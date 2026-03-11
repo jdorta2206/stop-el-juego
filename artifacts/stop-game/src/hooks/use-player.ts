@@ -1,43 +1,44 @@
 import { useState, useEffect } from "react";
-import { v4 as uuidv4 } from "uuid";
 import { AVATAR_COLORS } from "@/lib/utils";
 
 export interface PlayerProfile {
   id: string;
   name: string;
   avatarColor: string;
+  loginMethod?: string | null;
 }
+
+const STORAGE_KEY = "stop_player_v2";
 
 export function usePlayer() {
   const [player, setPlayer] = useState<PlayerProfile | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [needsAuth, setNeedsAuth] = useState(false);
 
   useEffect(() => {
-    const stored = localStorage.getItem("stop_player_profile");
+    const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
       try {
-        setPlayer(JSON.parse(stored));
-      } catch (e) {
-        createNewPlayer();
+        const parsed = JSON.parse(stored);
+        if (parsed.id && parsed.name) {
+          setPlayer(parsed);
+          setNeedsAuth(false);
+        } else {
+          setNeedsAuth(true);
+        }
+      } catch {
+        setNeedsAuth(true);
       }
     } else {
-      createNewPlayer();
+      setNeedsAuth(true);
     }
     setIsLoaded(true);
   }, []);
 
-  const createNewPlayer = () => {
-    const newPlayer: PlayerProfile = {
-      id: uuidv4(),
-      name: `Jugador${Math.floor(Math.random() * 10000)}`,
-      avatarColor: AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)],
-    };
-    savePlayer(newPlayer);
-  };
-
   const savePlayer = (profile: PlayerProfile) => {
-    localStorage.setItem("stop_player_profile", JSON.stringify(profile));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(profile));
     setPlayer(profile);
+    setNeedsAuth(false);
   };
 
   const updateProfile = (updates: Partial<PlayerProfile>) => {
@@ -46,5 +47,13 @@ export function usePlayer() {
     savePlayer(updated);
   };
 
-  return { player, isLoaded, updateProfile };
+  const logout = () => {
+    localStorage.removeItem(STORAGE_KEY);
+    setPlayer(null);
+    setNeedsAuth(true);
+  };
+
+  const showAuth = () => setNeedsAuth(true);
+
+  return { player, isLoaded, needsAuth, savePlayer, updateProfile, logout, showAuth };
 }
