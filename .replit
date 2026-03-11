@@ -24,3 +24,9 @@ expertMode = true
 [postMerge]
 path = "scripts/post-merge.sh"
 timeoutMs = 20000
+
+[userenv]
+
+[userenv.shared]
+APP_ORIGIN = "https://3697d7d1-ea3c-4cf5-b00f-386041779844-00-emhgnr1gq77c.kirk.replit.dev"
+VITE_INSTAGRAM_CLIENT_ID = ""

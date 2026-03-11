@@ -1,9 +1,18 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Button, Input } from "./ui";
 import { AVATAR_COLORS } from "@/lib/utils";
 import type { PlayerProfile } from "@/hooks/use-player";
-import { X, Mail, User, Palette } from "lucide-react";
+import { Mail, User, Palette, Loader2, AlertCircle } from "lucide-react";
+import {
+  signInWithGoogle,
+  signInWithFacebook,
+  signInWithInstagram,
+  checkInstagramReturn,
+  isGoogleConfigured,
+  isFacebookConfigured,
+  isInstagramConfigured,
+  type OAuthUser,
+} from "@/lib/oauth";
 
 const LOGO_URL = `${import.meta.env.BASE_URL}images/stop-logo.png`;
 
@@ -12,18 +21,74 @@ interface AuthModalProps {
   initial?: PlayerProfile | null;
 }
 
-const GOOGLE_COLORS = ["#4285F4", "#EA4335", "#FBBC05", "#34A853"];
-
 export function AuthModal({ onSave, initial }: AuthModalProps) {
   const [step, setStep] = useState<"login" | "profile">(initial ? "profile" : "login");
   const [name, setName] = useState(initial?.name || "");
   const [avatarColor, setAvatarColor] = useState(initial?.avatarColor || AVATAR_COLORS[0]);
   const [loginMethod, setLoginMethod] = useState<string | null>(null);
+  const [oauthPicture, setOauthPicture] = useState<string | null>(null);
+  const [loading, setLoading] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleSocialLogin = (method: string) => {
-    setLoginMethod(method);
-    // Pre-fill name based on method for demo
-    if (!name) setName("");
+  // Check if we returned from Instagram OAuth redirect
+  useEffect(() => {
+    const igUser = checkInstagramReturn();
+    if (igUser) handleOAuthSuccess(igUser);
+    // Check URL for auth errors
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("auth_error")) {
+      setError("No se pudo completar el inicio de sesión. Inténtalo de nuevo.");
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, []);
+
+  const handleOAuthSuccess = (oauthUser: OAuthUser) => {
+    setLoginMethod(oauthUser.provider);
+    setName(oauthUser.name?.slice(0, 14) || "");
+    setOauthPicture(oauthUser.picture || null);
+    setError(null);
+    setStep("profile");
+  };
+
+  const handleGoogle = async () => {
+    setLoading("google");
+    setError(null);
+    try {
+      const user = await signInWithGoogle();
+      handleOAuthSuccess(user);
+    } catch (e: any) {
+      setError(e.message || "Error con Google. Inténtalo de nuevo.");
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  const handleFacebook = async () => {
+    setLoading("facebook");
+    setError(null);
+    try {
+      const user = await signInWithFacebook();
+      handleOAuthSuccess(user);
+    } catch (e: any) {
+      setError(e.message || "Error con Facebook. Inténtalo de nuevo.");
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  const handleInstagram = () => {
+    setLoading("instagram");
+    setError(null);
+    try {
+      signInWithInstagram(); // triggers redirect
+    } catch (e: any) {
+      setError(e.message || "Error con Instagram. Inténtalo de nuevo.");
+      setLoading(null);
+    }
+  };
+
+  const handleGuest = () => {
+    setLoginMethod("guest");
     setStep("profile");
   };
 
@@ -34,6 +99,7 @@ export function AuthModal({ onSave, initial }: AuthModalProps) {
       name: name.trim().slice(0, 14),
       avatarColor,
       loginMethod,
+      picture: oauthPicture,
     } as any);
   };
 
@@ -55,7 +121,7 @@ export function AuthModal({ onSave, initial }: AuthModalProps) {
           }}
         >
           {/* Header */}
-          <div className="relative text-center pt-8 pb-4 px-6">
+          <div className="text-center pt-8 pb-4 px-6">
             <motion.img
               src={LOGO_URL}
               alt="STOP"
@@ -74,6 +140,21 @@ export function AuthModal({ onSave, initial }: AuthModalProps) {
             </p>
           </div>
 
+          {/* Error banner */}
+          <AnimatePresence>
+            {error && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                className="mx-6 mb-2 flex items-center gap-2 bg-red-500/20 border border-red-500/40 rounded-xl px-3 py-2 text-red-300 text-sm"
+              >
+                <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                {error}
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           <div className="px-6 pb-8 space-y-4">
             <AnimatePresence mode="wait">
               {step === "login" ? (
@@ -86,7 +167,10 @@ export function AuthModal({ onSave, initial }: AuthModalProps) {
                 >
                   {/* Google */}
                   <SocialButton
-                    onClick={() => handleSocialLogin("google")}
+                    onClick={handleGoogle}
+                    loading={loading === "google"}
+                    disabled={!!loading}
+                    configured={isGoogleConfigured}
                     icon={
                       <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none">
                         <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
@@ -102,7 +186,10 @@ export function AuthModal({ onSave, initial }: AuthModalProps) {
 
                   {/* Facebook */}
                   <SocialButton
-                    onClick={() => handleSocialLogin("facebook")}
+                    onClick={handleFacebook}
+                    loading={loading === "facebook"}
+                    disabled={!!loading}
+                    configured={isFacebookConfigured}
                     icon={
                       <svg viewBox="0 0 24 24" className="w-5 h-5" fill="#1877F2">
                         <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
@@ -115,21 +202,21 @@ export function AuthModal({ onSave, initial }: AuthModalProps) {
 
                   {/* Instagram */}
                   <SocialButton
-                    onClick={() => handleSocialLogin("instagram")}
+                    onClick={handleInstagram}
+                    loading={loading === "instagram"}
+                    disabled={!!loading}
+                    configured={isInstagramConfigured}
                     icon={
                       <svg viewBox="0 0 24 24" className="w-5 h-5">
                         <defs>
-                          <linearGradient id="ig" x1="0%" y1="100%" x2="100%" y2="0%">
+                          <linearGradient id="ig2" x1="0%" y1="100%" x2="100%" y2="0%">
                             <stop offset="0%" stopColor="#f09433" />
-                            <stop offset="25%" stopColor="#e6683c" />
                             <stop offset="50%" stopColor="#dc2743" />
-                            <stop offset="75%" stopColor="#cc2366" />
                             <stop offset="100%" stopColor="#bc1888" />
                           </linearGradient>
                         </defs>
-                        <rect width="24" height="24" rx="5" fill="url(#ig)" />
+                        <rect width="24" height="24" rx="5" fill="url(#ig2)" />
                         <path d="M12 7.5A4.5 4.5 0 1 0 16.5 12 4.505 4.505 0 0 0 12 7.5zm0 7.5a3 3 0 1 1 3-3 3 3 0 0 1-3 3zm5.885-8.153a1.05 1.05 0 1 1-1.05-1.05 1.05 1.05 0 0 1 1.05 1.05z" fill="white"/>
-                        <rect x="2" y="2" width="20" height="20" rx="5" fill="none" stroke="white" strokeOpacity="0.2" strokeWidth="0.5"/>
                       </svg>
                     }
                     label="Continuar con Instagram"
@@ -137,17 +224,18 @@ export function AuthModal({ onSave, initial }: AuthModalProps) {
                     textColor="white"
                   />
 
-                  {/* Separator */}
-                  <div className="flex items-center gap-3 my-2">
+                  {/* Divider */}
+                  <div className="flex items-center gap-3 py-1">
                     <div className="flex-1 h-px bg-white/15" />
                     <span className="text-white/40 text-xs font-bold uppercase tracking-wider">o</span>
                     <div className="flex-1 h-px bg-white/15" />
                   </div>
 
-                  {/* Guest / email */}
+                  {/* Guest */}
                   <button
-                    onClick={() => handleSocialLogin("guest")}
-                    className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl border-2 border-white/20 text-white/80 font-bold hover:bg-white/10 transition-all text-sm"
+                    onClick={handleGuest}
+                    disabled={!!loading}
+                    className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl border-2 border-white/20 text-white/80 font-bold hover:bg-white/10 transition-all text-sm disabled:opacity-50"
                   >
                     <Mail className="w-4 h-4" />
                     Entrar como invitado
@@ -161,18 +249,36 @@ export function AuthModal({ onSave, initial }: AuthModalProps) {
                   exit={{ opacity: 0, x: -20 }}
                   className="space-y-4"
                 >
-                  {/* Login method badge */}
+                  {/* Provider badge */}
                   {loginMethod && loginMethod !== "guest" && (
-                    <div className="flex items-center justify-center gap-2 text-sm font-bold text-[#f9a825]">
-                      <span className="uppercase tracking-wider">{loginMethod}</span>
-                      <span className="text-white/40">conectado ✓</span>
+                    <div className="flex items-center justify-center gap-2 py-2 px-4 rounded-full bg-white/10 w-fit mx-auto">
+                      <span className="text-[#f9a825] font-black text-xs uppercase tracking-wider">{loginMethod}</span>
+                      <span className="text-green-400 text-xs font-bold">✓ conectado</span>
                     </div>
                   )}
 
+                  {/* Avatar preview with optional OAuth picture */}
+                  <div className="flex justify-center">
+                    {oauthPicture ? (
+                      <img
+                        src={oauthPicture}
+                        alt="avatar"
+                        className="w-16 h-16 rounded-full border-4 border-[#f9a825] shadow-xl object-cover"
+                      />
+                    ) : (
+                      <div
+                        className="w-16 h-16 rounded-full border-4 border-white/30 flex items-center justify-center text-white font-black text-3xl shadow-lg"
+                        style={{ backgroundColor: avatarColor }}
+                      >
+                        {name.charAt(0).toUpperCase() || "?"}
+                      </div>
+                    )}
+                  </div>
+
                   {/* Name */}
                   <div>
-                    <label className="block text-white/70 text-xs font-bold uppercase tracking-wider mb-1.5">
-                      Tu nombre de jugador
+                    <label className="text-xs font-bold text-white/60 uppercase tracking-wider mb-1.5 block">
+                      Nombre de jugador
                     </label>
                     <div className="relative">
                       <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
@@ -182,52 +288,44 @@ export function AuthModal({ onSave, initial }: AuthModalProps) {
                         maxLength={14}
                         placeholder="Ej: CrakVillarreal10"
                         autoFocus
+                        onKeyDown={e => e.key === "Enter" && handleSave()}
                         className="w-full pl-10 pr-4 py-3 rounded-xl bg-white/10 border-2 border-white/20 text-white placeholder:text-white/40 font-bold text-base focus:outline-none focus:border-[#f9a825] transition-colors"
                       />
                     </div>
                     <p className="text-white/30 text-xs mt-1 text-right">{name.length}/14</p>
                   </div>
 
-                  {/* Avatar color */}
-                  <div>
-                    <label className="flex items-center gap-1.5 text-white/70 text-xs font-bold uppercase tracking-wider mb-2">
-                      <Palette className="w-3.5 h-3.5" /> Color de avatar
-                    </label>
-                    <div className="flex flex-wrap gap-2">
-                      {AVATAR_COLORS.map(color => (
-                        <button
-                          key={color}
-                          onClick={() => setAvatarColor(color)}
-                          className="w-9 h-9 rounded-full border-4 transition-all hover:scale-110"
-                          style={{
-                            backgroundColor: color,
-                            borderColor: avatarColor === color ? "white" : "transparent",
-                            transform: avatarColor === color ? "scale(1.15)" : undefined,
-                            boxShadow: avatarColor === color ? "0 0 0 2px rgba(255,255,255,0.5)" : "none",
-                          }}
-                        />
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Preview */}
-                  <div className="flex items-center gap-3 bg-white/5 rounded-xl p-3">
-                    <div
-                      className="w-10 h-10 rounded-full flex items-center justify-center text-white font-black text-lg shadow"
-                      style={{ backgroundColor: avatarColor }}
-                    >
-                      {name.charAt(0).toUpperCase() || "?"}
-                    </div>
+                  {/* Color picker (only if no OAuth picture) */}
+                  {!oauthPicture && (
                     <div>
-                      <p className="font-bold text-white">{name || "Tu nombre"}</p>
-                      <p className="text-white/40 text-xs">Jugador STOP</p>
+                      <label className="flex items-center gap-1.5 text-white/60 text-xs font-bold uppercase tracking-wider mb-2">
+                        <Palette className="w-3.5 h-3.5" /> Color de avatar
+                      </label>
+                      <div className="flex flex-wrap gap-2">
+                        {AVATAR_COLORS.map(color => (
+                          <button
+                            key={color}
+                            onClick={() => setAvatarColor(color)}
+                            className="w-9 h-9 rounded-full border-4 transition-all hover:scale-110"
+                            style={{
+                              backgroundColor: color,
+                              borderColor: avatarColor === color ? "white" : "transparent",
+                              boxShadow: avatarColor === color ? "0 0 0 2px rgba(255,255,255,0.5)" : "none",
+                              transform: avatarColor === color ? "scale(1.15)" : undefined,
+                            }}
+                          />
+                        ))}
+                      </div>
                     </div>
-                  </div>
+                  )}
 
-                  <button
+                  {/* CTA */}
+                  <motion.button
+                    whileHover={{ scale: name.trim() ? 1.02 : 1 }}
+                    whileTap={{ scale: name.trim() ? 0.97 : 1 }}
                     onClick={handleSave}
                     disabled={!name.trim()}
-                    className="w-full py-4 rounded-xl font-black text-xl tracking-wider transition-all disabled:opacity-40 disabled:cursor-not-allowed active:scale-95"
+                    className="w-full py-4 rounded-xl font-black text-xl tracking-wider transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                     style={{
                       background: name.trim() ? "#e63012" : "#555",
                       color: "white",
@@ -236,14 +334,14 @@ export function AuthModal({ onSave, initial }: AuthModalProps) {
                     }}
                   >
                     ¡JUGAR!
-                  </button>
+                  </motion.button>
 
                   {!initial && (
                     <button
-                      onClick={() => setStep("login")}
+                      onClick={() => { setStep("login"); setLoginMethod(null); setOauthPicture(null); }}
                       className="w-full text-white/40 text-sm text-center hover:text-white/60 transition-colors"
                     >
-                      ← Volver
+                      ← Cambiar método de login
                     </button>
                   )}
                 </motion.div>
@@ -256,30 +354,46 @@ export function AuthModal({ onSave, initial }: AuthModalProps) {
   );
 }
 
+// ─── Social Button ────────────────────────────────────────────────────────────
+
 function SocialButton({
   onClick,
   icon,
   label,
   bg,
   textColor,
+  loading,
+  disabled,
+  configured,
 }: {
   onClick: () => void;
   icon: React.ReactNode;
   label: string;
   bg: string;
   textColor: string;
+  loading?: boolean;
+  disabled?: boolean;
+  configured?: boolean;
 }) {
   return (
     <motion.button
-      whileHover={{ scale: 1.02, y: -1 }}
-      whileTap={{ scale: 0.98 }}
+      whileHover={!disabled ? { scale: 1.02, y: -1 } : {}}
+      whileTap={!disabled ? { scale: 0.98 } : {}}
       onClick={onClick}
-      className="w-full flex items-center gap-3 py-3.5 px-5 rounded-xl font-bold text-sm transition-all shadow-md"
+      disabled={disabled}
+      className="w-full flex items-center gap-3 py-3.5 px-5 rounded-xl font-bold text-sm transition-all shadow-md disabled:opacity-60 disabled:cursor-not-allowed relative overflow-hidden"
       style={{ background: bg, color: textColor, boxShadow: "0 2px 12px rgba(0,0,0,0.2)" }}
     >
-      <span className="w-5 h-5 flex-shrink-0">{icon}</span>
+      <span className="w-5 h-5 flex-shrink-0">
+        {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : icon}
+      </span>
       <span className="flex-1 text-left">{label}</span>
-      <span className="opacity-50">→</span>
+      {!configured && (
+        <span className="text-[10px] opacity-60 font-normal bg-black/20 px-2 py-0.5 rounded-full">
+          config. pendiente
+        </span>
+      )}
+      {configured && !loading && <span className="opacity-50">→</span>}
     </motion.button>
   );
 }
