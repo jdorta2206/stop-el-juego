@@ -5,6 +5,8 @@ import { AVATAR_COLORS } from "@/lib/utils";
 import type { PlayerProfile } from "@/hooks/use-player";
 import { X, Mail, User, Palette } from "lucide-react";
 
+const LOGO_URL = `${import.meta.env.BASE_URL}images/stop-logo.png`;
+
 interface AuthModalProps {
   onSave: (profile: PlayerProfile) => void;
   initial?: PlayerProfile | null;
@@ -54,17 +56,14 @@ export function AuthModal({ onSave, initial }: AuthModalProps) {
         >
           {/* Header */}
           <div className="relative text-center pt-8 pb-4 px-6">
-            <div
-              className="mx-auto mb-3 w-20 h-20 rounded-2xl flex items-center justify-center text-4xl font-black shadow-xl"
-              style={{
-                background: "#e63012",
-                color: "white",
-                fontFamily: "'Baloo 2', sans-serif",
-                transform: "rotate(-3deg)",
-              }}
-            >
-              STOP
-            </div>
+            <motion.img
+              src={LOGO_URL}
+              alt="STOP"
+              className="mx-auto mb-3 w-20 h-20 rounded-full shadow-xl"
+              animate={{ rotate: [0, 3, -3, 0] }}
+              transition={{ repeat: Infinity, duration: 5, ease: "easeInOut" }}
+              style={{ boxShadow: "0 6px 24px rgba(0,0,0,0.4)" }}
+            />
             <h2 className="text-2xl font-black text-white">
               {step === "login" ? "¡Únete a STOP!" : "Tu perfil"}
             </h2>
