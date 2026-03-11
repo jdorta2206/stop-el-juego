@@ -1,0 +1,19 @@
+packages:
+  "framer-motion": "For smooth roulette wheel spins, page transitions, and bouncy UI elements"
+  "canvas-confetti": "For celebration effects on the results screen when the player wins"
+  "uuid": "To generate stable unique player IDs for local storage"
+  "@types/canvas-confetti": "TypeScript definitions for canvas-confetti"
+  "@types/uuid": "TypeScript definitions for uuid"
+  "lucide-react": "For UI icons throughout the game"
+  "clsx": "For conditional tailwind class merging"
+  "tailwind-merge": "For conditional tailwind class merging"
+
+images:
+  - path: "artifacts/stop-game/public/images/game-bg-pattern.png"
+    description: "A subtle, semi-transparent geometric background pattern of scattered letters, pencils, and generic shapes in deep red to overlay on the bright red background"
+    aspect_ratio: "16:9"
+
+notes:
+  - Using @workspace/api-client-react for all API calls as per the monorepo structure provided.
+  - Relying on local storage for player identity since there's no complex auth setup specified.
+  - Assuming the API expects category keys EXACTLY as defined in the UI (e.g., "Nombre", "Lugar").

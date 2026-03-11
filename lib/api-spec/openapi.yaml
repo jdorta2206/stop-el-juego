@@ -1,22 +1,26 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: STOP Game API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: game
+    description: Game operations
+  - name: ranking
+    description: Ranking and leaderboard operations
+  - name: rooms
+    description: Multiplayer room operations
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +28,182 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /game/validate:
+    post:
+      operationId: validateRound
+      tags: [game]
+      summary: Validate player round responses against AI
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ValidateRoundRequest"
+      responses:
+        "200":
+          description: Validation results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidateRoundResponse"
+
+  /ranking/scores:
+    get:
+      operationId: getLeaderboard
+      tags: [ranking]
+      summary: Get global leaderboard
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: Leaderboard data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeaderboardResponse"
+
+    post:
+      operationId: submitScore
+      tags: [ranking]
+      summary: Submit a player score
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubmitScoreRequest"
+      responses:
+        "201":
+          description: Score submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlayerScore"
+
+  /ranking/scores/{playerId}:
+    get:
+      operationId: getPlayerStats
+      tags: [ranking]
+      summary: Get player stats
+      parameters:
+        - name: playerId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Player stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlayerStats"
+
+  /rooms:
+    post:
+      operationId: createRoom
+      tags: [rooms]
+      summary: Create a multiplayer room
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRoomRequest"
+      responses:
+        "201":
+          description: Room created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Room"
+
+  /rooms/{roomCode}:
+    get:
+      operationId: getRoom
+      tags: [rooms]
+      summary: Get room by code
+      parameters:
+        - name: roomCode
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Room details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Room"
+        "404":
+          description: Room not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /rooms/{roomCode}/join:
+    post:
+      operationId: joinRoom
+      tags: [rooms]
+      summary: Join a room
+      parameters:
+        - name: roomCode
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/JoinRoomRequest"
+      responses:
+        "200":
+          description: Joined room
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Room"
+        "404":
+          description: Room not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /rooms/{roomCode}/results:
+    post:
+      operationId: submitRoomResults
+      tags: [rooms]
+      summary: Submit results for a room round
+      parameters:
+        - name: roomCode
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RoomResultsRequest"
+      responses:
+        "200":
+          description: Results saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Room"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +214,295 @@ components:
       required:
         - status
 
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    CategoryResponse:
+      type: object
+      properties:
+        category:
+          type: string
+        word:
+          type: string
+      required:
+        - category
+        - word
+
+    ResultDetail:
+      type: object
+      properties:
+        response:
+          type: string
+        isValid:
+          type: boolean
+        score:
+          type: integer
+      required:
+        - response
+        - isValid
+        - score
+
+    CategoryResult:
+      type: object
+      properties:
+        player:
+          $ref: "#/components/schemas/ResultDetail"
+        ai:
+          $ref: "#/components/schemas/ResultDetail"
+      required:
+        - player
+        - ai
+
+    ValidateRoundRequest:
+      type: object
+      properties:
+        letter:
+          type: string
+          minLength: 1
+          maxLength: 1
+        language:
+          type: string
+          enum: [es, en, fr, pt]
+        playerName:
+          type: string
+        playerResponses:
+          type: array
+          items:
+            $ref: "#/components/schemas/CategoryResponse"
+      required:
+        - letter
+        - language
+        - playerResponses
+
+    ValidateRoundResponse:
+      type: object
+      properties:
+        results:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/CategoryResult"
+        playerTotalScore:
+          type: integer
+        aiTotalScore:
+          type: integer
+      required:
+        - results
+        - playerTotalScore
+        - aiTotalScore
+
+    PlayerScore:
+      type: object
+      properties:
+        id:
+          type: integer
+        playerId:
+          type: string
+        playerName:
+          type: string
+        avatarColor:
+          type: string
+        totalScore:
+          type: integer
+        gamesPlayed:
+          type: integer
+        wins:
+          type: integer
+        rank:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - playerId
+        - playerName
+        - totalScore
+        - gamesPlayed
+        - wins
+
+    PlayerStats:
+      type: object
+      properties:
+        score:
+          $ref: "#/components/schemas/PlayerScore"
+        recentGames:
+          type: array
+          items:
+            $ref: "#/components/schemas/GameHistory"
+      required:
+        - score
+        - recentGames
+
+    GameHistory:
+      type: object
+      properties:
+        id:
+          type: integer
+        playerId:
+          type: string
+        score:
+          type: integer
+        letter:
+          type: string
+        mode:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - playerId
+        - score
+        - letter
+        - mode
+
+    SubmitScoreRequest:
+      type: object
+      properties:
+        playerId:
+          type: string
+        playerName:
+          type: string
+        avatarColor:
+          type: string
+        score:
+          type: integer
+        letter:
+          type: string
+        mode:
+          type: string
+        won:
+          type: boolean
+      required:
+        - playerId
+        - playerName
+        - score
+        - letter
+        - mode
+
+    LeaderboardResponse:
+      type: object
+      properties:
+        players:
+          type: array
+          items:
+            $ref: "#/components/schemas/PlayerScore"
+        total:
+          type: integer
+      required:
+        - players
+        - total
+
+    RoomPlayer:
+      type: object
+      properties:
+        playerId:
+          type: string
+        playerName:
+          type: string
+        avatarColor:
+          type: string
+        score:
+          type: integer
+        isHost:
+          type: boolean
+        isReady:
+          type: boolean
+      required:
+        - playerId
+        - playerName
+        - score
+        - isHost
+        - isReady
+
+    Room:
+      type: object
+      properties:
+        id:
+          type: integer
+        roomCode:
+          type: string
+        hostId:
+          type: string
+        status:
+          type: string
+          enum: [waiting, playing, finished]
+        currentLetter:
+          type: string
+          nullable: true
+        currentRound:
+          type: integer
+        maxRounds:
+          type: integer
+        language:
+          type: string
+        players:
+          type: array
+          items:
+            $ref: "#/components/schemas/RoomPlayer"
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - roomCode
+        - hostId
+        - status
+        - currentRound
+        - maxRounds
+        - language
+        - players
+
+    CreateRoomRequest:
+      type: object
+      properties:
+        hostId:
+          type: string
+        hostName:
+          type: string
+        avatarColor:
+          type: string
+        maxRounds:
+          type: integer
+          default: 3
+        language:
+          type: string
+          default: es
+      required:
+        - hostId
+        - hostName
+
+    JoinRoomRequest:
+      type: object
+      properties:
+        playerId:
+          type: string
+        playerName:
+          type: string
+        avatarColor:
+          type: string
+      required:
+        - playerId
+        - playerName
+
+    RoomResultsRequest:
+      type: object
+      properties:
+        playerId:
+          type: string
+        roundScore:
+          type: integer
+        letter:
+          type: string
+      required:
+        - playerId
+        - roundScore
+        - letter

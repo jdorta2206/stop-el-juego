@@ -1,0 +1,84 @@
+@import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@400;600;700;800&display=swap');
+@import "tailwindcss";
+
+@theme inline {
+  --font-display: 'Fredoka', sans-serif;
+  --font-body: 'Nunito', sans-serif;
+
+  /* The classic STOP game color palette */
+  --color-background: hsl(6 90% 55%); /* Bright Red */
+  --color-foreground: hsl(0 0% 100%); /* White */
+  
+  --color-card: hsl(6 90% 45%); /* Darker Red for cards */
+  --color-card-foreground: hsl(0 0% 100%);
+  
+  --color-popover: hsl(6 90% 40%);
+  --color-popover-foreground: hsl(0 0% 100%);
+  
+  --color-primary: hsl(222 47% 11%); /* Navy Blue */
+  --color-primary-foreground: hsl(0 0% 100%);
+  
+  --color-secondary: hsl(48 96% 57%); /* Yellow */
+  --color-secondary-foreground: hsl(222 47% 11%); /* Navy text on yellow */
+  
+  --color-muted: hsl(6 80% 35%);
+  --color-muted-foreground: hsl(0 0% 90%);
+  
+  --color-accent: hsl(48 96% 57%);
+  --color-accent-foreground: hsl(222 47% 11%);
+  
+  --color-destructive: hsl(0 100% 50%);
+  --color-destructive-foreground: hsl(0 0% 100%);
+  
+  --color-border: hsl(6 80% 40%);
+  --color-input: hsl(6 70% 30%);
+  --color-ring: hsl(48 96% 57%);
+
+  --radius-xl: 1.5rem;
+  --radius-lg: 1rem;
+  --radius-md: 0.75rem;
+  --radius-sm: 0.5rem;
+}
+
+@layer base {
+  body {
+    @apply bg-background text-foreground font-body antialiased selection:bg-secondary selection:text-secondary-foreground;
+    background-image: 
+      radial-gradient(circle at 100% 0%, hsla(48, 96%, 57%, 0.15) 0%, transparent 50%),
+      radial-gradient(circle at 0% 100%, hsla(222, 47%, 11%, 0.2) 0%, transparent 50%);
+    background-attachment: fixed;
+    min-height: 100vh;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-display);
+    @apply tracking-tight;
+  }
+}
+
+@layer utilities {
+  .text-shadow-sm {
+    text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  }
+  .text-shadow-md {
+    text-shadow: 0 4px 8px rgba(0,0,0,0.3);
+  }
+  .text-shadow-glow {
+    text-shadow: 0 0 20px hsla(48, 96%, 57%, 0.5);
+  }
+  .glass-card {
+    @apply bg-card/80 backdrop-blur-md border border-white/10 shadow-xl;
+  }
+  
+  /* Custom scrollbar for game feeling */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-black/10 rounded-full;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-white/30 rounded-full hover:bg-white/50 transition-colors;
+  }
+}
