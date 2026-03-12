@@ -256,7 +256,7 @@ router.get("/instagram/callback", async (req: Request, res: Response) => {
 // ── TIKTOK ────────────────────────────────────────────────────────────────────
 
 router.get("/tiktok/start", (req: Request, res: Response) => {
-  const TIKTOK_CLIENT_KEY = process.env["TIKTOK_CLIENT_KEY"];
+  const TIKTOK_CLIENT_KEY = process.env["TIKTOK_CLIENT_KEY"]?.trim();
   if (!TIKTOK_CLIENT_KEY) {
     return res.redirect(`${APP_ORIGIN}/?auth_error=tiktok_not_configured`);
   }
@@ -277,8 +277,8 @@ router.get("/tiktok/callback", async (req: Request, res: Response) => {
   const state = req.query["state"] as string || "/";
   const error = req.query["error"] as string | undefined;
 
-  const TIKTOK_CLIENT_KEY    = process.env["TIKTOK_CLIENT_KEY"];
-  const TIKTOK_CLIENT_SECRET = process.env["TIKTOK_CLIENT_SECRET"];
+  const TIKTOK_CLIENT_KEY    = process.env["TIKTOK_CLIENT_KEY"]?.trim();
+  const TIKTOK_CLIENT_SECRET = process.env["TIKTOK_CLIENT_SECRET"]?.trim();
 
   if (error || !code) {
     return res.redirect(`${APP_ORIGIN}/?auth_error=tiktok_cancelled`);
