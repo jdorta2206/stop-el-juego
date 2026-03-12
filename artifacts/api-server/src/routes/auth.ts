@@ -74,12 +74,29 @@ router.get("/google/callback", async (req: Request, res: Response) => {
       }),
     });
     const tokenData = (await tokenRes.json()) as any;
-    if (!tokenData.id_token) throw new Error("No id_token");
+    console.log("Google token response keys:", Object.keys(tokenData));
+    if (tokenData.error) {
+      console.error("Google token error:", tokenData.error, tokenData.error_description);
+      throw new Error(`Google error: ${tokenData.error} - ${tokenData.error_description}`);
+    }
 
-    // Decode JWT payload (no verification needed — we just exchanged the code)
-    const payload = JSON.parse(
-      Buffer.from(tokenData.id_token.split(".")[1], "base64url").toString()
-    );
+    let payload: any = null;
+
+    if (tokenData.id_token) {
+      // Decode JWT payload
+      payload = JSON.parse(
+        Buffer.from(tokenData.id_token.split(".")[1], "base64url").toString()
+      );
+    } else if (tokenData.access_token) {
+      // Fallback: use userinfo endpoint
+      const userinfoRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+        headers: { Authorization: `Bearer ${tokenData.access_token}` },
+      });
+      payload = (await userinfoRes.json()) as any;
+      console.log("Google userinfo payload:", JSON.stringify(payload));
+    } else {
+      throw new Error("No id_token or access_token in Google response");
+    }
 
     const user = JSON.stringify({
       id:       `google_${payload.sub}`,
