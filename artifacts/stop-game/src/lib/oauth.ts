@@ -14,8 +14,9 @@ export const isGoogleConfigured    = !!import.meta.env.VITE_GOOGLE_CLIENT_ID;
 export const isFacebookConfigured  = !!import.meta.env.VITE_FACEBOOK_APP_ID;
 // Instagram requires Meta app review to work — show as coming soon until approved
 export const isInstagramConfigured = false;
-// TikTok requires a registered Developer app — show as coming soon until configured
-export const isTikTokConfigured    = false;
+// TikTok key lives only in backend (TIKTOK_CLIENT_KEY) — always show the button
+// and let the backend redirect to error page if not configured
+export const isTikTokConfigured    = true;
 
 function startOAuth(provider: "google" | "facebook" | "instagram" | "tiktok") {
   const returnPath = window.location.pathname + window.location.search;
