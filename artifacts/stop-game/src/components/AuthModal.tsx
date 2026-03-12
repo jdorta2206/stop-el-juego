@@ -6,9 +6,13 @@ import { Mail, User, Palette, AlertCircle } from "lucide-react";
 import {
   signInWithGoogle,
   signInWithFacebook,
+  signInWithInstagram,
+  signInWithTikTok,
   checkOAuthReturn,
   isGoogleConfigured,
   isFacebookConfigured,
+  isInstagramConfigured,
+  isTikTokConfigured,
   type OAuthUser,
 } from "@/lib/oauth";
 
@@ -146,6 +150,44 @@ export function AuthModal({ onSave, initial }: AuthModalProps) {
                     }
                     label="Continuar con Facebook"
                     bg="#1877F2"
+                    textColor="white"
+                  />
+
+                  {/* Instagram */}
+                  <SocialButton
+                    onClick={signInWithInstagram}
+                    configured={isInstagramConfigured}
+                    icon={
+                      <svg viewBox="0 0 24 24" className="w-5 h-5">
+                        <defs>
+                          <linearGradient id="ig-grad" x1="0%" y1="100%" x2="100%" y2="0%">
+                            <stop offset="0%" stopColor="#f09433" />
+                            <stop offset="25%" stopColor="#e6683c" />
+                            <stop offset="50%" stopColor="#dc2743" />
+                            <stop offset="75%" stopColor="#cc2366" />
+                            <stop offset="100%" stopColor="#bc1888" />
+                          </linearGradient>
+                        </defs>
+                        <rect width="24" height="24" rx="5" fill="url(#ig-grad)" />
+                        <path d="M12 7.5A4.5 4.5 0 1 0 16.5 12 4.505 4.505 0 0 0 12 7.5zm0 7.5a3 3 0 1 1 3-3 3 3 0 0 1-3 3zm5.885-8.153a1.05 1.05 0 1 1-1.05-1.05 1.05 1.05 0 0 1 1.05 1.05z" fill="white"/>
+                      </svg>
+                    }
+                    label="Continuar con Instagram"
+                    bg="linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888)"
+                    textColor="white"
+                  />
+
+                  {/* TikTok */}
+                  <SocialButton
+                    onClick={signInWithTikTok}
+                    configured={isTikTokConfigured}
+                    icon={
+                      <svg viewBox="0 0 24 24" className="w-5 h-5" fill="white">
+                        <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1-2.89-2.89 2.89 2.89 0 0 1 2.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 0 0-.79-.05 6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 6.34 6.34 6.34 6.34 0 0 0 6.33-6.34V8.69a8.2 8.2 0 0 0 4.79 1.52V6.76a4.85 4.85 0 0 1-1.02-.07z"/>
+                      </svg>
+                    }
+                    label="Continuar con TikTok"
+                    bg="#010101"
                     textColor="white"
                   />
 
@@ -287,7 +329,7 @@ function SocialButton({
   label,
   bg,
   textColor,
-  configured,
+  configured = true,
 }: {
   onClick: () => void;
   icon: React.ReactNode;
@@ -298,15 +340,24 @@ function SocialButton({
 }) {
   return (
     <motion.button
-      whileHover={{ scale: 1.02, y: -1 }}
-      whileTap={{ scale: 0.98 }}
-      onClick={onClick}
-      className="w-full flex items-center gap-3 py-3.5 px-5 rounded-xl font-bold text-sm transition-all shadow-md"
-      style={{ background: bg, color: textColor, boxShadow: "0 2px 12px rgba(0,0,0,0.2)" }}
+      whileHover={{ scale: configured ? 1.02 : 1, y: configured ? -1 : 0 }}
+      whileTap={{ scale: configured ? 0.98 : 1 }}
+      onClick={configured ? onClick : undefined}
+      className="w-full flex items-center gap-3 py-3.5 px-5 rounded-xl font-bold text-sm transition-all shadow-md relative"
+      style={{
+        background: bg,
+        color: textColor,
+        boxShadow: "0 2px 12px rgba(0,0,0,0.2)",
+        opacity: configured ? 1 : 0.45,
+        cursor: configured ? "pointer" : "not-allowed",
+      }}
     >
       <span className="w-5 h-5 flex-shrink-0">{icon}</span>
       <span className="flex-1 text-left">{label}</span>
-      <span className="opacity-50">→</span>
+      {configured
+        ? <span className="opacity-50">→</span>
+        : <span className="text-xs font-bold opacity-70 bg-black/20 px-2 py-0.5 rounded-full">Pronto</span>
+      }
     </motion.button>
   );
 }

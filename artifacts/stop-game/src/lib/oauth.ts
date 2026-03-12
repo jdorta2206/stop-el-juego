@@ -6,19 +6,18 @@ export interface OAuthUser {
   name: string;
   email?: string;
   picture?: string | null;
-  provider: "google" | "facebook" | "instagram";
+  provider: "google" | "facebook" | "instagram" | "tiktok";
 }
 
 // Which providers are configured (secrets exist)
 export const isGoogleConfigured    = !!import.meta.env.VITE_GOOGLE_CLIENT_ID;
 export const isFacebookConfigured  = !!import.meta.env.VITE_FACEBOOK_APP_ID;
 export const isInstagramConfigured = !!import.meta.env.VITE_INSTAGRAM_CLIENT_ID;
+export const isTikTokConfigured    = !!import.meta.env.VITE_TIKTOK_CLIENT_KEY;
 
-function startOAuth(provider: "google" | "facebook" | "instagram") {
+function startOAuth(provider: "google" | "facebook" | "instagram" | "tiktok") {
   const returnPath = window.location.pathname + window.location.search;
   sessionStorage.setItem("oauth_return", returnPath);
-  // Use window.location.origin so the redirect always hits the real domain,
-  // not a Vite sub-path. The API server lives on the same domain under /api.
   const origin = window.location.origin;
   window.location.href =
     `${origin}/api/auth/${provider}/start?return=${encodeURIComponent(returnPath)}`;
@@ -27,6 +26,7 @@ function startOAuth(provider: "google" | "facebook" | "instagram") {
 export function signInWithGoogle()    { startOAuth("google"); }
 export function signInWithFacebook()  { startOAuth("facebook"); }
 export function signInWithInstagram() { startOAuth("instagram"); }
+export function signInWithTikTok()    { startOAuth("tiktok"); }
 
 // After the backend callback, the bridge page writes `oauth_user` to
 // sessionStorage before redirecting back here. Read it once.
@@ -54,15 +54,18 @@ export function checkOAuthReturn(): OAuthUser | null {
 
 function friendlyError(code: string): string {
   const map: Record<string, string> = {
-    google_cancelled:        "Inicio con Google cancelado.",
-    google_failed:           "Error al conectar con Google. Inténtalo de nuevo.",
-    google_not_configured:   "Google no está configurado aún.",
-    facebook_cancelled:      "Inicio con Facebook cancelado.",
-    facebook_failed:         "Error al conectar con Facebook. Inténtalo de nuevo.",
-    facebook_not_configured: "Facebook no está configurado aún.",
-    instagram_cancelled:     "Inicio con Instagram cancelado.",
-    instagram_failed:        "Error al conectar con Instagram. Inténtalo de nuevo.",
-    instagram_not_configured:"Instagram no está configurado aún.",
+    google_cancelled:         "Inicio con Google cancelado.",
+    google_failed:            "Error al conectar con Google. Inténtalo de nuevo.",
+    google_not_configured:    "Google no está configurado aún.",
+    facebook_cancelled:       "Inicio con Facebook cancelado.",
+    facebook_failed:          "Error al conectar con Facebook. Inténtalo de nuevo.",
+    facebook_not_configured:  "Facebook no está configurado aún.",
+    instagram_cancelled:      "Inicio con Instagram cancelado.",
+    instagram_failed:         "Error al conectar con Instagram. Inténtalo de nuevo.",
+    instagram_not_configured: "Instagram no está configurado aún.",
+    tiktok_cancelled:         "Inicio con TikTok cancelado.",
+    tiktok_failed:            "Error al conectar con TikTok. Inténtalo de nuevo.",
+    tiktok_not_configured:    "TikTok no está configurado aún.",
   };
   return map[code] || "Error al iniciar sesión. Inténtalo de nuevo.";
 }

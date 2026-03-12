@@ -191,11 +191,11 @@ router.get("/instagram/start", (req: Request, res: Response) => {
   const params = new URLSearchParams({
     client_id: INSTAGRAM_CLIENT_ID,
     redirect_uri: redirectUri,
-    scope: "user_profile,user_media",
+    scope: "instagram_business_basic",
     response_type: "code",
     state,
   });
-  res.redirect(`https://api.instagram.com/oauth/authorize?${params}`);
+  res.redirect(`https://www.instagram.com/oauth/authorize?${params}`);
 });
 
 router.get("/instagram/callback", async (req: Request, res: Response) => {
@@ -228,17 +228,21 @@ router.get("/instagram/callback", async (req: Request, res: Response) => {
       }),
     });
     const tokenData = (await tokenRes.json()) as any;
-    if (!tokenData.access_token) throw new Error("No access_token");
+    console.log("Instagram token keys:", Object.keys(tokenData));
+    if (tokenData.error_type || tokenData.error) {
+      throw new Error(`Instagram error: ${tokenData.error_type || tokenData.error} - ${tokenData.error_message || tokenData.error_description}`);
+    }
+    if (!tokenData.access_token) throw new Error("No access_token from Instagram");
 
     const meRes = await fetch(
-      `https://graph.instagram.com/me?fields=id,username&access_token=${tokenData.access_token}`
+      `https://graph.instagram.com/v21.0/me?fields=id,username,profile_picture_url&access_token=${tokenData.access_token}`
     );
     const me = (await meRes.json()) as any;
 
     const user = JSON.stringify({
       id:       `ig_${me.id}`,
-      name:     me.username,
-      picture:  null,
+      name:     me.username || me.name || "Usuario",
+      picture:  me.profile_picture_url || null,
       provider: "instagram",
     });
 
@@ -246,6 +250,87 @@ router.get("/instagram/callback", async (req: Request, res: Response) => {
   } catch (err) {
     console.error("Instagram OAuth error:", err);
     res.redirect(`${APP_ORIGIN}/?auth_error=instagram_failed`);
+  }
+});
+
+// ── TIKTOK ────────────────────────────────────────────────────────────────────
+
+router.get("/tiktok/start", (req: Request, res: Response) => {
+  const TIKTOK_CLIENT_KEY = process.env["TIKTOK_CLIENT_KEY"];
+  if (!TIKTOK_CLIENT_KEY) {
+    return res.redirect(`${APP_ORIGIN}/?auth_error=tiktok_not_configured`);
+  }
+  const redirectUri = `${APP_ORIGIN}/api/auth/tiktok/callback`;
+  const state = req.query["return"] as string || "/";
+  const params = new URLSearchParams({
+    client_key: TIKTOK_CLIENT_KEY,
+    redirect_uri: redirectUri,
+    scope: "user.info.basic",
+    response_type: "code",
+    state,
+  });
+  res.redirect(`https://www.tiktok.com/v2/auth/authorize?${params}`);
+});
+
+router.get("/tiktok/callback", async (req: Request, res: Response) => {
+  const code  = req.query["code"]  as string | undefined;
+  const state = req.query["state"] as string || "/";
+  const error = req.query["error"] as string | undefined;
+
+  const TIKTOK_CLIENT_KEY    = process.env["TIKTOK_CLIENT_KEY"];
+  const TIKTOK_CLIENT_SECRET = process.env["TIKTOK_CLIENT_SECRET"];
+
+  if (error || !code) {
+    return res.redirect(`${APP_ORIGIN}/?auth_error=tiktok_cancelled`);
+  }
+  if (!TIKTOK_CLIENT_KEY || !TIKTOK_CLIENT_SECRET) {
+    return res.redirect(`${APP_ORIGIN}/?auth_error=tiktok_not_configured`);
+  }
+
+  try {
+    const redirectUri = `${APP_ORIGIN}/api/auth/tiktok/callback`;
+
+    const tokenRes = await fetch("https://open.tiktokapis.com/v2/oauth/token/", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Cache-Control": "no-cache",
+      },
+      body: new URLSearchParams({
+        client_key: TIKTOK_CLIENT_KEY,
+        client_secret: TIKTOK_CLIENT_SECRET,
+        code,
+        grant_type: "authorization_code",
+        redirect_uri: redirectUri,
+      }),
+    });
+    const tokenData = (await tokenRes.json()) as any;
+    console.log("TikTok token keys:", Object.keys(tokenData));
+    if (tokenData.error) throw new Error(`TikTok token error: ${tokenData.error}`);
+
+    const accessToken = tokenData.access_token || tokenData.data?.access_token;
+    if (!accessToken) throw new Error("No access_token from TikTok");
+
+    const openId = tokenData.open_id || tokenData.data?.open_id;
+
+    const meRes = await fetch(
+      "https://open.tiktokapis.com/v2/user/info/?fields=open_id,display_name,avatar_url",
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    );
+    const meData = (await meRes.json()) as any;
+    const me = meData.data?.user || meData.user || {};
+
+    const user = JSON.stringify({
+      id:       `tt_${me.open_id || openId}`,
+      name:     me.display_name || "TikToker",
+      picture:  me.avatar_url || null,
+      provider: "tiktok",
+    });
+
+    res.send(bridgePage("oauth_user", user, state));
+  } catch (err) {
+    console.error("TikTok OAuth error:", err);
+    res.redirect(`${APP_ORIGIN}/?auth_error=tiktok_failed`);
   }
 });
 
