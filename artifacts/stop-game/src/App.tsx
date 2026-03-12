@@ -6,6 +6,8 @@ import SoloGame from "@/pages/SoloGame";
 import Multiplayer from "@/pages/Multiplayer";
 import Room from "@/pages/Room";
 import Ranking from "@/pages/Ranking";
+import Privacy from "@/pages/Privacy";
+import Terms from "@/pages/Terms";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient({
@@ -25,6 +27,8 @@ function Router() {
       <Route path="/multiplayer" component={Multiplayer} />
       <Route path="/room/:id" component={Room} />
       <Route path="/ranking" component={Ranking} />
+      <Route path="/privacy" component={Privacy} />
+      <Route path="/terms" component={Terms} />
       <Route component={NotFound} />
     </Switch>
   );
