@@ -2,12 +2,12 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { AVATAR_COLORS } from "@/lib/utils";
 import type { PlayerProfile } from "@/hooks/use-player";
-import { Mail, User, Palette, Loader2, AlertCircle } from "lucide-react";
+import { Mail, User, Palette, AlertCircle } from "lucide-react";
 import {
   signInWithGoogle,
   signInWithFacebook,
   signInWithInstagram,
-  checkInstagramReturn,
+  checkOAuthReturn,
   isGoogleConfigured,
   isFacebookConfigured,
   isInstagramConfigured,
@@ -27,68 +27,23 @@ export function AuthModal({ onSave, initial }: AuthModalProps) {
   const [avatarColor, setAvatarColor] = useState(initial?.avatarColor || AVATAR_COLORS[0]);
   const [loginMethod, setLoginMethod] = useState<string | null>(null);
   const [oauthPicture, setOauthPicture] = useState<string | null>(null);
-  const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Check if we returned from Instagram OAuth redirect
+  // On mount — check if we just returned from a social OAuth redirect
   useEffect(() => {
-    const igUser = checkInstagramReturn();
-    if (igUser) handleOAuthSuccess(igUser);
-    // Check URL for auth errors
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("auth_error")) {
-      setError("No se pudo completar el inicio de sesión. Inténtalo de nuevo.");
-      window.history.replaceState({}, "", window.location.pathname);
+    try {
+      const oauthUser = checkOAuthReturn();
+      if (oauthUser) handleOAuthSuccess(oauthUser);
+    } catch (e: any) {
+      setError(e.message || "Error al iniciar sesión.");
     }
   }, []);
 
   const handleOAuthSuccess = (oauthUser: OAuthUser) => {
     setLoginMethod(oauthUser.provider);
-    setName(oauthUser.name?.slice(0, 14) || "");
+    setName((oauthUser.name || "").slice(0, 14));
     setOauthPicture(oauthUser.picture || null);
     setError(null);
-    setStep("profile");
-  };
-
-  const handleGoogle = async () => {
-    setLoading("google");
-    setError(null);
-    try {
-      const user = await signInWithGoogle();
-      handleOAuthSuccess(user);
-    } catch (e: any) {
-      setError(e.message || "Error con Google. Inténtalo de nuevo.");
-    } finally {
-      setLoading(null);
-    }
-  };
-
-  const handleFacebook = async () => {
-    setLoading("facebook");
-    setError(null);
-    try {
-      const user = await signInWithFacebook();
-      handleOAuthSuccess(user);
-    } catch (e: any) {
-      setError(e.message || "Error con Facebook. Inténtalo de nuevo.");
-    } finally {
-      setLoading(null);
-    }
-  };
-
-  const handleInstagram = () => {
-    setLoading("instagram");
-    setError(null);
-    try {
-      signInWithInstagram(); // triggers redirect
-    } catch (e: any) {
-      setError(e.message || "Error con Instagram. Inténtalo de nuevo.");
-      setLoading(null);
-    }
-  };
-
-  const handleGuest = () => {
-    setLoginMethod("guest");
     setStep("profile");
   };
 
@@ -167,9 +122,7 @@ export function AuthModal({ onSave, initial }: AuthModalProps) {
                 >
                   {/* Google */}
                   <SocialButton
-                    onClick={handleGoogle}
-                    loading={loading === "google"}
-                    disabled={!!loading}
+                    onClick={signInWithGoogle}
                     configured={isGoogleConfigured}
                     icon={
                       <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none">
@@ -186,9 +139,7 @@ export function AuthModal({ onSave, initial }: AuthModalProps) {
 
                   {/* Facebook */}
                   <SocialButton
-                    onClick={handleFacebook}
-                    loading={loading === "facebook"}
-                    disabled={!!loading}
+                    onClick={signInWithFacebook}
                     configured={isFacebookConfigured}
                     icon={
                       <svg viewBox="0 0 24 24" className="w-5 h-5" fill="#1877F2">
@@ -202,20 +153,18 @@ export function AuthModal({ onSave, initial }: AuthModalProps) {
 
                   {/* Instagram */}
                   <SocialButton
-                    onClick={handleInstagram}
-                    loading={loading === "instagram"}
-                    disabled={!!loading}
+                    onClick={signInWithInstagram}
                     configured={isInstagramConfigured}
                     icon={
                       <svg viewBox="0 0 24 24" className="w-5 h-5">
                         <defs>
-                          <linearGradient id="ig2" x1="0%" y1="100%" x2="100%" y2="0%">
+                          <linearGradient id="ig3" x1="0%" y1="100%" x2="100%" y2="0%">
                             <stop offset="0%" stopColor="#f09433" />
                             <stop offset="50%" stopColor="#dc2743" />
                             <stop offset="100%" stopColor="#bc1888" />
                           </linearGradient>
                         </defs>
-                        <rect width="24" height="24" rx="5" fill="url(#ig2)" />
+                        <rect width="24" height="24" rx="5" fill="url(#ig3)" />
                         <path d="M12 7.5A4.5 4.5 0 1 0 16.5 12 4.505 4.505 0 0 0 12 7.5zm0 7.5a3 3 0 1 1 3-3 3 3 0 0 1-3 3zm5.885-8.153a1.05 1.05 0 1 1-1.05-1.05 1.05 1.05 0 0 1 1.05 1.05z" fill="white"/>
                       </svg>
                     }
@@ -233,9 +182,8 @@ export function AuthModal({ onSave, initial }: AuthModalProps) {
 
                   {/* Guest */}
                   <button
-                    onClick={handleGuest}
-                    disabled={!!loading}
-                    className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl border-2 border-white/20 text-white/80 font-bold hover:bg-white/10 transition-all text-sm disabled:opacity-50"
+                    onClick={() => { setLoginMethod("guest"); setStep("profile"); }}
+                    className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl border-2 border-white/20 text-white/80 font-bold hover:bg-white/10 transition-all text-sm"
                   >
                     <Mail className="w-4 h-4" />
                     Entrar como invitado
@@ -257,13 +205,14 @@ export function AuthModal({ onSave, initial }: AuthModalProps) {
                     </div>
                   )}
 
-                  {/* Avatar preview with optional OAuth picture */}
+                  {/* Avatar */}
                   <div className="flex justify-center">
                     {oauthPicture ? (
                       <img
                         src={oauthPicture}
                         alt="avatar"
                         className="w-16 h-16 rounded-full border-4 border-[#f9a825] shadow-xl object-cover"
+                        onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
                       />
                     ) : (
                       <div
@@ -295,7 +244,7 @@ export function AuthModal({ onSave, initial }: AuthModalProps) {
                     <p className="text-white/30 text-xs mt-1 text-right">{name.length}/14</p>
                   </div>
 
-                  {/* Color picker (only if no OAuth picture) */}
+                  {/* Color picker (only for guests) */}
                   {!oauthPicture && (
                     <div>
                       <label className="flex items-center gap-1.5 text-white/60 text-xs font-bold uppercase tracking-wider mb-2">
@@ -362,8 +311,6 @@ function SocialButton({
   label,
   bg,
   textColor,
-  loading,
-  disabled,
   configured,
 }: {
   onClick: () => void;
@@ -371,29 +318,19 @@ function SocialButton({
   label: string;
   bg: string;
   textColor: string;
-  loading?: boolean;
-  disabled?: boolean;
   configured?: boolean;
 }) {
   return (
     <motion.button
-      whileHover={!disabled ? { scale: 1.02, y: -1 } : {}}
-      whileTap={!disabled ? { scale: 0.98 } : {}}
+      whileHover={{ scale: 1.02, y: -1 }}
+      whileTap={{ scale: 0.98 }}
       onClick={onClick}
-      disabled={disabled}
-      className="w-full flex items-center gap-3 py-3.5 px-5 rounded-xl font-bold text-sm transition-all shadow-md disabled:opacity-60 disabled:cursor-not-allowed relative overflow-hidden"
+      className="w-full flex items-center gap-3 py-3.5 px-5 rounded-xl font-bold text-sm transition-all shadow-md"
       style={{ background: bg, color: textColor, boxShadow: "0 2px 12px rgba(0,0,0,0.2)" }}
     >
-      <span className="w-5 h-5 flex-shrink-0">
-        {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : icon}
-      </span>
+      <span className="w-5 h-5 flex-shrink-0">{icon}</span>
       <span className="flex-1 text-left">{label}</span>
-      {!configured && (
-        <span className="text-[10px] opacity-60 font-normal bg-black/20 px-2 py-0.5 rounded-full">
-          config. pendiente
-        </span>
-      )}
-      {configured && !loading && <span className="opacity-50">→</span>}
+      <span className="opacity-50">→</span>
     </motion.button>
   );
 }
