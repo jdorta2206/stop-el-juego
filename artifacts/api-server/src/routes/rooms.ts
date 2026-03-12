@@ -6,6 +6,8 @@ import { CreateRoomBody, JoinRoomBody, SubmitRoomResultsBody } from "@workspace/
 
 const router: IRouter = Router();
 
+const ALPHABET_ES = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").filter(l => !["Q","X"].includes(l));
+
 function generateRoomCode(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   let code = "";
@@ -16,11 +18,11 @@ function generateRoomCode(): string {
 }
 
 function parseRoomPlayers(json: string): any[] {
-  try {
-    return JSON.parse(json);
-  } catch {
-    return [];
-  }
+  try { return JSON.parse(json); } catch { return []; }
+}
+
+function randomLetter(): string {
+  return ALPHABET_ES[Math.floor(Math.random() * ALPHABET_ES.length)];
 }
 
 function formatRoom(room: any) {
@@ -38,22 +40,18 @@ function formatRoom(room: any) {
   };
 }
 
+// POST /rooms — create room
 router.post("/", async (req, res) => {
   const body = CreateRoomBody.safeParse(req.body);
-  if (!body.success) {
-    res.status(400).json({ error: "Invalid request body" });
-    return;
-  }
+  if (!body.success) { res.status(400).json({ error: "Invalid request body" }); return; }
 
   const { hostId, hostName, avatarColor, maxRounds, language } = body.data;
-  
+
   let roomCode = generateRoomCode();
-  let attempts = 0;
-  while (attempts < 5) {
+  for (let i = 0; i < 5; i++) {
     const existing = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, roomCode)).limit(1);
     if (existing.length === 0) break;
     roomCode = generateRoomCode();
-    attempts++;
   }
 
   const players = [{
@@ -61,8 +59,9 @@ router.post("/", async (req, res) => {
     playerName: hostName,
     avatarColor: avatarColor ?? "#e53e3e",
     score: 0,
+    roundScore: 0,
     isHost: true,
-    isReady: true,
+    isReady: false,
   }];
 
   const [room] = await db.insert(roomsTable).values({
@@ -78,47 +77,34 @@ router.post("/", async (req, res) => {
   res.status(201).json(formatRoom(room));
 });
 
+// GET /rooms/:roomCode
 router.get("/:roomCode", async (req, res) => {
   const { roomCode } = req.params;
-  
   const rooms = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, roomCode.toUpperCase())).limit(1);
-  
-  if (rooms.length === 0) {
-    res.status(404).json({ error: "Room not found" });
-    return;
-  }
-
+  if (rooms.length === 0) { res.status(404).json({ error: "Room not found" }); return; }
   res.json(formatRoom(rooms[0]));
 });
 
+// POST /rooms/:roomCode/join
 router.post("/:roomCode/join", async (req, res) => {
   const { roomCode } = req.params;
   const body = JoinRoomBody.safeParse(req.body);
-  
-  if (!body.success) {
-    res.status(400).json({ error: "Invalid request body" });
-    return;
-  }
+  if (!body.success) { res.status(400).json({ error: "Invalid request body" }); return; }
 
   const rooms = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, roomCode.toUpperCase())).limit(1);
-  
-  if (rooms.length === 0) {
-    res.status(404).json({ error: "Room not found" });
-    return;
-  }
+  if (rooms.length === 0) { res.status(404).json({ error: "Room not found" }); return; }
 
   const room = rooms[0];
   const players = parseRoomPlayers(room.playersJson);
-  
   const { playerId, playerName, avatarColor } = body.data;
-  
-  const existing = players.find((p: any) => p.playerId === playerId);
-  if (!existing) {
+
+  if (!players.find((p: any) => p.playerId === playerId)) {
     players.push({
       playerId,
       playerName,
       avatarColor: avatarColor ?? "#3182ce",
       score: 0,
+      roundScore: 0,
       isHost: false,
       isReady: false,
     });
@@ -132,50 +118,26 @@ router.post("/:roomCode/join", async (req, res) => {
   res.json(formatRoom(updated));
 });
 
-router.post("/:roomCode/results", async (req, res) => {
+// POST /rooms/:roomCode/start — host starts the game / next round
+router.post("/:roomCode/start", async (req, res) => {
   const { roomCode } = req.params;
-  const body = SubmitRoomResultsBody.safeParse(req.body);
-  
-  if (!body.success) {
-    res.status(400).json({ error: "Invalid request body" });
-    return;
-  }
-
   const rooms = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, roomCode.toUpperCase())).limit(1);
-  
-  if (rooms.length === 0) {
-    res.status(404).json({ error: "Room not found" });
-    return;
-  }
+  if (rooms.length === 0) { res.status(404).json({ error: "Room not found" }); return; }
 
   const room = rooms[0];
   const players = parseRoomPlayers(room.playersJson);
-  const { playerId, roundScore } = body.data;
-  
-  const updatedPlayers = players.map((p: any) => {
-    if (p.playerId === playerId) {
-      return { ...p, score: (p.score || 0) + roundScore, isReady: true };
-    }
-    return p;
-  });
 
-  // Check if all players submitted - advance round
-  const allReady = updatedPlayers.every((p: any) => p.isReady);
-  const newRound = allReady ? room.currentRound + 1 : room.currentRound;
-  const newStatus = newRound >= room.maxRounds ? "finished" : (allReady ? "waiting" : "playing");
-  
-  // Generate random letter for next round
-  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
-  const newLetter = allReady ? alphabet[Math.floor(Math.random() * alphabet.length)] : room.currentLetter;
-
-  const resetPlayers = allReady ? updatedPlayers.map((p: any) => ({ ...p, isReady: false })) : updatedPlayers;
+  // Reset all isReady and roundScore
+  const resetPlayers = players.map((p: any) => ({ ...p, isReady: false, roundScore: 0 }));
+  const newRound = room.currentRound === 0 ? 1 : room.currentRound;
+  const letter = randomLetter();
 
   const [updated] = await db.update(roomsTable)
-    .set({ 
-      playersJson: JSON.stringify(resetPlayers), 
+    .set({
+      status: "playing",
       currentRound: newRound,
-      currentLetter: newLetter,
-      status: newStatus,
+      currentLetter: letter,
+      playersJson: JSON.stringify(resetPlayers),
       updatedAt: new Date(),
     })
     .where(eq(roomsTable.roomCode, roomCode.toUpperCase()))
@@ -184,22 +146,55 @@ router.post("/:roomCode/results", async (req, res) => {
   res.json(formatRoom(updated));
 });
 
-// Start game endpoint (host only)
-router.post("/:roomCode/start", async (req, res) => {
+// POST /rooms/:roomCode/results — player submits their round answers
+router.post("/:roomCode/results", async (req, res) => {
   const { roomCode } = req.params;
-  
+  const body = SubmitRoomResultsBody.safeParse(req.body);
+  if (!body.success) { res.status(400).json({ error: "Invalid request body" }); return; }
+
   const rooms = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, roomCode.toUpperCase())).limit(1);
-  
-  if (rooms.length === 0) {
-    res.status(404).json({ error: "Room not found" });
-    return;
+  if (rooms.length === 0) { res.status(404).json({ error: "Room not found" }); return; }
+
+  const room = rooms[0];
+  const players = parseRoomPlayers(room.playersJson);
+  const { playerId, roundScore } = body.data;
+
+  // Update player score and mark ready
+  const updatedPlayers = players.map((p: any) => {
+    if (p.playerId === playerId) {
+      return { ...p, score: (p.score || 0) + roundScore, roundScore, isReady: true };
+    }
+    return p;
+  });
+
+  const allReady = updatedPlayers.every((p: any) => p.isReady);
+  const newRound = allReady ? room.currentRound + 1 : room.currentRound;
+  const isGameOver = newRound > room.maxRounds;
+
+  let newStatus = room.status;
+  let newLetter = room.currentLetter;
+  let finalPlayers = updatedPlayers;
+
+  if (allReady) {
+    if (isGameOver) {
+      newStatus = "finished";
+    } else {
+      // Auto-advance to next round immediately
+      newStatus = "playing";
+      newLetter = randomLetter();
+      // Reset isReady and roundScore for new round
+      finalPlayers = updatedPlayers.map((p: any) => ({ ...p, isReady: false, roundScore: 0 }));
+    }
   }
 
-  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
-  const letter = alphabet[Math.floor(Math.random() * alphabet.length)];
-
   const [updated] = await db.update(roomsTable)
-    .set({ status: "playing", currentRound: 1, currentLetter: letter, updatedAt: new Date() })
+    .set({
+      playersJson: JSON.stringify(finalPlayers),
+      currentRound: newRound > room.maxRounds ? room.maxRounds : newRound,
+      currentLetter: newLetter,
+      status: newStatus,
+      updatedAt: new Date(),
+    })
     .where(eq(roomsTable.roomCode, roomCode.toUpperCase()))
     .returning();
 

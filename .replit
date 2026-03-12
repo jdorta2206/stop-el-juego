@@ -1,4 +1,4 @@
-modules = ["nodejs-24"]
+modules = ["nodejs-24", "postgresql-16"]
 
 [[artifacts]]
 id = "artifacts/api-server"
@@ -31,3 +31,6 @@ timeoutMs = 20000
 APP_ORIGIN = "https://3697d7d1-ea3c-4cf5-b00f-386041779844-00-emhgnr1gq77c.kirk.replit.dev"
 VITE_INSTAGRAM_CLIENT_ID = "1379237529947145"
 VITE_TIKTOK_CLIENT_KEY = "aw3oaev5mhzkl4r2"
+
+[nix]
+channel = "stable-25_05"
