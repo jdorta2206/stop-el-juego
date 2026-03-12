@@ -42,6 +42,7 @@ export const roomsTable = pgTable("rooms", {
   maxRounds: integer("max_rounds").notNull().default(3),
   language: text("language").notNull().default("es"),
   playersJson: text("players_json").notNull().default("[]"),
+  stopperJson: text("stopper_json"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

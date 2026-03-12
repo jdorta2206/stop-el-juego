@@ -17,8 +17,13 @@ function generateRoomCode(): string {
   return code;
 }
 
-function parseRoomPlayers(json: string): any[] {
+function parsePlayers(json: string): any[] {
   try { return JSON.parse(json); } catch { return []; }
+}
+
+function parseStopper(json: string | null): any | null {
+  if (!json) return null;
+  try { return JSON.parse(json); } catch { return null; }
 }
 
 function randomLetter(): string {
@@ -35,7 +40,8 @@ function formatRoom(room: any) {
     currentRound: room.currentRound,
     maxRounds: room.maxRounds,
     language: room.language,
-    players: parseRoomPlayers(room.playersJson),
+    players: parsePlayers(room.playersJson),
+    stopper: parseStopper(room.stopperJson),
     createdAt: room.createdAt,
   };
 }
@@ -72,6 +78,7 @@ router.post("/", async (req, res) => {
     maxRounds: maxRounds ?? 3,
     language: language ?? "es",
     playersJson: JSON.stringify(players),
+    stopperJson: null,
   }).returning();
 
   res.status(201).json(formatRoom(room));
@@ -95,7 +102,7 @@ router.post("/:roomCode/join", async (req, res) => {
   if (rooms.length === 0) { res.status(404).json({ error: "Room not found" }); return; }
 
   const room = rooms[0];
-  const players = parseRoomPlayers(room.playersJson);
+  const players = parsePlayers(room.playersJson);
   const { playerId, playerName, avatarColor } = body.data;
 
   if (!players.find((p: any) => p.playerId === playerId)) {
@@ -118,26 +125,26 @@ router.post("/:roomCode/join", async (req, res) => {
   res.json(formatRoom(updated));
 });
 
-// POST /rooms/:roomCode/start — host starts the game / next round
+// POST /rooms/:roomCode/start — host starts / continues the game
 router.post("/:roomCode/start", async (req, res) => {
   const { roomCode } = req.params;
   const rooms = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, roomCode.toUpperCase())).limit(1);
   if (rooms.length === 0) { res.status(404).json({ error: "Room not found" }); return; }
 
   const room = rooms[0];
-  const players = parseRoomPlayers(room.playersJson);
+  const players = parsePlayers(room.playersJson);
 
-  // Reset all isReady and roundScore
+  // Reset all ready flags and round scores for new round
   const resetPlayers = players.map((p: any) => ({ ...p, isReady: false, roundScore: 0 }));
   const newRound = room.currentRound === 0 ? 1 : room.currentRound;
-  const letter = randomLetter();
 
   const [updated] = await db.update(roomsTable)
     .set({
       status: "playing",
       currentRound: newRound,
-      currentLetter: letter,
+      currentLetter: randomLetter(),
       playersJson: JSON.stringify(resetPlayers),
+      stopperJson: null,
       updatedAt: new Date(),
     })
     .where(eq(roomsTable.roomCode, roomCode.toUpperCase()))
@@ -146,7 +153,37 @@ router.post("/:roomCode/start", async (req, res) => {
   res.json(formatRoom(updated));
 });
 
-// POST /rooms/:roomCode/results — player submits their round answers
+// POST /rooms/:roomCode/stop — ANY player calls this to stop the round globally
+router.post("/:roomCode/stop", async (req, res) => {
+  const { roomCode } = req.params;
+  const { playerId, playerName } = req.body;
+
+  const rooms = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, roomCode.toUpperCase())).limit(1);
+  if (rooms.length === 0) { res.status(404).json({ error: "Room not found" }); return; }
+
+  const room = rooms[0];
+
+  // Only stop if currently playing (ignore duplicate stops)
+  if (room.status !== "playing") {
+    res.json(formatRoom(room));
+    return;
+  }
+
+  const stopper = { id: playerId, name: playerName };
+
+  const [updated] = await db.update(roomsTable)
+    .set({
+      status: "stopped",
+      stopperJson: JSON.stringify(stopper),
+      updatedAt: new Date(),
+    })
+    .where(eq(roomsTable.roomCode, roomCode.toUpperCase()))
+    .returning();
+
+  res.json(formatRoom(updated));
+});
+
+// POST /rooms/:roomCode/results — each player submits their answers after STOP
 router.post("/:roomCode/results", async (req, res) => {
   const { roomCode } = req.params;
   const body = SubmitRoomResultsBody.safeParse(req.body);
@@ -156,10 +193,17 @@ router.post("/:roomCode/results", async (req, res) => {
   if (rooms.length === 0) { res.status(404).json({ error: "Room not found" }); return; }
 
   const room = rooms[0];
-  const players = parseRoomPlayers(room.playersJson);
+
+  // Must be stopped or playing to submit
+  if (room.status !== "stopped" && room.status !== "playing") {
+    res.json(formatRoom(room));
+    return;
+  }
+
+  const players = parsePlayers(room.playersJson);
   const { playerId, roundScore } = body.data;
 
-  // Update player score and mark ready
+  // Update this player's score and mark as ready
   const updatedPlayers = players.map((p: any) => {
     if (p.playerId === playerId) {
       return { ...p, score: (p.score || 0) + roundScore, roundScore, isReady: true };
@@ -168,29 +212,30 @@ router.post("/:roomCode/results", async (req, res) => {
   });
 
   const allReady = updatedPlayers.every((p: any) => p.isReady);
-  const newRound = allReady ? room.currentRound + 1 : room.currentRound;
-  const isGameOver = newRound > room.maxRounds;
 
   let newStatus = room.status;
   let newLetter = room.currentLetter;
+  let newRound = room.currentRound;
   let finalPlayers = updatedPlayers;
 
   if (allReady) {
+    newRound = room.currentRound + 1;
+    const isGameOver = newRound > room.maxRounds;
+
     if (isGameOver) {
       newStatus = "finished";
+      newRound = room.maxRounds;
     } else {
-      // Auto-advance to next round immediately
-      newStatus = "playing";
+      // Go back to waiting — host will click "Siguiente Ronda" to continue
+      newStatus = "waiting";
       newLetter = randomLetter();
-      // Reset isReady and roundScore for new round
-      finalPlayers = updatedPlayers.map((p: any) => ({ ...p, isReady: false, roundScore: 0 }));
     }
   }
 
   const [updated] = await db.update(roomsTable)
     .set({
       playersJson: JSON.stringify(finalPlayers),
-      currentRound: newRound > room.maxRounds ? room.maxRounds : newRound,
+      currentRound: newRound,
       currentLetter: newLetter,
       status: newStatus,
       updatedAt: new Date(),
