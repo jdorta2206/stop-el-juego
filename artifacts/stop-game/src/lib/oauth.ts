@@ -12,7 +12,8 @@ export interface OAuthUser {
 // Which providers are configured (secrets exist)
 export const isGoogleConfigured    = !!import.meta.env.VITE_GOOGLE_CLIENT_ID;
 export const isFacebookConfigured  = !!import.meta.env.VITE_FACEBOOK_APP_ID;
-export const isInstagramConfigured = !!import.meta.env.VITE_INSTAGRAM_CLIENT_ID;
+// Instagram requires Meta app review to work — show as coming soon until approved
+export const isInstagramConfigured = false;
 export const isTikTokConfigured    = !!import.meta.env.VITE_TIKTOK_CLIENT_KEY;
 
 function startOAuth(provider: "google" | "facebook" | "instagram" | "tiktok") {

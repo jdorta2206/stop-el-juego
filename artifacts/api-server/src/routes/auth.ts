@@ -191,11 +191,11 @@ router.get("/instagram/start", (req: Request, res: Response) => {
   const params = new URLSearchParams({
     client_id: INSTAGRAM_CLIENT_ID,
     redirect_uri: redirectUri,
-    scope: "instagram_business_basic",
+    scope: "user_profile,user_media",
     response_type: "code",
     state,
   });
-  res.redirect(`https://www.instagram.com/oauth/authorize?${params}`);
+  res.redirect(`https://api.instagram.com/oauth/authorize?${params}`);
 });
 
 router.get("/instagram/callback", async (req: Request, res: Response) => {
