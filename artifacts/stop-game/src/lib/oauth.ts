@@ -12,8 +12,8 @@ export interface OAuthUser {
 // Which providers are configured (secrets exist)
 export const isGoogleConfigured    = !!import.meta.env.VITE_GOOGLE_CLIENT_ID;
 export const isFacebookConfigured  = !!import.meta.env.VITE_FACEBOOK_APP_ID;
-// Instagram requires Meta app review to work — show as coming soon until approved
-export const isInstagramConfigured = false;
+// Instagram Business API — app is live in production
+export const isInstagramConfigured = true;
 // TikTok requires domain verification + app review (like Instagram) — re-enable after deployment
 export const isTikTokConfigured    = false;
 
