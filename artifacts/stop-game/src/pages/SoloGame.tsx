@@ -4,7 +4,7 @@ import confetti from "canvas-confetti";
 import { Layout } from "@/components/Layout";
 import { Button, Card, Input, Progress } from "@/components/ui";
 import { Roulette } from "@/components/Roulette";
-import { CATEGORIES_ES, ALPHABET_ES } from "@/lib/utils";
+import { getCategories, getAlphabet, getCurrentLang } from "@/lib/utils";
 import { useValidateRound, useSubmitScore } from "@workspace/api-client-react";
 import { usePlayer } from "@/hooks/use-player";
 import { motion, AnimatePresence } from "framer-motion";
@@ -12,14 +12,17 @@ import { InterstitialAd, RewardedAd, BannerAd } from "@/components/AdSystem";
 import { PremiumModal } from "@/components/PremiumModal";
 import { usePremium } from "@/lib/usePremium";
 import { Tv2, Crown } from "lucide-react";
+import { useT } from "@/i18n/useT";
 
 type GameState = "LOBBY" | "SPINNING" | "PLAYING" | "EVALUATING" | "RESULTS" | "AD_BETWEEN_ROUNDS";
 
 const ROUND_TIME = 60;
+const MAX_ROUNDS = 3;
 
 export default function SoloGame() {
   const { player } = usePlayer();
   const { isPremium } = usePremium(player?.id);
+  const { t, lang } = useT();
   const [gameState, setGameState] = useState<GameState>("LOBBY");
   const [currentLetter, setCurrentLetter] = useState<string>("");
   const [timeLeft, setTimeLeft] = useState(ROUND_TIME);
@@ -30,8 +33,13 @@ export default function SoloGame() {
   const [showRewardedAd, setShowRewardedAd] = useState(false);
   const [rewardedUsed, setRewardedUsed] = useState(false);
   const [showPremiumModal, setShowPremiumModal] = useState(false);
+  const [categories, setCategories] = useState<string[]>(getCategories());
 
-  // Check URL for checkout result
+  // Re-read categories when language changes
+  useEffect(() => {
+    setCategories(getCategories());
+  }, [lang]);
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("premium") === "success") {
@@ -45,7 +53,8 @@ export default function SoloGame() {
   const timerRef = useRef<NodeJS.Timeout>(null);
 
   const startGame = () => {
-    const randomLetter = ALPHABET_ES[Math.floor(Math.random() * ALPHABET_ES.length)];
+    const alphabet = getAlphabet();
+    const randomLetter = alphabet[Math.floor(Math.random() * alphabet.length)];
     setCurrentLetter(randomLetter);
     setResponses({});
     setGameState("SPINNING");
@@ -71,7 +80,8 @@ export default function SoloGame() {
     if (timerRef.current) clearInterval(timerRef.current);
     setGameState("EVALUATING");
 
-    const formattedResponses = CATEGORIES_ES.map(cat => ({
+    const currentCategories = getCategories();
+    const formattedResponses = currentCategories.map(cat => ({
       category: cat,
       word: responses[cat] || ""
     }));
@@ -80,7 +90,7 @@ export default function SoloGame() {
       await validateMutation.mutateAsync({
         data: {
           letter: currentLetter,
-          language: "es",
+          language: getCurrentLang(),
           playerName: player?.name,
           playerResponses: formattedResponses,
         }
@@ -105,7 +115,7 @@ export default function SoloGame() {
   }, [gameState, results]);
 
   const nextRound = () => {
-    if (round >= 3) {
+    if (round >= MAX_ROUNDS) {
       if (player) {
         submitScoreMutation.mutate({
           data: {
@@ -124,7 +134,6 @@ export default function SoloGame() {
       setTotalScore(0);
       setAiTotalScore(0);
     } else {
-      // Premium users skip interstitial ads
       if (isPremium) {
         setRound(r => r + 1);
         startGame();
@@ -149,12 +158,10 @@ export default function SoloGame() {
     <Layout>
       <div className="flex-1 flex flex-col max-w-2xl mx-auto w-full">
 
-        {/* Between-rounds interstitial — skipped for premium */}
         {gameState === "AD_BETWEEN_ROUNDS" && (
           <InterstitialAd onDone={afterInterstitial} />
         )}
 
-        {/* Rewarded ad overlay */}
         {showRewardedAd && (
           <RewardedAd
             rewardType="extraTime"
@@ -164,13 +171,12 @@ export default function SoloGame() {
           />
         )}
 
-        {/* Premium modal */}
         {showPremiumModal && (
           <PremiumModal
             open={showPremiumModal}
             onClose={() => setShowPremiumModal(false)}
             playerId={player?.id || "guest"}
-            playerName={player?.name || "Jugador"}
+            playerName={player?.name || ""}
             isPremium={isPremium}
           />
         )}
@@ -178,15 +184,15 @@ export default function SoloGame() {
         {/* Header Stats */}
         <div className="flex justify-between items-center bg-black/20 rounded-2xl p-4 mb-5 backdrop-blur-md">
           <div className="text-center">
-            <p className="text-xs text-white/60 font-bold uppercase">Ronda</p>
-            <p className="text-2xl font-display font-bold">{round}/3</p>
+            <p className="text-xs text-white/60 font-bold uppercase">{t.game.round}</p>
+            <p className="text-2xl font-display font-bold">{round}/{MAX_ROUNDS}</p>
           </div>
           <div className="text-center border-l border-r border-white/20 px-6">
-            <p className="text-xs text-white/60 font-bold uppercase">Tú</p>
+            <p className="text-xs text-white/60 font-bold uppercase">{t.game.you}</p>
             <p className="text-2xl font-display font-black text-secondary">{totalScore}</p>
           </div>
           <div className="text-center">
-            <p className="text-xs text-white/60 font-bold uppercase">IA</p>
+            <p className="text-xs text-white/60 font-bold uppercase">{t.game.ai}</p>
             <p className="text-2xl font-display font-bold">{aiTotalScore}</p>
           </div>
         </div>
@@ -201,29 +207,21 @@ export default function SoloGame() {
               className="flex-1 flex flex-col items-center justify-center text-center space-y-8"
             >
               <div>
-                <h2 className="text-4xl font-display font-bold mb-2">Jugar contra la IA</h2>
-                <p className="text-white/70 max-w-md">La IA es rápida y no comete errores ortográficos. ¡Demuestra que los humanos somos más creativos!</p>
+                <h2 className="text-4xl font-display font-bold mb-2">{t.home.soloVsAI}</h2>
               </div>
-              <Button size="xl" onClick={startGame}>Comenzar Ronda {round}</Button>
+              <Button size="xl" onClick={startGame}>{t.game.round} {round}</Button>
 
-              {/* Premium upsell or badge */}
               {isPremium ? (
                 <button
                   onClick={() => setShowPremiumModal(true)}
                   className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all"
                   style={{ background: "rgba(249,168,37,0.15)", border: "1px solid rgba(249,168,37,0.4)", color: "#f9a825" }}
                 >
-                  <Crown size={16} /> Premium activo · Gestionar
+                  <Crown size={16} /> {t.premium.active}
                 </button>
               ) : (
                 <>
                   <BannerAd className="w-full max-w-md" />
-                  <button
-                    onClick={() => setShowPremiumModal(true)}
-                    className="text-white/50 text-xs underline underline-offset-2 hover:text-white/80 transition-colors"
-                  >
-                    ¿Cansado de anuncios? Activa Premium →
-                  </button>
                 </>
               )}
             </motion.div>
@@ -236,7 +234,7 @@ export default function SoloGame() {
               initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}
               className="flex-1 flex flex-col items-center justify-center"
             >
-              <h3 className="text-2xl font-display font-bold mb-8 animate-pulse">Girando la ruleta...</h3>
+              <h3 className="text-2xl font-display font-bold mb-8 animate-pulse">{t.game.spinningLetter}</h3>
               <Roulette isSpinning={true} targetLetter={currentLetter} onSpinComplete={startRound} />
             </motion.div>
           )}
@@ -248,14 +246,13 @@ export default function SoloGame() {
               initial={{ opacity: 0, x: 50 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -50 }}
               className="flex-1 flex flex-col"
             >
-              {/* Letter + timer bar */}
               <div className="flex items-center gap-4 mb-5 bg-primary p-4 rounded-2xl shadow-lg border-2 border-white/10">
                 <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center text-primary font-display font-black text-4xl shadow-inner flex-shrink-0">
                   {currentLetter}
                 </div>
                 <div className="flex-1">
                   <div className="flex justify-between mb-1">
-                    <span className="font-bold text-sm text-white/70">Tiempo restante</span>
+                    <span className="font-bold text-sm text-white/70">{t.game.round}</span>
                     <span className={timeLeft <= 10 ? "text-red-400 font-black animate-pulse" : "font-bold"}>
                       {timeLeft}s
                     </span>
@@ -267,19 +264,17 @@ export default function SoloGame() {
                 </div>
               </div>
 
-              {/* +30s rewarded ad button — always available (fun even for premium) */}
               {!rewardedUsed && (
                 <button
                   onClick={() => setShowRewardedAd(true)}
                   className="mb-3 flex items-center justify-center gap-2 py-2 px-4 rounded-xl border border-yellow-500/30 bg-yellow-500/10 text-yellow-300 text-sm font-bold hover:bg-yellow-500/20 transition-all"
                 >
-                  <Tv2 className="w-4 h-4" /> Ver anuncio para +30 segundos
+                  <Tv2 className="w-4 h-4" /> {t.game.watchAdForPoints}
                 </button>
               )}
 
-              {/* Category inputs */}
               <div className="space-y-2 flex-1 overflow-y-auto pb-28">
-                {CATEGORIES_ES.map(category => (
+                {categories.map(category => (
                   <div key={category} className="bg-card p-3 rounded-xl border border-white/5">
                     <label className="block text-xs font-black text-secondary mb-1 uppercase tracking-wider">{category}</label>
                     <Input
@@ -293,7 +288,6 @@ export default function SoloGame() {
                 ))}
               </div>
 
-              {/* STOP button */}
               <div className="fixed bottom-4 left-0 w-full px-4 z-20">
                 <div className="max-w-2xl mx-auto">
                   <Button
@@ -302,7 +296,7 @@ export default function SoloGame() {
                     className="w-full py-6 rounded-full text-3xl shadow-2xl shadow-red-900/50 border-4 border-white/20"
                     onClick={handleStop}
                   >
-                    ¡STOP!
+                    {t.game.stop}
                   </Button>
                 </div>
               </div>
@@ -317,8 +311,7 @@ export default function SoloGame() {
               className="flex-1 flex flex-col items-center justify-center"
             >
               <div className="w-16 h-16 border-4 border-white border-t-secondary rounded-full animate-spin mb-6" />
-              <h2 className="text-3xl font-display font-bold">La IA está evaluando...</h2>
-              <p className="text-white/60 mt-2">Revisando diccionarios y reglas</p>
+              <h2 className="text-3xl font-display font-bold">{t.game.evaluating}</h2>
             </motion.div>
           )}
 
@@ -329,23 +322,21 @@ export default function SoloGame() {
               initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
               className="flex-1 flex flex-col pb-8"
             >
-              <h2 className="text-3xl font-display font-bold mb-4 text-center">Resultados de la Ronda</h2>
+              <h2 className="text-3xl font-display font-bold mb-4 text-center">{t.game.results}</h2>
 
-              {/* Round score summary */}
               <div className="bg-primary/50 rounded-2xl p-4 flex justify-around mb-5 border border-white/10">
                 <div className="text-center">
-                  <p className="text-sm font-bold text-white/60">Tu puntuación</p>
+                  <p className="text-sm font-bold text-white/60">{t.game.you}</p>
                   <p className="text-4xl font-display font-black text-secondary">+{results?.playerTotalScore || 0}</p>
                 </div>
                 <div className="text-center border-l border-white/20 pl-8">
-                  <p className="text-sm font-bold text-white/60">Puntuación IA</p>
+                  <p className="text-sm font-bold text-white/60">{t.game.ai}</p>
                   <p className="text-4xl font-display font-black">+{results?.aiTotalScore || 0}</p>
                 </div>
               </div>
 
-              {/* Category breakdown */}
               <div className="space-y-3 mb-6 flex-1 overflow-y-auto">
-                {CATEGORIES_ES.map(category => {
+                {categories.map(category => {
                   const res = results?.results?.[category];
                   const playerRes = res?.player;
                   const aiRes = res?.ai;
@@ -355,16 +346,16 @@ export default function SoloGame() {
                       <h4 className="font-bold text-secondary text-xs mb-2 uppercase tracking-wider">{category}</h4>
                       <div className="grid grid-cols-2 gap-3">
                         <div className="bg-card p-3 rounded-lg border border-white/10 relative overflow-hidden">
-                          <p className="text-xs text-white/50 font-bold mb-1">Tú</p>
-                          <p className="font-semibold text-lg break-words">{playerRes?.response || "—"}</p>
+                          <p className="text-xs text-white/50 font-bold mb-1">{t.game.you}</p>
+                          <p className="font-semibold text-lg break-words">{playerRes?.response || t.game.empty}</p>
                           <div className={`absolute top-0 right-0 h-full w-1.5 ${playerRes?.score === 10 ? "bg-green-500" : playerRes?.score === 5 ? "bg-yellow-400" : "bg-red-500/60"}`} />
-                          <span className="absolute bottom-2 right-3 text-xs font-bold opacity-50">{playerRes?.score ?? 0}pts</span>
+                          <span className="absolute bottom-2 right-3 text-xs font-bold opacity-50">{playerRes?.score ?? 0}{t.game.points}</span>
                         </div>
                         <div className="bg-primary/40 p-3 rounded-lg border border-white/10 relative overflow-hidden">
-                          <p className="text-xs text-white/50 font-bold mb-1">IA</p>
-                          <p className="font-semibold text-lg break-words">{aiRes?.response || "—"}</p>
+                          <p className="text-xs text-white/50 font-bold mb-1">{t.game.ai}</p>
+                          <p className="font-semibold text-lg break-words">{aiRes?.response || t.game.empty}</p>
                           <div className={`absolute top-0 right-0 h-full w-1.5 ${aiRes?.score === 10 ? "bg-green-500" : aiRes?.score === 5 ? "bg-yellow-400" : "bg-red-500/60"}`} />
-                          <span className="absolute bottom-2 right-3 text-xs font-bold opacity-50">{aiRes?.score ?? 0}pts</span>
+                          <span className="absolute bottom-2 right-3 text-xs font-bold opacity-50">{aiRes?.score ?? 0}{t.game.points}</span>
                         </div>
                       </div>
                     </Card>
@@ -372,23 +363,21 @@ export default function SoloGame() {
                 })}
               </div>
 
-              {/* Banner ad in results — hidden for premium */}
               {!isPremium && <BannerAd className="mb-4" />}
 
-              {/* Next round / finish buttons */}
               <div className="grid grid-cols-2 gap-3">
-                {round >= 3 ? (
+                {round >= MAX_ROUNDS ? (
                   <>
                     <Button size="lg" onClick={() => { setRound(1); setGameState("LOBBY"); setTotalScore(0); setAiTotalScore(0); }}>
-                      Nueva Partida
+                      {t.game.playAgain}
                     </Button>
                     <Link href="/ranking">
-                      <Button variant="secondary" size="lg" className="w-full">Ver Ranking</Button>
+                      <Button variant="secondary" size="lg" className="w-full">{t.ranking.title}</Button>
                     </Link>
                   </>
                 ) : (
                   <Button size="lg" className="col-span-2" onClick={nextRound}>
-                    Siguiente Ronda ({round + 1}/3)
+                    {t.game.nextRound} ({round + 1}/{MAX_ROUNDS})
                   </Button>
                 )}
               </div>

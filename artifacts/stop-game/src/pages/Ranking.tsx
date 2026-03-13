@@ -5,11 +5,13 @@ import { useGetLeaderboard } from "@workspace/api-client-react";
 import { Trophy } from "lucide-react";
 import { usePlayer } from "@/hooks/use-player";
 import { motion } from "framer-motion";
+import { useT } from "@/i18n/useT";
 
 export default function Ranking() {
   const { data, isLoading } = useGetLeaderboard({ limit: 50 });
   const { player } = usePlayer();
-  const [filter, setFilter] = useState<"global" | "amigos">("global");
+  const { t } = useT();
+  const [filter, setFilter] = useState<"global" | "friends">("global");
 
   const players = data?.players || [];
   const top3 = players.slice(0, 3);
@@ -17,7 +19,7 @@ export default function Ranking() {
   const myEntry = players.find((p: any) => p.playerId === player?.id);
   const myRank = myEntry ? players.indexOf(myEntry) + 1 : null;
 
-  const PODIUM_ORDER = [1, 0, 2]; // silver, gold, bronze visual order
+  const PODIUM_ORDER = [1, 0, 2];
 
   const medalColors: Record<number, { bg: string; border: string; size: string; label: string }> = {
     0: { bg: "linear-gradient(135deg, #f9a825, #f57f17)", border: "#f9a825", size: "w-20 h-20 text-3xl", label: "🥇" },
@@ -29,26 +31,23 @@ export default function Ranking() {
     <Layout>
       <div className="flex-1 flex flex-col max-w-3xl mx-auto w-full py-8 space-y-6">
 
-        {/* Title */}
         <div className="text-center">
           <h1 className="text-4xl md:text-5xl font-display font-black text-white flex items-center justify-center gap-4">
             <Trophy className="w-10 h-10 text-secondary" />
-            Clasificación
+            {t.ranking.title}
             <Trophy className="w-10 h-10 text-secondary" />
           </h1>
-          <p className="text-white/70 mt-2 font-bold">Los mejores jugadores del mundo</p>
         </div>
 
-        {/* Filter tabs */}
         <div className="flex justify-center">
           <div className="bg-black/30 p-1 rounded-full flex gap-1">
-            {(["global", "amigos"] as const).map(f => (
+            {(["global", "friends"] as const).map(f => (
               <button
                 key={f}
                 className={`px-6 py-2 rounded-full font-bold transition-all capitalize ${filter === f ? "bg-secondary text-black shadow-md" : "text-white hover:bg-white/10"}`}
                 onClick={() => setFilter(f)}
               >
-                {f === "global" ? "Global" : "Amigos"}
+                {f === "global" ? "Global" : t.friends.offline}
               </button>
             ))}
           </div>
@@ -63,12 +62,10 @@ export default function Ranking() {
         ) : players.length === 0 ? (
           <div className="p-16 text-center text-white/50 font-bold bg-black/20 rounded-2xl border border-white/10">
             <Trophy className="w-12 h-12 mx-auto mb-4 opacity-20" />
-            <p>Aún no hay puntuaciones registradas.</p>
-            <p className="text-sm mt-1">¡Juega una partida y sé el primero!</p>
+            <p>{t.ranking.noRanking}</p>
           </div>
         ) : (
           <>
-            {/* Podium — top 3 */}
             {top3.length > 0 && (
               <div className="flex items-end justify-center gap-4 py-4">
                 {PODIUM_ORDER.map(visualIdx => {
@@ -85,10 +82,7 @@ export default function Ranking() {
                       transition={{ delay: visualIdx * 0.15, type: "spring", bounce: 0.4 }}
                       className="flex flex-col items-center gap-2"
                     >
-                      {/* Medal label */}
                       <span className="text-2xl">{m.label}</span>
-
-                      {/* Avatar */}
                       <motion.div
                         animate={visualIdx === 0 ? { y: [0, -4, 0] } : {}}
                         transition={{ repeat: Infinity, duration: 2 }}
@@ -97,17 +91,13 @@ export default function Ranking() {
                       >
                         {p.playerName.charAt(0).toUpperCase()}
                         {isMe && (
-                          <span className="absolute -top-2 -right-2 bg-secondary text-black text-[9px] font-black px-1.5 py-0.5 rounded-full">TÚ</span>
+                          <span className="absolute -top-2 -right-2 bg-secondary text-black text-[9px] font-black px-1.5 py-0.5 rounded-full">{t.game.you.toUpperCase()}</span>
                         )}
                       </motion.div>
-
-                      {/* Name & score */}
                       <div className="text-center">
                         <p className="font-black text-sm truncate max-w-[80px]">{p.playerName}</p>
-                        <p className="font-black text-secondary">{p.totalScore} pts</p>
+                        <p className="font-black text-secondary">{p.totalScore} {t.game.points}</p>
                       </div>
-
-                      {/* Podium base */}
                       <div
                         className={`${podiumHeights[visualIdx]} w-24 rounded-t-xl flex items-end justify-center pb-2`}
                         style={{ background: `linear-gradient(to bottom, ${m.border}33, ${m.border}11)`, border: `1px solid ${m.border}44` }}
@@ -120,7 +110,6 @@ export default function Ranking() {
               </div>
             )}
 
-            {/* My rank highlight (if not in top 3) */}
             {myEntry && myRank && myRank > 3 && (
               <Card className="p-3 bg-secondary/10 border border-secondary/30">
                 <div className="flex items-center gap-3">
@@ -128,24 +117,21 @@ export default function Ranking() {
                   <div className="w-9 h-9 rounded-full flex items-center justify-center text-white font-bold shadow" style={{ backgroundColor: myEntry.avatarColor || "#555" }}>
                     {myEntry.playerName.charAt(0).toUpperCase()}
                   </div>
-                  <span className="flex-1 font-black">{myEntry.playerName} <span className="text-secondary text-xs">(Tú)</span></span>
-                  <span className="text-white/60 text-sm">{myEntry.gamesPlayed} partidas</span>
-                  <span className="text-secondary font-black text-lg">{myEntry.totalScore} pts</span>
+                  <span className="flex-1 font-black">{myEntry.playerName} <span className="text-secondary text-xs">({t.game.you})</span></span>
+                  <span className="text-white/60 text-sm">{myEntry.gamesPlayed}</span>
+                  <span className="text-secondary font-black text-lg">{myEntry.totalScore} {t.game.points}</span>
                 </div>
               </Card>
             )}
 
-            {/* Rows 4+ */}
             {rest.length > 0 && (
               <Card className="p-2 bg-black/20 border-white/10 shadow-xl">
-                {/* Header */}
                 <div className="grid grid-cols-[40px_1fr_80px_80px] gap-2 px-3 py-2 text-xs font-bold text-white/40 uppercase tracking-wider">
                   <div className="text-center">#</div>
-                  <div>Jugador</div>
-                  <div className="text-center">Partidas</div>
-                  <div className="text-right">Puntos</div>
+                  <div>{t.ranking.player}</div>
+                  <div className="text-center">{t.ranking.games}</div>
+                  <div className="text-right">{t.ranking.score}</div>
                 </div>
-
                 <div className="flex flex-col gap-1">
                   {rest.map((p: any, idx: number) => {
                     const position = idx + 4;
@@ -172,7 +158,7 @@ export default function Ranking() {
                           >
                             {p.playerName.charAt(0).toUpperCase()}
                           </div>
-                          <span className="truncate">{p.playerName} {isMe && "(Tú)"}</span>
+                          <span className="truncate">{p.playerName} {isMe && `(${t.game.you})`}</span>
                         </div>
                         <div className={`text-center text-sm ${isMe ? "text-black/70" : "text-white/60"}`}>
                           {p.gamesPlayed}

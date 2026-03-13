@@ -1,18 +1,20 @@
 import { ReactNode, useState } from "react";
 import { Link } from "wouter";
 import { usePlayer } from "@/hooks/use-player";
-import { Crown, LogOut, Edit2 } from "lucide-react";
+import { Crown, LogOut } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button, Input } from "./ui";
 import { AuthModal } from "./AuthModal";
+import { LanguageSelector } from "./LanguageSelector";
 import { AVATAR_COLORS } from "@/lib/utils";
+import { useT } from "@/i18n/useT";
 
 const LOGO_URL = `${import.meta.env.BASE_URL}images/stop-logo.png`;
 
 export function Layout({ children }: { children: ReactNode }) {
-  const { player, isLoaded, needsAuth, savePlayer, updateProfile, logout, showAuth } = usePlayer();
+  const { player, isLoaded, needsAuth, savePlayer, updateProfile, logout } = usePlayer();
+  const { t } = useT();
   const [showProfile, setShowProfile] = useState(false);
-  const [showPremium, setShowPremium] = useState(false);
   const [editName, setEditName] = useState("");
   const [editColor, setEditColor] = useState("");
 
@@ -45,7 +47,6 @@ export function Layout({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-screen flex flex-col relative overflow-hidden">
-      {/* Auth modal — shown when no player profile exists */}
       <AnimatePresence>
         {needsAuth && (
           <AuthModal
@@ -69,16 +70,8 @@ export function Layout({ children }: { children: ReactNode }) {
         </Link>
 
         <div className="flex items-center gap-2">
-          {/* PRO badge */}
-          <motion.button
-            whileHover={{ scale: 1.05, y: -1 }}
-            whileTap={{ scale: 0.97 }}
-            onClick={() => setShowPremium(true)}
-            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full font-black text-sm shadow-md"
-            style={{ background: "linear-gradient(135deg, #f9a825, #f57f17)", color: "#1a237e" }}
-          >
-            <Crown className="w-3.5 h-3.5" /> PRO
-          </motion.button>
+          {/* Language selector */}
+          <LanguageSelector />
 
           {/* Player chip */}
           {player && (
@@ -105,12 +98,11 @@ export function Layout({ children }: { children: ReactNode }) {
         {children}
       </main>
 
-      {/* ── Modals ── */}
+      {/* Profile modal */}
       <AnimatePresence>
         {showProfile && (
-          <Modal onClose={() => setShowProfile(false)} title="Mi Perfil">
+          <Modal onClose={() => setShowProfile(false)} title={t.nav.home}>
             <div className="space-y-5">
-              {/* Avatar preview */}
               <div className="flex flex-col items-center gap-3">
                 <div
                   className="w-16 h-16 rounded-full border-4 border-white/30 flex items-center justify-center text-white font-black text-3xl shadow-lg"
@@ -120,23 +112,21 @@ export function Layout({ children }: { children: ReactNode }) {
                 </div>
               </div>
 
-              {/* Name */}
               <div>
                 <label className="text-xs font-bold text-white/60 uppercase tracking-wider mb-1 block">
-                  Nombre
+                  {t.multiplayer.playerName}
                 </label>
                 <Input
                   value={editName}
                   onChange={e => setEditName(e.target.value)}
                   maxLength={14}
-                  placeholder="Tu nombre de jugador"
+                  placeholder={t.multiplayer.enterName}
                 />
               </div>
 
-              {/* Avatar color */}
               <div>
                 <label className="text-xs font-bold text-white/60 uppercase tracking-wider mb-2 block">
-                  Color de avatar
+                  Avatar
                 </label>
                 <div className="flex flex-wrap gap-2">
                   {AVATAR_COLORS.map(color => (
@@ -155,50 +145,14 @@ export function Layout({ children }: { children: ReactNode }) {
               </div>
 
               <Button className="w-full" onClick={handleSaveProfile}>
-                Guardar cambios
+                ✓ Guardar
               </Button>
 
               <button
                 onClick={() => { setShowProfile(false); logout(); }}
                 className="w-full flex items-center justify-center gap-2 text-white/40 text-sm hover:text-white/70 transition-colors py-1"
               >
-                <LogOut className="w-4 h-4" /> Cerrar sesión
-              </button>
-            </div>
-          </Modal>
-        )}
-
-        {showPremium && (
-          <Modal onClose={() => setShowPremium(false)} title="">
-            <div className="space-y-5 text-center">
-              <div className="flex justify-center">
-                <img src={LOGO_URL} alt="STOP" className="w-20 h-20 rounded-full shadow-xl" />
-              </div>
-              <div>
-                <p className="text-[#f9a825] font-black text-xs uppercase tracking-widest mb-1">STOP Premium</p>
-                <h3 className="text-2xl font-black text-white">¡Juega sin límites!</h3>
-                <p className="text-white/50 text-sm mt-1">Por solo €2,99/mes</p>
-              </div>
-              <ul className="text-left text-sm space-y-3 bg-white/5 p-4 rounded-2xl border border-white/10">
-                {[
-                  "🚫 Sin anuncios ni interrupciones",
-                  "🔒 Salas privadas ilimitadas",
-                  "🎨 Avatares y colores exclusivos",
-                  "📚 Categorías extra: Películas, Canciones, Deportes…",
-                  "⚡ Modo relámpago (30 segundos)",
-                  "📊 Estadísticas detalladas",
-                ].map(item => (
-                  <li key={item} className="flex items-start gap-2 text-white/80 font-medium">
-                    <span>{item}</span>
-                  </li>
-                ))}
-              </ul>
-              <button
-                className="w-full py-4 rounded-2xl font-black text-lg text-[#1a237e] shadow-xl transition-all hover:scale-[1.02] active:scale-[0.98]"
-                style={{ background: "linear-gradient(135deg, #f9a825, #f57f17)" }}
-                onClick={() => setShowPremium(false)}
-              >
-                Próximamente… 🚀
+                <LogOut className="w-4 h-4" /> {t.nav.logout}
               </button>
             </div>
           </Modal>

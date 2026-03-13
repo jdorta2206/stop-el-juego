@@ -1,24 +1,29 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { getLang, getT } from "@/i18n/index";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export const CATEGORIES_ES = [
-  "Nombre",
-  "Lugar",
-  "Animal",
-  "Objeto",
-  "Color",
-  "Fruta",
-  "Marca"
-];
+// Legacy export kept for backward compat — prefer getCategories() at call site
+export const CATEGORIES_ES = ["Nombre", "Lugar", "Animal", "Objeto", "Color", "Fruta", "Marca"];
+export const ALPHABET_ES = "ABCDEFGHIJKLMNÑOPRSTUVWYZ".split("");
 
-// Spanish alphabet including Ñ - skip Q, X (hard letters), keep all standard ones
-export const ALPHABET_ES = "ABCDEFGHIJKLMNÑOPQRSTUVWXYZ".split("").filter(
-  l => !["Q", "X"].includes(l)
-);
+/** Returns categories for the currently selected language */
+export function getCategories(): string[] {
+  return [...getT().categories];
+}
+
+/** Returns alphabet for the currently selected language */
+export function getAlphabet(): string[] {
+  return [...getT().alphabet];
+}
+
+/** Current language code (for API calls) */
+export function getCurrentLang(): string {
+  return getLang();
+}
 
 export const VOWELS = new Set(["A", "E", "I", "O", "U"]);
 
@@ -27,16 +32,16 @@ export function isVowel(letter: string): boolean {
 }
 
 export const AVATAR_COLORS = [
-  "#e63012", // STOP red
-  "#1a237e", // dark blue
-  "#f9a825", // yellow
-  "#2e7d32", // green
-  "#8e24aa", // purple
-  "#0097a7", // teal
-  "#e64a19", // deep orange
-  "#37474f", // slate
-  "#ad1457", // pink
-  "#00838f", // cyan
+  "#e63012",
+  "#1a237e",
+  "#f9a825",
+  "#2e7d32",
+  "#8e24aa",
+  "#0097a7",
+  "#e64a19",
+  "#37474f",
+  "#ad1457",
+  "#00838f",
 ];
 
 export function shareText(text: string, url: string) {
@@ -45,7 +50,7 @@ export function shareText(text: string, url: string) {
   return {
     whatsapp: `https://wa.me/?text=${encodedText}%20${encodedUrl}`,
     facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}&quote=${encodedText}`,
-    instagram: `https://www.instagram.com/`, // IG doesn't support direct URL share
+    instagram: `https://www.instagram.com/`,
     twitter: `https://twitter.com/intent/tweet?text=${encodedText}&url=${encodedUrl}`,
     native: () => {
       if (navigator.share) {
