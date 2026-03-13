@@ -1,8 +1,9 @@
 import { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Wifi, Copy, ChevronDown, ChevronUp, Swords, Check, Clock } from "lucide-react";
+import { Wifi, Copy, ChevronDown, ChevronUp, Swords, Check, Clock, UserPlus, UserCheck } from "lucide-react";
 import { usePresence, sendChallenge, pollChallengeStatus, type OnlinePlayer } from "@/lib/usePresence";
 import { useFacebookFriends, type EnrichedFriend } from "@/lib/useFriends";
+import { useFollows, type FollowedFriend } from "@/lib/useFollows";
 import type { PlayerProfile } from "@/hooks/use-player";
 import { useLocation } from "wouter";
 import { ChallengeNotification } from "@/components/ChallengeNotification";
@@ -140,15 +141,50 @@ function ChallengeButton({
   return null;
 }
 
+// Follow button
+function FollowButton({
+  playerId,
+  isFollowing,
+  onFollow,
+  onUnfollow,
+}: {
+  playerId: string;
+  isFollowing: boolean;
+  onFollow: () => void;
+  onUnfollow: () => void;
+}) {
+  return (
+    <button
+      onClick={isFollowing ? onUnfollow : onFollow}
+      className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all"
+      style={
+        isFollowing
+          ? { background: "rgba(74,222,128,0.12)", border: "1px solid rgba(74,222,128,0.3)", color: "#4ade80" }
+          : { background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.15)", color: "rgba(255,255,255,0.7)" }
+      }
+      title={isFollowing ? "Dejar de seguir" : "Añadir amigo"}
+    >
+      {isFollowing ? <UserCheck size={11} /> : <UserPlus size={11} />}
+      {isFollowing ? "Amigo" : "Añadir"}
+    </button>
+  );
+}
+
 // Single player row
 function PlayerRow({
   player,
   isCurrentUser,
   currentPlayer,
+  isFollowing,
+  onFollow,
+  onUnfollow,
 }: {
   player: OnlinePlayer;
   isCurrentUser: boolean;
   currentPlayer?: PlayerProfile;
+  isFollowing?: boolean;
+  onFollow?: () => void;
+  onUnfollow?: () => void;
 }) {
   const [, setLocation] = useLocation();
   const [copied, setCopied] = useState(false);
@@ -168,7 +204,6 @@ function PlayerRow({
     const result = await sendChallenge(currentPlayer, player.playerId);
     if (!result) return;
     pendingChallengeId.current = result.challengeId;
-    // Poll for response
     const poll = setInterval(async () => {
       if (!pendingChallengeId.current) { clearInterval(poll); return; }
       const status = await pollChallengeStatus(pendingChallengeId.current);
@@ -181,7 +216,6 @@ function PlayerRow({
         pendingChallengeId.current = null;
       }
     }, 2000);
-    // Stop polling after 60s
     setTimeout(() => { clearInterval(poll); pendingChallengeId.current = null; }, 60000);
   };
 
@@ -189,15 +223,10 @@ function PlayerRow({
     <motion.div
       initial={{ opacity: 0, x: -10 }}
       animate={{ opacity: 1, x: 0 }}
-      className="flex items-center gap-3 py-2.5 px-1"
+      className="flex items-center gap-2 py-2.5 px-1"
     >
       <div className="relative flex-shrink-0">
-        <Avatar
-          picture={player.picture}
-          name={player.name}
-          avatarColor={player.avatarColor}
-          size={36}
-        />
+        <Avatar picture={player.picture} name={player.name} avatarColor={player.avatarColor} size={36} />
         <span className="absolute -bottom-0.5 -right-0.5">
           <OnlineDot isOnline={true} />
         </span>
@@ -206,9 +235,7 @@ function PlayerRow({
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
           <span className="text-white font-bold text-sm truncate">{player.name}</span>
-          {isCurrentUser && (
-            <span className="text-[10px] text-white/40 font-bold">(tú)</span>
-          )}
+          {isCurrentUser && <span className="text-[10px] text-white/40 font-bold">(tú)</span>}
           <ProviderDot provider={player.provider} />
         </div>
         {player.roomCode ? (
@@ -219,11 +246,21 @@ function PlayerRow({
       </div>
 
       {!isCurrentUser && (
-        <>
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          {/* Follow button */}
+          {onFollow && onUnfollow && (
+            <FollowButton
+              playerId={player.playerId}
+              isFollowing={!!isFollowing}
+              onFollow={onFollow}
+              onUnfollow={onUnfollow}
+            />
+          )}
+          {/* Action button */}
           {player.roomCode ? (
             <button
               onClick={handleCopy}
-              className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all"
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all"
               style={{
                 background: copied ? "rgba(74,222,128,0.2)" : "rgba(249,168,37,0.15)",
                 border: copied ? "1px solid rgba(74,222,128,0.4)" : "1px solid rgba(249,168,37,0.3)",
@@ -236,7 +273,7 @@ function PlayerRow({
           ) : currentPlayer ? (
             <ChallengeButton onChallenge={handleChallenge} />
           ) : null}
-        </>
+        </div>
       )}
     </motion.div>
   );
@@ -336,10 +373,18 @@ export function OnlineFriends({ player }: OnlineFriendsProps) {
     player.fbAccessToken,
     onlinePlayers
   );
+  const { friends: gameFriends, isFollowing, follow, unfollow } = useFollows(
+    player.loginMethod !== "guest" ? player.id : null,
+    onlinePlayers
+  );
 
   const others = onlinePlayers.filter((p) => p.playerId !== player.id);
   const onlineCount = others.length;
   const hasFbFriends = player.loginMethod === "facebook" && player.fbAccessToken;
+
+  // In-game friends not currently visible in the online list (offline)
+  const offlineGameFriends = gameFriends.filter((f) => !f.isOnline);
+  const hasGameFriends = gameFriends.length > 0 && player.loginMethod !== "guest";
 
   return (
     <>
@@ -404,7 +449,15 @@ export function OnlineFriends({ player }: OnlineFriendsProps) {
               )}
 
               {others.map((p) => (
-                <PlayerRow key={p.playerId} player={p} isCurrentUser={false} currentPlayer={player} />
+                <PlayerRow
+                  key={p.playerId}
+                  player={p}
+                  isCurrentUser={false}
+                  currentPlayer={player}
+                  isFollowing={isFollowing(p.playerId)}
+                  onFollow={() => follow(p)}
+                  onUnfollow={() => unfollow(p.playerId)}
+                />
               ))}
 
               {others.length === 0 && (
@@ -450,6 +503,53 @@ export function OnlineFriends({ player }: OnlineFriendsProps) {
                   <p className="text-white/30 text-xs text-center leading-relaxed">
                     Inicia sesión con <span className="text-[#1877F2] font-bold">Facebook</span> para ver si tus amigos están jugando
                   </p>
+                </div>
+              )}
+
+              {/* In-game friends section — offline followed players */}
+              {hasGameFriends && offlineGameFriends.length > 0 && (
+                <div className="border-t border-white/10 pt-2 mt-2">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <UserCheck size={13} className="text-white/40" />
+                    <span className="text-white/40 text-xs font-bold uppercase tracking-wider">
+                      Mis amigos
+                    </span>
+                    <span className="text-white/25 text-[10px]">({offlineGameFriends.length})</span>
+                  </div>
+                  {offlineGameFriends.map((f) => (
+                    <motion.div
+                      key={f.followedId}
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      className="flex items-center gap-2 py-2 px-1"
+                    >
+                      <div className="relative flex-shrink-0">
+                        <Avatar
+                          picture={f.followedPicture}
+                          name={f.followedName}
+                          avatarColor={f.followedAvatarColor}
+                          size={32}
+                        />
+                        <span className="absolute -bottom-0.5 -right-0.5">
+                          <OnlineDot isOnline={false} />
+                        </span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1">
+                          <span className="text-white/60 font-bold text-sm truncate">{f.followedName}</span>
+                          <ProviderDot provider={f.followedProvider} />
+                        </div>
+                        <p className="text-xs text-white/25">Desconectado</p>
+                      </div>
+                      <button
+                        onClick={() => unfollow(f.followedId)}
+                        className="flex-shrink-0 text-white/20 hover:text-red-400/70 transition-colors p-1 rounded"
+                        title="Eliminar amigo"
+                      >
+                        <UserCheck size={12} />
+                      </button>
+                    </motion.div>
+                  ))}
                 </div>
               )}
             </div>

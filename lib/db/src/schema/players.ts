@@ -53,3 +53,18 @@ export const roomsTable = pgTable("rooms", {
 export const insertRoomSchema = createInsertSchema(roomsTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertRoom = z.infer<typeof insertRoomSchema>;
 export type Room = typeof roomsTable.$inferSelect;
+
+export const followsTable = pgTable("follows", {
+  id: serial("id").primaryKey(),
+  followerId: text("follower_id").notNull(),
+  followedId: text("followed_id").notNull(),
+  followedName: text("followed_name").notNull(),
+  followedPicture: text("followed_picture"),
+  followedAvatarColor: text("followed_avatar_color").notNull().default("#e53e3e"),
+  followedProvider: text("followed_provider"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertFollowSchema = createInsertSchema(followsTable).omit({ id: true, createdAt: true });
+export type InsertFollow = z.infer<typeof insertFollowSchema>;
+export type Follow = typeof followsTable.$inferSelect;

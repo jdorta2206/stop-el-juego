@@ -6,6 +6,7 @@ import roomsRouter from "./rooms";
 import authRouter from "./auth";
 import stripeRouter from "./stripe";
 import presenceRouter from "./presence";
+import friendsRouter from "./friends";
 
 const router: IRouter = Router();
 
@@ -16,5 +17,6 @@ router.use("/rooms", roomsRouter);
 router.use("/auth", authRouter);
 router.use("/stripe", stripeRouter);
 router.use("/presence", presenceRouter);
+router.use("/friends", friendsRouter);
 
 export default router;
