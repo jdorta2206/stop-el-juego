@@ -5,9 +5,11 @@ import { Button, Card, Input } from "@/components/ui";
 import { useCreateRoom, useJoinRoom } from "@workspace/api-client-react";
 import { usePlayer } from "@/hooks/use-player";
 import { OnlineFriends } from "@/components/OnlineFriends";
-import { Users, Plus, LogIn } from "lucide-react";
+import { InviteFriends } from "@/components/InviteFriends";
+import { Users, Plus, LogIn, UserPlus } from "lucide-react";
 import { useT } from "@/i18n/useT";
 import { getCurrentLang } from "@/lib/utils";
+import { AnimatePresence } from "framer-motion";
 
 export default function Multiplayer() {
   const [, setLocation] = useLocation();
@@ -15,6 +17,7 @@ export default function Multiplayer() {
   const { t } = useT();
   const [roomCode, setRoomCode] = useState("");
   const [error, setError] = useState("");
+  const [showInvite, setShowInvite] = useState(false);
 
   const createMutation = useCreateRoom();
   const joinMutation = useJoinRoom();
@@ -57,6 +60,12 @@ export default function Multiplayer() {
 
   return (
     <Layout>
+      <AnimatePresence>
+        {showInvite && player && (
+          <InviteFriends player={player} onClose={() => setShowInvite(false)} />
+        )}
+      </AnimatePresence>
+
       <div className="flex-1 flex flex-col max-w-md mx-auto w-full space-y-5 py-4">
 
         <div className="text-center">
@@ -64,6 +73,22 @@ export default function Multiplayer() {
             <Users className="w-10 h-10 text-secondary" />
           </div>
           <h1 className="text-4xl font-display font-bold">{t.home.multiplayer}</h1>
+
+          {/* Invite button */}
+          {player && player.loginMethod !== "guest" && (
+            <button
+              onClick={() => setShowInvite(true)}
+              className="mt-3 inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-bold transition-all hover:scale-105"
+              style={{
+                background: "rgba(249,168,37,0.12)",
+                border: "1px solid rgba(249,168,37,0.3)",
+                color: "#f9a825",
+              }}
+            >
+              <UserPlus size={14} />
+              Invitar amigos
+            </button>
+          )}
         </div>
 
         {error && (

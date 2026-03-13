@@ -2,8 +2,8 @@ import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui";
-import { Play, Users, Trophy, Share2, Facebook, Instagram, Crown } from "lucide-react";
-import { motion } from "framer-motion";
+import { Play, Users, Trophy, Share2, Facebook, Instagram, Crown, Swords } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import { shareText } from "@/lib/utils";
 import { PremiumModal } from "@/components/PremiumModal";
 import { usePremium } from "@/lib/usePremium";
@@ -17,12 +17,27 @@ export default function Home() {
   const { isPremium } = usePremium(player?.id);
   const { t } = useT();
   const [showPremiumModal, setShowPremiumModal] = useState(false);
+  const [invitedBy, setInvitedBy] = useState<string | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("premium") === "success") {
       window.history.replaceState({}, "", window.location.pathname);
       setShowPremiumModal(true);
+    }
+    // Personalised invite banner — persist through OAuth redirect via sessionStorage
+    const from = params.get("from");
+    if (from) {
+      const name = decodeURIComponent(from);
+      sessionStorage.setItem("stop_invited_by", name);
+      window.history.replaceState({}, "", window.location.pathname);
+      setInvitedBy(name);
+    } else {
+      const stored = sessionStorage.getItem("stop_invited_by");
+      if (stored) {
+        setInvitedBy(stored);
+        sessionStorage.removeItem("stop_invited_by");
+      }
     }
   }, []);
 
@@ -44,6 +59,40 @@ export default function Home() {
       )}
 
       <div className="flex-1 flex flex-col items-center justify-center max-w-md mx-auto w-full space-y-7 py-6">
+
+        {/* Invite welcome banner */}
+        <AnimatePresence>
+          {invitedBy && (
+            <motion.div
+              initial={{ opacity: 0, y: -20, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl"
+              style={{
+                background: "linear-gradient(135deg, rgba(249,168,37,0.15), rgba(249,168,37,0.05))",
+                border: "1px solid rgba(249,168,37,0.4)",
+              }}
+            >
+              <div className="text-2xl flex-shrink-0">🎮</div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[#f9a825] font-black text-sm truncate">
+                  <span className="text-white">{invitedBy}</span> te ha invitado a jugar
+                </p>
+                <p className="text-white/50 text-xs">¡Regístrate y acéptale el reto!</p>
+              </div>
+              <Link href="/multiplayer">
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-black flex-shrink-0"
+                  style={{ background: "#f9a825", color: "#0d1757" }}
+                >
+                  <Swords size={12} /> Retar
+                </motion.button>
+              </Link>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Logo */}
         <motion.div
