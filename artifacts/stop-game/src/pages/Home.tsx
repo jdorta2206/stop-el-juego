@@ -1,13 +1,30 @@
+import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { Layout } from "@/components/Layout";
 import { Button, Card } from "@/components/ui";
-import { Play, Users, Trophy, Share2, MessageCircle, Facebook, Instagram } from "lucide-react";
+import { Play, Users, Trophy, Share2, MessageCircle, Facebook, Instagram, Crown } from "lucide-react";
 import { motion } from "framer-motion";
 import { shareText } from "@/lib/utils";
+import { PremiumModal } from "@/components/PremiumModal";
+import { usePremium } from "@/lib/usePremium";
+import { usePlayer } from "@/hooks/use-player";
 
 const LOGO_URL = `${import.meta.env.BASE_URL}images/stop-logo.png`;
 
 export default function Home() {
+  const { player } = usePlayer();
+  const { isPremium } = usePremium(player?.id);
+  const [showPremiumModal, setShowPremiumModal] = useState(false);
+
+  // Handle return from Stripe checkout
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("premium") === "success") {
+      window.history.replaceState({}, "", window.location.pathname);
+      setShowPremiumModal(true);
+    }
+  }, []);
+
   const share = shareText(
     "¡Juega a STOP conmigo! El clásico juego de palabras. ¿Quién es más rápido?",
     window.location.origin
@@ -17,6 +34,16 @@ export default function Home() {
 
   return (
     <Layout>
+      {showPremiumModal && (
+        <PremiumModal
+          open={showPremiumModal}
+          onClose={() => setShowPremiumModal(false)}
+          playerId={player?.id || "guest"}
+          playerName={player?.name || "Jugador"}
+          isPremium={isPremium}
+        />
+      )}
+
       <div className="flex-1 flex flex-col items-center justify-center max-w-md mx-auto w-full space-y-7 py-6">
 
         {/* Logo */}
@@ -68,6 +95,22 @@ export default function Home() {
               JUGAR VS IA
             </motion.div>
           </Link>
+
+          {/* Premium button */}
+          <motion.button
+            whileHover={{ scale: 1.02, y: -1 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => setShowPremiumModal(true)}
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl font-black text-base tracking-wide shadow-lg"
+            style={
+              isPremium
+                ? { background: "rgba(249,168,37,0.18)", border: "2px solid rgba(249,168,37,0.5)", color: "#f9a825" }
+                : { background: "rgba(249,168,37,0.12)", border: "2px solid rgba(249,168,37,0.3)", color: "#f9a825" }
+            }
+          >
+            <Crown className="w-5 h-5" />
+            {isPremium ? "⭐ Premium activo" : "Activar Premium — sin anuncios"}
+          </motion.button>
 
           {/* Multiplayer + Ranking */}
           <div className="grid grid-cols-2 gap-3">

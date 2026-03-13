@@ -9,7 +9,9 @@ import { useValidateRound, useSubmitScore } from "@workspace/api-client-react";
 import { usePlayer } from "@/hooks/use-player";
 import { motion, AnimatePresence } from "framer-motion";
 import { InterstitialAd, RewardedAd, BannerAd } from "@/components/AdSystem";
-import { Tv2 } from "lucide-react";
+import { PremiumModal } from "@/components/PremiumModal";
+import { usePremium } from "@/lib/usePremium";
+import { Tv2, Crown } from "lucide-react";
 
 type GameState = "LOBBY" | "SPINNING" | "PLAYING" | "EVALUATING" | "RESULTS" | "AD_BETWEEN_ROUNDS";
 
@@ -17,6 +19,7 @@ const ROUND_TIME = 60;
 
 export default function SoloGame() {
   const { player } = usePlayer();
+  const { isPremium } = usePremium(player?.id);
   const [gameState, setGameState] = useState<GameState>("LOBBY");
   const [currentLetter, setCurrentLetter] = useState<string>("");
   const [timeLeft, setTimeLeft] = useState(ROUND_TIME);
@@ -26,6 +29,16 @@ export default function SoloGame() {
   const [aiTotalScore, setAiTotalScore] = useState(0);
   const [showRewardedAd, setShowRewardedAd] = useState(false);
   const [rewardedUsed, setRewardedUsed] = useState(false);
+  const [showPremiumModal, setShowPremiumModal] = useState(false);
+
+  // Check URL for checkout result
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("premium") === "success") {
+      window.history.replaceState({}, "", window.location.pathname);
+      setShowPremiumModal(true);
+    }
+  }, []);
 
   const validateMutation = useValidateRound();
   const submitScoreMutation = useSubmitScore();
@@ -93,7 +106,6 @@ export default function SoloGame() {
 
   const nextRound = () => {
     if (round >= 3) {
-      // Game over — submit score and go back to lobby
       if (player) {
         submitScoreMutation.mutate({
           data: {
@@ -112,8 +124,13 @@ export default function SoloGame() {
       setTotalScore(0);
       setAiTotalScore(0);
     } else {
-      // Show interstitial ad between rounds
-      setGameState("AD_BETWEEN_ROUNDS");
+      // Premium users skip interstitial ads
+      if (isPremium) {
+        setRound(r => r + 1);
+        startGame();
+      } else {
+        setGameState("AD_BETWEEN_ROUNDS");
+      }
     }
   };
 
@@ -132,7 +149,7 @@ export default function SoloGame() {
     <Layout>
       <div className="flex-1 flex flex-col max-w-2xl mx-auto w-full">
 
-        {/* Between-rounds interstitial */}
+        {/* Between-rounds interstitial — skipped for premium */}
         {gameState === "AD_BETWEEN_ROUNDS" && (
           <InterstitialAd onDone={afterInterstitial} />
         )}
@@ -144,6 +161,17 @@ export default function SoloGame() {
             rewardAmount={30}
             onComplete={handleRewardedComplete}
             onSkip={() => setShowRewardedAd(false)}
+          />
+        )}
+
+        {/* Premium modal */}
+        {showPremiumModal && (
+          <PremiumModal
+            open={showPremiumModal}
+            onClose={() => setShowPremiumModal(false)}
+            playerId={player?.id || "guest"}
+            playerName={player?.name || "Jugador"}
+            isPremium={isPremium}
           />
         )}
 
@@ -177,7 +205,27 @@ export default function SoloGame() {
                 <p className="text-white/70 max-w-md">La IA es rápida y no comete errores ortográficos. ¡Demuestra que los humanos somos más creativos!</p>
               </div>
               <Button size="xl" onClick={startGame}>Comenzar Ronda {round}</Button>
-              <BannerAd className="w-full max-w-md" />
+
+              {/* Premium upsell or badge */}
+              {isPremium ? (
+                <button
+                  onClick={() => setShowPremiumModal(true)}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all"
+                  style={{ background: "rgba(249,168,37,0.15)", border: "1px solid rgba(249,168,37,0.4)", color: "#f9a825" }}
+                >
+                  <Crown size={16} /> Premium activo · Gestionar
+                </button>
+              ) : (
+                <>
+                  <BannerAd className="w-full max-w-md" />
+                  <button
+                    onClick={() => setShowPremiumModal(true)}
+                    className="text-white/50 text-xs underline underline-offset-2 hover:text-white/80 transition-colors"
+                  >
+                    ¿Cansado de anuncios? Activa Premium →
+                  </button>
+                </>
+              )}
             </motion.div>
           )}
 
@@ -219,7 +267,7 @@ export default function SoloGame() {
                 </div>
               </div>
 
-              {/* +30s rewarded ad button */}
+              {/* +30s rewarded ad button — always available (fun even for premium) */}
               {!rewardedUsed && (
                 <button
                   onClick={() => setShowRewardedAd(true)}
@@ -324,8 +372,8 @@ export default function SoloGame() {
                 })}
               </div>
 
-              {/* Banner ad in results */}
-              <BannerAd className="mb-4" />
+              {/* Banner ad in results — hidden for premium */}
+              {!isPremium && <BannerAd className="mb-4" />}
 
               {/* Next round / finish buttons */}
               <div className="grid grid-cols-2 gap-3">

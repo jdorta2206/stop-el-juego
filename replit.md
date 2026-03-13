@@ -25,7 +25,7 @@ Full-stack STOP game (Tutti Frutti / Scattergories) web app built with React + V
 2. **Multiplayer**: Create/join rooms with 6-char code, share via WhatsApp/Instagram/Facebook
 3. **Ranking**: Global leaderboard with player scores, wins, games played
 4. **Player Profile**: Nickname + avatar color stored in localStorage
-5. **Premium Modal**: PRO subscription flow (UI only, "Próximamente")
+5. **Premium Subscription**: Full Stripe integration — €1.99/month or €14.99/year; no-ads tier; checkout via Stripe hosted page; subscription management via Stripe Customer Portal; webhook syncs subscription state to PostgreSQL via `stripe-replit-sync`
 
 ## Game Categories (Spanish)
 
