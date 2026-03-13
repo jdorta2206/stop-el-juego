@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "xs_jQLvgKvRDfgpmF15P1"
+uri = "file://testers.csv"
+type = "table"
+title = "testers.csv — Lista de testers"
