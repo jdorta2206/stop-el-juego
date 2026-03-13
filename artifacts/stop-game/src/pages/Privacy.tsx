@@ -19,15 +19,27 @@ export default function Privacy() {
         </div>
         <div>
           <h2 className="text-xl font-bold text-white mb-2">4. Eliminación de datos</h2>
-          <p>Puedes solicitar la eliminación de tus datos en cualquier momento enviando un correo a través de la sección de contacto. Eliminaremos toda tu información en un plazo de 30 días.</p>
+          <p>Puedes solicitar la eliminación completa de tu cuenta y todos tus datos en cualquier momento. Para ello, envía un correo electrónico a <a href="mailto:jdorta2206@gmail.com" className="text-[hsl(48,96%,57%)] underline">jdorta2206@gmail.com</a> con el asunto <strong>"Eliminar mis datos"</strong> indicando el nombre de usuario o correo con el que iniciaste sesión. Procesaremos tu solicitud en un plazo máximo de 30 días. Se eliminarán: tu nombre, foto de perfil, puntuaciones, historial de partidas y datos de suscripción.</p>
         </div>
         <div>
           <h2 className="text-xl font-bold text-white mb-2">5. Contacto</h2>
-          <p>Para cualquier consulta sobre privacidad, puedes contactarnos a través de la app.</p>
+          <p>Para cualquier consulta sobre privacidad o para ejercer tus derechos de acceso, rectificación o eliminación, contacta con nosotros en: <a href="mailto:jdorta2206@gmail.com" className="text-[hsl(48,96%,57%)] underline">jdorta2206@gmail.com</a></p>
         </div>
       </section>
 
-      <a href="/" className="inline-block mt-10 text-[hsl(48,96%,57%)] hover:underline">← Volver al juego</a>
+      <div className="mt-10 p-6 rounded-2xl border border-[hsl(48,96%,57%)]/30 bg-[hsl(48,96%,57%)]/5">
+        <h3 className="text-lg font-black text-[hsl(48,96%,57%)] mb-2">🗑️ Solicitar eliminación de datos</h3>
+        <p className="text-white/70 text-sm mb-4">Para eliminar tu cuenta y todos tus datos, envía un email a:</p>
+        <a
+          href="mailto:jdorta2206@gmail.com?subject=Eliminar%20mis%20datos&body=Hola%2C%20quiero%20eliminar%20mi%20cuenta%20y%20todos%20mis%20datos%20del%20juego%20STOP."
+          className="inline-block px-6 py-3 rounded-xl font-black text-sm"
+          style={{ background: "hsl(48,96%,57%)", color: "hsl(222,47%,11%)" }}
+        >
+          Enviar solicitud de eliminación
+        </a>
+      </div>
+
+      <a href="/" className="inline-block mt-8 text-[hsl(48,96%,57%)] hover:underline">← Volver al juego</a>
     </div>
   );
 }
