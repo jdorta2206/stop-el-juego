@@ -11,8 +11,9 @@ import { motion, AnimatePresence } from "framer-motion";
 import { InterstitialAd, RewardedAd, BannerAd } from "@/components/AdSystem";
 import { PremiumModal } from "@/components/PremiumModal";
 import { usePremium } from "@/lib/usePremium";
-import { Tv2, Crown } from "lucide-react";
+import { Tv2, Crown, Volume2, VolumeX } from "lucide-react";
 import { useT } from "@/i18n/useT";
+import { useTicker } from "@/hooks/useTicker";
 
 type GameState = "LOBBY" | "SPINNING" | "PLAYING" | "EVALUATING" | "RESULTS" | "AD_BETWEEN_ROUNDS";
 
@@ -34,11 +35,20 @@ export default function SoloGame() {
   const [rewardedUsed, setRewardedUsed] = useState(false);
   const [showPremiumModal, setShowPremiumModal] = useState(false);
   const [categories, setCategories] = useState<string[]>(getCategories());
+  const [muted, setMuted] = useState(false);
 
   // Re-read categories when language changes
   useEffect(() => {
     setCategories(getCategories());
   }, [lang]);
+
+  // Ticking sound — active only during PLAYING
+  const { toggleMute } = useTicker(timeLeft, ROUND_TIME, gameState === "PLAYING" && !muted);
+
+  const handleToggleMute = () => {
+    const nowMuted = toggleMute();
+    setMuted(nowMuted);
+  };
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -246,20 +256,62 @@ export default function SoloGame() {
               initial={{ opacity: 0, x: 50 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -50 }}
               className="flex-1 flex flex-col"
             >
-              <div className="flex items-center gap-4 mb-5 bg-primary p-4 rounded-2xl shadow-lg border-2 border-white/10">
-                <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center text-primary font-display font-black text-4xl shadow-inner flex-shrink-0">
+              {/* Panic overlay — red pulse when < 10s */}
+              <AnimatePresence>
+                {timeLeft <= 10 && timeLeft > 0 && (
+                  <motion.div
+                    key="panic-overlay"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: [0, 0.18, 0] }}
+                    transition={{ duration: 0.4, repeat: Infinity, repeatType: "loop" }}
+                    className="fixed inset-0 z-10 pointer-events-none"
+                    style={{ background: "radial-gradient(ellipse at center, rgba(220,38,38,0.5) 0%, transparent 70%)" }}
+                  />
+                )}
+              </AnimatePresence>
+
+              <div
+                className="flex items-center gap-4 mb-5 p-4 rounded-2xl shadow-lg border-2 transition-colors duration-500"
+                style={{
+                  background: timeLeft <= 10 ? "rgba(185,28,28,0.5)" : "hsl(222 47% 20%)",
+                  borderColor: timeLeft <= 10 ? "rgba(239,68,68,0.6)" : "rgba(255,255,255,0.1)",
+                }}
+              >
+                {/* Letter */}
+                <motion.div
+                  animate={timeLeft <= 10 ? { scale: [1, 1.1, 1] } : {}}
+                  transition={{ duration: 0.4, repeat: Infinity }}
+                  className="w-16 h-16 bg-white rounded-full flex items-center justify-center text-primary font-display font-black text-4xl shadow-inner flex-shrink-0"
+                >
                   {currentLetter}
-                </div>
+                </motion.div>
+
+                {/* Timer bar */}
                 <div className="flex-1">
-                  <div className="flex justify-between mb-1">
+                  <div className="flex justify-between items-center mb-1">
                     <span className="font-bold text-sm text-white/70">{t.game.round}</span>
-                    <span className={timeLeft <= 10 ? "text-red-400 font-black animate-pulse" : "font-bold"}>
-                      {timeLeft}s
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <motion.span
+                        key={timeLeft}
+                        initial={{ scale: timeLeft <= 10 ? 1.4 : 1 }}
+                        animate={{ scale: 1 }}
+                        className={timeLeft <= 10 ? "text-red-300 font-black text-lg" : timeLeft <= 25 ? "text-yellow-300 font-black" : "font-bold"}
+                      >
+                        {timeLeft}s
+                      </motion.span>
+                      {/* Mute toggle */}
+                      <button
+                        onClick={handleToggleMute}
+                        className="ml-1 text-white/40 hover:text-white/80 transition-colors"
+                        title={muted ? "Activar sonido" : "Silenciar"}
+                      >
+                        {muted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+                      </button>
+                    </div>
                   </div>
                   <Progress
                     value={(timeLeft / ROUND_TIME) * 100}
-                    indicatorClass={timeLeft <= 10 ? "bg-red-500" : timeLeft <= 30 ? "bg-yellow-400" : "bg-green-400"}
+                    indicatorClass={timeLeft <= 10 ? "bg-red-500" : timeLeft <= 25 ? "bg-yellow-400" : "bg-green-400"}
                   />
                 </div>
               </div>
