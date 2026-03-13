@@ -2,42 +2,105 @@ import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Play, Gift, Zap, Star } from "lucide-react";
 
-// ─── Banner Ad ───────────────────────────────────────────────────────────────
+// ─── AdSense config (set these in Replit Secrets) ────────────────────────────
+// VITE_ADSENSE_CLIENT_ID    → your ca-pub-XXXXXXXXXXXXXXXX
+// VITE_ADSENSE_BANNER_SLOT  → ad unit slot ID for banners
+// VITE_ADSENSE_VIDEO_SLOT   → ad unit slot ID for interstitials/video
 
-const BANNER_ADS = [
+const ADSENSE_CLIENT = import.meta.env.VITE_ADSENSE_CLIENT_ID as string | undefined;
+const BANNER_SLOT    = import.meta.env.VITE_ADSENSE_BANNER_SLOT as string | undefined;
+const VIDEO_SLOT     = import.meta.env.VITE_ADSENSE_VIDEO_SLOT as string | undefined;
+
+const ADSENSE_READY = !!(ADSENSE_CLIENT && BANNER_SLOT);
+
+// Load the AdSense script once when a real client ID is present
+function useAdSenseScript() {
+  useEffect(() => {
+    if (!ADSENSE_CLIENT) return;
+    if (document.querySelector('script[data-adsense]')) return; // already loaded
+    const s = document.createElement("script");
+    s.src = `https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${ADSENSE_CLIENT}`;
+    s.async = true;
+    s.crossOrigin = "anonymous";
+    s.dataset.adsense = "true";
+    document.head.appendChild(s);
+  }, []);
+}
+
+// Push an AdSense slot after it mounts
+function pushAd(ref: React.RefObject<HTMLElement | null>) {
+  try {
+    const win = window as any;
+    win.adsbygoogle = win.adsbygoogle || [];
+    win.adsbygoogle.push({});
+  } catch (_) {}
+}
+
+// ─── Mock ads (shown when AdSense is not configured) ─────────────────────────
+
+const MOCK_BANNER_ADS = [
   {
     id: 1,
-    brand: "🎮 AppGamePro",
-    text: "Descarga el pack premium — 100 categorías extra",
-    cta: "Ver más",
+    brand: "🏆 STOP Premium",
+    text: "Sin anuncios + categorías ilimitadas — solo €1,99/mes",
+    cta: "Ver oferta",
     bg: "linear-gradient(135deg, #1a237e 0%, #283593 100%)",
     accent: "#f9a825",
   },
   {
     id: 2,
-    brand: "⚡ SpeedWords",
-    text: "¿Puedes escribir más rápido que la IA? Prueba el desafío",
-    cta: "Probar",
+    brand: "🎮 Modo Multijugador",
+    text: "¡Juega contra amigos en tiempo real! Créa tu sala ahora",
+    cta: "Jugar",
     bg: "linear-gradient(135deg, #b71c1c 0%, #e53935 100%)",
     accent: "#fff",
   },
   {
     id: 3,
-    brand: "🏆 STOP Pro",
-    text: "Sin anuncios + 3 meses gratis. ¡Oferta limitada!",
-    cta: "Activar",
-    bg: "linear-gradient(135deg, #1b5e20 0%, #2e7d32 100%)",
-    accent: "#a5d6a7",
+    brand: "📢 Anunciante",
+    text: "Tu anuncio podría aparecer aquí — Google AdSense pendiente",
+    cta: "Info",
+    bg: "linear-gradient(135deg, #37474f 0%, #546e7a 100%)",
+    accent: "#90a4ae",
   },
 ];
 
+// ─── Banner Ad ────────────────────────────────────────────────────────────────
+
 export function BannerAd({ className = "" }: { className?: string }) {
+  useAdSenseScript();
+  const insRef = useRef<HTMLModElement>(null);
   const [adIndex, setAdIndex] = useState(0);
   const [visible, setVisible] = useState(true);
 
-  const ad = BANNER_ADS[adIndex % BANNER_ADS.length];
+  useEffect(() => {
+    if (ADSENSE_READY && insRef.current) {
+      pushAd(insRef as any);
+    }
+  }, []);
 
   if (!visible) return null;
+
+  // ── Real AdSense banner ──
+  if (ADSENSE_READY) {
+    return (
+      <div className={`relative overflow-hidden rounded-xl ${className}`} style={{ minHeight: 60 }}>
+        <div className="absolute top-1 left-2 text-[9px] text-black/30 font-mono z-10">Publicidad</div>
+        <ins
+          ref={insRef}
+          className="adsbygoogle"
+          style={{ display: "block", minHeight: 50 }}
+          data-ad-client={ADSENSE_CLIENT}
+          data-ad-slot={BANNER_SLOT}
+          data-ad-format="auto"
+          data-full-width-responsive="true"
+        />
+      </div>
+    );
+  }
+
+  // ── Mock banner (development / no AdSense) ──
+  const ad = MOCK_BANNER_ADS[adIndex % MOCK_BANNER_ADS.length];
 
   return (
     <AnimatePresence>
@@ -55,14 +118,12 @@ export function BannerAd({ className = "" }: { className?: string }) {
             >
               {ad.brand} · Publicidad
             </p>
-            <p className="text-white text-sm font-semibold leading-tight truncate">
-              {ad.text}
-            </p>
+            <p className="text-white text-sm font-semibold leading-tight truncate">{ad.text}</p>
           </div>
           <button
             className="flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-black transition-all hover:scale-105 active:scale-95"
             style={{ background: ad.accent, color: ad.bg.includes("1a237e") ? "#1a237e" : "#fff" }}
-            onClick={() => setAdIndex(i => i + 1)}
+            onClick={() => setAdIndex((i) => i + 1)}
           >
             {ad.cta}
           </button>
@@ -73,7 +134,6 @@ export function BannerAd({ className = "" }: { className?: string }) {
             <X className="w-3.5 h-3.5" />
           </button>
         </div>
-        {/* "Ad" label */}
         <div className="absolute top-1 right-8 text-[10px] text-white/30 font-mono">AD</div>
       </motion.div>
     </AnimatePresence>
@@ -89,7 +149,14 @@ interface RewardedAdProps {
   rewardAmount?: number;
 }
 
-export function RewardedAd({ onComplete, onSkip, rewardType = "points", rewardAmount = 20 }: RewardedAdProps) {
+export function RewardedAd({
+  onComplete,
+  onSkip,
+  rewardType = "points",
+  rewardAmount = 20,
+}: RewardedAdProps) {
+  useAdSenseScript();
+  const insRef = useRef<HTMLModElement>(null);
   const [countdown, setCountdown] = useState(15);
   const [phase, setPhase] = useState<"pre" | "watching" | "done">("pre");
   const [progress, setProgress] = useState(0);
@@ -97,6 +164,10 @@ export function RewardedAd({ onComplete, onSkip, rewardType = "points", rewardAm
 
   const startWatching = () => {
     setPhase("watching");
+    // Push real ad when video starts
+    if (ADSENSE_CLIENT && VIDEO_SLOT && insRef.current) {
+      pushAd(insRef as any);
+    }
     let elapsed = 0;
     intervalRef.current = setInterval(() => {
       elapsed++;
@@ -111,7 +182,9 @@ export function RewardedAd({ onComplete, onSkip, rewardType = "points", rewardAm
   };
 
   useEffect(() => {
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
   }, []);
 
   const rewardLabels = {
@@ -119,7 +192,6 @@ export function RewardedAd({ onComplete, onSkip, rewardType = "points", rewardAm
     hint: "Pista gratuita",
     extraTime: "+30 segundos",
   };
-
   const rewardIcons = {
     points: <Star className="w-8 h-8 text-[#f9a825]" />,
     hint: <Zap className="w-8 h-8 text-[#f9a825]" />,
@@ -134,7 +206,10 @@ export function RewardedAd({ onComplete, onSkip, rewardType = "points", rewardAm
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.85, opacity: 0 }}
         className="relative z-10 w-full max-w-sm rounded-3xl overflow-hidden shadow-2xl"
-        style={{ background: "linear-gradient(145deg, #1a237e, #0d1757)", border: "2px solid rgba(249,168,37,0.4)" }}
+        style={{
+          background: "linear-gradient(145deg, #1a237e, #0d1757)",
+          border: "2px solid rgba(249,168,37,0.4)",
+        }}
       >
         {phase === "pre" && (
           <div className="p-8 text-center space-y-6">
@@ -144,22 +219,36 @@ export function RewardedAd({ onComplete, onSkip, rewardType = "points", rewardAm
               <p className="text-white/70">Mira un vídeo corto y gana</p>
               <p className="text-[#f9a825] text-3xl font-black mt-2">{rewardLabels[rewardType]}</p>
             </div>
-            {/* Simulated ad preview */}
-            <div
-              className="rounded-2xl overflow-hidden relative h-36 flex items-center justify-center"
-              style={{ background: "linear-gradient(135deg, #2d1b69, #11998e)" }}
-            >
-              <div className="absolute inset-0 flex items-center justify-center">
+
+            {/* Ad preview area — real AdSense or mock */}
+            {ADSENSE_CLIENT && VIDEO_SLOT ? (
+              <div className="rounded-2xl overflow-hidden bg-black/30" style={{ minHeight: 150 }}>
+                <ins
+                  ref={insRef}
+                  className="adsbygoogle"
+                  style={{ display: "block", minHeight: 150 }}
+                  data-ad-client={ADSENSE_CLIENT}
+                  data-ad-slot={VIDEO_SLOT}
+                  data-ad-format="rectangle"
+                  data-full-width-responsive="true"
+                />
+              </div>
+            ) : (
+              <div
+                className="rounded-2xl overflow-hidden relative h-36 flex items-center justify-center"
+                style={{ background: "linear-gradient(135deg, #2d1b69, #11998e)" }}
+              >
                 <div className="text-center text-white">
                   <div className="text-4xl mb-2">🎯</div>
                   <p className="font-bold">Vídeo publicitario</p>
                   <p className="text-xs opacity-60 mt-1">Duración: 15 segundos</p>
                 </div>
+                <div className="absolute top-2 right-2 bg-black/50 text-white text-xs px-2 py-1 rounded font-bold">
+                  ANUNCIO
+                </div>
               </div>
-              <div className="absolute top-2 right-2 bg-black/50 text-white text-xs px-2 py-1 rounded font-bold">
-                ANUNCIO
-              </div>
-            </div>
+            )}
+
             <div className="flex gap-3">
               <button
                 onClick={onSkip}
@@ -180,7 +269,6 @@ export function RewardedAd({ onComplete, onSkip, rewardType = "points", rewardAm
 
         {phase === "watching" && (
           <div className="p-8 space-y-6">
-            {/* Simulated video player */}
             <div
               className="rounded-2xl overflow-hidden relative h-44 flex items-center justify-center"
               style={{ background: "linear-gradient(135deg, #2d1b69, #11998e)" }}
@@ -196,7 +284,6 @@ export function RewardedAd({ onComplete, onSkip, rewardType = "points", rewardAm
                 <p className="font-bold text-lg">¡Mira el anuncio completo!</p>
                 <p className="text-sm opacity-70 mt-1">para recibir tu recompensa</p>
               </div>
-              {/* Countdown overlay */}
               <div className="absolute bottom-3 right-3 bg-black/60 text-white text-sm px-3 py-1 rounded-full font-bold">
                 {countdown}s
               </div>
@@ -204,7 +291,6 @@ export function RewardedAd({ onComplete, onSkip, rewardType = "points", rewardAm
                 ANUNCIO
               </div>
             </div>
-            {/* Progress bar */}
             <div>
               <div className="flex justify-between text-sm text-white/60 mb-2">
                 <span>Progreso</span>
@@ -252,11 +338,18 @@ interface InterstitialAdProps {
 }
 
 export function InterstitialAd({ onDone }: InterstitialAdProps) {
+  useAdSenseScript();
+  const insRef = useRef<HTMLModElement>(null);
   const [countdown, setCountdown] = useState(5);
 
   useEffect(() => {
+    // Push real ad on mount
+    if (ADSENSE_CLIENT && VIDEO_SLOT && insRef.current) {
+      pushAd(insRef as any);
+    }
+
     const timer = setInterval(() => {
-      setCountdown(prev => {
+      setCountdown((prev) => {
         if (prev <= 1) {
           clearInterval(timer);
           onDone();
@@ -275,21 +368,43 @@ export function InterstitialAd({ onDone }: InterstitialAdProps) {
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         className="relative z-10 w-full max-w-sm rounded-3xl overflow-hidden shadow-2xl"
-        style={{ background: "linear-gradient(135deg, #2d1b69, #11998e)", border: "2px solid rgba(255,255,255,0.1)" }}
+        style={{
+          background: "linear-gradient(135deg, #0d1757, #1a237e)",
+          border: "2px solid rgba(255,255,255,0.1)",
+        }}
       >
         <div className="p-6 space-y-4">
           <div className="text-xs text-white/40 font-bold uppercase tracking-wider text-center">
             Publicidad · Apoya STOP gratis
           </div>
-          <div className="h-48 rounded-2xl bg-black/30 flex items-center justify-center">
-            <div className="text-center text-white">
-              <div className="text-5xl mb-3">🚀</div>
-              <p className="font-bold text-xl">Juego Premium Pro</p>
-              <p className="text-white/60 text-sm mt-1">Descarga gratis en la App Store</p>
+
+          {/* Real AdSense or mock */}
+          {ADSENSE_CLIENT && VIDEO_SLOT ? (
+            <div className="rounded-2xl overflow-hidden bg-black/30" style={{ minHeight: 200 }}>
+              <ins
+                ref={insRef}
+                className="adsbygoogle"
+                style={{ display: "block", minHeight: 200 }}
+                data-ad-client={ADSENSE_CLIENT}
+                data-ad-slot={VIDEO_SLOT}
+                data-ad-format="rectangle"
+                data-full-width-responsive="true"
+              />
             </div>
-          </div>
+          ) : (
+            <div className="h-48 rounded-2xl bg-black/30 flex items-center justify-center">
+              <div className="text-center text-white">
+                <div className="text-5xl mb-3">🚀</div>
+                <p className="font-bold text-xl">Espacio para anuncios</p>
+                <p className="text-white/60 text-sm mt-1">Configura Google AdSense para ganar dinero</p>
+              </div>
+            </div>
+          )}
+
           <div className="flex items-center justify-between">
-            <p className="text-white/50 text-sm">Se cierra en {countdown}s</p>
+            <p className="text-white/50 text-sm">
+              {countdown > 0 ? `Se cierra en ${countdown}s` : "Listo"}
+            </p>
             {countdown === 0 && (
               <button
                 onClick={onDone}
