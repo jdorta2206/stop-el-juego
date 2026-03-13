@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "app.replit.stop_el_juego.twa",
+        "sha256_cert_fingerprints": ["30:B6:ED:A1:7B:C3:99:96:4C:51:E5:A6:0D:C4:05:8F:E2:47:A8:2E:CD:3B:07:E3:F5:97:79:F8:2B:97:AB:09"]
+      }
+    }]
