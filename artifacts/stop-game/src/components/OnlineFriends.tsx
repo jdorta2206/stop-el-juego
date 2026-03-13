@@ -279,6 +279,112 @@ function PlayerRow({
   );
 }
 
+// Instagram player row (online players who logged in with Instagram)
+function InstagramPlayerRow({
+  player: p,
+  currentPlayer,
+  isFollowing,
+  onFollow,
+  onUnfollow,
+}: {
+  player: OnlinePlayer;
+  currentPlayer?: PlayerProfile;
+  isFollowing?: boolean;
+  onFollow?: () => void;
+  onUnfollow?: () => void;
+}) {
+  const [, setLocation] = useLocation();
+  const [copied, setCopied] = useState(false);
+  const pendingChallengeId = useRef<string | null>(null);
+
+  const handleJoin = () => {
+    if (p.roomCode) {
+      navigator.clipboard.writeText(p.roomCode).then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      });
+    }
+  };
+
+  const handleChallenge = async () => {
+    if (!currentPlayer) return;
+    const result = await sendChallenge(currentPlayer, p.playerId);
+    if (!result) return;
+    pendingChallengeId.current = result.challengeId;
+    const poll = setInterval(async () => {
+      if (!pendingChallengeId.current) { clearInterval(poll); return; }
+      const status = await pollChallengeStatus(pendingChallengeId.current);
+      if (status.status === "accepted") {
+        clearInterval(poll);
+        pendingChallengeId.current = null;
+        setLocation(`/room/${status.roomCode}`);
+      } else if (status.status === "declined" || status.status === "expired") {
+        clearInterval(poll);
+        pendingChallengeId.current = null;
+      }
+    }, 2000);
+    setTimeout(() => { clearInterval(poll); pendingChallengeId.current = null; }, 60000);
+  };
+
+  const isMe = currentPlayer?.id === p.playerId;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: -10 }}
+      animate={{ opacity: 1, x: 0 }}
+      className="flex items-center gap-3 py-2.5 px-1"
+    >
+      <div className="relative flex-shrink-0">
+        <Avatar picture={p.picture} name={p.name} avatarColor={p.avatarColor} size={36} />
+        <span className="absolute -bottom-0.5 -right-0.5">
+          <OnlineDot isOnline={true} />
+        </span>
+      </div>
+
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5">
+          <span className="text-white font-bold text-sm truncate">{p.name}</span>
+          {isMe && <span className="text-[10px] text-white/40 font-bold">(tú)</span>}
+          <ProviderDot provider="instagram" />
+        </div>
+        {p.roomCode ? (
+          <p className="text-xs text-green-400/80 font-medium">En sala: {p.roomCode}</p>
+        ) : (
+          <p className="text-xs text-green-400/60">Conectado · En el menú</p>
+        )}
+      </div>
+
+      {!isMe && (
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          {onFollow && onUnfollow && (
+            <FollowButton
+              playerId={p.playerId}
+              isFollowing={!!isFollowing}
+              onFollow={onFollow}
+              onUnfollow={onUnfollow}
+            />
+          )}
+          {p.roomCode ? (
+            <button
+              onClick={handleJoin}
+              className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all"
+              style={{
+                background: copied ? "rgba(74,222,128,0.2)" : "rgba(225,48,108,0.15)",
+                border: copied ? "1px solid rgba(74,222,128,0.4)" : "1px solid rgba(225,48,108,0.4)",
+                color: copied ? "#4ade80" : "#f472b6",
+              }}
+            >
+              {copied ? <><Check size={11} /> Copiado</> : <><Copy size={11} /> Unirse</>}
+            </button>
+          ) : currentPlayer ? (
+            <ChallengeButton onChallenge={handleChallenge} />
+          ) : null}
+        </div>
+      )}
+    </motion.div>
+  );
+}
+
 // FB friend row
 function FriendRow({ friend, currentPlayer }: { friend: EnrichedFriend; currentPlayer?: PlayerProfile }) {
   const [, setLocation] = useLocation();
@@ -381,6 +487,12 @@ export function OnlineFriends({ player }: OnlineFriendsProps) {
   const others = onlinePlayers.filter((p) => p.playerId !== player.id);
   const onlineCount = others.length;
   const hasFbFriends = player.loginMethod === "facebook" && player.fbAccessToken;
+
+  // Instagram: other online players who logged in with Instagram
+  const igPlayers = onlinePlayers.filter(
+    (p) => p.provider === "instagram" && p.playerId !== player.id
+  );
+  const isIgUser = player.loginMethod === "instagram";
 
   // In-game friends not currently visible in the online list (offline)
   const offlineGameFriends = gameFriends.filter((f) => !f.isOnline);
@@ -503,6 +615,67 @@ export function OnlineFriends({ player }: OnlineFriendsProps) {
                   <p className="text-white/30 text-xs text-center leading-relaxed">
                     Inicia sesión con <span className="text-[#1877F2] font-bold">Facebook</span> para ver si tus amigos están jugando
                   </p>
+                </div>
+              )}
+
+              {/* ── Instagram section ── */}
+              {(isIgUser || igPlayers.length > 0) && (
+                <div className="border-t border-white/10 pt-2 mt-2">
+                  <div className="flex items-center gap-1.5 mb-2">
+                    {/* Instagram gradient icon */}
+                    <span
+                      className="inline-flex items-center justify-center w-4 h-4 rounded text-[9px] font-black text-white flex-shrink-0"
+                      style={{
+                        background: "linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888)",
+                      }}
+                    >
+                      IG
+                    </span>
+                    <span className="text-white/60 text-xs font-bold uppercase tracking-wider">
+                      Instagram
+                    </span>
+                    {igPlayers.length > 0 && (
+                      <span
+                        className="text-[10px] font-black rounded-full px-1.5 py-0.5 leading-none text-white"
+                        style={{ background: "#dc2743" }}
+                      >
+                        {igPlayers.length}
+                      </span>
+                    )}
+                  </div>
+
+                  {igPlayers.length === 0 ? (
+                    <p className="text-white/30 text-xs py-1 leading-relaxed">
+                      {isIgUser
+                        ? "Ningún otro jugador de Instagram online ahora. ¡Invita a tus seguidores!"
+                        : "No hay jugadores de Instagram conectados."}
+                    </p>
+                  ) : (
+                    igPlayers.map((p) => (
+                      <InstagramPlayerRow
+                        key={p.playerId}
+                        player={p}
+                        currentPlayer={player}
+                        isFollowing={isFollowing(p.playerId)}
+                        onFollow={() => follow(p)}
+                        onUnfollow={() => unfollow(p.playerId)}
+                      />
+                    ))
+                  )}
+
+                  {/* CTA for non-IG users */}
+                  {!isIgUser && (
+                    <p className="text-white/25 text-xs text-center mt-1 leading-relaxed">
+                      Conéctate con{" "}
+                      <span
+                        className="font-bold"
+                        style={{ color: "#e1306c" }}
+                      >
+                        Instagram
+                      </span>{" "}
+                      para encontrar a tus seguidores aquí
+                    </p>
+                  )}
                 </div>
               )}
 
