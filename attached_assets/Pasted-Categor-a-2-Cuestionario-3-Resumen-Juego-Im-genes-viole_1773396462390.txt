@@ -1,0 +1,94 @@
+Categoría
+2
+Cuestionario
+3
+Resumen
+Juego
+Imágenes violentas, sangrientas o grotescas
+Completado
+¿El juego contiene inferencias o representaciones de imágenes violentas, sangrientas o grotescas, o referencias a ellas? Esto incluye la violencia dirigida al personaje del jugador. Tenga en cuenta que esta pregunta no alude al contenido generado por los usuarios. Más información
+
+Sí
+
+No
+Miedo
+Completado
+¿El juego contiene imágenes o sonidos que pueden asustar o causar terror o inquietud? Tenga en cuenta que esta pregunta no hace referencia al contenido generado por los usuarios.
+
+Sí
+
+No
+Sexualidad, sugerencia o juegos de citas
+Completado
+¿El juego contiene inferencias, referencias o representaciones relativas a la sexualidad, violencia sexual, insinuación, juegos de citas, vestimenta sugerente o desnudez? Tenga en cuenta que esta pregunta no alude al contenido generado por los usuarios.
+
+Sí
+
+No
+Temas de apuestas, apuestas simuladas o apuestas reales
+Completado
+¿El juego contiene apuestas, simulaciones de apuestas en casinos o bingos o temas de apuestas? Tenga en cuenta que esta pregunta no alude al contenido generado por los usuarios.
+
+Sí
+
+No
+Lenguaje
+Completado
+¿El juego contiene lenguaje potencialmente ofensivo? Tenga en cuenta que esta pregunta no hace referencia al contenido generado por los usuarios.
+
+Sí
+
+No
+Sustancias reguladas
+Completado
+¿El juego contiene alguna referencia al consumo de drogas, alcohol o tabaco? Tenga en cuenta que esta pregunta no hace referencia al contenido generado por los usuarios.
+
+Sí
+
+No
+Humor negro
+Completado
+¿El juego contiene funciones fisiológicas como eructos, ventosidades o vómitos usadas con fines humorísticos? Tenga en cuenta que esta pregunta no hace referencia al contenido generado por los usuarios.
+
+Sí
+
+No
+Compras digitales, premios convertibles en efectivo o NFT
+Completado
+¿El juego incluye la compra o venta de bienes digitales, recompensas en metálico, tarjetas regalo, características de jugar para ganar, recompensas convertibles en criptomoneda o la emisión de activos digitales transferibles (por ejemplo, NFT)?
+
+Sí
+
+No
+Varios
+Completado
+¿El juego permite de forma nativa que los usuarios interactúen o intercambien contenido con otros usuarios a través de comunicaciones de voz, texto o uso compartido de imágenes o de audio? Más información
+
+Sí
+
+No
+¿El juego comparte la ubicación física y precisa actual del usuario con otros usuarios? Más información
+
+Sí
+
+No
+¿El juego contiene esvásticas, otros símbolos nazi o propaganda considerada inconstitucional en Alemania? Más información
+
+Sí
+
+No
+¿El juego contiene algún contenido que pueda minar considerablemente la identidad nacional de la República de Corea mediante la descripción de actos antinacionales o la distorsión de hechos históricos?
+
+Sí
+
+No
+¿El juego promueve que se cometan actos terroristas? Más información
+
+Sí
+
+No
+¿El juego contiene descripciones realistas de delitos (por ejemplo, robo, secuestro) o técnicas que puedan usarse en delitos penales?
+
+Sí
+
+No
