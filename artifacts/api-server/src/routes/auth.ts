@@ -7,6 +7,14 @@ const APP_ORIGIN = process.env["APP_ORIGIN"] || "https://3697d7d1-ea3c-4cf5-b00f
 
 // Helper: build a tiny HTML page that writes data to sessionStorage and redirects
 function bridgePage(key: string, value: string, returnPath: string) {
+  return bridgePageMulti([[key, value]], returnPath);
+}
+
+// Multi-key bridge page — writes multiple sessionStorage entries before redirecting
+function bridgePageMulti(items: [string, string][], returnPath: string) {
+  const setItems = items
+    .map(([k, v]) => `sessionStorage.setItem(${JSON.stringify(k)}, ${JSON.stringify(v)});`)
+    .join("\n    ");
   return `<!DOCTYPE html><html><head><meta charset="utf-8">
 <title>Conectando...</title>
 <style>body{background:#0d1757;color:white;font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;}
@@ -15,7 +23,7 @@ function bridgePage(key: string, value: string, returnPath: string) {
 <body><div class="logo"><div class="spinner"></div><p>Conectando cuenta...</p></div>
 <script>
   try {
-    sessionStorage.setItem(${JSON.stringify(key)}, ${JSON.stringify(value)});
+    ${setItems}
   } catch(e) {}
   window.location.replace(${JSON.stringify(APP_ORIGIN + returnPath)});
 </script>
@@ -125,7 +133,7 @@ router.get("/facebook/start", (req: Request, res: Response) => {
   const params = new URLSearchParams({
     client_id: FACEBOOK_APP_ID,
     redirect_uri: redirectUri,
-    scope: "email,public_profile",
+    scope: "email,public_profile,user_friends",
     response_type: "code",
     state,
   });
@@ -172,7 +180,11 @@ router.get("/facebook/callback", async (req: Request, res: Response) => {
       provider: "facebook",
     });
 
-    res.send(bridgePage("oauth_user", user, state));
+    // Pass both user profile AND access token so frontend can call Graph API for friends
+    res.send(bridgePageMulti([
+      ["oauth_user", user],
+      ["fb_access_token", tokenData.access_token],
+    ], state));
   } catch (err) {
     console.error("Facebook OAuth error:", err);
     res.redirect(`${APP_ORIGIN}/?auth_error=facebook_failed`);

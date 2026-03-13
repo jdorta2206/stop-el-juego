@@ -5,6 +5,7 @@ import rankingRouter from "./ranking";
 import roomsRouter from "./rooms";
 import authRouter from "./auth";
 import stripeRouter from "./stripe";
+import presenceRouter from "./presence";
 
 const router: IRouter = Router();
 
@@ -14,5 +15,6 @@ router.use("/ranking", rankingRouter);
 router.use("/rooms", roomsRouter);
 router.use("/auth", authRouter);
 router.use("/stripe", stripeRouter);
+router.use("/presence", presenceRouter);
 
 export default router;

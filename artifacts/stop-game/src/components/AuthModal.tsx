@@ -29,13 +29,22 @@ export function AuthModal({ onSave, initial }: AuthModalProps) {
   const [avatarColor, setAvatarColor] = useState(initial?.avatarColor || AVATAR_COLORS[0]);
   const [loginMethod, setLoginMethod] = useState<string | null>(null);
   const [oauthPicture, setOauthPicture] = useState<string | null>(null);
+  const [fbToken, setFbToken] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // On mount — check if we just returned from a social OAuth redirect
   useEffect(() => {
     try {
       const oauthUser = checkOAuthReturn();
-      if (oauthUser) handleOAuthSuccess(oauthUser);
+      if (oauthUser) {
+        // Also grab FB access token if it was stored by the bridge page
+        const storedFbToken = sessionStorage.getItem("fb_access_token");
+        if (storedFbToken) {
+          sessionStorage.removeItem("fb_access_token");
+          setFbToken(storedFbToken);
+        }
+        handleOAuthSuccess(oauthUser);
+      }
     } catch (e: any) {
       setError(e.message || "Error al iniciar sesión.");
     }
@@ -57,6 +66,7 @@ export function AuthModal({ onSave, initial }: AuthModalProps) {
       avatarColor,
       loginMethod,
       picture: oauthPicture,
+      fbAccessToken: fbToken || initial?.fbAccessToken || null,
     } as any);
   };
 
