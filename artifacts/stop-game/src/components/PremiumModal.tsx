@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Star, Zap, ShieldOff, Crown } from "lucide-react";
 import { fetchPremiumProducts, startCheckout, openCustomerPortal } from "@/lib/usePremium";
+import { useT } from "@/i18n/useT";
 
 interface PremiumModalProps {
   open: boolean;
@@ -11,13 +12,6 @@ interface PremiumModalProps {
   email?: string;
   isPremium: boolean;
 }
-
-const FEATURES = [
-  { icon: ShieldOff, label: "Sin anuncios — juega sin interrupciones" },
-  { icon: Zap, label: "Acceso anticipado a nuevas funciones" },
-  { icon: Crown, label: "Insignia premium en el ranking global" },
-  { icon: Star, label: "Apoya el desarrollo del juego" },
-];
 
 function formatPrice(amount: number, currency: string) {
   return new Intl.NumberFormat("es-ES", {
@@ -35,11 +29,19 @@ export function PremiumModal({
   email,
   isPremium,
 }: PremiumModalProps) {
+  const { t } = useT();
   const [products, setProducts] = useState<any[]>([]);
   const [selectedPrice, setSelectedPrice] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loadingProducts, setLoadingProducts] = useState(false);
+
+  const FEATURES = [
+    { icon: ShieldOff, label: t.premium.features[0] },
+    { icon: Zap, label: t.premium.features[1] },
+    { icon: Crown, label: t.premium.features[2] },
+    { icon: Star, label: t.premium.features[3] },
+  ];
 
   useEffect(() => {
     if (!open || isPremium) return;
@@ -47,11 +49,10 @@ export function PremiumModal({
     fetchPremiumProducts()
       .then((res) => {
         setProducts(res.data || []);
-        // Pre-select the first price found
         const firstPrice = res.data?.[0]?.prices?.[0]?.id;
         if (firstPrice) setSelectedPrice(firstPrice);
       })
-      .catch(() => setError("No se pudieron cargar los planes. Inténtalo de nuevo."))
+      .catch(() => setError(t.premium.errorLoad))
       .finally(() => setLoadingProducts(false));
   }, [open, isPremium]);
 
@@ -63,7 +64,7 @@ export function PremiumModal({
       const { url } = await startCheckout({ playerId, playerName, email, priceId: selectedPrice });
       window.location.href = url;
     } catch (err: any) {
-      setError(err.message || "Error al iniciar el pago. Inténtalo de nuevo.");
+      setError(err.message || t.premium.errorCheckout);
       setLoading(false);
     }
   };
@@ -75,7 +76,7 @@ export function PremiumModal({
       const { url } = await openCustomerPortal(playerId);
       window.location.href = url;
     } catch (err: any) {
-      setError(err.message || "Error al abrir el portal. Inténtalo de nuevo.");
+      setError(err.message || t.premium.errorPortal);
       setLoading(false);
     }
   };
@@ -102,9 +103,7 @@ export function PremiumModal({
             {/* Header */}
             <div
               className="relative px-6 pt-8 pb-6 text-center"
-              style={{
-                background: "linear-gradient(160deg, hsl(6 90% 45%) 0%, hsl(222 47% 15%) 100%)",
-              }}
+              style={{ background: "linear-gradient(160deg, hsl(6 90% 45%) 0%, hsl(222 47% 15%) 100%)" }}
             >
               <button
                 onClick={onClose}
@@ -124,23 +123,22 @@ export function PremiumModal({
               {isPremium ? (
                 <>
                   <h2 className="text-white font-black text-2xl mb-1" style={{ fontFamily: "'Baloo 2', sans-serif" }}>
-                    ¡Ya eres Premium!
+                    {t.premium.alreadyPremium}
                   </h2>
-                  <p className="text-white/75 text-sm">Gracias por apoyar STOP</p>
+                  <p className="text-white/75 text-sm">{t.premium.thankYou}</p>
                 </>
               ) : (
                 <>
                   <h2 className="text-white font-black text-2xl mb-1" style={{ fontFamily: "'Baloo 2', sans-serif" }}>
-                    STOP Premium
+                    {t.premium.title}
                   </h2>
-                  <p className="text-white/75 text-sm">Juega sin límites</p>
+                  <p className="text-white/75 text-sm">{t.premium.subtitle}</p>
                 </>
               )}
             </div>
 
             {/* Body */}
             <div className="px-6 py-5 space-y-4">
-              {/* Features list */}
               <ul className="space-y-3">
                 {FEATURES.map(({ icon: Icon, label }) => (
                   <li key={label} className="flex items-center gap-3">
@@ -155,7 +153,6 @@ export function PremiumModal({
                 ))}
               </ul>
 
-              {/* Error */}
               {error && (
                 <p className="text-red-400 text-xs text-center bg-red-900/20 rounded-lg px-3 py-2">
                   {error}
@@ -168,7 +165,7 @@ export function PremiumModal({
                     className="rounded-xl px-4 py-3 text-center"
                     style={{ background: "rgba(249,168,37,0.1)", border: "1px solid rgba(249,168,37,0.3)" }}
                   >
-                    <p className="text-[#f9a825] font-bold text-sm">✓ Suscripción activa</p>
+                    <p className="text-[#f9a825] font-bold text-sm">{t.premium.active}</p>
                   </div>
                   <button
                     onClick={handleManage}
@@ -176,22 +173,17 @@ export function PremiumModal({
                     className="w-full py-3 rounded-xl font-bold text-white text-sm transition-all"
                     style={{ background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.2)" }}
                   >
-                    {loading ? "Cargando..." : "Gestionar suscripción"}
+                    {loading ? t.premium.loading : t.premium.manage}
                   </button>
                 </>
               ) : loadingProducts ? (
                 <div className="text-center py-4">
-                  <div
-                    className="inline-block w-6 h-6 rounded-full border-2 border-[#f9a825] border-t-transparent animate-spin"
-                  />
+                  <div className="inline-block w-6 h-6 rounded-full border-2 border-[#f9a825] border-t-transparent animate-spin" />
                 </div>
               ) : products.length === 0 ? (
-                <p className="text-white/50 text-sm text-center py-2">
-                  No hay planes disponibles por el momento.
-                </p>
+                <p className="text-white/50 text-sm text-center py-2">{t.premium.noPlans}</p>
               ) : (
                 <>
-                  {/* Price selector */}
                   <div className="space-y-2">
                     {products.map((product) =>
                       product.prices.map((price: any) => (
@@ -200,28 +192,22 @@ export function PremiumModal({
                           onClick={() => setSelectedPrice(price.id)}
                           className="w-full rounded-xl px-4 py-3 text-left transition-all flex items-center justify-between"
                           style={{
-                            background:
-                              selectedPrice === price.id
-                                ? "rgba(249,168,37,0.15)"
-                                : "rgba(255,255,255,0.05)",
-                            border:
-                              selectedPrice === price.id
-                                ? "2px solid #f9a825"
-                                : "2px solid rgba(255,255,255,0.1)",
+                            background: selectedPrice === price.id ? "rgba(249,168,37,0.15)" : "rgba(255,255,255,0.05)",
+                            border: selectedPrice === price.id ? "2px solid #f9a825" : "2px solid rgba(255,255,255,0.1)",
                           }}
                         >
                           <div>
                             <p className="text-white font-bold text-sm">{product.name}</p>
                             {price.recurring && (
                               <p className="text-white/60 text-xs capitalize">
-                                {price.recurring.interval === "month" ? "Mensual" : "Anual"}
+                                {price.recurring.interval === "month" ? t.premium.monthly : t.premium.yearly}
                               </p>
                             )}
                           </div>
                           <p className="text-[#f9a825] font-black text-lg">
                             {formatPrice(price.unit_amount, price.currency)}
                             <span className="text-white/50 text-xs font-normal ml-1">
-                              /{price.recurring?.interval === "month" ? "mes" : "año"}
+                              /{price.recurring?.interval === "month" ? t.premium.perMonth : t.premium.perYear}
                             </span>
                           </p>
                         </button>
@@ -229,7 +215,6 @@ export function PremiumModal({
                     )}
                   </div>
 
-                  {/* CTA */}
                   <motion.button
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
@@ -243,7 +228,7 @@ export function PremiumModal({
                       fontFamily: "'Baloo 2', sans-serif",
                     }}
                   >
-                    {loading ? "Redirigiendo..." : "¡Activar Premium!"}
+                    {loading ? t.premium.redirecting : t.premium.activate}
                   </motion.button>
 
                   {/* Payment methods */}
@@ -270,11 +255,11 @@ export function PremiumModal({
                       className="px-3 py-1.5 rounded-lg text-xs font-medium text-white/70"
                       style={{ background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.2)" }}
                     >
-                      💳 Tarjeta
+                      💳
                     </div>
                   </div>
                   <p className="text-white/40 text-xs text-center -mt-1">
-                    Pago seguro con Stripe · Cancela cuando quieras
+                    {t.premium.secure}
                   </p>
                 </>
               )}

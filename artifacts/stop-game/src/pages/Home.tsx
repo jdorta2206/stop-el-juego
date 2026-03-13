@@ -1,22 +1,23 @@
 import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { Layout } from "@/components/Layout";
-import { Button, Card } from "@/components/ui";
-import { Play, Users, Trophy, Share2, MessageCircle, Facebook, Instagram, Crown } from "lucide-react";
+import { Button } from "@/components/ui";
+import { Play, Users, Trophy, Share2, Facebook, Instagram, Crown } from "lucide-react";
 import { motion } from "framer-motion";
 import { shareText } from "@/lib/utils";
 import { PremiumModal } from "@/components/PremiumModal";
 import { usePremium } from "@/lib/usePremium";
 import { usePlayer } from "@/hooks/use-player";
+import { useT } from "@/i18n/useT";
 
 const LOGO_URL = `${import.meta.env.BASE_URL}images/stop-logo.png`;
 
 export default function Home() {
   const { player } = usePlayer();
   const { isPremium } = usePremium(player?.id);
+  const { t } = useT();
   const [showPremiumModal, setShowPremiumModal] = useState(false);
 
-  // Handle return from Stripe checkout
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("premium") === "success") {
@@ -26,11 +27,9 @@ export default function Home() {
   }, []);
 
   const share = shareText(
-    "¡Juega a STOP conmigo! El clásico juego de palabras. ¿Quién es más rápido?",
+    t.home.howToPlayText,
     window.location.origin
   );
-
-  const handleNativeShare = () => share.native();
 
   return (
     <Layout>
@@ -39,7 +38,7 @@ export default function Home() {
           open={showPremiumModal}
           onClose={() => setShowPremiumModal(false)}
           playerId={player?.id || "guest"}
-          playerName={player?.name || "Jugador"}
+          playerName={player?.name || ""}
           isPremium={isPremium}
         />
       )}
@@ -61,14 +60,6 @@ export default function Home() {
             animate={{ rotate: [0, 2, -2, 0] }}
             transition={{ repeat: Infinity, duration: 6, ease: "easeInOut" }}
           />
-          <motion.p
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
-            className="text-white/80 font-bold text-lg text-center"
-          >
-            El clásico juego de palabras
-          </motion.p>
         </motion.div>
 
         {/* Main buttons */}
@@ -78,7 +69,6 @@ export default function Home() {
           transition={{ delay: 0.25 }}
           className="w-full space-y-3"
         >
-          {/* Play vs AI — main CTA */}
           <Link href="/solo">
             <motion.div
               whileHover={{ scale: 1.02, y: -2 }}
@@ -92,11 +82,10 @@ export default function Home() {
               }}
             >
               <Play className="w-6 h-6 fill-white" />
-              JUGAR VS IA
+              {t.home.soloVsAI.toUpperCase()}
             </motion.div>
           </Link>
 
-          {/* Premium button */}
           <motion.button
             whileHover={{ scale: 1.02, y: -1 }}
             whileTap={{ scale: 0.98 }}
@@ -109,10 +98,9 @@ export default function Home() {
             }
           >
             <Crown className="w-5 h-5" />
-            {isPremium ? "⭐ Premium activo" : "Activar Premium — sin anuncios"}
+            {isPremium ? `⭐ ${t.premium.active}` : `${t.premium.title} — ${t.premium.features[0]}`}
           </motion.button>
 
-          {/* Multiplayer + Ranking */}
           <div className="grid grid-cols-2 gap-3">
             <Link href="/multiplayer">
               <motion.div
@@ -127,7 +115,7 @@ export default function Home() {
                 }}
               >
                 <Users className="w-8 h-8 text-[#f9a825]" />
-                <span className="text-sm font-black">Multijugador</span>
+                <span className="text-sm font-black">{t.home.multiplayer}</span>
               </motion.div>
             </Link>
 
@@ -144,7 +132,7 @@ export default function Home() {
                 }}
               >
                 <Trophy className="w-8 h-8 text-[#f9a825]" />
-                <span className="text-sm font-black">Ranking</span>
+                <span className="text-sm font-black">{t.home.ranking}</span>
               </motion.div>
             </Link>
           </div>
@@ -157,14 +145,9 @@ export default function Home() {
           transition={{ delay: 0.5 }}
           className="flex items-center gap-3"
         >
-          <span className="text-white/50 text-sm font-bold">Invita amigos:</span>
+          <span className="text-white/50 text-sm font-bold">{t.friends.challenge}:</span>
 
-          {/* WhatsApp */}
-          <a
-            href={share.whatsapp}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
+          <a href={share.whatsapp} target="_blank" rel="noopener noreferrer">
             <motion.div
               whileHover={{ scale: 1.15, y: -2 }}
               whileTap={{ scale: 0.92 }}
@@ -177,7 +160,6 @@ export default function Home() {
             </motion.div>
           </a>
 
-          {/* Facebook */}
           <a href={share.facebook} target="_blank" rel="noopener noreferrer">
             <motion.div
               whileHover={{ scale: 1.15, y: -2 }}
@@ -189,25 +171,21 @@ export default function Home() {
             </motion.div>
           </a>
 
-          {/* Instagram */}
           <a href={share.instagram} target="_blank" rel="noopener noreferrer">
             <motion.div
               whileHover={{ scale: 1.15, y: -2 }}
               whileTap={{ scale: 0.92 }}
               className="w-10 h-10 rounded-full flex items-center justify-center shadow-md"
-              style={{
-                background: "linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888)",
-              }}
+              style={{ background: "linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888)" }}
             >
               <Instagram className="w-5 h-5 text-white" />
             </motion.div>
           </a>
 
-          {/* Native share */}
           <motion.button
             whileHover={{ scale: 1.15, y: -2 }}
             whileTap={{ scale: 0.92 }}
-            onClick={handleNativeShare}
+            onClick={() => share.native()}
             className="w-10 h-10 rounded-full flex items-center justify-center shadow-md"
             style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.2)" }}
           >

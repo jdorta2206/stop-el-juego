@@ -15,6 +15,8 @@ import {
   isTikTokConfigured,
   type OAuthUser,
 } from "@/lib/oauth";
+import { useT } from "@/i18n/useT";
+import { LanguageSelector } from "./LanguageSelector";
 
 const LOGO_URL = `${import.meta.env.BASE_URL}images/stop-logo.png`;
 
@@ -24,6 +26,7 @@ interface AuthModalProps {
 }
 
 export function AuthModal({ onSave, initial }: AuthModalProps) {
+  const { t } = useT();
   const [step, setStep] = useState<"login" | "profile">(initial ? "profile" : "login");
   const [name, setName] = useState(initial?.name || "");
   const [avatarColor, setAvatarColor] = useState(initial?.avatarColor || AVATAR_COLORS[0]);
@@ -32,12 +35,10 @@ export function AuthModal({ onSave, initial }: AuthModalProps) {
   const [fbToken, setFbToken] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // On mount — check if we just returned from a social OAuth redirect
   useEffect(() => {
     try {
       const oauthUser = checkOAuthReturn();
       if (oauthUser) {
-        // Also grab FB access token if it was stored by the bridge page
         const storedFbToken = sessionStorage.getItem("fb_access_token");
         if (storedFbToken) {
           sessionStorage.removeItem("fb_access_token");
@@ -46,7 +47,7 @@ export function AuthModal({ onSave, initial }: AuthModalProps) {
         handleOAuthSuccess(oauthUser);
       }
     } catch (e: any) {
-      setError(e.message || "Error al iniciar sesión.");
+      setError(e.message || "Error.");
     }
   }, []);
 
@@ -88,7 +89,12 @@ export function AuthModal({ onSave, initial }: AuthModalProps) {
           }}
         >
           {/* Header */}
-          <div className="text-center pt-8 pb-4 px-6">
+          <div className="text-center pt-8 pb-4 px-6 relative">
+            {/* Language selector top-right */}
+            <div className="absolute top-4 right-4">
+              <LanguageSelector />
+            </div>
+
             <motion.img
               src={LOGO_URL}
               alt="STOP"
@@ -98,16 +104,13 @@ export function AuthModal({ onSave, initial }: AuthModalProps) {
               style={{ boxShadow: "0 6px 24px rgba(0,0,0,0.4)" }}
             />
             <h2 className="text-2xl font-black text-white">
-              {step === "login" ? "¡Únete a STOP!" : "Tu perfil"}
+              {step === "login" ? t.auth.title : "👤"}
             </h2>
             <p className="text-white/60 text-sm mt-1">
-              {step === "login"
-                ? "Crea tu cuenta y compite con el mundo"
-                : "Elige tu nombre y avatar"}
+              {step === "login" ? t.auth.subtitle : t.multiplayer.enterName}
             </p>
           </div>
 
-          {/* Error banner */}
           <AnimatePresence>
             {error && (
               <motion.div
@@ -132,7 +135,6 @@ export function AuthModal({ onSave, initial }: AuthModalProps) {
                   exit={{ opacity: 0, x: -20 }}
                   className="space-y-3"
                 >
-                  {/* Google */}
                   <SocialButton
                     onClick={signInWithGoogle}
                     configured={isGoogleConfigured}
@@ -144,12 +146,12 @@ export function AuthModal({ onSave, initial }: AuthModalProps) {
                         <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
                       </svg>
                     }
-                    label="Continuar con Google"
+                    label={t.auth.google}
                     bg="white"
                     textColor="#333"
+                    soonLabel={t.auth.soon}
                   />
 
-                  {/* Facebook */}
                   <SocialButton
                     onClick={signInWithFacebook}
                     configured={isFacebookConfigured}
@@ -158,12 +160,12 @@ export function AuthModal({ onSave, initial }: AuthModalProps) {
                         <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
                       </svg>
                     }
-                    label="Continuar con Facebook"
+                    label={t.auth.facebook}
                     bg="#1877F2"
                     textColor="white"
+                    soonLabel={t.auth.soon}
                   />
 
-                  {/* Instagram */}
                   <SocialButton
                     onClick={signInWithInstagram}
                     configured={isInstagramConfigured}
@@ -182,12 +184,12 @@ export function AuthModal({ onSave, initial }: AuthModalProps) {
                         <path d="M12 7.5A4.5 4.5 0 1 0 16.5 12 4.505 4.505 0 0 0 12 7.5zm0 7.5a3 3 0 1 1 3-3 3 3 0 0 1-3 3zm5.885-8.153a1.05 1.05 0 1 1-1.05-1.05 1.05 1.05 0 0 1 1.05 1.05z" fill="white"/>
                       </svg>
                     }
-                    label="Continuar con Instagram"
+                    label={t.auth.instagram}
                     bg="linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888)"
                     textColor="white"
+                    soonLabel={t.auth.soon}
                   />
 
-                  {/* TikTok */}
                   <SocialButton
                     onClick={signInWithTikTok}
                     configured={isTikTokConfigured}
@@ -196,25 +198,24 @@ export function AuthModal({ onSave, initial }: AuthModalProps) {
                         <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1-2.89-2.89 2.89 2.89 0 0 1 2.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 0 0-.79-.05 6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 6.34 6.34 6.34 6.34 0 0 0 6.33-6.34V8.69a8.2 8.2 0 0 0 4.79 1.52V6.76a4.85 4.85 0 0 1-1.02-.07z"/>
                       </svg>
                     }
-                    label="Continuar con TikTok"
+                    label={t.auth.tiktok}
                     bg="#010101"
                     textColor="white"
+                    soonLabel={t.auth.soon}
                   />
 
-                  {/* Divider */}
                   <div className="flex items-center gap-3 py-1">
                     <div className="flex-1 h-px bg-white/15" />
                     <span className="text-white/40 text-xs font-bold uppercase tracking-wider">o</span>
                     <div className="flex-1 h-px bg-white/15" />
                   </div>
 
-                  {/* Guest */}
                   <button
                     onClick={() => { setLoginMethod("guest"); setStep("profile"); }}
                     className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl border-2 border-white/20 text-white/80 font-bold hover:bg-white/10 transition-all text-sm"
                   >
                     <Mail className="w-4 h-4" />
-                    Entrar como invitado
+                    {t.auth.guest}
                   </button>
                 </motion.div>
               ) : (
@@ -225,15 +226,13 @@ export function AuthModal({ onSave, initial }: AuthModalProps) {
                   exit={{ opacity: 0, x: -20 }}
                   className="space-y-4"
                 >
-                  {/* Provider badge */}
                   {loginMethod && loginMethod !== "guest" && (
                     <div className="flex items-center justify-center gap-2 py-2 px-4 rounded-full bg-white/10 w-fit mx-auto">
                       <span className="text-[#f9a825] font-black text-xs uppercase tracking-wider">{loginMethod}</span>
-                      <span className="text-green-400 text-xs font-bold">✓ conectado</span>
+                      <span className="text-green-400 text-xs font-bold">✓</span>
                     </div>
                   )}
 
-                  {/* Avatar */}
                   <div className="flex justify-center">
                     {oauthPicture ? (
                       <img
@@ -252,10 +251,9 @@ export function AuthModal({ onSave, initial }: AuthModalProps) {
                     )}
                   </div>
 
-                  {/* Name */}
                   <div>
                     <label className="text-xs font-bold text-white/60 uppercase tracking-wider mb-1.5 block">
-                      Nombre de jugador
+                      {t.multiplayer.playerName}
                     </label>
                     <div className="relative">
                       <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
@@ -263,7 +261,7 @@ export function AuthModal({ onSave, initial }: AuthModalProps) {
                         value={name}
                         onChange={e => setName(e.target.value)}
                         maxLength={14}
-                        placeholder="Ej: CrakVillarreal10"
+                        placeholder={t.multiplayer.enterName}
                         autoFocus
                         onKeyDown={e => e.key === "Enter" && handleSave()}
                         className="w-full pl-10 pr-4 py-3 rounded-xl bg-white/10 border-2 border-white/20 text-white placeholder:text-white/40 font-bold text-base focus:outline-none focus:border-[#f9a825] transition-colors"
@@ -272,11 +270,10 @@ export function AuthModal({ onSave, initial }: AuthModalProps) {
                     <p className="text-white/30 text-xs mt-1 text-right">{name.length}/14</p>
                   </div>
 
-                  {/* Color picker (only for guests) */}
                   {!oauthPicture && (
                     <div>
                       <label className="flex items-center gap-1.5 text-white/60 text-xs font-bold uppercase tracking-wider mb-2">
-                        <Palette className="w-3.5 h-3.5" /> Color de avatar
+                        <Palette className="w-3.5 h-3.5" /> Avatar
                       </label>
                       <div className="flex flex-wrap gap-2">
                         {AVATAR_COLORS.map(color => (
@@ -296,7 +293,6 @@ export function AuthModal({ onSave, initial }: AuthModalProps) {
                     </div>
                   )}
 
-                  {/* CTA */}
                   <motion.button
                     whileHover={{ scale: name.trim() ? 1.02 : 1 }}
                     whileTap={{ scale: name.trim() ? 0.97 : 1 }}
@@ -310,7 +306,7 @@ export function AuthModal({ onSave, initial }: AuthModalProps) {
                       boxShadow: name.trim() ? "0 4px 20px rgba(230,48,18,0.4)" : "none",
                     }}
                   >
-                    ¡JUGAR!
+                    {t.home.play}
                   </motion.button>
 
                   {!initial && (
@@ -318,7 +314,7 @@ export function AuthModal({ onSave, initial }: AuthModalProps) {
                       onClick={() => { setStep("login"); setLoginMethod(null); setOauthPicture(null); }}
                       className="w-full text-white/40 text-sm text-center hover:text-white/60 transition-colors"
                     >
-                      ← Cambiar método de login
+                      ← {t.auth.guest}
                     </button>
                   )}
                 </motion.div>
@@ -331,8 +327,6 @@ export function AuthModal({ onSave, initial }: AuthModalProps) {
   );
 }
 
-// ─── Social Button ────────────────────────────────────────────────────────────
-
 function SocialButton({
   onClick,
   icon,
@@ -340,6 +334,7 @@ function SocialButton({
   bg,
   textColor,
   configured = true,
+  soonLabel = "Soon",
 }: {
   onClick: () => void;
   icon: React.ReactNode;
@@ -347,6 +342,7 @@ function SocialButton({
   bg: string;
   textColor: string;
   configured?: boolean;
+  soonLabel?: string;
 }) {
   return (
     <motion.button
@@ -366,7 +362,7 @@ function SocialButton({
       <span className="flex-1 text-left">{label}</span>
       {configured
         ? <span className="opacity-50">→</span>
-        : <span className="text-xs font-bold opacity-70 bg-black/20 px-2 py-0.5 rounded-full">Pronto</span>
+        : <span className="text-xs font-bold opacity-70 bg-black/20 px-2 py-0.5 rounded-full">{soonLabel}</span>
       }
     </motion.button>
   );
