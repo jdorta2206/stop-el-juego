@@ -10,6 +10,9 @@ export const playerScoresTable = pgTable("player_scores", {
   totalScore: integer("total_score").notNull().default(0),
   gamesPlayed: integer("games_played").notNull().default(0),
   wins: integer("wins").notNull().default(0),
+  stripeCustomerId: text("stripe_customer_id"),
+  stripeSubscriptionId: text("stripe_subscription_id"),
+  isPremium: boolean("is_premium").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
