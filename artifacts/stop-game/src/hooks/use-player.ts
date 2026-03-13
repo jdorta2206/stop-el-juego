@@ -6,6 +6,8 @@ export interface PlayerProfile {
   name: string;
   avatarColor: string;
   loginMethod?: string | null;
+  picture?: string | null;
+  fbAccessToken?: string | null;
 }
 
 const STORAGE_KEY = "stop_player_v2";
@@ -47,6 +49,13 @@ export function usePlayer() {
     savePlayer(updated);
   };
 
+  const saveFbToken = (token: string) => {
+    if (!player) return;
+    const updated = { ...player, fbAccessToken: token };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    setPlayer(updated);
+  };
+
   const logout = () => {
     localStorage.removeItem(STORAGE_KEY);
     setPlayer(null);
@@ -55,5 +64,5 @@ export function usePlayer() {
 
   const showAuth = () => setNeedsAuth(true);
 
-  return { player, isLoaded, needsAuth, savePlayer, updateProfile, logout, showAuth };
+  return { player, isLoaded, needsAuth, savePlayer, updateProfile, saveFbToken, logout, showAuth };
 }

@@ -4,6 +4,7 @@ import { Layout } from "@/components/Layout";
 import { Button, Card, Input } from "@/components/ui";
 import { useCreateRoom, useJoinRoom } from "@workspace/api-client-react";
 import { usePlayer } from "@/hooks/use-player";
+import { OnlineFriends } from "@/components/OnlineFriends";
 import { Users, Plus, LogIn } from "lucide-react";
 
 export default function Multiplayer() {
@@ -54,7 +55,7 @@ export default function Multiplayer() {
 
   return (
     <Layout>
-      <div className="flex-1 flex flex-col items-center justify-center max-w-md mx-auto w-full space-y-8">
+      <div className="flex-1 flex flex-col max-w-md mx-auto w-full space-y-5 py-4">
         
         <div className="text-center">
           <div className="bg-primary/20 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4 backdrop-blur-sm border border-white/10">
@@ -69,6 +70,9 @@ export default function Multiplayer() {
             {error}
           </div>
         )}
+
+        {/* Online friends panel */}
+        {player && <OnlineFriends player={player} />}
 
         <Card className="w-full p-6 space-y-6">
           <div>
