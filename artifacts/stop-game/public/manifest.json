@@ -1,14 +1,20 @@
 {
+  "id": "/",
   "name": "STOP - El Juego",
   "short_name": "STOP",
   "description": "El juego de Tutti Frutti / Scattergories — juega solo o con amigos en tiempo real",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
   "orientation": "portrait",
   "background_color": "#0d1757",
   "theme_color": "#e63012",
   "lang": "es",
+  "dir": "ltr",
   "categories": ["games", "entertainment"],
+  "iarc_rating_id": "",
+  "prefer_related_applications": false,
   "icons": [
     {
       "src": "/images/stop-logo.png",
@@ -28,7 +34,22 @@
       "purpose": "any maskable"
     }
   ],
-  "screenshots": [],
+  "screenshots": [
+    {
+      "src": "/screenshots/desktop.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Pantalla de inicio de STOP"
+    },
+    {
+      "src": "/screenshots/mobile.png",
+      "sizes": "390x844",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "STOP en móvil"
+    }
+  ],
   "shortcuts": [
     {
       "name": "Jugar Solo",
@@ -41,6 +62,21 @@
       "short_name": "Multi",
       "url": "/multiplayer",
       "icons": [{ "src": "/images/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Ranking",
+      "short_name": "Ranking",
+      "url": "/ranking",
+      "icons": [{ "src": "/images/icon-192.png", "sizes": "192x192" }]
     }
-  ]
+  ],
+  "share_target": {
+    "action": "/multiplayer",
+    "method": "GET",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url"
+    }
+  }
 }
