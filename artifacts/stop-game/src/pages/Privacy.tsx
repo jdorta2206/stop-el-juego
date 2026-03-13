@@ -7,7 +7,7 @@ export default function Privacy() {
       <section className="space-y-6 text-white/80 leading-relaxed">
         <div>
           <h2 className="text-xl font-bold text-white mb-2">1. Información que recopilamos</h2>
-          <p>Cuando inicias sesión con Google, Facebook o TikTok, recopilamos únicamente tu nombre público y foto de perfil para personalizar tu experiencia en el juego y mostrar tu nombre en el ranking global.</p>
+          <p>Cuando inicias sesión con Google, Facebook, Instagram o TikTok, recopilamos únicamente tu nombre público y foto de perfil para personalizar tu experiencia en el juego y mostrar tu nombre en el ranking global.</p>
         </div>
         <div>
           <h2 className="text-xl font-bold text-white mb-2">2. Cómo usamos tu información</h2>
