@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { stripeStorage } from "../stripeStorage";
 import { stripeService } from "../stripeService";
+import { getUncachableStripeClient } from "../stripeClient";
 
 const router: IRouter = Router();
 
@@ -39,34 +40,43 @@ router.get("/status", async (req, res) => {
 });
 
 // GET /api/stripe/products
-// Returns active products with their prices
+// Returns active products with their prices — reads directly from Stripe API
 router.get("/products", async (_req, res) => {
   try {
-    const rows = await stripeStorage.listProductsWithPrices();
+    const stripe = await getUncachableStripeClient();
 
-    const productsMap = new Map<string, any>();
-    for (const row of rows) {
-      if (!productsMap.has(row.product_id as string)) {
-        productsMap.set(row.product_id as string, {
-          id: row.product_id,
-          name: row.product_name,
-          description: row.product_description,
-          active: row.product_active,
-          prices: [],
-        });
-      }
-      if (row.price_id) {
-        productsMap.get(row.product_id as string).prices.push({
-          id: row.price_id,
-          unit_amount: row.unit_amount,
-          currency: row.currency,
-          recurring: row.recurring,
-          active: row.price_active,
-        });
-      }
+    // Fetch active products from Stripe
+    const productsRes = await stripe.products.list({ active: true, limit: 20 });
+    const pricesRes = await stripe.prices.list({ active: true, limit: 100 });
+
+    const pricesByProduct = new Map<string, any[]>();
+    for (const price of pricesRes.data) {
+      const productId = typeof price.product === "string" ? price.product : price.product.id;
+      if (!pricesByProduct.has(productId)) pricesByProduct.set(productId, []);
+      pricesByProduct.get(productId)!.push({
+        id: price.id,
+        unit_amount: price.unit_amount,
+        currency: price.currency,
+        recurring: price.recurring
+          ? { interval: price.recurring.interval, interval_count: price.recurring.interval_count }
+          : null,
+        active: price.active,
+      });
     }
 
-    return res.json({ data: Array.from(productsMap.values()) });
+    const data = productsRes.data
+      .filter((p) => pricesByProduct.has(p.id))
+      .map((p) => ({
+        id: p.id,
+        name: p.name,
+        description: p.description,
+        active: p.active,
+        prices: (pricesByProduct.get(p.id) || []).sort(
+          (a, b) => (a.unit_amount ?? 0) - (b.unit_amount ?? 0)
+        ),
+      }));
+
+    return res.json({ data });
   } catch (err: any) {
     console.error("stripe/products error:", err.message);
     return res.status(500).json({ error: "Internal server error" });
