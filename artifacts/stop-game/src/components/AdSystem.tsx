@@ -11,7 +11,8 @@ const ADSENSE_CLIENT = import.meta.env.VITE_ADSENSE_CLIENT_ID as string | undefi
 const BANNER_SLOT    = import.meta.env.VITE_ADSENSE_BANNER_SLOT as string | undefined;
 const VIDEO_SLOT     = import.meta.env.VITE_ADSENSE_VIDEO_SLOT as string | undefined;
 
-const ADSENSE_READY = !!(ADSENSE_CLIENT && BANNER_SLOT);
+// Auto Ads mode: only needs the client ID — Google places ads automatically
+const ADSENSE_READY = !!ADSENSE_CLIENT;
 
 // Push an AdSense slot after it mounts
 function pushAd(ref: React.RefObject<HTMLElement | null>) {
@@ -59,15 +60,16 @@ export function BannerAd({ className = "" }: { className?: string }) {
   const [visible, setVisible] = useState(true);
 
   useEffect(() => {
-    if (ADSENSE_READY && insRef.current) {
+    // Push manual slot if configured
+    if (ADSENSE_READY && BANNER_SLOT && insRef.current) {
       pushAd(insRef as any);
     }
   }, []);
 
   if (!visible) return null;
 
-  // ── Real AdSense banner ──
-  if (ADSENSE_READY) {
+  // ── Manual AdSense slot (if BANNER_SLOT is configured) ──
+  if (ADSENSE_READY && BANNER_SLOT) {
     return (
       <div className={`relative overflow-hidden rounded-xl ${className}`} style={{ minHeight: 60 }}>
         <div className="absolute top-1 left-2 text-[9px] text-black/30 font-mono z-10">Publicidad</div>
@@ -84,7 +86,14 @@ export function BannerAd({ className = "" }: { className?: string }) {
     );
   }
 
-  // ── Mock banner (development / no AdSense) ──
+  // ── Auto Ads mode (client set, no slot) ──
+  // Google Auto Ads injects ads automatically via the script in index.html.
+  // Return null here — no manual <ins> needed (and it would error without a slot).
+  if (ADSENSE_READY && !BANNER_SLOT) {
+    return null;
+  }
+
+  // ── Mock banner (no AdSense configured) ──
   const ad = MOCK_BANNER_ADS[adIndex % MOCK_BANNER_ADS.length];
 
   return (
