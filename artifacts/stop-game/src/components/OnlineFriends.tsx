@@ -1,9 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Users, Wifi, Copy, ChevronDown, ChevronUp, UserCheck } from "lucide-react";
-import { usePresence, type OnlinePlayer } from "@/lib/usePresence";
+import { Wifi, Copy, ChevronDown, ChevronUp, Swords, Check, Clock } from "lucide-react";
+import { usePresence, sendChallenge, pollChallengeStatus, type OnlinePlayer } from "@/lib/usePresence";
 import { useFacebookFriends, type EnrichedFriend } from "@/lib/useFriends";
 import type { PlayerProfile } from "@/hooks/use-player";
+import { useLocation } from "wouter";
+import { ChallengeNotification } from "@/components/ChallengeNotification";
 
 interface OnlineFriendsProps {
   player: PlayerProfile;
@@ -84,17 +86,73 @@ function Avatar({
   );
 }
 
+type ChallengeState = "idle" | "sending" | "waiting" | "accepted" | "declined" | "expired";
+
+// Challenge button with state feedback
+function ChallengeButton({
+  onChallenge,
+}: {
+  onChallenge: () => Promise<void>;
+}) {
+  const [state, setState] = useState<ChallengeState>("idle");
+
+  const handleClick = async () => {
+    if (state !== "idle") return;
+    setState("sending");
+    await onChallenge();
+    setState("waiting");
+  };
+
+  if (state === "idle") {
+    return (
+      <button
+        onClick={handleClick}
+        className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all"
+        style={{
+          background: "rgba(249,168,37,0.12)",
+          border: "1px solid rgba(249,168,37,0.3)",
+          color: "#f9a825",
+        }}
+        title="Retar a este jugador"
+      >
+        <Swords size={11} /> Retar
+      </button>
+    );
+  }
+
+  if (state === "sending") {
+    return (
+      <span className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 text-xs text-white/40">
+        <div className="w-3 h-3 border border-white/30 border-t-white/70 rounded-full animate-spin" />
+        Enviando…
+      </span>
+    );
+  }
+
+  if (state === "waiting") {
+    return (
+      <span className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 text-xs text-yellow-400/80">
+        <Clock size={11} /> Esperando…
+      </span>
+    );
+  }
+
+  return null;
+}
+
 // Single player row
 function PlayerRow({
   player,
   isCurrentUser,
-  onCopyInvite,
+  currentPlayer,
 }: {
   player: OnlinePlayer;
   isCurrentUser: boolean;
-  onCopyInvite?: () => void;
+  currentPlayer?: PlayerProfile;
 }) {
+  const [, setLocation] = useLocation();
   const [copied, setCopied] = useState(false);
+  const pendingChallengeId = useRef<string | null>(null);
 
   const handleCopy = () => {
     if (player.roomCode) {
@@ -103,7 +161,28 @@ function PlayerRow({
         setTimeout(() => setCopied(false), 2000);
       });
     }
-    onCopyInvite?.();
+  };
+
+  const handleChallenge = async () => {
+    if (!currentPlayer) return;
+    const result = await sendChallenge(currentPlayer, player.playerId);
+    if (!result) return;
+    pendingChallengeId.current = result.challengeId;
+    // Poll for response
+    const poll = setInterval(async () => {
+      if (!pendingChallengeId.current) { clearInterval(poll); return; }
+      const status = await pollChallengeStatus(pendingChallengeId.current);
+      if (status.status === "accepted") {
+        clearInterval(poll);
+        pendingChallengeId.current = null;
+        setLocation(`/room/${status.roomCode}`);
+      } else if (status.status === "declined" || status.status === "expired") {
+        clearInterval(poll);
+        pendingChallengeId.current = null;
+      }
+    }, 2000);
+    // Stop polling after 60s
+    setTimeout(() => { clearInterval(poll); pendingChallengeId.current = null; }, 60000);
   };
 
   return (
@@ -119,7 +198,6 @@ function PlayerRow({
           avatarColor={player.avatarColor}
           size={36}
         />
-        {/* Online pulse ring */}
         <span className="absolute -bottom-0.5 -right-0.5">
           <OnlineDot isOnline={true} />
         </span>
@@ -140,33 +218,35 @@ function PlayerRow({
         )}
       </div>
 
-      {player.roomCode && !isCurrentUser && (
-        <button
-          onClick={handleCopy}
-          className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all"
-          style={{
-            background: copied ? "rgba(74,222,128,0.2)" : "rgba(249,168,37,0.15)",
-            border: copied ? "1px solid rgba(74,222,128,0.4)" : "1px solid rgba(249,168,37,0.3)",
-            color: copied ? "#4ade80" : "#f9a825",
-          }}
-          title="Copiar código de sala para unirte"
-        >
-          {copied ? (
-            "✓ Copiado"
-          ) : (
-            <>
-              <Copy size={11} /> Unirse
-            </>
-          )}
-        </button>
+      {!isCurrentUser && (
+        <>
+          {player.roomCode ? (
+            <button
+              onClick={handleCopy}
+              className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all"
+              style={{
+                background: copied ? "rgba(74,222,128,0.2)" : "rgba(249,168,37,0.15)",
+                border: copied ? "1px solid rgba(74,222,128,0.4)" : "1px solid rgba(249,168,37,0.3)",
+                color: copied ? "#4ade80" : "#f9a825",
+              }}
+              title="Copiar código de sala"
+            >
+              {copied ? <><Check size={11} /> Copiado</> : <><Copy size={11} /> Unirse</>}
+            </button>
+          ) : currentPlayer ? (
+            <ChallengeButton onChallenge={handleChallenge} />
+          ) : null}
+        </>
       )}
     </motion.div>
   );
 }
 
-// FB friend row (may or may not be online)
-function FriendRow({ friend }: { friend: EnrichedFriend }) {
+// FB friend row
+function FriendRow({ friend, currentPlayer }: { friend: EnrichedFriend; currentPlayer?: PlayerProfile }) {
+  const [, setLocation] = useLocation();
   const [copied, setCopied] = useState(false);
+  const pendingChallengeId = useRef<string | null>(null);
 
   const handleJoin = () => {
     if (friend.onlineData?.roomCode) {
@@ -175,6 +255,26 @@ function FriendRow({ friend }: { friend: EnrichedFriend }) {
         setTimeout(() => setCopied(false), 2000);
       });
     }
+  };
+
+  const handleChallenge = async () => {
+    if (!currentPlayer || !friend.onlineData?.playerId) return;
+    const result = await sendChallenge(currentPlayer, friend.onlineData.playerId);
+    if (!result) return;
+    pendingChallengeId.current = result.challengeId;
+    const poll = setInterval(async () => {
+      if (!pendingChallengeId.current) { clearInterval(poll); return; }
+      const status = await pollChallengeStatus(pendingChallengeId.current);
+      if (status.status === "accepted") {
+        clearInterval(poll);
+        pendingChallengeId.current = null;
+        setLocation(`/room/${status.roomCode}`);
+      } else if (status.status === "declined" || status.status === "expired") {
+        clearInterval(poll);
+        pendingChallengeId.current = null;
+      }
+    }, 2000);
+    setTimeout(() => { clearInterval(poll); pendingChallengeId.current = null; }, 60000);
   };
 
   return (
@@ -206,18 +306,24 @@ function FriendRow({ friend }: { friend: EnrichedFriend }) {
         )}
       </div>
 
-      {friend.isOnline && friend.onlineData?.roomCode && (
-        <button
-          onClick={handleJoin}
-          className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all"
-          style={{
-            background: copied ? "rgba(74,222,128,0.2)" : "rgba(24,119,242,0.2)",
-            border: copied ? "1px solid rgba(74,222,128,0.4)" : "1px solid rgba(24,119,242,0.4)",
-            color: copied ? "#4ade80" : "#60a5fa",
-          }}
-        >
-          {copied ? "✓ Copiado" : <><Copy size={11} /> Unirse</>}
-        </button>
+      {friend.isOnline && friend.onlineData && (
+        <>
+          {friend.onlineData.roomCode ? (
+            <button
+              onClick={handleJoin}
+              className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all"
+              style={{
+                background: copied ? "rgba(74,222,128,0.2)" : "rgba(24,119,242,0.2)",
+                border: copied ? "1px solid rgba(74,222,128,0.4)" : "1px solid rgba(24,119,242,0.4)",
+                color: copied ? "#4ade80" : "#60a5fa",
+              }}
+            >
+              {copied ? <><Check size={11} /> Copiado</> : <><Copy size={11} /> Unirse</>}
+            </button>
+          ) : currentPlayer ? (
+            <ChallengeButton onChallenge={handleChallenge} />
+          ) : null}
+        </>
       )}
     </motion.div>
   );
@@ -225,21 +331,21 @@ function FriendRow({ friend }: { friend: EnrichedFriend }) {
 
 export function OnlineFriends({ player }: OnlineFriendsProps) {
   const [isExpanded, setIsExpanded] = useState(true);
-  const { onlinePlayers } = usePresence(player);
+  const { onlinePlayers, incomingChallenge, dismissChallenge } = usePresence(player);
   const { enriched: fbFriends, loading: fbLoading } = useFacebookFriends(
     player.fbAccessToken,
     onlinePlayers
   );
 
-  // Filter out current player from online list; show others only
   const others = onlinePlayers.filter((p) => p.playerId !== player.id);
   const onlineCount = others.length;
-
-  // FB friends who are also in online list (quick access to online friends)
-  const onlineFbFriends = fbFriends.filter((f) => f.isOnline);
   const hasFbFriends = player.loginMethod === "facebook" && player.fbAccessToken;
 
   return (
+    <>
+    {incomingChallenge && (
+      <ChallengeNotification challenge={incomingChallenge} onDismiss={dismissChallenge} />
+    )}
     <div
       className="w-full rounded-2xl overflow-hidden"
       style={{
@@ -279,7 +385,7 @@ export function OnlineFriends({ player }: OnlineFriendsProps) {
             style={{ overflow: "hidden" }}
           >
             <div className="px-4 pb-4 space-y-1 max-h-64 overflow-y-auto">
-              {/* Current player (always online since they're here) */}
+              {/* Current player */}
               <PlayerRow
                 player={{
                   playerId: player.id,
@@ -293,14 +399,12 @@ export function OnlineFriends({ player }: OnlineFriendsProps) {
                 isCurrentUser={true}
               />
 
-              {/* Divider if there are others */}
               {others.length > 0 && (
                 <div className="border-t border-white/10 my-1" />
               )}
 
-              {/* Other online players */}
               {others.map((p) => (
-                <PlayerRow key={p.playerId} player={p} isCurrentUser={false} />
+                <PlayerRow key={p.playerId} player={p} isCurrentUser={false} currentPlayer={player} />
               ))}
 
               {others.length === 0 && (
@@ -335,13 +439,12 @@ export function OnlineFriends({ player }: OnlineFriendsProps) {
                     )}
 
                     {fbFriends.map((f) => (
-                      <FriendRow key={f.fbId} friend={f} />
+                      <FriendRow key={f.fbId} friend={f} currentPlayer={player} />
                     ))}
                   </div>
                 </>
               )}
 
-              {/* CTA for users not logged in with Facebook */}
               {!hasFbFriends && player.loginMethod !== "facebook" && (
                 <div className="border-t border-white/10 pt-3 mt-2">
                   <p className="text-white/30 text-xs text-center leading-relaxed">
@@ -354,5 +457,6 @@ export function OnlineFriends({ player }: OnlineFriendsProps) {
         )}
       </AnimatePresence>
     </div>
+    </>
   );
 }
