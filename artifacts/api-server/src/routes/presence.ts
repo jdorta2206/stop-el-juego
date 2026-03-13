@@ -14,16 +14,45 @@ interface PresenceEntry {
 
 const presenceMap = new Map<string, PresenceEntry>();
 
+// In-memory challenges store
+interface Challenge {
+  challengeId: string;
+  fromPlayerId: string;
+  fromName: string;
+  fromPicture: string | null;
+  fromAvatarColor: string;
+  toPlayerId: string;
+  roomCode: string;
+  status: "pending" | "accepted" | "declined";
+  createdAt: number;
+}
+
+const challengeMap = new Map<string, Challenge>();
+
+function generateRoomCode(): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let code = "";
+  for (let i = 0; i < 4; i++) {
+    code += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return code;
+}
+
 // Clean up stale entries every 2 minutes
 setInterval(() => {
   const cutoff = Date.now() - 3 * 60 * 1000;
   for (const [id, data] of presenceMap) {
     if (data.lastSeen < cutoff) presenceMap.delete(id);
   }
+  // Challenges expire after 2 minutes
+  const challengeCutoff = Date.now() - 2 * 60 * 1000;
+  for (const [id] of challengeMap) {
+    const c = challengeMap.get(id)!;
+    if (c.createdAt < challengeCutoff) challengeMap.delete(id);
+  }
 }, 2 * 60 * 1000);
 
 // POST /api/presence/ping
-// Body: { playerId, name, picture?, avatarColor?, provider?, roomCode? }
 router.post("/ping", (req, res) => {
   const { playerId, name, picture, avatarColor, provider, roomCode } = req.body as {
     playerId: string;
@@ -51,7 +80,6 @@ router.post("/ping", (req, res) => {
 });
 
 // GET /api/presence/online
-// Returns all players seen in last 90 seconds
 router.get("/online", (_req, res) => {
   const cutoff = Date.now() - 90 * 1000;
   const online: Array<{
@@ -70,9 +98,90 @@ router.get("/online", (_req, res) => {
     }
   }
 
-  // Sort: most recently seen first
   online.sort((a, b) => b.lastSeen - a.lastSeen);
   return res.json({ online });
+});
+
+// POST /api/presence/challenge — send a challenge to another player
+router.post("/challenge", (req, res) => {
+  const { fromPlayerId, fromName, fromPicture, fromAvatarColor, toPlayerId } = req.body as {
+    fromPlayerId: string;
+    fromName: string;
+    fromPicture?: string | null;
+    fromAvatarColor?: string;
+    toPlayerId: string;
+  };
+
+  if (!fromPlayerId || !toPlayerId || !fromName) {
+    return res.status(400).json({ error: "fromPlayerId, fromName and toPlayerId required" });
+  }
+
+  // Check target player is online
+  const cutoff = Date.now() - 90 * 1000;
+  const target = presenceMap.get(toPlayerId);
+  if (!target || target.lastSeen < cutoff) {
+    return res.status(404).json({ error: "Player is not online" });
+  }
+
+  // Remove any existing pending challenge between these two
+  for (const [id, c] of challengeMap) {
+    if (c.fromPlayerId === fromPlayerId && c.toPlayerId === toPlayerId && c.status === "pending") {
+      challengeMap.delete(id);
+    }
+  }
+
+  const challengeId = `ch_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+  const roomCode = generateRoomCode();
+
+  challengeMap.set(challengeId, {
+    challengeId,
+    fromPlayerId,
+    fromName,
+    fromPicture: fromPicture || null,
+    fromAvatarColor: fromAvatarColor || "#e53e3e",
+    toPlayerId,
+    roomCode,
+    status: "pending",
+    createdAt: Date.now(),
+  });
+
+  return res.json({ challengeId, roomCode });
+});
+
+// GET /api/presence/challenges/:playerId — get incoming pending challenges
+router.get("/challenges/:playerId", (req, res) => {
+  const { playerId } = req.params;
+  const cutoff = Date.now() - 60 * 1000;
+
+  const incoming = Array.from(challengeMap.values()).filter(
+    (c) => c.toPlayerId === playerId && c.status === "pending" && c.createdAt >= cutoff
+  );
+
+  return res.json({ challenges: incoming });
+});
+
+// POST /api/presence/challenge/:challengeId/respond
+router.post("/challenge/:challengeId/respond", (req, res) => {
+  const { challengeId } = req.params;
+  const { accepted } = req.body as { accepted: boolean };
+
+  const challenge = challengeMap.get(challengeId);
+  if (!challenge) {
+    return res.status(404).json({ error: "Challenge not found or expired" });
+  }
+
+  challenge.status = accepted ? "accepted" : "declined";
+  return res.json({ ok: true, roomCode: accepted ? challenge.roomCode : null });
+});
+
+// GET /api/presence/challenge/:challengeId/status — poll status (for sender)
+router.get("/challenge/:challengeId/status", (req, res) => {
+  const { challengeId } = req.params;
+  const challenge = challengeMap.get(challengeId);
+  if (!challenge) {
+    return res.json({ status: "expired" });
+  }
+  return res.json({ status: challenge.status, roomCode: challenge.roomCode });
 });
 
 export default router;
