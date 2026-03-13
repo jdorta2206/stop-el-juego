@@ -19,7 +19,8 @@ export class StripeService {
     const stripe = await getUncachableStripeClient();
     return await stripe.checkout.sessions.create({
       customer: customerId,
-      payment_method_types: ["card"],
+      // Omitting payment_method_types → Stripe auto-enables Google Pay,
+      // Apple Pay, cards, and any method configured in the Dashboard
       line_items: [{ price: priceId, quantity: 1 }],
       mode: "subscription",
       success_url: successUrl,

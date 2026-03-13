@@ -246,7 +246,34 @@ export function PremiumModal({
                     {loading ? "Redirigiendo..." : "¡Activar Premium!"}
                   </motion.button>
 
-                  <p className="text-white/40 text-xs text-center">
+                  {/* Payment methods */}
+                  <div className="flex items-center justify-center gap-2 flex-wrap">
+                    <div
+                      className="px-3 py-1.5 rounded-lg text-xs font-bold"
+                      style={{ background: "#fff", color: "#3C4043" }}
+                    >
+                      <span style={{ color: "#4285F4" }}>G</span>
+                      <span style={{ color: "#EA4335" }}>o</span>
+                      <span style={{ color: "#FBBC05" }}>o</span>
+                      <span style={{ color: "#4285F4" }}>g</span>
+                      <span style={{ color: "#34A853" }}>l</span>
+                      <span style={{ color: "#EA4335" }}>e</span>
+                      <span style={{ color: "#3C4043" }}> Pay</span>
+                    </div>
+                    <div
+                      className="px-3 py-1.5 rounded-lg text-xs font-bold text-white"
+                      style={{ background: "#000" }}
+                    >
+                      🍎 Pay
+                    </div>
+                    <div
+                      className="px-3 py-1.5 rounded-lg text-xs font-medium text-white/70"
+                      style={{ background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.2)" }}
+                    >
+                      💳 Tarjeta
+                    </div>
+                  </div>
+                  <p className="text-white/40 text-xs text-center -mt-1">
                     Pago seguro con Stripe · Cancela cuando quieras
                   </p>
                 </>
