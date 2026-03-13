@@ -13,20 +13,6 @@ const VIDEO_SLOT     = import.meta.env.VITE_ADSENSE_VIDEO_SLOT as string | undef
 
 const ADSENSE_READY = !!(ADSENSE_CLIENT && BANNER_SLOT);
 
-// Load the AdSense script once when a real client ID is present
-function useAdSenseScript() {
-  useEffect(() => {
-    if (!ADSENSE_CLIENT) return;
-    if (document.querySelector('script[data-adsense]')) return; // already loaded
-    const s = document.createElement("script");
-    s.src = `https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${ADSENSE_CLIENT}`;
-    s.async = true;
-    s.crossOrigin = "anonymous";
-    s.dataset.adsense = "true";
-    document.head.appendChild(s);
-  }, []);
-}
-
 // Push an AdSense slot after it mounts
 function pushAd(ref: React.RefObject<HTMLElement | null>) {
   try {
@@ -68,7 +54,6 @@ const MOCK_BANNER_ADS = [
 // ─── Banner Ad ────────────────────────────────────────────────────────────────
 
 export function BannerAd({ className = "" }: { className?: string }) {
-  useAdSenseScript();
   const insRef = useRef<HTMLModElement>(null);
   const [adIndex, setAdIndex] = useState(0);
   const [visible, setVisible] = useState(true);
@@ -155,7 +140,6 @@ export function RewardedAd({
   rewardType = "points",
   rewardAmount = 20,
 }: RewardedAdProps) {
-  useAdSenseScript();
   const insRef = useRef<HTMLModElement>(null);
   const [countdown, setCountdown] = useState(15);
   const [phase, setPhase] = useState<"pre" | "watching" | "done">("pre");
@@ -338,7 +322,6 @@ interface InterstitialAdProps {
 }
 
 export function InterstitialAd({ onDone }: InterstitialAdProps) {
-  useAdSenseScript();
   const insRef = useRef<HTMLModElement>(null);
   const [countdown, setCountdown] = useState(5);
 
