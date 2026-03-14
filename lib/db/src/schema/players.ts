@@ -46,6 +46,8 @@ export const roomsTable = pgTable("rooms", {
   language: text("language").notNull().default("es"),
   playersJson: text("players_json").notNull().default("[]"),
   stopperJson: text("stopper_json"),
+  isPublic: boolean("is_public").notNull().default(false),
+  hostName: text("host_name").notNull().default(""),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

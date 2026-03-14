@@ -135,6 +135,7 @@ export const CreateRoomBody = zod.object({
   avatarColor: zod.string().optional(),
   maxRounds: zod.number().default(createRoomBodyMaxRoundsDefault),
   language: zod.string().default(createRoomBodyLanguageDefault),
+  isPublic: zod.boolean().optional().default(false),
 });
 
 /**

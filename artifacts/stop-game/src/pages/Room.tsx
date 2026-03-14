@@ -4,13 +4,15 @@ import { Layout } from "@/components/Layout";
 import { Button, Card, Input, Progress } from "@/components/ui";
 import { useGetRoom, useSubmitRoomResults, useSubmitScore } from "@workspace/api-client-react";
 import { usePlayer } from "@/hooks/use-player";
-import { Share2, Play, ArrowLeft, Trophy, CheckCircle2, Circle } from "lucide-react";
+import { Share2, Play, ArrowLeft, Trophy, CheckCircle2, Circle, Volume2, VolumeX } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { CATEGORIES_ES } from "@/lib/utils";
 import confetti from "canvas-confetti";
 import { RoomInvitePanel } from "@/components/RoomInvitePanel";
 import { ChallengeNotification } from "@/components/ChallengeNotification";
 import { usePresence } from "@/lib/usePresence";
+import { Roulette } from "@/components/Roulette";
+import { useTicker } from "@/hooks/useTicker";
 
 const ROUND_TIME = 60;
 
@@ -24,7 +26,7 @@ function calcScore(responses: Record<string, string>, letter: string): number {
 }
 
 // Local UI phase — what the current player sees
-type LocalPhase = "lobby" | "playing" | "freeze" | "submitted" | "between_rounds" | "finished";
+type LocalPhase = "lobby" | "spinning" | "playing" | "freeze" | "submitted" | "between_rounds" | "finished";
 
 export default function Room() {
   const { id: roomCode } = useParams<{ id: string }>();
@@ -37,6 +39,7 @@ export default function Room() {
   const [freezeCountdown, setFreezeCountdown] = useState(3);
   const [copied, setCopied] = useState(false);
   const [isStopping, setIsStopping] = useState(false);
+  const [muted, setMuted] = useState(false);
 
   const responsesRef = useRef<Record<string, string>>({});
   const lastRoundRef = useRef<number>(0);
@@ -48,6 +51,9 @@ export default function Room() {
   const submitMutation = useSubmitRoomResults();
   const submitScoreMutation = useSubmitScore();
   const hasSubmittedLeaderboardRef = useRef(false);
+
+  // Ticking sound — only active during PLAYING phase
+  const { toggleMute } = useTicker(timeLeft, ROUND_TIME, phase === "playing" && !muted);
 
   // Presence + challenge/room-invite notifications while in lobby
   const { incomingChallenge, dismissChallenge } = usePresence(
@@ -169,14 +175,14 @@ export default function Room() {
 
     if (roomStatus === "playing") {
       if (currentRound !== lastRoundRef.current) {
-        // New round — reset everything
+        // New round — show spinning roulette first, then start playing
         lastRoundRef.current = currentRound;
         hasSubmittedRef.current = false;
         setResponses({});
         responsesRef.current = {};
-        setPhase("playing");
         setTimeLeft(ROUND_TIME);
-        startRoundTimer();
+        setPhase("spinning");
+        // Timer starts after spin completes (see onSpinComplete in JSX)
       }
       return;
     }
@@ -328,6 +334,26 @@ export default function Room() {
           </motion.div>
         )}
 
+        {/* ── SPINNING — letter roulette ── */}
+        {phase === "spinning" && (
+          <motion.div key="spinning"
+            initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}
+            className="flex-1 flex flex-col items-center justify-center gap-6"
+          >
+            <p className="text-2xl font-display font-bold animate-pulse text-center">
+              Ronda {currentRound} de {maxRounds} · ¡Girando la letra!
+            </p>
+            <Roulette
+              isSpinning={true}
+              targetLetter={currentLetter}
+              onSpinComplete={() => {
+                setPhase("playing");
+                startRoundTimer();
+              }}
+            />
+          </motion.div>
+        )}
+
         {/* ── PLAYING ── */}
         {phase === "playing" && (
           <motion.div key="playing"
@@ -347,6 +373,13 @@ export default function Room() {
                 <Progress value={(timeLeft / ROUND_TIME) * 100}
                   indicatorClass={timeLeft <= 10 ? "bg-red-500" : timeLeft <= 30 ? "bg-yellow-400" : "bg-green-400"} />
               </div>
+              <button
+                onClick={() => { toggleMute(); setMuted(m => !m); }}
+                className="p-2 rounded-full hover:bg-white/10 transition-colors flex-shrink-0"
+                title={muted ? "Activar sonido" : "Silenciar"}
+              >
+                {muted ? <VolumeX className="w-5 h-5 text-white/40" /> : <Volume2 className="w-5 h-5 text-white/70" />}
+              </button>
             </div>
 
             {/* Who's submitted */}
