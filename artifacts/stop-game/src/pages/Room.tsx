@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+
 import { useParams, useLocation } from "wouter";
 import { Layout } from "@/components/Layout";
 import { Button, Card, Input, Progress } from "@/components/ui";
-import { useGetRoom, useSubmitRoomResults, useSubmitScore } from "@workspace/api-client-react";
+import { useGetRoom, useSubmitRoomResults } from "@workspace/api-client-react";
 import { usePlayer } from "@/hooks/use-player";
 import { Share2, Play, ArrowLeft, Trophy, CheckCircle2, Circle, Volume2, VolumeX } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -50,8 +51,6 @@ export default function Room() {
   const hasSubmittedRef = useRef(false);
 
   const submitMutation = useSubmitRoomResults();
-  const submitScoreMutation = useSubmitScore();
-  const hasSubmittedLeaderboardRef = useRef(false);
   const queryClient = useQueryClient();
 
   // Ticking sound — only active during PLAYING phase
@@ -146,26 +145,9 @@ export default function Room() {
       if (myPlayer && myPlayer.score === maxScore && players.length > 1) {
         confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
       }
-      // Submit multiplayer score to global leaderboard (once per game)
-      if (player && player.loginMethod !== "guest" && !hasSubmittedLeaderboardRef.current && myPlayer) {
-        hasSubmittedLeaderboardRef.current = true;
-        const winner = sortedPlayers[0];
-        submitScoreMutation.mutate({
-          data: {
-            playerId: player.id,
-            playerName: player.name,
-            avatarColor: player.avatarColor,
-            score: myPlayer.score || 0,
-            letter: room?.currentLetter || "A",
-            mode: "multiplayer",
-            won: winner?.playerId === player.id,
-          }
-        }, {
-          onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ["/api/ranking/scores"] });
-          }
-        });
-      }
+      // Server auto-submits all players' scores when game ends (rooms.ts).
+      // Just invalidate the ranking cache so the UI refreshes.
+      queryClient.invalidateQueries({ queryKey: ["/api/ranking/scores"] });
       return;
     }
 

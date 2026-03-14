@@ -7,6 +7,13 @@ import { usePlayer } from "@/hooks/use-player";
 import { motion } from "framer-motion";
 import { useT } from "@/i18n/useT";
 
+interface FollowedFriend {
+  followedId: string;
+  followedName: string;
+  followedAvatarColor: string;
+  followedPicture: string | null;
+}
+
 export default function Ranking() {
   const { data, isLoading } = useGetLeaderboard({ limit: 100 }, {
     query: { refetchOnMount: "always", staleTime: 0 }
@@ -14,23 +21,49 @@ export default function Ranking() {
   const { player } = usePlayer();
   const { t } = useT();
   const [filter, setFilter] = useState<"global" | "friends">("global");
-  const [followedIds, setFollowedIds] = useState<Set<string>>(new Set());
+  const [followedFriends, setFollowedFriends] = useState<FollowedFriend[]>([]);
 
   useEffect(() => {
     if (!player?.id) return;
     fetch(`${window.location.origin}/api/friends/list/${encodeURIComponent(player.id)}`)
       .then(r => r.ok ? r.json() : { friends: [] })
-      .then(({ friends }: { friends: Array<{ followedId: string }> }) => {
-        setFollowedIds(new Set(friends.map(f => f.followedId)));
+      .then(({ friends }: { friends: FollowedFriend[] }) => {
+        setFollowedFriends(friends);
       })
       .catch(() => {});
   }, [player?.id]);
 
+  const followedIds = new Set(followedFriends.map(f => f.followedId));
   const allPlayers = data?.players || [];
 
-  const players = filter === "friends"
-    ? allPlayers.filter((p: any) => followedIds.has(p.playerId) || p.playerId === player?.id)
-    : allPlayers;
+  // For global tab: all leaderboard players
+  // For friends tab: merge leaderboard + followed friends (union, friends without scores get score=0)
+  const friendsTabPlayers = (() => {
+    if (filter !== "friends") return [];
+
+    // Players in leaderboard who are followed OR are the current user
+    const inLeaderboard = allPlayers.filter((p: any) =>
+      followedIds.has(p.playerId) || p.playerId === player?.id
+    );
+
+    // Friends NOT yet in leaderboard (no games played)
+    const inLeaderboardIds = new Set(inLeaderboard.map((p: any) => p.playerId));
+    const notInLeaderboard: any[] = followedFriends
+      .filter(f => !inLeaderboardIds.has(f.followedId) && f.followedId !== player?.id)
+      .map(f => ({
+        playerId: f.followedId,
+        playerName: f.followedName,
+        avatarColor: f.followedAvatarColor,
+        totalScore: 0,
+        gamesPlayed: 0,
+        wins: 0,
+        noGames: true,
+      }));
+
+    return [...inLeaderboard, ...notInLeaderboard];
+  })();
+
+  const players = filter === "friends" ? friendsTabPlayers : allPlayers;
 
   const top3 = players.slice(0, 3);
   const rest = players.slice(3);
@@ -78,20 +111,29 @@ export default function Ranking() {
               <div key={i} className="h-16 bg-white/10 rounded-xl animate-pulse" />
             ))}
           </div>
+        ) : players.length === 0 && filter === "friends" ? (
+          <div className="p-16 text-center text-white/50 font-bold bg-black/20 rounded-2xl border border-white/10">
+            <Users className="w-12 h-12 mx-auto mb-4 opacity-20" />
+            <p>{t.ranking.noFriendsRanking ?? "Ningún amigo aparece en el ranking aún."}</p>
+            <p className="text-sm mt-2 text-white/30">
+              {t.friends.noFriends ?? "Sigue a otros jugadores desde el lobby de una sala para verlos aquí."}
+            </p>
+          </div>
         ) : players.length === 0 ? (
           <div className="p-16 text-center text-white/50 font-bold bg-black/20 rounded-2xl border border-white/10">
             <Trophy className="w-12 h-12 mx-auto mb-4 opacity-20" />
-            <p>
-              {filter === "friends"
-                ? (t.ranking.noFriendsRanking ?? "Ningún amigo aparece en el ranking aún.")
-                : t.ranking.noRanking}
-            </p>
-            {filter === "friends" && followedIds.size === 0 && (
-              <p className="text-sm mt-2 text-white/30">{t.friends.noFriends}</p>
-            )}
+            <p>{t.ranking.noRanking}</p>
           </div>
         ) : (
           <>
+            {filter === "friends" && followedFriends.length > 0 && friendsTabPlayers.some((p: any) => p.noGames) && (
+              <div className="px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-xs text-white/40 text-center">
+                {friendsTabPlayers.filter((p: any) => p.noGames).length === 1
+                  ? "1 amigo aún no ha jugado una partida registrada."
+                  : `${friendsTabPlayers.filter((p: any) => p.noGames).length} amigos aún no han jugado una partida registrada.`}
+              </div>
+            )}
+
             {top3.length > 0 && (
               <div className="flex items-end justify-center gap-4 py-4">
                 {PODIUM_ORDER.map(visualIdx => {
@@ -122,7 +164,9 @@ export default function Ranking() {
                       </motion.div>
                       <div className="text-center">
                         <p className="font-black text-sm truncate max-w-[80px]">{p.playerName}</p>
-                        <p className="font-black text-secondary">{p.totalScore} {t.game.points}</p>
+                        <p className={`font-black ${(p as any).noGames ? "text-white/30 text-xs" : "text-secondary"}`}>
+                          {(p as any).noGames ? "Sin partidas" : `${p.totalScore} ${t.game.points}`}
+                        </p>
                       </div>
                       <div
                         className={`${podiumHeights[visualIdx]} w-24 rounded-t-xl flex items-end justify-center pb-2`}
@@ -171,11 +215,13 @@ export default function Ranking() {
                         className={`grid grid-cols-[40px_1fr_80px_80px] gap-2 px-3 py-2.5 items-center rounded-xl ${
                           isMe
                             ? "bg-secondary text-black font-black shadow-md shadow-secondary/20"
+                            : p.noGames
+                            ? "bg-white/5 border border-white/5 text-white/40 font-bold"
                             : "bg-card/60 hover:bg-card border border-white/5 text-white font-bold"
                         }`}
                       >
                         <div className={`text-center font-bold ${isMe ? "text-black/60" : "text-white/30"}`}>
-                          {position}
+                          {p.noGames ? "-" : position}
                         </div>
                         <div className="flex items-center gap-2 overflow-hidden">
                           <div
@@ -187,10 +233,10 @@ export default function Ranking() {
                           <span className="truncate">{p.playerName} {isMe && `(${t.game.you})`}</span>
                         </div>
                         <div className={`text-center text-sm ${isMe ? "text-black/70" : "text-white/60"}`}>
-                          {p.gamesPlayed}
+                          {p.noGames ? "-" : p.gamesPlayed}
                         </div>
-                        <div className={`text-right font-black ${isMe ? "text-black" : "text-secondary"}`}>
-                          {p.totalScore}
+                        <div className={`text-right font-black ${isMe ? "text-black" : p.noGames ? "text-white/30" : "text-secondary"}`}>
+                          {p.noGames ? "—" : p.totalScore}
                         </div>
                       </motion.div>
                     );

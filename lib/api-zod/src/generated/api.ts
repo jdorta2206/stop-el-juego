@@ -133,6 +133,7 @@ export const CreateRoomBody = zod.object({
   hostId: zod.string(),
   hostName: zod.string(),
   avatarColor: zod.string().optional(),
+  loginMethod: zod.string().optional().nullable(),
   maxRounds: zod.number().default(createRoomBodyMaxRoundsDefault),
   language: zod.string().default(createRoomBodyLanguageDefault),
   isPublic: zod.boolean().optional().default(false),
@@ -178,6 +179,7 @@ export const JoinRoomBody = zod.object({
   playerId: zod.string(),
   playerName: zod.string(),
   avatarColor: zod.string().optional(),
+  loginMethod: zod.string().optional().nullable(),
 });
 
 export const JoinRoomResponse = zod.object({
