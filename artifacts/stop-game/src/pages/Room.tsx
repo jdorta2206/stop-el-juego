@@ -49,9 +49,25 @@ export default function Room() {
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const freezeTimerRef = useRef<NodeJS.Timeout | null>(null);
   const hasSubmittedRef = useRef(false);
+  // Track whether we've intentionally left so cleanup doesn't double-fire
+  const hasLeftRef = useRef(false);
 
   const submitMutation = useSubmitRoomResults();
   const queryClient = useQueryClient();
+
+  // Call the leave endpoint — host in lobby deletes room, regular player is removed
+  const leaveRoom = useCallback(() => {
+    if (!roomCode || !player || hasLeftRef.current) return;
+    hasLeftRef.current = true;
+    const url = `/api/rooms/${roomCode.toUpperCase()}/leave`;
+    const body = JSON.stringify({ playerId: player.id });
+    // sendBeacon works even if the page is being unloaded
+    if (navigator.sendBeacon) {
+      navigator.sendBeacon(url, new Blob([body], { type: "application/json" }));
+    } else {
+      fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body, keepalive: true }).catch(() => {});
+    }
+  }, [roomCode, player]);
 
   // Ticking sound — only active during PLAYING phase
   const { toggleMute } = useTicker(timeLeft, ROUND_TIME, phase === "playing" && !muted);
@@ -185,8 +201,20 @@ export default function Room() {
     }
   }, [roomStatus, currentRound]);
 
-  // Cleanup on unmount
-  useEffect(() => () => stopAllTimers(), [stopAllTimers]);
+  // Cleanup on unmount: stop timers and notify server that player left
+  useEffect(() => {
+    return () => {
+      stopAllTimers();
+      leaveRoom();
+    };
+  }, [stopAllTimers, leaveRoom]);
+
+  // Also fire leaveRoom if the browser tab/window is closed
+  useEffect(() => {
+    const handleUnload = () => leaveRoom();
+    window.addEventListener("beforeunload", handleUnload);
+    return () => window.removeEventListener("beforeunload", handleUnload);
+  }, [leaveRoom]);
 
   const handleStop = async () => {
     if (phase !== "playing" || isStopping || !player || !roomCode) return;
@@ -251,7 +279,7 @@ export default function Room() {
             initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}
             className="flex-1 flex flex-col max-w-2xl mx-auto w-full pt-6"
           >
-            <button onClick={() => setLocation("/multiplayer")}
+            <button onClick={() => { leaveRoom(); setLocation("/multiplayer"); }}
               className="flex items-center gap-2 text-white/60 hover:text-white mb-6 w-fit transition-colors"
             >
               <ArrowLeft className="w-4 h-4" /> Salir
