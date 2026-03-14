@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
 import { Layout } from "@/components/Layout";
 import { Button, Card, Input, Progress } from "@/components/ui";
@@ -51,6 +52,7 @@ export default function Room() {
   const submitMutation = useSubmitRoomResults();
   const submitScoreMutation = useSubmitScore();
   const hasSubmittedLeaderboardRef = useRef(false);
+  const queryClient = useQueryClient();
 
   // Ticking sound — only active during PLAYING phase
   const { toggleMute } = useTicker(timeLeft, ROUND_TIME, phase === "playing" && !muted);
@@ -157,6 +159,10 @@ export default function Room() {
             letter: room?.currentLetter || "A",
             mode: "multiplayer",
             won: winner?.playerId === player.id,
+          }
+        }, {
+          onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["/api/ranking/scores"] });
           }
         });
       }

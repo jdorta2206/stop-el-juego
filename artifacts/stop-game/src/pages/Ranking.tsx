@@ -8,7 +8,9 @@ import { motion } from "framer-motion";
 import { useT } from "@/i18n/useT";
 
 export default function Ranking() {
-  const { data, isLoading } = useGetLeaderboard({ limit: 100 });
+  const { data, isLoading } = useGetLeaderboard({ limit: 100 }, {
+    query: { refetchOnMount: "always", staleTime: 0 }
+  });
   const { player } = usePlayer();
   const { t } = useT();
   const [filter, setFilter] = useState<"global" | "friends">("global");
