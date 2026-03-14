@@ -148,14 +148,61 @@ router.post("/challenge", (req, res) => {
   return res.json({ challengeId, roomCode });
 });
 
-// GET /api/presence/challenges/:playerId — get incoming pending challenges
+// POST /api/presence/room-invite — invite a player to an already-existing room
+router.post("/room-invite", (req, res) => {
+  const { fromPlayerId, fromName, fromPicture, fromAvatarColor, toPlayerId, roomCode } = req.body as {
+    fromPlayerId: string;
+    fromName: string;
+    fromPicture?: string | null;
+    fromAvatarColor?: string;
+    toPlayerId: string;
+    roomCode: string;
+  };
+
+  if (!fromPlayerId || !toPlayerId || !fromName || !roomCode) {
+    return res.status(400).json({ error: "fromPlayerId, fromName, toPlayerId and roomCode required" });
+  }
+
+  // Remove any existing pending room-invite from this sender to this target
+  for (const [id, c] of challengeMap) {
+    if (
+      c.fromPlayerId === fromPlayerId &&
+      c.toPlayerId === toPlayerId &&
+      (c as any).isRoomInvite &&
+      c.status === "pending"
+    ) {
+      challengeMap.delete(id);
+    }
+  }
+
+  const challengeId = `ri_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+
+  const entry: Challenge & { isRoomInvite?: boolean } = {
+    challengeId,
+    fromPlayerId,
+    fromName,
+    fromPicture: fromPicture || null,
+    fromAvatarColor: fromAvatarColor || "#e53e3e",
+    toPlayerId,
+    roomCode,
+    status: "pending",
+    createdAt: Date.now(),
+  };
+  (entry as any).isRoomInvite = true;
+
+  challengeMap.set(challengeId, entry);
+
+  return res.json({ ok: true, challengeId });
+});
+
+// GET /api/presence/challenges/:playerId — get incoming pending challenges + room invites
 router.get("/challenges/:playerId", (req, res) => {
   const { playerId } = req.params;
   const cutoff = Date.now() - 60 * 1000;
 
-  const incoming = Array.from(challengeMap.values()).filter(
-    (c) => c.toPlayerId === playerId && c.status === "pending" && c.createdAt >= cutoff
-  );
+  const incoming = Array.from(challengeMap.values())
+    .filter((c) => c.toPlayerId === playerId && c.status === "pending" && c.createdAt >= cutoff)
+    .map((c) => ({ ...c, isRoomInvite: !!(c as any).isRoomInvite }));
 
   return res.json({ challenges: incoming });
 });

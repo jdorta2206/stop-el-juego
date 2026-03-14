@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Swords, X, Check } from "lucide-react";
+import { Swords, X, Check, DoorOpen } from "lucide-react";
 import { respondToChallenge, type IncomingChallenge } from "@/lib/usePresence";
 import { useLocation } from "wouter";
 
@@ -14,7 +14,8 @@ export function ChallengeNotification({ challenge, onDismiss }: ChallengeNotific
   const [countdown, setCountdown] = useState(30);
   const [responding, setResponding] = useState(false);
 
-  // Countdown timer — auto-decline after 30s
+  const isRoomInvite = !!challenge.isRoomInvite;
+
   useEffect(() => {
     const timer = setInterval(() => {
       setCountdown((v) => {
@@ -31,16 +32,24 @@ export function ChallengeNotification({ challenge, onDismiss }: ChallengeNotific
 
   const handleAccept = async () => {
     setResponding(true);
-    await respondToChallenge(challenge.challengeId, true);
+    if (!isRoomInvite) {
+      await respondToChallenge(challenge.challengeId, true);
+    }
     onDismiss();
     setLocation(`/room/${challenge.roomCode}`);
   };
 
   const handleDecline = async () => {
     setResponding(true);
-    await respondToChallenge(challenge.challengeId, false);
+    if (!isRoomInvite) {
+      await respondToChallenge(challenge.challengeId, false);
+    }
     onDismiss();
   };
+
+  const accentColor = isRoomInvite ? "#34d399" : "#f9a825";
+  const borderColor = isRoomInvite ? "rgba(52,211,153,0.4)" : "rgba(249,168,37,0.4)";
+  const glowColor = isRoomInvite ? "rgba(52,211,153,0.15)" : "rgba(249,168,37,0.15)";
 
   return (
     <AnimatePresence>
@@ -56,22 +65,28 @@ export function ChallengeNotification({ challenge, onDismiss }: ChallengeNotific
           className="rounded-2xl p-4 shadow-2xl"
           style={{
             background: "linear-gradient(135deg, hsl(222 47% 14%) 0%, hsl(222 47% 10%) 100%)",
-            border: "1px solid rgba(249,168,37,0.4)",
-            boxShadow: "0 0 30px rgba(249,168,37,0.15)",
+            border: `1px solid ${borderColor}`,
+            boxShadow: `0 0 30px ${glowColor}`,
           }}
         >
           {/* Header */}
           <div className="flex items-center gap-3 mb-3">
             <div
               className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
-              style={{ background: "rgba(249,168,37,0.15)", border: "1px solid rgba(249,168,37,0.3)" }}
+              style={{ background: `${accentColor}20`, border: `1px solid ${accentColor}50` }}
             >
-              <Swords className="w-5 h-5" style={{ color: "#f9a825" }} />
+              {isRoomInvite
+                ? <DoorOpen className="w-5 h-5" style={{ color: accentColor }} />
+                : <Swords className="w-5 h-5" style={{ color: accentColor }} />
+              }
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-white font-black text-sm">¡Te han retado!</p>
+              <p className="text-white font-black text-sm">
+                {isRoomInvite ? "¡Te invitan a una sala!" : "¡Te han retado!"}
+              </p>
               <p className="text-white/60 text-xs truncate">
-                <span className="text-yellow-400 font-bold">{challenge.fromName}</span> quiere jugar contigo
+                <span style={{ color: accentColor }} className="font-bold">{challenge.fromName}</span>
+                {isRoomInvite ? " te invita a su sala" : " quiere jugar contigo"}
               </p>
             </div>
             {/* Countdown ring */}
@@ -81,7 +96,7 @@ export function ChallengeNotification({ challenge, onDismiss }: ChallengeNotific
                 <circle
                   cx="16" cy="16" r="13"
                   fill="none"
-                  stroke="#f9a825"
+                  stroke={accentColor}
                   strokeWidth="2.5"
                   strokeDasharray={`${2 * Math.PI * 13}`}
                   strokeDashoffset={`${2 * Math.PI * 13 * (1 - countdown / 30)}`}
@@ -91,14 +106,14 @@ export function ChallengeNotification({ challenge, onDismiss }: ChallengeNotific
               </svg>
               <span
                 className="absolute inset-0 flex items-center justify-center text-[10px] font-black"
-                style={{ color: "#f9a825" }}
+                style={{ color: accentColor }}
               >
                 {countdown}
               </span>
             </div>
           </div>
 
-          {/* Challenger avatar */}
+          {/* Challenger avatar + room code */}
           <div className="flex items-center gap-2 mb-4 px-1">
             {challenge.fromPicture ? (
               <img
@@ -125,26 +140,31 @@ export function ChallengeNotification({ challenge, onDismiss }: ChallengeNotific
             <button
               onClick={handleDecline}
               disabled={responding}
-              className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-bold transition-all"
+              className="flex-shrink-0 flex items-center justify-center gap-1.5 py-2.5 px-4 rounded-xl text-sm font-bold transition-all"
               style={{
                 background: "rgba(255,255,255,0.06)",
                 border: "1px solid rgba(255,255,255,0.12)",
                 color: "rgba(255,255,255,0.5)",
               }}
             >
-              <X size={14} /> Rechazar
+              <X size={14} /> {isRoomInvite ? "Ignorar" : "Rechazar"}
             </button>
             <button
               onClick={handleAccept}
               disabled={responding}
               className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-bold transition-all"
               style={{
-                background: "linear-gradient(135deg, #f9a825, #f57f17)",
+                background: isRoomInvite
+                  ? "linear-gradient(135deg, #34d399, #059669)"
+                  : "linear-gradient(135deg, #f9a825, #f57f17)",
                 color: "#000",
-                boxShadow: "0 4px 15px rgba(249,168,37,0.35)",
+                boxShadow: `0 4px 15px ${accentColor}55`,
               }}
             >
-              <Check size={14} /> ¡Aceptar!
+              {isRoomInvite
+                ? <><DoorOpen size={14} /> ¡Unirme!</>
+                : <><Check size={14} /> ¡Aceptar!</>
+              }
             </button>
           </div>
         </div>

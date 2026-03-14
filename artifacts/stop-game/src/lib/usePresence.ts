@@ -23,6 +23,7 @@ export interface IncomingChallenge {
   fromAvatarColor: string;
   roomCode: string;
   createdAt: number;
+  isRoomInvite?: boolean;
 }
 
 // Send a heartbeat to mark this player as online
@@ -96,6 +97,31 @@ export async function respondToChallenge(
     return await res.json();
   } catch {
     return { roomCode: null };
+  }
+}
+
+// Send a room invite to an online player (they can join directly, no accept/decline)
+export async function sendRoomInvite(
+  player: PlayerProfile,
+  toPlayerId: string,
+  roomCode: string
+): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE}/api/presence/room-invite`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        fromPlayerId: player.id,
+        fromName: player.name,
+        fromPicture: (player as any).picture || null,
+        fromAvatarColor: player.avatarColor,
+        toPlayerId,
+        roomCode,
+      }),
+    });
+    return res.ok;
+  } catch {
+    return false;
   }
 }
 

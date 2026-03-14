@@ -8,6 +8,9 @@ import { Share2, Play, ArrowLeft, Trophy, CheckCircle2, Circle } from "lucide-re
 import { motion, AnimatePresence } from "framer-motion";
 import { CATEGORIES_ES } from "@/lib/utils";
 import confetti from "canvas-confetti";
+import { RoomInvitePanel } from "@/components/RoomInvitePanel";
+import { ChallengeNotification } from "@/components/ChallengeNotification";
+import { usePresence } from "@/lib/usePresence";
 
 const ROUND_TIME = 60;
 
@@ -43,6 +46,12 @@ export default function Room() {
   const hasSubmittedRef = useRef(false);
 
   const submitMutation = useSubmitRoomResults();
+
+  // Presence + challenge/room-invite notifications while in lobby
+  const { incomingChallenge, dismissChallenge } = usePresence(
+    phase === "lobby" ? (player || null) : null,
+    roomCode
+  );
 
   const { data: room, error } = useGetRoom(roomCode || "", {
     query: { refetchInterval: 1500, enabled: !!roomCode }
@@ -214,6 +223,13 @@ export default function Room() {
 
   return (
     <Layout>
+      {/* Room-invite / challenge notifications while in lobby */}
+      <AnimatePresence>
+        {incomingChallenge && (
+          <ChallengeNotification challenge={incomingChallenge} onDismiss={dismissChallenge} />
+        )}
+      </AnimatePresence>
+
       <AnimatePresence mode="wait">
 
         {/* ── LOBBY ── */}
@@ -237,6 +253,7 @@ export default function Room() {
             </div>
 
             <div className="grid md:grid-cols-2 gap-5 mb-5">
+              {/* Left: players in room */}
               <Card className="p-5">
                 <h3 className="font-display font-bold text-base mb-3 text-white/70">
                   Jugadores ({players.length})
@@ -259,12 +276,15 @@ export default function Room() {
                 </div>
               </Card>
 
+              {/* Right: actions */}
               <div className="flex flex-col gap-3">
-                <Card className="p-5 flex-1 flex flex-col items-center justify-center text-center gap-3 bg-primary/30">
-                  <Share2 className="w-7 h-7 text-secondary" />
-                  <p className="text-sm text-white/70 font-bold">Comparte el código con tus amigos</p>
-                  <Button variant="secondary" className="w-full" onClick={handleShare}>
-                    {copied ? "¡Copiado! ✓" : "Compartir Enlace"}
+                <Card className="p-4 flex items-center justify-between gap-3 bg-primary/20">
+                  <div className="flex items-center gap-2">
+                    <Share2 className="w-5 h-5 text-secondary flex-shrink-0" />
+                    <span className="text-sm text-white/70 font-bold">Compartir código</span>
+                  </div>
+                  <Button variant="secondary" size="sm" onClick={handleShare}>
+                    {copied ? "¡Copiado! ✓" : "Copiar"}
                   </Button>
                 </Card>
                 {isHost ? (
@@ -279,6 +299,13 @@ export default function Room() {
                 )}
               </div>
             </div>
+
+            {/* Invite panel — invite friends directly to this room */}
+            {player && player.loginMethod !== "guest" && roomCode && (
+              <div className="mb-5">
+                <RoomInvitePanel player={player} roomCode={roomCode} />
+              </div>
+            )}
           </motion.div>
         )}
 
