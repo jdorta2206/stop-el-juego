@@ -49,7 +49,12 @@ export default function Multiplayer() {
     setLoadingPublic(false);
   };
 
-  useEffect(() => { loadPublicRooms(); }, []);
+  // Load on mount and auto-refresh every 6 seconds
+  useEffect(() => {
+    loadPublicRooms();
+    const interval = setInterval(loadPublicRooms, 6000);
+    return () => clearInterval(interval);
+  }, []);
 
   const handleCreate = async () => {
     if (!player) return;

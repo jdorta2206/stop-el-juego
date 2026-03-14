@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import confetti from "canvas-confetti";
 import { Layout } from "@/components/Layout";
@@ -60,6 +61,7 @@ export default function SoloGame() {
 
   const validateMutation = useValidateRound();
   const submitScoreMutation = useSubmitScore();
+  const queryClient = useQueryClient();
   const timerRef = useRef<NodeJS.Timeout>(null);
 
   const startGame = () => {
@@ -135,6 +137,10 @@ export default function SoloGame() {
         letter: currentLetter,
         mode: "solo",
         won: finalScore > finalAiScore,
+      }
+    }, {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ["/api/ranking/scores"] });
       }
     });
   };
