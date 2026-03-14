@@ -65,6 +65,7 @@ export default function Multiplayer() {
           hostId: player.id,
           hostName: player.name,
           avatarColor: player.avatarColor,
+          loginMethod: player.loginMethod ?? null,
           maxRounds: 3,
           language: getCurrentLang(),
           isPublic,
@@ -87,6 +88,7 @@ export default function Multiplayer() {
           playerId: player.id,
           playerName: player.name,
           avatarColor: player.avatarColor,
+          loginMethod: player.loginMethod ?? null,
         }
       });
       setLocation(`/room/${room.roomCode}`);
@@ -105,6 +107,7 @@ export default function Multiplayer() {
           playerId: player.id,
           playerName: player.name,
           avatarColor: player.avatarColor,
+          loginMethod: player.loginMethod ?? null,
         }
       });
       setLocation(`/room/${room.roomCode}`);
