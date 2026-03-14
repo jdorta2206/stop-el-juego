@@ -229,6 +229,42 @@ router.post("/:roomCode/start", async (req, res) => {
   res.json(formatRoom(updated));
 });
 
+// POST /rooms/:roomCode/leave — player leaves the room
+router.post("/:roomCode/leave", async (req, res) => {
+  const { roomCode } = req.params;
+  const { playerId } = req.body as { playerId: string };
+
+  if (!playerId) { res.status(400).json({ error: "playerId required" }); return; }
+
+  const rooms = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, roomCode.toUpperCase())).limit(1);
+  if (rooms.length === 0) { res.json({ ok: true }); return; }
+
+  const room = rooms[0];
+  const players = parsePlayers(room.playersJson);
+  const leavingPlayer = players.find((p: any) => p.playerId === playerId);
+
+  // If game is already in progress or finished, do nothing (let the game continue)
+  if (room.status === "playing" || room.status === "stopped" || room.status === "finished") {
+    res.json({ ok: true });
+    return;
+  }
+
+  // If the host leaves while in lobby → delete the room entirely
+  if (leavingPlayer?.isHost) {
+    await db.delete(roomsTable).where(eq(roomsTable.roomCode, roomCode.toUpperCase()));
+    res.json({ ok: true, deleted: true });
+    return;
+  }
+
+  // Regular player leaves → remove from players list
+  const remaining = players.filter((p: any) => p.playerId !== playerId);
+  await db.update(roomsTable)
+    .set({ playersJson: JSON.stringify(remaining), updatedAt: new Date() })
+    .where(eq(roomsTable.roomCode, roomCode.toUpperCase()));
+
+  res.json({ ok: true });
+});
+
 // POST /rooms/:roomCode/stop — ANY player calls this to stop the round globally
 router.post("/:roomCode/stop", async (req, res) => {
   const { roomCode } = req.params;
