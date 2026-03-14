@@ -51,23 +51,39 @@ export default function Room() {
   const hasSubmittedRef = useRef(false);
   // Track whether we've intentionally left so cleanup doesn't double-fire
   const hasLeftRef = useRef(false);
+  // Keep latest phase and roomCode in refs so leaveRoom doesn't need state deps
+  const phaseRef = useRef<string>("lobby");
+  const roomCodeRef = useRef<string>(roomCode || "");
 
   const submitMutation = useSubmitRoomResults();
   const queryClient = useQueryClient();
 
-  // Call the leave endpoint — host in lobby deletes room, regular player is removed
+  // Call the leave endpoint — only while in lobby; host leaving deletes room
   const leaveRoom = useCallback(() => {
-    if (!roomCode || !player || hasLeftRef.current) return;
+    // Only clean up if still in lobby; game-in-progress rooms stay alive
+    if (phaseRef.current !== "lobby") return;
+    if (hasLeftRef.current) return;
+    const code = roomCodeRef.current;
+    if (!code) return;
+
+    // Read playerId directly from localStorage so it works even if React state is null
+    let playerId: string | null = null;
+    try {
+      const stored = localStorage.getItem("stop_player_v2");
+      if (stored) playerId = JSON.parse(stored).id ?? null;
+    } catch { /* ignore */ }
+    if (!playerId) return;
+
     hasLeftRef.current = true;
-    const url = `/api/rooms/${roomCode.toUpperCase()}/leave`;
-    const body = JSON.stringify({ playerId: player.id });
-    // sendBeacon works even if the page is being unloaded
+    const url = `/api/rooms/${code.toUpperCase()}/leave`;
+    const body = JSON.stringify({ playerId });
+    // sendBeacon works even when the page is being unloaded
     if (navigator.sendBeacon) {
       navigator.sendBeacon(url, new Blob([body], { type: "application/json" }));
     } else {
       fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body, keepalive: true }).catch(() => {});
     }
-  }, [roomCode, player]);
+  }, []); // no deps — reads everything from refs/localStorage directly
 
   // Ticking sound — only active during PLAYING phase
   const { toggleMute } = useTicker(timeLeft, ROUND_TIME, phase === "playing" && !muted);
@@ -92,6 +108,9 @@ export default function Room() {
 
   // Keep responsesRef in sync
   useEffect(() => { responsesRef.current = responses; }, [responses]);
+  // Keep phase and roomCode refs in sync so leaveRoom always has the latest values
+  useEffect(() => { phaseRef.current = phase; }, [phase]);
+  useEffect(() => { roomCodeRef.current = roomCode || ""; }, [roomCode]);
 
   const stopAllTimers = useCallback(() => {
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
