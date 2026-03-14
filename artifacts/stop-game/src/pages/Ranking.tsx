@@ -1,23 +1,39 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Layout } from "@/components/Layout";
 import { Card } from "@/components/ui";
 import { useGetLeaderboard } from "@workspace/api-client-react";
-import { Trophy } from "lucide-react";
+import { Trophy, Users } from "lucide-react";
 import { usePlayer } from "@/hooks/use-player";
 import { motion } from "framer-motion";
 import { useT } from "@/i18n/useT";
 
 export default function Ranking() {
-  const { data, isLoading } = useGetLeaderboard({ limit: 50 });
+  const { data, isLoading } = useGetLeaderboard({ limit: 100 });
   const { player } = usePlayer();
   const { t } = useT();
   const [filter, setFilter] = useState<"global" | "friends">("global");
+  const [followedIds, setFollowedIds] = useState<Set<string>>(new Set());
 
-  const players = data?.players || [];
+  useEffect(() => {
+    if (!player?.id) return;
+    fetch(`${window.location.origin}/api/friends/list/${encodeURIComponent(player.id)}`)
+      .then(r => r.ok ? r.json() : { friends: [] })
+      .then(({ friends }: { friends: Array<{ followedId: string }> }) => {
+        setFollowedIds(new Set(friends.map(f => f.followedId)));
+      })
+      .catch(() => {});
+  }, [player?.id]);
+
+  const allPlayers = data?.players || [];
+
+  const players = filter === "friends"
+    ? allPlayers.filter((p: any) => followedIds.has(p.playerId) || p.playerId === player?.id)
+    : allPlayers;
+
   const top3 = players.slice(0, 3);
   const rest = players.slice(3);
-  const myEntry = players.find((p: any) => p.playerId === player?.id);
-  const myRank = myEntry ? players.indexOf(myEntry) + 1 : null;
+  const myEntry = allPlayers.find((p: any) => p.playerId === player?.id);
+  const myRank = myEntry ? allPlayers.indexOf(myEntry) + 1 : null;
 
   const PODIUM_ORDER = [1, 0, 2];
 
@@ -44,9 +60,10 @@ export default function Ranking() {
             {(["global", "friends"] as const).map(f => (
               <button
                 key={f}
-                className={`px-6 py-2 rounded-full font-bold transition-all capitalize ${filter === f ? "bg-secondary text-black shadow-md" : "text-white hover:bg-white/10"}`}
+                className={`px-6 py-2 rounded-full font-bold transition-all capitalize flex items-center gap-2 ${filter === f ? "bg-secondary text-black shadow-md" : "text-white hover:bg-white/10"}`}
                 onClick={() => setFilter(f)}
               >
+                {f === "friends" && <Users className="w-4 h-4" />}
                 {f === "global" ? "Global" : t.friends.offline}
               </button>
             ))}
@@ -62,7 +79,14 @@ export default function Ranking() {
         ) : players.length === 0 ? (
           <div className="p-16 text-center text-white/50 font-bold bg-black/20 rounded-2xl border border-white/10">
             <Trophy className="w-12 h-12 mx-auto mb-4 opacity-20" />
-            <p>{t.ranking.noRanking}</p>
+            <p>
+              {filter === "friends"
+                ? (t.ranking.noFriendsRanking ?? "Ningún amigo aparece en el ranking aún.")
+                : t.ranking.noRanking}
+            </p>
+            {filter === "friends" && followedIds.size === 0 && (
+              <p className="text-sm mt-2 text-white/30">{t.friends.noFriends}</p>
+            )}
           </div>
         ) : (
           <>
@@ -110,7 +134,7 @@ export default function Ranking() {
               </div>
             )}
 
-            {myEntry && myRank && myRank > 3 && (
+            {myEntry && myRank && myRank > 3 && filter === "global" && (
               <Card className="p-3 bg-secondary/10 border border-secondary/30">
                 <div className="flex items-center gap-3">
                   <span className="text-secondary font-black text-lg w-8 text-center">#{myRank}</span>
@@ -134,7 +158,7 @@ export default function Ranking() {
                 </div>
                 <div className="flex flex-col gap-1">
                   {rest.map((p: any, idx: number) => {
-                    const position = idx + 4;
+                    const position = filter === "global" ? idx + 4 : players.indexOf(p) + 1;
                     const isMe = p.playerId === player?.id;
                     return (
                       <motion.div

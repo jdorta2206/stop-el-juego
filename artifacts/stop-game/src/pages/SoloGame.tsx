@@ -124,21 +124,24 @@ export default function SoloGame() {
     }
   }, [gameState, results]);
 
+  const submitToLeaderboard = (finalScore: number, finalAiScore: number) => {
+    if (!player || player.loginMethod === "guest") return;
+    submitScoreMutation.mutate({
+      data: {
+        playerId: player.id,
+        playerName: player.name,
+        avatarColor: player.avatarColor,
+        score: finalScore,
+        letter: currentLetter,
+        mode: "solo",
+        won: finalScore > finalAiScore,
+      }
+    });
+  };
+
   const nextRound = () => {
     if (round >= MAX_ROUNDS) {
-      if (player) {
-        submitScoreMutation.mutate({
-          data: {
-            playerId: player.id,
-            playerName: player.name,
-            avatarColor: player.avatarColor,
-            score: totalScore,
-            letter: currentLetter,
-            mode: "solo",
-            won: totalScore > aiTotalScore,
-          }
-        });
-      }
+      submitToLeaderboard(totalScore, aiTotalScore);
       setGameState("LOBBY");
       setRound(1);
       setTotalScore(0);

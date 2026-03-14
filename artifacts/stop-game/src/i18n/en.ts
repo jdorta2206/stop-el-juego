@@ -87,6 +87,7 @@ const en = {
     games: "Games",
     yourRank: "Your rank",
     noRanking: "No ranking data yet.",
+    noFriendsRanking: "None of your friends appear in the ranking yet.",
     premium: "Premium",
     guest: "Guest",
     signInToRank: "Sign in to appear in the ranking",
