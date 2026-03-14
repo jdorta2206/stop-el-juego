@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { roomsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { CreateRoomBody, JoinRoomBody, SubmitRoomResultsBody } from "@workspace/api-zod";
 
 const router: IRouter = Router();
@@ -35,23 +35,46 @@ function formatRoom(room: any) {
     id: room.id,
     roomCode: room.roomCode,
     hostId: room.hostId,
+    hostName: room.hostName || "",
     status: room.status,
     currentLetter: room.currentLetter,
     currentRound: room.currentRound,
     maxRounds: room.maxRounds,
     language: room.language,
+    isPublic: room.isPublic ?? false,
     players: parsePlayers(room.playersJson),
     stopper: parseStopper(room.stopperJson),
     createdAt: room.createdAt,
   };
 }
 
+// GET /rooms/public — list open public rooms
+router.get("/public", async (_req, res) => {
+  const rooms = await db
+    .select()
+    .from(roomsTable)
+    .where(and(eq(roomsTable.isPublic, true), eq(roomsTable.status, "waiting")))
+    .orderBy(roomsTable.createdAt)
+    .limit(20);
+
+  const formatted = rooms.map(r => ({
+    roomCode: r.roomCode,
+    hostId: r.hostId,
+    hostName: r.hostName || "Anfitrión",
+    maxRounds: r.maxRounds,
+    language: r.language,
+    playerCount: parsePlayers(r.playersJson).length,
+    createdAt: r.createdAt,
+  }));
+  res.json({ rooms: formatted });
+});
+
 // POST /rooms — create room
 router.post("/", async (req, res) => {
   const body = CreateRoomBody.safeParse(req.body);
   if (!body.success) { res.status(400).json({ error: "Invalid request body" }); return; }
 
-  const { hostId, hostName, avatarColor, maxRounds, language } = body.data;
+  const { hostId, hostName, avatarColor, maxRounds, language, isPublic } = body.data;
 
   let roomCode = generateRoomCode();
   for (let i = 0; i < 5; i++) {
@@ -73,12 +96,14 @@ router.post("/", async (req, res) => {
   const [room] = await db.insert(roomsTable).values({
     roomCode,
     hostId,
+    hostName: hostName ?? "",
     status: "waiting",
     currentRound: 0,
     maxRounds: maxRounds ?? 3,
     language: language ?? "es",
     playersJson: JSON.stringify(players),
     stopperJson: null,
+    isPublic: isPublic ?? false,
   }).returning();
 
   res.status(201).json(formatRoom(room));
