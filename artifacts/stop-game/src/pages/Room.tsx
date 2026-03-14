@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useLocation } from "wouter";
 import { Layout } from "@/components/Layout";
 import { Button, Card, Input, Progress } from "@/components/ui";
-import { useGetRoom, useSubmitRoomResults } from "@workspace/api-client-react";
+import { useGetRoom, useSubmitRoomResults, useSubmitScore } from "@workspace/api-client-react";
 import { usePlayer } from "@/hooks/use-player";
 import { Share2, Play, ArrowLeft, Trophy, CheckCircle2, Circle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -46,6 +46,8 @@ export default function Room() {
   const hasSubmittedRef = useRef(false);
 
   const submitMutation = useSubmitRoomResults();
+  const submitScoreMutation = useSubmitScore();
+  const hasSubmittedLeaderboardRef = useRef(false);
 
   // Presence + challenge/room-invite notifications while in lobby
   const { incomingChallenge, dismissChallenge } = usePresence(
@@ -130,10 +132,27 @@ export default function Room() {
     if (roomStatus === "finished") {
       stopAllTimers();
       setPhase("finished");
-      const maxScore = Math.max(...players.map((p: any) => p.score || 0));
+      const sortedPlayers = [...players].sort((a: any, b: any) => (b.score || 0) - (a.score || 0));
+      const maxScore = sortedPlayers[0]?.score || 0;
       const myPlayer = players.find((p: any) => p.playerId === player?.id);
       if (myPlayer && myPlayer.score === maxScore && players.length > 1) {
         confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
+      }
+      // Submit multiplayer score to global leaderboard (once per game)
+      if (player && player.loginMethod !== "guest" && !hasSubmittedLeaderboardRef.current && myPlayer) {
+        hasSubmittedLeaderboardRef.current = true;
+        const winner = sortedPlayers[0];
+        submitScoreMutation.mutate({
+          data: {
+            playerId: player.id,
+            playerName: player.name,
+            avatarColor: player.avatarColor,
+            score: myPlayer.score || 0,
+            letter: room?.currentLetter || "A",
+            mode: "multiplayer",
+            won: winner?.playerId === player.id,
+          }
+        });
       }
       return;
     }
