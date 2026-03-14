@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { roomsTable, playerScoresTable, gameHistoryTable } from "@workspace/db";
-import { eq, and } from "drizzle-orm";
+import { eq, and, lt } from "drizzle-orm";
 import { CreateRoomBody, JoinRoomBody, SubmitRoomResultsBody } from "@workspace/api-zod";
 
 const router: IRouter = Router();
@@ -97,8 +97,19 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string) {
   }));
 }
 
-// GET /rooms/public — list open public rooms
+// Delete stale "waiting" rooms older than 2 hours (guests leave without cleanup)
+async function purgeStaleRooms() {
+  const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+  await db.delete(roomsTable).where(
+    and(eq(roomsTable.status, "waiting"), lt(roomsTable.updatedAt, twoHoursAgo))
+  );
+}
+
+// GET /rooms/public — list open public rooms (also purges stale rooms)
 router.get("/public", async (_req, res) => {
+  // Opportunistic cleanup: remove stale waiting rooms on every public listing request
+  purgeStaleRooms().catch(() => {});
+
   const rooms = await db
     .select()
     .from(roomsTable)
