@@ -18,3 +18,27 @@ id = "Rjw7NGIvpP0NCImbRqHE_"
 uri = "file://attached_assets/stop_feature_graphic_1024x500.png"
 type = "image"
 title = "Imagen de portada 1024×500 px — Google Play"
+
+[[outputs]]
+id = "r18bvVab4ZRYEcormGDbU"
+uri = "file://attached_assets/stop_icon_play_512.png"
+type = "image"
+title = "Icono 512×512 px"
+
+[[outputs]]
+id = "FD56b8nYSF8IIqIU0rxLs"
+uri = "file://attached_assets/stop_feature_play_1024x500.png"
+type = "image"
+title = "Imagen de portada 1024×500 px"
+
+[[outputs]]
+id = "6NPQK9zug-7Hd47f5olJn"
+uri = "file://attached_assets/stop_icon_oficial_512.png"
+type = "image"
+title = "✅ Icono oficial 512×512 px — tu logo real"
+
+[[outputs]]
+id = "4fdSJyYMNRu528eekEhYN"
+uri = "file://attached_assets/stop_feature_oficial.png"
+type = "image"
+title = "✅ Imagen de portada 1024×500 px — tu logo real"
