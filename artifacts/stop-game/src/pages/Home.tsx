@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui";
-import { Play, Users, Trophy, Share2, Facebook, Instagram, Crown, Swords } from "lucide-react";
+import { Play, Users, Trophy, Share2, Facebook, Instagram, Crown, Swords, BookOpen } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { shareText } from "@/lib/utils";
 import { PremiumModal } from "@/components/PremiumModal";
@@ -150,7 +150,7 @@ export default function Home() {
             {isPremium ? `⭐ ${t.premium.active}` : `${t.premium.title} — ${t.premium.features[0]}`}
           </motion.button>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <Link href="/multiplayer">
               <motion.div
                 whileHover={{ scale: 1.03, y: -2 }}
@@ -164,7 +164,7 @@ export default function Home() {
                 }}
               >
                 <Users className="w-8 h-8 text-[#f9a825]" />
-                <span className="text-sm font-black">{t.home.multiplayer}</span>
+                <span className="text-xs font-black">{t.home.multiplayer}</span>
               </motion.div>
             </Link>
 
@@ -181,7 +181,24 @@ export default function Home() {
                 }}
               >
                 <Trophy className="w-8 h-8 text-[#f9a825]" />
-                <span className="text-sm font-black">{t.home.ranking}</span>
+                <span className="text-xs font-black">{t.home.ranking}</span>
+              </motion.div>
+            </Link>
+
+            <Link href="/como-jugar">
+              <motion.div
+                whileHover={{ scale: 1.03, y: -2 }}
+                whileTap={{ scale: 0.97 }}
+                className="flex flex-col items-center gap-2 py-5 rounded-2xl font-bold shadow-lg cursor-pointer"
+                style={{
+                  background: "rgba(0,0,0,0.25)",
+                  border: "2px solid rgba(255,255,255,0.15)",
+                  color: "white",
+                  backdropFilter: "blur(8px)",
+                }}
+              >
+                <BookOpen className="w-8 h-8 text-[#f9a825]" />
+                <span className="text-xs font-black">{t.home.howToPlay}</span>
               </motion.div>
             </Link>
           </div>
