@@ -6,3 +6,15 @@ id = "xs_jQLvgKvRDfgpmF15P1"
 uri = "file://testers.csv"
 type = "table"
 title = "testers.csv — Lista de testers"
+
+[[outputs]]
+id = "oDGhIuh9OEtnVInsW28tz"
+uri = "file://attached_assets/stop_icon_512.png"
+type = "image"
+title = "Icono 512×512 px — Google Play"
+
+[[outputs]]
+id = "Rjw7NGIvpP0NCImbRqHE_"
+uri = "file://attached_assets/stop_feature_graphic_1024x500.png"
+type = "image"
+title = "Imagen de portada 1024×500 px — Google Play"
