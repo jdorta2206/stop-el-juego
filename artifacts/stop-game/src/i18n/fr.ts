@@ -158,6 +158,7 @@ const fr = {
     categories: "Catégories",
     ends: "Termine dans",
     playFirst: "Joue pour voir le classement",
+    seeRanking: "Voir le classement du jour",
     noResults: "Sois le premier à jouer aujourd'hui",
     newChallenge: "Nouveau défi chaque jour à minuit",
   },

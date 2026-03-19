@@ -158,6 +158,7 @@ const en = {
     categories: "Categories",
     ends: "Ends in",
     playFirst: "Play to see the ranking",
+    seeRanking: "See today's ranking",
     noResults: "Be the first to play today",
     newChallenge: "New challenge every day at midnight",
   },
