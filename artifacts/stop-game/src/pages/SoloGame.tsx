@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import confetti from "canvas-confetti";
 import { Layout } from "@/components/Layout";
 import { Button, Card, Input, Progress } from "@/components/ui";
@@ -46,6 +46,7 @@ export default function SoloGame() {
   const { isPremium } = usePremium(player?.id);
   const { t, lang } = useT();
   const { recordPlay } = useStreak();
+  const [, setLocation] = useLocation();
   const [gameState, setGameState] = useState<GameState>("LOBBY");
   const [currentLetter, setCurrentLetter] = useState<string>("");
   const [timeLeft, setTimeLeft] = useState(ROUND_TIME);
@@ -206,7 +207,12 @@ export default function SoloGame() {
       // totalScore / aiTotalScore are already updated by useEffect when RESULTS state fired
       recordPlay();
       submitToLeaderboard(totalScore, aiTotalScore);
-      if (isDailyMode) submitDailyResult(totalScore);
+      if (isDailyMode) {
+        submitDailyResult(totalScore);
+        // Navigate back to Daily Challenge page so user sees the ranking
+        setLocation("/reto");
+        return;
+      }
       setGameState("LOBBY");
       setRound(1);
       setTotalScore(0);
@@ -263,7 +269,7 @@ export default function SoloGame() {
         <div className="flex justify-between items-center bg-black/20 rounded-2xl p-4 mb-5 backdrop-blur-md">
           <div className="text-center">
             <p className="text-xs text-white/60 font-bold uppercase">{t.game.round}</p>
-            <p className="text-2xl font-display font-bold">{round}/{MAX_ROUNDS}</p>
+            <p className="text-2xl font-display font-bold">{round}/{isDailyMode ? 1 : MAX_ROUNDS}</p>
           </div>
           <div className="text-center border-l border-r border-white/20 px-6">
             <p className="text-xs text-white/60 font-bold uppercase">{t.game.you}</p>
