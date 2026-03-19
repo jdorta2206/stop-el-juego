@@ -51,6 +51,18 @@ const DICTIONARY: Record<string, Record<string, string[]>> = {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+// Categories where ANY word starting with the right letter is valid (open-ended proper nouns)
+const OPEN_CATEGORIES = new Set([
+  // Spanish
+  "nombre","lugar","animal",
+  // English
+  "name","place","animal",
+  // Portuguese
+  "nome","lugar","animal",
+  // French
+  "prénom","prenom","lieu","animal",
+]);
+
 function normalizeWord(word: string): string {
   return word.toLowerCase().trim()
     .normalize("NFD")
@@ -79,19 +91,26 @@ function isWordValid(word: string, letter: string, category: string, language = 
   if (!normalizedWord.startsWith(normalizedLetter)) return false;
   if (normalizedWord.length < 2) return false;
 
+  // Names and places: accept any word with the correct letter (3+ chars)
+  const normCategory = normalizeWord(category);
+  if (OPEN_CATEGORIES.has(normCategory) || normCategory.includes("nombre") || normCategory.includes("lugar") || normCategory.includes("name") || normCategory.includes("place") || normCategory.includes("lieu") || normCategory.includes("prenom") || normCategory.includes("nome")) {
+    return normalizedWord.length >= 3;
+  }
+
   const langDict = DICTIONARY[language] || DICTIONARY["es"];
   const categoryWords = findCategoryWords(langDict, category);
 
   if (categoryWords.length === 0) {
     // No dictionary for this category — accept any word with the correct letter
-    return true;
+    return normalizedWord.length >= 3;
   }
 
-  // Accept if any dictionary word starts with what the player typed (min 3 chars prefix)
-  const prefix = normalizedWord.substring(0, Math.max(3, normalizedWord.length));
+  // Check exact match or prefix match against dictionary
   return categoryWords.some(w => {
     const nw = normalizeWord(w);
-    return nw === normalizedWord || nw.startsWith(prefix) || normalizedWord.startsWith(nw.substring(0, Math.min(nw.length, 4)));
+    return nw === normalizedWord ||
+      nw.startsWith(normalizedWord) ||
+      normalizedWord.startsWith(nw);
   });
 }
 
