@@ -10,19 +10,38 @@ router.get("/scores", async (req, res) => {
   const query = GetLeaderboardQueryParams.safeParse(req.query);
   const limit = query.success ? (query.data.limit ?? 20) : 20;
 
-  const players = await db
-    .select()
-    .from(playerScoresTable)
-    .orderBy(desc(playerScoresTable.totalScore))
-    .limit(limit);
+  // Deduplicate by player_name: keep each player's highest-score row only
+  const rows = await db.execute(sql`
+    SELECT * FROM (
+      SELECT DISTINCT ON (player_name) *
+      FROM player_scores
+      ORDER BY player_name, total_score DESC
+    ) AS deduped
+    ORDER BY total_score DESC
+    LIMIT ${limit}
+  `);
 
-  const total = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(playerScoresTable);
+  const players = rows.rows as Array<Record<string, unknown>>;
+
+  const totalRows = await db.execute(sql`
+    SELECT COUNT(DISTINCT player_name) AS count FROM player_scores
+  `);
+  const total = Number((totalRows.rows[0] as any)?.count ?? 0);
 
   res.json({
-    players: players.map((p, i) => ({ ...p, rank: i + 1 })),
-    total: Number(total[0]?.count ?? 0),
+    players: players.map((p, i) => ({
+      id: p.id,
+      playerId: p.player_id,
+      playerName: p.player_name,
+      avatarColor: p.avatar_color,
+      totalScore: p.total_score,
+      gamesPlayed: p.games_played,
+      wins: p.wins,
+      createdAt: p.created_at,
+      updatedAt: p.updated_at,
+      rank: i + 1,
+    })),
+    total,
   });
 });
 
