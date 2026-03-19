@@ -12,19 +12,40 @@ import { motion, AnimatePresence } from "framer-motion";
 import { InterstitialAd, RewardedAd, BannerAd } from "@/components/AdSystem";
 import { PremiumModal } from "@/components/PremiumModal";
 import { usePremium } from "@/lib/usePremium";
-import { Tv2, Crown, Volume2, VolumeX } from "lucide-react";
+import { Tv2, Crown, Volume2, VolumeX, Calendar } from "lucide-react";
 import { useT } from "@/i18n/useT";
 import { useTicker } from "@/hooks/useTicker";
+import { useStreak } from "@/hooks/useStreak";
 
 type GameState = "LOBBY" | "SPINNING" | "PLAYING" | "EVALUATING" | "RESULTS" | "AD_BETWEEN_ROUNDS";
 
 const ROUND_TIME = 60;
 const MAX_ROUNDS = 3;
 
+function getCrazyCategory(t: any): string | null {
+  if (!t.crazyCategories || t.crazyCategories.length === 0) return null;
+  if (Math.random() > 0.3) return null; // 30% chance
+  return t.crazyCategories[Math.floor(Math.random() * t.crazyCategories.length)];
+}
+
+function mixCrazyCategory(cats: string[], t: any): string[] {
+  const crazy = getCrazyCategory(t);
+  if (!crazy) return cats;
+  const result = [...cats];
+  const idx = Math.floor(Math.random() * result.length);
+  result[idx] = crazy;
+  return result;
+}
+
+function getTodayStr(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
 export default function SoloGame() {
   const { player } = usePlayer();
   const { isPremium } = usePremium(player?.id);
   const { t, lang } = useT();
+  const { recordPlay } = useStreak();
   const [gameState, setGameState] = useState<GameState>("LOBBY");
   const [currentLetter, setCurrentLetter] = useState<string>("");
   const [timeLeft, setTimeLeft] = useState(ROUND_TIME);
@@ -38,10 +59,16 @@ export default function SoloGame() {
   const [categories, setCategories] = useState<string[]>(getCategories());
   const [muted, setMuted] = useState(false);
 
-  // Re-read categories when language changes
+  // Daily mode — read URL params once
+  const urlParams = new URLSearchParams(window.location.search);
+  const isDailyMode = urlParams.get("daily") === "true";
+  const dailyLetter = urlParams.get("letter") || "";
+  const dailyCategories = urlParams.get("cats")?.split(",").filter(Boolean) || [];
+
+  // Re-read categories when language changes (only if not daily mode)
   useEffect(() => {
-    setCategories(getCategories());
-  }, [lang]);
+    if (!isDailyMode) setCategories(getCategories());
+  }, [lang, isDailyMode]);
 
   // Ticking sound — active only during PLAYING
   const { toggleMute } = useTicker(timeLeft, ROUND_TIME, gameState === "PLAYING" && !muted);
@@ -65,9 +92,18 @@ export default function SoloGame() {
   const timerRef = useRef<NodeJS.Timeout>(null);
 
   const startGame = () => {
-    const alphabet = getAlphabet();
-    const randomLetter = alphabet[Math.floor(Math.random() * alphabet.length)];
-    setCurrentLetter(randomLetter);
+    if (isDailyMode) {
+      // Daily challenge: fixed letter and categories
+      setCurrentLetter(dailyLetter);
+      const cats = dailyCategories.length > 0 ? dailyCategories : getCategories();
+      setCategories(cats);
+    } else {
+      const alphabet = getAlphabet();
+      const randomLetter = alphabet[Math.floor(Math.random() * alphabet.length)];
+      setCurrentLetter(randomLetter);
+      // Mix in a crazy category with 30% probability
+      setCategories(mixCrazyCategory(getCategories(), t));
+    }
     setResponses({});
     setGameState("SPINNING");
   };
@@ -92,8 +128,7 @@ export default function SoloGame() {
     if (timerRef.current) clearInterval(timerRef.current);
     setGameState("EVALUATING");
 
-    const currentCategories = getCategories();
-    const formattedResponses = currentCategories.map(cat => ({
+    const formattedResponses = categories.map(cat => ({
       category: cat,
       word: responses[cat] || ""
     }));
@@ -135,7 +170,7 @@ export default function SoloGame() {
         avatarColor: player.avatarColor,
         score: finalScore,
         letter: currentLetter,
-        mode: "solo",
+        mode: isDailyMode ? "daily" : "solo",
         won: finalScore > finalAiScore,
       }
     }, {
@@ -145,9 +180,33 @@ export default function SoloGame() {
     });
   };
 
+  const submitDailyResult = (finalScore: number) => {
+    // Always save daily score locally (works for guests too)
+    localStorage.setItem(`stop_daily_${getTodayStr()}`, String(finalScore));
+
+    // Save to server if logged in
+    if (!player || player.loginMethod === "guest") return;
+    fetch(`${window.location.origin}/api/daily/submit`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        playerId: player.id,
+        playerName: player.name,
+        avatarColor: player.avatarColor,
+        score: finalScore,
+        letter: dailyLetter || currentLetter,
+        language: getCurrentLang(),
+      }),
+    }).catch(() => {});
+  };
+
   const nextRound = () => {
-    if (round >= MAX_ROUNDS) {
+    const maxRounds = isDailyMode ? 1 : MAX_ROUNDS;
+    if (round >= maxRounds) {
+      // totalScore / aiTotalScore are already updated by useEffect when RESULTS state fired
+      recordPlay();
       submitToLeaderboard(totalScore, aiTotalScore);
+      if (isDailyMode) submitDailyResult(totalScore);
       setGameState("LOBBY");
       setRound(1);
       setTotalScore(0);

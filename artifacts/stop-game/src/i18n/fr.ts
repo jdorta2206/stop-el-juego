@@ -120,6 +120,48 @@ const fr = {
     perYear: "an",
   },
 
+  crazyCategories: [
+    "Excuse pour ne pas aller au travail",
+    "Chose que tu emporterais sur une île déserte",
+    "Super-pouvoir que tu voudrais avoir",
+    "Aliment que tu ne supportes pas",
+    "Métier le plus bizarre du monde",
+    "Film que tu fais semblant d'avoir vu",
+    "Chose qui t'embarrasse",
+    "Surnom ridicule",
+    "Endroit où tu n'irais jamais",
+    "Chose que tu ne ferais jamais pour de l'argent",
+    "Chose qui fait peur aux enfants",
+    "Animal que tu ne voudrais pas rencontrer",
+    "Excuse pour arriver en retard",
+    "Ton talent caché",
+    "Chanson qui te met de mauvaise humeur",
+  ],
+
+  streak: {
+    label: "Série",
+    days: "jours",
+    newRecord: "Nouveau record !",
+    keepIt: "Continue comme ça !",
+    start: "Commence ta série aujourd'hui !",
+    longest: "Meilleure série",
+  },
+
+  daily: {
+    title: "Défi du Jour",
+    subtitle: "Une lettre, tout le monde joue",
+    play: "Jouer le défi",
+    played: "Déjà joué aujourd'hui",
+    yourScore: "Ton score",
+    rankings: "Classement du jour",
+    letter: "Lettre du jour",
+    categories: "Catégories",
+    ends: "Termine dans",
+    playFirst: "Joue pour voir le classement",
+    noResults: "Sois le premier à jouer aujourd'hui",
+    newChallenge: "Nouveau défi chaque jour à minuit",
+  },
+
   friends: {
     online: "En ligne",
     offline: "Mes amis",
