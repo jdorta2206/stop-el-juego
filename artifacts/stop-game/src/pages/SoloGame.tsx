@@ -9,7 +9,7 @@ import { getCategories, getAlphabet, getCurrentLang } from "@/lib/utils";
 import { useValidateRound, useSubmitScore } from "@workspace/api-client-react";
 import { usePlayer } from "@/hooks/use-player";
 import { motion, AnimatePresence } from "framer-motion";
-import { InterstitialAd, RewardedAd, BannerAd } from "@/components/AdSystem";
+import { RewardedAd, BannerAd } from "@/components/AdSystem";
 import { PremiumModal } from "@/components/PremiumModal";
 import { usePremium } from "@/lib/usePremium";
 import { Tv2, Crown, Volume2, VolumeX, Calendar } from "lucide-react";
@@ -17,7 +17,7 @@ import { useT } from "@/i18n/useT";
 import { useTicker } from "@/hooks/useTicker";
 import { useStreak } from "@/hooks/useStreak";
 
-type GameState = "LOBBY" | "SPINNING" | "PLAYING" | "EVALUATING" | "RESULTS" | "AD_BETWEEN_ROUNDS";
+type GameState = "LOBBY" | "SPINNING" | "PLAYING" | "EVALUATING" | "RESULTS";
 
 const ROUND_TIME = 60;
 const MAX_ROUNDS = 3;
@@ -218,18 +218,9 @@ export default function SoloGame() {
       setTotalScore(0);
       setAiTotalScore(0);
     } else {
-      if (isPremium) {
-        setRound(r => r + 1);
-        startGame();
-      } else {
-        setGameState("AD_BETWEEN_ROUNDS");
-      }
+      setRound(r => r + 1);
+      startGame();
     }
-  };
-
-  const afterInterstitial = () => {
-    setRound(r => r + 1);
-    startGame();
   };
 
   const handleRewardedComplete = (reward: number) => {
@@ -241,10 +232,6 @@ export default function SoloGame() {
   return (
     <Layout>
       <div className="flex-1 flex flex-col max-w-2xl mx-auto w-full">
-
-        {gameState === "AD_BETWEEN_ROUNDS" && (
-          <InterstitialAd onDone={afterInterstitial} />
-        )}
 
         {showRewardedAd && (
           <RewardedAd
@@ -492,15 +479,22 @@ export default function SoloGame() {
               {!isPremium && <BannerAd className="mb-4" />}
 
               <div className="grid grid-cols-2 gap-3">
-                {round >= MAX_ROUNDS ? (
-                  <>
-                    <Button size="lg" onClick={() => { setRound(1); setGameState("LOBBY"); setTotalScore(0); setAiTotalScore(0); }}>
-                      {t.game.playAgain}
+                {round >= (isDailyMode ? 1 : MAX_ROUNDS) ? (
+                  isDailyMode ? (
+                    // Daily mode end: go back to the challenge page
+                    <Button size="lg" className="col-span-2" onClick={nextRound}>
+                      {t.daily.seeRanking ?? "Ver ranking del día"}
                     </Button>
-                    <Link href="/ranking">
-                      <Button variant="secondary" size="lg" className="w-full">{t.ranking.title}</Button>
-                    </Link>
-                  </>
+                  ) : (
+                    <>
+                      <Button size="lg" onClick={() => { setRound(1); setGameState("LOBBY"); setTotalScore(0); setAiTotalScore(0); }}>
+                        {t.game.playAgain}
+                      </Button>
+                      <Link href="/ranking">
+                        <Button variant="secondary" size="lg" className="w-full">{t.ranking.title}</Button>
+                      </Link>
+                    </>
+                  )
                 ) : (
                   <Button size="lg" className="col-span-2" onClick={nextRound}>
                     {t.game.nextRound} ({round + 1}/{MAX_ROUNDS})
