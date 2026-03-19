@@ -356,10 +356,14 @@ const OPEN_CATEGORIES = new Set([
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function normalizeWord(word: string): string {
+  // Protect Ñ/ñ with a placeholder BEFORE NFD decomposition,
+  // otherwise "ñ" → "n" + combining-tilde → "n" (indistinguishable from N)
   return word.toLowerCase().trim()
+    .replace(/ñ/g, "~")               // protect ñ from NFD
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z\s]/g, "")
+    .replace(/[\u0300-\u036f]/g, "")  // strip other accent marks
+    .replace(/[^a-z~\s]/g, "")        // keep letters + ñ placeholder
+    .replace(/~/g, "ñ")               // restore ñ
     .trim();
 }
 
