@@ -7,6 +7,7 @@ import authRouter from "./auth";
 import stripeRouter from "./stripe";
 import presenceRouter from "./presence";
 import friendsRouter from "./friends";
+import dailyRouter from "./daily";
 
 const router: IRouter = Router();
 
@@ -18,5 +19,6 @@ router.use("/auth", authRouter);
 router.use("/stripe", stripeRouter);
 router.use("/presence", presenceRouter);
 router.use("/friends", friendsRouter);
+router.use("/daily", dailyRouter);
 
 export default router;

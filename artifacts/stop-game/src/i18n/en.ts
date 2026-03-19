@@ -120,6 +120,48 @@ const en = {
     perYear: "yr",
   },
 
+  crazyCategories: [
+    "Excuse to skip work",
+    "Thing you'd bring to a desert island",
+    "Superpower you'd want",
+    "Food you can't stand",
+    "Weirdest job ever",
+    "Movie you pretend to have seen",
+    "Thing that embarrasses you",
+    "Nickname you'd hate",
+    "Place you'd never visit",
+    "Thing you'd never do for money",
+    "Thing that scares kids",
+    "Animal you'd hate to meet",
+    "Excuse for being late",
+    "Your hidden talent",
+    "Song that ruins your mood",
+  ],
+
+  streak: {
+    label: "Streak",
+    days: "days",
+    newRecord: "New record!",
+    keepIt: "Keep it up!",
+    start: "Start your streak today!",
+    longest: "Best streak",
+  },
+
+  daily: {
+    title: "Daily Challenge",
+    subtitle: "One letter, everyone competes",
+    play: "Play challenge",
+    played: "Already played today",
+    yourScore: "Your score",
+    rankings: "Today's ranking",
+    letter: "Today's letter",
+    categories: "Categories",
+    ends: "Ends in",
+    playFirst: "Play to see the ranking",
+    noResults: "Be the first to play today",
+    newChallenge: "New challenge every day at midnight",
+  },
+
   friends: {
     online: "Online",
     offline: "My friends",

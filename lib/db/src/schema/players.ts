@@ -70,3 +70,20 @@ export const followsTable = pgTable("follows", {
 export const insertFollowSchema = createInsertSchema(followsTable).omit({ id: true, createdAt: true });
 export type InsertFollow = z.infer<typeof insertFollowSchema>;
 export type Follow = typeof followsTable.$inferSelect;
+
+// ── Daily challenge results ───────────────────────────────────────────────────
+export const dailyResultsTable = pgTable("daily_results", {
+  id: serial("id").primaryKey(),
+  playerId: text("player_id").notNull(),
+  playerName: text("player_name").notNull(),
+  avatarColor: text("avatar_color").notNull().default("#e53e3e"),
+  challengeDate: text("challenge_date").notNull(), // YYYY-MM-DD
+  score: integer("score").notNull().default(0),
+  letter: text("letter").notNull(),
+  language: text("language").notNull().default("es"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertDailyResultSchema = createInsertSchema(dailyResultsTable).omit({ id: true, createdAt: true });
+export type InsertDailyResult = z.infer<typeof insertDailyResultSchema>;
+export type DailyResult = typeof dailyResultsTable.$inferSelect;

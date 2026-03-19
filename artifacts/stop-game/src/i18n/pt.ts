@@ -120,6 +120,48 @@ const pt = {
     perYear: "ano",
   },
 
+  crazyCategories: [
+    "Desculpa para faltar ao trabalho",
+    "Coisa que levaria para uma ilha deserta",
+    "Superpoder que você queria ter",
+    "Alimento que você não suporta",
+    "Trabalho mais estranho do mundo",
+    "Filme que você finge ter assistido",
+    "Coisa que te envergonha",
+    "Apelido ridículo",
+    "Lugar que você nunca visitaria",
+    "Coisa que nunca faria por dinheiro",
+    "Coisa que assusta crianças",
+    "Animal que você não quer encontrar",
+    "Desculpa para chegar atrasado",
+    "Seu talento secreto",
+    "Música que estraga seu humor",
+  ],
+
+  streak: {
+    label: "Sequência",
+    days: "dias",
+    newRecord: "Novo recorde!",
+    keepIt: "Continue assim!",
+    start: "Comece sua sequência hoje!",
+    longest: "Melhor sequência",
+  },
+
+  daily: {
+    title: "Desafio do Dia",
+    subtitle: "Uma letra, todos competem",
+    play: "Jogar desafio",
+    played: "Já jogou hoje",
+    yourScore: "Sua pontuação",
+    rankings: "Ranking de hoje",
+    letter: "Letra de hoje",
+    categories: "Categorias",
+    ends: "Termina em",
+    playFirst: "Jogue para ver o ranking",
+    noResults: "Seja o primeiro a jogar hoje",
+    newChallenge: "Novo desafio todo dia à meia-noite",
+  },
+
   friends: {
     online: "Online",
     offline: "Meus amigos",

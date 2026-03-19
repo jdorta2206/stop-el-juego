@@ -120,6 +120,48 @@ const es = {
     perYear: "año",
   },
 
+  crazyCategories: [
+    "Excusa para no ir al trabajo",
+    "Cosa que te da vergüenza",
+    "Lugar al que nunca irías",
+    "Cosa que llevarías a una isla desierta",
+    "Superpoder que querrías tener",
+    "Alimento que no soportas",
+    "Trabajo rarísimo",
+    "Cosa que hace tu abuela",
+    "Apodo ridículo",
+    "Película que finges haber visto",
+    "Cosa que asusta a los niños",
+    "Excusa para llegar tarde",
+    "Animal que no te gustaría encontrar",
+    "Cosa que nunca harías por dinero",
+    "Canción que te pone de mal humor",
+  ],
+
+  streak: {
+    label: "Racha",
+    days: "días",
+    newRecord: "¡Nuevo récord!",
+    keepIt: "¡Sigue así!",
+    start: "¡Empieza tu racha hoy!",
+    longest: "Mejor racha",
+  },
+
+  daily: {
+    title: "Reto del Día",
+    subtitle: "Una letra, todos compiten",
+    play: "Jugar reto",
+    played: "Ya jugaste hoy",
+    yourScore: "Tu puntuación",
+    rankings: "Ranking de hoy",
+    letter: "Letra de hoy",
+    categories: "Categorías",
+    ends: "Termina en",
+    playFirst: "Juega para ver el ranking",
+    noResults: "Sé el primero en jugar hoy",
+    newChallenge: "Nuevo reto cada día a medianoche",
+  },
+
   friends: {
     online: "En línea",
     offline: "Mis amigos",
