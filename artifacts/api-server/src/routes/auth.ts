@@ -5,6 +5,15 @@ const router = Router();
 
 const APP_ORIGIN = process.env["APP_ORIGIN"] || "https://3697d7d1-ea3c-4cf5-b00f-386041779844-00-emhgnr1gq77c.kirk.replit.dev";
 
+// ── Dedup cache: prevent double-use of OAuth codes (mobile browsers fire callback twice) ──
+const usedCodes = new Set<string>();
+function claimCode(code: string): boolean {
+  if (usedCodes.has(code)) return false;
+  usedCodes.add(code);
+  setTimeout(() => usedCodes.delete(code), 60_000);
+  return true;
+}
+
 // Helper: build a tiny HTML page that writes data to sessionStorage and redirects
 function bridgePage(key: string, value: string, returnPath: string) {
   return bridgePageMulti([[key, value]], returnPath);
@@ -64,6 +73,9 @@ router.get("/google/callback", async (req: Request, res: Response) => {
   }
   if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
     return res.redirect(`${APP_ORIGIN}/?auth_error=google_not_configured`);
+  }
+  if (!claimCode(`google_${code}`)) {
+    return res.redirect(`${APP_ORIGIN}${state}`);
   }
 
   try {
@@ -154,6 +166,9 @@ router.get("/facebook/callback", async (req: Request, res: Response) => {
   if (!FACEBOOK_APP_ID || !FACEBOOK_APP_SECRET) {
     return res.redirect(`${APP_ORIGIN}/?auth_error=facebook_not_configured`);
   }
+  if (!claimCode(`fb_${code}`)) {
+    return res.redirect(`${APP_ORIGIN}${state}`);
+  }
 
   try {
     const redirectUri = `${APP_ORIGIN}/api/auth/facebook/callback`;
@@ -223,6 +238,9 @@ router.get("/instagram/callback", async (req: Request, res: Response) => {
   }
   if (!INSTAGRAM_CLIENT_ID || !INSTAGRAM_CLIENT_SECRET) {
     return res.redirect(`${APP_ORIGIN}/?auth_error=instagram_not_configured`);
+  }
+  if (!claimCode(`ig_${code}`)) {
+    return res.redirect(`${APP_ORIGIN}${state}`);
   }
 
   try {
