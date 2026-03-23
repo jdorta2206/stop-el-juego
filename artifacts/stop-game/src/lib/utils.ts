@@ -2,6 +2,16 @@ import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { getLang, getT } from "@/i18n/index";
 
+/**
+ * Returns the API base URL.
+ * In production (Render), reads VITE_API_URL env var so the frontend knows
+ * the separate API service. In development (Replit), falls back to origin.
+ */
+export function getApiUrl(): string {
+  const env = (import.meta as { env?: { VITE_API_URL?: string } }).env;
+  return env?.VITE_API_URL ?? window.location.origin;
+}
+
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }

@@ -271,19 +271,43 @@ async function parseSuccessBody(
   }
 }
 
+declare const __VITE_API_URL__: string | undefined;
+
+function getApiBase(): string {
+  try {
+    const envUrl =
+      typeof import.meta !== "undefined" &&
+      (import.meta as { env?: { VITE_API_URL?: string } }).env?.VITE_API_URL;
+    return envUrl || "";
+  } catch {
+    return "";
+  }
+}
+
+function resolveInputUrl(input: RequestInfo | URL): RequestInfo | URL {
+  const base = getApiBase();
+  if (!base) return input;
+  const raw = resolveUrl(input);
+  if (raw.startsWith("/")) {
+    return base.replace(/\/$/, "") + raw;
+  }
+  return input;
+}
+
 export async function customFetch<T = unknown>(
   input: RequestInfo | URL,
   options: CustomFetchOptions = {},
 ): Promise<T> {
   const { responseType = "auto", headers: headersInit, ...init } = options;
 
-  const method = resolveMethod(input, init.method);
+  const resolvedInput = resolveInputUrl(input);
+  const method = resolveMethod(resolvedInput, init.method);
 
   if (init.body != null && (method === "GET" || method === "HEAD")) {
     throw new TypeError(`customFetch: ${method} requests cannot have a body.`);
   }
 
-  const headers = mergeHeaders(isRequest(input) ? input.headers : undefined, headersInit);
+  const headers = mergeHeaders(isRequest(resolvedInput) ? resolvedInput.headers : undefined, headersInit);
 
   if (
     typeof init.body === "string" &&
@@ -297,9 +321,9 @@ export async function customFetch<T = unknown>(
     headers.set("accept", DEFAULT_JSON_ACCEPT);
   }
 
-  const requestInfo = { method, url: resolveUrl(input) };
+  const requestInfo = { method, url: resolveUrl(resolvedInput) };
 
-  const response = await fetch(input, { ...init, method, headers });
+  const response = await fetch(resolvedInput, { ...init, method, headers });
 
   if (!response.ok) {
     const errorData = await parseErrorBody(response, method);

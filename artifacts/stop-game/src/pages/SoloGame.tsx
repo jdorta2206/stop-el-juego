@@ -5,7 +5,7 @@ import confetti from "canvas-confetti";
 import { Layout } from "@/components/Layout";
 import { Button, Card, Input, Progress } from "@/components/ui";
 import { Roulette } from "@/components/Roulette";
-import { getCategories, getAlphabet, getCurrentLang } from "@/lib/utils";
+import { getCategories, getAlphabet, getCurrentLang, getApiUrl } from "@/lib/utils";
 import { useValidateRound, useSubmitScore } from "@workspace/api-client-react";
 import { usePlayer } from "@/hooks/use-player";
 import { motion, AnimatePresence } from "framer-motion";
@@ -187,7 +187,7 @@ export default function SoloGame() {
 
     // Save to server if logged in
     if (!player || player.loginMethod === "guest") return;
-    fetch(`${window.location.origin}/api/daily/submit`, {
+    fetch(`${getApiUrl()}/api/daily/submit`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
