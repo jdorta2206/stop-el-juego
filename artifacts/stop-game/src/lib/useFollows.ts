@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import type { OnlinePlayer } from "./usePresence";
+import { getApiUrl } from "./utils";
 
 export interface FollowedFriend {
   id: number;
@@ -15,7 +16,7 @@ export interface FollowedFriend {
   onlineData?: OnlinePlayer;
 }
 
-const BASE = window.location.origin;
+const BASE = getApiUrl();
 
 export function useFollows(playerId: string | null, onlinePlayers: OnlinePlayer[]) {
   const [friends, setFriends] = useState<FollowedFriend[]>([]);

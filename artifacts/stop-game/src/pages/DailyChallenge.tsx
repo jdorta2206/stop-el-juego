@@ -6,6 +6,7 @@ import { useT } from "@/i18n/useT";
 import { usePlayer } from "@/hooks/use-player";
 import { ArrowLeft, Trophy, Calendar, Flame } from "lucide-react";
 import { useStreak } from "@/hooks/useStreak";
+import { getApiUrl } from "@/lib/utils";
 
 interface DailyChallenge {
   letter: string;
@@ -20,7 +21,7 @@ interface DailyRanking {
   score: number;
 }
 
-const API_BASE = window.location.origin;
+const API_BASE = getApiUrl();
 
 function getTodayStr() {
   return new Date().toISOString().slice(0, 10);

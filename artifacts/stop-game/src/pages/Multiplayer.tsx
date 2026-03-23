@@ -8,7 +8,7 @@ import { OnlineFriends } from "@/components/OnlineFriends";
 import { InviteFriends } from "@/components/InviteFriends";
 import { Users, Plus, LogIn, UserPlus, Globe, Lock, RefreshCw, Flag } from "lucide-react";
 import { useT } from "@/i18n/useT";
-import { getCurrentLang } from "@/lib/utils";
+import { getCurrentLang, getApiUrl } from "@/lib/utils";
 import { AnimatePresence, motion } from "framer-motion";
 
 interface PublicRoom {
@@ -40,7 +40,7 @@ export default function Multiplayer() {
   const loadPublicRooms = async () => {
     setLoadingPublic(true);
     try {
-      const res = await fetch(`${window.location.origin}/api/rooms/public`);
+      const res = await fetch(`${getApiUrl()}/api/rooms/public`);
       if (res.ok) {
         const data = await res.json();
         setPublicRooms(data.rooms || []);

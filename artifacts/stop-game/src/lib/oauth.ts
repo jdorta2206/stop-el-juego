@@ -20,9 +20,10 @@ export const isTikTokConfigured    = false;
 function startOAuth(provider: "google" | "facebook" | "instagram" | "tiktok") {
   const returnPath = window.location.pathname + window.location.search;
   sessionStorage.setItem("oauth_return", returnPath);
-  const origin = window.location.origin;
+  const apiBase = (import.meta as { env?: { VITE_API_URL?: string } }).env?.VITE_API_URL
+    ?? window.location.origin;
   window.location.href =
-    `${origin}/api/auth/${provider}/start?return=${encodeURIComponent(returnPath)}`;
+    `${apiBase}/api/auth/${provider}/start?return=${encodeURIComponent(returnPath)}`;
 }
 
 export function signInWithGoogle()    { startOAuth("google"); }

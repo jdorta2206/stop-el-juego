@@ -6,6 +6,7 @@ import { Trophy, Users } from "lucide-react";
 import { usePlayer } from "@/hooks/use-player";
 import { motion } from "framer-motion";
 import { useT } from "@/i18n/useT";
+import { getApiUrl } from "@/lib/utils";
 
 interface FollowedFriend {
   followedId: string;
@@ -25,7 +26,7 @@ export default function Ranking() {
 
   useEffect(() => {
     if (!player?.id) return;
-    fetch(`${window.location.origin}/api/friends/list/${encodeURIComponent(player.id)}`)
+    fetch(`${getApiUrl()}/api/friends/list/${encodeURIComponent(player.id)}`)
       .then(r => r.ok ? r.json() : { friends: [] })
       .then(({ friends }: { friends: FollowedFriend[] }) => {
         setFollowedFriends(friends);
