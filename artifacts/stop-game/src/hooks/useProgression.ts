@@ -1,6 +1,35 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 
 const XP_KEY = "stop_xp_v2";
+
+export interface League {
+  key: string;
+  emoji: string;
+  color: string;
+  minLevel: number;
+}
+
+const LEAGUES: League[] = [
+  { key: "bronze",   emoji: "🥉", color: "#cd7f32", minLevel: 1  },
+  { key: "silver",   emoji: "🥈", color: "#c0c0c0", minLevel: 5  },
+  { key: "gold",     emoji: "🥇", color: "#ffd700", minLevel: 10 },
+  { key: "diamond",  emoji: "💎", color: "#67e8f9", minLevel: 15 },
+  { key: "master",   emoji: "👑", color: "#f9a825", minLevel: 20 },
+];
+
+export function getLeague(level: number): League {
+  let league = LEAGUES[0];
+  for (const l of LEAGUES) {
+    if (level >= l.minLevel) league = l;
+  }
+  return league;
+}
+
+export function getNextLeague(level: number): League | null {
+  const current = getLeague(level);
+  const idx = LEAGUES.findIndex(l => l.key === current.key);
+  return idx < LEAGUES.length - 1 ? LEAGUES[idx + 1] : null;
+}
 
 const LEVEL_THRESHOLDS = [
   0, 100, 250, 450, 700, 1000, 1400, 1900, 2500, 3200,

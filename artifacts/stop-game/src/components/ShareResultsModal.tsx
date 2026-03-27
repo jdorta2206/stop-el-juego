@@ -1,7 +1,6 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { Share2, X, Copy, Check } from "lucide-react";
 import { useState } from "react";
-import { Button } from "@/components/ui";
 
 interface ShareResultsModalProps {
   open: boolean;
@@ -24,6 +23,18 @@ interface ShareResultsModalProps {
   gameUrl?: string;
 }
 
+function buildWordleGrid(
+  categories: string[],
+  results: Record<string, { player?: { response: string; score: number }; ai?: { response: string; score: number } }>,
+): string {
+  return categories.map(cat => {
+    const score = results[cat]?.player?.score ?? 0;
+    if (score >= 10) return "🟩";
+    if (score >= 5)  return "🟨";
+    return "⬛";
+  }).join("");
+}
+
 export function ShareResultsModal({
   open,
   onClose,
@@ -39,6 +50,7 @@ export function ShareResultsModal({
 
   const won = playerScore > aiScore;
   const url = gameUrl || window.location.origin;
+  const wordleGrid = buildWordleGrid(categories, results);
 
   const validWords = categories
     .filter(cat => (results[cat]?.player?.score ?? 0) > 0)
@@ -47,11 +59,8 @@ export function ShareResultsModal({
 
   const shareMessage = [
     `🎮 STOP - Letra ${letter}`,
-    won ? "¡Gané! 🏆" : "¡Jugué!",
-    `Yo: ${playerScore}pts — IA: ${aiScore}pts`,
-    validWords.length > 0
-      ? `✅ ${validWords.slice(0, 3).join(", ")}${validWords.length > 3 ? "..." : ""}`
-      : "",
+    wordleGrid,
+    won ? `✅ ${t.you}: ${playerScore}pts · 🤖 IA: ${aiScore}pts 🏆` : `🤖 IA: ${aiScore}pts · ${t.you}: ${playerScore}pts`,
     `${t.shareChallenge}`,
     url,
   ]
@@ -107,9 +116,9 @@ export function ShareResultsModal({
               </button>
             </div>
 
-            {/* Result card preview */}
+            {/* Wordle grid preview */}
             <div
-              className="mx-4 mb-4 rounded-2xl p-4"
+              className="mx-4 mb-4 rounded-2xl p-4 text-center"
               style={{
                 background: won
                   ? "linear-gradient(135deg, rgba(34,197,94,0.15), rgba(21,128,61,0.1))"
@@ -117,24 +126,36 @@ export function ShareResultsModal({
                 border: `1px solid ${won ? "rgba(34,197,94,0.3)" : "rgba(229,62,18,0.3)"}`,
               }}
             >
+              {/* Letter + score header */}
               <div className="flex items-center gap-3 mb-3">
                 <div
-                  className="w-12 h-12 rounded-xl flex items-center justify-center font-black text-2xl"
+                  className="w-12 h-12 rounded-xl flex items-center justify-center font-black text-2xl flex-shrink-0"
                   style={{ background: "hsl(6 90% 55%)", color: "white" }}
                 >
                   {letter}
                 </div>
-                <div>
+                <div className="text-left">
                   <p className="text-white font-black text-base">
                     {won ? "🏆 ¡Ganaste!" : "💪 ¡Completado!"}
                   </p>
                   <p className="text-white/60 text-xs">
-                    Tú {playerScore}pts · IA {aiScore}pts
+                    {t.you} {playerScore}pts · IA {aiScore}pts
                   </p>
                 </div>
               </div>
+
+              {/* Wordle emoji grid */}
+              <div className="flex flex-col items-center gap-1 my-2">
+                <p className="text-[2rem] tracking-wide leading-none">{wordleGrid}</p>
+                <div className="flex gap-4 mt-1 text-xs text-white/50">
+                  <span>🟩 10pts</span>
+                  <span>🟨 5pts</span>
+                  <span>⬛ 0pts</span>
+                </div>
+              </div>
+
               {validWords.length > 0 && (
-                <div className="flex flex-wrap gap-1.5">
+                <div className="flex flex-wrap gap-1.5 justify-center mt-2">
                   {validWords.slice(0, 4).map((word, i) => (
                     <span
                       key={i}
@@ -145,9 +166,7 @@ export function ShareResultsModal({
                     </span>
                   ))}
                   {validWords.length > 4 && (
-                    <span className="text-white/40 text-xs self-center">
-                      +{validWords.length - 4} más
-                    </span>
+                    <span className="text-white/40 text-xs self-center">+{validWords.length - 4}</span>
                   )}
                 </div>
               )}
