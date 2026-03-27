@@ -24,9 +24,13 @@ import { useAchievements } from "@/hooks/useAchievements";
 import { AchievementToast } from "@/components/AchievementToast";
 import { drawPowerCard, POWER_CARDS, type PowerCardId } from "@/data/powerCards";
 
-type GameState = "LOBBY" | "SPINNING" | "CARD_REVEAL" | "PLAYING" | "EVALUATING" | "RESULTS";
+type GameState = "LOBBY" | "SPINNING" | "CARD_REVEAL" | "PLAYING" | "EVALUATING" | "JUDGING" | "RESULTS";
 
 type SpecialReveal = { type: "oracle" | "steal"; category: string; word: string } | null;
+
+type BluffResult = { category: string; caught: boolean; scoreChange: number };
+type AiBluffSetup = { category: string; wasActuallyBluffing: boolean };
+type AiBluffReveal = { category: string; answer: string; wasActuallyBluffing: boolean; scoreChange: number };
 type RandomEvent = "double_xp" | "easy_letter" | "speed" | null;
 
 const ROUND_TIME = 60;
@@ -104,6 +108,15 @@ export default function SoloGame() {
 
   // Achievements system
   const { newlyUnlocked, afterRound, clearNewlyUnlocked } = useAchievements();
+
+  // Bluff / Social Deception state
+  const [bluffedCategories, setBluffedCategories] = useState<Set<string>>(new Set());
+  const [aiBluffSetup, setAiBluffSetup] = useState<AiBluffSetup | null>(null);
+  const [bluffResults, setBluffResults] = useState<BluffResult[]>([]);
+  const [aiBluffReveal, setAiBluffReveal] = useState<AiBluffReveal | null>(null);
+  const [playerJudgedAi, setPlayerJudgedAi] = useState<boolean | null>(null);
+  const [judgingPhase, setJudgingPhase] = useState<"player_bluffs" | "ai_bluff">("player_bluffs");
+  const [bluffBonusScore, setBluffBonusScore] = useState(0);
 
   // Power Cards state
   const [activeCard, setActiveCard] = useState<PowerCardId | null>(null);
@@ -187,10 +200,22 @@ export default function SoloGame() {
     setSelectingSabotage(false);
     setSpecialReveal(null);
 
+    // Reset bluff system
+    setBluffedCategories(new Set());
+    setBluffResults([]);
+    setAiBluffReveal(null);
+    setPlayerJudgedAi(null);
+    setJudgingPhase("player_bluffs");
+    setBluffBonusScore(0);
+
     setGameState("SPINNING");
   };
 
   const startRound = () => {
+    // Set up AI bluff for this round (random category, 50% chance it's actually bluffing)
+    const aiBluffCat = categories[Math.floor(Math.random() * categories.length)];
+    setAiBluffSetup({ category: aiBluffCat, wasActuallyBluffing: Math.random() < 0.5 });
+
     setGameState("PLAYING");
     setTimeLeft(roundTime);
     setRewardedUsed(false);
@@ -205,6 +230,28 @@ export default function SoloGame() {
         return prev - 1;
       });
     }, 1000);
+  };
+
+  const toggleBluff = (category: string) => {
+    setBluffedCategories(prev => {
+      const next = new Set(prev);
+      if (next.has(category)) {
+        next.delete(category);
+      } else if (next.size < 2) {
+        next.add(category);
+      }
+      return next;
+    });
+  };
+
+  const handleJudgeAi = (playerSaysItsMentira: boolean) => {
+    setPlayerJudgedAi(playerSaysItsMentira);
+    if (aiBluffReveal) {
+      const correct = aiBluffReveal.wasActuallyBluffing === playerSaysItsMentira;
+      const change = correct ? 15 : 0;
+      setBluffBonusScore(prev => prev + change);
+      setAiBluffReveal(prev => prev ? { ...prev, scoreChange: change } : null);
+    }
   };
 
   const proceedFromCardReveal = () => {
@@ -238,8 +285,9 @@ export default function SoloGame() {
       word: responses[cat] || ""
     }));
 
+    let apiData = null;
     try {
-      await validateMutation.mutateAsync({
+      apiData = await validateMutation.mutateAsync({
         data: {
           letter: currentLetter,
           language: getCurrentLang(),
@@ -250,7 +298,41 @@ export default function SoloGame() {
     } catch {
       // Fallback: proceed to results without API
     }
-    setGameState("RESULTS");
+
+    // Process player bluffs
+    const hasPlayerBluffs = bluffedCategories.size > 0;
+    if (hasPlayerBluffs) {
+      const detectionRate = isChaosMode ? 0.7 : 0.5;
+      const results: BluffResult[] = [];
+      let bonusDelta = 0;
+      bluffedCategories.forEach(cat => {
+        const caught = Math.random() < detectionRate;
+        const scoreChange = caught ? -10 : 20;
+        results.push({ category: cat, caught, scoreChange });
+        bonusDelta += scoreChange;
+      });
+      setBluffResults(results);
+      setBluffBonusScore(bonusDelta);
+    }
+
+    // Set up AI bluff reveal data (using API response)
+    if (aiBluffSetup && apiData) {
+      const aiAnswer = (apiData as { results?: Record<string, { ai?: { response?: string } }> }).results?.[aiBluffSetup.category]?.ai?.response ?? "";
+      setAiBluffReveal({
+        category: aiBluffSetup.category,
+        answer: aiAnswer,
+        wasActuallyBluffing: aiBluffSetup.wasActuallyBluffing,
+        scoreChange: 0,
+      });
+    }
+
+    // Go to JUDGING if there's anything to judge, otherwise go straight to results
+    if (hasPlayerBluffs || aiBluffSetup) {
+      setJudgingPhase("player_bluffs");
+      setGameState("JUDGING");
+    } else {
+      setGameState("RESULTS");
+    }
   };
 
   const results = validateMutation.data;
@@ -289,7 +371,7 @@ export default function SoloGame() {
 
       const won = (ps + stolenScore) > as_;
 
-      setTotalScore(prev => prev + ps + stolenScore);
+      setTotalScore(prev => prev + ps + stolenScore + bluffBonusScore);
       setAiTotalScore(prev => prev + as_);
       setRoundWon(won);
 
@@ -818,19 +900,47 @@ export default function SoloGame() {
                 </button>
               )}
 
+              {/* Bluff hint bar */}
+              <div className="flex items-center justify-between mb-2 px-1">
+                <p className="text-xs text-white/40">{t.bluff.bluffHint}</p>
+                <p className="text-xs font-bold" style={{ color: bluffedCategories.size > 0 ? "#a855f7" : "rgba(255,255,255,0.3)" }}>
+                  🎭 {bluffedCategories.size}/2
+                </p>
+              </div>
+
               <div className="space-y-2 flex-1 overflow-y-auto pb-28">
                 {categories.map(category => {
                   const isSabotaged = sabotageCategory === category;
                   const canSabotage = selectingSabotage && !sabotageCategory;
+                  const isBluffed = bluffedCategories.has(category);
+                  const canBluff = !isBluffed && bluffedCategories.size >= 2;
                   return (
                     <div
                       key={category}
                       className="relative bg-card p-3 rounded-xl border transition-all"
                       style={{
-                        borderColor: isSabotaged ? "#ef4444" : canSabotage ? "#ef444466" : "rgba(255,255,255,0.05)",
+                        borderColor: isBluffed ? "#a855f7" : isSabotaged ? "#ef4444" : canSabotage ? "#ef444466" : "rgba(255,255,255,0.05)",
+                        background: isBluffed ? "rgba(168,85,247,0.08)" : undefined,
                       }}
                     >
-                      <label className="block text-xs font-black text-secondary mb-1 uppercase tracking-wider">{category}</label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-xs font-black text-secondary uppercase tracking-wider">{category}</label>
+                        {!isSabotaged && (
+                          <button
+                            onClick={() => toggleBluff(category)}
+                            disabled={canBluff}
+                            className={`text-xs px-2 py-0.5 rounded-lg font-bold transition-all ${
+                              isBluffed
+                                ? "bg-purple-500 text-white"
+                                : canBluff
+                                ? "bg-white/5 text-white/20 cursor-not-allowed"
+                                : "bg-white/10 text-white/50 hover:bg-purple-500/30 hover:text-purple-300"
+                            }`}
+                          >
+                            {isBluffed ? t.bluff.toggleOn : "🎭"}
+                          </button>
+                        )}
+                      </div>
                       {isSabotaged ? (
                         <div className="flex items-center gap-2 py-2 text-red-400 font-bold">
                           <span>❌</span> <span className="text-sm opacity-70">Categoría anulada para la IA</span>
@@ -839,9 +949,10 @@ export default function SoloGame() {
                         <Input
                           value={responses[category] || ""}
                           onChange={e => setResponses({ ...responses, [category]: e.target.value.toUpperCase() })}
-                          placeholder={`${category}...`}
+                          placeholder={isBluffed ? `${category}... 🎭` : `${category}...`}
                           autoComplete="off"
                           autoCorrect="off"
+                          className={isBluffed ? "border-purple-500/50 bg-purple-900/20" : ""}
                         />
                       )}
                       {canSabotage && (
@@ -885,6 +996,184 @@ export default function SoloGame() {
             >
               <div className="w-16 h-16 border-4 border-white border-t-secondary rounded-full animate-spin mb-6" />
               <h2 className="text-3xl font-display font-bold">{t.game.evaluating}</h2>
+            </motion.div>
+          )}
+
+          {/* JUDGING — Social deception reveal */}
+          {gameState === "JUDGING" && (
+            <motion.div
+              key="judging"
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+              className="flex-1 flex flex-col items-center px-4 py-6 gap-5"
+            >
+              {/* Dramatic header */}
+              <motion.div
+                initial={{ scale: 0.7, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ type: "spring", stiffness: 180, damping: 14 }}
+                className="text-center"
+              >
+                <h2 className="text-4xl font-display font-black text-yellow-400 drop-shadow-lg">
+                  {t.bluff.judging_title}
+                </h2>
+                <p className="text-sm text-white/50 mt-1">{t.bluff.judging_sub}</p>
+              </motion.div>
+
+              {/* PHASE 1: Player bluff results */}
+              {judgingPhase === "player_bluffs" && (
+                <div className="w-full space-y-3">
+                  {bluffResults.length === 0 ? (
+                    <motion.p
+                      initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }}
+                      className="text-center text-white/40 text-sm py-4"
+                    >
+                      {t.bluff.noBluffs}
+                    </motion.p>
+                  ) : (
+                    bluffResults.map((result, i) => (
+                      <motion.div
+                        key={result.category}
+                        initial={{ opacity: 0, x: -40 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: i * 1.4, type: "spring", stiffness: 150, damping: 18 }}
+                        className="p-4 rounded-2xl border-2 flex items-center gap-4"
+                        style={{
+                          borderColor: result.caught ? "#ef4444" : "#22c55e",
+                          background: result.caught ? "rgba(239,68,68,0.1)" : "rgba(34,197,94,0.1)",
+                        }}
+                      >
+                        <motion.span
+                          initial={{ scale: 0 }} animate={{ scale: 1 }}
+                          transition={{ delay: i * 1.4 + 0.4, type: "spring" }}
+                          className="text-3xl"
+                        >
+                          {result.caught ? "🕵️" : "🎉"}
+                        </motion.span>
+                        <div className="flex-1">
+                          <p className="text-xs uppercase tracking-wider opacity-50">{result.category}</p>
+                          <p className="font-black text-lg" style={{ color: result.caught ? "#f87171" : "#4ade80" }}>
+                            {result.caught ? t.bluff.caught : t.bluff.perfect}
+                          </p>
+                        </div>
+                        <motion.span
+                          initial={{ scale: 0 }} animate={{ scale: 1 }}
+                          transition={{ delay: i * 1.4 + 0.7 }}
+                          className="text-xl font-black"
+                          style={{ color: result.caught ? "#f87171" : "#4ade80" }}
+                        >
+                          {result.scoreChange > 0 ? "+" : ""}{result.scoreChange}{t.bluff.pts}
+                        </motion.span>
+                      </motion.div>
+                    ))
+                  )}
+
+                  {/* Proceed to AI bluff phase */}
+                  <motion.button
+                    initial={{ opacity: 0, y: 16 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: Math.max(bluffResults.length * 1.4 + 0.6, 0.8) }}
+                    onClick={() => setJudgingPhase("ai_bluff")}
+                    className="w-full py-4 rounded-2xl font-black text-white text-lg shadow-lg"
+                    style={{ background: "hsl(222 47% 25%)", border: "2px solid rgba(255,255,255,0.12)" }}
+                  >
+                    {t.bluff.aiPhaseTitle} →
+                  </motion.button>
+                </div>
+              )}
+
+              {/* PHASE 2: AI bluff accusation */}
+              {judgingPhase === "ai_bluff" && aiBluffReveal && playerJudgedAi === null && (
+                <motion.div
+                  initial={{ opacity: 0, y: 24 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ type: "spring" }}
+                  className="w-full space-y-5"
+                >
+                  <p className="text-center text-white/60 text-sm">{t.bluff.aiSuspicious}</p>
+
+                  {/* AI's suspicious answer card */}
+                  <div
+                    className="p-6 rounded-3xl border-2 text-center shadow-2xl"
+                    style={{ background: "hsl(222 47% 20%)", borderColor: "rgba(255,255,255,0.12)" }}
+                  >
+                    <p className="text-xs uppercase tracking-widest opacity-50 mb-2">{aiBluffReveal.category}</p>
+                    <p className="text-4xl font-black mb-1">{aiBluffReveal.answer || "—"}</p>
+                    <div className="flex items-center justify-center gap-2 mt-2">
+                      <span className="text-2xl">{aiPersonality.emoji}</span>
+                      <p className="text-sm font-bold opacity-60">{aiPersonality.name}</p>
+                    </div>
+                  </div>
+
+                  <p className="text-center font-bold text-white">{t.bluff.aiQuestion}</p>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <motion.button
+                      whileTap={{ scale: 0.95 }}
+                      onClick={() => handleJudgeAi(false)}
+                      className="py-5 rounded-2xl font-black text-green-300 text-lg border-2"
+                      style={{ background: "rgba(34,197,94,0.12)", borderColor: "rgba(34,197,94,0.4)" }}
+                    >
+                      {t.bluff.btnReal}
+                    </motion.button>
+                    <motion.button
+                      whileTap={{ scale: 0.95 }}
+                      onClick={() => handleJudgeAi(true)}
+                      className="py-5 rounded-2xl font-black text-purple-300 text-lg border-2"
+                      style={{ background: "rgba(168,85,247,0.12)", borderColor: "rgba(168,85,247,0.4)" }}
+                    >
+                      {t.bluff.btnLie}
+                    </motion.button>
+                  </div>
+                </motion.div>
+              )}
+
+              {/* PHASE 2 reveal: after player judges AI */}
+              {judgingPhase === "ai_bluff" && playerJudgedAi !== null && aiBluffReveal && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.88 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ type: "spring", stiffness: 180, damping: 16 }}
+                  className="w-full space-y-4 text-center"
+                >
+                  {aiBluffReveal.wasActuallyBluffing === playerJudgedAi ? (
+                    <>
+                      <motion.p
+                        initial={{ scale: 0 }} animate={{ scale: 1 }}
+                        transition={{ type: "spring", stiffness: 200 }}
+                        className="text-6xl"
+                      >🕵️</motion.p>
+                      <p className="text-3xl font-black text-green-400">{t.bluff.detectPerfect}</p>
+                      <p className="text-green-300 font-bold text-xl">+15{t.bluff.pts}</p>
+                      <p className="text-sm text-white/50">
+                        {playerJudgedAi ? t.bluff.aiActuallyLied : t.bluff.aiWasReal}
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <motion.p
+                        initial={{ scale: 0 }} animate={{ scale: 1 }}
+                        transition={{ type: "spring", stiffness: 200 }}
+                        className="text-6xl"
+                      >{aiPersonality.emoji}</motion.p>
+                      <p className="text-3xl font-black text-red-400">{t.bluff.aiWon} 😈</p>
+                      <p className="text-sm text-white/50">
+                        {aiBluffReveal.wasActuallyBluffing ? t.bluff.aiActuallyLied : t.bluff.aiWasReal}
+                      </p>
+                    </>
+                  )}
+
+                  <motion.button
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.5 }}
+                    onClick={() => setGameState("RESULTS")}
+                    className="w-full py-4 rounded-2xl font-black text-white text-lg"
+                    style={{ background: "hsl(6 90% 55%)" }}
+                  >
+                    {t.bluff.seeResults}
+                  </motion.button>
+                </motion.div>
+              )}
             </motion.div>
           )}
 
