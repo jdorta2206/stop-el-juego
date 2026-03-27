@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui";
-import { Play, Users, Trophy, Share2, Facebook, Instagram, Crown, Swords, BookOpen, Flame, Calendar } from "lucide-react";
+import { Play, Users, Trophy, Share2, Facebook, Instagram, Crown, Swords, BookOpen, Flame, Calendar, Zap, Star } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { shareText } from "@/lib/utils";
 import { PremiumModal } from "@/components/PremiumModal";
@@ -10,6 +10,7 @@ import { usePremium } from "@/lib/usePremium";
 import { usePlayer } from "@/hooks/use-player";
 import { useT } from "@/i18n/useT";
 import { useStreak } from "@/hooks/useStreak";
+import { useProgression } from "@/hooks/useProgression";
 
 const LOGO_URL = `${import.meta.env.BASE_URL}images/stop-logo.png`;
 
@@ -18,6 +19,7 @@ export default function Home() {
   const { isPremium } = usePremium(player?.id);
   const { t } = useT();
   const { streak } = useStreak();
+  const { level, xp, progress } = useProgression();
   const [showPremiumModal, setShowPremiumModal] = useState(false);
   const [invitedBy, setInvitedBy] = useState<string | null>(null);
 
@@ -111,6 +113,29 @@ export default function Home() {
             animate={{ rotate: [0, 2, -2, 0] }}
             transition={{ repeat: Infinity, duration: 6, ease: "easeInOut" }}
           />
+          {/* Level badge */}
+          <motion.div
+            initial={{ scale: 0, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ type: "spring", bounce: 0.6, delay: 0.35 }}
+            className="flex items-center gap-2"
+          >
+            <div
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full"
+              style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.15)" }}
+            >
+              <Star className="w-3.5 h-3.5 text-[#f9a825]" fill="#f9a825" />
+              <span className="text-white font-black text-xs">{t.home.level} {level}</span>
+              <div className="w-16 h-1.5 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.1)" }}>
+                <div
+                  className="h-full rounded-full transition-all"
+                  style={{ width: `${progress}%`, background: "linear-gradient(90deg, #f9a825, hsl(6 90% 55%))" }}
+                />
+              </div>
+              <span className="text-white/40 text-xs">{xp}{t.home.xp}</span>
+            </div>
+          </motion.div>
+
           {/* Streak badge */}
           {streak.current > 0 && (
             <motion.div
@@ -157,6 +182,31 @@ export default function Home() {
             >
               <Play className="w-6 h-6 fill-white" />
               {t.home.soloVsAI.toUpperCase()}
+            </motion.div>
+          </Link>
+
+          <Link href="/solo?mode=quick">
+            <motion.div
+              whileHover={{ scale: 1.02, y: -2 }}
+              whileTap={{ scale: 0.98 }}
+              className="w-full flex items-center gap-4 px-5 py-3.5 rounded-2xl font-black tracking-wide shadow-lg"
+              style={{
+                background: "linear-gradient(135deg, rgba(249,168,37,0.2), rgba(229,62,18,0.15))",
+                border: "2px solid rgba(249,168,37,0.4)",
+                color: "white",
+              }}
+            >
+              <div
+                className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                style={{ background: "linear-gradient(135deg, hsl(48 96% 57%), hsl(6 90% 55%))" }}
+              >
+                <Zap className="w-5 h-5 text-white fill-white" />
+              </div>
+              <div className="flex-1">
+                <p className="text-white font-black text-base leading-tight">{t.home.quickMode}</p>
+                <p className="text-white/55 text-xs font-bold">{t.home.quickModeSubtitle}</p>
+              </div>
+              <span className="text-[#f9a825] font-black text-lg">→</span>
             </motion.div>
           </Link>
 

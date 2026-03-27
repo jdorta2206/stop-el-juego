@@ -18,12 +18,17 @@ const fr = {
   home: {
     play: "Jouer !",
     soloVsAI: "Solo vs IA",
+    quickMode: "Mode Rapide",
+    quickModeSubtitle: "30 sec · 1 manche · Allez !",
     multiplayer: "Multijoueur",
     ranking: "Classement mondial",
     howToPlay: "Comment jouer ?",
     howToPlayText: "Une lettre aléatoire est tirée. Tu as 60 secondes pour remplir toutes les catégories avec des mots commençant par cette lettre. Le premier à crier STOP gagne la manche !",
     signInToSave: "Connecte-toi pour sauvegarder ton score",
     online: "en ligne",
+    level: "Niveau",
+    xp: "XP",
+    levelUp: "Niveau supérieur !",
   },
 
   game: {
@@ -52,6 +57,14 @@ const fr = {
     spinningLetter: "Tirage de la lettre...",
     timeUp: "Temps écoulé !",
     evaluating: "Évaluation des réponses...",
+    quickMode: "⚡ MODE RAPIDE",
+    shareResults: "Partager les résultats",
+    shareText: "J'ai joué à STOP avec la lettre",
+    shareScore: "et j'ai fait",
+    shareChallenge: "Essaie de me battre !",
+    xpEarned: "XP gagnés",
+    newLevel: "Nouveau niveau !",
+    wordsValidated: "mots valides",
   },
 
   multiplayer: {
