@@ -18,12 +18,17 @@ const en = {
   home: {
     play: "Play!",
     soloVsAI: "Solo vs AI",
+    quickMode: "Quick Mode",
+    quickModeSubtitle: "30 sec · 1 round · Go!",
     multiplayer: "Multiplayer",
     ranking: "Global Ranking",
     howToPlay: "How to play?",
     howToPlayText: "A random letter is drawn. You have 60 seconds to fill in all categories with words starting with that letter. The first to shout STOP wins the round!",
     signInToSave: "Sign in to save your score",
     online: "online",
+    level: "Level",
+    xp: "XP",
+    levelUp: "Level up!",
   },
 
   game: {
@@ -52,6 +57,14 @@ const en = {
     spinningLetter: "Drawing letter...",
     timeUp: "Time's up!",
     evaluating: "Evaluating answers...",
+    quickMode: "⚡ QUICK MODE",
+    shareResults: "Share results",
+    shareText: "I played STOP with letter",
+    shareScore: "and scored",
+    shareChallenge: "Beat that!",
+    xpEarned: "XP earned",
+    newLevel: "New level!",
+    wordsValidated: "valid words",
   },
 
   multiplayer: {

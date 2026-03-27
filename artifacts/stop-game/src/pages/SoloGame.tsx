@@ -11,15 +11,18 @@ import { usePlayer } from "@/hooks/use-player";
 import { motion, AnimatePresence } from "framer-motion";
 import { RewardedAd, BannerAd } from "@/components/AdSystem";
 import { PremiumModal } from "@/components/PremiumModal";
+import { ShareResultsModal } from "@/components/ShareResultsModal";
 import { usePremium } from "@/lib/usePremium";
-import { Tv2, Crown, Volume2, VolumeX, Calendar } from "lucide-react";
+import { Tv2, Crown, Volume2, VolumeX, Calendar, Zap, Star } from "lucide-react";
 import { useT } from "@/i18n/useT";
 import { useTicker } from "@/hooks/useTicker";
 import { useStreak } from "@/hooks/useStreak";
+import { useProgression, calcXpFromResults } from "@/hooks/useProgression";
 
 type GameState = "LOBBY" | "SPINNING" | "PLAYING" | "EVALUATING" | "RESULTS";
 
 const ROUND_TIME = 60;
+const QUICK_ROUND_TIME = 30;
 const MAX_ROUNDS = 3;
 
 function getCrazyCategory(t: any): string | null {
@@ -46,6 +49,7 @@ export default function SoloGame() {
   const { isPremium } = usePremium(player?.id);
   const { t, lang } = useT();
   const { recordPlay } = useStreak();
+  const { addXp, levelUpInfo, clearLevelUp } = useProgression();
   const [, setLocation] = useLocation();
   const [gameState, setGameState] = useState<GameState>("LOBBY");
   const [currentLetter, setCurrentLetter] = useState<string>("");
@@ -57,14 +61,20 @@ export default function SoloGame() {
   const [showRewardedAd, setShowRewardedAd] = useState(false);
   const [rewardedUsed, setRewardedUsed] = useState(false);
   const [showPremiumModal, setShowPremiumModal] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [lastXpGain, setLastXpGain] = useState(0);
   const [categories, setCategories] = useState<string[]>(getCategories());
   const [muted, setMuted] = useState(false);
 
-  // Daily mode — read URL params once
+  // Daily / Quick mode — read URL params once
   const urlParams = new URLSearchParams(window.location.search);
   const isDailyMode = urlParams.get("daily") === "true";
+  const isQuickMode = urlParams.get("mode") === "quick";
   const dailyLetter = urlParams.get("letter") || "";
   const dailyCategories = urlParams.get("cats")?.split(",").filter(Boolean) || [];
+
+  const roundTime = isQuickMode ? QUICK_ROUND_TIME : ROUND_TIME;
+  const maxRounds = isDailyMode ? 1 : isQuickMode ? 1 : MAX_ROUNDS;
 
   // Re-read categories when language changes (only if not daily mode)
   useEffect(() => {
@@ -111,7 +121,7 @@ export default function SoloGame() {
 
   const startRound = () => {
     setGameState("PLAYING");
-    setTimeLeft(ROUND_TIME);
+    setTimeLeft(roundTime);
     setRewardedUsed(false);
 
     timerRef.current = setInterval(() => {
@@ -202,14 +212,18 @@ export default function SoloGame() {
   };
 
   const nextRound = () => {
-    const maxRounds = isDailyMode ? 1 : MAX_ROUNDS;
     if (round >= maxRounds) {
-      // totalScore / aiTotalScore are already updated by useEffect when RESULTS state fired
       recordPlay();
       submitToLeaderboard(totalScore, aiTotalScore);
+      // Award XP
+      const validCount = results
+        ? Object.values(results.results || {}).filter(r => (r.player?.score ?? 0) > 0).length
+        : 0;
+      const xpGained = calcXpFromResults(validCount, totalScore, aiTotalScore);
+      addXp(xpGained);
+      setLastXpGain(xpGained);
       if (isDailyMode) {
         submitDailyResult(totalScore);
-        // Navigate back to Daily Challenge page so user sees the ranking
         setLocation("/reto");
         return;
       }
@@ -252,11 +266,34 @@ export default function SoloGame() {
           />
         )}
 
+        <ShareResultsModal
+          open={showShareModal}
+          onClose={() => setShowShareModal(false)}
+          letter={currentLetter}
+          playerScore={totalScore}
+          aiScore={aiTotalScore}
+          categories={categories}
+          results={results?.results || {}}
+          t={t.game}
+        />
+
+        {/* Quick Mode badge */}
+        {isQuickMode && (
+          <div className="flex items-center justify-center gap-2 mb-3">
+            <div
+              className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black"
+              style={{ background: "linear-gradient(135deg, hsl(48 96% 57%), hsl(6 90% 55%))", color: "#0d1757" }}
+            >
+              <Zap size={12} /> {t.game.quickMode}
+            </div>
+          </div>
+        )}
+
         {/* Header Stats */}
         <div className="flex justify-between items-center bg-black/20 rounded-2xl p-4 mb-5 backdrop-blur-md">
           <div className="text-center">
             <p className="text-xs text-white/60 font-bold uppercase">{t.game.round}</p>
-            <p className="text-2xl font-display font-bold">{round}/{isDailyMode ? 1 : MAX_ROUNDS}</p>
+            <p className="text-2xl font-display font-bold">{round}/{maxRounds}</p>
           </div>
           <div className="text-center border-l border-r border-white/20 px-6">
             <p className="text-xs text-white/60 font-bold uppercase">{t.game.you}</p>
@@ -478,26 +515,60 @@ export default function SoloGame() {
 
               {!isPremium && <BannerAd className="mb-4" />}
 
+              {/* XP earned notification */}
+              {round >= maxRounds && lastXpGain > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="flex items-center justify-center gap-2 mb-3 py-2 px-4 rounded-xl"
+                  style={{ background: "rgba(249,168,37,0.15)", border: "1px solid rgba(249,168,37,0.3)" }}
+                >
+                  <Star className="w-4 h-4 text-[#f9a825]" />
+                  <span className="text-[#f9a825] font-black text-sm">+{lastXpGain} {t.game.xpEarned}</span>
+                </motion.div>
+              )}
+
+              {/* Level up notification */}
+              <AnimatePresence>
+                {levelUpInfo && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10, scale: 0.9 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.9 }}
+                    className="flex items-center justify-center gap-2 mb-3 py-2 px-4 rounded-xl cursor-pointer"
+                    style={{ background: "linear-gradient(135deg, rgba(249,168,37,0.3), rgba(229,62,18,0.2))", border: "2px solid rgba(249,168,37,0.5)" }}
+                    onClick={clearLevelUp}
+                  >
+                    <span className="text-2xl">🎉</span>
+                    <span className="text-white font-black text-sm">{t.game.newLevel} {levelUpInfo.from} → {levelUpInfo.to}</span>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
               <div className="grid grid-cols-2 gap-3">
-                {round >= (isDailyMode ? 1 : MAX_ROUNDS) ? (
+                {round >= maxRounds ? (
                   isDailyMode ? (
-                    // Daily mode end: go back to the challenge page
                     <Button size="lg" className="col-span-2" onClick={nextRound}>
                       {t.daily.seeRanking ?? "Ver ranking del día"}
                     </Button>
                   ) : (
                     <>
-                      <Button size="lg" onClick={() => { setRound(1); setGameState("LOBBY"); setTotalScore(0); setAiTotalScore(0); }}>
+                      <Button size="lg" onClick={nextRound}>
                         {t.game.playAgain}
                       </Button>
-                      <Link href="/ranking">
-                        <Button variant="secondary" size="lg" className="w-full">{t.ranking.title}</Button>
-                      </Link>
+                      <Button
+                        variant="secondary"
+                        size="lg"
+                        onClick={() => setShowShareModal(true)}
+                        className="flex items-center justify-center gap-2"
+                      >
+                        <Star size={16} /> {t.game.shareResults}
+                      </Button>
                     </>
                   )
                 ) : (
                   <Button size="lg" className="col-span-2" onClick={nextRound}>
-                    {t.game.nextRound} ({round + 1}/{MAX_ROUNDS})
+                    {t.game.nextRound} ({round + 1}/{maxRounds})
                   </Button>
                 )}
               </div>

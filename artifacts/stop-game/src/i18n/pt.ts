@@ -18,12 +18,17 @@ const pt = {
   home: {
     play: "Jogar!",
     soloVsAI: "Solo vs IA",
+    quickMode: "Modo Rápido",
+    quickModeSubtitle: "30 seg · 1 rodada · Vai!",
     multiplayer: "Multijogador",
     ranking: "Ranking Global",
     howToPlay: "Como se joga?",
     howToPlayText: "Uma letra aleatória é sorteada. Você tem 60 segundos para preencher todas as categorias com palavras que comecem com essa letra. O primeiro a gritar STOP ganha a rodada!",
     signInToSave: "Entre para salvar sua pontuação",
     online: "online",
+    level: "Nível",
+    xp: "XP",
+    levelUp: "Subiu de nível!",
   },
 
   game: {
@@ -52,6 +57,14 @@ const pt = {
     spinningLetter: "Sorteando letra...",
     timeUp: "Tempo esgotado!",
     evaluating: "Avaliando respostas...",
+    quickMode: "⚡ MODO RÁPIDO",
+    shareResults: "Compartilhar resultados",
+    shareText: "Joguei STOP com a letra",
+    shareScore: "e fiz",
+    shareChallenge: "Tente me superar!",
+    xpEarned: "XP ganhos",
+    newLevel: "Novo nível!",
+    wordsValidated: "palavras válidas",
   },
 
   multiplayer: {
