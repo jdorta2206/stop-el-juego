@@ -19,6 +19,9 @@ import { useTicker } from "@/hooks/useTicker";
 import { useStreak } from "@/hooks/useStreak";
 import { useProgression, calcXpFromResults } from "@/hooks/useProgression";
 import { useSound } from "@/hooks/useSound";
+import { pickRandomPersonality, getAIComment, type AIPersonality } from "@/data/aiPersonalities";
+import { useAchievements } from "@/hooks/useAchievements";
+import { AchievementToast } from "@/components/AchievementToast";
 
 type GameState = "LOBBY" | "SPINNING" | "PLAYING" | "EVALUATING" | "RESULTS";
 type RandomEvent = "double_xp" | "easy_letter" | "speed" | null;
@@ -26,6 +29,7 @@ type RandomEvent = "double_xp" | "easy_letter" | "speed" | null;
 const ROUND_TIME = 60;
 const QUICK_ROUND_TIME = 30;
 const SPEED_ROUND_TIME = 20;
+const CHAOS_ROUND_TIME = 45;
 const MAX_ROUNDS = 3;
 const EASY_LETTERS = ["A", "C", "E", "I", "L", "M", "P", "R", "S", "T"];
 
@@ -77,18 +81,26 @@ export default function SoloGame() {
   // Round result announcement
   const [roundWon, setRoundWon] = useState<boolean | null>(null);
 
-  // Daily / Quick mode — read URL params once
+  // Daily / Quick / Chaos mode — read URL params once
   const urlParams = new URLSearchParams(window.location.search);
   const isDailyMode = urlParams.get("daily") === "true";
   const isQuickMode = urlParams.get("mode") === "quick";
+  const isChaosMode = urlParams.get("mode") === "chaos";
   const dailyLetter = urlParams.get("letter") || "";
   const dailyCategories = urlParams.get("cats")?.split(",").filter(Boolean) || [];
 
-  const baseRoundTime = isQuickMode ? QUICK_ROUND_TIME : ROUND_TIME;
-  const effectiveRoundTime = (!isQuickMode && !isDailyMode && randomEvent === "speed")
+  const baseRoundTime = isQuickMode ? QUICK_ROUND_TIME : isChaosMode ? CHAOS_ROUND_TIME : ROUND_TIME;
+  const effectiveRoundTime = (!isQuickMode && !isDailyMode && !isChaosMode && randomEvent === "speed")
     ? SPEED_ROUND_TIME : baseRoundTime;
   const roundTime = effectiveRoundTime;
   const maxRounds = isDailyMode ? 1 : isQuickMode ? 1 : MAX_ROUNDS;
+
+  // AI personality (picked once per session)
+  const [aiPersonality] = useState<AIPersonality>(() => pickRandomPersonality());
+  const [aiComment, setAiComment] = useState<string | null>(null);
+
+  // Achievements system
+  const { newlyUnlocked, afterRound, clearNewlyUnlocked } = useAchievements();
 
   // Sound hook
   const sound = useSound(muted);
@@ -120,14 +132,16 @@ export default function SoloGame() {
   const timerRef = useRef<NodeJS.Timeout>(null);
 
   const startGame = () => {
+    setAiComment(null);
     // Pick random event (only in normal solo mode)
     let event: RandomEvent = null;
-    if (!isDailyMode && !isQuickMode) {
+    if (!isDailyMode && !isQuickMode && !isChaosMode) {
       const roll = Math.random();
       if (roll < 0.25) event = "double_xp";
       else if (roll < 0.45) event = "easy_letter";
       else if (roll < 0.60) event = "speed";
     }
+    if (isChaosMode) event = "double_xp"; // chaos always = double XP
     setRandomEvent(event);
     setRoundWon(null);
 
@@ -139,7 +153,18 @@ export default function SoloGame() {
       const alphabet = event === "easy_letter" ? EASY_LETTERS : getAlphabet();
       const randomLetter = alphabet[Math.floor(Math.random() * alphabet.length)];
       setCurrentLetter(randomLetter);
-      setCategories(mixCrazyCategory(getCategories(), t));
+      if (isChaosMode) {
+        // All categories are crazy in chaos mode
+        const crazyCats = t.crazyCategories && t.crazyCategories.length >= 6
+          ? [...t.crazyCategories].sort(() => Math.random() - 0.5).slice(0, 6)
+          : getCategories().map(() => {
+              const pool = t.crazyCategories || [];
+              return pool.length > 0 ? pool[Math.floor(Math.random() * pool.length)] : getCategories()[0];
+            });
+        setCategories(crazyCats);
+      } else {
+        setCategories(mixCrazyCategory(getCategories(), t));
+      }
     }
     setResponses({});
     setGameState("SPINNING");
@@ -199,6 +224,25 @@ export default function SoloGame() {
       setAiTotalScore(prev => prev + as_);
       setRoundWon(won);
 
+      // AI personality comment
+      const comment = getAIComment(aiPersonality, won, ps, as_);
+      setTimeout(() => setAiComment(comment), 1200);
+
+      // Count valid words for achievements
+      const validWordCount = Object.values(results.results || {}).filter(
+        r => (r.player?.score ?? 0) > 0
+      ).length;
+
+      // Track achievement progress
+      afterRound({
+        won,
+        validWords: validWordCount,
+        combo: combo + (won ? 1 : 0),
+        wasSpeedRound: randomEvent === "speed",
+        wasChaosRound: isChaosMode,
+        xpGained: 0, // will be counted in nextRound
+      });
+
       if (won) {
         confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
         setCombo(prev => {
@@ -213,7 +257,6 @@ export default function SoloGame() {
       } else {
         sound.playLose();
         setCombo(0);
-        // Subtle lose confetti (grey)
         confetti({ particleCount: 20, spread: 40, origin: { y: 0.6 }, colors: ["#666", "#999"] });
       }
     }
@@ -335,6 +378,13 @@ export default function SoloGame() {
           t={t.game}
         />
 
+        {/* Achievement toast notification */}
+        <AchievementToast
+          achievement={newlyUnlocked}
+          onDone={clearNewlyUnlocked}
+          tAchievements={t.achievements as Record<string, string>}
+        />
+
         {/* Mode badges row */}
         <div className="flex items-center justify-center gap-2 mb-3 flex-wrap">
           {isQuickMode && (
@@ -344,6 +394,16 @@ export default function SoloGame() {
             >
               <Zap size={12} /> {t.game.quickMode}
             </div>
+          )}
+          {isChaosMode && (
+            <motion.div
+              animate={{ scale: [1, 1.05, 1] }}
+              transition={{ repeat: Infinity, duration: 2 }}
+              className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black"
+              style={{ background: "linear-gradient(135deg, #7c3aed, #4c1d95)", color: "white" }}
+            >
+              🌀 {(t.game as Record<string,string>).chaosMode ?? "MODO CAOS"}
+            </motion.div>
           )}
           {/* Random event badge */}
           <AnimatePresence>
@@ -398,7 +458,9 @@ export default function SoloGame() {
             <p className="text-2xl font-display font-black text-secondary">{totalScore}</p>
           </div>
           <div className="text-center">
-            <p className="text-xs text-white/60 font-bold uppercase">{t.game.ai}</p>
+            <p className="text-xs text-white/60 font-bold uppercase">
+              {aiPersonality.emoji} {aiPersonality.name}
+            </p>
             <p className="text-2xl font-display font-bold">{aiTotalScore}</p>
           </div>
         </div>
@@ -643,7 +705,7 @@ export default function SoloGame() {
 
               <h2 className="text-xl font-display font-bold mb-3 text-center opacity-70">{t.game.results}</h2>
 
-              <div className="bg-primary/50 rounded-2xl p-4 flex justify-around mb-5 border border-white/10">
+              <div className="bg-primary/50 rounded-2xl p-4 flex justify-around mb-3 border border-white/10">
                 <div className="text-center">
                   <p className="text-sm font-bold text-white/60">{t.game.you}</p>
                   <motion.p
@@ -658,10 +720,37 @@ export default function SoloGame() {
                   </motion.p>
                 </div>
                 <div className="text-center border-l border-white/20 pl-8">
-                  <p className="text-sm font-bold text-white/60">{t.game.ai}</p>
+                  <p className="text-sm font-bold text-white/60">
+                    {aiPersonality.emoji} {aiPersonality.name}
+                  </p>
                   <p className="text-4xl font-display font-black">+{results?.aiTotalScore || 0}</p>
                 </div>
               </div>
+
+              {/* AI personality comment bubble */}
+              <AnimatePresence>
+                {aiComment && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10, scale: 0.92 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ type: "spring", bounce: 0.4 }}
+                    className="flex items-start gap-2 px-4 py-2.5 rounded-2xl mb-4"
+                    style={{
+                      background: `${aiPersonality.color}18`,
+                      border: `1.5px solid ${aiPersonality.color}44`,
+                    }}
+                  >
+                    <span className="text-2xl flex-shrink-0 mt-0.5">{aiPersonality.emoji}</span>
+                    <div>
+                      <p className="text-xs font-black mb-0.5" style={{ color: aiPersonality.color }}>
+                        {aiPersonality.name}
+                      </p>
+                      <p className="text-white/85 text-sm font-semibold italic">"{aiComment}"</p>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
 
               <div className="space-y-3 mb-6 flex-1 overflow-y-auto">
                 {categories.map((category, idx) => {

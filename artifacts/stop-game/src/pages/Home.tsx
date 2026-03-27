@@ -10,7 +10,7 @@ import { usePremium } from "@/lib/usePremium";
 import { usePlayer } from "@/hooks/use-player";
 import { useT } from "@/i18n/useT";
 import { useStreak } from "@/hooks/useStreak";
-import { useProgression } from "@/hooks/useProgression";
+import { useProgression, getLeague } from "@/hooks/useProgression";
 
 const LOGO_URL = `${import.meta.env.BASE_URL}images/stop-logo.png`;
 
@@ -20,6 +20,7 @@ export default function Home() {
   const { t } = useT();
   const { streak } = useStreak();
   const { level, xp, progress } = useProgression();
+  const league = getLeague(level);
   const [showPremiumModal, setShowPremiumModal] = useState(false);
   const [invitedBy, setInvitedBy] = useState<string | null>(null);
 
@@ -113,7 +114,7 @@ export default function Home() {
             animate={{ rotate: [0, 2, -2, 0] }}
             transition={{ repeat: Infinity, duration: 6, ease: "easeInOut" }}
           />
-          {/* Level badge */}
+          {/* Level + League badges */}
           <motion.div
             initial={{ scale: 0, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
@@ -134,6 +135,20 @@ export default function Home() {
               </div>
               <span className="text-white/40 text-xs">{xp}{t.home.xp}</span>
             </div>
+            {/* League badge */}
+            <motion.div
+              whileHover={{ scale: 1.1 }}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-full font-black text-xs"
+              style={{
+                background: `${league.color}22`,
+                border: `1px solid ${league.color}66`,
+                color: league.color,
+              }}
+              title={`${t.home.yourLeague}: ${(t.home as Record<string,string>)[league.key] ?? league.key}`}
+            >
+              <span>{league.emoji}</span>
+              <span>{(t.home as Record<string,string>)[league.key] ?? league.key}</span>
+            </motion.div>
           </motion.div>
 
           {/* Streak badge */}
@@ -207,6 +222,32 @@ export default function Home() {
                 <p className="text-white/55 text-xs font-bold">{t.home.quickModeSubtitle}</p>
               </div>
               <span className="text-[#f9a825] font-black text-lg">→</span>
+            </motion.div>
+          </Link>
+
+          {/* Chaos mode button */}
+          <Link href="/solo?mode=chaos">
+            <motion.div
+              whileHover={{ scale: 1.02, y: -2 }}
+              whileTap={{ scale: 0.98 }}
+              className="w-full flex items-center gap-4 px-5 py-3.5 rounded-2xl font-black tracking-wide shadow-lg"
+              style={{
+                background: "linear-gradient(135deg, rgba(139,92,246,0.2), rgba(59,7,100,0.25))",
+                border: "2px solid rgba(139,92,246,0.5)",
+                color: "white",
+              }}
+            >
+              <div
+                className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-xl"
+                style={{ background: "linear-gradient(135deg, #7c3aed, #4c1d95)" }}
+              >
+                🌀
+              </div>
+              <div className="flex-1">
+                <p className="text-white font-black text-base leading-tight">{t.home.chaosMode}</p>
+                <p className="text-white/55 text-xs font-bold">{t.home.chaosModeSubtitle}</p>
+              </div>
+              <span className="text-purple-400 font-black text-lg">→</span>
             </motion.div>
           </Link>
 
