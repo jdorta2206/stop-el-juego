@@ -65,6 +65,17 @@ const pt = {
     xpEarned: "XP ganhos",
     newLevel: "Novo nível!",
     wordsValidated: "palavras válidas",
+    roundWon: "VOCÊ GANHOU A RODADA!",
+    roundLost: "A IA GANHOU!",
+    combo: "COMBO",
+    comboBonus: "Bônus de sequência!",
+    doubleXp: "XP DUPLO!",
+    doubleXpSubtitle: "Esta rodada vale o dobro de experiência",
+    easyLetter: "LETRA FÁCIL!",
+    easyLetterSubtitle: "Você pegou uma letra comum nesta rodada",
+    speedBonus: "RODADA RELÂMPAGO!",
+    speedBonusSubtitle: "Acabe em 20 seg · XP triplo se ganhar",
+    eventBanner: "EVENTO ESPECIAL",
   },
 
   multiplayer: {
