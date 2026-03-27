@@ -26,6 +26,12 @@ Full-stack STOP game (Tutti Frutti / Scattergories) web app built with React + V
 3. **Ranking**: Global leaderboard with player scores, wins, games played
 4. **Player Profile**: Nickname + avatar color stored in localStorage
 5. **Premium Subscription**: Full Stripe integration — €1.99/month or €14.99/year; no-ads tier; checkout via Stripe hosted page; subscription management via Stripe Customer Portal; webhook syncs subscription state to PostgreSQL via `stripe-replit-sync`
+6. **AI Personalities**: 4 unique AI characters (ARIA 🤖, CHIP 😄, NEO 🧠, ZEUS ⚡) with speech bubbles in 4 languages
+7. **Achievements**: 8 unlockable achievements tracked via localStorage with animated toast notifications
+8. **League System**: Bronze→Silver→Gold→Diamond→Master progression with XP
+9. **Chaos Mode**: All crazy categories, 45s timer, guaranteed 2×XP
+10. **Cartas de Poder**: 6 power cards (Oracle🔮, Sabotaje❌, Doble-o-Nada🎯, Tránsfuga🔄, Rayo⚡, Escudo🛡️) drawn per round with dramatic card flip reveal animation
+11. **Mentir es Válido**: Social deception mechanic — players can bluff up to 2 answers per round; AI has 50% detection rate; AI also bluffs 1 answer per round; player judges AI's answer; bonus/penalty scoring system; full "EL JUICIO" reveal screen with animated sequence
 
 ## Game Categories (Spanish)
 
