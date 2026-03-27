@@ -22,8 +22,11 @@ import { useSound } from "@/hooks/useSound";
 import { pickRandomPersonality, getAIComment, type AIPersonality } from "@/data/aiPersonalities";
 import { useAchievements } from "@/hooks/useAchievements";
 import { AchievementToast } from "@/components/AchievementToast";
+import { drawPowerCard, POWER_CARDS, type PowerCardId } from "@/data/powerCards";
 
-type GameState = "LOBBY" | "SPINNING" | "PLAYING" | "EVALUATING" | "RESULTS";
+type GameState = "LOBBY" | "SPINNING" | "CARD_REVEAL" | "PLAYING" | "EVALUATING" | "RESULTS";
+
+type SpecialReveal = { type: "oracle" | "steal"; category: string; word: string } | null;
 type RandomEvent = "double_xp" | "easy_letter" | "speed" | null;
 
 const ROUND_TIME = 60;
@@ -102,6 +105,14 @@ export default function SoloGame() {
   // Achievements system
   const { newlyUnlocked, afterRound, clearNewlyUnlocked } = useAchievements();
 
+  // Power Cards state
+  const [activeCard, setActiveCard] = useState<PowerCardId | null>(null);
+  const [cardUsed, setCardUsed] = useState(false);
+  const [sabotageCategory, setSabotageCategory] = useState<string | null>(null);
+  const [selectingSabotage, setSelectingSabotage] = useState(false);
+  const [specialReveal, setSpecialReveal] = useState<SpecialReveal>(null);
+  const cardRevealTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Sound hook
   const sound = useSound(muted);
 
@@ -167,6 +178,15 @@ export default function SoloGame() {
       }
     }
     setResponses({});
+
+    // Draw a power card for this round
+    const card = drawPowerCard(isQuickMode, isChaosMode);
+    setActiveCard(card);
+    setCardUsed(false);
+    setSabotageCategory(null);
+    setSelectingSabotage(false);
+    setSpecialReveal(null);
+
     setGameState("SPINNING");
   };
 
@@ -186,6 +206,27 @@ export default function SoloGame() {
       });
     }, 1000);
   };
+
+  const proceedFromCardReveal = () => {
+    if (cardRevealTimer.current) clearTimeout(cardRevealTimer.current);
+    startRound();
+  };
+
+  const handleSpinComplete = () => {
+    if (activeCard) {
+      setGameState("CARD_REVEAL");
+      cardRevealTimer.current = setTimeout(startRound, 4000);
+    } else {
+      startRound();
+    }
+  };
+
+  // Cleanup card reveal timer on unmount
+  useEffect(() => {
+    return () => {
+      if (cardRevealTimer.current) clearTimeout(cardRevealTimer.current);
+    };
+  }, []);
 
   const handleStop = async () => {
     if (timerRef.current) clearInterval(timerRef.current);
@@ -217,10 +258,38 @@ export default function SoloGame() {
   useEffect(() => {
     if (gameState === "RESULTS" && results) {
       const ps = results.playerTotalScore || 0;
-      const as_ = results.aiTotalScore || 0;
-      const won = ps > as_;
+      const rawAs = results.aiTotalScore || 0;
 
-      setTotalScore(prev => prev + ps);
+      // SABOTAGE: reduce AI score for the sabotaged category
+      const sabotageBonus = sabotageCategory
+        ? (results.results?.[sabotageCategory]?.ai?.score ?? 0)
+        : 0;
+      const as_ = rawAs - sabotageBonus;
+
+      // STEAL: find highest-value category where player scored 0 and AI scored
+      let stolenScore = 0;
+      if (activeCard === "steal") {
+        const entry = Object.entries(results.results || {})
+          .filter(([, r]) => (r.player?.score ?? 0) === 0 && (r.ai?.score ?? 0) > 0)
+          .sort(([, a], [, b]) => (b.ai?.score ?? 0) - (a.ai?.score ?? 0))[0];
+        if (entry) {
+          stolenScore = entry[1].ai?.score ?? 0;
+          setSpecialReveal({ type: "steal", category: entry[0], word: entry[1].ai?.response ?? "" });
+        }
+      }
+
+      // ORACLE: reveal one AI answer the player missed
+      if (activeCard === "oracle") {
+        const entry = Object.entries(results.results || {})
+          .find(([, r]) => (r.player?.score ?? 0) === 0 && (r.ai?.score ?? 0) > 0);
+        if (entry) {
+          setSpecialReveal({ type: "oracle", category: entry[0], word: entry[1].ai?.response ?? "" });
+        }
+      }
+
+      const won = (ps + stolenScore) > as_;
+
+      setTotalScore(prev => prev + ps + stolenScore);
       setAiTotalScore(prev => prev + as_);
       setRoundWon(won);
 
@@ -256,7 +325,8 @@ export default function SoloGame() {
         });
       } else {
         sound.playLose();
-        setCombo(0);
+        // SHIELD: don't reset combo on loss
+        if (activeCard !== "shield") setCombo(0);
         confetti({ particleCount: 20, spread: 40, origin: { y: 0.6 }, colors: ["#666", "#999"] });
       }
     }
@@ -310,6 +380,7 @@ export default function SoloGame() {
         : 0;
       const baseXp = calcXpFromResults(validCount, totalScore, aiTotalScore);
       const multiplier =
+        activeCard === "double_or_nothing" ? (roundWon ? 3 : 0) :
         randomEvent === "double_xp" ? 2 :
         randomEvent === "speed" && roundWon ? 3 :
         combo >= 4 ? 2 :
@@ -537,9 +608,88 @@ export default function SoloGame() {
               </AnimatePresence>
 
               <h3 className="text-2xl font-display font-bold animate-pulse">{t.game.spinningLetter}</h3>
-              <Roulette isSpinning={true} targetLetter={currentLetter} onSpinComplete={startRound} />
+              <Roulette isSpinning={true} targetLetter={currentLetter} onSpinComplete={handleSpinComplete} />
             </motion.div>
           )}
+
+          {/* CARD REVEAL */}
+          {gameState === "CARD_REVEAL" && activeCard && (() => {
+            const card = POWER_CARDS[activeCard];
+            const nameKey = `${activeCard}_name` as keyof typeof t.powerCards;
+            const descKey = `${activeCard}_desc` as keyof typeof t.powerCards;
+            const isAuto = card.timing === "auto" || card.timing === "auto_results";
+            return (
+              <motion.div
+                key="card-reveal"
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.8 }}
+                className="flex-1 flex flex-col items-center justify-center gap-6 px-4"
+              >
+                <motion.p
+                  initial={{ opacity: 0, y: -20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="text-lg font-bold uppercase tracking-widest text-yellow-400"
+                >
+                  {t.powerCards.title}
+                </motion.p>
+
+                {/* Card flip */}
+                <motion.div
+                  initial={{ rotateY: 180, scale: 0.7 }}
+                  animate={{ rotateY: 0, scale: 1 }}
+                  transition={{ type: "spring", stiffness: 150, damping: 18, delay: 0.15 }}
+                  className="relative w-56 h-80 rounded-3xl flex flex-col items-center justify-center gap-4 shadow-2xl border-4"
+                  style={{
+                    background: `linear-gradient(145deg, ${card.color}33, ${card.color}11)`,
+                    borderColor: card.color,
+                    boxShadow: `0 0 40px ${card.color}55`,
+                  }}
+                >
+                  <motion.div
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ delay: 0.4, type: "spring", stiffness: 200 }}
+                    className="text-8xl"
+                  >
+                    {card.emoji}
+                  </motion.div>
+                  <div className="text-center px-4">
+                    <p className="font-display font-black text-xl text-white">
+                      {t.powerCards[nameKey] as string}
+                    </p>
+                    <p className="text-sm mt-1 opacity-80 text-white/80">
+                      {t.powerCards[descKey] as string}
+                    </p>
+                  </div>
+                  {isAuto && (
+                    <span
+                      className="text-xs font-bold px-3 py-1 rounded-full"
+                      style={{ background: `${card.color}44`, color: card.color }}
+                    >
+                      {t.powerCards.autoApply}
+                    </span>
+                  )}
+                </motion.div>
+
+                <motion.button
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.6 }}
+                  onClick={proceedFromCardReveal}
+                  className="px-10 py-3 rounded-2xl font-black text-lg text-white shadow-xl"
+                  style={{ background: card.color }}
+                >
+                  {t.powerCards.proceed}
+                </motion.button>
+
+                {/* Letter reminder */}
+                <p className="text-3xl font-black opacity-60">
+                  {t.game.letter}: <span className="text-yellow-400">{currentLetter}</span>
+                </p>
+              </motion.div>
+            );
+          })()}
 
           {/* PLAYING */}
           {gameState === "PLAYING" && (
@@ -608,6 +758,57 @@ export default function SoloGame() {
                 </div>
               </div>
 
+              {/* Power Card active badge */}
+              {activeCard && (() => {
+                const card = POWER_CARDS[activeCard];
+                const nameKey = `${activeCard}_name` as keyof typeof t.powerCards;
+                const isPlayingCard = card.timing === "playing";
+                const isUsed = cardUsed;
+                return (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="mb-3 flex items-center gap-3 px-3 py-2 rounded-2xl border"
+                    style={{
+                      background: `${card.color}18`,
+                      borderColor: `${card.color}55`,
+                    }}
+                  >
+                    <span className="text-2xl">{card.emoji}</span>
+                    <div className="flex-1">
+                      <p className="text-xs font-black" style={{ color: card.color }}>
+                        {t.powerCards[nameKey] as string}
+                      </p>
+                      {selectingSabotage && (
+                        <p className="text-xs text-white/60">{t.powerCards.sabotage_pick}</p>
+                      )}
+                      {sabotageCategory && (
+                        <p className="text-xs text-white/60">{t.powerCards.sabotage_active} — {sabotageCategory}</p>
+                      )}
+                    </div>
+                    {isPlayingCard && !isUsed && !selectingSabotage && !sabotageCategory && (
+                      <button
+                        onClick={() => {
+                          if (activeCard === "lightning") {
+                            setCardUsed(true);
+                            handleStop();
+                          } else if (activeCard === "sabotage") {
+                            setSelectingSabotage(true);
+                          }
+                        }}
+                        className="px-3 py-1 rounded-xl text-xs font-black text-white"
+                        style={{ background: card.color }}
+                      >
+                        {t.powerCards.use}
+                      </button>
+                    )}
+                    {isUsed && (
+                      <span className="text-xs font-bold opacity-40">{t.powerCards.passive}</span>
+                    )}
+                  </motion.div>
+                );
+              })()}
+
               {!rewardedUsed && (
                 <button
                   onClick={() => setShowRewardedAd(true)}
@@ -618,18 +819,46 @@ export default function SoloGame() {
               )}
 
               <div className="space-y-2 flex-1 overflow-y-auto pb-28">
-                {categories.map(category => (
-                  <div key={category} className="bg-card p-3 rounded-xl border border-white/5">
-                    <label className="block text-xs font-black text-secondary mb-1 uppercase tracking-wider">{category}</label>
-                    <Input
-                      value={responses[category] || ""}
-                      onChange={e => setResponses({ ...responses, [category]: e.target.value.toUpperCase() })}
-                      placeholder={`${category}...`}
-                      autoComplete="off"
-                      autoCorrect="off"
-                    />
-                  </div>
-                ))}
+                {categories.map(category => {
+                  const isSabotaged = sabotageCategory === category;
+                  const canSabotage = selectingSabotage && !sabotageCategory;
+                  return (
+                    <div
+                      key={category}
+                      className="relative bg-card p-3 rounded-xl border transition-all"
+                      style={{
+                        borderColor: isSabotaged ? "#ef4444" : canSabotage ? "#ef444466" : "rgba(255,255,255,0.05)",
+                      }}
+                    >
+                      <label className="block text-xs font-black text-secondary mb-1 uppercase tracking-wider">{category}</label>
+                      {isSabotaged ? (
+                        <div className="flex items-center gap-2 py-2 text-red-400 font-bold">
+                          <span>❌</span> <span className="text-sm opacity-70">Categoría anulada para la IA</span>
+                        </div>
+                      ) : (
+                        <Input
+                          value={responses[category] || ""}
+                          onChange={e => setResponses({ ...responses, [category]: e.target.value.toUpperCase() })}
+                          placeholder={`${category}...`}
+                          autoComplete="off"
+                          autoCorrect="off"
+                        />
+                      )}
+                      {canSabotage && (
+                        <button
+                          onClick={() => {
+                            setSabotageCategory(category);
+                            setSelectingSabotage(false);
+                            setCardUsed(true);
+                          }}
+                          className="absolute inset-0 rounded-xl bg-red-500/20 flex items-center justify-center font-black text-red-300 text-sm border-2 border-red-500/50"
+                        >
+                          ❌ SABOTEAR
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
 
               <div className="fixed bottom-4 left-0 w-full px-4 z-20">
@@ -752,13 +981,43 @@ export default function SoloGame() {
                 )}
               </AnimatePresence>
 
+              {/* Special card reveal (Oracle / Steal) */}
+              <AnimatePresence>
+                {specialReveal && (() => {
+                  const isOracle = specialReveal.type === "oracle";
+                  const color = isOracle ? "#a855f7" : "#22d3ee";
+                  const emoji = isOracle ? "🔮" : "🔄";
+                  const label = isOracle ? t.powerCards.oracle_reveal : t.powerCards.steal_reveal;
+                  return (
+                    <motion.div
+                      key="special-reveal"
+                      initial={{ opacity: 0, scale: 0.88, y: 10 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ type: "spring", stiffness: 200, damping: 20 }}
+                      className="mb-4 px-4 py-3 rounded-2xl border-2 flex items-center gap-3"
+                      style={{ background: `${color}18`, borderColor: `${color}55` }}
+                    >
+                      <span className="text-3xl">{emoji}</span>
+                      <div>
+                        <p className="text-xs font-black uppercase" style={{ color }}>{label}</p>
+                        <p className="text-sm font-bold text-white">
+                          {specialReveal.category}: <span style={{ color }} className="font-black">{specialReveal.word || "—"}</span>
+                        </p>
+                      </div>
+                    </motion.div>
+                  );
+                })()}
+              </AnimatePresence>
+
               <div className="space-y-3 mb-6 flex-1 overflow-y-auto">
                 {categories.map((category, idx) => {
                   const res = results?.results?.[category];
                   const playerRes = res?.player;
                   const aiRes = res?.ai;
-                  const playerWon = (playerRes?.score ?? 0) > (aiRes?.score ?? 0);
-                  const tied = (playerRes?.score ?? 0) === (aiRes?.score ?? 0) && (playerRes?.score ?? 0) > 0;
+                  const isSabotaged = sabotageCategory === category;
+                  const playerWon = (playerRes?.score ?? 0) > ((isSabotaged ? 0 : aiRes?.score) ?? 0);
+                  const tied = !isSabotaged && (playerRes?.score ?? 0) === (aiRes?.score ?? 0) && (playerRes?.score ?? 0) > 0;
 
                   return (
                     <motion.div
@@ -780,11 +1039,23 @@ export default function SoloGame() {
                             <div className={`absolute top-0 right-0 h-full w-1.5 ${(playerRes?.score ?? 0) >= 10 ? "bg-green-500" : (playerRes?.score ?? 0) >= 5 ? "bg-yellow-400" : "bg-red-500/60"}`} />
                             <span className="absolute bottom-2 right-3 text-xs font-bold opacity-50">{playerRes?.score ?? 0}{t.game.points}</span>
                           </div>
-                          <div className="bg-primary/40 p-3 rounded-lg border border-white/10 relative overflow-hidden">
+                          <div
+                            className="p-3 rounded-lg border relative overflow-hidden"
+                            style={{
+                              background: isSabotaged ? "rgba(239,68,68,0.12)" : "hsl(222 47% 25%)",
+                              borderColor: isSabotaged ? "#ef444455" : "rgba(255,255,255,0.1)",
+                            }}
+                          >
                             <p className="text-xs text-white/50 font-bold mb-1">{t.game.ai}</p>
-                            <p className="font-semibold text-lg break-words">{aiRes?.response || t.game.empty}</p>
-                            <div className={`absolute top-0 right-0 h-full w-1.5 ${(aiRes?.score ?? 0) >= 10 ? "bg-green-500" : (aiRes?.score ?? 0) >= 5 ? "bg-yellow-400" : "bg-red-500/60"}`} />
-                            <span className="absolute bottom-2 right-3 text-xs font-bold opacity-50">{aiRes?.score ?? 0}{t.game.points}</span>
+                            {isSabotaged ? (
+                              <p className="font-bold text-red-400 text-sm">❌ SABOTAJE</p>
+                            ) : (
+                              <p className="font-semibold text-lg break-words">{aiRes?.response || t.game.empty}</p>
+                            )}
+                            <div className={`absolute top-0 right-0 h-full w-1.5 ${isSabotaged ? "bg-red-500" : (aiRes?.score ?? 0) >= 10 ? "bg-green-500" : (aiRes?.score ?? 0) >= 5 ? "bg-yellow-400" : "bg-red-500/60"}`} />
+                            <span className="absolute bottom-2 right-3 text-xs font-bold opacity-50">
+                              {isSabotaged ? "0" : (aiRes?.score ?? 0)}{t.game.points}
+                            </span>
                           </div>
                         </div>
                       </Card>
@@ -794,6 +1065,36 @@ export default function SoloGame() {
               </div>
 
               {!isPremium && <BannerAd className="mb-4" />}
+
+              {/* Double or Nothing result badge */}
+              {activeCard === "double_or_nothing" && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.85 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="flex items-center gap-3 justify-center mb-3 py-2 px-4 rounded-xl font-black"
+                  style={{
+                    background: roundWon ? "rgba(249,115,22,0.15)" : "rgba(100,100,100,0.12)",
+                    border: roundWon ? "1px solid rgba(249,115,22,0.4)" : "1px solid rgba(150,150,150,0.2)",
+                  }}
+                >
+                  <span className="text-xl">🎯</span>
+                  <span style={{ color: roundWon ? "#f97316" : "#888" }}>
+                    {roundWon ? "DOBLE O NADA: ×3 XP 🔥" : "DOBLE O NADA: ×0 XP 💀"}
+                  </span>
+                </motion.div>
+              )}
+
+              {/* Shield used badge */}
+              {activeCard === "shield" && roundWon === false && (
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="flex items-center gap-2 justify-center mb-3 py-2 px-4 rounded-xl text-sm font-bold"
+                  style={{ background: "rgba(74,222,128,0.12)", border: "1px solid rgba(74,222,128,0.3)", color: "#4ade80" }}
+                >
+                  🛡️ {t.powerCards.shield_desc}
+                </motion.div>
+              )}
 
               {/* XP multiplier hint (mid-game) */}
               {round < maxRounds && randomEvent && (
