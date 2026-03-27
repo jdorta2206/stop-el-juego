@@ -65,6 +65,17 @@ const en = {
     xpEarned: "XP earned",
     newLevel: "New level!",
     wordsValidated: "valid words",
+    roundWon: "YOU WON THE ROUND!",
+    roundLost: "AI WON THIS ONE!",
+    combo: "COMBO",
+    comboBonus: "Streak bonus!",
+    doubleXp: "DOUBLE XP!",
+    doubleXpSubtitle: "This round is worth double experience",
+    easyLetter: "EASY LETTER!",
+    easyLetterSubtitle: "You got a common letter this round",
+    speedBonus: "LIGHTNING ROUND!",
+    speedBonusSubtitle: "Finish in 20 sec · Triple XP if you win",
+    eventBanner: "SPECIAL EVENT",
   },
 
   multiplayer: {

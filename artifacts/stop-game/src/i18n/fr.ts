@@ -65,6 +65,17 @@ const fr = {
     xpEarned: "XP gagnés",
     newLevel: "Nouveau niveau !",
     wordsValidated: "mots valides",
+    roundWon: "TU AS GAGNÉ LA MANCHE !",
+    roundLost: "L'IA A GAGNÉ !",
+    combo: "COMBO",
+    comboBonus: "Bonus de série !",
+    doubleXp: "XP DOUBLE !",
+    doubleXpSubtitle: "Cette manche vaut double expérience",
+    easyLetter: "LETTRE FACILE !",
+    easyLetterSubtitle: "Tu as une lettre commune cette manche",
+    speedBonus: "MANCHE ÉCLAIR !",
+    speedBonusSubtitle: "Finis en 20 sec · XP triple si tu gagnes",
+    eventBanner: "ÉVÉNEMENT SPÉCIAL",
   },
 
   multiplayer: {

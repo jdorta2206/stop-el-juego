@@ -13,17 +13,21 @@ import { RewardedAd, BannerAd } from "@/components/AdSystem";
 import { PremiumModal } from "@/components/PremiumModal";
 import { ShareResultsModal } from "@/components/ShareResultsModal";
 import { usePremium } from "@/lib/usePremium";
-import { Tv2, Crown, Volume2, VolumeX, Calendar, Zap, Star } from "lucide-react";
+import { Tv2, Crown, Volume2, VolumeX, Zap, Star, Flame, Trophy } from "lucide-react";
 import { useT } from "@/i18n/useT";
 import { useTicker } from "@/hooks/useTicker";
 import { useStreak } from "@/hooks/useStreak";
 import { useProgression, calcXpFromResults } from "@/hooks/useProgression";
+import { useSound } from "@/hooks/useSound";
 
 type GameState = "LOBBY" | "SPINNING" | "PLAYING" | "EVALUATING" | "RESULTS";
+type RandomEvent = "double_xp" | "easy_letter" | "speed" | null;
 
 const ROUND_TIME = 60;
 const QUICK_ROUND_TIME = 30;
+const SPEED_ROUND_TIME = 20;
 const MAX_ROUNDS = 3;
+const EASY_LETTERS = ["A", "C", "E", "I", "L", "M", "P", "R", "S", "T"];
 
 function getCrazyCategory(t: any): string | null {
   if (!t.crazyCategories || t.crazyCategories.length === 0) return null;
@@ -66,6 +70,13 @@ export default function SoloGame() {
   const [categories, setCategories] = useState<string[]>(getCategories());
   const [muted, setMuted] = useState(false);
 
+  // Combo system
+  const [combo, setCombo] = useState(0);
+  // Random event for current round
+  const [randomEvent, setRandomEvent] = useState<RandomEvent>(null);
+  // Round result announcement
+  const [roundWon, setRoundWon] = useState<boolean | null>(null);
+
   // Daily / Quick mode — read URL params once
   const urlParams = new URLSearchParams(window.location.search);
   const isDailyMode = urlParams.get("daily") === "true";
@@ -73,8 +84,14 @@ export default function SoloGame() {
   const dailyLetter = urlParams.get("letter") || "";
   const dailyCategories = urlParams.get("cats")?.split(",").filter(Boolean) || [];
 
-  const roundTime = isQuickMode ? QUICK_ROUND_TIME : ROUND_TIME;
+  const baseRoundTime = isQuickMode ? QUICK_ROUND_TIME : ROUND_TIME;
+  const effectiveRoundTime = (!isQuickMode && !isDailyMode && randomEvent === "speed")
+    ? SPEED_ROUND_TIME : baseRoundTime;
+  const roundTime = effectiveRoundTime;
   const maxRounds = isDailyMode ? 1 : isQuickMode ? 1 : MAX_ROUNDS;
+
+  // Sound hook
+  const sound = useSound(muted);
 
   // Re-read categories when language changes (only if not daily mode)
   useEffect(() => {
@@ -103,16 +120,25 @@ export default function SoloGame() {
   const timerRef = useRef<NodeJS.Timeout>(null);
 
   const startGame = () => {
+    // Pick random event (only in normal solo mode)
+    let event: RandomEvent = null;
+    if (!isDailyMode && !isQuickMode) {
+      const roll = Math.random();
+      if (roll < 0.25) event = "double_xp";
+      else if (roll < 0.45) event = "easy_letter";
+      else if (roll < 0.60) event = "speed";
+    }
+    setRandomEvent(event);
+    setRoundWon(null);
+
     if (isDailyMode) {
-      // Daily challenge: fixed letter and categories
       setCurrentLetter(dailyLetter);
       const cats = dailyCategories.length > 0 ? dailyCategories : getCategories();
       setCategories(cats);
     } else {
-      const alphabet = getAlphabet();
+      const alphabet = event === "easy_letter" ? EASY_LETTERS : getAlphabet();
       const randomLetter = alphabet[Math.floor(Math.random() * alphabet.length)];
       setCurrentLetter(randomLetter);
-      // Mix in a crazy category with 30% probability
       setCategories(mixCrazyCategory(getCategories(), t));
     }
     setResponses({});
@@ -123,6 +149,7 @@ export default function SoloGame() {
     setGameState("PLAYING");
     setTimeLeft(roundTime);
     setRewardedUsed(false);
+    sound.playRoundStart();
 
     timerRef.current = setInterval(() => {
       setTimeLeft(prev => {
@@ -137,6 +164,7 @@ export default function SoloGame() {
 
   const handleStop = async () => {
     if (timerRef.current) clearInterval(timerRef.current);
+    sound.playStop();
     setGameState("EVALUATING");
 
     const formattedResponses = categories.map(cat => ({
@@ -163,14 +191,33 @@ export default function SoloGame() {
 
   useEffect(() => {
     if (gameState === "RESULTS" && results) {
-      setTotalScore(prev => prev + (results.playerTotalScore || 0));
-      setAiTotalScore(prev => prev + (results.aiTotalScore || 0));
+      const ps = results.playerTotalScore || 0;
+      const as_ = results.aiTotalScore || 0;
+      const won = ps > as_;
 
-      if ((results.playerTotalScore || 0) > (results.aiTotalScore || 0)) {
-        confetti({ particleCount: 80, spread: 60, origin: { y: 0.6 } });
+      setTotalScore(prev => prev + ps);
+      setAiTotalScore(prev => prev + as_);
+      setRoundWon(won);
+
+      if (won) {
+        confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+        setCombo(prev => {
+          const newCombo = prev + 1;
+          if (newCombo >= 2) {
+            sound.playCombo(newCombo);
+          } else {
+            sound.playWin();
+          }
+          return newCombo;
+        });
+      } else {
+        sound.playLose();
+        setCombo(0);
+        // Subtle lose confetti (grey)
+        confetti({ particleCount: 20, spread: 40, origin: { y: 0.6 }, colors: ["#666", "#999"] });
       }
     }
-  }, [gameState, results]);
+  }, [gameState, results]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const submitToLeaderboard = (finalScore: number, finalAiScore: number) => {
     if (!player || player.loginMethod === "guest") return;
@@ -214,14 +261,22 @@ export default function SoloGame() {
   const nextRound = () => {
     if (round >= maxRounds) {
       recordPlay();
-      submitToLeaderboard(totalScore, aiTotalScore);
-      // Award XP
+      // Calculate XP with multipliers
       const validCount = results
         ? Object.values(results.results || {}).filter(r => (r.player?.score ?? 0) > 0).length
         : 0;
-      const xpGained = calcXpFromResults(validCount, totalScore, aiTotalScore);
+      const baseXp = calcXpFromResults(validCount, totalScore, aiTotalScore);
+      const multiplier =
+        randomEvent === "double_xp" ? 2 :
+        randomEvent === "speed" && roundWon ? 3 :
+        combo >= 4 ? 2 :
+        combo >= 2 ? 1.5 :
+        1;
+      const xpGained = Math.round(baseXp * multiplier);
       addXp(xpGained);
       setLastXpGain(xpGained);
+      if (levelUpInfo) sound.playLevelUp();
+      submitToLeaderboard(totalScore, aiTotalScore);
       if (isDailyMode) {
         submitDailyResult(totalScore);
         setLocation("/reto");
@@ -231,6 +286,9 @@ export default function SoloGame() {
       setRound(1);
       setTotalScore(0);
       setAiTotalScore(0);
+      setCombo(0);
+      setRandomEvent(null);
+      setRoundWon(null);
     } else {
       setRound(r => r + 1);
       startGame();
@@ -277,17 +335,57 @@ export default function SoloGame() {
           t={t.game}
         />
 
-        {/* Quick Mode badge */}
-        {isQuickMode && (
-          <div className="flex items-center justify-center gap-2 mb-3">
+        {/* Mode badges row */}
+        <div className="flex items-center justify-center gap-2 mb-3 flex-wrap">
+          {isQuickMode && (
             <div
               className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black"
               style={{ background: "linear-gradient(135deg, hsl(48 96% 57%), hsl(6 90% 55%))", color: "#0d1757" }}
             >
               <Zap size={12} /> {t.game.quickMode}
             </div>
-          </div>
-        )}
+          )}
+          {/* Random event badge */}
+          <AnimatePresence>
+            {randomEvent && (
+              <motion.div
+                key={randomEvent}
+                initial={{ scale: 0, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0, opacity: 0 }}
+                transition={{ type: "spring", bounce: 0.5 }}
+                className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black"
+                style={{
+                  background:
+                    randomEvent === "double_xp" ? "linear-gradient(135deg, rgba(249,168,37,0.9), rgba(234,88,12,0.9))" :
+                    randomEvent === "easy_letter" ? "linear-gradient(135deg, rgba(34,197,94,0.9), rgba(21,128,61,0.9))" :
+                    "linear-gradient(135deg, rgba(139,92,246,0.9), rgba(109,40,217,0.9))",
+                  color: "white",
+                }}
+              >
+                {randomEvent === "double_xp" && <><Star size={11} fill="white" /> {t.game.doubleXp}</>}
+                {randomEvent === "easy_letter" && <>🍀 {t.game.easyLetter}</>}
+                {randomEvent === "speed" && <><Zap size={11} fill="white" /> {t.game.speedBonus}</>}
+              </motion.div>
+            )}
+          </AnimatePresence>
+          {/* Combo badge */}
+          <AnimatePresence>
+            {combo >= 2 && (
+              <motion.div
+                key={`combo-${combo}`}
+                initial={{ scale: 0, rotate: -15 }}
+                animate={{ scale: 1, rotate: 0 }}
+                exit={{ scale: 0 }}
+                transition={{ type: "spring", bounce: 0.7 }}
+                className="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-black"
+                style={{ background: "linear-gradient(135deg, rgba(239,68,68,0.9), rgba(220,38,38,0.9))", color: "white" }}
+              >
+                <Flame size={11} fill="white" /> {t.game.combo} x{combo}!
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
 
         {/* Header Stats */}
         <div className="flex justify-between items-center bg-black/20 rounded-2xl p-4 mb-5 backdrop-blur-md">
@@ -340,9 +438,43 @@ export default function SoloGame() {
             <motion.div
               key="spinning"
               initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}
-              className="flex-1 flex flex-col items-center justify-center"
+              className="flex-1 flex flex-col items-center justify-center gap-6"
             >
-              <h3 className="text-2xl font-display font-bold mb-8 animate-pulse">{t.game.spinningLetter}</h3>
+              {/* Event announcement card */}
+              <AnimatePresence>
+                {randomEvent && (
+                  <motion.div
+                    initial={{ y: -30, opacity: 0, scale: 0.85 }}
+                    animate={{ y: 0, opacity: 1, scale: 1 }}
+                    transition={{ type: "spring", bounce: 0.55, delay: 0.15 }}
+                    className="w-full max-w-xs rounded-2xl p-4 text-center"
+                    style={{
+                      background:
+                        randomEvent === "double_xp" ? "linear-gradient(135deg, rgba(249,168,37,0.2), rgba(234,88,12,0.15))" :
+                        randomEvent === "easy_letter" ? "linear-gradient(135deg, rgba(34,197,94,0.2), rgba(21,128,61,0.15))" :
+                        "linear-gradient(135deg, rgba(139,92,246,0.2), rgba(109,40,217,0.15))",
+                      border:
+                        randomEvent === "double_xp" ? "2px solid rgba(249,168,37,0.5)" :
+                        randomEvent === "easy_letter" ? "2px solid rgba(34,197,94,0.5)" :
+                        "2px solid rgba(139,92,246,0.5)",
+                    }}
+                  >
+                    <p className="text-white/50 text-xs font-bold uppercase mb-1">{t.game.eventBanner}</p>
+                    <p className="text-white font-black text-xl mb-0.5">
+                      {randomEvent === "double_xp" && `⭐ ${t.game.doubleXp}`}
+                      {randomEvent === "easy_letter" && `🍀 ${t.game.easyLetter}`}
+                      {randomEvent === "speed" && `⚡ ${t.game.speedBonus}`}
+                    </p>
+                    <p className="text-white/60 text-xs">
+                      {randomEvent === "double_xp" && t.game.doubleXpSubtitle}
+                      {randomEvent === "easy_letter" && t.game.easyLetterSubtitle}
+                      {randomEvent === "speed" && t.game.speedBonusSubtitle}
+                    </p>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              <h3 className="text-2xl font-display font-bold animate-pulse">{t.game.spinningLetter}</h3>
               <Roulette isSpinning={true} targetLetter={currentLetter} onSpinComplete={startRound} />
             </motion.div>
           )}
@@ -408,7 +540,7 @@ export default function SoloGame() {
                     </div>
                   </div>
                   <Progress
-                    value={(timeLeft / ROUND_TIME) * 100}
+                    value={(timeLeft / roundTime) * 100}
                     indicatorClass={timeLeft <= 10 ? "bg-red-500" : timeLeft <= 25 ? "bg-yellow-400" : "bg-green-400"}
                   />
                 </div>
@@ -472,12 +604,58 @@ export default function SoloGame() {
               initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
               className="flex-1 flex flex-col pb-8"
             >
-              <h2 className="text-3xl font-display font-bold mb-4 text-center">{t.game.results}</h2>
+              {/* Round won/lost announcement */}
+              <AnimatePresence>
+                {roundWon !== null && (
+                  <motion.div
+                    key={roundWon ? "won" : "lost"}
+                    initial={{ scale: 0.7, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ type: "spring", bounce: 0.55 }}
+                    className="flex items-center justify-center gap-3 mb-4 py-3 px-4 rounded-2xl"
+                    style={{
+                      background: roundWon
+                        ? "linear-gradient(135deg, rgba(34,197,94,0.2), rgba(21,128,61,0.15))"
+                        : "linear-gradient(135deg, rgba(239,68,68,0.15), rgba(185,28,28,0.1))",
+                      border: roundWon
+                        ? "2px solid rgba(34,197,94,0.4)"
+                        : "2px solid rgba(239,68,68,0.3)",
+                    }}
+                  >
+                    {roundWon
+                      ? <Trophy className="w-6 h-6 text-green-400" fill="rgba(34,197,94,0.5)" />
+                      : <span className="text-2xl">💻</span>
+                    }
+                    <p className={`font-black text-lg ${roundWon ? "text-green-300" : "text-red-300"}`}>
+                      {roundWon ? t.game.roundWon : t.game.roundLost}
+                    </p>
+                    {combo >= 2 && roundWon && (
+                      <div
+                        className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-black"
+                        style={{ background: "rgba(239,68,68,0.3)", color: "#fca5a5" }}
+                      >
+                        <Flame size={10} /> x{combo}
+                      </div>
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              <h2 className="text-xl font-display font-bold mb-3 text-center opacity-70">{t.game.results}</h2>
 
               <div className="bg-primary/50 rounded-2xl p-4 flex justify-around mb-5 border border-white/10">
                 <div className="text-center">
                   <p className="text-sm font-bold text-white/60">{t.game.you}</p>
-                  <p className="text-4xl font-display font-black text-secondary">+{results?.playerTotalScore || 0}</p>
+                  <motion.p
+                    key={results?.playerTotalScore}
+                    initial={{ scale: 1.4, color: "#fbbf24" }}
+                    animate={{ scale: 1, color: "hsl(48 96% 57%)" }}
+                    transition={{ duration: 0.4 }}
+                    className="text-4xl font-display font-black"
+                    style={{ color: "hsl(48 96% 57%)" }}
+                  >
+                    +{results?.playerTotalScore || 0}
+                  </motion.p>
                 </div>
                 <div className="text-center border-l border-white/20 pl-8">
                   <p className="text-sm font-bold text-white/60">{t.game.ai}</p>
@@ -486,36 +664,64 @@ export default function SoloGame() {
               </div>
 
               <div className="space-y-3 mb-6 flex-1 overflow-y-auto">
-                {categories.map(category => {
+                {categories.map((category, idx) => {
                   const res = results?.results?.[category];
                   const playerRes = res?.player;
                   const aiRes = res?.ai;
+                  const playerWon = (playerRes?.score ?? 0) > (aiRes?.score ?? 0);
+                  const tied = (playerRes?.score ?? 0) === (aiRes?.score ?? 0) && (playerRes?.score ?? 0) > 0;
 
                   return (
-                    <Card key={category} className="p-4 bg-black/20 border-white/5">
-                      <h4 className="font-bold text-secondary text-xs mb-2 uppercase tracking-wider">{category}</h4>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="bg-card p-3 rounded-lg border border-white/10 relative overflow-hidden">
-                          <p className="text-xs text-white/50 font-bold mb-1">{t.game.you}</p>
-                          <p className="font-semibold text-lg break-words">{playerRes?.response || t.game.empty}</p>
-                          <div className={`absolute top-0 right-0 h-full w-1.5 ${playerRes?.score === 10 ? "bg-green-500" : playerRes?.score === 5 ? "bg-yellow-400" : "bg-red-500/60"}`} />
-                          <span className="absolute bottom-2 right-3 text-xs font-bold opacity-50">{playerRes?.score ?? 0}{t.game.points}</span>
+                    <motion.div
+                      key={category}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: idx * 0.07 }}
+                    >
+                      <Card className="p-4 bg-black/20 border-white/5">
+                        <div className="flex items-center gap-2 mb-2">
+                          <h4 className="font-bold text-secondary text-xs uppercase tracking-wider flex-1">{category}</h4>
+                          {playerWon && <span className="text-green-400 text-xs font-black">+{playerRes?.score}pts ✓</span>}
+                          {tied && <span className="text-yellow-400 text-xs font-black">={playerRes?.score}pts</span>}
                         </div>
-                        <div className="bg-primary/40 p-3 rounded-lg border border-white/10 relative overflow-hidden">
-                          <p className="text-xs text-white/50 font-bold mb-1">{t.game.ai}</p>
-                          <p className="font-semibold text-lg break-words">{aiRes?.response || t.game.empty}</p>
-                          <div className={`absolute top-0 right-0 h-full w-1.5 ${aiRes?.score === 10 ? "bg-green-500" : aiRes?.score === 5 ? "bg-yellow-400" : "bg-red-500/60"}`} />
-                          <span className="absolute bottom-2 right-3 text-xs font-bold opacity-50">{aiRes?.score ?? 0}{t.game.points}</span>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="bg-card p-3 rounded-lg border border-white/10 relative overflow-hidden">
+                            <p className="text-xs text-white/50 font-bold mb-1">{t.game.you}</p>
+                            <p className="font-semibold text-lg break-words">{playerRes?.response || t.game.empty}</p>
+                            <div className={`absolute top-0 right-0 h-full w-1.5 ${(playerRes?.score ?? 0) >= 10 ? "bg-green-500" : (playerRes?.score ?? 0) >= 5 ? "bg-yellow-400" : "bg-red-500/60"}`} />
+                            <span className="absolute bottom-2 right-3 text-xs font-bold opacity-50">{playerRes?.score ?? 0}{t.game.points}</span>
+                          </div>
+                          <div className="bg-primary/40 p-3 rounded-lg border border-white/10 relative overflow-hidden">
+                            <p className="text-xs text-white/50 font-bold mb-1">{t.game.ai}</p>
+                            <p className="font-semibold text-lg break-words">{aiRes?.response || t.game.empty}</p>
+                            <div className={`absolute top-0 right-0 h-full w-1.5 ${(aiRes?.score ?? 0) >= 10 ? "bg-green-500" : (aiRes?.score ?? 0) >= 5 ? "bg-yellow-400" : "bg-red-500/60"}`} />
+                            <span className="absolute bottom-2 right-3 text-xs font-bold opacity-50">{aiRes?.score ?? 0}{t.game.points}</span>
+                          </div>
                         </div>
-                      </div>
-                    </Card>
+                      </Card>
+                    </motion.div>
                   );
                 })}
               </div>
 
               {!isPremium && <BannerAd className="mb-4" />}
 
-              {/* XP earned notification */}
+              {/* XP multiplier hint (mid-game) */}
+              {round < maxRounds && randomEvent && (
+                <div
+                  className="flex items-center gap-2 justify-center mb-3 py-1.5 px-3 rounded-xl text-xs font-bold"
+                  style={{ background: "rgba(249,168,37,0.1)", border: "1px solid rgba(249,168,37,0.2)" }}
+                >
+                  <Star size={12} className="text-[#f9a825]" />
+                  <span className="text-[#f9a825]">
+                    {randomEvent === "double_xp" && t.game.doubleXp}
+                    {randomEvent === "easy_letter" && t.game.easyLetter}
+                    {randomEvent === "speed" && t.game.speedBonus}
+                  </span>
+                </div>
+              )}
+
+              {/* XP earned notification (final) */}
               {round >= maxRounds && lastXpGain > 0 && (
                 <motion.div
                   initial={{ opacity: 0, scale: 0.8 }}
@@ -523,8 +729,13 @@ export default function SoloGame() {
                   className="flex items-center justify-center gap-2 mb-3 py-2 px-4 rounded-xl"
                   style={{ background: "rgba(249,168,37,0.15)", border: "1px solid rgba(249,168,37,0.3)" }}
                 >
-                  <Star className="w-4 h-4 text-[#f9a825]" />
+                  <Star className="w-4 h-4 text-[#f9a825]" fill="rgba(249,168,37,0.5)" />
                   <span className="text-[#f9a825] font-black text-sm">+{lastXpGain} {t.game.xpEarned}</span>
+                  {(randomEvent === "double_xp" || (randomEvent === "speed" && roundWon) || combo >= 2) && (
+                    <span className="text-[#f9a825]/60 text-xs font-bold">
+                      {randomEvent === "double_xp" ? "×2" : randomEvent === "speed" && roundWon ? "×3" : combo >= 4 ? "×2" : "×1.5"}
+                    </span>
+                  )}
                 </motion.div>
               )}
 
