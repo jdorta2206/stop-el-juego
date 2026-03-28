@@ -20,9 +20,13 @@ const ROUND_TIME = 60;
 
 function calcScore(responses: Record<string, string>, letter: string): number {
   let score = 0;
+  const usedWords = new Set<string>();
   for (const val of Object.values(responses)) {
     const t = val.trim().toUpperCase();
-    if (t && t.startsWith(letter.toUpperCase())) score += 10;
+    if (t && t.startsWith(letter.toUpperCase()) && !usedWords.has(t)) {
+      score += 10;
+      usedWords.add(t);
+    }
   }
   return score;
 }

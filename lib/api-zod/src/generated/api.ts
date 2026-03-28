@@ -39,6 +39,7 @@ export const ValidateRoundResponse = zod.object({
         response: zod.string(),
         isValid: zod.boolean(),
         score: zod.number(),
+        isDuplicate: zod.boolean().optional(),
       }),
       ai: zod.object({
         response: zod.string(),

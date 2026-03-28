@@ -10,4 +10,5 @@ export interface ResultDetail {
   response: string;
   isValid: boolean;
   score: number;
+  isDuplicate?: boolean;
 }
