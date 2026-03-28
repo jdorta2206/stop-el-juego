@@ -21,6 +21,8 @@ interface ShareResultsModalProps {
     empty: string;
   };
   gameUrl?: string;
+  bluffResults?: Array<{ category: string; caught: boolean; scoreChange: number }>;
+  aiJudged?: { wasCorrect: boolean; category: string } | null;
 }
 
 function buildWordleGrid(
@@ -45,6 +47,8 @@ export function ShareResultsModal({
   results,
   t,
   gameUrl,
+  bluffResults,
+  aiJudged,
 }: ShareResultsModalProps) {
   const [copied, setCopied] = useState(false);
 
@@ -57,10 +61,22 @@ export function ShareResultsModal({
     .map(cat => results[cat]?.player?.response || "")
     .filter(Boolean);
 
+  const bluffLine = (() => {
+    if (!bluffResults || bluffResults.length === 0) return null;
+    const perfect = bluffResults.filter(r => !r.caught).length;
+    const caught = bluffResults.filter(r => r.caught).length;
+    const parts: string[] = [];
+    if (perfect > 0) parts.push(`🎭 ${perfect} engaño${perfect > 1 ? "s" : ""} perfecto${perfect > 1 ? "s" : ""}`);
+    if (caught > 0) parts.push(`🕵️ ${caught} pillado${caught > 1 ? "s" : ""}`);
+    if (aiJudged) parts.push(aiJudged.wasCorrect ? "🔍 ¡Detecté a la IA mintiendo!" : "🤖 La IA me engañó");
+    return parts.length > 0 ? parts.join(" · ") : null;
+  })();
+
   const shareMessage = [
     `🎮 STOP - Letra ${letter}`,
     wordleGrid,
     won ? `✅ ${t.you}: ${playerScore}pts · 🤖 IA: ${aiScore}pts 🏆` : `🤖 IA: ${aiScore}pts · ${t.you}: ${playerScore}pts`,
+    bluffLine,
     `${t.shareChallenge}`,
     url,
   ]

@@ -28,7 +28,7 @@ function calcScore(responses: Record<string, string>, letter: string): number {
 }
 
 // Local UI phase — what the current player sees
-type LocalPhase = "lobby" | "spinning" | "playing" | "freeze" | "submitted" | "between_rounds" | "finished";
+type LocalPhase = "lobby" | "spinning" | "playing" | "freeze" | "judging" | "submitted" | "between_rounds" | "finished";
 
 export default function Room() {
   const { id: roomCode } = useParams<{ id: string }>();
@@ -42,6 +42,11 @@ export default function Room() {
   const [copied, setCopied] = useState(false);
   const [isStopping, setIsStopping] = useState(false);
   const [muted, setMuted] = useState(false);
+
+  // Multiplayer bluff state
+  const [bluffedCategories, setBluffedCategories] = useState<Set<string>>(new Set());
+  const [roomBluffResults, setRoomBluffResults] = useState<{ cat: string; caught: boolean }[]>([]);
+  const bluffedCategoriesRef = useRef<Set<string>>(new Set());
 
   const responsesRef = useRef<Record<string, string>>({});
   const lastRoundRef = useRef<number>(0);
@@ -106,8 +111,9 @@ export default function Room() {
   const players = room?.players || [];
   const stopper = (room as any)?.stopper;
 
-  // Keep responsesRef in sync
+  // Keep responsesRef and bluffedCategoriesRef in sync
   useEffect(() => { responsesRef.current = responses; }, [responses]);
+  useEffect(() => { bluffedCategoriesRef.current = bluffedCategories; }, [bluffedCategories]);
   // Keep phase and roomCode refs in sync so leaveRoom always has the latest values
   useEffect(() => { phaseRef.current = phase; }, [phase]);
   useEffect(() => { roomCodeRef.current = roomCode || ""; }, [roomCode]);
@@ -131,7 +137,15 @@ export default function Room() {
 
   const autoSubmit = useCallback(() => {
     const score = calcScore(responsesRef.current, currentLetter);
-    submitResults(score);
+    const bluffedList = [...bluffedCategoriesRef.current];
+    if (bluffedList.length > 0) {
+      const results = bluffedList.map(cat => ({ cat, caught: Math.random() < 0.5 }));
+      setRoomBluffResults(results);
+      setPhase("judging");
+      setTimeout(() => { submitResults(score); }, 4000);
+    } else {
+      submitResults(score);
+    }
   }, [currentLetter, submitResults]);
 
   // Start game timer for this round
@@ -203,6 +217,9 @@ export default function Room() {
         hasSubmittedRef.current = false;
         setResponses({});
         responsesRef.current = {};
+        setBluffedCategories(new Set());
+        bluffedCategoriesRef.current = new Set();
+        setRoomBluffResults([]);
         setTimeLeft(ROUND_TIME);
         setPhase("spinning");
         // Timer starts after spin completes (see onSpinComplete in JSX)
@@ -257,6 +274,15 @@ export default function Room() {
     try {
       await fetch(`/api/rooms/${roomCode.toUpperCase()}/start`, { method: "POST" });
     } catch (e) { console.error(e); }
+  };
+
+  const toggleBluff = (cat: string) => {
+    setBluffedCategories(prev => {
+      const next = new Set(prev);
+      if (next.has(cat)) next.delete(cat);
+      else if (next.size < 2) next.add(cat);
+      return next;
+    });
   };
 
   const handleShare = async () => {
@@ -428,19 +454,49 @@ export default function Room() {
               ))}
             </div>
 
+            {/* Bluff hint */}
+            <div className="flex items-center justify-between mb-2 px-1">
+              <p className="text-xs text-white/30">🎭 Activa hasta 2 respuestas como MENTIRA</p>
+              <p className="text-xs font-bold" style={{ color: bluffedCategories.size > 0 ? "#a855f7" : "rgba(255,255,255,0.2)" }}>
+                🎭 {bluffedCategories.size}/2
+              </p>
+            </div>
+
             {/* Inputs */}
             <div className="space-y-2 flex-1 overflow-y-auto pb-28">
-              {CATEGORIES_ES.map(cat => (
-                <div key={cat} className="bg-card p-3 rounded-xl border border-white/5">
-                  <label className="block text-xs font-black text-secondary mb-1 uppercase tracking-wider">{cat}</label>
-                  <Input
-                    value={responses[cat] || ""}
-                    onChange={e => setResponses(r => ({ ...r, [cat]: e.target.value.toUpperCase() }))}
-                    placeholder={`${cat} con ${currentLetter}...`}
-                    autoComplete="off" autoCorrect="off"
-                  />
-                </div>
-              ))}
+              {CATEGORIES_ES.map(cat => {
+                const isBluffed = bluffedCategories.has(cat);
+                const canBluff = !isBluffed && bluffedCategories.size >= 2;
+                return (
+                  <div key={cat} className="bg-card p-3 rounded-xl border transition-all"
+                    style={{
+                      borderColor: isBluffed ? "#a855f7" : "rgba(255,255,255,0.05)",
+                      background: isBluffed ? "rgba(168,85,247,0.07)" : undefined,
+                    }}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs font-black text-secondary uppercase tracking-wider">{cat}</label>
+                      <button
+                        onClick={() => toggleBluff(cat)}
+                        disabled={canBluff}
+                        className={`text-xs px-2 py-0.5 rounded-lg font-bold transition-all ${
+                          isBluffed ? "bg-purple-500 text-white" :
+                          canBluff ? "bg-white/5 text-white/20 cursor-not-allowed" :
+                          "bg-white/10 text-white/40 hover:bg-purple-500/30 hover:text-purple-300"
+                        }`}
+                      >
+                        {isBluffed ? "🎭 MENTIRA" : "🎭"}
+                      </button>
+                    </div>
+                    <Input
+                      value={responses[cat] || ""}
+                      onChange={e => setResponses(r => ({ ...r, [cat]: e.target.value.toUpperCase() }))}
+                      placeholder={`${cat} con ${currentLetter}...`}
+                      autoComplete="off" autoCorrect="off"
+                    />
+                  </div>
+                );
+              })}
             </div>
 
             {/* STOP button */}
@@ -506,6 +562,62 @@ export default function Room() {
                 {freezeCountdown}
               </motion.div>
             </div>
+          </motion.div>
+        )}
+
+        {/* ── JUDGING — bluff reveal after STOP ── */}
+        {phase === "judging" && (
+          <motion.div key="judging"
+            initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+            className="fixed inset-0 z-40 flex flex-col items-center justify-center gap-5 bg-black/85 backdrop-blur-sm px-6"
+          >
+            <motion.div
+              initial={{ scale: 0.7, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ type: "spring", stiffness: 180, damping: 14 }}
+              className="text-center"
+            >
+              <h2 className="text-4xl font-display font-black text-yellow-400">🎭 EL JUICIO</h2>
+              <p className="text-sm text-white/50 mt-1">Revelando tus engaños...</p>
+            </motion.div>
+
+            <div className="w-full max-w-sm space-y-3">
+              {roomBluffResults.map((r, i) => (
+                <motion.div
+                  key={r.cat}
+                  initial={{ opacity: 0, x: -40 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: i * 0.9, type: "spring", stiffness: 150, damping: 18 }}
+                  className="p-4 rounded-2xl border-2 flex items-center gap-4"
+                  style={{
+                    borderColor: r.caught ? "#ef4444" : "#22c55e",
+                    background: r.caught ? "rgba(239,68,68,0.1)" : "rgba(34,197,94,0.1)",
+                  }}
+                >
+                  <motion.span
+                    initial={{ scale: 0 }} animate={{ scale: 1 }}
+                    transition={{ delay: i * 0.9 + 0.35, type: "spring" }}
+                    className="text-3xl flex-shrink-0"
+                  >
+                    {r.caught ? "🕵️" : "🎉"}
+                  </motion.span>
+                  <div className="flex-1">
+                    <p className="text-xs uppercase tracking-wider opacity-50">{r.cat}</p>
+                    <p className="font-black text-base" style={{ color: r.caught ? "#f87171" : "#4ade80" }}>
+                      {r.caught ? "¡Te pillaron! −10pts" : "¡Engaño perfecto! +20pts"}
+                    </p>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+
+            <motion.p
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+              transition={{ delay: Math.max(roomBluffResults.length * 0.9 + 0.5, 1.2) }}
+              className="text-white/30 text-sm text-center"
+            >
+              Enviando respuestas automáticamente...
+            </motion.p>
           </motion.div>
         )}
 
