@@ -31,7 +31,7 @@ type SpecialReveal = { type: "oracle" | "steal"; category: string; word: string 
 type BluffResult = { category: string; caught: boolean; scoreChange: number };
 type AiBluffSetup = { category: string; wasActuallyBluffing: boolean };
 type AiBluffReveal = { category: string; answer: string; wasActuallyBluffing: boolean; scoreChange: number };
-type RandomEvent = "double_xp" | "easy_letter" | "speed" | null;
+type RandomEvent = "double_xp" | "easy_letter" | "speed" | "hidden_category" | "time_bomb" | null;
 
 const ROUND_TIME = 60;
 const QUICK_ROUND_TIME = 30;
@@ -109,6 +109,9 @@ export default function SoloGame() {
   // Achievements system
   const { newlyUnlocked, afterRound, clearNewlyUnlocked } = useAchievements();
 
+  // Hidden category index (for hidden_category event)
+  const [hiddenCategoryIdx, setHiddenCategoryIdx] = useState<number | null>(null);
+
   // Bluff / Social Deception state
   const [bluffedCategories, setBluffedCategories] = useState<Set<string>>(new Set());
   const [aiBluffSetup, setAiBluffSetup] = useState<AiBluffSetup | null>(null);
@@ -161,11 +164,13 @@ export default function SoloGame() {
     let event: RandomEvent = null;
     if (!isDailyMode && !isQuickMode && !isChaosMode) {
       const roll = Math.random();
-      if (roll < 0.25) event = "double_xp";
-      else if (roll < 0.45) event = "easy_letter";
-      else if (roll < 0.60) event = "speed";
+      if (roll < 0.22) event = "double_xp";
+      else if (roll < 0.40) event = "easy_letter";
+      else if (roll < 0.53) event = "speed";
+      else if (roll < 0.66) event = "hidden_category";
+      else if (roll < 0.76) event = "time_bomb";
     }
-    if (isChaosMode) event = "double_xp"; // chaos always = double XP
+    if (isChaosMode) event = "double_xp";
     setRandomEvent(event);
     setRoundWon(null);
 
@@ -200,6 +205,9 @@ export default function SoloGame() {
     setSelectingSabotage(false);
     setSpecialReveal(null);
 
+    // Reset hidden category
+    setHiddenCategoryIdx(event === "hidden_category" ? Math.floor(Math.random() * 7) : null);
+
     // Reset bluff system
     setBluffedCategories(new Set());
     setBluffResults([]);
@@ -220,6 +228,7 @@ export default function SoloGame() {
     setTimeLeft(roundTime);
     setRewardedUsed(false);
     sound.playRoundStart();
+    if (randomEvent === "hidden_category") setTimeout(() => sound.playHiddenReveal(), 400);
 
     timerRef.current = setInterval(() => {
       setTimeLeft(prev => {
@@ -497,6 +506,35 @@ export default function SoloGame() {
     setShowRewardedAd(false);
   };
 
+  // Bluff reveal sounds — play as each result animates in (1.4s per card)
+  const bluffSoundFiredRef = useRef(false);
+  useEffect(() => {
+    if (gameState !== "JUDGING" || judgingPhase !== "player_bluffs" || bluffResults.length === 0) {
+      bluffSoundFiredRef.current = false;
+      return;
+    }
+    if (bluffSoundFiredRef.current) return;
+    bluffSoundFiredRef.current = true;
+    const timeouts: ReturnType<typeof setTimeout>[] = [];
+    bluffResults.forEach((result, i) => {
+      timeouts.push(setTimeout(() => {
+        if (result.caught) sound.playBluffCaught();
+        else sound.playBluffPerfect();
+      }, (i * 1.4 + 0.45) * 1000));
+    });
+    return () => timeouts.forEach(clearTimeout);
+  }, [gameState, judgingPhase, bluffResults]);
+
+  // Suspense chord when AI bluff phase begins
+  const aiJudgeSoundFiredRef = useRef(false);
+  useEffect(() => {
+    if (gameState === "JUDGING" && judgingPhase === "ai_bluff" && !aiJudgeSoundFiredRef.current) {
+      aiJudgeSoundFiredRef.current = true;
+      sound.playJudge();
+    }
+    if (gameState !== "JUDGING") aiJudgeSoundFiredRef.current = false;
+  }, [gameState, judgingPhase]);
+
   return (
     <Layout>
       <div className="flex-1 flex flex-col max-w-2xl mx-auto w-full">
@@ -529,6 +567,12 @@ export default function SoloGame() {
           categories={categories}
           results={results?.results || {}}
           t={t.game}
+          bluffResults={bluffResults.length > 0 ? bluffResults : undefined}
+          aiJudged={
+            playerJudgedAi !== null && aiBluffReveal
+              ? { wasCorrect: playerJudgedAi === aiBluffReveal.wasActuallyBluffing, category: aiBluffReveal.category }
+              : null
+          }
         />
 
         {/* Achievement toast notification */}
@@ -572,6 +616,8 @@ export default function SoloGame() {
                   background:
                     randomEvent === "double_xp" ? "linear-gradient(135deg, rgba(249,168,37,0.9), rgba(234,88,12,0.9))" :
                     randomEvent === "easy_letter" ? "linear-gradient(135deg, rgba(34,197,94,0.9), rgba(21,128,61,0.9))" :
+                    randomEvent === "hidden_category" ? "linear-gradient(135deg, rgba(59,130,246,0.9), rgba(37,99,235,0.9))" :
+                    randomEvent === "time_bomb" ? "linear-gradient(135deg, rgba(239,68,68,0.9), rgba(185,28,28,0.9))" :
                     "linear-gradient(135deg, rgba(139,92,246,0.9), rgba(109,40,217,0.9))",
                   color: "white",
                 }}
@@ -579,6 +625,8 @@ export default function SoloGame() {
                 {randomEvent === "double_xp" && <><Star size={11} fill="white" /> {t.game.doubleXp}</>}
                 {randomEvent === "easy_letter" && <>🍀 {t.game.easyLetter}</>}
                 {randomEvent === "speed" && <><Zap size={11} fill="white" /> {t.game.speedBonus}</>}
+                {randomEvent === "hidden_category" && <>🔍 {t.game.hiddenCategory}</>}
+                {randomEvent === "time_bomb" && <>💣 {t.game.timeBomb}</>}
               </motion.div>
             )}
           </AnimatePresence>
@@ -667,10 +715,14 @@ export default function SoloGame() {
                       background:
                         randomEvent === "double_xp" ? "linear-gradient(135deg, rgba(249,168,37,0.2), rgba(234,88,12,0.15))" :
                         randomEvent === "easy_letter" ? "linear-gradient(135deg, rgba(34,197,94,0.2), rgba(21,128,61,0.15))" :
+                        randomEvent === "hidden_category" ? "linear-gradient(135deg, rgba(59,130,246,0.2), rgba(37,99,235,0.15))" :
+                        randomEvent === "time_bomb" ? "linear-gradient(135deg, rgba(239,68,68,0.2), rgba(185,28,28,0.15))" :
                         "linear-gradient(135deg, rgba(139,92,246,0.2), rgba(109,40,217,0.15))",
                       border:
                         randomEvent === "double_xp" ? "2px solid rgba(249,168,37,0.5)" :
                         randomEvent === "easy_letter" ? "2px solid rgba(34,197,94,0.5)" :
+                        randomEvent === "hidden_category" ? "2px solid rgba(59,130,246,0.5)" :
+                        randomEvent === "time_bomb" ? "2px solid rgba(239,68,68,0.5)" :
                         "2px solid rgba(139,92,246,0.5)",
                     }}
                   >
@@ -679,11 +731,15 @@ export default function SoloGame() {
                       {randomEvent === "double_xp" && `⭐ ${t.game.doubleXp}`}
                       {randomEvent === "easy_letter" && `🍀 ${t.game.easyLetter}`}
                       {randomEvent === "speed" && `⚡ ${t.game.speedBonus}`}
+                      {randomEvent === "hidden_category" && `🔍 ${t.game.hiddenCategory}`}
+                      {randomEvent === "time_bomb" && `💣 ${t.game.timeBomb}`}
                     </p>
                     <p className="text-white/60 text-xs">
                       {randomEvent === "double_xp" && t.game.doubleXpSubtitle}
                       {randomEvent === "easy_letter" && t.game.easyLetterSubtitle}
                       {randomEvent === "speed" && t.game.speedBonusSubtitle}
+                      {randomEvent === "hidden_category" && t.game.hiddenCategorySubtitle}
+                      {randomEvent === "time_bomb" && t.game.timeBombSubtitle}
                     </p>
                   </motion.div>
                 )}
@@ -816,12 +872,16 @@ export default function SoloGame() {
                     <span className="font-bold text-sm text-white/70">{t.game.round}</span>
                     <div className="flex items-center gap-2">
                       <motion.span
-                        key={timeLeft}
-                        initial={{ scale: timeLeft <= 10 ? 1.4 : 1 }}
+                        key={randomEvent === "time_bomb" ? "bomb" : timeLeft}
+                        initial={{ scale: timeLeft <= 10 && randomEvent !== "time_bomb" ? 1.4 : 1 }}
                         animate={{ scale: 1 }}
-                        className={timeLeft <= 10 ? "text-red-300 font-black text-lg" : timeLeft <= 25 ? "text-yellow-300 font-black" : "font-bold"}
+                        className={
+                          randomEvent === "time_bomb"
+                            ? "text-red-400 font-black text-lg animate-pulse"
+                            : timeLeft <= 10 ? "text-red-300 font-black text-lg" : timeLeft <= 25 ? "text-yellow-300 font-black" : "font-bold"
+                        }
                       >
-                        {timeLeft}s
+                        {randomEvent === "time_bomb" ? "💣?" : `${timeLeft}s`}
                       </motion.span>
                       {/* Mute toggle */}
                       <button
@@ -909,22 +969,25 @@ export default function SoloGame() {
               </div>
 
               <div className="space-y-2 flex-1 overflow-y-auto pb-28">
-                {categories.map(category => {
+                {categories.map((category, catIdx) => {
                   const isSabotaged = sabotageCategory === category;
                   const canSabotage = selectingSabotage && !sabotageCategory;
                   const isBluffed = bluffedCategories.has(category);
                   const canBluff = !isBluffed && bluffedCategories.size >= 2;
+                  const isHidden = randomEvent === "hidden_category" && catIdx === hiddenCategoryIdx;
                   return (
                     <div
                       key={category}
                       className="relative bg-card p-3 rounded-xl border transition-all"
                       style={{
-                        borderColor: isBluffed ? "#a855f7" : isSabotaged ? "#ef4444" : canSabotage ? "#ef444466" : "rgba(255,255,255,0.05)",
-                        background: isBluffed ? "rgba(168,85,247,0.08)" : undefined,
+                        borderColor: isBluffed ? "#a855f7" : isHidden ? "rgba(59,130,246,0.5)" : isSabotaged ? "#ef4444" : canSabotage ? "#ef444466" : "rgba(255,255,255,0.05)",
+                        background: isBluffed ? "rgba(168,85,247,0.08)" : isHidden ? "rgba(59,130,246,0.06)" : undefined,
                       }}
                     >
                       <div className="flex items-center justify-between mb-1">
-                        <label className="text-xs font-black text-secondary uppercase tracking-wider">{category}</label>
+                        <label className="text-xs font-black uppercase tracking-wider" style={{ color: isHidden ? "#60a5fa" : undefined }}>
+                          {isHidden ? "??? 🔍" : category}
+                        </label>
                         {!isSabotaged && (
                           <button
                             onClick={() => toggleBluff(category)}
@@ -1396,6 +1459,8 @@ export default function SoloGame() {
                     {randomEvent === "double_xp" && t.game.doubleXp}
                     {randomEvent === "easy_letter" && t.game.easyLetter}
                     {randomEvent === "speed" && t.game.speedBonus}
+                    {randomEvent === "hidden_category" && t.game.hiddenCategory}
+                    {randomEvent === "time_bomb" && t.game.timeBomb}
                   </span>
                 </div>
               )}

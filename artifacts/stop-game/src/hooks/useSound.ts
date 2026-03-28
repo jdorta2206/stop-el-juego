@@ -1,5 +1,8 @@
 import { useRef, useCallback } from "react";
 
+const MAX_VOICES = 8;
+let activeVoices = 0;
+
 function playTone(
   ctx: AudioContext,
   freq: number,
@@ -10,7 +13,9 @@ function playTone(
   attack = 0.01,
   release = 0.08,
 ) {
+  if (activeVoices >= MAX_VOICES) return;
   try {
+    activeVoices++;
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = type;
@@ -23,7 +28,8 @@ function playTone(
     gain.connect(ctx.destination);
     osc.start(startTime);
     osc.stop(startTime + duration + 0.01);
-  } catch {}
+    osc.onended = () => { activeVoices = Math.max(0, activeVoices - 1); };
+  } catch { activeVoices = Math.max(0, activeVoices - 1); }
 }
 
 export function useSound(muted: boolean) {
@@ -118,7 +124,6 @@ export function useSound(muted: boolean) {
     playTone(ctx, 880, t + 0.09, 0.18, "sine", 0.14);
   }), [play]);
 
-  // Double XP event — exciting fanfare
   const playEvent = useCallback(() => play(ctx => {
     const t = ctx.currentTime;
     [659, 784, 988, 1175].forEach((f, i) =>
@@ -127,5 +132,50 @@ export function useSound(muted: boolean) {
     playTone(ctx, 1568, t + 0.28, 0.4, "sine", 0.22, 0.02, 0.15);
   }), [play]);
 
-  return { playCorrect, playWrong, playWin, playLose, playLevelUp, playCombo, playStop, playRoundStart, playEvent };
+  // 🎭 Bluff perfect — triumphant ascending shimmer, player got away with it
+  const playBluffPerfect = useCallback(() => play(ctx => {
+    const t = ctx.currentTime;
+    [392, 523, 659, 784, 1047].forEach((f, i) =>
+      playTone(ctx, f, t + i * 0.06, 0.35, "sine", 0.18)
+    );
+    playTone(ctx, 1319, t + 0.35, 0.5, "triangle", 0.14, 0.02, 0.2);
+    [784, 1047].forEach((f, i) =>
+      playTone(ctx, f, t + 0.4 + i * 0.08, 0.3, "triangle", 0.08)
+    );
+  }), [play]);
+
+  // 🕵️ Bluff caught — dramatic descending buzz, exposed!
+  const playBluffCaught = useCallback(() => play(ctx => {
+    const t = ctx.currentTime;
+    playTone(ctx, 440, t, 0.06, "sawtooth", 0.2, 0.005, 0.04);
+    [330, 277, 220, 185].forEach((f, i) =>
+      playTone(ctx, f, t + 0.06 + i * 0.1, 0.18, "sawtooth", 0.14)
+    );
+    playTone(ctx, 110, t + 0.5, 0.35, "sine", 0.18, 0.02, 0.2);
+  }), [play]);
+
+  // ⚖️ Judge reveal — ominous suspense chord before AI bluff is revealed
+  const playJudge = useCallback(() => play(ctx => {
+    const t = ctx.currentTime;
+    [110, 138, 164].forEach((f, i) =>
+      playTone(ctx, f, t + i * 0.08, 0.6, "sine", 0.16, 0.04, 0.25)
+    );
+    playTone(ctx, 220, t + 0.3, 0.5, "triangle", 0.1, 0.06, 0.3);
+    playTone(ctx, 330, t + 0.55, 0.4, "sine", 0.08, 0.04, 0.28);
+  }), [play]);
+
+  // 🔍 Hidden reveal — mysterious ascending arpeggio for hidden category
+  const playHiddenReveal = useCallback(() => play(ctx => {
+    const t = ctx.currentTime;
+    [330, 415, 523, 622].forEach((f, i) =>
+      playTone(ctx, f, t + i * 0.08, 0.25, "triangle", 0.16)
+    );
+    playTone(ctx, 740, t + 0.36, 0.4, "sine", 0.14, 0.03, 0.2);
+  }), [play]);
+
+  return {
+    playCorrect, playWrong, playWin, playLose, playLevelUp,
+    playCombo, playStop, playRoundStart, playEvent,
+    playBluffPerfect, playBluffCaught, playJudge, playHiddenReveal,
+  };
 }
