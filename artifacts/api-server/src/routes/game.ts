@@ -429,26 +429,35 @@ router.post("/validate", (req, res) => {
 
   const { letter, language, playerResponses } = body.data;
   const results: Record<string, {
-    player: { response: string; isValid: boolean; score: number };
+    player: { response: string; isValid: boolean; score: number; isDuplicate?: boolean };
     ai: { response: string; isValid: boolean; score: number };
   }> = {};
   let playerTotalScore = 0;
   let aiTotalScore = 0;
 
+  // Track normalized player words used across categories to detect duplicates
+  const usedPlayerWords = new Set<string>();
+
   for (const pr of playerResponses) {
     const playerWord = pr.word?.trim() || "";
     const aiWord = getAiWord(letter, pr.category, language);
 
-    const isPlayerWordValid = isWordValid(playerWord, letter, pr.category, language);
+    const normPlayerWord = normalizeWord(playerWord);
+    // A word is a duplicate if it was already used in a previous category this round
+    const isDuplicate = normPlayerWord.length > 0 && usedPlayerWords.has(normPlayerWord);
+
+    const isPlayerWordValid = !isDuplicate && isWordValid(playerWord, letter, pr.category, language);
     const isAiWordValid = aiWord.length > 0 && isWordValid(aiWord, letter, pr.category, language);
+
+    // Track unique valid player words to penalize repeats
+    if (isPlayerWordValid) usedPlayerWords.add(normPlayerWord);
 
     let playerScore = 0;
     let aiScore = 0;
 
     if (isPlayerWordValid && isAiWordValid) {
-      const normPlayer = normalizeWord(playerWord);
       const normAi = normalizeWord(aiWord);
-      if (normPlayer === normAi) {
+      if (normPlayerWord === normAi) {
         playerScore = 5;
         aiScore = 5;
       } else {
@@ -465,7 +474,7 @@ router.post("/validate", (req, res) => {
 
     const formattedAiWord = aiWord ? aiWord.charAt(0).toUpperCase() + aiWord.slice(1) : "";
     results[pr.category] = {
-      player: { response: playerWord, isValid: isPlayerWordValid, score: playerScore },
+      player: { response: playerWord, isValid: isPlayerWordValid, score: playerScore, isDuplicate: isDuplicate || undefined },
       ai: { response: formattedAiWord, isValid: isAiWordValid, score: aiScore },
     };
 

@@ -1368,8 +1368,9 @@ export default function SoloGame() {
                   const playerRes = res?.player;
                   const aiRes = res?.ai;
                   const isSabotaged = sabotageCategory === category;
-                  const playerWon = (playerRes?.score ?? 0) > ((isSabotaged ? 0 : aiRes?.score) ?? 0);
-                  const tied = !isSabotaged && (playerRes?.score ?? 0) === (aiRes?.score ?? 0) && (playerRes?.score ?? 0) > 0;
+                  const isDuplicate = playerRes?.isDuplicate === true;
+                  const playerWon = !isDuplicate && (playerRes?.score ?? 0) > ((isSabotaged ? 0 : aiRes?.score) ?? 0);
+                  const tied = !isSabotaged && !isDuplicate && (playerRes?.score ?? 0) === (aiRes?.score ?? 0) && (playerRes?.score ?? 0) > 0;
 
                   return (
                     <motion.div
@@ -1381,15 +1382,17 @@ export default function SoloGame() {
                       <Card className="p-4 bg-black/20 border-white/5">
                         <div className="flex items-center gap-2 mb-2">
                           <h4 className="font-bold text-secondary text-xs uppercase tracking-wider flex-1">{category}</h4>
-                          {playerWon && <span className="text-green-400 text-xs font-black">+{playerRes?.score}pts ✓</span>}
-                          {tied && <span className="text-yellow-400 text-xs font-black">={playerRes?.score}pts</span>}
+                          {isDuplicate && <span className="text-red-400 text-xs font-black">REPETIDA ❌</span>}
+                          {!isDuplicate && playerWon && <span className="text-green-400 text-xs font-black">+{playerRes?.score}pts ✓</span>}
+                          {!isDuplicate && tied && <span className="text-yellow-400 text-xs font-black">={playerRes?.score}pts</span>}
                         </div>
                         <div className="grid grid-cols-2 gap-3">
-                          <div className="bg-card p-3 rounded-lg border border-white/10 relative overflow-hidden">
+                          <div className={`bg-card p-3 rounded-lg border relative overflow-hidden ${isDuplicate ? "border-red-500/40" : "border-white/10"}`}>
                             <p className="text-xs text-white/50 font-bold mb-1">{t.game.you}</p>
-                            <p className="font-semibold text-lg break-words">{playerRes?.response || t.game.empty}</p>
-                            <div className={`absolute top-0 right-0 h-full w-1.5 ${(playerRes?.score ?? 0) >= 10 ? "bg-green-500" : (playerRes?.score ?? 0) >= 5 ? "bg-yellow-400" : "bg-red-500/60"}`} />
-                            <span className="absolute bottom-2 right-3 text-xs font-bold opacity-50">{playerRes?.score ?? 0}{t.game.points}</span>
+                            <p className={`font-semibold text-lg break-words ${isDuplicate ? "line-through opacity-50" : ""}`}>{playerRes?.response || t.game.empty}</p>
+                            {isDuplicate && <p className="text-red-400 text-xs font-bold mt-1">0pts — respuesta repetida</p>}
+                            <div className={`absolute top-0 right-0 h-full w-1.5 ${isDuplicate ? "bg-red-500/60" : (playerRes?.score ?? 0) >= 10 ? "bg-green-500" : (playerRes?.score ?? 0) >= 5 ? "bg-yellow-400" : "bg-red-500/60"}`} />
+                            {!isDuplicate && <span className="absolute bottom-2 right-3 text-xs font-bold opacity-50">{playerRes?.score ?? 0}{t.game.points}</span>}
                           </div>
                           <div
                             className="p-3 rounded-lg border relative overflow-hidden"
