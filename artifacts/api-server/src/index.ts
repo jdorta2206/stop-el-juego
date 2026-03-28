@@ -39,7 +39,6 @@ async function initStripe() {
       .catch((err: Error) => console.error("Stripe sync error:", err.message));
   } catch (error: any) {
     console.error("Failed to initialize Stripe:", error.message);
-    // Don't throw — app should still start even if Stripe init fails
   }
 }
 
@@ -56,10 +55,14 @@ async function main() {
     throw new Error(`Invalid PORT value: "${rawPort}"`);
   }
 
-  await initStripe();
-
+  // Start listening immediately so the deployment platform detects the port.
+  // Stripe initializes in the background — it can take several seconds.
   app.listen(port, () => {
     console.log(`Server listening on port ${port}`);
+  });
+
+  initStripe().catch((err) => {
+    console.error("Stripe init failed:", err.message);
   });
 }
 
