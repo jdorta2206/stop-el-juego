@@ -26,7 +26,7 @@ import { drawPowerCard, POWER_CARDS, type PowerCardId } from "@/data/powerCards"
 
 type GameState = "LOBBY" | "SPINNING" | "CARD_REVEAL" | "PLAYING" | "EVALUATING" | "JUDGING" | "RESULTS";
 
-type SpecialReveal = { type: "oracle" | "steal"; category: string; word: string } | null;
+type SpecialReveal = { type: "oracle" | "steal" | "sabotage"; category: string; word: string; pts?: number } | null;
 
 type BluffResult = { category: string; caught: boolean; scoreChange: number };
 type AiBluffSetup = { category: string; wasActuallyBluffing: boolean };
@@ -351,11 +351,19 @@ export default function SoloGame() {
       const ps = results.playerTotalScore || 0;
       const rawAs = results.aiTotalScore || 0;
 
-      // SABOTAGE: reduce AI score for the sabotaged category
-      const sabotageBonus = sabotageCategory
+      // SABOTAGE: reduce AI score AND transfer those points to player
+      const sabotageStolen = sabotageCategory
         ? (results.results?.[sabotageCategory]?.ai?.score ?? 0)
         : 0;
-      const as_ = rawAs - sabotageBonus;
+      const as_ = rawAs - sabotageStolen;
+      if (sabotageStolen > 0 && sabotageCategory) {
+        setSpecialReveal({
+          type: "sabotage",
+          category: sabotageCategory,
+          word: results.results?.[sabotageCategory]?.ai?.response ?? "",
+          pts: sabotageStolen,
+        });
+      }
 
       // STEAL: find highest-value category where player scored 0 and AI scored
       let stolenScore = 0;
@@ -378,9 +386,9 @@ export default function SoloGame() {
         }
       }
 
-      const won = (ps + stolenScore) > as_;
+      const won = (ps + stolenScore + sabotageStolen) > as_;
 
-      setTotalScore(prev => prev + ps + stolenScore + bluffBonusScore);
+      setTotalScore(prev => prev + ps + stolenScore + sabotageStolen + bluffBonusScore);
       setAiTotalScore(prev => prev + as_);
       setRoundWon(won);
 
@@ -1333,13 +1341,16 @@ export default function SoloGame() {
                 )}
               </AnimatePresence>
 
-              {/* Special card reveal (Oracle / Steal) */}
+              {/* Special card reveal (Oracle / Steal / Sabotage) */}
               <AnimatePresence>
                 {specialReveal && (() => {
+                  const isSabotageReveal = specialReveal.type === "sabotage";
                   const isOracle = specialReveal.type === "oracle";
-                  const color = isOracle ? "#a855f7" : "#22d3ee";
-                  const emoji = isOracle ? "🔮" : "🔄";
-                  const label = isOracle ? t.powerCards.oracle_reveal : t.powerCards.steal_reveal;
+                  const color = isSabotageReveal ? "#ef4444" : isOracle ? "#a855f7" : "#22d3ee";
+                  const emoji = isSabotageReveal ? "💣" : isOracle ? "🔮" : "🔄";
+                  const label = isSabotageReveal
+                    ? t.powerCards.sabotage_steal
+                    : isOracle ? t.powerCards.oracle_reveal : t.powerCards.steal_reveal;
                   return (
                     <motion.div
                       key="special-reveal"
@@ -1355,6 +1366,9 @@ export default function SoloGame() {
                         <p className="text-xs font-black uppercase" style={{ color }}>{label}</p>
                         <p className="text-sm font-bold text-white">
                           {specialReveal.category}: <span style={{ color }} className="font-black">{specialReveal.word || "—"}</span>
+                          {isSabotageReveal && specialReveal.pts
+                            ? <span className="ml-2 text-green-400 font-black">+{specialReveal.pts}pts</span>
+                            : null}
                         </p>
                       </div>
                     </motion.div>
