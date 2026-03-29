@@ -58,6 +58,7 @@ const fr = {
     you: "Toi",
     ai: "IA",
     watchAdForPoints: "Voir pub (+20 pts)",
+    premiumBonus: "⭐ Bonus premium (+20 pts)",
     finalResults: "Résultats finaux !",
     winner: "Gagnant !",
     playAgain: "Rejouer",

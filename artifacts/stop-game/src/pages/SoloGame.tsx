@@ -137,6 +137,23 @@ export default function SoloGame() {
     if (!isDailyMode) setCategories(getCategories());
   }, [lang, isDailyMode]);
 
+  // Pause Google Auto Ads for premium users
+  useEffect(() => {
+    try {
+      const win = window as any;
+      win.adsbygoogle = win.adsbygoogle || [];
+      if (isPremium) {
+        win.adsbygoogle.pauseAdRequests = 1;
+        // Hide any auto-injected ad iframes
+        document.querySelectorAll("ins.adsbygoogle, iframe[id^='google_ads']").forEach((el) => {
+          (el as HTMLElement).style.display = "none";
+        });
+      } else {
+        win.adsbygoogle.pauseAdRequests = 0;
+      }
+    } catch (_) {}
+  }, [isPremium]);
+
   // Ticking sound — active only during PLAYING
   const { toggleMute } = useTicker(timeLeft, ROUND_TIME, gameState === "PLAYING" && !muted);
 
@@ -960,12 +977,21 @@ export default function SoloGame() {
               })()}
 
               {!rewardedUsed && (
-                <button
-                  onClick={() => setShowRewardedAd(true)}
-                  className="mb-3 flex items-center justify-center gap-2 py-2 px-4 rounded-xl border border-yellow-500/30 bg-yellow-500/10 text-yellow-300 text-sm font-bold hover:bg-yellow-500/20 transition-all"
-                >
-                  <Tv2 className="w-4 h-4" /> {t.game.watchAdForPoints}
-                </button>
+                isPremium ? (
+                  <button
+                    onClick={() => { setTimeLeft(prev => prev + 20); setRewardedUsed(true); }}
+                    className="mb-3 flex items-center justify-center gap-2 py-2 px-4 rounded-xl border border-yellow-400/50 bg-yellow-400/15 text-yellow-300 text-sm font-bold hover:bg-yellow-400/25 transition-all"
+                  >
+                    {t.game.premiumBonus}
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setShowRewardedAd(true)}
+                    className="mb-3 flex items-center justify-center gap-2 py-2 px-4 rounded-xl border border-yellow-500/30 bg-yellow-500/10 text-yellow-300 text-sm font-bold hover:bg-yellow-500/20 transition-all"
+                  >
+                    <Tv2 className="w-4 h-4" /> {t.game.watchAdForPoints}
+                  </button>
+                )
               )}
 
               {/* Bluff hint bar */}
