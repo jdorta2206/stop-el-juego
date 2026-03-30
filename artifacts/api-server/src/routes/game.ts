@@ -756,22 +756,16 @@ router.post("/validate", (req, res) => {
   let playerTotalScore = 0;
   let aiTotalScore = 0;
 
-  // Track normalized player words used across categories to detect duplicates
-  const usedPlayerWords = new Set<string>();
-
   for (const pr of playerResponses) {
     const playerWord = pr.word?.trim() || "";
     const aiWord = getAiWord(letter, pr.category, language);
 
     const normPlayerWord = normalizeWord(playerWord);
-    // A word is a duplicate if it was already used in a previous category this round
-    const isDuplicate = normPlayerWord.length > 0 && usedPlayerWords.has(normPlayerWord);
 
-    const isPlayerWordValid = !isDuplicate && isWordValid(playerWord, letter, pr.category, language);
+    // "Repetida" only means the player and the AI wrote the exact same word in the same category
+    // (handled below by giving 5pts each). Using the same word in different categories is allowed.
+    const isPlayerWordValid = isWordValid(playerWord, letter, pr.category, language);
     const isAiWordValid = aiWord.length > 0 && isWordValid(aiWord, letter, pr.category, language);
-
-    // Track unique valid player words to penalize repeats
-    if (isPlayerWordValid) usedPlayerWords.add(normPlayerWord);
 
     let playerScore = 0;
     let aiScore = 0;
@@ -795,7 +789,7 @@ router.post("/validate", (req, res) => {
 
     const formattedAiWord = aiWord ? aiWord.charAt(0).toUpperCase() + aiWord.slice(1) : "";
     results[pr.category] = {
-      player: { response: playerWord, isValid: isPlayerWordValid, score: playerScore, isDuplicate: isDuplicate || undefined },
+      player: { response: playerWord, isValid: isPlayerWordValid, score: playerScore },
       ai: { response: formattedAiWord, isValid: isAiWordValid, score: aiScore },
     };
 
