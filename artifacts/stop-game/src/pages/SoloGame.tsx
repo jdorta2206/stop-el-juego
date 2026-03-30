@@ -343,11 +343,19 @@ export default function SoloGame() {
 
     // Set up AI bluff reveal data (using API response)
     if (aiBluffSetup && apiData) {
-      const aiAnswer = (apiData as { results?: Record<string, { ai?: { response?: string } }> }).results?.[aiBluffSetup.category]?.ai?.response ?? "";
+      const catResult = (apiData as { results?: Record<string, { ai?: { response?: string; score?: number } }> }).results?.[aiBluffSetup.category];
+      const aiAnswer = catResult?.ai?.response ?? "";
+      const aiGotPoints = (catResult?.ai?.score ?? 0) > 0;
+
+      // The AI can only TRULY bluff (show a fake answer) when it had NO valid word.
+      // If the AI has a real valid answer (score > 0), it is NEVER bluffing — it's honest.
+      // This prevents situations like "YouTube" being incorrectly labeled as a lie.
+      const wasActuallyBluffing = !aiGotPoints && aiBluffSetup.wasActuallyBluffing;
+
       setAiBluffReveal({
         category: aiBluffSetup.category,
         answer: aiAnswer,
-        wasActuallyBluffing: aiBluffSetup.wasActuallyBluffing,
+        wasActuallyBluffing,
         scoreChange: 0,
       });
     }
