@@ -11,6 +11,7 @@ import { usePlayer } from "@/hooks/use-player";
 import { useT } from "@/i18n/useT";
 import { useStreak } from "@/hooks/useStreak";
 import { useProgression, getLeague } from "@/hooks/useProgression";
+import { useGetLeaderboard } from "@workspace/api-client-react";
 
 const LOGO_URL = `${import.meta.env.BASE_URL}images/stop-logo.png`;
 
@@ -23,6 +24,8 @@ export default function Home() {
   const league = getLeague(level);
   const [showPremiumModal, setShowPremiumModal] = useState(false);
   const [invitedBy, setInvitedBy] = useState<string | null>(null);
+  const { data: leaderboardData } = useGetLeaderboard({ limit: 3 }, { query: { staleTime: 60_000 } });
+  const top3 = leaderboardData?.players?.slice(0, 3) ?? [];
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -350,6 +353,55 @@ export default function Home() {
             </Link>
           </div>
         </motion.div>
+
+        {/* Mini Leaderboard */}
+        {top3.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4 }}
+            className="w-full"
+          >
+            <Link href="/ranking">
+              <div
+                className="w-full rounded-2xl px-4 py-3 cursor-pointer hover:opacity-90 transition-opacity"
+                style={{ background: "rgba(0,0,0,0.25)", border: "2px solid rgba(255,255,255,0.1)", backdropFilter: "blur(8px)" }}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <Trophy className="w-4 h-4 text-[#f9a825]" />
+                    <span className="text-xs font-black text-[#f9a825] uppercase tracking-wide">{t.home.ranking}</span>
+                  </div>
+                  <span className="text-xs text-white/40">Ver todo →</span>
+                </div>
+                <div className="space-y-1.5">
+                  {top3.map((p: any, i: number) => {
+                    const medals = ["🥇", "🥈", "🥉"];
+                    const isMe = p.playerId === player?.id;
+                    return (
+                      <div key={p.playerId} className="flex items-center gap-2">
+                        <span className="text-base w-6 text-center">{medals[i]}</span>
+                        <div
+                          className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-black flex-shrink-0"
+                          style={{ background: p.avatarColor || "#e63012" }}
+                        >
+                          {p.picture
+                            ? <img src={p.picture} alt="" className="w-6 h-6 rounded-full object-cover" />
+                            : (p.name?.[0] || "?").toUpperCase()
+                          }
+                        </div>
+                        <span className={`text-sm font-bold flex-1 truncate ${isMe ? "text-[#f9a825]" : "text-white"}`}>
+                          {isMe ? "⭐ " : ""}{p.name}
+                        </span>
+                        <span className="text-xs font-black text-white/60">{p.totalScore?.toLocaleString()} pts</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </Link>
+          </motion.div>
+        )}
 
         {/* Share row */}
         <motion.div
