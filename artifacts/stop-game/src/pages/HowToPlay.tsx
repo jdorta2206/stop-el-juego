@@ -96,8 +96,87 @@ export default function HowToPlay() {
               En el modo individual juegas contra un oponente de inteligencia artificial que responde de forma autónoma a cada categoría. Es el modo perfecto para practicar, mejorar tu vocabulario y calentar antes de enfrentarte a jugadores reales.
             </p>
             <p>
-              La IA tiene tres niveles de dificultad: fácil, medio y difícil. En el nivel difícil completa las categorías más rápido y con palabras menos comunes, por lo que tendrás que pensar con rapidez para superarla.
+              La IA tiene diferentes personalidades (el Clásico, el Trolero, el Filosófico…) que cambian con cada partida, haciendo cada ronda única y sorprendente.
             </p>
+          </div>
+
+          <div>
+            <h2 className="text-2xl font-black text-white mb-3">⚡ Quick Mode</h2>
+            <p className="mb-3">
+              Una partida relámpago de <strong className="text-[hsl(48,96%,57%)]">30 segundos y 1 sola ronda</strong>. Perfecta cuando quieres una partida rápida. Ideal para competir contra tu propio récord o calentar antes de una partida larga.
+            </p>
+          </div>
+
+          <div>
+            <h2 className="text-2xl font-black text-white mb-3">🌀 Chaos Mode</h2>
+            <p className="mb-3">
+              El modo más loco de STOP. Las categorías son inesperadas e inusuales: <em>"Excusa para llegar tarde"</em>, <em>"Superpoder ridículo"</em>, <em>"Cosa que nunca harías"</em>, <em>"Cosa que llevarías a una isla desierta"</em>… Aquí no basta con saber vocabulario — ¡hace falta imaginación!
+            </p>
+            <p>
+              Algunas categorías tienen respuestas curadas (solo palabras que realmente tengan sentido), mientras que otras son completamente abiertas. Las respuestas únicas y creativas consiguen los 10 puntos completos.
+            </p>
+          </div>
+
+          <div>
+            <h2 className="text-2xl font-black text-white mb-3">🃏 Cartas de Poder</h2>
+            <p className="mb-3">
+              Cada partida recibes <strong className="text-[hsl(48,96%,57%)]">una Carta de Poder aleatoria</strong> que puedes usar una sola vez durante la ronda para cambiar el rumbo de la partida. Hay tres tipos:
+            </p>
+            <div className="space-y-3">
+              <div className="p-4 rounded-2xl border" style={{ background: "rgba(139,92,246,0.1)", borderColor: "rgba(139,92,246,0.3)" }}>
+                <h3 className="font-bold mb-1" style={{ color: "#a78bfa" }}>🔮 Oráculo</h3>
+                <p className="text-sm text-white/70">Revela la respuesta correcta de la IA en una categoría de tu elección antes de escribir. Úsala cuando estés atascado en una categoría difícil.</p>
+              </div>
+              <div className="p-4 rounded-2xl border" style={{ background: "rgba(249,168,37,0.1)", borderColor: "rgba(249,168,37,0.3)" }}>
+                <h3 className="font-bold mb-1" style={{ color: "#fbbf24" }}>⚡ Robo</h3>
+                <p className="text-sm text-white/70">Copia la respuesta de la IA en la categoría que elijas. Los puntos de esa categoría son tuyos — pero solo si la IA tenía una respuesta válida.</p>
+              </div>
+              <div className="p-4 rounded-2xl border" style={{ background: "rgba(239,68,68,0.1)", borderColor: "rgba(239,68,68,0.3)" }}>
+                <h3 className="font-bold mb-1" style={{ color: "#f87171" }}>💣 Sabotaje</h3>
+                <p className="text-sm text-white/70">Anula la respuesta de la IA en una categoría y transfiere sus puntos directamente a tu marcador. Un swing de hasta +20 puntos en el marcador de la ronda.</p>
+              </div>
+            </div>
+            <p className="mt-3 text-sm text-white/50">Cada ronda recibes una carta distinta al azar. Solo puedes usarla una vez por ronda y en la categoría que elijas.</p>
+          </div>
+
+          <div>
+            <h2 className="text-2xl font-black text-white mb-3">🎭 Mentir es Válido</h2>
+            <p className="mb-3">
+              El sistema de <strong className="text-[hsl(48,96%,57%)]">bluff social</strong> que diferencia a STOP de cualquier otro juego de palabras. Funciona así:
+            </p>
+            <ol className="list-decimal list-inside space-y-3 mb-4">
+              <li><strong>Fase de escritura:</strong> Rellena tus categorías normalmente. Si no sabes una palabra, puedes intentar <em>bluffear</em> — escribir algo que suene creíble aunque no sea la respuesta correcta.</li>
+              <li><strong>Fase de juicio (solo modo Solo):</strong> Antes de ver los resultados finales, la IA desafía algunas de tus respuestas. Tú decides si <em>defender</em> tu respuesta o <em>retractarte</em>.</li>
+              <li><strong>Resultado:</strong> Si defiendes una respuesta válida, ganas los puntos. Si defiendes un bluff y la IA lo descubre, pierdes puntos. Si la IA te desafía una respuesta correcta y tú la defiendes, ¡la IA pierde puntos!</li>
+            </ol>
+            <div className="p-4 rounded-2xl bg-white/5 border border-white/10">
+              <p className="text-sm text-white/70"><strong className="text-white">Consejo:</strong> El bluff es más efectivo en categorías abiertas como "Color" o "Animal" donde hay miles de respuestas posibles. En categorías cerradas como "Marca" o "Deporte", la IA tiene más contexto para detectarte.</p>
+            </div>
+          </div>
+
+          <div>
+            <h2 className="text-2xl font-black text-white mb-3">⭐ Sistema de Ligas y Progresión</h2>
+            <p className="mb-3">
+              Cada partida ganas <strong className="text-[hsl(48,96%,57%)]">XP (puntos de experiencia)</strong> que van subiendo tu nivel. Al subir niveles desbloqueas ligas superiores:
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              {[
+                { emoji: "🥉", name: "Bronce", desc: "Nivel 1 — punto de partida", color: "#cd7f32" },
+                { emoji: "🥈", name: "Plata", desc: "Nivel 5 — jugador habitual", color: "#9ca3af" },
+                { emoji: "🥇", name: "Oro", desc: "Nivel 10 — experto en palabras", color: "#f9a825" },
+                { emoji: "💎", name: "Diamante", desc: "Nivel 15 — élite", color: "#60a5fa" },
+                { emoji: "👑", name: "Maestro", desc: "Nivel 20 — leyenda del STOP", color: "#a78bfa" },
+              ].map((league) => (
+                <div key={league.name} className="p-3 rounded-xl bg-white/5 border border-white/10">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-lg">{league.emoji}</span>
+                    <span className="font-bold" style={{ color: league.color }}>{league.name}</span>
+                  </div>
+                  <p className="text-xs text-white/60">{league.desc}</p>
+                </div>
+              ))}
+            </div>
+            <p className="mt-3 text-sm text-white/50">Tu liga y nivel son visibles en el ranking global. También puedes mantener rachas de partidas diarias para bonus de XP extra.</p>
           </div>
 
           <div>
