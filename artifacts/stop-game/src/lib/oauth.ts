@@ -6,7 +6,7 @@ export interface OAuthUser {
   name: string;
   email?: string;
   picture?: string | null;
-  provider: "google" | "facebook" | "instagram" | "tiktok";
+  provider: "google" | "facebook" | "instagram" | "tiktok" | "apple";
 }
 
 // Which providers are configured (secrets exist)
@@ -16,8 +16,10 @@ export const isFacebookConfigured  = !!import.meta.env.VITE_FACEBOOK_APP_ID;
 export const isInstagramConfigured = true;
 // TikTok requires domain verification + app review (like Instagram) — re-enable after deployment
 export const isTikTokConfigured    = false;
+// Apple Sign In — requires Apple Developer Program ($99/yr) + Service ID + private key
+export const isAppleConfigured     = false; // set to true once APPLE_CLIENT_ID etc. are added
 
-function startOAuth(provider: "google" | "facebook" | "instagram" | "tiktok") {
+function startOAuth(provider: "google" | "facebook" | "instagram" | "tiktok" | "apple") {
   const returnPath = window.location.pathname + window.location.search;
   sessionStorage.setItem("oauth_return", returnPath);
   const apiBase = (import.meta as { env?: { VITE_API_URL?: string } }).env?.VITE_API_URL
@@ -30,6 +32,7 @@ export function signInWithGoogle()    { startOAuth("google"); }
 export function signInWithFacebook()  { startOAuth("facebook"); }
 export function signInWithInstagram() { startOAuth("instagram"); }
 export function signInWithTikTok()    { startOAuth("tiktok"); }
+export function signInWithApple()     { startOAuth("apple"); }
 
 // After the backend callback, the bridge page writes `oauth_user` to
 // sessionStorage before redirecting back here. Read it once.
@@ -69,6 +72,9 @@ function friendlyError(code: string): string {
     tiktok_cancelled:         "Inicio con TikTok cancelado.",
     tiktok_failed:            "Error al conectar con TikTok. Inténtalo de nuevo.",
     tiktok_not_configured:    "TikTok no está configurado aún.",
+    apple_cancelled:          "Inicio con Apple cancelado.",
+    apple_failed:             "Error al conectar con Apple. Inténtalo de nuevo.",
+    apple_not_configured:     "Apple no está configurado aún.",
   };
   return map[code] || "Error al iniciar sesión. Inténtalo de nuevo.";
 }

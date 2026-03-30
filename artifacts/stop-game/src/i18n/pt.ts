@@ -11,6 +11,7 @@ const pt = {
     facebook: "Continuar com Facebook",
     instagram: "Continuar com Instagram",
     tiktok: "Continuar com TikTok",
+    apple: "Continuar com Apple",
     soon: "Em breve",
     guest: "Entrar como convidado",
   },
