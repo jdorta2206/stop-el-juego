@@ -11,6 +11,7 @@ const es = {
     facebook: "Continuar con Facebook",
     instagram: "Continuar con Instagram",
     tiktok: "Continuar con TikTok",
+    apple: "Continuar con Apple",
     soon: "Pronto",
     guest: "Entrar como invitado",
   },

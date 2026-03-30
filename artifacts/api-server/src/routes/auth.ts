@@ -1,5 +1,6 @@
 import { Router } from "express";
 import type { Request, Response } from "express";
+import jwt from "jsonwebtoken";
 
 const router = Router();
 
@@ -280,6 +281,113 @@ router.get("/instagram/callback", async (req: Request, res: Response) => {
   } catch (err) {
     console.error("Instagram OAuth error:", err);
     res.redirect(`${APP_ORIGIN}/?auth_error=instagram_failed`);
+  }
+});
+
+// ── APPLE ─────────────────────────────────────────────────────────────────────
+// Requires: APPLE_CLIENT_ID (Service ID), APPLE_TEAM_ID, APPLE_KEY_ID, APPLE_PRIVATE_KEY (.p8 content)
+
+function makeAppleClientSecret(): string {
+  const privateKey = (process.env["APPLE_PRIVATE_KEY"] || "").replace(/\\n/g, "\n");
+  const teamId     = process.env["APPLE_TEAM_ID"]!;
+  const clientId   = process.env["APPLE_CLIENT_ID"]!;
+  const keyId      = process.env["APPLE_KEY_ID"]!;
+
+  return jwt.sign({}, privateKey, {
+    algorithm: "ES256",
+    keyid: keyId,
+    issuer: teamId,
+    audience: "https://appleid.apple.com",
+    subject: clientId,
+    expiresIn: "5m",
+  });
+}
+
+router.get("/apple/start", (req: Request, res: Response) => {
+  const APPLE_CLIENT_ID = process.env["APPLE_CLIENT_ID"];
+  if (!APPLE_CLIENT_ID) {
+    return res.redirect(`${APP_ORIGIN}/?auth_error=apple_not_configured`);
+  }
+  const redirectUri = `${APP_ORIGIN}/api/auth/apple/callback`;
+  const state = req.query["return"] as string || "/";
+  const params = new URLSearchParams({
+    client_id: APPLE_CLIENT_ID,
+    redirect_uri: redirectUri,
+    response_type: "code",
+    scope: "name email",
+    response_mode: "form_post",
+    state,
+  });
+  res.redirect(`https://appleid.apple.com/auth/authorize?${params}`);
+});
+
+// Apple sends a POST (form_post response_mode)
+router.post("/apple/callback", async (req: Request, res: Response) => {
+  const code  = req.body?.["code"]  as string | undefined;
+  const state = req.body?.["state"] as string || "/";
+  const error = req.body?.["error"] as string | undefined;
+
+  const APPLE_CLIENT_ID = process.env["APPLE_CLIENT_ID"];
+
+  if (error || !code) {
+    return res.redirect(`${APP_ORIGIN}/?auth_error=apple_cancelled`);
+  }
+  if (!APPLE_CLIENT_ID || !process.env["APPLE_TEAM_ID"] || !process.env["APPLE_KEY_ID"] || !process.env["APPLE_PRIVATE_KEY"]) {
+    return res.redirect(`${APP_ORIGIN}/?auth_error=apple_not_configured`);
+  }
+  if (!claimCode(`apple_${code}`)) {
+    return res.redirect(`${APP_ORIGIN}${state}`);
+  }
+
+  try {
+    const redirectUri = `${APP_ORIGIN}/api/auth/apple/callback`;
+    const clientSecret = makeAppleClientSecret();
+
+    // Exchange code → tokens
+    const tokenRes = await fetch("https://appleid.apple.com/auth/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: APPLE_CLIENT_ID,
+        client_secret: clientSecret,
+        code,
+        grant_type: "authorization_code",
+        redirect_uri: redirectUri,
+      }),
+    });
+    const tokenData = (await tokenRes.json()) as any;
+    if (tokenData.error) throw new Error(`Apple error: ${tokenData.error}`);
+    if (!tokenData.id_token) throw new Error("No id_token from Apple");
+
+    // Decode the id_token (Apple's JWT) — no need to verify signature here, we trust Apple
+    const payload = JSON.parse(
+      Buffer.from(tokenData.id_token.split(".")[1], "base64url").toString()
+    );
+
+    // Apple only sends name on first login (via req.body.user JSON string)
+    let displayName = "Apple User";
+    try {
+      const userJson = req.body?.["user"];
+      if (userJson) {
+        const u = typeof userJson === "string" ? JSON.parse(userJson) : userJson;
+        const firstName = u?.name?.firstName || "";
+        const lastName  = u?.name?.lastName  || "";
+        displayName = `${firstName} ${lastName}`.trim() || displayName;
+      }
+    } catch (_) {}
+
+    const user = JSON.stringify({
+      id:       `apple_${payload.sub}`,
+      name:     displayName,
+      email:    payload.email || null,
+      picture:  null,
+      provider: "apple",
+    });
+
+    res.send(bridgePage("oauth_user", user, state));
+  } catch (err) {
+    console.error("Apple OAuth error:", err);
+    res.redirect(`${APP_ORIGIN}/?auth_error=apple_failed`);
   }
 });
 
