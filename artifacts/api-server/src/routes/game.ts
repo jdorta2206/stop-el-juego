@@ -703,7 +703,7 @@ function isWordValid(word: string, letter: string, category: string, language = 
   const normalizedLetter = normalizeWord(letter);
 
   if (!normalizedWord.startsWith(normalizedLetter)) return false;
-  if (normalizedWord.length < 3) return false;
+  if (normalizedWord.length < 2) return false;
 
   // Reject words that are never valid in any STOP category (spatial/directional words)
   if (NEVER_VALID_WORDS.has(normalizedWord)) return false;
