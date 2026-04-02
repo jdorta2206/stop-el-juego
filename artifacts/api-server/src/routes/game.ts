@@ -16,22 +16,21 @@ const DICTIONARY: Record<string, Record<string, string[]>> = {
       "avispa","axolote","babosa","babuino","ballena","becada","bisonte","boa","búfalo","buey",
       "búho","buitre","burro","caballo","cabra","caimán","camaleón","camello","canario","cangrejo",
       "canguro","capibara","capivara","caracol","caribú","castor","cebra","ciervo","cigüeña","cisne",
-      "cobra","cocodrilo","codorniz","colibri","colibrí","comadreja","conejo","cormorán","cóndor","coral",
-      "coyote","cocodrilo","cucaracha","cuervo","delfín","dromedario","elefante","erizo","escorpión",
-      "esturión","faisán","flamenco","foca","foca","foca","gacela","gallina","gallo","gamuza",
+      "cobra","cocodrilo","codorniz","colibrí","comadreja","conejo","cormorán","cóndor","coral",
+      "coyote","cucaracha","cuervo","delfín","dromedario","elefante","erizo","escorpión",
+      "esturión","faisán","flamenco","foca","gacela","gallina","gallo","gamuza",
       "ganso","gaviota","gecko","gibón","glotón","gorila","gorrión","grillo","grulla","guacamayo",
       "guepardo","halcón","hamster","hiena","hipopótamo","hormiga","hurón","iguana","impala","jabalí",
       "jaguar","jirafa","jilguero","koala","langosta","lechuza","lemur","leopardo","liebre","lince",
       "llama","lobo","loro","luciérnaga","manatí","mariposa","marmota","medusa","milano","mono",
       "morsa","mosquito","murciélago","musaraña","mula","nutria","ñandú","ñu","orangután","orca",
       "oruga","oso","ostra","oveja","pájaro","paloma","panda","pantera","pato","pavo","pavorreal",
-      "pelícano","perro","pez","pingüino","pitón","polilla","puerco","puercoespín","pulga","pulpo",
-      "puma","quetzal","quirquincho","rana","ratón","raya","reno","rinoceronte","ruiseñor","salamandra",
-      "salmón","saltamontes","sapo","sardina","serpiente","suricata","tapir","tiburón","tigre",
-      "topo","tortuga","tucán","urraca","urogallo","vaca","vicuña","víbora","visón","wallaby",
-      "wombat","yak","yegua","zorro","zopilote","zorillo","zorzal","cabra","cerdo","pez espada",
-      "pez globo","pez payaso","pingüino","piraña","polvo","puma","tejón","toro","trucha","venado",
-      "venado","yacaré","yarará","zamuro","zancudo","zopilotera"
+      "pelícano","perro","pez","pez espada","pez globo","pez payaso","pingüino","piraña","pitón",
+      "polilla","puerco","puercoespín","pulga","pulpo","puma","quetzal","quirquincho",
+      "rana","ratón","raya","reno","rinoceronte","ruiseñor","salamandra",
+      "salmón","saltamontes","sapo","sardina","serpiente","suricata","tapir","tejón","tiburón","tigre",
+      "topo","toro","tortuga","trucha","tucán","urraca","urogallo","vaca","venado","vicuña","víbora","visón",
+      "cerdo","wallaby","wombat","yak","yacaré","yarará","yegua","zamuro","zancudo","zebra","zorillo","zorro","zorzal"
     ],
 
     // ── Colores (exhaustivo) ─────────────────────────────────────────────────
@@ -703,6 +702,7 @@ function isWordValid(word: string, letter: string, category: string, language = 
   const normalizedLetter = normalizeWord(letter);
 
   if (!normalizedWord.startsWith(normalizedLetter)) return false;
+  // Global minimum: 2 chars (allows "ñu", "ox", etc. in closed finite categories)
   if (normalizedWord.length < 2) return false;
 
   // Reject words that are never valid in any STOP category (spatial/directional words)
@@ -710,8 +710,9 @@ function isWordValid(word: string, letter: string, category: string, language = 
 
   const normCategory = normalizeWord(category);
 
-  // Open categories: accept any word with the correct starting letter
-  if (OPEN_CATEGORIES.has(normCategory)) return true;
+  // Open categories: any word is valid IF it has at least 3 chars.
+  // (Min-2 is kept globally only for closed categories like Animal where "ñu" is valid.)
+  if (OPEN_CATEGORIES.has(normCategory)) return normalizedWord.length >= 3;
 
   const langDict = DICTIONARY[language] || DICTIONARY["es"];
   const categoryWords = findCategoryWords(langDict, category);
