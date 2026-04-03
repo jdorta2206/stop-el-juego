@@ -34,8 +34,10 @@ export function AuthModal({ onSave, initial }: AuthModalProps) {
   const [avatarColor, setAvatarColor] = useState(initial?.avatarColor || AVATAR_COLORS[0]);
   const [loginMethod, setLoginMethod] = useState<string | null>(null);
   const [oauthPicture, setOauthPicture] = useState<string | null>(null);
+  const [oauthId, setOauthId] = useState<string | null>(null);
   const [fbToken, setFbToken] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [existingStats, setExistingStats] = useState<{ totalScore: number; gamesPlayed: number } | null>(null);
 
   useEffect(() => {
     try {
@@ -54,17 +56,31 @@ export function AuthModal({ onSave, initial }: AuthModalProps) {
   }, []);
 
   const handleOAuthSuccess = (oauthUser: OAuthUser) => {
+    setOauthId(oauthUser.id);
     setLoginMethod(oauthUser.provider);
     setName((oauthUser.name || "").slice(0, 14));
     setOauthPicture(oauthUser.picture || null);
     setError(null);
     setStep("profile");
+
+    // Fetch existing profile from DB (returning user on new device)
+    const apiBase = (import.meta as any).env?.VITE_API_URL ?? window.location.origin;
+    fetch(`${apiBase}/api/ranking/scores/${encodeURIComponent(oauthUser.id)}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.score?.totalScore > 0) {
+          setExistingStats({ totalScore: data.score.totalScore, gamesPlayed: data.score.gamesPlayed });
+        }
+      })
+      .catch(() => {});
   };
 
   const handleSave = () => {
     if (!name.trim()) return;
+    // Use the OAuth provider ID so the same account is recognised on any device
+    const persistentId = oauthId || initial?.id || crypto.randomUUID();
     onSave({
-      id: initial?.id || crypto.randomUUID(),
+      id: persistentId,
       name: name.trim().slice(0, 14),
       avatarColor,
       loginMethod,
@@ -251,6 +267,24 @@ export function AuthModal({ onSave, initial }: AuthModalProps) {
                       <span className="text-[#f9a825] font-black text-xs uppercase tracking-wider">{loginMethod}</span>
                       <span className="text-green-400 text-xs font-bold">✓</span>
                     </div>
+                  )}
+
+                  {/* Welcome back banner for returning users */}
+                  {existingStats && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className="flex items-center gap-3 px-4 py-3 rounded-2xl"
+                      style={{ background: "rgba(249,168,37,0.15)", border: "1px solid rgba(249,168,37,0.4)" }}
+                    >
+                      <span className="text-2xl">🏆</span>
+                      <div>
+                        <p className="text-[#f9a825] font-black text-sm">¡Bienvenido de vuelta!</p>
+                        <p className="text-white/70 text-xs">
+                          {existingStats.totalScore.toLocaleString()} pts · {existingStats.gamesPlayed} partidas
+                        </p>
+                      </div>
+                    </motion.div>
                   )}
 
                   <div className="flex justify-center">

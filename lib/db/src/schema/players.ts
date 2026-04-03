@@ -87,3 +87,18 @@ export const dailyResultsTable = pgTable("daily_results", {
 export const insertDailyResultSchema = createInsertSchema(dailyResultsTable).omit({ id: true, createdAt: true });
 export type InsertDailyResult = z.infer<typeof insertDailyResultSchema>;
 export type DailyResult = typeof dailyResultsTable.$inferSelect;
+
+// ── Push notification subscriptions ──────────────────────────────────────────
+export const pushSubscriptionsTable = pgTable("push_subscriptions", {
+  id: serial("id").primaryKey(),
+  playerId: text("player_id").notNull(),
+  endpoint: text("endpoint").notNull().unique(),
+  p256dh: text("p256dh").notNull(),
+  auth: text("auth").notNull(),
+  language: text("language").notNull().default("es"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertPushSubscriptionSchema = createInsertSchema(pushSubscriptionsTable).omit({ id: true, createdAt: true });
+export type InsertPushSubscription = z.infer<typeof insertPushSubscriptionSchema>;
+export type PushSubscription = typeof pushSubscriptionsTable.$inferSelect;

@@ -1,4 +1,4 @@
-const CACHE = "stop-v1";
+const CACHE = "stop-v2";
 const STATIC = [
   "/",
   "/images/stop-logo.png",
@@ -24,7 +24,6 @@ self.addEventListener("fetch", (e) => {
   if (e.request.method !== "GET") return;
   const url = new URL(e.request.url);
 
-  // Network-first for API calls
   if (url.pathname.startsWith("/api/")) {
     e.respondWith(
       fetch(e.request).catch(() => caches.match(e.request))
@@ -32,7 +31,6 @@ self.addEventListener("fetch", (e) => {
     return;
   }
 
-  // Cache-first for static assets
   e.respondWith(
     caches.match(e.request).then((cached) =>
       cached ||
@@ -44,5 +42,46 @@ self.addEventListener("fetch", (e) => {
         return res;
       })
     )
+  );
+});
+
+// ── Push notifications ────────────────────────────────────────────────────────
+self.addEventListener("push", (e) => {
+  let data = {};
+  try { data = e.data?.json() ?? {}; } catch {}
+
+  const title  = data.title  || "STOP El Juego";
+  const body   = data.body   || "¡Tienes una notificación!";
+  const icon   = data.icon   || "/images/icon-192.png";
+  const badge  = data.badge  || "/images/icon-192.png";
+  const url    = data.url    || "/";
+
+  e.waitUntil(
+    self.registration.showNotification(title, {
+      body,
+      icon,
+      badge,
+      data: { url },
+      vibrate: [200, 100, 200],
+      requireInteraction: false,
+    })
+  );
+});
+
+self.addEventListener("notificationclick", (e) => {
+  e.notification.close();
+  const url = e.notification.data?.url || "/";
+  e.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+      // Focus existing tab if open
+      for (const client of clients) {
+        if (client.url.includes(self.location.origin) && "focus" in client) {
+          client.navigate(url);
+          return client.focus();
+        }
+      }
+      // Otherwise open new tab
+      if (self.clients.openWindow) return self.clients.openWindow(url);
+    })
   );
 });
