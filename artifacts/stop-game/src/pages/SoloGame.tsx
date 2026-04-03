@@ -174,6 +174,9 @@ export default function SoloGame() {
   const submitScoreMutation = useSubmitScore();
   const queryClient = useQueryClient();
   const timerRef = useRef<NodeJS.Timeout>(null);
+  // Guards to prevent handleStop / results-accumulation from firing more than once per round
+  const stoppedRef = useRef(false);
+  const resultsAppliedRef = useRef(false);
 
   const startGame = () => {
     setAiComment(null);
@@ -237,6 +240,10 @@ export default function SoloGame() {
   };
 
   const startRound = () => {
+    // Reset per-round guards
+    stoppedRef.current = false;
+    resultsAppliedRef.current = false;
+
     // Set up AI bluff for this round (random category, 50% chance it's actually bluffing)
     const aiBluffCat = categories[Math.floor(Math.random() * categories.length)];
     setAiBluffSetup({ category: aiBluffCat, wasActuallyBluffing: Math.random() < 0.5 });
@@ -250,7 +257,13 @@ export default function SoloGame() {
     timerRef.current = setInterval(() => {
       setTimeLeft(prev => {
         if (prev <= 1) {
-          handleStop();
+          // Clear the interval immediately (synchronously) so this branch never fires twice
+          if (timerRef.current) {
+            clearInterval(timerRef.current);
+            timerRef.current = null;
+          }
+          // Schedule handleStop outside the state-setter (safe async trigger)
+          setTimeout(handleStop, 0);
           return 0;
         }
         return prev - 1;
@@ -302,7 +315,14 @@ export default function SoloGame() {
   }, []);
 
   const handleStop = async () => {
-    if (timerRef.current) clearInterval(timerRef.current);
+    // Guard: never run more than once per round
+    if (stoppedRef.current) return;
+    stoppedRef.current = true;
+
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
     sound.playStop();
     setGameState("EVALUATING");
 
@@ -373,6 +393,10 @@ export default function SoloGame() {
 
   useEffect(() => {
     if (gameState === "RESULTS" && results) {
+      // Guard: only apply round scores once per round, never on re-renders
+      if (resultsAppliedRef.current) return;
+      resultsAppliedRef.current = true;
+
       const ps = results.playerTotalScore || 0;
       const rawAs = results.aiTotalScore || 0;
 
