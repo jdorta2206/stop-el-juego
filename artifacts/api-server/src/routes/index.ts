@@ -8,6 +8,7 @@ import stripeRouter from "./stripe";
 import presenceRouter from "./presence";
 import friendsRouter from "./friends";
 import dailyRouter from "./daily";
+import notificationsRouter from "./notifications";
 
 const router: IRouter = Router();
 
@@ -20,5 +21,6 @@ router.use("/stripe", stripeRouter);
 router.use("/presence", presenceRouter);
 router.use("/friends", friendsRouter);
 router.use("/daily", dailyRouter);
+router.use("/notifications", notificationsRouter);
 
 export default router;

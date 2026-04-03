@@ -1,22 +1,26 @@
 import { ReactNode, useState } from "react";
 import { Link } from "wouter";
 import { usePlayer } from "@/hooks/use-player";
-import { Crown, LogOut } from "lucide-react";
+import { Crown, LogOut, Bell, BellOff } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button, Input } from "./ui";
 import { AuthModal } from "./AuthModal";
 import { LanguageSelector } from "./LanguageSelector";
 import { AVATAR_COLORS } from "@/lib/utils";
 import { useT } from "@/i18n/useT";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
 
 const LOGO_URL = `${import.meta.env.BASE_URL}images/stop-logo.png`;
 
 export function Layout({ children }: { children: ReactNode }) {
   const { player, isLoaded, needsAuth, savePlayer, updateProfile, logout } = usePlayer();
-  const { t } = useT();
+  const { t, lang } = useT();
   const [showProfile, setShowProfile] = useState(false);
   const [editName, setEditName] = useState("");
   const [editColor, setEditColor] = useState("");
+  const { isSupported, isSubscribed, permission, loading: notifLoading, subscribe, unsubscribe } =
+    usePushNotifications(player?.id, lang);
+  const [notifToast, setNotifToast] = useState<string | null>(null);
 
   if (!isLoaded) {
     return (
@@ -73,6 +77,32 @@ export function Layout({ children }: { children: ReactNode }) {
           {/* Language selector */}
           <LanguageSelector />
 
+          {/* Notification bell — only for logged-in, non-guest users on supported browsers */}
+          {player && player.loginMethod !== "guest" && isSupported && permission !== "denied" && (
+            <motion.button
+              whileTap={{ scale: 0.9 }}
+              onClick={async () => {
+                if (isSubscribed) {
+                  await unsubscribe();
+                  setNotifToast("🔕 Notificaciones desactivadas");
+                } else {
+                  await subscribe();
+                  setNotifToast("🔔 ¡Notificaciones activadas!");
+                }
+                setTimeout(() => setNotifToast(null), 3000);
+              }}
+              disabled={notifLoading}
+              title={isSubscribed ? "Desactivar notificaciones" : "Activar notificaciones"}
+              className="w-8 h-8 rounded-full flex items-center justify-center transition-colors hover:bg-white/10 relative"
+              style={{ color: isSubscribed ? "#f9a825" : "rgba(255,255,255,0.5)" }}
+            >
+              {isSubscribed ? <Bell className="w-4 h-4" /> : <BellOff className="w-4 h-4" />}
+              {isSubscribed && (
+                <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-[#f9a825]" />
+              )}
+            </motion.button>
+          )}
+
           {/* Player chip */}
           {player && (
             <button
@@ -122,6 +152,21 @@ export function Layout({ children }: { children: ReactNode }) {
           <span className="text-white/20 text-xs">© 2026 STOP El Juego</span>
         </div>
       </footer>
+
+      {/* Notification toast */}
+      <AnimatePresence>
+        {notifToast && (
+          <motion.div
+            initial={{ opacity: 0, y: -40 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -40 }}
+            className="fixed top-20 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-2xl font-bold text-sm text-white shadow-2xl"
+            style={{ background: "rgba(26,35,126,0.95)", border: "1px solid rgba(249,168,37,0.5)", whiteSpace: "nowrap" }}
+          >
+            {notifToast}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Profile modal */}
       <AnimatePresence>
