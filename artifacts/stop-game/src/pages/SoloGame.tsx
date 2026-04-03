@@ -397,7 +397,14 @@ export default function SoloGame() {
       if (resultsAppliedRef.current) return;
       resultsAppliedRef.current = true;
 
-      const ps = results.playerTotalScore || 0;
+      // Void word scores for categories where the player was caught bluffing
+      const caughtBluffCategories = new Set(
+        bluffResults.filter(br => br.caught).map(br => br.category)
+      );
+      const voidedScore = Array.from(caughtBluffCategories).reduce((sum, cat) => {
+        return sum + (results.results?.[cat]?.player?.score ?? 0);
+      }, 0);
+      const ps = (results.playerTotalScore || 0) - voidedScore;
       const rawAs = results.aiTotalScore || 0;
 
       // SABOTAGE: reduce AI score AND transfer those points to player
@@ -1441,8 +1448,9 @@ export default function SoloGame() {
                   const aiRes = res?.ai;
                   const isSabotaged = sabotageCategory === category;
                   const isDuplicate = playerRes?.isDuplicate === true;
-                  const playerWon = !isDuplicate && (playerRes?.score ?? 0) > ((isSabotaged ? 0 : aiRes?.score) ?? 0);
-                  const tied = !isSabotaged && !isDuplicate && (playerRes?.score ?? 0) === (aiRes?.score ?? 0) && (playerRes?.score ?? 0) > 0;
+                  const isCaughtBluff = bluffResults.some(br => br.category === category && br.caught);
+                  const playerWon = !isDuplicate && !isCaughtBluff && (playerRes?.score ?? 0) > ((isSabotaged ? 0 : aiRes?.score) ?? 0);
+                  const tied = !isSabotaged && !isDuplicate && !isCaughtBluff && (playerRes?.score ?? 0) === (aiRes?.score ?? 0) && (playerRes?.score ?? 0) > 0;
 
                   return (
                     <motion.div
@@ -1455,16 +1463,18 @@ export default function SoloGame() {
                         <div className="flex items-center gap-2 mb-2">
                           <h4 className="font-bold text-secondary text-xs uppercase tracking-wider flex-1">{category}</h4>
                           {isDuplicate && <span className="text-red-400 text-xs font-black">REPETIDA ❌</span>}
-                          {!isDuplicate && playerWon && <span className="text-green-400 text-xs font-black">+{playerRes?.score}pts ✓</span>}
-                          {!isDuplicate && tied && <span className="text-yellow-400 text-xs font-black">={playerRes?.score}pts</span>}
+                          {isCaughtBluff && <span className="text-red-400 text-xs font-black">PILLADO 🕵️ −10pts</span>}
+                          {!isDuplicate && !isCaughtBluff && playerWon && <span className="text-green-400 text-xs font-black">+{playerRes?.score}pts ✓</span>}
+                          {!isDuplicate && !isCaughtBluff && tied && <span className="text-yellow-400 text-xs font-black">={playerRes?.score}pts</span>}
                         </div>
                         <div className="grid grid-cols-2 gap-3">
-                          <div className={`bg-card p-3 rounded-lg border relative overflow-hidden ${isDuplicate ? "border-red-500/40" : "border-white/10"}`}>
+                          <div className={`bg-card p-3 rounded-lg border relative overflow-hidden ${isDuplicate || isCaughtBluff ? "border-red-500/40" : "border-white/10"}`}>
                             <p className="text-xs text-white/50 font-bold mb-1">{t.game.you}</p>
-                            <p className={`font-semibold text-lg break-words ${isDuplicate ? "line-through opacity-50" : ""}`}>{playerRes?.response || t.game.empty}</p>
+                            <p className={`font-semibold text-lg break-words ${isDuplicate || isCaughtBluff ? "line-through opacity-50" : ""}`}>{playerRes?.response || t.game.empty}</p>
                             {isDuplicate && <p className="text-red-400 text-xs font-bold mt-1">0pts — respuesta repetida</p>}
-                            <div className={`absolute top-0 right-0 h-full w-1.5 ${isDuplicate ? "bg-red-500/60" : (playerRes?.score ?? 0) >= 10 ? "bg-green-500" : (playerRes?.score ?? 0) >= 5 ? "bg-yellow-400" : "bg-red-500/60"}`} />
-                            {!isDuplicate && <span className="absolute bottom-2 right-3 text-xs font-bold opacity-50">{playerRes?.score ?? 0}{t.game.points}</span>}
+                            {isCaughtBluff && <p className="text-red-400 text-xs font-bold mt-1">0pts — pillado mintiendo</p>}
+                            <div className={`absolute top-0 right-0 h-full w-1.5 ${isDuplicate || isCaughtBluff ? "bg-red-500/60" : (playerRes?.score ?? 0) >= 10 ? "bg-green-500" : (playerRes?.score ?? 0) >= 5 ? "bg-yellow-400" : "bg-red-500/60"}`} />
+                            {!isDuplicate && !isCaughtBluff && <span className="absolute bottom-2 right-3 text-xs font-bold opacity-50">{playerRes?.score ?? 0}{t.game.points}</span>}
                           </div>
                           <div
                             className="p-3 rounded-lg border relative overflow-hidden"
