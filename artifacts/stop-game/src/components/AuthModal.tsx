@@ -174,8 +174,9 @@ export function AuthModal({ onSave, initial }: AuthModalProps) {
                     onClick={signInWithFacebook}
                     configured={isFacebookConfigured}
                     icon={
-                      <svg viewBox="0 0 24 24" className="w-5 h-5" fill="#1877F2">
-                        <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                      <svg viewBox="0 0 24 24" className="w-5 h-5">
+                        <circle cx="12" cy="12" r="12" fill="white" />
+                        <path d="M13.397 20.997v-8.196h2.765l.411-3.209h-3.176V7.548c0-.926.258-1.56 1.587-1.56h1.684V3.127A22.336 22.336 0 0 0 14.201 3c-2.444 0-4.122 1.492-4.122 4.231v2.355H7.332v3.209h2.753v8.202h3.312z" fill="#1877F2" />
                       </svg>
                     }
                     label={t.auth.facebook}
