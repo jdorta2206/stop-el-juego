@@ -6,7 +6,7 @@ import fr from "./fr";
 export type LangCode = "es" | "en" | "pt" | "fr";
 export type LangDict = typeof es;
 
-export const LANGUAGES: Record<LangCode, LangDict> = { es, en, pt, fr };
+export const LANGUAGES = { es, en, pt, fr } as unknown as Record<LangCode, LangDict>;
 
 const STORAGE_KEY = "stop_lang";
 
