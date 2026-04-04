@@ -65,11 +65,9 @@ export default function Multiplayer() {
           hostId: player.id,
           hostName: player.name,
           avatarColor: player.avatarColor,
-          loginMethod: player.loginMethod ?? null,
           maxRounds: 3,
           language: getCurrentLang(),
-          isPublic,
-        }
+        } as import("@workspace/api-client-react").CreateRoomRequest & { loginMethod?: string | null; isPublic?: boolean },
       });
       setLocation(`/room/${room.roomCode}`);
     } catch {
@@ -88,8 +86,7 @@ export default function Multiplayer() {
           playerId: player.id,
           playerName: player.name,
           avatarColor: player.avatarColor,
-          loginMethod: player.loginMethod ?? null,
-        }
+        } as import("@workspace/api-client-react").JoinRoomRequest & { loginMethod?: string | null },
       });
       setLocation(`/room/${room.roomCode}`);
     } catch {
@@ -107,8 +104,7 @@ export default function Multiplayer() {
           playerId: player.id,
           playerName: player.name,
           avatarColor: player.avatarColor,
-          loginMethod: player.loginMethod ?? null,
-        }
+        } as import("@workspace/api-client-react").JoinRoomRequest & { loginMethod?: string | null },
       });
       setLocation(`/room/${room.roomCode}`);
     } catch {

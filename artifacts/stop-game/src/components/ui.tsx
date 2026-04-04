@@ -10,7 +10,7 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
 }
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant = "primary", size = "md", isLoading, children, ...props }, ref) => {
+  ({ className, variant = "primary", size = "md", isLoading, children, onDrag: _onDrag, ...props }, ref) => {
     const variants = {
       primary: "bg-primary text-primary-foreground hover:bg-primary/90 shadow-lg shadow-primary/30",
       secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/90 shadow-lg shadow-secondary/30",
@@ -38,7 +38,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
           className
         )}
         disabled={isLoading || props.disabled}
-        {...props}
+        {...(props as any)}
       >
         {isLoading ? (
           <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin mr-2" />

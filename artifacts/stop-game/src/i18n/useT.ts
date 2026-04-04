@@ -6,7 +6,7 @@ export function useT(): { t: LangDict; lang: LangCode; setLang: (c: LangCode) =>
 
   useEffect(() => {
     const unsub = subscribe(() => rerender((n) => n + 1));
-    return unsub;
+    return () => { unsub(); };
   }, []);
 
   return {

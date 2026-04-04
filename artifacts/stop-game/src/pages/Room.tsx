@@ -103,8 +103,9 @@ export default function Room() {
     roomCode
   );
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: room, error } = useGetRoom(roomCode || "", {
-    query: { refetchInterval: 1500, enabled: !!roomCode }
+    query: { refetchInterval: 1500, enabled: !!roomCode } as any
   });
 
   const isHost = room?.hostId === player?.id;

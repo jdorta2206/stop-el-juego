@@ -336,7 +336,7 @@ export default function SoloGame() {
       apiData = await validateMutation.mutateAsync({
         data: {
           letter: currentLetter,
-          language: getCurrentLang(),
+          language: getCurrentLang() as import("@workspace/api-client-react").ValidateRoundRequestLanguage,
           playerName: player?.name,
           playerResponses: formattedResponses,
         }
@@ -643,7 +643,7 @@ export default function SoloGame() {
         <AchievementToast
           achievement={newlyUnlocked}
           onDone={clearNewlyUnlocked}
-          tAchievements={t.achievements as Record<string, string>}
+          tAchievements={t.achievements as unknown as { [key: string]: string; new: string; xpBonus: string }}
         />
 
         {/* Mode badges row */}
@@ -1447,7 +1447,7 @@ export default function SoloGame() {
                   const playerRes = res?.player;
                   const aiRes = res?.ai;
                   const isSabotaged = sabotageCategory === category;
-                  const isDuplicate = playerRes?.isDuplicate === true;
+                  const isDuplicate = (playerRes as (typeof playerRes & { isDuplicate?: boolean }) | undefined)?.isDuplicate === true;
                   const isCaughtBluff = bluffResults.some(br => br.category === category && br.caught);
                   const playerWon = !isDuplicate && !isCaughtBluff && (playerRes?.score ?? 0) > ((isSabotaged ? 0 : aiRes?.score) ?? 0);
                   const tied = !isSabotaged && !isDuplicate && !isCaughtBluff && (playerRes?.score ?? 0) === (aiRes?.score ?? 0) && (playerRes?.score ?? 0) > 0;

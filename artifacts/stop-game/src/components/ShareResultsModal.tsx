@@ -230,7 +230,7 @@ export function ShareResultsModal({
                 {copied ? "¡Copiado!" : "Copiar texto"}
               </button>
 
-              {navigator.share && (
+              {"share" in navigator && (
                 <button
                   onClick={handleNativeShare}
                   className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-sm transition-all hover:opacity-90 active:scale-95"

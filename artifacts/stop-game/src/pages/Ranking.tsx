@@ -140,8 +140,9 @@ function CopyJoinBtn({ roomCode }: { roomCode: string }) {
 }
 
 export default function Ranking() {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, isLoading } = useGetLeaderboard({ limit: 100 }, {
-    query: { refetchOnMount: "always", staleTime: 0 }
+    query: { refetchOnMount: "always", staleTime: 0 } as any
   });
   const { player } = usePlayer();
   const { t } = useT();

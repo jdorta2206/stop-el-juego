@@ -24,7 +24,8 @@ export default function Home() {
   const league = getLeague(level);
   const [showPremiumModal, setShowPremiumModal] = useState(false);
   const [invitedBy, setInvitedBy] = useState<string | null>(null);
-  const { data: leaderboardData } = useGetLeaderboard({ limit: 3 }, { query: { staleTime: 60_000 } });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: leaderboardData } = useGetLeaderboard({ limit: 3 }, { query: { staleTime: 60_000 } as any });
   const top3 = leaderboardData?.players?.slice(0, 3) ?? [];
 
   useEffect(() => {
