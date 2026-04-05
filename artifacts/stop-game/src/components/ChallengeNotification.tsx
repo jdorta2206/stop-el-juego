@@ -32,32 +32,35 @@ export function ChallengeNotification({ challenge, onDismiss }: ChallengeNotific
 
   const handleAccept = async () => {
     setResponding(true);
+
+    // Read player data once — needed for /join in both flows
+    let playerData: { id: string; name: string; avatarColor: string; loginMethod?: string | null } | null = null;
+    try {
+      const stored = localStorage.getItem("stop_player_v2");
+      if (stored) playerData = JSON.parse(stored);
+    } catch { /* ignore */ }
+
     if (!isRoomInvite) {
       await respondToChallenge(challenge.challengeId, true);
-    } else {
-      // For room invites, call /join first so the player appears in the room lobby
-      try {
-        let playerData: { id: string; name: string; avatarColor: string; loginMethod?: string | null } | null = null;
-        try {
-          const stored = localStorage.getItem("stop_player_v2");
-          if (stored) playerData = JSON.parse(stored);
-        } catch { /* ignore */ }
+    }
 
-        if (playerData?.id) {
-          const apiBase = (import.meta as any).env?.VITE_API_URL ?? window.location.origin;
-          await fetch(`${apiBase}/api/rooms/${challenge.roomCode.toUpperCase()}/join`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              playerId: playerData.id,
-              playerName: playerData.name,
-              avatarColor: playerData.avatarColor,
-              loginMethod: playerData.loginMethod ?? null,
-            }),
-          });
-        }
+    // Always call /join so the player appears in the room lobby (both reto and room invite)
+    if (playerData?.id) {
+      try {
+        const apiBase = (import.meta as any).env?.VITE_API_URL ?? window.location.origin;
+        await fetch(`${apiBase}/api/rooms/${challenge.roomCode.toUpperCase()}/join`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            playerId: playerData.id,
+            playerName: playerData.name,
+            avatarColor: playerData.avatarColor,
+            loginMethod: playerData.loginMethod ?? null,
+          }),
+        });
       } catch { /* silently proceed even if join fails */ }
     }
+
     onDismiss();
     setLocation(`/room/${challenge.roomCode}`);
   };
