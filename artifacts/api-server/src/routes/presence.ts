@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { roomsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
+import { sendPushToPlayer, notifyFollowersPlayerOnline } from "../lib/pushHelper";
 
 const router: IRouter = Router();
 
@@ -57,18 +58,23 @@ setInterval(() => {
 
 // POST /api/presence/ping
 router.post("/ping", (req, res) => {
-  const { playerId, name, picture, avatarColor, provider, roomCode } = req.body as {
+  const { playerId, name, picture, avatarColor, provider, roomCode, language } = req.body as {
     playerId: string;
     name: string;
     picture?: string | null;
     avatarColor?: string;
     provider?: string | null;
     roomCode?: string | null;
+    language?: string;
   };
 
   if (!playerId || !name) {
     return res.status(400).json({ error: "playerId and name required" });
   }
+
+  // Check if this is a fresh connection (player was offline for > 3 min)
+  const existing = presenceMap.get(playerId);
+  const wasOffline = !existing || existing.lastSeen < Date.now() - 3 * 60 * 1000;
 
   presenceMap.set(playerId, {
     name,
@@ -78,6 +84,11 @@ router.post("/ping", (req, res) => {
     roomCode: roomCode || null,
     lastSeen: Date.now(),
   });
+
+  // Notify followers asynchronously (non-blocking) when player reconnects
+  if (wasOffline && provider && provider !== "guest") {
+    notifyFollowersPlayerOnline(playerId, name, language || "es").catch(() => {});
+  }
 
   return res.json({ ok: true });
 });
@@ -176,6 +187,17 @@ router.post("/challenge", async (req, res) => {
     createdAt: Date.now(),
   });
 
+  // Send push notification to target (works even if they have the app closed)
+  const lang = (req.body as any).language || "es";
+  const CHALLENGE_MSGS: Record<string, { title: string; body: string }> = {
+    es: { title: "⚔️ ¡Nuevo reto!", body: `${fromName} te desafía a una partida de STOP. ¡Acepta si te atreves!` },
+    en: { title: "⚔️ New challenge!", body: `${fromName} is challenging you to a STOP game. Do you dare accept?` },
+    pt: { title: "⚔️ Novo desafio!", body: `${fromName} desafia-te para uma partida de STOP. Aceitas?` },
+    fr: { title: "⚔️ Nouveau défi !", body: `${fromName} te défie à une partie de STOP. Tu oses accepter ?` },
+  };
+  const challengeMsg = CHALLENGE_MSGS[lang] || CHALLENGE_MSGS.es;
+  sendPushToPlayer(toPlayerId, { ...challengeMsg, url: "/multijugador" }).catch(() => {});
+
   return res.json({ challengeId, roomCode });
 });
 
@@ -222,6 +244,17 @@ router.post("/room-invite", (req, res) => {
   (entry as any).isRoomInvite = true;
 
   challengeMap.set(challengeId, entry);
+
+  // Push notification to target (works even if app is closed)
+  const invLang = (req.body as any).language || "es";
+  const INVITE_MSGS: Record<string, { title: string; body: string }> = {
+    es: { title: "🎮 ¡Te invitan a tu sala!", body: `${fromName} te invita a unirte a la sala ${roomCode}` },
+    en: { title: "🎮 Room invite!", body: `${fromName} invites you to join room ${roomCode}` },
+    pt: { title: "🎮 Convite para sala!", body: `${fromName} convida-te para a sala ${roomCode}` },
+    fr: { title: "🎮 Invitation à la salle !", body: `${fromName} t'invite à rejoindre la salle ${roomCode}` },
+  };
+  const invMsg = INVITE_MSGS[invLang] || INVITE_MSGS.es;
+  sendPushToPlayer(toPlayerId, { ...invMsg, url: `/multijugador?room=${roomCode}` }).catch(() => {});
 
   return res.json({ ok: true, challengeId });
 });

@@ -3,12 +3,13 @@ import webpush from "web-push";
 import { db } from "@workspace/db";
 import { pushSubscriptionsTable } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
+import { sendPushToAllSubscribers } from "../lib/pushHelper";
 
 const router: IRouter = Router();
 
 const VAPID_PUBLIC  = process.env.VAPID_PUBLIC_KEY  || "";
 const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY || "";
-const VAPID_EMAIL   = process.env.VAPID_EMAIL       || "mailto:admin@stop-el-juego.com";
+const VAPID_EMAIL   = process.env.VAPID_EMAIL       || "mailto:stopeljuegodepalabras@gmail.com";
 
 if (VAPID_PUBLIC && VAPID_PRIVATE) {
   webpush.setVapidDetails(VAPID_EMAIL, VAPID_PUBLIC, VAPID_PRIVATE);
@@ -36,7 +37,6 @@ router.post("/subscribe", async (req, res) => {
   }
 
   try {
-    // Upsert: update language if endpoint already exists
     await db.execute(sql`
       INSERT INTO push_subscriptions (player_id, endpoint, p256dh, auth, language)
       VALUES (${playerId}, ${endpoint}, ${p256dh}, ${auth}, ${language || "es"})
@@ -63,9 +63,8 @@ router.delete("/unsubscribe", async (req, res) => {
   }
 });
 
-// POST /api/notifications/send-daily  (called by a cron or manual trigger)
+// POST /api/notifications/send-daily  (called by cron or manual trigger)
 router.post("/send-daily", async (req, res) => {
-  // Simple auth: only allow internal calls with a shared secret
   const secret = req.headers["x-cron-secret"];
   if (secret !== process.env.CRON_SECRET && process.env.CRON_SECRET) {
     res.status(403).json({ error: "Forbidden" }); return;
@@ -84,48 +83,15 @@ router.post("/send-daily", async (req, res) => {
   };
   const msg = DAILY_MSGS[lang] || DAILY_MSGS.es;
 
-  const rows = await db
-    .select()
-    .from(pushSubscriptionsTable)
-    .where(eq(pushSubscriptionsTable.language, lang));
-
-  let sent = 0;
-  let failed = 0;
-  const toDelete: string[] = [];
-
-  await Promise.allSettled(
-    rows.map(async (row) => {
-      try {
-        await webpush.sendNotification(
-          { endpoint: row.endpoint, keys: { p256dh: row.p256dh, auth: row.auth } },
-          JSON.stringify({
-            title: msg.title,
-            body: msg.body,
-            icon: "/images/icon-192.png",
-            badge: "/images/icon-192.png",
-            url: "/reto",
-          })
-        );
-        sent++;
-      } catch (e: any) {
-        failed++;
-        // 410 Gone = subscription expired, remove it
-        if (e.statusCode === 410 || e.statusCode === 404) {
-          toDelete.push(row.endpoint);
-        }
-      }
-    })
+  const result = await sendPushToAllSubscribers(
+    { ...msg, icon: "/images/icon-192.png", badge: "/images/icon-192.png", url: "/reto" },
+    lang
   );
 
-  // Cleanup stale subscriptions
-  for (const ep of toDelete) {
-    await db.delete(pushSubscriptionsTable).where(eq(pushSubscriptionsTable.endpoint, ep)).catch(() => {});
-  }
-
-  res.json({ sent, failed, removed: toDelete.length });
+  res.json(result);
 });
 
-// POST /api/notifications/send-invite — notify a specific player
+// POST /api/notifications/send-invite — notify a specific player (room invite)
 router.post("/send-invite", async (req, res) => {
   const { targetPlayerId, fromName, roomCode, language } = req.body;
   if (!targetPlayerId || !fromName || !roomCode) {
@@ -144,29 +110,19 @@ router.post("/send-invite", async (req, res) => {
   };
   const msg = INVITE_MSGS[lang] || INVITE_MSGS.es;
 
-  const rows = await db
-    .select()
-    .from(pushSubscriptionsTable)
+  const rows = await db.select().from(pushSubscriptionsTable)
     .where(eq(pushSubscriptionsTable.playerId, targetPlayerId));
 
   let sent = 0;
-  await Promise.allSettled(
-    rows.map(async (row) => {
-      try {
-        await webpush.sendNotification(
-          { endpoint: row.endpoint, keys: { p256dh: row.p256dh, auth: row.auth } },
-          JSON.stringify({
-            title: msg.title,
-            body: msg.body,
-            icon: "/images/icon-192.png",
-            badge: "/images/icon-192.png",
-            url: `/multijugador?room=${roomCode}`,
-          })
-        );
-        sent++;
-      } catch {}
-    })
-  );
+  await Promise.allSettled(rows.map(async (row) => {
+    try {
+      await webpush.sendNotification(
+        { endpoint: row.endpoint, keys: { p256dh: row.p256dh, auth: row.auth } },
+        JSON.stringify({ ...msg, icon: "/images/icon-192.png", badge: "/images/icon-192.png", url: `/multijugador?room=${roomCode}` })
+      );
+      sent++;
+    } catch {}
+  }));
 
   res.json({ sent });
 });

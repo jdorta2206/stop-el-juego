@@ -1,6 +1,7 @@
 import { runMigrations } from "stripe-replit-sync";
 import { getStripeSync } from "./stripeClient";
 import app from "./app";
+import { startDailyCron } from "./lib/dailyCron";
 
 async function initStripe() {
   const databaseUrl = process.env["DATABASE_URL"];
@@ -60,6 +61,8 @@ async function main() {
   app.listen(port, () => {
     console.log(`Server listening on port ${port}`);
   });
+
+  startDailyCron();
 
   initStripe().catch((err) => {
     console.error("Stripe init failed:", err.message);
