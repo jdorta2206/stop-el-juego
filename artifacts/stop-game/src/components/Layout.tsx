@@ -1,7 +1,7 @@
 import { ReactNode, useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { usePlayer } from "@/hooks/use-player";
-import { Crown, LogOut, Bell, BellOff } from "lucide-react";
+import { Crown, LogOut, Bell, BellOff, Home, Trophy, Users, Calendar } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button, Input } from "./ui";
 import { AuthModal } from "./AuthModal";
@@ -12,9 +12,17 @@ import { usePushNotifications } from "@/hooks/usePushNotifications";
 
 const LOGO_URL = `${import.meta.env.BASE_URL}images/stop-logo.png`;
 
+const NAV_ITEMS = [
+  { href: "/", icon: Home, label: "Inicio" },
+  { href: "/ranking", icon: Trophy, label: "Ranking" },
+  { href: "/amigos", icon: Users, label: "Amigos" },
+  { href: "/reto", icon: Calendar, label: "Reto" },
+] as const;
+
 export function Layout({ children }: { children: ReactNode }) {
   const { player, isLoaded, needsAuth, savePlayer, updateProfile, logout } = usePlayer();
   const { t, lang } = useT();
+  const [location] = useLocation();
   const [showProfile, setShowProfile] = useState(false);
   const [editName, setEditName] = useState("");
   const [editColor, setEditColor] = useState("");
@@ -124,12 +132,51 @@ export function Layout({ children }: { children: ReactNode }) {
       </header>
 
       {/* Main content */}
-      <main className="flex-1 w-full max-w-5xl mx-auto px-4 pb-4 z-10 flex flex-col">
+      <main className="flex-1 w-full max-w-5xl mx-auto px-4 pb-24 z-10 flex flex-col">
         {children}
       </main>
 
+      {/* Bottom navigation bar */}
+      <nav
+        className="fixed bottom-0 left-0 right-0 z-40 flex items-center justify-around px-2 py-2 safe-area-pb"
+        style={{
+          background: "rgba(10,18,60,0.97)",
+          backdropFilter: "blur(16px)",
+          borderTop: "1px solid rgba(255,255,255,0.1)",
+        }}
+      >
+        {NAV_ITEMS.map(({ href, icon: Icon, label }) => {
+          const isActive = href === "/"
+            ? location === "/" || location === ""
+            : location.startsWith(href);
+          return (
+            <Link key={href} href={href}>
+              <motion.div
+                whileTap={{ scale: 0.88 }}
+                className="flex flex-col items-center gap-0.5 px-4 py-1 rounded-2xl transition-all cursor-pointer min-w-[60px]"
+                style={isActive
+                  ? { background: "rgba(249,168,37,0.15)" }
+                  : {}
+                }
+              >
+                <Icon
+                  size={22}
+                  style={{ color: isActive ? "#f9a825" : "rgba(255,255,255,0.4)" }}
+                />
+                <span
+                  className="text-[10px] font-bold leading-none"
+                  style={{ color: isActive ? "#f9a825" : "rgba(255,255,255,0.35)" }}
+                >
+                  {label}
+                </span>
+              </motion.div>
+            </Link>
+          );
+        })}
+      </nav>
+
       {/* Footer */}
-      <footer className="w-full border-t border-white/10 mt-4 py-4 px-4 z-10">
+      <footer className="hidden w-full border-t border-white/10 mt-4 py-4 px-4 z-10">
         <div className="max-w-5xl mx-auto flex flex-wrap items-center justify-center gap-x-5 gap-y-1">
           <Link href="/acerca" className="text-white/40 hover:text-white/70 text-xs transition-colors">
             Acerca de

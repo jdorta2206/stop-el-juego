@@ -11,6 +11,7 @@ import Terms from "@/pages/Terms";
 import About from "@/pages/About";
 import HowToPlay from "@/pages/HowToPlay";
 import DailyChallenge from "@/pages/DailyChallenge";
+import Friends from "@/pages/Friends";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient({
@@ -35,6 +36,7 @@ function Router() {
       <Route path="/acerca" component={About} />
       <Route path="/como-jugar" component={HowToPlay} />
       <Route path="/reto" component={DailyChallenge} />
+      <Route path="/amigos" component={Friends} />
       <Route component={NotFound} />
     </Switch>
   );
