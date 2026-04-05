@@ -1084,7 +1084,7 @@ export default function SoloGame() {
                       ) : (
                         <Input
                           value={responses[category] || ""}
-                          onChange={e => setResponses({ ...responses, [category]: e.target.value.toUpperCase() })}
+                          onChange={e => setResponses(prev => ({ ...prev, [category]: e.target.value.toUpperCase() }))}
                           placeholder={isBluffed ? `${category}... 🎭` : `${category}...`}
                           autoComplete="off"
                           autoCorrect="off"
