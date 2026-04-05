@@ -60,7 +60,7 @@ function getTodayStr(): string {
 }
 
 export default function SoloGame() {
-  const { player } = usePlayer();
+  const { player, showAuth } = usePlayer();
   const { isPremium } = usePremium(player?.id);
   const { t, lang } = useT();
   const { recordPlay } = useStreak();
@@ -1602,6 +1602,27 @@ export default function SoloGame() {
                   </motion.div>
                 )}
               </AnimatePresence>
+
+              {/* Guest warning: score not saved */}
+              {round >= maxRounds && (!player || player.loginMethod === "guest") && (
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mb-3 rounded-xl px-4 py-3 flex items-start gap-3 cursor-pointer"
+                  style={{ background: "rgba(249,168,37,0.15)", border: "1.5px solid rgba(249,168,37,0.45)" }}
+                  onClick={showAuth}
+                >
+                  <span className="text-xl mt-0.5">⚠️</span>
+                  <div>
+                    <p className="text-yellow-300 font-black text-sm leading-tight">
+                      {lang === "pt" ? "Pontuação não salva" : lang === "en" ? "Score not saved" : lang === "fr" ? "Score non enregistré" : "Puntuación no guardada"}
+                    </p>
+                    <p className="text-yellow-200/70 text-xs mt-0.5">
+                      {lang === "pt" ? "Inicia sessão para aparecer no ranking" : lang === "en" ? "Sign in to appear on the leaderboard" : lang === "fr" ? "Connecte-toi pour apparaître au classement" : "Inicia sesión para aparecer en el ranking"}
+                    </p>
+                  </div>
+                </motion.div>
+              )}
 
               <div className="grid grid-cols-2 gap-3">
                 {round >= maxRounds ? (
