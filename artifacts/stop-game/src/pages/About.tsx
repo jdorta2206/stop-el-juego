@@ -62,10 +62,10 @@ export default function About() {
             ¿Tienes sugerencias, encontraste un error o quieres eliminar tu cuenta?<br />
             Escríbenos a:{" "}
             <a
-              href="mailto:jdorta2206@gmail.com"
+              href="mailto:stopeljuegodepalabras@gmail.com"
               className="text-[hsl(48,96%,57%)] underline"
             >
-              jdorta2206@gmail.com
+              stopeljuegodepalabras@gmail.com
             </a>
           </p>
         </div>
