@@ -53,13 +53,13 @@ export function ChallengeNotification({ challenge, onDismiss }: ChallengeNotific
 
   return (
     <AnimatePresence>
+      <div className="fixed inset-x-0 top-4 z-50 flex justify-center px-4 pointer-events-none">
       <motion.div
         initial={{ y: -80, opacity: 0, scale: 0.9 }}
         animate={{ y: 0, opacity: 1, scale: 1 }}
         exit={{ y: -80, opacity: 0, scale: 0.9 }}
         transition={{ type: "spring", stiffness: 400, damping: 30 }}
-        className="fixed top-4 left-1/2 z-50 w-[calc(100vw-2rem)] max-w-sm"
-        style={{ transform: "translateX(-50%)", marginLeft: 0 }}
+        className="w-full max-w-sm pointer-events-auto"
       >
         <div
           className="rounded-2xl p-4 shadow-2xl"
@@ -169,6 +169,7 @@ export function ChallengeNotification({ challenge, onDismiss }: ChallengeNotific
           </div>
         </div>
       </motion.div>
+      </div>
     </AnimatePresence>
   );
 }
