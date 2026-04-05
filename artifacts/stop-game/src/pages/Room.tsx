@@ -58,6 +58,8 @@ export default function Room() {
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const freezeTimerRef = useRef<NodeJS.Timeout | null>(null);
   const hasSubmittedRef = useRef(false);
+  // Synchronous flag: true once freeze has started (avoids double-freeze from stale phase closure)
+  const isFreezingRef = useRef(false);
   // Track whether we've intentionally left so cleanup doesn't double-fire
   const hasLeftRef = useRef(false);
   // Keep latest phase and roomCode in refs so leaveRoom doesn't need state deps
@@ -157,6 +159,7 @@ export default function Room() {
   const startRoundTimer = useCallback(() => {
     stopAllTimers();
     hasSubmittedRef.current = false;
+    isFreezingRef.current = false;
     timerRef.current = setInterval(() => {
       setTimeLeft(prev => {
         if (prev <= 1) {
@@ -169,8 +172,12 @@ export default function Room() {
     }, 1000);
   }, [stopAllTimers, autoSubmit]);
 
-  // Start freeze countdown (when STOP is called by someone)
+  // Start freeze countdown (when STOP is called by someone).
+  // isFreezingRef is set SYNCHRONOUSLY so the polling effect can check it
+  // without relying on the stale `phase` closure value.
   const startFreezeCountdown = useCallback(() => {
+    if (isFreezingRef.current) return; // already freezing — do not double-start
+    isFreezingRef.current = true;
     stopAllTimers();
     setFreezeCountdown(3);
     let count = 3;
@@ -220,6 +227,7 @@ export default function Room() {
         // New round — show spinning roulette first, then start playing
         lastRoundRef.current = currentRound;
         hasSubmittedRef.current = false;
+        isFreezingRef.current = false;
         setResponses({});
         responsesRef.current = {};
         setBluffedCategories(new Set());
