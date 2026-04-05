@@ -10,13 +10,11 @@ router.get("/scores", async (req, res) => {
   const query = GetLeaderboardQueryParams.safeParse(req.query);
   const limit = query.success ? (query.data.limit ?? 20) : 20;
 
-  // Deduplicate by player_name: keep each player's highest-score row only
+  // Each player_id already has exactly one row (scores are updated in place),
+  // so no deduplication needed — just order by score descending.
   const rows = await db.execute(sql`
-    SELECT * FROM (
-      SELECT DISTINCT ON (player_name) *
-      FROM player_scores
-      ORDER BY player_name, total_score DESC
-    ) AS deduped
+    SELECT *
+    FROM player_scores
     ORDER BY total_score DESC
     LIMIT ${limit}
   `);
@@ -24,7 +22,7 @@ router.get("/scores", async (req, res) => {
   const players = rows.rows as Array<Record<string, unknown>>;
 
   const totalRows = await db.execute(sql`
-    SELECT COUNT(DISTINCT player_name) AS count FROM player_scores
+    SELECT COUNT(*) AS count FROM player_scores
   `);
   const total = Number((totalRows.rows[0] as any)?.count ?? 0);
 
