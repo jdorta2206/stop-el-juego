@@ -144,7 +144,7 @@ export function Layout({ children }: { children: ReactNode }) {
             Cómo jugar
           </Link>
           <a
-            href="mailto:jdorta2206@gmail.com"
+            href="mailto:stopeljuegodepalabras@gmail.com"
             className="text-white/40 hover:text-white/70 text-xs transition-colors"
           >
             Contacto
