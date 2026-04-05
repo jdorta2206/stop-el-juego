@@ -29,7 +29,7 @@ interface AuthModalProps {
 
 export function AuthModal({ onSave, initial }: AuthModalProps) {
   const { t } = useT();
-  const [step, setStep] = useState<"login" | "profile">(initial ? "profile" : "login");
+  const [step, setStep] = useState<"login" | "profile" | "welcome_back">(initial ? "profile" : "login");
   const [name, setName] = useState(initial?.name || "");
   const [avatarColor, setAvatarColor] = useState(initial?.avatarColor || AVATAR_COLORS[0]);
   const [loginMethod, setLoginMethod] = useState<string | null>(null);
@@ -48,14 +48,14 @@ export function AuthModal({ onSave, initial }: AuthModalProps) {
           sessionStorage.removeItem("fb_access_token");
           setFbToken(storedFbToken);
         }
-        handleOAuthSuccess(oauthUser);
+        handleOAuthSuccess(oauthUser, storedFbToken || null);
       }
     } catch (e: any) {
       setError(e.message || "Error.");
     }
   }, []);
 
-  const handleOAuthSuccess = (oauthUser: OAuthUser) => {
+  const handleOAuthSuccess = (oauthUser: OAuthUser, fbAccessToken: string | null = null) => {
     setOauthId(oauthUser.id);
     setLoginMethod(oauthUser.provider);
     setName((oauthUser.name || "").slice(0, 14));
@@ -68,11 +68,28 @@ export function AuthModal({ onSave, initial }: AuthModalProps) {
     fetch(`${apiBase}/api/ranking/scores/${encodeURIComponent(oauthUser.id)}`)
       .then(r => r.ok ? r.json() : null)
       .then(data => {
-        if (data?.score?.totalScore > 0) {
-          setExistingStats({ totalScore: data.score.totalScore, gamesPlayed: data.score.gamesPlayed });
+        if (data?.score?.gamesPlayed > 0) {
+          const stats = { totalScore: data.score.totalScore, gamesPlayed: data.score.gamesPlayed };
+          setExistingStats(stats);
+          // Auto-login returning users — no need to confirm their profile again
+          setStep("welcome_back");
+          // Pick a deterministic color based on the player ID so it's consistent across sessions
+          const colorIdx = oauthUser.id.split("").reduce((acc, c) => acc + c.charCodeAt(0), 0) % AVATAR_COLORS.length;
+          const profile = {
+            id: oauthUser.id,
+            name: (oauthUser.name || "").slice(0, 14),
+            avatarColor: AVATAR_COLORS[colorIdx],
+            loginMethod: oauthUser.provider,
+            picture: oauthUser.picture || null,
+            fbAccessToken: fbAccessToken,
+          } as any;
+          setTimeout(() => onSave(profile), 2000);
         }
+        // else: new user → stays on profile step to set up their name
       })
-      .catch(() => {});
+      .catch(() => {
+        // On network error, stay on profile step (user confirms manually)
+      });
   };
 
   const handleSave = () => {
@@ -145,7 +162,46 @@ export function AuthModal({ onSave, initial }: AuthModalProps) {
 
           <div className="px-6 pb-8 space-y-4">
             <AnimatePresence mode="wait">
-              {step === "login" ? (
+              {step === "welcome_back" ? (
+                <motion.div
+                  key="welcome_back"
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.9 }}
+                  className="flex flex-col items-center gap-4 py-4 text-center"
+                >
+                  {oauthPicture && (
+                    <img src={oauthPicture} alt="avatar"
+                      className="w-20 h-20 rounded-full border-4 border-[#f9a825] shadow-xl object-cover"
+                      onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+                    />
+                  )}
+                  <div>
+                    <p className="text-white font-black text-xl">¡Bienvenido de vuelta, {name}!</p>
+                    <p className="text-white/50 text-sm mt-1">Restaurando tu cuenta…</p>
+                  </div>
+                  {existingStats && (
+                    <div className="flex items-center gap-3 px-5 py-3 rounded-2xl w-full"
+                      style={{ background: "rgba(249,168,37,0.15)", border: "1px solid rgba(249,168,37,0.4)" }}
+                    >
+                      <span className="text-2xl">🏆</span>
+                      <div className="text-left">
+                        <p className="text-[#f9a825] font-black text-sm">{existingStats.totalScore.toLocaleString()} pts</p>
+                        <p className="text-white/50 text-xs">{existingStats.gamesPlayed} partidas jugadas</p>
+                      </div>
+                    </div>
+                  )}
+                  <div className="flex gap-1.5 mt-2">
+                    {[0,1,2].map(i => (
+                      <motion.div key={i}
+                        animate={{ opacity: [0.3, 1, 0.3] }}
+                        transition={{ repeat: Infinity, duration: 1, delay: i * 0.25 }}
+                        className="w-2 h-2 rounded-full bg-[#f9a825]"
+                      />
+                    ))}
+                  </div>
+                </motion.div>
+              ) : step === "login" ? (
                 <motion.div
                   key="login"
                   initial={{ opacity: 0, x: 20 }}
