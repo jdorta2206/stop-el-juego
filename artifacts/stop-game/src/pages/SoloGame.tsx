@@ -132,6 +132,12 @@ export default function SoloGame() {
   // Sound hook
   const sound = useSound(muted);
 
+  // Keep refs in sync with state so handleStop never reads stale closure values
+  useEffect(() => { responsesRef.current = responses; }, [responses]);
+  useEffect(() => { categoriesRef.current = categories; }, [categories]);
+  useEffect(() => { bluffedCategoriesRef.current = bluffedCategories; }, [bluffedCategories]);
+  useEffect(() => { currentLetterRef.current = currentLetter; }, [currentLetter]);
+
   // Re-read categories when language changes (only if not daily mode)
   useEffect(() => {
     if (!isDailyMode) setCategories(getCategories());
@@ -177,6 +183,12 @@ export default function SoloGame() {
   // Guards to prevent handleStop / results-accumulation from firing more than once per round
   const stoppedRef = useRef(false);
   const resultsAppliedRef = useRef(false);
+
+  // Always-current refs so handleStop never reads stale closure values
+  const responsesRef = useRef<Record<string, string>>({});
+  const categoriesRef = useRef<string[]>([]);
+  const bluffedCategoriesRef = useRef<Set<string>>(new Set());
+  const currentLetterRef = useRef<string>("");
 
   const startGame = () => {
     setAiComment(null);
@@ -326,16 +338,22 @@ export default function SoloGame() {
     sound.playStop();
     setGameState("EVALUATING");
 
-    const formattedResponses = categories.map(cat => ({
+    // Use refs to always get the latest state values (avoids stale closure bug)
+    const currentResponses = responsesRef.current;
+    const currentCategories = categoriesRef.current;
+    const currentBluffed = bluffedCategoriesRef.current;
+    const letter = currentLetterRef.current;
+
+    const formattedResponses = currentCategories.map(cat => ({
       category: cat,
-      word: responses[cat] || ""
+      word: currentResponses[cat] || ""
     }));
 
     let apiData = null;
     try {
       apiData = await validateMutation.mutateAsync({
         data: {
-          letter: currentLetter,
+          letter,
           language: getCurrentLang() as import("@workspace/api-client-react").ValidateRoundRequestLanguage,
           playerName: player?.name,
           playerResponses: formattedResponses,
@@ -346,12 +364,12 @@ export default function SoloGame() {
     }
 
     // Process player bluffs
-    const hasPlayerBluffs = bluffedCategories.size > 0;
+    const hasPlayerBluffs = currentBluffed.size > 0;
     if (hasPlayerBluffs) {
       const detectionRate = isChaosMode ? 0.7 : 0.5;
       const results: BluffResult[] = [];
       let bonusDelta = 0;
-      bluffedCategories.forEach(cat => {
+      currentBluffed.forEach(cat => {
         const caught = Math.random() < detectionRate;
         const scoreChange = caught ? -10 : 20;
         results.push({ category: cat, caught, scoreChange });
