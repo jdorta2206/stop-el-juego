@@ -1,4 +1,4 @@
-const CACHE = "stop-v4";
+const CACHE = "stop-v5";
 const STATIC = [
   "/images/stop-logo.png",
   "/images/icon-192.png",
