@@ -1,4 +1,7 @@
 import { Router, type IRouter } from "express";
+import { db } from "@workspace/db";
+import { roomsTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
 
 const router: IRouter = Router();
 
@@ -103,7 +106,7 @@ router.get("/online", (_req, res) => {
 });
 
 // POST /api/presence/challenge — send a challenge to another player
-router.post("/challenge", (req, res) => {
+router.post("/challenge", async (req, res) => {
   const { fromPlayerId, fromName, fromPicture, fromAvatarColor, toPlayerId } = req.body as {
     fromPlayerId: string;
     fromName: string;
@@ -132,6 +135,34 @@ router.post("/challenge", (req, res) => {
 
   const challengeId = `ch_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
   const roomCode = generateRoomCode();
+
+  // Create the room in the DB right now so /join works when the challenge is accepted
+  try {
+    const players = [{
+      playerId: fromPlayerId,
+      playerName: fromName,
+      avatarColor: fromAvatarColor ?? "#e53e3e",
+      loginMethod: null as string | null,
+      score: 0,
+      roundScore: 0,
+      isHost: true,
+      isReady: false,
+    }];
+    await db.insert(roomsTable).values({
+      roomCode,
+      hostId: fromPlayerId,
+      hostName: fromName,
+      status: "waiting",
+      currentRound: 0,
+      maxRounds: 3,
+      language: "es",
+      playersJson: JSON.stringify(players),
+      stopperJson: null,
+      isPublic: false,
+    });
+  } catch (e) {
+    console.error("Challenge room creation failed:", e);
+  }
 
   challengeMap.set(challengeId, {
     challengeId,
