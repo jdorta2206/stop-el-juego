@@ -48,9 +48,11 @@ function FollowBtn({
 function ChallengeBtn({
   onlinePlayer,
   currentPlayer,
+  lang,
 }: {
   onlinePlayer: OnlinePlayer;
   currentPlayer: any;
+  lang?: string;
 }) {
   const [, setLocation] = useLocation();
   const [state, setState] = useState<ChallengeState>("idle");
@@ -60,7 +62,7 @@ function ChallengeBtn({
   const handleChallenge = useCallback(async () => {
     if (state !== "idle" || !currentPlayer) return;
     setState("sending");
-    const result = await sendChallenge(currentPlayer, onlinePlayer.playerId);
+    const result = await sendChallenge(currentPlayer, onlinePlayer.playerId, lang);
     if (!result) { setState("idle"); return; }
     pendingRef.current = result.challengeId;
     setState("waiting");
@@ -145,12 +147,14 @@ export default function Ranking() {
     query: { refetchOnMount: "always", staleTime: 0 } as any
   });
   const { player } = usePlayer();
-  const { t } = useT();
+  const { t, lang } = useT();
   const [filter, setFilter] = useState<"global" | "friends">("global");
 
   // Presence: online players + incoming challenge notifications
   const { onlinePlayers, incomingChallenge, dismissChallenge } = usePresence(
-    player?.loginMethod !== "guest" ? player || null : null
+    player?.loginMethod !== "guest" ? player || null : null,
+    null,
+    lang
   );
   const onlineMap = new Map(onlinePlayers.map((p) => [p.playerId, p]));
 
@@ -354,7 +358,7 @@ export default function Ranking() {
                             }
                           />
                           {isOnline && onlineData && (
-                            <ChallengeBtn onlinePlayer={onlineData} currentPlayer={player} />
+                            <ChallengeBtn onlinePlayer={onlineData} currentPlayer={player} lang={lang} />
                           )}
                         </div>
                       )}
@@ -466,7 +470,7 @@ export default function Ranking() {
                                 }
                               />
                               {isOnline && onlineData && (
-                                <ChallengeBtn onlinePlayer={onlineData} currentPlayer={player} />
+                                <ChallengeBtn onlinePlayer={onlineData} currentPlayer={player} lang={lang} />
                               )}
                             </>
                           )}

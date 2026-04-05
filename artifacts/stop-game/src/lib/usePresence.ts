@@ -27,7 +27,7 @@ export interface IncomingChallenge {
 }
 
 // Send a heartbeat to mark this player as online
-async function ping(player: PlayerProfile, roomCode?: string | null) {
+async function ping(player: PlayerProfile, roomCode?: string | null, language?: string) {
   try {
     await fetch(`${API_BASE}/api/presence/ping`, {
       method: "POST",
@@ -39,6 +39,7 @@ async function ping(player: PlayerProfile, roomCode?: string | null) {
         avatarColor: player.avatarColor,
         provider: player.loginMethod || null,
         roomCode: roomCode || null,
+        language: language || "es",
       }),
     });
   } catch {
@@ -61,7 +62,8 @@ export async function fetchOnlinePlayers(): Promise<OnlinePlayer[]> {
 // Send a challenge to another player, returns challengeId + roomCode
 export async function sendChallenge(
   player: PlayerProfile,
-  toPlayerId: string
+  toPlayerId: string,
+  language?: string
 ): Promise<{ challengeId: string; roomCode: string } | null> {
   try {
     const res = await fetch(`${API_BASE}/api/presence/challenge`, {
@@ -73,6 +75,7 @@ export async function sendChallenge(
         fromPicture: (player as any).picture || null,
         fromAvatarColor: player.avatarColor,
         toPlayerId,
+        language: language || "es",
       }),
     });
     if (!res.ok) return null;
@@ -104,7 +107,8 @@ export async function respondToChallenge(
 export async function sendRoomInvite(
   player: PlayerProfile,
   toPlayerId: string,
-  roomCode: string
+  roomCode: string,
+  language?: string
 ): Promise<boolean> {
   try {
     const res = await fetch(`${API_BASE}/api/presence/room-invite`, {
@@ -117,6 +121,7 @@ export async function sendRoomInvite(
         fromAvatarColor: player.avatarColor,
         toPlayerId,
         roomCode,
+        language: language || "es",
       }),
     });
     return res.ok;
@@ -141,7 +146,8 @@ export async function pollChallengeStatus(
 // Hook: sends heartbeat + returns live online players list + incoming challenges
 export function usePresence(
   player: PlayerProfile | null,
-  roomCode?: string | null
+  roomCode?: string | null,
+  language?: string
 ) {
   const [onlinePlayers, setOnlinePlayers] = useState<OnlinePlayer[]>([]);
   const [incomingChallenge, setIncomingChallenge] = useState<IncomingChallenge | null>(null);
@@ -178,11 +184,11 @@ export function usePresence(
   useEffect(() => {
     if (!player) return;
 
-    ping(player, roomCode);
+    ping(player, roomCode, language);
     refresh();
 
     intervalRef.current = setInterval(() => {
-      ping(player, roomCode);
+      ping(player, roomCode, language);
       refresh();
     }, PING_INTERVAL);
 
@@ -195,7 +201,7 @@ export function usePresence(
       if (intervalRef.current) clearInterval(intervalRef.current);
       if (challengePollRef.current) clearInterval(challengePollRef.current);
     };
-  }, [player?.id, roomCode]);
+  }, [player?.id, roomCode, language]);
 
   return { onlinePlayers, refresh, incomingChallenge, dismissChallenge };
 }
