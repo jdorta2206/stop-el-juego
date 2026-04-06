@@ -91,6 +91,8 @@ export default function SoloGame() {
   // Insane mode — activates after 3 consecutive wins
   const [insaneMode, setInsaneMode] = useState(false);
   const [showInsaneBanner, setShowInsaneBanner] = useState(false);
+  // Clip moment — fires when player beats their personal best
+  const [showImpossibleBanner, setShowImpossibleBanner] = useState(false);
   // Random event for current round
   const [randomEvent, setRandomEvent] = useState<RandomEvent>(null);
   // Round result announcement
@@ -484,8 +486,16 @@ export default function SoloGame() {
       if (round >= maxRounds) {
         const br = updateBest(finalPlayerScore);
         setBestResult(br);
-        if (br.isNew) setTimeout(() => { vibrate([60, 40, 60, 40, 120]); sound.playLevelUp(); }, 600);
-        if (!isDailyMode) setTimeout(() => setShowShareModal(true), 3500);
+        if (br.isNew) {
+          setTimeout(() => {
+            vibrate([60, 40, 60, 40, 200]);
+            sound.playLevelUp();
+            setShowImpossibleBanner(true);
+            confetti({ particleCount: 300, spread: 140, origin: { y: 0.5 }, colors: ["#f9a825", "#e53518", "#ffffff", "#4ade80"] });
+            setTimeout(() => setShowImpossibleBanner(false), 3200);
+          }, 500);
+        }
+        if (!isDailyMode) setTimeout(() => setShowShareModal(true), br.isNew ? 4200 : 3500);
       }
 
       // AI personality comment
@@ -606,6 +616,7 @@ export default function SoloGame() {
       setAiTotalScore(0);
       setCombo(0);
       setInsaneMode(false);
+      setShowImpossibleBanner(false);
       setRandomEvent(null);
       setRoundWon(null);
       setBestResult(null);
@@ -762,6 +773,39 @@ export default function SoloGame() {
             )}
           </AnimatePresence>
         </div>
+
+        {/* IMPOSSIBLE clip-moment banner — fires on new personal best */}
+        <AnimatePresence>
+          {showImpossibleBanner && (
+            <motion.div
+              key="impossible-banner"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[60] flex flex-col items-center justify-center pointer-events-none overflow-hidden"
+              style={{ background: "rgba(0,0,0,0.88)" }}
+            >
+              <motion.div
+                initial={{ scale: 0.3, rotate: -8 }}
+                animate={{ scale: [0.3, 1.25, 1.0], rotate: [-8, 4, 0] }}
+                transition={{ duration: 0.55, ease: "backOut" }}
+                className="text-center px-8"
+              >
+                <motion.p
+                  animate={{ textShadow: ["0 0 0px #f9a825", "0 0 60px #f9a825", "0 0 20px #f9a825"] }}
+                  transition={{ repeat: Infinity, duration: 0.6, repeatType: "reverse" }}
+                  className="font-black uppercase leading-none"
+                  style={{ fontSize: "clamp(3.5rem,18vw,7rem)", color: "#f9a825", fontFamily: "'Baloo 2', sans-serif", letterSpacing: "-0.02em" }}
+                >
+                  {lang === "en" ? "IMPOSSIBLE" : lang === "pt" ? "IMPOSSÍVEL" : lang === "fr" ? "IMPOSSIBLE" : "IMPOSIBLE"}
+                </motion.p>
+                <p className="text-white/80 font-black text-base mt-3">
+                  {lang === "en" ? "New personal record 🏆" : lang === "pt" ? "Novo recorde pessoal 🏆" : lang === "fr" ? "Nouveau record personnel 🏆" : "Nuevo récord personal 🏆"}
+                </p>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Insane Mode activation banner — full-screen flash */}
         <AnimatePresence>
@@ -1746,6 +1790,50 @@ export default function SoloGame() {
                   </motion.div>
                 )}
               </AnimatePresence>
+
+              {/* RAGE message — final game loss (taunt = repeat) */}
+              {round >= maxRounds && totalScore < aiTotalScore && (() => {
+                const diff = aiTotalScore - totalScore;
+                const rageMsgs = {
+                  es: diff <= 15
+                    ? ["¿Lo ves? Estabas TAN cerca 💀", "Eso dolió, ¿verdad? 💀", "Una palabra más y ganabas 😤"]
+                    : diff <= 40
+                    ? ["¿En serio perdiste eso? 💀", "La IA te aplastó 😬", "¿Así nomas? ¿Sin luchar? 💀"]
+                    : ["Eso fue doloroso de ver 💀", "La IA lo da todo, tú no 😂", "¿Seguro que esto es lo tuyo? 💀"],
+                  en: diff <= 15
+                    ? ["You were SO close 💀", "That hurt, didn't it? 💀", "One more word and you had it 😤"]
+                    : diff <= 40
+                    ? ["Seriously? You lost that? 💀", "The AI destroyed you 😬", "You gave up that easily? 💀"]
+                    : ["That was painful to watch 💀", "The AI goes all in, you don't 😂", "Is this really your game? 💀"],
+                  pt: diff <= 15
+                    ? ["Estavas TÃO perto 💀", "Isso doeu, não? 💀", "Mais uma palavra e tinhas ganho 😤"]
+                    : diff <= 40
+                    ? ["A sério? Perdeste isso? 💀", "A IA destruiu-te 😬", "Desististe assim tão fácil? 💀"]
+                    : ["Foi doloroso de ver 💀", "A IA dá tudo, tu não 😂", "Tens a certeza que isto é o teu jogo? 💀"],
+                  fr: diff <= 15
+                    ? ["T'étais SI près 💀", "Ça fait mal, non ? 💀", "Un mot de plus et t'avais gagné 😤"]
+                    : diff <= 40
+                    ? ["Sérieusement ? T'as perdu ça ? 💀", "L'IA t'a écrasé 😬", "T'as abandonné aussi facilement ? 💀"]
+                    : ["C'était douloureux à regarder 💀", "L'IA met tout, pas toi 😂", "T'es sûr que c'est ton jeu ? 💀"],
+                };
+                const pool = (rageMsgs as any)[lang] ?? rageMsgs.es;
+                const msg = pool[Math.floor(totalScore * 7 % pool.length)];
+                return (
+                  <motion.div
+                    key="rage-msg"
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 1.2, type: "spring", bounce: 0.4 }}
+                    className="mb-3 px-4 py-2.5 rounded-xl text-center"
+                    style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.25)" }}
+                  >
+                    <p className="text-red-300 font-black text-sm">{msg}</p>
+                    <p className="text-white/40 text-xs mt-0.5 font-bold">
+                      {lang === "en" ? "— The game nobody beats" : lang === "pt" ? "— O jogo que ninguém vence" : lang === "fr" ? "— Le jeu que personne ne bat" : "— El juego que nadie supera"}
+                    </p>
+                  </motion.div>
+                );
+              })()}
 
               {/* Guest warning: score not saved */}
               {round >= maxRounds && (!player || player.loginMethod === "guest") && (

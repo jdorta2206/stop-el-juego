@@ -88,7 +88,7 @@ export function ShareResultsModal({
     wordleGrid,
     bluffLine,
     challengeLine,
-    url,
+    `🎮 El juego que nadie supera → ${url}`,
   ]
     .filter(Boolean)
     .join("\n");
