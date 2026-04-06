@@ -180,6 +180,39 @@ export default function Home() {
           )}
         </motion.div>
 
+        {/* Global challenge hook — shown when leaderboard has data */}
+        {top3[0] && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.15, type: "spring", bounce: 0.4 }}
+          >
+            <Link href="/ranking">
+              <motion.div
+                animate={{ boxShadow: ["0 0 0px rgba(229,62,18,0)", "0 0 18px rgba(229,62,18,0.45)", "0 0 0px rgba(229,62,18,0)"] }}
+                transition={{ repeat: Infinity, duration: 2.4 }}
+                className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl cursor-pointer"
+                style={{ background: "rgba(229,62,18,0.12)", border: "1.5px solid rgba(229,62,18,0.45)" }}
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">🔥</span>
+                  <div>
+                    <p className="text-[hsl(6_90%_70%)] font-black text-xs uppercase tracking-wide leading-tight">
+                      {t.home.globalRecord ?? "Récord global"}
+                    </p>
+                    <p className="text-white font-black text-sm leading-tight">
+                      {top3[0].score} pts — {top3[0].name}
+                    </p>
+                  </div>
+                </div>
+                <p className="text-[hsl(6_90%_70%)] font-black text-xs text-right max-w-[110px] leading-tight">
+                  {t.home.canYouBeat ?? "¿Puedes superarlo?"} →
+                </p>
+              </motion.div>
+            </Link>
+          </motion.div>
+        )}
+
         {/* Main buttons */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
