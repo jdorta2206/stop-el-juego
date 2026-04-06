@@ -88,6 +88,9 @@ export default function SoloGame() {
 
   // Combo system
   const [combo, setCombo] = useState(0);
+  // Insane mode — activates after 3 consecutive wins
+  const [insaneMode, setInsaneMode] = useState(false);
+  const [showInsaneBanner, setShowInsaneBanner] = useState(false);
   // Random event for current round
   const [randomEvent, setRandomEvent] = useState<RandomEvent>(null);
   // Round result announcement
@@ -105,8 +108,8 @@ export default function SoloGame() {
   const { best: personalBest, updateBest } = usePersonalBest(gameMode);
   const [bestResult, setBestResult] = useState<{ isNew: boolean; diff: number } | null>(null);
 
-  const baseRoundTime = isQuickMode ? QUICK_ROUND_TIME : isChaosMode ? CHAOS_ROUND_TIME : ROUND_TIME;
-  const effectiveRoundTime = (!isQuickMode && !isDailyMode && !isChaosMode && randomEvent === "speed")
+  const baseRoundTime = isQuickMode ? QUICK_ROUND_TIME : isChaosMode ? CHAOS_ROUND_TIME : insaneMode ? QUICK_ROUND_TIME : ROUND_TIME;
+  const effectiveRoundTime = (!isQuickMode && !isDailyMode && !isChaosMode && !insaneMode && randomEvent === "speed")
     ? SPEED_ROUND_TIME : baseRoundTime;
   const roundTime = effectiveRoundTime;
   const maxRounds = isDailyMode ? 1 : isQuickMode ? 1 : MAX_ROUNDS;
@@ -482,6 +485,7 @@ export default function SoloGame() {
         const br = updateBest(finalPlayerScore);
         setBestResult(br);
         if (br.isNew) setTimeout(() => { vibrate([60, 40, 60, 40, 120]); sound.playLevelUp(); }, 600);
+        if (!isDailyMode) setTimeout(() => setShowShareModal(true), 3500);
       }
 
       // AI personality comment
@@ -507,6 +511,12 @@ export default function SoloGame() {
         confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
         setCombo(prev => {
           const newCombo = prev + 1;
+          if (newCombo >= 3 && !insaneMode && !isDailyMode) {
+            setInsaneMode(true);
+            setShowInsaneBanner(true);
+            setTimeout(() => setShowInsaneBanner(false), 2800);
+            vibrate([60, 30, 60, 30, 180]);
+          }
           if (newCombo >= 2) {
             sound.playCombo(newCombo);
           } else {
@@ -517,7 +527,10 @@ export default function SoloGame() {
       } else {
         sound.playLose();
         // SHIELD: don't reset combo on loss
-        if (activeCard !== "shield") setCombo(0);
+        if (activeCard !== "shield") {
+          setCombo(0);
+          setInsaneMode(false);
+        }
         confetti({ particleCount: 20, spread: 40, origin: { y: 0.6 }, colors: ["#666", "#999"] });
       }
     }
@@ -592,6 +605,7 @@ export default function SoloGame() {
       setTotalScore(0);
       setAiTotalScore(0);
       setCombo(0);
+      setInsaneMode(false);
       setRandomEvent(null);
       setRoundWon(null);
       setBestResult(null);
@@ -749,10 +763,57 @@ export default function SoloGame() {
           </AnimatePresence>
         </div>
 
+        {/* Insane Mode activation banner — full-screen flash */}
+        <AnimatePresence>
+          {showInsaneBanner && (
+            <motion.div
+              key="insane-banner"
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 1.1 }}
+              transition={{ type: "spring", bounce: 0.4 }}
+              className="fixed inset-0 z-50 flex flex-col items-center justify-center pointer-events-none"
+              style={{ background: "rgba(185,28,28,0.82)", backdropFilter: "blur(4px)" }}
+            >
+              <motion.div
+                animate={{ scale: [1, 1.08, 1], rotate: [-1, 1, -1, 1, 0] }}
+                transition={{ repeat: 2, duration: 0.4 }}
+                className="text-center px-8"
+              >
+                <p className="text-7xl mb-3">🔥</p>
+                <p className="text-white font-black text-3xl tracking-wide uppercase" style={{ fontFamily: "'Baloo 2', sans-serif" }}>
+                  {lang === "en" ? "INSANE MODE!" : lang === "pt" ? "MODO INSANO!" : lang === "fr" ? "MODE INSANE !" : "¡MODO INSANO!"}
+                </p>
+                <p className="text-red-200 font-bold text-sm mt-2 opacity-80">
+                  {lang === "en" ? "30s rounds — no mercy" : lang === "pt" ? "Rondas de 30s — sem piedade" : lang === "fr" ? "Rondes de 30s — sans pitié" : "Rondas de 30s — sin piedad"}
+                </p>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Header Stats */}
-        <div className="flex justify-between items-center bg-black/20 rounded-2xl p-4 mb-5 backdrop-blur-md">
+        <div
+          className="flex justify-between items-center rounded-2xl p-4 mb-5 backdrop-blur-md"
+          style={{
+            background: insaneMode ? "rgba(185,28,28,0.3)" : "rgba(0,0,0,0.2)",
+            border: insaneMode ? "1.5px solid rgba(239,68,68,0.5)" : undefined,
+            transition: "background 0.5s, border 0.5s",
+          }}
+        >
           <div className="text-center">
-            <p className="text-xs text-white/60 font-bold uppercase">{t.game.round}</p>
+            {insaneMode ? (
+              <motion.p
+                animate={{ opacity: [1, 0.5, 1] }}
+                transition={{ repeat: Infinity, duration: 0.8 }}
+                className="text-xs font-black uppercase"
+                style={{ color: "#f87171" }}
+              >
+                🔥 INSANO
+              </motion.p>
+            ) : (
+              <p className="text-xs text-white/60 font-bold uppercase">{t.game.round}</p>
+            )}
             <p className="text-2xl font-display font-bold">{round}/{maxRounds}</p>
           </div>
           <div className="text-center border-l border-r border-white/20 px-6">
@@ -1384,9 +1445,25 @@ export default function SoloGame() {
                       ? <Trophy className="w-6 h-6 text-green-400" fill="rgba(34,197,94,0.5)" />
                       : <span className="text-2xl">💻</span>
                     }
-                    <p className={`font-black text-lg ${roundWon ? "text-green-300" : "text-red-300"}`}>
-                      {roundWon ? t.game.roundWon : t.game.roundLost}
-                    </p>
+                    <div>
+                      <p className={`font-black text-lg ${roundWon ? "text-green-300" : "text-red-300"}`}>
+                        {roundWon ? t.game.roundWon : t.game.roundLost}
+                      </p>
+                      {/* Close-loss frustration message */}
+                      {roundWon === false && results && (() => {
+                        const roundPs = results.playerTotalScore || 0;
+                        const roundAs = results.aiTotalScore || 0;
+                        const margin = roundAs - roundPs;
+                        if (margin > 0 && margin <= 15) {
+                          return (
+                            <p className="text-red-200/80 text-xs font-bold mt-0.5">
+                              {lang === "en" ? `Only ${margin} pts behind 😤` : lang === "pt" ? `Só ${margin} pts atrás 😤` : lang === "fr" ? `Juste ${margin} pts de retard 😤` : `Perdiste por solo ${margin} pts 😤`}
+                            </p>
+                          );
+                        }
+                        return null;
+                      })()}
+                    </div>
                     {combo >= 2 && roundWon && (
                       <div
                         className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-black"

@@ -72,12 +72,22 @@ export function ShareResultsModal({
     return parts.length > 0 ? parts.join(" · ") : null;
   })();
 
+  const diff = Math.abs(playerScore - aiScore);
+  const closeMatch = diff <= 15;
+
+  const viralLine = won
+    ? `🧠 Conseguí ${playerScore} pts con la letra "${letter}" y le gané a la IA${closeMatch ? ` (¡por solo ${diff} pts!)` : ""} 🏆`
+    : `🤖 La IA me ganó por ${diff} pts con la letra "${letter}"… yo iba con ${playerScore} pts`;
+
+  const challengeLine = won
+    ? `¿Puedes superarme? 👇`
+    : `¿Tú puedes ganarle? 👇`;
+
   const shareMessage = [
-    `🎮 STOP - Letra ${letter}`,
+    viralLine,
     wordleGrid,
-    won ? `✅ ${t.you}: ${playerScore}pts · 🤖 IA: ${aiScore}pts 🏆` : `🤖 IA: ${aiScore}pts · ${t.you}: ${playerScore}pts`,
     bluffLine,
-    `${t.shareChallenge}`,
+    challengeLine,
     url,
   ]
     .filter(Boolean)
