@@ -23,6 +23,11 @@ import { pickRandomPersonality, getAIComment, type AIPersonality } from "@/data/
 import { useAchievements } from "@/hooks/useAchievements";
 import { AchievementToast } from "@/components/AchievementToast";
 import { drawPowerCard, POWER_CARDS, type PowerCardId } from "@/data/powerCards";
+import { usePersonalBest } from "@/hooks/usePersonalBest";
+
+function vibrate(pattern: number | number[]) {
+  try { if (navigator.vibrate) navigator.vibrate(pattern); } catch {}
+}
 
 type GameState = "LOBBY" | "SPINNING" | "CARD_REVEAL" | "PLAYING" | "EVALUATING" | "JUDGING" | "RESULTS";
 
@@ -95,6 +100,10 @@ export default function SoloGame() {
   const isChaosMode = urlParams.get("mode") === "chaos";
   const dailyLetter = urlParams.get("letter") || "";
   const dailyCategories = urlParams.get("cats")?.split(",").filter(Boolean) || [];
+
+  const gameMode = isDailyMode ? "daily" : isQuickMode ? "quick" : isChaosMode ? "chaos" : "normal";
+  const { best: personalBest, updateBest } = usePersonalBest(gameMode);
+  const [bestResult, setBestResult] = useState<{ isNew: boolean; diff: number } | null>(null);
 
   const baseRoundTime = isQuickMode ? QUICK_ROUND_TIME : isChaosMode ? CHAOS_ROUND_TIME : ROUND_TIME;
   const effectiveRoundTime = (!isQuickMode && !isDailyMode && !isChaosMode && randomEvent === "speed")
@@ -336,6 +345,7 @@ export default function SoloGame() {
       timerRef.current = null;
     }
     sound.playStop();
+    vibrate([80, 30, 80]);
     setGameState("EVALUATING");
 
     // Use refs to always get the latest state values (avoids stale closure bug)
@@ -462,9 +472,17 @@ export default function SoloGame() {
 
       const won = (ps + stolenScore + sabotageStolen) > as_;
 
-      setTotalScore(prev => prev + ps + stolenScore + sabotageStolen + bluffBonusScore);
+      const finalPlayerScore = totalScore + ps + stolenScore + sabotageStolen + bluffBonusScore;
+      setTotalScore(finalPlayerScore);
       setAiTotalScore(prev => prev + as_);
       setRoundWon(won);
+      vibrate(won ? [40, 20, 80] : [120]);
+
+      if (round >= maxRounds) {
+        const br = updateBest(finalPlayerScore);
+        setBestResult(br);
+        if (br.isNew) setTimeout(() => { vibrate([60, 40, 60, 40, 120]); sound.playLevelUp(); }, 600);
+      }
 
       // AI personality comment
       const comment = getAIComment(aiPersonality, won, ps, as_);
@@ -576,6 +594,7 @@ export default function SoloGame() {
       setCombo(0);
       setRandomEvent(null);
       setRoundWon(null);
+      setBestResult(null);
     } else {
       setRound(r => r + 1);
       startGame();
@@ -739,6 +758,11 @@ export default function SoloGame() {
           <div className="text-center border-l border-r border-white/20 px-6">
             <p className="text-xs text-white/60 font-bold uppercase">{t.game.you}</p>
             <p className="text-2xl font-display font-black text-secondary">{totalScore}</p>
+            {personalBest > 0 && (
+              <p className="text-[10px] text-white/35 font-bold mt-0.5">
+                🏆 {personalBest}
+              </p>
+            )}
           </div>
           <div className="text-center">
             <p className="text-xs text-white/60 font-bold uppercase">
@@ -1583,6 +1607,49 @@ export default function SoloGame() {
                       {randomEvent === "double_xp" ? "×2" : randomEvent === "speed" && roundWon ? "×3" : combo >= 4 ? "×2" : "×1.5"}
                     </span>
                   )}
+                </motion.div>
+              )}
+
+              {/* Personal best result — shown on final round */}
+              {round >= maxRounds && bestResult && (
+                <motion.div
+                  key="personal-best"
+                  initial={{ scale: 0.8, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ type: "spring", bounce: 0.55, delay: 0.3 }}
+                  className="flex flex-col items-center justify-center mb-3 py-3 px-4 rounded-2xl gap-1"
+                  style={
+                    bestResult.isNew
+                      ? { background: "linear-gradient(135deg,rgba(249,168,37,0.25),rgba(229,62,18,0.2))", border: "2px solid rgba(249,168,37,0.6)" }
+                      : { background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)" }
+                  }
+                >
+                  {bestResult.isNew ? (
+                    <>
+                      <span className="text-2xl">🏆</span>
+                      <p className="text-yellow-300 font-black text-base text-center">
+                        {lang === "en" ? "NEW PERSONAL RECORD!" : lang === "pt" ? "NOVO RECORDE PESSOAL!" : lang === "fr" ? "NOUVEAU RECORD PERSO !" : "¡NUEVO RÉCORD PERSONAL!"}
+                      </p>
+                      <p className="text-yellow-200/70 text-xs font-bold text-center">
+                        {totalScore} {lang === "en" ? "pts — your best ever" : lang === "pt" ? "pts — o teu melhor" : lang === "fr" ? "pts — ton meilleur" : "pts — ¡tu mejor marca!"}
+                      </p>
+                    </>
+                  ) : personalBest > 0 ? (
+                    <>
+                      <p className="text-white/50 text-xs font-bold text-center">
+                        🏆 {lang === "en" ? "Record" : lang === "pt" ? "Recorde" : lang === "fr" ? "Record" : "Récord"}: {personalBest} pts
+                      </p>
+                      {bestResult.diff > -20 ? (
+                        <p className="text-white/80 font-black text-sm text-center">
+                          {lang === "en" ? `So close! ${Math.abs(bestResult.diff)} pts away 😤` : lang === "pt" ? `Tão perto! Faltaram ${Math.abs(bestResult.diff)} pts 😤` : lang === "fr" ? `Si proche ! ${Math.abs(bestResult.diff)} pts de plus 😤` : `¡Tan cerca! Te faltaron ${Math.abs(bestResult.diff)} pts 😤`}
+                        </p>
+                      ) : (
+                        <p className="text-white/60 text-xs text-center">
+                          {lang === "en" ? "Can you beat your record? 🎯" : lang === "pt" ? "Consegues bater o teu recorde? 🎯" : lang === "fr" ? "Peux-tu battre ton record ? 🎯" : "¿Puedes superar tu récord? 🎯"}
+                        </p>
+                      )}
+                    </>
+                  ) : null}
                 </motion.div>
               )}
 
