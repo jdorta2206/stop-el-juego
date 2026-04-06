@@ -118,6 +118,15 @@ export default function Home() {
             animate={{ rotate: [0, 2, -2, 0] }}
             transition={{ repeat: Infinity, duration: 6, ease: "easeInOut" }}
           />
+          <motion.p
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.5 }}
+            className="text-xs font-black uppercase tracking-widest text-center"
+            style={{ color: "hsl(6 90% 70%)", letterSpacing: "0.15em" }}
+          >
+            El juego que nadie supera
+          </motion.p>
           {/* Level + League badges */}
           <motion.div
             initial={{ scale: 0, opacity: 0 }}
