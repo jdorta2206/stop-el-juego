@@ -1,4 +1,4 @@
-import { ReactNode, useState } from "react";
+import { ReactNode, useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { usePlayer } from "@/hooks/use-player";
 import { Crown, LogOut, Bell, BellOff, Home, Trophy, Users, Calendar } from "lucide-react";
@@ -29,6 +29,16 @@ export function Layout({ children }: { children: ReactNode }) {
   const { isSupported, isSubscribed, permission, loading: notifLoading, subscribe, unsubscribe } =
     usePushNotifications(player?.id, lang);
   const [notifToast, setNotifToast] = useState<string | null>(null);
+  const [showNotifPrompt, setShowNotifPrompt] = useState(false);
+
+  // Proactive notification prompt — show once per device, 8s after mount, only if not yet subscribed/denied
+  useEffect(() => {
+    if (!isSupported || isSubscribed || permission === "denied" || permission === "granted") return;
+    const dismissed = localStorage.getItem("stop_notif_prompt_v1");
+    if (dismissed) return;
+    const timer = setTimeout(() => setShowNotifPrompt(true), 8000);
+    return () => clearTimeout(timer);
+  }, [isSupported, isSubscribed, permission]);
 
   if (!isLoaded) {
     return (
@@ -85,8 +95,8 @@ export function Layout({ children }: { children: ReactNode }) {
           {/* Language selector */}
           <LanguageSelector />
 
-          {/* Notification bell — only for logged-in, non-guest users on supported browsers */}
-          {player && player.loginMethod !== "guest" && isSupported && permission !== "denied" && (
+          {/* Notification bell — visible for all users on supported browsers */}
+          {isSupported && permission !== "denied" && (
             <motion.button
               whileTap={{ scale: 0.9 }}
               onClick={async () => {
@@ -94,17 +104,25 @@ export function Layout({ children }: { children: ReactNode }) {
                   await unsubscribe();
                   setNotifToast("🔕 Notificaciones desactivadas");
                 } else {
-                  await subscribe();
-                  setNotifToast("🔔 ¡Notificaciones activadas!");
+                  const ok = await subscribe();
+                  if (ok) setNotifToast("🔔 ¡Notificaciones activadas!");
                 }
-                setTimeout(() => setNotifToast(null), 3000);
+                setTimeout(() => setNotifToast(null), 3500);
               }}
               disabled={notifLoading}
               title={isSubscribed ? "Desactivar notificaciones" : "Activar notificaciones"}
               className="w-8 h-8 rounded-full flex items-center justify-center transition-colors hover:bg-white/10 relative"
-              style={{ color: isSubscribed ? "#f9a825" : "rgba(255,255,255,0.5)" }}
+              style={{ color: isSubscribed ? "#f9a825" : "rgba(255,255,255,0.45)" }}
             >
               {isSubscribed ? <Bell className="w-4 h-4" /> : <BellOff className="w-4 h-4" />}
+              {/* Pulsing dot when not subscribed */}
+              {!isSubscribed && (
+                <motion.span
+                  animate={{ scale: [1, 1.5, 1], opacity: [1, 0.4, 1] }}
+                  transition={{ repeat: Infinity, duration: 1.8 }}
+                  className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-red-500"
+                />
+              )}
               {isSubscribed && (
                 <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-[#f9a825]" />
               )}
@@ -199,6 +217,65 @@ export function Layout({ children }: { children: ReactNode }) {
           <span className="text-white/20 text-xs">© 2026 STOP El Juego</span>
         </div>
       </footer>
+
+      {/* Proactive notification prompt — slides up once, 8s after first visit */}
+      <AnimatePresence>
+        {showNotifPrompt && (
+          <motion.div
+            key="notif-prompt"
+            initial={{ y: 120, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 120, opacity: 0 }}
+            transition={{ type: "spring", bounce: 0.35 }}
+            className="fixed bottom-20 left-0 right-0 z-50 flex justify-center px-4"
+          >
+            <div
+              className="w-full max-w-sm rounded-3xl p-5 shadow-2xl flex flex-col gap-4"
+              style={{
+                background: "linear-gradient(145deg, #1a237e 0%, #0d1757 100%)",
+                border: "2px solid rgba(249,168,37,0.4)",
+              }}
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-3xl">🔔</span>
+                <div>
+                  <p className="text-white font-black text-sm leading-tight">
+                    {lang === "en" ? "Never miss a challenge!" : lang === "pt" ? "Nunca percas um desafio!" : lang === "fr" ? "Ne rate jamais un défi !" : "¡No te pierdas el reto diario!"}
+                  </p>
+                  <p className="text-white/55 text-xs mt-0.5">
+                    {lang === "en" ? "Get a daily push when today's word is ready." : lang === "pt" ? "Recebe uma notificação diária quando o desafio estiver pronto." : lang === "fr" ? "Reçois une notification quotidienne quand le défi du jour est prêt." : "Te avisamos cada día cuando el reto está listo."}
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={async () => {
+                    setShowNotifPrompt(false);
+                    localStorage.setItem("stop_notif_prompt_v1", "1");
+                    const ok = await subscribe();
+                    if (ok) setNotifToast("🔔 ¡Notificaciones activadas!");
+                    setTimeout(() => setNotifToast(null), 3500);
+                  }}
+                  className="flex-1 py-2.5 rounded-2xl font-black text-sm text-[#0d1757] transition-transform active:scale-95"
+                  style={{ background: "#f9a825" }}
+                  disabled={notifLoading}
+                >
+                  {lang === "en" ? "Activate" : lang === "pt" ? "Ativar" : lang === "fr" ? "Activer" : "Activar"} 🔔
+                </button>
+                <button
+                  onClick={() => {
+                    setShowNotifPrompt(false);
+                    localStorage.setItem("stop_notif_prompt_v1", "1");
+                  }}
+                  className="py-2.5 px-4 rounded-2xl font-bold text-sm text-white/50 hover:text-white/80 transition-colors"
+                >
+                  {lang === "en" ? "Later" : lang === "pt" ? "Depois" : lang === "fr" ? "Plus tard" : "Luego"}
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Notification toast */}
       <AnimatePresence>
