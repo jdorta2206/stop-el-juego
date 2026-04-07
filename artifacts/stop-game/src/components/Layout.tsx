@@ -33,14 +33,17 @@ export function Layout({ children }: { children: ReactNode }) {
   const [notifToast, setNotifToast] = useState<string | null>(null);
   const [showNotifPrompt, setShowNotifPrompt] = useState(false);
 
-  // Proactive prompt — show once per device, 8s after mount, if not subscribed/denied and not already installed+subscribed
+  // Proactive prompt — show 3s after mount, if not subscribed/denied
+  // In TWA/standalone mode: ignore the previous "dismissed" flag so users who installed
+  // from Play Store still get prompted to allow notifications.
   useEffect(() => {
+    const isStandalone = window.matchMedia("(display-mode: standalone)").matches || (navigator as any).standalone;
     const dismissed = localStorage.getItem("stop_notif_prompt_v1");
-    if (dismissed) return;
-    // Show if: we can install the PWA, OR we support push and haven't subscribed yet
+    // In TWA/standalone mode, only respect dismissed flag if user is already subscribed
+    if (dismissed && !(isStandalone && !isSubscribed)) return;
     const shouldShow = canInstall || (isSupported && !isSubscribed && permission !== "denied" && permission !== "granted");
     if (!shouldShow) return;
-    const timer = setTimeout(() => setShowNotifPrompt(true), 8000);
+    const timer = setTimeout(() => setShowNotifPrompt(true), 3000);
     return () => clearTimeout(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canInstall, isSupported, isSubscribed, permission]);
@@ -411,6 +414,61 @@ export function Layout({ children }: { children: ReactNode }) {
                   ))}
                 </div>
               </div>
+
+              {/* Notification toggle in profile */}
+              {isSupported && permission !== "unsupported" && (
+                <div>
+                  <label className="text-xs font-bold text-white/60 uppercase tracking-wider mb-2 block">
+                    🔔 {lang === "en" ? "Notifications" : lang === "pt" ? "Notificações" : lang === "fr" ? "Notifications" : "Notificaciones"}
+                  </label>
+                  {permission === "denied" ? (
+                    <div className="flex items-center gap-2 py-2 px-3 rounded-xl" style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)" }}>
+                      <span className="text-red-400 text-xs font-bold flex-1">
+                        {lang === "en" ? "Blocked in browser settings. Go to Settings → Apps → Chrome → Notifications to enable." : lang === "pt" ? "Bloqueado. Vai a Definições → Apps → Chrome → Notificações." : lang === "fr" ? "Bloqué. Va dans Réglages → Apps → Chrome → Notifications." : "Bloqueadas. Ve a Ajustes → Apps → Chrome → Notificaciones para activarlas."}
+                      </span>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={async () => {
+                        if (isSubscribed) {
+                          await unsubscribe();
+                          setNotifToast("🔕 Notificaciones desactivadas");
+                        } else {
+                          const ok = await subscribe();
+                          if (ok) {
+                            setNotifToast("🔔 ¡Notificaciones activadas! Ahora aparecerás en Ajustes → Notificaciones");
+                            localStorage.setItem("stop_notif_prompt_v1", "1");
+                          }
+                        }
+                        setTimeout(() => setNotifToast(null), 5000);
+                      }}
+                      disabled={notifLoading}
+                      className="w-full flex items-center gap-3 py-3 px-4 rounded-xl transition-all active:scale-95"
+                      style={isSubscribed
+                        ? { background: "rgba(74,222,128,0.12)", border: "1px solid rgba(74,222,128,0.35)" }
+                        : { background: "rgba(249,168,37,0.12)", border: "1px solid rgba(249,168,37,0.35)" }
+                      }
+                    >
+                      <span className="text-2xl">{isSubscribed ? "🔔" : "🔕"}</span>
+                      <div className="flex-1 text-left">
+                        <p className="text-white font-black text-sm">
+                          {isSubscribed
+                            ? (lang === "en" ? "Notifications ON" : lang === "pt" ? "Notificações ATIVAS" : lang === "fr" ? "Notifications ACTIVÉES" : "Notificaciones ACTIVADAS")
+                            : (lang === "en" ? "Activate notifications" : lang === "pt" ? "Ativar notificações" : lang === "fr" ? "Activer les notifications" : "Activar notificaciones")}
+                        </p>
+                        <p className="text-white/50 text-xs">
+                          {isSubscribed
+                            ? (lang === "en" ? "Tap to disable" : lang === "pt" ? "Toca para desativar" : lang === "fr" ? "Appuie pour désactiver" : "Toca para desactivar")
+                            : (lang === "en" ? "Get daily challenge alerts" : lang === "pt" ? "Recebe alertas do desafio diário" : lang === "fr" ? "Reçois les alertes du défi quotidien" : "Recibe el reto diario en tu pantalla")}
+                        </p>
+                      </div>
+                      <span className="text-xs font-black px-2 py-1 rounded-lg" style={{ background: isSubscribed ? "rgba(74,222,128,0.2)" : "rgba(249,168,37,0.25)", color: isSubscribed ? "#4ade80" : "#f9a825" }}>
+                        {notifLoading ? "..." : isSubscribed ? (lang === "en" ? "ON" : "ON") : (lang === "en" ? "OFF" : "OFF")}
+                      </span>
+                    </button>
+                  )}
+                </div>
+              )}
 
               <Button className="w-full" onClick={handleSaveProfile}>
                 ✓ Guardar
