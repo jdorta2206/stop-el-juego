@@ -9,6 +9,7 @@ import { LanguageSelector } from "./LanguageSelector";
 import { AVATAR_COLORS } from "@/lib/utils";
 import { useT } from "@/i18n/useT";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
+import { usePWAInstall } from "@/hooks/usePWAInstall";
 
 const LOGO_URL = `${import.meta.env.BASE_URL}images/stop-logo.png`;
 
@@ -28,17 +29,21 @@ export function Layout({ children }: { children: ReactNode }) {
   const [editColor, setEditColor] = useState("");
   const { isSupported, isSubscribed, permission, loading: notifLoading, subscribe, unsubscribe } =
     usePushNotifications(player?.id, lang);
+  const { canInstall, isInstalled, isInstalling, triggerInstall } = usePWAInstall();
   const [notifToast, setNotifToast] = useState<string | null>(null);
   const [showNotifPrompt, setShowNotifPrompt] = useState(false);
 
-  // Proactive notification prompt — show once per device, 8s after mount, only if not yet subscribed/denied
+  // Proactive prompt — show once per device, 8s after mount, if not subscribed/denied and not already installed+subscribed
   useEffect(() => {
-    if (!isSupported || isSubscribed || permission === "denied" || permission === "granted") return;
     const dismissed = localStorage.getItem("stop_notif_prompt_v1");
     if (dismissed) return;
+    // Show if: we can install the PWA, OR we support push and haven't subscribed yet
+    const shouldShow = canInstall || (isSupported && !isSubscribed && permission !== "denied" && permission !== "granted");
+    if (!shouldShow) return;
     const timer = setTimeout(() => setShowNotifPrompt(true), 8000);
     return () => clearTimeout(timer);
-  }, [isSupported, isSubscribed, permission]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canInstall, isSupported, isSubscribed, permission]);
 
   if (!isLoaded) {
     return (
@@ -218,7 +223,7 @@ export function Layout({ children }: { children: ReactNode }) {
         </div>
       </footer>
 
-      {/* Proactive notification prompt — slides up once, 8s after first visit */}
+      {/* Proactive install + notification prompt */}
       <AnimatePresence>
         {showNotifPrompt && (
           <motion.div
@@ -230,48 +235,117 @@ export function Layout({ children }: { children: ReactNode }) {
             className="fixed bottom-20 left-0 right-0 z-50 flex justify-center px-4"
           >
             <div
-              className="w-full max-w-sm rounded-3xl p-5 shadow-2xl flex flex-col gap-4"
+              className="w-full max-w-sm rounded-3xl p-5 shadow-2xl flex flex-col gap-3"
               style={{
                 background: "linear-gradient(145deg, #1a237e 0%, #0d1757 100%)",
                 border: "2px solid rgba(249,168,37,0.4)",
               }}
             >
-              <div className="flex items-center gap-3">
-                <span className="text-3xl">🔔</span>
-                <div>
+              {/* Header */}
+              <div className="flex items-start gap-3">
+                <span className="text-3xl mt-0.5">🔔</span>
+                <div className="flex-1">
                   <p className="text-white font-black text-sm leading-tight">
-                    {lang === "en" ? "Never miss a challenge!" : lang === "pt" ? "Nunca percas um desafio!" : lang === "fr" ? "Ne rate jamais un défi !" : "¡No te pierdas el reto diario!"}
+                    {lang === "en" ? "Get daily notifications!" : lang === "pt" ? "Recebe notificações diárias!" : lang === "fr" ? "Reçois des notifs quotidiennes !" : "¡Activa las notificaciones!"}
                   </p>
-                  <p className="text-white/55 text-xs mt-0.5">
-                    {lang === "en" ? "Get a daily push when today's word is ready." : lang === "pt" ? "Recebe uma notificação diária quando o desafio estiver pronto." : lang === "fr" ? "Reçois une notification quotidienne quand le défi du jour est prêt." : "Te avisamos cada día cuando el reto está listo."}
+                  <p className="text-white/55 text-xs mt-1 leading-relaxed">
+                    {lang === "en"
+                      ? "Install the app and allow notifications to get the daily challenge on your lock screen."
+                      : lang === "pt"
+                      ? "Instala a app e permite notificações para receber o desafio diário no ecrã de bloqueio."
+                      : lang === "fr"
+                      ? "Installe l'app et autorise les notifs pour recevoir le défi du jour sur ton écran verrouillé."
+                      : "Instala la app y activa los avisos para recibir el reto diario en tu pantalla de bloqueo."}
                   </p>
                 </div>
-              </div>
-              <div className="flex gap-2">
                 <button
-                  onClick={async () => {
-                    setShowNotifPrompt(false);
-                    localStorage.setItem("stop_notif_prompt_v1", "1");
-                    const ok = await subscribe();
-                    if (ok) setNotifToast("🔔 ¡Notificaciones activadas!");
-                    setTimeout(() => setNotifToast(null), 3500);
-                  }}
-                  className="flex-1 py-2.5 rounded-2xl font-black text-sm text-[#0d1757] transition-transform active:scale-95"
-                  style={{ background: "#f9a825" }}
-                  disabled={notifLoading}
-                >
-                  {lang === "en" ? "Activate" : lang === "pt" ? "Ativar" : lang === "fr" ? "Activer" : "Activar"} 🔔
-                </button>
-                <button
-                  onClick={() => {
-                    setShowNotifPrompt(false);
-                    localStorage.setItem("stop_notif_prompt_v1", "1");
-                  }}
-                  className="py-2.5 px-4 rounded-2xl font-bold text-sm text-white/50 hover:text-white/80 transition-colors"
-                >
-                  {lang === "en" ? "Later" : lang === "pt" ? "Depois" : lang === "fr" ? "Plus tard" : "Luego"}
-                </button>
+                  onClick={() => { setShowNotifPrompt(false); localStorage.setItem("stop_notif_prompt_v1", "1"); }}
+                  className="text-white/30 hover:text-white/60 text-lg leading-none mt-0.5"
+                >✕</button>
               </div>
+
+              {/* Step indicators */}
+              <div className="flex flex-col gap-2">
+                {/* Step 1: Install PWA (only on Android Chrome when installable) */}
+                {canInstall && (
+                  <div className="flex items-center gap-3 p-3 rounded-2xl" style={{ background: "rgba(249,168,37,0.12)", border: "1px solid rgba(249,168,37,0.3)" }}>
+                    <span className="text-lg">📲</span>
+                    <div className="flex-1">
+                      <p className="text-white font-black text-xs">
+                        {lang === "en" ? "Step 1 · Install the app" : lang === "pt" ? "Passo 1 · Instalar a app" : lang === "fr" ? "Étape 1 · Installer l'app" : "Paso 1 · Instalar la app"}
+                      </p>
+                      <p className="text-white/50 text-[10px]">
+                        {lang === "en" ? "Appears in your home screen & notification settings" : lang === "pt" ? "Aparece no ecrã inicial e nas notificações" : lang === "fr" ? "Apparaît sur l'écran d'accueil et dans les notifs" : "Aparece en tu pantalla de inicio y ajustes de notif."}
+                      </p>
+                    </div>
+                    <button
+                      onClick={async () => {
+                        const result = await triggerInstall();
+                        if (result === "accepted") {
+                          setNotifToast("📲 ¡App instalada!");
+                          setTimeout(() => setNotifToast(null), 3000);
+                        }
+                      }}
+                      disabled={isInstalling}
+                      className="px-3 py-1.5 rounded-xl font-black text-[11px] text-[#0d1757] flex-shrink-0"
+                      style={{ background: "#f9a825" }}
+                    >
+                      {isInstalling ? "..." : lang === "en" ? "Install" : lang === "pt" ? "Instalar" : lang === "fr" ? "Installer" : "Instalar"}
+                    </button>
+                  </div>
+                )}
+
+                {/* Step 2: Allow notifications */}
+                {isSupported && permission !== "denied" && (
+                  <div
+                    className="flex items-center gap-3 p-3 rounded-2xl"
+                    style={{
+                      background: isSubscribed ? "rgba(74,222,128,0.1)" : "rgba(255,255,255,0.06)",
+                      border: `1px solid ${isSubscribed ? "rgba(74,222,128,0.3)" : "rgba(255,255,255,0.1)"}`,
+                    }}
+                  >
+                    <span className="text-lg">{isSubscribed ? "✅" : "🔔"}</span>
+                    <div className="flex-1">
+                      <p className="text-white font-black text-xs">
+                        {canInstall
+                          ? (lang === "en" ? "Step 2 · Allow notifications" : lang === "pt" ? "Passo 2 · Permitir notificações" : lang === "fr" ? "Étape 2 · Autoriser les notifs" : "Paso 2 · Permitir notificaciones")
+                          : (lang === "en" ? "Allow notifications" : lang === "pt" ? "Permitir notificações" : lang === "fr" ? "Autoriser les notifs" : "Permitir notificaciones")}
+                      </p>
+                      <p className="text-white/50 text-[10px]">
+                        {isSubscribed
+                          ? (lang === "en" ? "Active ✓" : lang === "pt" ? "Ativo ✓" : lang === "fr" ? "Activé ✓" : "Activadas ✓")
+                          : (lang === "en" ? "The browser will ask for permission" : lang === "pt" ? "O navegador pedirá permissão" : lang === "fr" ? "Le navigateur demandera la permission" : "El navegador te pedirá permiso")}
+                      </p>
+                    </div>
+                    {!isSubscribed && (
+                      <button
+                        onClick={async () => {
+                          const ok = await subscribe();
+                          if (ok) {
+                            setNotifToast("🔔 ¡Notificaciones activadas!");
+                            setTimeout(() => setNotifToast(null), 3500);
+                            setShowNotifPrompt(false);
+                            localStorage.setItem("stop_notif_prompt_v1", "1");
+                          }
+                        }}
+                        disabled={notifLoading}
+                        className="px-3 py-1.5 rounded-xl font-black text-[11px] text-[#0d1757] flex-shrink-0"
+                        style={{ background: "#f9a825" }}
+                      >
+                        {notifLoading ? "..." : lang === "en" ? "Allow" : lang === "pt" ? "Permitir" : lang === "fr" ? "Autoriser" : "Permitir"}
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Dismiss */}
+              <button
+                onClick={() => { setShowNotifPrompt(false); localStorage.setItem("stop_notif_prompt_v1", "1"); }}
+                className="text-center text-white/35 text-xs font-bold py-1"
+              >
+                {lang === "en" ? "No thanks" : lang === "pt" ? "Não, obrigado" : lang === "fr" ? "Non merci" : "Ahora no"}
+              </button>
             </div>
           </motion.div>
         )}
