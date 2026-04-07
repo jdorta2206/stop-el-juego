@@ -411,10 +411,10 @@ export function AuthModal({ onSave, initial }: AuthModalProps) {
                     disabled={!name.trim()}
                     className="w-full py-4 rounded-xl font-black text-xl tracking-wider transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                     style={{
-                      background: name.trim() ? "#e63012" : "#555",
+                      background: name.trim() ? "#b5301a" : "#555",
                       color: "white",
                       fontFamily: "'Baloo 2', sans-serif",
-                      boxShadow: name.trim() ? "0 4px 20px rgba(230,48,18,0.4)" : "none",
+                      boxShadow: name.trim() ? "0 4px 20px rgba(181,48,26,0.4)" : "none",
                     }}
                   >
                     {t.home.play}

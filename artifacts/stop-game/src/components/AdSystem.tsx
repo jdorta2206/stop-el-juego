@@ -252,7 +252,7 @@ export function RewardedAd({
               <button
                 onClick={startWatching}
                 className="flex-1 py-3 rounded-xl font-black text-sm flex items-center justify-center gap-2"
-                style={{ background: "#e63012", color: "white" }}
+                style={{ background: "#b5301a", color: "white" }}
               >
                 <Play className="w-4 h-4 fill-white" /> Ver vídeo
               </button>

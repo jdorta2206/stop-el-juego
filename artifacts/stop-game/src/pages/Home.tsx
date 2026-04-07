@@ -173,7 +173,7 @@ export default function Home() {
               className="flex items-center gap-2 px-4 py-2 rounded-full"
               style={{
                 background: streak.current >= 7
-                  ? "linear-gradient(135deg, rgba(249,168,37,0.3), rgba(229,62,18,0.3))"
+                  ? "linear-gradient(135deg, rgba(249,168,37,0.3), rgba(181,48,26,0.3))"
                   : "rgba(249,168,37,0.15)",
                 border: "1px solid rgba(249,168,37,0.5)",
               }}
@@ -198,10 +198,10 @@ export default function Home() {
           >
             <Link href="/ranking">
               <motion.div
-                animate={{ boxShadow: ["0 0 0px rgba(229,62,18,0)", "0 0 18px rgba(229,62,18,0.45)", "0 0 0px rgba(229,62,18,0)"] }}
+                animate={{ boxShadow: ["0 0 0px rgba(181,48,26,0)", "0 0 18px rgba(181,48,26,0.45)", "0 0 0px rgba(181,48,26,0)"] }}
                 transition={{ repeat: Infinity, duration: 2.4 }}
                 className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl cursor-pointer"
-                style={{ background: "rgba(229,62,18,0.12)", border: "1.5px solid rgba(229,62,18,0.45)" }}
+                style={{ background: "rgba(181,48,26,0.12)", border: "1.5px solid rgba(181,48,26,0.45)" }}
               >
                 <div className="flex items-center gap-2">
                   <span className="text-lg">🔥</span>
@@ -252,7 +252,7 @@ export default function Home() {
               whileTap={{ scale: 0.98 }}
               className="w-full flex items-center gap-4 px-5 py-3.5 rounded-2xl font-black tracking-wide shadow-lg"
               style={{
-                background: "linear-gradient(135deg, rgba(249,168,37,0.2), rgba(229,62,18,0.15))",
+                background: "linear-gradient(135deg, rgba(249,168,37,0.2), rgba(181,48,26,0.15))",
                 border: "2px solid rgba(249,168,37,0.4)",
                 color: "white",
               }}
@@ -319,7 +319,7 @@ export default function Home() {
               whileTap={{ scale: 0.98 }}
               className="w-full flex items-center gap-4 px-5 py-4 rounded-2xl cursor-pointer"
               style={{
-                background: "linear-gradient(135deg, rgba(229,62,18,0.2), rgba(249,168,37,0.15))",
+                background: "linear-gradient(135deg, rgba(181,48,26,0.2), rgba(249,168,37,0.15))",
                 border: "2px solid rgba(249,168,37,0.35)",
               }}
             >
@@ -426,7 +426,7 @@ export default function Home() {
                         <span className="text-base w-6 text-center">{medals[i]}</span>
                         <div
                           className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-black flex-shrink-0"
-                          style={{ background: p.avatarColor || "#e63012" }}
+                          style={{ background: p.avatarColor || "#b5301a" }}
                         >
                           {p.picture
                             ? <img src={p.picture} alt="" className="w-6 h-6 rounded-full object-cover" />

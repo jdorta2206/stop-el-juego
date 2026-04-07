@@ -42,7 +42,7 @@ export function isVowel(letter: string): boolean {
 }
 
 export const AVATAR_COLORS = [
-  "#e63012",
+  "#b5301a",
   "#1a237e",
   "#f9a825",
   "#2e7d32",

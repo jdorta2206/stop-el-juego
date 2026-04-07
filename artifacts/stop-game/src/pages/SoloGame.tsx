@@ -491,7 +491,7 @@ export default function SoloGame() {
             vibrate([60, 40, 60, 40, 200]);
             sound.playLevelUp();
             setShowImpossibleBanner(true);
-            confetti({ particleCount: 300, spread: 140, origin: { y: 0.5 }, colors: ["#f9a825", "#e53518", "#ffffff", "#4ade80"] });
+            confetti({ particleCount: 300, spread: 140, origin: { y: 0.5 }, colors: ["#f9a825", "#b5301a", "#ffffff", "#4ade80"] });
             setTimeout(() => setShowImpossibleBanner(false), 3200);
           }, 500);
         }
@@ -1741,7 +1741,7 @@ export default function SoloGame() {
                   className="flex flex-col items-center justify-center mb-3 py-3 px-4 rounded-2xl gap-1"
                   style={
                     bestResult.isNew
-                      ? { background: "linear-gradient(135deg,rgba(249,168,37,0.25),rgba(229,62,18,0.2))", border: "2px solid rgba(249,168,37,0.6)" }
+                      ? { background: "linear-gradient(135deg,rgba(249,168,37,0.25),rgba(181,48,26,0.2))", border: "2px solid rgba(249,168,37,0.6)" }
                       : { background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)" }
                   }
                 >
@@ -1782,7 +1782,7 @@ export default function SoloGame() {
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.9 }}
                     className="flex items-center justify-center gap-2 mb-3 py-2 px-4 rounded-xl cursor-pointer"
-                    style={{ background: "linear-gradient(135deg, rgba(249,168,37,0.3), rgba(229,62,18,0.2))", border: "2px solid rgba(249,168,37,0.5)" }}
+                    style={{ background: "linear-gradient(135deg, rgba(249,168,37,0.3), rgba(181,48,26,0.2))", border: "2px solid rgba(249,168,37,0.5)" }}
                     onClick={clearLevelUp}
                   >
                     <span className="text-2xl">🎉</span>

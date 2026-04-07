@@ -123,7 +123,7 @@ export default function DailyChallenge() {
             animate={{ opacity: 1, y: 0 }}
             className="rounded-3xl p-5 space-y-4"
             style={{
-              background: "linear-gradient(135deg, rgba(229,62,18,0.25), rgba(26,35,126,0.35))",
+              background: "linear-gradient(135deg, rgba(181,48,26,0.25), rgba(26,35,126,0.35))",
               border: "1px solid rgba(255,255,255,0.12)",
             }}
           >
@@ -137,7 +137,7 @@ export default function DailyChallenge() {
                     background: "linear-gradient(135deg, hsl(6 90% 55%), hsl(6 90% 40%))",
                     fontFamily: "'Baloo 2', sans-serif",
                     color: "white",
-                    boxShadow: "0 8px 24px rgba(229,62,18,0.4)",
+                    boxShadow: "0 8px 24px rgba(181,48,26,0.4)",
                   }}
                 >
                   {challenge.letter}
@@ -188,7 +188,7 @@ export default function DailyChallenge() {
                 style={{
                   background: "linear-gradient(135deg, hsl(6 90% 55%), hsl(6 90% 42%))",
                   color: "white",
-                  boxShadow: "0 6px 24px rgba(229,62,18,0.45)",
+                  boxShadow: "0 6px 24px rgba(181,48,26,0.45)",
                   fontFamily: "'Baloo 2', sans-serif",
                 }}
               >
