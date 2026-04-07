@@ -10,15 +10,15 @@ interface RouletteProps {
 
 // Vibrant color palette for wheel sectors - STOP brand colors
 const SECTOR_COLORS = [
-  "#e63012", // red
+  "#b5301a", // red
   "#1a237e", // dark blue
   "#f9a825", // yellow
   "#2e7d32", // green
-  "#e63012",
+  "#b5301a",
   "#1a237e",
   "#f9a825",
   "#2e7d32",
-  "#e63012",
+  "#b5301a",
   "#c62828", // darker red
   "#283593", // indigo
   "#f57f17", // amber
@@ -27,15 +27,15 @@ const SECTOR_COLORS = [
   "#1a237e",
   "#f9a825",
   "#2e7d32",
-  "#e63012",
+  "#b5301a",
   "#1a237e",
   "#f9a825",
   "#2e7d32",
-  "#e63012",
+  "#b5301a",
   "#1a237e",
   "#f9a825",
   "#2e7d32",
-  "#e63012",
+  "#b5301a",
   "#1a237e",
 ];
 
@@ -178,7 +178,7 @@ export function Roulette({ onSpinComplete, isSpinning, targetLetter }: RouletteP
           className="absolute inset-0 rounded-full"
           style={{
             background: "radial-gradient(circle, transparent 60%, rgba(249,168,37,0.3) 100%)",
-            boxShadow: "0 0 30px rgba(249,168,37,0.4), 0 0 60px rgba(230,48,18,0.3)",
+            boxShadow: "0 0 30px rgba(249,168,37,0.4), 0 0 60px rgba(181,48,26,0.3)",
           }}
         />
 
@@ -250,7 +250,7 @@ export function Roulette({ onSpinComplete, isSpinning, targetLetter }: RouletteP
             <div className="w-14 h-14 rounded-full bg-white border-4 border-[#1a237e] flex items-center justify-center shadow-inner">
               <span
                 className="text-xs font-black leading-none"
-                style={{ color: "#e63012", fontFamily: "'Baloo 2', sans-serif" }}
+                style={{ color: "#b5301a", fontFamily: "'Baloo 2', sans-serif" }}
               >
                 STOP
               </span>

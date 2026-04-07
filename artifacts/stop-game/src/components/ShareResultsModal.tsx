@@ -148,8 +148,8 @@ export function ShareResultsModal({
               style={{
                 background: won
                   ? "linear-gradient(135deg, rgba(34,197,94,0.15), rgba(21,128,61,0.1))"
-                  : "linear-gradient(135deg, rgba(229,62,18,0.15), rgba(153,27,27,0.1))",
-                border: `1px solid ${won ? "rgba(34,197,94,0.3)" : "rgba(229,62,18,0.3)"}`,
+                  : "linear-gradient(135deg, rgba(181,48,26,0.15), rgba(153,27,27,0.1))",
+                border: `1px solid ${won ? "rgba(34,197,94,0.3)" : "rgba(181,48,26,0.3)"}`,
               }}
             >
               {/* Letter + score header */}
