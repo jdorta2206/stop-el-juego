@@ -13,12 +13,12 @@ function urlB64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
 
 export type NotifPermission = "default" | "granted" | "denied" | "unsupported";
 
+// playerId is optional — guests can still subscribe for daily notifications
 export function usePushNotifications(playerId: string | undefined, language: string) {
   const [permission, setPermission] = useState<NotifPermission>("default");
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // Determine current permission state on mount
   useEffect(() => {
     if (!("Notification" in window) || !("serviceWorker" in navigator)) {
       setPermission("unsupported");
@@ -26,7 +26,6 @@ export function usePushNotifications(playerId: string | undefined, language: str
     }
     setPermission(Notification.permission as NotifPermission);
 
-    // Check if already subscribed
     navigator.serviceWorker.ready.then((reg) => {
       reg.pushManager.getSubscription().then((sub) => {
         setIsSubscribed(!!sub);
@@ -35,13 +34,13 @@ export function usePushNotifications(playerId: string | undefined, language: str
   }, []);
 
   const subscribe = useCallback(async () => {
-    if (!playerId || !VAPID_PUBLIC || !("serviceWorker" in navigator)) return;
+    if (!VAPID_PUBLIC || !("serviceWorker" in navigator)) return false;
     setLoading(true);
     try {
       const reg = await navigator.serviceWorker.ready;
       const perm = await Notification.requestPermission();
       setPermission(perm as NotifPermission);
-      if (perm !== "granted") { setLoading(false); return; }
+      if (perm !== "granted") { setLoading(false); return false; }
 
       const sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
@@ -51,12 +50,18 @@ export function usePushNotifications(playerId: string | undefined, language: str
       await fetch(`${API_BASE}/api/notifications/subscribe`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ playerId, subscription: sub.toJSON(), language }),
+        body: JSON.stringify({
+          playerId: playerId || "anonymous",
+          subscription: sub.toJSON(),
+          language,
+        }),
       });
 
       setIsSubscribed(true);
+      return true;
     } catch (e) {
       console.error("Push subscribe error:", e);
+      return false;
     } finally {
       setLoading(false);
     }
