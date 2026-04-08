@@ -318,7 +318,7 @@ router.post("/:roomCode/stop", async (req, res) => {
     return;
   }
 
-  const stopper = { id: playerId, name: playerName };
+  const stopper = { id: playerId, name: playerName, stopTimestamp: Date.now() };
 
   const [updated] = await db.update(roomsTable)
     .set({
@@ -346,6 +346,29 @@ router.post("/:roomCode/results", async (req, res) => {
     res.json(formatRoom(room));
     return;
   }
+
+  // ── Timing exploit guard ──────────────────────────────────────────────────
+  // Players have at most 20 s after STOP is called to submit their answers.
+  // (Freeze countdown is 8 s + 12 s network grace.)
+  const SUBMIT_GRACE_MS = 20_000;
+  const stopMeta = parseBluffMeta(room.stopperJson);
+  const stopTimestamp: number | undefined =
+    stopMeta?.stopTimestamp ?? stopMeta?.stopper?.stopTimestamp;
+  if (stopTimestamp && Date.now() - stopTimestamp > SUBMIT_GRACE_MS) {
+    // Too late — accept the submission but zero out the score to prevent cheating
+    // (we still need to mark them ready so the round can proceed)
+    const latePlayers = parsePlayers(room.playersJson).map((p: any) =>
+      p.playerId === body.data.playerId ? { ...p, isReady: true, roundScore: 0 } : p
+    );
+    const allReady = latePlayers.every((p: any) => p.isReady);
+    await db.update(roomsTable)
+      .set({ playersJson: JSON.stringify(latePlayers), status: allReady ? "waiting" : room.status, updatedAt: new Date() })
+      .where(eq(roomsTable.roomCode, roomCode.toUpperCase()));
+    const [refreshed] = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, roomCode.toUpperCase())).limit(1);
+    res.json(formatRoom(refreshed));
+    return;
+  }
+  // ─────────────────────────────────────────────────────────────────────────
 
   const players = parsePlayers(room.playersJson);
   const { playerId, roundScore, bluffedCategories, bluffedWords } = body.data;
