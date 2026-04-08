@@ -27,7 +27,7 @@ export async function getStripeSync(): Promise<StripeSync> {
 export async function getUncachableStripeClient(): Promise<Stripe> {
   if (!stripeClientInstance) {
     stripeClientInstance = new Stripe(getStripeSecretKey(), {
-      apiVersion: "2025-02-24.acacia",
+      apiVersion: "2026-02-25.clover",
     });
   }
   return stripeClientInstance;
