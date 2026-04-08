@@ -16,8 +16,38 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4807272408824742" crossorigin="anonymous"></script>
+    <style>
+      #html-splash {
+        position: fixed;
+        inset: 0;
+        z-index: 99999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: radial-gradient(ellipse at 50% 45%, #5a1208 0%, #1a063a 55%, #060318 100%);
+        transition: opacity 0.35s ease;
+      }
+      #html-splash.fade-out {
+        opacity: 0;
+        pointer-events: none;
+      }
+      #html-splash img {
+        width: 160px;
+        height: 160px;
+        border-radius: 50%;
+        filter: drop-shadow(0 0 28px rgba(181,48,26,0.95)) drop-shadow(0 4px 16px rgba(0,0,0,0.8));
+        animation: splash-pulse 1.6s ease-in-out infinite;
+      }
+      @keyframes splash-pulse {
+        0%, 100% { transform: scale(1); filter: drop-shadow(0 0 28px rgba(181,48,26,0.95)) drop-shadow(0 4px 16px rgba(0,0,0,0.8)); }
+        50%       { transform: scale(1.06); filter: drop-shadow(0 0 42px rgba(181,48,26,1)) drop-shadow(0 4px 20px rgba(0,0,0,0.9)); }
+      }
+    </style>
   </head>
   <body>
+    <div id="html-splash">
+      <img src="/images/stop-logo.png" alt="STOP" />
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
