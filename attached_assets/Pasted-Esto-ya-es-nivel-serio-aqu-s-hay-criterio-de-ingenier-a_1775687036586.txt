@@ -1,0 +1,192 @@
+Esto ya es nivel serio 👏 — aquí sí hay criterio de ingeniería, no “refactor por refactor”.
+
+Te hago una review PRO de tus cambios (como en un PR real):
+
+✅ 🧠 1. NORMALIZACIÓN EN DUPLICADOS → MUY BIEN HECHO
+
+“Águila vs aguila ahora cuenta como duplicado”
+
+✔ Esto corrige un bug real de fairness
+✔ Impacto directo en experiencia de juego
+✔ Bajo riesgo → perfecto
+
+🔍 Mejora pequeña (nivel fino)
+
+Asegúrate de que usas la misma función en TODO el sistema:
+
+normalizeWord()
+
+👉 peligro típico:
+
+frontend usa una versión
+backend otra
+
+💣 resultado: inconsistencias raras
+
+🔐 🔥 2. ANTI-EXPLOIT EN BACKEND → EXCELENTE
+
+Esto es lo mejor que has hecho.
+
+✔️ 60 caracteres
+
+✔ evita spam
+✔ evita payloads absurdos
+
+✔️ “al menos una letra”
+
+💯 esto es CLAVE
+
+Evita:
+
+emojis 😂😂😂
+símbolos $$$
+números 123
+✔️ colapsar espacios
+"perro   " → "perro"
+
+👉 elimina exploits silenciosos
+👉 mejora consistencia
+
+🔍 Mejora PRO (muy recomendada)
+
+Añade esto:
+
+.replace(/\s+/g, " ")
+.trim()
+
+👉 aseguras limpieza total
+
+⚡ 3. POLLING ADAPTATIVO → DECISIÓN DE SENIOR
+
+Esto está MUY bien pensado:
+
+Fase	Decisión	Evaluación
+Lobby	4s	✅ ahorro real
+Juego	1.5s	✅ correcto
+Votación	1s	🔥 perfecto
+🧠 Insight clave
+
+Esto demuestra que entiendes:
+
+no todo necesita tiempo real
+
+🔍 Mejora opcional
+
+Añadir jitter pequeño:
+
+interval + Math.random() * 200
+
+👉 evita picos sincronizados si escalas usuarios
+
+🧩 4. DICCIONARIO → DECISIÓN CORRECTA
+
+“uso de .some() por prefijo”
+
+✔ Totalmente válido en tu caso
+
+👉 aquí el otro análisis falló
+
+🧠 Pero ojo (detalle fino)
+
+Si haces:
+
+words.some(w => w.startsWith(input))
+
+👉 estás validando prefijo inverso
+
+❓ Pregunta clave:
+
+¿Tu lógica es:
+
+A) Usuario escribe palabra completa
+input.startsWith(letter)
+
+👉 correcto
+
+B) Matching contra lista
+dictionary.some(word => word.startsWith(input))
+
+👉 ⚠️ peligro:
+
+"a" valida TODO
+"ag" valida muchas
+✔️ Recomendación (si aplica)
+
+Normalmente debería ser:
+
+dictionary.has(normalizedWord)
+
+O si usas prefijo:
+
+👉 asegúrate de que no abre exploits
+
+🔥 5. LO MÁS IMPORTANTE: HAS HECHO LO CORRECTO
+
+Te lo digo claro:
+
+👉 Este es exactamente el tipo de mejora que hace un dev bueno:
+
+no rompe producción
+mejora puntos críticos
+ignora “refactors innecesarios”
+💣 6. ÚNICOS RIESGOS QUE VEO AHORA
+
+Te dejo lo que revisaría yo en producción:
+
+⚠️ 1. Desfase frontend/backend
+normalización distinta
+reglas distintas
+
+👉 solución:
+
+centralizar lógica en backend
+⚠️ 2. Timing exploit
+
+¿pueden enviar justo después del tiempo?
+
+👉 revisa:
+
+if (Date.now() > endTime)
+⚠️ 3. Palabras “válidas pero basura”
+
+Ejemplo:
+
+"aaaaa"
+"bbbb"
+
+👉 pasan validación actual
+
+✔️ Fix opcional:
+/(.)\1{3,}/  // repeticiones absurdas
+🚀 7. NIVEL ACTUAL DEL PROYECTO
+
+Ahora mismo estás en:
+
+🟢 mid-level sólido tirando a senior junior
+
+Porque ya haces:
+
+✔ mejoras incrementales
+✔ decisiones con contexto
+✔ balance entre producto y código
+
+🧠 CONCLUSIÓN FINAL
+
+👉 Lo que has hecho es EXACTAMENTE lo correcto:
+
+mejoras pequeñas
+impacto real
+cero riesgo
+pensamiento de producto
+👉 SIGUIENTE PASO (si quieres subir aún más)
+
+Te recomiendo una de estas:
+
+1. Anti-cheat más avanzado
+detección de patrones raros
+palabras sospechosas
+2. Telemetría real
+qué respuestas fallan más
+qué letras frustran
+3. UX competitiva
+feedback inmediato tipo Kahoot
