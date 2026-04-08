@@ -32,7 +32,7 @@ function calcScore(responses: Record<string, string>, letter: string): number {
 }
 
 // Local UI phase — what the current player sees
-type LocalPhase = "lobby" | "spinning" | "playing" | "freeze" | "judging" | "submitted" | "between_rounds" | "finished";
+type LocalPhase = "lobby" | "spinning" | "playing" | "freeze" | "submitted" | "bluffvoting" | "bluff_results" | "between_rounds" | "finished";
 
 export default function Room() {
   const { id: roomCode } = useParams<{ id: string }>();
@@ -49,8 +49,12 @@ export default function Room() {
 
   // Multiplayer bluff state
   const [bluffedCategories, setBluffedCategories] = useState<Set<string>>(new Set());
-  const [roomBluffResults, setRoomBluffResults] = useState<{ cat: string; caught: boolean }[]>([]);
+  const [myBluffResults, setMyBluffResults] = useState<{ cat: string; caught: boolean }[]>([]);
+  const [bluffVoteTimeLeft, setBluffVoteTimeLeft] = useState(15);
+  const [myVotes, setMyVotes] = useState<Record<string, Record<string, "lie" | "real">>>({});
+  const bluffVoteTimerRef = useRef<NodeJS.Timeout | null>(null);
   const bluffedCategoriesRef = useRef<Set<string>>(new Set());
+  const responsesSnapshotRef = useRef<Record<string, string>>({});
 
   const responsesRef = useRef<Record<string, string>>({});
   const lastRoundRef = useRef<number>(0);
@@ -134,25 +138,31 @@ export default function Room() {
     if (hasSubmittedRef.current || !player || !roomCode) return;
     hasSubmittedRef.current = true;
     setPhase("submitted");
+    const bluffedList = [...bluffedCategoriesRef.current];
+    // Build bluffedWords map: category → what the player wrote
+    const bluffedWords: Record<string, string> = {};
+    for (const cat of bluffedList) {
+      bluffedWords[cat] = responsesSnapshotRef.current[cat] ?? "";
+    }
     try {
       await submitMutation.mutateAsync({
         roomCode: roomCode.toUpperCase(),
-        data: { playerId: player.id, roundScore: score, letter: currentLetter },
+        data: {
+          playerId: player.id,
+          roundScore: score,
+          letter: currentLetter,
+          bluffedCategories: bluffedList.length > 0 ? bluffedList : undefined,
+          bluffedWords: bluffedList.length > 0 ? bluffedWords : undefined,
+        },
       });
     } catch (e) { console.error("submit error:", e); }
   }, [player, roomCode, currentLetter]);
 
   const autoSubmit = useCallback(() => {
+    // Snapshot current responses before clearing for the bluff words map
+    responsesSnapshotRef.current = { ...responsesRef.current };
     const score = calcScore(responsesRef.current, currentLetter);
-    const bluffedList = [...bluffedCategoriesRef.current];
-    if (bluffedList.length > 0) {
-      const results = bluffedList.map(cat => ({ cat, caught: Math.random() < 0.5 }));
-      setRoomBluffResults(results);
-      setPhase("judging");
-      setTimeout(() => { submitResults(score); }, 4000);
-    } else {
-      submitResults(score);
-    }
+    submitResults(score);
   }, [currentLetter, submitResults]);
 
   // Start game timer for this round
@@ -191,6 +201,38 @@ export default function Room() {
     }, 1000);
   }, [stopAllTimers, autoSubmit]);
 
+  const apiBase = (() => {
+    const env = (import.meta as any).env;
+    return env?.VITE_API_URL ?? window.location.origin;
+  })();
+
+  // Cast a bluff vote (opponent calls this)
+  const castBluffVote = useCallback(async (accusedPlayerId: string, category: string, vote: "lie" | "real") => {
+    if (!player || !roomCode) return;
+    setMyVotes(prev => ({
+      ...prev,
+      [accusedPlayerId]: { ...(prev[accusedPlayerId] ?? {}), [category]: vote },
+    }));
+    try {
+      await fetch(`${apiBase}/api/rooms/${roomCode.toUpperCase()}/bluff-vote`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ voterId: player.id, accusedPlayerId, category, vote }),
+      });
+    } catch { /* silent */ }
+  }, [player, roomCode, apiBase]);
+
+  // Force-resolve bluffs after deadline (any client can call this)
+  const resolveBluffs = useCallback(async () => {
+    if (!roomCode) return;
+    try {
+      await fetch(`${apiBase}/api/rooms/${roomCode.toUpperCase()}/resolve-bluffs`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch { /* silent */ }
+  }, [roomCode, apiBase]);
+
   // React to room status changes from polling
   useEffect(() => {
     if (!room) return;
@@ -199,6 +241,7 @@ export default function Room() {
 
     if (roomStatus === "finished") {
       stopAllTimers();
+      if (bluffVoteTimerRef.current) { clearInterval(bluffVoteTimerRef.current); bluffVoteTimerRef.current = null; }
       setPhase("finished");
       const sortedPlayers = [...players].sort((a: any, b: any) => (b.score || 0) - (a.score || 0));
       const maxScore = sortedPlayers[0]?.score || 0;
@@ -206,14 +249,32 @@ export default function Room() {
       if (myPlayer && myPlayer.score === maxScore && players.length > 1) {
         confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
       }
-      // Server auto-submits all players' scores when game ends (rooms.ts).
-      // Just invalidate the ranking cache so the UI refreshes.
       queryClient.invalidateQueries({ queryKey: ["/api/ranking/scores"] });
       return;
     }
 
+    if (roomStatus === "bluffvoting" && phase !== "bluffvoting" && phase !== "bluff_results") {
+      setPhase("bluffvoting");
+      // Start local countdown from deadline
+      const deadline = (room as any).bluffVoteDeadline;
+      const secsLeft = deadline ? Math.max(0, Math.ceil((new Date(deadline).getTime() - Date.now()) / 1000)) : 15;
+      setBluffVoteTimeLeft(secsLeft);
+      if (bluffVoteTimerRef.current) clearInterval(bluffVoteTimerRef.current);
+      bluffVoteTimerRef.current = setInterval(() => {
+        setBluffVoteTimeLeft(prev => {
+          if (prev <= 1) {
+            clearInterval(bluffVoteTimerRef.current!);
+            bluffVoteTimerRef.current = null;
+            resolveBluffs();
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+      return;
+    }
+
     if (roomStatus === "stopped") {
-      // Only transition to freeze if we were playing (not already submitted/freezing)
       if (phase === "playing") {
         stopAllTimers();
         setPhase("freeze");
@@ -224,7 +285,6 @@ export default function Room() {
 
     if (roomStatus === "playing") {
       if (currentRound !== lastRoundRef.current) {
-        // New round — show spinning roulette first, then start playing
         lastRoundRef.current = currentRound;
         hasSubmittedRef.current = false;
         isFreezingRef.current = false;
@@ -232,17 +292,19 @@ export default function Room() {
         responsesRef.current = {};
         setBluffedCategories(new Set());
         bluffedCategoriesRef.current = new Set();
-        setRoomBluffResults([]);
+        setMyVotes({});
+        setMyBluffResults([]);
+        setBluffVoteTimeLeft(15);
+        if (bluffVoteTimerRef.current) { clearInterval(bluffVoteTimerRef.current); bluffVoteTimerRef.current = null; }
         setTimeLeft(ROUND_TIME);
         setPhase("spinning");
-        // Timer starts after spin completes (see onSpinComplete in JSX)
       }
       return;
     }
 
     if (roomStatus === "waiting") {
+      if (bluffVoteTimerRef.current) { clearInterval(bluffVoteTimerRef.current); bluffVoteTimerRef.current = null; }
       if (currentRound > 0 && prevStatus !== "waiting") {
-        // Between rounds
         setPhase("between_rounds");
       } else if (currentRound === 0) {
         setPhase("lobby");
@@ -578,61 +640,140 @@ export default function Room() {
           </motion.div>
         )}
 
-        {/* ── JUDGING — bluff reveal after STOP ── */}
-        {phase === "judging" && (
-          <motion.div key="judging"
-            initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
-            className="fixed inset-0 z-40 flex flex-col items-center justify-center gap-5 bg-black/85 backdrop-blur-sm px-6"
-          >
-            <motion.div
-              initial={{ scale: 0.7, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ type: "spring", stiffness: 180, damping: 14 }}
-              className="text-center"
-            >
-              <h2 className="text-4xl font-display font-black text-yellow-400">🎭 EL JUICIO</h2>
-              <p className="text-sm text-white/50 mt-1">Revelando tus engaños...</p>
-            </motion.div>
+        {/* ── BLUFF VOTING — opponents vote on each bluffed word ── */}
+        {phase === "bluffvoting" && (() => {
+          const bluffers = players.filter((p: any) => p.bluffedCategories?.length > 0 && p.playerId !== player?.id);
+          const iAmBluffer = (players.find((p: any) => p.playerId === player?.id) as any)?.bluffedCategories?.length > 0;
 
-            <div className="w-full max-w-sm space-y-3">
-              {roomBluffResults.map((r, i) => (
-                <motion.div
-                  key={r.cat}
-                  initial={{ opacity: 0, x: -40 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: i * 0.9, type: "spring", stiffness: 150, damping: 18 }}
-                  className="p-4 rounded-2xl border-2 flex items-center gap-4"
-                  style={{
-                    borderColor: r.caught ? "#ef4444" : "#22c55e",
-                    background: r.caught ? "rgba(239,68,68,0.1)" : "rgba(34,197,94,0.1)",
-                  }}
-                >
-                  <motion.span
-                    initial={{ scale: 0 }} animate={{ scale: 1 }}
-                    transition={{ delay: i * 0.9 + 0.35, type: "spring" }}
-                    className="text-3xl flex-shrink-0"
-                  >
-                    {r.caught ? "🕵️" : "🎉"}
-                  </motion.span>
-                  <div className="flex-1">
-                    <p className="text-xs uppercase tracking-wider opacity-50">{r.cat}</p>
-                    <p className="font-black text-base" style={{ color: r.caught ? "#f87171" : "#4ade80" }}>
-                      {r.caught ? "¡Te pillaron! −10pts" : "¡Engaño perfecto! +20pts"}
-                    </p>
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-
-            <motion.p
+          return (
+            <motion.div key="bluffvoting"
               initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-              transition={{ delay: Math.max(roomBluffResults.length * 0.9 + 0.5, 1.2) }}
-              className="text-white/30 text-sm text-center"
+              className="fixed inset-0 z-40 flex flex-col items-center bg-black/90 backdrop-blur-sm pt-8 px-4 gap-4 overflow-y-auto pb-8"
             >
-              Enviando respuestas automáticamente...
-            </motion.p>
-          </motion.div>
-        )}
+              {/* Header */}
+              <div className="text-center">
+                <motion.h2
+                  initial={{ scale: 0.7 }} animate={{ scale: 1 }}
+                  transition={{ type: "spring", bounce: 0.4 }}
+                  className="text-4xl font-display font-black text-yellow-400"
+                >
+                  🎭 ¡EL JUICIO!
+                </motion.h2>
+                <p className="text-sm text-white/50 mt-1">
+                  {iAmBluffer
+                    ? "Los demás están votando si mentiste..."
+                    : "¿Alguien está mintiendo? ¡Descúbrelo!"}
+                </p>
+                {/* Countdown ring */}
+                <div className="mt-3 flex items-center justify-center gap-2">
+                  <span className={`text-2xl font-black ${bluffVoteTimeLeft <= 5 ? "text-red-400 animate-pulse" : "text-white/60"}`}>
+                    {bluffVoteTimeLeft}s
+                  </span>
+                  <span className="text-white/30 text-sm">para votar</span>
+                </div>
+              </div>
+
+              {iAmBluffer ? (
+                /* ── You bluffed: show what you wrote and waiting message ── */
+                <div className="w-full max-w-sm space-y-3">
+                  <p className="text-center text-yellow-400/80 text-xs font-bold uppercase tracking-wider">Tus palabras sospechosas</p>
+                  {(players.find((p: any) => p.playerId === player?.id) as any)?.bluffedCategories?.map((cat: string, i: number) => {
+                    const word = (players.find((p: any) => p.playerId === player?.id) as any)?.bluffedWords?.[cat] ?? "—";
+                    return (
+                      <motion.div key={cat}
+                        initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: i * 0.15 }}
+                        className="p-4 rounded-2xl border border-purple-500/40 bg-purple-900/20 flex items-center gap-3"
+                      >
+                        <span className="text-2xl">🎭</span>
+                        <div>
+                          <p className="text-xs uppercase text-purple-300/60">{cat}</p>
+                          <p className="font-black text-white text-lg">{word}</p>
+                        </div>
+                      </motion.div>
+                    );
+                  })}
+                  <p className="text-center text-white/30 text-sm mt-4 animate-pulse">
+                    Esperando los votos de los demás...
+                  </p>
+                </div>
+              ) : (
+                /* ── You're an opponent: vote on each bluffed player ── */
+                <div className="w-full max-w-sm space-y-5">
+                  {bluffers.length === 0 ? (
+                    <p className="text-center text-white/30">No hay mentiras que juzgar.</p>
+                  ) : bluffers.map((bluffer: any, bi: number) => (
+                    <motion.div key={bluffer.playerId}
+                      initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: bi * 0.1 }}
+                      className="rounded-2xl overflow-hidden border border-white/10"
+                      style={{ background: "rgba(0,0,0,0.3)" }}
+                    >
+                      {/* Bluffer header */}
+                      <div className="flex items-center gap-3 px-4 py-3 border-b border-white/10">
+                        <div className="w-8 h-8 rounded-full flex items-center justify-center font-black text-white text-sm"
+                          style={{ backgroundColor: bluffer.avatarColor }}>
+                          {bluffer.playerName?.[0]?.toUpperCase()}
+                        </div>
+                        <span className="font-black text-white">{bluffer.playerName}</span>
+                        <span className="ml-auto text-yellow-400/70 text-xs font-bold">apostó {bluffer.bluffedCategories.length} respuesta{bluffer.bluffedCategories.length > 1 ? "s" : ""}</span>
+                      </div>
+
+                      {/* Vote on each category */}
+                      <div className="p-3 space-y-2">
+                        {bluffer.bluffedCategories.map((cat: string, ci: number) => {
+                          const word = bluffer.bluffedWords?.[cat] ?? "???";
+                          const myVote = myVotes[bluffer.playerId]?.[cat];
+                          return (
+                            <motion.div key={cat}
+                              initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                              transition={{ delay: bi * 0.1 + ci * 0.08 }}
+                              className="rounded-xl p-3"
+                              style={{ background: "rgba(255,255,255,0.04)" }}
+                            >
+                              <div className="flex items-center justify-between mb-2">
+                                <div>
+                                  <p className="text-xs text-white/40 uppercase tracking-wide">{cat}</p>
+                                  <p className="font-black text-white text-base">{word}</p>
+                                </div>
+                              </div>
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => castBluffVote(bluffer.playerId, cat, "lie")}
+                                  disabled={!!myVote}
+                                  className="flex-1 py-2 rounded-xl font-black text-sm transition-all"
+                                  style={myVote === "lie"
+                                    ? { background: "#ef4444", color: "white" }
+                                    : myVote
+                                    ? { background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.3)" }
+                                    : { background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.4)", color: "#f87171" }}
+                                >
+                                  {myVote === "lie" ? "🕵️ ¡Mentira!" : "🕵️ Es mentira"}
+                                </button>
+                                <button
+                                  onClick={() => castBluffVote(bluffer.playerId, cat, "real")}
+                                  disabled={!!myVote}
+                                  className="flex-1 py-2 rounded-xl font-black text-sm transition-all"
+                                  style={myVote === "real"
+                                    ? { background: "#22c55e", color: "white" }
+                                    : myVote
+                                    ? { background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.3)" }
+                                    : { background: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.35)", color: "#4ade80" }}
+                                >
+                                  {myVote === "real" ? "✅ ¡Es real!" : "✅ Es real"}
+                                </button>
+                              </div>
+                            </motion.div>
+                          );
+                        })}
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              )}
+            </motion.div>
+          );
+        })()}
 
         {/* ── SUBMITTED — waiting for all others ── */}
         {phase === "submitted" && (

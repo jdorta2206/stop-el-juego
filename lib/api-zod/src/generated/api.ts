@@ -216,17 +216,21 @@ export const SubmitRoomResultsBody = zod.object({
   playerId: zod.string(),
   roundScore: zod.number(),
   letter: zod.string(),
+  bluffedCategories: zod.array(zod.string()).optional(),
+  bluffedWords: zod.record(zod.string(), zod.string()).optional(),
 });
 
 export const SubmitRoomResultsResponse = zod.object({
   id: zod.number(),
   roomCode: zod.string(),
   hostId: zod.string(),
-  status: zod.enum(["waiting", "playing", "finished"]),
+  status: zod.enum(["waiting", "playing", "stopped", "finished", "bluffvoting"]),
   currentLetter: zod.string().nullish(),
   currentRound: zod.number(),
   maxRounds: zod.number(),
   language: zod.string(),
+  bluffVoteDeadline: zod.string().nullish(),
+  bluffData: zod.any().nullish(),
   players: zod.array(
     zod.object({
       playerId: zod.string(),
@@ -235,6 +239,8 @@ export const SubmitRoomResultsResponse = zod.object({
       score: zod.number(),
       isHost: zod.boolean(),
       isReady: zod.boolean(),
+      bluffedCategories: zod.array(zod.string()).optional(),
+      bluffedWords: zod.record(zod.string(), zod.string()).optional(),
     }),
   ),
   createdAt: zod.date().optional(),
