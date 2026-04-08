@@ -1,4 +1,4 @@
-import { ReactNode, useState, useEffect } from "react";
+import { ReactNode, useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
 import { usePlayer } from "@/hooks/use-player";
 import { Crown, LogOut, Bell, BellOff, Home, Trophy, Users, Calendar } from "lucide-react";
@@ -33,16 +33,31 @@ export function Layout({ children }: { children: ReactNode }) {
   const [notifToast, setNotifToast] = useState<string | null>(null);
   const [showNotifPrompt, setShowNotifPrompt] = useState(false);
 
-  // Proactive prompt — show 3s after mount, if not subscribed/denied
-  // In TWA/standalone mode: ignore the previous "dismissed" flag so users who installed
-  // from Play Store still get prompted to allow notifications.
+  // Proactive prompt — show once per install, 3 s after first open.
+  // Rules:
+  //   • If the user dismissed OR activated → never show again (localStorage flag).
+  //   • If permission is already granted/denied → mark as seen and never show.
+  //   • Only evaluates the condition once per session (promptChecked ref).
+  const promptChecked = useRef(false);
   useEffect(() => {
-    const isStandalone = window.matchMedia("(display-mode: standalone)").matches || (navigator as any).standalone;
+    if (promptChecked.current) return;
+
+    // Always respect the dismissed flag — unconditionally, even in standalone/TWA mode.
     const dismissed = localStorage.getItem("stop_notif_prompt_v1");
-    // In TWA/standalone mode, only respect dismissed flag if user is already subscribed
-    if (dismissed && !(isStandalone && !isSubscribed)) return;
-    const shouldShow = canInstall || (isSupported && !isSubscribed && permission !== "denied" && permission !== "granted");
+    if (dismissed) { promptChecked.current = true; return; }
+
+    // If already subscribed or browser permission is final → mark done and never show.
+    if (isSubscribed || permission === "granted" || permission === "denied") {
+      promptChecked.current = true;
+      localStorage.setItem("stop_notif_prompt_v1", "1");
+      return;
+    }
+
+    // Still waiting for async subscription state — only proceed when we know enough.
+    const shouldShow = canInstall || (isSupported && permission !== "unsupported");
     if (!shouldShow) return;
+
+    promptChecked.current = true;
     const timer = setTimeout(() => setShowNotifPrompt(true), 3000);
     return () => clearTimeout(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
