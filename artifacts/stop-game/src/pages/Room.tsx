@@ -18,14 +18,26 @@ import { useTicker } from "@/hooks/useTicker";
 
 const ROUND_TIME = 60;
 
+/** Mirror of server-side normalizeWord — strip accents, lower, keep only a-z + ñ */
+function normalizeForScore(word: string): string {
+  return word.trim().toLowerCase()
+    .replace(/ñ/g, "~")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/~/g, "ñ")
+    .replace(/[^a-zñ\s]/g, "")
+    .trim();
+}
+
 function calcScore(responses: Record<string, string>, letter: string): number {
   let score = 0;
-  const usedWords = new Set<string>();
+  const usedNorm = new Set<string>();
+  const normLetter = normalizeForScore(letter);
   for (const val of Object.values(responses)) {
-    const t = val.trim().toUpperCase();
-    if (t && t.startsWith(letter.toUpperCase()) && !usedWords.has(t)) {
+    const norm = normalizeForScore(val);
+    if (norm.length >= 2 && norm.startsWith(normLetter) && !usedNorm.has(norm)) {
       score += 10;
-      usedWords.add(t);
+      usedNorm.add(norm);
     }
   }
   return score;
@@ -109,9 +121,15 @@ export default function Room() {
     roomCode
   );
 
+  // Adaptive polling: fast during active play/voting, slower when idle
+  const pollingInterval =
+    phase === "bluffvoting"                                          ? 1000 :
+    phase === "playing" || phase === "freeze" || phase === "submitted" ? 1500 :
+    /* lobby / between_rounds / finished / spinning */                  4000;
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: room, error } = useGetRoom(roomCode || "", {
-    query: { refetchInterval: 1500, enabled: !!roomCode } as any
+    query: { refetchInterval: pollingInterval, enabled: !!roomCode } as any
   });
 
   const isHost = room?.hostId === player?.id;
