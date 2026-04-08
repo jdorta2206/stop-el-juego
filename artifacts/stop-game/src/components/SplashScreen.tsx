@@ -69,6 +69,14 @@ export function SplashScreen({ onDone, lang = "es" }: Props) {
   const tagline = TAGLINES[lang] ?? TAGLINES.es;
 
   useEffect(() => {
+    const el = document.getElementById("html-splash");
+    if (el) {
+      el.classList.add("fade-out");
+      setTimeout(() => el.remove(), 400);
+    }
+  }, []);
+
+  useEffect(() => {
     let running = true;
     function tick(now: number) {
       if (!lastRef.current) lastRef.current = now;
