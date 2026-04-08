@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Layout } from "@/components/Layout";
 import { Card } from "@/components/ui";
-import { useGetLeaderboard } from "@workspace/api-client-react";
+import { useGetLeaderboard, useGetPlayerStats } from "@workspace/api-client-react";
 import { Trophy, Users, UserPlus, UserCheck, Swords, Clock, Copy, Check } from "lucide-react";
 import { usePlayer } from "@/hooks/use-player";
 import { motion } from "framer-motion";
@@ -148,6 +148,12 @@ export default function Ranking() {
   });
   const { player } = usePlayer();
   const { t, lang } = useT();
+  const isLoggedInPlayer = !!(player && player.loginMethod !== "guest");
+  // Always fetch the current player's own stats (works even if outside top 100)
+  const { data: myStats, refetch: refetchMyStats } = useGetPlayerStats(
+    player?.id ?? "",
+    { query: { enabled: isLoggedInPlayer, refetchOnMount: "always", staleTime: 0 } as any }
+  );
   const [filter, setFilter] = useState<"global" | "friends">("global");
 
   // Presence: online players + incoming challenge notifications
@@ -228,6 +234,17 @@ export default function Ranking() {
   const myEntry = allPlayers.find((p: any) => p.playerId === player?.id);
   const myRank = myEntry ? allPlayers.indexOf(myEntry) + 1 : null;
   const isLoggedIn = player && player.loginMethod !== "guest";
+  // If not in the top-100 list, build an entry from personal stats
+  const myFallbackEntry = !myEntry && myStats?.score && myStats.score.gamesPlayed > 0
+    ? {
+        playerId: player?.id,
+        playerName: myStats.score.playerName,
+        avatarColor: myStats.score.avatarColor || player?.avatarColor,
+        totalScore: myStats.score.totalScore,
+        gamesPlayed: myStats.score.gamesPlayed,
+        wins: myStats.score.wins,
+      }
+    : null;
 
   const PODIUM_ORDER = [1, 0, 2];
   const medalColors: Record<number, { bg: string; border: string; size: string; label: string }> = {
@@ -376,19 +393,26 @@ export default function Ranking() {
             )}
 
             {/* ── MY POSITION CARD ── */}
-            {myEntry && myRank && myRank > 3 && filter === "global" && (
-              <Card className="p-3 bg-secondary/10 border border-secondary/30">
-                <div className="flex items-center gap-3">
-                  <span className="text-secondary font-black text-lg w-8 text-center">#{myRank}</span>
-                  <div className="w-9 h-9 rounded-full flex items-center justify-center text-white font-bold shadow" style={{ backgroundColor: myEntry.avatarColor || "#555" }}>
-                    {myEntry.playerName.charAt(0).toUpperCase()}
+            {(() => {
+              const displayEntry = (myEntry && myRank && myRank > 3) ? myEntry : myFallbackEntry;
+              const displayRank = myRank && myRank > 3 ? myRank : null;
+              if (!displayEntry || filter !== "global") return null;
+              return (
+                <Card className="p-3 bg-secondary/10 border border-secondary/30">
+                  <div className="flex items-center gap-3">
+                    <span className="text-secondary font-black text-lg w-10 text-center">
+                      {displayRank ? `#${displayRank}` : "—"}
+                    </span>
+                    <div className="w-9 h-9 rounded-full flex items-center justify-center text-white font-bold shadow" style={{ backgroundColor: (displayEntry as any).avatarColor || "#555" }}>
+                      {(displayEntry as any).playerName?.charAt(0).toUpperCase()}
+                    </div>
+                    <span className="flex-1 font-black">{(displayEntry as any).playerName} <span className="text-secondary text-xs">({t.game.you})</span></span>
+                    <span className="text-white/60 text-sm">{(displayEntry as any).gamesPlayed}</span>
+                    <span className="text-secondary font-black text-lg">{(displayEntry as any).totalScore} {t.game.points}</span>
                   </div>
-                  <span className="flex-1 font-black">{myEntry.playerName} <span className="text-secondary text-xs">({t.game.you})</span></span>
-                  <span className="text-white/60 text-sm">{myEntry.gamesPlayed}</span>
-                  <span className="text-secondary font-black text-lg">{myEntry.totalScore} {t.game.points}</span>
-                </div>
-              </Card>
-            )}
+                </Card>
+              );
+            })()}
 
             {/* ── REST OF LIST ── */}
             {rest.length > 0 && (

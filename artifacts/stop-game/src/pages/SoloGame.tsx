@@ -19,6 +19,7 @@ import { useTicker } from "@/hooks/useTicker";
 import { useStreak } from "@/hooks/useStreak";
 import { useProgression, calcXpFromResults } from "@/hooks/useProgression";
 import { useSound } from "@/hooks/useSound";
+import { useToast } from "@/hooks/use-toast";
 import { pickRandomPersonality, getAIComment, type AIPersonality } from "@/data/aiPersonalities";
 import { useAchievements } from "@/hooks/useAchievements";
 import { AchievementToast } from "@/components/AchievementToast";
@@ -145,6 +146,7 @@ export default function SoloGame() {
 
   // Sound hook
   const sound = useSound(muted);
+  const { toast } = useToast();
 
   // Keep refs in sync with state so handleStop never reads stale closure values
   useEffect(() => { responsesRef.current = responses; }, [responses]);
@@ -548,19 +550,34 @@ export default function SoloGame() {
 
   const submitToLeaderboard = (finalScore: number, finalAiScore: number) => {
     if (!player || player.loginMethod === "guest") return;
+    const won = finalScore > finalAiScore;
     submitScoreMutation.mutate({
       data: {
         playerId: player.id,
         playerName: player.name,
         avatarColor: player.avatarColor,
         score: finalScore,
-        letter: currentLetter,
+        letter: currentLetter || "?",
         mode: isDailyMode ? "daily" : "solo",
-        won: finalScore > finalAiScore,
+        won,
       }
     }, {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: ["/api/ranking/scores"] });
+        const msg =
+          lang === "en" ? `+${finalScore} pts saved to ranking!` :
+          lang === "pt" ? `+${finalScore} pts guardados no ranking!` :
+          lang === "fr" ? `+${finalScore} pts enregistrés au classement !` :
+          `¡+${finalScore} pts guardados en el ranking!`;
+        toast({ title: "🏆 " + msg });
+      },
+      onError: () => {
+        const msg =
+          lang === "en" ? "Could not save score. Check your connection." :
+          lang === "pt" ? "Não foi possível guardar a pontuação." :
+          lang === "fr" ? "Impossible d'enregistrer le score." :
+          "No se pudo guardar el puntaje. Verifica tu conexión.";
+        toast({ title: "⚠️ " + msg, variant: "destructive" });
       }
     });
   };
