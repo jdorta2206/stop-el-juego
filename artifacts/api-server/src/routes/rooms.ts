@@ -374,6 +374,17 @@ router.post("/:roomCode/results", async (req, res) => {
   const { playerId, roundScore, bluffedCategories, bluffedWords } = body.data;
 
   // Update this player's score and mark as ready; store bluff data
+  const { answers } = body.data;
+  // Sanitize answers: keep only non-empty string values
+  const safeAnswers: Record<string, string> = {};
+  if (answers && typeof answers === "object") {
+    for (const [cat, val] of Object.entries(answers)) {
+      if (typeof val === "string" && val.trim().length > 0) {
+        safeAnswers[cat] = val.trim().slice(0, 80);
+      }
+    }
+  }
+
   const updatedPlayers = players.map((p: any) => {
     if (p.playerId === playerId) {
       return {
@@ -381,6 +392,7 @@ router.post("/:roomCode/results", async (req, res) => {
         score: (p.score || 0) + roundScore,
         roundScore,
         isReady: true,
+        answers: safeAnswers,
         bluffedCategories: bluffedCategories ?? [],
         bluffedWords: bluffedWords ?? {},
       };
