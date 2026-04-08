@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import type { PlayerProfile } from "@/hooks/use-player";
+import { getApiUrl } from "@/lib/utils";
 
-const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+const API_BASE = getApiUrl();
 const PING_INTERVAL = 30_000; // 30 seconds
 const CHALLENGE_POLL_INTERVAL = 4_000; // 4 seconds
 
