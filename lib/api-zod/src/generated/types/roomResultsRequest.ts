@@ -10,4 +10,7 @@ export interface RoomResultsRequest {
   playerId: string;
   roundScore: number;
   letter: string;
+  answers?: { [key: string]: string };
+  bluffedCategories?: string[];
+  bluffedWords?: { [key: string]: string };
 }

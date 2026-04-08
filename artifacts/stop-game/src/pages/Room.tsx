@@ -58,6 +58,7 @@ export default function Room() {
   const [copied, setCopied] = useState(false);
   const [isStopping, setIsStopping] = useState(false);
   const [muted, setMuted] = useState(false);
+  const [revealedCount, setRevealedCount] = useState(0);
 
   // Multiplayer bluff state
   const [bluffedCategories, setBluffedCategories] = useState<Set<string>>(new Set());
@@ -67,6 +68,7 @@ export default function Room() {
   const bluffVoteTimerRef = useRef<NodeJS.Timeout | null>(null);
   const bluffedCategoriesRef = useRef<Set<string>>(new Set());
   const responsesSnapshotRef = useRef<Record<string, string>>({});
+  const iAmTheStopperRef = useRef(false);
 
   const responsesRef = useRef<Record<string, string>>({});
   const lastRoundRef = useRef<number>(0);
@@ -152,7 +154,7 @@ export default function Room() {
     if (freezeTimerRef.current) { clearInterval(freezeTimerRef.current); freezeTimerRef.current = null; }
   }, []);
 
-  const submitResults = useCallback(async (score: number) => {
+  const submitResults = useCallback(async (score: number, isStopper = false) => {
     if (hasSubmittedRef.current || !player || !roomCode) return;
     hasSubmittedRef.current = true;
     setPhase("submitted");
@@ -162,13 +164,17 @@ export default function Room() {
     for (const cat of bluffedList) {
       bluffedWords[cat] = responsesSnapshotRef.current[cat] ?? "";
     }
+    // Speed bonus: stopper gets +5 if they filled ALL categories
+    const allFilled = CATEGORIES_ES.every(cat => (responsesSnapshotRef.current[cat] ?? "").trim().length >= 2);
+    const finalScore = isStopper && allFilled ? score + 5 : score;
     try {
       await submitMutation.mutateAsync({
         roomCode: roomCode.toUpperCase(),
         data: {
           playerId: player.id,
-          roundScore: score,
+          roundScore: finalScore,
           letter: currentLetter,
+          answers: { ...responsesSnapshotRef.current },
           bluffedCategories: bluffedList.length > 0 ? bluffedList : undefined,
           bluffedWords: bluffedList.length > 0 ? bluffedWords : undefined,
         },
@@ -176,11 +182,11 @@ export default function Room() {
     } catch (e) { console.error("submit error:", e); }
   }, [player, roomCode, currentLetter]);
 
-  const autoSubmit = useCallback(() => {
+  const autoSubmit = useCallback((asStopper = false) => {
     // Snapshot current responses before clearing for the bluff words map
     responsesSnapshotRef.current = { ...responsesRef.current };
     const score = calcScore(responsesRef.current, currentLetter);
-    submitResults(score);
+    submitResults(score, asStopper);
   }, [currentLetter, submitResults]);
 
   // Start game timer for this round
@@ -192,7 +198,7 @@ export default function Room() {
       setTimeLeft(prev => {
         if (prev <= 1) {
           stopAllTimers();
-          autoSubmit();
+          autoSubmit(false); // timer expired — not a stopper
           return 0;
         }
         return prev - 1;
@@ -214,7 +220,7 @@ export default function Room() {
       setFreezeCountdown(count);
       if (count <= 0) {
         clearInterval(freezeTimerRef.current!);
-        autoSubmit();
+        autoSubmit(iAmTheStopperRef.current); // speed bonus if this player called STOP
       }
     }, 1000);
   }, [stopAllTimers, autoSubmit]);
@@ -294,6 +300,8 @@ export default function Room() {
 
     if (roomStatus === "stopped") {
       if (phase === "playing") {
+        // Mark if this player was the one who called STOP (for speed bonus)
+        iAmTheStopperRef.current = stopper?.id === player?.id;
         stopAllTimers();
         setPhase("freeze");
         startFreezeCountdown();
@@ -323,6 +331,7 @@ export default function Room() {
     if (roomStatus === "waiting") {
       if (bluffVoteTimerRef.current) { clearInterval(bluffVoteTimerRef.current); bluffVoteTimerRef.current = null; }
       if (currentRound > 0 && prevStatus !== "waiting") {
+        setRevealedCount(0);
         setPhase("between_rounds");
       } else if (currentRound === 0) {
         setPhase("lobby");
@@ -823,55 +832,138 @@ export default function Room() {
           </motion.div>
         )}
 
-        {/* ── BETWEEN ROUNDS — results + next round button ── */}
-        {phase === "between_rounds" && (
-          <motion.div key="between_rounds"
-            initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-            className="flex-1 flex flex-col max-w-md mx-auto w-full py-8 gap-5"
-          >
-            <div className="text-center">
-              <p className="text-secondary font-black text-sm uppercase tracking-widest">Resultados</p>
-              <h2 className="text-3xl font-display font-black">Ronda {currentRound - 1}/{maxRounds}</h2>
-            </div>
-
-            {/* Ranking for this point */}
-            <Card className="p-4 bg-black/20 border-white/10">
-              <div className="space-y-2">
-                {[...players].sort((a: any, b: any) => (b.score || 0) - (a.score || 0)).map((p: any, i) => {
-                  const medals = ["🥇", "🥈", "🥉"];
-                  const isMe = p.playerId === player?.id;
-                  return (
-                    <motion.div key={p.playerId}
-                      initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: i * 0.08 }}
-                      className={`flex items-center gap-3 p-3 rounded-xl ${isMe ? "bg-secondary/20 border border-secondary/30" : "bg-white/5"}`}>
-                      <span className="text-xl">{medals[i] || `#${i + 1}`}</span>
-                      <div className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold"
-                        style={{ backgroundColor: p.avatarColor }}>
-                        {p.playerName.charAt(0).toUpperCase()}
-                      </div>
-                      <div className="flex-1">
-                        <p className="font-black text-sm">{p.playerName} {isMe && <span className="text-secondary text-xs">(tú)</span>}</p>
-                        <p className="text-xs text-white/40">+{p.roundScore || 0} pts esta ronda</p>
-                      </div>
-                      <p className="font-black text-secondary text-lg">{p.score || 0}</p>
-                    </motion.div>
-                  );
-                })}
+        {/* ── BETWEEN ROUNDS — answer reveal + scores ── */}
+        {phase === "between_rounds" && (() => {
+          const normLetter = normalizeForScore(currentLetter || room?.currentLetter || "");
+          // Build uniqueness map: for each category, which normalized values appear >1 times
+          const duplicatesByCategory: Record<string, Set<string>> = {};
+          for (const cat of CATEGORIES_ES) {
+            const vals = players
+              .map((p: any) => normalizeForScore(p.answers?.[cat] ?? ""))
+              .filter(v => v.length >= 2 && v.startsWith(normLetter));
+            const seen = new Set<string>();
+            const dupes = new Set<string>();
+            for (const v of vals) { if (seen.has(v)) dupes.add(v); else seen.add(v); }
+            duplicatesByCategory[cat] = dupes;
+          }
+          const showScores = revealedCount >= CATEGORIES_ES.length;
+          const roundNumber = currentRound > 1 ? currentRound - 1 : maxRounds;
+          return (
+            <motion.div key="between_rounds"
+              initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+              className="flex-1 flex flex-col max-w-lg mx-auto w-full py-4 gap-4"
+            >
+              <div className="text-center">
+                <p className="text-secondary font-black text-sm uppercase tracking-widest">Ronda {roundNumber}/{maxRounds}</p>
+                <h2 className="text-2xl font-display font-black">
+                  {showScores ? "Puntuaciones" : `Letra ${currentLetter || room?.currentLetter}`}
+                </h2>
               </div>
-            </Card>
 
-            {isHost ? (
-              <Button size="xl" className="w-full border-2 border-white/20" onClick={handleStart}>
-                <Play className="w-5 h-5 mr-2 fill-current" /> Siguiente Ronda ({currentRound}/{maxRounds})
-              </Button>
-            ) : (
-              <div className="bg-black/20 p-4 rounded-xl text-center border border-white/10">
-                <p className="font-bold animate-pulse text-secondary">Esperando al anfitrión...</p>
-              </div>
-            )}
-          </motion.div>
-        )}
+              {!showScores ? (
+                <>
+                  {/* Category reveal grid */}
+                  <div className="space-y-2 flex-1 overflow-y-auto">
+                    {CATEGORIES_ES.map((cat, catIdx) => {
+                      const revealed = catIdx < revealedCount;
+                      return (
+                        <motion.div key={cat}
+                          initial={{ opacity: 0, x: -12 }} animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: catIdx * 0.04 }}
+                          className="bg-black/20 border border-white/10 rounded-xl overflow-hidden"
+                        >
+                          {/* Category header */}
+                          <div className="px-3 py-1.5 bg-white/5 flex items-center justify-between">
+                            <p className="font-black text-xs uppercase tracking-widest text-white/60">{cat}</p>
+                          </div>
+                          {/* Player answers */}
+                          <div className="divide-y divide-white/5">
+                            {players.map((p: any) => {
+                              const raw = p.answers?.[cat] ?? "";
+                              const norm = normalizeForScore(raw);
+                              const valid = norm.length >= 2 && norm.startsWith(normLetter);
+                              const isDupe = valid && duplicatesByCategory[cat].has(norm);
+                              const isMe = p.playerId === player?.id;
+                              return (
+                                <div key={p.playerId}
+                                  className={`flex items-center gap-2 px-3 py-1.5 transition-all duration-300 ${revealed ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+                                >
+                                  <div className="w-5 h-5 rounded-full flex-shrink-0 flex items-center justify-center text-white text-[10px] font-bold"
+                                    style={{ backgroundColor: p.avatarColor }}>
+                                    {p.playerName.charAt(0).toUpperCase()}
+                                  </div>
+                                  <p className={`text-xs font-bold flex-1 truncate ${isMe ? "text-secondary" : "text-white/80"}`}>
+                                    {p.playerName}
+                                  </p>
+                                  <p className={`text-xs font-black truncate max-w-[120px] ${!revealed ? "blur-sm" : valid ? isDupe ? "text-yellow-400" : "text-green-400" : "text-white/30"}`}>
+                                    {raw || "—"}
+                                  </p>
+                                  {revealed && valid && (
+                                    <span className="text-[10px] font-black shrink-0"
+                                      style={{ color: isDupe ? "#facc15" : "#4ade80" }}>
+                                      {isDupe ? "×2" : "✓"}
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </motion.div>
+                      );
+                    })}
+                  </div>
+                  <Button size="lg" className="w-full shrink-0"
+                    onClick={() => setRevealedCount(prev => Math.min(prev + 1, CATEGORIES_ES.length))}>
+                    {revealedCount === 0 ? "▶ Revelar" : revealedCount < CATEGORIES_ES.length ? `Siguiente (${revealedCount}/${CATEGORIES_ES.length})` : "Ver puntuaciones"}
+                  </Button>
+                  {revealedCount > 0 && revealedCount < CATEGORIES_ES.length && (
+                    <button className="text-xs text-white/30 underline text-center"
+                      onClick={() => setRevealedCount(CATEGORIES_ES.length)}>
+                      Ver todo de una vez
+                    </button>
+                  )}
+                </>
+              ) : (
+                <>
+                  {/* Score summary */}
+                  <div className="space-y-2">
+                    {[...players].sort((a: any, b: any) => (b.score || 0) - (a.score || 0)).map((p: any, i) => {
+                      const medals = ["🥇", "🥈", "🥉"];
+                      const isMe = p.playerId === player?.id;
+                      const roundPts = p.roundScore ?? 0;
+                      return (
+                        <motion.div key={p.playerId}
+                          initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: i * 0.08 }}
+                          className={`flex items-center gap-3 p-3 rounded-xl ${isMe ? "bg-secondary/20 border border-secondary/30" : "bg-black/20 border border-white/10"}`}>
+                          <span className="text-xl">{medals[i] || `#${i + 1}`}</span>
+                          <div className="w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-white font-bold"
+                            style={{ backgroundColor: p.avatarColor }}>
+                            {p.playerName.charAt(0).toUpperCase()}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-black text-sm truncate">{p.playerName} {isMe && <span className="text-secondary text-xs">(tú)</span>}</p>
+                            <p className="text-xs text-white/40">+{roundPts} pts esta ronda</p>
+                          </div>
+                          <p className="font-black text-secondary text-lg shrink-0">{p.score || 0}</p>
+                        </motion.div>
+                      );
+                    })}
+                  </div>
+                  {isHost ? (
+                    <Button size="xl" className="w-full border-2 border-white/20" onClick={handleStart}>
+                      <Play className="w-5 h-5 mr-2 fill-current" /> Siguiente Ronda ({currentRound}/{maxRounds})
+                    </Button>
+                  ) : (
+                    <div className="bg-black/20 p-4 rounded-xl text-center border border-white/10">
+                      <p className="font-bold animate-pulse text-secondary">Esperando al anfitrión...</p>
+                    </div>
+                  )}
+                </>
+              )}
+            </motion.div>
+          );
+        })()}
 
         {/* ── FINISHED ── */}
         {phase === "finished" && (
