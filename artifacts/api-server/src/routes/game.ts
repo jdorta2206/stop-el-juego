@@ -685,11 +685,14 @@ function normalizeWord(word: string): string {
     .trim();
 }
 
-/** Hard limits to prevent abuse: max 60 chars, must contain at least one letter */
+/** Hard limits to prevent abuse: max 60 chars, must contain a real letter, no absurd repetitions */
 function isSafeInput(word: string): boolean {
   if (!word || word.trim().length === 0) return false;
   if (word.length > 60) return false;
-  return /[a-záéíóúàèìòùäëïöüñ]/i.test(word);
+  if (!/[a-záéíóúàèìòùäëïöüñ]/i.test(word)) return false;
+  // Reject keyboard-mashing: 4+ consecutive identical characters (e.g. "aaaa", "bbbbb")
+  if (/(.)\1{3,}/.test(word.toLowerCase())) return false;
+  return true;
 }
 
 function findCategoryWords(langDict: Record<string, string[]>, category: string): string[] {
