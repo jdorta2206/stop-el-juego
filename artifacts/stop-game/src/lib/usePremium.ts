@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
+import { getApiUrl } from "@/lib/utils";
 
-const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+const API_BASE = getApiUrl();
 
 export interface PremiumStatus {
   isPremium: boolean;
