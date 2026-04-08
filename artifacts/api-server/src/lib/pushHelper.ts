@@ -115,10 +115,10 @@ export async function notifyFollowersPlayerOnline(
 
     const now = Date.now();
     const MSGS: Record<string, PushPayload> = {
-      es: { title: "🟢 ¡Amigo conectado!", body: `${playerName} está jugando ahora. ¡Reta a partida!`, url: "/multijugador" },
-      en: { title: "🟢 Friend online!", body: `${playerName} is playing now. Challenge them!`, url: "/multijugador" },
-      pt: { title: "🟢 Amigo online!", body: `${playerName} está jogando agora. Desafia-o!`, url: "/multijugador" },
-      fr: { title: "🟢 Ami connecté !", body: `${playerName} joue maintenant. Lance-lui un défi !`, url: "/multijugador" },
+      es: { title: "🟢 ¡Amigo conectado!", body: `${playerName} está jugando ahora. ¡Reta a partida!`, url: "/multiplayer" },
+      en: { title: "🟢 Friend online!", body: `${playerName} is playing now. Challenge them!`, url: "/multiplayer" },
+      pt: { title: "🟢 Amigo online!", body: `${playerName} está jogando agora. Desafia-o!`, url: "/multiplayer" },
+      fr: { title: "🟢 Ami connecté !", body: `${playerName} joue maintenant. Lance-lui un défi !`, url: "/multiplayer" },
     };
     const msg = MSGS[language] || MSGS.es;
 

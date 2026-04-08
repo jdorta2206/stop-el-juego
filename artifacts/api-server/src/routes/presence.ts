@@ -196,7 +196,7 @@ router.post("/challenge", async (req, res) => {
     fr: { title: "⚔️ Nouveau défi !", body: `${fromName} te défie à une partie de STOP. Tu oses accepter ?` },
   };
   const challengeMsg = CHALLENGE_MSGS[lang] || CHALLENGE_MSGS.es;
-  sendPushToPlayer(toPlayerId, { ...challengeMsg, url: "/multijugador" }).catch(() => {});
+  sendPushToPlayer(toPlayerId, { ...challengeMsg, url: "/multiplayer" }).catch(() => {});
 
   return res.json({ challengeId, roomCode });
 });
@@ -254,7 +254,7 @@ router.post("/room-invite", (req, res) => {
     fr: { title: "🎮 Invitation à la salle !", body: `${fromName} t'invite à rejoindre la salle ${roomCode}` },
   };
   const invMsg = INVITE_MSGS[invLang] || INVITE_MSGS.es;
-  sendPushToPlayer(toPlayerId, { ...invMsg, url: `/multijugador?room=${roomCode}` }).catch(() => {});
+  sendPushToPlayer(toPlayerId, { ...invMsg, url: `/multiplayer?room=${roomCode}` }).catch(() => {});
 
   return res.json({ ok: true, challengeId });
 });
