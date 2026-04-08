@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Layout } from "@/components/Layout";
 import { Card } from "@/components/ui";
 import { useGetLeaderboard, useGetPlayerStats } from "@workspace/api-client-react";
-import { Trophy, Users, UserPlus, UserCheck, Swords, Clock, Copy, Check } from "lucide-react";
+import { Trophy, Users, UserPlus, UserCheck, Swords, Clock, Copy, Check, CalendarClock } from "lucide-react";
 import { usePlayer } from "@/hooks/use-player";
 import { motion } from "framer-motion";
 import { useT } from "@/i18n/useT";
@@ -141,6 +142,25 @@ function CopyJoinBtn({ roomCode }: { roomCode: string }) {
   );
 }
 
+function useWeekCountdown(nextReset?: string) {
+  const [timeLeft, setTimeLeft] = useState("");
+  useEffect(() => {
+    if (!nextReset) return;
+    const target = new Date(nextReset).getTime();
+    const update = () => {
+      const diff = target - Date.now();
+      if (diff <= 0) { setTimeLeft("0h 0m"); return; }
+      const h = Math.floor(diff / 3600000);
+      const m = Math.floor((diff % 3600000) / 60000);
+      setTimeLeft(h >= 24 ? `${Math.floor(h / 24)}d ${h % 24}h` : `${h}h ${m}m`);
+    };
+    update();
+    const t = setInterval(update, 60000);
+    return () => clearInterval(t);
+  }, [nextReset]);
+  return timeLeft;
+}
+
 export default function Ranking() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, isLoading } = useGetLeaderboard({ limit: 100 }, {
@@ -150,11 +170,21 @@ export default function Ranking() {
   const { t, lang } = useT();
   const isLoggedInPlayer = !!(player && player.loginMethod !== "guest");
   // Always fetch the current player's own stats (works even if outside top 100)
-  const { data: myStats, refetch: refetchMyStats } = useGetPlayerStats(
+  const { data: myStats } = useGetPlayerStats(
     player?.id ?? "",
     { query: { enabled: isLoggedInPlayer, refetchOnMount: "always", staleTime: 0 } as any }
   );
-  const [filter, setFilter] = useState<"global" | "friends">("global");
+  // Weekly ranking
+  const { data: weeklyData, isLoading: weeklyLoading } = useQuery({
+    queryKey: ["/api/ranking/weekly"],
+    queryFn: () => fetch(`${getApiUrl()}/api/ranking/weekly`).then(r => r.json()),
+    refetchOnMount: true,
+    staleTime: 0,
+  });
+  const weeklyPlayers: any[] = weeklyData?.players ?? [];
+  const weekCountdown = useWeekCountdown(weeklyData?.nextReset);
+
+  const [filter, setFilter] = useState<"global" | "weekly" | "friends">("global");
 
   // Presence: online players + incoming challenge notifications
   const { onlinePlayers, incomingChallenge, dismissChallenge } = usePresence(
@@ -228,11 +258,15 @@ export default function Ranking() {
     return [...inLeaderboard, ...notInLeaderboard];
   })();
 
-  const players = filter === "friends" ? friendsTabPlayers : allPlayers;
+  const players =
+    filter === "friends" ? friendsTabPlayers :
+    filter === "weekly"  ? weeklyPlayers :
+    allPlayers;
   const top3 = players.slice(0, 3);
   const rest = players.slice(3);
-  const myEntry = allPlayers.find((p: any) => p.playerId === player?.id);
-  const myRank = myEntry ? allPlayers.indexOf(myEntry) + 1 : null;
+  const baseList = filter === "weekly" ? weeklyPlayers : allPlayers;
+  const myEntry = baseList.find((p: any) => p.playerId === player?.id);
+  const myRank = myEntry ? baseList.indexOf(myEntry) + 1 : null;
   const isLoggedIn = player && player.loginMethod !== "guest";
   // If not in the top-100 list, build an entry from personal stats
   const myFallbackEntry = !myEntry && myStats?.score && myStats.score.gamesPlayed > 0
@@ -278,20 +312,53 @@ export default function Ranking() {
 
         <div className="flex justify-center">
           <div className="bg-black/30 p-1 rounded-full flex gap-1">
-            {(["global", "friends"] as const).map(f => (
-              <button
-                key={f}
-                className={`px-6 py-2 rounded-full font-bold transition-all capitalize flex items-center gap-2 ${filter === f ? "bg-secondary text-black shadow-md" : "text-white hover:bg-white/10"}`}
-                onClick={() => setFilter(f)}
-              >
-                {f === "friends" && <Users className="w-4 h-4" />}
-                {f === "global" ? "Global" : "Amigos"}
-              </button>
-            ))}
+            <button
+              className={`px-4 py-2 rounded-full font-bold transition-all flex items-center gap-2 ${filter === "global" ? "bg-secondary text-black shadow-md" : "text-white hover:bg-white/10"}`}
+              onClick={() => setFilter("global")}
+            >
+              <Trophy className="w-4 h-4" />
+              {lang === "en" ? "Global" : lang === "pt" ? "Global" : lang === "fr" ? "Global" : "Global"}
+            </button>
+            <button
+              className={`px-4 py-2 rounded-full font-bold transition-all flex items-center gap-2 relative ${filter === "weekly" ? "bg-amber-500 text-black shadow-md" : "text-white hover:bg-white/10"}`}
+              onClick={() => setFilter("weekly")}
+            >
+              <CalendarClock className="w-4 h-4" />
+              {lang === "en" ? "Week" : lang === "pt" ? "Semana" : lang === "fr" ? "Semaine" : "Semana"}
+              <span className="absolute -top-1.5 -right-1 text-[9px] font-black bg-amber-400 text-black rounded-full px-1 leading-tight">NEW</span>
+            </button>
+            <button
+              className={`px-4 py-2 rounded-full font-bold transition-all flex items-center gap-2 ${filter === "friends" ? "bg-secondary text-black shadow-md" : "text-white hover:bg-white/10"}`}
+              onClick={() => setFilter("friends")}
+            >
+              <Users className="w-4 h-4" />
+              {lang === "en" ? "Friends" : lang === "pt" ? "Amigos" : lang === "fr" ? "Amis" : "Amigos"}
+            </button>
           </div>
         </div>
 
-        {isLoading ? (
+        {/* Weekly countdown banner */}
+        {filter === "weekly" && weekCountdown && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex items-center justify-center gap-2 py-2 px-4 rounded-2xl text-sm font-bold"
+            style={{ background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.3)", color: "#f59e0b" }}
+          >
+            <CalendarClock className="w-4 h-4 flex-shrink-0" />
+            {lang === "en" ? `Resets in ${weekCountdown}` :
+             lang === "pt" ? `Reinicia em ${weekCountdown}` :
+             lang === "fr" ? `Réinitialise dans ${weekCountdown}` :
+             `Reinicia en ${weekCountdown}`}
+            {" "}·{" "}
+            {lang === "en" ? "Who will win this week?" :
+             lang === "pt" ? "Quem vai ganhar esta semana?" :
+             lang === "fr" ? "Qui va gagner cette semaine ?" :
+             "¿Quién gana esta semana?"}
+          </motion.div>
+        )}
+
+        {(filter === "weekly" ? weeklyLoading : isLoading) ? (
           <div className="space-y-3">
             {[1,2,3,4,5].map(i => (
               <div key={i} className="h-16 bg-white/10 rounded-xl animate-pulse" />
@@ -303,6 +370,16 @@ export default function Ranking() {
             <p>Ningún amigo aparece en el ranking aún.</p>
             <p className="text-sm mt-2 text-white/30">
               Agrega amigos desde el ranking global con el botón <UserPlus className="inline w-3 h-3" /> Agregar.
+            </p>
+          </div>
+        ) : players.length === 0 && filter === "weekly" ? (
+          <div className="p-16 text-center text-white/50 font-bold bg-black/20 rounded-2xl border border-white/10">
+            <CalendarClock className="w-12 h-12 mx-auto mb-4 opacity-20" />
+            <p className="text-lg">
+              {lang === "en" ? "No games this week yet. Be the first!" :
+               lang === "pt" ? "Nenhum jogo esta semana ainda. Sê o primeiro!" :
+               lang === "fr" ? "Aucune partie cette semaine. Sois le premier !" :
+               "Nadie ha jugado esta semana aún. ¡Sé el primero!"}
             </p>
           </div>
         ) : players.length === 0 ? (
@@ -394,9 +471,14 @@ export default function Ranking() {
 
             {/* ── MY POSITION CARD ── */}
             {(() => {
-              const displayEntry = (myEntry && myRank && myRank > 3) ? myEntry : myFallbackEntry;
+              // On weekly: only show if the user is IN the weekly list (no global-stats fallback)
+              // On global: show from list or fallback from personal stats
+              const displayEntry =
+                filter === "weekly"
+                  ? (myEntry && myRank && myRank > 3 ? myEntry : null)
+                  : (myEntry && myRank && myRank > 3 ? myEntry : myFallbackEntry);
               const displayRank = myRank && myRank > 3 ? myRank : null;
-              if (!displayEntry || filter !== "global") return null;
+              if (!displayEntry || filter === "friends") return null;
               return (
                 <Card className="p-3 bg-secondary/10 border border-secondary/30">
                   <div className="flex items-center gap-3">

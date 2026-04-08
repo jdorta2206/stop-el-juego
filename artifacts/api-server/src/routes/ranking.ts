@@ -101,6 +101,46 @@ router.post("/scores", async (req, res) => {
   res.status(201).json({ ...player, rank: 0 });
 });
 
+router.get("/weekly", async (req, res) => {
+  // Aggregate game_history for the current ISO week (Mon 00:00 UTC → Sun 23:59 UTC)
+  // JOIN with player_scores to get player name + avatar
+  const rows = await db.execute(sql`
+    SELECT
+      gh.player_id        AS "playerId",
+      ps.player_name      AS "playerName",
+      ps.avatar_color     AS "avatarColor",
+      SUM(gh.score)       AS "totalScore",
+      COUNT(*)            AS "gamesPlayed",
+      SUM(CASE WHEN gh.won THEN 1 ELSE 0 END) AS "wins"
+    FROM game_history gh
+    LEFT JOIN player_scores ps ON gh.player_id = ps.player_id
+    WHERE gh.created_at >= date_trunc('week', NOW() AT TIME ZONE 'UTC')
+    GROUP BY gh.player_id, ps.player_name, ps.avatar_color
+    ORDER BY SUM(gh.score) DESC
+    LIMIT 100
+  `);
+
+  const players = (rows.rows as Array<Record<string, unknown>>).map((p, i) => ({
+    playerId:    p.playerId,
+    playerName:  p.playerName ?? "—",
+    avatarColor: p.avatarColor ?? "#e53e3e",
+    totalScore:  Number(p.totalScore ?? 0),
+    gamesPlayed: Number(p.gamesPlayed ?? 0),
+    wins:        Number(p.wins ?? 0),
+    rank:        i + 1,
+  }));
+
+  // Next Monday at 00:00 UTC
+  const now = new Date();
+  const day = now.getUTCDay(); // 0=Sun … 6=Sat
+  const daysUntilMonday = day === 0 ? 1 : 8 - day;
+  const nextReset = new Date(Date.UTC(
+    now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + daysUntilMonday
+  ));
+
+  res.json({ players, nextReset: nextReset.toISOString() });
+});
+
 router.get("/scores/:playerId", async (req, res) => {
   const { playerId } = req.params;
 
