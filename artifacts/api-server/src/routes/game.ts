@@ -679,9 +679,17 @@ function normalizeWord(word: string): string {
     .replace(/ñ/g, "~")               // protect ñ from NFD
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")  // strip other accent marks
-    .replace(/[^a-z~\s]/g, "")        // keep letters + ñ placeholder
+    .replace(/[^a-z~\s]/g, "")        // strip numbers, emojis, symbols
+    .replace(/\s+/g, " ")             // collapse multiple spaces into one
     .replace(/~/g, "ñ")               // restore ñ
     .trim();
+}
+
+/** Hard limits to prevent abuse: max 60 chars, must contain at least one letter */
+function isSafeInput(word: string): boolean {
+  if (!word || word.trim().length === 0) return false;
+  if (word.length > 60) return false;
+  return /[a-záéíóúàèìòùäëïöüñ]/i.test(word);
 }
 
 function findCategoryWords(langDict: Record<string, string[]>, category: string): string[] {
@@ -696,7 +704,7 @@ function findCategoryWords(langDict: Record<string, string[]>, category: string)
 }
 
 function isWordValid(word: string, letter: string, category: string, language = "es"): boolean {
-  if (!word || word.trim().length === 0) return false;
+  if (!isSafeInput(word)) return false;
 
   const normalizedWord = normalizeWord(word);
   const normalizedLetter = normalizeWord(letter);
