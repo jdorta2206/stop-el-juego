@@ -1,6 +1,8 @@
 import { Switch, Route, Router as WouterRouter } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { useState } from "react";
 import { Toaster } from "@/components/ui/toaster";
+import { SplashScreen } from "@/components/SplashScreen";
 import Home from "@/pages/Home";
 import SoloGame from "@/pages/SoloGame";
 import Multiplayer from "@/pages/Multiplayer";
@@ -43,11 +45,17 @@ function Router() {
 }
 
 function App() {
+  const [splashDone, setSplashDone] = useState(false);
+  const lang = (localStorage.getItem("stop_lang") ?? "es") as string;
+
   return (
     <QueryClientProvider client={queryClient}>
-      <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-        <Router />
-      </WouterRouter>
+      <SplashScreen onDone={() => setSplashDone(true)} lang={lang} />
+      {splashDone && (
+        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+          <Router />
+        </WouterRouter>
+      )}
       <Toaster />
     </QueryClientProvider>
   );
