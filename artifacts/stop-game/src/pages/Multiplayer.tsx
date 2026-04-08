@@ -27,7 +27,10 @@ export default function Multiplayer() {
   const [, setLocation] = useLocation();
   const { player } = usePlayer();
   const { t } = useT();
-  const [roomCode, setRoomCode] = useState("");
+  const [roomCode, setRoomCode] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return (params.get("room") || "").toUpperCase();
+  });
   const [error, setError] = useState("");
   const [showInvite, setShowInvite] = useState(false);
   const [isPublic, setIsPublic] = useState(false);
