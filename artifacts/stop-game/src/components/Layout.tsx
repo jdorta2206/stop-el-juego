@@ -217,19 +217,22 @@ export function Layout({ children }: { children: ReactNode }) {
       </nav>
 
       {/* Footer */}
-      <footer className="hidden w-full border-t border-white/10 mt-4 py-4 px-4 z-10">
+      <footer className="w-full border-t border-white/10 mt-4 py-4 px-4 z-10">
         <div className="max-w-5xl mx-auto flex flex-wrap items-center justify-center gap-x-5 gap-y-1">
           <Link href="/acerca" className="text-white/40 hover:text-white/70 text-xs transition-colors">
             Acerca de
+          </Link>
+          <Link href="/como-jugar" className="text-white/40 hover:text-white/70 text-xs transition-colors">
+            Cómo jugar
+          </Link>
+          <Link href="/estrategias" className="text-white/40 hover:text-white/70 text-xs transition-colors">
+            Estrategias
           </Link>
           <Link href="/privacy" className="text-white/40 hover:text-white/70 text-xs transition-colors">
             Privacidad
           </Link>
           <Link href="/terms" className="text-white/40 hover:text-white/70 text-xs transition-colors">
             Términos
-          </Link>
-          <Link href="/como-jugar" className="text-white/40 hover:text-white/70 text-xs transition-colors">
-            Cómo jugar
           </Link>
           <a
             href="mailto:stopeljuegodepalabras@gmail.com"
