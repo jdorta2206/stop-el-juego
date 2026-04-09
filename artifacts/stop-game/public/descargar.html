@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Descargar STOP - El Juego de las Palabras</title>
+
+  <!-- Open Graph — WhatsApp, Instagram, Facebook, Telegram -->
+  <meta property="og:type"         content="website" />
+  <meta property="og:site_name"    content="STOP - El Juego" />
+  <meta property="og:url"          content="https://stop-el-juego.replit.app/descargar.html" />
+  <meta property="og:title"        content="STOP - El Juego de las Palabras 🎯" />
+  <meta property="og:description"  content="¡Descarga gratis el juego de las categorías! Juega solo o con amigos, sube al ranking global y demuestra quién tiene más vocabulario. Disponible en Google Play." />
+  <meta property="og:image"        content="https://stop-el-juego.replit.app/opengraph.jpg" />
+  <meta property="og:image:width"  content="1280" />
+  <meta property="og:image:height" content="720" />
+  <meta property="og:image:alt"    content="STOP - El Juego de las Palabras" />
+  <meta property="og:locale"       content="es_ES" />
+
+  <!-- Twitter card -->
+  <meta name="twitter:card"        content="summary_large_image" />
+  <meta name="twitter:title"       content="STOP - El Juego de las Palabras 🎯" />
+  <meta name="twitter:description" content="¡Descarga gratis el juego de las categorías! Disponible en Google Play." />
+  <meta name="twitter:image"       content="https://stop-el-juego.replit.app/opengraph.jpg" />
+
+  <!-- SEO -->
+  <meta name="description" content="Descarga gratis STOP - El Juego de las Palabras en Google Play. ¡El clásico juego de las categorías ahora online!" />
+
+  <meta name="theme-color" content="#b5301a" />
+  <link rel="icon" type="image/png" href="/images/stop-logo.png" />
+
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: radial-gradient(ellipse at 50% 40%, #5a1208 0%, #1a063a 55%, #060318 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      text-align: center;
+      padding: 24px;
+    }
+    .card {
+      max-width: 380px;
+      width: 100%;
+    }
+    .logo {
+      width: 120px;
+      height: 120px;
+      border-radius: 50%;
+      margin: 0 auto 24px;
+      display: block;
+      filter: drop-shadow(0 0 28px rgba(181,48,26,0.9));
+    }
+    h1 {
+      font-size: 28px;
+      font-weight: 900;
+      margin-bottom: 10px;
+      letter-spacing: -0.5px;
+    }
+    p {
+      font-size: 15px;
+      color: rgba(255,255,255,0.65);
+      margin-bottom: 32px;
+      line-height: 1.5;
+    }
+    .btn-play {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      background: #01875f;
+      color: white;
+      text-decoration: none;
+      padding: 16px 28px;
+      border-radius: 16px;
+      font-size: 17px;
+      font-weight: 700;
+      margin-bottom: 14px;
+      transition: transform 0.15s, background 0.15s;
+    }
+    .btn-play:hover { background: #019a6e; transform: scale(1.02); }
+    .btn-play img { width: 28px; height: 28px; }
+    .btn-web {
+      display: block;
+      color: rgba(255,255,255,0.5);
+      text-decoration: none;
+      font-size: 13px;
+      padding: 10px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.1);
+      transition: color 0.15s;
+    }
+    .btn-web:hover { color: white; }
+    .redirect-note {
+      margin-top: 20px;
+      font-size: 12px;
+      color: rgba(255,255,255,0.3);
+    }
+  </style>
+
+  <script>
+    // Auto-redirect Android users to Play Store after a short delay
+    var ua = navigator.userAgent || '';
+    var isAndroid = /android/i.test(ua);
+    if (isAndroid) {
+      setTimeout(function () {
+        window.location.href = 'https://play.google.com/store/apps/details?id=app.replit.stop_el_juego.twa';
+      }, 800);
+    }
+  </script>
+</head>
+<body>
+  <div class="card">
+    <img class="logo" src="/images/stop-logo.png" alt="STOP" />
+    <h1>STOP - El Juego</h1>
+    <p>El clásico juego de las categorías, ahora online. Juega solo o con amigos y sube al ranking global.</p>
+
+    <a class="btn-play"
+       href="https://play.google.com/store/apps/details?id=app.replit.stop_el_juego.twa">
+      <img src="https://www.gstatic.com/android/market_images/web/play_logo_x2.png" alt="Google Play" />
+      Descargar en Google Play
+    </a>
+
+    <a class="btn-web" href="https://stop-el-juego.replit.app/">
+      Jugar directamente en el navegador →
+    </a>
+
+    <p class="redirect-note" id="redirect-note"></p>
+  </div>
+
+  <script>
+    var ua = navigator.userAgent || '';
+    var isAndroid = /android/i.test(ua);
+    if (isAndroid) {
+      document.getElementById('redirect-note').textContent = 'Redirigiendo a Google Play…';
+    }
+  </script>
+</body>
+</html>
