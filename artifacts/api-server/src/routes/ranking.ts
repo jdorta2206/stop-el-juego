@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { playerScoresTable, gameHistoryTable } from "@workspace/db";
 import { eq, desc, sql } from "drizzle-orm";
+import { sendPushToPlayer } from "../lib/pushHelper";
 import { SubmitScoreBody, GetLeaderboardQueryParams } from "@workspace/api-zod";
 
 const router: IRouter = Router();
@@ -59,6 +60,24 @@ router.post("/scores", async (req, res) => {
     .where(eq(playerScoresTable.playerId, playerId))
     .limit(1);
 
+  const oldTotal = existing.length > 0 ? existing[0].totalScore : 0;
+  const newTotal = oldTotal + score;
+
+  // ── Detect overtaken players BEFORE updating ─────────────────────────────
+  // Anyone whose total is strictly between old and new total got overtaken.
+  // (Skip the player themselves in case they have multiple rows — shouldn't happen.)
+  const overtaken = score > 0 && newTotal > oldTotal
+    ? await db
+        .select({ playerId: playerScoresTable.playerId, playerName: playerScoresTable.playerName })
+        .from(playerScoresTable)
+        .where(
+          sql`${playerScoresTable.totalScore} > ${oldTotal}
+          AND ${playerScoresTable.totalScore} <= ${newTotal}
+          AND ${playerScoresTable.playerId} != ${playerId}`
+        )
+    : [];
+  // ─────────────────────────────────────────────────────────────────────────
+
   let player;
   if (existing.length > 0) {
     const [updated] = await db
@@ -66,7 +85,7 @@ router.post("/scores", async (req, res) => {
       .set({
         playerName,
         avatarColor: avatarColor ?? existing[0].avatarColor,
-        totalScore: existing[0].totalScore + score,
+        totalScore: newTotal,
         gamesPlayed: existing[0].gamesPlayed + 1,
         wins: existing[0].wins + (won ? 1 : 0),
         updatedAt: new Date(),
@@ -88,6 +107,20 @@ router.post("/scores", async (req, res) => {
       .returning();
     player = created;
   }
+
+  // ── Send "you've been overtaken" push notifications ──────────────────────
+  if (overtaken.length > 0) {
+    await Promise.allSettled(
+      overtaken.map(op =>
+        sendPushToPlayer(op.playerId, {
+          title: "¡Te han superado! 😤",
+          body: `${playerName} acaba de quitarte el puesto en el ranking global. ¡Hora de vengarse!`,
+          url: "/ranking",
+        })
+      )
+    );
+  }
+  // ─────────────────────────────────────────────────────────────────────────
 
   // Record game history
   await db.insert(gameHistoryTable).values({
