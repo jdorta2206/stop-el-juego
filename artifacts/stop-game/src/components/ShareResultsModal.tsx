@@ -104,6 +104,13 @@ export function ShareResultsModal({
 
   const diff = Math.abs(playerScore - aiScore);
   const closeMatch = diff <= 15;
+  const spicyLine = won
+    ? closeMatch
+      ? `🔥 Gané por los pelos: ${diff} pts`
+      : `👑 Les pasé por encima: ${diff} pts`
+    : closeMatch
+      ? `😱 Perdí por nada: ${diff} pts`
+      : `💀 Me ganó por ${diff} pts`;
 
   const viralLine = won
     ? `🧠 Conseguí ${playerScore} pts con la letra "${letter}" y le gané a la IA${closeMatch ? ` (¡por solo ${diff} pts!)` : ""} 🏆`
@@ -113,6 +120,7 @@ export function ShareResultsModal({
 
   const shareMessage = mpMessage ?? [
     viralLine,
+    spicyLine,
     wordleGrid,
     bluffLine,
     challengeLine,
