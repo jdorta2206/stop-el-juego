@@ -1,4 +1,5 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
+import { getApiUrl } from "@/lib/utils";
 
 const XP_KEY = "stop_xp_v2";
 
@@ -66,7 +67,7 @@ export function calcXpFromResults(
   return base + winBonus + scorePts;
 }
 
-export function useProgression() {
+export function useProgression(playerId?: string) {
   const [xp, setXp] = useState<number>(() => {
     try {
       const stored = localStorage.getItem(XP_KEY);
@@ -77,6 +78,27 @@ export function useProgression() {
   });
 
   const [levelUpInfo, setLevelUpInfo] = useState<{ from: number; to: number } | null>(null);
+
+  // ── Sync from server on mount (server is source of truth) ──────────────
+  useEffect(() => {
+    if (!playerId) return;
+    const API = getApiUrl();
+    fetch(`${API}/api/ranking/profile/${playerId}`)
+      .then(r => r.ok ? r.json() : null)
+      .then((data: { xp?: number } | null) => {
+        if (data?.xp != null && data.xp > 0) {
+          setXp(prev => {
+            const serverXp = data.xp as number;
+            if (serverXp > prev) {
+              try { localStorage.setItem(XP_KEY, String(serverXp)); } catch {}
+              return serverXp;
+            }
+            return prev;
+          });
+        }
+      })
+      .catch(() => {});
+  }, [playerId]);
 
   const level = calcLevel(xp);
   const currentLevelXp = xpForLevel(level);

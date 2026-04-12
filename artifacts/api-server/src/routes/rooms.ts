@@ -14,6 +14,20 @@ type Reaction = { id: string; emoji: string; playerName: string; ts: number };
 const roomReactions = new Map<string, Reaction[]>();
 const roomCategoryPacks = new Map<string, "standard" | "crazy" | "mix">();
 
+type QuickPhrase = { id: string; playerName: string; text: string; ts: number };
+const roomPhrases = new Map<string, QuickPhrase[]>();
+
+const QUICK_PHRASES = [
+  "¡Buena!", "¡Trampa! 😤", "¡Revanche!", "¡Eso no vale!",
+  "🔥 ¡Brillante!", "😂 ¡Me ganaste!", "¡GG!", "🤔 ¡Difícil esa!",
+];
+
+function getPhrases(code: string): QuickPhrase[] {
+  const all = roomPhrases.get(code) ?? [];
+  const cutoff = Date.now() - 30_000;
+  return all.filter(p => p.ts > cutoff);
+}
+
 const VALID_REACTIONS = ["🔥", "❤️", "😂", "👑", "🎯", "😤", "💪", "🤯"];
 
 function getReactions(code: string): Reaction[] {
@@ -72,6 +86,7 @@ function formatRoom(room: any) {
     bluffData: meta?.bluffVotes ?? null,
     bluffVoteDeadline: meta?.bluffDeadline ?? null,
     reactions: getReactions(code),
+    phrases: getPhrases(code),
     createdAt: room.createdAt,
   };
 }
@@ -425,6 +440,24 @@ router.post("/:roomCode/use-card", async (req, res) => {
   res.json({ ok: true, card, room: formatRoom(updated) });
 });
 
+// POST /rooms/:roomCode/phrase — quick phrase (social chat)
+router.post("/:roomCode/phrase", (req, res) => {
+  const code = req.params.roomCode.toUpperCase();
+  const { playerName, phraseIndex } = req.body as { playerName: string; phraseIndex: number };
+  if (phraseIndex < 0 || phraseIndex >= QUICK_PHRASES.length) {
+    res.status(400).json({ error: "Invalid phrase" }); return;
+  }
+  const phrase: QuickPhrase = {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    playerName: String(playerName ?? "?").slice(0, 30),
+    text: QUICK_PHRASES[phraseIndex],
+    ts: Date.now(),
+  };
+  const existing = getPhrases(code);
+  roomPhrases.set(code, [...existing, phrase].slice(-30));
+  res.json({ ok: true });
+});
+
 // POST /rooms/:roomCode/stop — ANY player calls this to stop the round globally
 router.post("/:roomCode/stop", async (req, res) => {
   const { roomCode } = req.params;
@@ -498,22 +531,32 @@ router.post("/:roomCode/results", async (req, res) => {
 
   // Update this player's score and mark as ready; store bluff data
   const { answers } = body.data;
-  // Sanitize answers: keep only non-empty string values
+
+  // ── T002: Letter validation — strip answers that don't start with the correct letter
+  const letter = (room.currentLetter ?? "A").toUpperCase();
   const safeAnswers: Record<string, string> = {};
+  let validAnswerCount = 0;
   if (answers && typeof answers === "object") {
     for (const [cat, val] of Object.entries(answers)) {
       if (typeof val === "string" && val.trim().length > 0) {
-        safeAnswers[cat] = val.trim().slice(0, 80);
+        const word = val.trim().slice(0, 80);
+        if (word.toUpperCase().startsWith(letter)) {
+          safeAnswers[cat] = word;
+          validAnswerCount++;
+        }
+        // Answers starting with wrong letter are silently dropped
       }
     }
   }
+  // Cap roundScore to prevent client-side inflation: max 10 pts per valid answer + 20 bluff bonus each
+  const cappedRoundScore = Math.min(roundScore, validAnswerCount * 30);
 
   const updatedPlayers = players.map((p: any) => {
     if (p.playerId === playerId) {
       return {
         ...p,
-        score: (p.score || 0) + roundScore,
-        roundScore,
+        score: (p.score || 0) + cappedRoundScore,
+        roundScore: cappedRoundScore,
         isReady: true,
         answers: safeAnswers,
         bluffedCategories: bluffedCategories ?? [],

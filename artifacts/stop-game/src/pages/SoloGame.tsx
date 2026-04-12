@@ -70,7 +70,7 @@ export default function SoloGame() {
   const { isPremium } = usePremium(player?.id);
   const { t, lang } = useT();
   const { recordPlay } = useStreak();
-  const { addXp, levelUpInfo, clearLevelUp } = useProgression();
+  const { addXp, levelUpInfo, clearLevelUp } = useProgression(player?.id);
   const [, setLocation] = useLocation();
   const [gameState, setGameState] = useState<GameState>("LOBBY");
   const [currentLetter, setCurrentLetter] = useState<string>("");

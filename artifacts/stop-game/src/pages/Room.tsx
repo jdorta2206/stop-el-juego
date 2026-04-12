@@ -72,6 +72,9 @@ export default function Room() {
   const [showShareModal, setShowShareModal] = useState(false);
   const [floatingReactions, setFloatingReactions] = useState<Array<{ id: string; emoji: string; playerName: string }>>([]);
   const seenReactionIds = useRef<Set<string>>(new Set());
+  const [showPhrases, setShowPhrases] = useState(false);
+  const [visiblePhrases, setVisiblePhrases] = useState<Array<{ id: string; playerName: string; text: string }>>([]);
+  const seenPhraseIds = useRef<Set<string>>(new Set());
   const [categoryPack, setCategoryPack] = useState<"standard" | "crazy" | "mix">("standard");
   const [roundCategories, setRoundCategories] = useState<string[]>(CATEGORIES_ES);
   const CRAZY_CATEGORIES_ES = [
@@ -219,6 +222,32 @@ export default function Room() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ emoji, playerName: player.name }),
+      });
+    } catch {}
+  }, [player, roomCode]);
+
+  // Process incoming quick phrases from room polling
+  useEffect(() => {
+    const phrases: Array<{ id: string; playerName: string; text: string }> = (room as any)?.phrases ?? [];
+    const newOnes = phrases.filter(p => !seenPhraseIds.current.has(p.id));
+    if (newOnes.length === 0) return;
+    newOnes.forEach(p => seenPhraseIds.current.add(p.id));
+    setVisiblePhrases(prev => [...prev, ...newOnes].slice(-5));
+    newOnes.forEach(p => {
+      setTimeout(() => {
+        setVisiblePhrases(prev => prev.filter(x => x.id !== p.id));
+      }, 6000);
+    });
+  }, [(room as any)?.phrases]);
+
+  const sendQuickPhrase = useCallback(async (phraseIndex: number) => {
+    if (!player || !roomCode) return;
+    setShowPhrases(false);
+    try {
+      await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/phrase`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ playerName: player.name, phraseIndex }),
       });
     } catch {}
   }, [player, roomCode]);
@@ -532,6 +561,47 @@ export default function Room() {
         </AnimatePresence>
       </div>
 
+      {/* Quick phrases floating display */}
+      <div className="fixed bottom-28 left-0 right-0 flex flex-col items-center gap-1 z-30 pointer-events-none px-4">
+        <AnimatePresence>
+          {visiblePhrases.map(p => (
+            <motion.div
+              key={p.id}
+              initial={{ opacity: 0, y: 12, scale: 0.9 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -8, scale: 0.95 }}
+              className="bg-black/70 backdrop-blur-sm border border-white/15 rounded-2xl px-4 py-2 flex items-center gap-2"
+            >
+              <span className="text-xs font-bold text-white/60">{p.playerName}:</span>
+              <span className="text-sm font-bold text-white">{p.text}</span>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
+
+      {/* Quick phrases picker panel */}
+      <AnimatePresence>
+        {showPhrases && (
+          <motion.div
+            key="phrases-panel"
+            initial={{ opacity: 0, y: 40 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 40 }}
+            className="fixed bottom-24 left-1/2 -translate-x-1/2 z-40 w-72 bg-[#0e0a2e] border border-white/15 rounded-2xl shadow-2xl p-3 grid grid-cols-2 gap-2"
+          >
+            {["¡Buena!", "¡Trampa! 😤", "¡Revanche!", "¡Eso no vale!", "🔥 ¡Brillante!", "😂 ¡Me ganaste!", "¡GG!", "🤔 ¡Difícil esa!"].map((txt, i) => (
+              <button
+                key={i}
+                onClick={() => sendQuickPhrase(i)}
+                className="text-sm font-bold text-white bg-white/5 hover:bg-white/15 rounded-xl py-2 px-3 text-left transition-colors"
+              >
+                {txt}
+              </button>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Share results modal */}
       {showShareModal && currentLetter && (
         <ShareResultsModal
@@ -840,6 +910,13 @@ export default function Room() {
                     {emoji}
                   </motion.button>
                 ))}
+                <motion.button
+                  whileTap={{ scale: 0.75 }}
+                  onClick={() => setShowPhrases(v => !v)}
+                  className={`w-9 h-9 flex items-center justify-center rounded-full text-xl border backdrop-blur-sm transition-all ${showPhrases ? "bg-white/20 border-white/40" : "bg-black/50 border-white/15 hover:bg-white/10"}`}
+                >
+                  💬
+                </motion.button>
               </div>
               <div className="max-w-2xl mx-auto w-full">
                 <Button variant="destructive" size="xl"
