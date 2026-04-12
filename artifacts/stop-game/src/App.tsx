@@ -15,6 +15,7 @@ import HowToPlay from "@/pages/HowToPlay";
 import DailyChallenge from "@/pages/DailyChallenge";
 import Friends from "@/pages/Friends";
 import Strategies from "@/pages/Strategies";
+import PlayerProfile from "@/pages/PlayerProfile";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient({
@@ -41,6 +42,7 @@ function Router() {
       <Route path="/reto" component={DailyChallenge} />
       <Route path="/amigos" component={Friends} />
       <Route path="/estrategias" component={Strategies} />
+      <Route path="/player/:id" component={PlayerProfile} />
       <Route component={NotFound} />
     </Switch>
   );

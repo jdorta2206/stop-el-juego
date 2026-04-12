@@ -69,10 +69,13 @@ lib/
 ## API Routes
 
 - `POST /api/game/validate` — Validate player words vs AI (dictionary-based)
-- `GET /api/ranking/scores` — Get global leaderboard
-- `POST /api/ranking/scores` — Submit score after game
+- `GET /api/ranking/scores` — Get global leaderboard (includes `currentStreak`, `longestStreak`, `title`)
+- `POST /api/ranking/scores` — Submit score after game (calculates daily streak, 1.5x if mode=multiplayer)
 - `GET /api/ranking/scores/:playerId` — Get player stats
-- `POST /api/rooms` — Create multiplayer room
+- `GET /api/ranking/weekly` — Weekly leaderboard
+- `GET /api/ranking/monthly` — Monthly leaderboard
+- `GET /api/ranking/profile/:playerId` — Full player profile (streak, title, modeStats, globalRank, monthlyScore)
+- `POST /api/rooms` — Create multiplayer room (accepts `gameMode`, `maxPlayers`)
 - `GET /api/rooms/:roomCode` — Get room details (polling for multiplayer)
 - `POST /api/rooms/:roomCode/join` — Join room
 - `POST /api/rooms/:roomCode/results` — Submit round results

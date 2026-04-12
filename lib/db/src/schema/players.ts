@@ -13,6 +13,9 @@ export const playerScoresTable = pgTable("player_scores", {
   stripeCustomerId: text("stripe_customer_id"),
   stripeSubscriptionId: text("stripe_subscription_id"),
   isPremium: boolean("is_premium").notNull().default(false),
+  currentStreak: integer("current_streak").notNull().default(0),
+  longestStreak: integer("longest_streak").notNull().default(0),
+  lastPlayedDate: text("last_played_date"), // YYYY-MM-DD UTC
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -43,6 +46,8 @@ export const roomsTable = pgTable("rooms", {
   currentLetter: text("current_letter"),
   currentRound: integer("current_round").notNull().default(0),
   maxRounds: integer("max_rounds").notNull().default(3),
+  maxPlayers: integer("max_players").notNull().default(8),
+  gameMode: text("game_mode").notNull().default("classic"), // classic | blitz | challenge
   language: text("language").notNull().default("es"),
   playersJson: text("players_json").notNull().default("[]"),
   stopperJson: text("stopper_json"),

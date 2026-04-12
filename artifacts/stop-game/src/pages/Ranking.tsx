@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Layout } from "@/components/Layout";
 import { Card } from "@/components/ui";
 import { useGetLeaderboard, useGetPlayerStats } from "@workspace/api-client-react";
-import { Trophy, Users, UserPlus, UserCheck, Swords, Clock, Copy, Check, CalendarClock } from "lucide-react";
+import { Trophy, Users, UserPlus, UserCheck, Swords, Clock, Copy, Check, CalendarClock, Star, Flame } from "lucide-react";
 import { usePlayer } from "@/hooks/use-player";
 import { motion } from "framer-motion";
 import { useT } from "@/i18n/useT";
@@ -184,7 +184,17 @@ export default function Ranking() {
   const weeklyPlayers: any[] = weeklyData?.players ?? [];
   const weekCountdown = useWeekCountdown(weeklyData?.nextReset);
 
-  const [filter, setFilter] = useState<"global" | "weekly" | "friends">("global");
+  // Monthly ranking
+  const { data: monthlyData, isLoading: monthlyLoading } = useQuery({
+    queryKey: ["/api/ranking/monthly"],
+    queryFn: () => fetch(`${getApiUrl()}/api/ranking/monthly`).then(r => r.json()),
+    refetchOnMount: true,
+    staleTime: 0,
+  });
+  const monthlyPlayers: any[] = monthlyData?.players ?? [];
+  const monthCountdown = useWeekCountdown(monthlyData?.nextReset);
+
+  const [filter, setFilter] = useState<"global" | "weekly" | "monthly" | "friends">("global");
 
   // Presence: online players + incoming challenge notifications
   const { onlinePlayers, incomingChallenge, dismissChallenge } = usePresence(
@@ -261,10 +271,11 @@ export default function Ranking() {
   const players =
     filter === "friends" ? friendsTabPlayers :
     filter === "weekly"  ? weeklyPlayers :
+    filter === "monthly" ? monthlyPlayers :
     allPlayers;
   const top3 = players.slice(0, 3);
   const rest = players.slice(3);
-  const baseList = filter === "weekly" ? weeklyPlayers : allPlayers;
+  const baseList = filter === "weekly" ? weeklyPlayers : filter === "monthly" ? monthlyPlayers : allPlayers;
   const myEntry = baseList.find((p: any) => p.playerId === player?.id);
   const myRank = myEntry ? baseList.indexOf(myEntry) + 1 : null;
   const isLoggedIn = player && player.loginMethod !== "guest";
@@ -328,6 +339,13 @@ export default function Ranking() {
               <span className="absolute -top-1.5 -right-1 text-[9px] font-black bg-amber-400 text-black rounded-full px-1 leading-tight">NEW</span>
             </button>
             <button
+              className={`px-4 py-2 rounded-full font-bold transition-all flex items-center gap-2 relative ${filter === "monthly" ? "bg-purple-500 text-white shadow-md" : "text-white hover:bg-white/10"}`}
+              onClick={() => setFilter("monthly")}
+            >
+              <Star className="w-4 h-4" />
+              {lang === "en" ? "Month" : lang === "pt" ? "Mês" : lang === "fr" ? "Mois" : "Mes"}
+            </button>
+            <button
               className={`px-4 py-2 rounded-full font-bold transition-all flex items-center gap-2 ${filter === "friends" ? "bg-secondary text-black shadow-md" : "text-white hover:bg-white/10"}`}
               onClick={() => setFilter("friends")}
             >
@@ -358,7 +376,28 @@ export default function Ranking() {
           </motion.div>
         )}
 
-        {(filter === "weekly" ? weeklyLoading : isLoading) ? (
+        {/* Monthly countdown banner */}
+        {filter === "monthly" && monthCountdown && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex items-center justify-center gap-2 py-2 px-4 rounded-2xl text-sm font-bold"
+            style={{ background: "rgba(168,85,247,0.12)", border: "1px solid rgba(168,85,247,0.3)", color: "#c084fc" }}
+          >
+            <Star className="w-4 h-4 flex-shrink-0" />
+            {lang === "en" ? `Resets in ${monthCountdown}` :
+             lang === "pt" ? `Reinicia em ${monthCountdown}` :
+             lang === "fr" ? `Réinitialise dans ${monthCountdown}` :
+             `Reinicia en ${monthCountdown}`}
+            {" "}·{" "}
+            {lang === "en" ? "Top monthly champions" :
+             lang === "pt" ? "Campeões do mês" :
+             lang === "fr" ? "Champions du mois" :
+             "¡Campeones del mes!"}
+          </motion.div>
+        )}
+
+        {(filter === "weekly" ? weeklyLoading : filter === "monthly" ? monthlyLoading : isLoading) ? (
           <div className="space-y-3">
             {[1,2,3,4,5].map(i => (
               <div key={i} className="h-16 bg-white/10 rounded-xl animate-pulse" />
@@ -380,6 +419,16 @@ export default function Ranking() {
                lang === "pt" ? "Nenhum jogo esta semana ainda. Sê o primeiro!" :
                lang === "fr" ? "Aucune partie cette semaine. Sois le premier !" :
                "Nadie ha jugado esta semana aún. ¡Sé el primero!"}
+            </p>
+          </div>
+        ) : players.length === 0 && filter === "monthly" ? (
+          <div className="p-16 text-center text-white/50 font-bold bg-black/20 rounded-2xl border border-white/10">
+            <Star className="w-12 h-12 mx-auto mb-4 opacity-20" />
+            <p className="text-lg">
+              {lang === "en" ? "No games this month yet. Be the first!" :
+               lang === "pt" ? "Nenhum jogo este mês ainda. Sê o primeiro!" :
+               lang === "fr" ? "Aucune partie ce mois. Sois le premier !" :
+               "Nadie ha jugado este mes aún. ¡Sé el primero!"}
             </p>
           </div>
         ) : players.length === 0 ? (
@@ -435,9 +484,15 @@ export default function Ranking() {
                       </motion.div>
                       <div className="text-center">
                         <p className="font-black text-sm truncate max-w-[80px]">{p.playerName}</p>
+                        {(p as any).title && <p className="text-[10px] text-white/40 leading-tight truncate max-w-[80px]">{(p as any).title}</p>}
                         <p className={`font-black ${(p as any).noGames ? "text-white/30 text-xs" : "text-secondary"}`}>
                           {(p as any).noGames ? "Sin partidas" : `${p.totalScore} ${t.game.points}`}
                         </p>
+                        {((p as any).currentStreak ?? 0) >= 2 && (
+                          <p className="text-[10px] text-orange-400 font-bold flex items-center justify-center gap-0.5 mt-0.5">
+                            <Flame size={9} /> {(p as any).currentStreak}
+                          </p>
+                        )}
                       </div>
 
                       {/* Podium action buttons */}
@@ -519,12 +574,13 @@ export default function Ranking() {
                         initial={{ opacity: 0, x: -10 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ delay: idx * 0.04 }}
-                        className={`grid grid-cols-[36px_1fr_64px_auto] gap-2 px-3 py-2.5 items-center rounded-xl ${
+                        onClick={() => !isMe && !p.noGames && setLocation(`/player/${encodeURIComponent(p.playerId)}`)}
+                        className={`grid grid-cols-[36px_1fr_64px_auto] gap-2 px-3 py-2.5 items-center rounded-xl transition-all ${
                           isMe
                             ? "bg-secondary text-black font-black shadow-md shadow-secondary/20"
                             : p.noGames
                             ? "bg-white/5 border border-white/5 text-white/40 font-bold"
-                            : "bg-card/60 hover:bg-card border border-white/5 text-white font-bold"
+                            : "bg-card/60 hover:bg-card border border-white/5 text-white font-bold cursor-pointer hover:border-secondary/30"
                         }`}
                       >
                         {/* Position */}
@@ -532,7 +588,7 @@ export default function Ranking() {
                           {p.noGames ? "-" : position}
                         </div>
 
-                        {/* Player name + online dot */}
+                        {/* Player name + online dot + streak + title */}
                         <div className="flex items-center gap-2 overflow-hidden">
                           <div className="relative flex-shrink-0">
                             <div
@@ -546,10 +602,18 @@ export default function Ranking() {
                             )}
                           </div>
                           <div className="min-w-0">
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex items-center gap-1.5 flex-wrap">
                               <span className="truncate text-sm">{p.playerName}</span>
                               {isMe && <span className={`text-[10px] font-bold ${isMe ? "text-black/50" : "text-white/40"}`}>({t.game.you})</span>}
+                              {(p.currentStreak ?? 0) >= 2 && (
+                                <span className={`flex items-center gap-0.5 text-[10px] font-bold ${isMe ? "text-black/60" : "text-orange-400"}`}>
+                                  <Flame size={9} />{p.currentStreak}
+                                </span>
+                              )}
                             </div>
+                            {p.title && !isMe && (
+                              <p className="text-[10px] text-white/40 font-medium leading-none mt-0.5 truncate">{p.title}</p>
+                            )}
                             {isOnline && !isMe && (
                               <p className="text-[10px] text-green-400/80 font-medium leading-none mt-0.5">
                                 {onlineData?.roomCode ? `En sala: ${onlineData.roomCode}` : "En el menú"}
