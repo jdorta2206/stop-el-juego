@@ -298,6 +298,9 @@ export default function Ranking() {
     1: { bg: "linear-gradient(135deg, #9e9e9e, #757575)", border: "#9e9e9e",  size: "w-16 h-16 text-2xl", label: "🥈" },
     2: { bg: "linear-gradient(135deg, #a0522d, #795548)", border: "#a0522d", size: "w-14 h-14 text-xl",  label: "🥉" },
   };
+  const openProfile = useCallback((playerId: string) => {
+    setLocation(`/player/${encodeURIComponent(playerId)}`);
+  }, [setLocation]);
 
   return (
     <Layout>
@@ -478,7 +481,8 @@ export default function Ranking() {
                       initial={{ opacity: 0, y: 40 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: visualIdx * 0.15, type: "spring", bounce: 0.4 }}
-                      className="flex flex-col items-center gap-2"
+                      className="flex flex-col items-center gap-2 cursor-pointer"
+                      onClick={() => openProfile(p.playerId)}
                     >
                       <span className="text-2xl">{m.label}</span>
                       <motion.div
