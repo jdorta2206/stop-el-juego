@@ -290,6 +290,8 @@ export default function Ranking() {
         totalScore: myStats.score.totalScore,
         gamesPlayed: myStats.score.gamesPlayed,
         wins: myStats.score.wins,
+        globalRank: myStats.score.globalRank,
+        bestScore: myStats.score.bestScore,
       }
     : null;
 
@@ -594,6 +596,11 @@ export default function Ranking() {
                     <span className="text-white/60 text-sm">{(displayEntry as any).gamesPlayed}</span>
                     <span className="text-secondary font-black text-lg">{(displayEntry as any).totalScore} {t.game.points}</span>
                   </div>
+                  {(displayEntry as any).globalRank && (
+                    <p className="mt-2 text-[11px] text-white/45 font-bold">
+                      Récord global: #{(displayEntry as any).globalRank} · Mejor partida: {(displayEntry as any).bestScore ?? 0}
+                    </p>
+                  )}
                 </Card>
               );
             })()}
