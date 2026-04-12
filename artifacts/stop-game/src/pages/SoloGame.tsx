@@ -108,7 +108,7 @@ export default function SoloGame() {
   const dailyCategories = urlParams.get("cats")?.split(",").filter(Boolean) || [];
 
   const gameMode = isDailyMode ? "daily" : isQuickMode ? "quick" : isChaosMode ? "chaos" : "normal";
-  const { best: personalBest, updateBest } = usePersonalBest(gameMode);
+  const { best: personalBest, updateBest } = usePersonalBest(gameMode, player?.id);
   const [bestResult, setBestResult] = useState<{ isNew: boolean; diff: number } | null>(null);
 
   const baseRoundTime = isQuickMode ? QUICK_ROUND_TIME : isChaosMode ? CHAOS_ROUND_TIME : insaneMode ? QUICK_ROUND_TIME : ROUND_TIME;
@@ -122,7 +122,7 @@ export default function SoloGame() {
   const [aiComment, setAiComment] = useState<string | null>(null);
 
   // Achievements system
-  const { newlyUnlocked, afterRound, clearNewlyUnlocked } = useAchievements();
+  const { newlyUnlocked, afterRound, clearNewlyUnlocked } = useAchievements(player?.id);
 
   // Hidden category index (for hidden_category event)
   const [hiddenCategoryIdx, setHiddenCategoryIdx] = useState<number | null>(null);
@@ -158,6 +158,21 @@ export default function SoloGame() {
   useEffect(() => {
     if (!isDailyMode) setCategories(getCategories());
   }, [lang, isDailyMode]);
+
+  // Countdown tick sound (last 5 seconds — urgency escalates)
+  useEffect(() => {
+    if (gameState !== "PLAYING" || muted) return;
+    if (timeLeft <= 5 && timeLeft > 0) {
+      sound.playTick(5 - timeLeft + 1); // urgency 1 → 5
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timeLeft, gameState]);
+
+  // Achievement unlock sound
+  useEffect(() => {
+    if (newlyUnlocked) sound.playAchievement();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [newlyUnlocked]);
 
   // Pause Google Auto Ads for premium users
   useEffect(() => {
@@ -1248,7 +1263,7 @@ export default function SoloGame() {
                       ) : (
                         <Input
                           value={responses[category] || ""}
-                          onChange={e => setResponses(prev => ({ ...prev, [category]: e.target.value.toUpperCase() }))}
+                          onChange={e => { sound.playKeyClick(); setResponses(prev => ({ ...prev, [category]: e.target.value.toUpperCase() })); }}
                           placeholder={isBluffed ? `${category}... 🎭` : `${category}...`}
                           autoComplete="off"
                           autoCorrect="off"

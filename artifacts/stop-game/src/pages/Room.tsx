@@ -4,7 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
 import { Layout } from "@/components/Layout";
 import { Button, Card, Input, Progress } from "@/components/ui";
-import { useGetRoom, useSubmitRoomResults } from "@workspace/api-client-react";
+import { useGetRoom, useSubmitRoomResults, getGetRoomQueryKey } from "@workspace/api-client-react";
 import { usePlayer } from "@/hooks/use-player";
 import { Share2, Play, ArrowLeft, Trophy, CheckCircle2, Circle, Volume2, VolumeX, Layers } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -75,6 +75,7 @@ export default function Room() {
   const [showPhrases, setShowPhrases] = useState(false);
   const [visiblePhrases, setVisiblePhrases] = useState<Array<{ id: string; playerName: string; text: string }>>([]);
   const seenPhraseIds = useRef<Set<string>>(new Set());
+  const [sseActive, setSseActive] = useState(false);
   const [categoryPack, setCategoryPack] = useState<"standard" | "crazy" | "mix">("standard");
   const [roundCategories, setRoundCategories] = useState<string[]>(CATEGORIES_ES);
   const CRAZY_CATEGORIES_ES = [
@@ -123,6 +124,42 @@ export default function Room() {
   const submitMutation = useSubmitRoomResults();
   const queryClient = useQueryClient();
 
+  // ── SSE: real-time push updates (replaces polling for critical game moments) ──
+  useEffect(() => {
+    if (!roomCode || !player?.id) return;
+    const code = roomCode.toUpperCase();
+    const API = getApiUrl();
+    const url = `${API}/api/rooms/${code}/events?playerId=${player.id}`;
+    let es: EventSource;
+    let retryTimeout: ReturnType<typeof setTimeout>;
+    let closed = false;
+
+    function connect() {
+      if (closed) return;
+      es = new EventSource(url);
+      es.onopen = () => setSseActive(true);
+      es.onmessage = (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          queryClient.setQueryData(getGetRoomQueryKey(code), data);
+        } catch {}
+      };
+      es.onerror = () => {
+        setSseActive(false);
+        es.close();
+        if (!closed) retryTimeout = setTimeout(connect, 5000);
+      };
+    }
+    connect();
+
+    return () => {
+      closed = true;
+      clearTimeout(retryTimeout);
+      es?.close();
+      setSseActive(false);
+    };
+  }, [roomCode, player?.id, queryClient]);
+
   // Call the leave endpoint — only while in lobby; host leaving deletes room
   const leaveRoom = useCallback(() => {
     // Only clean up if still in lobby; game-in-progress rooms stay alive
@@ -159,11 +196,12 @@ export default function Room() {
     roomCode
   );
 
-  // Adaptive polling: fast during active play/voting, slower when idle
-  const pollingInterval =
-    phase === "bluffvoting"                                          ? 1000 :
-    phase === "playing" || phase === "freeze" || phase === "submitted" ? 1500 :
-    /* lobby / between_rounds / finished / spinning */                  4000;
+  // When SSE is active it pushes updates in real-time — polling is just a safety fallback
+  const pollingInterval = sseActive
+    ? 30_000
+    : phase === "bluffvoting"                                          ? 1000
+    : phase === "playing" || phase === "freeze" || phase === "submitted" ? 1500
+    : /* lobby / between_rounds / finished / spinning */                  4000;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: room, error } = useGetRoom(roomCode || "", {

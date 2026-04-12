@@ -173,9 +173,47 @@ export function useSound(muted: boolean) {
     playTone(ctx, 740, t + 0.36, 0.4, "sine", 0.14, 0.03, 0.2);
   }), [play]);
 
+  // ⌨️ Key click — subtle satisfying tick for each letter typed
+  const playKeyClick = useCallback(() => play(ctx => {
+    const t = ctx.currentTime;
+    const noise = ctx.createOscillator();
+    const gain = ctx.createGain();
+    noise.type = "square";
+    noise.frequency.value = 1200 + Math.random() * 400;
+    gain.gain.setValueAtTime(0.08, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.04);
+    noise.connect(gain);
+    gain.connect(ctx.destination);
+    noise.start(t);
+    noise.stop(t + 0.05);
+  }), [play]);
+
+  // ⏰ Urgent countdown tick — for last 5 seconds
+  const playTick = useCallback((urgency = 1) => play(ctx => {
+    const t = ctx.currentTime;
+    const freq = urgency >= 3 ? 880 : urgency >= 2 ? 660 : 440;
+    playTone(ctx, freq, t, 0.06, "sine", 0.25, 0.002, 0.04);
+  }), [play]);
+
+  // 🏅 Achievement unlocked — celebratory cascade
+  const playAchievement = useCallback(() => play(ctx => {
+    const t = ctx.currentTime;
+    // Rising sparkle
+    [523, 659, 784, 988, 1175, 1319, 1568].forEach((f, i) =>
+      playTone(ctx, f, t + i * 0.055, 0.3, "sine", 0.2, 0.01, 0.12)
+    );
+    // Shimmer
+    [784, 1047, 1319, 1568, 2093].forEach((f, i) =>
+      playTone(ctx, f, t + 0.05 + i * 0.04, 0.22, "triangle", 0.1, 0.01, 0.1)
+    );
+    // Final accent
+    playTone(ctx, 2093, t + 0.42, 0.5, "sine", 0.14, 0.02, 0.3);
+  }), [play]);
+
   return {
     playCorrect, playWrong, playWin, playLose, playLevelUp,
     playCombo, playStop, playRoundStart, playEvent,
     playBluffPerfect, playBluffCaught, playJudge, playHiddenReveal,
+    playKeyClick, playTick, playAchievement,
   };
 }

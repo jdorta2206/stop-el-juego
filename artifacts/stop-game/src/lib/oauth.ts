@@ -17,7 +17,8 @@ export const isInstagramConfigured = true;
 // TikTok requires domain verification + app review (like Instagram) — re-enable after deployment
 export const isTikTokConfigured    = false;
 // Apple Sign In — requires Apple Developer Program ($99/yr) + Service ID + private key
-export const isAppleConfigured     = false; // set to true once APPLE_CLIENT_ID etc. are added
+// Becomes true automatically once VITE_APPLE_CLIENT_ID is added to env secrets
+export const isAppleConfigured = !!import.meta.env.VITE_APPLE_CLIENT_ID;
 
 function startOAuth(provider: "google" | "facebook" | "instagram" | "tiktok" | "apple") {
   const returnPath = window.location.pathname + window.location.search;
