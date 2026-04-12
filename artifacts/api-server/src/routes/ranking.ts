@@ -290,33 +290,39 @@ router.get("/profile/:playerId", async (req, res) => {
 
   const ps = scoreRows[0];
 
-  // Global rank
-  const rankRow = await db.execute(sql`
-    SELECT COUNT(*) AS cnt FROM player_scores WHERE total_score > ${ps.totalScore}
-  `);
+  // Run all queries in parallel
+  const [rankRow, monthlyRow, modeRows, recentRows] = await Promise.all([
+    db.execute(sql`
+      SELECT COUNT(*) AS cnt FROM player_scores WHERE total_score > ${ps.totalScore}
+    `),
+    db.execute(sql`
+      SELECT COALESCE(SUM(score), 0) AS monthly_score
+      FROM game_history
+      WHERE player_id = ${playerId}
+        AND created_at >= date_trunc('month', NOW() AT TIME ZONE 'UTC')
+    `),
+    db.execute(sql`
+      SELECT
+        mode,
+        COUNT(*)                                      AS games,
+        COALESCE(SUM(score), 0)                       AS total_score,
+        COALESCE(MAX(score), 0)                       AS best_score,
+        SUM(CASE WHEN won THEN 1 ELSE 0 END)          AS wins
+      FROM game_history
+      WHERE player_id = ${playerId}
+      GROUP BY mode
+    `),
+    db.execute(sql`
+      SELECT id, score, letter, mode, won, created_at
+      FROM game_history
+      WHERE player_id = ${playerId}
+      ORDER BY created_at DESC
+      LIMIT 20
+    `),
+  ]);
+
   const globalRank = Number((rankRow.rows[0] as any)?.cnt ?? 0) + 1;
-
-  // Monthly score
-  const monthlyRow = await db.execute(sql`
-    SELECT COALESCE(SUM(score), 0) AS monthly_score
-    FROM game_history
-    WHERE player_id = ${playerId}
-      AND created_at >= date_trunc('month', NOW() AT TIME ZONE 'UTC')
-  `);
   const monthlyScore = Number((monthlyRow.rows[0] as any)?.monthly_score ?? 0);
-
-  // Stats by game mode
-  const modeRows = await db.execute(sql`
-    SELECT
-      mode,
-      COUNT(*)                                      AS games,
-      COALESCE(SUM(score), 0)                       AS total_score,
-      COALESCE(MAX(score), 0)                       AS best_score,
-      SUM(CASE WHEN won THEN 1 ELSE 0 END)          AS wins
-    FROM game_history
-    WHERE player_id = ${playerId}
-    GROUP BY mode
-  `);
 
   const modeStats: Record<string, any> = {};
   for (const row of modeRows.rows as any[]) {
@@ -327,6 +333,15 @@ router.get("/profile/:playerId", async (req, res) => {
       wins: Number(row.wins),
     };
   }
+
+  const recentGames = (recentRows.rows as any[]).map(r => ({
+    id: r.id,
+    score: Number(r.score),
+    letter: r.letter,
+    mode: r.mode,
+    won: r.won,
+    createdAt: r.created_at,
+  }));
 
   res.json({
     playerId: ps.playerId,
@@ -342,6 +357,7 @@ router.get("/profile/:playerId", async (req, res) => {
     monthlyScore,
     title: getTitle(globalRank),
     modeStats,
+    recentGames,
   });
 });
 

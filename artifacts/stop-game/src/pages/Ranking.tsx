@@ -168,6 +168,7 @@ export default function Ranking() {
   });
   const { player } = usePlayer();
   const { t, lang } = useT();
+  const [, setLocation] = useLocation();
   const isLoggedInPlayer = !!(player && player.loginMethod !== "guest");
   // Always fetch the current player's own stats (works even if outside top 100)
   const { data: myStats } = useGetPlayerStats(
@@ -318,6 +319,18 @@ export default function Ranking() {
               <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-400 shadow-[0_0_4px_#4ade80]" />
               {onlinePlayers.length} jugador{onlinePlayers.length !== 1 ? "es" : ""} online ahora
             </p>
+          )}
+          {isLoggedInPlayer && player && (
+            <button
+              onClick={() => setLocation(`/player/${encodeURIComponent(player.id)}`)}
+              className="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold transition-all hover:scale-105"
+              style={{ background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.15)", color: "rgba(255,255,255,0.7)" }}
+            >
+              <div className="w-5 h-5 rounded-full flex items-center justify-center text-white text-[10px] font-black" style={{ backgroundColor: player.avatarColor || "#e53e3e" }}>
+                {player.name.charAt(0).toUpperCase()}
+              </div>
+              Mi Perfil
+            </button>
           )}
         </div>
 
