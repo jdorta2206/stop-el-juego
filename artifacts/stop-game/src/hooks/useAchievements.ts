@@ -1,4 +1,5 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
+import { getApiUrl } from "@/lib/utils";
 
 const STATS_KEY = "stop_achievement_stats_v1";
 const UNLOCKED_KEY = "stop_achievements_unlocked_v1";
@@ -68,13 +69,9 @@ export const ACHIEVEMENTS: AchievementDef[] = [
 
 function defaultStats(): AchievementStats {
   return {
-    totalWins: 0,
-    totalGames: 0,
-    maxCombo: 0,
-    wonSpeedRound: false,
-    wonChaosRound: false,
-    validWordsRecord: 0,
-    xpTotal: 0,
+    totalWins: 0, totalGames: 0, maxCombo: 0,
+    wonSpeedRound: false, wonChaosRound: false,
+    validWordsRecord: 0, xpTotal: 0,
   };
 }
 
@@ -100,10 +97,47 @@ function saveUnlocked(unlocked: Set<string>) {
   try { localStorage.setItem(UNLOCKED_KEY, JSON.stringify([...unlocked])); } catch {}
 }
 
-export function useAchievements() {
+async function syncFromServer(playerId: string): Promise<string[]> {
+  try {
+    const r = await fetch(`${getApiUrl()}/api/ranking/progress/${playerId}`);
+    if (!r.ok) return [];
+    const data = await r.json();
+    return Array.isArray(data.achievements) ? data.achievements : [];
+  } catch { return []; }
+}
+
+async function saveToServer(playerId: string, achievements: string[]) {
+  try {
+    await fetch(`${getApiUrl()}/api/ranking/progress/${playerId}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ achievements }),
+    });
+  } catch {}
+}
+
+export function useAchievements(playerId?: string) {
   const [stats, setStats] = useState<AchievementStats>(loadStats);
   const [unlocked, setUnlocked] = useState<Set<string>>(loadUnlocked);
   const [newlyUnlocked, setNewlyUnlocked] = useState<AchievementDef | null>(null);
+  const syncedRef = useRef(false);
+
+  // ── Sync from server on mount (server wins if it has more) ──────────────
+  useEffect(() => {
+    if (!playerId || syncedRef.current) return;
+    syncedRef.current = true;
+    syncFromServer(playerId).then(serverIds => {
+      if (serverIds.length === 0) return;
+      setUnlocked(prev => {
+        const merged = new Set([...prev, ...serverIds]);
+        if (merged.size !== prev.size) {
+          saveUnlocked(merged);
+          return merged;
+        }
+        return prev;
+      });
+    });
+  }, [playerId]);
 
   const afterRound = useCallback((result: RoundResult) => {
     const current = loadStats();
@@ -132,8 +166,10 @@ export function useAchievements() {
       saveUnlocked(newUnlocked);
       setUnlocked(newUnlocked);
       setNewlyUnlocked(justUnlocked);
+      // Persist new achievements to server
+      if (playerId) saveToServer(playerId, [...newUnlocked]);
     }
-  }, []);
+  }, [playerId]);
 
   const clearNewlyUnlocked = useCallback(() => setNewlyUnlocked(null), []);
 

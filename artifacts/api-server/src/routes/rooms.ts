@@ -9,6 +9,26 @@ const router: IRouter = Router();
 
 const ALPHABET_ES = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").filter(l => !["Q","X"].includes(l));
 
+// ── SSE listeners: roomCode → set of response objects ──────────────────────
+type SseClient = { res: import("express").Response; playerId: string };
+const sseClients = new Map<string, Set<SseClient>>();
+
+function broadcastRoom(code: string, roomPayload: object) {
+  const clients = sseClients.get(code);
+  if (!clients || clients.size === 0) return;
+  const data = `data: ${JSON.stringify(roomPayload)}\n\n`;
+  for (const client of [...clients]) {
+    try { client.res.write(data); } catch { clients.delete(client); }
+  }
+}
+
+// Format room AND broadcast to SSE clients at the same time
+function broadcastAndFormat(room: any) {
+  const formatted = formatRoom(room);
+  broadcastRoom(formatted.roomCode as string, formatted);
+  return formatted;
+}
+
 // ── In-memory stores (ephemeral, no DB needed) ─────────────────────────────
 type Reaction = { id: string; emoji: string; playerName: string; ts: number };
 const roomReactions = new Map<string, Reaction[]>();
@@ -440,6 +460,38 @@ router.post("/:roomCode/use-card", async (req, res) => {
   res.json({ ok: true, card, room: formatRoom(updated) });
 });
 
+// GET /rooms/:roomCode/events — SSE stream for real-time room state
+router.get("/:roomCode/events", async (req, res) => {
+  const code = req.params.roomCode.toUpperCase();
+  const playerId = (req.query["playerId"] as string) || "";
+
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
+  res.flushHeaders?.();
+
+  // Send current state immediately
+  const [roomRow] = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, code)).limit(1);
+  if (roomRow) {
+    res.write(`data: ${JSON.stringify(formatRoom(roomRow))}\n\n`);
+  }
+
+  const client: SseClient = { res, playerId };
+  if (!sseClients.has(code)) sseClients.set(code, new Set());
+  sseClients.get(code)!.add(client);
+
+  // Heartbeat every 25s to keep connection alive
+  const heartbeat = setInterval(() => {
+    try { res.write(": heartbeat\n\n"); } catch { clearInterval(heartbeat); }
+  }, 25_000);
+
+  req.on("close", () => {
+    clearInterval(heartbeat);
+    sseClients.get(code)?.delete(client);
+  });
+});
+
 // POST /rooms/:roomCode/phrase — quick phrase (social chat)
 router.post("/:roomCode/phrase", (req, res) => {
   const code = req.params.roomCode.toUpperCase();
@@ -485,7 +537,7 @@ router.post("/:roomCode/stop", async (req, res) => {
     .where(eq(roomsTable.roomCode, roomCode.toUpperCase()))
     .returning();
 
-  res.json(formatRoom(updated));
+  res.json(broadcastAndFormat(updated));
 });
 
 // POST /rooms/:roomCode/results — each player submits their answers after STOP
@@ -622,7 +674,7 @@ router.post("/:roomCode/results", async (req, res) => {
     .where(eq(roomsTable.roomCode, roomCode.toUpperCase()))
     .returning();
 
-  res.json(formatRoom(updated));
+  res.json(broadcastAndFormat(updated));
 });
 
 // POST /rooms/:roomCode/bluff-vote — opponent casts "lie" or "real" for a bluffed category
@@ -748,7 +800,7 @@ router.post("/:roomCode/resolve-bluffs", async (req, res) => {
     .where(eq(roomsTable.roomCode, roomCode.toUpperCase()))
     .returning();
 
-  res.json(formatRoom(updated));
+  res.json(broadcastAndFormat(updated));
 });
 
 export default router;
