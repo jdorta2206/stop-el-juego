@@ -63,6 +63,7 @@ export default function Tournament() {
   const [error, setError] = useState("");
   const [invitedIds, setInvitedIds] = useState<Set<string>>(new Set());
   const redirectedMatchRef = useRef<string | null>(null);
+  const resumeTournamentRef = useRef<string | null>(null);
 
   const poll = useCallback(async () => {
     if (!tournament || !player) return;
@@ -92,6 +93,21 @@ export default function Tournament() {
     const id = setInterval(poll, 2500);
     return () => clearInterval(id);
   }, [poll, tournament]);
+
+  useEffect(() => {
+    const onFocus = () => {
+      if (resumeTournamentRef.current) {
+        setView("lobby");
+        resumeTournamentRef.current = null;
+      }
+    };
+    window.addEventListener("focus", onFocus);
+    window.addEventListener("visibilitychange", onFocus);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      window.removeEventListener("visibilitychange", onFocus);
+    };
+  }, []);
 
   const createTournament = async () => {
     if (!player || !tName.trim()) return;
@@ -185,6 +201,7 @@ export default function Tournament() {
     const text = getInviteText();
     const url = getInviteUrl();
     if (!text || !url) return;
+    resumeTournamentRef.current = tournament?.code ?? null;
     if (navigator.share) {
       try {
         await navigator.share({ title: "STOP - Torneo", text, url });
@@ -417,7 +434,10 @@ export default function Tournament() {
             </button>
             <div className="mt-3 flex flex-wrap gap-2 justify-center">
               <button
-                onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(getInviteText())}`, "_blank")}
+                  onClick={() => {
+                    resumeTournamentRef.current = tournament.code;
+                    window.open(`https://wa.me/?text=${encodeURIComponent(getInviteText())}`, "_blank");
+                  }}
                 className="px-3 py-2 rounded-full text-xs font-black text-white flex items-center gap-1.5"
                 style={{ background: "#25D366" }}
               >
@@ -425,7 +445,10 @@ export default function Tournament() {
                 WhatsApp
               </button>
               <button
-                onClick={() => window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(getInviteText())}`, "_blank")}
+                  onClick={() => {
+                    resumeTournamentRef.current = tournament.code;
+                    window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(getInviteText())}`, "_blank");
+                  }}
                 className="px-3 py-2 rounded-full text-xs font-black text-white flex items-center gap-1.5"
                 style={{ background: "#1DA1F2" }}
               >
