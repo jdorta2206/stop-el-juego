@@ -6,7 +6,7 @@ import { Layout } from "@/components/Layout";
 import { Button, Card, Input, Progress } from "@/components/ui";
 import { useGetRoom, useSubmitRoomResults } from "@workspace/api-client-react";
 import { usePlayer } from "@/hooks/use-player";
-import { Share2, Play, ArrowLeft, Trophy, CheckCircle2, Circle, Volume2, VolumeX } from "lucide-react";
+import { Share2, Play, ArrowLeft, Trophy, CheckCircle2, Circle, Volume2, VolumeX, Layers } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { CATEGORIES_ES } from "@/lib/utils";
 import confetti from "canvas-confetti";
@@ -15,6 +15,8 @@ import { ChallengeNotification } from "@/components/ChallengeNotification";
 import { usePresence } from "@/lib/usePresence";
 import { Roulette } from "@/components/Roulette";
 import { useTicker } from "@/hooks/useTicker";
+import { ShareResultsModal } from "@/components/ShareResultsModal";
+import { getApiUrl } from "@/lib/utils";
 
 const ROUND_TIME = 60;
 
@@ -49,6 +51,14 @@ type LocalPhase = "lobby" | "spinning" | "playing" | "freeze" | "submitted" | "b
 export default function Room() {
   const { id: roomCode } = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
+
+  // Tournament context (optional — from query params)
+  const tournamentCtx = (() => {
+    const params = new URLSearchParams(window.location.search);
+    const t = params.get("torneo");
+    const m = params.get("match");
+    return t && m ? { code: t, matchId: m } : null;
+  })();
   const { player } = usePlayer();
 
   const [phase, setPhase] = useState<LocalPhase>("lobby");
@@ -59,6 +69,29 @@ export default function Room() {
   const [isStopping, setIsStopping] = useState(false);
   const [muted, setMuted] = useState(false);
   const [revealedCount, setRevealedCount] = useState(0);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [floatingReactions, setFloatingReactions] = useState<Array<{ id: string; emoji: string; playerName: string }>>([]);
+  const seenReactionIds = useRef<Set<string>>(new Set());
+  const [categoryPack, setCategoryPack] = useState<"standard" | "crazy" | "mix">("standard");
+  const [roundCategories, setRoundCategories] = useState<string[]>(CATEGORIES_ES);
+  const CRAZY_CATEGORIES_ES = [
+    "Excusa para llegar tarde", "Película que finges haber visto", "Animal que querrías de mascota",
+    "Cosa que no debes decir en una cita", "Superhéroe inventado", "Profesión del futuro",
+    "Cosa que encuentras bajo el sofá", "Deporte que nunca se inventó",
+  ];
+  const computeCategories = useCallback((pack: "standard" | "crazy" | "mix", letter: string, round: number) => {
+    if (pack === "crazy") return CRAZY_CATEGORIES_ES;
+    if (pack === "mix") {
+      const seed = letter.charCodeAt(0) * 31 + round * 7;
+      const mixed = [...CATEGORIES_ES];
+      const idx = seed % mixed.length;
+      const crazyIdx = seed % CRAZY_CATEGORIES_ES.length;
+      mixed[idx] = CRAZY_CATEGORIES_ES[crazyIdx];
+      return mixed;
+    }
+    return CATEGORIES_ES;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Multiplayer bluff state
   const [bluffedCategories, setBluffedCategories] = useState<Set<string>>(new Set());
@@ -150,6 +183,57 @@ export default function Room() {
   // Keep phase and roomCode refs in sync so leaveRoom always has the latest values
   useEffect(() => { phaseRef.current = phase; }, [phase]);
   useEffect(() => { roomCodeRef.current = roomCode || ""; }, [roomCode]);
+
+  // Sync categoryPack from room data
+  useEffect(() => {
+    const pack = (room as any)?.categoryPack;
+    if (pack && ["standard", "crazy", "mix"].includes(pack)) setCategoryPack(pack);
+  }, [(room as any)?.categoryPack]);
+
+  // Recompute categories when round starts
+  useEffect(() => {
+    if (phase === "playing" && currentLetter && currentRound) {
+      setRoundCategories(computeCategories(categoryPack, currentLetter, currentRound));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, currentLetter, currentRound]);
+
+  // Process incoming reactions from room polling
+  useEffect(() => {
+    const reactions: Array<{ id: string; emoji: string; playerName: string }> = (room as any)?.reactions ?? [];
+    const newOnes = reactions.filter(r => !seenReactionIds.current.has(r.id));
+    if (newOnes.length === 0) return;
+    newOnes.forEach(r => seenReactionIds.current.add(r.id));
+    setFloatingReactions(prev => [...prev, ...newOnes]);
+    newOnes.forEach(r => {
+      setTimeout(() => {
+        setFloatingReactions(prev => prev.filter(x => x.id !== r.id));
+      }, 3200);
+    });
+  }, [(room as any)?.reactions]);
+
+  const sendReaction = useCallback(async (emoji: string) => {
+    if (!player || !roomCode) return;
+    try {
+      await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/react`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ emoji, playerName: player.name }),
+      });
+    } catch {}
+  }, [player, roomCode]);
+
+  const saveCategoryPack = useCallback(async (pack: "standard" | "crazy" | "mix") => {
+    if (!player || !roomCode) return;
+    setCategoryPack(pack);
+    try {
+      await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/category-pack`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hostId: player.id, pack }),
+      });
+    } catch {}
+  }, [player, roomCode]);
 
   const stopAllTimers = useCallback(() => {
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
@@ -276,6 +360,15 @@ export default function Room() {
         confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
       }
       queryClient.invalidateQueries({ queryKey: ["/api/ranking/scores"] });
+      // Tournament: report match result (host only to avoid duplicate calls)
+      if (tournamentCtx && player && sortedPlayers.length > 0 && room?.hostId === player.id) {
+        const winner = sortedPlayers[0] as any;
+        fetch(`${getApiUrl()}/api/tournaments/${tournamentCtx.code}/match-result`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ matchId: tournamentCtx.matchId, winnerId: winner.playerId, winnerName: winner.playerName }),
+        }).catch(() => {});
+      }
       return;
     }
 
@@ -420,6 +513,44 @@ export default function Room() {
         )}
       </AnimatePresence>
 
+      {/* Floating emoji reactions overlay */}
+      <div className="fixed bottom-24 left-0 w-full pointer-events-none z-50 flex justify-center">
+        <AnimatePresence>
+          {floatingReactions.map(r => (
+            <motion.div
+              key={r.id}
+              initial={{ opacity: 0, y: 0, x: (Math.random() - 0.5) * 120, scale: 0.5 }}
+              animate={{ opacity: 1, y: -200, scale: 1.4 }}
+              exit={{ opacity: 0, scale: 0.8 }}
+              transition={{ duration: 3, ease: "easeOut" }}
+              className="absolute flex flex-col items-center gap-0.5 pointer-events-none"
+            >
+              <span className="text-4xl drop-shadow-lg">{r.emoji}</span>
+              <span className="text-[10px] font-bold text-white/70 bg-black/40 px-1.5 py-0.5 rounded-full">{r.playerName}</span>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
+
+      {/* Share results modal */}
+      {showShareModal && currentLetter && (
+        <ShareResultsModal
+          open={showShareModal}
+          onClose={() => setShowShareModal(false)}
+          letter={currentLetter}
+          playerScore={players.find((p: any) => p.playerId === player?.id)?.score ?? 0}
+          aiScore={0}
+          categories={[]}
+          results={{}}
+          t={{ shareResults: "Compartir resultado", shareText: "", shareScore: "", shareChallenge: "", you: "Tú:", ai: "IA:", points: "pts", empty: "—" }}
+          multiplayerData={{
+            players: players.map((p: any) => ({ playerId: p.playerId, playerName: p.playerName, score: p.score ?? 0, avatarColor: p.avatarColor })),
+            myPlayerId: player?.id ?? "",
+            letter: currentLetter,
+          }}
+        />
+      )}
+
       <AnimatePresence mode="wait">
 
         {/* ── LOBBY ── */}
@@ -495,6 +626,38 @@ export default function Room() {
               </div>
             </div>
 
+            {/* Category pack selector — host only */}
+            <Card className="p-4 mb-3">
+              <div className="flex items-center gap-2 mb-3">
+                <Layers className="w-4 h-4 text-secondary" />
+                <span className="text-sm font-black text-white/70">Categorías</span>
+                {!isHost && <span className="text-xs text-white/30 ml-auto">El anfitrión elige</span>}
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                {([
+                  { id: "standard", label: "📚 Clásicas", desc: "Las de siempre" },
+                  { id: "crazy", label: "🌀 Locas", desc: "Muy originales" },
+                  { id: "mix", label: "🎲 Mixtas", desc: "Sorpresa" },
+                ] as const).map(opt => (
+                  <button
+                    key={opt.id}
+                    disabled={!isHost}
+                    onClick={() => isHost && saveCategoryPack(opt.id)}
+                    className="flex flex-col items-center gap-1 py-3 px-2 rounded-xl text-center transition-all"
+                    style={{
+                      background: categoryPack === opt.id ? "rgba(181,48,26,0.25)" : "rgba(255,255,255,0.05)",
+                      border: `2px solid ${categoryPack === opt.id ? "rgba(181,48,26,0.7)" : "rgba(255,255,255,0.08)"}`,
+                      opacity: !isHost ? 0.6 : 1,
+                      cursor: isHost ? "pointer" : "default",
+                    }}
+                  >
+                    <span className="text-sm font-black text-white">{opt.label}</span>
+                    <span className="text-[10px] text-white/40">{opt.desc}</span>
+                  </button>
+                ))}
+              </div>
+            </Card>
+
             {/* Invite panel — invite friends directly to this room */}
             {player && player.loginMethod !== "guest" && roomCode && (
               <div className="mb-5">
@@ -563,6 +726,62 @@ export default function Room() {
               ))}
             </div>
 
+            {/* Power card — shown if player has one */}
+            {(() => {
+              const me = players.find((p: any) => p.playerId === player?.id) as any;
+              const cardId = me?.powerCard;
+              const cardUsed = me?.powerCardUsed;
+              if (!cardId) return null;
+              const CARD_META: Record<string, { emoji: string; name: string; desc: string; color: string }> = {
+                lightning:  { emoji: "⚡", name: "Rayo",        desc: "+15s a tu tiempo",        color: "#facc15" },
+                shield:     { emoji: "🛡️", name: "Escudo",      desc: "Inmune a votos de mentira", color: "#4ade80" },
+                sabotage:   { emoji: "❌", name: "Sabotaje",    desc: "Roba 10pts al líder",     color: "#ef4444" },
+                steal:      { emoji: "🔄", name: "Hurto",       desc: "Roba 10pts al líder",     color: "#22d3ee" },
+                double_or_nothing: { emoji: "🎯", name: "Doble o Nada", desc: "×2 a tu score",   color: "#f97316" },
+              };
+              const card = CARD_META[cardId] ?? { emoji: "🃏", name: cardId, desc: "", color: "#a855f7" };
+              return (
+                <motion.div
+                  initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+                  className="flex items-center gap-3 p-2.5 rounded-xl mb-2"
+                  style={{
+                    background: cardUsed ? "rgba(255,255,255,0.03)" : `${card.color}18`,
+                    border: `1.5px solid ${cardUsed ? "rgba(255,255,255,0.08)" : `${card.color}60`}`,
+                    opacity: cardUsed ? 0.5 : 1,
+                  }}
+                >
+                  <span className="text-2xl flex-shrink-0">{card.emoji}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-black" style={{ color: card.color }}>{card.name}</p>
+                    <p className="text-[10px] text-white/40">{card.desc}</p>
+                  </div>
+                  {!cardUsed && (
+                    <motion.button
+                      whileTap={{ scale: 0.9 }}
+                      onClick={async () => {
+                        if (!player || !roomCode) return;
+                        try {
+                          const r = await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/use-card`, {
+                            method: "POST", headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ playerId: player.id }),
+                          });
+                          const data = await r.json();
+                          if (data.ok) {
+                            if (cardId === "lightning") setTimeLeft(t => Math.min(t + 15, ROUND_TIME + 15));
+                          }
+                        } catch {}
+                      }}
+                      className="px-3 py-1 rounded-lg text-xs font-black flex-shrink-0"
+                      style={{ background: card.color, color: "#000" }}
+                    >
+                      Usar
+                    </motion.button>
+                  )}
+                  {cardUsed && <span className="text-[10px] text-white/30 font-bold flex-shrink-0">Usada</span>}
+                </motion.div>
+              );
+            })()}
+
             {/* Bluff hint */}
             <div className="flex items-center justify-between mb-2 px-1">
               <p className="text-xs text-white/30">🎭 Activa hasta 2 respuestas como MENTIRA</p>
@@ -573,7 +792,7 @@ export default function Room() {
 
             {/* Inputs */}
             <div className="space-y-2 flex-1 overflow-y-auto pb-28">
-              {CATEGORIES_ES.map(cat => {
+              {roundCategories.map(cat => {
                 const isBluffed = bluffedCategories.has(cat);
                 const canBluff = !isBluffed && bluffedCategories.size >= 2;
                 return (
@@ -608,9 +827,21 @@ export default function Room() {
               })}
             </div>
 
-            {/* STOP button */}
-            <div className="fixed bottom-4 left-0 w-full px-4 z-20">
-              <div className="max-w-2xl mx-auto">
+            {/* Emoji reactions bar + STOP button */}
+            <div className="fixed bottom-4 left-0 w-full px-4 z-20 flex flex-col gap-2">
+              <div className="max-w-2xl mx-auto w-full flex items-center justify-center gap-2">
+                {["🔥", "❤️", "😂", "👑", "🎯", "😤", "💪", "🤯"].map(emoji => (
+                  <motion.button
+                    key={emoji}
+                    whileTap={{ scale: 0.75 }}
+                    onClick={() => sendReaction(emoji)}
+                    className="w-9 h-9 flex items-center justify-center rounded-full text-xl bg-black/50 border border-white/15 backdrop-blur-sm hover:bg-white/10 active:scale-75 transition-all"
+                  >
+                    {emoji}
+                  </motion.button>
+                ))}
+              </div>
+              <div className="max-w-2xl mx-auto w-full">
                 <Button variant="destructive" size="xl"
                   className="w-full py-5 rounded-full text-3xl shadow-2xl shadow-red-900/50 border-4 border-white/20"
                   onClick={handleStop} isLoading={isStopping}>
@@ -649,7 +880,7 @@ export default function Room() {
             <Card className="p-4 max-w-sm w-full bg-black/40 border-white/10 max-h-60 overflow-y-auto">
               <p className="text-xs font-bold text-white/40 uppercase tracking-wider mb-3 text-center">Tus respuestas</p>
               <div className="space-y-1.5">
-                {CATEGORIES_ES.map(cat => (
+                {roundCategories.map(cat => (
                   <div key={cat} className="flex items-center justify-between text-sm">
                     <span className="text-secondary font-bold uppercase text-xs">{cat}</span>
                     <span className={`font-bold ${responses[cat]?.trim() ? "text-white" : "text-white/20"}`}>
@@ -1008,6 +1239,31 @@ export default function Room() {
               })}
             </div>
 
+            {/* Share result button */}
+            <motion.button
+              whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
+              onClick={() => setShowShareModal(true)}
+              className="w-full flex items-center justify-center gap-3 py-4 rounded-2xl font-black text-lg"
+              style={{
+                background: "linear-gradient(135deg, rgba(249,168,37,0.25), rgba(181,48,26,0.2))",
+                border: "2px solid rgba(249,168,37,0.5)",
+                color: "#f9a825",
+              }}
+            >
+              <Share2 className="w-5 h-5" />
+              Compartir resultado 🎮
+            </motion.button>
+
+            {tournamentCtx && (
+              <motion.button
+                whileTap={{ scale: 0.97 }}
+                onClick={() => setLocation("/torneo")}
+                className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-black text-sm"
+                style={{ background: "linear-gradient(135deg, rgba(245,158,11,0.2), rgba(220,38,38,0.2))", border: "1.5px solid rgba(245,158,11,0.4)", color: "#f59e0b" }}
+              >
+                🏆 Ver bracket del torneo
+              </motion.button>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <Button variant="secondary" size="lg" onClick={() => setLocation("/ranking")}>
                 <Trophy className="w-4 h-4 mr-2" /> Ranking

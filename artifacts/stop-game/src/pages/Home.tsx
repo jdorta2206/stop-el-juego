@@ -343,57 +343,30 @@ export default function Home() {
             </motion.div>
           </Link>
 
-          <div className="grid grid-cols-3 gap-3">
-            <Link href="/multiplayer">
-              <motion.div
-                whileHover={{ scale: 1.03, y: -2 }}
-                whileTap={{ scale: 0.97 }}
-                className="flex flex-col items-center gap-2 py-5 rounded-2xl font-bold shadow-lg cursor-pointer"
-                style={{
-                  background: "rgba(0,0,0,0.25)",
-                  border: "2px solid rgba(255,255,255,0.15)",
-                  color: "white",
-                  backdropFilter: "blur(8px)",
-                }}
-              >
-                <Users className="w-8 h-8 text-[#f9a825]" />
-                <span className="text-xs font-black">{t.home.multiplayer}</span>
-              </motion.div>
-            </Link>
-
-            <Link href="/ranking">
-              <motion.div
-                whileHover={{ scale: 1.03, y: -2 }}
-                whileTap={{ scale: 0.97 }}
-                className="flex flex-col items-center gap-2 py-5 rounded-2xl font-bold shadow-lg cursor-pointer"
-                style={{
-                  background: "rgba(0,0,0,0.25)",
-                  border: "2px solid rgba(255,255,255,0.15)",
-                  color: "white",
-                  backdropFilter: "blur(8px)",
-                }}
-              >
-                <Trophy className="w-8 h-8 text-[#f9a825]" />
-                <span className="text-xs font-black">{t.home.ranking}</span>
-              </motion.div>
-            </Link>
-
-            <Link href="/como-jugar">
-              <motion.div
-                whileHover={{ scale: 1.03, y: -2 }}
-                whileTap={{ scale: 0.97 }}
-                className="flex flex-col items-center gap-2 py-5 rounded-2xl font-bold shadow-lg cursor-pointer"
-                style={{
-                  background: "rgba(0,0,0,0.25)",
-                  border: "2px solid rgba(255,255,255,0.15)",
-                  color: "white",
-                  backdropFilter: "blur(8px)",
-                }}
-              >
-                <BookOpen className="w-8 h-8 text-[#f9a825]" />
-                <span className="text-xs font-black">{t.home.howToPlay}</span>
-              </motion.div>
-            </Link>
+          <div className="grid grid-cols-2 gap-3">
+            {[
+              { href: "/multiplayer", icon: <Users className="w-8 h-8 text-[#f9a825]" />, label: t.home.multiplayer },
+              { href: "/torneo",      icon: <Trophy className="w-8 h-8 text-amber-400" />, label: "Torneo", highlight: true },
+              { href: "/ranking",    icon: <Crown className="w-8 h-8 text-[#f9a825]" />, label: t.home.ranking },
+              { href: "/como-jugar", icon: <BookOpen className="w-8 h-8 text-[#f9a825]" />, label: t.home.howToPlay },
+            ].map(item => (
+              <Link key={item.href} href={item.href}>
+                <motion.div
+                  whileHover={{ scale: 1.03, y: -2 }}
+                  whileTap={{ scale: 0.97 }}
+                  className="flex flex-col items-center gap-2 py-5 rounded-2xl font-bold shadow-lg cursor-pointer"
+                  style={{
+                    background: item.highlight ? "linear-gradient(135deg, rgba(245,158,11,0.18), rgba(220,38,38,0.12))" : "rgba(0,0,0,0.25)",
+                    border: item.highlight ? "2px solid rgba(245,158,11,0.45)" : "2px solid rgba(255,255,255,0.15)",
+                    color: "white",
+                    backdropFilter: "blur(8px)",
+                  }}
+                >
+                  {item.icon}
+                  <span className="text-xs font-black">{item.label}</span>
+                </motion.div>
+              </Link>
+            ))}
           </div>
         </motion.div>
 

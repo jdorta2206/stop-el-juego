@@ -2,6 +2,12 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Share2, X, Copy, Check } from "lucide-react";
 import { useState } from "react";
 
+interface MultiplayerShareData {
+  players: Array<{ playerId: string; playerName: string; score: number; avatarColor?: string }>;
+  myPlayerId: string;
+  letter: string;
+}
+
 interface ShareResultsModalProps {
   open: boolean;
   onClose: () => void;
@@ -23,6 +29,7 @@ interface ShareResultsModalProps {
   gameUrl?: string;
   bluffResults?: Array<{ category: string; caught: boolean; scoreChange: number }>;
   aiJudged?: { wasCorrect: boolean; category: string } | null;
+  multiplayerData?: MultiplayerShareData;
 }
 
 function buildWordleGrid(
@@ -49,12 +56,35 @@ export function ShareResultsModal({
   gameUrl,
   bluffResults,
   aiJudged,
+  multiplayerData,
 }: ShareResultsModalProps) {
   const [copied, setCopied] = useState(false);
 
-  const won = playerScore > aiScore;
   const url = gameUrl || window.location.origin;
-  const wordleGrid = buildWordleGrid(categories, results);
+
+  // ── Multiplayer mode ────────────────────────────────────────────────────────
+  const mpMessage = (() => {
+    if (!multiplayerData) return null;
+    const sorted = [...multiplayerData.players].sort((a, b) => b.score - a.score);
+    const myRank = sorted.findIndex(p => p.playerId === multiplayerData.myPlayerId) + 1;
+    const myScore = sorted.find(p => p.playerId === multiplayerData.myPlayerId)?.score ?? 0;
+    const total = sorted.length;
+    const won = myRank === 1;
+    const podium = ["🥇", "🥈", "🥉"];
+    const rankEmoji = podium[myRank - 1] ?? `#${myRank}`;
+    const scoreboard = sorted.map((p, i) => `${podium[i] ?? `${i+1}.`} ${p.playerName} — ${p.score}pts`).join("\n");
+    const headline = won
+      ? `👑 ¡Gané! Letra "${multiplayerData.letter}" · ${myScore}pts entre ${total} jugadores`
+      : `${rankEmoji} Quedé ${myRank}º de ${total} · Letra "${multiplayerData.letter}" · ${myScore}pts`;
+    return [headline, scoreboard, "¿Te atreves? 👇", `🎮 stop-el-juego.replit.app`].join("\n");
+  })();
+
+  // ── Solo mode ───────────────────────────────────────────────────────────────
+  const won = multiplayerData
+    ? ([...multiplayerData.players].sort((a, b) => b.score - a.score)[0]?.playerId === multiplayerData.myPlayerId)
+    : playerScore > aiScore;
+
+  const wordleGrid = multiplayerData ? "" : buildWordleGrid(categories, results);
 
   const validWords = categories
     .filter(cat => (results[cat]?.player?.score ?? 0) > 0)
@@ -79,19 +109,15 @@ export function ShareResultsModal({
     ? `🧠 Conseguí ${playerScore} pts con la letra "${letter}" y le gané a la IA${closeMatch ? ` (¡por solo ${diff} pts!)` : ""} 🏆`
     : `🤖 La IA me ganó por ${diff} pts con la letra "${letter}"… yo iba con ${playerScore} pts`;
 
-  const challengeLine = won
-    ? `¿Puedes superarme? 👇`
-    : `¿Tú puedes ganarle? 👇`;
+  const challengeLine = won ? `¿Puedes superarme? 👇` : `¿Tú puedes ganarle? 👇`;
 
-  const shareMessage = [
+  const shareMessage = mpMessage ?? [
     viralLine,
     wordleGrid,
     bluffLine,
     challengeLine,
     `🎮 El juego que nadie supera → ${url}`,
-  ]
-    .filter(Boolean)
-    .join("\n");
+  ].filter(Boolean).join("\n");
 
   const handleCopy = async () => {
     try {
@@ -142,9 +168,9 @@ export function ShareResultsModal({
               </button>
             </div>
 
-            {/* Wordle grid preview */}
+            {/* Result preview */}
             <div
-              className="mx-4 mb-4 rounded-2xl p-4 text-center"
+              className="mx-4 mb-4 rounded-2xl p-4"
               style={{
                 background: won
                   ? "linear-gradient(135deg, rgba(34,197,94,0.15), rgba(21,128,61,0.1))"
@@ -152,47 +178,70 @@ export function ShareResultsModal({
                 border: `1px solid ${won ? "rgba(34,197,94,0.3)" : "rgba(181,48,26,0.3)"}`,
               }}
             >
-              {/* Letter + score header */}
-              <div className="flex items-center gap-3 mb-3">
-                <div
-                  className="w-12 h-12 rounded-xl flex items-center justify-center font-black text-2xl flex-shrink-0"
-                  style={{ background: "hsl(6 90% 55%)", color: "white" }}
-                >
-                  {letter}
-                </div>
-                <div className="text-left">
-                  <p className="text-white font-black text-base">
-                    {won ? "🏆 ¡Ganaste!" : "💪 ¡Completado!"}
-                  </p>
-                  <p className="text-white/60 text-xs">
-                    {t.you} {playerScore}pts · IA {aiScore}pts
-                  </p>
-                </div>
-              </div>
-
-              {/* Wordle emoji grid */}
-              <div className="flex flex-col items-center gap-1 my-2">
-                <p className="text-[2rem] tracking-wide leading-none">{wordleGrid}</p>
-                <div className="flex gap-4 mt-1 text-xs text-white/50">
-                  <span>🟩 10pts</span>
-                  <span>🟨 5pts</span>
-                  <span>⬛ 0pts</span>
-                </div>
-              </div>
-
-              {validWords.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 justify-center mt-2">
-                  {validWords.slice(0, 4).map((word, i) => (
-                    <span
-                      key={i}
-                      className="px-2 py-0.5 rounded-full text-xs font-bold"
-                      style={{ background: "rgba(249,168,37,0.2)", color: "#f9a825" }}
-                    >
-                      {word}
-                    </span>
-                  ))}
-                  {validWords.length > 4 && (
-                    <span className="text-white/40 text-xs self-center">+{validWords.length - 4}</span>
+              {multiplayerData ? (
+                /* ── Multiplayer scoreboard ── */
+                (() => {
+                  const sorted = [...multiplayerData.players].sort((a, b) => b.score - a.score);
+                  const podium = ["🥇", "🥈", "🥉"];
+                  const myRank = sorted.findIndex(p => p.playerId === multiplayerData.myPlayerId) + 1;
+                  return (
+                    <div>
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="w-12 h-12 rounded-xl flex items-center justify-center font-black text-2xl flex-shrink-0"
+                          style={{ background: "hsl(6 90% 55%)", color: "white" }}>
+                          {multiplayerData.letter}
+                        </div>
+                        <div>
+                          <p className="text-white font-black text-base">
+                            {won ? "👑 ¡Ganaste la partida!" : `${podium[myRank - 1] ?? `#${myRank}`} Posición ${myRank}ª`}
+                          </p>
+                          <p className="text-white/50 text-xs">{sorted.length} jugadores · Multijugador</p>
+                        </div>
+                      </div>
+                      <div className="space-y-1.5">
+                        {sorted.slice(0, 5).map((p, i) => {
+                          const isMe = p.playerId === multiplayerData.myPlayerId;
+                          return (
+                            <div key={p.playerId} className={`flex items-center gap-2 px-2 py-1 rounded-lg ${isMe ? "bg-secondary/20" : ""}`}>
+                              <span className="text-sm w-5 text-center">{podium[i] ?? `${i + 1}.`}</span>
+                              <span className={`flex-1 text-sm font-bold truncate ${isMe ? "text-secondary" : "text-white"}`}>{p.playerName}</span>
+                              <span className="text-xs font-black text-white/60">{p.score}pts</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()
+              ) : (
+                /* ── Solo mode wordle grid ── */
+                <div className="text-center">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-12 h-12 rounded-xl flex items-center justify-center font-black text-2xl flex-shrink-0"
+                      style={{ background: "hsl(6 90% 55%)", color: "white" }}>
+                      {letter}
+                    </div>
+                    <div className="text-left">
+                      <p className="text-white font-black text-base">{won ? "🏆 ¡Ganaste!" : "💪 ¡Completado!"}</p>
+                      <p className="text-white/60 text-xs">{t.you} {playerScore}pts · IA {aiScore}pts</p>
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-center gap-1 my-2">
+                    <p className="text-[2rem] tracking-wide leading-none">{wordleGrid}</p>
+                    <div className="flex gap-4 mt-1 text-xs text-white/50">
+                      <span>🟩 10pts</span><span>🟨 5pts</span><span>⬛ 0pts</span>
+                    </div>
+                  </div>
+                  {validWords.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 justify-center mt-2">
+                      {validWords.slice(0, 4).map((word, i) => (
+                        <span key={i} className="px-2 py-0.5 rounded-full text-xs font-bold"
+                          style={{ background: "rgba(249,168,37,0.2)", color: "#f9a825" }}>
+                          {word}
+                        </span>
+                      ))}
+                      {validWords.length > 4 && <span className="text-white/40 text-xs self-center">+{validWords.length - 4}</span>}
+                    </div>
                   )}
                 </div>
               )}

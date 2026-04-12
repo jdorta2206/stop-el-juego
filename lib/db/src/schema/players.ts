@@ -93,6 +93,25 @@ export const insertDailyResultSchema = createInsertSchema(dailyResultsTable).omi
 export type InsertDailyResult = z.infer<typeof insertDailyResultSchema>;
 export type DailyResult = typeof dailyResultsTable.$inferSelect;
 
+// ── Tournaments ───────────────────────────────────────────────────────────────
+export const tournamentsTable = pgTable("tournaments", {
+  id: serial("id").primaryKey(),
+  code: text("code").notNull().unique(),
+  hostId: text("host_id").notNull(),
+  hostName: text("host_name").notNull().default(""),
+  name: text("name").notNull(),
+  status: text("status").notNull().default("waiting"), // waiting | active | completed
+  size: integer("size").notNull().default(4), // 4 or 8
+  playersJson: text("players_json").notNull().default("[]"),
+  bracketJson: text("bracket_json"), // full bracket with rounds, matches, winners
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertTournamentSchema = createInsertSchema(tournamentsTable).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertTournament = z.infer<typeof insertTournamentSchema>;
+export type Tournament = typeof tournamentsTable.$inferSelect;
+
 // ── Push notification subscriptions ──────────────────────────────────────────
 export const pushSubscriptionsTable = pgTable("push_subscriptions", {
   id: serial("id").primaryKey(),
