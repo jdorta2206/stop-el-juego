@@ -9,6 +9,7 @@ import presenceRouter from "./presence";
 import friendsRouter from "./friends";
 import dailyRouter from "./daily";
 import notificationsRouter from "./notifications";
+import tournamentsRouter from "./tournaments";
 
 const router: IRouter = Router();
 
@@ -22,5 +23,6 @@ router.use("/presence", presenceRouter);
 router.use("/friends", friendsRouter);
 router.use("/daily", dailyRouter);
 router.use("/notifications", notificationsRouter);
+router.use("/tournaments", tournamentsRouter);
 
 export default router;

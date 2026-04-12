@@ -32,6 +32,11 @@ Full-stack STOP game (Tutti Frutti / Scattergories) web app built with React + V
 9. **Chaos Mode**: All crazy categories, 45s timer, guaranteed 2×XP
 10. **Cartas de Poder**: 6 power cards (Oracle🔮, Sabotaje❌, Doble-o-Nada🎯, Tránsfuga🔄, Rayo⚡, Escudo🛡️) drawn per round with dramatic card flip reveal animation
 11. **Mentir es Válido**: Social deception mechanic — players can bluff up to 2 answers per round; AI has 50% detection rate; AI also bluffs 1 answer per round; player judges AI's answer; bonus/penalty scoring system; full "EL JUICIO" reveal screen with animated sequence
+12. **Compartir resultado Multiplayer** (T001): ShareResultsModal extended with multiplayer scoreboard view; Wordle-like share text with rank, score, and player table
+13. **Emoji Reactions Multiplayer** (T002): POST /api/rooms/:code/react endpoint; floating animated reaction overlay during play; 8-emoji bar above STOP button; in-memory store (ephemeral)
+14. **Category Pack Selection** (T003): Host picks Clásicas/Locas/Mixtas in lobby; seeded deterministic category selection per round; POST /api/rooms/:code/category-pack endpoint
+15. **Cartas de Poder Multiplayer** (T004): Random power card assigned to each player at game start; cards: ⚡Rayo (+15s), 🛡️Escudo (bluff immunity), ❌Sabotaje/🔄Hurto (steal 10pts from leader), 🎯Doble-o-Nada (×2 score); POST /api/rooms/:code/use-card endpoint with server-side effect resolution
+16. **Modo Torneo** (T005): New `tournamentsTable` in DB; bracket system for 4 or 8 players; POST/GET/join/start/start-match/match-result API routes; Tournament.tsx page with full bracket UI; room auto-created for each match; bracket advances automatically on match completion; champion crown revealed at the end
 
 ## Game Categories (Spanish)
 

@@ -9,6 +9,20 @@ const router: IRouter = Router();
 
 const ALPHABET_ES = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").filter(l => !["Q","X"].includes(l));
 
+// ── In-memory stores (ephemeral, no DB needed) ─────────────────────────────
+type Reaction = { id: string; emoji: string; playerName: string; ts: number };
+const roomReactions = new Map<string, Reaction[]>();
+const roomCategoryPacks = new Map<string, "standard" | "crazy" | "mix">();
+
+const VALID_REACTIONS = ["🔥", "❤️", "😂", "👑", "🎯", "😤", "💪", "🤯"];
+
+function getReactions(code: string): Reaction[] {
+  const all = roomReactions.get(code) ?? [];
+  const fresh = all.filter(r => Date.now() - r.ts < 8000);
+  if (fresh.length !== all.length) roomReactions.set(code, fresh);
+  return fresh;
+}
+
 function generateRoomCode(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   let code = "";
@@ -38,9 +52,10 @@ function parseBluffMeta(json: string | null): any | null {
 
 function formatRoom(room: any) {
   const meta = parseBluffMeta(room.stopperJson);
+  const code = room.roomCode as string;
   return {
     id: room.id,
-    roomCode: room.roomCode,
+    roomCode: code,
     hostId: room.hostId,
     hostName: room.hostName || "",
     status: room.status,
@@ -49,12 +64,14 @@ function formatRoom(room: any) {
     maxRounds: room.maxRounds,
     maxPlayers: room.maxPlayers ?? 8,
     gameMode: room.gameMode ?? "classic",
+    categoryPack: roomCategoryPacks.get(code) ?? "standard",
     language: room.language,
     isPublic: room.isPublic ?? false,
     players: parsePlayers(room.playersJson),
     stopper: meta?.stopper ?? meta,
     bluffData: meta?.bluffVotes ?? null,
     bluffVoteDeadline: meta?.bluffDeadline ?? null,
+    reactions: getReactions(code),
     createdAt: room.createdAt,
   };
 }
@@ -274,9 +291,21 @@ router.post("/:roomCode/start", async (req, res) => {
   const room = rooms[0];
   const players = parsePlayers(room.playersJson);
 
-  // Reset all ready flags and round scores for new round
-  const resetPlayers = players.map((p: any) => ({ ...p, isReady: false, roundScore: 0 }));
   const newRound = room.currentRound === 0 ? 1 : room.currentRound;
+  const MP_CARDS = ["lightning", "shield", "sabotage", "double_or_nothing", "steal"] as const;
+
+  // Reset all ready flags and round scores; assign power cards on round 1 only
+  const resetPlayers = players.map((p: any) => ({
+    ...p,
+    isReady: false,
+    roundScore: 0,
+    // Assign 1 random card at game start (round 1); keep it for subsequent rounds until used
+    powerCard: newRound === 1
+      ? MP_CARDS[Math.floor(Math.random() * MP_CARDS.length)]
+      : (p.powerCard ?? null),
+    powerCardUsed: newRound === 1 ? false : (p.powerCardUsed ?? false),
+    bluffImmune: false,
+  }));
 
   const [updated] = await db.update(roomsTable)
     .set({
@@ -327,6 +356,73 @@ router.post("/:roomCode/leave", async (req, res) => {
     .where(eq(roomsTable.roomCode, roomCode.toUpperCase()));
 
   res.json({ ok: true });
+});
+
+// POST /rooms/:roomCode/react — player sends an emoji reaction (in-memory, ephemeral)
+router.post("/:roomCode/react", async (req, res) => {
+  const code = req.params.roomCode.toUpperCase();
+  const { emoji, playerName } = req.body as { emoji: string; playerName: string };
+  if (!VALID_REACTIONS.includes(emoji)) { res.status(400).json({ error: "Invalid emoji" }); return; }
+  const list = roomReactions.get(code) ?? [];
+  list.push({ id: Math.random().toString(36).slice(2), emoji, playerName: playerName ?? "?", ts: Date.now() });
+  roomReactions.set(code, list.slice(-40));
+  res.json({ ok: true });
+});
+
+// POST /rooms/:roomCode/category-pack — host sets category pack (standard/crazy/mix)
+router.post("/:roomCode/category-pack", async (req, res) => {
+  const code = req.params.roomCode.toUpperCase();
+  const { hostId, pack } = req.body as { hostId: string; pack: "standard" | "crazy" | "mix" };
+  const rooms = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, code)).limit(1);
+  if (rooms.length === 0) { res.status(404).json({ error: "Room not found" }); return; }
+  if (rooms[0].hostId !== hostId) { res.status(403).json({ error: "Not host" }); return; }
+  if (!["standard", "crazy", "mix"].includes(pack)) { res.status(400).json({ error: "Invalid pack" }); return; }
+  roomCategoryPacks.set(code, pack);
+  res.json({ ok: true, categoryPack: pack });
+});
+
+// POST /rooms/:roomCode/use-card — player activates their power card
+router.post("/:roomCode/use-card", async (req, res) => {
+  const code = req.params.roomCode.toUpperCase();
+  const { playerId } = req.body as { playerId: string };
+  const rooms = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, code)).limit(1);
+  if (rooms.length === 0) { res.status(404).json({ error: "Room not found" }); return; }
+
+  const room = rooms[0];
+  const players: any[] = parsePlayers(room.playersJson);
+  const me = players.find(p => p.playerId === playerId);
+  if (!me || me.powerCardUsed || !me.powerCard) {
+    res.status(400).json({ error: "Card not available" }); return;
+  }
+
+  let updatedPlayers = players.map(p =>
+    p.playerId === playerId ? { ...p, powerCardUsed: true } : p
+  );
+
+  // Apply server-side effects
+  const card = me.powerCard as string;
+  if (card === "sabotage" || card === "steal") {
+    // Steal 10 pts from the current leader (not self)
+    const sorted = [...updatedPlayers].filter(p => p.playerId !== playerId).sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+    if (sorted.length > 0) {
+      const leaderId = sorted[0].playerId;
+      updatedPlayers = updatedPlayers.map(p =>
+        p.playerId === leaderId ? { ...p, score: Math.max(0, (p.score ?? 0) - 10) } : p
+      );
+    }
+  } else if (card === "shield") {
+    updatedPlayers = updatedPlayers.map(p =>
+      p.playerId === playerId ? { ...p, bluffImmune: true } : p
+    );
+  }
+  // lightning and double_or_nothing are handled client-side (time bonus / score multiplier)
+
+  const [updated] = await db.update(roomsTable)
+    .set({ playersJson: JSON.stringify(updatedPlayers), updatedAt: new Date() })
+    .where(eq(roomsTable.roomCode, code))
+    .returning();
+
+  res.json({ ok: true, card, room: formatRoom(updated) });
 });
 
 // POST /rooms/:roomCode/stop — ANY player calls this to stop the round globally
