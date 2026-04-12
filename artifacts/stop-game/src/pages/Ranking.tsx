@@ -327,16 +327,29 @@ export default function Ranking() {
             </p>
           )}
           {isLoggedInPlayer && player && (
-            <button
-              onClick={() => setLocation(`/player/${encodeURIComponent(player.id)}`)}
-              className="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold transition-all hover:scale-105"
-              style={{ background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.15)", color: "rgba(255,255,255,0.7)" }}
-            >
-              <div className="w-5 h-5 rounded-full flex items-center justify-center text-white text-[10px] font-black" style={{ backgroundColor: player.avatarColor || "#e53e3e" }}>
-                {player.name.charAt(0).toUpperCase()}
+            <div className="mt-3 flex flex-col items-center gap-2">
+              <button
+                onClick={() => setLocation(`/player/${encodeURIComponent(player.id)}`)}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold transition-all hover:scale-105"
+                style={{ background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.15)", color: "rgba(255,255,255,0.7)" }}
+              >
+                <div className="w-5 h-5 rounded-full flex items-center justify-center text-white text-[10px] font-black" style={{ backgroundColor: player.avatarColor || "#e53e3e" }}>
+                  {player.name.charAt(0).toUpperCase()}
+                </div>
+                Mi Perfil
+              </button>
+              <div className="flex items-center gap-2 text-[11px] font-bold text-white/55">
+                <span>Récord global:</span>
+                <span className="text-secondary">
+                  #{(myFallbackEntry as any)?.globalRank ?? (myStats?.score as any)?.globalRank ?? "—"}
+                </span>
+                <span>•</span>
+                <span>Mejor partida:</span>
+                <span className="text-secondary">
+                  {(myFallbackEntry as any)?.bestScore ?? (myStats?.score as any)?.bestScore ?? 0}
+                </span>
               </div>
-              Mi Perfil
-            </button>
+            </div>
           )}
         </div>
 
