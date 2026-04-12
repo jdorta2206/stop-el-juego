@@ -139,6 +139,8 @@ export default function Room() {
   const currentLetter = room?.currentLetter || "";
   const currentRound = room?.currentRound || 0;
   const maxRounds = room?.maxRounds || 3;
+  const maxPlayers = (room as any)?.maxPlayers || 8;
+  const gameMode = (room as any)?.gameMode || "classic";
   const players = room?.players || [];
   const stopper = (room as any)?.stopper;
 
@@ -437,7 +439,12 @@ export default function Room() {
               <div className="bg-black/30 inline-block px-8 py-4 rounded-2xl border-2 border-white/20">
                 <h1 className="text-5xl font-display font-black tracking-widest text-secondary">{roomCode}</h1>
               </div>
-              <p className="text-white/50 text-xs mt-2">Sin límite de jugadores · Comparte el código</p>
+              <p className="text-white/50 text-xs mt-2">
+                {(() => {
+                  const modeLabel: Record<string, string> = { classic: "🎯 Clásico", blitz: "⚡ Blitz", challenge: "🏆 Reto" };
+                  return `${modeLabel[gameMode] ?? "🎯 Clásico"} · Máx ${maxPlayers} jugadores · Comparte el código`;
+                })()}
+              </p>
             </div>
 
             <div className="grid md:grid-cols-2 gap-5 mb-5">

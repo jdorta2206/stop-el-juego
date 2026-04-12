@@ -3,6 +3,7 @@ import { db } from "@workspace/db";
 import { roomsTable, playerScoresTable, gameHistoryTable } from "@workspace/db";
 import { eq, and, lt } from "drizzle-orm";
 import { CreateRoomBody, JoinRoomBody, SubmitRoomResultsBody } from "@workspace/api-zod";
+import { calculateStreak } from "./ranking";
 
 const router: IRouter = Router();
 
@@ -46,6 +47,8 @@ function formatRoom(room: any) {
     currentLetter: room.currentLetter,
     currentRound: room.currentRound,
     maxRounds: room.maxRounds,
+    maxPlayers: room.maxPlayers ?? 8,
+    gameMode: room.gameMode ?? "classic",
     language: room.language,
     isPublic: room.isPublic ?? false,
     players: parsePlayers(room.playersJson),
@@ -77,12 +80,15 @@ function resolveBluffs(players: any[], bluffVotes: Record<string, any>): any[] {
 // Auto-submit all non-guest players' scores to the global leaderboard when the game ends
 async function submitAllScoresToLeaderboard(players: any[], letter: string) {
   const winner = [...players].sort((a, b) => (b.score || 0) - (a.score || 0))[0];
+  const today = new Date().toISOString().split("T")[0];
 
   await Promise.allSettled(players.map(async (p: any) => {
     // Skip guests and players with 0 or no score
     if (!p.playerId || p.loginMethod === "guest") return;
 
-    const score = p.score || 0;
+    const rawScore = p.score || 0;
+    // Apply 1.5x multiplier for multiplayer
+    const score = Math.round(rawScore * 1.5);
     const won = winner?.playerId === p.playerId;
 
     const existing = await db
@@ -90,6 +96,13 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string) {
       .from(playerScoresTable)
       .where(eq(playerScoresTable.playerId, p.playerId))
       .limit(1);
+
+    // Streak calculation
+    const { newStreak, updatedToday } = calculateStreak(
+      existing[0]?.lastPlayedDate ?? null,
+      existing[0]?.currentStreak ?? 0
+    );
+    const newLongest = Math.max(existing[0]?.longestStreak ?? 0, newStreak);
 
     if (existing.length > 0) {
       await db.update(playerScoresTable)
@@ -99,6 +112,11 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string) {
           totalScore: existing[0].totalScore + score,
           gamesPlayed: existing[0].gamesPlayed + 1,
           wins: existing[0].wins + (won ? 1 : 0),
+          ...(updatedToday ? {
+            currentStreak: newStreak,
+            longestStreak: newLongest,
+            lastPlayedDate: today,
+          } : {}),
           updatedAt: new Date(),
         })
         .where(eq(playerScoresTable.playerId, p.playerId));
@@ -110,6 +128,9 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string) {
         totalScore: score,
         gamesPlayed: 1,
         wins: won ? 1 : 0,
+        currentStreak: 1,
+        longestStreak: 1,
+        lastPlayedDate: today,
       });
     }
 
@@ -148,6 +169,8 @@ router.get("/public", async (_req, res) => {
     hostId: r.hostId,
     hostName: r.hostName || "Anfitrión",
     maxRounds: r.maxRounds,
+    maxPlayers: r.maxPlayers ?? 8,
+    gameMode: r.gameMode ?? "classic",
     language: r.language,
     playerCount: parsePlayers(r.playersJson).length,
     createdAt: r.createdAt,
@@ -161,6 +184,8 @@ router.post("/", async (req, res) => {
   if (!body.success) { res.status(400).json({ error: "Invalid request body" }); return; }
 
   const { hostId, hostName, avatarColor, loginMethod, maxRounds, language, isPublic } = body.data;
+  const gameMode = (body.data as any).gameMode ?? "classic";
+  const maxPlayers = (body.data as any).maxPlayers ?? 8;
 
   let roomCode = generateRoomCode();
   for (let i = 0; i < 5; i++) {
@@ -187,6 +212,8 @@ router.post("/", async (req, res) => {
     status: "waiting",
     currentRound: 0,
     maxRounds: maxRounds ?? 3,
+    maxPlayers,
+    gameMode,
     language: language ?? "es",
     playersJson: JSON.stringify(players),
     stopperJson: null,

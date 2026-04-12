@@ -34,6 +34,8 @@ export default function Multiplayer() {
   const [error, setError] = useState("");
   const [showInvite, setShowInvite] = useState(false);
   const [isPublic, setIsPublic] = useState(false);
+  const [gameMode, setGameMode] = useState<"classic" | "blitz" | "challenge">("classic");
+  const [maxPlayers, setMaxPlayers] = useState(8);
   const [publicRooms, setPublicRooms] = useState<PublicRoom[]>([]);
   const [loadingPublic, setLoadingPublic] = useState(false);
 
@@ -70,7 +72,11 @@ export default function Multiplayer() {
           avatarColor: player.avatarColor,
           maxRounds: 3,
           language: getCurrentLang(),
-        } as import("@workspace/api-client-react").CreateRoomRequest & { loginMethod?: string | null; isPublic?: boolean },
+          loginMethod: player.loginMethod ?? null,
+          isPublic,
+          gameMode,
+          maxPlayers,
+        } as any,
       });
       setLocation(`/room/${room.roomCode}`);
     } catch {
@@ -185,6 +191,57 @@ export default function Multiplayer() {
                 Cualquier jugador podrá unirse a tu sala desde el listado de salas abiertas.
               </p>
             )}
+
+            {/* Game mode selector */}
+            <div className="mb-4">
+              <p className="text-xs font-bold text-white/40 uppercase tracking-wider mb-2">Modo de juego</p>
+              <div className="grid grid-cols-3 gap-2">
+                {(["classic", "blitz", "challenge"] as const).map(mode => {
+                  const meta: Record<string, { emoji: string; label: string }> = {
+                    classic: { emoji: "🎯", label: "Clásico" },
+                    blitz: { emoji: "⚡", label: "Blitz" },
+                    challenge: { emoji: "🏆", label: "Reto" },
+                  };
+                  const active = gameMode === mode;
+                  return (
+                    <button
+                      key={mode}
+                      onClick={() => setGameMode(mode)}
+                      className={`flex flex-col items-center gap-1 py-3 px-2 rounded-xl font-bold text-sm transition-all border ${
+                        active
+                          ? "bg-secondary/20 border-secondary/50 text-secondary"
+                          : "bg-black/20 border-white/10 text-white/50 hover:text-white hover:border-white/20"
+                      }`}
+                    >
+                      <span className="text-xl">{meta[mode].emoji}</span>
+                      <span className="text-xs">{meta[mode].label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Max players selector */}
+            <div className="mb-4">
+              <p className="text-xs font-bold text-white/40 uppercase tracking-wider mb-2">
+                Jugadores máx: <span className="text-white">{maxPlayers}</span>
+              </p>
+              <div className="flex items-center gap-2">
+                {[2, 3, 4, 5, 6, 7, 8].map(n => (
+                  <button
+                    key={n}
+                    onClick={() => setMaxPlayers(n)}
+                    className={`flex-1 py-2 rounded-lg font-black text-sm transition-all border ${
+                      maxPlayers === n
+                        ? "bg-secondary text-black border-secondary shadow-md"
+                        : "bg-black/20 border-white/10 text-white/50 hover:text-white hover:border-white/20"
+                    }`}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
+            </div>
 
             <Button
               size="lg"

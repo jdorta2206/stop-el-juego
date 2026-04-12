@@ -7,12 +7,36 @@ import { SubmitScoreBody, GetLeaderboardQueryParams } from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
+// Assign a display title based on global rank
+export function getTitle(rank: number): string {
+  if (rank === 1) return "👑 Leyenda";
+  if (rank <= 3) return "🏆 Campeón";
+  if (rank <= 10) return "⭐ Estrella";
+  if (rank <= 25) return "🔥 Experto";
+  if (rank <= 50) return "💪 Veterano";
+  if (rank <= 100) return "🎯 Aspirante";
+  return "🌱 Novato";
+}
+
+// Calculate the new streak for a player given their last played date
+export function calculateStreak(
+  lastPlayedDate: string | null,
+  currentStreak: number
+): { newStreak: number; updatedToday: boolean } {
+  const today = new Date().toISOString().split("T")[0]; // YYYY-MM-DD UTC
+  if (lastPlayedDate === today) {
+    // Already played today — don't change streak
+    return { newStreak: currentStreak, updatedToday: false };
+  }
+  const yesterday = new Date(Date.now() - 86_400_000).toISOString().split("T")[0];
+  const newStreak = lastPlayedDate === yesterday ? currentStreak + 1 : 1;
+  return { newStreak, updatedToday: true };
+}
+
 router.get("/scores", async (req, res) => {
   const query = GetLeaderboardQueryParams.safeParse(req.query);
   const limit = query.success ? (query.data.limit ?? 20) : 20;
 
-  // Each player_id already has exactly one row (scores are updated in place),
-  // so no deduplication needed — just order by score descending.
   const rows = await db.execute(sql`
     SELECT *
     FROM player_scores
@@ -36,6 +60,9 @@ router.get("/scores", async (req, res) => {
       totalScore: p.total_score,
       gamesPlayed: p.games_played,
       wins: p.wins,
+      currentStreak: p.current_streak ?? 0,
+      longestStreak: p.longest_streak ?? 0,
+      title: getTitle(i + 1),
       createdAt: p.created_at,
       updatedAt: p.updated_at,
       rank: i + 1,
@@ -51,9 +78,11 @@ router.post("/scores", async (req, res) => {
     return;
   }
 
-  const { playerId, playerName, avatarColor, score, letter, mode, won } = body.data;
+  const { playerId, playerName, avatarColor, score: rawScore, letter, mode, won } = body.data;
 
-  // Upsert player score
+  // Apply 1.5x multiplier for multiplayer games
+  const score = mode === "multiplayer" ? Math.round(rawScore * 1.5) : rawScore;
+
   const existing = await db
     .select()
     .from(playerScoresTable)
@@ -63,9 +92,13 @@ router.post("/scores", async (req, res) => {
   const oldTotal = existing.length > 0 ? existing[0].totalScore : 0;
   const newTotal = oldTotal + score;
 
-  // ── Detect overtaken players BEFORE updating ─────────────────────────────
-  // Anyone whose total is strictly between old and new total got overtaken.
-  // (Skip the player themselves in case they have multiple rows — shouldn't happen.)
+  // Streak calculation
+  const today = new Date().toISOString().split("T")[0];
+  const lastPlayedDate = existing[0]?.lastPlayedDate ?? null;
+  const { newStreak, updatedToday } = calculateStreak(lastPlayedDate, existing[0]?.currentStreak ?? 0);
+  const newLongest = Math.max(existing[0]?.longestStreak ?? 0, newStreak);
+
+  // Detect overtaken players BEFORE updating
   const overtaken = score > 0 && newTotal > oldTotal
     ? await db
         .select({ playerId: playerScoresTable.playerId, playerName: playerScoresTable.playerName })
@@ -76,7 +109,6 @@ router.post("/scores", async (req, res) => {
           AND ${playerScoresTable.playerId} != ${playerId}`
         )
     : [];
-  // ─────────────────────────────────────────────────────────────────────────
 
   let player;
   if (existing.length > 0) {
@@ -88,6 +120,11 @@ router.post("/scores", async (req, res) => {
         totalScore: newTotal,
         gamesPlayed: existing[0].gamesPlayed + 1,
         wins: existing[0].wins + (won ? 1 : 0),
+        ...(updatedToday ? {
+          currentStreak: newStreak,
+          longestStreak: newLongest,
+          lastPlayedDate: today,
+        } : {}),
         updatedAt: new Date(),
       })
       .where(eq(playerScoresTable.playerId, playerId))
@@ -103,12 +140,15 @@ router.post("/scores", async (req, res) => {
         totalScore: score,
         gamesPlayed: 1,
         wins: won ? 1 : 0,
+        currentStreak: 1,
+        longestStreak: 1,
+        lastPlayedDate: today,
       })
       .returning();
     player = created;
   }
 
-  // ── Send "you've been overtaken" push notifications ──────────────────────
+  // Send "you've been overtaken" push notifications
   if (overtaken.length > 0) {
     await Promise.allSettled(
       overtaken.map(op =>
@@ -120,7 +160,6 @@ router.post("/scores", async (req, res) => {
       )
     );
   }
-  // ─────────────────────────────────────────────────────────────────────────
 
   // Record game history
   await db.insert(gameHistoryTable).values({
@@ -135,41 +174,77 @@ router.post("/scores", async (req, res) => {
 });
 
 router.get("/weekly", async (req, res) => {
-  // Aggregate game_history for the current ISO week (Mon 00:00 UTC → Sun 23:59 UTC)
-  // JOIN with player_scores to get player name + avatar
   const rows = await db.execute(sql`
     SELECT
       gh.player_id        AS "playerId",
       ps.player_name      AS "playerName",
       ps.avatar_color     AS "avatarColor",
+      ps.current_streak   AS "currentStreak",
       SUM(gh.score)       AS "totalScore",
       COUNT(*)            AS "gamesPlayed",
       SUM(CASE WHEN gh.won THEN 1 ELSE 0 END) AS "wins"
     FROM game_history gh
     LEFT JOIN player_scores ps ON gh.player_id = ps.player_id
     WHERE gh.created_at >= date_trunc('week', NOW() AT TIME ZONE 'UTC')
-    GROUP BY gh.player_id, ps.player_name, ps.avatar_color
+    GROUP BY gh.player_id, ps.player_name, ps.avatar_color, ps.current_streak
     ORDER BY SUM(gh.score) DESC
     LIMIT 100
   `);
 
   const players = (rows.rows as Array<Record<string, unknown>>).map((p, i) => ({
-    playerId:    p.playerId,
-    playerName:  p.playerName ?? "—",
-    avatarColor: p.avatarColor ?? "#e53e3e",
-    totalScore:  Number(p.totalScore ?? 0),
-    gamesPlayed: Number(p.gamesPlayed ?? 0),
-    wins:        Number(p.wins ?? 0),
-    rank:        i + 1,
+    playerId:      p.playerId,
+    playerName:    p.playerName ?? "—",
+    avatarColor:   p.avatarColor ?? "#e53e3e",
+    totalScore:    Number(p.totalScore ?? 0),
+    gamesPlayed:   Number(p.gamesPlayed ?? 0),
+    wins:          Number(p.wins ?? 0),
+    currentStreak: Number(p.currentStreak ?? 0),
+    title:         getTitle(i + 1),
+    rank:          i + 1,
   }));
 
-  // Next Monday at 00:00 UTC
   const now = new Date();
-  const day = now.getUTCDay(); // 0=Sun … 6=Sat
+  const day = now.getUTCDay();
   const daysUntilMonday = day === 0 ? 1 : 8 - day;
   const nextReset = new Date(Date.UTC(
     now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + daysUntilMonday
   ));
+
+  res.json({ players, nextReset: nextReset.toISOString() });
+});
+
+router.get("/monthly", async (_req, res) => {
+  const rows = await db.execute(sql`
+    SELECT
+      gh.player_id        AS "playerId",
+      ps.player_name      AS "playerName",
+      ps.avatar_color     AS "avatarColor",
+      ps.current_streak   AS "currentStreak",
+      SUM(gh.score)       AS "totalScore",
+      COUNT(*)            AS "gamesPlayed",
+      SUM(CASE WHEN gh.won THEN 1 ELSE 0 END) AS "wins"
+    FROM game_history gh
+    LEFT JOIN player_scores ps ON gh.player_id = ps.player_id
+    WHERE gh.created_at >= date_trunc('month', NOW() AT TIME ZONE 'UTC')
+    GROUP BY gh.player_id, ps.player_name, ps.avatar_color, ps.current_streak
+    ORDER BY SUM(gh.score) DESC
+    LIMIT 100
+  `);
+
+  const players = (rows.rows as Array<Record<string, unknown>>).map((p, i) => ({
+    playerId:      p.playerId,
+    playerName:    p.playerName ?? "—",
+    avatarColor:   p.avatarColor ?? "#e53e3e",
+    totalScore:    Number(p.totalScore ?? 0),
+    gamesPlayed:   Number(p.gamesPlayed ?? 0),
+    wins:          Number(p.wins ?? 0),
+    currentStreak: Number(p.currentStreak ?? 0),
+    title:         getTitle(i + 1),
+    rank:          i + 1,
+  }));
+
+  const now = new Date();
+  const nextReset = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
 
   res.json({ players, nextReset: nextReset.toISOString() });
 });
@@ -196,6 +271,78 @@ router.get("/scores/:playerId", async (req, res) => {
     .limit(10);
 
   res.json({ score: { ...scores[0], rank: 0 }, recentGames });
+});
+
+router.get("/profile/:playerId", async (req, res) => {
+  const { playerId } = req.params;
+
+  // Base player stats
+  const scoreRows = await db
+    .select()
+    .from(playerScoresTable)
+    .where(eq(playerScoresTable.playerId, playerId))
+    .limit(1);
+
+  if (scoreRows.length === 0) {
+    res.status(404).json({ error: "Player not found" });
+    return;
+  }
+
+  const ps = scoreRows[0];
+
+  // Global rank
+  const rankRow = await db.execute(sql`
+    SELECT COUNT(*) AS cnt FROM player_scores WHERE total_score > ${ps.totalScore}
+  `);
+  const globalRank = Number((rankRow.rows[0] as any)?.cnt ?? 0) + 1;
+
+  // Monthly score
+  const monthlyRow = await db.execute(sql`
+    SELECT COALESCE(SUM(score), 0) AS monthly_score
+    FROM game_history
+    WHERE player_id = ${playerId}
+      AND created_at >= date_trunc('month', NOW() AT TIME ZONE 'UTC')
+  `);
+  const monthlyScore = Number((monthlyRow.rows[0] as any)?.monthly_score ?? 0);
+
+  // Stats by game mode
+  const modeRows = await db.execute(sql`
+    SELECT
+      mode,
+      COUNT(*)                                      AS games,
+      COALESCE(SUM(score), 0)                       AS total_score,
+      COALESCE(MAX(score), 0)                       AS best_score,
+      SUM(CASE WHEN won THEN 1 ELSE 0 END)          AS wins
+    FROM game_history
+    WHERE player_id = ${playerId}
+    GROUP BY mode
+  `);
+
+  const modeStats: Record<string, any> = {};
+  for (const row of modeRows.rows as any[]) {
+    modeStats[row.mode] = {
+      games: Number(row.games),
+      totalScore: Number(row.total_score),
+      bestScore: Number(row.best_score),
+      wins: Number(row.wins),
+    };
+  }
+
+  res.json({
+    playerId: ps.playerId,
+    playerName: ps.playerName,
+    avatarColor: ps.avatarColor,
+    totalScore: ps.totalScore,
+    gamesPlayed: ps.gamesPlayed,
+    wins: ps.wins,
+    currentStreak: ps.currentStreak ?? 0,
+    longestStreak: ps.longestStreak ?? 0,
+    lastPlayedDate: ps.lastPlayedDate ?? null,
+    globalRank,
+    monthlyScore,
+    title: getTitle(globalRank),
+    modeStats,
+  });
 });
 
 export default router;
