@@ -214,6 +214,7 @@ export default function Ranking() {
   // Friends list for the friends tab (separate fetch to avoid duplicate)
   const [followedIds, setFollowedIds] = useState<Set<string>>(new Set());
   const [followedFriends, setFollowedFriends] = useState<any[]>([]);
+  const [previewPlayer, setPreviewPlayer] = useState<any | null>(null);
 
   useEffect(() => {
     if (!player?.id) return;
@@ -482,7 +483,7 @@ export default function Ranking() {
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: visualIdx * 0.15, type: "spring", bounce: 0.4 }}
                       className="flex flex-col items-center gap-2 cursor-pointer"
-                      onClick={() => openProfile(p.playerId)}
+                      onClick={() => setPreviewPlayer(p)}
                     >
                       <span className="text-2xl">{m.label}</span>
                       <motion.div
@@ -538,6 +539,35 @@ export default function Ranking() {
                     </motion.div>
                   );
                 })}
+              </div>
+            )}
+
+            {previewPlayer && (
+              <div
+                className="fixed inset-0 z-50 flex items-end justify-center p-4 bg-black/60"
+                onClick={() => setPreviewPlayer(null)}
+              >
+                <div
+                  className="w-full max-w-sm rounded-3xl p-4 bg-[#0e0a2e] border border-white/10 shadow-2xl"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-14 h-14 rounded-full flex items-center justify-center text-white font-black text-xl"
+                      style={{ backgroundColor: previewPlayer.avatarColor || "#555" }}>
+                      {previewPlayer.playerName.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-black text-white text-lg truncate">{previewPlayer.playerName}</p>
+                      <p className="text-xs text-white/40 truncate">{(previewPlayer as any).title || "Jugador"}</p>
+                    </div>
+                    <button
+                      className="px-3 py-1.5 rounded-full text-xs font-bold bg-white/10 text-white"
+                      onClick={() => openProfile(previewPlayer.playerId)}
+                    >
+                      Ver perfil
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
 
