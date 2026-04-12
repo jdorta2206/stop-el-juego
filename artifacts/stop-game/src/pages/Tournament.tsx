@@ -207,6 +207,39 @@ export default function Tournament() {
     }
   };
 
+  const tournamentInviteTargets = (() => {
+    if (!player) return [];
+    const onlineMap = new Map(onlinePlayers.map(p => [p.playerId, p]));
+    const friendsMap = new Map(gameFriends.map(f => [f.followedId, f]));
+    const ids = new Set<string>();
+    const list: { id: string; name: string; avatarColor?: string; isFriend: boolean; isOnline: boolean; roomCode?: string | null }[] = [];
+    for (const f of gameFriends) {
+      if (f.followedId === player.id || ids.has(f.followedId)) continue;
+      ids.add(f.followedId);
+      list.push({
+        id: f.followedId,
+        name: f.followedName,
+        avatarColor: f.followedAvatarColor,
+        isFriend: true,
+        isOnline: !!onlineMap.get(f.followedId),
+        roomCode: onlineMap.get(f.followedId)?.roomCode ?? null,
+      });
+    }
+    for (const p of onlinePlayers) {
+      if (p.playerId === player.id || ids.has(p.playerId)) continue;
+      ids.add(p.playerId);
+      list.push({
+        id: p.playerId,
+        name: p.name,
+        avatarColor: p.avatarColor,
+        isFriend: !!friendsMap.get(p.playerId),
+        isOnline: true,
+        roomCode: p.roomCode,
+      });
+    }
+    return list;
+  })();
+
   // ── Home ─────────────────────────────────────────────────────────────────
   if (view === "home") return (
     <div className="min-h-screen flex flex-col" style={{ background: "#060318" }}>
@@ -417,13 +450,12 @@ export default function Tournament() {
               <p className="text-white/30 text-[11px]">{onlinePlayers.length} online</p>
             </div>
             <div className="max-h-52 overflow-y-auto flex flex-col gap-2">
-              {onlinePlayers.filter(p => p.playerId !== player?.id).slice(0, 8).map((p: OnlinePlayer) => {
-                const isFriend = gameFriends.some(f => f.followedId === p.playerId);
-                const already = invitedIds.has(p.playerId);
+              {tournamentInviteTargets.slice(0, 12).map((p) => {
+                const already = invitedIds.has(p.id);
                 return (
                   <button
-                    key={p.playerId}
-                    onClick={() => inviteToTournament(p.playerId, p.name)}
+                    key={p.id}
+                    onClick={() => inviteToTournament(p.id, p.name)}
                     className="flex items-center gap-3 p-3 rounded-xl text-left"
                     style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}
                   >
@@ -432,7 +464,7 @@ export default function Tournament() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-white font-bold text-sm truncate">{p.name}</p>
-                      <p className="text-white/35 text-[11px]">{isFriend ? "Amigo" : p.roomCode ? "En partida" : "Online"}</p>
+                      <p className="text-white/35 text-[11px]">{p.isFriend ? "Amigo" : p.roomCode ? "En partida" : p.isOnline ? "Online" : "Desconectado"}</p>
                     </div>
                     <span className="text-xs font-black px-3 py-1.5 rounded-full" style={{ background: already ? "rgba(74,222,128,0.15)" : "rgba(249,168,37,0.12)", color: already ? "#4ade80" : "#f9a825" }}>
                       {already ? "Invitado" : "Invitar"}
@@ -440,7 +472,7 @@ export default function Tournament() {
                   </button>
                 );
               })}
-              {onlinePlayers.filter(p => p.playerId !== player?.id).length === 0 && (
+              {tournamentInviteTargets.length === 0 && (
                 <p className="text-center text-white/30 text-xs py-3">No hay jugadores online ahora mismo</p>
               )}
             </div>
