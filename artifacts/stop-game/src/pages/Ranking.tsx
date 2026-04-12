@@ -294,6 +294,7 @@ export default function Ranking() {
         bestScore: myStats.score.bestScore,
       }
     : null;
+  const myDisplayStats = (myFallbackEntry ?? myStats?.score ?? null) as any;
 
   const PODIUM_ORDER = [1, 0, 2];
   const medalColors: Record<number, { bg: string; border: string; size: string; label: string }> = {
@@ -341,12 +342,12 @@ export default function Ranking() {
               <div className="flex items-center gap-2 text-[11px] font-bold text-white/55">
                 <span>Récord global:</span>
                 <span className="text-secondary">
-                  #{(myFallbackEntry as any)?.globalRank ?? (myStats?.score as any)?.globalRank ?? "—"}
+                  #{myDisplayStats?.globalRank ?? "—"}
                 </span>
                 <span>•</span>
                 <span>Mejor partida:</span>
                 <span className="text-secondary">
-                  {(myFallbackEntry as any)?.bestScore ?? (myStats?.score as any)?.bestScore ?? 0}
+                  {myDisplayStats?.bestScore ?? 0}
                 </span>
               </div>
             </div>
@@ -609,7 +610,7 @@ export default function Ranking() {
                     <span className="text-white/60 text-sm">{(displayEntry as any).gamesPlayed}</span>
                     <span className="text-secondary font-black text-lg">{(displayEntry as any).totalScore} {t.game.points}</span>
                   </div>
-                  {(displayEntry as any).globalRank && (
+                  {(displayEntry as any).globalRank != null && (
                     <p className="mt-2 text-[11px] text-white/45 font-bold">
                       Récord global: #{(displayEntry as any).globalRank} · Mejor partida: {(displayEntry as any).bestScore ?? 0}
                     </p>
