@@ -2,7 +2,10 @@ import { useParams, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui";
-import { Trophy, Flame, Gamepad2, Users, Star, ArrowLeft, UserPlus, UserCheck } from "lucide-react";
+import {
+  Trophy, Flame, Gamepad2, Users, Star, ArrowLeft,
+  UserPlus, UserCheck, Clock, Sword,
+} from "lucide-react";
 import { motion } from "framer-motion";
 import { usePlayer } from "@/hooks/use-player";
 import { getApiUrl } from "@/lib/utils";
@@ -10,24 +13,60 @@ import { useFollows } from "@/lib/useFollows";
 import { useCallback, useState } from "react";
 import { type OnlinePlayer } from "@/lib/usePresence";
 
+// ── Level system based on total games played ───────────────────────────────
+const LEVELS = [
+  { min: 0,   max: 4,   label: "Principiante", icon: "🌱", color: "#6b7280" },
+  { min: 5,   max: 14,  label: "Amateur",       icon: "🎮", color: "#3b82f6" },
+  { min: 15,  max: 29,  label: "Aficionado",    icon: "⚔️", color: "#8b5cf6" },
+  { min: 30,  max: 49,  label: "Veterano",      icon: "🛡️", color: "#f59e0b" },
+  { min: 50,  max: 99,  label: "Experto",       icon: "🔥", color: "#ef4444" },
+  { min: 100, max: 199, label: "Maestro",       icon: "⭐", color: "#f97316" },
+  { min: 200, max: Infinity, label: "Leyenda",  icon: "👑", color: "#eab308" },
+];
+
+function getLevel(gamesPlayed: number) {
+  return LEVELS.find(l => gamesPlayed >= l.min && gamesPlayed <= l.max) ?? LEVELS[0];
+}
+
+function getLevelProgress(gamesPlayed: number) {
+  const lvl = getLevel(gamesPlayed);
+  if (lvl.max === Infinity) return 100;
+  const span = lvl.max - lvl.min + 1;
+  return Math.round(((gamesPlayed - lvl.min) / span) * 100);
+}
+
+// ── Mode labels ────────────────────────────────────────────────────────────
 const MODE_LABELS: Record<string, { label: string; icon: string }> = {
-  solo: { label: "Solo", icon: "🎯" },
-  multiplayer: { label: "Multijugador", icon: "👥" },
-  daily: { label: "Diario", icon: "📅" },
-  blitz: { label: "Blitz", icon: "⚡" },
-  challenge: { label: "Reto", icon: "🏆" },
+  solo:        { label: "Solo",        icon: "🎯" },
+  multiplayer: { label: "Multijugador",icon: "👥" },
+  daily:       { label: "Diario",      icon: "📅" },
+  blitz:       { label: "Blitz",       icon: "⚡" },
+  challenge:   { label: "Reto",        icon: "🏆" },
 };
 
-function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
+// ── Helpers ────────────────────────────────────────────────────────────────
+function StatCard({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="flex flex-col items-center gap-1 p-4 bg-black/30 rounded-2xl border border-white/10">
       <span className="text-2xl font-black text-secondary">{value}</span>
       <span className="text-xs font-bold text-white/50 text-center leading-tight">{label}</span>
-      {sub && <span className="text-[10px] text-white/30">{sub}</span>}
     </div>
   );
 }
 
+function timeAgo(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const m = Math.floor(diff / 60000);
+  const h = Math.floor(diff / 3600000);
+  const d = Math.floor(diff / 86400000);
+  if (m < 1)  return "ahora mismo";
+  if (m < 60) return `hace ${m}m`;
+  if (h < 24) return `hace ${h}h`;
+  if (d < 7)  return `hace ${d}d`;
+  return new Date(dateStr).toLocaleDateString("es-ES", { day: "numeric", month: "short" });
+}
+
+// ── Component ──────────────────────────────────────────────────────────────
 export default function PlayerProfile() {
   const { id } = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
@@ -97,10 +136,14 @@ export default function PlayerProfile() {
   }
 
   const modeKeys = Object.keys(data.modeStats ?? {});
+  const recentGames: any[] = data.recentGames ?? [];
+  const level = getLevel(data.gamesPlayed);
+  const progress = getLevelProgress(data.gamesPlayed);
+  const nextLevel = LEVELS[LEVELS.indexOf(level) + 1];
 
   return (
     <Layout>
-      <div className="flex-1 flex flex-col max-w-md mx-auto w-full py-6 gap-6">
+      <div className="flex-1 flex flex-col max-w-md mx-auto w-full py-6 gap-6 pb-10">
 
         {/* Back button */}
         <button
@@ -110,26 +153,39 @@ export default function PlayerProfile() {
           <ArrowLeft size={16} /> Ranking
         </button>
 
-        {/* Avatar + name + title */}
+        {/* ── HERO: Avatar + nombre + título + rango ── */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           className="flex flex-col items-center gap-3"
         >
-          <div
-            className="w-24 h-24 rounded-full flex items-center justify-center text-4xl font-black text-white shadow-2xl border-4 border-white/10"
-            style={{ backgroundColor: data.avatarColor || "#e53e3e" }}
-          >
-            {data.playerName?.charAt(0).toUpperCase()}
+          <div className="relative">
+            <div
+              className="w-24 h-24 rounded-full flex items-center justify-center text-4xl font-black text-white shadow-2xl border-4"
+              style={{ backgroundColor: data.avatarColor || "#e53e3e", borderColor: level.color + "88" }}
+            >
+              {data.playerName?.charAt(0).toUpperCase()}
+            </div>
+            <span
+              className="absolute -bottom-1 -right-1 text-xl"
+              title={level.label}
+            >
+              {level.icon}
+            </span>
           </div>
+
           <div className="text-center">
             <h1 className="text-3xl font-display font-black">{data.playerName}</h1>
-            <p className="text-secondary font-bold mt-0.5">{data.title}</p>
+            <p className="font-bold mt-0.5" style={{ color: "#f9a825" }}>{data.title}</p>
             <p className="text-white/40 text-sm mt-0.5">Puesto #{data.globalRank} global</p>
           </div>
 
-          {/* Follow button */}
-          {!isMe && isLoggedIn && (
+          {/* Follow / "Tú" badge */}
+          {isMe ? (
+            <span className="px-4 py-1.5 rounded-full text-xs font-black bg-secondary/20 text-secondary border border-secondary/40">
+              Tu perfil
+            </span>
+          ) : isLoggedIn && (
             <button
               onClick={handleFollow}
               disabled={followState === "loading"}
@@ -146,7 +202,45 @@ export default function PlayerProfile() {
           )}
         </motion.div>
 
-        {/* Streak banner */}
+        {/* ── NIVEL con barra de progreso ── */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.05 }}
+          className="p-4 bg-black/30 rounded-2xl border border-white/10"
+        >
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <span className="text-2xl">{level.icon}</span>
+              <div>
+                <p className="font-black text-sm" style={{ color: level.color }}>Nivel: {level.label}</p>
+                <p className="text-xs text-white/40">{data.gamesPlayed} partidas jugadas</p>
+              </div>
+            </div>
+            {nextLevel && (
+              <p className="text-[11px] text-white/30 text-right">
+                Siguiente:<br />
+                <span className="font-bold" style={{ color: nextLevel.color }}>{nextLevel.icon} {nextLevel.label}</span>
+              </p>
+            )}
+          </div>
+          <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+            <motion.div
+              initial={{ width: 0 }}
+              animate={{ width: `${progress}%` }}
+              transition={{ delay: 0.3, duration: 0.8, ease: "easeOut" }}
+              className="h-full rounded-full"
+              style={{ background: `linear-gradient(to right, ${level.color}88, ${level.color})` }}
+            />
+          </div>
+          {nextLevel && (
+            <p className="text-[10px] text-white/30 mt-1 text-right">
+              {nextLevel.min - data.gamesPlayed} partidas para {nextLevel.label}
+            </p>
+          )}
+        </motion.div>
+
+        {/* ── RACHA ── */}
         {(data.currentStreak > 0 || data.longestStreak > 0) && (
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
@@ -157,8 +251,7 @@ export default function PlayerProfile() {
           >
             <div className="flex flex-col items-center gap-0.5">
               <span className="text-3xl font-black text-orange-400 flex items-center gap-1">
-                <Flame className="w-6 h-6" />
-                {data.currentStreak}
+                <Flame className="w-6 h-6" />{data.currentStreak}
               </span>
               <span className="text-xs text-white/50 font-bold">Racha actual</span>
             </div>
@@ -170,7 +263,7 @@ export default function PlayerProfile() {
           </motion.div>
         )}
 
-        {/* Global stats grid */}
+        {/* ── ESTADÍSTICAS GLOBALES ── */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -182,7 +275,7 @@ export default function PlayerProfile() {
           <StatCard label="Victorias" value={data.wins} />
         </motion.div>
 
-        {/* Monthly score */}
+        {/* ── PUNTOS DEL MES ── */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -191,12 +284,15 @@ export default function PlayerProfile() {
         >
           <Star className="w-6 h-6 text-amber-400 flex-shrink-0" />
           <div>
-            <p className="font-black text-white">{data.monthlyScore} pts <span className="text-amber-400">este mes</span></p>
+            <p className="font-black text-white">
+              {data.monthlyScore} pts{" "}
+              <span className="text-amber-400">este mes</span>
+            </p>
             <p className="text-xs text-white/40">Ranking mensual activo</p>
           </div>
         </motion.div>
 
-        {/* Stats by game mode */}
+        {/* ── STATS POR MODO ── */}
         {modeKeys.length > 0 && (
           <motion.div
             initial={{ opacity: 0, y: 10 }}
@@ -212,6 +308,7 @@ export default function PlayerProfile() {
               {modeKeys.map(mode => {
                 const s = data.modeStats[mode];
                 const meta = MODE_LABELS[mode] ?? { label: mode, icon: "🎮" };
+                const winRate = s.games > 0 ? Math.round((s.wins / s.games) * 100) : 0;
                 return (
                   <div
                     key={mode}
@@ -220,7 +317,9 @@ export default function PlayerProfile() {
                     <span className="text-2xl">{meta.icon}</span>
                     <div className="flex-1">
                       <p className="font-bold text-sm">{meta.label}</p>
-                      <p className="text-xs text-white/40">{s.games} partidas · {s.wins} victorias</p>
+                      <p className="text-xs text-white/40">
+                        {s.games} partidas · {s.wins} victorias ({winRate}%)
+                      </p>
                     </div>
                     <div className="text-right">
                       <p className="font-black text-secondary">{s.totalScore} pts</p>
@@ -233,16 +332,77 @@ export default function PlayerProfile() {
           </motion.div>
         )}
 
-        {/* Challenge button */}
-        <Button
-          variant="secondary"
-          size="lg"
-          className="w-full mt-2"
-          onClick={() => setLocation("/multiplayer")}
-        >
-          <Users className="w-4 h-4 mr-2" />
-          Retar a una partida
-        </Button>
+        {/* ── HISTORIAL DE PARTIDAS ── */}
+        {recentGames.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+            className="space-y-3"
+          >
+            <h2 className="font-display font-black text-lg flex items-center gap-2">
+              <Clock className="w-5 h-5 text-secondary" />
+              Últimas partidas
+            </h2>
+            <div className="space-y-1.5">
+              {recentGames.map((g, i) => {
+                const meta = MODE_LABELS[g.mode] ?? { label: g.mode, icon: "🎮" };
+                return (
+                  <motion.div
+                    key={g.id}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.3 + i * 0.04 }}
+                    className="flex items-center gap-3 px-4 py-2.5 bg-black/20 rounded-xl border border-white/10"
+                  >
+                    <span className="text-lg">{meta.icon}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-bold">{meta.label}</span>
+                        {g.letter && (
+                          <span className="text-[11px] bg-white/10 px-1.5 py-0.5 rounded font-black text-white/60">
+                            {g.letter}
+                          </span>
+                        )}
+                        {g.won && (
+                          <span className="text-[10px] bg-secondary/20 text-secondary border border-secondary/30 px-1.5 py-0.5 rounded-full font-black">
+                            GANÓ
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-white/30">{timeAgo(g.createdAt)}</p>
+                    </div>
+                    <span className="font-black text-secondary text-sm flex-shrink-0">
+                      +{g.score} pts
+                    </span>
+                  </motion.div>
+                );
+              })}
+            </div>
+          </motion.div>
+        )}
+
+        {/* ── ACCIÓN FINAL ── */}
+        {!isMe && (
+          <Button
+            variant="secondary"
+            size="lg"
+            className="w-full mt-2"
+            onClick={() => setLocation("/multiplayer")}
+          >
+            <Sword className="w-4 h-4 mr-2" />
+            Retar a una partida
+          </Button>
+        )}
+        {isMe && (
+          <Button
+            size="lg"
+            className="w-full mt-2"
+            onClick={() => setLocation("/")}
+          >
+            Jugar ahora
+          </Button>
+        )}
 
       </div>
     </Layout>
