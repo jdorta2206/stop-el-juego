@@ -5,7 +5,7 @@ import { usePlayer } from "@/hooks/use-player";
 import { getApiUrl } from "@/lib/utils";
 import {
   Trophy, Users, Play, Copy, Check, ChevronRight,
-  Swords, Crown, ArrowLeft, Loader2, Plus, LogIn
+  Swords, Crown, ArrowLeft, Loader2, Plus, LogIn, Share2, MessageCircle, Send
 } from "lucide-react";
 
 type Match = {
@@ -164,6 +164,29 @@ export default function Tournament() {
     navigator.clipboard.writeText(tournament.code);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const getInviteUrl = () => {
+    if (!tournament) return "";
+    return `${window.location.origin}${import.meta.env.BASE_URL}torneo/${tournament.code}`;
+  };
+
+  const getInviteText = () => {
+    if (!tournament) return "";
+    return `¡Únete a mi torneo STOP! 🎮\nTorneo: ${tournament.name}\nCódigo: ${tournament.code}\nLink: ${getInviteUrl()}`;
+  };
+
+  const shareTournament = async () => {
+    const text = getInviteText();
+    const url = getInviteUrl();
+    if (!text || !url) return;
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: "STOP - Torneo", text, url });
+        return;
+      } catch {}
+    }
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
   };
 
   // ── Home ─────────────────────────────────────────────────────────────────
@@ -341,6 +364,33 @@ export default function Tournament() {
               {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
               {copied ? "¡Copiado!" : "Copiar código"}
             </button>
+            <div className="mt-3 flex flex-wrap gap-2 justify-center">
+              <button
+                onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(getInviteText())}`, "_blank")}
+                className="px-3 py-2 rounded-full text-xs font-black text-white flex items-center gap-1.5"
+                style={{ background: "#25D366" }}
+              >
+                <MessageCircle className="w-3.5 h-3.5" />
+                WhatsApp
+              </button>
+              <button
+                onClick={() => window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(getInviteText())}`, "_blank")}
+                className="px-3 py-2 rounded-full text-xs font-black text-white flex items-center gap-1.5"
+                style={{ background: "#1DA1F2" }}
+              >
+                <Send className="w-3.5 h-3.5" />
+                X
+              </button>
+              <button
+                onClick={shareTournament}
+                className="px-3 py-2 rounded-full text-xs font-black text-white flex items-center gap-1.5"
+                style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.12)" }}
+              >
+                <Share2 className="w-3.5 h-3.5" />
+                Compartir
+              </button>
+            </div>
+            <p className="text-[10px] text-white/30 mt-2">Comparte el código o el enlace para que tus amigos entren al torneo.</p>
           </div>
 
           {/* Players list */}
