@@ -400,6 +400,7 @@ router.get("/progress/:playerId", async (req, res) => {
   const [ps] = await db
     .select({
       achievementsJson: playerScoresTable.achievementsJson,
+      achievementStatsJson: playerScoresTable.achievementStatsJson,
       personalBestsJson: playerScoresTable.personalBestsJson,
     })
     .from(playerScoresTable)
@@ -407,39 +408,58 @@ router.get("/progress/:playerId", async (req, res) => {
     .limit(1);
 
   if (!ps) {
-    res.json({ achievements: [], personalBests: {} });
+    res.json({ achievements: [], stats: {}, personalBests: {} });
     return;
   }
   let achievements: string[] = [];
+  let stats: Record<string, unknown> = {};
   let personalBests: Record<string, number> = {};
   try { achievements = JSON.parse(ps.achievementsJson ?? "[]"); } catch {}
+  try { stats = JSON.parse(ps.achievementStatsJson ?? "{}"); } catch {}
   try { personalBests = JSON.parse(ps.personalBestsJson ?? "{}"); } catch {}
-  res.json({ achievements, personalBests });
+  res.json({ achievements, stats, personalBests });
 });
 
-// ── POST /ranking/progress/:playerId — save achievements + personal bests ──
+// ── POST /ranking/progress/:playerId — save achievements + stats + personal bests ──
 router.post("/progress/:playerId", async (req, res) => {
   const { playerId } = req.params;
-  const { achievements, personalBests } = req.body as {
+  const { achievements, stats, personalBests } = req.body as {
     achievements?: string[];
+    stats?: Record<string, unknown>;
     personalBests?: Record<string, number>;
   };
 
   const [existing] = await db
-    .select({ achievementsJson: playerScoresTable.achievementsJson, personalBestsJson: playerScoresTable.personalBestsJson })
+    .select({
+      achievementsJson: playerScoresTable.achievementsJson,
+      achievementStatsJson: playerScoresTable.achievementStatsJson,
+      personalBestsJson: playerScoresTable.personalBestsJson,
+    })
     .from(playerScoresTable)
     .where(eq(playerScoresTable.playerId, playerId))
     .limit(1);
 
   if (!existing) { res.json({ ok: false, reason: "player_not_found" }); return; }
 
-  // Merge: never remove achievements, never reduce personal bests
+  // Merge achievements: never remove
   let curAch: string[] = [];
+  let curStats: Record<string, unknown> = {};
   let curBests: Record<string, number> = {};
   try { curAch = JSON.parse(existing.achievementsJson ?? "[]"); } catch {}
+  try { curStats = JSON.parse(existing.achievementStatsJson ?? "{}"); } catch {}
   try { curBests = JSON.parse(existing.personalBestsJson ?? "{}"); } catch {}
 
   const mergedAch = [...new Set([...curAch, ...(achievements ?? [])])];
+
+  // Merge stats: take the higher numeric value, OR for booleans
+  const mergedStats = { ...curStats };
+  for (const [k, v] of Object.entries(stats ?? {})) {
+    const cur = mergedStats[k];
+    if (typeof v === "boolean") mergedStats[k] = Boolean(cur) || v;
+    else if (typeof v === "number") mergedStats[k] = Math.max(Number(cur ?? 0), v);
+  }
+
+  // Merge personal bests: take max score per mode
   const mergedBests = { ...curBests };
   for (const [mode, score] of Object.entries(personalBests ?? {})) {
     if ((mergedBests[mode] ?? 0) < score) mergedBests[mode] = score;
@@ -449,12 +469,13 @@ router.post("/progress/:playerId", async (req, res) => {
     .update(playerScoresTable)
     .set({
       achievementsJson: JSON.stringify(mergedAch),
+      achievementStatsJson: JSON.stringify(mergedStats),
       personalBestsJson: JSON.stringify(mergedBests),
       updatedAt: new Date(),
     })
     .where(eq(playerScoresTable.playerId, playerId));
 
-  res.json({ ok: true, achievements: mergedAch, personalBests: mergedBests });
+  res.json({ ok: true, achievements: mergedAch, stats: mergedStats, personalBests: mergedBests });
 });
 
 export default router;
