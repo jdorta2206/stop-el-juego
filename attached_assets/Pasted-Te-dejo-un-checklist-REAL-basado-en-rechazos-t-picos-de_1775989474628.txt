@@ -1,0 +1,141 @@
+Te dejo un checklist REAL, basado en rechazos típicos de App Store, adaptado a tu juego.
+
+🍎✅ CHECKLIST EXACTO — PASAR REVISIÓN DE APPLE (SIN RECHAZOS)
+🧠 BLOQUE 1 — LOGIN (CRÍTICO ABSOLUTO)
+✔️ Obligatorio si tienes login social:
+✅ Botón “Sign in with Apple” implementado
+✅ Funciona (no solo visible)
+✅ Permite entrar sin errores
+
+👉 Si tienes:
+
+Google / Facebook / Instagram
+❗ SIN Apple Login → RECHAZO SEGURO
+💳 BLOQUE 2 — PAGOS (MUY PELIGROSO)
+❗ Apple NO permite:
+Stripe dentro de la app para contenido digital
+✔️ Debes hacer UNA de estas:
+OPCIÓN A (recomendada):
+✅ Usar In-App Purchases de Apple
+OPCIÓN B:
+❌ NO vender nada dentro de la app
+(premium solo fuera, web)
+
+👉 Si no cumples esto:
+
+💣 rechazo casi garantizado
+📱 BLOQUE 3 — CALIDAD DE LA APP
+
+Apple revisa esto como locos:
+
+✔️ Navegación:
+no botones rotos
+no pantallas vacías
+✔️ Rendimiento:
+carga rápida
+sin lag
+✔️ Multijugador:
+funciona SIEMPRE
+no errores al entrar/salir
+
+👉 Haz pruebas reales:
+
+entrar/salir 10 veces
+jugar varias partidas seguidas
+🎮 BLOQUE 4 — EXPERIENCIA REAL (MUY IMPORTANTE)
+
+Apple prueba tu app como usuario nuevo.
+
+✔️ Debe pasar esto:
+entra → entiende → juega
+
+en menos de:
+
+⏱️ 10–15 segundos
+❗ Si pasa esto:
+no sabe qué hacer
+se pierde
+necesita registro obligatorio
+
+👉 rechazo por mala UX
+
+🔐 BLOQUE 5 — CUENTAS Y PRIVACIDAD
+✔️ Obligatorio:
+✅ Política de privacidad (link visible)
+✅ No pedir datos innecesarios
+✅ Login opcional (o claro)
+
+👉 Añade en la app:
+
+botón o link a privacidad
+🌐 BLOQUE 6 — PWA / WEB APP (TU CASO)
+
+Tu app es tipo web → Apple lo vigila más.
+
+✔️ Debes asegurar:
+parece app, NO web
+sin barras de navegador
+diseño limpio
+sin links que abran fuera raro
+
+👉 Si parece web metida:
+⚠️ riesgo de rechazo
+
+🔔 BLOQUE 7 — NOTIFICACIONES
+
+Si usas push:
+
+✔️ pedir permiso correctamente
+✔️ no abusar
+✔️ no enviar spam
+🧪 BLOQUE 8 — TEST REAL (LO MÁS IMPORTANTE)
+
+Antes de subir, haz esto:
+
+📱 Test manual:
+instalar app
+registrarte
+jugar
+invitar
+salir
+volver a entrar
+
+👉 Si TODO funciona:
+
+🟢 estás listo
+📄 BLOQUE 9 — APP STORE CONNECT
+✔️ Necesitas:
+icono profesional
+capturas reales del juego
+descripción clara
+💡 Texto clave:
+
+“Juego multijugador rápido tipo STOP con ranking, ligas y retos con amigos”
+
+🚨 BLOQUE 10 — ERRORES QUE CAUSAN RECHAZO
+
+❌ no Apple login
+❌ pagos fuera del sistema
+❌ bugs en partida
+❌ app lenta
+❌ UX confusa
+❌ links rotos
+
+🏆 CHECK FINAL (RESUMEN)
+
+Si cumples esto:
+
+✅ Apple login
+✅ pagos correctos
+✅ sin bugs
+✅ UX clara
+✅ app fluida
+🚀 RESULTADO
+
+👉 80–90% probabilidad de pasar a la primera
+
+🧠 FRASE FINAL
+
+Apple no busca apps perfectas…
+
+👉 busca apps que se sientan profesionales
