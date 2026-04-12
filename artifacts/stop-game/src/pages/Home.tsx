@@ -20,7 +20,7 @@ export default function Home() {
   const { isPremium } = usePremium(player?.id);
   const { t } = useT();
   const { streak } = useStreak();
-  const { level, xp, progress } = useProgression();
+  const { level, xp, progress } = useProgression(player?.id);
   const league = getLeague(level);
   const [showPremiumModal, setShowPremiumModal] = useState(false);
   const [invitedBy, setInvitedBy] = useState<string | null>(null);

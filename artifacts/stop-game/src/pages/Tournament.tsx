@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "wouter";
 import { usePlayer } from "@/hooks/use-player";
@@ -57,15 +57,30 @@ export default function Tournament() {
   const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const redirectedMatchRef = useRef<string | null>(null);
 
   const poll = useCallback(async () => {
-    if (!tournament) return;
+    if (!tournament || !player) return;
     try {
       const data: Tournament = await apiFetch(`/${tournament.code}`);
       setTournament(data);
       if (data.status === "active" && view !== "bracket") setView("bracket");
+
+      // T004: Auto-redirect when a match involving this player starts (non-host player)
+      if (data.bracket) {
+        const myMatch = data.bracket.rounds.flat().find(
+          (m: Match) =>
+            m.status === "playing" &&
+            m.roomCode &&
+            (m.p1Id === player.id || m.p2Id === player.id),
+        );
+        if (myMatch?.roomCode && redirectedMatchRef.current !== myMatch.id) {
+          redirectedMatchRef.current = myMatch.id;
+          navigate(`/room/${myMatch.roomCode}?torneo=${data.code}&match=${myMatch.id}`);
+        }
+      }
     } catch {}
-  }, [tournament, view]);
+  }, [tournament, player, view, navigate]);
 
   useEffect(() => {
     if (!tournament) return;

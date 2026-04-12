@@ -7,6 +7,28 @@ import { SubmitScoreBody, GetLeaderboardQueryParams } from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
+// ── XP / Level (mirrors useProgression.ts thresholds) ─────────────────────
+const LEVEL_THRESHOLDS = [
+  0, 100, 250, 450, 700, 1000, 1400, 1900, 2500, 3200,
+  4000, 5000, 6200, 7600, 9200, 11000, 13000, 15500, 18500, 22000,
+];
+
+export function calcLevel(xp: number): number {
+  let level = 1;
+  for (let i = 0; i < LEVEL_THRESHOLDS.length; i++) {
+    if (xp >= LEVEL_THRESHOLDS[i]) level = i + 1;
+    else break;
+  }
+  return level;
+}
+
+export function calcXpGain(score: number, won: boolean, mode: string): number {
+  const base = Math.max(0, Math.floor(score / 5));         // 1 XP per 5 pts
+  const winBonus = won ? 30 : 0;
+  const modeBonus = mode === "multiplayer" ? 20 : mode === "daily" ? 15 : 0;
+  return base + winBonus + modeBonus;
+}
+
 // Assign a display title based on global rank
 export function getTitle(rank: number): string {
   if (rank === 1) return "👑 Leyenda";
@@ -110,6 +132,11 @@ router.post("/scores", async (req, res) => {
         )
     : [];
 
+  // XP / Level
+  const xpGain = calcXpGain(score, won ?? false, mode ?? "solo");
+  const newXp = (existing[0]?.xp ?? 0) + xpGain;
+  const newLevel = calcLevel(newXp);
+
   let player;
   if (existing.length > 0) {
     const [updated] = await db
@@ -120,6 +147,8 @@ router.post("/scores", async (req, res) => {
         totalScore: newTotal,
         gamesPlayed: existing[0].gamesPlayed + 1,
         wins: existing[0].wins + (won ? 1 : 0),
+        xp: newXp,
+        level: newLevel,
         ...(updatedToday ? {
           currentStreak: newStreak,
           longestStreak: newLongest,
@@ -143,6 +172,8 @@ router.post("/scores", async (req, res) => {
         currentStreak: 1,
         longestStreak: 1,
         lastPlayedDate: today,
+        xp: xpGain,
+        level: calcLevel(xpGain),
       })
       .returning();
     player = created;
@@ -353,6 +384,8 @@ router.get("/profile/:playerId", async (req, res) => {
     currentStreak: ps.currentStreak ?? 0,
     longestStreak: ps.longestStreak ?? 0,
     lastPlayedDate: ps.lastPlayedDate ?? null,
+    xp: ps.xp ?? 0,
+    level: ps.level ?? 1,
     globalRank,
     monthlyScore,
     title: getTitle(globalRank),
