@@ -18,8 +18,9 @@ export const playerScoresTable = pgTable("player_scores", {
   lastPlayedDate: text("last_played_date"), // YYYY-MM-DD UTC
   xp: integer("xp").notNull().default(0),
   level: integer("level").notNull().default(1),
-  achievementsJson: text("achievements_json").notNull().default("[]"),     // array of unlocked achievement IDs
-  personalBestsJson: text("personal_bests_json").notNull().default("{}"),  // { normal, quick, chaos, daily } → number
+  achievementsJson: text("achievements_json").notNull().default("[]"),         // array of unlocked achievement IDs
+  achievementStatsJson: text("achievement_stats_json").notNull().default("{}"), // { totalWins, totalGames, maxCombo, … }
+  personalBestsJson: text("personal_bests_json").notNull().default("{}"),   // { normal, quick, chaos, daily } → number
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

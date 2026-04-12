@@ -82,7 +82,7 @@ function loadStats(): AchievementStats {
   } catch { return defaultStats(); }
 }
 
-function saveStats(stats: AchievementStats) {
+function saveStatsLocal(stats: AchievementStats) {
   try { localStorage.setItem(STATS_KEY, JSON.stringify(stats)); } catch {}
 }
 
@@ -97,21 +97,44 @@ function saveUnlocked(unlocked: Set<string>) {
   try { localStorage.setItem(UNLOCKED_KEY, JSON.stringify([...unlocked])); } catch {}
 }
 
-async function syncFromServer(playerId: string): Promise<string[]> {
-  try {
-    const r = await fetch(`${getApiUrl()}/api/ranking/progress/${playerId}`);
-    if (!r.ok) return [];
-    const data = await r.json();
-    return Array.isArray(data.achievements) ? data.achievements : [];
-  } catch { return []; }
+// Merge two stat objects: take max of numerics, OR of booleans
+function mergeStats(local: AchievementStats, remote: Partial<AchievementStats>): AchievementStats {
+  return {
+    totalWins: Math.max(local.totalWins, Number(remote.totalWins ?? 0)),
+    totalGames: Math.max(local.totalGames, Number(remote.totalGames ?? 0)),
+    maxCombo: Math.max(local.maxCombo, Number(remote.maxCombo ?? 0)),
+    wonSpeedRound: local.wonSpeedRound || Boolean(remote.wonSpeedRound),
+    wonChaosRound: local.wonChaosRound || Boolean(remote.wonChaosRound),
+    validWordsRecord: Math.max(local.validWordsRecord, Number(remote.validWordsRecord ?? 0)),
+    xpTotal: Math.max(local.xpTotal, Number(remote.xpTotal ?? 0)),
+  };
 }
 
-async function saveToServer(playerId: string, achievements: string[]) {
+async function syncFromServer(playerId: string): Promise<{
+  achievements: string[];
+  stats: Partial<AchievementStats>;
+}> {
+  try {
+    const r = await fetch(`${getApiUrl()}/api/ranking/progress/${playerId}`);
+    if (!r.ok) return { achievements: [], stats: {} };
+    const data = await r.json();
+    return {
+      achievements: Array.isArray(data.achievements) ? data.achievements : [],
+      stats: data.stats && typeof data.stats === "object" ? data.stats : {},
+    };
+  } catch { return { achievements: [], stats: {} }; }
+}
+
+async function saveToServer(
+  playerId: string,
+  achievements: string[],
+  stats: AchievementStats,
+) {
   try {
     await fetch(`${getApiUrl()}/api/ranking/progress/${playerId}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ achievements }),
+      body: JSON.stringify({ achievements, stats }),
     });
   } catch {}
 }
@@ -122,12 +145,12 @@ export function useAchievements(playerId?: string) {
   const [newlyUnlocked, setNewlyUnlocked] = useState<AchievementDef | null>(null);
   const syncedRef = useRef(false);
 
-  // ── Sync from server on mount (server wins if it has more) ──────────────
+  // ── Sync from server on mount — server wins, then merge with local ────────
   useEffect(() => {
     if (!playerId || syncedRef.current) return;
     syncedRef.current = true;
-    syncFromServer(playerId).then(serverIds => {
-      if (serverIds.length === 0) return;
+    syncFromServer(playerId).then(({ achievements: serverIds, stats: serverStats }) => {
+      // Merge achievements
       setUnlocked(prev => {
         const merged = new Set([...prev, ...serverIds]);
         if (merged.size !== prev.size) {
@@ -136,6 +159,19 @@ export function useAchievements(playerId?: string) {
         }
         return prev;
       });
+
+      // Merge stats — server wins on any value that is higher
+      if (Object.keys(serverStats).length > 0) {
+        setStats(prev => {
+          const merged = mergeStats(prev, serverStats);
+          // Only update localStorage if something changed
+          if (JSON.stringify(merged) !== JSON.stringify(prev)) {
+            saveStatsLocal(merged);
+            return merged;
+          }
+          return prev;
+        });
+      }
     });
   }, [playerId]);
 
@@ -150,7 +186,7 @@ export function useAchievements(playerId?: string) {
       validWordsRecord: Math.max(current.validWordsRecord, result.validWords),
       xpTotal: current.xpTotal + result.xpGained,
     };
-    saveStats(next);
+    saveStatsLocal(next);
     setStats(next);
 
     const currentUnlocked = loadUnlocked();
@@ -166,9 +202,9 @@ export function useAchievements(playerId?: string) {
       saveUnlocked(newUnlocked);
       setUnlocked(newUnlocked);
       setNewlyUnlocked(justUnlocked);
-      // Persist new achievements to server
-      if (playerId) saveToServer(playerId, [...newUnlocked]);
     }
+    // Always persist stats + achievements to server after every round
+    if (playerId) saveToServer(playerId, [...newUnlocked], next);
   }, [playerId]);
 
   const clearNewlyUnlocked = useCallback(() => setNewlyUnlocked(null), []);
