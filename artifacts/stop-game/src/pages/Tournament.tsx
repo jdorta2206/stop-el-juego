@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "wouter";
 import { usePlayer } from "@/hooks/use-player";
+import { usePresence, sendChallenge, type OnlinePlayer } from "@/lib/usePresence";
+import { useFollows } from "@/lib/useFollows";
 import { getApiUrl } from "@/lib/utils";
 import {
   Trophy, Users, Play, Copy, Check, ChevronRight,
@@ -48,6 +50,8 @@ async function apiFetch(path: string, opts?: RequestInit) {
 export default function Tournament() {
   const [, navigate] = useLocation();
   const { player } = usePlayer();
+  const { onlinePlayers } = usePresence(player ?? null, null);
+  const { friends: gameFriends } = useFollows(player?.loginMethod !== "guest" ? player?.id ?? null : null, onlinePlayers);
 
   const [view, setView] = useState<"home" | "create" | "join" | "lobby" | "bracket">("home");
   const [tournament, setTournament] = useState<Tournament | null>(null);
@@ -57,6 +61,7 @@ export default function Tournament() {
   const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [invitedIds, setInvitedIds] = useState<Set<string>>(new Set());
   const redirectedMatchRef = useRef<string | null>(null);
 
   const poll = useCallback(async () => {
@@ -106,7 +111,7 @@ export default function Tournament() {
     if (!player || !joinCode.trim()) return;
     setLoading(true); setError("");
     try {
-      const data: Tournament = await apiFetch(`/${joinCode.trim().toUpperCase()}/join`, {
+      const data: any = await apiFetch(`/${joinCode.trim().toUpperCase()}/join`, {
         method: "POST",
         body: JSON.stringify({ playerId: player.id, playerName: player.name }),
       });
@@ -121,7 +126,7 @@ export default function Tournament() {
     if (!tournament || !player) return;
     setLoading(true); setError("");
     try {
-      const data: Tournament = await apiFetch(`/${tournament.code}/start`, {
+      const data: any = await apiFetch(`/${tournament.code}/start`, {
         method: "POST",
         body: JSON.stringify({ hostId: player.id }),
       });
@@ -187,6 +192,19 @@ export default function Tournament() {
       } catch {}
     }
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
+  };
+
+  const inviteToTournament = async (targetId: string, targetName: string) => {
+    if (!tournament || !player) return;
+    const roomCode = tournament.code;
+    const online = onlinePlayers.find(p => p.playerId === targetId);
+    if (online) {
+      await sendChallenge(player, targetId, "es");
+    }
+    setInvitedIds(prev => new Set([...prev, targetId]));
+    if (!online) {
+      window.open(`https://wa.me/?text=${encodeURIComponent(`¡${player.name} te invita al torneo STOP! 🎮\n${tournament.name}\nCódigo: ${roomCode}`)}`, "_blank");
+    }
   };
 
   // ── Home ─────────────────────────────────────────────────────────────────
@@ -391,6 +409,41 @@ export default function Tournament() {
               </button>
             </div>
             <p className="text-[10px] text-white/30 mt-2">Comparte el código o el enlace para que tus amigos entren al torneo.</p>
+          </div>
+
+          <div className="p-4 rounded-2xl" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-white/60 text-xs font-bold">INVITAR DENTRO DEL JUEGO</p>
+              <p className="text-white/30 text-[11px]">{onlinePlayers.length} online</p>
+            </div>
+            <div className="max-h-52 overflow-y-auto flex flex-col gap-2">
+              {onlinePlayers.filter(p => p.playerId !== player?.id).slice(0, 8).map((p: OnlinePlayer) => {
+                const isFriend = gameFriends.some(f => f.followedId === p.playerId);
+                const already = invitedIds.has(p.playerId);
+                return (
+                  <button
+                    key={p.playerId}
+                    onClick={() => inviteToTournament(p.playerId, p.name)}
+                    className="flex items-center gap-3 p-3 rounded-xl text-left"
+                    style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}
+                  >
+                    <div className="w-8 h-8 rounded-full flex items-center justify-center text-white font-black" style={{ background: p.avatarColor || "#555" }}>
+                      {p.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-white font-bold text-sm truncate">{p.name}</p>
+                      <p className="text-white/35 text-[11px]">{isFriend ? "Amigo" : p.roomCode ? "En partida" : "Online"}</p>
+                    </div>
+                    <span className="text-xs font-black px-3 py-1.5 rounded-full" style={{ background: already ? "rgba(74,222,128,0.15)" : "rgba(249,168,37,0.12)", color: already ? "#4ade80" : "#f9a825" }}>
+                      {already ? "Invitado" : "Invitar"}
+                    </span>
+                  </button>
+                );
+              })}
+              {onlinePlayers.filter(p => p.playerId !== player?.id).length === 0 && (
+                <p className="text-center text-white/30 text-xs py-3">No hay jugadores online ahora mismo</p>
+              )}
+            </div>
           </div>
 
           {/* Players list */}
