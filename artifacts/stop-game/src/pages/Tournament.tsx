@@ -97,7 +97,7 @@ export default function Tournament() {
   useEffect(() => {
     const onFocus = () => {
       if (resumeTournamentRef.current) {
-        setView("lobby");
+        setView(tournament?.status === "active" ? "bracket" : "lobby");
         resumeTournamentRef.current = null;
       }
     };
