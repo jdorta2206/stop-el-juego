@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { tournamentsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 
 const router: IRouter = Router();
 
@@ -26,6 +26,7 @@ function formatTournament(t: any) {
     name: t.name,
     status: t.status,
     size: t.size,
+    isPublic: !!t.isPublic,
     players: parsePlayers(t.playersJson),
     bracket: parseBracket(t.bracketJson),
     createdAt: t.createdAt,
@@ -109,8 +110,8 @@ function advanceBracket(bracket: any): any {
 
 // POST /api/tournaments — create
 router.post("/", async (req, res) => {
-  const { hostId, hostName, name, size } = req.body as {
-    hostId: string; hostName: string; name: string; size: number;
+  const { hostId, hostName, name, size, isPublic } = req.body as {
+    hostId: string; hostName: string; name: string; size: number; isPublic?: boolean;
   };
   if (!hostId || !name) { res.status(400).json({ error: "Missing fields" }); return; }
   const safeSize = [4, 8].includes(size) ? size : 4;
@@ -125,11 +126,21 @@ router.post("/", async (req, res) => {
     name,
     status: "waiting",
     size: safeSize,
+    isPublic: !!isPublic,
     playersJson: JSON.stringify(players),
     bracketJson: null,
   }).returning();
 
   res.json(formatTournament(t));
+});
+
+// GET /api/tournaments/public — list open public tournaments waiting for players
+router.get("/public", async (_req, res) => {
+  const rows = await db.select().from(tournamentsTable)
+    .where(and(eq(tournamentsTable.isPublic, true), eq(tournamentsTable.status, "waiting")))
+    .orderBy(desc(tournamentsTable.createdAt))
+    .limit(30);
+  res.json(rows.map(formatTournament).filter(t => t.players.length < t.size));
 });
 
 // GET /api/tournaments/:code — poll

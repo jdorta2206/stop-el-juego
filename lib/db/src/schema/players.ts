@@ -107,6 +107,7 @@ export const tournamentsTable = pgTable("tournaments", {
   name: text("name").notNull(),
   status: text("status").notNull().default("waiting"), // waiting | active | completed
   size: integer("size").notNull().default(4), // 4 or 8
+  isPublic: boolean("is_public").notNull().default(false),
   playersJson: text("players_json").notNull().default("[]"),
   bracketJson: text("bracket_json"), // full bracket with rounds, matches, winners
   createdAt: timestamp("created_at").defaultNow().notNull(),

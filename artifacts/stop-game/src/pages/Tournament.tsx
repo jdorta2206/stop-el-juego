@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useLocation } from "wouter";
+import { useLocation, useRoute } from "wouter";
 import { usePlayer } from "@/hooks/use-player";
 import { usePresence, sendChallenge, type OnlinePlayer } from "@/lib/usePresence";
 import { useFollows } from "@/lib/useFollows";
@@ -49,19 +49,24 @@ async function apiFetch(path: string, opts?: RequestInit) {
 
 export default function Tournament() {
   const [, navigate] = useLocation();
+  const [, params] = useRoute<{ code: string }>("/torneo/:code");
+  const urlCode = params?.code?.toUpperCase() ?? null;
   const { player } = usePlayer();
   const { onlinePlayers } = usePresence(player ?? null, null);
   const { friends: gameFriends } = useFollows(player?.loginMethod !== "guest" ? player?.id ?? null : null, onlinePlayers);
 
-  const [view, setView] = useState<"home" | "create" | "join" | "lobby" | "bracket">("home");
+  const [view, setView] = useState<"home" | "create" | "join" | "lobby" | "bracket">(urlCode ? "join" : "home");
   const [tournament, setTournament] = useState<Tournament | null>(null);
   const [tName, setTName] = useState("");
   const [tSize, setTSize] = useState<4 | 8>(4);
-  const [joinCode, setJoinCode] = useState("");
+  const [tIsPublic, setTIsPublic] = useState(false);
+  const [joinCode, setJoinCode] = useState(urlCode ?? "");
   const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [invitedIds, setInvitedIds] = useState<Set<string>>(new Set());
+  const [publicList, setPublicList] = useState<Tournament[]>([]);
+  const [autoJoinTried, setAutoJoinTried] = useState(false);
   const redirectedMatchRef = useRef<string | null>(null);
   const resumeTournamentRef = useRef<string | null>(null);
 
@@ -115,7 +120,7 @@ export default function Tournament() {
     try {
       const data: Tournament = await apiFetch("/", {
         method: "POST",
-        body: JSON.stringify({ hostId: player.id, hostName: player.name, name: tName.trim(), size: tSize }),
+        body: JSON.stringify({ hostId: player.id, hostName: player.name, name: tName.trim(), size: tSize, isPublic: tIsPublic }),
       });
       setTournament(data);
       setView("lobby");
@@ -123,11 +128,11 @@ export default function Tournament() {
     setLoading(false);
   };
 
-  const joinTournament = async () => {
-    if (!player || !joinCode.trim()) return;
+  const joinByCode = useCallback(async (code: string) => {
+    if (!player || !code) return;
     setLoading(true); setError("");
     try {
-      const data: any = await apiFetch(`/${joinCode.trim().toUpperCase()}/join`, {
+      const data: any = await apiFetch(`/${code.toUpperCase()}/join`, {
         method: "POST",
         body: JSON.stringify({ playerId: player.id, playerName: player.name }),
       });
@@ -136,6 +141,34 @@ export default function Tournament() {
       setView(data.status === "active" ? "bracket" : "lobby");
     } catch { setError("Código de torneo inválido"); }
     setLoading(false);
+  }, [player]);
+
+  // Auto-join when arriving via /torneo/:code link
+  useEffect(() => {
+    if (urlCode && player && !autoJoinTried && !tournament) {
+      setAutoJoinTried(true);
+      joinByCode(urlCode);
+    }
+  }, [urlCode, player, autoJoinTried, tournament, joinByCode]);
+
+  // Load public tournaments when in join view
+  useEffect(() => {
+    if (view !== "join" && view !== "home") return;
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const data = await apiFetch("/public");
+        if (!cancelled && Array.isArray(data)) setPublicList(data);
+      } catch {}
+    };
+    load();
+    const id = setInterval(load, 8000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [view]);
+
+  const joinTournament = async () => {
+    if (!joinCode.trim()) return;
+    await joinByCode(joinCode.trim());
   };
 
   const startTournament = async () => {
@@ -344,6 +377,36 @@ export default function Tournament() {
             ))}
           </div>
         </div>
+        <div>
+          <label className="text-white/60 text-xs font-bold mb-1.5 block">VISIBILIDAD</label>
+          <div className="flex gap-3">
+            <button
+              onClick={() => setTIsPublic(false)}
+              className="flex-1 py-3 rounded-xl font-black text-sm transition-all"
+              style={{
+                background: !tIsPublic ? "linear-gradient(135deg, #f59e0b, #dc2626)" : "rgba(255,255,255,0.07)",
+                color: !tIsPublic ? "#fff" : "rgba(255,255,255,0.4)",
+                border: !tIsPublic ? "none" : "1.5px solid rgba(255,255,255,0.12)",
+              }}
+            >
+              🔒 Privado
+            </button>
+            <button
+              onClick={() => setTIsPublic(true)}
+              className="flex-1 py-3 rounded-xl font-black text-sm transition-all"
+              style={{
+                background: tIsPublic ? "linear-gradient(135deg, #f59e0b, #dc2626)" : "rgba(255,255,255,0.07)",
+                color: tIsPublic ? "#fff" : "rgba(255,255,255,0.4)",
+                border: tIsPublic ? "none" : "1.5px solid rgba(255,255,255,0.12)",
+              }}
+            >
+              🌍 Público
+            </button>
+          </div>
+          <p className="text-white/40 text-[11px] mt-1.5">
+            {tIsPublic ? "Aparecerá en la lista pública para que cualquiera se una." : "Solo entrarán quienes tengan el código o el enlace."}
+          </p>
+        </div>
         <div className="p-4 rounded-xl" style={{ background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.3)" }}>
           <p className="text-amber-300 text-xs font-bold">📋 Formato</p>
           <p className="text-amber-200/70 text-xs mt-1">
@@ -398,6 +461,41 @@ export default function Tournament() {
           {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <LogIn className="w-5 h-5" />}
           Unirse
         </motion.button>
+
+        {/* Public tournaments list */}
+        <div className="w-full mt-4">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-white/60 text-xs font-bold uppercase tracking-widest">🌍 Torneos públicos</p>
+            <p className="text-white/30 text-[11px]">{publicList.length}</p>
+          </div>
+          <div className="flex flex-col gap-2 max-h-72 overflow-y-auto">
+            {publicList.length === 0 && (
+              <p className="text-center text-white/30 text-xs py-4">No hay torneos públicos abiertos. ¡Crea el primero!</p>
+            )}
+            {publicList.map(pt => (
+              <button
+                key={pt.code}
+                onClick={() => joinByCode(pt.code)}
+                disabled={loading}
+                className="flex items-center gap-3 p-3 rounded-xl text-left disabled:opacity-50"
+                style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}
+              >
+                <div className="w-9 h-9 rounded-full flex items-center justify-center text-white font-black text-sm flex-shrink-0"
+                  style={{ background: "linear-gradient(135deg, #f59e0b, #dc2626)" }}
+                >
+                  <Trophy className="w-4 h-4" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-white font-bold text-sm truncate">{pt.name}</p>
+                  <p className="text-white/40 text-[11px] truncate">Host: {pt.hostName} · {pt.players.length}/{pt.size}</p>
+                </div>
+                <span className="text-[10px] font-black px-2 py-1 rounded-full" style={{ background: "rgba(245,158,11,0.15)", color: "#f59e0b" }}>
+                  Unirse
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );

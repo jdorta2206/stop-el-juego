@@ -152,22 +152,6 @@ export default function DailyChallenge() {
               </div>
             </div>
 
-            {/* Categories */}
-            <div>
-              <p className="text-white/60 text-xs font-bold uppercase tracking-widest mb-2">{t.daily.categories}</p>
-              <div className="flex flex-wrap gap-2">
-                {challenge.categories.map(cat => (
-                  <span
-                    key={cat}
-                    className="px-3 py-1 rounded-full text-xs font-bold"
-                    style={{ background: "rgba(255,255,255,0.1)", color: "white" }}
-                  >
-                    {cat}
-                  </span>
-                ))}
-              </div>
-            </div>
-
             {/* Play / played */}
             {playedToday ? (
               <div className="text-center space-y-1">
