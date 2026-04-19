@@ -299,25 +299,28 @@ export default function Tournament() {
         </button>
         <h1 className="text-white font-black text-lg">Modo Torneo</h1>
       </div>
-      <div className="flex-1 flex flex-col items-center justify-center p-6 gap-6">
-        <motion.div
-          initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-          className="w-24 h-24 rounded-full flex items-center justify-center"
-          style={{ background: "linear-gradient(135deg, #f59e0b, #dc2626)" }}
-        >
-          <Trophy className="w-12 h-12 text-white" />
-        </motion.div>
-        <div className="text-center">
-          <h2 className="text-white font-black text-2xl mb-2">Torneo STOP</h2>
-          <p className="text-white/50 text-sm max-w-xs">
-            Compite en brackets eliminatorios de 4 u 8 jugadores. Un campeón se coronará.
-          </p>
+      <div className="flex-1 overflow-y-auto p-5 pb-8 max-w-md mx-auto w-full">
+        <div className="flex flex-col items-center gap-4 mb-5">
+          <motion.div
+            initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+            className="w-20 h-20 rounded-full flex items-center justify-center"
+            style={{ background: "linear-gradient(135deg, #f59e0b, #dc2626)" }}
+          >
+            <Trophy className="w-10 h-10 text-white" />
+          </motion.div>
+          <div className="text-center">
+            <h2 className="text-white font-black text-xl mb-1">Torneo STOP</h2>
+            <p className="text-white/50 text-xs max-w-xs">
+              Brackets eliminatorios de 4 u 8 jugadores. Un campeón se corona.
+            </p>
+          </div>
         </div>
-        <div className="flex flex-col gap-3 w-full max-w-xs">
+
+        <div className="flex flex-col gap-3 mb-6">
           <motion.button
             whileTap={{ scale: 0.97 }}
             onClick={() => setView("create")}
-            className="w-full py-4 rounded-2xl font-black text-white flex items-center justify-center gap-3"
+            className="w-full py-3.5 rounded-2xl font-black text-white flex items-center justify-center gap-3"
             style={{ background: "linear-gradient(135deg, #f59e0b, #dc2626)" }}
           >
             <Plus className="w-5 h-5" />
@@ -326,12 +329,50 @@ export default function Tournament() {
           <motion.button
             whileTap={{ scale: 0.97 }}
             onClick={() => setView("join")}
-            className="w-full py-4 rounded-2xl font-black border border-white/20 text-white flex items-center justify-center gap-3"
+            className="w-full py-3.5 rounded-2xl font-black border border-white/20 text-white flex items-center justify-center gap-3"
             style={{ background: "rgba(255,255,255,0.05)" }}
           >
             <LogIn className="w-5 h-5" />
             Unirse con Código
           </motion.button>
+        </div>
+
+        {/* Public tournaments — visible right on the home view */}
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-white/60 text-xs font-bold uppercase tracking-widest">🌍 Torneos públicos abiertos</p>
+            <p className="text-white/30 text-[11px]">{publicList.length}</p>
+          </div>
+          <div className="flex flex-col gap-2">
+            {publicList.length === 0 && (
+              <div className="text-center py-6 px-4 rounded-2xl" style={{ background: "rgba(255,255,255,0.04)", border: "1px dashed rgba(255,255,255,0.12)" }}>
+                <p className="text-white/40 text-xs">No hay torneos públicos abiertos.</p>
+                <p className="text-white/30 text-[11px] mt-1">¡Crea uno y márcalo como público!</p>
+              </div>
+            )}
+            {publicList.map(pt => (
+              <button
+                key={pt.code}
+                onClick={() => joinByCode(pt.code)}
+                disabled={loading}
+                className="flex items-center gap-3 p-3 rounded-xl text-left disabled:opacity-50"
+                style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}
+              >
+                <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-black flex-shrink-0"
+                  style={{ background: "linear-gradient(135deg, #f59e0b, #dc2626)" }}
+                >
+                  <Trophy className="w-4 h-4" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-white font-bold text-sm truncate">{pt.name}</p>
+                  <p className="text-white/40 text-[11px] truncate">Host: {pt.hostName} · {pt.players.length}/{pt.size} jugadores</p>
+                </div>
+                <span className="text-[10px] font-black px-2.5 py-1 rounded-full" style={{ background: "rgba(245,158,11,0.15)", color: "#f59e0b" }}>
+                  Unirse
+                </span>
+              </button>
+            ))}
+          </div>
         </div>
       </div>
     </div>
