@@ -195,7 +195,7 @@ export default function Ranking() {
   const monthlyPlayers: any[] = monthlyData?.players ?? [];
   const monthCountdown = useWeekCountdown(monthlyData?.nextReset);
 
-  const [filter, setFilter] = useState<"global" | "weekly" | "monthly" | "friends">("global");
+  const [filter, setFilter] = useState<"global" | "weekly" | "monthly" | "friends">("weekly");
 
   // Presence: online players + incoming challenge notifications
   const { onlinePlayers, incomingChallenge, dismissChallenge } = usePresence(
@@ -357,26 +357,25 @@ export default function Ranking() {
         <div className="flex justify-center">
           <div className="bg-black/30 p-1 rounded-full flex gap-1">
             <button
-              className={`px-4 py-2 rounded-full font-bold transition-all flex items-center gap-2 ${filter === "global" ? "bg-secondary text-black shadow-md" : "text-white hover:bg-white/10"}`}
-              onClick={() => setFilter("global")}
-            >
-              <Trophy className="w-4 h-4" />
-              {lang === "en" ? "Global" : lang === "pt" ? "Global" : lang === "fr" ? "Global" : "Global"}
-            </button>
-            <button
-              className={`px-4 py-2 rounded-full font-bold transition-all flex items-center gap-2 relative ${filter === "weekly" ? "bg-amber-500 text-black shadow-md" : "text-white hover:bg-white/10"}`}
+              className={`px-4 py-2 rounded-full font-bold transition-all flex items-center gap-2 ${filter === "weekly" ? "bg-amber-500 text-black shadow-md" : "text-white hover:bg-white/10"}`}
               onClick={() => setFilter("weekly")}
             >
               <CalendarClock className="w-4 h-4" />
               {lang === "en" ? "Week" : lang === "pt" ? "Semana" : lang === "fr" ? "Semaine" : "Semana"}
-              <span className="absolute -top-1.5 -right-1 text-[9px] font-black bg-amber-400 text-black rounded-full px-1 leading-tight">NEW</span>
             </button>
             <button
-              className={`px-4 py-2 rounded-full font-bold transition-all flex items-center gap-2 relative ${filter === "monthly" ? "bg-purple-500 text-white shadow-md" : "text-white hover:bg-white/10"}`}
+              className={`px-4 py-2 rounded-full font-bold transition-all flex items-center gap-2 ${filter === "monthly" ? "bg-purple-500 text-white shadow-md" : "text-white hover:bg-white/10"}`}
               onClick={() => setFilter("monthly")}
             >
               <Star className="w-4 h-4" />
               {lang === "en" ? "Month" : lang === "pt" ? "Mês" : lang === "fr" ? "Mois" : "Mes"}
+            </button>
+            <button
+              className={`px-4 py-2 rounded-full font-bold transition-all flex items-center gap-2 ${filter === "global" ? "bg-secondary text-black shadow-md" : "text-white hover:bg-white/10"}`}
+              onClick={() => setFilter("global")}
+            >
+              <Trophy className="w-4 h-4" />
+              {lang === "en" ? "All-time" : lang === "pt" ? "Histórico" : lang === "fr" ? "Total" : "Histórico"}
             </button>
             <button
               className={`px-4 py-2 rounded-full font-bold transition-all flex items-center gap-2 ${filter === "friends" ? "bg-secondary text-black shadow-md" : "text-white hover:bg-white/10"}`}
