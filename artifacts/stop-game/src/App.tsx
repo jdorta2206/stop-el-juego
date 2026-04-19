@@ -45,6 +45,7 @@ function Router() {
       <Route path="/estrategias" component={Strategies} />
       <Route path="/player/:id" component={PlayerProfile} />
       <Route path="/torneo" component={Tournament} />
+      <Route path="/torneo/:code" component={Tournament} />
       <Route component={NotFound} />
     </Switch>
   );
