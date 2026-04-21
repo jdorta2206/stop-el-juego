@@ -205,6 +205,12 @@ export default function SoloGame() {
       window.history.replaceState({}, "", window.location.pathname);
       setShowPremiumModal(true);
     }
+    // Auto-start: open the page already in a match. Used by the home "JUGAR YA" hero.
+    if (params.get("auto") === "1") {
+      window.history.replaceState({}, "", window.location.pathname + (params.get("mode") ? `?mode=${params.get("mode")}` : ""));
+      setTimeout(() => startGame(), 60);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const validateMutation = useValidateRound();
