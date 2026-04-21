@@ -76,6 +76,10 @@ export default function Room() {
   const [visiblePhrases, setVisiblePhrases] = useState<Array<{ id: string; playerName: string; text: string }>>([]);
   const seenPhraseIds = useRef<Set<string>>(new Set());
   const [sseActive, setSseActive] = useState(false);
+  const [typingPlayers, setTypingPlayers] = useState<Array<{ playerId: string; playerName: string }>>([]);
+  const [rematchCode, setRematchCode] = useState<string | null>(null);
+  const [rematchLoading, setRematchLoading] = useState(false);
+  const lastTypingPing = useRef(0);
   const [categoryPack, setCategoryPack] = useState<"standard" | "crazy" | "mix">("standard");
   const [roundCategories, setRoundCategories] = useState<string[]>(CATEGORIES_ES);
   const CRAZY_CATEGORIES_ES = [
@@ -230,6 +234,48 @@ export default function Room() {
     const pack = (room as any)?.categoryPack;
     if (pack && ["standard", "crazy", "mix"].includes(pack)) setCategoryPack(pack);
   }, [(room as any)?.categoryPack]);
+
+  // Sync typing presence from room data (excluding self)
+  useEffect(() => {
+    const list = ((room as any)?.typing ?? []) as Array<{ playerId: string; playerName: string }>;
+    setTypingPlayers(list.filter(t => t.playerId !== player?.id));
+  }, [(room as any)?.typing, player?.id]);
+
+  // Sync rematch link — when host of a finished match clicks Revancha, every player gets it
+  useEffect(() => {
+    const code = (room as any)?.rematchCode;
+    if (code && code !== rematchCode) setRematchCode(code);
+  }, [(room as any)?.rematchCode, rematchCode]);
+
+  // Throttled "I'm typing" ping — fires at most once every 1.5s while typing
+  const pingTyping = useCallback(() => {
+    if (!player?.id || !roomCode) return;
+    const now = Date.now();
+    if (now - lastTypingPing.current < 1500) return;
+    lastTypingPing.current = now;
+    fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/typing`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerId: player.id, playerName: player.name ?? "?" }),
+    }).catch(() => {});
+  }, [player?.id, player?.name, roomCode]);
+
+  // Trigger Revancha — first caller creates the new room, others piggyback on the broadcast
+  const handleRematch = useCallback(async () => {
+    if (rematchLoading) return;
+    if (rematchCode) { setLocation(`/sala/${rematchCode}`); return; }
+    if (!player?.id || !roomCode) return;
+    setRematchLoading(true);
+    try {
+      const r = await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/rematch`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ playerId: player.id, playerName: player.name ?? "?", avatarColor: (player as any).avatarColor }),
+      });
+      const j = await r.json();
+      if (j.rematchCode) { setRematchCode(j.rematchCode); setLocation(`/sala/${j.rematchCode}`); }
+    } catch {} finally { setRematchLoading(false); }
+  }, [rematchCode, rematchLoading, player, roomCode, setLocation]);
 
   // Recompute categories when round starts
   useEffect(() => {
@@ -824,7 +870,7 @@ export default function Room() {
             </div>
 
             {/* Who's submitted */}
-            <div className="flex gap-1.5 mb-3 flex-wrap">
+            <div className="flex gap-1.5 mb-2 flex-wrap">
               {players.map((p: any) => (
                 <span key={p.playerId}
                   className={`flex items-center gap-1 text-xs px-2 py-1 rounded-full font-bold ${p.isReady ? "bg-green-500/20 text-green-300" : "bg-white/10 text-white/40"}`}>
@@ -833,6 +879,36 @@ export default function Room() {
                 </span>
               ))}
             </div>
+
+            {/* Live typing presence — pure social pressure */}
+            <AnimatePresence>
+              {typingPlayers.length > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, y: -6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  className="flex items-center gap-2 mb-3 text-xs text-white/70"
+                >
+                  <span className="flex gap-0.5">
+                    {[0, 1, 2].map(i => (
+                      <motion.span
+                        key={i}
+                        className="inline-block w-1 h-1 rounded-full bg-amber-400"
+                        animate={{ opacity: [0.3, 1, 0.3] }}
+                        transition={{ duration: 0.9, repeat: Infinity, delay: i * 0.15 }}
+                      />
+                    ))}
+                  </span>
+                  <span className="font-bold truncate">
+                    {typingPlayers.length === 1
+                      ? `${typingPlayers[0].playerName} está escribiendo...`
+                      : typingPlayers.length === 2
+                        ? `${typingPlayers[0].playerName} y ${typingPlayers[1].playerName} están escribiendo...`
+                        : `${typingPlayers.length} jugadores están escribiendo...`}
+                  </span>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {/* Power card — shown if player has one */}
             {(() => {
@@ -926,7 +1002,10 @@ export default function Room() {
                     </div>
                     <Input
                       value={responses[cat] || ""}
-                      onChange={e => setResponses(r => ({ ...r, [cat]: e.target.value.toUpperCase() }))}
+                      onChange={e => {
+                        setResponses(r => ({ ...r, [cat]: e.target.value.toUpperCase() }));
+                        pingTyping();
+                      }}
                       placeholder={`${cat} con ${currentLetter}...`}
                       autoComplete="off" autoCorrect="off"
                     />
@@ -1379,11 +1458,41 @@ export default function Room() {
                 🏆 Ver bracket del torneo
               </motion.button>
             )}
+            {/* ⚡ REVANCHA — same opponents, one tap */}
+            {!tournamentCtx && (
+              <motion.button
+                whileTap={{ scale: 0.96 }}
+                onClick={handleRematch}
+                disabled={rematchLoading}
+                animate={rematchCode ? {
+                  boxShadow: [
+                    "0 0 0px rgba(220,38,38,0.0)",
+                    "0 0 24px rgba(220,38,38,0.7)",
+                    "0 0 0px rgba(220,38,38,0.0)",
+                  ],
+                } : {}}
+                transition={{ repeat: Infinity, duration: 1.4 }}
+                className="w-full flex items-center justify-center gap-3 py-5 rounded-2xl font-black text-xl disabled:opacity-60"
+                style={{
+                  background: rematchCode
+                    ? "linear-gradient(135deg, #f9a825, #dc2626)"
+                    : "linear-gradient(135deg, #1a237e, #283593)",
+                  color: "white",
+                  textShadow: "0 2px 6px rgba(0,0,0,0.3)",
+                }}
+              >
+                {rematchLoading
+                  ? "Creando..."
+                  : rematchCode
+                    ? "⚔️ ¡ENTRAR A LA REVANCHA!"
+                    : "🔥 REVANCHA"}
+              </motion.button>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <Button variant="secondary" size="lg" onClick={() => setLocation("/ranking")}>
                 <Trophy className="w-4 h-4 mr-2" /> Ranking
               </Button>
-              <Button size="lg" onClick={() => setLocation("/multiplayer")}>Nueva Partida</Button>
+              <Button size="lg" onClick={() => setLocation("/multiplayer")}>Otra sala</Button>
             </div>
           </motion.div>
         )}

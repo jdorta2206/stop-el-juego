@@ -37,6 +37,24 @@ const roomCategoryPacks = new Map<string, "standard" | "crazy" | "mix">();
 type QuickPhrase = { id: string; playerName: string; text: string; ts: number };
 const roomPhrases = new Map<string, QuickPhrase[]>();
 
+// Live typing presence — playerId → { name, ts }. Stale after 3 seconds.
+const roomTyping = new Map<string, Map<string, { name: string; ts: number }>>();
+function getTyping(code: string, excludeId?: string): { playerId: string; playerName: string }[] {
+  const m = roomTyping.get(code);
+  if (!m) return [];
+  const cutoff = Date.now() - 3000;
+  const out: { playerId: string; playerName: string }[] = [];
+  for (const [pid, info] of [...m.entries()]) {
+    if (info.ts < cutoff) { m.delete(pid); continue; }
+    if (excludeId && pid === excludeId) continue;
+    out.push({ playerId: pid, playerName: info.name });
+  }
+  return out;
+}
+
+// Rematch links — oldCode → newCode (in-memory, ephemeral)
+const roomRematch = new Map<string, string>();
+
 const QUICK_PHRASES = [
   "¡Buena!", "¡Trampa! 😤", "¡Revanche!", "¡Eso no vale!",
   "🔥 ¡Brillante!", "😂 ¡Me ganaste!", "¡GG!", "🤔 ¡Difícil esa!",
@@ -107,6 +125,8 @@ function formatRoom(room: any) {
     bluffVoteDeadline: meta?.bluffDeadline ?? null,
     reactions: getReactions(code),
     phrases: getPhrases(code),
+    typing: getTyping(code),
+    rematchCode: roomRematch.get(code) ?? null,
     createdAt: room.createdAt,
   };
 }
@@ -493,6 +513,80 @@ router.get("/:roomCode/events", async (req, res) => {
 });
 
 // POST /rooms/:roomCode/phrase — quick phrase (social chat)
+// POST /rooms/:roomCode/typing — heartbeat: this player is currently typing.
+// Throttled by the client to once every ~1.5s. Stale entries auto-expire after 3s.
+router.post("/:roomCode/typing", async (req, res) => {
+  const code = req.params.roomCode.toUpperCase();
+  const { playerId, playerName } = req.body as { playerId: string; playerName: string };
+  if (!playerId) { res.status(400).json({ error: "Missing playerId" }); return; }
+
+  let m = roomTyping.get(code);
+  if (!m) { m = new Map(); roomTyping.set(code, m); }
+  m.set(playerId, { name: String(playerName ?? "?").slice(0, 30), ts: Date.now() });
+
+  // Lightweight broadcast — re-fetch room and broadcast formatted state
+  const rooms = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, code)).limit(1);
+  if (rooms.length > 0) broadcastAndFormat(rooms[0]);
+  res.json({ ok: true });
+});
+
+// POST /rooms/:roomCode/rematch — first caller creates a new room with same settings,
+// the new code is broadcast to everyone in the original room so they can jump in with one tap.
+router.post("/:roomCode/rematch", async (req, res) => {
+  const oldCode = req.params.roomCode.toUpperCase();
+  const { playerId, playerName, avatarColor } = req.body as { playerId: string; playerName: string; avatarColor?: string };
+
+  // Already created by another player → just return it
+  const existingNew = roomRematch.get(oldCode);
+  if (existingNew) { res.json({ rematchCode: existingNew }); return; }
+
+  const oldRooms = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, oldCode)).limit(1);
+  if (oldRooms.length === 0) { res.status(404).json({ error: "Room not found" }); return; }
+  const oldRoom = oldRooms[0];
+
+  // New room = same settings, this player as host
+  let newCode = generateRoomCode();
+  for (let i = 0; i < 5; i++) {
+    const exists = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, newCode)).limit(1);
+    if (exists.length === 0) break;
+    newCode = generateRoomCode();
+  }
+
+  const players = [{
+    playerId,
+    playerName: playerName ?? "?",
+    avatarColor: avatarColor ?? "#e53e3e",
+    score: 0,
+    roundScore: 0,
+    isHost: true,
+    isReady: false,
+  }];
+
+  await db.insert(roomsTable).values({
+    roomCode: newCode,
+    hostId: playerId,
+    hostName: playerName ?? "",
+    status: "waiting",
+    currentRound: 0,
+    maxRounds: oldRoom.maxRounds,
+    maxPlayers: oldRoom.maxPlayers ?? 8,
+    gameMode: oldRoom.gameMode ?? "classic",
+    language: oldRoom.language,
+    playersJson: JSON.stringify(players),
+    stopperJson: null,
+    isPublic: false,
+  });
+
+  roomRematch.set(oldCode, newCode);
+  // Auto-clear after 5 minutes so the link doesn't linger forever
+  setTimeout(() => roomRematch.delete(oldCode), 5 * 60 * 1000);
+
+  // Broadcast the rematchCode to everyone still subscribed to the old room
+  broadcastAndFormat(oldRoom);
+
+  res.json({ rematchCode: newCode });
+});
+
 router.post("/:roomCode/phrase", (req, res) => {
   const code = req.params.roomCode.toUpperCase();
   const { playerName, phraseIndex } = req.body as { playerName: string; phraseIndex: number };
