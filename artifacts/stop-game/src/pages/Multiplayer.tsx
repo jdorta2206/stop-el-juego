@@ -34,7 +34,7 @@ export default function Multiplayer() {
   const [error, setError] = useState("");
   const [showInvite, setShowInvite] = useState(false);
   const [isPublic, setIsPublic] = useState(false);
-  const [gameMode, setGameMode] = useState<"classic" | "blitz" | "challenge">("classic");
+  const [gameMode, setGameMode] = useState<"classic" | "blitz" | "challenge" | "random">("classic");
   const [maxPlayers, setMaxPlayers] = useState(8);
   const [publicRooms, setPublicRooms] = useState<PublicRoom[]>([]);
   const [loadingPublic, setLoadingPublic] = useState(false);
@@ -195,21 +195,25 @@ export default function Multiplayer() {
             {/* Game mode selector */}
             <div className="mb-4">
               <p className="text-xs font-bold text-white/40 uppercase tracking-wider mb-2">Modo de juego</p>
-              <div className="grid grid-cols-3 gap-2">
-                {(["classic", "blitz", "challenge"] as const).map(mode => {
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {(["classic", "blitz", "challenge", "random"] as const).map(mode => {
                   const meta: Record<string, { emoji: string; label: string }> = {
                     classic: { emoji: "🎯", label: "Clásico" },
                     blitz: { emoji: "⚡", label: "Blitz" },
                     challenge: { emoji: "🏆", label: "Reto" },
+                    random: { emoji: "🎲", label: "Misterio" },
                   };
                   const active = gameMode === mode;
+                  const isRandom = mode === "random";
                   return (
                     <button
                       key={mode}
                       onClick={() => setGameMode(mode)}
                       className={`flex flex-col items-center gap-1 py-3 px-2 rounded-xl font-bold text-sm transition-all border ${
                         active
-                          ? "bg-secondary/20 border-secondary/50 text-secondary"
+                          ? isRandom
+                            ? "bg-fuchsia-600/25 border-fuchsia-400/60 text-fuchsia-200"
+                            : "bg-secondary/20 border-secondary/50 text-secondary"
                           : "bg-black/20 border-white/10 text-white/50 hover:text-white hover:border-white/20"
                       }`}
                     >
@@ -219,6 +223,11 @@ export default function Multiplayer() {
                   );
                 })}
               </div>
+              {gameMode === "random" && (
+                <p className="text-xs text-fuchsia-300/80 mt-2 text-center">
+                  El cronómetro está oculto. La ronda termina entre 15 y 55 segundos. ⏱️🎲
+                </p>
+              )}
             </div>
 
             {/* Max players selector */}
