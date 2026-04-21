@@ -20,6 +20,23 @@ import { getApiUrl } from "@/lib/utils";
 
 const ROUND_TIME = 60;
 
+// 🎲 Modo Misterio (STOP Random multijugador): duración secreta determinista
+// derivada de roomCode + ronda + letra. Todos los clientes calculan lo mismo
+// sin necesidad de que el servidor coordine timestamps.
+const RANDOM_MIN = 15;
+const RANDOM_MAX = 55;
+function randomRoundDuration(roomCode: string, round: number, letter: string): number {
+  const seed = `${roomCode}|${round}|${letter}`;
+  let hash = 2166136261;
+  for (let i = 0; i < seed.length; i++) {
+    hash ^= seed.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  const positive = Math.abs(hash);
+  const range = RANDOM_MAX - RANDOM_MIN + 1;
+  return RANDOM_MIN + (positive % range);
+}
+
 /** Mirror of server-side normalizeWord — strip accents, lower, keep only a-z + ñ */
 function normalizeForScore(word: string): string {
   return word.trim().toLowerCase()
@@ -399,11 +416,25 @@ export default function Room() {
     submitResults(score, asStopper);
   }, [currentLetter, submitResults]);
 
+  // 🎲 In random mode, the round duration is a hidden value derived deterministically
+  // from roomCode + currentRound + currentLetter, so all clients agree without server coord.
+  const isRandomMode = (room as any)?.gameMode === "random";
+  const roundDurationFor = useCallback((round: number, letter: string) => {
+    if (isRandomMode && roomCode) {
+      // Use a deterministic seed; even if `letter` is briefly missing the result
+      // stays consistent across clients (never falls back to 60s mid-round).
+      return randomRoundDuration(roomCode.toUpperCase(), round, letter || "");
+    }
+    return ROUND_TIME;
+  }, [isRandomMode, roomCode]);
+
   // Start game timer for this round
   const startRoundTimer = useCallback(() => {
     stopAllTimers();
     hasSubmittedRef.current = false;
     isFreezingRef.current = false;
+    // Reset timeLeft to the round-specific duration (random mode → hidden value)
+    setTimeLeft(roundDurationFor(currentRound, currentLetter));
     timerRef.current = setInterval(() => {
       setTimeLeft(prev => {
         if (prev <= 1) {
@@ -414,7 +445,7 @@ export default function Room() {
         return prev - 1;
       });
     }, 1000);
-  }, [stopAllTimers, autoSubmit]);
+  }, [stopAllTimers, autoSubmit, roundDurationFor, currentRound, currentLetter]);
 
   // Start freeze countdown (when STOP is called by someone).
   // isFreezingRef is set SYNCHRONOUSLY so the polling effect can check it
@@ -870,10 +901,24 @@ export default function Room() {
               <div className="flex-1">
                 <div className="flex justify-between text-xs font-bold text-white/60 mb-1">
                   <span>RONDA {currentRound}/{maxRounds} · {players.length} jugadores</span>
-                  <span className={timeLeft <= 10 ? "text-red-400 animate-pulse font-black" : ""}>{timeLeft}s</span>
+                  {isRandomMode ? (
+                    <span className="text-fuchsia-300 font-black animate-pulse">🎲 MISTERIO</span>
+                  ) : (
+                    <span className={timeLeft <= 10 ? "text-red-400 animate-pulse font-black" : ""}>{timeLeft}s</span>
+                  )}
                 </div>
-                <Progress value={(timeLeft / ROUND_TIME) * 100}
-                  indicatorClass={timeLeft <= 10 ? "bg-red-500" : timeLeft <= 30 ? "bg-yellow-400" : "bg-green-400"} />
+                {isRandomMode ? (
+                  <div className="relative h-2 w-full overflow-hidden rounded-full bg-purple-950/50 border border-fuchsia-500/30">
+                    <motion.div
+                      className="absolute inset-y-0 w-1/3 bg-gradient-to-r from-fuchsia-500 via-purple-400 to-pink-500 rounded-full"
+                      animate={{ x: ["-30%", "230%"] }}
+                      transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
+                    />
+                  </div>
+                ) : (
+                  <Progress value={(timeLeft / ROUND_TIME) * 100}
+                    indicatorClass={timeLeft <= 10 ? "bg-red-500" : timeLeft <= 30 ? "bg-yellow-400" : "bg-green-400"} />
+                )}
               </div>
               <button
                 onClick={() => { toggleMute(); setMuted(m => !m); }}
