@@ -3,7 +3,7 @@ import { getApiUrl } from "@/lib/utils";
 
 const STORAGE_KEY = "stop_best_score_v2";
 
-type GameMode = "normal" | "quick" | "chaos" | "daily";
+type GameMode = "normal" | "quick" | "chaos" | "daily" | "random";
 type BestScores = Partial<Record<GameMode, number>>;
 
 async function syncBestsFromServer(playerId: string): Promise<BestScores> {

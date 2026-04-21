@@ -318,6 +318,32 @@ export default function Home() {
             </motion.div>
           </Link>
 
+          {/* 🎲 STOP Random — el juego corta cuando le da la gana */}
+          <Link href="/solo?mode=random">
+            <motion.div
+              whileHover={{ scale: 1.02, y: -2 }}
+              whileTap={{ scale: 0.98 }}
+              className="w-full flex items-center gap-4 px-5 py-3.5 rounded-2xl font-black tracking-wide shadow-lg"
+              style={{
+                background: "linear-gradient(135deg, rgba(236,72,153,0.22), rgba(88,28,135,0.28))",
+                border: "2px solid rgba(236,72,153,0.55)",
+                color: "white",
+              }}
+            >
+              <div
+                className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-xl"
+                style={{ background: "linear-gradient(135deg, #ec4899, #7e22ce)" }}
+              >
+                🎲
+              </div>
+              <div className="flex-1">
+                <p className="text-white font-black text-base leading-tight">STOP Random</p>
+                <p className="text-white/60 text-xs font-bold">Tiempo oculto · corta cuando quiere</p>
+              </div>
+              <span className="text-pink-400 font-black text-lg">→</span>
+            </motion.div>
+          </Link>
+
           {/* Chaos mode button */}
           <Link href="/solo?mode=chaos">
             <motion.div
