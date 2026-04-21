@@ -105,15 +105,21 @@ export default function SoloGame() {
   const isDailyMode = urlParams.get("daily") === "true";
   const isQuickMode = urlParams.get("mode") === "quick";
   const isChaosMode = urlParams.get("mode") === "chaos";
+  const isRandomMode = urlParams.get("mode") === "random";
   const dailyLetter = urlParams.get("letter") || "";
   const dailyCategories = urlParams.get("cats")?.split(",").filter(Boolean) || [];
 
-  const gameMode = isDailyMode ? "daily" : isQuickMode ? "quick" : isChaosMode ? "chaos" : "normal";
+  const gameMode = isDailyMode ? "daily" : isQuickMode ? "quick" : isChaosMode ? "chaos" : isRandomMode ? "random" : "normal";
   const { best: personalBest, updateBest } = usePersonalBest(gameMode, player?.id);
   const [bestResult, setBestResult] = useState<{ isNew: boolean; diff: number } | null>(null);
 
-  const baseRoundTime = isQuickMode ? QUICK_ROUND_TIME : isChaosMode ? CHAOS_ROUND_TIME : insaneMode ? QUICK_ROUND_TIME : ROUND_TIME;
-  const effectiveRoundTime = (!isQuickMode && !isDailyMode && !isChaosMode && !insaneMode && randomEvent === "speed")
+  // 🎲 STOP Random — pick a fresh secret end time each round (15–55s). Player never sees the timer.
+  const [randomRoundTime, setRandomRoundTime] = useState<number>(() => 15 + Math.floor(Math.random() * 41));
+  const baseRoundTime = isRandomMode ? randomRoundTime
+    : isQuickMode ? QUICK_ROUND_TIME
+    : isChaosMode ? CHAOS_ROUND_TIME
+    : insaneMode ? QUICK_ROUND_TIME : ROUND_TIME;
+  const effectiveRoundTime = (!isQuickMode && !isDailyMode && !isChaosMode && !isRandomMode && !insaneMode && randomEvent === "speed")
     ? SPEED_ROUND_TIME : baseRoundTime;
   const roundTime = effectiveRoundTime;
   const maxRounds = isDailyMode ? 1 : isQuickMode ? 1 : MAX_ROUNDS;
@@ -230,6 +236,8 @@ export default function SoloGame() {
 
   const startGame = () => {
     setAiComment(null);
+    // 🎲 Random mode — reroll the secret round time so each round feels different (15–55s)
+    if (isRandomMode) setRandomRoundTime(15 + Math.floor(Math.random() * 41));
     // Pick random event (only in normal solo mode)
     let event: RandomEvent = null;
     if (!isDailyMode && !isQuickMode && !isChaosMode) {
@@ -831,21 +839,37 @@ export default function SoloGame() {
               </motion.div>
             )}
           </AnimatePresence>
-          {/* Combo badge */}
+          {/* 🔥 Racha badge — bolder, with explicit point multiplier */}
           <AnimatePresence>
-            {combo >= 2 && (
-              <motion.div
-                key={`combo-${combo}`}
-                initial={{ scale: 0, rotate: -15 }}
-                animate={{ scale: 1, rotate: 0 }}
-                exit={{ scale: 0 }}
-                transition={{ type: "spring", bounce: 0.7 }}
-                className="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-black"
-                style={{ background: "linear-gradient(135deg, rgba(239,68,68,0.9), rgba(220,38,38,0.9))", color: "white" }}
-              >
-                <Flame size={11} fill="white" /> {t.game.combo} x{combo}!
-              </motion.div>
-            )}
+            {combo >= 2 && (() => {
+              const mult = combo >= 4 ? 2 : 1.5;
+              const isMax = combo >= 4;
+              return (
+                <motion.div
+                  key={`combo-${combo}`}
+                  initial={{ scale: 0, rotate: -20, y: -10 }}
+                  animate={{ scale: 1, rotate: 0, y: 0 }}
+                  exit={{ scale: 0 }}
+                  transition={{ type: "spring", bounce: 0.7 }}
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-sm font-black shadow-lg"
+                  style={{
+                    background: isMax
+                      ? "linear-gradient(135deg, #f59e0b, #dc2626, #f59e0b)"
+                      : "linear-gradient(135deg, rgba(239,68,68,0.95), rgba(220,38,38,0.95))",
+                    color: "white",
+                    backgroundSize: isMax ? "200% 100%" : undefined,
+                    boxShadow: isMax
+                      ? "0 0 18px rgba(245,158,11,0.6), 0 0 36px rgba(220,38,38,0.4)"
+                      : "0 4px 12px rgba(220,38,38,0.4)",
+                    animation: isMax ? "comboShine 1.4s linear infinite" : undefined,
+                  }}
+                >
+                  <Flame size={14} fill="white" />
+                  <span>RACHA x{combo}</span>
+                  <span className="bg-black/30 rounded-full px-1.5 py-0.5 text-xs ml-0.5">×{mult} pts</span>
+                </motion.div>
+              );
+            })()}
           </AnimatePresence>
         </div>
 
@@ -1158,16 +1182,19 @@ export default function SoloGame() {
                     <span className="font-bold text-sm text-white/70">{t.game.round}</span>
                     <div className="flex items-center gap-2">
                       <motion.span
-                        key={randomEvent === "time_bomb" ? "bomb" : timeLeft}
-                        initial={{ scale: timeLeft <= 10 && randomEvent !== "time_bomb" ? 1.4 : 1 }}
-                        animate={{ scale: 1 }}
+                        key={isRandomMode ? "rand" : randomEvent === "time_bomb" ? "bomb" : timeLeft}
+                        initial={{ scale: timeLeft <= 10 && randomEvent !== "time_bomb" && !isRandomMode ? 1.4 : 1 }}
+                        animate={isRandomMode ? { opacity: [0.6, 1, 0.6] } : { scale: 1 }}
+                        transition={isRandomMode ? { duration: 1.2, repeat: Infinity } : undefined}
                         className={
-                          randomEvent === "time_bomb"
-                            ? "text-red-400 font-black text-lg animate-pulse"
-                            : timeLeft <= 10 ? "text-red-300 font-black text-lg" : timeLeft <= 25 ? "text-yellow-300 font-black" : "font-bold"
+                          isRandomMode
+                            ? "text-purple-300 font-black text-lg"
+                            : randomEvent === "time_bomb"
+                              ? "text-red-400 font-black text-lg animate-pulse"
+                              : timeLeft <= 10 ? "text-red-300 font-black text-lg" : timeLeft <= 25 ? "text-yellow-300 font-black" : "font-bold"
                         }
                       >
-                        {randomEvent === "time_bomb" ? "💣?" : `${timeLeft}s`}
+                        {isRandomMode ? "🎲 ¿?" : randomEvent === "time_bomb" ? "💣?" : `${timeLeft}s`}
                       </motion.span>
                       {/* Mute toggle */}
                       <button
@@ -1179,10 +1206,22 @@ export default function SoloGame() {
                       </button>
                     </div>
                   </div>
-                  <Progress
-                    value={(timeLeft / roundTime) * 100}
-                    indicatorClass={timeLeft <= 10 ? "bg-red-500" : timeLeft <= 25 ? "bg-yellow-400" : "bg-green-400"}
-                  />
+                  {isRandomMode ? (
+                    /* Random mode — animated mystery bar, no real progress shown */
+                    <div className="h-2.5 w-full rounded-full overflow-hidden bg-purple-900/40">
+                      <motion.div
+                        className="h-full"
+                        style={{ background: "linear-gradient(90deg, #a855f7, #ec4899, #a855f7)", backgroundSize: "200% 100%" }}
+                        animate={{ backgroundPosition: ["0% 0%", "100% 0%"] }}
+                        transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
+                      />
+                    </div>
+                  ) : (
+                    <Progress
+                      value={(timeLeft / roundTime) * 100}
+                      indicatorClass={timeLeft <= 10 ? "bg-red-500" : timeLeft <= 25 ? "bg-yellow-400" : "bg-green-400"}
+                    />
+                  )}
                 </div>
               </div>
 
