@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 
 import { useParams, useLocation } from "wouter";
 import { Layout } from "@/components/Layout";
+import { PremiumBadge } from "@/components/PremiumBadge";
 import { Button, Card, Input, Progress } from "@/components/ui";
 import { useGetRoom, useSubmitRoomResults, getGetRoomQueryKey } from "@workspace/api-client-react";
 import { usePlayer } from "@/hooks/use-player";
@@ -787,8 +788,9 @@ export default function Room() {
                         style={{ backgroundColor: p.avatarColor || "#555" }}>
                         {p.playerName.charAt(0).toUpperCase()}
                       </div>
-                      <span className="flex-1 font-bold text-sm truncate">
-                        {p.playerName}
+                      <span className="flex-1 font-bold text-sm truncate flex items-center gap-1">
+                        <span className="truncate">{p.playerName}</span>
+                        {p.isPremium && <PremiumBadge size="xs" />}
                         {p.playerId === player?.id && <span className="text-white/40 text-xs ml-1">(tú)</span>}
                       </span>
                       {p.isHost && <span className="text-xs bg-secondary text-black px-2 py-0.5 rounded-full font-black">HOST</span>}
@@ -936,6 +938,7 @@ export default function Room() {
                   className={`flex items-center gap-1 text-xs px-2 py-1 rounded-full font-bold ${p.isReady ? "bg-green-500/20 text-green-300" : "bg-white/10 text-white/40"}`}>
                   {p.isReady ? <CheckCircle2 className="w-3 h-3" /> : <Circle className="w-3 h-3" />}
                   {p.playerName}
+                  {p.isPremium && <PremiumBadge size="xs" />}
                 </span>
               ))}
             </div>
@@ -1386,7 +1389,10 @@ export default function Room() {
                     style={{ backgroundColor: p.avatarColor }}>
                     {p.playerName.charAt(0).toUpperCase()}
                   </div>
-                  <span className="flex-1 font-bold text-sm">{p.playerName}</span>
+                  <span className="flex-1 font-bold text-sm flex items-center gap-1">
+                    {p.playerName}
+                    {p.isPremium && <PremiumBadge size="xs" />}
+                  </span>
                   {p.isReady
                     ? <span className="text-green-400 text-sm font-bold flex items-center gap-1"><CheckCircle2 className="w-4 h-4" /> Listo</span>
                     : <span className="text-white/30 text-xs font-bold animate-pulse">Enviando...</span>}
@@ -1456,8 +1462,9 @@ export default function Room() {
                                     style={{ backgroundColor: p.avatarColor }}>
                                     {p.playerName.charAt(0).toUpperCase()}
                                   </div>
-                                  <p className={`text-xs font-bold flex-1 truncate ${isMe ? "text-secondary" : "text-white/80"}`}>
-                                    {p.playerName}
+                                  <p className={`text-xs font-bold flex-1 truncate flex items-center gap-1 ${isMe ? "text-secondary" : "text-white/80"}`}>
+                                    <span className="truncate">{p.playerName}</span>
+                                    {p.isPremium && <PremiumBadge size="xs" />}
                                   </p>
                                   <p className={`text-xs font-black truncate max-w-[120px] ${!revealed ? "blur-sm" : valid ? isDupe ? "text-yellow-400" : "text-green-400" : "text-white/30"}`}>
                                     {raw || "—"}
@@ -1549,7 +1556,11 @@ export default function Room() {
                             {p.playerName.charAt(0).toUpperCase()}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="font-black text-sm truncate">{p.playerName} {isMe && <span className="text-secondary text-xs">(tú)</span>}</p>
+                            <p className="font-black text-sm truncate flex items-center gap-1">
+                              <span className="truncate">{p.playerName}</span>
+                              {p.isPremium && <PremiumBadge size="xs" />}
+                              {isMe && <span className="text-secondary text-xs">(tú)</span>}
+                            </p>
                             <p className="text-xs text-white/40">+{roundPts} pts esta ronda</p>
                           </div>
                           <p className="font-black text-secondary text-lg shrink-0">{p.score || 0}</p>
@@ -1643,7 +1654,11 @@ export default function Room() {
                       {p.playerName.charAt(0).toUpperCase()}
                     </div>
                     <div className="flex-1">
-                      <p className="font-black">{p.playerName} {isMe && <span className="text-secondary/80 font-bold">(Tú)</span>}</p>
+                      <p className="font-black flex items-center gap-1">
+                        {p.playerName}
+                        {p.isPremium && <PremiumBadge size="sm" />}
+                        {isMe && <span className="text-secondary/80 font-bold">(Tú)</span>}
+                      </p>
                       {i === 0 && <p className="text-xs text-secondary font-black">¡GANADOR!</p>}
                     </div>
                     <p className="text-2xl font-black text-secondary">{p.score || 0}</p>
