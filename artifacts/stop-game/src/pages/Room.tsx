@@ -73,6 +73,11 @@ export default function Room() {
   const [floatingReactions, setFloatingReactions] = useState<Array<{ id: string; emoji: string; playerName: string }>>([]);
   const seenReactionIds = useRef<Set<string>>(new Set());
   const [showPhrases, setShowPhrases] = useState(false);
+  // 🕵️ Spy / Robar respuesta — 1 use per round, costs -10 pts at submit
+  const [spyUsed, setSpyUsed] = useState(false);
+  const [spyLoading, setSpyLoading] = useState(false);
+  const [spyReveal, setSpyReveal] = useState<{ rivalName: string; category: string; word: string } | null>(null);
+  const [spyError, setSpyError] = useState<string | null>(null);
   const [visiblePhrases, setVisiblePhrases] = useState<Array<{ id: string; playerName: string; text: string }>>([]);
   const seenPhraseIds = useRef<Set<string>>(new Set());
   const [sseActive, setSseActive] = useState(false);
@@ -247,7 +252,8 @@ export default function Room() {
     if (code && code !== rematchCode) setRematchCode(code);
   }, [(room as any)?.rematchCode, rematchCode]);
 
-  // Throttled "I'm typing" ping — fires at most once every 1.5s while typing
+  // Throttled "I'm typing" ping — fires at most once every 1.5s while typing.
+  // Also sends a snapshot of current responses so /spy can peek at what rivals wrote.
   const pingTyping = useCallback(() => {
     if (!player?.id || !roomCode) return;
     const now = Date.now();
@@ -256,7 +262,11 @@ export default function Room() {
     fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/typing`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ playerId: player.id, playerName: player.name ?? "?" }),
+      body: JSON.stringify({
+        playerId: player.id,
+        playerName: player.name ?? "?",
+        responses: { ...responsesRef.current },
+      }),
     }).catch(() => {});
   }, [player?.id, player?.name, roomCode]);
 
@@ -366,6 +376,7 @@ export default function Room() {
     // Speed bonus: stopper gets +5 if they filled ALL categories
     const allFilled = CATEGORIES_ES.every(cat => (responsesSnapshotRef.current[cat] ?? "").trim().length >= 2);
     const finalScore = isStopper && allFilled ? score + 5 : score;
+    // 🕵️ Nota: el coste -10 por ESPIAR lo aplica el servidor autoritativamente.
     try {
       await submitMutation.mutateAsync({
         roomCode: roomCode.toUpperCase(),
@@ -834,6 +845,10 @@ export default function Room() {
               isSpinning={true}
               targetLetter={currentLetter}
               onSpinComplete={() => {
+                // 🕵️ Reset spy budget for the new round
+                setSpyUsed(false);
+                setSpyReveal(null);
+                setSpyError(null);
                 setPhase("playing");
                 startRoundTimer();
               }}
@@ -1035,7 +1050,46 @@ export default function Room() {
                   💬
                 </motion.button>
               </div>
-              <div className="max-w-2xl mx-auto w-full">
+              <div className="max-w-2xl mx-auto w-full flex flex-col gap-2">
+                {/* 🕵️ ESPÍA — peek at a rival's in-progress answer */}
+                <button
+                  type="button"
+                  disabled={spyUsed || spyLoading}
+                  onClick={async () => {
+                    if (spyUsed || spyLoading || !player?.id || !roomCode) return;
+                    setSpyError(null);
+                    setSpyLoading(true);
+                    try {
+                      const r = await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/spy`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ playerId: player.id }),
+                      });
+                      if (!r.ok) {
+                        const j = await r.json().catch(() => ({}));
+                        setSpyError(j.error || "No se pudo espiar 🤷");
+                        setTimeout(() => setSpyError(null), 2200);
+                      } else {
+                        const data = await r.json();
+                        setSpyUsed(true);
+                        setSpyReveal(data);
+                        setTimeout(() => setSpyReveal(null), 5000);
+                      }
+                    } catch {
+                      setSpyError("Sin conexión 📡");
+                      setTimeout(() => setSpyError(null), 2200);
+                    } finally {
+                      setSpyLoading(false);
+                    }
+                  }}
+                  className={`w-full py-2 rounded-full text-sm font-bold border-2 transition-all ${
+                    spyUsed
+                      ? "bg-black/40 border-white/10 text-white/40 cursor-not-allowed"
+                      : "bg-gradient-to-r from-purple-600 to-fuchsia-600 border-white/30 text-white hover:scale-[1.02] active:scale-95 shadow-lg shadow-purple-900/40"
+                  }`}
+                >
+                  {spyLoading ? "Espiando…" : spyUsed ? "🕵️ ESPÍA usado" : "🕵️ ESPIAR a un rival · -10 pts"}
+                </button>
                 <Button variant="destructive" size="xl"
                   className="w-full py-5 rounded-full text-3xl shadow-2xl shadow-red-900/50 border-4 border-white/20"
                   onClick={handleStop} isLoading={isStopping}>
@@ -1043,6 +1097,39 @@ export default function Room() {
                 </Button>
               </div>
             </div>
+            {/* 🕵️ Spy reveal popup */}
+            <AnimatePresence>
+              {spyReveal && (
+                <motion.div
+                  key="spy-reveal"
+                  initial={{ opacity: 0, scale: 0.85, y: -20 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.9, y: -10 }}
+                  className="fixed top-20 left-1/2 -translate-x-1/2 z-50 max-w-sm w-[90vw] rounded-2xl border-2 border-fuchsia-400/60 bg-gradient-to-br from-purple-900/95 to-fuchsia-900/95 backdrop-blur-md p-4 shadow-2xl shadow-purple-900/60"
+                >
+                  <div className="text-xs uppercase tracking-wider text-fuchsia-200/80 font-bold mb-1">🕵️ Interceptado</div>
+                  <div className="text-sm text-white/90">
+                    <span className="font-bold text-fuchsia-200">{spyReveal.rivalName}</span> está escribiendo en{" "}
+                    <span className="font-bold text-white">{spyReveal.category}</span>:
+                  </div>
+                  <div className="mt-2 text-2xl font-display font-black text-white text-center py-2 px-3 bg-black/30 rounded-lg border border-white/10">
+                    "{spyReveal.word}"
+                  </div>
+                  <div className="text-[10px] text-white/50 text-center mt-2">-10 pts · desaparece en 5s</div>
+                </motion.div>
+              )}
+              {spyError && (
+                <motion.div
+                  key="spy-error"
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                  className="fixed top-20 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-full bg-black/80 border border-white/20 text-sm text-white"
+                >
+                  {spyError}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </motion.div>
         )}
 
