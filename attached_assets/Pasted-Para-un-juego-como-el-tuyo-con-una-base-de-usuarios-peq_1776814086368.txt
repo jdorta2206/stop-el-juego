@@ -1,0 +1,65 @@
+Para un juego como el tuyo, con una base de usuarios pequeña pero activa, el camino más realista y rentable no es poner un muro de pago, sino construir un modelo híbrido e inteligente. La clave es monetizar a los jugadores que nunca pagan (que son el 95% de tu base) a través de anuncios, ofreciéndoles valor a cambio. Y cuando los usuarios estén enganchados, ofrecerles mejoras y personalización mediante compras dentro de la app.
+
+Aquí tienes una hoja de ruta práctica, paso a paso, para empezar a generar ingresos de verdad.
+
+🧱 Paso 1: Los Cimientos (Configura tu AdMob YA)
+Para empezar a ganar dinero con anuncios, necesitas la herramienta correcta: Google AdMob. Es el estándar de la industria y el SDK que debes integrar en tu app.
+
+Crea tu cuenta de AdMob: Es el primer paso. Una vez creada, obtendrás tu ID de aplicación de AdMob, que es como la llave para empezar.
+
+Integra el SDK en tu WebView/TWA: Para apps híbridas como la tuya, la integración es un poco especial. Debes asegurarte de que la capa nativa de Android pueda comunicarse con tu código web. La documentación oficial de Google tiene guías específicas sobre cómo integrar la API de WebView para anuncios, lo que permite que las etiquetas de anuncio dentro de tu WebView se rellenen correctamente. Si te surge alguna duda, recursos como GitHub o Stack Overflow tienen ejemplos prácticos de otros desarrolladores que han implementado AdMob en proyectos similares.
+
+🎯 Paso 2: La Estrategia Principal (Anuncios Recompensados)
+Este es el formato estrella y tu principal fuente de ingresos a corto y medio plazo. En 2026, los anuncios recompensados siguen siendo la herramienta más efectiva para monetizar juegos casuales. La magia está en que el jugador elige ver el anuncio a cambio de una ventaja tangible en el juego. No es intrusivo, es beneficioso para él y te genera ingresos a ti.
+
+¿Cómo integrarlo en tu juego de palabras? Aquí tienes algunas ideas prácticas:
+
+"Carta Comodín": Ofrece al jugador la posibilidad de ver un anuncio para recibir una letra aleatoria que pueda usar en la ronda actual.
+
+"Robar Respuesta": Permite al jugador, una vez por partida, ver un anuncio para ver la respuesta de otro jugador (¡esa funcionalidad que ya tienes en mente puede monetizarse!).
+
+Doblar Puntuación: Al final de una ronda o partida, ofrece la opción de ver un anuncio para duplicar la puntuación obtenida.
+
+Revancha Rápida: Si un jugador pierde, puede ver un anuncio para obtener una "oportunidad extra" o un comodín en la siguiente ronda.
+
+Los datos muestran que los usuarios que interactúan con estos anuncios tienen cinco veces más probabilidades de convertirse en compradores más adelante. Los estás "calentando" para el siguiente paso.
+
+💎 Paso 3: La Fuente de Ingresos Premium (Compras Integradas - IAPs)
+Una vez que tienes una base de usuarios fiel, es el momento de ofrecerles mejoras reales. No se trata de vender "poder" para ganar (eso espanta a la gente), sino de vender comodidad, personalización y progreso. El objetivo es que una pequeña parte de tus usuarios (el famoso 2-5%) quiera mejorar su experiencia.
+
+Paquete de Inicio (Starter Pack): Una oferta única y barata (ej: 0,99€ - 1,99€) que incluya monedas para usar en las funciones del Paso 2 y un avatar exclusivo.
+
+Eliminar Anuncios: Una compra única para eliminar todos los anuncios del juego para siempre. Es una de las compras más demandadas.
+
+Temas y Avatares: Vende packs de personalización. Por ejemplo, un "Pack Nocturno" con un tema oscuro o un avatar de "Cerebro Galáctico" para los más competitivos.
+
+Pase de Temporada (Battle Pass): Esta es una estrategia excelente. Ofrece un pase mensual o por temporada (ej: 2,99€/mes). Al comprarlo, el jugador desbloquea una serie de recompensas exclusivas a medida que juega y sube de nivel en el pase.
+
+🗓️ Paso 4: El Ingreso Recurrente (Suscripciones)
+Si el Pase de Temporada funciona, puedes dar el siguiente paso: las micro-suscripciones. No son caras, pero te garantizan un ingreso mensual recurrente. Por ejemplo:
+
+Suscripción "Campeón": Por 1,99€/mes, el jugador recibe una cantidad diaria de monedas, acceso a un avatar especial cada mes y un descuento en las compras de la tienda.
+
+⚙️ Cómo Combinarlo Todo (El Modelo Híbrido)
+La clave del éxito en 2026 es la monetización híbrida, que combina anuncios y compras. No se trata de elegir uno, sino de que ambos se refuercen mutuamente.
+
+Modelo por defecto: El juego es completamente gratis. Los jugadores casuales (los que nunca pagan) tendrán acceso a las funciones de anuncios recompensados del Paso 2.
+
+Para los que pagan: Cuando un usuario compre el "Paquete de Inicio" o la "Eliminación de Anuncios", la frecuencia de anuncios mostrados se reduce drásticamente o desaparece, y tienen acceso prioritario a las recompensas del Pase de Temporada.
+
+📊 Bonus: Un Viento de Cola (Nuevas Comisiones de Google Play)
+A partir del 30 de junio de 2026, Google Play reduce sus comisiones. Para las nuevas instalaciones de tu app, la comisión por compras dentro de la app baja del 30% al 20% (e incluso al 15% si entras en un programa de incentivos). Además, se te permitirá usar sistemas de pago de terceros para ahorrarte ese 5% extra de comisión por procesamiento de pagos. Esto significa que, de cada compra de 1€ que haga un jugador, te quedarás con mucho más que antes.
+
+🚀 Tu Plan de Acción en 3 Fases
+Para que no te abrumes, empieza poco a poco:
+
+Configuración (Esta semana): Crea tu cuenta de AdMob e intégrala correctamente en tu WebView/TWA.
+
+Lanzamiento (Próximas 2 semanas): Implementa 2 o 3 funciones de anuncios recompensados (como las que te he sugerido) y lanza una actualización. El objetivo es empezar a generar ingresos base y aprender cómo reaccionan tus usuarios.
+
+Expansión (Primer mes): Analiza los datos y, si ves que la gente los usa, implementa un Paquete de Inicio y la opción de Eliminar Anuncios como primeras compras. Ya tienes un modelo de negocio funcionando.
+
+Es un proceso, pero con esta hoja de ruta, tu juego dejará de ser un hobby para convertirse en un proyecto con un futuro económico real.
+
+Si en algún momento te surge alguna otra duda, aquí estoy para ayudarte.
+

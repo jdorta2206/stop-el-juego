@@ -9,6 +9,21 @@ const router: IRouter = Router();
 
 const ALPHABET_ES = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").filter(l => !["Q","X"].includes(l));
 
+// Server-validated premium lookup: reads isPremium from the player_scores table.
+// Cosmetic-grade: a guest spoofing another playerId would also need to spoof their identity end-to-end.
+async function isPlayerPremium(playerId: string | null | undefined): Promise<boolean> {
+  if (!playerId) return false;
+  try {
+    const rows = await db.select({ isPremium: playerScoresTable.isPremium })
+      .from(playerScoresTable)
+      .where(eq(playerScoresTable.playerId, playerId))
+      .limit(1);
+    return rows[0]?.isPremium === true;
+  } catch {
+    return false;
+  }
+}
+
 // ── SSE listeners: roomCode → set of response objects ──────────────────────
 type SseClient = { res: import("express").Response; playerId: string };
 const sseClients = new Map<string, Set<SseClient>>();
@@ -288,11 +303,15 @@ router.post("/", async (req, res) => {
     roomCode = generateRoomCode();
   }
 
+  // Look up premium status from DB (server-validated, can't be faked by client)
+  const hostPremium = await isPlayerPremium(hostId);
+
   const players = [{
     playerId: hostId,
     playerName: hostName,
     avatarColor: avatarColor ?? "#e53e3e",
     loginMethod: loginMethod ?? null,
+    isPremium: hostPremium,
     score: 0,
     roundScore: 0,
     isHost: true,
@@ -339,11 +358,13 @@ router.post("/:roomCode/join", async (req, res) => {
   const { playerId, playerName, avatarColor, loginMethod } = body.data;
 
   if (!players.find((p: any) => p.playerId === playerId)) {
+    const joinerPremium = await isPlayerPremium(playerId);
     players.push({
       playerId,
       playerName,
       avatarColor: avatarColor ?? "#3182ce",
       loginMethod: loginMethod ?? null,
+      isPremium: joinerPremium,
       score: 0,
       roundScore: 0,
       isHost: false,

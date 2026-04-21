@@ -70,6 +70,18 @@
     @apply bg-card/80 backdrop-blur-md border border-white/10 shadow-xl;
   }
   
+  /* Premium star badge pulsing glow */
+  @keyframes premiumPulse {
+    0%, 100% {
+      filter: drop-shadow(0 0 3px rgba(250, 204, 21, 0.45));
+      transform: scale(1);
+    }
+    50% {
+      filter: drop-shadow(0 0 8px rgba(250, 204, 21, 0.85));
+      transform: scale(1.12);
+    }
+  }
+
   /* Custom scrollbar for game feeling */
   ::-webkit-scrollbar {
     width: 8px;
