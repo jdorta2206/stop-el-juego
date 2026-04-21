@@ -1565,7 +1565,64 @@ export default function Room() {
             </div>
 
             {/* 🎭 Premios humillación — listo para compartir */}
-            {total >= 2 && (
+            {total >= 2 && (() => {
+              // Compute extra humiliation awards from final-round answers.
+              // Each player has `answers` (Record<category, word>) and `bluffedCategories` (array).
+              type P = any;
+              const norm = (w: string) => (w ?? "").toString().trim().toLowerCase();
+
+              // Build category → list of normalized words across all players (last round)
+              const wordsByCat = new Map<string, string[]>();
+              for (const p of players as P[]) {
+                const ans = (p.answers ?? {}) as Record<string, string>;
+                for (const [cat, w] of Object.entries(ans)) {
+                  const nw = norm(w);
+                  if (!nw) continue;
+                  const arr = wordsByCat.get(cat) ?? [];
+                  arr.push(nw);
+                  wordsByCat.set(cat, arr);
+                }
+              }
+              // Per player: count unique vs duplicated answers in the final round
+              const stats = (players as P[]).map(p => {
+                const ans = (p.answers ?? {}) as Record<string, string>;
+                let unique = 0, dup = 0, filled = 0;
+                for (const [cat, w] of Object.entries(ans)) {
+                  const nw = norm(w);
+                  if (!nw) continue;
+                  filled++;
+                  const occurrences = (wordsByCat.get(cat) ?? []).filter(x => x === nw).length;
+                  if (occurrences === 1) unique++;
+                  else if (occurrences >= 2) dup++;
+                }
+                return {
+                  playerId: p.playerId,
+                  playerName: p.playerName,
+                  unique, dup, filled,
+                  bluffs: (p.bluffedCategories?.length ?? 0) as number,
+                };
+              });
+
+              const winnerOf = <K extends "unique" | "dup" | "bluffs">(k: K, minVal = 1) => {
+                const best = stats.reduce<typeof stats[0] | null>((acc, s) =>
+                  s[k] >= minVal && (!acc || s[k] > acc[k]) ? s : acc, null);
+                if (!best) return null;
+                // Skip if tied with another player on the same metric
+                const tied = stats.filter(s => s[k] === best[k]);
+                return tied.length === 1 ? best : null;
+              };
+              const loserMostEmpty = (() => {
+                const maxEmpty = Math.max(...stats.map(s => Math.max(0, 8 - s.filled)));
+                if (maxEmpty < 3) return null; // only shame if truly bad (3+ empty)
+                const cand = stats.filter(s => (8 - s.filled) === maxEmpty);
+                return cand.length === 1 ? cand[0] : null;
+              })();
+
+              const original = winnerOf("unique", 2);
+              const copion   = winnerOf("dup", 2);
+              const bluffer  = winnerOf("bluffs", 1);
+
+              return (
               <motion.div
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -1592,9 +1649,46 @@ export default function Room() {
                       </div>
                     </div>
                   )}
+                  {original && (
+                    <div className="flex items-center gap-3 text-sm">
+                      <span className="text-2xl">🦄</span>
+                      <div className="flex-1">
+                        <p className="font-black text-fuchsia-300">El Único</p>
+                        <p className="text-xs text-white/60">{original.playerName} · {original.unique} respuestas que nadie más puso</p>
+                      </div>
+                    </div>
+                  )}
+                  {copion && (
+                    <div className="flex items-center gap-3 text-sm">
+                      <span className="text-2xl">🦜</span>
+                      <div className="flex-1">
+                        <p className="font-black text-orange-300">El Copión</p>
+                        <p className="text-xs text-white/60">{copion.playerName} · {copion.dup} respuestas calcadas</p>
+                      </div>
+                    </div>
+                  )}
+                  {bluffer && (
+                    <div className="flex items-center gap-3 text-sm">
+                      <span className="text-2xl">🎭</span>
+                      <div className="flex-1">
+                        <p className="font-black text-cyan-300">El Bluffer</p>
+                        <p className="text-xs text-white/60">{bluffer.playerName} · {bluffer.bluffs} bluff{bluffer.bluffs === 1 ? "" : "s"}</p>
+                      </div>
+                    </div>
+                  )}
+                  {loserMostEmpty && loserMostEmpty.playerId !== champ.playerId && (
+                    <div className="flex items-center gap-3 text-sm">
+                      <span className="text-2xl">🥶</span>
+                      <div className="flex-1">
+                        <p className="font-black text-blue-300">Cerebro Congelado</p>
+                        <p className="text-xs text-white/60">{loserMostEmpty.playerName} · {8 - loserMostEmpty.filled} casillas en blanco</p>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </motion.div>
-            )}
+              );
+            })()}
 
             {/* Share result button */}
             <motion.button
