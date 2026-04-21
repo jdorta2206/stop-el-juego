@@ -52,6 +52,12 @@ function getTyping(code: string, excludeId?: string): { playerId: string; player
   return out;
 }
 
+// 🕵️ Live in-progress responses (for spy/peek mechanic). Stale after 5s.
+// playerId → { name, responses: { category: word }, ts }
+const roomLiveResponses = new Map<string, Map<string, { name: string; responses: Record<string, string>; ts: number }>>();
+// roomCode → set of playerIds that already used their 1 spy this round
+const roomSpyUsage = new Map<string, Set<string>>();
+
 // Rematch links — oldCode → newCode (in-memory, ephemeral)
 const roomRematch = new Map<string, string>();
 
@@ -400,6 +406,11 @@ router.post("/:roomCode/leave", async (req, res) => {
   // If the host leaves while in lobby → delete the room entirely
   if (leavingPlayer?.isHost) {
     await db.delete(roomsTable).where(eq(roomsTable.roomCode, roomCode.toUpperCase()));
+    // Free in-memory ephemeral state for this room
+    roomTyping.delete(roomCode.toUpperCase());
+    roomLiveResponses.delete(roomCode.toUpperCase());
+    roomSpyUsage.delete(roomCode.toUpperCase());
+    roomRematch.delete(roomCode.toUpperCase());
     res.json({ ok: true, deleted: true });
     return;
   }
@@ -517,17 +528,92 @@ router.get("/:roomCode/events", async (req, res) => {
 // Throttled by the client to once every ~1.5s. Stale entries auto-expire after 3s.
 router.post("/:roomCode/typing", async (req, res) => {
   const code = req.params.roomCode.toUpperCase();
-  const { playerId, playerName } = req.body as { playerId: string; playerName: string };
+  const { playerId, playerName, responses } = req.body as {
+    playerId: string;
+    playerName: string;
+    responses?: Record<string, string>;
+  };
   if (!playerId) { res.status(400).json({ error: "Missing playerId" }); return; }
 
   let m = roomTyping.get(code);
   if (!m) { m = new Map(); roomTyping.set(code, m); }
   m.set(playerId, { name: String(playerName ?? "?").slice(0, 30), ts: Date.now() });
 
+  // 🕵️ Stash live responses so /spy can peek at them. Stale after 5 s.
+  if (responses && typeof responses === "object") {
+    let lr = roomLiveResponses.get(code);
+    if (!lr) { lr = new Map(); roomLiveResponses.set(code, lr); }
+    // Sanitize: only keep non-empty string values, cap length
+    const safe: Record<string, string> = {};
+    for (const [k, v] of Object.entries(responses)) {
+      if (typeof v === "string" && v.trim().length > 0) {
+        safe[String(k).slice(0, 60)] = v.trim().slice(0, 80);
+      }
+    }
+    lr.set(playerId, { name: String(playerName ?? "?").slice(0, 30), responses: safe, ts: Date.now() });
+  }
+
   // Lightweight broadcast — re-fetch room and broadcast formatted state
   const rooms = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, code)).limit(1);
   if (rooms.length > 0) broadcastAndFormat(rooms[0]);
   res.json({ ok: true });
+});
+
+// 🕵️ POST /rooms/:roomCode/spy — peek at one rival's in-progress answer.
+// 1 use per round per player. Client should apply -10 pts at submission time.
+router.post("/:roomCode/spy", async (req, res) => {
+  const code = req.params.roomCode.toUpperCase();
+  const { playerId } = req.body as { playerId: string };
+  if (!playerId) { res.status(400).json({ error: "Missing playerId" }); return; }
+
+  // Auth: caller must actually be in the room AND the round must be live
+  const rooms = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, code)).limit(1);
+  if (rooms.length === 0) { res.status(404).json({ error: "Room not found" }); return; }
+  const room = rooms[0];
+  if (room.status !== "playing") {
+    res.status(409).json({ error: "El espionaje sólo está activo durante la ronda" });
+    return;
+  }
+  const players = parsePlayers(room.playersJson);
+  if (!players.some((p: any) => p.playerId === playerId)) {
+    res.status(403).json({ error: "No estás en esta sala" });
+    return;
+  }
+
+  // Enforce 1 use per round
+  let used = roomSpyUsage.get(code);
+  if (!used) { used = new Set(); roomSpyUsage.set(code, used); }
+  if (used.has(playerId)) {
+    res.status(429).json({ error: "Ya espiaste esta ronda" });
+    return;
+  }
+
+  // Find rivals with at least one fresh non-empty response
+  const lr = roomLiveResponses.get(code);
+  if (!lr || lr.size === 0) {
+    res.status(404).json({ error: "Nadie ha empezado a escribir todavía" });
+    return;
+  }
+  const cutoff = Date.now() - 5000;
+  const candidates: Array<{ pid: string; name: string; cat: string; word: string }> = [];
+  for (const [pid, info] of lr.entries()) {
+    if (pid === playerId) continue;
+    if (info.ts < cutoff) continue;
+    for (const [cat, word] of Object.entries(info.responses)) {
+      if (word && word.length > 0) candidates.push({ pid, name: info.name, cat, word });
+    }
+  }
+  if (candidates.length === 0) {
+    res.status(404).json({ error: "Tus rivales aún no escribieron nada 🤷" });
+    return;
+  }
+  const pick = candidates[Math.floor(Math.random() * candidates.length)];
+  used.add(playerId);
+  res.json({
+    rivalName: pick.name,
+    category: pick.cat,
+    word: pick.word,
+  });
 });
 
 // POST /rooms/:roomCode/rematch — first caller creates a new room with same settings,
@@ -695,7 +781,12 @@ router.post("/:roomCode/results", async (req, res) => {
     }
   }
   // Cap roundScore to prevent client-side inflation: max 10 pts per valid answer + 20 bluff bonus each
-  const cappedRoundScore = Math.min(roundScore, validAnswerCount * 30);
+  let cappedRoundScore = Math.min(roundScore, validAnswerCount * 30);
+  // 🕵️ Authoritative spy penalty: -10 pts if the server registered a spy use this round
+  const spies = roomSpyUsage.get(roomCode.toUpperCase());
+  if (spies?.has(playerId)) {
+    cappedRoundScore = Math.max(0, cappedRoundScore - 10);
+  }
 
   const updatedPlayers = players.map((p: any) => {
     if (p.playerId === playerId) {
@@ -753,6 +844,9 @@ router.post("/:roomCode/results", async (req, res) => {
         newStatus = "waiting";
         newLetter = randomLetter();
       }
+      // 🕵️ Reset spy budgets and stale live responses for the new round
+      roomSpyUsage.delete(roomCode.toUpperCase());
+      roomLiveResponses.delete(roomCode.toUpperCase());
     }
   }
 
