@@ -70,8 +70,11 @@ function getTyping(code: string, excludeId?: string): { playerId: string; player
 // 🕵️ Live in-progress responses (for spy/peek mechanic). Stale after 5s.
 // playerId → { name, responses: { category: word }, ts }
 const roomLiveResponses = new Map<string, Map<string, { name: string; responses: Record<string, string>; ts: number }>>();
-// roomCode → set of playerIds that already used their 1 spy this round
-const roomSpyUsage = new Map<string, Set<string>>();
+// roomCode → map of playerId → spy uses this round.
+// Free players: 1 use/round. Premium players: 2 uses/round.
+const roomSpyUsage = new Map<string, Map<string, number>>();
+const SPY_LIMIT_FREE = 1;
+const SPY_LIMIT_PREMIUM = 2;
 
 // Rematch links — oldCode → newCode (in-memory, ephemeral)
 const roomRematch = new Map<string, string>();
@@ -618,11 +621,18 @@ router.post("/:roomCode/spy", async (req, res) => {
     return;
   }
 
-  // Enforce 1 use per round
+  // Enforce per-round usage limit (premium gets 2x)
   let used = roomSpyUsage.get(code);
-  if (!used) { used = new Set(); roomSpyUsage.set(code, used); }
-  if (used.has(playerId)) {
-    res.status(429).json({ error: "Ya espiaste esta ronda" });
+  if (!used) { used = new Map(); roomSpyUsage.set(code, used); }
+  const callerPremium = await isPlayerPremium(playerId);
+  const limit = callerPremium ? SPY_LIMIT_PREMIUM : SPY_LIMIT_FREE;
+  const current = used.get(playerId) ?? 0;
+  if (current >= limit) {
+    res.status(429).json({
+      error: callerPremium
+        ? "Ya usaste tus 2 espías esta ronda"
+        : "Ya espiaste esta ronda. Hazte Premium para 2 usos por ronda.",
+    });
     return;
   }
 
@@ -646,11 +656,13 @@ router.post("/:roomCode/spy", async (req, res) => {
     return;
   }
   const pick = candidates[Math.floor(Math.random() * candidates.length)];
-  used.add(playerId);
+  used.set(playerId, current + 1);
   res.json({
     rivalName: pick.name,
     category: pick.cat,
     word: pick.word,
+    usesLeft: limit - (current + 1),
+    limit,
   });
 });
 
