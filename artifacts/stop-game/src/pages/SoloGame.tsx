@@ -86,6 +86,7 @@ export default function SoloGame() {
   const [lastXpGain, setLastXpGain] = useState(0);
   const [categories, setCategories] = useState<string[]>(getCategories());
   const [muted, setMuted] = useState(false);
+  const [stopFlash, setStopFlash] = useState(false);
 
   // Combo system
   const [combo, setCombo] = useState(0);
@@ -373,7 +374,10 @@ export default function SoloGame() {
       timerRef.current = null;
     }
     sound.playStop();
-    vibrate([80, 30, 80]);
+    // Big juicy haptic: 3 pulses with quick gaps — feels like an alarm
+    vibrate([180, 60, 120, 60, 200]);
+    setStopFlash(true);
+    setTimeout(() => setStopFlash(false), 700);
     setGameState("EVALUATING");
 
     // Use refs to always get the latest state values (avoids stale closure bug)
@@ -701,6 +705,39 @@ export default function SoloGame() {
 
   return (
     <Layout>
+      {/* 💥 Fullscreen STOP flash — fires the instant time runs out / STOP is hit */}
+      <AnimatePresence>
+        {stopFlash && (
+          <motion.div
+            key="stopflash"
+            initial={{ opacity: 0, scale: 0.6 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 1.2 }}
+            transition={{ duration: 0.18 }}
+            className="fixed inset-0 z-[9999] flex items-center justify-center pointer-events-none"
+            style={{
+              background: "radial-gradient(circle, rgba(220,38,38,0.85) 0%, rgba(127,29,29,0.95) 100%)",
+            }}
+          >
+            <motion.div
+              initial={{ scale: 0.4, rotate: -8 }}
+              animate={{ scale: [0.4, 1.25, 1], rotate: [-8, 4, 0] }}
+              transition={{ duration: 0.55, times: [0, 0.55, 1] }}
+              className="font-black tracking-wider"
+              style={{
+                fontFamily: "'Baloo 2', sans-serif",
+                fontSize: "clamp(120px, 28vw, 280px)",
+                color: "#fff",
+                textShadow: "0 8px 30px rgba(0,0,0,0.5), 0 0 80px rgba(255,255,255,0.4)",
+                lineHeight: 1,
+              }}
+            >
+              STOP!
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <div className="flex-1 flex flex-col max-w-2xl mx-auto w-full">
 
         {showRewardedAd && (
