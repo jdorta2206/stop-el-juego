@@ -1468,6 +1468,49 @@ export default function Room() {
                                       {isDupe ? "×2" : "✓"}
                                     </span>
                                   )}
+                                  {/* 👏 Vote-for-funniest button */}
+                                  {revealed && valid && !isMe && (() => {
+                                    const allVotes = ((room as any)?.funVotes ?? []) as Array<{
+                                      round: number; voterId: string; votedPlayerId: string; category: string; answer: string;
+                                    }>;
+                                    const roundNum = currentRound > 1 ? currentRound - 1 : maxRounds;
+                                    const myVote = allVotes.find(v =>
+                                      v.round === roundNum && v.voterId === player?.id);
+                                    const iVotedThis =
+                                      myVote?.votedPlayerId === p.playerId && myVote?.category === cat;
+                                    const voteCount = allVotes.filter(v =>
+                                      v.round === roundNum && v.votedPlayerId === p.playerId && v.category === cat
+                                    ).length;
+                                    return (
+                                      <button
+                                        type="button"
+                                        onClick={async () => {
+                                          if (!player?.id || !roomCode) return;
+                                          try {
+                                            await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/funvote`, {
+                                              method: "POST",
+                                              headers: { "Content-Type": "application/json" },
+                                              body: JSON.stringify({
+                                                playerId: player.id,
+                                                votedPlayerId: p.playerId,
+                                                category: cat,
+                                                round: roundNum,
+                                                answer: raw,
+                                              }),
+                                            });
+                                          } catch {}
+                                        }}
+                                        title={iVotedThis ? "Tu voto" : "Votar como jugada graciosa"}
+                                        className={`text-sm shrink-0 px-1.5 py-0.5 rounded-full transition-all border ${
+                                          iVotedThis
+                                            ? "bg-pink-500/30 border-pink-400/60 scale-110"
+                                            : "bg-white/5 border-transparent hover:bg-white/15 opacity-60 hover:opacity-100"
+                                        }`}
+                                      >
+                                        👏{voteCount > 0 ? <span className="ml-0.5 text-[10px] font-black">{voteCount}</span> : null}
+                                      </button>
+                                    );
+                                  })()}
                                 </div>
                               );
                             })}
@@ -1667,6 +1710,30 @@ export default function Room() {
               const copion   = winnerOf("dup", 2);
               const bluffer  = winnerOf("bluffs", 1);
 
+              // 👏 Jugada de la partida: la respuesta con más votos a "graciosa"
+              const allVotes = ((room as any)?.funVotes ?? []) as Array<{
+                round: number; voterId: string; votedPlayerId: string; category: string; answer: string;
+              }>;
+              const tally = new Map<string, { player: any; category: string; answer: string; round: number; votes: number }>();
+              for (const v of allVotes) {
+                const k = `${v.round}|${v.votedPlayerId}|${v.category}`;
+                const t = tally.get(k);
+                if (t) t.votes++;
+                else {
+                  const target = (players as P[]).find(p => p.playerId === v.votedPlayerId);
+                  if (target) tally.set(k, { player: target, category: v.category, answer: v.answer, round: v.round, votes: 1 });
+                }
+              }
+              const funniest = (() => {
+                if (tally.size === 0) return null;
+                const entries = Array.from(tally.values());
+                entries.sort((a, b) => b.votes - a.votes);
+                const top = entries[0];
+                // tie at top → no clear winner
+                if (entries.length > 1 && entries[1].votes === top.votes) return null;
+                return top;
+              })();
+
               return (
               <motion.div
                 initial={{ opacity: 0, y: 12 }}
@@ -1727,6 +1794,17 @@ export default function Room() {
                       <div className="flex-1">
                         <p className="font-black text-blue-300">Cerebro Congelado</p>
                         <p className="text-xs text-white/60">{loserMostEmpty.playerName} · {8 - loserMostEmpty.filled} casillas en blanco</p>
+                      </div>
+                    </div>
+                  )}
+                  {funniest && (
+                    <div className="flex items-center gap-3 text-sm">
+                      <span className="text-2xl">👏</span>
+                      <div className="flex-1">
+                        <p className="font-black text-pink-300">Jugada de la partida</p>
+                        <p className="text-xs text-white/60">
+                          {funniest.player.playerName} con <span className="font-black text-white">"{funniest.answer}"</span> en {funniest.category} · {funniest.votes} voto{funniest.votes === 1 ? "" : "s"}
+                        </p>
                       </div>
                     </div>
                   )}

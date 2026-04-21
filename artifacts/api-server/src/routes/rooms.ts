@@ -61,6 +61,21 @@ const roomSpyUsage = new Map<string, Set<string>>();
 // Rematch links — oldCode → newCode (in-memory, ephemeral)
 const roomRematch = new Map<string, string>();
 
+// 👏 Votos a "Jugada de la ronda" — 1 voto por ronda por jugador.
+// Key: roomCode → Map<`${round}:${voterId}`, FunVote>
+type FunVote = {
+  round: number;
+  voterId: string;
+  votedPlayerId: string;
+  category: string;
+  answer: string;
+};
+const roomFunVotes = new Map<string, Map<string, FunVote>>();
+function getFunVotes(code: string): FunVote[] {
+  const m = roomFunVotes.get(code);
+  return m ? Array.from(m.values()) : [];
+}
+
 const QUICK_PHRASES = [
   "¡Buena!", "¡Trampa! 😤", "¡Revanche!", "¡Eso no vale!",
   "🔥 ¡Brillante!", "😂 ¡Me ganaste!", "¡GG!", "🤔 ¡Difícil esa!",
@@ -133,6 +148,7 @@ function formatRoom(room: any) {
     phrases: getPhrases(code),
     typing: getTyping(code),
     rematchCode: roomRematch.get(code) ?? null,
+    funVotes: getFunVotes(code),
     createdAt: room.createdAt,
   };
 }
@@ -411,6 +427,7 @@ router.post("/:roomCode/leave", async (req, res) => {
     roomLiveResponses.delete(roomCode.toUpperCase());
     roomSpyUsage.delete(roomCode.toUpperCase());
     roomRematch.delete(roomCode.toUpperCase());
+    roomFunVotes.delete(roomCode.toUpperCase());
     res.json({ ok: true, deleted: true });
     return;
   }
@@ -614,6 +631,51 @@ router.post("/:roomCode/spy", async (req, res) => {
     category: pick.cat,
     word: pick.word,
   });
+});
+
+// 👏 POST /rooms/:roomCode/funvote — vote for the funniest answer of the round.
+// 1 vote per round per voter. Voting again replaces the previous vote.
+router.post("/:roomCode/funvote", async (req, res) => {
+  const code = req.params.roomCode.toUpperCase();
+  const { playerId, votedPlayerId, category, round, answer } = req.body as {
+    playerId?: string;
+    votedPlayerId?: string;
+    category?: string;
+    round?: number;
+    answer?: string;
+  };
+  if (!playerId || !votedPlayerId || !category || typeof round !== "number") {
+    res.status(400).json({ error: "Missing fields" }); return;
+  }
+  if (playerId === votedPlayerId) {
+    res.status(400).json({ error: "No puedes votarte a ti mismo" }); return;
+  }
+
+  // Membership check + round must be revealing/finished
+  const rooms = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, code)).limit(1);
+  if (rooms.length === 0) { res.status(404).json({ error: "Room not found" }); return; }
+  const room = rooms[0];
+  const players = parsePlayers(room.playersJson);
+  if (!players.some((p: any) => p.playerId === playerId)) {
+    res.status(403).json({ error: "No estás en esta sala" }); return;
+  }
+  if (!players.some((p: any) => p.playerId === votedPlayerId)) {
+    res.status(404).json({ error: "Ese jugador no está en la sala" }); return;
+  }
+
+  let votes = roomFunVotes.get(code);
+  if (!votes) { votes = new Map(); roomFunVotes.set(code, votes); }
+  const key = `${round}:${playerId}`;
+  votes.set(key, {
+    round,
+    voterId: playerId,
+    votedPlayerId,
+    category: String(category).slice(0, 60),
+    answer: String(answer ?? "").slice(0, 80),
+  });
+
+  broadcastAndFormat(room);
+  res.json({ ok: true });
 });
 
 // POST /rooms/:roomCode/rematch — first caller creates a new room with same settings,
