@@ -11,7 +11,7 @@ import { usePlayer } from "@/hooks/use-player";
 import { useT } from "@/i18n/useT";
 import { useStreak } from "@/hooks/useStreak";
 import { useProgression, getLeague } from "@/hooks/useProgression";
-import { useGetLeaderboard } from "@workspace/api-client-react";
+import { useGetLeaderboard, useGetPlayerStats } from "@workspace/api-client-react";
 
 const LOGO_URL = `${import.meta.env.BASE_URL}images/stop-logo.png`;
 
@@ -27,6 +27,9 @@ export default function Home() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: leaderboardData } = useGetLeaderboard({ limit: 3 }, { query: { staleTime: 60_000 } as any });
   const top3 = leaderboardData?.players?.slice(0, 3) ?? [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: myStats } = useGetPlayerStats(player?.id || "", { query: { enabled: !!player?.id && player?.loginMethod !== "guest", staleTime: 30_000 } as any });
+  const myScore = myStats?.score;
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -229,45 +232,89 @@ export default function Home() {
           transition={{ delay: 0.25 }}
           className="w-full space-y-3"
         >
+          {/* ⚡ HERO: JUGAR YA — auto-starts a quick match in 1 tap */}
+          <Link href="/solo?mode=quick&auto=1">
+            <motion.div
+              whileHover={{ scale: 1.02, y: -2 }}
+              whileTap={{ scale: 0.97 }}
+              animate={{ boxShadow: [
+                "0 6px 28px rgba(220,38,38,0.45)",
+                "0 6px 38px rgba(249,168,37,0.65)",
+                "0 6px 28px rgba(220,38,38,0.45)",
+              ] }}
+              transition={{ repeat: Infinity, duration: 1.8 }}
+              className="relative w-full flex items-center justify-center gap-3 py-7 rounded-2xl font-black tracking-wide overflow-hidden"
+              style={{
+                background: "linear-gradient(135deg, #f9a825 0%, #dc2626 60%, #7c1d1d 100%)",
+                color: "white",
+                fontFamily: "'Baloo 2', sans-serif",
+              }}
+            >
+              <motion.span
+                className="absolute inset-0 pointer-events-none"
+                style={{ background: "radial-gradient(circle at 30% 20%, rgba(255,255,255,0.25), transparent 60%)" }}
+                animate={{ opacity: [0.4, 0.8, 0.4] }}
+                transition={{ repeat: Infinity, duration: 2.2 }}
+              />
+              <Zap className="w-7 h-7 fill-white relative z-10" />
+              <span className="text-3xl relative z-10" style={{ textShadow: "0 2px 8px rgba(0,0,0,0.4)" }}>
+                ¡JUGAR YA!
+              </span>
+            </motion.div>
+          </Link>
+
+          {/* Live stats chip — visible always, makes rank tangible */}
+          {player && player.loginMethod !== "guest" && (
+            <Link href="/ranking">
+              <motion.div
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="w-full flex items-center justify-around gap-2 py-2.5 px-4 rounded-xl cursor-pointer"
+                style={{ background: "rgba(0,0,0,0.3)", border: "1px solid rgba(249,168,37,0.25)" }}
+              >
+                <div className="flex flex-col items-center min-w-0 flex-1">
+                  <span className="text-[10px] text-white/50 uppercase font-bold tracking-wider">Top</span>
+                  <span className="text-[#f9a825] font-black text-base leading-tight">
+                    {myScore?.rank ? `#${myScore.rank}` : "—"}
+                  </span>
+                </div>
+                <div className="w-px h-8 bg-white/10" />
+                <div className="flex flex-col items-center min-w-0 flex-1">
+                  <span className="text-[10px] text-white/50 uppercase font-bold tracking-wider">Victorias</span>
+                  <span className="text-white font-black text-base leading-tight">{myScore?.wins ?? 0}</span>
+                </div>
+                <div className="w-px h-8 bg-white/10" />
+                <div className="flex flex-col items-center min-w-0 flex-1">
+                  <span className="text-[10px] text-white/50 uppercase font-bold tracking-wider">Partidas</span>
+                  <span className="text-white font-black text-base leading-tight">{myScore?.gamesPlayed ?? 0}</span>
+                </div>
+              </motion.div>
+            </Link>
+          )}
+
+          {/* Secondary: classic solo (with start screen, settings) */}
           <Link href="/solo">
             <motion.div
               whileHover={{ scale: 1.02, y: -2 }}
               whileTap={{ scale: 0.98 }}
-              className="w-full flex items-center justify-center gap-3 py-5 rounded-2xl font-black text-2xl tracking-wide shadow-xl"
+              className="w-full flex items-center gap-4 px-5 py-3 rounded-2xl font-black tracking-wide"
               style={{
-                background: "linear-gradient(135deg, #1a237e, #283593)",
-                color: "white",
-                boxShadow: "0 6px 28px rgba(26,35,126,0.5)",
-                fontFamily: "'Baloo 2', sans-serif",
-              }}
-            >
-              <Play className="w-6 h-6 fill-white" />
-              {t.home.soloVsAI.toUpperCase()}
-            </motion.div>
-          </Link>
-
-          <Link href="/solo?mode=quick">
-            <motion.div
-              whileHover={{ scale: 1.02, y: -2 }}
-              whileTap={{ scale: 0.98 }}
-              className="w-full flex items-center gap-4 px-5 py-3.5 rounded-2xl font-black tracking-wide shadow-lg"
-              style={{
-                background: "linear-gradient(135deg, rgba(249,168,37,0.2), rgba(181,48,26,0.15))",
-                border: "2px solid rgba(249,168,37,0.4)",
+                background: "linear-gradient(135deg, rgba(26,35,126,0.55), rgba(40,53,147,0.45))",
+                border: "1.5px solid rgba(255,255,255,0.12)",
                 color: "white",
               }}
             >
               <div
                 className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-                style={{ background: "linear-gradient(135deg, hsl(48 96% 57%), hsl(6 90% 55%))" }}
+                style={{ background: "linear-gradient(135deg, #1a237e, #283593)" }}
               >
-                <Zap className="w-5 h-5 text-white fill-white" />
+                <Play className="w-5 h-5 fill-white text-white" />
               </div>
               <div className="flex-1">
-                <p className="text-white font-black text-base leading-tight">{t.home.quickMode}</p>
-                <p className="text-white/55 text-xs font-bold">{t.home.quickModeSubtitle}</p>
+                <p className="text-white font-black text-sm leading-tight">{t.home.soloVsAI}</p>
+                <p className="text-white/50 text-xs font-bold">3 rondas · eventos · IA</p>
               </div>
-              <span className="text-[#f9a825] font-black text-lg">→</span>
+              <span className="text-white/40 font-black text-lg">→</span>
             </motion.div>
           </Link>
 
