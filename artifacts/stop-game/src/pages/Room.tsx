@@ -1398,11 +1398,56 @@ export default function Room() {
         })()}
 
         {/* ── FINISHED ── */}
-        {phase === "finished" && (
+        {phase === "finished" && (() => {
+          const sorted = [...players].sort((a: any, b: any) => (b.score || 0) - (a.score || 0));
+          const myIdx = sorted.findIndex((p: any) => p.playerId === player?.id);
+          const myPos = myIdx >= 0 ? myIdx + 1 : null;
+          const total = sorted.length;
+          const medals = ["🥇", "🥈", "🥉"];
+          const champ = sorted[0];
+          const wooden = total >= 3 ? sorted[sorted.length - 1] : null;
+          const posEmoji = myPos === 1 ? "🥇" : myPos === 2 ? "🥈" : myPos === 3 ? "🥉" : "💀";
+          const posMsg =
+            myPos === 1 ? "¡CAMPEÓN!"
+            : myPos === 2 ? "¡Casi casi!"
+            : myPos === 3 ? "Top 3, vamos"
+            : myPos === total ? "Cuchara de palo 🐌"
+            : `Quedaste #${myPos}`;
+
+          return (
           <motion.div key="finished"
             initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
             className="flex-1 flex flex-col max-w-md mx-auto w-full py-8 gap-6"
           >
+            {/* 🎯 Position toast — first thing the player sees */}
+            {myPos && total > 1 && (
+              <motion.div
+                initial={{ scale: 0.4, opacity: 0, y: -30 }}
+                animate={{ scale: [0.4, 1.18, 1], opacity: 1, y: 0 }}
+                transition={{ duration: 0.7, times: [0, 0.6, 1], type: "spring", bounce: 0.5 }}
+                className="text-center py-5 px-4 rounded-3xl border-2"
+                style={{
+                  background: myPos === 1
+                    ? "linear-gradient(135deg, rgba(249,168,37,0.35), rgba(220,38,38,0.25))"
+                    : myPos === total
+                      ? "linear-gradient(135deg, rgba(100,116,139,0.35), rgba(30,41,59,0.4))"
+                      : "linear-gradient(135deg, rgba(99,102,241,0.3), rgba(168,85,247,0.25))",
+                  borderColor: myPos === 1 ? "#f9a825" : myPos === total ? "#64748b" : "#a855f7",
+                }}
+              >
+                <div className="text-6xl mb-1">{posEmoji}</div>
+                <p className="text-3xl font-display font-black" style={{
+                  color: myPos === 1 ? "#fbbf24" : "#fff",
+                  textShadow: "0 2px 8px rgba(0,0,0,0.4)",
+                }}>
+                  {posMsg}
+                </p>
+                <p className="text-sm text-white/70 mt-1 font-bold">
+                  {myPos} de {total} jugadores
+                </p>
+              </motion.div>
+            )}
+
             <div className="text-center">
               <Trophy className="w-16 h-16 text-secondary mx-auto mb-3" />
               <h2 className="text-4xl font-display font-black">¡Partida Terminada!</h2>
@@ -1410,8 +1455,7 @@ export default function Room() {
             </div>
 
             <div className="space-y-3">
-              {[...players].sort((a: any, b: any) => (b.score || 0) - (a.score || 0)).map((p: any, i) => {
-                const medals = ["🥇", "🥈", "🥉"];
+              {sorted.map((p: any, i) => {
                 const isMe = p.playerId === player?.id;
                 return (
                   <motion.div key={p.playerId}
@@ -1432,6 +1476,38 @@ export default function Room() {
                 );
               })}
             </div>
+
+            {/* 🎭 Premios humillación — listo para compartir */}
+            {total >= 2 && (
+              <motion.div
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.6 }}
+                className="rounded-2xl p-4 border border-white/10 bg-gradient-to-br from-yellow-900/20 to-red-900/20"
+              >
+                <p className="text-xs font-black text-white/60 uppercase tracking-wider text-center mb-3">
+                  🏅 Premios de la partida
+                </p>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-3 text-sm">
+                    <span className="text-2xl">👑</span>
+                    <div className="flex-1">
+                      <p className="font-black text-yellow-400">Rey del Stop</p>
+                      <p className="text-xs text-white/60">{champ.playerName} · {champ.score || 0} pts</p>
+                    </div>
+                  </div>
+                  {wooden && wooden.playerId !== champ.playerId && (
+                    <div className="flex items-center gap-3 text-sm">
+                      <span className="text-2xl">🐌</span>
+                      <div className="flex-1">
+                        <p className="font-black text-slate-300">Cuchara de palo</p>
+                        <p className="text-xs text-white/60">{wooden.playerName} · {wooden.score || 0} pts</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            )}
 
             {/* Share result button */}
             <motion.button
@@ -1495,7 +1571,8 @@ export default function Room() {
               <Button size="lg" onClick={() => setLocation("/multiplayer")}>Otra sala</Button>
             </div>
           </motion.div>
-        )}
+          );
+        })()}
 
       </AnimatePresence>
     </Layout>
