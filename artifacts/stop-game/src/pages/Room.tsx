@@ -4,6 +4,9 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
 import { Layout } from "@/components/Layout";
 import { PremiumBadge } from "@/components/PremiumBadge";
+import { usePremium } from "@/lib/usePremium";
+import { useFollows } from "@/lib/useFollows";
+import { FollowButton } from "@/components/FollowButton";
 import { Button, Card, Input, Progress } from "@/components/ui";
 import { useGetRoom, useSubmitRoomResults, getGetRoomQueryKey } from "@workspace/api-client-react";
 import { usePlayer } from "@/hooks/use-player";
@@ -78,6 +81,15 @@ export default function Room() {
     return t && m ? { code: t, matchId: m } : null;
   })();
   const { player } = usePlayer();
+  const { isPremium: meIsPremium } = usePremium(player?.id);
+  const { followedIds, follow, unfollow } = useFollows(player?.id);
+
+  // Sync spy budget with premium status: 2/round if premium, 1/round otherwise
+  useEffect(() => {
+    const limit = meIsPremium ? 2 : 1;
+    setSpyLimit(limit);
+    setSpyUsesLeft(limit);
+  }, [meIsPremium]);
 
   const [phase, setPhase] = useState<LocalPhase>("lobby");
   const [responses, setResponses] = useState<Record<string, string>>({});
@@ -91,8 +103,9 @@ export default function Room() {
   const [floatingReactions, setFloatingReactions] = useState<Array<{ id: string; emoji: string; playerName: string }>>([]);
   const seenReactionIds = useRef<Set<string>>(new Set());
   const [showPhrases, setShowPhrases] = useState(false);
-  // 🕵️ Spy / Robar respuesta — 1 use per round, costs -10 pts at submit
-  const [spyUsed, setSpyUsed] = useState(false);
+  // 🕵️ Spy / Robar respuesta — 1 use/round (free) or 2/round (premium), -10 pts each at submit
+  const [spyUsesLeft, setSpyUsesLeft] = useState(1);
+  const [spyLimit, setSpyLimit] = useState(1);
   const [spyLoading, setSpyLoading] = useState(false);
   const [spyReveal, setSpyReveal] = useState<{ rivalName: string; category: string; word: string } | null>(null);
   const [spyError, setSpyError] = useState<string | null>(null);
@@ -785,7 +798,10 @@ export default function Room() {
                   {players.map((p: any) => (
                     <div key={p.playerId} className="flex items-center gap-3 bg-black/20 p-2.5 rounded-xl">
                       <div className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-white text-sm"
-                        style={{ backgroundColor: p.avatarColor || "#555" }}>
+                        style={{
+                          backgroundColor: p.avatarColor || "#555",
+                          boxShadow: p.isPremium ? "0 0 0 2px #fde047, 0 0 10px rgba(250,204,21,0.65)" : undefined,
+                        }}>
                         {p.playerName.charAt(0).toUpperCase()}
                       </div>
                       <span className="flex-1 font-bold text-sm truncate flex items-center gap-1">
@@ -879,7 +895,7 @@ export default function Room() {
               targetLetter={currentLetter}
               onSpinComplete={() => {
                 // 🕵️ Reset spy budget for the new round
-                setSpyUsed(false);
+                setSpyUsesLeft(spyLimit);
                 setSpyReveal(null);
                 setSpyError(null);
                 setPhase("playing");
@@ -1102,9 +1118,9 @@ export default function Room() {
                 {/* 🕵️ ESPÍA — peek at a rival's in-progress answer */}
                 <button
                   type="button"
-                  disabled={spyUsed || spyLoading}
+                  disabled={spyUsesLeft <= 0 || spyLoading}
                   onClick={async () => {
-                    if (spyUsed || spyLoading || !player?.id || !roomCode) return;
+                    if (spyUsesLeft <= 0 || spyLoading || !player?.id || !roomCode) return;
                     setSpyError(null);
                     setSpyLoading(true);
                     try {
@@ -1119,7 +1135,8 @@ export default function Room() {
                         setTimeout(() => setSpyError(null), 2200);
                       } else {
                         const data = await r.json();
-                        setSpyUsed(true);
+                        if (typeof data.usesLeft === "number") setSpyUsesLeft(data.usesLeft);
+                        if (typeof data.limit === "number") setSpyLimit(data.limit);
                         setSpyReveal(data);
                         setTimeout(() => setSpyReveal(null), 5000);
                       }
@@ -1131,12 +1148,20 @@ export default function Room() {
                     }
                   }}
                   className={`w-full py-2 rounded-full text-sm font-bold border-2 transition-all ${
-                    spyUsed
+                    spyUsesLeft <= 0
                       ? "bg-black/40 border-white/10 text-white/40 cursor-not-allowed"
+                      : spyLimit > 1
+                      ? "bg-gradient-to-r from-yellow-500 via-purple-600 to-fuchsia-600 border-yellow-300/60 text-white hover:scale-[1.02] active:scale-95 shadow-lg shadow-purple-900/40"
                       : "bg-gradient-to-r from-purple-600 to-fuchsia-600 border-white/30 text-white hover:scale-[1.02] active:scale-95 shadow-lg shadow-purple-900/40"
                   }`}
                 >
-                  {spyLoading ? "Espiando…" : spyUsed ? "🕵️ ESPÍA usado" : "🕵️ ESPIAR a un rival · -10 pts"}
+                  {spyLoading
+                    ? "Espiando…"
+                    : spyUsesLeft <= 0
+                    ? "🕵️ ESPÍA agotado"
+                    : spyLimit > 1
+                    ? `⭐ 🕵️ ESPIAR (${spyUsesLeft}/${spyLimit}) · -10 pts c/u`
+                    : "🕵️ ESPIAR a un rival · -10 pts"}
                 </button>
                 <Button variant="destructive" size="xl"
                   className="w-full py-5 rounded-full text-3xl shadow-2xl shadow-red-900/50 border-4 border-white/20"
@@ -1386,7 +1411,10 @@ export default function Room() {
                 <div key={p.playerId}
                   className={`flex items-center gap-3 p-3 rounded-xl border ${p.isReady ? "bg-green-500/10 border-green-500/30" : "bg-white/5 border-white/10"}`}>
                   <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold"
-                    style={{ backgroundColor: p.avatarColor }}>
+                    style={{
+                      backgroundColor: p.avatarColor,
+                      boxShadow: p.isPremium ? "0 0 0 2px #fde047, 0 0 10px rgba(250,204,21,0.65)" : undefined,
+                    }}>
                     {p.playerName.charAt(0).toUpperCase()}
                   </div>
                   <span className="flex-1 font-bold text-sm flex items-center gap-1">
@@ -1459,7 +1487,10 @@ export default function Room() {
                                   className={`flex items-center gap-2 px-3 py-1.5 transition-all duration-300 ${revealed ? "opacity-100" : "opacity-0 pointer-events-none"}`}
                                 >
                                   <div className="w-5 h-5 rounded-full flex-shrink-0 flex items-center justify-center text-white text-[10px] font-bold"
-                                    style={{ backgroundColor: p.avatarColor }}>
+                                    style={{
+                                      backgroundColor: p.avatarColor,
+                                      boxShadow: p.isPremium ? "0 0 0 1.5px #fde047, 0 0 6px rgba(250,204,21,0.6)" : undefined,
+                                    }}>
                                     {p.playerName.charAt(0).toUpperCase()}
                                   </div>
                                   <p className={`text-xs font-bold flex-1 truncate flex items-center gap-1 ${isMe ? "text-secondary" : "text-white/80"}`}>
@@ -1552,7 +1583,10 @@ export default function Room() {
                           className={`flex items-center gap-3 p-3 rounded-xl ${isMe ? "bg-secondary/20 border border-secondary/30" : "bg-black/20 border border-white/10"}`}>
                           <span className="text-xl">{medals[i] || `#${i + 1}`}</span>
                           <div className="w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-white font-bold"
-                            style={{ backgroundColor: p.avatarColor }}>
+                            style={{
+                              backgroundColor: p.avatarColor,
+                              boxShadow: p.isPremium ? "0 0 0 2px #fde047, 0 0 10px rgba(250,204,21,0.65)" : undefined,
+                            }}>
                             {p.playerName.charAt(0).toUpperCase()}
                           </div>
                           <div className="flex-1 min-w-0">
@@ -1650,7 +1684,10 @@ export default function Room() {
                     className={`flex items-center gap-4 p-4 rounded-2xl border ${isMe ? "bg-secondary/20 border-secondary/40 scale-[1.02]" : "bg-black/20 border-white/10"}`}>
                     <span className="text-2xl">{medals[i] || `#${i + 1}`}</span>
                     <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold shadow"
-                      style={{ backgroundColor: p.avatarColor }}>
+                      style={{
+                        backgroundColor: p.avatarColor,
+                        boxShadow: p.isPremium ? "0 0 0 2.5px #fde047, 0 0 14px rgba(250,204,21,0.7)" : undefined,
+                      }}>
                       {p.playerName.charAt(0).toUpperCase()}
                     </div>
                     <div className="flex-1">
@@ -1660,6 +1697,20 @@ export default function Room() {
                         {isMe && <span className="text-secondary/80 font-bold">(Tú)</span>}
                       </p>
                       {i === 0 && <p className="text-xs text-secondary font-black">¡GANADOR!</p>}
+                      {!isMe && player?.id && (
+                        <div className="mt-1.5">
+                          <FollowButton
+                            meId={player.id}
+                            targetId={p.playerId}
+                            targetName={p.playerName}
+                            targetAvatarColor={p.avatarColor}
+                            isFollowing={followedIds.has(p.playerId)}
+                            follow={follow}
+                            unfollow={unfollow}
+                            size="xs"
+                          />
+                        </div>
+                      )}
                     </div>
                     <p className="text-2xl font-black text-secondary">{p.score || 0}</p>
                   </motion.div>

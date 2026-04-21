@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { shareText } from "@/lib/utils";
 import { PremiumModal } from "@/components/PremiumModal";
 import { usePremium } from "@/lib/usePremium";
+import { useFollows, useFriendsOnline } from "@/lib/useFollows";
 import { usePlayer } from "@/hooks/use-player";
 import { useT } from "@/i18n/useT";
 import { useStreak } from "@/hooks/useStreak";
@@ -18,6 +19,8 @@ const LOGO_URL = `${import.meta.env.BASE_URL}images/stop-logo.png`;
 export default function Home() {
   const { player } = usePlayer();
   const { isPremium } = usePremium(player?.id);
+  const { friends } = useFollows(player?.id);
+  const friendsOnline = useFriendsOnline(player?.id, friends);
   const { t } = useT();
   const { streak } = useStreak();
   const { level, xp, progress } = useProgression(player?.id);
@@ -191,6 +194,54 @@ export default function Home() {
             </motion.div>
           )}
         </motion.div>
+
+        {/* 👥 Amigos jugando ahora — quick join */}
+        {friendsOnline.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.12 }}
+            className="w-full px-3 py-2.5 rounded-xl"
+            style={{ background: "rgba(34,197,94,0.10)", border: "1.5px solid rgba(34,197,94,0.45)" }}
+          >
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-xs font-black text-green-300 flex items-center gap-1.5">
+                <span className="relative flex h-2 w-2">
+                  <span className="absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75 animate-ping"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                </span>
+                Amigos online · {friendsOnline.length}
+              </span>
+            </div>
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {friendsOnline.slice(0, 8).map((f) => {
+                const inRoom = !!f.roomCode;
+                const card = (
+                  <div className="flex flex-col items-center gap-1 min-w-[58px] cursor-pointer group">
+                    <div className="relative">
+                      <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm shadow"
+                        style={{ backgroundColor: f.avatarColor }}>
+                        {f.name.charAt(0).toUpperCase()}
+                      </div>
+                      <span className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-[#1a1a2e] ${inRoom ? "bg-fuchsia-500 animate-pulse" : "bg-green-500"}`} />
+                    </div>
+                    <span className="text-[10px] font-bold text-white/90 truncate max-w-[58px]">{f.name}</span>
+                    <span className={`text-[9px] font-black uppercase tracking-wide ${inRoom ? "text-fuchsia-300" : "text-green-300"}`}>
+                      {inRoom ? "Jugando" : "Online"}
+                    </span>
+                  </div>
+                );
+                return inRoom ? (
+                  <Link key={f.playerId} href={`/room/${f.roomCode}`} title={`Unirme a la sala de ${f.name}`}>
+                    {card}
+                  </Link>
+                ) : (
+                  <div key={f.playerId} title={`${f.name} está online`}>{card}</div>
+                );
+              })}
+            </div>
+          </motion.div>
+        )}
 
         {/* Global challenge hook — shown when leaderboard has data */}
         {top3[0] && (
