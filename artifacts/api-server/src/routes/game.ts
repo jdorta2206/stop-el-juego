@@ -753,6 +753,20 @@ function getAiWord(letter: string, category: string, language = "es"): string {
 
 // ─── Route ────────────────────────────────────────────────────────────────────
 
+// 🕵️ Espía / Robar respuesta — peek at one possible AI word for a category.
+// Returns a candidate (not the exact final word, since AI eval is randomized).
+router.get("/peek", (req, res) => {
+  const letter = String(req.query.letter || "").trim();
+  const category = String(req.query.category || "").trim();
+  const language = String(req.query.language || "es");
+  if (!letter || !category) {
+    res.status(400).json({ error: "letter and category required" });
+    return;
+  }
+  const word = getAiWord(letter, category, language);
+  res.json({ word });
+});
+
 router.post("/validate", (req, res) => {
   const body = ValidateRoundBody.safeParse(req.body);
   if (!body.success) {

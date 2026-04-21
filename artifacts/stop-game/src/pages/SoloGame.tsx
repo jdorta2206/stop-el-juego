@@ -87,6 +87,10 @@ export default function SoloGame() {
   const [categories, setCategories] = useState<string[]>(getCategories());
   const [muted, setMuted] = useState(false);
   const [stopFlash, setStopFlash] = useState(false);
+  // 🕵️ Espía / Robar respuesta — 1 uso por partida, cuesta -10 pts al final
+  const [spyUsed, setSpyUsed] = useState(false);
+  const [spyReveal, setSpyReveal] = useState<{ category: string; word: string } | null>(null);
+  const [spyLoading, setSpyLoading] = useState(false);
 
   // Combo system
   const [combo, setCombo] = useState(0);
@@ -236,6 +240,9 @@ export default function SoloGame() {
 
   const startGame = () => {
     setAiComment(null);
+    // Reset spy use each new game
+    setSpyUsed(false);
+    setSpyReveal(null);
     // 🎲 Random mode — reroll the secret round time so each round feels different (15–55s)
     if (isRandomMode) setRandomRoundTime(15 + Math.floor(Math.random() * 41));
     // Pick random event (only in normal solo mode)
@@ -512,7 +519,9 @@ export default function SoloGame() {
 
       const won = (ps + stolenScore + sabotageStolen) > as_;
 
-      const finalPlayerScore = totalScore + ps + stolenScore + sabotageStolen + bluffBonusScore;
+      // 🕵️ Espía costs -10 puntos this round if it was used
+      const spyCost = spyUsed ? 10 : 0;
+      const finalPlayerScore = totalScore + ps + stolenScore + sabotageStolen + bluffBonusScore - spyCost;
       setTotalScore(finalPlayerScore);
       setAiTotalScore(prev => prev + as_);
       setRoundWon(won);
@@ -1370,7 +1379,48 @@ export default function SoloGame() {
               </div>
 
               <div className="fixed bottom-4 left-0 w-full px-4 z-20">
-                <div className="max-w-2xl mx-auto">
+                <div className="max-w-2xl mx-auto space-y-2">
+                  {/* 🕵️ ESPÍA — Robar respuesta de la IA (1 uso, -10 pts) */}
+                  {!spyUsed && (
+                    <motion.button
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      whileTap={{ scale: 0.97 }}
+                      disabled={spyLoading}
+                      onClick={async () => {
+                        if (spyUsed || spyLoading) return;
+                        setSpyLoading(true);
+                        try {
+                          // Pick a random category not yet filled by the player (or any if all filled)
+                          const empty = categoriesRef.current.filter(c => !(responsesRef.current[c]?.trim()));
+                          const pool = empty.length > 0 ? empty : categoriesRef.current;
+                          const cat = pool[Math.floor(Math.random() * pool.length)];
+                          const url = `${getApiUrl()}/api/game/peek?letter=${encodeURIComponent(currentLetterRef.current)}&category=${encodeURIComponent(cat)}&language=${encodeURIComponent(getCurrentLang())}`;
+                          const r = await fetch(url);
+                          const data = await r.json().catch(() => ({}));
+                          const word = (data?.word as string) || "—";
+                          setSpyUsed(true);
+                          setSpyReveal({ category: cat, word });
+                          vibrate([30, 20, 30]);
+                          // Auto-dismiss after 5 seconds
+                          setTimeout(() => setSpyReveal(null), 5000);
+                        } catch {
+                          setSpyLoading(false);
+                          return;
+                        }
+                        setSpyLoading(false);
+                      }}
+                      className="w-full flex items-center justify-center gap-2 py-2.5 rounded-full font-black text-sm shadow-lg disabled:opacity-50"
+                      style={{
+                        background: "linear-gradient(135deg, rgba(124,58,237,0.85), rgba(67,20,157,0.95))",
+                        color: "white",
+                        border: "1.5px solid rgba(167,139,250,0.6)",
+                      }}
+                    >
+                      🕵️ {spyLoading ? "Espiando..." : "ESPIAR a la IA"}
+                      <span className="text-xs bg-black/30 rounded-full px-2 py-0.5 ml-1">-10 pts</span>
+                    </motion.button>
+                  )}
                   <Button
                     variant="destructive"
                     size="xl"
@@ -1381,6 +1431,42 @@ export default function SoloGame() {
                   </Button>
                 </div>
               </div>
+
+              {/* 🕵️ Spy reveal popup — shows the AI's possible word for one category */}
+              <AnimatePresence>
+                {spyReveal && (
+                  <motion.div
+                    key="spy-reveal"
+                    initial={{ opacity: 0, scale: 0.6, y: -20 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.6 }}
+                    transition={{ type: "spring", bounce: 0.5 }}
+                    className="fixed inset-x-0 top-24 z-50 px-4 flex justify-center pointer-events-none"
+                  >
+                    <div
+                      className="max-w-sm w-full rounded-2xl p-4 shadow-2xl pointer-events-auto"
+                      style={{
+                        background: "linear-gradient(135deg, rgba(67,20,157,0.96), rgba(30,7,79,0.98))",
+                        border: "2px solid rgba(167,139,250,0.7)",
+                      }}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <p className="text-xs font-black text-purple-300 uppercase tracking-wider">🕵️ Espía</p>
+                        <button
+                          onClick={() => setSpyReveal(null)}
+                          className="text-white/50 hover:text-white text-lg leading-none"
+                          aria-label="Cerrar"
+                        >×</button>
+                      </div>
+                      <p className="text-xs text-white/60 mb-1">La IA podría poner en <b className="text-purple-200">{spyReveal.category}</b>:</p>
+                      <p className="text-3xl font-display font-black text-white mb-1 break-words">
+                        {spyReveal.word || <span className="text-white/40 italic text-xl">(no encontró palabra)</span>}
+                      </p>
+                      <p className="text-[10px] text-white/40 italic">−10 pts al final · 5s para copiarla 😈</p>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </motion.div>
           )}
 
