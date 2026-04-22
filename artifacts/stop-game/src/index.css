@@ -82,6 +82,25 @@
     }
   }
 
+  /* Splash ring rotation — pure CSS, GPU compositor */
+  @keyframes splash-ring-spin {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+  }
+  .splash-ring-rotate {
+    animation: splash-ring-spin 12s linear infinite;
+  }
+
+  /* Respect user's OS-level reduced motion setting (Android, iOS, Windows, etc.) */
+  @media (prefers-reduced-motion: reduce) {
+    .splash-ring-rotate { animation: none; }
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+
   /* Custom scrollbar for game feeling */
   ::-webkit-scrollbar {
     width: 8px;

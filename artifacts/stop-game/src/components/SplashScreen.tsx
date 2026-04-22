@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 
 interface Props {
   onDone: () => void;
@@ -14,59 +14,21 @@ const TAGLINES: Record<string, string> = {
   fr: "Le jeu que personne ne bat",
 };
 
-function RingLetter({
-  letter,
-  index,
-  total,
-  radius,
-  rotate,
-}: {
-  letter: string;
-  index: number;
-  total: number;
-  radius: number;
-  rotate: number;
-}) {
-  const angle = (index / total) * 360 + rotate;
-  const rad = (angle * Math.PI) / 180;
-  const x = Math.cos(rad) * radius;
-  const y = Math.sin(rad) * radius;
-  const colors = [
-    "#f59e0b", "#ef4444", "#10b981", "#3b82f6",
-    "#8b5cf6", "#ec4899", "#f97316", "#06b6d4",
-  ];
-  const color = colors[index % colors.length];
-  return (
-    <motion.span
-      initial={{ opacity: 0, scale: 0 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={{ delay: 0.3 + index * 0.03, type: "spring", stiffness: 300, damping: 20 }}
-      style={{
-        position: "absolute",
-        left: "50%",
-        top: "50%",
-        transform: `translate(calc(-50% + ${x}px), calc(-50% + ${y}px))`,
-        color,
-        fontWeight: 900,
-        fontSize: "clamp(10px, 2.2vw, 15px)",
-        textShadow: `0 0 8px ${color}99`,
-        fontFamily: "'Fredoka One', sans-serif",
-        letterSpacing: 0,
-        userSelect: "none",
-      }}
-    >
-      {letter}
-    </motion.span>
-  );
-}
+const LETTER_COLORS = [
+  "#f59e0b", "#ef4444", "#10b981", "#3b82f6",
+  "#8b5cf6", "#ec4899", "#f97316", "#06b6d4",
+];
 
 export function SplashScreen({ onDone, lang = "es" }: Props) {
-  const [ringAngle, setRingAngle] = useState(0);
   const [logoPhase, setLogoPhase] = useState<"in" | "pulse">("in");
   const [exit, setExit] = useState(false);
-  const rafRef = useRef<number>(0);
-  const lastRef = useRef<number>(0);
   const tagline = TAGLINES[lang] ?? TAGLINES.es;
+
+  // Ring radius computed once (no re-renders during splash).
+  const ringRadius = useMemo(
+    () => Math.min(window.innerWidth, window.innerHeight) * 0.29,
+    []
+  );
 
   useEffect(() => {
     const el = document.getElementById("html-splash");
@@ -74,22 +36,6 @@ export function SplashScreen({ onDone, lang = "es" }: Props) {
       el.classList.add("fade-out");
       setTimeout(() => el.remove(), 400);
     }
-  }, []);
-
-  useEffect(() => {
-    let running = true;
-    function tick(now: number) {
-      if (!lastRef.current) lastRef.current = now;
-      const dt = now - lastRef.current;
-      lastRef.current = now;
-      setRingAngle((a) => (a + dt * 0.035) % 360);
-      if (running) rafRef.current = requestAnimationFrame(tick);
-    }
-    rafRef.current = requestAnimationFrame(tick);
-    return () => {
-      running = false;
-      cancelAnimationFrame(rafRef.current);
-    };
   }, []);
 
   // Keep latest onDone in a ref so re-renders from parent (new arrow fn each time)
@@ -103,8 +49,6 @@ export function SplashScreen({ onDone, lang = "es" }: Props) {
     const t3 = setTimeout(() => onDoneRef.current(), 3100);
     return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
   }, []);
-
-  const ringRadius = Math.min(window.innerWidth, window.innerHeight) * 0.29;
 
   return (
     <AnimatePresence>
@@ -158,25 +102,43 @@ export function SplashScreen({ onDone, lang = "es" }: Props) {
             }}
           />
 
-          {/* Rotating letter ring */}
+          {/* Rotating letter ring — pure CSS rotation (GPU compositor, 0 React work) */}
           <div
+            className="splash-ring-rotate"
             style={{
               position: "absolute",
               width: ringRadius * 2 + 60,
               height: ringRadius * 2 + 60,
               pointerEvents: "none",
+              willChange: "transform",
             }}
           >
-            {RING_LETTERS.split("").map((letter, i) => (
-              <RingLetter
-                key={letter}
-                letter={letter}
-                index={i}
-                total={26}
-                radius={ringRadius}
-                rotate={ringAngle}
-              />
-            ))}
+            {RING_LETTERS.split("").map((letter, i) => {
+              const angle = (i / 26) * 360;
+              const rad = (angle * Math.PI) / 180;
+              const x = Math.cos(rad) * ringRadius;
+              const y = Math.sin(rad) * ringRadius;
+              const color = LETTER_COLORS[i % LETTER_COLORS.length];
+              return (
+                <span
+                  key={letter}
+                  style={{
+                    position: "absolute",
+                    left: "50%",
+                    top: "50%",
+                    transform: `translate(calc(-50% + ${x}px), calc(-50% + ${y}px))`,
+                    color,
+                    fontWeight: 900,
+                    fontSize: "clamp(10px, 2.2vw, 15px)",
+                    textShadow: `0 0 8px ${color}99`,
+                    fontFamily: "'Fredoka One', sans-serif",
+                    userSelect: "none",
+                  }}
+                >
+                  {letter}
+                </span>
+              );
+            })}
           </div>
 
           {/* Glowing ring border */}

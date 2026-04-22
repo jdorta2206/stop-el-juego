@@ -1,0 +1,34 @@
+. La Sospecha Principal: El "Lag Fantasma" de las Animaciones y Transiciones UI
+Este es, con mucha diferencia, el culpable más probable. Por cómo has descrito las funcionalidades (toasts con animación spring, floating overlay, tarjeta dorada), tu juego hace un uso intensivo de animaciones CSS/JS. Las WebView de Android son tradicionalmente malas manejando animaciones complejas, aunque la conexión a Internet sea perfecta.
+
+El Problema: En el navegador de un PC, una animación spring se ve fluida. En una WebView de gama media o baja, esa misma animación puede traducirse en micro-cortes, frames saltados o una ligera sensación de "pegajosidad". El usuario no sabe por qué, pero siente que el juego "no es fino" o "va raro". Para un jugador casual, esa experiencia es razón suficiente para desinstalar.
+
+La Prueba: La propia Google ha documentado que desactivar el "desplazamiento suave" mejora drásticamente el rendimiento de las WebView, lo que indica un problema de base con el renderizado de animaciones en este entorno.
+
+La Solución Inmediata (Diagnóstico en 5 minutos):
+
+Abre tu juego en un móvil Android REAL (no en el emulador). Activa el modo desarrollador y dentro de él, busca las opciones de "Dibujo" -> "GPU Renderizado" o "Perfil de Renderizado" (depende de la marca). Juega una partida.
+
+Si ves muchas barras verdes que superan la línea horizontal (16ms), significa que tu juego está teniendo un rendimiento gráfico por debajo de los 60fps. Ese es el "lag fantasma" que ahuyenta a los usuarios.
+
+2. La Otra Posibilidad: Fuga de Memoria (Memory Leak) en la UI
+Tu juego es un "Single Page Application" (SPA) complejo con mucho estado: salas, rondas, mensajes SSE, reacciones... Si no limpias bien los event listeners y referencias del DOM al cambiar de pantalla, la memoria se acumula.
+
+El Problema: Una partida empieza bien. La segunda partida va un poco más lenta. En la tercera, el teclado tarda en responder o el juego se cierra solo. El usuario experimenta un empeoramiento progresivo que achaca a que la app "no funciona bien" y la desinstala. La fuga de memoria es una causa clásica de este patrón en apps web envueltas.
+
+La Solución Inmediata (Diagnóstico):
+
+Abre Chrome en tu PC y conecta tu móvil por USB con la opción "Depuración USB" activada.
+
+Abre chrome://inspect en el PC.
+
+Juega una partida en tu móvil.
+
+En el chrome://inspect, haz tres capturas de memoria (Memory -> Heap snapshot): Antes de empezar, después de la primera partida y después de la tercera.
+
+Compara los snapshots. Si el tamaño de la memoria (JS Heap) no para de crecer y no baja al terminar una partida, tienes una fuga de memoria.
+
+3. El "Rendimiento Subjetivo" del Teclado y los Inputs
+En un juego de palabras, el input de texto es el rey. Los WebViews tienen una historia problemática con la latencia del teclado y la sincronización de eventos input y keyup.
+
+El Problema: En un navegador, escribir "Manzana" es instantáneo. En una WebView, puede haber un retraso de 100-200ms entre que pulsas la tecla y la letra aparece, o entre que envías la respuesta y se registra. El jugador lo percibe como que el juego "no le sigue el ritmo" o es "torpe".

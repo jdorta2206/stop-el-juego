@@ -1,6 +1,7 @@
 import { Switch, Route, Router as WouterRouter } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, lazy, Suspense } from "react";
+import { MotionConfig } from "framer-motion";
 import { Toaster } from "@/components/ui/toaster";
 import { SplashScreen } from "@/components/SplashScreen";
 import Home from "@/pages/Home";
@@ -8,18 +9,20 @@ import SoloGame from "@/pages/SoloGame";
 import Multiplayer from "@/pages/Multiplayer";
 import Room from "@/pages/Room";
 import Ranking from "@/pages/Ranking";
-import Privacy from "@/pages/Privacy";
-import Terms from "@/pages/Terms";
-import About from "@/pages/About";
-import HowToPlay from "@/pages/HowToPlay";
-import DailyChallenge from "@/pages/DailyChallenge";
-import Friends from "@/pages/Friends";
-import Strategies from "@/pages/Strategies";
-import PlayerProfile from "@/pages/PlayerProfile";
-import Tournament from "@/pages/Tournament";
-import Live from "@/pages/Live";
-import Overlay from "@/pages/Overlay";
 import NotFound from "@/pages/not-found";
+
+// Lazy-loaded routes — keep initial bundle small for fast first paint on Android
+const Privacy        = lazy(() => import("@/pages/Privacy"));
+const Terms          = lazy(() => import("@/pages/Terms"));
+const About          = lazy(() => import("@/pages/About"));
+const HowToPlay      = lazy(() => import("@/pages/HowToPlay"));
+const DailyChallenge = lazy(() => import("@/pages/DailyChallenge"));
+const Friends        = lazy(() => import("@/pages/Friends"));
+const Strategies     = lazy(() => import("@/pages/Strategies"));
+const PlayerProfile  = lazy(() => import("@/pages/PlayerProfile"));
+const Tournament     = lazy(() => import("@/pages/Tournament"));
+const Live           = lazy(() => import("@/pages/Live"));
+const Overlay        = lazy(() => import("@/pages/Overlay"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -61,13 +64,18 @@ function App() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <SplashScreen onDone={() => setSplashDone(true)} lang={lang} />
-      {splashDone && (
-        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-          <Router />
-        </WouterRouter>
-      )}
-      <Toaster />
+      {/* reducedMotion="user" → respects OS-level "Reduce animations" toggle */}
+      <MotionConfig reducedMotion="user">
+        <SplashScreen onDone={() => setSplashDone(true)} lang={lang} />
+        {splashDone && (
+          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+            <Suspense fallback={null}>
+              <Router />
+            </Suspense>
+          </WouterRouter>
+        )}
+        <Toaster />
+      </MotionConfig>
     </QueryClientProvider>
   );
 }
