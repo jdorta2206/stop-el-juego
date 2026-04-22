@@ -92,12 +92,17 @@ export function SplashScreen({ onDone, lang = "es" }: Props) {
     };
   }, []);
 
+  // Keep latest onDone in a ref so re-renders from parent (new arrow fn each time)
+  // don't reset the fire-once timers. This prevents the splash from getting stuck.
+  const onDoneRef = useRef(onDone);
+  useEffect(() => { onDoneRef.current = onDone; }, [onDone]);
+
   useEffect(() => {
     const t1 = setTimeout(() => setLogoPhase("pulse"), 600);
     const t2 = setTimeout(() => setExit(true), 2600);
-    const t3 = setTimeout(onDone, 3100);
+    const t3 = setTimeout(() => onDoneRef.current(), 3100);
     return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
-  }, [onDone]);
+  }, []);
 
   const ringRadius = Math.min(window.innerWidth, window.innerHeight) * 0.29;
 
