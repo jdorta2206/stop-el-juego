@@ -195,6 +195,9 @@ export default function Home() {
           )}
         </motion.div>
 
+        {/* 🔴 EN VIVO ahora — public streamer rooms */}
+        <LiveRoomsSection />
+
         {/* 👥 Amigos jugando ahora — quick join */}
         {friendsOnline.length > 0 && (
           <motion.div
@@ -599,5 +602,62 @@ export default function Home() {
         </motion.div>
       </div>
     </Layout>
+  );
+}
+
+// 🔴 LiveRoomsSection — public spectator-friendly rooms currently in play
+function LiveRoomsSection() {
+  const [rooms, setRooms] = useState<any[]>([]);
+  useEffect(() => {
+    let stop = false;
+    const fetchRooms = async () => {
+      try {
+        const apiBase = (import.meta.env.VITE_API_BASE_URL || "") as string;
+        const r = await fetch(`${apiBase}/api/rooms/live`);
+        if (!r.ok) return;
+        const data = await r.json();
+        if (!stop) setRooms(data.rooms ?? []);
+      } catch { /* ignore */ }
+    };
+    fetchRooms();
+    const id = setInterval(fetchRooms, 30000);
+    return () => { stop = true; clearInterval(id); };
+  }, []);
+
+  if (rooms.length === 0) return null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="w-full px-3 py-2.5 rounded-xl"
+      style={{ background: "rgba(239,68,68,0.08)", border: "1.5px solid rgba(239,68,68,0.45)" }}
+    >
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-xs font-black text-red-300 flex items-center gap-1.5">
+          <span className="relative flex h-2 w-2">
+            <span className="absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75 animate-ping"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+          </span>
+          EN VIVO ahora · {rooms.length}
+        </span>
+      </div>
+      <div className="flex gap-2 overflow-x-auto pb-1">
+        {rooms.slice(0, 8).map((r) => (
+          <Link key={r.roomCode} href={`/live/${r.roomCode}`}>
+            <div className="min-w-[140px] px-3 py-2 rounded-lg bg-black/30 border border-white/10 hover:border-red-400/60 cursor-pointer transition">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[9px] uppercase tracking-wider text-red-300/80 font-black">{r.gameMode}</span>
+                <span className="text-[10px] text-amber-300 font-black">{r.currentLetter ?? "—"}</span>
+              </div>
+              <p className="text-white text-xs font-black truncate">{r.hostName}</p>
+              <p className="text-white/50 text-[10px]">
+                {r.playerCount} jug · R{r.currentRound}/{r.maxRounds}
+              </p>
+            </div>
+          </Link>
+        ))}
+      </div>
+    </motion.div>
   );
 }

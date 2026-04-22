@@ -827,6 +827,7 @@ export default function Room() {
                     {copied ? "¡Copiado! ✓" : "Copiar"}
                   </Button>
                 </Card>
+                {isHost && <StreamerModeCard room={room} playerId={player?.id ?? ""} />}
                 {isHost ? (
                   <Button size="xl" className="w-full shadow-xl border-2 border-white/20" onClick={handleStart}
                     disabled={players.length < 1}>
@@ -1946,5 +1947,78 @@ export default function Room() {
 
       </AnimatePresence>
     </Layout>
+  );
+}
+
+// 📺 Modo Streamer — host can publish the room so anyone can spectate at /live/:code
+// and an OBS-friendly overlay is exposed at /overlay/:code.
+function StreamerModeCard({ room, playerId }: { room: any; playerId: string }) {
+  const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState<string | null>(null);
+  const isPublic = !!room?.isPublic;
+  const code = room?.roomCode;
+  const apiBase = (import.meta.env.VITE_API_BASE_URL || "") as string;
+  const liveUrl = `${window.location.origin}${import.meta.env.BASE_URL}live/${code}`;
+  const overlayUrl = `${window.location.origin}${import.meta.env.BASE_URL}overlay/${code}`;
+
+  const toggle = async () => {
+    if (!code || !playerId) return;
+    setBusy(true);
+    try {
+      await fetch(`${apiBase}/api/rooms/${encodeURIComponent(code)}/visibility`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hostId: playerId, isPublic: !isPublic }),
+      });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const copy = (url: string, key: string) => {
+    navigator.clipboard.writeText(url).catch(() => {});
+    setCopied(key);
+    setTimeout(() => setCopied(null), 1500);
+  };
+
+  return (
+    <Card className="p-3 flex flex-col gap-2"
+      style={{ background: isPublic ? "rgba(239,68,68,0.10)" : "rgba(255,255,255,0.03)",
+        border: isPublic ? "1.5px solid rgba(239,68,68,0.55)" : "1px solid rgba(255,255,255,0.1)" }}>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <span className="text-base">📺</span>
+          <div>
+            <p className="text-sm font-black text-white">Modo Streamer</p>
+            <p className="text-[11px] text-white/50">
+              {isPublic ? "Sala pública · cualquiera puede mirar" : "Activa para que tus viewers puedan ver la partida"}
+            </p>
+          </div>
+        </div>
+        <Button size="sm" variant={isPublic ? "destructive" : "secondary"} onClick={toggle} disabled={busy}>
+          {isPublic ? "Apagar" : "Activar"}
+        </Button>
+      </div>
+      {isPublic && (
+        <div className="flex flex-col gap-1.5 mt-1">
+          <div className="flex gap-2">
+            <input readOnly value={liveUrl}
+              onClick={(e) => (e.target as HTMLInputElement).select()}
+              className="flex-1 bg-black/40 text-white/80 text-[11px] px-2 py-1 rounded border border-white/10 font-mono" />
+            <Button size="sm" variant="ghost" onClick={() => copy(liveUrl, "live")}>
+              {copied === "live" ? "✓" : "Live"}
+            </Button>
+          </div>
+          <div className="flex gap-2">
+            <input readOnly value={overlayUrl}
+              onClick={(e) => (e.target as HTMLInputElement).select()}
+              className="flex-1 bg-black/40 text-white/80 text-[11px] px-2 py-1 rounded border border-white/10 font-mono" />
+            <Button size="sm" variant="ghost" onClick={() => copy(overlayUrl, "obs")}>
+              {copied === "obs" ? "✓" : "OBS"}
+            </Button>
+          </div>
+        </div>
+      )}
+    </Card>
   );
 }

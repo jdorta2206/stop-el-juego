@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { roomsTable, playerScoresTable, gameHistoryTable } from "@workspace/db";
-import { eq, and, lt } from "drizzle-orm";
+import { eq, and, lt, inArray } from "drizzle-orm";
 import { CreateRoomBody, JoinRoomBody, SubmitRoomResultsBody } from "@workspace/api-zod";
 import { calculateStreak } from "./ranking";
 
@@ -265,6 +265,80 @@ async function purgeStaleRooms() {
 }
 
 // GET /rooms/public — list open public rooms (also purges stale rooms)
+// Sanitize a formatted room for public spectator/overlay views.
+// Hide individual players' answers while a round is in progress to prevent cheating.
+function sanitizeRoomForSpectator(room: any) {
+  if (room.status === "playing" || room.status === "stopping") {
+    return {
+      ...room,
+      players: (room.players ?? []).map((p: any) => ({
+        ...p,
+        answers: undefined,
+        bluffedCategories: undefined,
+      })),
+      typing: undefined,
+      stopper: room.stopper ? { stopperName: room.stopper.stopperName } : null,
+    };
+  }
+  return room;
+}
+
+// GET /rooms/live — public rooms currently mid-game (for streamer directory)
+router.get("/live", async (_req, res) => {
+  const rows = await db
+    .select()
+    .from(roomsTable)
+    .where(and(
+      eq(roomsTable.isPublic, true),
+      inArray(roomsTable.status, ["playing", "stopping", "revealing", "bluffvoting"]),
+    ))
+    .orderBy(roomsTable.createdAt)
+    .limit(12);
+  const list = rows.map(r => {
+    const players = parsePlayers(r.playersJson);
+    return {
+      roomCode: r.roomCode,
+      hostName: r.hostName || "Anfitrión",
+      status: r.status,
+      currentLetter: r.currentLetter,
+      currentRound: r.currentRound,
+      maxRounds: r.maxRounds,
+      gameMode: r.gameMode ?? "classic",
+      language: r.language,
+      playerCount: players.length,
+      topScore: Math.max(0, ...players.map((p: any) => p.score || 0)),
+    };
+  });
+  res.json({ rooms: list });
+});
+
+// GET /rooms/:code/spectate — sanitized public view (no auth required)
+router.get("/:roomCode/spectate", async (req, res) => {
+  const { roomCode } = req.params;
+  const rows = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, roomCode));
+  if (!rows.length) { res.status(404).json({ error: "Room not found" }); return; }
+  const room = rows[0];
+  if (!room.isPublic) { res.status(403).json({ error: "Room is private" }); return; }
+  res.json(sanitizeRoomForSpectator(formatRoom(room)));
+});
+
+// PATCH /rooms/:code/visibility — host toggles streamer mode (isPublic)
+router.patch("/:roomCode/visibility", async (req, res) => {
+  const { roomCode } = req.params;
+  const { hostId, isPublic } = req.body ?? {};
+  if (typeof isPublic !== "boolean" || !hostId) {
+    res.status(400).json({ error: "Missing hostId or isPublic" }); return;
+  }
+  const rows = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, roomCode));
+  if (!rows.length) { res.status(404).json({ error: "Room not found" }); return; }
+  if (rows[0].hostId !== hostId) { res.status(403).json({ error: "Only host can change visibility" }); return; }
+  const [updated] = await db.update(roomsTable)
+    .set({ isPublic })
+    .where(eq(roomsTable.roomCode, roomCode))
+    .returning();
+  res.json(formatRoom(updated));
+});
+
 router.get("/public", async (_req, res) => {
   // Opportunistic cleanup: remove stale waiting rooms on every public listing request
   purgeStaleRooms().catch(() => {});

@@ -17,6 +17,8 @@ import Friends from "@/pages/Friends";
 import Strategies from "@/pages/Strategies";
 import PlayerProfile from "@/pages/PlayerProfile";
 import Tournament from "@/pages/Tournament";
+import Live from "@/pages/Live";
+import Overlay from "@/pages/Overlay";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient({
@@ -35,6 +37,8 @@ function Router() {
       <Route path="/solo" component={SoloGame} />
       <Route path="/multiplayer" component={Multiplayer} />
       <Route path="/room/:id" component={Room} />
+      <Route path="/live/:code" component={Live} />
+      <Route path="/overlay/:code" component={Overlay} />
       <Route path="/ranking" component={Ranking} />
       <Route path="/privacy" component={Privacy} />
       <Route path="/terms" component={Terms} />
