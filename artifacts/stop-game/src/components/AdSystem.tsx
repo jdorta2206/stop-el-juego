@@ -24,6 +24,17 @@ const ADSTERRA_RECT_KEY = ADS_DISABLED
 const ADSTERRA_RECT_W = 300;
 const ADSTERRA_RECT_H = 250;
 
+// Native Banner — looks like organic content. Different domain from the iframe
+// banners (uses profitablecpmratenetwork.com, not highperformanceformat.com).
+const ADSTERRA_NATIVE_KEY = ADS_DISABLED
+  ? undefined
+  : ((import.meta.env.VITE_ADSTERRA_NATIVE_KEY as string | undefined) ??
+     "a84836d00454db806142953660d018f6");
+const ADSTERRA_NATIVE_SRC = ADS_DISABLED
+  ? undefined
+  : ((import.meta.env.VITE_ADSTERRA_NATIVE_SRC as string | undefined) ??
+     "https://pl29225874.profitablecpmratenetwork.com");
+
 // Legacy AdSense config (kept for the rewarded/interstitial mock paths) —
 // AdSense is currently disabled to avoid TOS conflicts with Adsterra.
 const ADSENSE_CLIENT = import.meta.env.VITE_ADSENSE_CLIENT_ID as string | undefined;
@@ -493,6 +504,64 @@ export function InterstitialAd({ onDone }: InterstitialAdProps) {
           </div>
         </div>
       </motion.div>
+    </div>
+  );
+}
+
+// ─── Native Banner ───────────────────────────────────────────────────────────
+// Renders Adsterra's "looks-like-content" widget. Adsterra populates the
+// container div with their own markup. We hide the slot if nothing fills.
+export function NativeBanner({ className = "" }: { className?: string }) {
+  const t = getT();
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const [status, setStatus] = useState<"loading" | "filled" | "empty">("loading");
+
+  useEffect(() => {
+    if (!ADSTERRA_NATIVE_KEY || !ADSTERRA_NATIVE_SRC) { setStatus("empty"); return; }
+    const wrapper = wrapperRef.current;
+    if (!wrapper) return;
+    if (wrapper.dataset.adInjected === "1") return;
+    wrapper.dataset.adInjected = "1";
+
+    // Adsterra requires a div with a specific id BEFORE the script runs
+    const target = document.createElement("div");
+    target.id = `container-${ADSTERRA_NATIVE_KEY}`;
+    wrapper.appendChild(target);
+
+    const script = document.createElement("script");
+    script.async = true;
+    script.setAttribute("data-cfasync", "false");
+    script.src = `${ADSTERRA_NATIVE_SRC}/${ADSTERRA_NATIVE_KEY}/invoke.js`;
+    script.onerror = () => setStatus("empty");
+    wrapper.appendChild(script);
+
+    const startedAt = Date.now();
+    const poll = window.setInterval(() => {
+      if (!wrapper.isConnected) { window.clearInterval(poll); return; }
+      // Native banner adds children (ad cards) inside the target div
+      if (target.children.length > 0 || target.innerHTML.trim().length > 0) {
+        setStatus("filled");
+        window.clearInterval(poll);
+      } else if (Date.now() - startedAt > 5000) {
+        setStatus("empty");
+        window.clearInterval(poll);
+      }
+    }, 500);
+
+    return () => {
+      window.clearInterval(poll);
+      try { wrapper.innerHTML = ""; wrapper.dataset.adInjected = ""; } catch {}
+    };
+  }, []);
+
+  if (status === "empty") return null;
+
+  return (
+    <div className={`relative w-full ${className}`} style={{ minHeight: status === "loading" ? 0 : 80 }}>
+      {status === "filled" && (
+        <div className="text-[9px] font-mono text-white/30 mb-1 px-1">{t.ads.label}</div>
+      )}
+      <div ref={wrapperRef} className="w-full" />
     </div>
   );
 }
