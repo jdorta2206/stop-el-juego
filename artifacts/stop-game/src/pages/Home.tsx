@@ -13,6 +13,7 @@ import { useT } from "@/i18n/useT";
 import { useStreak } from "@/hooks/useStreak";
 import { useProgression, getLeague } from "@/hooks/useProgression";
 import { useGetLeaderboard, useGetPlayerStats } from "@workspace/api-client-react";
+import { NativeBanner } from "@/components/AdSystem";
 
 const LOGO_URL = `${import.meta.env.BASE_URL}images/stop-logo.png`;
 
@@ -545,6 +546,9 @@ export default function Home() {
             </Link>
           </motion.div>
         )}
+
+        {/* Native ad — looks like content, hidden if no fill */}
+        {!isPremium && <NativeBanner className="my-4" />}
 
         {/* Share row */}
         <motion.div
