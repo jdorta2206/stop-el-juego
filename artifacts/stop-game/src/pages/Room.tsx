@@ -603,6 +603,17 @@ export default function Room() {
     }
   }, [roomStatus, currentRound]);
 
+  // ⚡ Auto-reveal categorías entre rondas para no aburrir a la gente.
+  // Cada ~1.2s revela la siguiente categoría hasta llegar al total.
+  useEffect(() => {
+    if (phase !== "between_rounds") return;
+    if (revealedCount >= CATEGORIES_ES.length) return;
+    const t = window.setTimeout(() => {
+      setRevealedCount(prev => Math.min(prev + 1, CATEGORIES_ES.length));
+    }, revealedCount === 0 ? 400 : 1200);
+    return () => window.clearTimeout(t);
+  }, [phase, revealedCount]);
+
   // Cleanup on unmount: stop timers and notify server that player left
   useEffect(() => {
     return () => {
@@ -1559,15 +1570,9 @@ export default function Room() {
                     })}
                   </div>
                   <Button size="lg" className="w-full shrink-0"
-                    onClick={() => setRevealedCount(prev => Math.min(prev + 1, CATEGORIES_ES.length))}>
-                    {revealedCount === 0 ? "▶ Revelar" : revealedCount < CATEGORIES_ES.length ? `Siguiente (${revealedCount}/${CATEGORIES_ES.length})` : "Ver puntuaciones"}
+                    onClick={() => setRevealedCount(CATEGORIES_ES.length)}>
+                    ⏭ Ver puntuaciones ({revealedCount}/{CATEGORIES_ES.length})
                   </Button>
-                  {revealedCount > 0 && revealedCount < CATEGORIES_ES.length && (
-                    <button className="text-xs text-white/30 underline text-center"
-                      onClick={() => setRevealedCount(CATEGORIES_ES.length)}>
-                      Ver todo de una vez
-                    </button>
-                  )}
                 </>
               ) : (
                 <>
