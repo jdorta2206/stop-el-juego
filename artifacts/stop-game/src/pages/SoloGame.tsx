@@ -79,8 +79,12 @@ export default function SoloGame() {
   const [round, setRound] = useState(1);
   const [totalScore, setTotalScore] = useState(0);
   const [aiTotalScore, setAiTotalScore] = useState(0);
-  const [showRewardedAd, setShowRewardedAd] = useState(false);
+  // null = closed, otherwise the type of reward being shown
+  const [rewardedAdType, setRewardedAdType] = useState<null | "extraTime" | "hint" | "double">(null);
   const [rewardedUsed, setRewardedUsed] = useState(false);
+  const [hintUsed, setHintUsed] = useState(false);
+  const [doubleUsed, setDoubleUsed] = useState(false);
+  const [hintReveal, setHintReveal] = useState<{ category: string; word: string } | null>(null);
   const [showPremiumModal, setShowPremiumModal] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [lastXpGain, setLastXpGain] = useState(0);
@@ -316,6 +320,8 @@ export default function SoloGame() {
     setGameState("PLAYING");
     setTimeLeft(roundTime);
     setRewardedUsed(false);
+    setHintUsed(false);
+    setHintReveal(null);
     sound.playRoundStart();
     if (randomEvent === "hidden_category") setTimeout(() => sound.playHiddenReveal(), 400);
 
@@ -673,6 +679,7 @@ export default function SoloGame() {
       setRound(1);
       setTotalScore(0);
       setAiTotalScore(0);
+      setDoubleUsed(false);
       setCombo(0);
       setInsaneMode(false);
       setShowImpossibleBanner(false);
@@ -685,10 +692,36 @@ export default function SoloGame() {
     }
   };
 
+  // Tiny inline starter pool — gives the player a 3-letter prefix to build on.
+  // Not exhaustive: when no match, falls back to "<letter>" alone as a nudge.
+  const HINT_STARTERS: Record<string, string[]> = {
+    A: ["ALA", "ARE", "ABA", "ACA"], B: ["BAR", "BEL", "BOL"], C: ["CAR", "CAS", "COR"],
+    D: ["DAN", "DOR"], E: ["ELE", "EST"], F: ["FIL", "FOR"], G: ["GAL", "GAR"],
+    H: ["HAR", "HEL"], I: ["INE", "ITA"], J: ["JAR", "JUL"], L: ["LAR", "LEO"],
+    M: ["MAR", "MEL"], N: ["NAR", "NEL"], O: ["OLI", "ORE"], P: ["PAL", "PAR"],
+    R: ["RAM", "RIO"], S: ["SAL", "SAN"], T: ["TAR", "TOR"], V: ["VAL", "VER"],
+  };
+
   const handleRewardedComplete = (reward: number) => {
-    setTimeLeft(prev => prev + reward);
-    setRewardedUsed(true);
-    setShowRewardedAd(false);
+    if (rewardedAdType === "extraTime") {
+      setTimeLeft(prev => prev + reward);
+      setRewardedUsed(true);
+    } else if (rewardedAdType === "hint") {
+      // Pick first empty category and reveal a starter
+      const empty = categories.find(c => !(responses[c] && responses[c].trim().length > 0));
+      if (empty) {
+        const pool = HINT_STARTERS[currentLetter] ?? [currentLetter];
+        const word = pool[Math.floor(Math.random() * pool.length)];
+        setResponses(prev => ({ ...prev, [empty]: word }));
+        setHintReveal({ category: empty, word });
+        setTimeout(() => setHintReveal(null), 3500);
+      }
+      setHintUsed(true);
+    } else if (rewardedAdType === "double") {
+      setTotalScore(prev => prev * 2);
+      setDoubleUsed(true);
+    }
+    setRewardedAdType(null);
   };
 
   // Bluff reveal sounds — play as each result animates in (1.4s per card)
@@ -757,12 +790,15 @@ export default function SoloGame() {
 
       <div className="flex-1 flex flex-col max-w-2xl mx-auto w-full">
 
-        {showRewardedAd && (
+        {rewardedAdType && (
           <RewardedAd
-            rewardType="extraTime"
-            rewardAmount={30}
+            rewardType={rewardedAdType === "double" ? "points" : rewardedAdType}
+            rewardAmount={
+              rewardedAdType === "extraTime" ? 30 :
+              rewardedAdType === "double" ? totalScore : 0
+            }
             onComplete={handleRewardedComplete}
-            onSkip={() => setShowRewardedAd(false)}
+            onSkip={() => setRewardedAdType(null)}
           />
         )}
 
@@ -1285,22 +1321,62 @@ export default function SoloGame() {
                 );
               })()}
 
-              {!rewardedUsed && (
-                isPremium ? (
+              <div className="grid grid-cols-2 gap-2 mb-3">
+                {!rewardedUsed && (
+                  isPremium ? (
+                    <button
+                      onClick={() => { setTimeLeft(prev => prev + 20); setRewardedUsed(true); }}
+                      className="flex items-center justify-center gap-2 py-2 px-3 rounded-xl border border-yellow-400/50 bg-yellow-400/15 text-yellow-300 text-xs font-bold hover:bg-yellow-400/25 transition-all"
+                    >
+                      ⭐ +20s
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => setRewardedAdType("extraTime")}
+                      className="flex items-center justify-center gap-2 py-2 px-3 rounded-xl border border-yellow-500/30 bg-yellow-500/10 text-yellow-300 text-xs font-bold hover:bg-yellow-500/20 transition-all"
+                    >
+                      <Tv2 className="w-3.5 h-3.5" /> +30s
+                    </button>
+                  )
+                )}
+                {!hintUsed && !isPremium && (
                   <button
-                    onClick={() => { setTimeLeft(prev => prev + 20); setRewardedUsed(true); }}
-                    className="mb-3 flex items-center justify-center gap-2 py-2 px-4 rounded-xl border border-yellow-400/50 bg-yellow-400/15 text-yellow-300 text-sm font-bold hover:bg-yellow-400/25 transition-all"
+                    onClick={() => setRewardedAdType("hint")}
+                    className="flex items-center justify-center gap-2 py-2 px-3 rounded-xl border border-cyan-500/30 bg-cyan-500/10 text-cyan-300 text-xs font-bold hover:bg-cyan-500/20 transition-all"
                   >
-                    {t.game.premiumBonus}
+                    💡 {lang === "en" ? "Hint" : lang === "pt" ? "Dica" : lang === "fr" ? "Indice" : "Pista"}
                   </button>
-                ) : (
+                )}
+                {!hintUsed && isPremium && (
                   <button
-                    onClick={() => setShowRewardedAd(true)}
-                    className="mb-3 flex items-center justify-center gap-2 py-2 px-4 rounded-xl border border-yellow-500/30 bg-yellow-500/10 text-yellow-300 text-sm font-bold hover:bg-yellow-500/20 transition-all"
+                    onClick={() => {
+                      const empty = categories.find(c => !(responses[c] && responses[c].trim().length > 0));
+                      if (empty) {
+                        const pool = HINT_STARTERS[currentLetter] ?? [currentLetter];
+                        const word = pool[Math.floor(Math.random() * pool.length)];
+                        setResponses(prev => ({ ...prev, [empty]: word }));
+                        setHintReveal({ category: empty, word });
+                        setTimeout(() => setHintReveal(null), 3500);
+                      }
+                      setHintUsed(true);
+                    }}
+                    className="flex items-center justify-center gap-2 py-2 px-3 rounded-xl border border-cyan-400/50 bg-cyan-400/15 text-cyan-300 text-xs font-bold hover:bg-cyan-400/25 transition-all"
                   >
-                    <Tv2 className="w-4 h-4" /> {t.game.watchAdForPoints}
+                    ⭐ 💡 {lang === "en" ? "Hint" : lang === "pt" ? "Dica" : lang === "fr" ? "Indice" : "Pista"}
                   </button>
-                )
+                )}
+              </div>
+
+              {hintReveal && (
+                <motion.div
+                  initial={{ opacity: 0, y: -8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                  className="mb-3 py-2 px-3 rounded-xl text-center text-xs font-bold"
+                  style={{ background: "rgba(34,211,238,0.15)", border: "1px solid rgba(34,211,238,0.4)", color: "#67e8f9" }}
+                >
+                  💡 {hintReveal.category}: <span className="text-white">{hintReveal.word}…</span>
+                </motion.div>
               )}
 
               {/* Bluff hint bar */}
@@ -2054,6 +2130,32 @@ export default function SoloGame() {
                     </p>
                   </div>
                 </motion.div>
+              )}
+
+              {round >= maxRounds && !doubleUsed && totalScore > 0 && !isDailyMode && (
+                <motion.button
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  whileHover={{ scale: 1.02 }}
+                  onClick={() => setRewardedAdType("double")}
+                  className="w-full mb-3 py-3 px-4 rounded-xl flex items-center justify-center gap-2 font-black text-sm"
+                  style={{
+                    background: "linear-gradient(135deg, rgba(249,168,37,0.25), rgba(181,48,26,0.2))",
+                    border: "2px solid rgba(249,168,37,0.6)",
+                    color: "#fde047",
+                  }}
+                >
+                  <Tv2 className="w-4 h-4" />
+                  {lang === "en" ? `Watch ad → DOUBLE your ${totalScore} pts!` :
+                   lang === "pt" ? `Vê anúncio → DUPLICA os teus ${totalScore} pts!` :
+                   lang === "fr" ? `Voir pub → DOUBLE tes ${totalScore} pts !` :
+                   `Ver anuncio → ¡DUPLICA tus ${totalScore} pts!`}
+                </motion.button>
+              )}
+              {round >= maxRounds && doubleUsed && (
+                <div className="w-full mb-3 py-2 px-4 rounded-xl text-center text-xs font-bold text-yellow-300 bg-yellow-500/10 border border-yellow-500/30">
+                  ✨ {lang === "en" ? "Score doubled!" : lang === "pt" ? "Pontuação duplicada!" : lang === "fr" ? "Score doublé !" : "¡Puntuación duplicada!"}
+                </div>
               )}
 
               <div className="grid grid-cols-2 gap-3">
