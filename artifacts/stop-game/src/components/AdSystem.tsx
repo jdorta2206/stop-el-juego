@@ -2,17 +2,69 @@ import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Play, Gift, Zap, Star } from "lucide-react";
 
-// ─── AdSense config (set these in Replit Secrets) ────────────────────────────
-// VITE_ADSENSE_CLIENT_ID    → your ca-pub-XXXXXXXXXXXXXXXX
-// VITE_ADSENSE_BANNER_SLOT  → ad unit slot ID for banners
-// VITE_ADSENSE_VIDEO_SLOT   → ad unit slot ID for interstitials/video
+// ─── Ad network config ───────────────────────────────────────────────────────
+// Currently using Adsterra (320x50 iframe banner). Override via env if needed.
+const ADSTERRA_BANNER_KEY =
+  (import.meta.env.VITE_ADSTERRA_BANNER_KEY as string | undefined) ??
+  "20fbacba6cfa090f0fdc325a456cc87b";
+const ADSTERRA_BANNER_W = 320;
+const ADSTERRA_BANNER_H = 50;
 
+// Legacy AdSense config (kept for the rewarded/interstitial mock paths) —
+// AdSense is currently disabled to avoid TOS conflicts with Adsterra.
 const ADSENSE_CLIENT = import.meta.env.VITE_ADSENSE_CLIENT_ID as string | undefined;
 const BANNER_SLOT    = import.meta.env.VITE_ADSENSE_BANNER_SLOT as string | undefined;
 const VIDEO_SLOT     = import.meta.env.VITE_ADSENSE_VIDEO_SLOT as string | undefined;
+const ADSENSE_READY  = !!ADSENSE_CLIENT;
 
-// Auto Ads mode: only needs the client ID — Google places ads automatically
-const ADSENSE_READY = !!ADSENSE_CLIENT;
+// ─── Adsterra banner component ───────────────────────────────────────────────
+// Their invoke.js looks at document.currentScript.parentNode to know where to
+// drop the iframe, so we mount real <script> elements inside a per-instance div.
+function AdsterraBanner({ className = "" }: { className?: string }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el || !ADSTERRA_BANNER_KEY) return;
+    // Avoid double-injection on React StrictMode double-effect runs
+    if (el.dataset.adInjected === "1") return;
+    el.dataset.adInjected = "1";
+
+    const cfg = document.createElement("script");
+    cfg.type = "text/javascript";
+    cfg.text =
+      `atOptions = { 'key' : '${ADSTERRA_BANNER_KEY}', ` +
+      `'format' : 'iframe', 'height' : ${ADSTERRA_BANNER_H}, ` +
+      `'width' : ${ADSTERRA_BANNER_W}, 'params' : {} };`;
+    el.appendChild(cfg);
+
+    const loader = document.createElement("script");
+    loader.type = "text/javascript";
+    loader.src = `https://www.highperformanceformat.com/${ADSTERRA_BANNER_KEY}/invoke.js`;
+    loader.async = true;
+    el.appendChild(loader);
+
+    return () => {
+      // Clean up so a remount doesn't pile up iframes
+      try { el.innerHTML = ""; el.dataset.adInjected = ""; } catch {}
+    };
+  }, []);
+
+  return (
+    <div
+      className={`relative overflow-hidden rounded-xl bg-black/5 ${className}`}
+      style={{ width: ADSTERRA_BANNER_W, height: ADSTERRA_BANNER_H + 14, margin: "0 auto" }}
+    >
+      <div className="absolute top-0 left-2 text-[9px] text-black/30 font-mono z-10 leading-none pt-0.5">
+        Publicidad
+      </div>
+      <div
+        ref={containerRef}
+        style={{ width: ADSTERRA_BANNER_W, height: ADSTERRA_BANNER_H, marginTop: 12 }}
+      />
+    </div>
+  );
+}
 
 // Push an AdSense slot after it mounts
 function pushAd(ref: React.RefObject<HTMLElement | null>) {
@@ -67,6 +119,22 @@ export function BannerAd({ className = "" }: { className?: string }) {
   }, []);
 
   if (!visible) return null;
+
+  // ── Adsterra banner (current production network) ──
+  if (ADSTERRA_BANNER_KEY) {
+    return (
+      <div className={`relative ${className}`}>
+        <AdsterraBanner />
+        <button
+          onClick={() => setVisible(false)}
+          aria-label="Cerrar anuncio"
+          className="absolute top-0 right-0 p-1 text-black/30 hover:text-black/60 z-20"
+        >
+          <X className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    );
+  }
 
   // ── Manual AdSense slot (if BANNER_SLOT is configured) ──
   if (ADSENSE_READY && BANNER_SLOT) {
