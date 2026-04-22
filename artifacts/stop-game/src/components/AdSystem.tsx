@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Play, Gift, Zap, Star } from "lucide-react";
+import { getT } from "@/i18n/index";
 
 // ─── Ad network config ───────────────────────────────────────────────────────
 // Currently using Adsterra (320x50 iframe banner). Override via env if needed.
@@ -46,6 +47,7 @@ function AdsterraSlot({
   className?: string;
   labelDark?: boolean;
 }) {
+  const t = getT();
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -81,7 +83,7 @@ function AdsterraSlot({
       <div
         className={`absolute top-0 left-2 text-[9px] font-mono z-10 leading-none pt-0.5 ${labelDark ? "text-white/40" : "text-black/30"}`}
       >
-        Publicidad
+        {t.ads.label}
       </div>
       <div ref={containerRef} style={{ width, height, marginTop: 12 }} />
     </div>
@@ -162,7 +164,7 @@ export function BannerAd({ className = "" }: { className?: string }) {
   if (ADSENSE_READY && BANNER_SLOT) {
     return (
       <div className={`relative overflow-hidden rounded-xl ${className}`} style={{ minHeight: 60 }}>
-        <div className="absolute top-1 left-2 text-[9px] text-black/30 font-mono z-10">Publicidad</div>
+        <div className="absolute top-1 left-2 text-[9px] text-black/30 font-mono z-10">{getT().ads.label}</div>
         <ins
           ref={insRef}
           className="adsbygoogle"
@@ -200,7 +202,7 @@ export function BannerAd({ className = "" }: { className?: string }) {
               className="text-xs font-bold uppercase tracking-wider opacity-70 mb-0.5"
               style={{ color: ad.accent }}
             >
-              {ad.brand} · Publicidad
+              {ad.brand} · {getT().ads.label}
             </p>
             <p className="text-white text-sm font-semibold leading-tight truncate">{ad.text}</p>
           </div>
@@ -270,10 +272,11 @@ export function RewardedAd({
     };
   }, []);
 
+  const t = getT();
   const rewardLabels = {
-    points: `+${rewardAmount} puntos`,
-    hint: "Pista gratuita",
-    extraTime: "+30 segundos",
+    points: `+${rewardAmount} pts`,
+    hint: t.ads.reward,
+    extraTime: "+30s",
   };
   const rewardIcons = {
     points: <Star className="w-8 h-8 text-[#f9a825]" />,
@@ -298,28 +301,26 @@ export function RewardedAd({
           <div className="p-8 text-center space-y-6">
             <div className="flex justify-center">{rewardIcons[rewardType]}</div>
             <div>
-              <h3 className="text-2xl font-black text-white mb-2">¡Gana un premio!</h3>
-              <p className="text-white/70">Mira un vídeo corto y gana</p>
+              <h3 className="text-2xl font-black text-white mb-2">{t.ads.reward}</h3>
+              <p className="text-white/70">{t.ads.rewardSubtitle}</p>
               <p className="text-[#f9a825] text-3xl font-black mt-2">{rewardLabels[rewardType]}</p>
             </div>
 
-            <p className="text-white/50 text-xs">
-              Verás un anuncio breve de 15 segundos
-            </p>
+            <p className="text-white/50 text-xs">{t.ads.adIntro}</p>
 
             <div className="flex gap-3">
               <button
                 onClick={onSkip}
                 className="flex-1 py-3 rounded-xl border-2 border-white/20 text-white/60 font-bold text-sm hover:bg-white/10 transition-all"
               >
-                Cancelar
+                {t.ads.cancel}
               </button>
               <button
                 onClick={startWatching}
                 className="flex-1 py-3 rounded-xl font-black text-sm flex items-center justify-center gap-2"
                 style={{ background: "#b5301a", color: "white" }}
               >
-                <Play className="w-4 h-4 fill-white" /> Ver anuncio
+                <Play className="w-4 h-4 fill-white" /> {t.ads.watchAd}
               </button>
             </div>
           </div>
@@ -341,14 +342,14 @@ export function RewardedAd({
               >
                 <div className="text-center text-white">
                   <div className="text-5xl mb-2">🎮</div>
-                  <p className="font-bold text-lg">Cargando anuncio...</p>
+                  <p className="font-bold text-lg">{t.ads.loading}</p>
                 </div>
               </div>
             )}
             <div>
               <div className="flex justify-between text-sm text-white/60 mb-2">
-                <span>Progreso</span>
-                <span>{countdown}s restantes</span>
+                <span>{t.ads.progress}</span>
+                <span>{countdown}s {t.ads.remaining}</span>
               </div>
               <div className="h-3 bg-white/10 rounded-full overflow-hidden">
                 <motion.div
@@ -358,7 +359,7 @@ export function RewardedAd({
                 />
               </div>
             </div>
-            <p className="text-center text-white/50 text-sm">No puedes saltar este anuncio</p>
+            <p className="text-center text-white/50 text-sm">{t.ads.cannotSkip}</p>
           </div>
         )}
 
@@ -376,7 +377,7 @@ export function RewardedAd({
             >
               🎉
             </motion.div>
-            <h3 className="text-2xl font-black text-[#f9a825]">¡Premio conseguido!</h3>
+            <h3 className="text-2xl font-black text-[#f9a825]">{t.ads.prize}</h3>
             <p className="text-4xl font-black text-white">{rewardLabels[rewardType]}</p>
           </motion.div>
         )}
