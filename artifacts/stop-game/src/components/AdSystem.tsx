@@ -4,9 +4,14 @@ import { X, Play, Gift, Zap, Star } from "lucide-react";
 
 // ─── Ad network config ───────────────────────────────────────────────────────
 // Currently using Adsterra (320x50 iframe banner). Override via env if needed.
-const ADSTERRA_BANNER_KEY =
-  (import.meta.env.VITE_ADSTERRA_BANNER_KEY as string | undefined) ??
-  "20fbacba6cfa090f0fdc325a456cc87b";
+// Kill-switch: set VITE_ADS_DISABLED=1 to disable ALL ads instantly (use this
+// if Google Play sends a "Disruptive Ads" policy warning — no redeploy needed
+// to switch behavior, just toggle the secret and restart).
+const ADS_DISABLED = import.meta.env.VITE_ADS_DISABLED === "1";
+const ADSTERRA_BANNER_KEY = ADS_DISABLED
+  ? undefined
+  : ((import.meta.env.VITE_ADSTERRA_BANNER_KEY as string | undefined) ??
+     "20fbacba6cfa090f0fdc325a456cc87b");
 const ADSTERRA_BANNER_W = 320;
 const ADSTERRA_BANNER_H = 50;
 
