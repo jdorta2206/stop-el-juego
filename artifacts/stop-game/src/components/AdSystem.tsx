@@ -49,6 +49,8 @@ function AdsterraSlot({
 }) {
   const t = getT();
   const containerRef = useRef<HTMLDivElement>(null);
+  // "loading" → not yet checked, "filled" → iframe present, "empty" → no fill (hide)
+  const [status, setStatus] = useState<"loading" | "filled" | "empty">("loading");
 
   useEffect(() => {
     const el = containerRef.current;
@@ -68,23 +70,44 @@ function AdsterraSlot({
     loader.type = "text/javascript";
     loader.src = `https://www.highperformanceformat.com/${adKey}/invoke.js`;
     loader.async = true;
+    loader.onerror = () => setStatus("empty");
     el.appendChild(loader);
 
+    // Poll for iframe — if none after 4s, treat as no-fill and hide the slot
+    const startedAt = Date.now();
+    const poll = window.setInterval(() => {
+      if (!el.isConnected) { window.clearInterval(poll); return; }
+      const iframe = el.querySelector("iframe");
+      if (iframe) {
+        setStatus("filled");
+        window.clearInterval(poll);
+      } else if (Date.now() - startedAt > 4000) {
+        setStatus("empty");
+        window.clearInterval(poll);
+      }
+    }, 400);
+
     return () => {
+      window.clearInterval(poll);
       try { el.innerHTML = ""; el.dataset.adInjected = ""; } catch {}
     };
   }, [adKey, width, height]);
+
+  // Hide the entire slot (label + box) when there's no fill — no empty hole
+  if (status === "empty") return null;
 
   return (
     <div
       className={`relative overflow-hidden rounded-xl ${labelDark ? "bg-black/30" : "bg-black/5"} ${className}`}
       style={{ width, height: height + 14, margin: "0 auto" }}
     >
-      <div
-        className={`absolute top-0 left-2 text-[9px] font-mono z-10 leading-none pt-0.5 ${labelDark ? "text-white/40" : "text-black/30"}`}
-      >
-        {t.ads.label}
-      </div>
+      {status === "filled" && (
+        <div
+          className={`absolute top-0 left-2 text-[9px] font-mono z-10 leading-none pt-0.5 ${labelDark ? "text-white/40" : "text-black/30"}`}
+        >
+          {t.ads.label}
+        </div>
+      )}
       <div ref={containerRef} style={{ width, height, marginTop: 12 }} />
     </div>
   );
