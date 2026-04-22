@@ -317,6 +317,11 @@ const pt = {
     adSpace: "Espaço para anúncios",
     configAdsense: "Configure o Google AdSense para ganhar dinheiro",
     waitingForAd: "Assista ao anúncio completo!",
+    cancel: "Cancelar",
+    watchAd: "Ver anúncio",
+    loading: "A carregar anúncio...",
+    adIntro: "Verás um anúncio breve de 15 segundos",
+    label: "Publicidade",
   },
 } as const;
 

@@ -317,6 +317,11 @@ const en = {
     adSpace: "Ad space",
     configAdsense: "Set up Google AdSense to earn money",
     waitingForAd: "Watch the full ad!",
+    cancel: "Cancel",
+    watchAd: "Watch ad",
+    loading: "Loading ad...",
+    adIntro: "You'll see a short 15-second ad",
+    label: "Ad",
   },
 } as const;
 
