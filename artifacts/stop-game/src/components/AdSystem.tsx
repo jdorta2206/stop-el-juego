@@ -15,6 +15,14 @@ const ADSTERRA_BANNER_KEY = ADS_DISABLED
 const ADSTERRA_BANNER_W = 320;
 const ADSTERRA_BANNER_H = 50;
 
+// Rectangle 300x250 — used inside RewardedAd modal as the "video" area.
+const ADSTERRA_RECT_KEY = ADS_DISABLED
+  ? undefined
+  : ((import.meta.env.VITE_ADSTERRA_RECT_KEY as string | undefined) ??
+     "8a1eada922ebe1e12f69cae426193885");
+const ADSTERRA_RECT_W = 300;
+const ADSTERRA_RECT_H = 250;
+
 // Legacy AdSense config (kept for the rewarded/interstitial mock paths) —
 // AdSense is currently disabled to avoid TOS conflicts with Adsterra.
 const ADSENSE_CLIENT = import.meta.env.VITE_ADSENSE_CLIENT_ID as string | undefined;
@@ -22,51 +30,60 @@ const BANNER_SLOT    = import.meta.env.VITE_ADSENSE_BANNER_SLOT as string | unde
 const VIDEO_SLOT     = import.meta.env.VITE_ADSENSE_VIDEO_SLOT as string | undefined;
 const ADSENSE_READY  = !!ADSENSE_CLIENT;
 
-// ─── Adsterra banner component ───────────────────────────────────────────────
+// ─── Adsterra iframe ad component ────────────────────────────────────────────
 // Their invoke.js looks at document.currentScript.parentNode to know where to
 // drop the iframe, so we mount real <script> elements inside a per-instance div.
-function AdsterraBanner({ className = "" }: { className?: string }) {
+function AdsterraSlot({
+  adKey,
+  width,
+  height,
+  className = "",
+  labelDark = false,
+}: {
+  adKey: string;
+  width: number;
+  height: number;
+  className?: string;
+  labelDark?: boolean;
+}) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const el = containerRef.current;
-    if (!el || !ADSTERRA_BANNER_KEY) return;
-    // Avoid double-injection on React StrictMode double-effect runs
-    if (el.dataset.adInjected === "1") return;
+    if (!el) return;
+    if (el.dataset.adInjected === "1") return; // StrictMode guard
     el.dataset.adInjected = "1";
 
     const cfg = document.createElement("script");
     cfg.type = "text/javascript";
     cfg.text =
-      `atOptions = { 'key' : '${ADSTERRA_BANNER_KEY}', ` +
-      `'format' : 'iframe', 'height' : ${ADSTERRA_BANNER_H}, ` +
-      `'width' : ${ADSTERRA_BANNER_W}, 'params' : {} };`;
+      `atOptions = { 'key' : '${adKey}', ` +
+      `'format' : 'iframe', 'height' : ${height}, ` +
+      `'width' : ${width}, 'params' : {} };`;
     el.appendChild(cfg);
 
     const loader = document.createElement("script");
     loader.type = "text/javascript";
-    loader.src = `https://www.highperformanceformat.com/${ADSTERRA_BANNER_KEY}/invoke.js`;
+    loader.src = `https://www.highperformanceformat.com/${adKey}/invoke.js`;
     loader.async = true;
     el.appendChild(loader);
 
     return () => {
-      // Clean up so a remount doesn't pile up iframes
       try { el.innerHTML = ""; el.dataset.adInjected = ""; } catch {}
     };
-  }, []);
+  }, [adKey, width, height]);
 
   return (
     <div
-      className={`relative overflow-hidden rounded-xl bg-black/5 ${className}`}
-      style={{ width: ADSTERRA_BANNER_W, height: ADSTERRA_BANNER_H + 14, margin: "0 auto" }}
+      className={`relative overflow-hidden rounded-xl ${labelDark ? "bg-black/30" : "bg-black/5"} ${className}`}
+      style={{ width, height: height + 14, margin: "0 auto" }}
     >
-      <div className="absolute top-0 left-2 text-[9px] text-black/30 font-mono z-10 leading-none pt-0.5">
+      <div
+        className={`absolute top-0 left-2 text-[9px] font-mono z-10 leading-none pt-0.5 ${labelDark ? "text-white/40" : "text-black/30"}`}
+      >
         Publicidad
       </div>
-      <div
-        ref={containerRef}
-        style={{ width: ADSTERRA_BANNER_W, height: ADSTERRA_BANNER_H, marginTop: 12 }}
-      />
+      <div ref={containerRef} style={{ width, height, marginTop: 12 }} />
     </div>
   );
 }
@@ -129,7 +146,7 @@ export function BannerAd({ className = "" }: { className?: string }) {
   if (ADSTERRA_BANNER_KEY) {
     return (
       <div className={`relative ${className}`}>
-        <AdsterraBanner />
+        <AdsterraSlot adKey={ADSTERRA_BANNER_KEY} width={ADSTERRA_BANNER_W} height={ADSTERRA_BANNER_H} />
         <button
           onClick={() => setVisible(false)}
           aria-label="Cerrar anuncio"
@@ -230,7 +247,7 @@ export function RewardedAd({
 
   const startWatching = () => {
     setPhase("watching");
-    // Push real ad when video starts
+    // Push real ad when video starts (legacy AdSense path; harmless if unused)
     if (ADSENSE_CLIENT && VIDEO_SLOT && insRef.current) {
       pushAd(insRef as any);
     }
@@ -286,77 +303,48 @@ export function RewardedAd({
               <p className="text-[#f9a825] text-3xl font-black mt-2">{rewardLabels[rewardType]}</p>
             </div>
 
-            {/* Ad preview area — real AdSense or mock */}
-            {ADSENSE_CLIENT && VIDEO_SLOT ? (
-              <div className="rounded-2xl overflow-hidden bg-black/30" style={{ minHeight: 150 }}>
-                <ins
-                  ref={insRef}
-                  className="adsbygoogle"
-                  style={{ display: "block", minHeight: 150 }}
-                  data-ad-client={ADSENSE_CLIENT}
-                  data-ad-slot={VIDEO_SLOT}
-                  data-ad-format="rectangle"
-                  data-full-width-responsive="true"
-                />
-              </div>
-            ) : (
-              <div
-                className="rounded-2xl overflow-hidden relative h-36 flex items-center justify-center"
-                style={{ background: "linear-gradient(135deg, #2d1b69, #11998e)" }}
-              >
-                <div className="text-center text-white">
-                  <div className="text-4xl mb-2">🎯</div>
-                  <p className="font-bold">Vídeo publicitario</p>
-                  <p className="text-xs opacity-60 mt-1">Duración: 15 segundos</p>
-                </div>
-                <div className="absolute top-2 right-2 bg-black/50 text-white text-xs px-2 py-1 rounded font-bold">
-                  ANUNCIO
-                </div>
-              </div>
-            )}
+            <p className="text-white/50 text-xs">
+              Verás un anuncio breve de 15 segundos
+            </p>
 
             <div className="flex gap-3">
               <button
                 onClick={onSkip}
                 className="flex-1 py-3 rounded-xl border-2 border-white/20 text-white/60 font-bold text-sm hover:bg-white/10 transition-all"
               >
-                Saltar
+                Cancelar
               </button>
               <button
                 onClick={startWatching}
                 className="flex-1 py-3 rounded-xl font-black text-sm flex items-center justify-center gap-2"
                 style={{ background: "#b5301a", color: "white" }}
               >
-                <Play className="w-4 h-4 fill-white" /> Ver vídeo
+                <Play className="w-4 h-4 fill-white" /> Ver anuncio
               </button>
             </div>
           </div>
         )}
 
         {phase === "watching" && (
-          <div className="p-8 space-y-6">
-            <div
-              className="rounded-2xl overflow-hidden relative h-44 flex items-center justify-center"
-              style={{ background: "linear-gradient(135deg, #2d1b69, #11998e)" }}
-            >
-              <div className="text-center text-white">
-                <motion.div
-                  animate={{ scale: [1, 1.1, 1] }}
-                  transition={{ repeat: Infinity, duration: 2 }}
-                  className="text-5xl mb-2"
-                >
-                  🎮
-                </motion.div>
-                <p className="font-bold text-lg">¡Mira el anuncio completo!</p>
-                <p className="text-sm opacity-70 mt-1">para recibir tu recompensa</p>
+          <div className="p-6 space-y-5">
+            {ADSTERRA_RECT_KEY ? (
+              <AdsterraSlot
+                adKey={ADSTERRA_RECT_KEY}
+                width={ADSTERRA_RECT_W}
+                height={ADSTERRA_RECT_H}
+                labelDark
+              />
+            ) : (
+              <div
+                className="rounded-2xl overflow-hidden relative h-44 flex items-center justify-center"
+                style={{ background: "linear-gradient(135deg, #2d1b69, #11998e)" }}
+              >
+                <div className="text-center text-white">
+                  <div className="text-5xl mb-2">🎮</div>
+                  <p className="font-bold text-lg">Cargando anuncio...</p>
+                </div>
               </div>
-              <div className="absolute bottom-3 right-3 bg-black/60 text-white text-sm px-3 py-1 rounded-full font-bold">
-                {countdown}s
-              </div>
-              <div className="absolute top-2 right-2 bg-black/50 text-white text-xs px-2 py-1 rounded font-bold">
-                ANUNCIO
-              </div>
-            </div>
+            )}
             <div>
               <div className="flex justify-between text-sm text-white/60 mb-2">
                 <span>Progreso</span>
