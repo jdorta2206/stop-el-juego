@@ -494,7 +494,9 @@ router.post("/:roomCode/start", async (req, res) => {
     .where(eq(roomsTable.roomCode, roomCode.toUpperCase()))
     .returning();
 
-  res.json(formatRoom(updated));
+  // 🚀 Empuja el cambio a TODOS los jugadores por SSE de inmediato
+  // (antes solo el host recibía la respuesta y los demás esperaban polling).
+  res.json(broadcastAndFormat(updated));
 });
 
 // POST /rooms/:roomCode/leave — player leaves the room
