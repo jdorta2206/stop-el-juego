@@ -39,4 +39,18 @@ app.use(express.urlencoded({ extended: true }));
 
 app.use("/api", router);
 
+// 🛡️ Global JSON error handler — prevents the server from sending HTML 500s
+// (which break the client because it expects JSON). Express 5 auto-forwards
+// async errors here, so unhandled exceptions in any route now return a clean
+// 500 with JSON body and stay logged on the server side.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  console.error("[API ERROR]", err?.message ?? err, err?.stack);
+  if (res.headersSent) return;
+  res.status(500).json({
+    error: "Internal server error",
+    message: err?.message ?? "Unknown error",
+  });
+});
+
 export default app;

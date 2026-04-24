@@ -173,11 +173,15 @@ export default function Room() {
     let es: EventSource;
     let retryTimeout: ReturnType<typeof setTimeout>;
     let closed = false;
+    let attempts = 0;
 
     function connect() {
       if (closed) return;
       es = new EventSource(url);
-      es.onopen = () => setSseActive(true);
+      es.onopen = () => {
+        attempts = 0; // 🔁 reset backoff on successful connection
+        setSseActive(true);
+      };
       es.onmessage = (e) => {
         try {
           const data = JSON.parse(e.data);
@@ -187,7 +191,11 @@ export default function Room() {
       es.onerror = () => {
         setSseActive(false);
         es.close();
-        if (!closed) retryTimeout = setTimeout(connect, 2000);
+        if (closed) return;
+        // 📈 Exponential backoff capped at 15 s (avoids "thundering herd" on server hiccups)
+        attempts += 1;
+        const delay = Math.min(15_000, 1000 * Math.pow(1.6, attempts));
+        retryTimeout = setTimeout(connect, delay);
       };
     }
     connect();
@@ -217,7 +225,7 @@ export default function Room() {
     if (!playerId) return;
 
     hasLeftRef.current = true;
-    const url = `/api/rooms/${code.toUpperCase()}/leave`;
+    const url = `${getApiUrl()}/api/rooms/${code.toUpperCase()}/leave`;
     const body = JSON.stringify({ playerId });
     // sendBeacon works even when the page is being unloaded
     if (navigator.sendBeacon) {
@@ -633,7 +641,7 @@ export default function Room() {
     if (phase !== "playing" || isStopping || !player || !roomCode) return;
     setIsStopping(true);
     try {
-      await fetch(`/api/rooms/${roomCode.toUpperCase()}/stop`, {
+      await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/stop`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ playerId: player.id, playerName: player.name }),

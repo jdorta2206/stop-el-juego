@@ -256,12 +256,21 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string) {
   }));
 }
 
-// Delete stale "waiting" rooms older than 2 hours (guests leave without cleanup)
+// Delete stale rooms (guests/hosts leave without cleanup).
+// - "waiting" rooms older than 2 hours
+// - any other state ("playing"/"stopped"/"finished"/"bluffvoting") older than 6 hours
+//   so abandoned games don't accumulate as DB garbage and slow down public listings.
 async function purgeStaleRooms() {
-  const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
-  await db.delete(roomsTable).where(
-    and(eq(roomsTable.status, "waiting"), lt(roomsTable.updatedAt, twoHoursAgo))
-  );
+  try {
+    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+    const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000);
+    await db.delete(roomsTable).where(
+      and(eq(roomsTable.status, "waiting"), lt(roomsTable.updatedAt, twoHoursAgo))
+    );
+    await db.delete(roomsTable).where(lt(roomsTable.updatedAt, sixHoursAgo));
+  } catch (err) {
+    console.error("[purgeStaleRooms] failed:", (err as Error).message);
+  }
 }
 
 // GET /rooms/public — list open public rooms (also purges stale rooms)
@@ -427,34 +436,63 @@ router.post("/:roomCode/join", async (req, res) => {
   const body = JoinRoomBody.safeParse(req.body);
   if (!body.success) { res.status(400).json({ error: "Invalid request body" }); return; }
 
-  const rooms = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, roomCode.toUpperCase())).limit(1);
-  if (rooms.length === 0) { res.status(404).json({ error: "Room not found" }); return; }
-
-  const room = rooms[0];
-  const players = parsePlayers(room.playersJson);
+  const code = roomCode.toUpperCase();
   const { playerId, playerName, avatarColor, loginMethod } = body.data;
+  const joinerPremium = await isPlayerPremium(playerId);
 
-  if (!players.find((p: any) => p.playerId === playerId)) {
-    const joinerPremium = await isPlayerPremium(playerId);
-    players.push({
-      playerId,
-      playerName,
-      avatarColor: avatarColor ?? "#3182ce",
-      loginMethod: loginMethod ?? null,
-      isPremium: joinerPremium,
-      score: 0,
-      roundScore: 0,
-      isHost: false,
-      isReady: false,
-    });
+  // 🛡️ Optimistic-concurrency join: read → modify → write with retry.
+  // Two players joining simultaneously could otherwise overwrite each other.
+  // We use updatedAt as a version stamp; on conflict we re-read and retry.
+  let updated: any = null;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const rooms = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, code)).limit(1);
+    if (rooms.length === 0) { res.status(404).json({ error: "Room not found" }); return; }
+
+    const room = rooms[0];
+    const lastVersion = room.updatedAt;
+    const players = parsePlayers(room.playersJson);
+
+    if (!players.find((p: any) => p.playerId === playerId)) {
+      players.push({
+        playerId,
+        playerName,
+        avatarColor: avatarColor ?? "#3182ce",
+        loginMethod: loginMethod ?? null,
+        isPremium: joinerPremium,
+        score: 0,
+        roundScore: 0,
+        isHost: false,
+        isReady: false,
+      });
+    } else {
+      // Already in the room — just refresh activity timestamp and broadcast
+      updated = room;
+      break;
+    }
+
+    const result = await db.update(roomsTable)
+      .set({ playersJson: JSON.stringify(players), updatedAt: new Date() })
+      .where(and(
+        eq(roomsTable.roomCode, code),
+        eq(roomsTable.updatedAt, lastVersion as any),
+      ))
+      .returning();
+
+    if (result.length > 0) {
+      updated = result[0];
+      break;
+    }
+    // Conflict — somebody else updated the row. Retry.
+    await new Promise(r => setTimeout(r, 30 + attempt * 50));
   }
 
-  const [updated] = await db.update(roomsTable)
-    .set({ playersJson: JSON.stringify(players), updatedAt: new Date() })
-    .where(eq(roomsTable.roomCode, roomCode.toUpperCase()))
-    .returning();
+  if (!updated) {
+    res.status(503).json({ error: "Room is busy, please retry" });
+    return;
+  }
 
-  res.json(formatRoom(updated));
+  // 🚀 Notifica a todos en la sala que entró un nuevo jugador
+  res.json(broadcastAndFormat(updated));
 });
 
 // POST /rooms/:roomCode/start — host starts / continues the game
@@ -534,10 +572,13 @@ router.post("/:roomCode/leave", async (req, res) => {
 
   // Regular player leaves → remove from players list
   const remaining = players.filter((p: any) => p.playerId !== playerId);
-  await db.update(roomsTable)
+  const [updated] = await db.update(roomsTable)
     .set({ playersJson: JSON.stringify(remaining), updatedAt: new Date() })
-    .where(eq(roomsTable.roomCode, roomCode.toUpperCase()));
+    .where(eq(roomsTable.roomCode, roomCode.toUpperCase()))
+    .returning();
 
+  // 🚀 Notify the rest of the lobby that the player is gone (no más fantasmas)
+  try { if (updated) broadcastAndFormat(updated); } catch {}
   res.json({ ok: true });
 });
 
@@ -549,6 +590,11 @@ router.post("/:roomCode/react", async (req, res) => {
   const list = roomReactions.get(code) ?? [];
   list.push({ id: Math.random().toString(36).slice(2), emoji, playerName: playerName ?? "?", ts: Date.now() });
   roomReactions.set(code, list.slice(-40));
+  // 🚀 Push reactions to all clients immediately (otherwise wait up to 1.5s)
+  try {
+    const rooms = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, code)).limit(1);
+    if (rooms.length > 0) broadcastAndFormat(rooms[0]);
+  } catch {}
   res.json({ ok: true });
 });
 
@@ -561,6 +607,8 @@ router.post("/:roomCode/category-pack", async (req, res) => {
   if (rooms[0].hostId !== hostId) { res.status(403).json({ error: "Not host" }); return; }
   if (!["standard", "crazy", "mix"].includes(pack)) { res.status(400).json({ error: "Invalid pack" }); return; }
   roomCategoryPacks.set(code, pack);
+  // 🚀 Notify all players the host changed the category pack
+  try { broadcastAndFormat(rooms[0]); } catch {}
   res.json({ ok: true, categoryPack: pack });
 });
 
@@ -605,7 +653,9 @@ router.post("/:roomCode/use-card", async (req, res) => {
     .where(eq(roomsTable.roomCode, code))
     .returning();
 
-  res.json({ ok: true, card, room: formatRoom(updated) });
+  // 🚀 Notify all players when a power card is used (sabotage/steal/shield affect everyone)
+  const formatted = broadcastAndFormat(updated);
+  res.json({ ok: true, card, room: formatted });
 });
 
 // GET /rooms/:roomCode/events — SSE stream for real-time room state
@@ -844,7 +894,7 @@ router.post("/:roomCode/rematch", async (req, res) => {
   res.json({ rematchCode: newCode });
 });
 
-router.post("/:roomCode/phrase", (req, res) => {
+router.post("/:roomCode/phrase", async (req, res) => {
   const code = req.params.roomCode.toUpperCase();
   const { playerName, phraseIndex } = req.body as { playerName: string; phraseIndex: number };
   if (phraseIndex < 0 || phraseIndex >= QUICK_PHRASES.length) {
@@ -858,6 +908,11 @@ router.post("/:roomCode/phrase", (req, res) => {
   };
   const existing = getPhrases(code);
   roomPhrases.set(code, [...existing, phrase].slice(-30));
+  // 🚀 Push phrases to all clients in real time
+  try {
+    const rooms = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, code)).limit(1);
+    if (rooms.length > 0) broadcastAndFormat(rooms[0]);
+  } catch {}
   res.json({ ok: true });
 });
 
@@ -1104,7 +1159,8 @@ router.post("/:roomCode/bluff-vote", async (req, res) => {
       })
       .where(eq(roomsTable.roomCode, roomCode.toUpperCase()))
       .returning();
-    res.json(formatRoom(updated));
+    // 🚀 Broadcast resolution to all players (was waiting for polling — main lag in bluff phase)
+    res.json(broadcastAndFormat(updated));
     return;
   }
 
@@ -1115,7 +1171,8 @@ router.post("/:roomCode/bluff-vote", async (req, res) => {
     .where(eq(roomsTable.roomCode, roomCode.toUpperCase()))
     .returning();
 
-  res.json(formatRoom(updated));
+  // 🚀 Broadcast partial vote progress so everyone sees votes coming in live
+  res.json(broadcastAndFormat(updated));
 });
 
 // POST /rooms/:roomCode/resolve-bluffs — force-resolve after deadline (called by any client polling)
