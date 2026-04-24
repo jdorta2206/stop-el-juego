@@ -187,7 +187,7 @@ export default function Room() {
       es.onerror = () => {
         setSseActive(false);
         es.close();
-        if (!closed) retryTimeout = setTimeout(connect, 5000);
+        if (!closed) retryTimeout = setTimeout(connect, 2000);
       };
     }
     connect();
@@ -239,9 +239,9 @@ export default function Room() {
   // When SSE is active it pushes updates in real-time — polling is just a safety fallback
   const pollingInterval = sseActive
     ? 30_000
-    : phase === "bluffvoting"                                          ? 1000
-    : phase === "playing" || phase === "freeze" || phase === "submitted" ? 1500
-    : /* lobby / between_rounds / finished / spinning */                  4000;
+    : phase === "bluffvoting"                                          ? 800
+    : phase === "playing" || phase === "freeze" || phase === "submitted" ? 1200
+    : /* lobby / between_rounds / finished / spinning */                  1500;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: room, error } = useGetRoom(roomCode || "", {
@@ -604,13 +604,13 @@ export default function Room() {
   }, [roomStatus, currentRound]);
 
   // ⚡ Auto-reveal categorías entre rondas para no aburrir a la gente.
-  // Cada ~1.2s revela la siguiente categoría hasta llegar al total.
+  // ~0.7s por categoría (12 cats ≈ 8s total) + arranque rápido.
   useEffect(() => {
     if (phase !== "between_rounds") return;
     if (revealedCount >= CATEGORIES_ES.length) return;
     const t = window.setTimeout(() => {
       setRevealedCount(prev => Math.min(prev + 1, CATEGORIES_ES.length));
-    }, revealedCount === 0 ? 400 : 1200);
+    }, revealedCount === 0 ? 200 : 700);
     return () => window.clearTimeout(t);
   }, [phase, revealedCount]);
 
