@@ -649,7 +649,18 @@ export default function Room() {
   const handleStart = async () => {
     if (!roomCode) return;
     try {
-      await fetch(`/api/rooms/${roomCode.toUpperCase()}/start`, { method: "POST" });
+      const r = await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/start`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      // 🚀 Adelantamos el estado en local sin esperar al SSE/polling — quien pulsa
+      // "Empezar" ve la transición instantánea (los demás llegan vía broadcast).
+      if (r.ok) {
+        try {
+          const data = await r.json();
+          queryClient.setQueryData(getGetRoomQueryKey(roomCode.toUpperCase()), data);
+        } catch {}
+      }
     } catch (e) { console.error(e); }
   };
 
