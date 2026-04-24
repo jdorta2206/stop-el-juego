@@ -117,7 +117,7 @@ export function Roulette({ onSpinComplete, isSpinning, targetLetter }: RouletteP
     let lastTickTime = 0;
 
     const startTime = Date.now();
-    const duration = 4500;
+    const duration = 2000;
 
     const doTick = () => {
       const elapsed = Date.now() - startTime;
@@ -141,7 +141,7 @@ export function Roulette({ onSpinComplete, isSpinning, targetLetter }: RouletteP
     controls.start({
       rotate: totalRotation,
       transition: {
-        duration: 4.5,
+        duration: 2.0,
         ease: [0.05, 0.4, 0.2, 1.0],
       }
     }).then(() => {
@@ -151,7 +151,7 @@ export function Roulette({ onSpinComplete, isSpinning, targetLetter }: RouletteP
       setTimeout(() => {
         setIsAnimating(false);
         onSpinComplete(targetLetter);
-      }, 900);
+      }, 350);
     });
 
     return () => {
