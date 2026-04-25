@@ -294,14 +294,31 @@ router.get("/scores/:playerId", async (req, res) => {
     return;
   }
 
-  const recentGames = await db
-    .select()
-    .from(gameHistoryTable)
-    .where(eq(gameHistoryTable.playerId, playerId))
-    .orderBy(desc(gameHistoryTable.createdAt))
-    .limit(10);
+  const ps = scores[0];
 
-  res.json({ score: { ...scores[0], rank: 0 }, recentGames });
+  // Run rank, best score, and recent games in parallel
+  const [rankRow, bestRow, recentGames] = await Promise.all([
+    db.execute(sql`
+      SELECT COUNT(*) AS cnt FROM player_scores WHERE total_score > ${ps.totalScore}
+    `),
+    db.execute(sql`
+      SELECT COALESCE(MAX(score), 0) AS best FROM game_history WHERE player_id = ${playerId}
+    `),
+    db
+      .select()
+      .from(gameHistoryTable)
+      .where(eq(gameHistoryTable.playerId, playerId))
+      .orderBy(desc(gameHistoryTable.createdAt))
+      .limit(10),
+  ]);
+
+  const globalRank = Number((rankRow.rows[0] as any)?.cnt ?? 0) + 1;
+  const bestScore = Number((bestRow.rows[0] as any)?.best ?? 0);
+
+  res.json({
+    score: { ...ps, rank: globalRank, globalRank, bestScore },
+    recentGames,
+  });
 });
 
 router.get("/profile/:playerId", async (req, res) => {

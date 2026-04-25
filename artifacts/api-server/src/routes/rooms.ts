@@ -947,6 +947,10 @@ router.post("/:roomCode/stop", async (req, res) => {
 });
 
 // POST /rooms/:roomCode/results — each player submits their answers after STOP
+// Hard cap on category submissions per round to prevent score inflation via fake category keys.
+// Standard Scattergories decks across all supported languages have ≤12 categories; 15 gives margin.
+const MAX_CATEGORIES_PER_ROUND = 15;
+
 router.post("/:roomCode/results", async (req, res) => {
   const { roomCode } = req.params;
   const body = SubmitRoomResultsBody.safeParse(req.body);
@@ -961,6 +965,17 @@ router.post("/:roomCode/results", async (req, res) => {
     return;
   }
 
+  // ── Idempotency guard ─────────────────────────────────────────────────────
+  // If this player already submitted for the current round (isReady === true),
+  // return the current room state without re-applying score — prevents double-submit cheats.
+  const existingPlayers = parsePlayers(room.playersJson);
+  const me = existingPlayers.find((p: any) => p.playerId === body.data.playerId);
+  if (me?.isReady === true) {
+    res.json(formatRoom(room));
+    return;
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
   // ── Timing exploit guard ──────────────────────────────────────────────────
   // Players have at most 20 s after STOP is called to submit their answers.
   // (Freeze countdown is 8 s + 12 s network grace.)
@@ -971,20 +986,26 @@ router.post("/:roomCode/results", async (req, res) => {
   if (stopTimestamp && Date.now() - stopTimestamp > SUBMIT_GRACE_MS) {
     // Too late — accept the submission but zero out the score to prevent cheating
     // (we still need to mark them ready so the round can proceed)
-    const latePlayers = parsePlayers(room.playersJson).map((p: any) =>
+    const latePlayers = existingPlayers.map((p: any) =>
       p.playerId === body.data.playerId ? { ...p, isReady: true, roundScore: 0 } : p
     );
     const allReady = latePlayers.every((p: any) => p.isReady);
-    await db.update(roomsTable)
+    const lateUpdate = await db.update(roomsTable)
       .set({ playersJson: JSON.stringify(latePlayers), status: allReady ? "waiting" : room.status, updatedAt: new Date() })
-      .where(eq(roomsTable.roomCode, roomCode.toUpperCase()));
-    const [refreshed] = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, roomCode.toUpperCase())).limit(1);
-    res.json(formatRoom(refreshed));
+      .where(and(eq(roomsTable.roomCode, roomCode.toUpperCase()), eq(roomsTable.updatedAt, room.updatedAt)))
+      .returning();
+    if (lateUpdate.length === 0) {
+      // Concurrent write — return latest state
+      const [refreshed] = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, roomCode.toUpperCase())).limit(1);
+      res.json(formatRoom(refreshed));
+      return;
+    }
+    res.json(formatRoom(lateUpdate[0]));
     return;
   }
   // ─────────────────────────────────────────────────────────────────────────
 
-  const players = parsePlayers(room.playersJson);
+  const players = existingPlayers;
   const { playerId, roundScore, bluffedCategories, bluffedWords } = body.data;
 
   // Update this player's score and mark as ready; store bluff data
@@ -995,7 +1016,8 @@ router.post("/:roomCode/results", async (req, res) => {
   const safeAnswers: Record<string, string> = {};
   let validAnswerCount = 0;
   if (answers && typeof answers === "object") {
-    for (const [cat, val] of Object.entries(answers)) {
+    const entries = Object.entries(answers).slice(0, MAX_CATEGORIES_PER_ROUND);
+    for (const [cat, val] of entries) {
       if (typeof val === "string" && val.trim().length > 0) {
         const word = val.trim().slice(0, 80);
         if (word.toUpperCase().startsWith(letter)) {
@@ -1006,8 +1028,10 @@ router.post("/:roomCode/results", async (req, res) => {
       }
     }
   }
+  // Hard cap valid count to prevent score inflation via fake category keys
+  validAnswerCount = Math.min(validAnswerCount, MAX_CATEGORIES_PER_ROUND);
   // Cap roundScore to prevent client-side inflation: max 10 pts per valid answer + 20 bluff bonus each
-  let cappedRoundScore = Math.min(roundScore, validAnswerCount * 30);
+  let cappedRoundScore = Math.min(Math.max(0, roundScore), validAnswerCount * 30);
   // 🕵️ Authoritative spy penalty: -10 pts if the server registered a spy use this round
   const spies = roomSpyUsage.get(roomCode.toUpperCase());
   if (spies?.has(playerId)) {
@@ -1076,7 +1100,9 @@ router.post("/:roomCode/results", async (req, res) => {
     }
   }
 
-  const [updated] = await db.update(roomsTable)
+  // Optimistic concurrency: only update if the room hasn't changed since we read it.
+  // If a concurrent /results submission won the race, return the latest state instead.
+  const updateResult = await db.update(roomsTable)
     .set({
       playersJson: JSON.stringify(updatedPlayers),
       currentRound: newRound,
@@ -1085,10 +1111,17 @@ router.post("/:roomCode/results", async (req, res) => {
       stopperJson: newStopperJson,
       updatedAt: new Date(),
     })
-    .where(eq(roomsTable.roomCode, roomCode.toUpperCase()))
+    .where(and(eq(roomsTable.roomCode, roomCode.toUpperCase()), eq(roomsTable.updatedAt, room.updatedAt)))
     .returning();
 
-  res.json(broadcastAndFormat(updated));
+  if (updateResult.length === 0) {
+    // Lost the race — return latest authoritative state without re-applying score
+    const [refreshed] = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, roomCode.toUpperCase())).limit(1);
+    res.json(formatRoom(refreshed));
+    return;
+  }
+
+  res.json(broadcastAndFormat(updateResult[0]));
 });
 
 // POST /rooms/:roomCode/bluff-vote — opponent casts "lie" or "real" for a bluffed category

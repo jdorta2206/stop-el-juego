@@ -268,7 +268,7 @@ export default function Home() {
                       {t.home.globalRecord ?? "Récord global"}
                     </p>
                     <p className="text-white font-black text-sm leading-tight">
-                      {top3[0].score} pts — {top3[0].name}
+                      {top3[0].totalScore?.toLocaleString() ?? 0} pts — {top3[0].playerName}
                     </p>
                   </div>
                 </div>
@@ -531,11 +531,11 @@ export default function Home() {
                         >
                           {p.picture
                             ? <img src={p.picture} alt="" className="w-6 h-6 rounded-full object-cover" />
-                            : (p.name?.[0] || "?").toUpperCase()
+                            : (p.playerName?.[0] || "?").toUpperCase()
                           }
                         </div>
                         <span className={`text-sm font-bold flex-1 truncate ${isMe ? "text-[#f9a825]" : "text-white"}`}>
-                          {isMe ? "⭐ " : ""}{p.name}
+                          {isMe ? "⭐ " : ""}{p.playerName}
                         </span>
                         <span className="text-xs font-black text-white/60">{p.totalScore?.toLocaleString()} pts</span>
                       </div>
