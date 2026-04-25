@@ -1,9 +1,10 @@
 import { Switch, Route, Router as WouterRouter } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useState, lazy, Suspense } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import { MotionConfig } from "framer-motion";
 import { Toaster } from "@/components/ui/toaster";
 import { SplashScreen } from "@/components/SplashScreen";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import Home from "@/pages/Home";
 import SoloGame from "@/pages/SoloGame";
 import Multiplayer from "@/pages/Multiplayer";
@@ -66,19 +67,45 @@ function App() {
   const [splashDone, setSplashDone] = useState(false);
   const lang = (localStorage.getItem("stop_lang") ?? "es") as string;
 
+  // ── Hardware back button (TWA / Android) — close open dialogs/dropdowns
+  // before letting the OS pop back. Without this, pressing back on the home
+  // screen instantly closes the TWA app, which is a common Play Store
+  // complaint. We seed one history entry on mount and intercept popstate.
+  useEffect(() => {
+    try {
+      window.history.pushState({ stopApp: true }, "");
+    } catch { /* ignore */ }
+    const onPop = () => {
+      // If any modal/dropdown sets data-modal-open on body, just close it
+      // and re-push the dummy entry so back doesn't exit the app.
+      const open = document.body.dataset.modalOpen;
+      if (open === "true") {
+        try {
+          document.body.dataset.modalOpen = "false";
+          window.dispatchEvent(new CustomEvent("stop:back"));
+          window.history.pushState({ stopApp: true }, "");
+        } catch { /* ignore */ }
+      }
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
       {/* reducedMotion="user" → respects OS-level "Reduce animations" toggle */}
       <MotionConfig reducedMotion="user">
-        <SplashScreen onDone={() => setSplashDone(true)} lang={lang} />
-        {splashDone && (
-          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-            <Suspense fallback={null}>
-              <Router />
-            </Suspense>
-          </WouterRouter>
-        )}
-        <Toaster />
+        <ErrorBoundary>
+          <SplashScreen onDone={() => setSplashDone(true)} lang={lang} />
+          {splashDone && (
+            <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+              <Suspense fallback={null}>
+                <Router />
+              </Suspense>
+            </WouterRouter>
+          )}
+          <Toaster />
+        </ErrorBoundary>
       </MotionConfig>
     </QueryClientProvider>
   );

@@ -65,10 +65,25 @@ export class StripeStorage {
     playerId: string,
     info: { stripeCustomerId?: string; stripeSubscriptionId?: string; isPremium?: boolean }
   ) {
+    // Upsert so paying users without an existing player_scores row still get
+    // their premium flag persisted (e.g., new sign-up that goes straight to
+    // checkout). Without this, the €1.99 charge succeeds but the user never
+    // sees premium features unlocked → refund + 1-star reviews.
     const [player] = await db
-      .update(playerScoresTable)
-      .set(info)
-      .where(eq(playerScoresTable.playerId, playerId))
+      .insert(playerScoresTable)
+      .values({
+        playerId,
+        playerName: "Player",
+        avatarColor: "#e53e3e",
+        totalScore: 0,
+        gamesPlayed: 0,
+        wins: 0,
+        ...info,
+      })
+      .onConflictDoUpdate({
+        target: playerScoresTable.playerId,
+        set: { ...info, updatedAt: new Date() },
+      })
       .returning();
     return player;
   }
