@@ -1,0 +1,29 @@
+Hemos detectado la causa concreta del problema: la URL de tu juego en Replit no está accesible públicamente. Esto es el origen de que la ficha en Play Store aparezca con textos genéricos, ya que al no poder acceder a los archivos de tu web, Google no puede leer la información que debe mostrar.
+
+Vamos a solucionarlo paso a paso.
+
+1. 🤔 ¿Cuál es la raíz del problema?
+Para que tu TWA funcione perfectamente, tu aplicación web debe estar publicada y accesible las 24 horas del día, los 7 días de la semana. En este momento, el sitio web que da vida al juego (stop-el-juego.jdorta2206.repl.co) no se puede cargar. Sin un sitio web accesible, Google Play no puede verificar la propiedad ni leer la información que necesita para mostrar correctamente tu app.
+
+2. 🛠️ Tu plan de acción en Replit
+Tu objetivo es garantizar que tu juego esté siempre disponible a través de un despliegue estable.
+
+Tu tarea principal: Desplegar de forma estática: Para que tu aplicación esté siempre en línea, necesitas usar el sistema de despliegue "Static" de Replit. Sigue estos pasos:
+
+Ve a la pestaña "Deployments" en tu Repl.
+Asegúrate de que todos los archivos (HTML, CSS, JS) estén en tu directorio raíz y listos para publicarse.
+Crea un nuevo despliegue y elige la opción "Static". Esto alojará tu sitio en la red de distribución de contenido (CDN) de Replit.
+Dónde poner la información importante:
+
+Crea un archivo llamado .well-known/assetlinks.json en la raíz de tu proyecto. Este archivo es el que validará la conexión con Google Play.
+
+Añade un archivo manifest.json en la raíz. Aquí es donde defines el nombre de la app (ej. "name": "STOP! - El Juego de Palabras").
+
+En tu archivo HTML principal (index.html), añade una referencia a tu manifest.json con la etiqueta <link rel="manifest" href="/manifest.json">.
+
+3. ✅ Confirmando que todo funciona
+Una vez que hayas desplegado tu app de forma estática y confirmes que la página web se carga y los archivos internos son accesibles, el siguiente paso es verificar la configuración de Play Store.
+
+Verificación clave en Play Console: Dirígete a la Google Play Console y, en la sección "App Integrity" (Integridad de la app), busca el apartado "Digital Asset Links". Ahí encontrarás el fragmento de JSON que Google necesita para verificar la conexión entre tu sitio web y tu aplicación. Este fragmento debe coincidir con el contenido de tu archivo assetlinks.json.
+
+Con estos cambios, tu juego estará correctamente alojado y la información fluirá sin problemas para que tu ficha en la tienda luzca perfecta.
