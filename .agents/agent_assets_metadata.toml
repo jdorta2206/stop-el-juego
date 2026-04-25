@@ -1,5 +1,10 @@
 uploads = []
-generated = []
+
+[[generated]]
+id = "JcvlCuasolmT4df8j1UPZ"
+uri = "file://attached_assets/generated_images/playstore_featured_graphic.png"
+type = "image"
+title = "generated_image"
 
 [[outputs]]
 id = "xs_jQLvgKvRDfgpmF15P1"
@@ -42,3 +47,9 @@ id = "4fdSJyYMNRu528eekEhYN"
 uri = "file://attached_assets/stop_feature_oficial.png"
 type = "image"
 title = "✅ Imagen de portada 1024×500 px — tu logo real"
+
+[[outputs]]
+id = "1yfsI5K3u0r06zyOWRkYN"
+uri = "file://attached_assets/generated_images/playstore_featured_1024x500.png"
+type = "image"
+title = "Gráfico destacado para Google Play (1024×500 px)"
