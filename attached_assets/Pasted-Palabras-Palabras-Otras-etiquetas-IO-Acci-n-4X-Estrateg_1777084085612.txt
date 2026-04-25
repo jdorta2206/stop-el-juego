@@ -1,0 +1,320 @@
+Palabras
+Palabras
+Otras etiquetas
+.IO
+Acción
+4X
+Estrategia
+Abstracto de estrategia
+Abstracto de estrategia, Mesa
+Acción
+Acción
+Acción y aventuras
+Acción, Acción y aventuras
+Acrobacias con vehículos
+Carreras
+Agricultura
+Simulación, Simuladores de construcción y gestión
+Ajedrez
+Abstracto de estrategia, Mesa
+Ajedrez automático
+Estrategia
+Arcade
+Arena de combate asimétrico
+Estrategia
+Artillería
+Acción, Disparos
+Aventura
+Aventura
+Aventura de puzles
+Aventura
+Baloncesto
+Deportes
+Batallas de cartas
+Cartas
+Batería
+Instrumentos musicales, Música
+Beat 'em up
+Acción, Lucha
+Billar
+Deportes
+Bingo
+Casino
+Blackjack
+Casino, Juegos de mesa
+Bolos
+Deportes
+Boxeo
+Deportes
+Béisbol
+Deportes
+Búsqueda de palabras
+Palabras
+Campo de batalla multijugador online
+Estrategia
+Campo de tiro
+Acción, Disparos
+Carreras
+Carreras
+Carreras de aceleración
+Carreras
+Carreras de camiones
+Carreras
+Carreras de coches
+Carreras
+Carreras de karts
+Carreras
+Carreras de motos
+Carreras
+Cartas
+Cartas
+Casino
+Casino
+Casuales
+Casuales
+Caza
+Acción, Disparos
+Colorear
+Puzles
+Construcción de ciudades
+Simulación, Simuladores de construcción y gestión
+Construcción y batalla
+Estrategia
+Correr
+Acción, Juegos de plataformas
+Correr de forma rítmica
+Música
+Crucigramas
+Palabras
+Críquet
+Deportes
+Cuestionario de logotipos
+Preguntas
+Cuidado de bebés
+Simulación, Simuladores médicos
+Dados
+Mesa
+Damas
+Abstracto de estrategia, Mesa
+Defensa de torres
+Estrategia
+Dentistas
+Simulación, Simuladores médicos
+Deportes
+Deportes
+Deportes de contacto
+Deportes
+Deportes de invierno
+Deportes
+Descartarse
+Cartas
+Dibujo
+Educativos
+Diseño
+Simulación, Simulación de estilo de vida
+Disfraces
+Simulación, Simulación de estilo de vida
+Disparar burbujas
+Puzles
+Disparos
+Acción, Disparos
+Disparos con vehículos
+Acción, Disparos
+Disparos tácticos
+Acción, Disparos
+Disparos y héroes
+Acción, Disparos
+Educativos
+Educativos
+Emparejar
+Emparejar, Puzles
+Entrenamiento mental
+Estimulación mental, Puzles
+Estimulación mental
+Estimulación mental, Puzles
+Estrategia
+Estrategia
+Francotiradores
+Acción, Disparos
+Física
+Puzles
+Fútbol
+Deportes
+Fútbol americano
+Deportes
+Gestión del tiempo
+Simulación
+Gestión deportiva
+Deportes
+Gobierno y política
+Simulación, Simuladores de construcción y gestión
+Golf
+Deportes
+Guitarra
+Instrumentos musicales, Música
+Hack and slash
+Acción, Juegos de plataformas
+Hipercasual
+Casuales
+Historia interactiva
+Aventura
+Hockey
+Deportes
+Híbrido de casino
+Casino
+Híbrido de unir 3
+Puzles, Unir 3
+Idiomas
+Educativos
+Instrumentos musicales
+Instrumentos musicales, Música
+Ir
+Abstracto de estrategia, Mesa
+Juego sandbox
+Simulación
+Juegos de bazas
+Cartas
+Juegos de fiesta
+Mesa
+Juegos de guerra
+Estrategia
+Juegos de mesa
+Casino, Juegos de mesa
+Juegos de plataformas
+Acción, Juegos de plataformas
+Juegos de rol
+Juegos de rol
+Juegos de rol de acción
+Juegos de rol
+Juegos de rol multijugador masivo online
+Juegos de rol
+Juegos de rol tácticos
+Juegos de rol
+Juegos incrementales
+Simulación
+Lucha
+Acción, Lucha
+Lucha libre
+Deportes
+Mahjong
+Abstracto de estrategia, Mesa
+Maquillaje
+Simulación, Simulación de estilo de vida
+Mascota
+Simulación, Simuladores médicos
+Matemáticas
+Educativos
+Mazmorras
+Juegos de rol
+Memoria
+Emparejar, Puzles
+Mesa
+Mesa
+Minijuegos
+Casuales
+Máquina tragaperras
+Casino
+Médicos
+Simulación, Simuladores médicos
+Música
+Música
+Negocios y magnates
+Simulación, Simuladores de construcción y gestión
+Objetos ocultos
+Puzles
+Parchís
+Abstracto de estrategia, Mesa
+Peluquería
+Simulación, Simulación de estilo de vida
+Piano
+Instrumentos musicales, Música
+Plataformas y disparos
+Acción, Juegos de plataformas
+Preguntas
+Preguntas
+Puzle de bloques
+Puzles
+Puzles
+Puzles
+Puzles de combinaciones
+Puzles
+Puzles de lógica
+Puzles
+Puzles de rol
+Juegos de rol, Puzles de rol
+Puzles deslizantes
+Puzles
+Póquer
+Casino, Juegos de mesa
+Rendimiento
+Música
+Restaurantes y cocina
+Simulación, Simuladores de construcción y gestión
+Rol de acción y estrategia
+Juegos de rol
+Rol de puzles de física
+Juegos de rol, Puzles de rol
+Rol de unir 3
+Juegos de rol, Puzles de rol
+Rol incremental
+Juegos de rol
+Rol por turnos
+Juegos de rol
+Rompebloques
+Puzles
+Rompecabezas
+Puzles
+Rummy
+Cartas, Unir
+Sal de la habitación
+Puzles
+Salón de manicura y pedicura
+Simulación, Simulación de estilo de vida
+Shoot 'em up
+Acción, Disparos
+Simulación
+Simulación
+Simulación de estilo de vida
+Simulación, Simulación de estilo de vida
+Simulación de legado
+Simulación, Simuladores de vida
+Simulador de camiones
+Simulación, Simuladores de vehículos
+Simulador de carreras
+Carreras
+Simulador de coches
+Simulación, Simuladores de vehículos
+Simulador de trenes
+Simulación, Simuladores de vehículos
+Simuladores de citas
+Simulación, Simuladores de vida
+Simuladores de construcción y gestión
+Simulación, Simuladores de construcción y gestión
+Simuladores de vehículos
+Simulación, Simuladores de vehículos
+Simuladores de vida
+Simulación, Simuladores de vida
+Simuladores de vuelo
+Simulación, Simuladores de vehículos
+Simuladores médicos
+Simulación, Simuladores médicos
+Simuladores sociales
+Simulación, Simuladores de vida
+Solitario
+Cartas
+Solitario mahjong
+Emparejar, Puzles
+Supervivencia
+Acción, Acción y aventuras
+Teen patti
+Casino, Juegos de mesa
+Tenis
+Deportes
+Terror y supervivencia
+Acción, Acción y aventuras
+Tácticas
+Estrategia
+Unir
+Cartas, Unir
+Unir 3
+Puzles, Unir 3
