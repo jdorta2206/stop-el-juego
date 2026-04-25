@@ -28,15 +28,22 @@ export default function Privacy() {
       </section>
 
       <div className="mt-10 p-6 rounded-2xl border border-[hsl(48,96%,57%)]/30 bg-[hsl(48,96%,57%)]/5">
-        <h3 className="text-lg font-black text-[hsl(48,96%,57%)] mb-2">🗑️ Solicitar eliminación de datos</h3>
-        <p className="text-white/70 text-sm mb-4">Para eliminar tu cuenta y todos tus datos, envía un email a:</p>
+        <h3 className="text-lg font-black text-[hsl(48,96%,57%)] mb-2">🗑️ Solicitar eliminación de cuenta y datos</h3>
+        <p className="text-white/70 text-sm mb-4">Tienes una página dedicada con un formulario y todos los detalles del proceso:</p>
         <a
-          href="mailto:stopeljuegodepalabras@gmail.com?subject=Eliminar%20mis%20datos&body=Hola%2C%20quiero%20eliminar%20mi%20cuenta%20y%20todos%20mis%20datos%20del%20juego%20STOP."
+          href="/eliminar-cuenta"
           className="inline-block px-6 py-3 rounded-xl font-black text-sm"
           style={{ background: "hsl(48,96%,57%)", color: "hsl(222,47%,11%)" }}
         >
-          Enviar solicitud de eliminación
+          Ir a "Eliminar mi cuenta"
         </a>
+        <p className="text-white/50 text-xs mt-3">
+          También puedes escribirnos directamente a{" "}
+          <a href="mailto:stopeljuegodepalabras@gmail.com" className="text-[hsl(48,96%,57%)] underline">
+            stopeljuegodepalabras@gmail.com
+          </a>{" "}
+          con el asunto "Eliminar mis datos".
+        </p>
       </div>
 
       <a href="/" className="inline-block mt-8 text-[hsl(48,96%,57%)] hover:underline">← Volver al juego</a>
