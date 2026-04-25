@@ -23,6 +23,7 @@ const PlayerProfile  = lazy(() => import("@/pages/PlayerProfile"));
 const Tournament     = lazy(() => import("@/pages/Tournament"));
 const Live           = lazy(() => import("@/pages/Live"));
 const Overlay        = lazy(() => import("@/pages/Overlay"));
+const DeleteAccount  = lazy(() => import("@/pages/DeleteAccount"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -53,6 +54,9 @@ function Router() {
       <Route path="/player/:id" component={PlayerProfile} />
       <Route path="/torneo" component={Tournament} />
       <Route path="/torneo/:code" component={Tournament} />
+      {/* Google Play "Account deletion URL" requirement (es + en aliases) */}
+      <Route path="/eliminar-cuenta" component={DeleteAccount} />
+      <Route path="/delete-account" component={DeleteAccount} />
       <Route component={NotFound} />
     </Switch>
   );
