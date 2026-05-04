@@ -178,6 +178,7 @@ const en = {
     create: "Create",
     playerName: "Your name",
     enterName: "Enter your name",
+    nameTaken: "That name is already taken in this room. Pick another or add a number.",
     lobby: "Waiting room",
     players: "Players",
     startGame: "Start game",
