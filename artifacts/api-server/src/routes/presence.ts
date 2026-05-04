@@ -3,6 +3,7 @@ import { db } from "@workspace/db";
 import { roomsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { sendPushToPlayer, notifyFollowersPlayerOnline } from "../lib/pushHelper";
+import { presenceLimiter } from "../middlewares/rateLimit";
 
 const router: IRouter = Router();
 
@@ -57,7 +58,7 @@ setInterval(() => {
 }, 2 * 60 * 1000);
 
 // POST /api/presence/ping
-router.post("/ping", (req, res) => {
+router.post("/ping", presenceLimiter, (req, res) => {
   const { playerId, name, picture, avatarColor, provider, roomCode, language } = req.body as {
     playerId: string;
     name: string;

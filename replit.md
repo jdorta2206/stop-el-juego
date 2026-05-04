@@ -105,3 +105,17 @@ The server-side validator in `artifacts/api-server/src/routes/game.ts` uses a co
 
 - `pnpm --filter @workspace/api-spec run codegen` — regenerates hooks/schemas from openapi.yaml
 - `pnpm --filter @workspace/db run push` — pushes schema changes to database
+
+## Hardening for 100k Concurrent Players (May 2026)
+
+Server hardening pass to support best-in-class multiplayer reliability:
+
+- **Server-authoritative scoring**: `/results` ignores `roundScore` from the client and recomputes via `calcServerScore`. Caps valid answers at 8 (largest pack across ES/EN/PT/FR) to defend against category-key injection. Stopper +5 bonus only when `validCount >= 7` (real standard pack size).
+- **Atomic leaderboard**: `submitAllScoresToLeaderboard` uses `sql\`col + N\`` increments and `INSERT … ON CONFLICT DO UPDATE` (no read-modify-write race).
+- **Atomic /start**: update guarded by `status='waiting'`. Parallel calls from the same host return identical letter/deadline. `/start` rejects "playing"/"stopped" (echoes state) and `409`s on "finished".
+- **Authorization**: `/start` requires matching `hostId`. `/stop` requires `playerId` ∈ room members. SSE `/events` 404s on unknown rooms, 403s on private rooms without member, and caps to 200 subscribers per room.
+- **Deadline-based timer (client)**: `serverNow` + `roundEndsAt` returned in every room payload. `Room.tsx` startRoundTimer captures clock-skew once at setup, reads `roundEndsAt` from `roomRef` each tick → smooth 4Hz countdown that adapts to deadline updates without re-creating the interval.
+- **Freeze race fix**: `handleStop` only calls `stopAllTimers + setPhase("freeze") + startFreezeCountdown` if `!isFreezingRef.current`, preventing the polling effect from clearing the freeze interval (was stalling at "3").
+- **Other**: rate limits per route (general/write/score/presence/auth), Postgres pool max 50, idempotent `ensureIndexes()` on boot, distributed cron lock, body size caps, trust proxy, JSON error handler.
+
+Known scaling caveat: per-room ephemeral state (SSE clients, typing presence, spy budget, reactions, phrases, fun votes, category packs, rematch links) lives in process memory. Multi-instance horizontal scaling will require Redis (or sticky-by-room routing) before exceeding a single Node process.

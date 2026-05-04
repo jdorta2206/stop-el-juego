@@ -3,6 +3,7 @@ import { getStripeSync } from "./stripeClient";
 import app from "./app";
 import { startDailyCron } from "./lib/dailyCron";
 import { ensurePermanentPremium } from "./lib/permanentPremium";
+import { ensureIndexes } from "@workspace/db";
 
 async function initStripe() {
   const databaseUrl = process.env["DATABASE_URL"];
@@ -61,6 +62,12 @@ async function main() {
   // Stripe initializes in the background — it can take several seconds.
   app.listen(port, () => {
     console.log(`Server listening on port ${port}`);
+  });
+
+  // Ensure all critical indexes exist before serving heavy traffic.
+  // Idempotent — safe to run on every boot.
+  ensureIndexes().catch((err: any) => {
+    console.error("[ensureIndexes] failed at startup:", err?.message ?? err);
   });
 
   startDailyCron();

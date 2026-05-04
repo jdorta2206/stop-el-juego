@@ -4,6 +4,7 @@ import { playerScoresTable, gameHistoryTable } from "@workspace/db";
 import { eq, desc, sql } from "drizzle-orm";
 import { sendPushToPlayer } from "../lib/pushHelper";
 import { SubmitScoreBody, GetLeaderboardQueryParams } from "@workspace/api-zod";
+import { scoreLimiter } from "../middlewares/rateLimit";
 
 const router: IRouter = Router();
 
@@ -94,7 +95,7 @@ router.get("/scores", async (req, res) => {
   });
 });
 
-router.post("/scores", async (req, res) => {
+router.post("/scores", scoreLimiter, async (req, res) => {
   const body = SubmitScoreBody.safeParse(req.body);
   if (!body.success) {
     res.status(400).json({ error: "Invalid request body" });
@@ -140,15 +141,20 @@ router.post("/scores", async (req, res) => {
 
   let player;
   if (existing.length > 0) {
+    // ⚛️ ATOMIC update — incrementing totalScore/gamesPlayed/wins/xp via SQL
+    // expressions (instead of read-modify-write) so two concurrent score
+    // submissions for the same player can never overwrite each other.
+    // Streak fields use the snapshot we just computed; this matches existing
+    // semantics and only updates them once per day per the helper logic.
     const [updated] = await db
       .update(playerScoresTable)
       .set({
         playerName,
         avatarColor: avatarColor ?? existing[0].avatarColor,
-        totalScore: newTotal,
-        gamesPlayed: existing[0].gamesPlayed + 1,
-        wins: existing[0].wins + (won ? 1 : 0),
-        xp: newXp,
+        totalScore: sql`${playerScoresTable.totalScore} + ${score}`,
+        gamesPlayed: sql`${playerScoresTable.gamesPlayed} + 1`,
+        wins: sql`${playerScoresTable.wins} + ${won ? 1 : 0}`,
+        xp: sql`${playerScoresTable.xp} + ${xpGain}`,
         level: newLevel,
         ...(updatedToday ? {
           currentStreak: newStreak,
