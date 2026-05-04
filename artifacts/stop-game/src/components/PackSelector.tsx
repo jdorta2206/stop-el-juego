@@ -29,6 +29,7 @@ export function PackSelector({ isPremium, onPremiumClick }: PackSelectorProps) {
           {lang === "en" ? "Category Pack" : lang === "pt" ? "Pack de Categorias" : lang === "fr" ? "Pack de catégories" : "Pack de categorías"}
         </span>
       </div>
+      <div className="relative">
       <div
         className="flex gap-2 overflow-x-auto pb-2 -mx-1 px-1 scrollbar-hide"
         style={{ scrollbarWidth: "none", msOverflowStyle: "none", WebkitOverflowScrolling: "touch" }}
@@ -85,6 +86,11 @@ export function PackSelector({ isPremium, onPremiumClick }: PackSelectorProps) {
             </motion.button>
           );
         })}
+      </div>
+      <div
+        className="absolute right-0 top-0 bottom-2 w-8 pointer-events-none"
+        style={{ background: "linear-gradient(to right, transparent, rgba(6,3,24,0.85))" }}
+      />
       </div>
     </div>
   );
