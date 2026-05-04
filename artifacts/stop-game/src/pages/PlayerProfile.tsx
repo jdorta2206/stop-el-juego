@@ -4,7 +4,7 @@ import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui";
 import {
   Trophy, Flame, Gamepad2, Users, Star, ArrowLeft,
-  UserPlus, UserCheck, Clock, Sword,
+  UserPlus, UserCheck, Clock, Sword, Crown,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { usePlayer } from "@/hooks/use-player";
@@ -178,6 +178,17 @@ export default function PlayerProfile() {
             <h1 className="text-3xl font-display font-black">{data.playerName}</h1>
             <p className="font-bold mt-0.5" style={{ color: "#f9a825" }}>{data.title}</p>
             <p className="text-white/40 text-sm mt-0.5">Puesto #{data.globalRank} global</p>
+            {data.isPremium && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="inline-flex items-center gap-1.5 mt-2 px-3 py-1 rounded-full"
+                style={{ background: "linear-gradient(135deg, rgba(249,168,37,0.2), rgba(245,124,0,0.15))", border: "1.5px solid rgba(249,168,37,0.5)" }}
+              >
+                <Crown className="w-3.5 h-3.5 text-[#f9a825]" />
+                <span className="text-xs font-black text-[#f9a825]">PREMIUM</span>
+              </motion.div>
+            )}
           </div>
 
           {/* Follow / "Tú" badge */}

@@ -1,6 +1,7 @@
 import { ReactNode, useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
 import { usePlayer } from "@/hooks/use-player";
+import { usePremium } from "@/lib/usePremium";
 import { Crown, LogOut, Bell, BellOff, Home, Trophy, Users, Calendar } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button, Input } from "./ui";
@@ -22,6 +23,7 @@ const NAV_ITEMS = [
 
 export function Layout({ children }: { children: ReactNode }) {
   const { player, isLoaded, needsAuth, savePlayer, updateProfile, logout } = usePlayer();
+  const { isPremium } = usePremium(player?.id);
   const { t, lang } = useT();
   const [location] = useLocation();
   const [showProfile, setShowProfile] = useState(false);
@@ -393,12 +395,30 @@ export function Layout({ children }: { children: ReactNode }) {
           <Modal onClose={() => setShowProfile(false)} title={t.nav.home}>
             <div className="space-y-5">
               <div className="flex flex-col items-center gap-3">
-                <div
-                  className="w-16 h-16 rounded-full border-4 border-white/30 flex items-center justify-center text-white font-black text-3xl shadow-lg"
-                  style={{ backgroundColor: editColor }}
-                >
-                  {editName.charAt(0).toUpperCase() || "?"}
+                <div className="relative">
+                  <div
+                    className="w-16 h-16 rounded-full border-4 border-white/30 flex items-center justify-center text-white font-black text-3xl shadow-lg"
+                    style={{ backgroundColor: editColor }}
+                  >
+                    {editName.charAt(0).toUpperCase() || "?"}
+                  </div>
+                  {isPremium && (
+                    <div
+                      className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full flex items-center justify-center shadow-lg"
+                      style={{ background: "linear-gradient(135deg, #f9a825, #f57c00)" }}
+                    >
+                      <Crown className="w-3.5 h-3.5 text-white" />
+                    </div>
+                  )}
                 </div>
+                {isPremium && (
+                  <span
+                    className="inline-flex items-center gap-1 px-3 py-0.5 rounded-full text-[10px] font-black"
+                    style={{ background: "linear-gradient(135deg, rgba(249,168,37,0.2), rgba(245,124,0,0.15))", border: "1.5px solid rgba(249,168,37,0.5)", color: "#f9a825" }}
+                  >
+                    <Crown className="w-3 h-3" /> PREMIUM
+                  </span>
+                )}
               </div>
 
               <div>

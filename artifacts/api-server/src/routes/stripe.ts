@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { stripeStorage } from "../stripeStorage";
 import { stripeService } from "../stripeService";
 import { getUncachableStripeClient } from "../stripeClient";
+import { isPermanentPremium } from "../lib/permanentPremium";
 
 const router: IRouter = Router();
 
@@ -16,23 +17,25 @@ router.get("/status", async (req, res) => {
     const { playerId } = req.query as { playerId?: string };
     if (!playerId) return res.status(400).json({ error: "playerId required" });
 
+    if (isPermanentPremium(playerId)) {
+      return res.json({ isPremium: true, stripeCustomerId: null });
+    }
+
     const player = await stripeStorage.getPlayer(playerId);
     if (!player) return res.json({ isPremium: false });
 
-    // Verify subscription is still active in stripe.subscriptions table
-    let isPremium = player.isPremium || false;
+    let premium = player.isPremium || false;
     if (player.stripeCustomerId) {
       const activeSub = await stripeStorage.getActiveSubscriptionByCustomerId(
         player.stripeCustomerId
       );
-      isPremium = !!activeSub;
-      // Sync isPremium flag if it changed
-      if (isPremium !== player.isPremium) {
-        await stripeStorage.updatePlayerStripeInfo(playerId, { isPremium });
+      premium = !!activeSub;
+      if (premium !== player.isPremium) {
+        await stripeStorage.updatePlayerStripeInfo(playerId, { isPremium: premium });
       }
     }
 
-    return res.json({ isPremium, stripeCustomerId: player.stripeCustomerId || null });
+    return res.json({ isPremium: premium, stripeCustomerId: player.stripeCustomerId || null });
   } catch (err: any) {
     console.error("stripe/status error:", err.message);
     return res.status(500).json({ error: "Internal server error" });

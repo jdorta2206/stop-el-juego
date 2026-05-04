@@ -403,6 +403,7 @@ router.get("/profile/:playerId", async (req, res) => {
     lastPlayedDate: ps.lastPlayedDate ?? null,
     xp: ps.xp ?? 0,
     level: ps.level ?? 1,
+    isPremium: ps.isPremium ?? false,
     globalRank,
     monthlyScore,
     title: getTitle(globalRank),
