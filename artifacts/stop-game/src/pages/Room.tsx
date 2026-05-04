@@ -21,6 +21,8 @@ import { Roulette } from "@/components/Roulette";
 import { useTicker } from "@/hooks/useTicker";
 import { ShareResultsModal } from "@/components/ShareResultsModal";
 import { getApiUrl } from "@/lib/utils";
+import { useT } from "@/i18n/useT";
+import { useToast } from "@/hooks/use-toast";
 
 const ROUND_TIME = 60;
 
@@ -261,6 +263,24 @@ export default function Room() {
 
   const isHost = room?.hostId === player?.id;
   const roomStatus = (room?.status as string) || "";
+
+  // 👑 Host migration toast: when the room snapshot reports a different
+  // hostId than the previous render and the new host is *us*, surface a
+  // toast so the user knows they just inherited host privileges (start
+  // game, kick, etc.). Detected purely from the snapshot the SSE channel
+  // already pushes; no extra side-channel needed.
+  const { t } = useT();
+  const { toast } = useToast();
+  const prevHostIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    const newHost = room?.hostId ?? null;
+    const prev = prevHostIdRef.current;
+    if (prev && newHost && prev !== newHost && newHost === player?.id) {
+      toast({ title: t.multiplayer?.hostMigrated ?? "You're the new host." });
+    }
+    prevHostIdRef.current = newHost;
+  }, [room?.hostId, player?.id, t.multiplayer, toast]);
+
   const currentLetter = room?.currentLetter || "";
   const currentRound = room?.currentRound || 0;
   const maxRounds = room?.maxRounds || 3;

@@ -19,6 +19,13 @@ Full-stack STOP game (Tutti Frutti / Scattergories) web app built with React + V
 - **Icons**: Lucide React
 - **Build**: esbuild (CJS bundle)
 
+## Recent reliability work (May 2026)
+
+- **Unique player names per room (concurrency-safe)**: `POST /rooms/:code/join` runs inside `db.transaction()` + `SELECT … FOR UPDATE`; case-insensitive trim collision returns HTTP **409 `name_taken`** (documented in `lib/api-spec/openapi.yaml`). Shared `normalizePlayerName()` helper used everywhere a player is added.
+- **Host migration on /leave**: when the host leaves the lobby the next player (arrival order) is promoted to host instead of nuking the room. Same row-locking transaction guards against /join vs /leave races. Only when no players remain is the room row deleted and ephemeral state freed. Mid-game leaves (`status !== "waiting"`) are no-ops so scores can't desync.
+- **Client toast** (`Room.tsx`): `prevHostIdRef` effect detects the snapshot host change and shows `t.multiplayer.hostMigrated` to the inheriting player — no SSE side-channel needed (would have clobbered the room cache via `onmessage`).
+- **Type hygiene**: rebuilt stale `lib/db` and `lib/api-client-react` dist; `lib/api-zod/src/index.ts` now re-exports zod schemas only (callers derive types via `z.infer`); `paramStr()` helper narrows `req.params[K]` to plain `string`; `PlayerScore` type widened with `globalRank` / `bestScore`. Stripe sync upgraded to `poolConfig: { connectionString }`.
+
 ## Game Features
 
 1. **Solo vs IA**: Play against AI with animated roulette wheel, 7 categories, 60s timer, word validation

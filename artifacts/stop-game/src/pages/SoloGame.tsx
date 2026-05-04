@@ -7,7 +7,7 @@ import { Button, Card, Input, Progress } from "@/components/ui";
 import { Roulette } from "@/components/Roulette";
 import { getCategories, getAlphabet, getCurrentLang, getApiUrl } from "@/lib/utils";
 import { getSelectedPackId, getPackCategories, getSafePackId, getPackById } from "@/data/categoryPacks";
-import { useValidateRound, useSubmitScore } from "@workspace/api-client-react";
+import { useValidateRound, useSubmitScore, type CategoryResult } from "@workspace/api-client-react";
 import { usePlayer } from "@/hooks/use-player";
 import { motion, AnimatePresence } from "framer-motion";
 import { RewardedAd, BannerAd } from "@/components/AdSystem";
@@ -508,21 +508,21 @@ export default function SoloGame() {
       // STEAL: find highest-value category where player scored 0 and AI scored
       let stolenScore = 0;
       if (activeCard === "steal") {
-        const entry = Object.entries(results.results || {})
-          .filter(([, r]) => (r.player?.score ?? 0) === 0 && (r.ai?.score ?? 0) > 0)
-          .sort(([, a], [, b]) => (b.ai?.score ?? 0) - (a.ai?.score ?? 0))[0];
+        const entry = Object.entries(results.results ?? {})
+          .filter(([, r]) => ((r as CategoryResult).player?.score ?? 0) === 0 && ((r as CategoryResult).ai?.score ?? 0) > 0)
+          .sort(([, a], [, b]) => ((b as CategoryResult).ai?.score ?? 0) - ((a as CategoryResult).ai?.score ?? 0))[0];
         if (entry) {
-          stolenScore = entry[1].ai?.score ?? 0;
-          setSpecialReveal({ type: "steal", category: entry[0], word: entry[1].ai?.response ?? "" });
+          stolenScore = (entry[1] as CategoryResult).ai?.score ?? 0;
+          setSpecialReveal({ type: "steal", category: entry[0], word: (entry[1] as CategoryResult).ai?.response ?? "" });
         }
       }
 
       // ORACLE: reveal one AI answer the player missed
       if (activeCard === "oracle") {
-        const entry = Object.entries(results.results || {})
-          .find(([, r]) => (r.player?.score ?? 0) === 0 && (r.ai?.score ?? 0) > 0);
+        const entry = Object.entries(results.results ?? {})
+          .find(([, r]) => ((r as CategoryResult).player?.score ?? 0) === 0 && ((r as CategoryResult).ai?.score ?? 0) > 0);
         if (entry) {
-          setSpecialReveal({ type: "oracle", category: entry[0], word: entry[1].ai?.response ?? "" });
+          setSpecialReveal({ type: "oracle", category: entry[0], word: (entry[1] as CategoryResult).ai?.response ?? "" });
         }
       }
 
@@ -556,8 +556,8 @@ export default function SoloGame() {
       setTimeout(() => setAiComment(comment), 1200);
 
       // Count valid words for achievements
-      const validWordCount = Object.values(results.results || {}).filter(
-        r => (r.player?.score ?? 0) > 0
+      const validWordCount = Object.values(results.results ?? {}).filter(
+        r => ((r as CategoryResult).player?.score ?? 0) > 0
       ).length;
 
       // Track achievement progress
@@ -658,7 +658,7 @@ export default function SoloGame() {
       recordPlay();
       // Calculate XP with multipliers
       const validCount = results
-        ? Object.values(results.results || {}).filter(r => (r.player?.score ?? 0) > 0).length
+        ? Object.values(results.results ?? {}).filter(r => ((r as CategoryResult).player?.score ?? 0) > 0).length
         : 0;
       const baseXp = calcXpFromResults(validCount, totalScore, aiTotalScore);
       const multiplier =
