@@ -275,386 +275,450 @@ const DICTIONARY: Record<string, Record<string, string[]>> = {
 
     // ── Geography pack ───────────────────────────────────────────────────────
     "país": [
-      "alemania","argentina","australia","austria","bélgica","bolivia","brasil","bulgaria",
-      "canadá","chile","china","colombia","corea","costa rica","cuba","croacia","dinamarca",
-      "ecuador","egipto","el salvador","escocia","eslovaquia","eslovenia","españa","estonia",
-      "etiopía","filipinas","finlandia","francia","gales","grecia","guatemala","haití","honduras",
-      "hungría","india","indonesia","inglaterra","irán","iraq","irlanda","islandia","israel","italia",
-      "jamaica","japón","jordania","kazajistán","kenia","kuwait","laos","letonia","líbano","libia",
-      "liechtenstein","lituania","luxemburgo","madagascar","malasia","mali","malta","marruecos",
-      "méxico","mónaco","nicaragua","nigeria","noruega","nueva zelanda","omán","pakistán","panamá",
-      "paraguay","perú","polonia","portugal","puerto rico","qatar","reino unido","república dominicana",
-      "rumanía","rusia","san marino","senegal","serbia","singapur","siria","somalia","sri lanka",
-      "sudáfrica","sudán","suecia","suiza","tailandia","taiwán","tanzania","togo","tunicia","turquía",
-      "ucrania","uganda","uruguay","uzbekistán","venezuela","vietnam","yemen","zambia","zimbabue"
+      "afganistán","albania","alemania","andorra","angola","arabia saudí","arabia saudita","argelia","argentina",
+      "armenia","australia","austria","azerbaiyán","bahamas","bangladés","barbados","baréin","bélgica","belice",
+      "benín","bielorrusia","birmania","bolivia","bosnia","botsuana","brasil","brunéi","bulgaria","burkina faso",
+      "burundi","bután","cabo verde","camboya","camerún","canadá","catar","chad","chile","china","chipre","colombia",
+      "comoras","congo","corea del norte","corea del sur","costa de marfil","costa rica","croacia","cuba","dinamarca",
+      "dominica","ecuador","egipto","el salvador","emiratos árabes","eritrea","escocia","eslovaquia","eslovenia",
+      "españa","estados unidos","estonia","etiopía","filipinas","finlandia","fiyi","francia","gabón","gales","gambia",
+      "georgia","ghana","granada","grecia","groenlandia","guatemala","guinea","guinea ecuatorial","guyana","haití",
+      "honduras","hungría","india","indonesia","inglaterra","irak","irán","irlanda","islandia","islas marshall",
+      "islas salomón","israel","italia","jamaica","japón","jordania","kazajistán","kenia","kirguistán","kiribati",
+      "kosovo","kuwait","laos","lesoto","letonia","líbano","liberia","libia","liechtenstein","lituania","luxemburgo",
+      "macedonia","madagascar","malasia","malaui","maldivas","mali","malta","marruecos","mauricio","mauritania",
+      "méxico","micronesia","moldavia","mónaco","mongolia","montenegro","mozambique","namibia","nauru","nepal",
+      "nicaragua","níger","nigeria","noruega","nueva zelanda","omán","países bajos","pakistán","palaos","panamá",
+      "papúa nueva guinea","paraguay","perú","polonia","portugal","puerto rico","qatar","reino unido",
+      "república checa","república dominicana","ruanda","rumanía","rusia","samoa","san marino","santa lucía",
+      "senegal","serbia","seychelles","sierra leona","singapur","siria","somalia","sri lanka","sudáfrica","sudán",
+      "sudán del sur","suecia","suiza","surinam","tailandia","taiwán","tanzania","tayikistán","timor oriental",
+      "togo","tonga","trinidad y tobago","túnez","turkmenistán","turquía","tuvalu","ucrania","uganda","uruguay",
+      "uzbekistán","vanuatu","vaticano","venezuela","vietnam","yemen","yibuti","zambia","zimbabue"
     ],
     "capital": [
-      "amsterdam","ankara","atenas","bangkok","beirut","berlín","berna","bogotá","brasilia","bratislava",
-      "bruselas","bucarest","budapest","buenos aires","cairo","canberra","caracas","copenhague","dakar",
-      "damasco","dublín","estocolmo","helsinki","kabul","kingston","kiev","la habana","la paz","lima",
-      "lisboa","liubliana","londres","madrid","managua","manila","minsk","moscú","nairobi","new delhi",
-      "oslo","ottawa","panamá","paris","pekin","pretoria","praga","quito","reikiavik","riad","riga",
-      "roma","san josé","san salvador","santiago","santo domingo","sarajevo","seúl","skopie","sofia",
-      "tallin","tegucigalpa","tel aviv","teherán","tirana","tokio","tunez","ulan bator","varsovia",
-      "viena","vientiane","vilna","washington","wellington","yakarta","zagreb"
+      "abu dabi","abuya","accra","addis abeba","amán","amsterdam","ankara","apia","asjabad","asmara","asunción",
+      "atenas","bagdad","bakú","bamako","bangkok","banjul","beirut","belgrado","berlín","berna","bisáu",
+      "bogotá","brasilia","bratislava","brazzaville","bridgetown","bruselas","bucarest","budapest","buenos aires",
+      "cairo","canberra","caracas","copenhague","dakar","damasco","doha","dublín","dushanbé","ereván",
+      "estocolmo","freetown","gaborone","georgetown","guatemala","hanói","harare","helsinki","islamabad",
+      "jartum","jerusalén","juba","kabul","kampala","katmandú","kiev","kigali","kingston","kingstown",
+      "kinshasa","kuala lumpur","kuwait","la habana","la haya","la paz","la valeta","libreville","lima",
+      "lisboa","liubliana","lomé","londres","luanda","lusaka","luxemburgo","madrid","malé","managua",
+      "manama","manila","maputo","maseru","mbabane","minsk","mogadiscio","monrovia","montevideo","moroni",
+      "moscú","nairobi","nasáu","niamey","nicosia","nueva delhi","oslo","ottawa","palikir","paramaribo",
+      "parís","pekín","phnom penh","podgorica","port louis","port moresby","praga","pretoria","pyongyang",
+      "quito","rabat","reikiavik","riad","riga","roma","saná","san josé","san juan","san marino",
+      "san salvador","santiago","santo domingo","sarajevo","seúl","singapur","skopie","sofía","sucre",
+      "suva","taipéi","tallin","taskent","tbilisi","tegucigalpa","teherán","tel aviv","thimphu","tirana",
+      "tokio","trípoli","túnez","ulán bator","vaduz","valeta","varsovia","vientián","viena","vilna",
+      "washington","wellington","windhoek","yamena","yamusukro","yaundé","zagreb"
     ],
     "río": [
-      "amazonas","amur","aragón","arno","brahmaputra","colorado","congo","danubio","duero","ebro",
-      "elba","éufrates","ganges","garona","guadalquivir","guadiana","hudson","indo","jordán",
-      "loira","mekong","misisipi","misuri","nilo","oder","orinoco","pánuco","paraná","pisuerga",
-      "po","rin","ródano","sena","tajo","támesis","tigris","tisza","ucayali","ural","uruguay",
-      "vístula","volga","yangtsé","yaqui","yenisei","yukon","zambeze"
+      "amazonas","amur","arno","bermejo","brahmaputra","colorado","columbia","congo","danubio","dnieper",
+      "dniéster","don","douro","duero","ebro","elba","eufrates","ganges","garona","guadalete","guadalquivir",
+      "guadiana","guayas","hudson","indo","irrawaddy","jordán","jucar","lena","limpopo","loira","mackenzie",
+      "magdalena","manzanares","marañón","mekong","miño","mississippi","missouri","niger","nilo","ob","oder",
+      "ohio","orange","orinoco","paraguay","paraná","plata","po","potomac","ródano","rin","salado",
+      "san lorenzo","sena","senegal","tajo","támesis","tigris","tinto","ucayali","ural","uruguay","vístula",
+      "volga","yangtsé","yenisei","yukón","zambeze"
     ],
     "montaña": [
-      "aconcagua","alpes","andes","annapurna","apeninos","atlas","ararat","balcanes","blanco",
-      "cárpatos","caucaso","cervino","cotopaxi","denali","elbrús","etna","everest","fitz roy",
-      "fuji","himalaya","huascarán","jungfrau","k2","kazbek","kilimanjaro","logan","makalu",
-      "mckinley","mont blanc","monte perdido","mulhacén","olimpo","ojos del salado","orizaba",
-      "pirineos","popocatépetl","rocallosas","sierra nevada","teide","torre","ural","veleta",
-      "vesubio","vinson","volcán","whitney"
+      "aconcagua","aiguille","alpes","andes","annapurna","apeninos","ararat","atlas","balcanes","blanco",
+      "cárpatos","cáucaso","cervino","chimborazo","chomolungma","cotopaxi","denali","eiger","elbrús","etna",
+      "everest","fitz roy","fuji","gasherbrum","himalaya","huascarán","jungfrau","k2","karakórum","kazbek",
+      "kilimanjaro","llullaillaco","logan","lhotse","makalu","manaslu","matterhorn","mauna kea","misti",
+      "moncayo","mont blanc","monte perdido","mulhacén","nanga parbat","ojos del salado","olimpo","orizaba",
+      "pico de orizaba","pirineos","popocatépetl","rocosas","sajama","sierra madre","sierra nevada","snowdon",
+      "taranaki","teide","torres del paine","ural","urales","veleta","vesubio","vinson","weisshorn","whitney"
     ],
     "idioma": [
-      "alemán","arameo","árabe","aragonés","armenio","asturiano","aymara","bantú","bengalí","bielorruso",
-      "bretón","búlgaro","cantonés","castellano","catalán","cebuano","checo","chino","coreano","corso",
-      "criollo","croata","danés","esperanto","estonio","euskera","farsi","finés","francés","gaélico",
-      "galego","gallego","georgiano","griego","guaraní","hebreo","hindi","holandés","húngaro","ibo",
-      "indonesio","inglés","italiano","japonés","javanés","kazajo","kurdo","ladino","laosiano","latín",
-      "letón","lituano","macedonio","malayo","mandarín","maorí","maya","mongol","náhuatl","navajo",
-      "nepalí","noruego","occitano","pashtún","persa","polaco","portugués","punjabi","quechua","rumano",
-      "ruso","sánscrito","serbio","siciliano","sueco","swahili","tagalo","tailandés","tamil","tibetano",
-      "turco","ucraniano","urdu","valenciano","vasco","vietnamita","wolof","xhosa","yiddish","yoruba","zulú"
+      "afrikáans","alemán","amárico","árabe","aragonés","armenio","asturiano","aymara","bantú","bengalí",
+      "bielorruso","birmano","bosnio","bretón","búlgaro","cantonés","castellano","catalán","cebuano","checo",
+      "chino","coreano","corso","criollo","croata","danés","eslovaco","esloveno","esperanto","estonio",
+      "euskera","farsi","finés","francés","gaélico","galés","gallego","georgiano","griego","guaraní",
+      "hawaiano","hebreo","hindi","holandés","húngaro","indonesio","inglés","irlandés","islandés","italiano",
+      "japonés","javanés","kazajo","kikuyu","kurdo","ladino","laosiano","latín","letón","lituano",
+      "luxemburgués","macedonio","malayo","mandarín","maorí","maltés","maya","moldavo","mongol","náhuatl",
+      "neerlandés","nepalí","noruego","occitano","pashtún","persa","polaco","portugués","punjabi","quechua",
+      "rumano","ruso","sánscrito","serbio","siciliano","somalí","sueco","swahili","tagalo","tailandés","tamil",
+      "tatar","telugu","tibetano","turco","turcomano","ucraniano","urdu","uzbeko","valenciano","vasco",
+      "vietnamita","wolof","xhosa","yiddish","yoruba","zulú"
     ],
     "monumento": [
-      "acrópolis","alcatraz","alhambra","arco","atomium","big ben","brandeburgo","cataratas","catedral",
-      "chichén itzá","coliseo","cristo redentor","duomo","escorial","empire state","esfinge","estatua",
-      "eiffel","faro","fortaleza","golden gate","gran muralla","kremlin","louvre","machu picchu",
-      "neuschwanstein","ópera","obelisco","pagoda","palacio","panteón","partenón","petra","pirámide",
-      "puente","puerta","sagrada familia","santuario","stonehenge","taj mahal","templo","torre","trevi",
-      "uffizi","versalles","vaticano","westminster","windsor","yacimiento","zigurat"
+      "acrópolis","alhambra","angkor wat","arco de triunfo","atomium","basílica de san pedro","big ben",
+      "brandenburgo","burj khalifa","capilla sixtina","casa blanca","castillo de praga","catedral de notre dame",
+      "chichén itzá","coliseo","cristo redentor","duomo","empire state","escorial","esfinge",
+      "estatua de la libertad","fortaleza","fuente de trevi","giralda","gran muralla","guggenheim","hagia sofia",
+      "kremlin","louvre","machu picchu","mausoleo","mezquita azul","monte rushmore","neuschwanstein","obelisco",
+      "ópera de sídney","palacio de buckingham","palacio real","panteón","partenón","petra","pirámide de giza",
+      "pirámide del sol","puente de londres","puerta de alcalá","puerta del sol","sagrada familia","santa sofía",
+      "stonehenge","taj mahal","templo del cielo","torre de londres","torre de pisa","torre eiffel","vaticano",
+      "versalles","westminster","windsor","yacimiento"
     ],
     "mar": [
-      "adriático","amarillo","arábigo","aral","argentino","ártico","atlántico","azov","báltico","barents",
-      "bering","caribe","caspio","celebes","china","coral","cortés","índico","japón","jónico","jüjpico",
-      "labrador","ligure","mar negro","marmara","mediterráneo","muerto","negro","norte","océano",
-      "okhotsk","pacífico","plata","rojo","ross","tasmania","timor","tirreno","weddell"
+      "adriático","amundsen","antártico","arábigo","aral","ártico","atlántico","azov","báltico","barents",
+      "bering","beaufort","caribe","caspio","célebes","china meridional","china oriental","coral","egeo",
+      "filipinas","glacial","índico","jónico","japón","kara","labrador","ligur","mar de java","mar de noruega",
+      "mar del coral","mar del norte","mar muerto","mar negro","mar rojo","mediterráneo","ojotsk","pacífico",
+      "ross","tasmania","timor","tirreno","weddell"
+    ],
+    "mar/océano": [
+      "adriático","amundsen","antártico","arábigo","aral","ártico","atlántico","azov","báltico","barents",
+      "bering","beaufort","caribe","caspio","célebes","china meridional","china oriental","coral","egeo",
+      "filipinas","glacial","índico","jónico","japón","kara","labrador","ligur","mar de java","mar de noruega",
+      "mar del coral","mar del norte","mar muerto","mar negro","mar rojo","mediterráneo","ojotsk","pacífico",
+      "ross","tasmania","timor","tirreno","weddell"
     ],
 
     // ── Football pack ────────────────────────────────────────────────────────
     futbolista: [
-      "agüero","alaba","alba","alves","ancelotti","auba","bale","baggio","beckham","benzema","bergkamp",
-      "best","buffon","busquets","butragueño","cafú","cannavaro","casillas","cavani","chiellini",
-      "cristiano","cruyff","de bruyne","de gea","dembélé","di stefano","díaz","dybala","eto'o","etxeberria",
-      "fàbregas","figo","forlán","gattuso","gerrard","griezmann","guardiola","guardado","haaland",
-      "hazard","henry","higuaín","hummels","ibrahimović","iniesta","isco","james","jordi alba","kanté",
-      "kaká","kane","kaká","kimmich","klose","koke","kross","kun","lahm","lampard","laporte","laudrup",
-      "lewandowski","lineker","mané","maradona","maldini","marcelo","marc-andré","mascherano","mbappé",
-      "messi","mertens","milla","modric","müller","muller","nadal","nesta","neto","neuer","neymar",
-      "nesta","oblak","ozil","pavón","pedri","pelé","piqué","pogba","popescu","puyol","raul","rashford",
-      "ramos","reyes","rivaldo","robben","rodrygo","rodri","romario","ronaldinho","ronaldo","rooney",
-      "ruud","salah","sanchez","scholes","schweinsteiger","seedorf","silva","simeone","stam","suárez",
-      "thiago","thiago silva","torres","totti","trezeguet","valdano","valdés","van basten","van persie",
-      "vidal","villa","vinicius","xabi","xavi","yashin","zambrotta","zanetti","zidane","zlatan"
+      "agüero","alaba","alba","alcácer","alves","ancelotti","araújo","baggio","bale","baresi","beckham",
+      "bellingham","benzema","bergkamp","best","bonucci","brahim","buffon","busquets","butragueño","cafú",
+      "cancelo","cannavaro","carvajal","casillas","cavani","chiellini","cristiano","cruyff","cuadrado",
+      "de bruyne","de gea","de jong","dembélé","di maría","di stefano","drogba","dybala","eto'o","fàbregas",
+      "fati","felipe","ferrán","figo","forlán","gattuso","gerrard","gerd müller","griezmann","guardiola",
+      "haaland","hazard","henry","higuaín","hummels","ibrahimović","iniesta","isco","james","jordi alba",
+      "joao felix","kaká","kane","kanté","kimmich","klose","koke","kroos","kun","lahm","lampard","laporte",
+      "laudrup","lewandowski","lineker","mané","maradona","maldini","marcelo","mascherano","matthäus",
+      "mbappé","messi","mertens","milla","modric","müller","nadal","nesta","neuer","neymar","oblak",
+      "okocha","ozil","pavón","pedri","pelé","piqué","pirlo","platini","pogba","puyol","rakitic","ramos",
+      "rashford","raul","reyes","ribery","rivaldo","robben","rodrygo","rodri","romario","ronaldinho",
+      "ronaldo","rooney","salah","sanchez","scholes","schweinsteiger","seedorf","sergio busquets","silva",
+      "simeone","sneijder","stoichkov","suárez","tevez","thiago","thiago silva","torres","totti","trezeguet",
+      "valdano","valdés","van basten","van persie","varane","vidal","villa","vinicius","xabi","xavi",
+      "yashin","zambrotta","zanetti","zidane","zlatan"
     ],
     equipo: [
-      "ajax","ac milan","arsenal","atlético","atalanta","atletico madrid","barcelona","bayern","benfica",
-      "betis","boca","borussia","brentford","brighton","celta","celtic","chelsea","colón","comunicaciones",
-      "dortmund","ecuador","eibar","everton","feyenoord","fiorentina","flamengo","fluminense","fulham",
-      "galatasaray","getafe","girona","gremio","huesca","independiente","internazionale","internacional",
-      "juventus","lazio","leeds","leganés","leicester","levante","liverpool","leverkusen","lyon",
-      "manchester","manchester city","manchester united","mainz","milan","monaco","montpellier","mallorca",
-      "napoli","newcastle","nottingham","olympiakos","osasuna","paris","palmeiras","peñarol","porto",
-      "psg","racing","rayo","real madrid","real sociedad","rennes","river","river plate","roma",
-      "sampdoria","santos","sao paulo","sassuolo","sevilla","sheffield","sporting","stuttgart","tottenham",
-      "udinese","unión","valencia","valladolid","valencia","vasco","verona","villarreal","west ham",
-      "wolverhampton","yokohama","zaragoza","zenit"
+      "ajax","ac milan","arsenal","atalanta","athletic","atlético","atlético de madrid","barcelona","bayer leverkusen",
+      "bayern múnich","benfica","betis","boca","borussia dortmund","brentford","brighton","celta","celtic",
+      "chelsea","colo colo","corinthians","cruzeiro","dinamo","dortmund","everton","eintracht","feyenoord",
+      "fiorentina","flamengo","fluminense","fulham","galatasaray","getafe","girona","granada","gremio",
+      "hertha","huesca","independiente","internazionale","internacional","juventus","lazio","leeds","leganés",
+      "leicester","levante","liverpool","lyon","manchester city","manchester united","marsella","mainz",
+      "milan","monaco","montpellier","mallorca","napoli","newcastle","niza","nottingham","olympiakos","osasuna",
+      "palmeiras","paris saint-germain","peñarol","porto","psg","racing","rayo","real madrid","real sociedad",
+      "rennes","river plate","roma","salzburgo","sampdoria","san lorenzo","santos","sao paulo","sassuolo",
+      "sevilla","sheffield","shakhtar","sporting","stuttgart","tigres","tottenham","udinese","valencia",
+      "valladolid","vasco","verona","villarreal","west ham","wolfsburgo","wolverhampton","zaragoza","zenit"
     ],
     estadio: [
-      "anoeta","azteca","balaídos","bernabéu","camp nou","centenario","ciutat de valencia","emirates",
-      "etihad","el monumental","el madrigal","la bombonera","la cartuja","la rosaleda","ipurúa","king fahd",
-      "luzhniki","maracaná","mestalla","metropolitano","montjuïc","monumental","old trafford","parc des princes",
-      "ramón sánchez pizjuán","reale arena","ricardo saprissa","rio tinto","san mamés","san paolo","san siro",
-      "santiago bernabéu","santiago bernabeu","signal iduna","stadio olimpico","tottenham hotspur","velódromo",
-      "villamarín","vodafone arena","wanda metropolitano","wembley","westfalenstadion","yankee stadium"
+      "allianz arena","anfield","anoeta","azteca","balaídos","bernabéu","camp nou","centenario","el monumental",
+      "emirates","etihad","king fahd","la bombonera","la cartuja","la rosaleda","luzhniki","maracaná","mestalla",
+      "metropolitano","montjuïc","monumental","old trafford","parc des princes","ramón sánchez pizjuán",
+      "reale arena","san mamés","san paolo","san siro","santiago bernabéu","signal iduna","stade de france",
+      "stadio olimpico","tottenham hotspur","velódromo","villamarín","wanda metropolitano","wembley",
+      "westfalenstadion","yankee stadium"
     ],
     entrenador: [
-      "alex ferguson","ancelotti","arrigo sacchi","aragonés","beenhakker","bielsa","bosque","capello",
-      "cesar luis menotti","clemente","conte","cruyff","del bosque","didier deschamps","emery",
-      "ferguson","flick","guardiola","gasperini","heynckes","hiddink","klinsmann","klopp","koeman",
-      "lopetegui","luis enrique","luis aragonés","mancini","manuel pellegrini","mourinho","nagelsmann",
-      "pep","pochettino","pellegrini","queiroz","ranieri","raymond goethals","rijkaard","sacchi",
-      "sampaoli","scaloni","scolari","setién","simeone","spalletti","tata martino","ten hag","tite",
-      "tuchel","valverde","vicente del bosque","wenger","xavi","zidane","zinedine zidane"
+      "alex ferguson","ancelotti","arrigo sacchi","aragonés","bielsa","capello","carlo ancelotti",
+      "cesar luis menotti","conte","cruyff","del bosque","didier deschamps","emery","ferguson","flick",
+      "guardiola","gasperini","heynckes","hiddink","klinsmann","klopp","koeman","lopetegui","luis enrique",
+      "luis aragonés","mancini","manuel pellegrini","mourinho","nagelsmann","pep","pochettino","pellegrini",
+      "queiroz","ranieri","rijkaard","sacchi","sampaoli","scaloni","scolari","setién","simeone","spalletti",
+      "tata martino","ten hag","tite","tuchel","valverde","vicente del bosque","wenger","xavi","zidane",
+      "zinedine zidane"
     ],
     competición: [
-      "amistoso","apertura","bundesliga","champions","clausura","conference","copa américa","copa argentina",
-      "copa del rey","copa libertadores","copa mundial","copa oro","copa sudamericana","cup","eliminatorias",
-      "europa","eurocopa","fa cup","ligue 1","libertadores","la liga","liga","mundial","mls","nations",
-      "olímpicos","olimpiadas","paulista","preolímpico","premier","recopa","relámpago","sudamericana",
-      "supercopa","trofeo","uefa","uefa champions league","uefa europa league","uefa nations league","yeclano"
+      "amistoso","apertura","bundesliga","champions","champions league","clausura","conference league",
+      "copa américa","copa argentina","copa del rey","copa libertadores","copa mundial","copa oro",
+      "copa sudamericana","eliminatorias","europa league","eurocopa","fa cup","ligue 1","la liga","libertadores",
+      "mls","mundial","nations league","olímpicos","paulista","premier league","recopa","serie a",
+      "supercopa","sudamericana","trofeo","uefa","uefa champions league","uefa europa league","uefa nations league"
     ],
     "país futbolero": [
-      "alemania","argentina","australia","austria","bélgica","bolivia","brasil","camerún","canadá","chile",
-      "china","colombia","corea","croacia","dinamarca","ecuador","egipto","el salvador","escocia","eslovaquia",
-      "españa","estados unidos","francia","gales","ghana","grecia","holanda","honduras","hungría","inglaterra",
-      "irlanda","irán","italia","jamaica","japón","marruecos","méxico","nigeria","noruega","panamá",
-      "paraguay","perú","polonia","portugal","qatar","república checa","república dominicana","rumanía",
-      "rusia","serbia","suecia","suiza","túnez","turquía","ucrania","uruguay","venezuela","yugoslavia"
+      "alemania","arabia saudí","argentina","australia","austria","bélgica","bolivia","brasil","camerún",
+      "canadá","chile","china","colombia","corea del sur","croacia","dinamarca","ecuador","egipto",
+      "el salvador","escocia","eslovaquia","españa","estados unidos","francia","gales","ghana","grecia",
+      "holanda","honduras","hungría","inglaterra","irlanda","irán","italia","jamaica","japón","marruecos",
+      "méxico","nigeria","noruega","países bajos","panamá","paraguay","perú","polonia","portugal","qatar",
+      "república checa","república dominicana","rumanía","rusia","senegal","serbia","suecia","suiza","túnez",
+      "turquía","ucrania","uruguay","venezuela"
     ],
     jugada: [
-      "amague","arquero","ataque","autopase","barrida","bicicleta","bolea","caño","cabezazo","centro",
-      "chilena","contraataque","corner","despeje","dribbling","entrada","escorpión","falta","finta","foul",
-      "gambeta","gol","golpe","habilidad","intercepción","jugada","keepie","lanzamiento","libre","luchada",
-      "maradoniana","media volea","media chilena","mejicana","nutmeg","off-side","paradinha","palomita",
-      "parada","pase","penal","penalti","quite","rabona","ramonete","recuperación","regate","remate",
-      "rosca","rueda","saque","sombrero","taco","tanda","taquilla","tijera","tiro","trivela","túnel",
-      "voleo","vuelta","wengue","xut","yarda","zamarrazo"
+      "amague","ataque","autopase","barrida","bicicleta","bolea","cabezazo","caño","centro","chilena",
+      "chut","contraataque","córner","despeje","desmarque","dribbling","entrada","escorpión","falta","finta",
+      "gambeta","gol","golpe franco","intercepción","lanzamiento","libre","libre directo","mano","melena",
+      "media volea","nutmeg","palomita","pase","penal","penalti","quite","rabona","recuperación","regate",
+      "remate","rosca","rueda","saque","saque de banda","saque de esquina","sombrero","taco","taconazo",
+      "tijera","tiro libre","tiro penal","trivela","túnel","voleo","volea","vuelta"
     ],
 
     // ── Cinema pack ──────────────────────────────────────────────────────────
     "actor": [
-      "adam","adrián","alba","alfredo","al pacino","alejandro","amaia","ana de armas","andrés","angelina",
-      "antonio banderas","arnold","audrey","banderas","ben","bardem","brad","brad pitt","bruce willis",
-      "cameron","cate","charlize","chris","chris hemsworth","clint","clint eastwood","cooper","cruz",
-      "daniel craig","de niro","dicaprio","diego","emma","emma stone","eva","fernando","george clooney",
-      "gerard","gisela","goya","hanks","harrison","hilary","hugh","hugh jackman","irene","javier",
-      "javier bardem","jennifer","jhonny depp","jodie","johnny depp","jolie","julia","julia roberts",
-      "keanu","keanu reeves","kevin","kidman","kristen","leonardo","liam","liam neeson","luis","mads",
-      "matthew","mel","meryl","meryl streep","morgan","morgan freeman","natalie","nicolas","nicole","oscar",
-      "oprah","penelope cruz","peter","ricardo","richard","robert","robert downey","roberto","ryan",
-      "samantha","samuel l jackson","sandra","sandra bullock","scarlett","sigourney","stallone","streep",
-      "tom","tom cruise","tom hanks","tom holland","tom hardy","uma","viggo","viola","wesley","willem",
-      "xavier","yolanda","zac efron","zoe","zoë"
+      "al pacino","alfonso ribeiro","amy adams","ana de armas","andrew garfield","angelina jolie",
+      "anne hathaway","anthony hopkins","antonio banderas","arnold schwarzenegger","audrey hepburn",
+      "ben affleck","ben stiller","benicio del toro","bill murray","brad pitt","bruce willis","cameron diaz",
+      "cate blanchett","charlize theron","chris evans","chris hemsworth","chris pratt","christian bale",
+      "clint eastwood","colin farrell","daniel craig","daniel day-lewis","daniel radcliffe","denzel washington",
+      "diego luna","drew barrymore","eddie murphy","edward norton","emily blunt","emma stone","emma watson",
+      "ewan mcgregor","gael garcía","george clooney","gerard butler","glenn close","gwyneth paltrow",
+      "halle berry","harrison ford","heath ledger","hugh grant","hugh jackman","jack nicholson","jake gyllenhaal",
+      "james mcavoy","jamie foxx","javier bardem","jennifer aniston","jennifer lawrence","jennifer lopez",
+      "jessica chastain","jim carrey","joaquin phoenix","jodie foster","john travolta","johnny depp","julia roberts",
+      "julianne moore","keanu reeves","keira knightley","kevin costner","kevin spacey","kristen stewart",
+      "leonardo dicaprio","liam neeson","mahershala ali","margot robbie","mark ruffalo","matt damon","matthew mcconaughey",
+      "mel gibson","meryl streep","michael caine","michael douglas","michael fassbender","mila kunis","morgan freeman",
+      "natalie portman","nicholas cage","nicole kidman","oscar isaac","penélope cruz","reese witherspoon",
+      "richard gere","robert de niro","robert downey","robin williams","russell crowe","ryan gosling","ryan reynolds",
+      "salma hayek","samuel l jackson","sandra bullock","scarlett johansson","sean connery","sean penn","sigourney weaver",
+      "sylvester stallone","tilda swinton","timothée chalamet","tom cruise","tom hanks","tom hardy","tom holland",
+      "uma thurman","vin diesel","viola davis","viggo mortensen","wesley snipes","whoopi goldberg","will smith",
+      "willem dafoe","winona ryder","yalitza aparicio","zac efron","zendaya","zoe saldana"
+    ],
+    "actor/actriz": [
+      "al pacino","ana de armas","angelina jolie","anne hathaway","anthony hopkins","antonio banderas","brad pitt",
+      "bruce willis","cameron diaz","cate blanchett","charlize theron","chris evans","chris hemsworth","christian bale",
+      "clint eastwood","daniel craig","denzel washington","emma stone","emma watson","gael garcía","george clooney",
+      "harrison ford","hugh jackman","jack nicholson","javier bardem","jennifer lawrence","jennifer lopez",
+      "jim carrey","joaquin phoenix","johnny depp","julia roberts","keanu reeves","leonardo dicaprio","liam neeson",
+      "margot robbie","matt damon","meryl streep","morgan freeman","natalie portman","nicole kidman","penélope cruz",
+      "robert de niro","robert downey","robin williams","ryan gosling","ryan reynolds","salma hayek","samuel l jackson",
+      "sandra bullock","scarlett johansson","sean connery","sigourney weaver","sylvester stallone","timothée chalamet",
+      "tom cruise","tom hanks","tom hardy","tom holland","uma thurman","viola davis","whoopi goldberg","will smith",
+      "yalitza aparicio","zac efron","zendaya","zoe saldana"
     ],
     "película": [
-      "alien","amelie","amistades","apocalypse now","atrapado","avatar","aviator","batman","beetlejuice",
-      "blade runner","brave","cars","casino","casablanca","cazafantasmas","chicago","chinatown","coco",
-      "constantino","cube","django","dunkerque","el padrino","el rey león","ella","encanto","everest",
-      "encantada","facundo","forrest gump","frozen","gladiador","gone girl","gravity","grease","harry potter",
-      "her","hércules","hook","independence day","increíbles","inception","interstellar","irréversible",
-      "it","jaws","jaws","jurassic park","jumanji","jojo rabbit","king kong","la la land","la lista de schindler",
-      "leon","lion","los goonies","matrix","memento","minari","minions","monstruos","moonlight","narnia",
-      "naruto","nimona","oceans","orgullo y prejuicio","oppenheimer","platoon","predator","psicosis","psycho",
-      "quién engañó","rocky","ratatouille","reservoir dogs","rocky","seven","shrek","spiderman","spirit",
-      "star wars","sully","tarzan","tarzán","taxi driver","terminator","titanic","tron","toy story","up",
-      "vértigo","vaiana","wall-e","watchmen","x-men","xanadu","yentl","zombieland","zootopia"
+      "alien","amelie","apocalypse now","avatar","avengers","barbie","batman","ben hur","bohemian rhapsody",
+      "braveheart","cars","casablanca","casino royale","casino","chicago","chinatown","cinema paradiso","ciudadano kane",
+      "coco","contracorriente","corazón valiente","crónica de una muerte","cube","death note","django",
+      "dune","dunkerque","el club de la pelea","el padrino","el quinto elemento","el rey león","el silencio de los corderos",
+      "elemental","encanto","et","forrest gump","frozen","gladiador","gone girl","gravity","grease","green book",
+      "harry potter","her","hercules","hook","incepción","inception","intensa-mente","interstellar",
+      "intocable","it","jaws","jojo rabbit","jumanji","jurassic park","king kong","la bella y la bestia",
+      "la dolce vita","la la land","la lista de schindler","la pasión","leon","lion","los goonies","los increíbles",
+      "los miserables","matrix","memento","minari","minions","misión imposible","moana","monstruos","moonlight",
+      "narnia","nimona","oceans","oppenheimer","orgullo y prejuicio","parásitos","pinocho","platoon","predator",
+      "psicosis","pulp fiction","ratatouille","reservoir dogs","rocky","romeo y julieta","seven","shrek","sicario",
+      "sin city","spiderman","spirit","star wars","sully","tarzán","taxi driver","terminator","the artist",
+      "titanic","toy story","trainspotting","trono de cristal","up","vértigo","wall-e","watchmen","whiplash",
+      "wonder woman","x-men","yentl","zombieland","zootopia"
     ],
     serie: [
-      "amigos","arrow","ágata","americana","andor","ahsoka","atlanta","bárbaros","big bang theory","black mirror",
-      "breaking bad","bridgerton","cobra kai","el chavo","el internado","el juego del calamar","el ministerio",
-      "élite","euphoria","frasier","friends","fugitivos","game of thrones","glee","gossip girl","greys anatomy",
-      "hawkeye","heartstopper","heidi","heroes","hijos de papá","homeland","house","house of the dragon",
-      "house of cards","industry","invincible","jane the virgin","jessica jones","kung fu","la casa de papel",
-      "lost","loki","lupin","mad men","mandalorian","mar de plástico","money heist","narcos","new girl","obi-wan",
-      "ozark","outlander","peaky blinders","pose","pulgarcito","quien es la máscara","queen of the south",
-      "rick and morty","rosa de guadalupe","sex education","sherlock","squid game","stranger things","succession",
-      "ted lasso","the last of us","the witcher","this is us","traffic","tulsa king","umbrella academy","upload",
-      "vikings","wandavision","wednesday","you","yo soy bea","z nation","zapping zone"
+      "andor","arrow","atlanta","bárbaros","big bang theory","black mirror","breaking bad","bridgerton","brooklyn 99",
+      "cobra kai","como conocí a tu madre","csi","dexter","doctor who","downton abbey","el chavo","el internado",
+      "el juego del calamar","el ministerio del tiempo","el último maestro","élite","euphoria","fargo","frasier",
+      "friends","futurama","game of thrones","glee","gossip girl","grey's anatomy","hawkeye","heartstopper","heidi",
+      "heroes","homeland","house","house of cards","house of the dragon","industry","invincible","it's always sunny",
+      "jane the virgin","jessica jones","kim's convenience","kung fu","la casa de papel","la rosa de guadalupe",
+      "los serrano","los simpson","los soprano","lost","loki","lupin","mad men","malcolm in the middle","mandalorian",
+      "merlin","modern family","narcos","new girl","obi-wan","outlander","ozark","padre de familia","peaky blinders",
+      "pose","queen of the south","ratched","reservation dogs","rick and morty","seinfeld","sex education","sherlock",
+      "south park","squid game","stranger things","succession","ted lasso","the boys","the crown","the last of us",
+      "the office","the umbrella academy","the witcher","this is us","tulsa king","two and a half men","umbrella academy",
+      "vikings","walking dead","wandavision","wednesday","west wing","white lotus","yo soy bea","you","z nation"
     ],
     "director": [
-      "almodóvar","akira","alfred","alfred hitchcock","amenábar","ang lee","aronofsky","ari aster","bayona",
-      "bigelow","brian de palma","burton","cameron","carpenter","ceylan","chazelle","chris columbus","christopher",
-      "clint eastwood","coen","coppola","cuarón","de palma","del toro","denis villeneuve","duvernay",
-      "eastwood","ferran adrià","fincher","ford","francis ford coppola","gerwig","godard","gonzález iñárritu",
-      "guillermo del toro","hitchcock","huston","ingmar bergman","iñárritu","jackson","james cameron","jane campion",
-      "jenkins","jonathan demme","jordan peele","jose luis garci","kar-wai","kathryn","kelly","kubrick",
-      "lanthimos","lasseter","lars von trier","linklater","lynne ramsay","luc besson","luhrmann","lucas",
-      "mann","mendes","miller","miyazaki","nolan","nora ephron","oliver stone","ozu","pablo larraín","park chan-wook",
-      "paul thomas anderson","peter jackson","peter weir","quentin tarantino","ridley scott","ritchie","ron howard",
-      "roman polanski","sam mendes","sam raimi","scorsese","sean penn","scott","sergio leone","spike lee",
-      "spielberg","steven spielberg","stanley kubrick","tarantino","tati","trier","truffaut","ueda","villa-lobos",
-      "villeneuve","von trier","wes anderson","wong kar-wai","xavier dolan","yates","yorgos","zhang yimou","zwick"
+      "akira kurosawa","alejandro amenábar","alfonso cuarón","alfred hitchcock","ang lee","aronofsky","baz luhrmann",
+      "bayona","bigelow","brian de palma","christopher nolan","clint eastwood","coen","damien chazelle","darren aronofsky",
+      "david fincher","david lynch","del toro","denis villeneuve","duvernay","eastwood","federico fellini","fincher",
+      "francis ford coppola","george lucas","gerwig","godard","greta gerwig","guillermo del toro","hitchcock",
+      "ingmar bergman","iñárritu","james cameron","jane campion","jean luc godard","jim jarmusch","john ford",
+      "john huston","jordan peele","kathryn bigelow","kubrick","lars von trier","linklater","luc besson","martin scorsese",
+      "michael bay","michael mann","miyazaki","nolan","oliver stone","orson welles","pablo larraín","park chan-wook",
+      "paul thomas anderson","pedro almodóvar","peter jackson","peter weir","quentin tarantino","ridley scott",
+      "robert rodriguez","ron howard","roman polanski","sam mendes","sam raimi","scorsese","sergio leone","sofia coppola",
+      "spielberg","stanley kubrick","steven soderbergh","steven spielberg","tarantino","taika waititi","terry gilliam",
+      "tim burton","truffaut","villeneuve","von trier","wes anderson","william wyler","wong kar-wai","woody allen",
+      "yorgos lanthimos","zack snyder","zhang yimou"
+    ],
+    "director/a": [
+      "akira kurosawa","alejandro amenábar","alfonso cuarón","alfred hitchcock","ang lee","baz luhrmann","bayona",
+      "christopher nolan","clint eastwood","damien chazelle","david fincher","david lynch","del toro","denis villeneuve",
+      "federico fellini","francis ford coppola","george lucas","greta gerwig","guillermo del toro","hitchcock",
+      "ingmar bergman","iñárritu","james cameron","jane campion","jordan peele","kathryn bigelow","kubrick",
+      "lars von trier","luc besson","martin scorsese","miyazaki","nolan","oliver stone","pablo larraín","paul thomas anderson",
+      "pedro almodóvar","peter jackson","quentin tarantino","ridley scott","sam mendes","scorsese","sergio leone",
+      "sofia coppola","spielberg","stanley kubrick","steven spielberg","tarantino","taika waititi","tim burton",
+      "truffaut","villeneuve","wes anderson","woody allen","yorgos lanthimos","zhang yimou"
     ],
     personaje: [
-      "aladdin","alf","ariel","aragorn","arthur","atreyu","bambi","barbie","batman","bart simpson","bilbo",
-      "buzz lightyear","capitán américa","catwoman","chewbacca","chucky","cinderella","conan","darth vader",
-      "darius","deadpool","don quijote","drácula","dora","dumbledore","eddard stark","edward","el grinch",
-      "elsa","elliot","emperador","enola holmes","ethan hunt","falcón","fiona","forrest gump","frankestein",
-      "freddy krueger","frodo","gandalf","gargamel","garfield","gohan","goku","gollum","hanibal","han solo",
-      "harry","harry potter","hermione","hércules","hulk","iron man","james bond","jason","john wick","joker",
-      "joaquín","kakashi","king kong","kung fu panda","laharl","leon","loki","luigi","luke skywalker","mario",
-      "merlín","michael myers","mickey","monstruo","mowgli","mufasa","murcielago","nemo","neo","obi-wan",
-      "obélix","odd","peter pan","pikachu","pinocho","piñera","pluto","popeye","quasimodo","ramos",
-      "rambo","rapunzel","ratoncito pérez","robin hood","rocky","sadako","sasuke","scarface","scooby","seven",
-      "shrek","simba","skywalker","spiderman","stewie","superman","tarzán","terminator","toad","tonto","totoro",
-      "ulises","uma","umbridge","vincent","virgilio","wally","wednesday","willy wonka","wolverine","woody",
-      "xena","yoda","zafira","zorro"
+      "aladdin","albus dumbledore","alf","ariel","aragorn","arthur","atreyu","bambi","barbie","batman","bart simpson",
+      "bilbo","buzz lightyear","capitán américa","catwoman","chewbacca","chucky","cinderella","conan","darth vader",
+      "deadpool","don quijote","dora","dr house","drácula","ed stark","el grinch","elsa","elliot","emperador palpatine",
+      "ethan hunt","fiona","forrest gump","frankenstein","freddy krueger","frodo","gandalf","gargamel","garfield",
+      "gohan","goku","gollum","han solo","hannibal","harry potter","hermione","hércules","hulk","indiana jones",
+      "iron man","james bond","jason","jessica rabbit","john snow","john wick","joker","kakashi","king kong",
+      "kung fu panda","leon","loki","luigi","luke skywalker","mario","merlín","michael myers","mickey mouse","mowgli",
+      "mufasa","nemo","neo","obi-wan kenobi","obélix","peter pan","pikachu","pinocho","pluto","popeye","quasimodo",
+      "rambo","rapunzel","robin hood","rocky","sasuke","scarface","scooby","seven","shrek","simba","spiderman",
+      "spock","stewie","superman","tarzán","terminator","totoro","ulises","umbridge","vincent vega","wally",
+      "wednesday","willy wonka","wolverine","woody","xena","yoda","zorro"
     ],
     "género": [
-      "acción","animación","aventura","autobiográfico","bélico","biografía","biopic","ciencia ficción",
-      "comedia","comedia romántica","crimen","cyberpunk","deporte","detectives","distopía","documental",
-      "drama","éepico","épico","erótico","estilo musical","experimental","fantasía","ficción","film noir",
-      "gore","gótico","gangster","historia","horror","independiente","infantil","jovial","juvenil","kuroshitsuji",
-      "legal","melodrama","misterio","musical","negro","neo-noir","odisea","pixar","policial","policíaco",
-      "religioso","romance","road movie","ruralista","sátira","sci-fi","slasher","superhéroes","suspense",
-      "terror","thriller","ultra violento","vintage","western","wuxia","xenofobia","zombie"
+      "acción","animación","aventura","balada","bélico","biografía","biopic","blues","bossa nova","bolero","bachata",
+      "ciencia ficción","clásica","comedia","comedia romántica","corrido","country","crimen","cumbia","cyberpunk",
+      "dance","deporte","disco","documental","drama","electrónica","épico","erótico","experimental","fantasía",
+      "film noir","flamenco","folk","funk","gospel","gótico","grunge","hard rock","heavy metal","hip hop","house",
+      "horror","independiente","indie","infantil","jazz","k-pop","melodrama","merengue","metal","misterio","musical",
+      "ópera","pop","punk","rap","reggae","reggaetón","road movie","rock","rock and roll","romance","romántica",
+      "salsa","samba","soul","slasher","superhéroes","suspense","tango","techno","terror","thriller","trap","vallenato",
+      "western","zombie"
     ],
-    "canción": [
-      "amor","abrázame","ante el espejo","baby blue","bohemian rhapsody","born free","cherry bomb","city of stars",
-      "danza kuduro","despacito","el cóndor pasa","el rey","eye of the tiger","flashdance","footloose",
-      "ghost","gloria","hakuna matata","heart of glass","heart will go on","hotel california","i will always love you",
-      "imagine","james bond theme","jailhouse rock","kiss from a rose","lady marmalade","la bamba","la vie en rose",
-      "let it go","let it be","life is a highway","living la vida loca","mamma mia","my heart will go on","new york new york",
-      "ocean man","old town road","over the rainbow","piensa en mí","purple rain","quédate","raindrops",
-      "remember me","rock around the clock","ruta 66","sing","stayin alive","summer nights","take my breath away",
-      "the time of my life","unchained melody","under the sea","viento","viva la vida","walking on sunshine",
-      "writings on the wall","you are my sunshine","you raise me up","yesterday","zorba"
+    "canción de peli": [
+      "a whole new world","ave maria","born free","cherry bomb","circle of life","city of stars","danger zone",
+      "danza kuduro","el cóndor pasa","eye of the tiger","fight song","flashdance","footloose","ghost","glory",
+      "hakuna matata","hallelujah","heart of glass","hotel california","i will always love you","imagine","jailhouse rock",
+      "kiss from a rose","la bamba","la vie en rose","let it go","life is a highway","living la vida loca","mamma mia",
+      "moon river","my heart will go on","new york new york","ocean eyes","old town road","over the rainbow","piano man",
+      "purple rain","raindrops","remember me","rock around the clock","shallow","singin in the rain","stayin alive",
+      "summer nights","take my breath away","the time of my life","time to say goodbye","unchained melody","under the sea",
+      "viva la vida","walking on sunshine","writings on the wall","yesterday","you are my sunshine","you raise me up",
+      "zorba"
     ],
 
     // ── Food pack ────────────────────────────────────────────────────────────
     plato: [
-      "albóndigas","arepa","arroz","asado","barbacoa","brochetas","burrito","calzone","canelones","carbonara",
-      "carpaccio","cebiche","ceviche","chilaquiles","chop suey","cocido","crepas","croquetas","curry","empanada",
-      "ensalada","fabada","fajitas","feijoada","filete","fish and chips","focaccia","fondue","gazpacho","goulash",
-      "guisado","gumbo","hamburguesa","hot dog","jambalaya","kebab","lasaña","macarrones","milanesa","moussaka",
-      "nachos","ñoquis","paella","pad thai","pasta","pizza","pollo asado","potaje","puchero","quesadilla","quiche",
-      "raviolis","risotto","rollitos","sancocho","sashimi","sopa","stroganoff","sushi","taco","tagine","tamal",
-      "tartar","tempura","tortilla","tortelini","tortelloni","tournedos","udon","vichyssoise","wonton","xinxim",
-      "yakisoba","yucca","zarzuela"
+      "ajiaco","albóndigas","arepa","arroz a la cubana","arroz chaufa","asado","barbacoa","biryani","bobotie",
+      "borscht","bouillabaisse","brochetas","burrito","cabrito","calzone","callos","canelones","carbonara",
+      "carpaccio","cassoulet","cebiche","ceviche","chiles en nogada","chilaquiles","chimichanga","chop suey",
+      "chorizo","chuleta","churrasco","cocido","cochinita pibil","couscous","crepas","croquetas","curry",
+      "dim sum","empanada","ensalada","ensaladilla","escalope","fabada","fajitas","falafel","feijoada","filete",
+      "fish and chips","focaccia","fondue","gazpacho","goulash","guacamole","guisado","gumbo","hamburguesa",
+      "hot dog","jambalaya","jamón ibérico","kebab","kimchi","koftas","lasaña","leche asada","lentejas",
+      "linguine","macarrones","mariscos","milanesa","moussaka","nachos","ñoquis","ossobuco","paella","pad thai",
+      "pasta","pastel de papa","pastrami","pho","pisto","pizza","pollo al horno","pollo asado","pozole","potaje",
+      "puchero","quesadilla","quiche","ratatouille","raviolis","risotto","rollitos primavera","sancocho","sashimi",
+      "shawarma","sopa","stroganoff","sushi","taco","tagine","tamal","tartar","tempura","teriyaki","tortilla",
+      "tortellini","udon","vichyssoise","wonton","xinxim","yakisoba","yakitori","zarzuela"
     ],
     ingrediente: [
-      "aceite","aceituna","ajo","albahaca","almendra","arroz","azúcar","bacalao","berenjena","carne",
-      "cebolla","champiñón","chorizo","cilantro","comino","cordero","crema","cúrcuma","dátil","ejote","escarola",
-      "espárrago","espinaca","fideos","frijol","garbanzo","gelatina","harina","hígado","huevo","jamón","jengibre",
-      "judía","kétchup","laurel","leche","lechuga","levadura","limón","maíz","mantequilla","manzana","menta","miel",
-      "nata","nuez","ñame","oliva","orégano","pan","papa","pepino","perejil","pescado","pimienta","piña","plátano",
-      "pollo","queso","quinoa","rábano","remolacha","romero","sal","salmón","salvia","sésamo","setas","tomate",
-      "tomillo","trigo","uva","vainilla","vinagre","wasabi","xantana","yogur","zanahoria","zumo"
+      "aceite","aceituna","achiote","ajo","albahaca","alcachofa","almendra","apio","arroz","atún","azúcar","bacalao",
+      "berenjena","brócoli","calabacín","calabaza","camarón","carne","cebolla","champiñón","chocolate","chorizo",
+      "cilantro","ciruela","coliflor","comino","cordero","crema","cúrcuma","dátil","ejote","escarola","espárrago",
+      "espinaca","fideos","frijol","garbanzo","gelatina","gengibre","harina","hígado","hongo","huevo","jamón",
+      "jengibre","judía","kétchup","laurel","leche","lechuga","lentejas","levadura","limón","maíz","mango",
+      "mantequilla","manzana","mariscos","mayonesa","melón","menta","miel","mostaza","nata","naranja","nuez",
+      "ñame","oliva","orégano","ostra","pan","papa","pepino","perejil","pescado","pimentón","pimienta","pimiento",
+      "piña","plátano","pollo","queso","quinoa","rábano","remolacha","romero","sal","salchicha","salmón","salsa",
+      "salvia","sandía","sésamo","setas","tomate","tomillo","trigo","uva","vainilla","vinagre","wasabi","yogur",
+      "yuca","zanahoria","zumo"
     ],
     restaurante: [
-      "abuela","aroi","barbacoa","bistro","brasería","cafetería","cantina","casa lola","casa pepe","casserole",
-      "chez","churrasquería","churrería","comedor","cocina","crepería","cervecería","deli","delicatessen",
-      "dominos","el corral","el portal","fonda","frankfurt","gastrobar","grill","hamburguesería","heladería",
-      "ikea","inn","izakaya","japonés","jardín","kebab","kfc","la bodeguita","la mafia","la pizzería","la trattoria",
-      "marisquería","mcdonalds","mexicano","mesón","negroni","oasis","osteria","palace","paladar","palmarés",
-      "panadería","parrilla","pizza hut","pizzería","posada","quiosco","restaurante","ribs","ristorante","sake",
-      "starbucks","subway","sushi bar","tapas","taquería","taberna","tasca","tasquinha","trattoria","udon",
-      "venta","vinería","wendys","yatai","zaida"
+      "asador","bar","bistro","brasería","burger king","cafetería","cantina","cervecería","churrasquería","churrería",
+      "creperia","crêperie","deli","delicatessen","dominos","el corte inglés","fonda","frankfurt","gastrobar","grill",
+      "hamburguesería","heladería","ikea","inn","izakaya","japonés","kebab","kfc","la mafia","la tagliatella",
+      "marisquería","mcdonalds","mesón","oasis","osteria","palace","panadería","parrilla","pastelería","pizza hut",
+      "pizzería","posada","quiosco","restaurante","ristorante","starbucks","subway","sushi bar","taberna","tapas",
+      "taquería","tasca","telepizza","trattoria","udon","venta","vinería","wendys","yatai"
     ],
     postre: [
-      "alfajor","arroz con leche","babá","baklava","brazo de gitano","brownie","bizcocho","buñuelo","cake",
-      "calabaza","cannoli","caramelos","carrot cake","cassata","cheesecake","chocolate","chocotorta","churros",
-      "compota","copa","crema catalana","creme brulee","crepa","crocante","cupcake","donut","dulce de leche",
-      "éclair","eclair","empanadilla","ensaimada","filloas","flan","fondant","frappé","fresas","fruta","galletas",
-      "gelatina","granizado","helado","helado","kremlin","leche frita","lemon pie","macarons","magdalena","mantecado",
-      "marquesa","mazapán","membrillo","merengue","milhojas","mochi","mousse","muffin","natilla","ñoño","panqueque",
-      "panettone","parfait","pastel","pastel de queso","pasta frola","peras al vino","picarón","pie","pionono",
-      "polvorón","ponche","pretzel","profiteroles","pudín","queque","quesillo","rocambole","rosquilla","sorbete",
-      "soufflé","strudel","sundae","tarta","tartaleta","tiramisú","torta","trifle","turrón","tortita","umble",
-      "vainilla","wafer","waffle","yogur","zabaglione"
+      "alfajor","arroz con leche","babá","baklava","brazo de gitano","bizcocho","brownie","buñuelo","cake","cannoli",
+      "carrot cake","cassata","charlota","cheesecake","chocolate","chocotorta","churros","compota","crema catalana",
+      "creme brulee","crepa","cupcake","donut","dulce de leche","éclair","empanadilla","ensaimada","filloas","flan",
+      "fondue","frappé","fresas con nata","galletas","gelatina","granizado","helado","leche asada","leche frita",
+      "lemon pie","macarons","magdalena","mantecado","marquesa","mazapán","membrillo","merengue","milhojas","mochi",
+      "mousse","muffin","natilla","palmera","panettone","panqueque","parfait","pastel","pastel de queso","pasta frola",
+      "peras al vino","picarón","pie","pionono","polvorón","ponche","profiteroles","pudín","quesada","quesadilla",
+      "quesillo","rosquilla","scones","sorbete","soufflé","strudel","sundae","tarta","tartaleta","tarta tatin",
+      "tiramisú","torta","trifle","turrón","tortita","vainilla","waffle","yogur","zabaglione"
     ],
     bebida: [
-      "agua","agua mineral","agua tónica","aguardiente","amaretto","aperol","batido","bebida","bourbon","brandy",
-      "cachaça","café","caipiriña","calimocho","capuccino","cava","cerveza","champagne","chicha","chocolate",
-      "cidra","cola","cóctel","coñac","cortado","crema","daiquiri","destilado","ginebra","granadina","guarapo",
-      "hidromiel","hidromel","horchata","infusión","jugo","jaibol","kalimotxo","kombucha","leche","licor",
-      "limonada","macchiato","manzanilla","margarita","martini","matcha","mezcal","mojito","moscatel","néctar",
-      "ouzo","pacharán","pisco","poncha","ponche","ron","sake","sangría","sidra","sirope","smoothie","soda",
-      "té","tequila","ti punch","tinto de verano","tónica","vermouth","vino","vodka","whisky","yerba mate",
-      "yogur","zumo"
+      "agua","agua mineral","agua tónica","aguardiente","amaretto","anís","aperol","batido","bourbon","brandy",
+      "cachaça","café","cafe con leche","caipirinha","calimocho","capuccino","cava","cerveza","champagne","chicha",
+      "chocolate","cidra","clara","cola","cóctel","coñac","cortado","cuba libre","daiquiri","fanta","ginebra",
+      "granadina","gin tonic","guarapo","horchata","hidromiel","infusión","jugo","kalimotxo","kombucha","leche",
+      "licor","limonada","macchiato","mahou","manzanilla","margarita","martini","matcha","mezcal","mojito",
+      "moscatel","néctar","oporto","ouzo","pacharán","pepsi","pisco","poncha","ponche","ron","sake","sangría",
+      "sidra","smoothie","soda","sprite","té","tequila","tinto de verano","tónica","vermouth","vino","vodka",
+      "whisky","yerba mate","zumo"
     ],
     especia: [
-      "ajedrea","ajenuz","ajo","ajowan","albahaca","alcaravea","amapola","anís","azafrán","azúcar","baya",
-      "bergamota","cacao","cardamomo","canela","cebollino","cilantro","clavo","cominos","cúrcuma","curry","damasco",
-      "enebro","eneldo","epazote","estragón","fenogreco","frutos rojos","galanga","garam masala","gengibre",
-      "hierbabuena","hierbas finas","hinojo","hojas de laurel","hojas de tilo","jengibre","kabsa","kafir lima","laurel",
-      "lavanda","lemongrass","limón","macis","mejorana","menta","mostaza","muskmelon","nuez moscada","ñoño","orégano",
-      "paprika","perejil","perilla","pimienta","pimienta de cayena","pimentón","piparra","pizza","poro","quinoto",
-      "ras el hanout","romero","rosa mosqueta","sal","salvia","sasafrás","sazón","sésamo","sumac","tomillo","tomato",
-      "umble","vainilla","wasabi","ximenia","yuzu","zumaque"
+      "ajedrea","ajo","ajonjolí","albahaca","alcaravea","anís","azafrán","cardamomo","canela","cebollino","cilantro",
+      "clavo","cominos","cúrcuma","curry","enebro","eneldo","epazote","estragón","fenogreco","galanga","garam masala",
+      "guindilla","hierbabuena","hierbas finas","hinojo","jengibre","laurel","lavanda","lemongrass","macis","mejorana",
+      "menta","mostaza","nuez moscada","orégano","paprika","perejil","perifollo","pimentón","pimienta","pimienta blanca",
+      "pimienta de cayena","pimienta negra","pimienta rosa","ras el hanout","romero","sal","salvia","sumac","tomillo",
+      "vainilla","wasabi","yuzu","zumaque"
     ],
     "cocina del mundo": [
-      "africana","alemana","americana","andaluza","arabe","argentina","asiática","austriaca","belga","brasileña",
-      "británica","cajún","canadiense","caribeña","catalana","central","chilena","china","colombiana","coreana",
-      "criolla","cubana","danesa","ecuatoriana","egipcia","escandinava","escocesa","española","etíope","filipina",
-      "francesa","galesa","gallega","griega","guatemalteca","hawaiana","holandesa","húngara","india","indonesia",
-      "inglesa","irlandesa","israelí","italiana","jamaicana","japonesa","keniata","libanesa","macedonia","malaya",
-      "marroquí","mediterránea","mexicana","mongol","moruna","noruega","nórdica","oaxaqueña","oriental","panameña",
-      "persa","peruana","polaca","portuguesa","quebequense","rumana","rusa","salvadoreña","sefardí","siciliana",
-      "siria","suiza","tailandesa","taiwanesa","texano","turca","tunecina","ucraniana","uruguaya","vasca",
-      "venezolana","vietnamita","yucateca","zambiana"
+      "africana","alemana","americana","andaluza","árabe","argentina","asiática","australiana","austriaca","belga",
+      "boliviana","brasileña","británica","búlgara","cajún","canadiense","caribeña","catalana","chilena","china",
+      "colombiana","coreana","criolla","cubana","danesa","dominicana","ecuatoriana","egipcia","escandinava","escocesa",
+      "española","etíope","filipina","francesa","gallega","griega","guatemalteca","hawaiana","holandesa","húngara",
+      "india","indonesia","inglesa","irlandesa","israelí","italiana","jamaicana","japonesa","keniana","libanesa",
+      "malaya","marroquí","mediterránea","mexicana","mongol","nicaragüense","noruega","nórdica","oaxaqueña","oriental",
+      "panameña","paraguaya","persa","peruana","polaca","portuguesa","puertorriqueña","rumana","rusa","salvadoreña",
+      "siciliana","siria","sueca","suiza","tailandesa","taiwanesa","tunecina","turca","ucraniana","uruguaya","vasca",
+      "venezolana","vietnamita","yucateca"
     ],
 
     // ── Music pack ───────────────────────────────────────────────────────────
     artista: [
-      "abba","adele","alanis","alejandro sanz","alicia keys","amaia","ana belén","arctic monkeys","ariana grande",
-      "armin van buuren","arnaldo antunes","aterciopelados","aviation","baby","bad bunny","beatles","beyoncé",
-      "billie eilish","bizarrap","björk","bon jovi","britney spears","bruno mars","calvin harris","camilo",
-      "carlos vives","celine dion","chayanne","chayanne","chris brown","christian nodal","coldplay","coque",
-      "daft punk","daddy yankee","david bisbal","david bowie","david guetta","dia","drake","dua lipa","ed sheeran",
-      "eminem","ella fitzgerald","enrique iglesias","extremoduro","feid","fito páez","frank sinatra","gloria estefan",
-      "guns n roses","green day","hozier","iron maiden","j balvin","jack white","james blunt","jay-z","jennifer lopez",
-      "jesse y joy","john mayer","jonas brothers","julio iglesias","justin bieber","kanye west","karol g","katy perry",
-      "kendrick lamar","ke$ha","king","la oreja de van gogh","lady gaga","lana del rey","laura pausini","lily allen",
-      "linkin park","luis miguel","luis fonsi","luis r conriquez","madonna","maluma","mana","manuel turizo","marc anthony",
-      "miley cyrus","muse","natanael cano","ne-yo","nirvana","oasis","olivia rodrigo","one direction","opera","peso pluma",
-      "phil collins","pharrell williams","pink floyd","piso 21","pitbull","quasar","queen","ricky martin","rihanna",
-      "rolling stones","rosalía","rubén blades","sabina","selena","selena gomez","shakira","shania twain","shawn mendes",
-      "soda stereo","spice girls","sting","sugarhill","supersub","taylor swift","the cure","the weeknd","timberlake",
-      "tigres del norte","u2","umbral","usher","vetusta morla","vicente fernández","whitney houston","wilfrido vargas",
-      "xavi","yandel","ye","zoe"
+      "abba","adele","aitana","alejandro fernández","alejandro sanz","alex ubago","alicia keys","amaia","ana belén",
+      "ana torroja","andrea bocelli","ariana grande","aventura","bad bunny","becky g","beyoncé","billie eilish",
+      "bizarrap","björk","bruno mars","calvin harris","camila","camilo","carlos santana","carlos vives","celine dion",
+      "charlie puth","chayanne","chris brown","christian nodal","coldplay","cole sprouse","daddy yankee","david bisbal",
+      "david bowie","david guetta","drake","dua lipa","ed sheeran","el canto del loco","eminem","enrique iglesias",
+      "estopa","feid","fito páez","frank sinatra","gloria estefan","jay-z","j balvin","james blunt","jennifer lopez",
+      "jesse y joy","john legend","johnny cash","john mayer","julio iglesias","justin bieber","justin timberlake",
+      "kanye west","karol g","katy perry","kendrick lamar","kygo","la oreja de van gogh","lady gaga","lana del rey",
+      "laura pausini","leonel garcía","lil nas x","liam payne","luis fonsi","luis miguel","madonna","maluma","manu chao",
+      "mango","manuel carrasco","manuel turizo","marc anthony","mariah carey","mary j blige","melendi","michael bublé",
+      "michael jackson","miley cyrus","mon laferte","morat","myke towers","natanael cano","ne-yo","nicki minaj",
+      "olivia rodrigo","one direction","ozuna","pablo alborán","peso pluma","pharrell williams","piso 21","pitbull",
+      "post malone","prince","prince royce","quevedo","raphael","reik","ricardo arjona","ricardo montaner","ricky martin",
+      "rihanna","robbie williams","rosa lópez","rosalía","rubén blades","sabina","sam smith","sandro","selena","selena gomez",
+      "shakira","shania twain","shawn mendes","sting","stevie wonder","sze","taylor swift","the weeknd","tiziano ferro",
+      "u2","usher","vetusta morla","vicente fernández","weeknd","whitney houston","willie colón","wisin","xavier",
+      "yandel","yatra","ye","zayn","zoe"
     ],
     canción: [
-      "abrázame","amor","amor eterno","baby","baby one more time","bailando","bohemian rhapsody","bring me to life",
-      "creep","con calma","callaita","despacito","don't stop believin","ella","faded","feel good inc","frente a frente",
-      "gangnam style","good 4 u","happy","hey jude","hotel california","hello","imagine","i will always love you",
-      "japón","jingle bells","kiss me","kiss the rain","la bamba","la mordidita","let it be","la canción","la flaca",
-      "macarena","mil veces","mi gente","mojito","montero","mr brightside","never gonna give you up","no me ames",
-      "ocean eyes","old town road","ojos así","payphone","poker face","provenza","quédate","rolling in the deep",
-      "rosa pastel","saoko","señorita","shake it off","shape of you","shake","ti amo","take on me","thriller",
-      "thriller","tusa","unchained melody","umbrella","viva la vida","vivir mi vida","vente pa ca","waiting","wonderwall",
-      "x gon give it","yellow","y volveré","yesterday","zombie"
+      "abrázame","amor eterno","amorfoda","baby one more time","bad romance","bailando","bohemian rhapsody",
+      "bring me to life","callaita","con calma","creep","danza kuduro","despacito","dynamite","el cóndor pasa",
+      "ella","faded","feel good inc","gangnam style","good 4 u","happy","havana","hey jude","hello","hotel california",
+      "i will always love you","imagine","jingle bells","kiss me","la bamba","la flaca","la la la","la mordidita",
+      "la vie en rose","let it be","let it go","macarena","mi gente","mil veces","montero","mr brightside",
+      "never gonna give you up","no me ames","ocean eyes","ojos así","old town road","payphone","poker face","provenza",
+      "purple rain","quédate","rolling in the deep","rosa pastel","saoko","señorita","shake it off","shape of you",
+      "single ladies","smells like teen spirit","stay","stayin alive","sweet caroline","take on me","tequila","ti amo",
+      "thriller","tusa","umbrella","unchained melody","uptown funk","vente pa ca","viva la vida","vivir mi vida",
+      "wonderwall","yesterday","yellow","zombie"
     ],
     banda: [
-      "abba","ac/dc","aerosmith","amaral","arctic monkeys","arcade fire","aterciopelados","auryn","bandalos chinos",
-      "barón rojo","beatles","beach boys","beirut","ben folds","blink 182","blur","bon jovi","cafe tacuba","cafe tacvba",
-      "carajo","cars","chile","chic","coldplay","creedence","dover","duran duran","el canto del loco","enanitos verdes",
-      "estopa","extremoduro","fito y fitipaldis","fall out boy","foo fighters","fugees","green day","gorillaz",
-      "guns n roses","heroes del silencio","imagine dragons","incubus","iron maiden","jonas brothers","jefferson airplane",
-      "kasabian","kings of leon","la oreja de van gogh","la pegatina","led zeppelin","leon de greiff","linkin park",
-      "los caligaris","los cafres","los enanitos verdes","los fabulosos cadillacs","los lonely boys","love of lesbian",
-      "manú chao","mecano","metallica","muse","my chemical romance","nirvana","no doubt","nine inch nails","oasis",
-      "oingo boingo","ocean colour scene","one direction","osmosis","panteón rococó","panic at the disco","pearl jam",
-      "pink floyd","placebo","primal scream","queen","queens of the stone age","rammstein","ramones","rata blanca",
-      "red hot chili peppers","r.e.m.","ride","rolling stones","scorpions","sex pistols","shakira","silvestre dangond",
-      "siniestro total","skid row","sodastereo","spice girls","stone temple pilots","supertramp","sum 41","tame impala",
-      "the cure","the killers","the smiths","the strokes","the weather girls","the who","u2","ultraje a rigor","vetusta morla",
-      "vampire weekend","vetusta morla","weezer","wallflowers","white stripes","x japan","yes","zoé","zz top"
+      "ac/dc","aerosmith","amaral","arcade fire","arctic monkeys","aterciopelados","barón rojo","beach boys","beatles",
+      "blink 182","blur","bon jovi","cafe tacuba","carajo","caifanes","coldplay","creedence","dover","duran duran",
+      "eagles","enanitos verdes","extremoduro","fall out boy","fito y fitipaldis","foo fighters","green day","gorillaz",
+      "guns n roses","heroes del silencio","imagine dragons","iron maiden","jonas brothers","kasabian","kings of leon",
+      "kiss","la oreja de van gogh","la pegatina","led zeppelin","linkin park","los fabulosos cadillacs","love of lesbian",
+      "maná","maroon 5","mecano","metallica","muse","my chemical romance","nirvana","no doubt","nine inch nails",
+      "oasis","one direction","panic at the disco","pearl jam","pink floyd","placebo","queen","r.e.m.","radiohead",
+      "rammstein","ramones","rata blanca","red hot chili peppers","rolling stones","scorpions","sex pistols",
+      "siniestro total","soda stereo","spice girls","sum 41","supertramp","tame impala","the cranberries","the cure",
+      "the killers","the smiths","the strokes","the who","u2","van halen","weezer","white stripes","yes","zoé","zz top"
     ],
     instrumento: [
-      "acordeón","acústica","arpa","armónica","banjo","bajo","balalaika","bandoneón","batería","bombo",
-      "campana","caja","cajón","castañuelas","cello","charango","clarinete","clavecín","contrabajo","corneta",
-      "cuatro","didgeridoo","didjeridoo","djembé","dulcimer","duduk","ervecería","flauta","flauta dulce","flauta traversa",
-      "fagot","gaita","guitarra","glockenspiel","güira","guitarrón","hammond","harmónica","harpa","instrumento",
-      "jarana","kazoo","kalimba","koto","laúd","lira","mandolina","maracas","marimba","melódica","metalófono",
-      "nai","obra","oboe","ocarina","octavín","órgano","órgano","pandereta","pandeiro","percusión","piano",
-      "platillos","quena","quitarra","requinto","rondador","saxofón","sintetizador","sitar","tabla","tambor",
-      "tambora","tamboril","timbal","triangle","trombón","trompeta","tuba","ukelele","viola","violín","violoncelo",
-      "vihuela","wah-wah","xilófono","yangqin","zampoña"
+      "acordeón","arpa","armónica","banjo","bajo","balalaika","bandoneón","batería","bombo","caja","cajón","campana",
+      "castañuelas","cello","charango","clarinete","clavecín","contrabajo","corneta","cuatro","didgeridoo","djembé",
+      "dulcimer","duduk","fagot","flauta","flauta dulce","flauta traversa","gaita","glockenspiel","guitarra",
+      "guitarra eléctrica","guitarrón","güira","hammond","jarana","kalimba","kazoo","koto","laúd","lira","mandolina",
+      "maracas","marimba","melódica","metalófono","oboe","ocarina","órgano","pandereta","pandeiro","piano","platillos",
+      "quena","requinto","rondador","saxofón","sintetizador","sitar","tabla","tambor","tambora","tamboril","timbal",
+      "triángulo","trombón","trompeta","tuba","ukelele","vihuela","viola","violín","violoncelo","xilófono","zampoña"
     ],
     álbum: [
-      "abbey road","achtung baby","after hours","aladdin sane","american idiot","amorfoda","appetite for destruction",
-      "back in black","bad","bambino","be","blackout","blonde","born to die","born to run","boys for pele",
-      "californication","calypso","chinatown","circus","crazy","damn","dangerous","dark side of the moon",
-      "death magnetic","dejavu","divide","done by the forces of nature","dookie","dr feelgood","dummy","el ataque","el amor",
-      "el dorado","el mal querer","el viaje","encore","fever to tell","four","futura","good kid mad city","graceland",
-      "hot fuss","heartstrings","horror show","houses of the holy","hounds of love","hybrid theory","i never loved a man",
-      "in utero","it takes a nation","japón","joshua tree","kid a","kind of blue","la quinta estación","ladies and gentlemen",
-      "led zeppelin iv","lemonade","let it be","made in lagos","master of puppets","mañana es para siempre","michael",
-      "miles","minor threat","montero","my beautiful dark twisted fantasy","nevermind","never","noise","nothing else matters",
-      "officium","ok computer","once","oro","paranoid android","pet sounds","persona","piano sonata","plastic ono band",
-      "purpose","quando quando","rage against the machine","random access memories","ready to die","red","reload","renaissance",
-      "revolver","rumours","saturday night fever","scorpions","sgt peppers","sticky fingers","superunknown","synchronicity",
-      "tapestry","texas","thriller","tommy","tracy chapman","unplugged","unknown pleasures","veneer","viva la vida",
-      "white album","wish you were here","yeezus","yellow submarine","yo","zooropa"
+      "abbey road","achtung baby","after hours","aladdin sane","american idiot","appetite for destruction","back in black",
+      "bad","be","blonde","blood on the tracks","born to die","born to run","californication","crazy","damn","dangerous",
+      "dark side of the moon","death magnetic","divide","dookie","dr feelgood","dummy","el dorado","el mal querer",
+      "encore","exodus","futura","good kid mad city","graceland","hotel california","hot fuss","houses of the holy",
+      "hounds of love","hybrid theory","in utero","jagged little pill","joshua tree","kid a","kind of blue","lemonade",
+      "let it be","life","master of puppets","my beautiful dark twisted fantasy","nevermind","ok computer","oro",
+      "pet sounds","plastic ono band","purpose","random access memories","ready to die","red","renaissance","revolver",
+      "rumours","saturday night fever","scorpions","sgt peppers","sticky fingers","superunknown","synchronicity",
+      "tapestry","thriller","tommy","unplugged","unknown pleasures","viva la vida","white album","wish you were here",
+      "yeezus","yellow submarine","zooropa"
     ],
     "sello": [
-      "agencia","alfa","arista","atlantic","backlot","bmg","blue note","capitol","cbs","columbia","decca",
-      "def jam","disney music","dreamworks","emi","epic","fonomusic","gamma","geffen","grand royal","hispavox",
-      "interscope","island","kontor","lava","love records","mercury","metalblade","ministry of sound","mute",
-      "nuclear blast","octobre","odeon","one music","panda","parlophone","pias","polydor","polygram","quality control",
-      "rca","reprise","rondonex","roadrunner","rounder","sire","sony","spotify","sub pop","sumerian","tempo",
-      "tk","trojan","umg","universal","valle","vertigo","virgin","walt disney","warner","wea","windham","xl",
-      "young money","zomba"
+      "arista","atlantic","blue note","bmg","capitol","cbs","columbia","decca","def jam","emi","epic","fonomusic",
+      "geffen","hispavox","interscope","island","mercury","mute","nuclear blast","octobre","odeon","parlophone","pias",
+      "polydor","polygram","rca","reprise","roadrunner","sire","sony","sub pop","umg","universal","vertigo","virgin",
+      "walt disney","warner","xl recordings","young money","zomba"
+    ],
+    "sello discográfico": [
+      "arista","atlantic","blue note","bmg","capitol","cbs","columbia","decca","def jam","emi","epic","fonomusic",
+      "geffen","hispavox","interscope","island","mercury","mute","nuclear blast","octobre","odeon","parlophone","pias",
+      "polydor","polygram","rca","reprise","roadrunner","sire","sony","sub pop","umg","universal","vertigo","virgin",
+      "walt disney","warner","xl recordings","young money","zomba"
     ],
 
     // ── Science pack ─────────────────────────────────────────────────────────
@@ -675,17 +739,16 @@ const DICTIONARY: Record<string, Record<string, string[]>> = {
       "adam smith","alan turing","albert einstein","aldrin","alessandro volta","alexander fleming","ampere","anderson",
       "antonio meucci","aristóteles","arquímedes","avogadro","bardeen","bell","bohr","boltzmann","boyle","cajal",
       "carl sagan","cavendish","celsius","chadwick","chien-shiung wu","copérnico","crick","curie","da vinci","dalton",
-      "darwin","darwin","de broglie","descartes","dirac","edison","ehrlich","einstein","euler","faraday","feynman",
+      "darwin","de broglie","descartes","dirac","edison","ehrlich","einstein","euler","faraday","feynman",
       "fermi","fleming","franklin","freud","galileo","galileo galilei","galvani","gauss","gell-mann","goeppert",
       "goodall","graham bell","hahn","halley","hawking","heisenberg","henry","hertz","higgs","hipócrates",
-      "hooke","hubble","huygens","isaac newton","jenner","jodrell","james watt","kelvin","kepler","kerckring",
-      "koch","lamarck","laplace","lavoisier","leakey","leeuwenhoek","leibniz","linneo","lord kelvin","lorentz",
-      "louis pasteur","lucretius","mach","margaret mead","marie curie","maxwell","maya angelou","meitner","mendel",
-      "mendeleyev","mendoza","michael faraday","mileva maric","milstein","morgan","morse","newton","nobel","ochoa",
-      "ohm","oppenheimer","pascal","pasteur","pavlov","planck","platón","poincaré","ptolomeo","pythagoras","pierre curie",
-      "ramón y cajal","raoult","redi","ritter","rontgen","russell","rutherford","sagan","schrodinger","semmelweis",
-      "tesla","tesla","tolstoi","torricelli","torricelli","ulises","umbral","vesalio","virchow","volta","von neumann",
-      "wallace","watson","watt","wegener","yates","yalow","young","zinc","zwicky"
+      "hooke","hubble","huygens","isaac newton","jenner","jodrell","james watt","kelvin","kepler","koch","lamarck",
+      "laplace","lavoisier","leakey","leeuwenhoek","leibniz","linneo","lord kelvin","lorentz","louis pasteur",
+      "mach","marie curie","maxwell","meitner","mendel","mendeleyev","michael faraday","mileva maric","milstein",
+      "morgan","morse","newton","nobel","ochoa","ohm","oppenheimer","pascal","pasteur","pavlov","planck","platón",
+      "poincaré","ptolomeo","pythagoras","pierre curie","ramón y cajal","raoult","redi","ritter","rontgen","russell",
+      "rutherford","sagan","schrodinger","semmelweis","tesla","torricelli","vesalio","virchow","volta","von neumann",
+      "wallace","watson","watt","wegener","yalow","young","zwicky"
     ],
     invento: [
       "abacus","aire acondicionado","airbag","alfabeto","ambulancia","anteojos","arado","arco","ascensor","aspirina",
@@ -703,13 +766,12 @@ const DICTIONARY: Record<string, Record<string, string[]>> = {
     ],
     "planeta": [
       "alpha centauri","altair","andrómeda","antares","arcturus","betelgeuse","callisto","calixto","capella",
-      "carmen","castor","ceres","cisne","cometa","constelación","copérnico","corona","cruz del sur","deimos","draco",
-      "edad","eridano","encélado","enana","encefalo","éride","eros","escorpio","estrella","europa","fobos","ganimedes",
-      "halley","hidra","híades","hyperion","io","júpiter","kepler","koropi","kuiper","la luna","la vía láctea","leo",
-      "luna","makemake","marte","mercurio","miranda","mira","mizar","neptuno","nube","oberón","océano","orión",
-      "osa mayor","osa menor","pegaso","pleiades","plutón","polaris","procyon","quaoar","rigel","saturno","sirius",
-      "sirio","sol","solaris","tauro","tierra","titán","triángulo","tritón","ulises","umbriel","urano","vega",
-      "venus","virgo","weddell","xena","yúgaro","zeta"
+      "castor","ceres","cisne","cometa","constelación","copérnico","corona","cruz del sur","deimos","draco",
+      "eridano","encélado","enana","éride","eros","escorpio","estrella","europa","fobos","ganimedes",
+      "halley","hidra","híades","hyperion","io","júpiter","kepler","kuiper","la luna","la vía láctea","leo",
+      "luna","makemake","marte","mercurio","miranda","mira","mizar","neptuno","nebulosa","oberón","orión",
+      "osa mayor","osa menor","pegaso","pléyades","plutón","polaris","procyon","quaoar","rigel","saturno","sirius",
+      "sirio","sol","tauro","tierra","titán","triángulo","tritón","umbriel","urano","vega","venus","virgo"
     ],
     enfermedad: [
       "alzheimer","amebiasis","amigdalitis","anemia","angina","ansiedad","apendicitis","artritis","asma","ataxia",
@@ -723,8 +785,7 @@ const DICTIONARY: Record<string, Record<string, string[]>> = {
       "neuralgia","obesidad","ojeras","onicomicosis","osteoporosis","otitis","paludismo","parálisis","parkinson",
       "paperas","pneumonía","poliomelitis","poliomielitis","psoriasis","queratoconjuntivitis","queratitis",
       "rabia","resfriado","rubéola","sarampión","sida","sífilis","tétanos","tifoidea","tifus","tos ferina",
-      "tuberculosis","tumor","úlcera","urticaria","varicela","viruela","vitíligo","wright","xeroftalmia","yactus",
-      "zika"
+      "tuberculosis","tumor","úlcera","urticaria","varicela","viruela","vitíligo","xeroftalmia","zika"
     ],
     "órgano": [
       "abdomen","apéndice","aorta","arteria","articulación","bazo","bíceps","boca","bronquios","cabeza","cerebro",
@@ -1251,17 +1312,6 @@ const OPEN_CATEGORIES = new Set([
   "prénom","prenom","lieu","objet","marque", // fr
 ]);
 
-// ─── Strict categories ────────────────────────────────────────────────────────
-// These are the only categories whose player answers must be in the dictionary.
-// Any other category (including all themed-pack categories) is lenient and
-// accepts any word ≥ 3 chars; their dictionaries exist primarily for the AI.
-const STRICT_CATEGORIES = new Set([
-  "animal","color","fruta",                // es
-  "animal","color","fruit",                // en
-  "animal","cor","fruta",                  // pt
-  "animal","couleur","fruit",              // fr
-]);
-
 // ─── Words that are NEVER valid STOP answers ──────────────────────────────────
 // Pure spatial/directional words that can never be a noun answer in any category.
 // Applied globally (including open categories) to block obvious non-answers.
@@ -1337,31 +1387,32 @@ function isWordValid(word: string, letter: string, category: string, language = 
   // (Min-2 is kept globally only for closed categories like Animal where "ñu" is valid.)
   if (OPEN_CATEGORIES.has(normCategory)) return normalizedWord.length >= 3;
 
-  const langDict = DICTIONARY[language] || DICTIONARY["es"];
-  const categoryWords = findCategoryWords(langDict, category);
+  // Strict mode: every other category requires the word to be in the dictionary.
+  // Try the player's language first, then fall back to Spanish (the canonical dict).
+  const primaryDict = DICTIONARY[language] || DICTIONARY["es"];
+  let categoryWords = findCategoryWords(primaryDict, category);
+  if (categoryWords.length === 0 && language !== "es") {
+    categoryWords = findCategoryWords(DICTIONARY["es"], category);
+  }
 
-  // No dictionary found for this category → accept any word ≥ 3 chars
+  // No dictionary at all → accept any word ≥ 3 chars (defensive fallback)
   if (categoryWords.length === 0) return normalizedWord.length >= 3;
 
-  // Check if word matches or is a variation of any dictionary word
-  const inDict = categoryWords.some(w => {
+  // Strict: word must match (or be a variation of) a dictionary entry.
+  return categoryWords.some(w => {
     const nw = normalizeWord(w);
     return nw === normalizedWord ||
       normalizedWord.startsWith(nw) ||   // e.g. "rosado" starts with "rosa" ✓
       nw.startsWith(normalizedWord);     // e.g. "ro" prefix of "rojo" ✓
   });
-  if (inDict) return true;
-
-  // Lenient fallback: only categories listed in STRICT_CATEGORIES (animal, color, fruta...)
-  // require strict dictionary membership. All other category dictionaries exist primarily
-  // so the AI has vocabulary; players can answer with any word ≥ 3 chars.
-  if (STRICT_CATEGORIES.has(normCategory)) return false;
-  return normalizedWord.length >= 3;
 }
 
 function getAiWord(letter: string, category: string, language = "es"): string {
   const langDict = DICTIONARY[language] || DICTIONARY["es"];
-  const categoryWords = findCategoryWords(langDict, category);
+  let categoryWords = findCategoryWords(langDict, category);
+  if (categoryWords.length === 0 && language !== "es") {
+    categoryWords = findCategoryWords(DICTIONARY["es"], category);
+  }
   const normalizedLetter = normalizeWord(letter);
 
   const matches = categoryWords.filter(w => normalizeWord(w).startsWith(normalizedLetter));
