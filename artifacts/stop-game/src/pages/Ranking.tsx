@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Layout } from "@/components/Layout";
 import { Card } from "@/components/ui";
 import { useGetLeaderboard, useGetPlayerStats } from "@workspace/api-client-react";
-import { Trophy, Users, UserPlus, UserCheck, Swords, Clock, Copy, Check, CalendarClock, Star, Flame } from "lucide-react";
+import { Trophy, Users, UserPlus, UserCheck, Swords, Clock, Copy, Check, CalendarClock, Star, Flame, Crown } from "lucide-react";
 import { usePlayer } from "@/hooks/use-player";
 import { motion } from "framer-motion";
 import { useT } from "@/i18n/useT";
@@ -514,6 +514,11 @@ export default function Ranking() {
                         {isOnline && !isMe && (
                           <span className="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full bg-green-400 border-2 border-[hsl(222_47%_11%)] shadow-[0_0_6px_#4ade80]" />
                         )}
+                        {(p as any).isPremium && !isMe && (
+                          <span className="absolute -bottom-1 -left-1 w-4 h-4 rounded-full flex items-center justify-center shadow" style={{ background: "linear-gradient(135deg, #f9a825, #f57c00)" }}>
+                            <Crown className="w-2.5 h-2.5 text-white" />
+                          </span>
+                        )}
                       </motion.div>
                       <div className="text-center">
                         <p className="font-black text-sm truncate max-w-[80px]">{p.playerName}</p>
@@ -572,7 +577,14 @@ export default function Ranking() {
                       {previewPlayer.playerName.charAt(0).toUpperCase()}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="font-black text-white text-lg truncate">{previewPlayer.playerName}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="font-black text-white text-lg truncate">{previewPlayer.playerName}</p>
+                        {(previewPlayer as any).isPremium && (
+                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-black flex-shrink-0" style={{ background: "rgba(249,168,37,0.2)", border: "1px solid rgba(249,168,37,0.4)", color: "#f9a825" }}>
+                            <Crown className="w-2.5 h-2.5" /> PRO
+                          </span>
+                        )}
+                      </div>
                       <p className="text-xs text-white/40 truncate">{(previewPlayer as any).title || "Jugador"}</p>
                     </div>
                     <button
@@ -666,6 +678,11 @@ export default function Ranking() {
                             </div>
                             {isOnline && (
                               <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-green-400 border-2 border-[hsl(222_47%_11%)] shadow-[0_0_4px_#4ade80]" />
+                            )}
+                            {(p as any).isPremium && (
+                              <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full flex items-center justify-center" style={{ background: "linear-gradient(135deg, #f9a825, #f57c00)" }}>
+                                <Crown className="w-2 h-2 text-white" />
+                              </span>
                             )}
                           </div>
                           <div className="min-w-0">

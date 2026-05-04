@@ -84,6 +84,7 @@ router.get("/scores", async (req, res) => {
       wins: p.wins,
       currentStreak: p.current_streak ?? 0,
       longestStreak: p.longest_streak ?? 0,
+      isPremium: p.is_premium ?? false,
       title: getTitle(i + 1),
       createdAt: p.created_at,
       updatedAt: p.updated_at,
@@ -211,13 +212,14 @@ router.get("/weekly", async (req, res) => {
       ps.player_name      AS "playerName",
       ps.avatar_color     AS "avatarColor",
       ps.current_streak   AS "currentStreak",
+      ps.is_premium       AS "isPremium",
       SUM(gh.score)       AS "totalScore",
       COUNT(*)            AS "gamesPlayed",
       SUM(CASE WHEN gh.won THEN 1 ELSE 0 END) AS "wins"
     FROM game_history gh
     LEFT JOIN player_scores ps ON gh.player_id = ps.player_id
     WHERE gh.created_at >= date_trunc('week', NOW() AT TIME ZONE 'UTC')
-    GROUP BY gh.player_id, ps.player_name, ps.avatar_color, ps.current_streak
+    GROUP BY gh.player_id, ps.player_name, ps.avatar_color, ps.current_streak, ps.is_premium
     ORDER BY SUM(gh.score) DESC
     LIMIT 100
   `);
@@ -230,6 +232,7 @@ router.get("/weekly", async (req, res) => {
     gamesPlayed:   Number(p.gamesPlayed ?? 0),
     wins:          Number(p.wins ?? 0),
     currentStreak: Number(p.currentStreak ?? 0),
+    isPremium:     p.isPremium ?? false,
     title:         getTitle(i + 1),
     rank:          i + 1,
   }));
@@ -251,13 +254,14 @@ router.get("/monthly", async (_req, res) => {
       ps.player_name      AS "playerName",
       ps.avatar_color     AS "avatarColor",
       ps.current_streak   AS "currentStreak",
+      ps.is_premium       AS "isPremium",
       SUM(gh.score)       AS "totalScore",
       COUNT(*)            AS "gamesPlayed",
       SUM(CASE WHEN gh.won THEN 1 ELSE 0 END) AS "wins"
     FROM game_history gh
     LEFT JOIN player_scores ps ON gh.player_id = ps.player_id
     WHERE gh.created_at >= date_trunc('month', NOW() AT TIME ZONE 'UTC')
-    GROUP BY gh.player_id, ps.player_name, ps.avatar_color, ps.current_streak
+    GROUP BY gh.player_id, ps.player_name, ps.avatar_color, ps.current_streak, ps.is_premium
     ORDER BY SUM(gh.score) DESC
     LIMIT 100
   `);
@@ -270,6 +274,7 @@ router.get("/monthly", async (_req, res) => {
     gamesPlayed:   Number(p.gamesPlayed ?? 0),
     wins:          Number(p.wins ?? 0),
     currentStreak: Number(p.currentStreak ?? 0),
+    isPremium:     p.isPremium ?? false,
     title:         getTitle(i + 1),
     rank:          i + 1,
   }));
