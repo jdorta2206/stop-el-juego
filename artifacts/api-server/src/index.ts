@@ -2,26 +2,7 @@ import { runMigrations } from "stripe-replit-sync";
 import { getStripeSync } from "./stripeClient";
 import app from "./app";
 import { startDailyCron } from "./lib/dailyCron";
-import { db } from "@workspace/db";
-import { playerScoresTable } from "@workspace/db";
-import { inArray } from "drizzle-orm";
-
-const PERMANENT_PREMIUM_IDS = [
-  "google_115341741312068082096",
-  "fb_10162175157238897",
-];
-
-async function ensurePermanentPremium() {
-  try {
-    await db
-      .update(playerScoresTable)
-      .set({ isPremium: true })
-      .where(inArray(playerScoresTable.playerId, PERMANENT_PREMIUM_IDS));
-    console.log(`[premium] Permanent premium enforced for ${PERMANENT_PREMIUM_IDS.length} accounts`);
-  } catch (err: any) {
-    console.error("[premium] Failed to enforce permanent premium:", err.message);
-  }
-}
+import { ensurePermanentPremium } from "./lib/permanentPremium";
 
 async function initStripe() {
   const databaseUrl = process.env["DATABASE_URL"];
