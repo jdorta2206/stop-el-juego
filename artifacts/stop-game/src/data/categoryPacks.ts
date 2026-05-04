@@ -152,3 +152,9 @@ export function getPackCategories(packId: string, lang: string): string[] {
   const key = (lang === "es" || lang === "en" || lang === "pt" || lang === "fr") ? lang : "es";
   return [...pack.categories[key]];
 }
+
+export function getSafePackId(packId: string, isPremium: boolean): string {
+  const pack = getPackById(packId);
+  if (pack.premium && !isPremium) return "classic";
+  return pack.id;
+}

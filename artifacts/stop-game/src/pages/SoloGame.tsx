@@ -6,7 +6,7 @@ import { Layout } from "@/components/Layout";
 import { Button, Card, Input, Progress } from "@/components/ui";
 import { Roulette } from "@/components/Roulette";
 import { getCategories, getAlphabet, getCurrentLang, getApiUrl } from "@/lib/utils";
-import { getSelectedPackId, getPackCategories } from "@/data/categoryPacks";
+import { getSelectedPackId, getPackCategories, getSafePackId, getPackById } from "@/data/categoryPacks";
 import { useValidateRound, useSubmitScore } from "@workspace/api-client-react";
 import { usePlayer } from "@/hooks/use-player";
 import { motion, AnimatePresence } from "framer-motion";
@@ -89,7 +89,8 @@ export default function SoloGame() {
   const [showPremiumModal, setShowPremiumModal] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [lastXpGain, setLastXpGain] = useState(0);
-  const packId = getSelectedPackId();
+  const packId = getSafePackId(getSelectedPackId(), isPremium);
+  const activePack = getPackById(packId);
   const packCats = () => packId === "classic" ? getCategories() : getPackCategories(packId, getCurrentLang());
   const [categories, setCategories] = useState<string[]>(packCats());
   const [muted, setMuted] = useState(false);
@@ -1034,6 +1035,19 @@ export default function SoloGame() {
             >
               <div>
                 <h2 className="text-4xl font-display font-bold mb-2">{t.home.soloVsAI}</h2>
+                {packId !== "classic" && (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full mt-1"
+                    style={{ background: `${activePack.color}22`, border: `1.5px solid ${activePack.color}55` }}
+                  >
+                    <span className="text-sm">{activePack.icon}</span>
+                    <span className="text-xs font-black" style={{ color: activePack.color }}>
+                      {activePack.name[(lang as "es"|"en"|"pt"|"fr")] || activePack.name.es}
+                    </span>
+                  </motion.div>
+                )}
               </div>
               <Button size="xl" onClick={startGame}>{t.game.round} {round}</Button>
 
