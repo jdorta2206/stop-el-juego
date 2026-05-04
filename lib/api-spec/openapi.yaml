@@ -172,8 +172,23 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Room"
+        "400":
+          description: Invalid request body (missing/empty player name, malformed payload)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "404":
           description: Room not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: |
+            A player with that name (case-insensitive, trimmed) is already in
+            the room. Client should prompt for a different name. Body shape:
+            `{ "error": "name_taken" }`.
           content:
             application/json:
               schema:

@@ -39,6 +39,8 @@ const fr = {
     diamond: "Diamant",
     master: "Maître",
     achievements: "Succès",
+    globalRecord: "Record mondial",
+    canYouBeat: "Peux-tu le battre ?",
   },
 
   game: {
@@ -179,6 +181,7 @@ const fr = {
     playerName: "Ton nom",
     enterName: "Entre ton nom",
     nameTaken: "Ce nom est déjà pris dans ce salon. Choisis-en un autre ou ajoute un numéro.",
+    hostMigrated: "L'hôte est parti. Tu es désormais l'hôte.",
     lobby: "Salle d'attente",
     players: "Joueurs",
     startGame: "Démarrer la partie",

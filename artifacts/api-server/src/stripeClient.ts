@@ -17,8 +17,9 @@ export async function getStripeSync(): Promise<StripeSync> {
 
     stripeSyncInstance = new StripeSync({
       stripeSecretKey: getStripeSecretKey(),
-      databaseUrl,
-      schema: "stripe",
+      // Newer stripe-replit-sync requires `poolConfig` (the legacy
+      // `databaseUrl` / `schema` options were dropped).
+      poolConfig: { connectionString: databaseUrl },
     });
   }
   return stripeSyncInstance;

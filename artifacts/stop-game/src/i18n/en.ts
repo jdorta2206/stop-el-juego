@@ -39,6 +39,8 @@ const en = {
     diamond: "Diamond",
     master: "Master",
     achievements: "Achievements",
+    globalRecord: "Global record",
+    canYouBeat: "Can you beat it?",
   },
 
   game: {
@@ -179,6 +181,7 @@ const en = {
     playerName: "Your name",
     enterName: "Enter your name",
     nameTaken: "That name is already taken in this room. Pick another or add a number.",
+    hostMigrated: "The host left. You're the new host.",
     lobby: "Waiting room",
     players: "Players",
     startGame: "Start game",

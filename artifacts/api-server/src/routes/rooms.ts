@@ -68,6 +68,22 @@ function calcServerScore(answers: Record<string, string>, letter: string): { sco
 
 const ALPHABET_ES = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").filter(l => !["Q","X"].includes(l));
 
+// 🪪 Shared name-normalization helper. Lower-cased + trimmed so that
+// "Jaime", "jaime " and "JAIME" all collide. Used by /join (and any future
+// endpoint that adds players to a room) so the unique-name guarantee can
+// never drift between code paths.
+function normalizePlayerName(name: unknown): string {
+  return String(name ?? "").trim().toLowerCase();
+}
+
+// Express's `req.params[K]` is typed `string | string[]` because the same
+// route param can repeat. All STOP routes use single segments, so this helper
+// narrows the value safely and keeps every `.toUpperCase()` call type-clean.
+function paramStr(value: unknown): string {
+  if (Array.isArray(value)) return String(value[0] ?? "");
+  return String(value ?? "");
+}
+
 // Server-validated premium lookup: reads isPremium from the player_scores table.
 // Cosmetic-grade: a guest spoofing another playerId would also need to spoof their identity end-to-end.
 async function isPlayerPremium(playerId: string | null | undefined): Promise<boolean> {
@@ -428,7 +444,7 @@ router.get("/live", async (_req, res) => {
 
 // GET /rooms/:code/spectate — sanitized public view (no auth required)
 router.get("/:roomCode/spectate", async (req, res) => {
-  const { roomCode } = req.params;
+  const roomCode = paramStr(req.params.roomCode);
   const rows = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, roomCode));
   if (!rows.length) { res.status(404).json({ error: "Room not found" }); return; }
   const room = rows[0];
@@ -438,7 +454,7 @@ router.get("/:roomCode/spectate", async (req, res) => {
 
 // PATCH /rooms/:code/visibility — host toggles streamer mode (isPublic)
 router.patch("/:roomCode/visibility", async (req, res) => {
-  const { roomCode } = req.params;
+  const roomCode = paramStr(req.params.roomCode);
   const { hostId, isPublic } = req.body ?? {};
   if (typeof isPublic !== "boolean" || !hostId) {
     res.status(400).json({ error: "Missing hostId or isPublic" }); return;
@@ -529,7 +545,7 @@ router.post("/", async (req, res) => {
 
 // GET /rooms/:roomCode
 router.get("/:roomCode", async (req, res) => {
-  const { roomCode } = req.params;
+  const roomCode = paramStr(req.params.roomCode);
   const rooms = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, roomCode.toUpperCase())).limit(1);
   if (rooms.length === 0) { res.status(404).json({ error: "Room not found" }); return; }
   res.json(formatRoom(rooms[0]));
@@ -537,7 +553,7 @@ router.get("/:roomCode", async (req, res) => {
 
 // POST /rooms/:roomCode/join
 router.post("/:roomCode/join", async (req, res) => {
-  const { roomCode } = req.params;
+  const roomCode = paramStr(req.params.roomCode);
   const body = JoinRoomBody.safeParse(req.body);
   if (!body.success) { res.status(400).json({ error: "Invalid request body" }); return; }
 
@@ -545,11 +561,7 @@ router.post("/:roomCode/join", async (req, res) => {
   const { playerId, playerName, avatarColor, loginMethod } = body.data;
   const joinerPremium = await isPlayerPremium(playerId);
 
-  // 🪪 Unique-name guard: each room must have unique player names so the
-  // scoreboard, bluff voting, and chat stay readable. Compare on a
-  // normalized form (trim + lowercase) so "Jaime" and "jaime " collide.
-  const normName = (s: string) => String(s ?? "").trim().toLowerCase();
-  const myNorm = normName(playerName);
+  const myNorm = normalizePlayerName(playerName);
   if (myNorm.length === 0) {
     res.status(400).json({ error: "Name cannot be empty" });
     return;
@@ -578,7 +590,7 @@ router.post("/:roomCode/join", async (req, res) => {
     const players = parsePlayers(playersJson);
 
     const collision = players.find(
-      (p: any) => p.playerId !== playerId && normName(p.playerName) === myNorm,
+      (p: any) => p.playerId !== playerId && normalizePlayerName(p.playerName) === myNorm,
     );
     if (collision) return { kind: "nameTaken" } as const;
 
@@ -621,7 +633,7 @@ router.post("/:roomCode/join", async (req, res) => {
 
 // POST /rooms/:roomCode/start — host starts / continues the game
 router.post("/:roomCode/start", async (req, res) => {
-  const { roomCode } = req.params;
+  const roomCode = paramStr(req.params.roomCode);
   const { hostId } = (req.body ?? {}) as { hostId?: string };
   const rooms = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, roomCode.toUpperCase())).limit(1);
   if (rooms.length === 0) { res.status(404).json({ error: "Room not found" }); return; }
@@ -703,53 +715,123 @@ router.post("/:roomCode/start", async (req, res) => {
 });
 
 // POST /rooms/:roomCode/leave — player leaves the room
+//
+// 👑 Host migration: when the host leaves the lobby we no longer nuke the
+// whole room. Instead we promote the next player in arrival order to host
+// (sets `isHost: true`, copies `playerId` to `room.hostId` / `hostName`) and
+// broadcast the updated room. Only when the room would become empty do we
+// delete the row + drop in-memory ephemeral state. This is what users expect
+// when someone closes a tab by accident — the party doesn't die.
 router.post("/:roomCode/leave", async (req, res) => {
-  const { roomCode } = req.params;
+  const code = paramStr(req.params.roomCode).toUpperCase();
   const { playerId } = req.body as { playerId: string };
 
   if (!playerId) { res.status(400).json({ error: "playerId required" }); return; }
 
-  const rooms = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, roomCode.toUpperCase())).limit(1);
-  if (rooms.length === 0) { res.json({ ok: true }); return; }
+  // Use a transaction with row-locking so that two simultaneous /leave calls
+  // (or a /leave racing with a /join) can't both decide they are the last
+  // person in the room and corrupt the player list.
+  type LeaveOutcome =
+    | { kind: "noop" }
+    | { kind: "deleted" }
+    | { kind: "updated"; row: any; newHostId: string | null };
 
-  const room = rooms[0];
-  const players = parsePlayers(room.playersJson);
-  const leavingPlayer = players.find((p: any) => p.playerId === playerId);
+  const outcome: LeaveOutcome = await db.transaction(async (tx) => {
+    const rows = await tx.execute(
+      sql`SELECT * FROM rooms WHERE room_code = ${code} FOR UPDATE`,
+    );
+    const list = (rows as any).rows ?? rows;
+    if (!list || list.length === 0) return { kind: "noop" } as const;
 
-  // If game is already in progress or finished, do nothing (let the game continue)
-  if (room.status === "playing" || room.status === "stopped" || room.status === "finished") {
-    res.json({ ok: true });
-    return;
-  }
+    const raw = list[0];
+    const playersJson = raw.players_json ?? raw.playersJson;
+    const status = raw.status;
+    const players = parsePlayers(playersJson);
+    const leaving = players.find((p: any) => p.playerId === playerId);
+    if (!leaving) return { kind: "noop" } as const;
 
-  // If the host leaves while in lobby → delete the room entirely
-  if (leavingPlayer?.isHost) {
-    await db.delete(roomsTable).where(eq(roomsTable.roomCode, roomCode.toUpperCase()));
-    // Free in-memory ephemeral state for this room
-    roomTyping.delete(roomCode.toUpperCase());
-    roomLiveResponses.delete(roomCode.toUpperCase());
-    roomSpyUsage.delete(roomCode.toUpperCase());
-    roomRematch.delete(roomCode.toUpperCase());
-    roomFunVotes.delete(roomCode.toUpperCase());
+    // Whitelist: only the lobby is safe to mutate. Any other status (playing,
+    // stopping, revealing, bluffvoting, stopped, finished, …) means a round
+    // is in flight and rewriting `playersJson` would desync scores. The
+    // client just shows the player as offline until the round resolves.
+    if (status !== "waiting") {
+      return { kind: "noop" } as const;
+    }
+
+    const remaining = players.filter((p: any) => p.playerId !== playerId);
+
+    // Empty lobby → delete the row and free ephemeral state.
+    if (remaining.length === 0) {
+      await tx.delete(roomsTable).where(eq(roomsTable.roomCode, code));
+      return { kind: "deleted" } as const;
+    }
+
+    // 👑 If the host is the one leaving, promote the next player in arrival
+    // order. Otherwise the existing host stays.
+    // Defensive: explicitly normalise the `isHost` flag across every
+    // remaining player so the invariant "exactly one host" can never drift,
+    // even if a previous code path forgot to clear it.
+    let newHostId: string | null = null;
+    if (leaving.isHost) {
+      remaining.forEach((p: any, idx: number) => { p.isHost = idx === 0; });
+      newHostId = remaining[0].playerId;
+    }
+
+    const setPayload: Record<string, unknown> = {
+      playersJson: JSON.stringify(remaining),
+      updatedAt: new Date(),
+    };
+    if (newHostId) {
+      setPayload.hostId = newHostId;
+      setPayload.hostName = remaining[0].playerName ?? "";
+    }
+
+    const updated = await tx
+      .update(roomsTable)
+      .set(setPayload as any)
+      .where(eq(roomsTable.roomCode, code))
+      .returning();
+
+    return { kind: "updated", row: updated[0], newHostId } as const;
+  });
+
+  if (outcome.kind === "deleted") {
+    roomTyping.delete(code);
+    roomLiveResponses.delete(code);
+    roomSpyUsage.delete(code);
+    roomRematch.delete(code);
+    roomFunVotes.delete(code);
+    roomReactions.delete(code);
+    roomPhrases.delete(code);
+    roomCategoryPacks.delete(code);
     res.json({ ok: true, deleted: true });
     return;
   }
 
-  // Regular player leaves → remove from players list
-  const remaining = players.filter((p: any) => p.playerId !== playerId);
-  const [updated] = await db.update(roomsTable)
-    .set({ playersJson: JSON.stringify(remaining), updatedAt: new Date() })
-    .where(eq(roomsTable.roomCode, roomCode.toUpperCase()))
-    .returning();
+  if (outcome.kind === "updated") {
+    try {
+      const formatted = broadcastAndFormat(outcome.row);
+      // The room snapshot we just broadcast already carries the new `hostId`
+      // and `hostName`, so every connected SSE client (including the new
+      // host) will reconcile via `queryClient.setQueryData`. The client can
+      // detect the migration by comparing the previous host with the
+      // incoming snapshot — no side-channel SSE event needed (and adding one
+      // would clobber the room query cache because the EventSource listener
+      // uses the default `onmessage` handler).
+      res.json({ ok: true, ...(outcome.newHostId ? { hostMigratedTo: outcome.newHostId } : {}), room: formatted });
+      return;
+    } catch {
+      res.json({ ok: true });
+      return;
+    }
+  }
 
-  // 🚀 Notify the rest of the lobby that the player is gone (no más fantasmas)
-  try { if (updated) broadcastAndFormat(updated); } catch {}
   res.json({ ok: true });
 });
 
 // POST /rooms/:roomCode/react — player sends an emoji reaction (in-memory, ephemeral)
 router.post("/:roomCode/react", writeLimiter, async (req, res) => {
-  const code = req.params.roomCode.toUpperCase();
+  const code = paramStr(req.params.roomCode).toUpperCase();
   const { emoji, playerName } = req.body as { emoji: string; playerName: string };
   if (!VALID_REACTIONS.includes(emoji)) { res.status(400).json({ error: "Invalid emoji" }); return; }
   const list = roomReactions.get(code) ?? [];
@@ -765,7 +847,7 @@ router.post("/:roomCode/react", writeLimiter, async (req, res) => {
 
 // POST /rooms/:roomCode/category-pack — host sets category pack (standard/crazy/mix)
 router.post("/:roomCode/category-pack", async (req, res) => {
-  const code = req.params.roomCode.toUpperCase();
+  const code = paramStr(req.params.roomCode).toUpperCase();
   const { hostId, pack } = req.body as { hostId: string; pack: "standard" | "crazy" | "mix" };
   const rooms = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, code)).limit(1);
   if (rooms.length === 0) { res.status(404).json({ error: "Room not found" }); return; }
@@ -779,7 +861,7 @@ router.post("/:roomCode/category-pack", async (req, res) => {
 
 // POST /rooms/:roomCode/use-card — player activates their power card
 router.post("/:roomCode/use-card", async (req, res) => {
-  const code = req.params.roomCode.toUpperCase();
+  const code = paramStr(req.params.roomCode).toUpperCase();
   const { playerId } = req.body as { playerId: string };
   const rooms = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, code)).limit(1);
   if (rooms.length === 0) { res.status(404).json({ error: "Room not found" }); return; }
@@ -831,7 +913,7 @@ router.post("/:roomCode/use-card", async (req, res) => {
 //   3. Unbounded fan-out per room (single noisy room could exhaust sockets).
 const MAX_SSE_CLIENTS_PER_ROOM = 200;
 router.get("/:roomCode/events", async (req, res) => {
-  const code = req.params.roomCode.toUpperCase();
+  const code = paramStr(req.params.roomCode).toUpperCase();
   const playerId = (req.query["playerId"] as string) || "";
 
   // 1. Room must exist before we ever touch the in-memory map.
@@ -884,7 +966,7 @@ router.get("/:roomCode/events", async (req, res) => {
 // POST /rooms/:roomCode/typing — heartbeat: this player is currently typing.
 // Throttled by the client to once every ~1.5s. Stale entries auto-expire after 3s.
 router.post("/:roomCode/typing", writeLimiter, async (req, res) => {
-  const code = req.params.roomCode.toUpperCase();
+  const code = paramStr(req.params.roomCode).toUpperCase();
   const { playerId, playerName, responses } = req.body as {
     playerId: string;
     playerName: string;
@@ -919,7 +1001,7 @@ router.post("/:roomCode/typing", writeLimiter, async (req, res) => {
 // 🕵️ POST /rooms/:roomCode/spy — peek at one rival's in-progress answer.
 // 1 use per round per player. Client should apply -10 pts at submission time.
 router.post("/:roomCode/spy", writeLimiter, async (req, res) => {
-  const code = req.params.roomCode.toUpperCase();
+  const code = paramStr(req.params.roomCode).toUpperCase();
   const { playerId } = req.body as { playerId: string };
   if (!playerId) { res.status(400).json({ error: "Missing playerId" }); return; }
 
@@ -985,7 +1067,7 @@ router.post("/:roomCode/spy", writeLimiter, async (req, res) => {
 // 👏 POST /rooms/:roomCode/funvote — vote for the funniest answer of the round.
 // 1 vote per round per voter. Voting again replaces the previous vote.
 router.post("/:roomCode/funvote", writeLimiter, async (req, res) => {
-  const code = req.params.roomCode.toUpperCase();
+  const code = paramStr(req.params.roomCode).toUpperCase();
   const { playerId, votedPlayerId, category, round, answer } = req.body as {
     playerId?: string;
     votedPlayerId?: string;
@@ -1030,7 +1112,7 @@ router.post("/:roomCode/funvote", writeLimiter, async (req, res) => {
 // POST /rooms/:roomCode/rematch — first caller creates a new room with same settings,
 // the new code is broadcast to everyone in the original room so they can jump in with one tap.
 router.post("/:roomCode/rematch", async (req, res) => {
-  const oldCode = req.params.roomCode.toUpperCase();
+  const oldCode = paramStr(req.params.roomCode).toUpperCase();
   const { playerId, playerName, avatarColor } = req.body as { playerId: string; playerName: string; avatarColor?: string };
 
   // Already created by another player → just return it
@@ -1085,7 +1167,7 @@ router.post("/:roomCode/rematch", async (req, res) => {
 });
 
 router.post("/:roomCode/phrase", writeLimiter, async (req, res) => {
-  const code = req.params.roomCode.toUpperCase();
+  const code = paramStr(req.params.roomCode).toUpperCase();
   const { playerName, phraseIndex } = req.body as { playerName: string; phraseIndex: number };
   if (phraseIndex < 0 || phraseIndex >= QUICK_PHRASES.length) {
     res.status(400).json({ error: "Invalid phrase" }); return;
@@ -1108,7 +1190,7 @@ router.post("/:roomCode/phrase", writeLimiter, async (req, res) => {
 
 // POST /rooms/:roomCode/stop — ANY player IN THE ROOM can stop the round globally
 router.post("/:roomCode/stop", async (req, res) => {
-  const { roomCode } = req.params;
+  const roomCode = paramStr(req.params.roomCode);
   const { playerId, playerName } = req.body;
 
   if (!playerId) { res.status(400).json({ error: "playerId required" }); return; }
@@ -1163,7 +1245,7 @@ router.post("/:roomCode/stop", async (req, res) => {
 const MAX_CATEGORIES_PER_ROUND = 15;
 
 router.post("/:roomCode/results", writeLimiter, async (req, res) => {
-  const { roomCode } = req.params;
+  const roomCode = paramStr(req.params.roomCode);
   const body = SubmitRoomResultsBody.safeParse(req.body);
   if (!body.success) { res.status(400).json({ error: "Invalid request body" }); return; }
 
@@ -1366,7 +1448,7 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
 
 // POST /rooms/:roomCode/bluff-vote — opponent casts "lie" or "real" for a bluffed category
 router.post("/:roomCode/bluff-vote", writeLimiter, async (req, res) => {
-  const { roomCode } = req.params;
+  const roomCode = paramStr(req.params.roomCode);
   const { voterId, accusedPlayerId, category, vote } = req.body as {
     voterId: string;
     accusedPlayerId: string;
@@ -1450,7 +1532,7 @@ router.post("/:roomCode/bluff-vote", writeLimiter, async (req, res) => {
 
 // POST /rooms/:roomCode/resolve-bluffs — force-resolve after deadline (called by any client polling)
 router.post("/:roomCode/resolve-bluffs", async (req, res) => {
-  const { roomCode } = req.params;
+  const roomCode = paramStr(req.params.roomCode);
 
   const rooms = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, roomCode.toUpperCase())).limit(1);
   if (rooms.length === 0) { res.status(404).json({ error: "Room not found" }); return; }

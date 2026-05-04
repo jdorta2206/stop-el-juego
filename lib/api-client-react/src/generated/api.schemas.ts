@@ -67,6 +67,11 @@ export interface PlayerScore {
   gamesPlayed: number;
   wins: number;
   rank?: number;
+  // Computed by the ranking endpoint at query time and always present in
+  // /me and leaderboard responses (see ranking.ts L330). Marked optional
+  // so that other endpoints which only return the row shape stay valid.
+  globalRank?: number;
+  bestScore?: number;
   createdAt?: string;
   updatedAt?: string;
 }
