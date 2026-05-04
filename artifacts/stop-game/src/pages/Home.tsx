@@ -13,6 +13,7 @@ import { useT } from "@/i18n/useT";
 import { useStreak } from "@/hooks/useStreak";
 import { useProgression, getLeague } from "@/hooks/useProgression";
 import { useGetLeaderboard, useGetPlayerStats } from "@workspace/api-client-react";
+import { PackSelector } from "@/components/PackSelector";
 import { NativeBanner } from "@/components/AdSystem";
 
 const LOGO_URL = `${import.meta.env.BASE_URL}images/stop-logo.png`;
@@ -279,6 +280,16 @@ export default function Home() {
             </Link>
           </motion.div>
         )}
+
+        {/* Category Pack Selector */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="w-full"
+        >
+          <PackSelector isPremium={isPremium} onPremiumClick={() => setShowPremiumModal(true)} />
+        </motion.div>
 
         {/* Main buttons */}
         <motion.div
