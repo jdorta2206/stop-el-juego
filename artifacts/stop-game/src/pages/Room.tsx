@@ -149,6 +149,9 @@ export default function Room() {
 
   const responsesRef = useRef<Record<string, string>>({});
   const lastRoundRef = useRef<number>(0);
+  // Latest room snapshot, kept in a ref so the 4Hz round-timer interval can
+  // read fresh deadlines without re-creating the interval on every poll.
+  const roomRef = useRef<any>(null);
   const lastStatusRef = useRef<string>("");
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const freezeTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -268,6 +271,8 @@ export default function Room() {
 
   // Keep responsesRef and bluffedCategoriesRef in sync
   useEffect(() => { responsesRef.current = responses; }, [responses]);
+  // Keep roomRef in sync so the round-timer interval can read fresh deadlines.
+  useEffect(() => { roomRef.current = room; }, [room]);
   useEffect(() => { bluffedCategoriesRef.current = bluffedCategories; }, [bluffedCategories]);
   // Keep phase and roomCode refs in sync so leaveRoom always has the latest values
   useEffect(() => { phaseRef.current = phase; }, [phase]);
@@ -450,23 +455,58 @@ export default function Room() {
     return ROUND_TIME;
   }, [isRandomMode, roomCode]);
 
-  // Start game timer for this round
+  // ⏱️ Start the game timer using the SERVER's deadline (roundEndsAt) when
+  // available so every client (and reconnects) shows the same countdown.
+  // Falls back to the deterministic local duration if the server didn't
+  // include a timestamp (older payloads) — keeps backwards compat.
+  //
+  // We read `room` via a ref instead of via deps so this callback's identity
+  // stays stable across the 4Hz tick re-renders. The interval re-reads from
+  // the ref on every tick, picking up fresh deadlines automatically when
+  // polling refreshes the room.
   const startRoundTimer = useCallback(() => {
     stopAllTimers();
     hasSubmittedRef.current = false;
     isFreezingRef.current = false;
-    // Reset timeLeft to the round-specific duration (random mode → hidden value)
-    setTimeLeft(roundDurationFor(currentRound, currentLetter));
+
+    // 🛠️ Capture clock-skew ONCE at setup time. Recomputing it on every tick
+    // (with both serverNow and Date.now() advancing together) makes Date.now()
+    // cancel out of the math, freezing the countdown between polls. We
+    // estimate the offset once from the freshest payload we have and then
+    // tick against the local clock for smooth, monotonic countdown behaviour.
+    const r0 = roomRef.current as any;
+    const serverNow0: number = typeof r0?.serverNow === "number" ? r0.serverNow : Date.now();
+    const clockSkew = Date.now() - serverNow0; // local-clock - server-clock, snapshot
+    const fallbackDuration = roundDurationFor(currentRound, currentLetter);
+
+    const computeRemaining = (): number => {
+      // We re-read roundEndsAt fresh each tick so when a new poll updates the
+      // deadline (e.g. the server extended the round) we pick it up promptly.
+      const r = roomRef.current as any;
+      const roundEndsAt: number | null = typeof r?.roundEndsAt === "number" ? r.roundEndsAt : null;
+      if (!roundEndsAt) return fallbackDuration;
+      const localDeadline = roundEndsAt + clockSkew;
+      return Math.max(0, Math.ceil((localDeadline - Date.now()) / 1000));
+    };
+
+    const initial = computeRemaining();
+    setTimeLeft(initial);
+    if (initial <= 0) {
+      autoSubmit(false);
+      return;
+    }
+
+    // Tick at 250ms so the displayed seconds tracks reality even if the tab
+    // throttled background timers. We always recompute from the deadline so
+    // we never drift, no matter how many ticks were skipped.
     timerRef.current = setInterval(() => {
-      setTimeLeft(prev => {
-        if (prev <= 1) {
-          stopAllTimers();
-          autoSubmit(false); // timer expired — not a stopper
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
+      const remaining = computeRemaining();
+      setTimeLeft(remaining);
+      if (remaining <= 0) {
+        stopAllTimers();
+        autoSubmit(false);
+      }
+    }, 250) as unknown as ReturnType<typeof setInterval>;
   }, [stopAllTimers, autoSubmit, roundDurationFor, currentRound, currentLetter]);
 
   // Start freeze countdown (when STOP is called by someone).
@@ -530,10 +570,22 @@ export default function Room() {
       stopAllTimers();
       if (bluffVoteTimerRef.current) { clearInterval(bluffVoteTimerRef.current); bluffVoteTimerRef.current = null; }
       setPhase("finished");
-      const sortedPlayers = [...players].sort((a: any, b: any) => (b.score || 0) - (a.score || 0));
-      const maxScore = sortedPlayers[0]?.score || 0;
-      const myPlayer = players.find((p: any) => p.playerId === player?.id);
-      if (myPlayer && myPlayer.score === maxScore && players.length > 1) {
+      // ⚖️ Same tie-breaker as the server (rooms.ts → submitAllScoresToLeaderboard):
+      // score → wasStopper → finishedAt → playerId. Without this, two players
+      // with equal points would BOTH get confetti and "Winner!" labels.
+      const sortedPlayers = [...players].sort((a: any, b: any) => {
+        const ds = (b.score || 0) - (a.score || 0);
+        if (ds !== 0) return ds;
+        const sa = a.wasStopper ? 1 : 0;
+        const sb = b.wasStopper ? 1 : 0;
+        if (sa !== sb) return sb - sa;
+        const fa = typeof a.finishedAt === "number" ? a.finishedAt : Number.MAX_SAFE_INTEGER;
+        const fb = typeof b.finishedAt === "number" ? b.finishedAt : Number.MAX_SAFE_INTEGER;
+        if (fa !== fb) return fa - fb;
+        return String(a.playerId || "").localeCompare(String(b.playerId || ""));
+      });
+      const winnerId = sortedPlayers[0]?.playerId;
+      if (winnerId && winnerId === player?.id && players.length > 1) {
         confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
       }
       queryClient.invalidateQueries({ queryKey: ["/api/ranking/scores"] });
@@ -646,20 +698,26 @@ export default function Room() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ playerId: player.id, playerName: player.name }),
       });
-      // Immediately transition to freeze locally too (don't wait for polling)
-      stopAllTimers();
-      setPhase("freeze");
-      startFreezeCountdown();
+      // 🛡️ Race fix: only kick off the freeze locally if polling hasn't already
+      // done it. Otherwise stopAllTimers() here would clear the freeze interval
+      // that the polling effect just installed and the countdown would stall at "3".
+      if (!isFreezingRef.current) {
+        stopAllTimers();
+        setPhase("freeze");
+        startFreezeCountdown();
+      }
     } catch (e) { console.error(e); }
     setIsStopping(false);
   };
 
   const handleStart = async () => {
-    if (!roomCode) return;
+    if (!roomCode || !player) return;
     try {
       const r = await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/start`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        // 🔐 Server now requires hostId to authorize round start.
+        body: JSON.stringify({ hostId: player.id }),
       });
       // 🚀 Adelantamos el estado en local sin esperar al SSE/polling — quien pulsa
       // "Empezar" ve la transición instantánea (los demás llegan vía broadcast).

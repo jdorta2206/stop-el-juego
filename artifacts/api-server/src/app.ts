@@ -2,8 +2,13 @@ import express, { type Express } from "express";
 import cors from "cors";
 import router from "./routes";
 import { WebhookHandlers } from "./webhookHandlers";
+import { generalLimiter } from "./middlewares/rateLimit";
 
 const app: Express = express();
+
+// Trust the platform proxy so req.ip resolves correctly behind the LB
+// (otherwise rate-limit keys all collapse to the proxy IP and never trigger).
+app.set("trust proxy", 1);
 
 // Stripe webhook MUST be registered before express.json() so it receives raw Buffer
 app.post(
@@ -34,8 +39,12 @@ app.post(
 );
 
 app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: "256kb" })); // small body cap protects against memory abuse
+app.use(express.urlencoded({ extended: true, limit: "64kb" }));
+
+// 🛡️ Global per-key rate limit covering ALL /api/* requests.
+// Per-route stricter limits are layered inside individual routers.
+app.use("/api", generalLimiter);
 
 app.use("/api", router);
 
