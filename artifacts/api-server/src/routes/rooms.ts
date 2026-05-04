@@ -545,19 +545,45 @@ router.post("/:roomCode/join", async (req, res) => {
   const { playerId, playerName, avatarColor, loginMethod } = body.data;
   const joinerPremium = await isPlayerPremium(playerId);
 
-  // 🛡️ Optimistic-concurrency join: read → modify → write with retry.
-  // Two players joining simultaneously could otherwise overwrite each other.
-  // We use updatedAt as a version stamp; on conflict we re-read and retry.
-  let updated: any = null;
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const rooms = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, code)).limit(1);
-    if (rooms.length === 0) { res.status(404).json({ error: "Room not found" }); return; }
+  // 🪪 Unique-name guard: each room must have unique player names so the
+  // scoreboard, bluff voting, and chat stay readable. Compare on a
+  // normalized form (trim + lowercase) so "Jaime" and "jaime " collide.
+  const normName = (s: string) => String(s ?? "").trim().toLowerCase();
+  const myNorm = normName(playerName);
+  if (myNorm.length === 0) {
+    res.status(400).json({ error: "Name cannot be empty" });
+    return;
+  }
 
-    const room = rooms[0];
-    const lastVersion = room.updatedAt;
-    const players = parsePlayers(room.playersJson);
+  // 🛡️ Concurrency-safe join via transaction + SELECT … FOR UPDATE.
+  // The previous optimistic-concurrency loop compared `updatedAt` (microsecond
+  // in Postgres) against a JS Date (millisecond) — the WHERE clause never
+  // matched, every join failed with 503. Row-level locking removes both the
+  // precision pitfall and the "two players joining at once" race.
+  type JoinOutcome =
+    | { kind: "ok"; row: any }
+    | { kind: "notFound" }
+    | { kind: "nameTaken" };
 
-    if (!players.find((p: any) => p.playerId === playerId)) {
+  const outcome: JoinOutcome = await db.transaction(async (tx) => {
+    const rows = await tx.execute(
+      sql`SELECT * FROM rooms WHERE room_code = ${code} FOR UPDATE`,
+    );
+    const list = (rows as any).rows ?? rows;
+    if (!list || list.length === 0) return { kind: "notFound" } as const;
+
+    // pg returns snake_case; map the two columns we need.
+    const raw = list[0];
+    const playersJson = raw.players_json ?? raw.playersJson;
+    const players = parsePlayers(playersJson);
+
+    const collision = players.find(
+      (p: any) => p.playerId !== playerId && normName(p.playerName) === myNorm,
+    );
+    if (collision) return { kind: "nameTaken" } as const;
+
+    const existing = players.find((p: any) => p.playerId === playerId);
+    if (!existing) {
       players.push({
         playerId,
         playerName,
@@ -569,35 +595,28 @@ router.post("/:roomCode/join", async (req, res) => {
         isHost: false,
         isReady: false,
       });
-    } else {
-      // Already in the room — just refresh activity timestamp and broadcast
-      updated = room;
-      break;
     }
 
-    const result = await db.update(roomsTable)
+    const updated = await tx
+      .update(roomsTable)
       .set({ playersJson: JSON.stringify(players), updatedAt: new Date() })
-      .where(and(
-        eq(roomsTable.roomCode, code),
-        eq(roomsTable.updatedAt, lastVersion as any),
-      ))
+      .where(eq(roomsTable.roomCode, code))
       .returning();
 
-    if (result.length > 0) {
-      updated = result[0];
-      break;
-    }
-    // Conflict — somebody else updated the row. Retry.
-    await new Promise(r => setTimeout(r, 30 + attempt * 50));
-  }
+    return { kind: "ok", row: updated[0] } as const;
+  });
 
-  if (!updated) {
-    res.status(503).json({ error: "Room is busy, please retry" });
+  if (outcome.kind === "notFound") { res.status(404).json({ error: "Room not found" }); return; }
+  if (outcome.kind === "nameTaken") {
+    res.status(409).json({
+      error: "name_taken",
+      message: "Ese nombre ya está en uso en esta sala. Prueba con otro o añade un número.",
+    });
     return;
   }
 
   // 🚀 Notifica a todos en la sala que entró un nuevo jugador
-  res.json(broadcastAndFormat(updated));
+  res.json(broadcastAndFormat(outcome.row));
 });
 
 // POST /rooms/:roomCode/start — host starts / continues the game

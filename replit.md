@@ -106,7 +106,14 @@ The server-side validator in `artifacts/api-server/src/routes/game.ts` uses a co
 - `pnpm --filter @workspace/api-spec run codegen` — regenerates hooks/schemas from openapi.yaml
 - `pnpm --filter @workspace/db run push` — pushes schema changes to database
 
-## Hardening for 100k Concurrent Players (May 2026)
+## Unique Player Names per Room (May 2026)
+
+- `/rooms/:code/join` ahora rechaza nombres duplicados con HTTP 409 `{ error: "name_taken" }`. Comparación normalizada (trim + lowercase) → "Jaime", "jaime", "jaime " colisionan.
+- Bug pre-existente arreglado: el optimistic-concurrency loop comparaba `updatedAt` (Postgres microsegundos) contra `Date` JS (ms) → la cláusula `eq` jamás casaba y todo join terminaba en 503. Reemplazado por `db.transaction()` + `SELECT … FOR UPDATE`, que serializa joins concurrentes y elimina la pifia de precisión.
+- Frontend (`Multiplayer.tsx` `describeJoinError`) detecta 409 y muestra `t.multiplayer.nameTaken` en es/en/pt/fr.
+- Verificado: 5 joins paralelos del mismo "Pedro" → exactamente 1 entra, 4 reciben 409. Re-join del mismo `playerId` con su mismo nombre sigue siendo idempotente (200).
+
+# Hardening for 100k Concurrent Players (May 2026)
 
 Server hardening pass to support best-in-class multiplayer reliability:
 

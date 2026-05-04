@@ -178,6 +178,7 @@ const fr = {
     create: "Créer",
     playerName: "Ton nom",
     enterName: "Entre ton nom",
+    nameTaken: "Ce nom est déjà pris dans ce salon. Choisis-en un autre ou ajoute un numéro.",
     lobby: "Salle d'attente",
     players: "Joueurs",
     startGame: "Démarrer la partie",

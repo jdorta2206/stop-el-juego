@@ -84,6 +84,25 @@ export default function Multiplayer() {
     }
   };
 
+  // Translates a join error (in particular the new 409 name-collision) into a
+  // friendly message in the active language. Falls back to the generic
+  // "waiting for host" copy for everything else.
+  // Reads both the ApiError shape (status + data) and the generic axios-ish
+  // shape so this stays robust if the transport layer changes.
+  const describeJoinError = (e: unknown): string => {
+    const err = e as {
+      status?: number;
+      data?: { error?: string; message?: string };
+      response?: { status?: number; data?: { error?: string; message?: string } };
+    };
+    const status = err?.status ?? err?.response?.status;
+    const code = err?.data?.error ?? err?.response?.data?.error ?? "";
+    if (status === 409 || code === "name_taken") {
+      return t.multiplayer.nameTaken ?? "Ese nombre ya está en uso en esta sala. Cambia tu nombre o añade un número.";
+    }
+    return t.multiplayer.waitingForHost;
+  };
+
   const handleJoin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!player || !roomCode.trim()) return;
@@ -98,8 +117,8 @@ export default function Multiplayer() {
         } as import("@workspace/api-client-react").JoinRoomRequest & { loginMethod?: string | null },
       });
       setLocation(`/room/${room.roomCode}`);
-    } catch {
-      setError(t.multiplayer.waitingForHost);
+    } catch (err) {
+      setError(describeJoinError(err));
     }
   };
 
@@ -116,8 +135,8 @@ export default function Multiplayer() {
         } as import("@workspace/api-client-react").JoinRoomRequest & { loginMethod?: string | null },
       });
       setLocation(`/room/${room.roomCode}`);
-    } catch {
-      setError(t.multiplayer.waitingForHost);
+    } catch (err) {
+      setError(describeJoinError(err));
       loadPublicRooms();
     }
   };

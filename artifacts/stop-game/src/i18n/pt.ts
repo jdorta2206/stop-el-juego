@@ -178,6 +178,7 @@ const pt = {
     create: "Criar",
     playerName: "Seu nome",
     enterName: "Digite seu nome",
+    nameTaken: "Esse nome já está em uso nesta sala. Escolha outro ou adicione um número.",
     lobby: "Sala de espera",
     players: "Jogadores",
     startGame: "Iniciar partida",
