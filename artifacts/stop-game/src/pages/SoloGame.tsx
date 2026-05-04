@@ -6,6 +6,7 @@ import { Layout } from "@/components/Layout";
 import { Button, Card, Input, Progress } from "@/components/ui";
 import { Roulette } from "@/components/Roulette";
 import { getCategories, getAlphabet, getCurrentLang, getApiUrl } from "@/lib/utils";
+import { getSelectedPackId, getPackCategories } from "@/data/categoryPacks";
 import { useValidateRound, useSubmitScore } from "@workspace/api-client-react";
 import { usePlayer } from "@/hooks/use-player";
 import { motion, AnimatePresence } from "framer-motion";
@@ -88,7 +89,9 @@ export default function SoloGame() {
   const [showPremiumModal, setShowPremiumModal] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [lastXpGain, setLastXpGain] = useState(0);
-  const [categories, setCategories] = useState<string[]>(getCategories());
+  const packId = getSelectedPackId();
+  const packCats = () => packId === "classic" ? getCategories() : getPackCategories(packId, getCurrentLang());
+  const [categories, setCategories] = useState<string[]>(packCats());
   const [muted, setMuted] = useState(false);
   const [stopFlash, setStopFlash] = useState(false);
   // 🕵️ Espía / Robar respuesta — 1 uso por partida, cuesta -10 pts al final
@@ -171,7 +174,7 @@ export default function SoloGame() {
 
   // Re-read categories when language changes (only if not daily mode)
   useEffect(() => {
-    if (!isDailyMode) setCategories(getCategories());
+    if (!isDailyMode) setCategories(packCats());
   }, [lang, isDailyMode]);
 
   // Countdown tick sound (last 5 seconds — urgency escalates)
@@ -265,23 +268,22 @@ export default function SoloGame() {
 
     if (isDailyMode) {
       setCurrentLetter(dailyLetter);
-      const cats = dailyCategories.length > 0 ? dailyCategories : getCategories();
+      const cats = dailyCategories.length > 0 ? dailyCategories : packCats();
       setCategories(cats);
     } else {
       const alphabet = event === "easy_letter" ? EASY_LETTERS : getAlphabet();
       const randomLetter = alphabet[Math.floor(Math.random() * alphabet.length)];
       setCurrentLetter(randomLetter);
       if (isChaosMode) {
-        // All categories are crazy in chaos mode
         const crazyCats = t.crazyCategories && t.crazyCategories.length >= 6
           ? [...t.crazyCategories].sort(() => Math.random() - 0.5).slice(0, 6)
-          : getCategories().map(() => {
+          : packCats().map(() => {
               const pool = t.crazyCategories || [];
-              return pool.length > 0 ? pool[Math.floor(Math.random() * pool.length)] : getCategories()[0];
+              return pool.length > 0 ? pool[Math.floor(Math.random() * pool.length)] : packCats()[0];
             });
         setCategories(crazyCats);
       } else {
-        setCategories(mixCrazyCategory(getCategories(), t));
+        setCategories(mixCrazyCategory(packCats(), t));
       }
     }
     setResponses({});
