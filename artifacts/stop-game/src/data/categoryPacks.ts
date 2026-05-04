@@ -100,7 +100,7 @@ export const CATEGORY_PACKS: CategoryPack[] = [
   {
     id: "science",
     icon: "🔬",
-    premium: true,
+    premium: false,
     categories: {
       es: ["Elemento químico", "Científico/a", "Invento", "Planeta/Astro", "Enfermedad", "Órgano", "Fórmula"],
       en: ["Chemical element", "Scientist", "Invention", "Planet/Star", "Disease", "Organ", "Formula"],
@@ -114,7 +114,7 @@ export const CATEGORY_PACKS: CategoryPack[] = [
   {
     id: "history",
     icon: "🏛️",
-    premium: true,
+    premium: false,
     categories: {
       es: ["Personaje histórico", "Batalla", "Imperio/Civilización", "Invento de época", "Revolución", "Tratado", "Monarca"],
       en: ["Historical figure", "Battle", "Empire/Civilization", "Invention", "Revolution", "Treaty", "Monarch"],
