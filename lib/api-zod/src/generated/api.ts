@@ -90,6 +90,7 @@ export const SubmitScoreBody = zod.object({
   letter: zod.string(),
   mode: zod.string(),
   won: zod.boolean().optional(),
+  bonus: zod.boolean().optional(),
 });
 
 /**

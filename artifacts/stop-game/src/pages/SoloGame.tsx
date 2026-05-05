@@ -599,9 +599,11 @@ export default function SoloGame() {
     }
   }, [gameState, results]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const submitToLeaderboard = (finalScore: number, finalAiScore: number) => {
+  const submitToLeaderboard = (finalScore: number, finalAiScore: number, opts?: { bonus?: boolean }) => {
     if (!player || player.loginMethod === "guest") return;
+    if (finalScore <= 0) return;
     const won = finalScore > finalAiScore;
+    const isBonus = opts?.bonus === true;
     submitScoreMutation.mutate({
       data: {
         playerId: player.id,
@@ -611,15 +613,20 @@ export default function SoloGame() {
         letter: currentLetter || "?",
         mode: isDailyMode ? "daily" : "solo",
         won,
+        bonus: isBonus,
       }
     }, {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: ["/api/ranking/scores"] });
-        const msg =
-          lang === "en" ? `+${finalScore} pts saved to ranking!` :
-          lang === "pt" ? `+${finalScore} pts guardados no ranking!` :
-          lang === "fr" ? `+${finalScore} pts enregistrés au classement !` :
-          `¡+${finalScore} pts guardados en el ranking!`;
+        const msg = isBonus
+          ? (lang === "en" ? `+${finalScore} bonus pts added!` :
+             lang === "pt" ? `+${finalScore} pts bónus adicionados!` :
+             lang === "fr" ? `+${finalScore} pts bonus ajoutés !` :
+             `¡+${finalScore} pts bonus añadidos!`)
+          : (lang === "en" ? `+${finalScore} pts saved to ranking!` :
+             lang === "pt" ? `+${finalScore} pts guardados no ranking!` :
+             lang === "fr" ? `+${finalScore} pts enregistrés au classement !` :
+             `¡+${finalScore} pts guardados en el ranking!`);
         toast({ title: "🏆 " + msg });
       },
       onError: () => {
@@ -632,6 +639,19 @@ export default function SoloGame() {
       }
     });
   };
+
+  // 💾 Auto-submit final score the moment the RESULTS screen first shows the
+  // final round. Previously the submit only happened inside `nextRound()` (the
+  // "Play again" button), so users who closed the page or went home without
+  // clicking "Jugar de nuevo" lost their score entirely. Guarded by a ref so
+  // the submission fires exactly once per game.
+  const submittedRef = useRef(false);
+  useEffect(() => {
+    if (gameState !== "RESULTS" || round < maxRounds || submittedRef.current) return;
+    submittedRef.current = true;
+    submitToLeaderboard(totalScore, aiTotalScore);
+    if (isDailyMode) submitDailyResult(totalScore);
+  }, [gameState, round, maxRounds, totalScore, aiTotalScore, isDailyMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const submitDailyResult = (finalScore: number) => {
     // Always save daily score locally (works for guests too)
@@ -672,12 +692,14 @@ export default function SoloGame() {
       addXp(xpGained);
       setLastXpGain(xpGained);
       if (levelUpInfo) sound.playLevelUp();
-      submitToLeaderboard(totalScore, aiTotalScore);
+      // Score submission has already happened automatically when the
+      // RESULTS screen first showed the final round (see submittedRef
+      // effect above). Don't re-submit here or we'd double-count.
       if (isDailyMode) {
-        submitDailyResult(totalScore);
         setLocation("/reto");
         return;
       }
+      submittedRef.current = false;
       setGameState("LOBBY");
       setRound(1);
       setTotalScore(0);
@@ -721,7 +743,15 @@ export default function SoloGame() {
       }
       setHintUsed(true);
     } else if (rewardedAdType === "double") {
-      setTotalScore(prev => prev * 2);
+      // 🎁 Doubling: the original `totalScore` was already submitted (auto on
+      // entering RESULTS-final). The bonus delta = the original score, sent
+      // as a separate `bonus: true` submission so the server adds the points
+      // and XP without counting an extra game/win/streak day.
+      setTotalScore(prev => {
+        const bonus = prev;
+        if (bonus > 0) submitToLeaderboard(bonus, aiTotalScore, { bonus: true });
+        return prev * 2;
+      });
       setDoubleUsed(true);
     }
     setRewardedAdType(null);
