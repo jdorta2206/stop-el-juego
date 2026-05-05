@@ -102,7 +102,12 @@ router.post("/scores", scoreLimiter, async (req, res) => {
     return;
   }
 
-  const { playerId, playerName, avatarColor, score: rawScore, letter, mode, won } = body.data;
+  const { playerId, playerName, avatarColor, score: rawScore, letter, mode, won, bonus } = body.data;
+
+  // 🎁 Bonus submissions (e.g. rewarded-video doubling) only ADD points and
+  // XP to the player — they don't count as a separate game played, win, or
+  // streak day, since the original submission already accounted for those.
+  const isBonus = bonus === true;
 
   // Apply 1.5x multiplier for multiplayer games
   const score = mode === "multiplayer" ? Math.round(rawScore * 1.5) : rawScore;
@@ -152,11 +157,13 @@ router.post("/scores", scoreLimiter, async (req, res) => {
         playerName,
         avatarColor: avatarColor ?? existing[0].avatarColor,
         totalScore: sql`${playerScoresTable.totalScore} + ${score}`,
-        gamesPlayed: sql`${playerScoresTable.gamesPlayed} + 1`,
-        wins: sql`${playerScoresTable.wins} + ${won ? 1 : 0}`,
+        ...(isBonus ? {} : {
+          gamesPlayed: sql`${playerScoresTable.gamesPlayed} + 1`,
+          wins: sql`${playerScoresTable.wins} + ${won ? 1 : 0}`,
+        }),
         xp: sql`${playerScoresTable.xp} + ${xpGain}`,
         level: newLevel,
-        ...(updatedToday ? {
+        ...(!isBonus && updatedToday ? {
           currentStreak: newStreak,
           longestStreak: newLongest,
           lastPlayedDate: today,
@@ -174,11 +181,14 @@ router.post("/scores", scoreLimiter, async (req, res) => {
         playerName,
         avatarColor: avatarColor ?? "#e53e3e",
         totalScore: score,
-        gamesPlayed: 1,
-        wins: won ? 1 : 0,
-        currentStreak: 1,
-        longestStreak: 1,
-        lastPlayedDate: today,
+        // 🎁 If a bonus submission arrives before the base submission for a
+        // brand-new player (network race), do NOT count it as a played game,
+        // win, or streak day — the upcoming base request will fill those in.
+        gamesPlayed: isBonus ? 0 : 1,
+        wins: isBonus ? 0 : (won ? 1 : 0),
+        currentStreak: isBonus ? 0 : 1,
+        longestStreak: isBonus ? 0 : 1,
+        lastPlayedDate: isBonus ? null : today,
         xp: xpGain,
         level: calcLevel(xpGain),
       })

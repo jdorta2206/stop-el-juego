@@ -98,6 +98,7 @@ export interface SubmitScoreRequest {
   letter: string;
   mode: string;
   won?: boolean;
+  bonus?: boolean;
 }
 
 export interface LeaderboardResponse {
