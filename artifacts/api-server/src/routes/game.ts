@@ -18,17 +18,18 @@ const DICTIONARY: Record<string, Record<string, string[]>> = {
       "canguro","capibara","capivara","caracol","caribú","castor","cebra","ciervo","cigüeña","cisne",
       "cobra","cocodrilo","codorniz","colibrí","comadreja","conejo","cormorán","cóndor","coral",
       "coyote","cucaracha","cuervo","delfín","dromedario","elefante","erizo","escorpión",
-      "esturión","faisán","flamenco","foca","gacela","gallina","gallo","gamuza",
+      "calamar","camarón","caracola","ciempiés","chimpancé","dinosaurio","dragón","escarabajo",
+      "esturión","faisán","flamenco","foca","gacela","gallina","gallo","gamuza","gato",
       "ganso","gaviota","gecko","gibón","glotón","gorila","gorrión","grillo","grulla","guacamayo",
-      "guepardo","halcón","hamster","hiena","hipopótamo","hormiga","hurón","iguana","impala","jabalí",
-      "jaguar","jirafa","jilguero","koala","langosta","lechuza","lemur","leopardo","liebre","lince",
-      "llama","lobo","loro","luciérnaga","manatí","mariposa","marmota","medusa","milano","mono",
+      "gusano","guepardo","halcón","hamster","hiena","hipopótamo","hormiga","hurón","iguana","impala","jabalí",
+      "jaguar","jirafa","jilguero","koala","lagartija","lagarto","langosta","lechuza","lemur","león","leopardo","liebre","libélula","lince",
+      "llama","lobo","loro","luciérnaga","manatí","mariposa","marmota","medusa","mejillón","mosca","milano","mono",
       "morsa","mosquito","murciélago","musaraña","mula","nutria","ñandú","ñu","orangután","orca",
-      "oruga","oso","ostra","oveja","pájaro","paloma","panda","pantera","pato","pavo","pavorreal",
+      "oruga","oso","ostra","oveja","pájaro","paloma","panda","pantera","pato","pavo","pavorreal","perdiz",
       "pelícano","perro","pez","pez espada","pez globo","pez payaso","pingüino","piraña","pitón",
       "polilla","puerco","puercoespín","pulga","pulpo","puma","quetzal","quirquincho",
-      "rana","ratón","raya","reno","rinoceronte","ruiseñor","salamandra",
-      "salmón","saltamontes","sapo","sardina","serpiente","suricata","tapir","tejón","tiburón","tigre",
+      "rana","rata","ratón","raya","reno","rinoceronte","ruiseñor","salamandra",
+      "salmón","saltamontes","sanguijuela","sapo","sardina","serpiente","suricata","tapir","tejón","tiburón","tigre",
       "topo","toro","tortuga","trucha","tucán","urraca","urogallo","vaca","venado","vicuña","víbora","visón",
       "cerdo","wallaby","wombat","yak","yacaré","yarará","yegua","zamuro","zancudo","zebra","zorillo","zorro","zorzal"
     ],
@@ -943,7 +944,7 @@ const DICTIONARY: Record<string, Record<string, string[]>> = {
       "raccoon","rat","raven","reindeer","rhino","salmon","scorpion","seahorse","seal","shark",
       "sheep","skunk","sloth","snail","snake","sparrow","squid","stork","swan","tapir","tiger",
       "toad","tortoise","toucan","turkey","turtle","viper","vulture","walrus","wasp","whale",
-      "wolf","wolverine","wombat","woodpecker","yak","zebra"
+      "wolf","wolverine","wombat","woodpecker","worm","beetle","dragon","dinosaur","yak","zebra"
     ],
     color: [
       "amber","amethyst","aquamarine","aqua","azure","beige","black","blue","bronze","brown",
@@ -1179,7 +1180,8 @@ const DICTIONARY: Record<string, Record<string, string[]>> = {
       "leao","leopardo","lobo","lontra","macaco","morcego","mosquito","mula","onca","orangotango",
       "ostrica","ourico","papagaio","pato","peixe","pinguim","piranha","pombo","porco","puma",
       "quati","rato","rinoceronte","sapo","serpente","suricato","tartaruga","tigre","tucano",
-      "tubarao","urso","urubu","vaca","veado","zebra","zorrilho"
+      "tubarao","urso","urubu","vaca","veado","zebra","zorrilho",
+      "cao","cão","leao","leão","mosca","verme","dragao","dragão","besouro","libelula","libélula"
     ],
     cor: [
       "amarelo","amarelado","ambar","anil","azul","azulado","azul marinho","azul celeste","azul royal",
@@ -1244,7 +1246,8 @@ const DICTIONARY: Record<string, Record<string, string[]>> = {
       "leopard","lievre","lion","loup","lynx","meduse","mouton","mule","narval","ours",
       "panda","panthère","paon","perroquet","pieuvre","pigeon","pingouin","porc","puma",
       "renard","requin","rhinoceros","sanglier","serpent","singe","suricate","tapir","tigre",
-      "tortue","toucan","vache","vautour","zebre","zibeline"
+      "tortue","toucan","vache","vautour","zebre","zibeline",
+      "rat","mouche","ver","lézard","lezard","dragon","scarabée","scarabee","libellule","papillon","sardine"
     ],
     couleur: [
       "abricot","ambre","amethyste","ardoise","argent","aubergine","azur","beige","bistre",
