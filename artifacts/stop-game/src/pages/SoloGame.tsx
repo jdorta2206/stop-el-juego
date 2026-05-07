@@ -549,6 +549,18 @@ export default function SoloGame() {
           }, 500);
         }
         if (!isDailyMode) setTimeout(() => setShowShareModal(true), br.isNew ? 4200 : 3500);
+
+        // 💾 Submit final score INLINE with the freshly-computed value.
+        // We can't rely on the auto-submit useEffect reading `totalScore` from
+        // state because `setTotalScore(finalPlayerScore)` above is async and
+        // the auto-submit effect would fire in the same render cycle with
+        // the OLD totalScore (off by the last round's points → 0pts daily bug).
+        if (!submittedRef.current) {
+          submittedRef.current = true;
+          const finalAi = aiTotalScore + as_;
+          submitToLeaderboard(finalPlayerScore, finalAi);
+          if (isDailyMode) submitDailyResult(finalPlayerScore);
+        }
       }
 
       // AI personality comment
