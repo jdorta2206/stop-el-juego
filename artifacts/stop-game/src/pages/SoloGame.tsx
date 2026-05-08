@@ -95,8 +95,11 @@ export default function SoloGame() {
   const [categories, setCategories] = useState<string[]>(packCats());
   const [muted, setMuted] = useState(false);
   const [stopFlash, setStopFlash] = useState(false);
-  // 🕵️ Espía / Robar respuesta — 1 uso por partida, cuesta -10 pts al final
-  const [spyUsed, setSpyUsed] = useState(false);
+  // 🕵️ Espía / Robar respuesta — free: 1 uso/partida, premium: 2 usos/partida. -10 pts cada uso.
+  // `spyUsesLeft` persists across rounds (per-game allowance).
+  // `spyUsesThisRound` resets each round so the -10 cost is only applied in the round it was used.
+  const [spyUsesLeft, setSpyUsesLeft] = useState(1);
+  const [spyUsesThisRound, setSpyUsesThisRound] = useState(0);
   const [spyReveal, setSpyReveal] = useState<{ category: string; word: string } | null>(null);
   const [spyLoading, setSpyLoading] = useState(false);
 
@@ -248,8 +251,8 @@ export default function SoloGame() {
 
   const startGame = () => {
     setAiComment(null);
-    // Reset spy use each new game
-    setSpyUsed(false);
+    // Reset spy uses each new game (premium gets 2x)
+    setSpyUsesLeft(isPremium ? 2 : 1);
     setSpyReveal(null);
     // 🎲 Random mode — reroll the secret round time so each round feels different (15–55s)
     if (isRandomMode) setRandomRoundTime(15 + Math.floor(Math.random() * 41));
@@ -325,6 +328,7 @@ export default function SoloGame() {
     setRewardedUsed(false);
     setHintUsed(false);
     setHintReveal(null);
+    setSpyUsesThisRound(0);
     sound.playRoundStart();
     if (randomEvent === "hidden_category") setTimeout(() => sound.playHiddenReveal(), 400);
 
@@ -528,8 +532,9 @@ export default function SoloGame() {
 
       const won = (ps + stolenScore + sabotageStolen) > as_;
 
-      // 🕵️ Espía costs -10 puntos this round if it was used
-      const spyCost = spyUsed ? 10 : 0;
+      // 🕵️ Espía costs -10 puntos per use, ONLY for uses in THIS round
+      // (spyUsesThisRound resets in startRound; spyUsesLeft is the per-game pool).
+      const spyCost = spyUsesThisRound * 10;
       const finalPlayerScore = totalScore + ps + stolenScore + sabotageStolen + bluffBonusScore - spyCost;
       setTotalScore(finalPlayerScore);
       setAiTotalScore(prev => prev + as_);
@@ -1514,15 +1519,15 @@ export default function SoloGame() {
 
               <div className="fixed bottom-4 left-0 w-full px-4 z-20">
                 <div className="max-w-2xl mx-auto space-y-2">
-                  {/* 🕵️ ESPÍA — Robar respuesta de la IA (1 uso, -10 pts) */}
-                  {!spyUsed && (
+                  {/* 🕵️ ESPÍA — Robar respuesta de la IA. Free: 1 uso, Premium: 2 usos. -10 pts cada uso. */}
+                  {spyUsesLeft > 0 && (
                     <motion.button
                       initial={{ opacity: 0, y: 8 }}
                       animate={{ opacity: 1, y: 0 }}
                       whileTap={{ scale: 0.97 }}
                       disabled={spyLoading}
                       onClick={async () => {
-                        if (spyUsed || spyLoading) return;
+                        if (spyUsesLeft <= 0 || spyLoading) return;
                         setSpyLoading(true);
                         try {
                           // Pick a random category not yet filled by the player (or any if all filled)
@@ -1533,7 +1538,8 @@ export default function SoloGame() {
                           const r = await fetch(url);
                           const data = await r.json().catch(() => ({}));
                           const word = (data?.word as string) || "—";
-                          setSpyUsed(true);
+                          setSpyUsesLeft(prev => Math.max(0, prev - 1));
+                          setSpyUsesThisRound(prev => prev + 1);
                           setSpyReveal({ category: cat, word });
                           vibrate([30, 20, 30]);
                           // Auto-dismiss after 5 seconds
@@ -1552,6 +1558,9 @@ export default function SoloGame() {
                       }}
                     >
                       🕵️ {spyLoading ? "Espiando..." : "ESPIAR a la IA"}
+                      {isPremium && (
+                        <span className="text-xs bg-yellow-400/30 border border-yellow-300/50 rounded-full px-2 py-0.5 ml-1">⭐ {spyUsesLeft}/2</span>
+                      )}
                       <span className="text-xs bg-black/30 rounded-full px-2 py-0.5 ml-1">-10 pts</span>
                     </motion.button>
                   )}
