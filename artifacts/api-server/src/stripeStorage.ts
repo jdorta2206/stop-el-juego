@@ -47,8 +47,13 @@ export class StripeStorage {
   }
 
   async getActiveSubscriptionByCustomerId(customerId: string) {
+    // 'trialing' grants premium during the 7-day free trial.
+    // 'active' is the normal paid state.
     const result = await db.execute(
-      sql`SELECT * FROM stripe.subscriptions WHERE customer = ${customerId} AND status = 'active' LIMIT 1`
+      sql`SELECT * FROM stripe.subscriptions
+          WHERE customer = ${customerId}
+            AND status IN ('active', 'trialing')
+          LIMIT 1`
     );
     return result.rows[0] || null;
   }
