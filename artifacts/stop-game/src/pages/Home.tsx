@@ -24,7 +24,8 @@ export default function Home() {
   const { friends } = useFollows(player?.id);
   const friendsOnline = useFriendsOnline(player?.id, friends);
   const { t } = useT();
-  const { streak } = useStreak();
+  const { streak, playedToday } = useStreak();
+  const streakAtRisk = streak.current > 0 && !playedToday;
   const { level, xp, progress } = useProgression(player?.id);
   const league = getLeague(level);
   const [showPremiumModal, setShowPremiumModal] = useState(false);
@@ -172,28 +173,48 @@ export default function Home() {
             </motion.div>
           </motion.div>
 
-          {/* Streak badge */}
+          {/* Streak badge — clickable to play & save streak */}
           {streak.current > 0 && (
-            <motion.div
-              initial={{ scale: 0, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ type: "spring", bounce: 0.6, delay: 0.4 }}
-              className="flex items-center gap-2 px-4 py-2 rounded-full"
-              style={{
-                background: streak.current >= 7
-                  ? "linear-gradient(135deg, rgba(249,168,37,0.3), rgba(181,48,26,0.3))"
-                  : "rgba(249,168,37,0.15)",
-                border: "1px solid rgba(249,168,37,0.5)",
-              }}
-            >
-              <Flame className="w-4 h-4 text-[#f9a825]" />
-              <span className="text-[#f9a825] font-black text-sm">
-                {streak.current} {t.streak.days}
-              </span>
-              {streak.current === streak.longest && streak.current >= 3 && (
-                <span className="text-white/60 text-xs">🏆 {t.streak.newRecord}</span>
-              )}
-            </motion.div>
+            <Link href="/solo?mode=quick&auto=1">
+              <motion.div
+                initial={{ scale: 0, opacity: 0 }}
+                animate={
+                  streakAtRisk
+                    ? { scale: 1, opacity: 1, boxShadow: ["0 0 0 rgba(220,38,38,0)", "0 0 18px rgba(220,38,38,0.55)", "0 0 0 rgba(220,38,38,0)"] }
+                    : { scale: 1, opacity: 1 }
+                }
+                transition={
+                  streakAtRisk
+                    ? { boxShadow: { repeat: Infinity, duration: 1.6 }, default: { type: "spring", bounce: 0.6, delay: 0.4 } }
+                    : { type: "spring", bounce: 0.6, delay: 0.4 }
+                }
+                className="flex items-center gap-2 px-4 py-2 rounded-full cursor-pointer"
+                style={{
+                  background: streakAtRisk
+                    ? "linear-gradient(135deg, rgba(220,38,38,0.25), rgba(249,168,37,0.18))"
+                    : streak.current >= 7
+                      ? "linear-gradient(135deg, rgba(249,168,37,0.3), rgba(181,48,26,0.3))"
+                      : "rgba(249,168,37,0.15)",
+                  border: streakAtRisk
+                    ? "1.5px solid rgba(220,38,38,0.7)"
+                    : "1px solid rgba(249,168,37,0.5)",
+                }}
+              >
+                <Flame className={`w-4 h-4 ${streakAtRisk ? "text-red-400" : "text-[#f9a825]"}`} />
+                <span className={`font-black text-sm ${streakAtRisk ? "text-white" : "text-[#f9a825]"}`}>
+                  {streak.current} {t.streak.days}
+                </span>
+                {streakAtRisk ? (
+                  <span className="text-red-300 text-xs font-black uppercase tracking-wide">
+                    ⚠️ Salva tu racha
+                  </span>
+                ) : streak.current === streak.longest && streak.current >= 3 ? (
+                  <span className="text-white/60 text-xs">🏆 {t.streak.newRecord}</span>
+                ) : (
+                  <span className="text-white/60 text-xs">✓ Hoy</span>
+                )}
+              </motion.div>
+            </Link>
           )}
         </motion.div>
 

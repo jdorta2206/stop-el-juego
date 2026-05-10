@@ -11,6 +11,7 @@ import { useValidateRound, useSubmitScore, type CategoryResult } from "@workspac
 import { usePlayer } from "@/hooks/use-player";
 import { motion, AnimatePresence } from "framer-motion";
 import { RewardedAd, BannerAd } from "@/components/AdSystem";
+import { ContextualPremiumPrompt } from "@/components/ContextualPremiumPrompt";
 import { PremiumModal } from "@/components/PremiumModal";
 import { ShareResultsModal } from "@/components/ShareResultsModal";
 import { usePremium } from "@/lib/usePremium";
@@ -69,8 +70,8 @@ function getTodayStr(): string {
 export default function SoloGame() {
   const { player, showAuth } = usePlayer();
   const { isPremium } = usePremium(player?.id);
+  const { streak: soloStreak, recordPlay } = useStreak();
   const { t, lang } = useT();
-  const { recordPlay } = useStreak();
   const { addXp, levelUpInfo, clearLevelUp } = useProgression(player?.id);
   const [, setLocation] = useLocation();
   const [gameState, setGameState] = useState<GameState>("LOBBY");
@@ -2007,7 +2008,20 @@ export default function SoloGame() {
                 })}
               </div>
 
-              {!isPremium && <BannerAd className="mb-4" />}
+              {!isPremium && (
+                <ContextualPremiumPrompt
+                  className="mb-4"
+                  context={{
+                    isPremium,
+                    roundLost: (results?.playerTotalScore ?? 0) < (results?.aiTotalScore ?? 0),
+                    margin: Math.abs((results?.playerTotalScore ?? 0) - (results?.aiTotalScore ?? 0)),
+                    spyExhausted: spyUsesLeft <= 0,
+                    streakDays: soloStreak.current,
+                  }}
+                  onUpgrade={() => setShowPremiumModal(true)}
+                  fallback={<BannerAd className="mb-4" />}
+                />
+              )}
 
               {/* Double or Nothing result badge */}
               {activeCard === "double_or_nothing" && (
