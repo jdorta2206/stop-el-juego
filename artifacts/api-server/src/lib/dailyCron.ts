@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import { db } from "@workspace/db";
 import { sendPushToAllSubscribers, sendPushToPlayer } from "./pushHelper";
+import { SEASON_LENGTH_DAYS, themeForStartDate } from "./seasonConfig";
 
 const LANGUAGES = ["es", "en", "pt", "fr"] as const;
 
@@ -13,6 +14,7 @@ const DAILY_MSGS: Record<string, { title: string; body: string }> = {
 
 const CRON_KEY = "daily_notifications";
 const STREAK_RESCUE_KEY = "streak_rescue_notifications";
+const SEASON_ROLLOVER_KEY = "season_rollover";
 
 const STREAK_RESCUE_MSGS: Record<string, (streak: number) => { title: string; body: string }> = {
   es: (s) => ({ title: `🔥 ¡Salva tu racha de ${s} días!`, body: "Aún estás a tiempo. Una partida rápida y tu racha sigue viva." }),
@@ -136,7 +138,46 @@ export function startDailyCron() {
         await sendStreakRescueNotifications();
       }
     }
+
+    // 08:00–08:05 UTC → season rollover. Idempotent: only opens a new season
+    // when no current season covers `today`. Single-instance via DB lock.
+    if (utcHour === 8 && utcMinute < 5) {
+      const claimed = await claimDailyLock(today, SEASON_ROLLOVER_KEY);
+      if (claimed) {
+        await rolloverSeasonIfNeeded(today);
+      }
+    }
   }, 5 * 60 * 1000);
 
-  console.log("[dailyCron] Crons started — daily 09:00 UTC, streak rescue 19:00 UTC");
+  console.log("[dailyCron] Crons started — daily 09:00 UTC, streak rescue 19:00 UTC, season rollover 08:00 UTC");
+}
+
+/**
+ * Opens a fresh 4-week season if no active season covers `today`. Safe to run
+ * daily — a no-op while the current season is still active.
+ */
+async function rolloverSeasonIfNeeded(today: string) {
+  try {
+    const existing = await db.execute(sql`
+      SELECT id FROM seasons
+      WHERE start_date <= ${today} AND end_date >= ${today}
+      ORDER BY id DESC LIMIT 1
+    `);
+    if ((existing as any).rows?.length > 0) {
+      console.log(`[seasonRollover] Active season exists for ${today} — no-op`);
+      return;
+    }
+
+    const start = today;
+    const end = new Date(new Date(start + "T00:00:00Z").getTime() + (SEASON_LENGTH_DAYS - 1) * 86_400_000)
+      .toISOString().slice(0, 10);
+    const theme = themeForStartDate(start);
+    await db.execute(sql`
+      INSERT INTO seasons (start_date, end_date, theme_json)
+      VALUES (${start}, ${end}, ${JSON.stringify(theme)})
+    `);
+    console.log(`[seasonRollover] Opened season ${start} → ${end} (${theme.name})`);
+  } catch (e: any) {
+    console.error("[seasonRollover] Error:", e?.message ?? e);
+  }
 }

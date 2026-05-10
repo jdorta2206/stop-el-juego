@@ -1,6 +1,7 @@
 import { Router } from "express";
 import type { Request, Response } from "express";
 import jwt from "jsonwebtoken";
+import { issuePlayerToken, PLAYER_TOKEN_BRIDGE_KEY } from "../lib/playerAuth";
 
 const router = Router();
 
@@ -22,8 +23,16 @@ function bridgePage(key: string, value: string, returnPath: string) {
 
 // Multi-key bridge page — writes multiple sessionStorage entries before redirecting
 function bridgePageMulti(items: [string, string][], returnPath: string) {
+  // Most items are session-scoped (existing OAuth profile handoff). The
+  // PLAYER_TOKEN_BRIDGE_KEY entry, however, must persist across tabs and
+  // browser restarts so daily Season Pass missions keep accumulating — write
+  // it to localStorage as a durable cross-origin fallback for the
+  // httpOnly auth cookie set in the same response.
   const setItems = items
-    .map(([k, v]) => `sessionStorage.setItem(${JSON.stringify(k)}, ${JSON.stringify(v)});`)
+    .map(([k, v]) => {
+      const store = k === PLAYER_TOKEN_BRIDGE_KEY ? "localStorage" : "sessionStorage";
+      return `${store}.setItem(${JSON.stringify(k)}, ${JSON.stringify(v)});`;
+    })
     .join("\n    ");
   return `<!DOCTYPE html><html><head><meta charset="utf-8">
 <title>Conectando...</title>
@@ -119,15 +128,20 @@ router.get("/google/callback", async (req: Request, res: Response) => {
       throw new Error("No id_token or access_token in Google response");
     }
 
+    const playerId = `google_${payload.sub}`;
     const user = JSON.stringify({
-      id:       `google_${payload.sub}`,
+      id:       playerId,
       name:     payload.name,
       email:    payload.email,
       picture:  payload.picture,
       provider: "google",
     });
 
-    res.send(bridgePage("oauth_user", user, state));
+    const sessionToken = issuePlayerToken(res, playerId);
+    res.send(bridgePageMulti([
+      ["oauth_user", user],
+      ...(sessionToken ? [[PLAYER_TOKEN_BRIDGE_KEY, sessionToken] as [string, string]] : []),
+    ], state));
   } catch (err) {
     console.error("Google OAuth error:", err);
     res.redirect(`${APP_ORIGIN}/?auth_error=google_failed`);
@@ -188,18 +202,21 @@ router.get("/facebook/callback", async (req: Request, res: Response) => {
     );
     const me = (await meRes.json()) as any;
 
+    const playerId = `fb_${me.id}`;
     const user = JSON.stringify({
-      id:       `fb_${me.id}`,
+      id:       playerId,
       name:     me.name,
       email:    me.email,
       picture:  me.picture?.data?.url || null,
       provider: "facebook",
     });
 
+    const sessionToken = issuePlayerToken(res, playerId);
     // Pass both user profile AND access token so frontend can call Graph API for friends
     res.send(bridgePageMulti([
       ["oauth_user", user],
       ["fb_access_token", tokenData.access_token],
+      ...(sessionToken ? [[PLAYER_TOKEN_BRIDGE_KEY, sessionToken] as [string, string]] : []),
     ], state));
   } catch (err) {
     console.error("Facebook OAuth error:", err);
@@ -270,14 +287,19 @@ router.get("/instagram/callback", async (req: Request, res: Response) => {
     );
     const me = (await meRes.json()) as any;
 
+    const playerId = `ig_${me.id}`;
     const user = JSON.stringify({
-      id:       `ig_${me.id}`,
+      id:       playerId,
       name:     me.username || me.name || "Usuario",
       picture:  me.profile_picture_url || null,
       provider: "instagram",
     });
 
-    res.send(bridgePage("oauth_user", user, state));
+    const sessionToken = issuePlayerToken(res, playerId);
+    res.send(bridgePageMulti([
+      ["oauth_user", user],
+      ...(sessionToken ? [[PLAYER_TOKEN_BRIDGE_KEY, sessionToken] as [string, string]] : []),
+    ], state));
   } catch (err) {
     console.error("Instagram OAuth error:", err);
     res.redirect(`${APP_ORIGIN}/?auth_error=instagram_failed`);
@@ -376,15 +398,20 @@ router.post("/apple/callback", async (req: Request, res: Response) => {
       }
     } catch (_) {}
 
+    const playerId = `apple_${payload.sub}`;
     const user = JSON.stringify({
-      id:       `apple_${payload.sub}`,
+      id:       playerId,
       name:     displayName,
       email:    payload.email || null,
       picture:  null,
       provider: "apple",
     });
 
-    res.send(bridgePage("oauth_user", user, state));
+    const sessionToken = issuePlayerToken(res, playerId);
+    res.send(bridgePageMulti([
+      ["oauth_user", user],
+      ...(sessionToken ? [[PLAYER_TOKEN_BRIDGE_KEY, sessionToken] as [string, string]] : []),
+    ], state));
   } catch (err) {
     console.error("Apple OAuth error:", err);
     res.redirect(`${APP_ORIGIN}/?auth_error=apple_failed`);
@@ -458,14 +485,19 @@ router.get("/tiktok/callback", async (req: Request, res: Response) => {
     const meData = (await meRes.json()) as any;
     const me = meData.data?.user || meData.user || {};
 
+    const playerId = `tt_${me.open_id || openId}`;
     const user = JSON.stringify({
-      id:       `tt_${me.open_id || openId}`,
+      id:       playerId,
       name:     me.display_name || "TikToker",
       picture:  me.avatar_url || null,
       provider: "tiktok",
     });
 
-    res.send(bridgePage("oauth_user", user, state));
+    const sessionToken = issuePlayerToken(res, playerId);
+    res.send(bridgePageMulti([
+      ["oauth_user", user],
+      ...(sessionToken ? [[PLAYER_TOKEN_BRIDGE_KEY, sessionToken] as [string, string]] : []),
+    ], state));
   } catch (err) {
     console.error("TikTok OAuth error:", err);
     res.redirect(`${APP_ORIGIN}/?auth_error=tiktok_failed`);

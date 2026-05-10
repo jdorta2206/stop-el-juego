@@ -10,6 +10,7 @@ import friendsRouter from "./friends";
 import dailyRouter from "./daily";
 import notificationsRouter from "./notifications";
 import tournamentsRouter from "./tournaments";
+import seasonRouter from "./season";
 
 const router: IRouter = Router();
 
@@ -24,5 +25,6 @@ router.use("/friends", friendsRouter);
 router.use("/daily", dailyRouter);
 router.use("/notifications", notificationsRouter);
 router.use("/tournaments", tournamentsRouter);
+router.use("/season", seasonRouter);
 
 export default router;

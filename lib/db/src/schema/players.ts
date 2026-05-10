@@ -132,3 +132,35 @@ export const pushSubscriptionsTable = pgTable("push_subscriptions", {
 export const insertPushSubscriptionSchema = createInsertSchema(pushSubscriptionsTable).omit({ id: true, createdAt: true });
 export type InsertPushSubscription = z.infer<typeof insertPushSubscriptionSchema>;
 export type PushSubscription = typeof pushSubscriptionsTable.$inferSelect;
+
+// ── Season Pass ──────────────────────────────────────────────────────────────
+// 4-week seasons with daily rotating missions and 30 tiers (free + premium).
+// `themeJson` is a small JSON blob: { name, color, emoji, tagline }.
+export const seasonsTable = pgTable("seasons", {
+  id: serial("id").primaryKey(),
+  startDate: text("start_date").notNull(), // YYYY-MM-DD UTC inclusive
+  endDate: text("end_date").notNull(),     // YYYY-MM-DD UTC inclusive
+  themeJson: text("theme_json").notNull().default("{}"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertSeasonSchema = createInsertSchema(seasonsTable).omit({ id: true, createdAt: true });
+export type InsertSeason = z.infer<typeof insertSeasonSchema>;
+export type Season = typeof seasonsTable.$inferSelect;
+
+// One row per (player, season). `missionsJson` is { date: 'YYYY-MM-DD',
+// missions: [{ id, target, progress, completed, claimed, xpReward }] }.
+// `claimedTiers` is { free: number[], premium: number[] }.
+export const seasonProgressTable = pgTable("season_progress", {
+  id: serial("id").primaryKey(),
+  playerId: text("player_id").notNull(),
+  seasonId: integer("season_id").notNull(),
+  xp: integer("xp").notNull().default(0),
+  claimedTiers: text("claimed_tiers").notNull().default("{\"free\":[],\"premium\":[]}"),
+  missionsJson: text("missions_json").notNull().default("{}"),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertSeasonProgressSchema = createInsertSchema(seasonProgressTable).omit({ id: true, updatedAt: true });
+export type InsertSeasonProgress = z.infer<typeof insertSeasonProgressSchema>;
+export type SeasonProgress = typeof seasonProgressTable.$inferSelect;

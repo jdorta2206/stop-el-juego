@@ -20,6 +20,7 @@ import { useT } from "@/i18n/useT";
 import { useTicker } from "@/hooks/useTicker";
 import { useStreak } from "@/hooks/useStreak";
 import { useProgression, calcXpFromResults } from "@/hooks/useProgression";
+import { reportSeasonEvent } from "@/hooks/useSeason";
 import { useSound } from "@/hooks/useSound";
 import { useToast } from "@/hooks/use-toast";
 import { pickRandomPersonality, getAIComment, type AIPersonality } from "@/data/aiPersonalities";
@@ -128,6 +129,10 @@ export default function SoloGame() {
   const gameMode = isDailyMode ? "daily" : isQuickMode ? "quick" : isChaosMode ? "chaos" : isRandomMode ? "random" : "normal";
   const { best: personalBest, updateBest } = usePersonalBest(gameMode, player?.id);
   const [bestResult, setBestResult] = useState<{ isNew: boolean; diff: number } | null>(null);
+  // Highest single-round score across the current game (resets on new game).
+  // Used to track the `round_score` Season Pass missions accurately, instead
+  // of using the cumulative `totalScore` which would over-award them.
+  const [bestRoundScore, setBestRoundScore] = useState(0);
 
   // 🎲 STOP Random — pick a fresh secret end time each round (15–55s). Player never sees the timer.
   const [randomRoundTime, setRandomRoundTime] = useState<number>(() => 15 + Math.floor(Math.random() * 41));
@@ -536,10 +541,15 @@ export default function SoloGame() {
       // 🕵️ Espía costs -10 puntos per use, ONLY for uses in THIS round
       // (spyUsesThisRound resets in startRound; spyUsesLeft is the per-game pool).
       const spyCost = spyUsesThisRound * 10;
-      const finalPlayerScore = totalScore + ps + stolenScore + sabotageStolen + bluffBonusScore - spyCost;
+      const roundDelta = ps + stolenScore + sabotageStolen + bluffBonusScore - spyCost;
+      const finalPlayerScore = totalScore + roundDelta;
       setTotalScore(finalPlayerScore);
       setAiTotalScore(prev => prev + as_);
       setRoundWon(won);
+      // Track best single-round score for the Season Pass `round_score` missions.
+      const roundScoreClamped = Math.max(0, roundDelta);
+      const newBestRound = Math.max(bestRoundScore, roundScoreClamped);
+      if (roundScoreClamped > bestRoundScore) setBestRoundScore(newBestRound);
       vibrate(won ? [40, 20, 80] : [120]);
 
       if (round >= maxRounds) {
@@ -566,6 +576,17 @@ export default function SoloGame() {
           const finalAi = aiTotalScore + as_;
           submitToLeaderboard(finalPlayerScore, finalAi);
           if (isDailyMode) submitDailyResult(finalPlayerScore);
+          // ── Season Pass mission tracking ──────────────────────────────
+          // Must fire here (not just in the auto-submit effect below) — the
+          // auto-submit effect early-returns once submittedRef is set, which
+          // happens RIGHT ABOVE on the same render cycle. So if we relied on
+          // the effect, missions would silently never advance from gameplay.
+          // The effect path remains as a fallback for any reload/edge case
+          // and is itself idempotent via `seasonEventsReportedRef`.
+          // We pass `newBestRound` explicitly because `setBestRoundScore`
+          // above is async — reading state would yield the previous value
+          // and under-report when the best round IS the final round.
+          reportGameEndSeasonEvents(finalPlayerScore, finalAi, results, newBestRound);
         }
       }
 
@@ -664,11 +685,51 @@ export default function SoloGame() {
   // clicking "Jugar de nuevo" lost their score entirely. Guarded by a ref so
   // the submission fires exactly once per game.
   const submittedRef = useRef(false);
+
+  // Single-fire guard for Season Pass mission events. Independent of
+  // submittedRef because the inline final-round block sets submittedRef
+  // before this effect can read it — see the call at line ~580.
+  const seasonEventsReportedRef = useRef(false);
+
+  /**
+   * Reports all end-of-game Season Pass events exactly once per game.
+   * Safe to call from multiple submit paths (inline final-round block AND
+   * the fallback auto-submit effect). Guests are silently no-op'd.
+   */
+  const reportGameEndSeasonEvents = (
+    finalScore: number,
+    finalAi: number,
+    finalResults: typeof results,
+    bestRoundOverride?: number,
+  ) => {
+    if (seasonEventsReportedRef.current) return;
+    if (!player || player.loginMethod === "guest") return;
+    seasonEventsReportedRef.current = true;
+    const won = finalScore > finalAi;
+    // Caller may pass a freshly-computed best-round value (the inline
+    // final-round path does this) so we don't read stale React state.
+    const bestRound = bestRoundOverride !== undefined ? bestRoundOverride : bestRoundScore;
+    reportSeasonEvent(player.id, "play_game", 1);
+    if (won) reportSeasonEvent(player.id, "win_game", 1);
+    if (isDailyMode) reportSeasonEvent(player.id, "daily_done", 1);
+    if (bestRound > 0) reportSeasonEvent(player.id, "round_score", bestRound);
+    const validCount = finalResults
+      ? Object.values(finalResults.results ?? {}).filter(
+          (r) => ((r as CategoryResult).player?.score ?? 0) > 0
+        ).length
+      : 0;
+    if (validCount > 0) reportSeasonEvent(player.id, "valid_words", validCount);
+    if (soloStreak.current > 0) reportSeasonEvent(player.id, "streak", soloStreak.current);
+  };
+
   useEffect(() => {
     if (gameState !== "RESULTS" || round < maxRounds || submittedRef.current) return;
     submittedRef.current = true;
     submitToLeaderboard(totalScore, aiTotalScore);
     if (isDailyMode) submitDailyResult(totalScore);
+    // Fallback path — the inline block already reports events on the normal
+    // happy path; this catches any case where the inline path didn't run.
+    reportGameEndSeasonEvents(totalScore, aiTotalScore, results);
   }, [gameState, round, maxRounds, totalScore, aiTotalScore, isDailyMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const submitDailyResult = (finalScore: number) => {
@@ -722,6 +783,7 @@ export default function SoloGame() {
       setRound(1);
       setTotalScore(0);
       setAiTotalScore(0);
+      setBestRoundScore(0);
       setDoubleUsed(false);
       setCombo(0);
       setInsaneMode(false);

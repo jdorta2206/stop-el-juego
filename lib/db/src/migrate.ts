@@ -6,6 +6,14 @@ import { db } from "./index";
  * These indexes are required for the app to handle thousands of concurrent
  * players without timing out on ranking, leaderboard and room queries.
  */
+// Readiness flag flipped to true after ensureIndexes() completes successfully.
+// Routes that require the new season tables can gate on this to avoid
+// cold-start races where requests arrive before tables exist.
+let _indexesReady = false;
+export function indexesReady(): boolean {
+  return _indexesReady;
+}
+
 export async function ensureIndexes(): Promise<void> {
   const stmts = [
     // ── player_scores ────────────────────────────────────────────────
@@ -54,6 +62,36 @@ export async function ensureIndexes(): Promise<void> {
        last_run_date text NOT NULL,
        updated_at timestamp NOT NULL DEFAULT NOW()
      )`,
+
+    // ── seasons / season_progress ────────────────────────────────────
+    // Tables created here (alongside cron_locks) so the API works on a fresh
+    // boot without requiring a separate drizzle-kit migration step.
+    `CREATE TABLE IF NOT EXISTS seasons (
+       id serial PRIMARY KEY,
+       start_date text NOT NULL,
+       end_date text NOT NULL,
+       theme_json text NOT NULL DEFAULT '{}',
+       created_at timestamp NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE TABLE IF NOT EXISTS season_progress (
+       id serial PRIMARY KEY,
+       player_id text NOT NULL,
+       season_id integer NOT NULL,
+       xp integer NOT NULL DEFAULT 0,
+       claimed_tiers text NOT NULL DEFAULT '{"free":[],"premium":[]}',
+       missions_json text NOT NULL DEFAULT '{}',
+       updated_at timestamp NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE INDEX IF NOT EXISTS seasons_dates_idx
+       ON seasons (start_date, end_date)`,
+    // Race-safe season creation relies on this — collapses concurrent
+    // first-hit / weekly-rollover INSERTs onto a single row.
+    `CREATE UNIQUE INDEX IF NOT EXISTS seasons_start_date_uidx
+       ON seasons (start_date)`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS season_progress_player_season_uidx
+       ON season_progress (player_id, season_id)`,
+    `CREATE INDEX IF NOT EXISTS season_progress_season_xp_desc_idx
+       ON season_progress (season_id, xp DESC)`,
   ];
 
   for (const stmt of stmts) {
@@ -66,5 +104,6 @@ export async function ensureIndexes(): Promise<void> {
       }
     }
   }
+  _indexesReady = true;
   console.log("[ensureIndexes] All indexes verified");
 }

@@ -12,6 +12,7 @@ import { usePlayer } from "@/hooks/use-player";
 import { useT } from "@/i18n/useT";
 import { useStreak } from "@/hooks/useStreak";
 import { useProgression, getLeague } from "@/hooks/useProgression";
+import { useSeason } from "@/hooks/useSeason";
 import { useGetLeaderboard, useGetPlayerStats } from "@workspace/api-client-react";
 import { PackSelector } from "@/components/PackSelector";
 import { NativeBanner } from "@/components/AdSystem";
@@ -28,6 +29,7 @@ export default function Home() {
   const streakAtRisk = streak.current > 0 && !playedToday;
   const { level, xp, progress } = useProgression(player?.id);
   const league = getLeague(level);
+  const { season, progress: seasonProgress } = useSeason(player?.id);
   const [showPremiumModal, setShowPremiumModal] = useState(false);
   const [invitedBy, setInvitedBy] = useState<string | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -217,6 +219,63 @@ export default function Home() {
             </Link>
           )}
         </motion.div>
+
+        {/* 🎟️ Season Pass banner — only shown when there's a mission ready to claim */}
+        {player && season && seasonProgress && seasonProgress.hasUnclaimedMissions && (
+          <Link href="/season">
+            <motion.div
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              whileHover={{ scale: 1.01 }}
+              whileTap={{ scale: 0.99 }}
+              className="w-full px-4 py-3 rounded-2xl cursor-pointer"
+              style={{
+                background: `linear-gradient(135deg, ${season.theme?.color ?? "#f9a825"}26, rgba(13,23,87,0.5))`,
+                border: `1.5px solid ${season.theme?.color ?? "#f9a825"}66`,
+              }}
+            >
+              <div className="flex items-center gap-3">
+                <div className="text-3xl flex-shrink-0">{season.theme?.emoji ?? "🎟️"}</div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p
+                      className="text-[10px] font-black uppercase tracking-widest"
+                      style={{ color: season.theme?.color ?? "#f9a825" }}
+                    >
+                      Temporada
+                    </p>
+                    {seasonProgress.hasUnclaimedMissions && (
+                      <span
+                        className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded animate-pulse"
+                        style={{ background: "#f9a825", color: "#0d1757" }}
+                      >
+                        ¡Reclama!
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-white font-black text-sm truncate">
+                    {season.theme?.name ?? "Season Pass"}
+                  </p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: "rgba(0,0,0,0.3)" }}>
+                      <div
+                        className="h-full rounded-full"
+                        style={{
+                          width: `${Math.min(100, ((seasonProgress.xp % 100) / 100) * 100)}%`,
+                          background: `linear-gradient(90deg, ${season.theme?.color ?? "#f9a825"}, #dc2626)`,
+                        }}
+                      />
+                    </div>
+                    <span className="text-white/70 text-[10px] font-mono">
+                      Nv {seasonProgress.currentTier}/{seasonProgress.totalTiers}
+                    </span>
+                  </div>
+                </div>
+                <span className="text-white/60 font-black text-lg flex-shrink-0">→</span>
+              </div>
+            </motion.div>
+          </Link>
+        )}
 
         {/* 🔴 EN VIVO ahora — public streamer rooms */}
         <LiveRoomsSection />
