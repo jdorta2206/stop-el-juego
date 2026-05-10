@@ -122,7 +122,13 @@ export function startDailyCron() {
       }
     }
 
-    // 19:00–19:05 UTC → streak rescue (still time before midnight UTC to play)
+    // 19:00–19:05 UTC → streak rescue. 19:00 UTC was chosen because it
+    // falls inside daytime/evening waking hours for every supported locale
+    // (es 20-21h CET, fr 20-21h CET, pt 16h BRT / 19h WET, en spans the
+    // US afternoon and EU early evening) — i.e. a built-in quiet-hours
+    // safeguard without per-user preferences. There is no per-user
+    // preferences/timezone column yet; if/when one is added, gate the
+    // SELECT in sendStreakRescueNotifications() on it.
     if (utcHour === 19 && utcMinute < 5) {
       const claimed = await claimDailyLock(today, STREAK_RESCUE_KEY);
       if (claimed) {
