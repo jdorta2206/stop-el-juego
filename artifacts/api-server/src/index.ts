@@ -2,7 +2,7 @@ import { runMigrations } from "stripe-replit-sync";
 import { getStripeSync } from "./stripeClient";
 import app from "./app";
 import { startDailyCron } from "./lib/dailyCron";
-import { ensurePermanentPremium } from "./lib/permanentPremium";
+import { revokeFakePremium } from "./lib/permanentPremium";
 import { ensureIndexes } from "@workspace/db";
 
 async function initStripe() {
@@ -71,7 +71,9 @@ async function main() {
   });
 
   startDailyCron();
-  ensurePermanentPremium();
+  // 🚫 One-shot cleanup at boot: revoke premium from any account without an
+  // active Stripe subscription. Idempotent — only premium comes from Stripe now.
+  revokeFakePremium();
 
   initStripe().catch((err) => {
     console.error("Stripe init failed:", err.message);
