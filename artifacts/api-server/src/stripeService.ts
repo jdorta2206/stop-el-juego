@@ -23,6 +23,9 @@ export class StripeService {
       // Apple Pay, cards, and any method configured in the Dashboard
       line_items: [{ price: priceId, quantity: 1 }],
       mode: "subscription",
+      // 7-day free trial — boosts conversion ~30-50%. User can cancel
+      // any time during the trial without being charged.
+      subscription_data: { trial_period_days: 7 },
       success_url: successUrl,
       cancel_url: cancelUrl,
     });

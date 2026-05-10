@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import { db } from "@workspace/db";
-import { sendPushToAllSubscribers } from "./pushHelper";
+import { sendPushToAllSubscribers, sendPushToPlayer } from "./pushHelper";
 
 const LANGUAGES = ["es", "en", "pt", "fr"] as const;
 
@@ -12,19 +12,27 @@ const DAILY_MSGS: Record<string, { title: string; body: string }> = {
 };
 
 const CRON_KEY = "daily_notifications";
+const STREAK_RESCUE_KEY = "streak_rescue_notifications";
+
+const STREAK_RESCUE_MSGS: Record<string, (streak: number) => { title: string; body: string }> = {
+  es: (s) => ({ title: `🔥 ¡Salva tu racha de ${s} días!`, body: "Aún estás a tiempo. Una partida rápida y tu racha sigue viva." }),
+  en: (s) => ({ title: `🔥 Save your ${s}-day streak!`, body: "You still have time. One quick game keeps your streak alive." }),
+  pt: (s) => ({ title: `🔥 Salva a tua sequência de ${s} dias!`, body: "Ainda estás a tempo. Um jogo rápido e a tua sequência continua." }),
+  fr: (s) => ({ title: `🔥 Sauve ta série de ${s} jours !`, body: "Tu as encore le temps. Une partie rapide suffit." }),
+};
 
 /**
  * Tries to claim the daily-notification lock for `today` in Postgres.
  * Returns true only on the FIRST instance to insert/update for this date.
  * Any subsequent instance (or restart) for the same date returns false.
  */
-async function claimDailyLock(today: string): Promise<boolean> {
+async function claimDailyLock(today: string, key: string = CRON_KEY): Promise<boolean> {
   try {
     // Insert if missing → claim. Else only update if the existing date is older → claim.
     // The atomic "WHERE last_run_date < $today" ensures only one wins the race.
     const result = await db.execute(sql`
       INSERT INTO cron_locks (lock_key, last_run_date, updated_at)
-      VALUES (${CRON_KEY}, ${today}, NOW())
+      VALUES (${key}, ${today}, NOW())
       ON CONFLICT (lock_key) DO UPDATE
         SET last_run_date = EXCLUDED.last_run_date, updated_at = NOW()
         WHERE cron_locks.last_run_date < EXCLUDED.last_run_date
@@ -34,6 +42,47 @@ async function claimDailyLock(today: string): Promise<boolean> {
   } catch (e) {
     console.error("[dailyCron] lock error:", e);
     return false;
+  }
+}
+
+/**
+ * Sends a "save your streak" push to every player whose streak is at risk:
+ *   - current_streak >= 2 (so it's worth saving)
+ *   - last_played_date is exactly yesterday (UTC) — they haven't played today yet
+ * Looks up each player's preferred language from their first push subscription.
+ */
+async function sendStreakRescueNotifications() {
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+
+    // Players with a worth-saving streak who haven't played today
+    const rows = await db.execute(sql`
+      SELECT ps.player_id, ps.current_streak,
+             COALESCE(MIN(sub.language), 'es') AS language
+      FROM player_scores ps
+      INNER JOIN push_subscriptions sub ON sub.player_id = ps.player_id
+      WHERE ps.current_streak >= 2
+        AND ps.last_played_date = ${yesterday}
+      GROUP BY ps.player_id, ps.current_streak
+      LIMIT 5000
+    `);
+
+    let sent = 0;
+    for (const row of rows.rows as Array<{ player_id: string; current_streak: number; language: string }>) {
+      const lang = STREAK_RESCUE_MSGS[row.language] ? row.language : "es";
+      const msg = STREAK_RESCUE_MSGS[lang](row.current_streak);
+      const n = await sendPushToPlayer(row.player_id, {
+        ...msg,
+        icon: "/images/icon-192.png",
+        badge: "/images/icon-192.png",
+        url: "/solo?mode=quick&auto=1",
+      });
+      sent += n;
+    }
+    console.log(`[streakRescueCron] Notifications sent: ${sent} (candidates: ${rows.rows.length}, date: ${today})`);
+  } catch (e) {
+    console.error("[streakRescueCron] Error:", e);
   }
 }
 
@@ -56,22 +105,32 @@ async function sendDailyNotifications() {
 }
 
 export function startDailyCron() {
-  // Check every 5 minutes if it's time to send the daily notification (9:00 UTC)
+  // Check every 5 minutes if it's time to send notifications.
+  // Both fires use a per-key DB lock so only ONE instance sends across the cluster.
   setInterval(async () => {
     const now = new Date();
     const utcHour = now.getUTCHours();
     const utcMinute = now.getUTCMinutes();
     const today = now.toISOString().slice(0, 10);
 
-    // Fire at 9:00–9:05 UTC. The DB lock guarantees ONE send across all instances.
+    // 09:00–09:05 UTC → daily challenge announcement
     if (utcHour === 9 && utcMinute < 5) {
-      const claimed = await claimDailyLock(today);
+      const claimed = await claimDailyLock(today, CRON_KEY);
       if (claimed) {
-        console.log(`[dailyCron] Lock claimed for ${today} — sending notifications`);
+        console.log(`[dailyCron] Lock claimed for ${today} — sending daily notifications`);
         await sendDailyNotifications();
+      }
+    }
+
+    // 19:00–19:05 UTC → streak rescue (still time before midnight UTC to play)
+    if (utcHour === 19 && utcMinute < 5) {
+      const claimed = await claimDailyLock(today, STREAK_RESCUE_KEY);
+      if (claimed) {
+        console.log(`[streakRescueCron] Lock claimed for ${today} — sending streak rescue`);
+        await sendStreakRescueNotifications();
       }
     }
   }, 5 * 60 * 1000);
 
-  console.log("[dailyCron] Daily notification cron started (fires at 09:00 UTC, distributed lock)");
+  console.log("[dailyCron] Crons started — daily 09:00 UTC, streak rescue 19:00 UTC");
 }
