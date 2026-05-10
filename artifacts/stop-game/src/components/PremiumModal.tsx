@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Star, Zap, ShieldOff, Crown } from "lucide-react";
-import { fetchPremiumProducts, startCheckout, openCustomerPortal } from "@/lib/usePremium";
+import { fetchPremiumProducts, startCheckout, openCustomerPortal, notifyPremiumRefresh } from "@/lib/usePremium";
 import { usePaymentChannel } from "@/hooks/usePaymentChannel";
 import { purchasePremiumOnPlay } from "@/lib/playBilling";
 import { useT } from "@/i18n/useT";
@@ -68,13 +68,14 @@ export function PremiumModal({
     try {
       if (channel === "play") {
         // Play Billing path — opens the native Google Play sheet, then
-        // server-validates. Premium activates immediately on success; the
-        // caller's `usePremium` hook will refetch on next mount.
+        // server-validates. On success we broadcast a refresh event so all
+        // mounted `usePremium` hooks refetch immediately (premium ring,
+        // ranking badge, ad-free state) without a page reload.
         const result = await purchasePremiumOnPlay(playerId);
         if (result.isPremium) {
-          // Force a reload so all stale isPremium reads (other tabs, cached
-          // state) pick up the new entitlement.
-          window.location.href = "/?premium=success";
+          notifyPremiumRefresh();
+          setLoading(false);
+          onClose();
           return;
         }
         setError(t.premium.errorCheckout);

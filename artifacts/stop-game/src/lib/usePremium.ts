@@ -9,10 +9,29 @@ export interface PremiumStatus {
   error: string | null;
 }
 
+// Custom DOM event other components fire after a successful purchase or
+// portal action — listeners refetch immediately so premium UI updates
+// without a page reload (required by the no-reload UX of the Play flow,
+// where window.location.href would lose Digital Goods state).
+export const PREMIUM_REFRESH_EVENT = "stop:premium-refresh";
+
+export function notifyPremiumRefresh() {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(PREMIUM_REFRESH_EVENT));
+  }
+}
+
 export function usePremium(playerId: string | null | undefined): PremiumStatus {
   const [isPremium, setIsPremium] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [refreshTick, setRefreshTick] = useState(0);
+
+  useEffect(() => {
+    const handler = () => setRefreshTick((t) => t + 1);
+    window.addEventListener(PREMIUM_REFRESH_EVENT, handler);
+    return () => window.removeEventListener(PREMIUM_REFRESH_EVENT, handler);
+  }, []);
 
   useEffect(() => {
     if (!playerId) return;
@@ -48,7 +67,7 @@ export function usePremium(playerId: string | null | undefined): PremiumStatus {
     return () => {
       cancelled = true;
     };
-  }, [playerId]);
+  }, [playerId, refreshTick]);
 
   return { isPremium, loading, error };
 }

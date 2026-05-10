@@ -55,16 +55,20 @@ async function tryGetService(): Promise<DigitalGoodsService | null> {
 export async function detectPaymentChannel(): Promise<"play" | "stripe"> {
   if (cachedChannel) return cachedChannel;
   const svc = await tryGetService();
-  // We require BOTH the API to be present AND the android-app referrer to
-  // safely route through Play. Either alone is too weak: Chrome on desktop
-  // exposes getDigitalGoodsService stubs in some flags configurations, and
-  // the referrer can be spoofed by a malicious deep link.
-  if (svc && isAndroidAppReferrer()) {
-    cachedChannel = "play";
-  } else {
-    cachedChannel = "stripe";
-  }
+  // The Digital Goods service successfully resolving the Play Billing
+  // payment method is the *authoritative* signal — Chrome only exposes it
+  // when the page is running inside a Play Store TWA with the playBilling
+  // feature enabled in the AAB manifest. The android-app:// referrer is a
+  // useful corroborating hint but not required: in some TWA flows (deep
+  // links, restored sessions) the referrer is empty, and that should NOT
+  // force the user back to Stripe inside the Play Store app.
+  cachedChannel = svc ? "play" : "stripe";
   return cachedChannel;
+}
+
+// Exposed for diagnostic UIs / debugging. The referrer alone is just a hint.
+export function hasAndroidAppReferrer(): boolean {
+  return isAndroidAppReferrer();
 }
 
 // ── Product details for the UI ──────────────────────────────────────────

@@ -1,0 +1,43 @@
+{
+  "_comment": "Bubblewrap manifest template for the STOP Trusted Web Activity. Copy this file into the local clone of your TWA project (NOT this repo — Bubblewrap expects it at the root of its own working directory) and run `bubblewrap update && bubblewrap build`. The fields marked TODO must be replaced with real values from your Play Console / signing keystore before building. The `playBilling` feature flag below is what unlocks the Digital Goods API on the JavaScript side; without it window.getDigitalGoodsService is undefined and the app falls back to Stripe.",
+  "packageId": "com.dorynex.stop",
+  "host": "stop-el-juego.replit.app",
+  "name": "STOP - El Juego",
+  "launcherName": "STOP",
+  "display": "standalone",
+  "themeColor": "#0d1757",
+  "navigationColor": "#0d1757",
+  "navigationColorDark": "#0d1757",
+  "navigationDividerColor": "#0d1757",
+  "navigationDividerColorDark": "#0d1757",
+  "backgroundColor": "#0d1757",
+  "enableNotifications": true,
+  "startUrl": "/",
+  "iconUrl": "https://stop-el-juego.replit.app/images/icon-512.png",
+  "maskableIconUrl": "https://stop-el-juego.replit.app/images/icon-maskable-512.png",
+  "monochromeIconUrl": "https://stop-el-juego.replit.app/images/icon-mono-512.png",
+  "shortcuts": [],
+  "generatorApp": "bubblewrap-cli",
+  "webManifestUrl": "https://stop-el-juego.replit.app/manifest.json",
+  "fallbackType": "customtabs",
+  "features": {
+    "playBilling": {
+      "enabled": true
+    }
+  },
+  "alphaDependencies": {
+    "enabled": false
+  },
+  "enableSiteSettingsShortcut": false,
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "fullScopeUrl": "https://stop-el-juego.replit.app/",
+  "minSdkVersion": 21,
+  "orientation": "portrait",
+  "_TODO_signingKey": {
+    "path": "./android.keystore",
+    "alias": "android"
+  },
+  "appVersionName": "1.1.0",
+  "appVersionCode": 11
+}

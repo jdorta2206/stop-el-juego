@@ -1,6 +1,7 @@
 import { motion } from "framer-motion";
 import { Crown, Flame, Eye, Trophy } from "lucide-react";
 import type { ReactNode } from "react";
+import { usePaymentChannel } from "@/hooks/usePaymentChannel";
 
 export interface PremiumPromptContext {
   isPremium: boolean;
@@ -82,10 +83,17 @@ export function ContextualPremiumPrompt({
   fallback,
   className,
 }: ContextualPremiumPromptProps) {
+  // Branch the CTA badge by payment channel so the user sees the same
+  // brand they'll see on the next screen — "Google Play" inside the TWA,
+  // "Probar" on the web. Doesn't change the click target (the parent
+  // PremiumModal handles the actual purchase routing).
+  const { channel } = usePaymentChannel();
+
   if (context.isPremium) return null;
 
   const variant = pickVariant(context);
   if (!variant) return <>{fallback}</>;
+  const ctaLabel = channel === "play" ? "Google Play" : "Probar";
 
   return (
     <motion.button
@@ -117,7 +125,7 @@ export function ContextualPremiumPrompt({
         style={{ background: variant.color, color: "#0d1757" }}
       >
         <Crown className="w-3 h-3" />
-        Probar
+        {ctaLabel}
       </div>
     </motion.button>
   );
