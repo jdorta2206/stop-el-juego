@@ -16,9 +16,22 @@ export function isPermanentPremium(_playerId: string): boolean {
 // (those with a non-empty stripe_subscription_id) are never touched.
 export async function revokeFakePremium() {
   try {
-    const result = await db
-      .update(playerScoresTable)
-      .set({ isPremium: false })
+    // Skip players that have an active Google Play subscription on file —
+    // they are legitimately premium even though they have no Stripe row.
+    // Without this filter the boot-time sweep would clear premium for every
+    // Play Store paying user.
+    const playSubscribers = await db.execute(
+      sql`SELECT DISTINCT player_id FROM play_subscriptions
+          WHERE state IN ('ACTIVE', 'IN_GRACE_PERIOD')
+            AND expiry_time_ms > ${Date.now()}`,
+    );
+    const playPremiumIds = new Set<string>(
+      (playSubscribers.rows as Array<{ player_id: string }>).map((r) => r.player_id),
+    );
+
+    const candidates = await db
+      .select({ id: playerScoresTable.id, playerId: playerScoresTable.playerId, name: playerScoresTable.playerName })
+      .from(playerScoresTable)
       .where(
         and(
           eq(playerScoresTable.isPremium, true),
@@ -27,6 +40,19 @@ export async function revokeFakePremium() {
             eq(playerScoresTable.stripeSubscriptionId, "")
           )
         )
+      );
+
+    const toRevoke = candidates.filter((c) => !playPremiumIds.has(c.playerId));
+    if (toRevoke.length === 0) {
+      console.log("[premium] No fake premium accounts found — DB clean.");
+      return;
+    }
+
+    const result = await db
+      .update(playerScoresTable)
+      .set({ isPremium: false })
+      .where(
+        sql`id IN (${sql.join(toRevoke.map((c) => sql`${c.id}`), sql`, `)})`,
       )
       .returning({ id: playerScoresTable.id, name: playerScoresTable.playerName });
     if (result.length > 0) {

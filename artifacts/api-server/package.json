@@ -18,6 +18,8 @@
     "drizzle-orm": "catalog:",
     "express": "^5",
     "express-rate-limit": "^8.5.0",
+    "google-auth-library": "^10.6.2",
+    "googleapis": "^171.4.0",
     "jsonwebtoken": "^9.0.3",
     "node-fetch": "^3.3.2",
     "stripe": "^20.4.1",

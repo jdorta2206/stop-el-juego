@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Star, Zap, ShieldOff, Crown } from "lucide-react";
 import { fetchPremiumProducts, startCheckout, openCustomerPortal } from "@/lib/usePremium";
+import { usePaymentChannel } from "@/hooks/usePaymentChannel";
+import { purchasePremiumOnPlay } from "@/lib/playBilling";
 import { useT } from "@/i18n/useT";
 
 interface PremiumModalProps {
@@ -30,6 +32,7 @@ export function PremiumModal({
   isPremium,
 }: PremiumModalProps) {
   const { t } = useT();
+  const { channel, playProduct } = usePaymentChannel();
   const [products, setProducts] = useState<any[]>([]);
   const [selectedPrice, setSelectedPrice] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -44,7 +47,10 @@ export function PremiumModal({
   ];
 
   useEffect(() => {
-    if (!open || isPremium) return;
+    // Skip Stripe product fetch when paying through Google Play — we already
+    // have the product/price from the Digital Goods API and the Stripe price
+    // id is irrelevant on that path.
+    if (!open || isPremium || channel === "play" || channel === "loading") return;
     setLoadingProducts(true);
     fetchPremiumProducts()
       .then((res) => {
@@ -54,13 +60,32 @@ export function PremiumModal({
       })
       .catch(() => setError(t.premium.errorLoad))
       .finally(() => setLoadingProducts(false));
-  }, [open, isPremium]);
+  }, [open, isPremium, channel]);
 
   const handleSubscribe = async () => {
-    if (!selectedPrice) return;
     setLoading(true);
     setError(null);
     try {
+      if (channel === "play") {
+        // Play Billing path — opens the native Google Play sheet, then
+        // server-validates. Premium activates immediately on success; the
+        // caller's `usePremium` hook will refetch on next mount.
+        const result = await purchasePremiumOnPlay(playerId);
+        if (result.isPremium) {
+          // Force a reload so all stale isPremium reads (other tabs, cached
+          // state) pick up the new entitlement.
+          window.location.href = "/?premium=success";
+          return;
+        }
+        setError(t.premium.errorCheckout);
+        setLoading(false);
+        return;
+      }
+      // Stripe path (default web) — unchanged.
+      if (!selectedPrice) {
+        setLoading(false);
+        return;
+      }
       const { url } = await startCheckout({ playerId, playerName, email, priceId: selectedPrice });
       window.location.href = url;
     } catch (err: any) {
@@ -176,7 +201,67 @@ export function PremiumModal({
                     {loading ? t.premium.loading : t.premium.manage}
                   </button>
                 </>
-              ) : loadingProducts ? (
+              ) : channel === "play" ? (
+                <>
+                  {/* Single Google-Play-priced plan card. The price label
+                      comes directly from the Digital Goods API, so it's
+                      already in the user's local currency. */}
+                  <div
+                    className="w-full rounded-xl px-4 py-3 text-left flex items-center justify-between"
+                    style={{
+                      background: "rgba(249,168,37,0.15)",
+                      border: "2px solid #f9a825",
+                    }}
+                  >
+                    <div>
+                      <p className="text-white font-bold text-sm">
+                        {playProduct?.title ?? "STOP Premium"}
+                      </p>
+                      <p className="text-white/60 text-xs">{t.premium.monthly}</p>
+                    </div>
+                    <p className="text-[#f9a825] font-black text-lg">
+                      {playProduct?.priceLabel ?? "1,99 €"}
+                      <span className="text-white/50 text-xs font-normal ml-1">
+                        /{t.premium.perMonth}
+                      </span>
+                    </p>
+                  </div>
+
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={handleSubscribe}
+                    disabled={loading}
+                    className="w-full py-4 rounded-xl font-black text-lg tracking-wide transition-all disabled:opacity-50"
+                    style={{
+                      background: "linear-gradient(135deg, #f9a825, #f57f17)",
+                      color: "#0d1757",
+                      boxShadow: "0 4px 20px rgba(249,168,37,0.4)",
+                      fontFamily: "'Baloo 2', sans-serif",
+                    }}
+                  >
+                    {loading ? t.premium.redirecting : t.premium.activate}
+                  </motion.button>
+
+                  <div className="flex items-center justify-center gap-2">
+                    <div
+                      className="px-3 py-1.5 rounded-lg text-xs font-bold"
+                      style={{ background: "#fff", color: "#3C4043" }}
+                    >
+                      <span style={{ color: "#4285F4" }}>G</span>
+                      <span style={{ color: "#EA4335" }}>o</span>
+                      <span style={{ color: "#FBBC05" }}>o</span>
+                      <span style={{ color: "#4285F4" }}>g</span>
+                      <span style={{ color: "#34A853" }}>l</span>
+                      <span style={{ color: "#EA4335" }}>e</span>
+                      <span style={{ color: "#3C4043" }}> Play</span>
+                    </div>
+                  </div>
+                  <p className="text-white/40 text-xs text-center -mt-1">
+                    {t.premium.secure}
+                  </p>
+                </>
+              ) : loadingProducts || channel === "loading" ? (
                 <div className="text-center py-4">
                   <div className="inline-block w-6 h-6 rounded-full border-2 border-[#f9a825] border-t-transparent animate-spin" />
                 </div>

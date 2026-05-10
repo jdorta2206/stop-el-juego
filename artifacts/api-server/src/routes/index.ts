@@ -11,6 +11,7 @@ import dailyRouter from "./daily";
 import notificationsRouter from "./notifications";
 import tournamentsRouter from "./tournaments";
 import seasonRouter from "./season";
+import playBillingRouter from "./playBilling";
 
 const router: IRouter = Router();
 
@@ -26,5 +27,6 @@ router.use("/daily", dailyRouter);
 router.use("/notifications", notificationsRouter);
 router.use("/tournaments", tournamentsRouter);
 router.use("/season", seasonRouter);
+router.use("/billing/play", playBillingRouter);
 
 export default router;

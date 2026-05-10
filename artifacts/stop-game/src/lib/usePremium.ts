@@ -21,8 +21,20 @@ export function usePremium(playerId: string | null | undefined): PremiumStatus {
     setLoading(true);
     setError(null);
 
-    fetch(`${API_BASE}/api/stripe/status?playerId=${encodeURIComponent(playerId)}`)
-      .then((r) => r.json())
+    // Unified premium status — checks Stripe AND Google Play, so a TWA user
+    // with a Play subscription gets premium even though they have no Stripe
+    // customer id. Falls back to /api/stripe/status if the unified endpoint
+    // returns 5xx (e.g. cold start race during deploy).
+    fetch(`${API_BASE}/api/billing/play/status?playerId=${encodeURIComponent(playerId)}`, {
+      credentials: "include",
+    })
+      .then(async (r) => {
+        if (r.ok) return r.json();
+        const fallback = await fetch(
+          `${API_BASE}/api/stripe/status?playerId=${encodeURIComponent(playerId)}`,
+        );
+        return fallback.json();
+      })
       .then((data) => {
         if (!cancelled) setIsPremium(data.isPremium === true);
       })
