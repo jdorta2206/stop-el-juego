@@ -1,5 +1,7 @@
-const CACHE = "stop-v5";
+const CACHE = "stop-v6";
 const STATIC = [
+  "/",
+  "/manifest.json",
   "/images/stop-logo.png",
   "/images/icon-192.png",
   "/images/icon-512.png"
@@ -8,7 +10,16 @@ const STATIC = [
 self.addEventListener("install", (e) => {
   e.waitUntil(
     caches.open(CACHE)
-      .then((c) => c.addAll(STATIC))
+      .then((c) =>
+        // Use individual puts so a single missing asset doesn't abort install
+        Promise.all(
+          STATIC.map((url) =>
+            fetch(url, { cache: "reload" })
+              .then((res) => (res.ok ? c.put(url, res) : null))
+              .catch(() => null)
+          )
+        )
+      )
       .then(() => self.skipWaiting())
   );
 });
@@ -34,7 +45,7 @@ self.addEventListener("fetch", (e) => {
   }
 
   // HTML navigation requests: NETWORK FIRST so updates are always picked up.
-  // If offline, fall back to the cached shell.
+  // If offline, fall back to the cached shell ("/").
   if (e.request.mode === "navigate" || e.request.headers.get("accept")?.includes("text/html")) {
     e.respondWith(
       fetch(e.request)
@@ -43,7 +54,9 @@ self.addEventListener("fetch", (e) => {
           caches.open(CACHE).then((c) => c.put(e.request, clone));
           return res;
         })
-        .catch(() => caches.match(e.request))
+        .catch(() =>
+          caches.match(e.request).then((m) => m || caches.match("/"))
+        )
     );
     return;
   }
