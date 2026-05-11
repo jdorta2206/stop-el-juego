@@ -13,6 +13,8 @@ import { useT } from "@/i18n/useT";
 import { useStreak } from "@/hooks/useStreak";
 import { useAchievements } from "@/hooks/useAchievements";
 import { StreakCalendarModal } from "@/components/StreakCalendar";
+import { FTUEWelcomeModal } from "@/components/FTUEWelcomeModal";
+import { useFTUE } from "@/hooks/useFTUE";
 import { AchievementToast } from "@/components/AchievementToast";
 import { useProgression, getLeague } from "@/hooks/useProgression";
 import { useSeason } from "@/hooks/useSeason";
@@ -32,6 +34,16 @@ export default function Home() {
   const streakAtRisk = streak.current > 0 && !playedToday;
   const { newlyUnlocked, clearNewlyUnlocked, checkStreakMilestone } = useAchievements(player?.id);
   const [showStreakCalendar, setShowStreakCalendar] = useState(false);
+  const ftue = useFTUE();
+  const [showFTUEWelcome, setShowFTUEWelcome] = useState(false);
+
+  // Open the FTUE welcome modal once on first ever visit (after a tiny delay
+  // so the home page can render its hero animation first).
+  useEffect(() => {
+    if (!ftue.isFirstVisit) return;
+    const t = setTimeout(() => setShowFTUEWelcome(true), 600);
+    return () => clearTimeout(t);
+  }, [ftue.isFirstVisit]);
 
   // Deterministically evaluate streak milestones from local streak data on
   // every Home mount / streak change — independent of whether the player
@@ -80,6 +92,14 @@ export default function Home() {
 
   return (
     <Layout>
+      <FTUEWelcomeModal
+        open={showFTUEWelcome}
+        onClose={() => {
+          setShowFTUEWelcome(false);
+          ftue.dismissWelcome();
+        }}
+      />
+
       {showPremiumModal && (
         <PremiumModal
           open={showPremiumModal}

@@ -342,6 +342,22 @@ const es = {
     adIntro: "Verás un anuncio breve de 15 segundos",
     label: "Publicidad",
   },
+
+  ftue: {
+    welcomeTitle: "¡Bienvenido a STOP!",
+    welcomeBody: "Sale una letra al azar. Escribe palabras en cada categoría que empiecen por esa letra. ¡Más rápido y original que la IA!",
+    welcomeCta: "¡Jugar mi primera partida!",
+    skip: "Saltar",
+    tipFast: "60 segundos",
+    tipOriginal: "Originalidad +pts",
+    tipLevel: "Sube de nivel",
+    firstWinTag: "Tu primera victoria",
+    firstWinTitle: "¡GANASTE!",
+    firstWinBody: "Has hecho una partida completa. Ahora sigue jugando para subir de nivel y desbloquear logros.",
+    firstWinCta: "¡Seguir jugando!",
+    enableNotifications: "Avísame para no perder mi racha",
+    tutorialBadge: "Tutorial",
+  },
 } as const;
 
 export default es;

@@ -342,6 +342,22 @@ const fr = {
     adIntro: "Tu verras une courte pub de 15 secondes",
     label: "Pub",
   },
+
+  ftue: {
+    welcomeTitle: "Bienvenue dans STOP !",
+    welcomeBody: "Une lettre tombe au hasard. Écris un mot dans chaque catégorie qui commence par cette lettre — plus vite et plus original que l'IA !",
+    welcomeCta: "Jouer ma première partie !",
+    skip: "Passer",
+    tipFast: "60 secondes",
+    tipOriginal: "Originalité +pts",
+    tipLevel: "Monte de niveau",
+    firstWinTag: "Ta première victoire",
+    firstWinTitle: "TU AS GAGNÉ !",
+    firstWinBody: "Tu as terminé une partie complète. Continue de jouer pour monter de niveau et débloquer des succès.",
+    firstWinCta: "Continuer à jouer !",
+    enableNotifications: "Préviens-moi pour ne pas perdre ma série",
+    tutorialBadge: "Tutoriel",
+  },
 } as const;
 
 export default fr;

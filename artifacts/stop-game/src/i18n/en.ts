@@ -342,6 +342,22 @@ const en = {
     adIntro: "You'll see a short 15-second ad",
     label: "Ad",
   },
+
+  ftue: {
+    welcomeTitle: "Welcome to STOP!",
+    welcomeBody: "A random letter pops up. Write a word in each category that starts with that letter — faster and more original than the AI!",
+    welcomeCta: "Play my first match!",
+    skip: "Skip",
+    tipFast: "60 seconds",
+    tipOriginal: "Originality +pts",
+    tipLevel: "Level up",
+    firstWinTag: "Your first win",
+    firstWinTitle: "YOU WON!",
+    firstWinBody: "You completed a full match. Keep playing to level up and unlock achievements.",
+    firstWinCta: "Keep playing!",
+    enableNotifications: "Remind me so I don't lose my streak",
+    tutorialBadge: "Tutorial",
+  },
 } as const;
 
 export default en;

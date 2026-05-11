@@ -24,6 +24,9 @@ import { reportSeasonEvent } from "@/hooks/useSeason";
 import { useSound } from "@/hooks/useSound";
 import { useToast } from "@/hooks/use-toast";
 import { pickRandomPersonality, getAIComment, type AIPersonality } from "@/data/aiPersonalities";
+import { AI_PERSONALITIES } from "@/data/aiPersonalities";
+import { useFTUE } from "@/hooks/useFTUE";
+import { FirstVictoryCelebration } from "@/components/FirstVictoryCelebration";
 import { useAchievements } from "@/hooks/useAchievements";
 import { AchievementToast } from "@/components/AchievementToast";
 import { drawPowerCard, POWER_CARDS, type PowerCardId } from "@/data/powerCards";
@@ -123,6 +126,17 @@ export default function SoloGame() {
   const isQuickMode = urlParams.get("mode") === "quick";
   const isChaosMode = urlParams.get("mode") === "chaos";
   const isRandomMode = urlParams.get("mode") === "random";
+
+  // First-Time User Experience: handicap the AI for the first 3 games to
+  // guarantee an early win and a smoother onboarding. Read once on mount —
+  // the values used in the round are captured per-game in `tutorialActive`.
+  const ftue = useFTUE();
+  const isTutorial = ftue.isInTutorial && !isDailyMode;
+  const [showFirstWin, setShowFirstWin] = useState(false);
+  const [lastWinXp, setLastWinXp] = useState(0);
+  // Snapshot the tutorial flag at game start so a mid-game state change
+  // (after recording the game) doesn't change the rules of the round.
+  const [tutorialActive, setTutorialActive] = useState(isTutorial);
   const dailyLetter = urlParams.get("letter") || "";
   const dailyCategories = urlParams.get("cats")?.split(",").filter(Boolean) || [];
 
@@ -142,11 +156,19 @@ export default function SoloGame() {
     : insaneMode ? QUICK_ROUND_TIME : ROUND_TIME;
   const effectiveRoundTime = (!isQuickMode && !isDailyMode && !isChaosMode && !isRandomMode && !insaneMode && randomEvent === "speed")
     ? SPEED_ROUND_TIME : baseRoundTime;
-  const roundTime = effectiveRoundTime;
+  // Tutorial: +50% extra time per round to reduce panic for first-timers.
+  const roundTime = tutorialActive ? Math.round(effectiveRoundTime * 1.5) : effectiveRoundTime;
   const maxRounds = isDailyMode ? 1 : isQuickMode ? 1 : MAX_ROUNDS;
 
-  // AI personality (picked once per session)
-  const [aiPersonality] = useState<AIPersonality>(() => pickRandomPersonality());
+  // AI personality. During the tutorial we force the friendly CHIP
+  // personality; once the tutorial ends the personality is re-picked at the
+  // start of each game so a long session doesn't keep CHIP forever.
+  const [aiPersonality, setAiPersonality] = useState<AIPersonality>(() => {
+    if (isTutorial) {
+      return AI_PERSONALITIES.find((p) => p.id === "chip") ?? pickRandomPersonality();
+    }
+    return pickRandomPersonality();
+  });
   const [aiComment, setAiComment] = useState<string | null>(null);
 
   // Achievements system
@@ -256,6 +278,17 @@ export default function SoloGame() {
   const currentLetterRef = useRef<string>("");
 
   const startGame = () => {
+    // Snapshot the tutorial state at the moment the player presses Play so
+    // the rules of the round are stable until it ends.
+    const tutorialNow = ftue.isInTutorial && !isDailyMode;
+    setTutorialActive(tutorialNow);
+    // Re-pick personality each game start: friendly CHIP during tutorial,
+    // random afterwards (prevents CHIP sticking around for games 4+).
+    setAiPersonality(
+      tutorialNow
+        ? (AI_PERSONALITIES.find((p) => p.id === "chip") ?? pickRandomPersonality())
+        : pickRandomPersonality()
+    );
     setAiComment(null);
     // Reset spy uses each new game (premium gets 2x)
     setSpyUsesLeft(isPremium ? 2 : 1);
@@ -499,11 +532,14 @@ export default function SoloGame() {
         return sum + (results.results?.[cat]?.player?.score ?? 0);
       }, 0);
       const ps = (results.playerTotalScore || 0) - voidedScore;
-      const rawAs = results.aiTotalScore || 0;
+      // 🎓 Tutorial handicap: halve the AI's effective score for the first
+      // 3 games to give brand-new players a fair shot at winning.
+      const tutorialAiMul = tutorialActive ? 0.5 : 1;
+      const rawAs = Math.floor((results.aiTotalScore || 0) * tutorialAiMul);
 
       // SABOTAGE: reduce AI score AND transfer those points to player
       const sabotageStolen = sabotageCategory
-        ? (results.results?.[sabotageCategory]?.ai?.score ?? 0)
+        ? Math.floor((results.results?.[sabotageCategory]?.ai?.score ?? 0) * tutorialAiMul)
         : 0;
       const as_ = rawAs - sabotageStolen;
       if (sabotageStolen > 0 && sabotageCategory) {
@@ -564,7 +600,35 @@ export default function SoloGame() {
             setTimeout(() => setShowImpossibleBanner(false), 3200);
           }, 500);
         }
-        if (!isDailyMode) setTimeout(() => setShowShareModal(true), br.isNew ? 4200 : 3500);
+        // 🎓 FTUE — record tutorial game and trigger first-win celebration.
+        // We snapshot the values at game-end so subsequent state changes don't
+        // affect the displayed reward.
+        const wasTutorialGame = tutorialActive;
+        const finalAiForGame = aiTotalScore + as_;
+        const wonGame = finalPlayerScore > finalAiForGame;
+        // Celebrate the player's first-ever match win regardless of whether
+        // it happened during the tutorial — it's the moment that matters.
+        const showFirstWinNow = wonGame && !ftue.firstWinCelebrated;
+        if (wasTutorialGame) {
+          ftue.recordTutorialGame();
+        }
+        if (showFirstWinNow) {
+          // Use the same XP formula nextRound() uses so the number stays
+          // consistent with what's awarded a moment later.
+          const validCount = Object.values(results.results ?? {}).filter(
+            (r) => ((r as CategoryResult).player?.score ?? 0) > 0,
+          ).length;
+          const xpEstimate = calcXpFromResults(validCount, finalPlayerScore, finalAiForGame);
+          setLastWinXp(xpEstimate);
+          setTimeout(() => setShowFirstWin(true), 1100);
+          ftue.markFirstWinCelebrated();
+        }
+        if (!isDailyMode) {
+          // Push the share modal back further when the first-win celebration
+          // is showing so the two don't fight for the player's attention.
+          const shareDelay = showFirstWinNow ? 6500 : (br.isNew ? 4200 : 3500);
+          setTimeout(() => setShowShareModal(true), shareDelay);
+        }
 
         // 💾 Submit final score INLINE with the freshly-computed value.
         // We can't rely on the auto-submit useEffect reading `totalScore` from
@@ -925,6 +989,17 @@ export default function SoloGame() {
           />
         )}
 
+        <FirstVictoryCelebration
+          open={showFirstWin}
+          xpGained={lastWinXp}
+          onClose={() => setShowFirstWin(false)}
+          onEnableNotifications={() => {
+            if (typeof Notification !== "undefined" && Notification.permission === "default") {
+              Notification.requestPermission().catch(() => {});
+            }
+          }}
+        />
+
         <ShareResultsModal
           open={showShareModal}
           onClose={() => setShowShareModal(false)}
@@ -951,6 +1026,15 @@ export default function SoloGame() {
 
         {/* Mode badges row */}
         <div className="flex items-center justify-center gap-2 mb-3 flex-wrap">
+          {tutorialActive && (
+            <div
+              className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black"
+              style={{ background: "linear-gradient(135deg, #4ade80, #22c55e)", color: "#0d1757" }}
+              title={`${ftue.gamesPlayed + 1} / ${ftue.tutorialGamesTotal}`}
+            >
+              🎓 {(t as unknown as { ftue: { tutorialBadge: string } }).ftue.tutorialBadge} {ftue.gamesPlayed + 1}/{ftue.tutorialGamesTotal}
+            </div>
+          )}
           {isQuickMode && (
             <div
               className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black"

@@ -342,6 +342,22 @@ const pt = {
     adIntro: "Verás um anúncio breve de 15 segundos",
     label: "Publicidade",
   },
+
+  ftue: {
+    welcomeTitle: "Bem-vindo ao STOP!",
+    welcomeBody: "Sai uma letra ao acaso. Escreve uma palavra em cada categoria que comece por essa letra — mais rápido e original que a IA!",
+    welcomeCta: "Jogar a minha primeira partida!",
+    skip: "Saltar",
+    tipFast: "60 segundos",
+    tipOriginal: "Originalidade +pts",
+    tipLevel: "Sobe de nível",
+    firstWinTag: "A tua primeira vitória",
+    firstWinTitle: "GANHASTE!",
+    firstWinBody: "Completaste uma partida. Continua a jogar para subir de nível e desbloquear conquistas.",
+    firstWinCta: "Continuar a jogar!",
+    enableNotifications: "Avisa-me para não perder a minha sequência",
+    tutorialBadge: "Tutorial",
+  },
 } as const;
 
 export default pt;
