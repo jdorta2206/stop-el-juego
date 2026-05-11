@@ -41,7 +41,19 @@ export function getTitle(rank: number): string {
   return "🌱 Novato";
 }
 
-// Calculate the new streak for a player given their last played date
+// Append today's date to a player's rolling 30-day streak-days JSON column
+// in a deterministic, deduped, sorted manner. Centralized here so solo
+// (`/ranking/scores`) and multiplayer (`rooms.ts`) persistence paths can't
+// drift. Caller is responsible for gating on "first play of the day".
+export function appendStreakDay(prevJson: string | null | undefined, today: string): string {
+  let days: string[] = [];
+  try { days = JSON.parse(prevJson ?? "[]"); } catch {}
+  if (!days.includes(today)) days.push(today);
+  // Keep only the most recent 30 unique dates (sorted ascending).
+  days = [...new Set(days)].sort().slice(-30);
+  return JSON.stringify(days);
+}
+
 export function calculateStreak(
   lastPlayedDate: string | null,
   currentStreak: number
@@ -144,6 +156,12 @@ router.post("/scores", scoreLimiter, async (req, res) => {
   const newXp = (existing[0]?.xp ?? 0) + xpGain;
   const newLevel = calcLevel(newXp);
 
+  // Streak calendar — append today to the rolling 30-day list when this is
+  // the first play of the day (mirrors `updatedToday` semantics).
+  const newStreakDaysJson = (!isBonus && updatedToday)
+    ? appendStreakDay(existing[0]?.streakDaysJson, today)
+    : undefined;
+
   let player;
   if (existing.length > 0) {
     // ⚛️ ATOMIC update — incrementing totalScore/gamesPlayed/wins/xp via SQL
@@ -167,6 +185,7 @@ router.post("/scores", scoreLimiter, async (req, res) => {
           currentStreak: newStreak,
           longestStreak: newLongest,
           lastPlayedDate: today,
+          streakDaysJson: newStreakDaysJson,
         } : {}),
         updatedAt: new Date(),
       })
@@ -189,6 +208,7 @@ router.post("/scores", scoreLimiter, async (req, res) => {
         currentStreak: isBonus ? 0 : 1,
         longestStreak: isBonus ? 0 : 1,
         lastPlayedDate: isBonus ? null : today,
+        streakDaysJson: isBonus ? "[]" : JSON.stringify([today]),
         xp: xpGain,
         level: calcLevel(xpGain),
       })
@@ -433,6 +453,48 @@ router.get("/profile/:playerId", async (req, res) => {
   });
 });
 
+// ── GET /ranking/streak/calendar/:playerId — last 30 days played flags ─────
+router.get("/streak/calendar/:playerId", async (req, res) => {
+  const { playerId } = req.params;
+  const [ps] = await db
+    .select({
+      currentStreak: playerScoresTable.currentStreak,
+      longestStreak: playerScoresTable.longestStreak,
+      lastPlayedDate: playerScoresTable.lastPlayedDate,
+      streakDaysJson: playerScoresTable.streakDaysJson,
+    })
+    .from(playerScoresTable)
+    .where(eq(playerScoresTable.playerId, playerId))
+    .limit(1);
+
+  // Build the rolling 30-day window ending today (UTC).
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  const todayStr = today.toISOString().slice(0, 10);
+
+  let playedSet = new Set<string>();
+  if (ps) {
+    try { playedSet = new Set<string>(JSON.parse(ps.streakDaysJson ?? "[]")); } catch {}
+  }
+
+  const days: { date: string; played: boolean; isToday: boolean }[] = [];
+  for (let i = 29; i >= 0; i--) {
+    const d = new Date(today);
+    d.setUTCDate(d.getUTCDate() - i);
+    const dateStr = d.toISOString().slice(0, 10);
+    days.push({ date: dateStr, played: playedSet.has(dateStr), isToday: dateStr === todayStr });
+  }
+
+  res.json({
+    playerId,
+    today: todayStr,
+    currentStreak: ps?.currentStreak ?? 0,
+    longestStreak: ps?.longestStreak ?? 0,
+    lastPlayedDate: ps?.lastPlayedDate ?? null,
+    days,
+  });
+});
+
 // ── GET /ranking/progress/:playerId — achievements + personal bests ────────
 router.get("/progress/:playerId", async (req, res) => {
   const { playerId } = req.params;
@@ -441,6 +503,7 @@ router.get("/progress/:playerId", async (req, res) => {
       achievementsJson: playerScoresTable.achievementsJson,
       achievementStatsJson: playerScoresTable.achievementStatsJson,
       personalBestsJson: playerScoresTable.personalBestsJson,
+      longestStreak: playerScoresTable.longestStreak,
     })
     .from(playerScoresTable)
     .where(eq(playerScoresTable.playerId, playerId))
@@ -456,6 +519,12 @@ router.get("/progress/:playerId", async (req, res) => {
   try { achievements = JSON.parse(ps.achievementsJson ?? "[]"); } catch {}
   try { stats = JSON.parse(ps.achievementStatsJson ?? "{}"); } catch {}
   try { personalBests = JSON.parse(ps.personalBestsJson ?? "{}"); } catch {}
+  // Merge the authoritative server-side longestStreak into stats so the
+  // achievements client can backfill streak milestones (3/7/14/30) for
+  // players whose local achievement state was wiped or never persisted.
+  const serverLongest = ps.longestStreak ?? 0;
+  const storedLongest = Number(stats.longestStreak ?? 0);
+  if (serverLongest > storedLongest) stats.longestStreak = serverLongest;
   res.json({ achievements, stats, personalBests });
 });
 

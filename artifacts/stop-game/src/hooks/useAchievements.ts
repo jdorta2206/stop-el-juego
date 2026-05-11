@@ -12,6 +12,7 @@ export interface AchievementStats {
   wonChaosRound: boolean;
   validWordsRecord: number;
   xpTotal: number;
+  longestStreak: number;
 }
 
 export interface RoundResult {
@@ -65,13 +66,42 @@ export const ACHIEVEMENTS: AchievementDef[] = [
     id: "unstoppable", icon: "👑", nameKey: "unstoppable_name", descKey: "unstoppable_desc", xpReward: 500,
     check: s => s.totalWins >= 50,
   },
+  // Streak milestones — celebrated by the streak calendar UI on Home.
+  {
+    id: "streak_3", icon: "🔥", nameKey: "streak_3_name", descKey: "streak_3_desc", xpReward: 75,
+    check: s => s.longestStreak >= 3,
+  },
+  {
+    id: "streak_7", icon: "🌟", nameKey: "streak_7_name", descKey: "streak_7_desc", xpReward: 150,
+    check: s => s.longestStreak >= 7,
+  },
+  {
+    id: "streak_14", icon: "💎", nameKey: "streak_14_name", descKey: "streak_14_desc", xpReward: 300,
+    check: s => s.longestStreak >= 14,
+  },
+  {
+    id: "streak_30", icon: "👑", nameKey: "streak_30_name", descKey: "streak_30_desc", xpReward: 750,
+    check: s => s.longestStreak >= 30,
+  },
 ];
+
+// Streak milestone thresholds — kept in sync with the four streak achievements
+// above so the calendar UI can highlight them.
+export const STREAK_MILESTONES = [3, 7, 14, 30] as const;
+export type StreakMilestone = typeof STREAK_MILESTONES[number];
+
+const MILESTONE_TO_ACHIEVEMENT: Record<StreakMilestone, string> = {
+  3: "streak_3",
+  7: "streak_7",
+  14: "streak_14",
+  30: "streak_30",
+};
 
 function defaultStats(): AchievementStats {
   return {
     totalWins: 0, totalGames: 0, maxCombo: 0,
     wonSpeedRound: false, wonChaosRound: false,
-    validWordsRecord: 0, xpTotal: 0,
+    validWordsRecord: 0, xpTotal: 0, longestStreak: 0,
   };
 }
 
@@ -107,7 +137,20 @@ function mergeStats(local: AchievementStats, remote: Partial<AchievementStats>):
     wonChaosRound: local.wonChaosRound || Boolean(remote.wonChaosRound),
     validWordsRecord: Math.max(local.validWordsRecord, Number(remote.validWordsRecord ?? 0)),
     xpTotal: Math.max(local.xpTotal, Number(remote.xpTotal ?? 0)),
+    longestStreak: Math.max(local.longestStreak, Number(remote.longestStreak ?? 0)),
   };
+}
+
+// Public helper used by the streak calendar to celebrate when a player crosses
+// a milestone. Persists locally + on the server, sets `newlyUnlocked` so the
+// existing AchievementToast surfaces the new badge, and returns the unlocked
+// achievement (or null if nothing new).
+export function getStreakMilestoneAchievement(streak: number): AchievementDef | null {
+  // Find the highest milestone the streak satisfies.
+  const milestone = [...STREAK_MILESTONES].reverse().find(m => streak >= m);
+  if (!milestone) return null;
+  const id = MILESTONE_TO_ACHIEVEMENT[milestone];
+  return ACHIEVEMENTS.find(a => a.id === id) ?? null;
 }
 
 async function syncFromServer(playerId: string): Promise<{
@@ -144,6 +187,7 @@ export function useAchievements(playerId?: string) {
   const [unlocked, setUnlocked] = useState<Set<string>>(loadUnlocked);
   const [newlyUnlocked, setNewlyUnlocked] = useState<AchievementDef | null>(null);
   const syncedRef = useRef(false);
+  const checkStreakMilestoneRef = useRef<(longestStreak: number) => AchievementDef | null>(() => null);
 
   // ── Sync from server on mount — server wins, then merge with local ────────
   useEffect(() => {
@@ -172,6 +216,15 @@ export function useAchievements(playerId?: string) {
           return prev;
         });
       }
+
+      // Deterministically evaluate streak milestones from the authoritative
+      // server-side longestStreak — does NOT depend on the player opening the
+      // streak calendar modal. checkStreakMilestone is idempotent.
+      const serverLongest = Number(serverStats.longestStreak ?? 0);
+      if (serverLongest >= STREAK_MILESTONES[0]) {
+        // Defer to next tick so the stats setState above has settled.
+        setTimeout(() => checkStreakMilestoneRef.current(serverLongest), 0);
+      }
     });
   }, [playerId]);
 
@@ -185,6 +238,7 @@ export function useAchievements(playerId?: string) {
       wonChaosRound: current.wonChaosRound || (result.wasChaosRound && result.won),
       validWordsRecord: Math.max(current.validWordsRecord, result.validWords),
       xpTotal: current.xpTotal + result.xpGained,
+      longestStreak: current.longestStreak,
     };
     saveStatsLocal(next);
     setStats(next);
@@ -207,7 +261,60 @@ export function useAchievements(playerId?: string) {
     if (playerId) saveToServer(playerId, [...newUnlocked], next);
   }, [playerId]);
 
+  // Called by the streak calendar when the player's longest streak crosses a
+  // milestone (3/7/14/30). Unlocks the matching achievement once and triggers
+  // the AchievementToast via `newlyUnlocked`.
+  const checkStreakMilestone = useCallback((longestStreak: number) => {
+    if (!longestStreak || longestStreak < STREAK_MILESTONES[0]) return null;
+    const current = loadStats();
+    const currentUnlocked = loadUnlocked();
+    const newUnlocked = new Set(currentUnlocked);
+
+    // Compute which milestone IDs are missing locally for this streak — this
+    // is the source of truth for whether to unlock, NOT the monotonic stats
+    // guard. That way an existing player whose server `longestStreak` is
+    // already past a milestone but whose local achievements set is missing
+    // the badge (fresh device, cleared storage, etc.) still gets unlocked
+    // on Home mount / server sync.
+    let justUnlocked: AchievementDef | null = null;
+    for (const m of STREAK_MILESTONES) {
+      if (longestStreak >= m) {
+        const id = MILESTONE_TO_ACHIEVEMENT[m];
+        if (!newUnlocked.has(id)) {
+          newUnlocked.add(id);
+          const def = ACHIEVEMENTS.find(a => a.id === id) ?? null;
+          // Show the *highest* milestone just crossed.
+          if (def) justUnlocked = def;
+        }
+      }
+    }
+
+    // Stats: bump only forward (never regress).
+    const nextLongest = Math.max(current.longestStreak, longestStreak);
+    const next: AchievementStats =
+      nextLongest === current.longestStreak ? current : { ...current, longestStreak: nextLongest };
+    if (next !== current) {
+      saveStatsLocal(next);
+      setStats(next);
+    }
+
+    if (justUnlocked) {
+      saveUnlocked(newUnlocked);
+      setUnlocked(newUnlocked);
+      setNewlyUnlocked(justUnlocked);
+    }
+    // Persist when either stats moved forward or new achievements were added.
+    if (playerId && (justUnlocked || next !== current)) {
+      saveToServer(playerId, [...newUnlocked], next);
+    }
+    return justUnlocked;
+  }, [playerId]);
+
+  // Keep the ref pointing at the latest closure so the server-sync effect can
+  // call it without re-running when the callback identity changes.
+  checkStreakMilestoneRef.current = checkStreakMilestone;
+
   const clearNewlyUnlocked = useCallback(() => setNewlyUnlocked(null), []);
 
-  return { stats, unlocked, newlyUnlocked, afterRound, clearNewlyUnlocked };
+  return { stats, unlocked, newlyUnlocked, afterRound, clearNewlyUnlocked, checkStreakMilestone };
 }

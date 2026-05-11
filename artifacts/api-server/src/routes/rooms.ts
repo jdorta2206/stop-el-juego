@@ -3,7 +3,7 @@ import { db } from "@workspace/db";
 import { roomsTable, playerScoresTable, gameHistoryTable } from "@workspace/db";
 import { eq, and, lt, inArray, sql } from "drizzle-orm";
 import { CreateRoomBody, JoinRoomBody, SubmitRoomResultsBody } from "@workspace/api-zod";
-import { calculateStreak } from "./ranking";
+import { calculateStreak, appendStreakDay } from "./ranking";
 import { writeLimiter } from "../middlewares/rateLimit";
 
 const router: IRouter = Router();
@@ -316,6 +316,7 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string) {
         currentStreak: playerScoresTable.currentStreak,
         longestStreak: playerScoresTable.longestStreak,
         avatarColor: playerScoresTable.avatarColor,
+        streakDaysJson: playerScoresTable.streakDaysJson,
       })
       .from(playerScoresTable)
       .where(eq(playerScoresTable.playerId, p.playerId))
@@ -326,6 +327,12 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string) {
       existing[0]?.currentStreak ?? 0
     );
     const newLongest = Math.max(existing[0]?.longestStreak ?? 0, newStreak);
+    // Append today to the rolling 30-day streak-days list using the same
+    // shared helper as the solo /ranking/scores path so the streak calendar
+    // is consistent regardless of which mode the player progressed through.
+    const newStreakDaysJson = updatedToday
+      ? appendStreakDay(existing[0]?.streakDaysJson, today)
+      : undefined;
 
     if (existing.length > 0) {
       await db.update(playerScoresTable)
@@ -339,6 +346,7 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string) {
             currentStreak: newStreak,
             longestStreak: newLongest,
             lastPlayedDate: today,
+            streakDaysJson: newStreakDaysJson,
           } : {}),
           updatedAt: new Date(),
         })
@@ -355,6 +363,7 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string) {
         currentStreak: 1,
         longestStreak: 1,
         lastPlayedDate: today,
+        streakDaysJson: JSON.stringify([today]),
       }).onConflictDoUpdate({
         target: playerScoresTable.playerId,
         set: {

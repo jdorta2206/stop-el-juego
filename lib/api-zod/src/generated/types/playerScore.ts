@@ -15,8 +15,7 @@ export interface PlayerScore {
   gamesPlayed: number;
   wins: number;
   rank?: number;
-  // Computed at query time by the ranking endpoint — not stored in the DB
-  // but always present in `/me` and leaderboard responses.
+  /** Computed at query time by the ranking endpoint — not stored in the DB but always present in `/me` and leaderboard responses. */
   globalRank?: number;
   bestScore?: number;
   createdAt?: Date;

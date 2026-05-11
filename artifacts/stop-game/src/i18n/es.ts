@@ -169,6 +169,14 @@ const es = {
     champion_desc: "Gana 10 rondas",
     unstoppable_name: "Imparable",
     unstoppable_desc: "Gana 50 rondas",
+    streak_3_name: "En llamas",
+    streak_3_desc: "Juega 3 días seguidos",
+    streak_7_name: "Semana perfecta",
+    streak_7_desc: "Juega 7 días seguidos",
+    streak_14_name: "Quincena de fuego",
+    streak_14_desc: "Juega 14 días seguidos",
+    streak_30_name: "Leyenda mensual",
+    streak_30_desc: "Juega 30 días seguidos",
   },
 
   multiplayer: {
@@ -264,6 +272,13 @@ const es = {
     keepIt: "¡Sigue así!",
     start: "¡Empieza tu racha hoy!",
     longest: "Mejor racha",
+    weekdaysShort: "L M X J V S D",
+    nextHint: "Te faltan {n} días para el siguiente hito",
+    milestoneCelebrate: "¡Hito desbloqueado!",
+    shareButton: "Comparte tu racha",
+    shareTitle: "Mi racha en STOP",
+    shareText: "Llevo",
+    shareCta: "¡Únete y rompe mi racha!",
   },
 
   daily: {

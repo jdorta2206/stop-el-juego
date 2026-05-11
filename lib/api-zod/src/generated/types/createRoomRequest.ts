@@ -12,4 +12,6 @@ export interface CreateRoomRequest {
   avatarColor?: string;
   maxRounds?: number;
   language?: string;
+  loginMethod?: string | null;
+  isPublic?: boolean;
 }

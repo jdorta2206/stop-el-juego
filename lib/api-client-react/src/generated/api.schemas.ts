@@ -22,6 +22,7 @@ export interface ResultDetail {
   response: string;
   isValid: boolean;
   score: number;
+  isDuplicate?: boolean;
 }
 
 export interface CategoryResult {
@@ -67,9 +68,7 @@ export interface PlayerScore {
   gamesPlayed: number;
   wins: number;
   rank?: number;
-  // Computed by the ranking endpoint at query time and always present in
-  // /me and leaderboard responses (see ranking.ts L330). Marked optional
-  // so that other endpoints which only return the row shape stay valid.
+  /** Computed at query time by the ranking endpoint — not stored in the DB but always present in `/me` and leaderboard responses. */
   globalRank?: number;
   bestScore?: number;
   createdAt?: string;
@@ -98,7 +97,30 @@ export interface SubmitScoreRequest {
   letter: string;
   mode: string;
   won?: boolean;
+  /** When true, the score is treated as a bonus increment (e.g. from a
+rewarded video doubling). The server still adds `score` to
+`totalScore` and grants XP, but skips incrementing
+`gamesPlayed`/`wins` and does not bump the daily streak — those
+already counted on the original (non-bonus) submission.
+ */
   bonus?: boolean;
+}
+
+export interface StreakCalendarDay {
+  /** YYYY-MM-DD UTC */
+  date: string;
+  played: boolean;
+  isToday: boolean;
+}
+
+export interface StreakCalendarResponse {
+  playerId: string;
+  /** YYYY-MM-DD UTC */
+  today: string;
+  currentStreak: number;
+  longestStreak: number;
+  lastPlayedDate?: string | null;
+  days: StreakCalendarDay[];
 }
 
 export interface LeaderboardResponse {
@@ -142,21 +164,28 @@ export interface CreateRoomRequest {
   avatarColor?: string;
   maxRounds?: number;
   language?: string;
+  loginMethod?: string | null;
+  isPublic?: boolean;
 }
 
 export interface JoinRoomRequest {
   playerId: string;
   playerName: string;
   avatarColor?: string;
+  loginMethod?: string | null;
 }
+
+export type RoomResultsRequestAnswers = { [key: string]: string };
+
+export type RoomResultsRequestBluffedWords = { [key: string]: string };
 
 export interface RoomResultsRequest {
   playerId: string;
   roundScore: number;
   letter: string;
-  answers?: { [key: string]: string };
+  answers?: RoomResultsRequestAnswers;
   bluffedCategories?: string[];
-  bluffedWords?: { [key: string]: string };
+  bluffedWords?: RoomResultsRequestBluffedWords;
 }
 
 export type GetLeaderboardParams = {

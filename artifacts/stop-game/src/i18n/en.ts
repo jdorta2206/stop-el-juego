@@ -169,6 +169,14 @@ const en = {
     champion_desc: "Win 10 rounds",
     unstoppable_name: "Unstoppable",
     unstoppable_desc: "Win 50 rounds",
+    streak_3_name: "On fire",
+    streak_3_desc: "Play 3 days in a row",
+    streak_7_name: "Perfect week",
+    streak_7_desc: "Play 7 days in a row",
+    streak_14_name: "Two-week blaze",
+    streak_14_desc: "Play 14 days in a row",
+    streak_30_name: "Monthly legend",
+    streak_30_desc: "Play 30 days in a row",
   },
 
   multiplayer: {
@@ -264,6 +272,13 @@ const en = {
     keepIt: "Keep it up!",
     start: "Start your streak today!",
     longest: "Best streak",
+    weekdaysShort: "M T W T F S S",
+    nextHint: "{n} days to the next milestone",
+    milestoneCelebrate: "Milestone unlocked!",
+    shareButton: "Share your streak",
+    shareTitle: "My STOP streak",
+    shareText: "I'm on a",
+    shareCta: "Join and try to break my streak!",
   },
 
   daily: {

@@ -14,4 +14,11 @@ export interface SubmitScoreRequest {
   letter: string;
   mode: string;
   won?: boolean;
+  /** When true, the score is treated as a bonus increment (e.g. from a
+rewarded video doubling). The server still adds `score` to
+`totalScore` and grants XP, but skips incrementing
+`gamesPlayed`/`wins` and does not bump the daily streak — those
+already counted on the original (non-bonus) submission.
+ */
+  bonus?: boolean;
 }

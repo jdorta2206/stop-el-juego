@@ -45,6 +45,7 @@ export const ValidateRoundResponse = zod.object({
         response: zod.string(),
         isValid: zod.boolean(),
         score: zod.number(),
+        isDuplicate: zod.boolean().optional(),
       }),
     }),
   ),
@@ -72,6 +73,13 @@ export const GetLeaderboardResponse = zod.object({
       gamesPlayed: zod.number(),
       wins: zod.number(),
       rank: zod.number().optional(),
+      globalRank: zod
+        .number()
+        .optional()
+        .describe(
+          "Computed at query time by the ranking endpoint — not stored in the DB but always present in `\/me` and leaderboard responses.",
+        ),
+      bestScore: zod.number().optional(),
       createdAt: zod.date().optional(),
       updatedAt: zod.date().optional(),
     }),
@@ -90,7 +98,12 @@ export const SubmitScoreBody = zod.object({
   letter: zod.string(),
   mode: zod.string(),
   won: zod.boolean().optional(),
-  bonus: zod.boolean().optional(),
+  bonus: zod
+    .boolean()
+    .optional()
+    .describe(
+      "When true, the score is treated as a bonus increment (e.g. from a\nrewarded video doubling). The server still adds `score` to\n`totalScore` and grants XP, but skips incrementing\n`gamesPlayed`\/`wins` and does not bump the daily streak — those\nalready counted on the original (non-bonus) submission.\n",
+    ),
 });
 
 /**
@@ -110,6 +123,13 @@ export const GetPlayerStatsResponse = zod.object({
     gamesPlayed: zod.number(),
     wins: zod.number(),
     rank: zod.number().optional(),
+    globalRank: zod
+      .number()
+      .optional()
+      .describe(
+        "Computed at query time by the ranking endpoint — not stored in the DB but always present in `\/me` and leaderboard responses.",
+      ),
+    bestScore: zod.number().optional(),
     createdAt: zod.date().optional(),
     updatedAt: zod.date().optional(),
   }),
@@ -126,19 +146,42 @@ export const GetPlayerStatsResponse = zod.object({
 });
 
 /**
+ * @summary Get last 30 days of streak activity for a player
+ */
+export const GetStreakCalendarParams = zod.object({
+  playerId: zod.coerce.string(),
+});
+
+export const GetStreakCalendarResponse = zod.object({
+  playerId: zod.string(),
+  today: zod.string().describe("YYYY-MM-DD UTC"),
+  currentStreak: zod.number(),
+  longestStreak: zod.number(),
+  lastPlayedDate: zod.string().nullish(),
+  days: zod.array(
+    zod.object({
+      date: zod.string().describe("YYYY-MM-DD UTC"),
+      played: zod.boolean(),
+      isToday: zod.boolean(),
+    }),
+  ),
+});
+
+/**
  * @summary Create a multiplayer room
  */
 export const createRoomBodyMaxRoundsDefault = 3;
 export const createRoomBodyLanguageDefault = `es`;
+export const createRoomBodyIsPublicDefault = false;
 
 export const CreateRoomBody = zod.object({
   hostId: zod.string(),
   hostName: zod.string(),
   avatarColor: zod.string().optional(),
-  loginMethod: zod.string().optional().nullable(),
   maxRounds: zod.number().default(createRoomBodyMaxRoundsDefault),
   language: zod.string().default(createRoomBodyLanguageDefault),
-  isPublic: zod.boolean().optional().default(false),
+  loginMethod: zod.string().nullish(),
+  isPublic: zod.boolean().default(createRoomBodyIsPublicDefault),
 });
 
 /**
@@ -181,7 +224,7 @@ export const JoinRoomBody = zod.object({
   playerId: zod.string(),
   playerName: zod.string(),
   avatarColor: zod.string().optional(),
-  loginMethod: zod.string().optional().nullable(),
+  loginMethod: zod.string().nullish(),
 });
 
 export const JoinRoomResponse = zod.object({
@@ -226,25 +269,19 @@ export const SubmitRoomResultsResponse = zod.object({
   id: zod.number(),
   roomCode: zod.string(),
   hostId: zod.string(),
-  status: zod.enum(["waiting", "playing", "stopped", "finished", "bluffvoting"]),
+  status: zod.enum(["waiting", "playing", "finished"]),
   currentLetter: zod.string().nullish(),
   currentRound: zod.number(),
   maxRounds: zod.number(),
   language: zod.string(),
-  bluffVoteDeadline: zod.string().nullish(),
-  bluffData: zod.any().nullish(),
   players: zod.array(
     zod.object({
       playerId: zod.string(),
       playerName: zod.string(),
       avatarColor: zod.string().optional(),
       score: zod.number(),
-      roundScore: zod.number().optional(),
       isHost: zod.boolean(),
       isReady: zod.boolean(),
-      answers: zod.record(zod.string(), zod.string()).optional(),
-      bluffedCategories: zod.array(zod.string()).optional(),
-      bluffedWords: zod.record(zod.string(), zod.string()).optional(),
     }),
   ),
   createdAt: zod.date().optional(),

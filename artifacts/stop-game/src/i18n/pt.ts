@@ -169,6 +169,14 @@ const pt = {
     champion_desc: "Ganhe 10 rodadas",
     unstoppable_name: "Imparável",
     unstoppable_desc: "Ganhe 50 rodadas",
+    streak_3_name: "Pegando fogo",
+    streak_3_desc: "Jogue 3 dias seguidos",
+    streak_7_name: "Semana perfeita",
+    streak_7_desc: "Jogue 7 dias seguidos",
+    streak_14_name: "Quinzena de fogo",
+    streak_14_desc: "Jogue 14 dias seguidos",
+    streak_30_name: "Lenda mensal",
+    streak_30_desc: "Jogue 30 dias seguidos",
   },
 
   multiplayer: {
@@ -264,6 +272,13 @@ const pt = {
     keepIt: "Continue assim!",
     start: "Comece sua sequência hoje!",
     longest: "Melhor sequência",
+    weekdaysShort: "S T Q Q S S D",
+    nextHint: "Faltam {n} dias para o próximo marco",
+    milestoneCelebrate: "Marco desbloqueado!",
+    shareButton: "Compartilhe sua sequência",
+    shareTitle: "Minha sequência no STOP",
+    shareText: "Estou há",
+    shareCta: "Entra e quebra a minha sequência!",
   },
 
   daily: {

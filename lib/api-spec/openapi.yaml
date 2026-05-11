@@ -104,6 +104,25 @@ paths:
               schema:
                 $ref: "#/components/schemas/PlayerStats"
 
+  /ranking/streak/calendar/{playerId}:
+    get:
+      operationId: getStreakCalendar
+      tags: [ranking]
+      summary: Get last 30 days of streak activity for a player
+      parameters:
+        - name: playerId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Streak calendar
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StreakCalendarResponse"
+
   /rooms:
     post:
       operationId: createRoom
@@ -257,6 +276,8 @@ components:
           type: boolean
         score:
           type: integer
+        isDuplicate:
+          type: boolean
       required:
         - response
         - isValid
@@ -328,6 +349,11 @@ components:
         wins:
           type: integer
         rank:
+          type: integer
+        globalRank:
+          type: integer
+          description: Computed at query time by the ranking endpoint — not stored in the DB but always present in `/me` and leaderboard responses.
+        bestScore:
           type: integer
         createdAt:
           type: string
@@ -410,6 +436,47 @@ components:
         - score
         - letter
         - mode
+
+    StreakCalendarDay:
+      type: object
+      properties:
+        date:
+          type: string
+          description: YYYY-MM-DD UTC
+        played:
+          type: boolean
+        isToday:
+          type: boolean
+      required:
+        - date
+        - played
+        - isToday
+
+    StreakCalendarResponse:
+      type: object
+      properties:
+        playerId:
+          type: string
+        today:
+          type: string
+          description: YYYY-MM-DD UTC
+        currentStreak:
+          type: integer
+        longestStreak:
+          type: integer
+        lastPlayedDate:
+          type: string
+          nullable: true
+        days:
+          type: array
+          items:
+            $ref: "#/components/schemas/StreakCalendarDay"
+      required:
+        - playerId
+        - today
+        - currentStreak
+        - longestStreak
+        - days
 
     LeaderboardResponse:
       type: object
@@ -499,6 +566,12 @@ components:
         language:
           type: string
           default: es
+        loginMethod:
+          type: string
+          nullable: true
+        isPublic:
+          type: boolean
+          default: false
       required:
         - hostId
         - hostName
@@ -512,6 +585,9 @@ components:
           type: string
         avatarColor:
           type: string
+        loginMethod:
+          type: string
+          nullable: true
       required:
         - playerId
         - playerName
@@ -525,6 +601,18 @@ components:
           type: integer
         letter:
           type: string
+        answers:
+          type: object
+          additionalProperties:
+            type: string
+        bluffedCategories:
+          type: array
+          items:
+            type: string
+        bluffedWords:
+          type: object
+          additionalProperties:
+            type: string
       required:
         - playerId
         - roundScore

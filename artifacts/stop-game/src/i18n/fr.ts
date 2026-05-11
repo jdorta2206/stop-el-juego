@@ -169,6 +169,14 @@ const fr = {
     champion_desc: "Gagne 10 manches",
     unstoppable_name: "Inarrêtable",
     unstoppable_desc: "Gagne 50 manches",
+    streak_3_name: "En feu",
+    streak_3_desc: "Joue 3 jours d'affilée",
+    streak_7_name: "Semaine parfaite",
+    streak_7_desc: "Joue 7 jours d'affilée",
+    streak_14_name: "Quinzaine en feu",
+    streak_14_desc: "Joue 14 jours d'affilée",
+    streak_30_name: "Légende mensuelle",
+    streak_30_desc: "Joue 30 jours d'affilée",
   },
 
   multiplayer: {
@@ -264,6 +272,13 @@ const fr = {
     keepIt: "Continue comme ça !",
     start: "Commence ta série aujourd'hui !",
     longest: "Meilleure série",
+    weekdaysShort: "L M M J V S D",
+    nextHint: "{n} jours avant le prochain palier",
+    milestoneCelebrate: "Palier débloqué !",
+    shareButton: "Partage ta série",
+    shareTitle: "Ma série STOP",
+    shareText: "J'enchaîne",
+    shareCta: "Rejoins-moi et brise ma série !",
   },
 
   daily: {

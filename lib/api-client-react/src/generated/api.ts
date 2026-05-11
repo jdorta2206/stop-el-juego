@@ -27,6 +27,7 @@ import type {
   PlayerStats,
   Room,
   RoomResultsRequest,
+  StreakCalendarResponse,
   SubmitScoreRequest,
   ValidateRoundRequest,
   ValidateRoundResponse,
@@ -462,6 +463,98 @@ export function useGetPlayerStats<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetPlayerStatsQueryOptions(playerId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get last 30 days of streak activity for a player
+ */
+export const getGetStreakCalendarUrl = (playerId: string) => {
+  return `/api/ranking/streak/calendar/${playerId}`;
+};
+
+export const getStreakCalendar = async (
+  playerId: string,
+  options?: RequestInit,
+): Promise<StreakCalendarResponse> => {
+  return customFetch<StreakCalendarResponse>(
+    getGetStreakCalendarUrl(playerId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetStreakCalendarQueryKey = (playerId: string) => {
+  return [`/api/ranking/streak/calendar/${playerId}`] as const;
+};
+
+export const getGetStreakCalendarQueryOptions = <
+  TData = Awaited<ReturnType<typeof getStreakCalendar>>,
+  TError = ErrorType<unknown>,
+>(
+  playerId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getStreakCalendar>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetStreakCalendarQueryKey(playerId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getStreakCalendar>>
+  > = ({ signal }) =>
+    getStreakCalendar(playerId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!playerId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getStreakCalendar>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetStreakCalendarQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getStreakCalendar>>
+>;
+export type GetStreakCalendarQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get last 30 days of streak activity for a player
+ */
+
+export function useGetStreakCalendar<
+  TData = Awaited<ReturnType<typeof getStreakCalendar>>,
+  TError = ErrorType<unknown>,
+>(
+  playerId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getStreakCalendar>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetStreakCalendarQueryOptions(playerId, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

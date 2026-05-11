@@ -5,12 +5,14 @@
  * STOP Game API
  * OpenAPI spec version: 0.1.0
  */
+import type { RoomResultsRequestAnswers } from "./roomResultsRequestAnswers";
+import type { RoomResultsRequestBluffedWords } from "./roomResultsRequestBluffedWords";
 
 export interface RoomResultsRequest {
   playerId: string;
   roundScore: number;
   letter: string;
-  answers?: { [key: string]: string };
+  answers?: RoomResultsRequestAnswers;
   bluffedCategories?: string[];
-  bluffedWords?: { [key: string]: string };
+  bluffedWords?: RoomResultsRequestBluffedWords;
 }

@@ -10,4 +10,5 @@ export interface JoinRoomRequest {
   playerId: string;
   playerName: string;
   avatarColor?: string;
+  loginMethod?: string | null;
 }

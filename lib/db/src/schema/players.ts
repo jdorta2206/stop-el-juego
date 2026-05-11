@@ -16,6 +16,9 @@ export const playerScoresTable = pgTable("player_scores", {
   currentStreak: integer("current_streak").notNull().default(0),
   longestStreak: integer("longest_streak").notNull().default(0),
   lastPlayedDate: text("last_played_date"), // YYYY-MM-DD UTC
+  // JSON array of YYYY-MM-DD strings — the most recent days the player played.
+  // Capped at the last 30 days at write time so it stays small and bounded.
+  streakDaysJson: text("streak_days_json").notNull().default("[]"),
   xp: integer("xp").notNull().default(0),
   level: integer("level").notNull().default(1),
   achievementsJson: text("achievements_json").notNull().default("[]"),         // array of unlocked achievement IDs

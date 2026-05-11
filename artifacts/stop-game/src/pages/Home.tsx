@@ -11,6 +11,9 @@ import { useFollows, useFriendsOnline } from "@/lib/useFollows";
 import { usePlayer } from "@/hooks/use-player";
 import { useT } from "@/i18n/useT";
 import { useStreak } from "@/hooks/useStreak";
+import { useAchievements } from "@/hooks/useAchievements";
+import { StreakCalendarModal } from "@/components/StreakCalendar";
+import { AchievementToast } from "@/components/AchievementToast";
 import { useProgression, getLeague } from "@/hooks/useProgression";
 import { useSeason } from "@/hooks/useSeason";
 import { useGetLeaderboard, useGetPlayerStats } from "@workspace/api-client-react";
@@ -27,6 +30,15 @@ export default function Home() {
   const { t } = useT();
   const { streak, playedToday } = useStreak();
   const streakAtRisk = streak.current > 0 && !playedToday;
+  const { newlyUnlocked, clearNewlyUnlocked, checkStreakMilestone } = useAchievements(player?.id);
+  const [showStreakCalendar, setShowStreakCalendar] = useState(false);
+
+  // Deterministically evaluate streak milestones from local streak data on
+  // every Home mount / streak change — independent of whether the player
+  // opens the streak calendar modal. Idempotent: only fires once per crossing.
+  useEffect(() => {
+    if (streak.longest >= 3) checkStreakMilestone(streak.longest);
+  }, [streak.longest, checkStreakMilestone]);
   const { level, xp, progress } = useProgression(player?.id);
   const league = getLeague(level);
   const { season, progress: seasonProgress } = useSeason(player?.id);
@@ -175,9 +187,14 @@ export default function Home() {
             </motion.div>
           </motion.div>
 
-          {/* Streak badge — clickable to play & save streak */}
+          {/* Streak badge — opens the visual streak calendar modal */}
           {streak.current > 0 && (
-            <Link href="/solo?mode=quick&auto=1">
+            <button
+              type="button"
+              onClick={() => setShowStreakCalendar(true)}
+              className="bg-transparent border-0 p-0"
+              aria-label={t.streak.label}
+            >
               <motion.div
                 initial={{ scale: 0, opacity: 0 }}
                 animate={
@@ -216,9 +233,27 @@ export default function Home() {
                   <span className="text-white/60 text-xs">✓ Hoy</span>
                 )}
               </motion.div>
-            </Link>
+            </button>
           )}
         </motion.div>
+
+        {/* Streak calendar modal */}
+        {player?.id && (
+          <StreakCalendarModal
+            open={showStreakCalendar}
+            onClose={() => setShowStreakCalendar(false)}
+            playerId={player.id}
+            playerName={player.name ?? "Jugador"}
+            onMilestoneReached={(_, current) => checkStreakMilestone(current)}
+          />
+        )}
+
+        {/* Achievement toast (for streak milestone unlocks etc.) */}
+        <AchievementToast
+          achievement={newlyUnlocked}
+          onDone={clearNewlyUnlocked}
+          tAchievements={t.achievements as unknown as { [key: string]: string; new: string; xpBonus: string }}
+        />
 
         {/* 🎟️ Season Pass banner — only shown when there's a mission ready to claim */}
         {player && season && seasonProgress && seasonProgress.hasUnclaimedMissions && (

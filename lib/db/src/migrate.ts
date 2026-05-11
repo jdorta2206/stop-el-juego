@@ -50,6 +50,10 @@ export async function ensureIndexes(): Promise<void> {
     `CREATE INDEX IF NOT EXISTS tournaments_is_public_status_created_at_desc_idx
        ON tournaments (is_public, status, created_at DESC)`,
 
+    // ── player_scores: streak calendar column (idempotent ADD) ───────
+    `ALTER TABLE player_scores
+       ADD COLUMN IF NOT EXISTS streak_days_json text NOT NULL DEFAULT '[]'`,
+
     // ── daily_results ────────────────────────────────────────────────
     `CREATE INDEX IF NOT EXISTS daily_results_date_score_desc_idx
        ON daily_results (challenge_date, score DESC)`,
