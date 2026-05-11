@@ -131,7 +131,20 @@ export const AI_PERSONALITIES: AIPersonality[] = [
   },
 ];
 
-export function pickRandomPersonality(): AIPersonality {
+export interface PickPersonalityOpts {
+  /**
+   * When true (FTUE / tutorial games), force the friendly CHIP personality
+   * so first-time players get a warm, encouraging vibe instead of a random
+   * — and possibly aggressive — opponent.
+   */
+  isTutorial?: boolean;
+}
+
+export function pickRandomPersonality(opts: PickPersonalityOpts = {}): AIPersonality {
+  if (opts.isTutorial) {
+    const chip = AI_PERSONALITIES.find((p) => p.id === "chip");
+    if (chip) return chip;
+  }
   return AI_PERSONALITIES[Math.floor(Math.random() * AI_PERSONALITIES.length)];
 }
 

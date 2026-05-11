@@ -24,7 +24,6 @@ import { reportSeasonEvent } from "@/hooks/useSeason";
 import { useSound } from "@/hooks/useSound";
 import { useToast } from "@/hooks/use-toast";
 import { pickRandomPersonality, getAIComment, type AIPersonality } from "@/data/aiPersonalities";
-import { AI_PERSONALITIES } from "@/data/aiPersonalities";
 import { useFTUE } from "@/hooks/useFTUE";
 import { FirstVictoryCelebration } from "@/components/FirstVictoryCelebration";
 import { useAchievements } from "@/hooks/useAchievements";
@@ -160,15 +159,17 @@ export default function SoloGame() {
   const roundTime = tutorialActive ? Math.round(effectiveRoundTime * 1.5) : effectiveRoundTime;
   const maxRounds = isDailyMode ? 1 : isQuickMode ? 1 : MAX_ROUNDS;
 
-  // AI personality. During the tutorial we force the friendly CHIP
-  // personality; once the tutorial ends the personality is re-picked at the
-  // start of each game so a long session doesn't keep CHIP forever.
-  const [aiPersonality, setAiPersonality] = useState<AIPersonality>(() => {
-    if (isTutorial) {
-      return AI_PERSONALITIES.find((p) => p.id === "chip") ?? pickRandomPersonality();
-    }
-    return pickRandomPersonality();
-  });
+  // AI personality. The `isTutorial` flag in the personality picker forces
+  // the friendly CHIP during the FTUE; once the tutorial ends, the
+  // personality is re-picked at the start of each game so a long session
+  // doesn't keep CHIP forever.
+  const [aiPersonality, setAiPersonality] = useState<AIPersonality>(() =>
+    pickRandomPersonality({ isTutorial }),
+  );
+  // Track whether THIS game is the player's very first ever game so we can
+  // guarantee a win on it (FTUE “victoria garantizada”). Snapshotted at
+  // startGame() to avoid recordTutorialGame() flipping it mid-match.
+  const [isFirstEverGame, setIsFirstEverGame] = useState(false);
   const [aiComment, setAiComment] = useState<string | null>(null);
 
   // Achievements system
@@ -282,13 +283,10 @@ export default function SoloGame() {
     // the rules of the round are stable until it ends.
     const tutorialNow = ftue.isInTutorial && !isDailyMode;
     setTutorialActive(tutorialNow);
-    // Re-pick personality each game start: friendly CHIP during tutorial,
-    // random afterwards (prevents CHIP sticking around for games 4+).
-    setAiPersonality(
-      tutorialNow
-        ? (AI_PERSONALITIES.find((p) => p.id === "chip") ?? pickRandomPersonality())
-        : pickRandomPersonality()
-    );
+    setIsFirstEverGame(tutorialNow && ftue.gamesPlayed === 0);
+    // Re-pick personality each game start so CHIP doesn't stick around
+    // forever once the tutorial ends.
+    setAiPersonality(pickRandomPersonality({ isTutorial: tutorialNow }));
     setAiComment(null);
     // Reset spy uses each new game (premium gets 2x)
     setSpyUsesLeft(isPremium ? 2 : 1);
@@ -472,6 +470,32 @@ export default function SoloGame() {
       // Fallback: proceed to results without API
     }
 
+    // 🎓 Tutorial: make the AI ACTUALLY easier (not just lower-scored).
+    // Drop ~50% of the AI's correct answers so the player visibly wins more
+    // categories. This mutates the validation payload in place so every
+    // downstream calculation (scoring, sabotage, steal, oracle, bluff) uses
+    // the same, weakened AI — no risk of UI showing a strong AI while
+    // score appears small.
+    if (tutorialActive && apiData) {
+      const data = apiData as {
+        results?: Record<string, { ai?: { response?: string; score?: number } }>;
+        aiTotalScore?: number;
+      };
+      let removed = 0;
+      Object.keys(data.results ?? {}).forEach((cat) => {
+        const ai = data.results?.[cat]?.ai;
+        if (!ai || (ai.score ?? 0) <= 0) return;
+        if (Math.random() < 0.5) {
+          removed += ai.score ?? 0;
+          ai.response = "";
+          ai.score = 0;
+        }
+      });
+      if (typeof data.aiTotalScore === "number") {
+        data.aiTotalScore = Math.max(0, data.aiTotalScore - removed);
+      }
+    }
+
     // Process player bluffs
     const hasPlayerBluffs = currentBluffed.size > 0;
     if (hasPlayerBluffs) {
@@ -532,14 +556,13 @@ export default function SoloGame() {
         return sum + (results.results?.[cat]?.player?.score ?? 0);
       }, 0);
       const ps = (results.playerTotalScore || 0) - voidedScore;
-      // 🎓 Tutorial handicap: halve the AI's effective score for the first
-      // 3 games to give brand-new players a fair shot at winning.
-      const tutorialAiMul = tutorialActive ? 0.5 : 1;
-      const rawAs = Math.floor((results.aiTotalScore || 0) * tutorialAiMul);
+      // AI score now reflects the (already-weakened in tutorial) results
+      // payload — see the tutorial handicap block in handleStop().
+      const rawAs = results.aiTotalScore || 0;
 
       // SABOTAGE: reduce AI score AND transfer those points to player
       const sabotageStolen = sabotageCategory
-        ? Math.floor((results.results?.[sabotageCategory]?.ai?.score ?? 0) * tutorialAiMul)
+        ? (results.results?.[sabotageCategory]?.ai?.score ?? 0)
         : 0;
       const as_ = rawAs - sabotageStolen;
       if (sabotageStolen > 0 && sabotageCategory) {
@@ -578,10 +601,29 @@ export default function SoloGame() {
       // (spyUsesThisRound resets in startRound; spyUsesLeft is the per-game pool).
       const spyCost = spyUsesThisRound * 10;
       const roundDelta = ps + stolenScore + sabotageStolen + bluffBonusScore - spyCost;
-      const finalPlayerScore = totalScore + roundDelta;
+      let finalPlayerScore = totalScore + roundDelta;
+
+      // 🎓 FTUE “victoria garantizada”: on the player's very first ever
+      // game, if after the FINAL round they would still be losing, add
+      // exactly enough bonus points so they win by 1. Applied only on the
+      // last round so the win condition is decided by the actual final
+      // score, not a per-round adjustment.
+      let ftueGuaranteedBonus = 0;
+      if (isFirstEverGame && round >= maxRounds) {
+        const projectedAi = aiTotalScore + as_;
+        if (finalPlayerScore <= projectedAi) {
+          ftueGuaranteedBonus = projectedAi - finalPlayerScore + 1;
+          finalPlayerScore += ftueGuaranteedBonus;
+        }
+      }
+
       setTotalScore(finalPlayerScore);
       setAiTotalScore(prev => prev + as_);
-      setRoundWon(won);
+      // Recompute roundWon after the FTUE bonus so the per-round won/lost
+      // banner agrees with the final game-end result.
+      const wonAfterBonus =
+        round >= maxRounds && ftueGuaranteedBonus > 0 ? true : won;
+      setRoundWon(wonAfterBonus);
       // Track best single-round score for the Season Pass `round_score` missions.
       const roundScoreClamped = Math.max(0, roundDelta);
       const newBestRound = Math.max(bestRoundScore, roundScoreClamped);
@@ -673,7 +715,7 @@ export default function SoloGame() {
         xpGained: 0, // will be counted in nextRound
       });
 
-      if (won) {
+      if (wonAfterBonus) {
         confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
         setCombo(prev => {
           const newCombo = prev + 1;
