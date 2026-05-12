@@ -693,8 +693,9 @@ export default function Home() {
           </motion.div>
         )}
 
-        {/* Native ad — looks like content, hidden if no fill */}
-        {!isPremium && <NativeBanner className="my-4" />}
+        {/* Native ad disabled — Adsterra native widget was triggering intrusive
+            popups on entry. Re-enable only with a verified non-intrusive key. */}
+        {/* {!isPremium && <NativeBanner className="my-4" />} */}
 
         {/* Share row */}
         <motion.div
