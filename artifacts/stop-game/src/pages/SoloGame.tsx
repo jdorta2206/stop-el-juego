@@ -224,6 +224,28 @@ export default function SoloGame() {
     };
   }, []);
 
+  // 📡 Avisa al jugador la primera vez que entra en modo offline en esta
+  // sesión. El banner discreto sigue ahí, pero un toast inicial explica qué
+  // implica jugar sin conexión (las partidas siguen funcionando, pero la
+  // puntuación se sube al ranking cuando vuelve internet). Solo una vez.
+  const offlineNoticeShownRef = useRef(false);
+  useEffect(() => {
+    if (!isOffline) return;
+    if (offlineNoticeShownRef.current) return;
+    offlineNoticeShownRef.current = true;
+    const title =
+      lang === "en" ? "📡 You're playing offline" :
+      lang === "pt" ? "📡 Estás a jogar sem ligação" :
+      lang === "fr" ? "📡 Tu joues hors ligne" :
+      "📡 Estás jugando sin conexión";
+    const description =
+      lang === "en" ? "Your games still work — your score will be uploaded to the ranking when you're back online." :
+      lang === "pt" ? "As tuas partidas funcionam — a tua pontuação será enviada ao ranking quando voltares a ter internet." :
+      lang === "fr" ? "Tes parties fonctionnent — ton score sera envoyé au classement quand tu auras de nouveau internet." :
+      "Tus partidas funcionan, pero tu puntuación se subirá al ranking cuando vuelvas a tener internet.";
+    toast({ title, description });
+  }, [isOffline, lang, toast]);
+
   // 🛰️ Drena la "outbox" de puntuaciones aparcadas mientras el jugador
   // estaba sin conexión: una vez al montar (cubre el "próximo arranque")
   // y cada vez que el navegador anuncie que vuelve la red.
