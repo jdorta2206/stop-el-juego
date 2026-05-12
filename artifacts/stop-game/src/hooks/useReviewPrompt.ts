@@ -110,7 +110,13 @@ export function useReviewPrompt() {
     return true;
   }, [eligible]);
 
-  const close = useCallback(() => setOpen(false), []);
+  // Closing the card (tapping backdrop or the X) is treated the same as
+  // "Más tarde": suppress the prompt for SNOOZE_DAYS instead of the default
+  // monthly cooldown set when the card was first shown.
+  const close = useCallback(() => {
+    setState((s) => ({ ...s, nextEligibleAt: Date.now() + SNOOZE_DAYS * DAY_MS }));
+    setOpen(false);
+  }, []);
 
   const markRated = useCallback(() => {
     setState((s) => ({ ...s, rated: true }));

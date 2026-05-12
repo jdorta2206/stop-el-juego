@@ -6,7 +6,7 @@ import { useT } from "@/i18n/useT";
 import { usePlayer } from "@/hooks/use-player";
 import { ArrowLeft, Trophy, Calendar, Flame } from "lucide-react";
 import { useStreak } from "@/hooks/useStreak";
-import { useReviewPrompt } from "@/hooks/useReviewPrompt";
+import { useReviewPrompt, recordGamePlayed } from "@/hooks/useReviewPrompt";
 import { ReviewPromptCard } from "@/components/ReviewPromptCard";
 import { getApiUrl } from "@/lib/utils";
 
@@ -68,13 +68,20 @@ export default function DailyChallenge() {
     if (played) {
       setPlayedToday(true);
       setMyScore(Number(played));
+      // Daily completion counts toward the "≥3 partidas" eligibility
+      // threshold for the review prompt. Idempotent per visit + day via the
+      // dedicated marker key below.
+      const countedKey = `stop_daily_counted_${getTodayStr()}`;
+      if (!localStorage.getItem(countedKey)) {
+        recordGamePlayed();
+        try { localStorage.setItem(countedKey, "1"); } catch {}
+      }
       // Try the review prompt at this happy moment (after they've seen
       // their daily score). Eligibility logic in the hook handles
       // games-played threshold, snooze and per-month frequency.
       reviewTimerRef.current = setTimeout(() => {
         reviewPrompt.maybeShow({
           streakDays: streak.current,
-          scorePercentile: Number(played) >= 80 ? 0.9 : 0,
         });
       }, 1500);
     }

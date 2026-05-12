@@ -23,6 +23,8 @@ import { ShareResultsModal } from "@/components/ShareResultsModal";
 import { getApiUrl } from "@/lib/utils";
 import { useT } from "@/i18n/useT";
 import { useToast } from "@/hooks/use-toast";
+import { useReviewPrompt, recordGamePlayed } from "@/hooks/useReviewPrompt";
+import { ReviewPromptCard } from "@/components/ReviewPromptCard";
 
 const ROUND_TIME = 60;
 
@@ -270,6 +272,15 @@ export default function Room() {
   // game, kick, etc.). Detected purely from the snapshot the SSE channel
   // already pushes; no extra side-channel needed.
   const { t } = useT();
+  // Review prompt (Google Play 5 stars). reviewCountedRef ensures we only
+  // count one game per finished match; reviewTimerRef holds the deferred
+  // show-the-card timeout so we can clean it up on unmount/navigation.
+  const reviewPrompt = useReviewPrompt();
+  const reviewCountedRef = useRef(false);
+  const reviewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (reviewTimerRef.current) clearTimeout(reviewTimerRef.current);
+  }, []);
   const { toast } = useToast();
   const prevHostIdRef = useRef<string | null>(null);
   useEffect(() => {
@@ -605,8 +616,20 @@ export default function Room() {
         return String(a.playerId || "").localeCompare(String(b.playerId || ""));
       });
       const winnerId = sortedPlayers[0]?.playerId;
-      if (winnerId && winnerId === player?.id && players.length > 1) {
+      const iWon = !!(winnerId && winnerId === player?.id && players.length > 1);
+      if (iWon) {
         confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
+      }
+      // Count this finished multiplayer game toward review-prompt
+      // eligibility (idempotent per match via the ref). Show the prompt
+      // only when the player is happy: ranked top of the room.
+      if (!reviewCountedRef.current) {
+        reviewCountedRef.current = true;
+        recordGamePlayed();
+        if (reviewTimerRef.current) clearTimeout(reviewTimerRef.current);
+        reviewTimerRef.current = setTimeout(() => {
+          reviewPrompt.maybeShow({ won: iWon });
+        }, iWon ? 4000 : 5500);
       }
       queryClient.invalidateQueries({ queryKey: ["/api/ranking/scores"] });
       // Tournament: report match result (host only to avoid duplicate calls)
@@ -2048,6 +2071,13 @@ export default function Room() {
         })()}
 
       </AnimatePresence>
+      <ReviewPromptCard
+        open={reviewPrompt.open}
+        onClose={reviewPrompt.close}
+        onRated={reviewPrompt.markRated}
+        onSnooze={reviewPrompt.snooze}
+        onDismissForever={reviewPrompt.dontAskAgain}
+      />
     </Layout>
   );
 }
