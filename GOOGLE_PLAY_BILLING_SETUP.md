@@ -80,7 +80,7 @@ Añade dos secrets nuevos:
 | Nombre | Valor |
 |---|---|
 | `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` | El contenido **completo** del archivo `.json` del paso 3.1.5 (pégalo entero, una sola línea o multilínea, ambos funcionan). |
-| `ANDROID_PACKAGE_NAME` | El package name de tu APK, ej. `com.dorynex.stop`. Se ve en Play Console arriba de la app. |
+| `ANDROID_PACKAGE_NAME` | `app.replit.stop_el_juego.twa` (debe coincidir EXACTAMENTE con el package_name del AAB en Play Console). |
 | `PUBSUB_PUSH_AUDIENCE` | La URL exacta del webhook que pondrás en Pub/Sub (paso 5.3): `https://stop-el-juego.replit.app/api/billing/play/webhook`. |
 | `PUBSUB_PUSH_SA_EMAIL` | El email de la Service Account que firmará los pushes de Pub/Sub. Si reusas la del paso 3, es del estilo `stop-play-billing@<project-id>.iam.gserviceaccount.com`. |
 
