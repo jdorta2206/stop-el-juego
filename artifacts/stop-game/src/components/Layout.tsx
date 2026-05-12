@@ -6,6 +6,7 @@ import { Crown, LogOut, Bell, BellOff, Home, Trophy, Users, Calendar } from "luc
 import { motion, AnimatePresence } from "framer-motion";
 import { Button, Input } from "./ui";
 import { AuthModal } from "./AuthModal";
+import { InstallAppBanner } from "./InstallAppBanner";
 import { LanguageSelector } from "./LanguageSelector";
 import { AVATAR_COLORS } from "@/lib/utils";
 import { useT } from "@/i18n/useT";
@@ -32,6 +33,16 @@ export function Layout({ children }: { children: ReactNode }) {
   const { isSupported, isSubscribed, permission, loading: notifLoading, subscribe, unsubscribe } =
     usePushNotifications(player?.id, lang);
   const { canInstall, isInstalled, isInstalling, triggerInstall } = usePWAInstall();
+  // Respect the dedicated install banner's 30-day cooldown: if the user
+  // dismissed that banner, don't surface another install CTA inside the
+  // notification prompt either.
+  const installCtaAllowed = (() => {
+    if (typeof window === "undefined") return true;
+    const dismissedAt = Number(localStorage.getItem("stop_install_banner_dismissed_at_v1") || 0);
+    if (!dismissedAt) return true;
+    return Date.now() - dismissedAt >= 30 * 24 * 60 * 60 * 1000;
+  })();
+  const showInstallStep = canInstall && installCtaAllowed;
   const [notifToast, setNotifToast] = useState<string | null>(null);
   const [showNotifPrompt, setShowNotifPrompt] = useState(false);
 
@@ -246,6 +257,9 @@ export function Layout({ children }: { children: ReactNode }) {
         </div>
       </footer>
 
+      {/* Standalone install banner (Android beforeinstallprompt + iOS Safari instructions) */}
+      <InstallAppBanner />
+
       {/* Proactive install + notification prompt */}
       <AnimatePresence>
         {showNotifPrompt && (
@@ -289,8 +303,8 @@ export function Layout({ children }: { children: ReactNode }) {
 
               {/* Step indicators */}
               <div className="flex flex-col gap-2">
-                {/* Step 1: Install PWA (only on Android Chrome when installable) */}
-                {canInstall && (
+                {/* Step 1: Install PWA (only on Android Chrome when installable, and respecting the install banner cooldown) */}
+                {showInstallStep && (
                   <div className="flex items-center gap-3 p-3 rounded-2xl" style={{ background: "rgba(249,168,37,0.12)", border: "1px solid rgba(249,168,37,0.3)" }}>
                     <span className="text-lg">📲</span>
                     <div className="flex-1">
@@ -330,7 +344,7 @@ export function Layout({ children }: { children: ReactNode }) {
                     <span className="text-lg">{isSubscribed ? "✅" : "🔔"}</span>
                     <div className="flex-1">
                       <p className="text-white font-black text-xs">
-                        {canInstall
+                        {showInstallStep
                           ? (lang === "en" ? "Step 2 · Allow notifications" : lang === "pt" ? "Passo 2 · Permitir notificações" : lang === "fr" ? "Étape 2 · Autoriser les notifs" : "Paso 2 · Permitir notificaciones")
                           : (lang === "en" ? "Allow notifications" : lang === "pt" ? "Permitir notificações" : lang === "fr" ? "Autoriser les notifs" : "Permitir notificaciones")}
                       </p>
