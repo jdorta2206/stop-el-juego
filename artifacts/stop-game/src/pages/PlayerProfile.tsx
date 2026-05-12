@@ -238,23 +238,33 @@ export default function PlayerProfile() {
           className="flex flex-col items-center gap-3"
         >
           <div className="relative">
-            {/* Equipped frame (if any) wins over the level-color border. */}
-            <div
-              className="w-24 h-24 rounded-full flex items-center justify-center text-4xl font-black text-white shadow-2xl border-4"
-              style={{
-                backgroundColor: data.avatarColor || "#e53e3e",
-                borderColor: data.equippedFrame
-                  ? FRAME_COLORS_BY_ID[data.equippedFrame] ?? level.color + "88"
-                  : level.color + "88",
-                boxShadow: data.equippedFrame
-                  ? `0 0 18px ${(FRAME_COLORS_BY_ID[data.equippedFrame] ?? "#000")}66`
-                  : undefined,
-              }}
-            >
-              {data.equippedAvatar && AVATAR_GLYPH_BY_ID[data.equippedAvatar]
-                ? AVATAR_GLYPH_BY_ID[data.equippedAvatar]
-                : data.playerName?.charAt(0).toUpperCase()}
-            </div>
+            {/* Equipped frame (if any) wins over the level-color border.
+                On own profile we prefer the live inventory snapshot so
+                an equip click reflects immediately without a profile
+                refetch; on others' profiles we use the public payload. */}
+            {(() => {
+              const equippedFrame = isMe
+                ? inventory?.equipped.frame ?? data.equippedFrame
+                : data.equippedFrame;
+              const equippedAvatar = isMe
+                ? inventory?.equipped.avatar ?? data.equippedAvatar
+                : data.equippedAvatar;
+              const frameColor = equippedFrame ? FRAME_COLORS_BY_ID[equippedFrame] : null;
+              return (
+                <div
+                  className="w-24 h-24 rounded-full flex items-center justify-center text-4xl font-black text-white shadow-2xl border-4"
+                  style={{
+                    backgroundColor: data.avatarColor || "#e53e3e",
+                    borderColor: frameColor ?? level.color + "88",
+                    boxShadow: frameColor ? `0 0 18px ${frameColor}66` : undefined,
+                  }}
+                >
+                  {equippedAvatar && AVATAR_GLYPH_BY_ID[equippedAvatar]
+                    ? AVATAR_GLYPH_BY_ID[equippedAvatar]
+                    : data.playerName?.charAt(0).toUpperCase()}
+                </div>
+              );
+            })()}
             <span
               className="absolute -bottom-1 -right-1 text-xl"
               title={level.label}

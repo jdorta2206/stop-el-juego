@@ -397,6 +397,18 @@ router.post("/claim-tier", requirePlayerIdentity, async (req: AuthedRequest, res
       // avatars/frames are appended to the inventory (de-duplicated). All
       // happens inside the SAME transaction as the claimed_tiers write so a
       // crash mid-claim leaves no half-state.
+      // Lock the player_scores row up front and hard-fail if it's missing
+      // — otherwise the UPDATE below could affect 0 rows and the claim
+      // would silently lose the reward while still being marked claimed.
+      const playerLocked = (await tx.execute(sql`
+        SELECT inventory_json FROM player_scores
+        WHERE player_id = ${playerId} FOR UPDATE
+      `)) as unknown as SqlResult<{ inventory_json: string }>;
+      const playerRow = playerLocked.rows?.[0];
+      if (!playerRow) {
+        return { ok: false as const, error: "Player profile not found", status: 404 };
+      }
+
       const reward = tierReward(tierNum)[track];
       let depositedCoins = 0;
       let depositedCosmetic: string | null = null;
@@ -408,16 +420,9 @@ router.post("/claim-tier", requirePlayerIdentity, async (req: AuthedRequest, res
         `);
         depositedCoins = reward.value;
       } else if ((reward.kind === "avatar" || reward.kind === "frame") && typeof reward.value === "string") {
-        // Read-modify-write inside the row lock taken above on
-        // season_progress; player_scores is also locked here to keep
-        // concurrent claims from stomping each other's inventory writes.
-        const invLocked = (await tx.execute(sql`
-          SELECT inventory_json FROM player_scores
-          WHERE player_id = ${playerId} FOR UPDATE
-        `)) as unknown as SqlResult<{ inventory_json: string }>;
         let inv: { avatars: string[]; frames: string[] } = { avatars: [], frames: [] };
         try {
-          const parsed = JSON.parse(invLocked.rows?.[0]?.inventory_json || "{}");
+          const parsed = JSON.parse(playerRow.inventory_json || "{}");
           if (Array.isArray(parsed.avatars)) inv.avatars = parsed.avatars;
           if (Array.isArray(parsed.frames)) inv.frames = parsed.frames;
         } catch { /* keep defaults */ }
