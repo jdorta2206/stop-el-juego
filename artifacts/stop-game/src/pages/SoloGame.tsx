@@ -30,7 +30,7 @@ import { useAchievements } from "@/hooks/useAchievements";
 import { AchievementToast } from "@/components/AchievementToast";
 import { drawPowerCard, POWER_CARDS, type PowerCardId } from "@/data/powerCards";
 import { usePersonalBest } from "@/hooks/usePersonalBest";
-import { useReviewPrompt, recordGamePlayed } from "@/hooks/useReviewPrompt";
+import { useReviewPrompt, recordGamePlayed, recordScoreAndPercentile } from "@/hooks/useReviewPrompt";
 import { ReviewPromptCard } from "@/components/ReviewPromptCard";
 
 function vibrate(pattern: number | number[]) {
@@ -681,6 +681,9 @@ export default function SoloGame() {
         // then try to show the prompt at a happy moment. Delayed so it doesn't
         // collide with first-win, share, or new-record celebrations.
         recordGamePlayed();
+        // Compute percentile against the player's last 50 solo scores so
+        // the "top 20%" happy-moment trigger is real, not a fixed proxy.
+        const percentile = recordScoreAndPercentile(finalPlayerScore);
         const reviewDelay = showFirstWinNow ? 9000 : (br.isNew ? 7500 : 5500);
         if (reviewTimerRef.current) clearTimeout(reviewTimerRef.current);
         reviewTimerRef.current = setTimeout(() => {
@@ -688,6 +691,7 @@ export default function SoloGame() {
             won: wonGame,
             newPersonalBest: br.isNew,
             streakDays: soloStreak.current,
+            scorePercentile: percentile,
           });
         }, reviewDelay);
 

@@ -597,6 +597,13 @@ export default function Room() {
     const prevStatus = lastStatusRef.current;
     lastStatusRef.current = roomStatus;
 
+    // Reset the per-match review guard whenever we leave the finished
+    // phase (new round, lobby for rematch, etc.) so subsequent victories
+    // in the same room can also trigger the prompt evaluation.
+    if (roomStatus !== "finished" && reviewCountedRef.current) {
+      reviewCountedRef.current = false;
+    }
+
     if (roomStatus === "finished") {
       stopAllTimers();
       if (bluffVoteTimerRef.current) { clearInterval(bluffVoteTimerRef.current); bluffVoteTimerRef.current = null; }
