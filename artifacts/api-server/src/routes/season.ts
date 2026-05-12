@@ -66,7 +66,7 @@ function addDays(dateStr: string, days: number): string {
  * (season_id, player_id) index so re-runs are a no-op. Called whenever a
  * brand-new active season is opened (lazy create OR cron rollover).
  */
-async function finalizePreviousSeason(currentSeasonId: number, today: string): Promise<void> {
+export async function finalizePreviousSeason(currentSeasonId: number, today: string): Promise<void> {
   try {
     // Find the most recent season that ended strictly before today AND is
     // not the freshly-opened one. We process at most one prior season per

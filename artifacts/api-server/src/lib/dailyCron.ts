@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import { db } from "@workspace/db";
 import { sendPushToAllSubscribers, sendPushToPlayer } from "./pushHelper";
 import { SEASON_LENGTH_DAYS, themeForStartDate } from "./seasonConfig";
+import { finalizePreviousSeason } from "../routes/season";
 
 const LANGUAGES = ["es", "en", "pt", "fr"] as const;
 
@@ -295,6 +296,18 @@ async function rolloverSeasonIfNeeded(today: string) {
       VALUES (${start}, ${end}, ${JSON.stringify(theme)})
     `);
     console.log(`[seasonRollover] Opened season ${start} → ${end} (${theme.name})`);
+
+    // Re-fetch the freshly-inserted season ID and freeze the previous
+    // season's standings + award champion frames. Idempotent — safe to
+    // run from both this cron and the lazy `getOrCreateActiveSeason()`
+    // path so recap data is never request-timing dependent.
+    const newRows = (await db.execute(sql`
+      SELECT id FROM seasons WHERE start_date = ${start} ORDER BY id DESC LIMIT 1
+    `)) as unknown as { rows?: { id: number }[] };
+    const newId = newRows.rows?.[0]?.id;
+    if (newId) {
+      await finalizePreviousSeason(newId, today);
+    }
   } catch (e: any) {
     console.error("[seasonRollover] Error:", e?.message ?? e);
   }
