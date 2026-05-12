@@ -6,7 +6,7 @@ import { useT } from "@/i18n/useT";
 import { usePlayer } from "@/hooks/use-player";
 import { ArrowLeft, Trophy, Calendar, Flame } from "lucide-react";
 import { useStreak } from "@/hooks/useStreak";
-import { useReviewPrompt, recordGamePlayed } from "@/hooks/useReviewPrompt";
+import { useReviewPrompt } from "@/hooks/useReviewPrompt";
 import { ReviewPromptCard } from "@/components/ReviewPromptCard";
 import { getApiUrl } from "@/lib/utils";
 
@@ -68,14 +68,11 @@ export default function DailyChallenge() {
     if (played) {
       setPlayedToday(true);
       setMyScore(Number(played));
-      // Daily completion counts toward the "≥3 partidas" eligibility
-      // threshold for the review prompt. Idempotent per visit + day via the
-      // dedicated marker key below.
-      const countedKey = `stop_daily_counted_${getTodayStr()}`;
-      if (!localStorage.getItem(countedKey)) {
-        recordGamePlayed();
-        try { localStorage.setItem(countedKey, "1"); } catch {}
-      }
+      // NOTE: do NOT increment the games-played counter here. The daily
+      // match itself already runs through SoloGame.tsx (which calls
+      // recordGamePlayed() at game end). Counting again on this landing
+      // page would let users hit the ≥3 games threshold without actually
+      // playing 3 matches.
       // Try the review prompt at this happy moment (after they've seen
       // their daily score). Eligibility logic in the hook handles
       // games-played threshold, snooze and per-month frequency.
