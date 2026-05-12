@@ -693,8 +693,8 @@ export default function Home() {
           </motion.div>
         )}
 
-        {/* Banner 320x50 no intrusivo (reemplaza al NativeBanner que abría popups) */}
-        {!isPremium && <BannerAd className="my-4" />}
+        {/* Banner deshabilitado — Adsterra redirige a páginas externas en TWA */}
+        {/* {!isPremium && <BannerAd className="my-4" />} */}
 
         {/* Share row */}
         <motion.div

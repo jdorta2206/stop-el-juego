@@ -1491,7 +1491,7 @@ export default function SoloGame() {
                 </button>
               ) : (
                 <>
-                  <BannerAd className="w-full max-w-md" />
+                  {/* BannerAd deshabilitado — Adsterra redirige en TWA */}
                 </>
               )}
             </motion.div>
@@ -2413,7 +2413,7 @@ export default function SoloGame() {
                     streakDays: soloStreak.current,
                   }}
                   onUpgrade={() => setShowPremiumModal(true)}
-                  fallback={<BannerAd className="mb-4" />}
+                  fallback={null}
                 />
               )}
 
