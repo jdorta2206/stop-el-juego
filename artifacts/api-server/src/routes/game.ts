@@ -1426,6 +1426,20 @@ function getAiWord(letter: string, category: string, language = "es"): string {
 
 // ─── Route ────────────────────────────────────────────────────────────────────
 
+// 📦 Offline bundle — diccionario + reglas auxiliares para que la app pueda
+// validar partidas y generar palabras de la IA sin conexión. Cacheado por el
+// service worker en `stop-data-v1` y persistido en localStorage del cliente.
+const OFFLINE_BUNDLE_VERSION = "1";
+router.get("/offline-bundle", (_req, res) => {
+  res.set("Cache-Control", "public, max-age=86400");
+  res.json({
+    version: OFFLINE_BUNDLE_VERSION,
+    dictionary: DICTIONARY,
+    openCategories: Array.from(OPEN_CATEGORIES),
+    neverValidWords: Array.from(NEVER_VALID_WORDS),
+  });
+});
+
 // 🕵️ Espía / Robar respuesta — peek at one possible AI word for a category.
 // Returns a candidate (not the exact final word, since AI eval is randomized).
 router.get("/peek", (req, res) => {

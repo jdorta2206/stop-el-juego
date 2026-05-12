@@ -1,4 +1,6 @@
-const CACHE = "stop-v6";
+const CACHE = "stop-v7";
+// Separate cache for game data (dictionary, etc) so it survives shell upgrades.
+const DATA_CACHE = "stop-data-v1";
 const STATIC = [
   "/",
   "/manifest.json",
@@ -6,11 +8,13 @@ const STATIC = [
   "/images/icon-192.png",
   "/images/icon-512.png"
 ];
+// Endpoint with the dictionary needed to play solo offline.
+const OFFLINE_BUNDLE_PATH = "/api/game/offline-bundle";
 
 self.addEventListener("install", (e) => {
   e.waitUntil(
-    caches.open(CACHE)
-      .then((c) =>
+    Promise.all([
+      caches.open(CACHE).then((c) =>
         // Use individual puts so a single missing asset doesn't abort install
         Promise.all(
           STATIC.map((url) =>
@@ -19,15 +23,24 @@ self.addEventListener("install", (e) => {
               .catch(() => null)
           )
         )
-      )
-      .then(() => self.skipWaiting())
+      ),
+      // Pre-warm the offline data bundle so the very first match works
+      // even if the player goes offline immediately after installing.
+      caches.open(DATA_CACHE).then((c) =>
+        fetch(OFFLINE_BUNDLE_PATH, { cache: "reload" })
+          .then((res) => (res.ok ? c.put(OFFLINE_BUNDLE_PATH, res) : null))
+          .catch(() => null)
+      ),
+    ]).then(() => self.skipWaiting())
   );
 });
 
 self.addEventListener("activate", (e) => {
+  // Keep both the current shell cache AND the data cache; only purge older versions.
+  const keep = new Set([CACHE, DATA_CACHE]);
   e.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(keys.filter((k) => !keep.has(k)).map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
@@ -35,6 +48,25 @@ self.addEventListener("activate", (e) => {
 self.addEventListener("fetch", (e) => {
   if (e.request.method !== "GET") return;
   const url = new URL(e.request.url);
+
+  // Offline data bundle: stale-while-revalidate from the dedicated data cache,
+  // so the dictionary is available instantly and refreshed in the background.
+  if (url.pathname === OFFLINE_BUNDLE_PATH) {
+    e.respondWith(
+      caches.open(DATA_CACHE).then((c) =>
+        c.match(e.request).then((cached) => {
+          const fresh = fetch(e.request)
+            .then((res) => {
+              if (res.ok) c.put(e.request, res.clone());
+              return res;
+            })
+            .catch(() => cached);
+          return cached || fresh;
+        })
+      )
+    );
+    return;
+  }
 
   // API calls: always network, fall back to cache
   if (url.pathname.startsWith("/api/")) {

@@ -1,8 +1,16 @@
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import "./index.css";
+import { ensureOfflineBundle } from "./lib/offlineGame";
 
 createRoot(document.getElementById("root")!).render(<App />);
+
+// Pre-cache the offline dictionary in the background on every load (cheap +
+// stale-while-revalidate at the SW level). This is what makes the very first
+// solo round survive a sudden offline transition.
+if (typeof window !== "undefined") {
+  setTimeout(() => { ensureOfflineBundle(); }, 1500);
+}
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {

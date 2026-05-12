@@ -6,8 +6,9 @@ import { Layout } from "@/components/Layout";
 import { Button, Card, Input, Progress } from "@/components/ui";
 import { Roulette } from "@/components/Roulette";
 import { getCategories, getAlphabet, getCurrentLang, getApiUrl } from "@/lib/utils";
+import { ensureOfflineBundle, validateRoundOffline, getAiWordOffline, getCachedOfflineBundle } from "@/lib/offlineGame";
 import { getSelectedPackId, getPackCategories, getSafePackId, getPackById } from "@/data/categoryPacks";
-import { useValidateRound, useSubmitScore, type CategoryResult } from "@workspace/api-client-react";
+import { useValidateRound, useSubmitScore, type CategoryResult, type ValidateRoundResponse } from "@workspace/api-client-react";
 import { usePlayer } from "@/hooks/use-player";
 import { motion, AnimatePresence } from "framer-motion";
 import { RewardedAd, BannerAd } from "@/components/AdSystem";
@@ -204,6 +205,25 @@ export default function SoloGame() {
   const sound = useSound(muted);
   const { toast } = useToast();
 
+  // 📡 Offline awareness — true when the last validation/peek had to fall back
+  // to the cached dictionary, OR the browser is reporting it's offline.
+  // Drives a small "modo sin conexión" banner.
+  const [isOffline, setIsOffline] = useState<boolean>(
+    typeof navigator !== "undefined" && navigator.onLine === false,
+  );
+  useEffect(() => {
+    const goOnline = () => setIsOffline(false);
+    const goOffline = () => setIsOffline(true);
+    window.addEventListener("online", goOnline);
+    window.addEventListener("offline", goOffline);
+    // Best-effort: ensure the offline bundle is cached for this language.
+    ensureOfflineBundle();
+    return () => {
+      window.removeEventListener("online", goOnline);
+      window.removeEventListener("offline", goOffline);
+    };
+  }, []);
+
   // Keep refs in sync with state so handleStop never reads stale closure values
   useEffect(() => { responsesRef.current = responses; }, [responses]);
   useEffect(() => { categoriesRef.current = categories; }, [categories]);
@@ -360,6 +380,9 @@ export default function SoloGame() {
     // Reset per-round guards
     stoppedRef.current = false;
     resultsAppliedRef.current = false;
+    // Clear previous round's payload so the RESULTS effect can never
+    // accidentally re-apply stale scores from the prior round.
+    setRoundResults(null);
 
     // Set up AI bluff for this round (random category, 50% chance it's actually bluffing)
     const aiBluffCat = categories[Math.floor(Math.random() * categories.length)];
@@ -461,7 +484,7 @@ export default function SoloGame() {
       word: currentResponses[cat] || ""
     }));
 
-    let apiData = null;
+    let apiData: ValidateRoundResponse | null = null;
     try {
       apiData = await validateMutation.mutateAsync({
         data: {
@@ -472,8 +495,22 @@ export default function SoloGame() {
         }
       });
     } catch {
-      // Fallback: proceed to results without API
+      // 📡 Sin conexión: validamos localmente con el diccionario cacheado.
+      // Si nunca se descargó el bundle, apiData seguirá null (comportamiento
+      // anterior). Si sí se descargó, la partida termina con puntuación real.
+      const local = validateRoundOffline({
+        letter,
+        language: getCurrentLang(),
+        playerResponses: formattedResponses,
+      });
+      if (local) {
+        apiData = local;
+        setIsOffline(true);
+      }
     }
+    // Persist whichever payload we ended up with so the RESULTS effect
+    // and the UI read the *current* round's data, not the prior mutation.
+    setRoundResults(apiData);
 
     // 🎓 Tutorial: make the AI ACTUALLY easier (not just lower-scored).
     // Drop ~50% of the AI's correct answers so the player visibly wins more
@@ -545,7 +582,13 @@ export default function SoloGame() {
     }
   };
 
-  const results = validateMutation.data;
+  // Single source of truth for the current round's results. Fed by either the
+  // server response OR the offline local validator (handleStop). Decoupling
+  // from `validateMutation.data` is critical for the offline flow: when the
+  // network call throws, mutation.data stays stale (or undefined) and the
+  // RESULTS effect would never fire / would reuse the prior round's payload.
+  const [roundResults, setRoundResults] = useState<ValidateRoundResponse | null>(null);
+  const results = roundResults;
 
   useEffect(() => {
     if (gameState === "RESULTS" && results) {
@@ -997,6 +1040,32 @@ export default function SoloGame() {
 
   return (
     <Layout>
+      {/* 📡 Discreet offline banner — shown while playing without internet using cached dictionary */}
+      <AnimatePresence>
+        {isOffline && (
+          <motion.div
+            key="offline-banner"
+            initial={{ opacity: 0, y: -12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -12 }}
+            className="fixed top-2 left-1/2 -translate-x-1/2 z-50 pointer-events-none"
+          >
+            <div
+              className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold"
+              style={{
+                background: "rgba(15,23,42,0.85)",
+                color: "rgba(253,224,71,0.95)",
+                border: "1px solid rgba(253,224,71,0.4)",
+                backdropFilter: "blur(8px)",
+              }}
+            >
+              <span>📡</span>
+              <span>Modo sin conexión</span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* 💥 Fullscreen STOP flash — fires the instant time runs out / STOP is hit */}
       <AnimatePresence>
         {stopFlash && (
@@ -1755,9 +1824,21 @@ export default function SoloGame() {
                           const pool = empty.length > 0 ? empty : categoriesRef.current;
                           const cat = pool[Math.floor(Math.random() * pool.length)];
                           const url = `${getApiUrl()}/api/game/peek?letter=${encodeURIComponent(currentLetterRef.current)}&category=${encodeURIComponent(cat)}&language=${encodeURIComponent(getCurrentLang())}`;
-                          const r = await fetch(url);
-                          const data = await r.json().catch(() => ({}));
-                          const word = (data?.word as string) || "—";
+                          let word = "—";
+                          try {
+                            const r = await fetch(url);
+                            const data = await r.json().catch(() => ({}));
+                            word = (data?.word as string) || "—";
+                          } catch {
+                            // 📡 Offline fallback: usa el diccionario cacheado.
+                            if (getCachedOfflineBundle()) {
+                              const local = getAiWordOffline(currentLetterRef.current, cat, getCurrentLang());
+                              if (local) {
+                                word = local.charAt(0).toUpperCase() + local.slice(1);
+                                setIsOffline(true);
+                              }
+                            }
+                          }
                           setSpyUsesLeft(prev => Math.max(0, prev - 1));
                           setSpyUsesThisRound(prev => prev + 1);
                           setSpyReveal({ category: cat, word });
