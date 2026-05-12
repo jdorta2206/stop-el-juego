@@ -15,6 +15,14 @@ const DAILY_MSGS: Record<string, { title: string; body: string }> = {
 const CRON_KEY = "daily_notifications";
 const STREAK_RESCUE_KEY = "streak_rescue_notifications";
 const SEASON_ROLLOVER_KEY = "season_rollover";
+const SEASON_CLAIM_KEY = "season_claim_notifications";
+
+const SEASON_CLAIM_MSGS: Record<string, { title: string; body: string }> = {
+  es: { title: "🏆 ¡Misiones listas para reclamar!", body: "Has completado misiones del Season Pass. Reclama el XP antes de que roten." },
+  en: { title: "🏆 Missions ready to claim!", body: "You've completed Season Pass missions. Claim the XP before they rotate." },
+  pt: { title: "🏆 Missões prontas para reclamar!", body: "Completaste missões do Season Pass. Reclama o XP antes de rodarem." },
+  fr: { title: "🏆 Missions prêtes à réclamer !", body: "Tu as terminé des missions du Season Pass. Réclame l'XP avant qu'elles tournent." },
+};
 
 const STREAK_RESCUE_MSGS: Record<string, (streak: number) => { title: string; body: string }> = {
   es: (s) => ({ title: `🔥 ¡Salva tu racha de ${s} días!`, body: "Aún estás a tiempo. Una partida rápida y tu racha sigue viva." }),
@@ -88,6 +96,91 @@ async function sendStreakRescueNotifications() {
   }
 }
 
+/**
+ * Sends a "claim your missions" push to every player who, in the currently
+ * active season, has at least one mission that is `completed: true` but
+ * `claimed: false`. Rotated nightly so XP doesn't evaporate when missions
+ * roll over the next day.
+ *
+ * The eligibility filter is intentionally a coarse SQL prefilter
+ * (`missions_json` LIKE '%"completed":true%') followed by a precise JSON
+ * parse in code: missions are tiny and the prefilter cuts the candidate
+ * set by ~98% without needing a Postgres jsonb column.
+ */
+async function sendSeasonClaimNotifications() {
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+
+    // 1) Resolve the active season for `today`. If none exists we silently
+    //    skip — the season rollover cron at 08:00 UTC will create one.
+    const seasonRows = await db.execute(sql`
+      SELECT id FROM seasons
+      WHERE start_date <= ${today} AND end_date >= ${today}
+      ORDER BY id DESC LIMIT 1
+    `);
+    const activeSeason = (seasonRows as any).rows?.[0] as { id: number } | undefined;
+    if (!activeSeason) {
+      console.log(`[seasonClaimCron] No active season for ${today} — skipping`);
+      return;
+    }
+
+    // 2) Pull progress rows that look like they have a completed mission AND
+    //    belong to a player with at least one push subscription. The LIKE
+    //    is a cheap prefilter; we re-validate by parsing the JSON below.
+    const rows = await db.execute(sql`
+      SELECT sp.player_id,
+             sp.missions_json,
+             COALESCE(MIN(sub.language), 'es') AS language
+      FROM season_progress sp
+      INNER JOIN push_subscriptions sub ON sub.player_id = sp.player_id
+      WHERE sp.season_id = ${activeSeason.id}
+        AND sp.missions_json LIKE '%"completed":true%'
+      GROUP BY sp.player_id, sp.missions_json
+      LIMIT 10000
+    `);
+
+    let candidates = 0;
+    let sent = 0;
+    for (const row of (rows as any).rows as Array<{
+      player_id: string;
+      missions_json: string;
+      language: string;
+    }>) {
+      // Validate the JSON: must contain a mission that is BOTH completed
+      // and not yet claimed. Skip silently on parse errors so a bad row
+      // doesn't break the whole batch.
+      let hasUnclaimed = false;
+      try {
+        const blob = JSON.parse(row.missions_json || "{}");
+        const missions = Array.isArray(blob?.missions) ? blob.missions : [];
+        hasUnclaimed = missions.some(
+          (m: { completed?: boolean; claimed?: boolean }) =>
+            m?.completed === true && m?.claimed !== true,
+        );
+      } catch {
+        continue;
+      }
+      if (!hasUnclaimed) continue;
+      candidates++;
+
+      const lang = SEASON_CLAIM_MSGS[row.language] ? row.language : "es";
+      const msg = SEASON_CLAIM_MSGS[lang];
+      const n = await sendPushToPlayer(row.player_id, {
+        ...msg,
+        icon: "/images/icon-192.png",
+        badge: "/images/icon-192.png",
+        url: "/season",
+      });
+      sent += n;
+    }
+    console.log(
+      `[seasonClaimCron] Notifications sent: ${sent} (eligible: ${candidates}, scanned: ${(rows as any).rows.length}, season: ${activeSeason.id}, date: ${today})`,
+    );
+  } catch (e) {
+    console.error("[seasonClaimCron] Error:", e);
+  }
+}
+
 async function sendDailyNotifications() {
   try {
     const totals = { sent: 0, failed: 0 };
@@ -147,9 +240,23 @@ export function startDailyCron() {
         await rolloverSeasonIfNeeded(today);
       }
     }
+
+    // 21:00–21:05 UTC → Season Pass mission claim reminder. Sent BEFORE the
+    // missions roll over (which happens lazily on the player's next request
+    // when the date changes) so the XP doesn't get lost. Same rationale as
+    // 19:00 UTC for the streak rescue: that window falls inside evening
+    // hours for every supported locale (es/fr 22-23h CET, pt 18h BRT,
+    // en spans US afternoon to EU late evening).
+    if (utcHour === 21 && utcMinute < 5) {
+      const claimed = await claimDailyLock(today, SEASON_CLAIM_KEY);
+      if (claimed) {
+        console.log(`[seasonClaimCron] Lock claimed for ${today} — sending claim reminders`);
+        await sendSeasonClaimNotifications();
+      }
+    }
   }, 5 * 60 * 1000);
 
-  console.log("[dailyCron] Crons started — daily 09:00 UTC, streak rescue 19:00 UTC, season rollover 08:00 UTC");
+  console.log("[dailyCron] Crons started — daily 09:00 UTC, streak rescue 19:00 UTC, season rollover 08:00 UTC, season claim 21:00 UTC");
 }
 
 /**
