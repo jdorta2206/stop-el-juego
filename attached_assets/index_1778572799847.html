@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#FF5722">
+    <title>STOP - Ruleta de la Fortuna</title>
+    <link rel="manifest" href="manifest.json">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="stylesheet" href="css/style.css">
+    <script src="js/dictionary.js" defer></script>
+    <script src="js/game.js" defer></script>
+</head>
+<body>
+    <div class="container">
+        <!-- Contenido del juego igual al anterior -->
+    </div>
+
+    <!-- Audio para WebView Android -->
+    <script>
+        // Función para reproducir sonidos en WebView
+        function playSound(sound) {
+            if(window.Android && Android.playSound) {
+                Android.playSound(sound);
+            } else {
+                document.getElementById(sound).play();
+            }
+        }
+    </script>
+</body>
+</html>

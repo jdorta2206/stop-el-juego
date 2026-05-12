@@ -1,0 +1,60 @@
+import android.content.Context;
+import android.content.Intent;
+import android.net.Uri;
+import android.media.MediaPlayer;
+import android.os.Vibrator;
+import android.webkit.JavascriptInterface;
+
+public class WebAppInterface {
+    private Context context;
+    private MediaPlayer mediaPlayer;
+
+    public WebAppInterface(Context context) {
+        this.context = context;
+    }
+
+    @JavascriptInterface
+    public void playSound(String sound) {
+        int resId = context.getResources().getIdentifier(
+            sound, "raw", context.getPackageName());
+        
+        if(mediaPlayer != null) {
+            mediaPlayer.release();
+        }
+        
+        mediaPlayer = MediaPlayer.create(context, resId);
+        mediaPlayer.start();
+    }
+
+    @JavascriptInterface
+    public void vibrate(int duration) {
+        Vibrator vibrator = (Vibrator) context.getSystemService(Context.VIBRATOR_SERVICE);
+        if(vibrator != null && vibrator.hasVibrator()) {
+            vibrator.vibrate(duration);
+        }
+    }
+
+    @JavascriptInterface
+    public void shareToWhatsApp(String text) {
+        Intent intent = new Intent(Intent.ACTION_SEND);
+        intent.setType("text/plain");
+        intent.setPackage("com.whatsapp");
+        intent.putExtra(Intent.EXTRA_TEXT, text);
+        context.startActivity(intent);
+    }
+
+    @JavascriptInterface
+    public void shareToZangi(String text) {
+        try {
+            Intent intent = new Intent(Intent.ACTION_SEND);
+            intent.setType("text/plain");
+            intent.setPackage("com.zangi");
+            intent.putExtra(Intent.EXTRA_TEXT, text);
+            context.startActivity(intent);
+        } catch (Exception e) {
+            // Abrir página de descarga si Zangi no está instalado
+            context.startActivity(new Intent(Intent.ACTION_VIEW, 
+                Uri.parse("https://play.google.com/store/apps/details?id=com.zangi")));
+        }
+    }
+}
