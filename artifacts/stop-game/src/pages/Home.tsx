@@ -20,7 +20,7 @@ import { useProgression, getLeague } from "@/hooks/useProgression";
 import { useSeason } from "@/hooks/useSeason";
 import { useGetLeaderboard, useGetPlayerStats } from "@workspace/api-client-react";
 import { PackSelector } from "@/components/PackSelector";
-import { NativeBanner } from "@/components/AdSystem";
+import { BannerAd } from "@/components/AdSystem";
 
 const LOGO_URL = `${import.meta.env.BASE_URL}images/stop-logo.png`;
 
@@ -693,9 +693,8 @@ export default function Home() {
           </motion.div>
         )}
 
-        {/* Native ad disabled — Adsterra native widget was triggering intrusive
-            popups on entry. Re-enable only with a verified non-intrusive key. */}
-        {/* {!isPremium && <NativeBanner className="my-4" />} */}
+        {/* Banner 320x50 no intrusivo (reemplaza al NativeBanner que abría popups) */}
+        {!isPremium && <BannerAd className="my-4" />}
 
         {/* Share row */}
         <motion.div
