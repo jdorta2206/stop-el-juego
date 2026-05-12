@@ -46,6 +46,23 @@ export type SeasonInfo = {
   tiers: TierReward[];
 };
 
+export type CosmeticMeta = {
+  id: string;
+  kind: "avatar" | "frame" | "coin_pack";
+  label: string;
+  glyph?: string;
+  color?: string;
+};
+
+export type PendingFinal = {
+  seasonId: number;
+  finalRank: number;
+  finalXp: number;
+  totalPlayers: number;
+  awardedCosmetic: CosmeticMeta | null;
+  seasonName: string | null;
+};
+
 export type SeasonProgress = {
   seasonId: number;
   xp: number;
@@ -55,6 +72,25 @@ export type SeasonProgress = {
   missions: Mission[];
   missionsDate: string;
   hasUnclaimedMissions: boolean;
+  pendingFinal: PendingFinal | null;
+};
+
+export type LeaderboardEntry = {
+  rank: number;
+  playerId: string;
+  playerName: string;
+  avatarColor: string;
+  isPremium: boolean;
+  equippedAvatar: string | null;
+  equippedFrame: string | null;
+  xp: number;
+};
+
+export type Leaderboard = {
+  seasonId: number;
+  total: number;
+  top: LeaderboardEntry[];
+  me: (LeaderboardEntry & { inTop: boolean }) | null;
 };
 
 export function useSeason(playerId?: string | null) {
@@ -99,6 +135,20 @@ export function useSeason(playerId?: string | null) {
     return data;
   }, [playerId, refresh]);
 
+  const ackFinal = useCallback(async (seasonId: number) => {
+    if (!playerId) return;
+    try {
+      await fetch(`${API}/api/season/ack-final`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ seasonId }),
+      });
+      // Optimistically clear locally so the modal doesn't reopen on re-render.
+      setProgress((prev) => (prev ? { ...prev, pendingFinal: null } : prev));
+    } catch { /* ignore */ }
+  }, [playerId]);
+
   const claimTier = useCallback(async (tier: number, track: "free" | "premium") => {
     if (!playerId) return null;
     const res = await fetch(`${API}/api/season/claim-tier`, {
@@ -116,7 +166,38 @@ export function useSeason(playerId?: string | null) {
     return data;
   }, [playerId, refresh]);
 
-  return { season, progress, loading, refresh, claimMission, claimTier };
+  return { season, progress, loading, refresh, claimMission, claimTier, ackFinal };
+}
+
+/**
+ * Fetches the season leaderboard. Public endpoint — viewer's row is included
+ * automatically when an auth session is present.
+ */
+export function useSeasonLeaderboard(seasonId?: number | null, enabled: boolean = true) {
+  const [data, setData] = useState<Leaderboard | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const refresh = useCallback(async () => {
+    if (!enabled) return;
+    setLoading(true);
+    try {
+      const url = new URL(`${API}/api/season/leaderboard`);
+      if (seasonId) url.searchParams.set("seasonId", String(seasonId));
+      const r = await fetch(url.toString(), {
+        credentials: "include",
+        headers: authHeaders(),
+      });
+      if (r.ok) setData(await r.json());
+    } catch {
+      /* ignore */
+    } finally {
+      setLoading(false);
+    }
+  }, [seasonId, enabled]);
+
+  useEffect(() => { refresh(); }, [refresh]);
+
+  return { data, loading, refresh };
 }
 
 /**

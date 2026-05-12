@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { db, seasonsTable, seasonProgressTable, playerScoresTable, indexesReady } from "@workspace/db";
-import { resolveCosmetic } from "../lib/inventoryCatalog";
+import { db, pool, seasonsTable, seasonProgressTable, playerScoresTable, indexesReady } from "@workspace/db";
+import { resolveCosmetic, championFrameId } from "../lib/inventoryCatalog";
 import { eq, and, desc, lte, gte, sql } from "drizzle-orm";
 import {
   buildMissionsForDate,
@@ -12,7 +12,7 @@ import {
   SEASON_LENGTH_DAYS,
   type Mission,
 } from "../lib/seasonConfig";
-import { requirePlayerIdentity, type AuthedRequest } from "../lib/playerAuth";
+import { requirePlayerIdentity, readPlayerId, type AuthedRequest } from "../lib/playerAuth";
 
 interface SqlResult<T> {
   rows?: T[];
@@ -60,6 +60,107 @@ function addDays(dateStr: string, days: number): string {
  * Returns the active season for `today`. Creates one if no season covers
  * today's date. Idempotent thanks to the date-overlap query.
  */
+/**
+ * Freezes the previous season's standings into `season_finals` and awards
+ * champion frames to the top 3. Idempotent — relies on the unique
+ * (season_id, player_id) index so re-runs are a no-op. Called whenever a
+ * brand-new active season is opened (lazy create OR cron rollover).
+ */
+async function finalizePreviousSeason(currentSeasonId: number, today: string): Promise<void> {
+  try {
+    // Find the most recent season that ended strictly before today AND is
+    // not the freshly-opened one. We process at most one prior season per
+    // call; older un-finalized seasons would be picked up the next time
+    // rollover happens.
+    const prevRows = (await db.execute(sql`
+      SELECT id FROM seasons
+      WHERE end_date < ${today} AND id <> ${currentSeasonId}
+      ORDER BY id DESC LIMIT 1
+    `)) as unknown as SqlResult<{ id: number }>;
+    const prevId = prevRows.rows?.[0]?.id;
+    if (!prevId) return;
+
+    const standings = (await db.execute(sql`
+      SELECT player_id, xp,
+             ROW_NUMBER() OVER (ORDER BY xp DESC, id ASC) AS rank,
+             COUNT(*) OVER () AS total
+      FROM season_progress
+      WHERE season_id = ${prevId}
+    `)) as unknown as SqlResult<{ player_id: string; xp: number; rank: number | string; total: number | string }>;
+
+    const rows = standings.rows ?? [];
+    if (rows.length === 0) return;
+
+    // We deliberately do NOT short-circuit if some finals rows already
+    // exist — a previous run may have failed mid-loop. Each per-player
+    // step is fully idempotent: the finals INSERT relies on the unique
+    // (season_id, player_id) index, and the inventory UPDATE happens
+    // inside a transaction with FOR UPDATE so concurrent writers (tier
+    // claims, shop purchases) cannot clobber the JSON blob.
+    let processed = 0;
+    for (const r of rows) {
+      const rank = Number(r.rank);
+      const total = Number(r.total);
+      const cosmetic = rank <= 3 ? championFrameId(prevId, rank as 1 | 2 | 3) : null;
+
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        await client.query(
+          `INSERT INTO season_finals
+             (season_id, player_id, final_rank, final_xp, total_players, awarded_cosmetic)
+           VALUES ($1, $2, $3, $4, $5, $6)
+           ON CONFLICT (season_id, player_id) DO NOTHING`,
+          [prevId, r.player_id, rank, r.xp, total, cosmetic],
+        );
+
+        if (cosmetic) {
+          // Lock the player_scores row so concurrent inventory writers
+          // serialize behind us.
+          const invRes = await client.query<{ inventory_json: string }>(
+            `SELECT inventory_json FROM player_scores
+             WHERE player_id = $1 FOR UPDATE`,
+            [r.player_id],
+          );
+          if (invRes.rows.length > 0) {
+            const raw = invRes.rows[0].inventory_json;
+            const inv: { avatars: string[]; frames: string[] } = { avatars: [], frames: [] };
+            try {
+              const parsed = JSON.parse(raw || "{}");
+              if (Array.isArray(parsed.avatars)) inv.avatars = parsed.avatars;
+              if (Array.isArray(parsed.frames)) inv.frames = parsed.frames;
+            } catch { /* keep defaults */ }
+            if (!inv.frames.includes(cosmetic)) {
+              inv.frames.push(cosmetic);
+              await client.query(
+                `UPDATE player_scores
+                 SET inventory_json = $1, updated_at = NOW()
+                 WHERE player_id = $2`,
+                [JSON.stringify(inv), r.player_id],
+              );
+            }
+          }
+        }
+
+        await client.query("COMMIT");
+        processed++;
+      } catch (txErr) {
+        await client.query("ROLLBACK").catch(() => {});
+        // Log per-player failures but keep going — finalize is resumable.
+        console.error(
+          `[finalizePreviousSeason] player ${r.player_id} failed:`,
+          txErr instanceof Error ? txErr.message : String(txErr),
+        );
+      } finally {
+        client.release();
+      }
+    }
+    console.log(`[finalizePreviousSeason] Finalized season ${prevId} (${processed}/${rows.length} players)`);
+  } catch (e: unknown) {
+    console.error("[finalizePreviousSeason] error:", e instanceof Error ? e.message : String(e));
+  }
+}
+
 async function getOrCreateActiveSeason() {
   const today = todayUTC();
 
@@ -91,6 +192,11 @@ async function getOrCreateActiveSeason() {
     .where(and(lte(seasonsTable.startDate, today), gte(seasonsTable.endDate, today)))
     .orderBy(desc(seasonsTable.id))
     .limit(1);
+
+  // We just created (or won the race for) a brand-new season. Take the
+  // chance to freeze finals for the previous one. Fire-and-forget: errors
+  // are logged inside and never block the active-season fetch.
+  void finalizePreviousSeason(winner[0].id, today);
 
   return winner[0];
 }
@@ -201,6 +307,50 @@ router.get("/progress", requirePlayerIdentity, async (req: AuthedRequest, res) =
     const claimed = parseClaimed(progress.claimedTiers);
     const currentTier = tierFromXp(progress.xp);
 
+    // ── End-of-season recap: surface the most recent finalized season the
+    // player participated in, but only if we haven't already shown them
+    // the recap modal. Frontend acks via POST /api/season/ack-final.
+    let pendingFinal: {
+      seasonId: number;
+      finalRank: number;
+      finalXp: number;
+      totalPlayers: number;
+      awardedCosmetic: ReturnType<typeof resolveCosmetic> | null;
+      seasonName: string | null;
+    } | null = null;
+
+    const finalRows = (await db.execute(sql`
+      SELECT sf.season_id, sf.final_rank, sf.final_xp, sf.total_players, sf.awarded_cosmetic,
+             s.theme_json, ps.notified_final_season_id
+      FROM season_finals sf
+      JOIN seasons s         ON s.id = sf.season_id
+      JOIN player_scores ps  ON ps.player_id = sf.player_id
+      WHERE sf.player_id = ${playerId}
+        AND sf.season_id <> ${season.id}
+      ORDER BY sf.season_id DESC LIMIT 1
+    `)) as unknown as SqlResult<{
+      season_id: number;
+      final_rank: number;
+      final_xp: number;
+      total_players: number;
+      awarded_cosmetic: string | null;
+      theme_json: string;
+      notified_final_season_id: number | null;
+    }>;
+    const fr = finalRows.rows?.[0];
+    if (fr && fr.notified_final_season_id !== fr.season_id) {
+      let seasonName: string | null = null;
+      try { seasonName = JSON.parse(fr.theme_json || "{}")?.name ?? null; } catch { /* ignore */ }
+      pendingFinal = {
+        seasonId: fr.season_id,
+        finalRank: Number(fr.final_rank),
+        finalXp: Number(fr.final_xp),
+        totalPlayers: Number(fr.total_players),
+        awardedCosmetic: fr.awarded_cosmetic ? resolveCosmetic(fr.awarded_cosmetic) : null,
+        seasonName,
+      };
+    }
+
     res.json({
       seasonId: season.id,
       xp: progress.xp,
@@ -210,10 +360,138 @@ router.get("/progress", requirePlayerIdentity, async (req: AuthedRequest, res) =
       missions: missions.missions,
       missionsDate: missions.date,
       hasUnclaimedMissions: missions.missions.some((m) => m.completed && !m.claimed),
+      pendingFinal,
     });
   } catch (e: unknown) {
     console.error("[season/progress] error:", e instanceof Error ? e.message : String(e));
     res.status(500).json({ error: "Failed to load progress" });
+  }
+});
+
+// GET /api/season/leaderboard?seasonId=  (public — defaults to active season)
+// Returns top 50 by XP plus the viewer's row (if authenticated and ranked).
+router.get("/leaderboard", async (req: AuthedRequest, res) => {
+  // Optional auth: derive viewer id if a session is present, but never 401.
+  req.playerId = readPlayerId(req) ?? undefined;
+  try {
+    let seasonId: number;
+    const requested = Number(req.query.seasonId);
+    if (Number.isFinite(requested) && requested > 0) {
+      seasonId = requested;
+    } else {
+      const season = await getOrCreateActiveSeason();
+      seasonId = season.id;
+    }
+
+    const topRows = (await db.execute(sql`
+      SELECT sp.player_id, sp.xp,
+             ps.player_name, ps.avatar_color, ps.is_premium,
+             ps.equipped_avatar, ps.equipped_frame
+      FROM season_progress sp
+      LEFT JOIN player_scores ps ON ps.player_id = sp.player_id
+      WHERE sp.season_id = ${seasonId}
+      ORDER BY sp.xp DESC, sp.id ASC
+      LIMIT 50
+    `)) as unknown as SqlResult<{
+      player_id: string; xp: number;
+      player_name: string | null; avatar_color: string | null; is_premium: boolean | null;
+      equipped_avatar: string | null; equipped_frame: string | null;
+    }>;
+
+    const totalRows = (await db.execute(sql`
+      SELECT COUNT(*)::int AS total FROM season_progress WHERE season_id = ${seasonId}
+    `)) as unknown as SqlResult<{ total: number }>;
+    const total = Number(totalRows.rows?.[0]?.total ?? 0);
+
+    const top = (topRows.rows ?? []).map((r, i) => ({
+      rank: i + 1,
+      playerId: r.player_id,
+      playerName: r.player_name ?? "Anónimo",
+      avatarColor: r.avatar_color ?? "#e53e3e",
+      isPremium: r.is_premium === true,
+      equippedAvatar: r.equipped_avatar,
+      equippedFrame: r.equipped_frame,
+      xp: Number(r.xp),
+    }));
+
+    // Derive viewer row (only if authenticated AND has a season_progress row).
+    let me: (typeof top)[number] & { inTop: boolean } | null = null;
+    const viewerId = req.playerId; // optional; requirePlayerIdentity not used here
+    if (viewerId) {
+      const rankRow = (await db.execute(sql`
+        WITH ranked AS (
+          SELECT sp.player_id, sp.xp,
+                 ROW_NUMBER() OVER (ORDER BY sp.xp DESC, sp.id ASC) AS rank
+          FROM season_progress sp
+          WHERE sp.season_id = ${seasonId}
+        )
+        SELECT r.player_id, r.xp, r.rank,
+               ps.player_name, ps.avatar_color, ps.is_premium,
+               ps.equipped_avatar, ps.equipped_frame
+        FROM ranked r
+        LEFT JOIN player_scores ps ON ps.player_id = r.player_id
+        WHERE r.player_id = ${viewerId}
+        LIMIT 1
+      `)) as unknown as SqlResult<{
+        player_id: string; xp: number; rank: number | string;
+        player_name: string | null; avatar_color: string | null; is_premium: boolean | null;
+        equipped_avatar: string | null; equipped_frame: string | null;
+      }>;
+      const mr = rankRow.rows?.[0];
+      if (mr) {
+        const rankNum = Number(mr.rank);
+        me = {
+          rank: rankNum,
+          playerId: mr.player_id,
+          playerName: mr.player_name ?? "Anónimo",
+          avatarColor: mr.avatar_color ?? "#e53e3e",
+          isPremium: mr.is_premium === true,
+          equippedAvatar: mr.equipped_avatar,
+          equippedFrame: mr.equipped_frame,
+          xp: Number(mr.xp),
+          inTop: rankNum <= 50,
+        };
+      }
+    }
+
+    res.json({ seasonId, total, top, me });
+  } catch (e: unknown) {
+    console.error("[season/leaderboard] error:", e instanceof Error ? e.message : String(e));
+    res.status(500).json({ error: "Failed to load leaderboard" });
+  }
+});
+
+// POST /api/season/ack-final { seasonId } → mark recap modal as shown.
+router.post("/ack-final", requirePlayerIdentity, async (req: AuthedRequest, res) => {
+  const playerId = req.playerId!;
+  const { seasonId } = (req.body ?? {}) as { seasonId?: number };
+  if (typeof seasonId !== "number" || seasonId <= 0) {
+    res.status(400).json({ error: "Invalid seasonId" });
+    return;
+  }
+  try {
+    // Only allow ack for a season the player actually has a finals row in.
+    const exists = (await db.execute(sql`
+      SELECT 1 FROM season_finals
+      WHERE player_id = ${playerId} AND season_id = ${seasonId}
+      LIMIT 1
+    `)) as unknown as SqlResult<{ "?column?": number }>;
+    if ((exists.rows?.length ?? 0) === 0) {
+      res.status(404).json({ error: "No final standing for that season" });
+      return;
+    }
+    // Monotonic update: never roll back the notified pointer if a newer
+    // ack already happened (defensive against out-of-order client calls).
+    await db.execute(sql`
+      UPDATE player_scores
+      SET notified_final_season_id = ${seasonId}, updated_at = NOW()
+      WHERE player_id = ${playerId}
+        AND COALESCE(notified_final_season_id, 0) < ${seasonId}
+    `);
+    res.json({ ok: true });
+  } catch (e: unknown) {
+    console.error("[season/ack-final] error:", e instanceof Error ? e.message : String(e));
+    res.status(500).json({ error: "Failed to ack" });
   }
 });
 

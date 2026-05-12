@@ -55,10 +55,36 @@ export function resolveCosmetic(id: string): CosmeticMeta | null {
       glyph: AVATAR_GLYPHS[idx % AVATAR_GLYPHS.length],
     };
   }
+  // Champion frames awarded to season top-3 — id shape: `frame_champion_s<seasonId>_r<rank>`
+  m = id.match(/^frame_champion_s(\d+)_r([1-3])$/);
+  if (m) {
+    const seasonId = Number(m[1]);
+    const rank = Number(m[2]);
+    const meta = CHAMPION_FRAMES[rank - 1];
+    return {
+      id, kind: "frame",
+      label: `${meta.label} S${seasonId}`,
+      glyph: meta.glyph,
+      color: meta.color,
+    };
+  }
   // Shop items
   const shop = SHOP_ITEMS.find((s) => s.id === id);
   if (shop) return { id: shop.id, kind: shop.kind, label: shop.label, glyph: shop.glyph, color: shop.color };
   return null;
+}
+
+// ── Champion frames (top 3 of a season) ─────────────────────────────────────
+// Awarded automatically by season rollover. Visuals shared across seasons —
+// only the season number in the label changes.
+const CHAMPION_FRAMES = [
+  { label: "Marco Campeón Oro",   glyph: "▣", color: "#fbbf24" },
+  { label: "Marco Campeón Plata", glyph: "▣", color: "#cbd5e1" },
+  { label: "Marco Campeón Bronce",glyph: "▣", color: "#cd7f32" },
+];
+
+export function championFrameId(seasonId: number, rank: 1 | 2 | 3): string {
+  return `frame_champion_s${seasonId}_r${rank}`;
 }
 
 // ── Coin shop ──────────────────────────────────────────────────────────────

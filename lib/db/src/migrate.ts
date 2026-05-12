@@ -64,6 +64,28 @@ export async function ensureIndexes(): Promise<void> {
        ADD COLUMN IF NOT EXISTS equipped_avatar text`,
     `ALTER TABLE player_scores
        ADD COLUMN IF NOT EXISTS equipped_frame text`,
+    // Tracks the most recent finished season for which the player has been
+    // shown the "Quedaste #N" recap modal. NULL = never notified.
+    `ALTER TABLE player_scores
+       ADD COLUMN IF NOT EXISTS notified_final_season_id integer`,
+
+    // ── season_finals ────────────────────────────────────────────────
+    // One row per (player, season) frozen at season rollover. Used to
+    // power the end-of-season recap modal and the champion cosmetic.
+    `CREATE TABLE IF NOT EXISTS season_finals (
+       id serial PRIMARY KEY,
+       season_id integer NOT NULL,
+       player_id text NOT NULL,
+       final_rank integer NOT NULL,
+       final_xp integer NOT NULL,
+       total_players integer NOT NULL,
+       awarded_cosmetic text,
+       created_at timestamp NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS season_finals_season_player_uidx
+       ON season_finals (season_id, player_id)`,
+    `CREATE INDEX IF NOT EXISTS season_finals_player_id_idx
+       ON season_finals (player_id)`,
 
     // ── daily_results ────────────────────────────────────────────────
     `CREATE INDEX IF NOT EXISTS daily_results_date_score_desc_idx

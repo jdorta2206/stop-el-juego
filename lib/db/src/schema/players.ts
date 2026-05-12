@@ -34,6 +34,8 @@ export const playerScoresTable = pgTable("player_scores", {
   // Server validates ownership on equip.
   equippedAvatar: text("equipped_avatar"),
   equippedFrame: text("equipped_frame"),
+  // Latest season for which the end-of-season recap modal has been shown.
+  notifiedFinalSeasonId: integer("notified_final_season_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
