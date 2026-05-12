@@ -343,6 +343,15 @@ const en = {
     label: "Ad",
   },
 
+  review: {
+    title: "Enjoying STOP?",
+    body: "If you're having fun, please leave us 5 stars on Google Play. It helps a ton.",
+    rate: "Yes, leave 5 stars",
+    later: "Later",
+    never: "No, thanks",
+    close: "Close",
+  },
+
   ftue: {
     welcomeTitle: "Welcome to STOP!",
     welcomeBody: "A random letter pops up. Write a word in each category that starts with that letter — faster and more original than the AI!",

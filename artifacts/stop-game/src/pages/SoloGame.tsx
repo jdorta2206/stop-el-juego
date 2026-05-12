@@ -30,6 +30,8 @@ import { useAchievements } from "@/hooks/useAchievements";
 import { AchievementToast } from "@/components/AchievementToast";
 import { drawPowerCard, POWER_CARDS, type PowerCardId } from "@/data/powerCards";
 import { usePersonalBest } from "@/hooks/usePersonalBest";
+import { useReviewPrompt, recordGamePlayed } from "@/hooks/useReviewPrompt";
+import { ReviewPromptCard } from "@/components/ReviewPromptCard";
 
 function vibrate(pattern: number | number[]) {
   try { if (navigator.vibrate) navigator.vibrate(pattern); } catch {}
@@ -141,6 +143,9 @@ export default function SoloGame() {
 
   const gameMode = isDailyMode ? "daily" : isQuickMode ? "quick" : isChaosMode ? "chaos" : isRandomMode ? "random" : "normal";
   const { best: personalBest, updateBest } = usePersonalBest(gameMode, player?.id);
+  const reviewPrompt = useReviewPrompt();
+  const reviewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (reviewTimerRef.current) clearTimeout(reviewTimerRef.current); }, []);
   const [bestResult, setBestResult] = useState<{ isNew: boolean; diff: number } | null>(null);
   // Highest single-round score across the current game (resets on new game).
   // Used to track the `round_score` Season Pass missions accurately, instead
@@ -672,6 +677,20 @@ export default function SoloGame() {
           setTimeout(() => setShowShareModal(true), shareDelay);
         }
 
+        // Record this finished game for the review-prompt eligibility counter,
+        // then try to show the prompt at a happy moment. Delayed so it doesn't
+        // collide with first-win, share, or new-record celebrations.
+        recordGamePlayed();
+        const reviewDelay = showFirstWinNow ? 9000 : (br.isNew ? 7500 : 5500);
+        if (reviewTimerRef.current) clearTimeout(reviewTimerRef.current);
+        reviewTimerRef.current = setTimeout(() => {
+          reviewPrompt.maybeShow({
+            won: wonGame,
+            newPersonalBest: br.isNew,
+            streakDays: soloStreak.current,
+          });
+        }, reviewDelay);
+
         // 💾 Submit final score INLINE with the freshly-computed value.
         // We can't rely on the auto-submit useEffect reading `totalScore` from
         // state because `setTotalScore(finalPlayerScore)` above is async and
@@ -1030,6 +1049,14 @@ export default function SoloGame() {
             isPremium={isPremium}
           />
         )}
+
+        <ReviewPromptCard
+          open={reviewPrompt.open}
+          onClose={reviewPrompt.close}
+          onRated={reviewPrompt.markRated}
+          onSnooze={reviewPrompt.snooze}
+          onDismissForever={reviewPrompt.dontAskAgain}
+        />
 
         <FirstVictoryCelebration
           open={showFirstWin}

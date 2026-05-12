@@ -343,6 +343,15 @@ const es = {
     label: "Publicidad",
   },
 
+  review: {
+    title: "¿Te está gustando STOP?",
+    body: "Si te lo estás pasando bien, déjanos 5 estrellas en Google Play. Nos ayuda muchísimo.",
+    rate: "Sí, dejar 5 estrellas",
+    later: "Más tarde",
+    never: "No, gracias",
+    close: "Cerrar",
+  },
+
   ftue: {
     welcomeTitle: "¡Bienvenido a STOP!",
     welcomeBody: "Sale una letra al azar. Escribe palabras en cada categoría que empiecen por esa letra. ¡Más rápido y original que la IA!",

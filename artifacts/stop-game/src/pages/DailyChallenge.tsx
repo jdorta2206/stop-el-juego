@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
 import { Layout } from "@/components/Layout";
 import { motion } from "framer-motion";
@@ -6,6 +6,8 @@ import { useT } from "@/i18n/useT";
 import { usePlayer } from "@/hooks/use-player";
 import { ArrowLeft, Trophy, Calendar, Flame } from "lucide-react";
 import { useStreak } from "@/hooks/useStreak";
+import { useReviewPrompt } from "@/hooks/useReviewPrompt";
+import { ReviewPromptCard } from "@/components/ReviewPromptCard";
 import { getApiUrl } from "@/lib/utils";
 
 interface DailyChallenge {
@@ -47,6 +49,8 @@ export default function DailyChallenge() {
   const [playedToday, setPlayedToday] = useState(false);
   const [myScore, setMyScore] = useState<number | null>(null);
   const [timeLeft, setTimeLeft] = useState(getTimeUntilMidnight());
+  const reviewPrompt = useReviewPrompt();
+  const reviewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     fetch(`${API_BASE}/api/daily?language=${lang}`)
@@ -64,12 +68,24 @@ export default function DailyChallenge() {
     if (played) {
       setPlayedToday(true);
       setMyScore(Number(played));
+      // Try the review prompt at this happy moment (after they've seen
+      // their daily score). Eligibility logic in the hook handles
+      // games-played threshold, snooze and per-month frequency.
+      reviewTimerRef.current = setTimeout(() => {
+        reviewPrompt.maybeShow({
+          streakDays: streak.current,
+          scorePercentile: Number(played) >= 80 ? 0.9 : 0,
+        });
+      }, 1500);
     }
 
     const timer = setInterval(() => {
       setTimeLeft(getTimeUntilMidnight());
     }, 60000);
-    return () => clearInterval(timer);
+    return () => {
+      clearInterval(timer);
+      if (reviewTimerRef.current) clearTimeout(reviewTimerRef.current);
+    };
   }, [lang]);
 
   function handlePlay() {
@@ -241,6 +257,14 @@ export default function DailyChallenge() {
         </motion.div>
 
       </div>
+
+      <ReviewPromptCard
+        open={reviewPrompt.open}
+        onClose={reviewPrompt.close}
+        onRated={reviewPrompt.markRated}
+        onSnooze={reviewPrompt.snooze}
+        onDismissForever={reviewPrompt.dontAskAgain}
+      />
     </Layout>
   );
 }

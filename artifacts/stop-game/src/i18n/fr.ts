@@ -343,6 +343,15 @@ const fr = {
     label: "Pub",
   },
 
+  review: {
+    title: "Tu aimes STOP ?",
+    body: "Si tu t'amuses, laisse-nous 5 étoiles sur Google Play. Ça nous aide énormément.",
+    rate: "Oui, laisser 5 étoiles",
+    later: "Plus tard",
+    never: "Non, merci",
+    close: "Fermer",
+  },
+
   ftue: {
     welcomeTitle: "Bienvenue dans STOP !",
     welcomeBody: "Une lettre tombe au hasard. Écris un mot dans chaque catégorie qui commence par cette lettre — plus vite et plus original que l'IA !",
