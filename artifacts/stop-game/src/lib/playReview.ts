@@ -1,5 +1,11 @@
 import { hasAndroidAppReferrer } from "@/lib/playBilling";
 
+// Source of truth: the Play Store association declared in
+// `attached_assets/assetlinks_*.json` (Digital Asset Links) and the
+// `related_applications` block in `artifacts/stop-game/public/manifest.json`,
+// both of which point to this package id. Do NOT confuse with the legacy
+// `android/twa-manifest.json` which contains a stale local Bubblewrap config
+// from a previous build and is no longer used to publish.
 export const PLAY_PACKAGE_ID = "app.replit.stop_el_juego.twa";
 export const PLAY_STORE_URL = `https://play.google.com/store/apps/details?id=${PLAY_PACKAGE_ID}`;
 
