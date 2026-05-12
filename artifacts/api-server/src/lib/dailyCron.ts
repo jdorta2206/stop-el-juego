@@ -107,18 +107,32 @@ async function sendStreakRescueNotifications() {
  * parse in code: missions are tiny and the prefilter cuts the candidate
  * set by ~98% without needing a Postgres jsonb column.
  */
+interface SqlResult<T> {
+  rows?: T[];
+}
+
+interface SeasonIdRow {
+  id: number;
+}
+
+interface SeasonClaimCandidateRow {
+  player_id: string;
+  missions_json: string;
+  language: string;
+}
+
 async function sendSeasonClaimNotifications() {
   try {
     const today = new Date().toISOString().slice(0, 10);
 
     // 1) Resolve the active season for `today`. If none exists we silently
     //    skip — the season rollover cron at 08:00 UTC will create one.
-    const seasonRows = await db.execute(sql`
+    const seasonRows = (await db.execute(sql`
       SELECT id FROM seasons
       WHERE start_date <= ${today} AND end_date >= ${today}
       ORDER BY id DESC LIMIT 1
-    `);
-    const activeSeason = (seasonRows as any).rows?.[0] as { id: number } | undefined;
+    `)) as unknown as SqlResult<SeasonIdRow>;
+    const activeSeason = seasonRows.rows?.[0];
     if (!activeSeason) {
       console.log(`[seasonClaimCron] No active season for ${today} — skipping`);
       return;
@@ -127,7 +141,7 @@ async function sendSeasonClaimNotifications() {
     // 2) Pull progress rows that look like they have a completed mission AND
     //    belong to a player with at least one push subscription. The LIKE
     //    is a cheap prefilter; we re-validate by parsing the JSON below.
-    const rows = await db.execute(sql`
+    const rows = (await db.execute(sql`
       SELECT sp.player_id,
              sp.missions_json,
              COALESCE(MIN(sub.language), 'es') AS language
@@ -137,15 +151,12 @@ async function sendSeasonClaimNotifications() {
         AND sp.missions_json LIKE '%"completed":true%'
       GROUP BY sp.player_id, sp.missions_json
       LIMIT 10000
-    `);
+    `)) as unknown as SqlResult<SeasonClaimCandidateRow>;
 
+    const candidateRows = rows.rows ?? [];
     let candidates = 0;
     let sent = 0;
-    for (const row of (rows as any).rows as Array<{
-      player_id: string;
-      missions_json: string;
-      language: string;
-    }>) {
+    for (const row of candidateRows) {
       // Validate the JSON: must contain a mission that is BOTH completed
       // and not yet claimed. Skip silently on parse errors so a bad row
       // doesn't break the whole batch.
@@ -174,7 +185,7 @@ async function sendSeasonClaimNotifications() {
       sent += n;
     }
     console.log(
-      `[seasonClaimCron] Notifications sent: ${sent} (eligible: ${candidates}, scanned: ${(rows as any).rows.length}, season: ${activeSeason.id}, date: ${today})`,
+      `[seasonClaimCron] Notifications sent: ${sent} (eligible: ${candidates}, scanned: ${candidateRows.length}, season: ${activeSeason.id}, date: ${today})`,
     );
   } catch (e) {
     console.error("[seasonClaimCron] Error:", e);
