@@ -54,6 +54,17 @@ export async function ensureIndexes(): Promise<void> {
     `ALTER TABLE player_scores
        ADD COLUMN IF NOT EXISTS streak_days_json text NOT NULL DEFAULT '[]'`,
 
+    // ── player_scores: Season Pass real rewards (inventory + coins) ──
+    // Idempotent ADDs so existing rows keep working without a migration.
+    `ALTER TABLE player_scores
+       ADD COLUMN IF NOT EXISTS coins integer NOT NULL DEFAULT 0`,
+    `ALTER TABLE player_scores
+       ADD COLUMN IF NOT EXISTS inventory_json text NOT NULL DEFAULT '{"avatars":[],"frames":[]}'`,
+    `ALTER TABLE player_scores
+       ADD COLUMN IF NOT EXISTS equipped_avatar text`,
+    `ALTER TABLE player_scores
+       ADD COLUMN IF NOT EXISTS equipped_frame text`,
+
     // ── daily_results ────────────────────────────────────────────────
     `CREATE INDEX IF NOT EXISTS daily_results_date_score_desc_idx
        ON daily_results (challenge_date, score DESC)`,

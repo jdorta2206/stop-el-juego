@@ -24,6 +24,16 @@ export const playerScoresTable = pgTable("player_scores", {
   achievementsJson: text("achievements_json").notNull().default("[]"),         // array of unlocked achievement IDs
   achievementStatsJson: text("achievement_stats_json").notNull().default("{}"), // { totalWins, totalGames, maxCombo, … }
   personalBestsJson: text("personal_bests_json").notNull().default("{}"),   // { normal, quick, chaos, daily } → number
+  // ── Season Pass real rewards ──────────────────────────────────────────
+  // Coin balance (earned from claiming Season Pass tiers, spendable in shop).
+  coins: integer("coins").notNull().default(0),
+  // Owned cosmetics: `{ avatars: string[], frames: string[] }`. Items are
+  // added via Season Pass tier claims or coin purchases; never removed.
+  inventoryJson: text("inventory_json").notNull().default("{\"avatars\":[],\"frames\":[]}"),
+  // Currently equipped cosmetics. Null = use default avatar/no frame.
+  // Server validates ownership on equip.
+  equippedAvatar: text("equipped_avatar"),
+  equippedFrame: text("equipped_frame"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

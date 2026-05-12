@@ -4,7 +4,7 @@ import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui";
 import {
   Trophy, Flame, Gamepad2, Users, Star, ArrowLeft,
-  UserPlus, UserCheck, Clock, Sword, Crown,
+  UserPlus, UserCheck, Clock, Sword, Crown, Coins, ShoppingBag, Check,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { usePlayer } from "@/hooks/use-player";
@@ -12,6 +12,7 @@ import { getApiUrl } from "@/lib/utils";
 import { useFollows } from "@/lib/useFollows";
 import { useCallback, useState } from "react";
 import { type OnlinePlayer } from "@/lib/usePresence";
+import { useInventory, type ShopItem } from "@/hooks/useInventory";
 
 // ── Level system based on total games played ───────────────────────────────
 const LEVELS = [
@@ -45,6 +46,63 @@ const MODE_LABELS: Record<string, { label: string; icon: string }> = {
 };
 
 // ── Helpers ────────────────────────────────────────────────────────────────
+function CosmeticChip({
+  glyph, label, equipped, busy, color, onClick,
+}: {
+  glyph: string;
+  label: string;
+  equipped: boolean;
+  busy: boolean;
+  color?: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={busy || equipped}
+      title={label}
+      className="relative flex flex-col items-center gap-1 px-2 py-1.5 rounded-lg transition-all disabled:opacity-90"
+      style={{
+        background: equipped ? "rgba(34,197,94,0.15)" : "rgba(255,255,255,0.05)",
+        border: equipped ? "1.5px solid rgba(34,197,94,0.5)" : "1.5px solid rgba(255,255,255,0.1)",
+        minWidth: 56,
+      }}
+    >
+      <span className="text-xl leading-none" style={{ color }}>{glyph}</span>
+      <span className="text-[9px] font-bold text-white/70 leading-tight text-center max-w-[60px] truncate">{label}</span>
+      {equipped && (
+        <span className="absolute -top-1 -right-1 bg-emerald-500 rounded-full p-0.5">
+          <Check className="w-2.5 h-2.5 text-white" />
+        </span>
+      )}
+    </button>
+  );
+}
+
+// Frame metadata mirror of the server catalog — used to render the equipped
+// frame ring around any player's avatar (own profile or others'). Keep in
+// sync with `inventoryCatalog.ts` on the server.
+const FRAME_COLORS_BY_ID: Record<string, string> = {
+  frame_free_5:  "#cd7f32",
+  frame_free_10: "#c0c0c0",
+  frame_free_15: "#f9a825",
+  frame_free_20: "#67e8f9",
+  frame_free_25: "#a78bfa",
+  frame_free_30: "#f472b6",
+  frame_shop_neon: "#22d3ee",
+};
+const AVATAR_GLYPH_BY_ID: Record<string, string> = {
+  avatar_premium_5:  "🎯",
+  avatar_premium_10: "🔥",
+  avatar_premium_15: "⚡",
+  avatar_premium_20: "🌟",
+  avatar_premium_25: "👑",
+  avatar_premium_30: "💎",
+  avatar_shop_rocket:  "🚀",
+  avatar_shop_unicorn: "🦄",
+  avatar_shop_alien:   "👽",
+};
+
 function StatCard({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="flex flex-col items-center gap-1 p-4 bg-black/30 rounded-2xl border border-white/10">
@@ -83,6 +141,26 @@ export default function PlayerProfile() {
 
   const isMe = me?.id === id;
   const isLoggedIn = !!(me && me.loginMethod !== "guest");
+  // Inventory only loads for the player's own profile — there's no public
+  // endpoint, and other players' equipped cosmetics ship via the profile
+  // payload below (see `data.equippedAvatar` / `data.equippedFrame`).
+  const { inventory, equip, buy } = useInventory(isMe ? me?.id : null);
+  const [busyAction, setBusyAction] = useState<string | null>(null);
+
+  const handleEquip = useCallback(async (kind: "avatar" | "frame", value: string | null) => {
+    setBusyAction(`equip:${kind}:${value ?? ""}`);
+    await equip(kind, value);
+    setBusyAction(null);
+  }, [equip]);
+
+  const handleBuy = useCallback(async (item: ShopItem) => {
+    setBusyAction(`buy:${item.id}`);
+    const r = await buy(item.id);
+    setBusyAction(null);
+    if (r && "error" in r && r.error) {
+      window.alert(r.error === "Insufficient coins" ? "No tienes suficientes monedas" : r.error);
+    }
+  }, [buy]);
 
   const { isFollowing, follow, unfollow } = useFollows(
     isLoggedIn ? me?.id ?? null : null,
@@ -160,11 +238,22 @@ export default function PlayerProfile() {
           className="flex flex-col items-center gap-3"
         >
           <div className="relative">
+            {/* Equipped frame (if any) wins over the level-color border. */}
             <div
               className="w-24 h-24 rounded-full flex items-center justify-center text-4xl font-black text-white shadow-2xl border-4"
-              style={{ backgroundColor: data.avatarColor || "#e53e3e", borderColor: level.color + "88" }}
+              style={{
+                backgroundColor: data.avatarColor || "#e53e3e",
+                borderColor: data.equippedFrame
+                  ? FRAME_COLORS_BY_ID[data.equippedFrame] ?? level.color + "88"
+                  : level.color + "88",
+                boxShadow: data.equippedFrame
+                  ? `0 0 18px ${(FRAME_COLORS_BY_ID[data.equippedFrame] ?? "#000")}66`
+                  : undefined,
+              }}
             >
-              {data.playerName?.charAt(0).toUpperCase()}
+              {data.equippedAvatar && AVATAR_GLYPH_BY_ID[data.equippedAvatar]
+                ? AVATAR_GLYPH_BY_ID[data.equippedAvatar]
+                : data.playerName?.charAt(0).toUpperCase()}
             </div>
             <span
               className="absolute -bottom-1 -right-1 text-xl"
@@ -270,6 +359,118 @@ export default function PlayerProfile() {
             <div className="flex flex-col items-center gap-0.5">
               <span className="text-3xl font-black text-orange-300">{data.longestStreak}</span>
               <span className="text-xs text-white/50 font-bold">Mejor racha</span>
+            </div>
+          </motion.div>
+        )}
+
+        {/* ── INVENTARIO Y MONEDAS (solo perfil propio) ── */}
+        {isMe && inventory && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.12 }}
+            className="space-y-3 p-4 rounded-2xl border border-white/10 bg-black/30"
+          >
+            <div className="flex items-center justify-between">
+              <h2 className="font-display font-black text-lg flex items-center gap-2">
+                <ShoppingBag className="w-5 h-5 text-secondary" /> Mi inventario
+              </h2>
+              <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-400/15 border border-amber-400/40">
+                <Coins className="w-4 h-4 text-amber-400" />
+                <span className="font-black text-amber-400 text-sm">{inventory.coins}</span>
+              </span>
+            </div>
+
+            {/* Avatares poseídos */}
+            <div>
+              <p className="text-xs font-bold text-white/50 mb-1.5">Avatares</p>
+              <div className="flex gap-2 flex-wrap">
+                <CosmeticChip
+                  glyph="—" label="Por defecto"
+                  equipped={inventory.equipped.avatar === null}
+                  busy={busyAction === "equip:avatar:"}
+                  onClick={() => handleEquip("avatar", null)}
+                />
+                {inventory.owned.avatars.map((c) => (
+                  <CosmeticChip
+                    key={c.id} glyph={c.glyph} label={c.label}
+                    equipped={inventory.equipped.avatar === c.id}
+                    busy={busyAction === `equip:avatar:${c.id}`}
+                    onClick={() => handleEquip("avatar", c.id)}
+                  />
+                ))}
+                {inventory.owned.avatars.length === 0 && (
+                  <p className="text-[11px] text-white/30 italic">Reclama niveles del Pase para conseguirlos.</p>
+                )}
+              </div>
+            </div>
+
+            {/* Marcos poseídos */}
+            <div>
+              <p className="text-xs font-bold text-white/50 mb-1.5">Marcos</p>
+              <div className="flex gap-2 flex-wrap">
+                <CosmeticChip
+                  glyph="—" label="Sin marco"
+                  equipped={inventory.equipped.frame === null}
+                  busy={busyAction === "equip:frame:"}
+                  onClick={() => handleEquip("frame", null)}
+                />
+                {inventory.owned.frames.map((c) => (
+                  <CosmeticChip
+                    key={c.id} glyph={c.glyph} label={c.label} color={c.color}
+                    equipped={inventory.equipped.frame === c.id}
+                    busy={busyAction === `equip:frame:${c.id}`}
+                    onClick={() => handleEquip("frame", c.id)}
+                  />
+                ))}
+                {inventory.owned.frames.length === 0 && (
+                  <p className="text-[11px] text-white/30 italic">Reclama niveles del Pase para conseguirlos.</p>
+                )}
+              </div>
+            </div>
+
+            {/* Tienda de monedas */}
+            <div>
+              <p className="text-xs font-bold text-white/50 mb-1.5 mt-1">Tienda</p>
+              <div className="space-y-1.5">
+                {inventory.shop.map((item) => {
+                  const owned =
+                    item.kind === "avatar"
+                      ? inventory.owned.avatars.some((a) => a.id === item.id)
+                      : inventory.owned.frames.some((f) => f.id === item.id);
+                  const canAfford = inventory.coins >= item.price;
+                  return (
+                    <div
+                      key={item.id}
+                      className="flex items-center gap-3 p-2.5 rounded-xl bg-black/30 border border-white/10"
+                    >
+                      <span className="text-2xl w-8 text-center" style={{ color: item.color }}>{item.glyph}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold truncate">{item.label}</p>
+                        <p className="text-[11px] text-amber-400 flex items-center gap-1">
+                          <Coins className="w-3 h-3" /> {item.price}
+                        </p>
+                      </div>
+                      {owned ? (
+                        <span className="text-[10px] font-black text-emerald-400 uppercase">Comprado</span>
+                      ) : (
+                        <button
+                          onClick={() => handleBuy(item)}
+                          disabled={!canAfford || busyAction === `buy:${item.id}`}
+                          className="px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all disabled:opacity-40"
+                          style={{
+                            background: canAfford ? "rgba(249,168,37,0.2)" : "rgba(255,255,255,0.05)",
+                            border: canAfford ? "1px solid rgba(249,168,37,0.5)" : "1px solid rgba(255,255,255,0.1)",
+                            color: canAfford ? "#f9a825" : "rgba(255,255,255,0.4)",
+                          }}
+                        >
+                          {busyAction === `buy:${item.id}` ? "…" : "Comprar"}
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </motion.div>
         )}

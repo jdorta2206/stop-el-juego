@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
-import { db, seasonsTable, seasonProgressTable, indexesReady } from "@workspace/db";
+import { db, seasonsTable, seasonProgressTable, playerScoresTable, indexesReady } from "@workspace/db";
+import { resolveCosmetic } from "../lib/inventoryCatalog";
 import { eq, and, desc, lte, gte, sql } from "drizzle-orm";
 import {
   buildMissionsForDate,
@@ -391,12 +392,49 @@ router.post("/claim-tier", requirePlayerIdentity, async (req: AuthedRequest, res
       }
       claimed[track].push(tierNum);
 
+      // 🎁 Deposit the actual reward into player_scores so Season Pass tiers
+      // are no longer cosmetic-only IDs. Coins increment the balance;
+      // avatars/frames are appended to the inventory (de-duplicated). All
+      // happens inside the SAME transaction as the claimed_tiers write so a
+      // crash mid-claim leaves no half-state.
+      const reward = tierReward(tierNum)[track];
+      let depositedCoins = 0;
+      let depositedCosmetic: string | null = null;
+      if (reward.kind === "coins" && typeof reward.value === "number") {
+        await tx.execute(sql`
+          UPDATE player_scores
+          SET coins = coins + ${reward.value}, updated_at = NOW()
+          WHERE player_id = ${playerId}
+        `);
+        depositedCoins = reward.value;
+      } else if ((reward.kind === "avatar" || reward.kind === "frame") && typeof reward.value === "string") {
+        // Read-modify-write inside the row lock taken above on
+        // season_progress; player_scores is also locked here to keep
+        // concurrent claims from stomping each other's inventory writes.
+        const invLocked = (await tx.execute(sql`
+          SELECT inventory_json FROM player_scores
+          WHERE player_id = ${playerId} FOR UPDATE
+        `)) as unknown as SqlResult<{ inventory_json: string }>;
+        let inv: { avatars: string[]; frames: string[] } = { avatars: [], frames: [] };
+        try {
+          const parsed = JSON.parse(invLocked.rows?.[0]?.inventory_json || "{}");
+          if (Array.isArray(parsed.avatars)) inv.avatars = parsed.avatars;
+          if (Array.isArray(parsed.frames)) inv.frames = parsed.frames;
+        } catch { /* keep defaults */ }
+        const bucket = reward.kind === "avatar" ? inv.avatars : inv.frames;
+        if (!bucket.includes(reward.value)) bucket.push(reward.value);
+        await tx.update(playerScoresTable)
+          .set({ inventoryJson: JSON.stringify(inv), updatedAt: new Date() })
+          .where(eq(playerScoresTable.playerId, playerId));
+        depositedCosmetic = reward.value;
+      }
+
       await tx
         .update(seasonProgressTable)
         .set({ claimedTiers: JSON.stringify(claimed), updatedAt: new Date() })
         .where(eq(seasonProgressTable.id, progress.id));
 
-      return { ok: true as const, claimed };
+      return { ok: true as const, claimed, depositedCoins, depositedCosmetic };
     });
 
     if (!claim) { res.status(500).json({ error: "Transaction failed" }); return; }
@@ -405,7 +443,17 @@ router.post("/claim-tier", requirePlayerIdentity, async (req: AuthedRequest, res
       return;
     }
 
-    res.json({ ok: true, reward: tierReward(tierNum)[track], claimedTiers: claim.claimed });
+    const reward = tierReward(tierNum)[track];
+    const cosmeticMeta = claim.depositedCosmetic ? resolveCosmetic(claim.depositedCosmetic) : null;
+    res.json({
+      ok: true,
+      reward,
+      deposited: {
+        coins: claim.depositedCoins,
+        cosmetic: cosmeticMeta,
+      },
+      claimedTiers: claim.claimed,
+    });
   } catch (e: unknown) {
     console.error("[season/claim-tier] error:", e instanceof Error ? e.message : String(e));
     res.status(500).json({ error: "Failed to claim tier" });
