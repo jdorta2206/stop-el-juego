@@ -246,6 +246,24 @@ export default function SoloGame() {
     toast({ title, description });
   }, [isOffline, lang, toast]);
 
+  // ✅ Cuando vuelve la conexión tras un episodio offline en esta sesión,
+  // mostramos un toast breve para cerrar el bucle. Solo se dispara en la
+  // transición true→false, y solo si antes hubo un aviso de offline en la
+  // sesión (no en el arranque normal con red, ni al cambiar de idioma).
+  const prevIsOfflineRef = useRef(isOffline);
+  useEffect(() => {
+    const wasOffline = prevIsOfflineRef.current;
+    prevIsOfflineRef.current = isOffline;
+    if (!(wasOffline && !isOffline)) return;
+    if (!offlineNoticeShownRef.current) return;
+    const title =
+      lang === "en" ? "✅ You're back online!" :
+      lang === "pt" ? "✅ Voltaste a estar online!" :
+      lang === "fr" ? "✅ Tu es de nouveau en ligne !" :
+      "✅ ¡Vuelves a estar online!";
+    toast({ title });
+  }, [isOffline, lang, toast]);
+
   // 🛰️ Drena la "outbox" de puntuaciones aparcadas mientras el jugador
   // estaba sin conexión: una vez al montar (cubre el "próximo arranque")
   // y cada vez que el navegador anuncie que vuelve la red.
