@@ -6,7 +6,7 @@ import { Layout } from "@/components/Layout";
 import { Button, Card, Input, Progress } from "@/components/ui";
 import { Roulette } from "@/components/Roulette";
 import { getCategories, getAlphabet, getCurrentLang, getApiUrl } from "@/lib/utils";
-import { ensureOfflineBundle, validateRoundOffline, getAiWordOffline, getCachedOfflineBundle } from "@/lib/offlineGame";
+import { ensureOfflineBundle, validateRoundOffline, getAiWordOffline, getCachedOfflineBundle, enqueueScoreOutbox, flushScoreOutbox } from "@/lib/offlineGame";
 import { getSelectedPackId, getPackCategories, getSafePackId, getPackById } from "@/data/categoryPacks";
 import { useValidateRound, useSubmitScore, type CategoryResult, type ValidateRoundResponse } from "@workspace/api-client-react";
 import { usePlayer } from "@/hooks/use-player";
@@ -222,6 +222,36 @@ export default function SoloGame() {
       window.removeEventListener("online", goOnline);
       window.removeEventListener("offline", goOffline);
     };
+  }, []);
+
+  // 🛰️ Drena la "outbox" de puntuaciones aparcadas mientras el jugador
+  // estaba sin conexión: una vez al montar (cubre el "próximo arranque")
+  // y cada vez que el navegador anuncie que vuelve la red.
+  useEffect(() => {
+    let cancelled = false;
+    const tryFlush = () => {
+      if (typeof navigator !== "undefined" && navigator.onLine === false) return;
+      flushScoreOutbox((payload) => submitScoreMutation.mutateAsync({ data: payload }))
+        .then((res) => {
+          if (cancelled || res.flushed <= 0) return;
+          queryClient.invalidateQueries({ queryKey: ["/api/ranking/scores"] });
+          const n = res.flushed;
+          const msg =
+            lang === "en" ? `${n} pending score${n > 1 ? "s" : ""} synced!` :
+            lang === "pt" ? `${n} pontuação${n > 1 ? "ões" : ""} pendente${n > 1 ? "s" : ""} sincronizada${n > 1 ? "s" : ""}!` :
+            lang === "fr" ? `${n} score${n > 1 ? "s" : ""} en attente synchronisé${n > 1 ? "s" : ""} !` :
+            `¡${n} puntuación${n > 1 ? "es" : ""} pendiente${n > 1 ? "s" : ""} sincronizada${n > 1 ? "s" : ""}!`;
+          toast({ title: "🛰️ " + msg });
+        })
+        .catch(() => { /* swallowed: flush itself never throws on item failure */ });
+    };
+    tryFlush();
+    window.addEventListener("online", tryFlush);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("online", tryFlush);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Keep refs in sync with state so handleStop never reads stale closure values
@@ -841,6 +871,30 @@ export default function SoloGame() {
         toast({ title: "🏆 " + msg });
       },
       onError: () => {
+        // 📡 Sin conexión: aparcamos la puntuación en la outbox para
+        // reenviarla cuando vuelva la red (evento `online` o próximo
+        // arranque). Sólo lo hacemos cuando el navegador reporta offline,
+        // para evitar duplicar puntuaciones cuando es un error de servidor
+        // que en realidad sí pudo persistir.
+        if (typeof navigator !== "undefined" && navigator.onLine === false) {
+          enqueueScoreOutbox({
+            playerId: player.id,
+            playerName: player.name,
+            avatarColor: player.avatarColor,
+            score: finalScore,
+            letter: currentLetter || "?",
+            mode: isDailyMode ? "daily" : "solo",
+            won,
+            bonus: isBonus,
+          });
+          const offMsg =
+            lang === "en" ? "Offline — score will sync when you're back." :
+            lang === "pt" ? "Offline — a pontuação irá sincronizar quando voltares." :
+            lang === "fr" ? "Hors-ligne — le score sera envoyé au retour." :
+            "Sin conexión: tu puntuación se enviará al volver internet.";
+          toast({ title: "📡 " + offMsg });
+          return;
+        }
         const msg =
           lang === "en" ? "Could not save score. Check your connection." :
           lang === "pt" ? "Não foi possível guardar a pontuação." :

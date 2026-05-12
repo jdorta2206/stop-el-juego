@@ -223,3 +223,102 @@ export function validateRoundOffline(req: OfflineValidateRequest): OfflineValida
 
   return { results, playerTotalScore, aiTotalScore };
 }
+
+// ───────── Score submission outbox ─────────
+//
+// Cuando el jugador termina una partida sin conexión, el envío a
+// /api/ranking/scores falla. Lo guardamos aquí para reintentarlo cuando
+// vuelva la red (evento `online`) o en el próximo arranque.
+//
+// Anti-duplicados: cada entrada se "reclama" (se elimina del array) ANTES
+// de enviar. Así, si una segunda llamada a flushScoreOutbox arranca en
+// paralelo (otra pestaña, evento online + arranque, etc.), no encontrará
+// la misma entrada para reenviarla. Si el envío falla, se vuelve a meter
+// al principio de la cola.
+
+const OUTBOX_KEY = "stop-score-outbox-v1";
+
+export type OutboxScorePayload = {
+  playerId: string;
+  playerName: string;
+  avatarColor?: string;
+  score: number;
+  letter: string;
+  mode: string;
+  won: boolean;
+  bonus?: boolean;
+};
+
+export type OutboxEntry = {
+  id: string;
+  payload: OutboxScorePayload;
+  createdAt: number;
+};
+
+function readOutbox(): OutboxEntry[] {
+  try {
+    const raw = localStorage.getItem(OUTBOX_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((e) => e && typeof e === "object" && e.payload) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeOutbox(entries: OutboxEntry[]) {
+  try {
+    if (entries.length === 0) localStorage.removeItem(OUTBOX_KEY);
+    else localStorage.setItem(OUTBOX_KEY, JSON.stringify(entries));
+  } catch {
+    // Storage disabled / quota — nothing we can do; we'll just lose retries.
+  }
+}
+
+export function enqueueScoreOutbox(payload: OutboxScorePayload): OutboxEntry {
+  const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  const entry: OutboxEntry = { id, payload, createdAt: Date.now() };
+  const cur = readOutbox();
+  cur.push(entry);
+  writeOutbox(cur);
+  return entry;
+}
+
+export function getScoreOutboxSize(): number {
+  return readOutbox().length;
+}
+
+let flushing = false;
+
+export async function flushScoreOutbox(
+  submit: (payload: OutboxScorePayload) => Promise<unknown>,
+): Promise<{ flushed: number; remaining: number }> {
+  if (flushing) return { flushed: 0, remaining: readOutbox().length };
+  flushing = true;
+  let flushed = 0;
+  try {
+    // Each iteration claims and removes the head entry BEFORE sending so a
+    // second concurrent flush can't pick up the same item and create a
+    // duplicate score on the server.
+    while (true) {
+      const cur = readOutbox();
+      if (cur.length === 0) break;
+      const [next, ...rest] = cur;
+      writeOutbox(rest);
+      try {
+        await submit(next.payload);
+        flushed++;
+      } catch {
+        // Likely still offline / server unreachable — restore the entry at
+        // the head and stop retrying for this round. Other queued entries
+        // would presumably fail too.
+        const after = readOutbox();
+        writeOutbox([next, ...after]);
+        break;
+      }
+    }
+  } finally {
+    flushing = false;
+  }
+  return { flushed, remaining: readOutbox().length };
+}
