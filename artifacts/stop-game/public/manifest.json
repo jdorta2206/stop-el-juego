@@ -15,6 +15,9 @@
   "categories": ["games", "entertainment"],
   "iarc_rating_id": "d66d384a-e88a-8929-8160-3f11edc31411",
   "prefer_related_applications": false,
+  "launch_handler": {
+    "client_mode": ["focus-existing", "auto"]
+  },
   "related_applications": [
     {
       "platform": "play",
