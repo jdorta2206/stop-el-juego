@@ -750,6 +750,23 @@ export default function Home() {
             <Share2 className="w-5 h-5 text-white" />
           </motion.button>
         </motion.div>
+
+        {/* Footer con enlaces — necesario para que el crawler de AdSense
+            descubra las páginas legales y de contenido (About, HowToPlay,
+            Strategies, Privacy, Terms). */}
+        <footer className="mt-10 pt-6 border-t border-white/10 text-center">
+          <nav className="flex flex-wrap justify-center gap-x-5 gap-y-2 text-sm text-white/60">
+            <Link href="/como-jugar" className="hover:text-[#f9a825] transition-colors">Cómo jugar</Link>
+            <Link href="/estrategias" className="hover:text-[#f9a825] transition-colors">Estrategias</Link>
+            <Link href="/acerca" className="hover:text-[#f9a825] transition-colors">Acerca de</Link>
+            <Link href="/privacy" className="hover:text-[#f9a825] transition-colors">Privacidad</Link>
+            <Link href="/terms" className="hover:text-[#f9a825] transition-colors">Términos</Link>
+            <a href="mailto:stopeljuegodepalabras@gmail.com" className="hover:text-[#f9a825] transition-colors">Contacto</a>
+          </nav>
+          <p className="mt-4 text-xs text-white/30">
+            STOP — El Juego de Palabras · © 2026 Dorynex Studio
+          </p>
+        </footer>
       </div>
     </Layout>
   );
