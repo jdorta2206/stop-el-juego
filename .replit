@@ -37,6 +37,8 @@ VAPID_PUBLIC_KEY = "BOwVNL3sEONgyFulirkX5dzwQo662Yj2_C846OSMrTSfiz4GFwEsl3_1NY3x
 VAPID_PRIVATE_KEY = "K8SlvlCX8tgSXybX8aCG_rV80-g8PujumujAbvQ8H-w"
 VAPID_EMAIL = "mailto:jdorta2206@gmail.com"
 VITE_VAPID_PUBLIC_KEY = "BOwVNL3sEONgyFulirkX5dzwQo662Yj2_C846OSMrTSfiz4GFwEsl3_1NY3x_GqJIco8P7Ls85u56IRC3Y8Bj2c"
+PUBSUB_PUSH_AUDIENCE = "https://stop-el-juego.replit.app/api/billing/play/webhook"
+PUBSUB_PUSH_SA_EMAIL = "stop-play-billing@global-stop.iam.gserviceaccount.com"
 
 [userenv.development]
 APP_ORIGIN = "https://3697d7d1-ea3c-4cf5-b00f-386041779844-00-emhgnr1gq77c.kirk.replit.dev"
