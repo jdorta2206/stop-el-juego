@@ -619,10 +619,10 @@ export default function Home() {
 
           <div className="grid grid-cols-2 gap-3">
             {[
-              { href: "/multiplayer", icon: <Users className="w-8 h-8 text-[#f9a825]" />, label: t.home.multiplayer },
+              { href: "/season",     icon: <Star className="w-8 h-8 text-amber-400" />, label: "Pase de Temporada", highlight: true },
               { href: "/torneo",      icon: <Trophy className="w-8 h-8 text-amber-400" />, label: "Torneo", highlight: true },
+              { href: "/multiplayer", icon: <Users className="w-8 h-8 text-[#f9a825]" />, label: t.home.multiplayer },
               { href: "/ranking",    icon: <Crown className="w-8 h-8 text-[#f9a825]" />, label: t.home.ranking },
-              { href: "/como-jugar", icon: <BookOpen className="w-8 h-8 text-[#f9a825]" />, label: t.home.howToPlay },
             ].map(item => (
               <Link key={item.href} href={item.href}>
                 <motion.div
