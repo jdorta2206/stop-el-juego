@@ -1278,33 +1278,16 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
   }
   // ─────────────────────────────────────────────────────────────────────────
 
-  // ── Timing exploit guard ──────────────────────────────────────────────────
-  // Players have at most 20 s after STOP is called to submit their answers.
-  // (Freeze countdown is 8 s + 12 s network grace.)
-  const SUBMIT_GRACE_MS = 20_000;
+  // ── Stuck-player grace window ─────────────────────────────────────────────
+  // After STOP we wait this long before considering non-submitters as
+  // truly disconnected. A player who DID submit (even late) gets their
+  // answers scored normally — we never zero out an honest submission just
+  // because their request was slow. Only the sweep below zeros players
+  // who never sent anything.
+  const SUBMIT_GRACE_MS = 45_000;
   const stopMeta = parseBluffMeta(room.stopperJson);
   const stopTimestamp: number | undefined =
     stopMeta?.stopTimestamp ?? stopMeta?.stopper?.stopTimestamp;
-  if (stopTimestamp && Date.now() - stopTimestamp > SUBMIT_GRACE_MS) {
-    // Too late — accept the submission but zero out the score to prevent cheating
-    // (we still need to mark them ready so the round can proceed)
-    const latePlayers = existingPlayers.map((p: any) =>
-      p.playerId === body.data.playerId ? { ...p, isReady: true, roundScore: 0 } : p
-    );
-    const allReady = latePlayers.every((p: any) => p.isReady);
-    const lateUpdate = await db.update(roomsTable)
-      .set({ playersJson: JSON.stringify(latePlayers), status: allReady ? "waiting" : room.status, updatedAt: new Date() })
-      .where(and(eq(roomsTable.roomCode, roomCode.toUpperCase()), eq(roomsTable.updatedAt, room.updatedAt)))
-      .returning();
-    if (lateUpdate.length === 0) {
-      // Concurrent write — return latest state
-      const [refreshed] = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, roomCode.toUpperCase())).limit(1);
-      res.json(formatRoom(refreshed));
-      return;
-    }
-    res.json(formatRoom(lateUpdate[0]));
-    return;
-  }
   // ─────────────────────────────────────────────────────────────────────────
 
   const players = existingPlayers;
