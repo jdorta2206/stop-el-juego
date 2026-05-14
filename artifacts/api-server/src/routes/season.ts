@@ -523,7 +523,7 @@ router.post("/event", requirePlayerIdentity, async (req: AuthedRequest, res) => 
       let mutated = false;
       for (const m of blob.missions) {
         if (m.type !== type || m.claimed) continue;
-        if (m.type === "round_score" || m.type === "streak" || m.type === "valid_words") {
+        if (m.type === "round_score" || m.type === "streak") {
           if (v > m.progress) {
             m.progress = Math.min(v, m.target);
             mutated = true;
