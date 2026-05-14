@@ -142,7 +142,7 @@ self.addEventListener("push", (e) => {
   const title  = data.title  || "STOP El Juego";
   const body   = data.body   || "¡Tienes una notificación!";
   const icon   = data.icon   || "/images/icon-192.png";
-  const badge  = data.badge  || "/images/icon-192.png";
+  const badge  = data.badge  || "/images/badge-96.png";
   const url    = data.url    || "/";
 
   e.waitUntil(

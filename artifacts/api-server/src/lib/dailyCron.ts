@@ -86,7 +86,7 @@ async function sendStreakRescueNotifications() {
       const n = await sendPushToPlayer(row.player_id, {
         ...msg,
         icon: "/images/icon-192.png",
-        badge: "/images/icon-192.png",
+        badge: "/images/badge-96.png",
         url: "/solo?mode=quick&auto=1",
       });
       sent += n;
@@ -180,7 +180,7 @@ async function sendSeasonClaimNotifications() {
       const n = await sendPushToPlayer(row.player_id, {
         ...msg,
         icon: "/images/icon-192.png",
-        badge: "/images/icon-192.png",
+        badge: "/images/badge-96.png",
         url: "/season",
       });
       sent += n;
@@ -199,7 +199,7 @@ async function sendDailyNotifications() {
     for (const lang of LANGUAGES) {
       const msg = DAILY_MSGS[lang];
       const result = await sendPushToAllSubscribers(
-        { ...msg, icon: "/images/icon-192.png", badge: "/images/icon-192.png", url: "/reto" },
+        { ...msg, icon: "/images/icon-192.png", badge: "/images/badge-96.png", url: "/reto" },
         lang
       );
       totals.sent += result.sent;

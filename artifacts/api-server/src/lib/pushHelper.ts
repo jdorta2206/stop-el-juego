@@ -40,7 +40,7 @@ export async function sendPushToPlayer(playerId: string, payload: PushPayload): 
           title: payload.title,
           body: payload.body,
           icon: payload.icon || "/images/icon-192.png",
-          badge: payload.badge || "/images/icon-192.png",
+          badge: payload.badge || "/images/badge-96.png",
           url: payload.url || "/",
         })
       );
@@ -76,7 +76,7 @@ export async function sendPushToAllSubscribers(
           title: payload.title,
           body: payload.body,
           icon: payload.icon || "/images/icon-192.png",
-          badge: payload.badge || "/images/icon-192.png",
+          badge: payload.badge || "/images/badge-96.png",
           url: payload.url || "/",
         })
       );

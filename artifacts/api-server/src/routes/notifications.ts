@@ -84,7 +84,7 @@ router.post("/send-daily", async (req, res) => {
   const msg = DAILY_MSGS[lang] || DAILY_MSGS.es;
 
   const result = await sendPushToAllSubscribers(
-    { ...msg, icon: "/images/icon-192.png", badge: "/images/icon-192.png", url: "/reto" },
+    { ...msg, icon: "/images/icon-192.png", badge: "/images/badge-96.png", url: "/reto" },
     lang
   );
 
@@ -118,7 +118,7 @@ router.post("/send-invite", async (req, res) => {
     try {
       await webpush.sendNotification(
         { endpoint: row.endpoint, keys: { p256dh: row.p256dh, auth: row.auth } },
-        JSON.stringify({ ...msg, icon: "/images/icon-192.png", badge: "/images/icon-192.png", url: `/multijugador?room=${roomCode}` })
+        JSON.stringify({ ...msg, icon: "/images/icon-192.png", badge: "/images/badge-96.png", url: `/multijugador?room=${roomCode}` })
       );
       sent++;
     } catch {}
