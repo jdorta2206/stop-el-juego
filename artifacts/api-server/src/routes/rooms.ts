@@ -1380,7 +1380,18 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
     return p;
   });
 
-  const allReady = updatedPlayers.every((p: any) => p.isReady);
+  // 🧹 Stuck-player sweep: if STOP was called and the grace window expired,
+  // mark any non-ready player as ready with 0 points so the round advances
+  // even if their /results request never arrived (network drop, app killed…).
+  const sweptPlayers = (() => {
+    if (!stopTimestamp) return updatedPlayers;
+    if (Date.now() - stopTimestamp <= SUBMIT_GRACE_MS) return updatedPlayers;
+    return updatedPlayers.map((p: any) =>
+      p.isReady ? p : { ...p, isReady: true, roundScore: 0, finishedAt: Date.now() }
+    );
+  })();
+
+  const allReady = sweptPlayers.every((p: any) => p.isReady);
 
   let newStatus = room.status;
   let newLetter = room.currentLetter;
@@ -1389,8 +1400,8 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
 
   if (allReady) {
     // Check if any player bluffed
-    const bluffers = updatedPlayers.filter((p: any) => p.bluffedCategories?.length > 0);
-    const nonBluffers = updatedPlayers.filter((p: any) => !p.bluffedCategories?.length);
+    const bluffers = sweptPlayers.filter((p: any) => p.bluffedCategories?.length > 0);
+    const nonBluffers = sweptPlayers.filter((p: any) => !p.bluffedCategories?.length);
 
     if (bluffers.length > 0 && nonBluffers.length > 0) {
       // Enter bluff-voting phase: give opponents 15 seconds to vote
@@ -1416,7 +1427,7 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
       if (isGameOver) {
         newStatus = "finished";
         newRound = room.maxRounds;
-        submitAllScoresToLeaderboard(updatedPlayers, room.currentLetter || "A").catch(() => {});
+        submitAllScoresToLeaderboard(sweptPlayers, room.currentLetter || "A").catch(() => {});
       } else {
         newStatus = "waiting";
         newLetter = randomLetter();
@@ -1435,7 +1446,7 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
   // If a concurrent /results submission won the race, return the latest state instead.
   const updateResult = await db.update(roomsTable)
     .set({
-      playersJson: JSON.stringify(updatedPlayers),
+      playersJson: JSON.stringify(sweptPlayers),
       currentRound: newRound,
       currentLetter: newLetter,
       status: newStatus,

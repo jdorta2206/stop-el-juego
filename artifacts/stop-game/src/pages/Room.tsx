@@ -452,19 +452,30 @@ export default function Room() {
     const allFilled = CATEGORIES_ES.every(cat => (responsesSnapshotRef.current[cat] ?? "").trim().length >= 2);
     const finalScore = isStopper && allFilled ? score + 5 : score;
     // 🕵️ Nota: el coste -10 por ESPIAR lo aplica el servidor autoritativamente.
-    try {
-      await submitMutation.mutateAsync({
-        roomCode: roomCode.toUpperCase(),
-        data: {
-          playerId: player.id,
-          roundScore: finalScore,
-          letter: currentLetter,
-          answers: { ...responsesSnapshotRef.current },
-          bluffedCategories: bluffedList.length > 0 ? bluffedList : undefined,
-          bluffedWords: bluffedList.length > 0 ? bluffedWords : undefined,
-        },
-      });
-    } catch (e) { console.error("submit error:", e); }
+    const payload = {
+      roomCode: roomCode.toUpperCase(),
+      data: {
+        playerId: player.id,
+        roundScore: finalScore,
+        letter: currentLetter,
+        answers: { ...responsesSnapshotRef.current },
+        bluffedCategories: bluffedList.length > 0 ? bluffedList : undefined,
+        bluffedWords: bluffedList.length > 0 ? bluffedWords : undefined,
+      },
+    };
+    // 🔁 Retry up to 3 times with exponential backoff so a single dropped
+    // request doesn't leave the player stuck on "Enviando…" forever.
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        await submitMutation.mutateAsync(payload);
+        return;
+      } catch (e) {
+        console.error(`submit error (attempt ${attempt}/3):`, e);
+        if (attempt < 3) {
+          await new Promise(r => setTimeout(r, 800 * attempt));
+        }
+      }
+    }
   }, [player, roomCode, currentLetter]);
 
   const autoSubmit = useCallback((asStopper = false) => {
