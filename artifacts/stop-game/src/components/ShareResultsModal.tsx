@@ -76,7 +76,7 @@ export function ShareResultsModal({
     const headline = won
       ? `👑 ¡Gané! Letra "${multiplayerData.letter}" · ${myScore}pts entre ${total} jugadores`
       : `${rankEmoji} Quedé ${myRank}º de ${total} · Letra "${multiplayerData.letter}" · ${myScore}pts`;
-    return [headline, scoreboard, "¿Te atreves? 👇", `🎮 stop-el-juego.replit.app`].join("\n");
+    return [headline, scoreboard, "¿Te atreves? 👇", `🎮 stopjuegodepalabras.com`].join("\n");
   })();
 
   // ── Solo mode ───────────────────────────────────────────────────────────────

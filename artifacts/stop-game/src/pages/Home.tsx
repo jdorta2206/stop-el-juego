@@ -87,7 +87,7 @@ export default function Home() {
 
   const share = shareText(
     t.home.howToPlayText,
-    window.location.origin
+    "https://stopjuegodepalabras.com"
   );
 
   return (
