@@ -21,6 +21,7 @@ import { useSeason } from "@/hooks/useSeason";
 import { useGetLeaderboard, useGetPlayerStats } from "@workspace/api-client-react";
 import { PackSelector } from "@/components/PackSelector";
 import { BannerAd } from "@/components/AdSystem";
+import { PLAY_STORE_URL } from "@/lib/playReview";
 
 const LOGO_URL = `${import.meta.env.BASE_URL}images/stop-logo.png`;
 
@@ -755,6 +756,27 @@ export default function Home() {
             descubra las páginas legales y de contenido (About, HowToPlay,
             Strategies, Privacy, Terms). */}
         <footer className="mt-10 pt-6 border-t border-white/10 text-center">
+          {/* Botón Google Play — solo se muestra si NO está ya en la app instalada */}
+          {typeof window !== "undefined" &&
+            !window.matchMedia?.("(display-mode: standalone)").matches &&
+            !window.matchMedia?.("(display-mode: fullscreen)").matches && (
+              <div className="mb-6 flex justify-center">
+                <a
+                  href={PLAY_STORE_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-3 bg-black hover:bg-gray-900 text-white px-5 py-3 rounded-xl shadow-lg transition-all hover:scale-105"
+                >
+                  <svg viewBox="0 0 24 24" className="w-7 h-7" fill="currentColor">
+                    <path d="M3.609 1.814L13.792 12 3.61 22.186a.996.996 0 01-.61-.92V2.734a1 1 0 01.609-.92zm10.89 10.893l2.302 2.302-10.937 6.333 8.635-8.635zm3.199-3.198l2.807 1.626a1 1 0 010 1.73l-2.808 1.626-2.491-2.491 2.492-2.491zM5.864 2.658L16.802 8.99l-2.302 2.302-8.636-8.634z"/>
+                  </svg>
+                  <div className="text-left leading-tight">
+                    <div className="text-[10px] uppercase opacity-80">Disponible en</div>
+                    <div className="text-base font-semibold">Google Play</div>
+                  </div>
+                </a>
+              </div>
+            )}
           <nav className="flex flex-wrap justify-center gap-x-5 gap-y-2 text-sm text-white/60">
             <Link href="/como-jugar" className="hover:text-[#f9a825] transition-colors">Cómo jugar</Link>
             <Link href="/estrategias" className="hover:text-[#f9a825] transition-colors">Estrategias</Link>
