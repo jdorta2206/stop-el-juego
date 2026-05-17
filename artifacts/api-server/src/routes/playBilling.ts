@@ -6,6 +6,7 @@ import {
   verifyPurchase,
   upsertPlaySubscription,
   updatePlaySubscriptionByToken,
+  acknowledgeSubscription,
 } from "../lib/playBillingService";
 import { isUserPremium } from "../lib/premiumStatus";
 import { verifyPubSubJwt } from "../lib/pubsubAuth";
@@ -45,6 +46,10 @@ router.post("/verify", async (req: Request, res: Response) => {
   if ("error" in v) {
     return res.status(v.status).json({ error: v.error });
   }
+
+  // Acknowledge ASAP — Google auto-refunds purchases not acknowledged within 3 days.
+  // Fire-and-forget pattern: failure is logged but does not block entitlement.
+  await acknowledgeSubscription(v.productId, v.purchaseToken, v.acknowledgementState === 1);
 
   const upsert = await upsertPlaySubscription(playerId, v);
   if (upsert.ownershipMismatch) {
@@ -176,6 +181,10 @@ router.post("/webhook", async (req: Request, res: Response) => {
     // Return 5xx so Pub/Sub retries.
     return res.status(500).json({ error: v.error });
   }
+
+  // Same acknowledge logic as /verify — covers the case where the user
+  // purchased on another device or the client crashed before /verify ran.
+  await acknowledgeSubscription(v.productId, v.purchaseToken, v.acknowledgementState === 1);
 
   const { playerId } = await updatePlaySubscriptionByToken(v);
   if (!playerId) {

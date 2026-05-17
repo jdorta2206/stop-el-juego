@@ -83,6 +83,7 @@ export interface VerifiedPurchase {
   expiryTimeMs: number;
   startTimeMs: number;
   isEntitled: boolean;
+  acknowledgementState: number;
   raw: Record<string, unknown>;
 }
 
@@ -137,12 +138,45 @@ export async function verifyPurchase(
       expiryTimeMs,
       startTimeMs,
       isEntitled: isPlayStateEntitled(state, expiryTimeMs),
+      acknowledgementState: Number(sub.acknowledgementState ?? 0),
       raw: sub as Record<string, unknown>,
     };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error("[playBilling] verifyPurchase failed:", msg);
     return { error: `Google Play API error: ${msg}`, status: 502 };
+  }
+}
+
+// ── Acknowledge ──────────────────────────────────────────────────────────
+// Google Play requires the developer to acknowledge each purchase within 3
+// days, or it gets auto-refunded. Idempotent: if the subscription was
+// already acknowledged we skip the API call. Errors are logged but never
+// thrown — failing to acknowledge should not prevent the user from getting
+// entitlement on our side. The next /verify or webhook will retry.
+
+export async function acknowledgeSubscription(
+  productId: string,
+  purchaseToken: string,
+  alreadyAcknowledged: boolean,
+): Promise<void> {
+  if (alreadyAcknowledged) return;
+  const packageName = getPackageName();
+  if (!packageName) return;
+  const client = await getClient();
+  if (!client) return;
+  try {
+    await client.purchases.subscriptions.acknowledge({
+      packageName,
+      subscriptionId: productId,
+      token: purchaseToken,
+    });
+    console.log(
+      `[playBilling] acknowledged subscription ${productId} (token ${purchaseToken.slice(0, 12)}…)`,
+    );
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[playBilling] acknowledge failed:", msg);
   }
 }
 
