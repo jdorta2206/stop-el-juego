@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui";
-import { Play, Users, Trophy, Share2, Facebook, Instagram, Crown, Swords, BookOpen, Flame, Calendar, Zap, Star } from "lucide-react";
+import { Play, Users, Trophy, Share2, Facebook, Instagram, Crown, Swords, BookOpen, Flame, Calendar, Zap, Star, Medal } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { shareText } from "@/lib/utils";
 import { PremiumModal } from "@/components/PremiumModal";
@@ -33,7 +33,7 @@ export default function Home() {
   const { t } = useT();
   const { streak, playedToday } = useStreak();
   const streakAtRisk = streak.current > 0 && !playedToday;
-  const { newlyUnlocked, clearNewlyUnlocked, checkStreakMilestone } = useAchievements(player?.id);
+  const { unlocked, newlyUnlocked, clearNewlyUnlocked, checkStreakMilestone } = useAchievements(player?.id);
   const [showStreakCalendar, setShowStreakCalendar] = useState(false);
   const ftue = useFTUE();
   const [showFTUEWelcome, setShowFTUEWelcome] = useState(false);
@@ -624,6 +624,7 @@ export default function Home() {
               { href: "/torneo",      icon: <Trophy className="w-8 h-8 text-amber-400" />, label: "Torneo", highlight: true },
               { href: "/multiplayer", icon: <Users className="w-8 h-8 text-[#f9a825]" />, label: t.home.multiplayer },
               { href: "/ranking",    icon: <Crown className="w-8 h-8 text-[#f9a825]" />, label: t.home.ranking },
+              { href: "/logros",     icon: <Medal className="w-8 h-8 text-[#f9a825]" />, label: (t.achievements as any)?.title ?? "Logros" },
             ].map(item => (
               <Link key={item.href} href={item.href}>
                 <motion.div
