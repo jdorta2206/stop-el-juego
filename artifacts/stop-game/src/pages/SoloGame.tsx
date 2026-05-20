@@ -556,18 +556,27 @@ export default function SoloGame() {
 
     let apiData: ValidateRoundResponse | null = null;
     try {
-      apiData = await validateMutation.mutateAsync({
-        data: {
-          letter,
-          language: getCurrentLang() as import("@workspace/api-client-react").ValidateRoundRequestLanguage,
-          playerName: player?.name,
-          playerResponses: formattedResponses,
-        }
-      });
+      // ⏱️ Timeout duro de 25s: si la IA del backend se cuelga con
+      // respuestas inválidas / palabras inventadas, NO dejamos al usuario
+      // atascado en "EL JUICIO". Disparamos el fallback offline / RESULTS.
+      const TIMEOUT_MS = 25000;
+      apiData = await Promise.race([
+        validateMutation.mutateAsync({
+          data: {
+            letter,
+            language: getCurrentLang() as import("@workspace/api-client-react").ValidateRoundRequestLanguage,
+            playerName: player?.name,
+            playerResponses: formattedResponses,
+          }
+        }),
+        new Promise<ValidateRoundResponse>((_, reject) =>
+          setTimeout(() => reject(new Error("validate-timeout")), TIMEOUT_MS)
+        ),
+      ]);
     } catch {
-      // 📡 Sin conexión: validamos localmente con el diccionario cacheado.
-      // Si nunca se descargó el bundle, apiData seguirá null (comportamiento
-      // anterior). Si sí se descargó, la partida termina con puntuación real.
+      // 📡 Sin conexión O timeout del servidor: validamos localmente con el
+      // diccionario cacheado. Si nunca se descargó el bundle, apiData seguirá
+      // null y caemos al fallback de cero puntos más abajo.
       const local = validateRoundOffline({
         letter,
         language: getCurrentLang(),
@@ -577,6 +586,24 @@ export default function SoloGame() {
         apiData = local;
         setIsOffline(true);
       }
+    }
+
+    // 🛟 Último recurso: si TODO falló (sin red + sin diccionario cacheado),
+    // construimos una respuesta vacía válida para que la partida pueda
+    // avanzar a RESULTS en vez de quedarse colgada en "EL JUICIO".
+    if (!apiData) {
+      const emptyResults: Record<string, { player: { response: string; score: number; valid: boolean }; ai: { response: string; score: number } }> = {};
+      for (const { category, word } of formattedResponses) {
+        emptyResults[category] = {
+          player: { response: word, score: 0, valid: false },
+          ai: { response: "", score: 0 },
+        };
+      }
+      apiData = {
+        playerTotalScore: 0,
+        aiTotalScore: 0,
+        results: emptyResults,
+      } as unknown as ValidateRoundResponse;
     }
     // Persist whichever payload we ended up with so the RESULTS effect
     // and the UI read the *current* round's data, not the prior mutation.
