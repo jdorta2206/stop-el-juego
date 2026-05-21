@@ -20,6 +20,8 @@ import { useProgression, getLeague } from "@/hooks/useProgression";
 import { useSeason } from "@/hooks/useSeason";
 import { useGetLeaderboard, useGetPlayerStats } from "@workspace/api-client-react";
 import { PackSelector } from "@/components/PackSelector";
+import { CustomPacksManager } from "@/components/CustomPacksManager";
+import { useCustomPacks } from "@/lib/useCustomPacks";
 import { BannerAd } from "@/components/AdSystem";
 import { PLAY_STORE_URL } from "@/lib/playReview";
 
@@ -56,6 +58,8 @@ export default function Home() {
   const league = getLeague(level);
   const { season, progress: seasonProgress } = useSeason(player?.id);
   const [showPremiumModal, setShowPremiumModal] = useState(false);
+  const [showPacksManager, setShowPacksManager] = useState(false);
+  const { packs: customPacks } = useCustomPacks(isPremium ? player?.id : null);
   const [invitedBy, setInvitedBy] = useState<string | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: leaderboardData } = useGetLeaderboard({ limit: 3 }, { query: { staleTime: 60_000 } as any });
@@ -424,7 +428,12 @@ export default function Home() {
           transition={{ delay: 0.2 }}
           className="w-full"
         >
-          <PackSelector isPremium={isPremium} onPremiumClick={() => setShowPremiumModal(true)} />
+          <PackSelector
+            isPremium={isPremium}
+            onPremiumClick={() => setShowPremiumModal(true)}
+            customPacks={customPacks}
+            onManageCustomClick={() => setShowPacksManager(true)}
+          />
         </motion.div>
 
         {/* Main buttons */}

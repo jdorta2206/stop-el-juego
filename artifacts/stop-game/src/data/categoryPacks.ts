@@ -129,6 +129,29 @@ export const CATEGORY_PACKS: CategoryPack[] = [
 
 const PACK_STORAGE_KEY = "stop_selected_pack";
 
+// Minimal shape a user-defined pack needs to slot into the built-in resolver.
+// Mirrors the API response from /api/custom-packs without coupling this
+// module to the React hook.
+export interface CustomPackLike {
+  id: number;
+  name: string;
+  icon: string;
+  color: string;
+  categories: string[];
+}
+
+// Storage encoding: built-in IDs are stored as-is ("classic"); custom packs
+// are prefixed ("custom:42") so we can round-trip selection without colliding
+// with future built-in ids.
+const CUSTOM_PREFIX = "custom:";
+const isCustomId = (id: string) => id.startsWith(CUSTOM_PREFIX);
+const parseCustomId = (id: string): number | null => {
+  if (!isCustomId(id)) return null;
+  const n = Number(id.slice(CUSTOM_PREFIX.length));
+  return Number.isFinite(n) ? n : null;
+};
+export const customPackKey = (id: number) => `${CUSTOM_PREFIX}${id}`;
+
 export function getSelectedPackId(): string {
   try {
     return localStorage.getItem(PACK_STORAGE_KEY) || "classic";
@@ -143,18 +166,64 @@ export function setSelectedPackId(id: string) {
   } catch { /* ignore */ }
 }
 
-export function getPackById(id: string): CategoryPack {
-  return CATEGORY_PACKS.find(p => p.id === id) || CATEGORY_PACKS[0];
+/**
+ * Resolve a pack id (built-in or `custom:N`) into a CategoryPack-shaped
+ * object. Custom packs are returned as a single-language pack where every
+ * language slot points to the user's saved categories.
+ */
+export function getPackById(id: string, customPacks: CustomPackLike[] = []): CategoryPack {
+  const customId = parseCustomId(id);
+  if (customId !== null) {
+    const found = customPacks.find((p) => p.id === customId);
+    if (found) {
+      return {
+        id: `${CUSTOM_PREFIX}${found.id}`,
+        icon: found.icon,
+        categories: {
+          es: [...found.categories],
+          en: [...found.categories],
+          pt: [...found.categories],
+          fr: [...found.categories],
+        },
+        name: {
+          es: found.name,
+          en: found.name,
+          pt: found.name,
+          fr: found.name,
+        },
+        color: found.color,
+        gradient: `linear-gradient(135deg, ${found.color}, ${found.color}cc)`,
+        premium: true,
+      };
+    }
+    // Selected pack was deleted / not loaded yet — fall back to classic so
+    // the game still starts.
+    return CATEGORY_PACKS[0];
+  }
+  return CATEGORY_PACKS.find((p) => p.id === id) || CATEGORY_PACKS[0];
 }
 
-export function getPackCategories(packId: string, lang: string): string[] {
-  const pack = getPackById(packId);
+export function getPackCategories(
+  packId: string,
+  lang: string,
+  customPacks: CustomPackLike[] = [],
+): string[] {
+  const pack = getPackById(packId, customPacks);
   const key = (lang === "es" || lang === "en" || lang === "pt" || lang === "fr") ? lang : "es";
   return [...pack.categories[key]];
 }
 
-export function getSafePackId(packId: string, isPremium: boolean): string {
-  const pack = getPackById(packId);
+export function getSafePackId(
+  packId: string,
+  isPremium: boolean,
+  customPacks: CustomPackLike[] = [],
+): string {
+  // Non-premium users can never select a custom pack (server would also
+  // reject the read, but this avoids a flicker).
+  if (isCustomId(packId) && !isPremium) return "classic";
+  const pack = getPackById(packId, customPacks);
   if (pack.premium && !isPremium) return "classic";
+  // Custom id that doesn't resolve (deleted) — drop back to classic.
+  if (isCustomId(packId) && pack.id === CATEGORY_PACKS[0].id) return "classic";
   return pack.id;
 }
