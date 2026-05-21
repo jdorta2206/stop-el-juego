@@ -36,6 +36,12 @@ export const playerScoresTable = pgTable("player_scores", {
   equippedFrame: text("equipped_frame"),
   // Latest season for which the end-of-season recap modal has been shown.
   notifiedFinalSeasonId: integer("notified_final_season_id"),
+  // ── Word Collection ───────────────────────────────────────────────────
+  // JSON map of unique valid words the player has discovered, keyed by the
+  // normalized word (lowercased, accents stripped). Value is { name, cat,
+  // r, d }: original-cased name, first category found, rarity, discoveredAt
+  // millis. Append-only at write time; never shrinks. Used by /coleccion.
+  collectedWordsJson: text("collected_words_json").notNull().default("{}"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

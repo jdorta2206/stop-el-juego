@@ -27,6 +27,7 @@ const Overlay        = lazy(() => import("@/pages/Overlay"));
 const DeleteAccount  = lazy(() => import("@/pages/DeleteAccount"));
 const SeasonPass     = lazy(() => import("@/pages/SeasonPass"));
 const Achievements   = lazy(() => import("@/pages/Achievements"));
+const Collection     = lazy(() => import("@/pages/Collection"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -60,6 +61,8 @@ function Router() {
       <Route path="/season" component={SeasonPass} />
       <Route path="/logros" component={Achievements} />
       <Route path="/achievements" component={Achievements} />
+      <Route path="/coleccion" component={Collection} />
+      <Route path="/collection" component={Collection} />
       {/* Google Play "Account deletion URL" requirement (es + en aliases) */}
       <Route path="/eliminar-cuenta" component={DeleteAccount} />
       <Route path="/delete-account" component={DeleteAccount} />

@@ -625,6 +625,7 @@ export default function Home() {
               { href: "/multiplayer", icon: <Users className="w-8 h-8 text-[#f9a825]" />, label: t.home.multiplayer },
               { href: "/ranking",    icon: <Crown className="w-8 h-8 text-[#f9a825]" />, label: t.home.ranking },
               { href: "/logros",     icon: <Medal className="w-8 h-8 text-[#f9a825]" />, label: (t.achievements as any)?.title ?? "Logros" },
+              { href: "/coleccion",  icon: <BookOpen className="w-8 h-8 text-[#f9a825]" />, label: (t as any).collection?.title ?? "Mi Colección" },
             ].map(item => (
               <Link key={item.href} href={item.href}>
                 <motion.div

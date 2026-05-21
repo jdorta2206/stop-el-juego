@@ -179,6 +179,22 @@ const es = {
     streak_30_desc: "Juega 30 días seguidos",
   },
 
+  collection: {
+    title: "Mi Colección",
+    new: "Nueva palabra",
+    wordsCollected: "palabras coleccionadas",
+    all: "Todas",
+    rarity_legendary: "Legendaria",
+    rarity_epic: "Épica",
+    rarity_rare: "Rara",
+    rarity_common: "Común",
+    searchPlaceholder: "Buscar palabra o categoría...",
+    emptyTitle: "Aún no has coleccionado palabras",
+    emptyHint: "Juega una partida y empieza tu colección.",
+    noMatches: "Sin resultados",
+    tryAnother: "Prueba otro filtro o búsqueda.",
+  },
+
   multiplayer: {
     createRoom: "Crear sala",
     joinRoom: "Unirse a sala",

@@ -505,6 +505,7 @@ router.get("/progress/:playerId", async (req, res) => {
       achievementsJson: playerScoresTable.achievementsJson,
       achievementStatsJson: playerScoresTable.achievementStatsJson,
       personalBestsJson: playerScoresTable.personalBestsJson,
+      collectedWordsJson: playerScoresTable.collectedWordsJson,
       longestStreak: playerScoresTable.longestStreak,
     })
     .from(playerScoresTable)
@@ -512,31 +513,34 @@ router.get("/progress/:playerId", async (req, res) => {
     .limit(1);
 
   if (!ps) {
-    res.json({ achievements: [], stats: {}, personalBests: {} });
+    res.json({ achievements: [], stats: {}, personalBests: {}, collectedWords: {} });
     return;
   }
   let achievements: string[] = [];
   let stats: Record<string, unknown> = {};
   let personalBests: Record<string, number> = {};
+  let collectedWords: Record<string, unknown> = {};
   try { achievements = JSON.parse(ps.achievementsJson ?? "[]"); } catch {}
   try { stats = JSON.parse(ps.achievementStatsJson ?? "{}"); } catch {}
   try { personalBests = JSON.parse(ps.personalBestsJson ?? "{}"); } catch {}
+  try { collectedWords = JSON.parse(ps.collectedWordsJson ?? "{}"); } catch {}
   // Merge the authoritative server-side longestStreak into stats so the
   // achievements client can backfill streak milestones (3/7/14/30) for
   // players whose local achievement state was wiped or never persisted.
   const serverLongest = ps.longestStreak ?? 0;
   const storedLongest = Number(stats.longestStreak ?? 0);
   if (serverLongest > storedLongest) stats.longestStreak = serverLongest;
-  res.json({ achievements, stats, personalBests });
+  res.json({ achievements, stats, personalBests, collectedWords });
 });
 
 // ── POST /ranking/progress/:playerId — save achievements + stats + personal bests ──
 router.post("/progress/:playerId", async (req, res) => {
   const { playerId } = req.params;
-  const { achievements, stats, personalBests } = req.body as {
+  const { achievements, stats, personalBests, collectedWords } = req.body as {
     achievements?: string[];
     stats?: Record<string, unknown>;
     personalBests?: Record<string, number>;
+    collectedWords?: Record<string, { name: string; cat: string; r: string; d: number }>;
   };
 
   const [existing] = await db
@@ -544,6 +548,7 @@ router.post("/progress/:playerId", async (req, res) => {
       achievementsJson: playerScoresTable.achievementsJson,
       achievementStatsJson: playerScoresTable.achievementStatsJson,
       personalBestsJson: playerScoresTable.personalBestsJson,
+      collectedWordsJson: playerScoresTable.collectedWordsJson,
     })
     .from(playerScoresTable)
     .where(eq(playerScoresTable.playerId, playerId))
@@ -555,9 +560,11 @@ router.post("/progress/:playerId", async (req, res) => {
   let curAch: string[] = [];
   let curStats: Record<string, unknown> = {};
   let curBests: Record<string, number> = {};
+  let curCollected: Record<string, { name: string; cat: string; r: string; d: number }> = {};
   try { curAch = JSON.parse(existing.achievementsJson ?? "[]"); } catch {}
   try { curStats = JSON.parse(existing.achievementStatsJson ?? "{}"); } catch {}
   try { curBests = JSON.parse(existing.personalBestsJson ?? "{}"); } catch {}
+  try { curCollected = JSON.parse(existing.collectedWordsJson ?? "{}"); } catch {}
 
   const mergedAch = [...new Set([...curAch, ...(achievements ?? [])])];
 
@@ -575,17 +582,40 @@ router.post("/progress/:playerId", async (req, res) => {
     if ((mergedBests[mode] ?? 0) < score) mergedBests[mode] = score;
   }
 
+  // Merge collected words: first-write wins (preserves original discovery
+  // date + rarity). Capped at 5000 entries to keep the JSON column bounded.
+  const mergedCollected = { ...curCollected };
+  for (const [k, v] of Object.entries(collectedWords ?? {})) {
+    if (!mergedCollected[k] && v && typeof v === "object") mergedCollected[k] = v;
+  }
+  let collectedToSave = mergedCollected;
+  const COLLECTED_CAP = 5000;
+  if (Object.keys(collectedToSave).length > COLLECTED_CAP) {
+    // Keep the most recent entries if we ever blow past the cap.
+    const entries = Object.entries(collectedToSave)
+      .sort((a, b) => (b[1]?.d ?? 0) - (a[1]?.d ?? 0))
+      .slice(0, COLLECTED_CAP);
+    collectedToSave = Object.fromEntries(entries);
+  }
+
   await db
     .update(playerScoresTable)
     .set({
       achievementsJson: JSON.stringify(mergedAch),
       achievementStatsJson: JSON.stringify(mergedStats),
       personalBestsJson: JSON.stringify(mergedBests),
+      collectedWordsJson: JSON.stringify(collectedToSave),
       updatedAt: new Date(),
     })
     .where(eq(playerScoresTable.playerId, playerId));
 
-  res.json({ ok: true, achievements: mergedAch, stats: mergedStats, personalBests: mergedBests });
+  res.json({
+    ok: true,
+    achievements: mergedAch,
+    stats: mergedStats,
+    personalBests: mergedBests,
+    collectedWords: collectedToSave,
+  });
 });
 
 export default router;

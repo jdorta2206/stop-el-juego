@@ -29,6 +29,8 @@ import { useFTUE } from "@/hooks/useFTUE";
 import { FirstVictoryCelebration } from "@/components/FirstVictoryCelebration";
 import { useAchievements } from "@/hooks/useAchievements";
 import { AchievementToast } from "@/components/AchievementToast";
+import { useCollection } from "@/hooks/useCollection";
+import { CollectionToast } from "@/components/CollectionToast";
 import { drawPowerCard, POWER_CARDS, type PowerCardId } from "@/data/powerCards";
 import { usePersonalBest } from "@/hooks/usePersonalBest";
 import { useReviewPrompt, recordGamePlayed, recordScoreAndPercentile } from "@/hooks/useReviewPrompt";
@@ -180,6 +182,7 @@ export default function SoloGame() {
 
   // Achievements system
   const { newlyUnlocked, afterRound, clearNewlyUnlocked } = useAchievements(player?.id);
+  const { lastDiscovered, recordRound, clearLastDiscovered } = useCollection(player?.id);
 
   // Hidden category index (for hidden_category event)
   const [hiddenCategoryIdx, setHiddenCategoryIdx] = useState<number | null>(null);
@@ -868,6 +871,17 @@ export default function SoloGame() {
         r => ((r as CategoryResult).player?.score ?? 0) > 0
       ).length;
 
+      // 📚 Word Collection: every word that scored points is "valid enough"
+      // to enter the player's collection. Rarity is computed locally.
+      const collectedThisRound: Array<{ word: string; category: string }> = [];
+      for (const [category, r] of Object.entries(results.results ?? {})) {
+        const player = (r as CategoryResult).player;
+        if (player && (player.score ?? 0) > 0 && player.response) {
+          collectedThisRound.push({ word: player.response, category });
+        }
+      }
+      if (collectedThisRound.length) recordRound(collectedThisRound);
+
       // Track achievement progress
       afterRound({
         won,
@@ -1286,6 +1300,9 @@ export default function SoloGame() {
           onDone={clearNewlyUnlocked}
           tAchievements={t.achievements as unknown as { [key: string]: string; new: string; xpBonus: string }}
         />
+
+        {/* Collection toast — surfaces rare/epic/legendary new words */}
+        <CollectionToast word={lastDiscovered} onDone={clearLastDiscovered} />
 
         {/* Mode badges row */}
         <div className="flex items-center justify-center gap-2 mb-3 flex-wrap">
