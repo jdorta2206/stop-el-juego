@@ -1,0 +1,84 @@
+¡Esa es la idea clave! Lo que planteas es justo lo que necesita STOP para que los jugadores vuelvan todos los días. Un sistema de colección bien diseñado convierte un juego funcional en una adicción positiva.
+
+Vamos a diseñar algo realista, fácil de implementar y que funcione sin tener que cambiar toda la estructura del juego.
+
+---
+
+🎯 El concepto: "Álbum STOP" (Colección de palabras únicas)
+
+Idea central: Cada vez que un jugador escribe una palabra válida y no repetida en una categoría, gana un cromo de esa categoría. El objetivo es completar el álbum.
+
+---
+
+📖 Cómo funciona (ejemplo concreto)
+
+Categoría Cromos posibles Ejemplo
+Futbolista 20 futbolistas míticos Messi, Maradona, Pelé, Cristiano, Cruyff...
+Equipo 20 equipos legendarios Madrid, Barcelona, Milan, Bayern, Liverpool...
+Estadio 20 estadios famosos Maracaná, Camp Nou, Wembley, Bernabéu...
+Competición 10 competiciones Mundial, Champions, Eurocopa, Libertadores...
+
+Mecánica:
+
+· Juegas una partida con letra "M", categoría "Futbolista".
+· Escribes "Messi" → ¡Cromo desbloqueado! (Messi aparece en tu álbum).
+· Si en otra partida vuelves a escribir "Messi", no obtienes otro cromo (evita el farmeo). Solo palabras nuevas.
+
+---
+
+🏆 Sistema de progresión (el "enganche")
+
+Hito Recompensa
+Completar 5 cromos de cualquier categoría +50 monedas (si tienes monedas) o una pista extra gratis.
+Completar una categoría entera (ej. 20 futbolistas) Desbloqueas un avatar especial (ej. "Leyenda del Fútbol") que se ve en el ranking.
+Completar el álbum entero (80 cromos) Título exclusivo "El coleccionista" y un efecto visual dorado en tu nombre.
+
+---
+
+🖼️ ¿Cómo se ve en la interfaz?
+
+Pantalla Qué muestra
+Pantalla de logros (ya la tienes) Añadir una pestaña "📒 Mi Álbum".
+Dentro del álbum Cada cromo aparece como "??? 🤔" si no lo tienes, y con su imagen y nombre si está desbloqueado.
+Notificación Al desbloquear un cromo, aparece un toast: "¡Nuevo cromo! Messi - Futbolista ⚽".
+
+Ejemplo visual:
+📒 Mi Álbum → pestaña "Fútbol" → "Messi ✅", "Maradona ✅", "Pelé ❓", "Cristiano ❓"...
+
+---
+
+⚙️ Implementación técnica (lo que necesitas)
+
+Componente Complejidad Notas
+Base de datos (nuevas tablas) Media Tabla user_cards y cards_catalog.
+Lógica de desbloqueo Baja Al validar palabra única, insertar cromo si no existe.
+Interfaz del álbum Media Pantalla estilo grid, con 20 cromos por categoría.
+Notificaciones Baja Usar el mismo sistema de toasts que para logros.
+
+Tiempo estimado: 1-2 semanas de trabajo, reutilizando la estructura de logros que ya tienes.
+
+---
+
+💰 Monetización asociada (sin ser agresivo)
+
+Oportunidad Cómo Precio
+Comprar "sobres de cromos" Ver un vídeo recompensado o pagar 0,10€ por 3 cromos aleatorios (sin duplicados). 0,10€ o vídeo.
+Pack "Cromo legendario" Desbloquear un cromo difícil (ej. "Pelé") directamente. 0,50€ (único).
+Pase de colección (temporada) Acceso a una colección especial limitada (ej. "Mundial 2026"). 1,99€ por temporada (1-2 meses).
+
+---
+
+✅ ¿Por qué esto sí funciona?
+
+Problema actual Solución del álbum
+"¿Por qué repetir partidas?" Para conseguir cromos nuevos y completar colecciones.
+"¿Para qué quiero monedas/pistas?" Para comprar sobres o acelerar la colección.
+"¿Por qué pagaría?" Para desbloquear un avatar especial o un cromo legendario.
+
+El álbum convierte un juego de partidas sueltas en un objetivo a largo plazo. El jugador siempre tiene una razón para volver: completar su colección.
+
+---
+
+🚀 ¿Quieres que empiece a diseñar las tablas de la base de datos para los cromos?
+
+O si lo prefieres, primero definimos los 20 futbolistas, 20 equipos y 20 estadios para empezar a probar. Dime por dónde quieres empezar.
