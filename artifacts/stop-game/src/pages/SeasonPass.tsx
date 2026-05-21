@@ -27,9 +27,22 @@ function daysLeft(endDate: string): number {
   return Math.max(0, Math.ceil((end - now) / 86_400_000));
 }
 
-function MissionRow({ mission, onClaim }: { mission: Mission; onClaim: (id: string) => void }) {
+function MissionRow({
+  mission, onClaim, isPremium, premiumMultiplier,
+}: {
+  mission: Mission;
+  onClaim: (id: string) => void;
+  isPremium: boolean;
+  premiumMultiplier: number;
+}) {
   const label = MISSION_LABELS[mission.i18nKey] ?? mission.i18nKey;
   const pct = Math.min(100, (mission.progress / mission.target) * 100);
+  // Multiplier comes from the server (/season/current.premiumMissionMultiplier)
+  // so the displayed XP can never drift from what /claim-mission actually pays.
+  const effectiveXp = isPremium
+    ? Math.round(mission.xpReward * premiumMultiplier)
+    : mission.xpReward;
+  const bonusPct = Math.round((premiumMultiplier - 1) * 100);
   return (
     <div
       className="w-full p-3 rounded-xl"
@@ -53,7 +66,20 @@ function MissionRow({ mission, onClaim }: { mission: Mission; onClaim: (id: stri
           )}
           <p className="text-white font-bold text-sm truncate">{label}</p>
         </div>
-        <span className="text-[#f9a825] font-black text-xs flex-shrink-0">+{mission.xpReward} XP</span>
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          {isPremium && bonusPct > 0 && (
+            <span
+              className="text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider"
+              style={{ background: "rgba(249,168,37,0.25)", color: "#f9a825" }}
+              title="Bonus de suscriptor Premium"
+            >
+              +{bonusPct}%
+            </span>
+          )}
+          <span className="text-[#f9a825] font-black text-xs">
+            +{effectiveXp} XP
+          </span>
+        </div>
       </div>
       <div className="flex items-center gap-2">
         <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.08)" }}>
@@ -482,7 +508,9 @@ export default function SeasonPass() {
             <Crown className="w-6 h-6 text-[#f9a825] flex-shrink-0" />
             <div className="flex-1 text-left min-w-0">
               <p className="text-[#f9a825] font-black text-sm">Desbloquea el Pase Premium</p>
-              <p className="text-white/70 text-xs">Avatares y marcos exclusivos · €1,99/mes</p>
+              <p className="text-white/70 text-xs">
+                +50% XP · Avatares · Marco Leyenda · €1,99/mes
+              </p>
             </div>
             <span className="text-[#f9a825] font-black">→</span>
           </motion.button>
@@ -504,7 +532,13 @@ export default function SeasonPass() {
             </p>
           ) : progress?.missions?.length ? (
             progress.missions.map((m) => (
-              <MissionRow key={m.id} mission={m} onClaim={(id) => claimMission(id)} />
+              <MissionRow
+                key={m.id}
+                mission={m}
+                onClaim={(id) => claimMission(id)}
+                isPremium={isPremium}
+                premiumMultiplier={season?.premiumMissionMultiplier ?? 1}
+              />
             ))
           ) : (
             <p className="text-white/50 text-sm text-center py-6">Cargando misiones…</p>

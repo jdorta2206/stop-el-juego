@@ -44,6 +44,12 @@ export type SeasonInfo = {
   theme: { name?: string; color?: string; emoji?: string; tagline?: string };
   totalTiers: number;
   tiers: TierReward[];
+  /**
+   * Multiplier applied server-side to mission XP for premium subscribers.
+   * Surfaced here so the UI never hardcodes the value and never drifts from
+   * what the server actually pays out.
+   */
+  premiumMissionMultiplier?: number;
 };
 
 export type CosmeticMeta = {

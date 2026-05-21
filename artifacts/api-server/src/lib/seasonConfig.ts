@@ -4,6 +4,15 @@
 export const SEASON_LENGTH_DAYS = 28; // 4 weeks
 export const TOTAL_TIERS = 30;
 
+// Premium subscribers earn 50% more XP from daily mission claims. Applied
+// server-side in /claim-mission so the bonus can never be spoofed client-side.
+export const PREMIUM_MISSION_MULTIPLIER = 1.5;
+
+// Special "Legend of the Pass" frame awarded at Tier 30 premium. Single
+// static cosmetic — players who max out the premium pass own it forever as
+// proof. Re-claiming in later seasons is deduped by the inventory write.
+export const LEGEND_FRAME_ID = "frame_legend_t30";
+
 // XP needed to *reach* tier N (cumulative). Tier 1 is unlocked at 100 XP, tier
 // 30 at 3000 XP. Total achievable in 28 days at ~100 XP/day of missions.
 export function xpForTier(tier: number): number {
@@ -75,14 +84,19 @@ const AVATAR_NAMES = ["🎯", "🔥", "⚡", "🌟", "👑", "💎"];
 export function tierReward(tier: number): TierReward {
   // Free track: mostly coins, an avatar/frame every 5 tiers.
   // Premium track: bigger coin payouts + premium frames/avatars.
+  // Tier 30 premium is a one-of-a-kind "Legend of the Pass" frame — the
+  // trophy for maxing out the premium pass. Replaces what used to be coins.
   const isMilestone = tier % 5 === 0;
   const milestoneIdx = Math.floor(tier / 5) - 1;
+  const isLegendTier = tier === TOTAL_TIERS;
   return {
     tier,
     free: isMilestone && milestoneIdx >= 0
       ? { kind: "frame", value: `frame_free_${tier}`, label: `Marco ${FRAME_NAMES[milestoneIdx % FRAME_NAMES.length]}` }
       : { kind: "coins", value: 50 + tier * 10, label: `${50 + tier * 10} monedas` },
-    premium: isMilestone && milestoneIdx >= 0
+    premium: isLegendTier
+      ? { kind: "frame", value: LEGEND_FRAME_ID, label: "Marco Leyenda del Pase" }
+      : isMilestone && milestoneIdx >= 0
       ? { kind: "avatar", value: `avatar_premium_${tier}`, label: `Avatar ${AVATAR_NAMES[milestoneIdx % AVATAR_NAMES.length]}` }
       : { kind: "coins", value: 100 + tier * 20, label: `${100 + tier * 20} monedas` },
   };

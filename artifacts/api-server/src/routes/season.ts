@@ -10,6 +10,8 @@ import {
   tierFromXp,
   TOTAL_TIERS,
   SEASON_LENGTH_DAYS,
+  PREMIUM_MISSION_MULTIPLIER,
+  LEGEND_FRAME_ID,
   type Mission,
 } from "../lib/seasonConfig";
 import { requirePlayerIdentity, readPlayerId, type AuthedRequest } from "../lib/playerAuth";
@@ -289,6 +291,8 @@ router.get("/current", async (_req, res) => {
       theme,
       totalTiers: TOTAL_TIERS,
       tiers: allTierRewards(),
+      // Surface entitlements so the client never hardcodes them.
+      premiumMissionMultiplier: PREMIUM_MISSION_MULTIPLIER,
     });
   } catch (e: unknown) {
     console.error("[season/current] error:", e instanceof Error ? e.message : String(e));
@@ -318,6 +322,39 @@ router.get("/progress", requirePlayerIdentity, async (req: AuthedRequest, res) =
       awardedCosmetic: ReturnType<typeof resolveCosmetic> | null;
       seasonName: string | null;
     } | null = null;
+
+    // Legacy backfill: players who claimed Tier 30 premium BEFORE the reward
+    // was upgraded from coins to `frame_legend_t30` should still get the
+    // frame. One-shot, idempotent — checks claimed_tiers + inventory and
+    // grants the frame if missing. No-op once the player owns it.
+    if (claimed.premium.includes(TOTAL_TIERS)) {
+      try {
+        await pool.query(
+          `UPDATE player_scores
+           SET inventory_json = jsonb_set(
+                 COALESCE(inventory_json::jsonb, '{"avatars":[],"frames":[]}'::jsonb),
+                 '{frames}',
+                 (
+                   COALESCE(inventory_json::jsonb->'frames', '[]'::jsonb)
+                   || to_jsonb($2::text)
+                 )
+               )::text,
+               updated_at = NOW()
+           WHERE player_id = $1
+             AND NOT (
+               COALESCE(inventory_json::jsonb->'frames', '[]'::jsonb)
+               @> to_jsonb($2::text)
+             )`,
+          [playerId, LEGEND_FRAME_ID],
+        );
+      } catch (backfillErr) {
+        // Backfill is best-effort; never block /progress on it.
+        console.error(
+          "[season/progress] legend backfill failed:",
+          backfillErr instanceof Error ? backfillErr.message : String(backfillErr),
+        );
+      }
+    }
 
     const finalRows = (await db.execute(sql`
       SELECT sf.season_id, sf.final_rank, sf.final_xp, sf.total_players, sf.awarded_cosmetic,
@@ -574,12 +611,19 @@ router.post("/claim-mission", requirePlayerIdentity, async (req: AuthedRequest, 
     const today = todayUTC();
 
     // Atomic claim guard: lock row, re-check claimed flag, update inside the same tx.
+    // is_premium is read INSIDE the tx (read-committed snapshot) so the XP
+    // bonus reflects entitlement state at commit time, not before.
     const claim = await db.transaction(async (tx) => {
       const locked = (await tx.execute(sql`
         SELECT id, xp, missions_json FROM season_progress WHERE id = ${progress.id} FOR UPDATE
       `)) as unknown as SqlResult<Pick<ProgressRowSql, "id" | "xp" | "missions_json">>;
       const row = locked.rows?.[0];
       if (!row) return { ok: false as const, error: "Progress row not found", status: 404 };
+
+      const premRows = (await tx.execute(sql`
+        SELECT is_premium FROM player_scores WHERE player_id = ${playerId} LIMIT 1
+      `)) as unknown as SqlResult<PlayerPremiumRow>;
+      const isPremium = premRows.rows?.[0]?.is_premium === true;
 
       const blob = parseMissions(row.missions_json, today);
       const m = blob.missions.find((x) => x.id === missionId);
@@ -588,14 +632,23 @@ router.post("/claim-mission", requirePlayerIdentity, async (req: AuthedRequest, 
       if (m.claimed) return { ok: false as const, error: "Already claimed", status: 400 };
 
       m.claimed = true;
-      const newXp = row.xp + m.xpReward;
+      const baseXp = m.xpReward;
+      const xpEarned = isPremium
+        ? Math.round(baseXp * PREMIUM_MISSION_MULTIPLIER)
+        : baseXp;
+      const bonusXp = xpEarned - baseXp;
+      const newXp = row.xp + xpEarned;
 
       await tx
         .update(seasonProgressTable)
         .set({ xp: newXp, missionsJson: JSON.stringify(blob), updatedAt: new Date() })
         .where(eq(seasonProgressTable.id, progress.id));
 
-      return { ok: true as const, xpEarned: m.xpReward, xp: newXp, missions: blob.missions };
+      return {
+        ok: true as const,
+        xpEarned, baseXp, bonusXp,
+        xp: newXp, missions: blob.missions, isPremium,
+      };
     });
 
     if (!claim) { res.status(500).json({ error: "Transaction failed" }); return; }
@@ -607,6 +660,9 @@ router.post("/claim-mission", requirePlayerIdentity, async (req: AuthedRequest, 
     res.json({
       ok: true,
       xpEarned: claim.xpEarned,
+      baseXp: claim.baseXp,
+      bonusXp: claim.bonusXp,
+      premiumBonus: claim.isPremium,
       xp: claim.xp,
       currentTier: tierFromXp(claim.xp),
       missions: claim.missions,

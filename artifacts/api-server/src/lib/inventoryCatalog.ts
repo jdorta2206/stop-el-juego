@@ -55,6 +55,15 @@ export function resolveCosmetic(id: string): CosmeticMeta | null {
       glyph: AVATAR_GLYPHS[idx % AVATAR_GLYPHS.length],
     };
   }
+  // Legend of the Pass — single static frame awarded at Tier 30 premium.
+  if (id === "frame_legend_t30") {
+    return {
+      id, kind: "frame",
+      label: "Marco Leyenda del Pase",
+      glyph: "✦",
+      color: "#fbbf24",
+    };
+  }
   // Champion frames awarded to season top-3 — id shape: `frame_champion_s<seasonId>_r<rank>`
   m = id.match(/^frame_champion_s(\d+)_r([1-3])$/);
   if (m) {
