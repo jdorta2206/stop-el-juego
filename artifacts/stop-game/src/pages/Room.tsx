@@ -22,6 +22,7 @@ import { useTicker } from "@/hooks/useTicker";
 import { useSound } from "@/hooks/useSound";
 import { useHaptic } from "@/hooks/useHaptic";
 import { ShareResultsModal } from "@/components/ShareResultsModal";
+import { CountUp } from "@/components/CountUp";
 import { getApiUrl } from "@/lib/utils";
 import { saveActiveRoom, clearActiveRoom, touchActiveRoom } from "@/lib/activeRoom";
 import { useT } from "@/i18n/useT";
@@ -1953,7 +1954,12 @@ export default function Room() {
                         </div>
                       )}
                     </div>
-                    <p className="text-2xl font-black text-secondary">{p.score || 0}</p>
+                    <CountUp
+                      to={p.score || 0}
+                      delayMs={i * 100 + 250}
+                      durationMs={1100 + i * 150}
+                      className="text-2xl font-black text-secondary tabular-nums"
+                    />
                   </motion.div>
                 );
               })}
