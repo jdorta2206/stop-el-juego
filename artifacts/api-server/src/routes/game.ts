@@ -57,7 +57,7 @@ const DICTIONARY: Record<string, Record<string, string[]>> = {
       "chirimoya","ciruela","cítrico","coco","corozo","cupuazú","dátil","damasco","durazno",
       "frambuesa","fresa","frutilla","fruta de la pasión","granada","granadilla","grosella","guanábana",
       "guayaba","higo","jackfruit","jaca","jocote","kiwi","kumquat","lichi","lima","limón",
-      "lúcuma","mamey","mandarina","mango","mangostán","maracuyá","marañón","melón","membrillo",
+      "lúcuma","mamey","mandarina","mango","mangostán","manzana","maracuyá","marañón","melocotón","melón","membrillo",
       "mirtilo","mora","naranja","nectarina","níspero","nuez","oliva","papaya","paraguaya","pera",
       "piña","pitahaya","pitaya","plátano","pomelo","rambután","sandía","sapote","tamarindo",
       "tuna","toronja","uva","uva pasa","uvilla","yuzu","zapote","zarzamora","acerola","aguaje",
