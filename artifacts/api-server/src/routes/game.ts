@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import { ValidateRoundBody, ValidateRoundResponse } from "@workspace/api-zod";
+import { validateWordWithAi } from "../lib/aiWordValidator";
 
 const router: IRouter = Router();
 
@@ -1371,6 +1372,47 @@ function findCategoryWords(langDict: Record<string, string[]>, category: string)
   return best ? best.words : [];
 }
 
+// Async wrapper around `isWordValid` that, when the static dictionary rejects
+// a word in a CLOSED category (fruta/color/animal/…), asks the LLM-backed
+// cache whether the word is actually a legitimate member of that category.
+// Open categories (nombre/lugar/objeto/marca) and basic sanity checks
+// (safety, first-letter, min-length) are handled fully by `isWordValid` so
+// we never burn an AI call on them.
+async function isWordValidAsync(
+  word: string,
+  letter: string,
+  category: string,
+  language: string,
+  playerId: string | null,
+): Promise<boolean> {
+  // Fast path: existing synchronous validator handles 99% of cases.
+  if (isWordValid(word, letter, category, language)) return true;
+
+  // Only attempt AI fallback if the word at least passed the basic gates
+  // (safe input, correct first letter, min length). If the static check
+  // failed for any of those reasons there's no point asking the AI — the
+  // word can't be a valid answer regardless of category membership.
+  if (!isSafeInput(word)) return false;
+  const normalizedWord = normalizeWord(word);
+  const normalizedLetter = normalizeWord(letter);
+  if (!normalizedWord.startsWith(normalizedLetter)) return false;
+  if (normalizedWord.length < 3) return false;
+  if (NEVER_VALID_WORDS.has(normalizedWord)) return false;
+
+  // Skip AI for open categories — they already accept any well-formed word,
+  // so a static "no" means the word failed safety/length, not membership.
+  const normCategory = normalizeWord(category);
+  if (OPEN_CATEGORIES.has(normCategory)) return false;
+
+  const result = await validateWordWithAi({
+    word: normalizedWord,
+    category: normCategory,
+    lang: language,
+    playerId,
+  });
+  return result.isValid;
+}
+
 function isWordValid(word: string, letter: string, category: string, language = "es"): boolean {
   if (!isSafeInput(word)) return false;
 
@@ -1454,7 +1496,7 @@ router.get("/peek", (req, res) => {
   res.json({ word });
 });
 
-router.post("/validate", (req, res) => {
+router.post("/validate", async (req, res) => {
   const body = ValidateRoundBody.safeParse(req.body);
   if (!body.success) {
     res.status(400).json({ error: "Invalid request body" });
@@ -1462,6 +1504,15 @@ router.post("/validate", (req, res) => {
   }
 
   const { letter, language, playerResponses } = body.data;
+  // Best-effort player id from common header conventions used elsewhere in
+  // the codebase. Used only to apply the per-player AI-call quota; absence
+  // is fine, the global daily cap still protects against runaway cost.
+  const playerId =
+    (req.header("x-player-id") as string | undefined) ||
+    (typeof (req as { playerId?: unknown }).playerId === "string"
+      ? ((req as { playerId?: string }).playerId ?? null)
+      : null);
+
   const results: Record<string, {
     player: { response: string; isValid: boolean; score: number; isDuplicate?: boolean };
     ai: { response: string; isValid: boolean; score: number };
@@ -1477,7 +1528,9 @@ router.post("/validate", (req, res) => {
 
     // "Repetida" only means the player and the AI wrote the exact same word in the same category
     // (handled below by giving 5pts each). Using the same word in different categories is allowed.
-    const isPlayerWordValid = isWordValid(playerWord, letter, pr.category, language);
+    // Player word: try dict first, AI fallback if not found (network/cache).
+    const isPlayerWordValid = await isWordValidAsync(playerWord, letter, pr.category, language, playerId);
+    // AI word comes from our own dictionary, so it never needs the AI fallback.
     const isAiWordValid = aiWord.length > 0 && isWordValid(aiWord, letter, pr.category, language);
 
     let playerScore = 0;

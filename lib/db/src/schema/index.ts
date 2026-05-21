@@ -19,3 +19,4 @@
 
 export * from "./players";
 export * from "./billing";
+export * from "./wordValidationCache";

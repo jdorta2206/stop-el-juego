@@ -22,6 +22,7 @@
     "googleapis": "^171.4.0",
     "jsonwebtoken": "^9.0.3",
     "node-fetch": "^3.3.2",
+    "openai": "^6.38.0",
     "stripe": "^20.4.1",
     "stripe-replit-sync": "^1.0.0",
     "web-push": "^3.6.7"
