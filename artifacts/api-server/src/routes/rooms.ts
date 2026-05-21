@@ -5,6 +5,13 @@ import { eq, and, lt, inArray, sql } from "drizzle-orm";
 import { CreateRoomBody, JoinRoomBody, SubmitRoomResultsBody } from "@workspace/api-zod";
 import { calculateStreak, appendStreakDay } from "./ranking";
 import { writeLimiter } from "../middlewares/rateLimit";
+import {
+  pickBotIdentity,
+  makeBotPlayer,
+  scheduleBotsForRound,
+  rushBotSubmits,
+  clearBotTimers,
+} from "../lib/multiplayerBot";
 
 const router: IRouter = Router();
 
@@ -129,6 +136,18 @@ function broadcastAndFormat(room: any) {
   broadcastRoom(formatted.roomCode as string, formatted);
   return formatted;
 }
+
+// Deps bundle passed to the bot module so it can broadcast room updates
+// after it submits / advances rounds. Defined as a getter so it captures
+// the latest reference to the local functions above.
+const botDeps = {
+  broadcast: (code: string, payload: object) => broadcastRoom(code, payload),
+  formatRoom: (room: any) => formatRoom(room),
+  // Persists final scores to the global leaderboard when the bot's submission
+  // happens to be the one that ends the match.
+  submitFinalScores: (players: any[], letter: string) =>
+    submitAllScoresToLeaderboard(players, letter).catch(() => {}),
+};
 
 // ── In-memory stores (ephemeral, no DB needed) ─────────────────────────────
 type Reaction = { id: string; emoji: string; playerName: string; ts: number };
@@ -743,6 +762,73 @@ router.post("/:roomCode/start", async (req, res) => {
   // 🚀 Empuja el cambio a TODOS los jugadores por SSE de inmediato
   // (antes solo el host recibía la respuesta y los demás esperaban polling).
   res.json(broadcastAndFormat(updateResult[0]));
+
+  // 🤖 Schedule bot STOPs/submits for this round. Done after the broadcast
+  // so humans see the round start immediately, then bots act on their own
+  // realistic delay (25-50s).
+  const botsInRoom = resetPlayers.filter((p: any) => p.isBot);
+  if (botsInRoom.length > 0) {
+    scheduleBotsForRound({
+      roomCode: roomCode.toUpperCase(),
+      bots: botsInRoom.map((b: any) => ({ playerId: b.playerId })),
+      deps: botDeps,
+    });
+  }
+});
+
+// POST /rooms/:roomCode/add-bot — host-only, adds a CPU player to the lobby
+router.post("/:roomCode/add-bot", async (req, res) => {
+  const roomCode = paramStr(req.params.roomCode);
+  const { hostId } = (req.body ?? {}) as { hostId?: string };
+  const code = roomCode.toUpperCase();
+
+  // 🔒 Row-locked transaction so concurrent /join + /add-bot can't trample
+  // each other (last-write-wins on playersJson would silently lose a player).
+  type Outcome =
+    | { kind: "ok"; row: any }
+    | { kind: "notFound" }
+    | { kind: "forbidden" }
+    | { kind: "badState" }
+    | { kind: "full" }
+    | { kind: "botCap" }
+    | { kind: "noName" };
+
+  const outcome: Outcome = await db.transaction(async (tx) => {
+    const rows = await tx.execute(
+      sql`SELECT * FROM rooms WHERE room_code = ${code} FOR UPDATE`,
+    );
+    const list = (rows as any).rows ?? rows;
+    if (!list || list.length === 0) return { kind: "notFound" };
+    const raw = list[0];
+    const rHostId = raw.host_id ?? raw.hostId;
+    const rStatus = raw.status;
+    const rMaxPlayers = raw.max_players ?? raw.maxPlayers ?? 8;
+    const playersJson = raw.players_json ?? raw.playersJson;
+    if (!hostId || rHostId !== hostId) return { kind: "forbidden" };
+    if (rStatus !== "waiting") return { kind: "badState" };
+    const players = parsePlayers(playersJson);
+    if (players.length >= rMaxPlayers) return { kind: "full" };
+    const existingBots = players.filter((p: any) => p.isBot).length;
+    if (existingBots >= 3) return { kind: "botCap" };
+    const identity = pickBotIdentity(players.map((p: any) => p.playerName));
+    if (!identity) return { kind: "noName" };
+    players.push(makeBotPlayer(identity));
+    const updated = await tx.update(roomsTable)
+      .set({ playersJson: JSON.stringify(players), updatedAt: new Date() })
+      .where(eq(roomsTable.roomCode, code))
+      .returning();
+    return { kind: "ok", row: updated[0] };
+  });
+
+  switch (outcome.kind) {
+    case "notFound": res.status(404).json({ error: "Room not found" }); return;
+    case "forbidden": res.status(403).json({ error: "Only the host can add bots" }); return;
+    case "badState": res.status(409).json({ error: "Bots can only be added in the lobby" }); return;
+    case "full": res.status(409).json({ error: "Room is full" }); return;
+    case "botCap": res.status(409).json({ error: "Max 3 bots per room" }); return;
+    case "noName": res.status(409).json({ error: "No bot names available" }); return;
+    case "ok": res.json(broadcastAndFormat(outcome.row)); return;
+  }
 });
 
 // POST /rooms/:roomCode/leave — player leaves the room
@@ -855,6 +941,8 @@ router.post("/:roomCode/leave", async (req, res) => {
     roomReactions.delete(code);
     roomPhrases.delete(code);
     roomCategoryPacks.delete(code);
+    // 🤖 Cancel pending bot timers so they don't fire against a deleted room.
+    clearBotTimers(code);
     res.json({ ok: true, deleted: true });
     return;
   }
@@ -1319,6 +1407,18 @@ router.post("/:roomCode/stop", async (req, res) => {
     .returning();
 
   res.json(broadcastAndFormat(updated));
+
+  // 🤖 If bots are in this room and haven't submitted yet, rush them so the
+  // round can advance ~3s after STOP (mimics a human freezing then submitting).
+  const updatedPlayers = parsePlayers(updated.playersJson);
+  const pendingBots = updatedPlayers.filter((p: any) => p.isBot && !p.isReady);
+  if (pendingBots.length > 0) {
+    rushBotSubmits({
+      roomCode: roomCode.toUpperCase(),
+      bots: pendingBots.map((b: any) => ({ playerId: b.playerId })),
+      deps: botDeps,
+    });
+  }
 });
 
 // POST /rooms/:roomCode/results — each player submits their answers after STOP

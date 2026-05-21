@@ -433,6 +433,30 @@ export default function Room() {
     }).catch(() => {});
   }, [player?.id, player?.name, roomCode]);
 
+  // 🤖 Add a bot opponent (host only, lobby only). Cold-start killer:
+  // if nobody's online, the host can fill the room with CPU players that
+  // actually play the round (STOP + submit).
+  const [addBotLoading, setAddBotLoading] = useState(false);
+  const handleAddBot = useCallback(async () => {
+    if (!roomCode || !player?.id || addBotLoading) return;
+    setAddBotLoading(true);
+    try {
+      const res = await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/add-bot`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hostId: player.id }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        toast({ title: data.error ?? "No se pudo añadir bot", variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "Sin conexión", variant: "destructive" });
+    } finally {
+      setAddBotLoading(false);
+    }
+  }, [roomCode, player?.id, addBotLoading, toast]);
+
   // Trigger Revancha — first caller creates the new room, others piggyback on the broadcast
   const handleRematch = useCallback(async () => {
     if (rematchLoading) return;
@@ -1123,15 +1147,16 @@ export default function Room() {
                 <div className="space-y-2 max-h-60 overflow-y-auto">
                   {players.map((p: any) => (
                     <div key={p.playerId} className="flex items-center gap-3 bg-black/20 p-2.5 rounded-xl">
-                      <div className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-white text-sm"
+                      <div className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-white text-sm relative"
                         style={{
                           backgroundColor: p.avatarColor || "#555",
                           boxShadow: p.isPremium ? "0 0 0 2px #fde047, 0 0 10px rgba(250,204,21,0.65)" : undefined,
                         }}>
-                        {p.playerName.charAt(0).toUpperCase()}
+                        {p.isBot ? "🤖" : p.playerName.charAt(0).toUpperCase()}
                       </div>
                       <span className="flex-1 font-bold text-sm truncate flex items-center gap-1">
                         <span className="truncate">{p.playerName}</span>
+                        {p.isBot && <span className="text-[10px] bg-white/15 text-white/70 px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wide">Bot</span>}
                         {p.isPremium && <PremiumBadge size="xs" />}
                         {p.playerId === player?.id && <span className="text-white/40 text-xs ml-1">(tú)</span>}
                       </span>
@@ -1154,6 +1179,12 @@ export default function Room() {
                   </Button>
                 </Card>
                 {isHost && <StreamerModeCard room={room} playerId={player?.id ?? ""} />}
+                {isHost && players.filter((p: any) => p.isBot).length < 3 && (
+                  <Button variant="outline" size="lg" className="w-full border-white/20 text-white/80 hover:bg-white/10"
+                    onClick={handleAddBot} disabled={addBotLoading || players.length >= maxPlayers}>
+                    🤖 {addBotLoading ? "Añadiendo..." : "Añadir bot"}
+                  </Button>
+                )}
                 {isHost ? (
                   <Button size="xl" className="w-full shadow-xl border-2 border-white/20" onClick={handleStart}
                     disabled={players.length < 1}>
