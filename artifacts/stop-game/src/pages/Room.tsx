@@ -315,6 +315,24 @@ export default function Room() {
   const haptic = useHaptic();
   const [stopFlash, setStopFlash] = useState(false);
 
+  // 📚 First-multiplayer-game coachmark — shows ONCE when the player reaches
+  // the playing phase of their first online room. Dismisses on tap or as
+  // soon as they start typing. Persisted in localStorage so it never
+  // re-appears even across devices logged with the same player.
+  const MP_COACHMARK_KEY = "stop_ftue_mp_coachmark_v1";
+  const [showMpCoachmark, setShowMpCoachmark] = useState(false);
+  useEffect(() => {
+    if (phase !== "playing") return;
+    try {
+      if (localStorage.getItem(MP_COACHMARK_KEY) === "1") return;
+    } catch { return; }
+    setShowMpCoachmark(true);
+  }, [phase]);
+  const dismissMpCoachmark = useCallback(() => {
+    setShowMpCoachmark(false);
+    try { localStorage.setItem(MP_COACHMARK_KEY, "1"); } catch { /* noop */ }
+  }, []);
+
   // Presence + challenge/room-invite notifications while in lobby
   const { incomingChallenge, dismissChallenge } = usePresence(
     phase === "lobby" ? (player || null) : null,
@@ -909,6 +927,67 @@ export default function Room() {
 
   return (
     <Layout>
+      {/* 📚 First-multiplayer-game coachmark */}
+      <AnimatePresence>
+        {showMpCoachmark && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.25 }}
+            onClick={dismissMpCoachmark}
+            className="fixed inset-0 z-[90] flex flex-col items-center justify-center p-6 gap-4"
+            style={{ background: "rgba(6,3,24,0.78)", backdropFilter: "blur(4px)" }}
+          >
+            <motion.div
+              initial={{ y: -20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ delay: 0.1, type: "spring", bounce: 0.45 }}
+              className="max-w-xs rounded-2xl p-5 text-center"
+              style={{
+                background: "linear-gradient(135deg, #1a063a 0%, #5a1208 100%)",
+                border: "2px solid rgba(249,168,37,0.55)",
+                boxShadow: "0 12px 32px rgba(0,0,0,0.5)",
+              }}
+            >
+              <div className="text-4xl mb-2">📝</div>
+              <p className="text-white font-black text-lg mb-1" style={{ fontFamily: "'Baloo 2', sans-serif" }}>
+                Escribe palabras con la letra <span className="text-secondary">{currentLetter}</span>
+              </p>
+              <p className="text-white/70 text-sm">Una por cada categoría. Más originales = más puntos.</p>
+            </motion.div>
+
+            <motion.div
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ delay: 0.25, type: "spring", bounce: 0.45 }}
+              className="max-w-xs rounded-2xl p-5 text-center"
+              style={{
+                background: "linear-gradient(135deg, #5a1208 0%, #1a063a 100%)",
+                border: "2px solid rgba(220,38,38,0.6)",
+                boxShadow: "0 12px 32px rgba(0,0,0,0.5)",
+              }}
+            >
+              <div className="text-4xl mb-2">🛑</div>
+              <p className="text-white font-black text-lg mb-1" style={{ fontFamily: "'Baloo 2', sans-serif" }}>
+                Pulsa <span className="text-red-400">STOP</span> al acabar
+              </p>
+              <p className="text-white/70 text-sm">Tienes 60s. Quien para primero gana bonus de velocidad.</p>
+            </motion.div>
+
+            <motion.button
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.5 }}
+              onClick={dismissMpCoachmark}
+              className="mt-2 px-6 py-2.5 rounded-full bg-secondary text-black font-black text-sm"
+            >
+              ¡Vamos!
+            </motion.button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* 🛑 STOP press flash — full-screen red pulse for kinetic impact */}
       <AnimatePresence>
         {stopFlash && (
@@ -1139,6 +1218,7 @@ export default function Room() {
               Ronda {currentRound} de {maxRounds} · ¡Girando la letra!
             </p>
             <Roulette
+              muted={muted}
               isSpinning={true}
               targetLetter={currentLetter}
               onSpinComplete={() => {
@@ -1306,10 +1386,18 @@ export default function Room() {
               {roundCategories.map(cat => {
                 const isBluffed = bluffedCategories.has(cat);
                 const canBluff = !isBluffed && bluffedCategories.size >= 2;
+                const isFilled = !!responses[cat]?.trim();
                 return (
-                  <div key={cat} className="bg-card p-3 rounded-xl border transition-all"
+                  <motion.div
+                    key={cat}
+                    animate={{
+                      borderColor: isBluffed ? "#a855f7" : isFilled ? "rgba(74,222,128,0.55)" : "rgba(255,255,255,0.05)",
+                      boxShadow: isFilled && !isBluffed ? "0 0 0 1px rgba(74,222,128,0.35), 0 0 14px rgba(74,222,128,0.25)" : "0 0 0 0 rgba(0,0,0,0)",
+                      scale: isFilled ? 1.012 : 1,
+                    }}
+                    transition={{ type: "spring", stiffness: 400, damping: 25 }}
+                    className="bg-card p-3 rounded-xl border"
                     style={{
-                      borderColor: isBluffed ? "#a855f7" : "rgba(255,255,255,0.05)",
                       background: isBluffed ? "rgba(168,85,247,0.07)" : undefined,
                     }}
                   >
@@ -1330,13 +1418,18 @@ export default function Room() {
                     <Input
                       value={responses[cat] || ""}
                       onChange={e => {
-                        setResponses(r => ({ ...r, [cat]: e.target.value.toUpperCase() }));
+                        const next = e.target.value.toUpperCase();
+                        const wasEmpty = !(responses[cat]?.trim());
+                        const nowFilled = !!next.trim();
+                        setResponses(r => ({ ...r, [cat]: next }));
                         pingTyping();
+                        if (wasEmpty && nowFilled) haptic.select();
+                        if (showMpCoachmark) dismissMpCoachmark();
                       }}
                       placeholder={`${cat} con ${currentLetter}...`}
                       autoComplete="off" autoCorrect="off"
                     />
-                  </div>
+                  </motion.div>
                 );
               })}
             </div>

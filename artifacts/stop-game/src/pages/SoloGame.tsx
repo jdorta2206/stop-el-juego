@@ -1591,7 +1591,7 @@ export default function SoloGame() {
               </AnimatePresence>
 
               <h3 className="text-2xl font-display font-bold animate-pulse">{t.game.spinningLetter}</h3>
-              <Roulette isSpinning={true} targetLetter={currentLetter} onSpinComplete={handleSpinComplete} />
+              <Roulette muted={muted} isSpinning={true} targetLetter={currentLetter} onSpinComplete={handleSpinComplete} />
             </motion.div>
           )}
 

@@ -6,6 +6,7 @@ interface RouletteProps {
   onSpinComplete: (letter: string) => void;
   isSpinning: boolean;
   targetLetter?: string;
+  muted?: boolean;
 }
 
 // Vibrant color palette for wheel sectors - STOP brand colors
@@ -80,7 +81,7 @@ function buildSlicePath(cx: number, cy: number, r: number, startAngle: number, e
   return `M${cx},${cy} L${x1},${y1} A${r},${r} 0 ${largeArc},1 ${x2},${y2} Z`;
 }
 
-export function Roulette({ onSpinComplete, isSpinning, targetLetter }: RouletteProps) {
+export function Roulette({ onSpinComplete, isSpinning, targetLetter, muted = false }: RouletteProps) {
   const controls = useAnimationControls();
   const [displayLetter, setDisplayLetter] = useState<string | null>(null);
   const [isAnimating, setIsAnimating] = useState(false);
@@ -127,7 +128,7 @@ export function Roulette({ onSpinComplete, isSpinning, targetLetter }: RouletteP
       const tickInterval = Math.max(30, 50 + progress * 400);
       if (Date.now() - lastTickTime > tickInterval) {
         const volume = Math.max(0.05, 0.25 * (1 - progress));
-        playTickSound(audioCtx, volume);
+        if (!muted) playTickSound(audioCtx, volume);
         lastTickTime = Date.now();
         tickCount++;
       }
@@ -146,7 +147,7 @@ export function Roulette({ onSpinComplete, isSpinning, targetLetter }: RouletteP
       }
     }).then(() => {
       if (tickIntervalRef.current) clearTimeout(tickIntervalRef.current);
-      playWinSound(audioCtx);
+      if (!muted) playWinSound(audioCtx);
       setDisplayLetter(targetLetter);
       setTimeout(() => {
         setIsAnimating(false);
