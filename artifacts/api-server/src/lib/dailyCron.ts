@@ -193,21 +193,100 @@ async function sendSeasonClaimNotifications() {
   }
 }
 
-async function sendDailyNotifications() {
+// Three rotating variants per language so the player never sees the same
+// title twice in a row. Picked deterministically from the date so every
+// player in the same timezone sees the same variant on a given day.
+const DAILY_VARIANTS: Record<string, Array<{ title: string; body: string }>> = {
+  es: [
+    { title: "Tu reto STOP de hoy", body: "Misión nueva disponible. ¿Le ganas a la IA?" },
+    { title: "Te toca jugar", body: "Una partida rápida y avanzas en el Pase." },
+    { title: "Hora de tu STOP", body: "Tu racha sigue viva si juegas ahora." },
+  ],
+  en: [
+    { title: "Today's STOP challenge", body: "New mission ready. Can you beat the AI?" },
+    { title: "Time to play", body: "One quick game and you progress in the Pass." },
+    { title: "STOP time", body: "Your streak stays alive if you play now." },
+  ],
+  pt: [
+    { title: "O teu desafio STOP de hoje", body: "Missão nova disponível. Bates a IA?" },
+    { title: "Hora de jogar", body: "Um jogo rápido e avanças no Passe." },
+    { title: "Hora do teu STOP", body: "A tua sequência continua se jogares agora." },
+  ],
+  fr: [
+    { title: "Ton défi STOP du jour", body: "Nouvelle mission. Bats-tu l'IA ?" },
+    { title: "À toi de jouer", body: "Une partie rapide et tu avances dans le Pass." },
+    { title: "L'heure de ton STOP", body: "Ta série reste en vie si tu joues maintenant." },
+  ],
+};
+
+function variantForToday(lang: string): { title: string; body: string } {
+  const list = DAILY_VARIANTS[lang] ?? DAILY_VARIANTS.es;
+  // Day-of-year picks the variant — same across all subscriptions for the day.
+  const dayOfYear = Math.floor(
+    (Date.now() - Date.UTC(new Date().getUTCFullYear(), 0, 1)) / 86_400_000,
+  );
+  return list[dayOfYear % list.length];
+}
+
+interface SubscriptionWithPrefsRow {
+  player_id: string;
+  language: string;
+  hour_local: number;
+}
+
+// Per-user daily reminder. Runs every 5 minutes; for each subscription it
+// computes the player's local hour from (UTC now + tz_offset_minutes) and
+// fires when the local hour matches `hour_local`. Mute and disable are
+// filtered in SQL so the candidate set stays tiny.
+async function sendPerUserDailyNotifications() {
   try {
-    const totals = { sent: 0, failed: 0 };
-    for (const lang of LANGUAGES) {
-      const msg = DAILY_MSGS[lang];
-      const result = await sendPushToAllSubscribers(
-        { ...msg, icon: "/images/icon-192.png", badge: "/images/badge-96.png", url: "/reto" },
-        lang
-      );
-      totals.sent += result.sent;
-      totals.failed += result.failed;
+    const now = Date.now();
+    const utcNow = new Date(now);
+    const utcHour = utcNow.getUTCHours();
+    const utcMinute = utcNow.getUTCMinutes();
+
+    // SQL filters to the few players whose local hour is the current
+    // UTC hour right now, accounting for their stored offset.
+    // Postgres `%` on negative integers returns negative results, which
+    // would never match a 0–23 `hour_local`. We pre-add 10080 minutes
+    // (7 days, > max possible |tz_offset_minutes| = 14*60) so the dividend
+    // is always positive before mod — works for any timezone, including
+    // far-west offsets around UTC midnight.
+    const utcMinutesOfDay = utcHour * 60 + utcMinute;
+    const rows = (await db.execute(sql`
+      SELECT player_id, language, hour_local
+      FROM push_subscriptions
+      WHERE enabled = TRUE
+        AND muted_until < ${now}
+        AND hour_local = (((${utcMinutesOfDay}::int + tz_offset_minutes + 10080) / 60) % 24)
+        AND (((${utcMinutesOfDay}::int + tz_offset_minutes + 10080) % 60) < 5)
+      LIMIT 10000
+    `)) as unknown as { rows?: SubscriptionWithPrefsRow[] };
+
+    const candidates = rows.rows ?? [];
+    if (candidates.length === 0) return;
+
+    // Dedup per (player, lang) — a player may have multiple endpoints
+    // (e.g. phone + desktop). sendPushToPlayer hits every endpoint
+    // already, so we send the message once per player_id here.
+    const seen = new Set<string>();
+    let sent = 0;
+    for (const row of candidates) {
+      if (seen.has(row.player_id)) continue;
+      seen.add(row.player_id);
+      const lang = DAILY_VARIANTS[row.language] ? row.language : "es";
+      const msg = variantForToday(lang);
+      const n = await sendPushToPlayer(row.player_id, {
+        ...msg,
+        icon: "/images/icon-192.png",
+        badge: "/images/badge-96.png",
+        url: "/reto",
+      });
+      sent += n;
     }
-    console.log(`[dailyCron] Notifications sent: ${totals.sent}, failed: ${totals.failed}`);
+    console.log(`[dailyCron] Per-user daily sent: ${sent} (candidates: ${candidates.length})`);
   } catch (e) {
-    console.error("[dailyCron] Error sending daily notifications:", e);
+    console.error("[dailyCron] per-user error:", e);
   }
 }
 
@@ -220,14 +299,13 @@ export function startDailyCron() {
     const utcMinute = now.getUTCMinutes();
     const today = now.toISOString().slice(0, 10);
 
-    // 09:00–09:05 UTC → daily challenge announcement
-    if (utcHour === 9 && utcMinute < 5) {
-      const claimed = await claimDailyLock(today, CRON_KEY);
-      if (claimed) {
-        console.log(`[dailyCron] Lock claimed for ${today} — sending daily notifications`);
-        await sendDailyNotifications();
-      }
-    }
+    // Per-user daily reminder — fires every 5 min and filters in SQL to the
+    // subscriptions whose local hour matches now. Replaces the legacy
+    // 09:00 UTC blast which hit everyone at 10-11 a.m. CET regardless of
+    // their preferred time. No global lock: each (player, day) is safe to
+    // hit at most once because the 5-min window check on local minute
+    // ensures the same player only matches in one 5-min slice per day.
+    await sendPerUserDailyNotifications();
 
     // 19:00–19:05 UTC → streak rescue. 19:00 UTC was chosen because it
     // falls inside daytime/evening waking hours for every supported locale

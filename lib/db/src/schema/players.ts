@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, timestamp, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, timestamp, boolean, bigint } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -147,6 +147,17 @@ export const pushSubscriptionsTable = pgTable("push_subscriptions", {
   p256dh: text("p256dh").notNull(),
   auth: text("auth").notNull(),
   language: text("language").notNull().default("es"),
+  // Per-user notification preferences. Master switch + preferred local hour
+  // (0-23) for the daily reminder + UTC offset in minutes so the server can
+  // tell when "20:00 local" is for this player without storing a tz name.
+  // `mutedUntil` is epoch ms; 0 = not muted. Used by the "snooze 7 days"
+  // button. Defaults are tuned for a Spanish user (20:00 local) since that's
+  // the largest cohort; the client overwrites these on subscribe with the
+  // real values from `new Date().getTimezoneOffset()` and the user's pick.
+  enabled: boolean("enabled").notNull().default(true),
+  hourLocal: integer("hour_local").notNull().default(20),
+  tzOffsetMinutes: integer("tz_offset_minutes").notNull().default(0),
+  mutedUntil: bigint("muted_until", { mode: "number" }).notNull().default(0),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

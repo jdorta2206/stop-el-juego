@@ -47,6 +47,12 @@ export function usePushNotifications(playerId: string | undefined, language: str
         applicationServerKey: urlB64ToUint8Array(VAPID_PUBLIC),
       });
 
+      // `getTimezoneOffset()` returns positive minutes WEST of UTC; we flip
+      // the sign so the server sees offset minutes EAST (Madrid summer = +120).
+      // We send 20 as the FIRST-TIME default — the server's UPSERT keeps any
+      // previously chosen hour on resubscribe so toggling off/on doesn't
+      // reset the user's pick from /notificaciones.
+      const tzOffsetMinutes = -new Date().getTimezoneOffset();
       await fetch(`${API_BASE}/api/notifications/subscribe`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -54,6 +60,8 @@ export function usePushNotifications(playerId: string | undefined, language: str
           playerId: playerId || "anonymous",
           subscription: sub.toJSON(),
           language,
+          hourLocal: 20,
+          tzOffsetMinutes,
         }),
       });
 
@@ -66,6 +74,42 @@ export function usePushNotifications(playerId: string | undefined, language: str
       setLoading(false);
     }
   }, [playerId, language]);
+
+  // ── Preferences (hour, mute, enabled) ───────────────────────────────────
+  // Loaded lazily by the Settings page; not called on mount to avoid an
+  // extra round-trip for users who never visit the settings.
+  const getPreferences = useCallback(async (): Promise<{
+    enabled: boolean; hourLocal: number; mutedUntil: number; tzOffsetMinutes: number;
+  } | null> => {
+    if (!("serviceWorker" in navigator)) return null;
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      if (!sub) return null;
+      const res = await fetch(
+        `${API_BASE}/api/notifications/preferences?endpoint=${encodeURIComponent(sub.endpoint)}`,
+      );
+      if (!res.ok) return null;
+      return await res.json();
+    } catch { return null; }
+  }, []);
+
+  const updatePreferences = useCallback(async (patch: {
+    enabled?: boolean; hourLocal?: number; muteDays?: number;
+  }): Promise<boolean> => {
+    if (!("serviceWorker" in navigator)) return false;
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      if (!sub) return false;
+      const res = await fetch(`${API_BASE}/api/notifications/preferences`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ endpoint: sub.endpoint, ...patch }),
+      });
+      return res.ok;
+    } catch { return false; }
+  }, []);
 
   const unsubscribe = useCallback(async () => {
     if (!("serviceWorker" in navigator)) return;
@@ -91,5 +135,5 @@ export function usePushNotifications(playerId: string | undefined, language: str
 
   const isSupported = "Notification" in window && "serviceWorker" in navigator && !!VAPID_PUBLIC;
 
-  return { permission, isSubscribed, loading, subscribe, unsubscribe, isSupported };
+  return { permission, isSubscribed, loading, subscribe, unsubscribe, isSupported, getPreferences, updatePreferences };
 }

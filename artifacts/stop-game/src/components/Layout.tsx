@@ -247,6 +247,9 @@ export function Layout({ children }: { children: ReactNode }) {
           <Link href="/terms" className="text-white/40 hover:text-white/70 text-xs transition-colors">
             Términos
           </Link>
+          <Link href="/notificaciones" className="text-white/40 hover:text-white/70 text-xs transition-colors">
+            {lang === "en" ? "Notifications" : lang === "pt" ? "Notificações" : lang === "fr" ? "Notifications" : "Notificaciones"}
+          </Link>
           <a
             href="mailto:stopeljuegodepalabras@gmail.com"
             className="text-white/40 hover:text-white/70 text-xs transition-colors"

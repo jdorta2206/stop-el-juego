@@ -45,6 +45,16 @@ export async function ensureIndexes(): Promise<void> {
     // ── push_subscriptions ───────────────────────────────────────────
     `CREATE INDEX IF NOT EXISTS push_subscriptions_player_id_idx
        ON push_subscriptions (player_id)`,
+    // Per-user notification preferences. Idempotent ADDs so a fresh boot
+    // brings legacy rows up to spec without a manual migration.
+    `ALTER TABLE push_subscriptions
+       ADD COLUMN IF NOT EXISTS enabled boolean NOT NULL DEFAULT TRUE`,
+    `ALTER TABLE push_subscriptions
+       ADD COLUMN IF NOT EXISTS hour_local integer NOT NULL DEFAULT 20`,
+    `ALTER TABLE push_subscriptions
+       ADD COLUMN IF NOT EXISTS tz_offset_minutes integer NOT NULL DEFAULT 0`,
+    `ALTER TABLE push_subscriptions
+       ADD COLUMN IF NOT EXISTS muted_until bigint NOT NULL DEFAULT 0`,
 
     // ── tournaments ──────────────────────────────────────────────────
     `CREATE INDEX IF NOT EXISTS tournaments_is_public_status_created_at_desc_idx
