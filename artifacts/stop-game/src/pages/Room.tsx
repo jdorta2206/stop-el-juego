@@ -4,6 +4,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
 import { Layout } from "@/components/Layout";
 import { PremiumBadge } from "@/components/PremiumBadge";
+import { PremiumAvatar } from "@/components/PremiumAvatar";
+import { PlayerEntranceToast } from "@/components/PlayerEntranceToast";
 import { usePremium } from "@/lib/usePremium";
 import { useFollows } from "@/lib/useFollows";
 import { FollowButton } from "@/components/FollowButton";
@@ -951,6 +953,9 @@ export default function Room() {
 
   return (
     <Layout>
+      {/* ✨ Entrance animation when a new player joins (Premium = golden burst) */}
+      <PlayerEntranceToast players={players} meId={player?.id} />
+
       {/* 📚 First-multiplayer-game coachmark */}
       <AnimatePresence>
         {showMpCoachmark && (
@@ -1147,13 +1152,13 @@ export default function Room() {
                 <div className="space-y-2 max-h-60 overflow-y-auto">
                   {players.map((p: any) => (
                     <div key={p.playerId} className="flex items-center gap-3 bg-black/20 p-2.5 rounded-xl">
-                      <div className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-white text-sm relative"
-                        style={{
-                          backgroundColor: p.avatarColor || "#555",
-                          boxShadow: p.isPremium ? "0 0 0 2px #fde047, 0 0 10px rgba(250,204,21,0.65)" : undefined,
-                        }}>
-                        {p.isBot ? "🤖" : p.playerName.charAt(0).toUpperCase()}
-                      </div>
+                      <PremiumAvatar
+                        name={p.playerName}
+                        color={p.avatarColor || "#555"}
+                        isPremium={p.isPremium}
+                        isBot={p.isBot}
+                        size="sm"
+                      />
                       <span className="flex-1 font-bold text-sm truncate flex items-center gap-1">
                         <span className="truncate">{p.playerName}</span>
                         {p.isBot && <span className="text-[10px] bg-white/15 text-white/70 px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wide">Bot</span>}
