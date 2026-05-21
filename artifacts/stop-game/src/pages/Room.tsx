@@ -19,6 +19,8 @@ import { ChallengeNotification } from "@/components/ChallengeNotification";
 import { usePresence } from "@/lib/usePresence";
 import { Roulette } from "@/components/Roulette";
 import { useTicker } from "@/hooks/useTicker";
+import { useSound } from "@/hooks/useSound";
+import { useHaptic } from "@/hooks/useHaptic";
 import { ShareResultsModal } from "@/components/ShareResultsModal";
 import { getApiUrl } from "@/lib/utils";
 import { saveActiveRoom, clearActiveRoom, touchActiveRoom } from "@/lib/activeRoom";
@@ -308,6 +310,9 @@ export default function Room() {
 
   // Ticking sound — only active during PLAYING phase
   const { toggleMute } = useTicker(timeLeft, ROUND_TIME, phase === "playing" && !muted);
+  const sound = useSound(muted);
+  const haptic = useHaptic();
+  const [stopFlash, setStopFlash] = useState(false);
 
   // Presence + challenge/room-invite notifications while in lobby
   const { incomingChallenge, dismissChallenge } = usePresence(
@@ -505,6 +510,8 @@ export default function Room() {
   const submitResults = useCallback(async (score: number, isStopper = false) => {
     if (hasSubmittedRef.current || !player || !roomCode) return;
     hasSubmittedRef.current = true;
+    sound.playCorrect();
+    haptic.submit();
     setPhase("submitted");
     const bluffedList = [...bluffedCategoriesRef.current];
     // Build bluffedWords map: category → what the player wrote
@@ -701,6 +708,11 @@ export default function Room() {
       const iWon = !!(winnerId && winnerId === player?.id && players.length > 1);
       if (iWon) {
         confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
+        sound.playWin();
+        haptic.win();
+      } else if (players.length > 1) {
+        sound.playLose();
+        haptic.lose();
       }
       // Count this finished multiplayer game toward review-prompt
       // eligibility (idempotent per match via the ref). Show the prompt
@@ -772,6 +784,8 @@ export default function Room() {
         setBluffVoteTimeLeft(15);
         if (bluffVoteTimerRef.current) { clearInterval(bluffVoteTimerRef.current); bluffVoteTimerRef.current = null; }
         setTimeLeft(ROUND_TIME);
+        sound.playRoundStart();
+        haptic.tap();
         setPhase("spinning");
       }
       return;
@@ -816,6 +830,12 @@ export default function Room() {
 
   const handleStop = async () => {
     if (phase !== "playing" || isStopping || !player || !roomCode) return;
+    // 🛑 Punchy feedback BEFORE the network call so the press feels instant
+    // even on slow connections. Sound + heavy haptic + screen flash.
+    sound.playStop();
+    haptic.stopHit();
+    setStopFlash(true);
+    setTimeout(() => setStopFlash(false), 220);
     setIsStopping(true);
     try {
       await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/stop`, {
@@ -888,6 +908,19 @@ export default function Room() {
 
   return (
     <Layout>
+      {/* 🛑 STOP press flash — full-screen red pulse for kinetic impact */}
+      <AnimatePresence>
+        {stopFlash && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 0.55 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.12 }}
+            className="fixed inset-0 z-[100] pointer-events-none bg-red-500"
+          />
+        )}
+      </AnimatePresence>
+
       {/* Room-invite / challenge notifications while in lobby */}
       <AnimatePresence>
         {incomingChallenge && (
