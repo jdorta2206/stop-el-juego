@@ -103,6 +103,17 @@ async function isPlayerPremium(playerId: string | null | undefined): Promise<boo
 type SseClient = { res: import("express").Response; playerId: string };
 const sseClients = new Map<string, Set<SseClient>>();
 
+// 🛰️ Presence: a player is "online" if they currently have an open SSE
+// connection to this room. Used by the stuck-sweep in /results so a player
+// who closed the tab is auto-skipped immediately instead of stalling the
+// round for the whole grace window.
+function isPlayerOnline(code: string, playerId: string): boolean {
+  const set = sseClients.get(code);
+  if (!set || set.size === 0) return false;
+  for (const c of set) if (c.playerId === playerId) return true;
+  return false;
+}
+
 function broadcastRoom(code: string, roomPayload: object) {
   const clients = sseClients.get(code);
   if (!clients || clients.size === 0) return;
@@ -402,6 +413,17 @@ async function purgeStaleRooms() {
     console.error("[purgeStaleRooms] failed:", (err as Error).message);
   }
 }
+
+// 🧹 Background cleanup: run once at boot and every 30 min thereafter. The
+// /public endpoint also calls this opportunistically, but private rooms
+// never hit /public — without this interval the `rooms` table would grow
+// unbounded on instances that only serve invited games.
+// 🔁 Guard against tsx hot-reload duplicating intervals across module re-evals.
+const PURGE_TIMER_KEY = "__stopPurgeRoomsTimer";
+const g = globalThis as any;
+if (g[PURGE_TIMER_KEY]) clearInterval(g[PURGE_TIMER_KEY]);
+purgeStaleRooms().catch(() => {});
+g[PURGE_TIMER_KEY] = setInterval(() => { purgeStaleRooms().catch(() => {}); }, 30 * 60 * 1000);
 
 // GET /rooms/public — list open public rooms (also purges stale rooms)
 // Sanitize a formatted room for public spectator/overlay views.
@@ -759,12 +781,32 @@ router.post("/:roomCode/leave", async (req, res) => {
     const leaving = players.find((p: any) => p.playerId === playerId);
     if (!leaving) return { kind: "noop" } as const;
 
-    // Whitelist: only the lobby is safe to mutate. Any other status (playing,
-    // stopping, revealing, bluffvoting, stopped, finished, …) means a round
-    // is in flight and rewriting `playersJson` would desync scores. The
-    // client just shows the player as offline until the round resolves.
+    // 👑 Mid-game host migration: if the host leaves while a round is in
+    // flight, we can't safely rewrite `playersJson` (would desync scores),
+    // but we MUST move the host badge to someone else — otherwise the room
+    // becomes a zombie that nobody can restart, rematch, or close. We do a
+    // minimal mutation: only `hostId`/`hostName` change, and we flip the
+    // `isHost` flag inside playersJson without touching scores or answers.
     if (status !== "waiting") {
-      return { kind: "noop" } as const;
+      if (!leaving.isHost) return { kind: "noop" } as const;
+      const others = players.filter((p: any) => p.playerId !== playerId);
+      if (others.length === 0) return { kind: "noop" } as const;
+      const newHost = others[0];
+      const migrated = players.map((p: any) => ({
+        ...p,
+        isHost: p.playerId === newHost.playerId,
+      }));
+      const updated = await tx
+        .update(roomsTable)
+        .set({
+          playersJson: JSON.stringify(migrated),
+          hostId: newHost.playerId,
+          hostName: newHost.playerName ?? "",
+          updatedAt: new Date(),
+        } as any)
+        .where(eq(roomsTable.roomCode, code))
+        .returning();
+      return { kind: "updated", row: updated[0], newHostId: newHost.playerId } as const;
     }
 
     const remaining = players.filter((p: any) => p.playerId !== playerId);
@@ -1284,7 +1326,17 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
   // answers scored normally — we never zero out an honest submission just
   // because their request was slow. Only the sweep below zeros players
   // who never sent anything.
-  const SUBMIT_GRACE_MS = 45_000;
+  // 🛡️ Anti-cheat: bounded window. Honest client freezes 3s after STOP and
+  // submits immediately. 15s is generous enough for mobile networks with
+  // multi-second hiccups but still short enough that a tampered client can't
+  // keep typing words for 30+ seconds. Any /results that arrives after this
+  // cutoff is accepted but scored ZERO (see hard cutoff below) — the player
+  // can't gain points by stalling.
+  const SUBMIT_GRACE_MS = 15_000;
+  // Buffer for SSE flicker / mobile reconnects: we won't auto-zero a player
+  // for "offline" until at least this long after STOP. Prevents false
+  // negatives from one-off socket drops on flaky networks.
+  const PRESENCE_GRACE_MS = 4_000;
   const stopMeta = parseBluffMeta(room.stopperJson);
   const stopTimestamp: number | undefined =
     stopMeta?.stopTimestamp ?? stopMeta?.stopper?.stopTimestamp;
@@ -1344,6 +1396,14 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
     cappedRoundScore = Math.max(0, cappedRoundScore - 10);
   }
 
+  // 🛡️ Anti-cheat hard cutoff: submissions that arrive AFTER the grace window
+  // score zero. A tampered client that buffered extra words past STOP can't
+  // benefit because waiting past the cutoff zeroes them anyway. Honest clients
+  // freeze for 3s and submit immediately, so they comfortably beat the 8s.
+  if (stopTimestamp && Date.now() - stopTimestamp > SUBMIT_GRACE_MS) {
+    cappedRoundScore = 0;
+  }
+
   const finishedAt = Date.now();
   const updatedPlayers = players.map((p: any) => {
     if (p.playerId === playerId) {
@@ -1363,15 +1423,30 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
     return p;
   });
 
-  // 🧹 Stuck-player sweep: if STOP was called and the grace window expired,
-  // mark any non-ready player as ready with 0 points so the round advances
-  // even if their /results request never arrived (network drop, app killed…).
+  // 🧹 Stuck-player sweep: if STOP was called, mark non-ready players as
+  // ready with 0 points so the round advances. Two trigger conditions:
+  //   1. Grace window expired → zero everyone still pending (failsafe).
+  //   2. Player has no live SSE connection → zero immediately (they closed
+  //      the tab / lost network) instead of stalling the whole table for 8s.
+  const codeUpper = roomCode.toUpperCase();
   const sweptPlayers = (() => {
     if (!stopTimestamp) return updatedPlayers;
-    if (Date.now() - stopTimestamp <= SUBMIT_GRACE_MS) return updatedPlayers;
-    return updatedPlayers.map((p: any) =>
-      p.isReady ? p : { ...p, isReady: true, roundScore: 0, finishedAt: Date.now() }
-    );
+    const sinceStop = Date.now() - stopTimestamp;
+    const gracePassed = sinceStop > SUBMIT_GRACE_MS;
+    // Only treat "offline" as fatal AFTER the presence buffer: a one-second
+    // SSE blip on a 4G network shouldn't zero a player whose /results is
+    // already on the wire.
+    const presenceArmed = sinceStop > PRESENCE_GRACE_MS;
+    return updatedPlayers.map((p: any) => {
+      if (p.isReady) return p;
+      if (gracePassed) {
+        return { ...p, isReady: true, roundScore: 0, finishedAt: Date.now() };
+      }
+      if (presenceArmed && !isPlayerOnline(codeUpper, p.playerId)) {
+        return { ...p, isReady: true, roundScore: 0, finishedAt: Date.now() };
+      }
+      return p;
+    });
   })();
 
   const allReady = sweptPlayers.every((p: any) => p.isReady);
