@@ -9,6 +9,7 @@ import {
   pickBotIdentity,
   makeBotPlayer,
   scheduleBotsForRound,
+  resolveCategoriesForRound,
   rushBotSubmits,
   clearBotTimers,
 } from "../lib/multiplayerBot";
@@ -768,9 +769,17 @@ router.post("/:roomCode/start", async (req, res) => {
   // realistic delay (25-50s).
   const botsInRoom = resetPlayers.filter((p: any) => p.isBot);
   if (botsInRoom.length > 0) {
+    const updatedRoom = updateResult[0];
+    const pack = (roomCategoryPacks.get(roomCode.toUpperCase()) ?? "standard") as "standard" | "crazy" | "mix";
+    const letterForRound = (updatedRoom.currentLetter ?? "A").toUpperCase();
+    const roundForRound = updatedRoom.currentRound ?? newRound;
+    const categories = resolveCategoriesForRound(pack, letterForRound, roundForRound);
     scheduleBotsForRound({
       roomCode: roomCode.toUpperCase(),
       bots: botsInRoom.map((b: any) => ({ playerId: b.playerId })),
+      letter: letterForRound,
+      categories,
+      round: roundForRound,
       deps: botDeps,
     });
   }

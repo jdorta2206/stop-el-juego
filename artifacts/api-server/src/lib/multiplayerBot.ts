@@ -19,6 +19,116 @@
 import { db } from "@workspace/db";
 import { roomsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
+import OpenAI from "openai";
+
+// ── LLM-backed answer generation ──────────────────────────────────────────
+// Bots used to pick random nouns from a hand-curated bank ignoring the round
+// category. That worked but felt obviously stupid ("lápiz" submitted for the
+// "Animal" category). With an LLM call per bot per round we get actually
+// plausible category-specific Spanish answers, capped by a tight quota so
+// the spend stays under a euro per month even at higher engagement.
+const LLM_MODEL = "gpt-5-mini";
+// Hard caps. 3 bots × ~3 rounds × ~30 games/day = 270 calls. 500 leaves
+// headroom and matches the budget shape used by aiWordValidator.ts.
+const LLM_GLOBAL_DAILY_LIMIT = 500;
+let llmCounterDay = new Date().toISOString().slice(0, 10);
+let llmGlobalCounter = 0;
+function bumpAndCheckLlmQuota(): boolean {
+  const today = new Date().toISOString().slice(0, 10);
+  if (today !== llmCounterDay) { llmCounterDay = today; llmGlobalCounter = 0; }
+  if (llmGlobalCounter >= LLM_GLOBAL_DAILY_LIMIT) return false;
+  llmGlobalCounter += 1;
+  return true;
+}
+let _llmClient: OpenAI | null = null;
+function getLlmClient(): OpenAI | null {
+  if (_llmClient) return _llmClient;
+  const baseURL = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL;
+  const apiKey = process.env.AI_INTEGRATIONS_OPENAI_API_KEY;
+  if (!baseURL || !apiKey) return null;
+  _llmClient = new OpenAI({ baseURL, apiKey });
+  return _llmClient;
+}
+
+async function generateBotAnswersLLM(
+  letter: string,
+  categories: string[],
+): Promise<Record<string, string> | null> {
+  const client = getLlmClient();
+  if (!client) return null;
+  if (!bumpAndCheckLlmQuota()) return null;
+  const L = letter.toUpperCase();
+  // Variety knob: bots intentionally miss a few categories so they don't
+  // always score 100%. Asking for 60-90% fillrate produces more human-feel.
+  const fillRate = 0.6 + Math.random() * 0.3;
+  const targetCount = Math.max(1, Math.round(categories.length * fillRate));
+  const prompt = [
+    `Eres un jugador de STOP (Scattergories) en español.`,
+    `Letra de la ronda: "${L}".`,
+    `Categorías: ${JSON.stringify(categories)}.`,
+    `Devuelve ${targetCount} respuestas (NO más). Reglas:`,
+    `- Cada respuesta DEBE empezar por la letra ${L} (mayúscula o minúscula da igual).`,
+    `- Una sola palabra o nombre corto (máx 3 palabras).`,
+    `- Palabras comunes que un hispanohablante reconozca, no inventos.`,
+    `- Una respuesta por categoría como mucho; deja fuera las que no sepas.`,
+    `- Responde SOLO con JSON válido: {"NombreCategoria": "palabra", ...}.`,
+  ].join("\n");
+  try {
+    const completion = await Promise.race([
+      client.chat.completions.create({
+        model: LLM_MODEL,
+        messages: [{ role: "user", content: prompt }],
+        response_format: { type: "json_object" },
+      }),
+      new Promise<never>((_, rej) => setTimeout(() => rej(new Error("timeout")), 8000)),
+    ]);
+    const raw = (completion as any).choices?.[0]?.message?.content;
+    if (typeof raw !== "string") return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return null;
+    const out: Record<string, string> = {};
+    for (const cat of categories) {
+      const val = (parsed as Record<string, unknown>)[cat];
+      if (typeof val === "string" && val.trim().length > 0) {
+        const word = val.trim().slice(0, 60);
+        if (stripAccents(word).toUpperCase().startsWith(L)) out[cat] = word;
+      }
+    }
+    return Object.keys(out).length > 0 ? out : null;
+  } catch (err) {
+    console.warn("[bot] LLM generation failed:", (err as Error).message ?? err);
+    return null;
+  }
+}
+
+// roomCode → botPlayerId → { round, letter, answers } ready for the round.
+// Tagged with round+letter so a late-resolving LLM promise from a previous
+// round can never bleed into the next one (race seen in code review).
+type PendingEntry = { round: number; letter: string; answers: Record<string, string> };
+const botPendingAnswers = new Map<string, Map<string, PendingEntry>>();
+function setPendingAnswers(code: string, botId: string, entry: PendingEntry) {
+  let m = botPendingAnswers.get(code);
+  if (!m) { m = new Map(); botPendingAnswers.set(code, m); }
+  m.set(botId, entry);
+}
+function getPendingAnswers(
+  code: string, botId: string, round: number, letter: string,
+): Record<string, string> | null {
+  const e = botPendingAnswers.get(code)?.get(botId);
+  if (!e) return null;
+  if (e.round !== round) return null;
+  if (e.letter.toUpperCase() !== letter.toUpperCase()) return null;
+  return e.answers;
+}
+function clearPendingAnswers(code: string) {
+  botPendingAnswers.delete(code);
+}
+
+// Strip Spanish accents so "Águila" passes the "starts with A" check, in
+// line with how the scoring layer normalizes user submissions.
+function stripAccents(s: string): string {
+  return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
 
 // ── Bot identities ────────────────────────────────────────────────────────
 // Short, memorable names. Colors picked to be visually distinct from the
@@ -112,9 +222,52 @@ function trackTimer(code: string, t: NodeJS.Timeout) {
 
 export function clearBotTimers(code: string) {
   const set = roomBotTimers.get(code);
-  if (!set) return;
-  for (const t of set) clearTimeout(t);
-  roomBotTimers.delete(code);
+  if (set) {
+    for (const t of set) clearTimeout(t);
+    roomBotTimers.delete(code);
+  }
+  // NOTE: pending LLM answers are intentionally NOT cleared here.
+  // rushBotSubmits() calls clearBotTimers to cancel the long 25-50s timers
+  // when a human STOPs early — but bots still need to consume the
+  // pregenerated LLM answers in that flow. Pending answers are cleared
+  // explicitly at the start of every new round (scheduleBotsForRound) and
+  // on full room cleanup (cleanupBotRoom).
+}
+
+// Full cleanup — call when a room is destroyed (last player /leave delete).
+export function cleanupBotRoom(code: string) {
+  clearBotTimers(code);
+  clearPendingAnswers(code);
+}
+
+// ── Category resolution (server mirror of the client packs) ───────────────
+// Kept in sync with artifacts/stop-game/src/pages/Room.tsx (CATEGORIES_ES +
+// CRAZY_CATEGORIES_ES + computeCategories). Small acceptable duplication so
+// the bot can ask the LLM with the SAME category names humans see.
+const STANDARD_CATEGORIES_ES = [
+  "Nombre", "Lugar", "Animal", "Objeto", "Color", "Fruta", "Marca",
+];
+const CRAZY_CATEGORIES_ES = [
+  "Excusa para llegar tarde", "Película que finges haber visto", "Animal que querrías de mascota",
+  "Cosa que no debes decir en una cita", "Superhéroe inventado", "Profesión del futuro",
+  "Cosa que encuentras bajo el sofá", "Deporte que nunca se inventó",
+];
+
+export function resolveCategoriesForRound(
+  pack: "standard" | "crazy" | "mix" | undefined,
+  letter: string,
+  round: number,
+): string[] {
+  if (pack === "crazy") return CRAZY_CATEGORIES_ES;
+  if (pack === "mix") {
+    const seed = (letter || "A").charCodeAt(0) * 31 + (round || 1) * 7;
+    const mixed = [...STANDARD_CATEGORIES_ES];
+    const idx = seed % mixed.length;
+    const crazyIdx = seed % CRAZY_CATEGORIES_ES.length;
+    mixed[idx] = CRAZY_CATEGORIES_ES[crazyIdx];
+    return mixed;
+  }
+  return STANDARD_CATEGORIES_ES;
 }
 
 // ── Word generation per round ─────────────────────────────────────────────
@@ -177,18 +330,23 @@ async function performBotSubmit(
       newStatus = "stopped";
     }
 
-    // Compose bot answers — use real category names from the latest human
-    // submission if available, otherwise generic cat_0..N keys (which the
-    // client doesn't show but the server score is still correct).
+    // Compose bot answers — prefer the LLM-pregenerated set from round
+    // start (category-aware), fall back to the random word bank if the LLM
+    // call failed or quota was exceeded.
     const letter = (room.currentLetter ?? "A").toUpperCase();
     const sampleCats = (() => {
       const human = players.find(p => !p.isBot && p.answers && typeof p.answers === "object");
       if (human?.answers) return Object.keys(human.answers);
       return ["cat_0","cat_1","cat_2","cat_3","cat_4","cat_5","cat_6"];
     })();
-    const words = pickWordsForRound(letter, sampleCats.length);
-    const answers: Record<string, string> = {};
-    words.forEach((w, i) => { if (sampleCats[i]) answers[sampleCats[i]] = w; });
+    let answers: Record<string, string> = {};
+    const pregen = getPendingAnswers(code, botPlayerId, room.currentRound ?? 0, letter);
+    if (pregen && Object.keys(pregen).length > 0) {
+      answers = pregen;
+    } else {
+      const words = pickWordsForRound(letter, sampleCats.length);
+      words.forEach((w, i) => { if (sampleCats[i]) answers[sampleCats[i]] = w; });
+    }
     // 🛡️ Mirror server scoring rules (unique per-letter only). Dedupes any
     // accidental duplicates in the bank so the bot can never out-score itself
     // by saying the same word twice.
@@ -300,9 +458,31 @@ async function performBotSubmit(
 export function scheduleBotsForRound(opts: {
   roomCode: string;
   bots: { playerId: string }[];
+  letter: string;
+  categories: string[];
   deps: BotActionDeps;
+  round: number;
 }) {
   clearBotTimers(opts.roomCode);
+  // Wipe any leftover LLM answers from a previous round so a late-resolving
+  // promise from round N-1 can't be served in round N. The round+letter
+  // tag on each pending entry is a second line of defence inside
+  // getPendingAnswers.
+  clearPendingAnswers(opts.roomCode);
+  // 🧠 Fire LLM generation in the background per bot at round start. Each
+  // bot gets a DIFFERENT result because gpt-5-mini varies with temperature
+  // (no caching), so the table doesn't see identical answers. If the LLM
+  // call doesn't return by the time the bot acts, performBotSubmit falls
+  // back to the static word bank.
+  const round = opts.round;
+  const letter = opts.letter;
+  for (const b of opts.bots) {
+    generateBotAnswersLLM(letter, opts.categories)
+      .then(answers => {
+        if (answers) setPendingAnswers(opts.roomCode, b.playerId, { round, letter, answers });
+      })
+      .catch(() => {});
+  }
   for (const b of opts.bots) {
     const delay = 25_000 + Math.random() * 25_000; // 25-50s
     const t = setTimeout(() => {
