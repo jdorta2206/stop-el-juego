@@ -21,6 +21,7 @@ import { Roulette } from "@/components/Roulette";
 import { useTicker } from "@/hooks/useTicker";
 import { ShareResultsModal } from "@/components/ShareResultsModal";
 import { getApiUrl } from "@/lib/utils";
+import { saveActiveRoom, clearActiveRoom, touchActiveRoom } from "@/lib/activeRoom";
 import { useT } from "@/i18n/useT";
 import { useToast } from "@/hooks/use-toast";
 import { useReviewPrompt, recordGamePlayed } from "@/hooks/useReviewPrompt";
@@ -215,6 +216,68 @@ export default function Room() {
     };
   }, [roomCode, player?.id, queryClient]);
 
+  // 🔁 Persist the active room so a closed app / dropped network can find
+  // its way back. Saved on mount, refreshed on every round change, cleared
+  // when the game finishes naturally (the leave handler also clears it for
+  // lobby exits — see leaveRoom below).
+  useEffect(() => {
+    if (!roomCode || !player?.id) return;
+    saveActiveRoom(roomCode.toUpperCase(), player.id);
+  }, [roomCode, player?.id]);
+  useEffect(() => {
+    if (!roomCode) return;
+    touchActiveRoom();
+  }, [roomCode, (room as any)?.currentRound, (room as any)?.status]);
+
+  // 🏁 Clear the saved active room when the game ends naturally so the
+  // "Volver a la partida" banner on /multiplayer doesn't keep pointing to
+  // a finished room.
+  useEffect(() => {
+    if ((room as any)?.status === "finished") clearActiveRoom();
+  }, [(room as any)?.status]);
+
+  // 🛟 Draft recovery: if /typing was sending live responses before the
+  // disconnect, the server kept them in memory. On mount (and whenever the
+  // round changes), fetch our own draft and merge it in if local state is
+  // empty — never overwrites words the user is currently typing.
+  const draftHydratedRef = useRef<string>("");
+  useEffect(() => {
+    if (!roomCode || !player?.id) return;
+    const status = (room as any)?.status;
+    const currentRound = (room as any)?.currentRound;
+    const letter = (room as any)?.currentLetter;
+    if (status !== "playing" || !letter || currentRound == null) return;
+    const key = `${currentRound}:${letter}`;
+    if (draftHydratedRef.current === key) return;
+    const haveLocal = Object.values(responsesRef.current).some(v => (v ?? "").trim().length > 0);
+    if (haveLocal) { draftHydratedRef.current = key; return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const url = `${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/draft?playerId=${encodeURIComponent(player.id)}`;
+        const r = await fetch(url);
+        if (!r.ok) return;
+        const data = await r.json() as { responses?: Record<string, string>; round?: number; letter?: string };
+        if (cancelled) return;
+        if (data?.round !== currentRound) return;
+        if ((data?.letter ?? "").toUpperCase() !== String(letter).toUpperCase()) return;
+        const incoming = data.responses ?? {};
+        if (Object.keys(incoming).length === 0) return;
+        // Merge: never clobber a non-empty local value the user just typed.
+        setResponses(prev => {
+          const merged = { ...prev };
+          for (const [cat, val] of Object.entries(incoming)) {
+            if (!merged[cat] || merged[cat].trim().length === 0) merged[cat] = val;
+          }
+          responsesRef.current = merged;
+          return merged;
+        });
+        draftHydratedRef.current = key;
+      } catch {}
+    })();
+    return () => { cancelled = true; };
+  }, [roomCode, player?.id, (room as any)?.status, (room as any)?.currentRound, (room as any)?.currentLetter]);
+
   // Call the leave endpoint — only while in lobby; host leaving deletes room
   const leaveRoom = useCallback(() => {
     // Only clean up if still in lobby; game-in-progress rooms stay alive
@@ -232,6 +295,7 @@ export default function Room() {
     if (!playerId) return;
 
     hasLeftRef.current = true;
+    clearActiveRoom();
     const url = `${getApiUrl()}/api/rooms/${code.toUpperCase()}/leave`;
     const body = JSON.stringify({ playerId });
     // sendBeacon works even when the page is being unloaded

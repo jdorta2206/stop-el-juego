@@ -9,6 +9,7 @@ import { InviteFriends } from "@/components/InviteFriends";
 import { Users, Plus, LogIn, UserPlus, Globe, Lock, RefreshCw, Flag } from "lucide-react";
 import { useT } from "@/i18n/useT";
 import { getCurrentLang, getApiUrl } from "@/lib/utils";
+import { loadActiveRoom, clearActiveRoom } from "@/lib/activeRoom";
 import { AnimatePresence, motion } from "framer-motion";
 
 interface PublicRoom {
@@ -38,9 +39,63 @@ export default function Multiplayer() {
   const [maxPlayers, setMaxPlayers] = useState(8);
   const [publicRooms, setPublicRooms] = useState<PublicRoom[]>([]);
   const [loadingPublic, setLoadingPublic] = useState(false);
+  const [resumeCode, setResumeCode] = useState<string | null>(null);
+  const [resuming, setResuming] = useState(false);
 
   const createMutation = useCreateRoom();
   const joinMutation = useJoinRoom();
+
+  // 🛟 Resume banner: if the player has a recent active room saved (closed app,
+  // lost connection, switched device), offer one-tap rejoin. Validates against
+  // the server first — if the room is gone or they're not a member, we clear
+  // the stale pointer silently so we never show a dead button.
+  useEffect(() => {
+    if (!player) return;
+    const saved = loadActiveRoom();
+    if (!saved || saved.playerId !== player.id) {
+      if (saved && saved.playerId !== player.id) clearActiveRoom();
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch(`${getApiUrl()}/api/rooms/${saved.code}`);
+        if (!r.ok) { clearActiveRoom(); return; }
+        const room = await r.json() as { status?: string; players?: Array<{ playerId: string }> };
+        if (cancelled) return;
+        if (room?.status === "finished") { clearActiveRoom(); return; }
+        const isMember = (room?.players ?? []).some(p => p.playerId === player.id);
+        if (!isMember) { clearActiveRoom(); return; }
+        setResumeCode(saved.code);
+      } catch { /* network error — leave the saved pointer alone, retry next mount */ }
+    })();
+    return () => { cancelled = true; };
+  }, [player?.id]);
+
+  const handleResume = async () => {
+    if (!player || !resumeCode || resuming) return;
+    setResuming(true);
+    try {
+      await joinMutation.mutateAsync({
+        roomCode: resumeCode,
+        data: {
+          playerId: player.id,
+          playerName: player.name,
+          avatarColor: player.avatarColor,
+        } as import("@workspace/api-client-react").JoinRoomRequest & { loginMethod?: string | null },
+      });
+      setLocation(`/room/${resumeCode}`);
+    } catch {
+      clearActiveRoom();
+      setResumeCode(null);
+      setResuming(false);
+    }
+  };
+
+  const dismissResume = () => {
+    clearActiveRoom();
+    setResumeCode(null);
+  };
 
   const loadPublicRooms = async () => {
     setLoadingPublic(true);
@@ -177,6 +232,33 @@ export default function Multiplayer() {
           <div className="bg-red-500/20 text-white border border-red-500 p-4 rounded-xl w-full text-center font-bold">
             {error}
           </div>
+        )}
+
+        {resumeCode && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="rounded-xl border border-secondary/40 bg-secondary/10 p-4 flex items-center gap-3"
+          >
+            <div className="flex-1">
+              <p className="text-sm text-white/80 font-bold">Tienes una partida activa</p>
+              <p className="text-xs text-white/60 font-mono">Sala {resumeCode}</p>
+            </div>
+            <button
+              onClick={handleResume}
+              disabled={resuming}
+              className="px-4 py-2 rounded-lg bg-secondary text-black font-bold text-sm disabled:opacity-60"
+            >
+              {resuming ? "..." : "Volver"}
+            </button>
+            <button
+              onClick={dismissResume}
+              className="px-2 py-2 text-white/50 hover:text-white text-sm"
+              aria-label="Descartar"
+            >
+              ✕
+            </button>
+          </motion.div>
         )}
 
         {player && <OnlineFriends player={player} />}

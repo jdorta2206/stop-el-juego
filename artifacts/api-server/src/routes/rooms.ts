@@ -1049,6 +1049,37 @@ router.post("/:roomCode/typing", writeLimiter, async (req, res) => {
   res.json({ ok: true });
 });
 
+// GET /rooms/:roomCode/draft — recover this player's own in-flight responses
+// after a reconnect (closed app, lost network, browser crash). Reads from
+// the in-memory `roomLiveResponses` map which is refreshed by /typing.
+// Returns whatever the server last received for this player in the current
+// round; client can decide whether to apply it based on round/letter match.
+router.get("/:roomCode/draft", async (req, res) => {
+  const code = paramStr(req.params.roomCode).toUpperCase();
+  const playerId = (req.query["playerId"] as string) || "";
+  if (!playerId) { res.status(400).json({ error: "playerId required" }); return; }
+
+  // Auth: caller must actually be in the room (private rooms expose nothing).
+  const [roomRow] = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, code)).limit(1);
+  if (!roomRow) { res.status(404).json({ error: "Room not found" }); return; }
+  const members = parsePlayers(roomRow.playersJson);
+  if (!members.some((p: any) => p.playerId === playerId)) {
+    res.status(403).json({ error: "Not a member of this room" });
+    return;
+  }
+
+  const lr = roomLiveResponses.get(code);
+  const entry = lr?.get(playerId);
+  if (!entry) { res.json({ responses: {}, ts: 0, age: null }); return; }
+  res.json({
+    responses: entry.responses,
+    ts: entry.ts,
+    age: Date.now() - entry.ts,
+    round: roomRow.currentRound,
+    letter: roomRow.currentLetter,
+  });
+});
+
 // 🕵️ POST /rooms/:roomCode/spy — peek at one rival's in-progress answer.
 // 1 use per round per player. Client should apply -10 pts at submission time.
 router.post("/:roomCode/spy", writeLimiter, async (req, res) => {
