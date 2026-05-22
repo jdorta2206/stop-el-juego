@@ -1166,7 +1166,10 @@ export default function Room() {
           here, so we ship a podium-style clip with just letter + total score. */}
       {showClipModal && currentLetter && (() => {
         const me = players.find((p: any) => p.playerId === player?.id);
-        const sorted = [...players].sort((a: any, b: any) => (b.score ?? 0) - (a.score ?? 0)).slice(0, 4);
+        const sortedAll = [...players].sort((a: any, b: any) => (b.score ?? 0) - (a.score ?? 0));
+        const myRank = sortedAll.findIndex((p: any) => p.playerId === player?.id) + 1;
+        const opponentBest = sortedAll.find((p: any) => p.playerId !== player?.id)?.score ?? 0;
+        const sorted = sortedAll.slice(0, 4);
         return (
           <ClipGenerator
             open={showClipModal}
@@ -1175,6 +1178,12 @@ export default function Room() {
             letter={currentLetter}
             totalScore={me?.score ?? 0}
             language="es"
+            context={{
+              mode: "multi",
+              rank: myRank > 0 ? myRank : undefined,
+              totalPlayers: sortedAll.length,
+              opponentBestScore: opponentBest,
+            }}
             entries={sorted.map((p: any, i: number) => ({
               category: `${i + 1}º · ${p.playerName}`,
               word: `${p.score ?? 0} pts`,

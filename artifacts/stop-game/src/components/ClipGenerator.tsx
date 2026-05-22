@@ -3,16 +3,12 @@ import { motion, AnimatePresence } from "framer-motion";
 import { X, Download, Video, Loader2, Share2 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CLIP GENERATOR
-// Renders the player's game result as an animated 9:16 vertical canvas so it
-// can be:
-//   1) Downloaded as a static PNG "story card" (instant, works everywhere)
-//   2) Recorded as a short (~8 s) video via MediaRecorder + canvas.captureStream
-//      (Chrome/Firefox/Edge/Android Safari 14.1+).  Degrades gracefully to
-//      PNG-only on browsers without MediaRecorder support.
-//   3) Shared via the Web Share API (mobile) when files can be shared.
-//
-// All client-side — no server, no ffmpeg, no object storage.
+// CLIP GENERATOR  v2 — viral output
+// 9:16 vertical canvas (720x1280) rendered to PNG or short MP4/webm via
+// MediaRecorder.  Designed as raw material for TikTok / Reels / Shorts: meme
+// headline hook, dramatic zoom punches, confetti on score reveal, final
+// "¿PUEDES GANARME?" CTA card.  All client-side, no server, no audio (TikTok
+// users mute scroll-by previews and remix with trending sounds anyway).
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface ClipEntry {
@@ -21,21 +17,35 @@ export interface ClipEntry {
   score: number;
 }
 
+export interface ClipContext {
+  /** "solo" (player vs AI/practice), "multi" (room vs friends), "impossible"
+   *  (daily challenge).  Controls headline tone. */
+  mode?: "solo" | "multi" | "impossible";
+  /** For impossible mode: did the player solve it? */
+  impossibleWin?: boolean;
+  /** For multi: 1-indexed final position. */
+  rank?: number;
+  totalPlayers?: number;
+  /** Best opponent score (multi or solo-vs-AI) for "humiliated by …" copy. */
+  opponentBestScore?: number;
+}
+
 export interface ClipGeneratorProps {
   open: boolean;
   onClose: () => void;
   playerName: string;
   letter: string;
-  entries: ClipEntry[];         // top categories + words
+  entries: ClipEntry[];
   totalScore: number;
   language?: string;
-  /** Fires once whenever the user successfully downloads or shares. */
+  context?: ClipContext;
   onShared?: () => void;
 }
 
 const W = 720;
 const H = 1280;
-const DURATION_MS = 8000;
+// 10.5 s timeline + 0.5 s hold on final frame.
+const DURATION_MS = 10500;
 const FPS = 30;
 
 const PALETTE = {
@@ -44,222 +54,240 @@ const PALETTE = {
   accent:   "#fbbf24",
   accent2:  "#f59e0b",
   good:     "#22c55e",
+  bad:      "#ef4444",
   text:     "#ffffff",
   muted:    "rgba(255,255,255,0.65)",
+  cta:      "#ec4899",
 };
 
-const STRINGS: Record<string, {
-  brand: string; round: string; pts: string; title: string;
-  tryIt: string; downloadImg: string; generateVideo: string; rendering: string;
-  share: string; close: string; recordingHint: string; notSupported: string;
-}> = {
-  es: { brand: "STOP", round: "LETRA", pts: "puntos", title: "¡Mi partida en STOP!",
-    tryIt: "stopjuegodepalabras.com", downloadImg: "Descargar imagen",
-    generateVideo: "Generar vídeo", rendering: "Renderizando…", share: "Compartir",
-    close: "Cerrar", recordingHint: "Tarda ~10 s · listo para TikTok / Reels",
-    notSupported: "Tu navegador no permite grabar vídeo · usa la imagen" },
-  en: { brand: "STOP", round: "LETTER", pts: "points", title: "My STOP game!",
-    tryIt: "stopjuegodepalabras.com", downloadImg: "Download image",
-    generateVideo: "Generate video", rendering: "Rendering…", share: "Share",
-    close: "Close", recordingHint: "Takes ~10 s · ready for TikTok / Reels",
-    notSupported: "Your browser can't record video · use the image" },
-  pt: { brand: "STOP", round: "LETRA", pts: "pontos", title: "A minha partida no STOP!",
-    tryIt: "stopjuegodepalabras.com", downloadImg: "Descarregar imagem",
-    generateVideo: "Gerar vídeo", rendering: "A renderizar…", share: "Partilhar",
-    close: "Fechar", recordingHint: "Demora ~10 s · pronto para TikTok / Reels",
-    notSupported: "O teu browser não grava vídeo · usa a imagem" },
-  fr: { brand: "STOP", round: "LETTRE", pts: "points", title: "Ma partie STOP !",
-    tryIt: "stopjuegodepalabras.com", downloadImg: "Télécharger l'image",
-    generateVideo: "Générer la vidéo", rendering: "Rendu en cours…", share: "Partager",
-    close: "Fermer", recordingHint: "~10 s · prêt pour TikTok / Reels",
-    notSupported: "Ton navigateur ne grave pas la vidéo · utilise l'image" },
+// ── Headlines + copy (per language, per outcome) ────────────────────────────
+type Lang = "es" | "en" | "pt" | "fr";
+
+interface Copy {
+  brand: string;
+  letterLabel: string;
+  pts: string;
+  cta: string;            // big final card text
+  ctaSub: string;         // small URL sub-line
+  tagline: string;        // bottom watermark during clip
+  subtitleHook: string;
+  subtitleLetter: string;
+  subtitleCats: string;
+  subtitleScore: string;
+  subtitleCta: string;
+  // share button labels
+  shareTitle: string; downloadImg: string; generateVideo: string;
+  rendering: string; share: string; close: string;
+  recordingHint: string; notSupported: string;
+}
+
+const STRINGS: Record<Lang, Copy> = {
+  es: {
+    brand: "STOP", letterLabel: "LETRA", pts: "pts",
+    cta: "¿PUEDES\nGANARME?", ctaSub: "stopjuegodepalabras.com",
+    tagline: "stopjuegodepalabras.com",
+    subtitleHook: "Esto pasó en mi partida 👇",
+    subtitleLetter: "Con esta letra…",
+    subtitleCats: "Estas fueron mis respuestas",
+    subtitleScore: "PUNTUACIÓN FINAL",
+    subtitleCta: "Te reto a superarme 👆",
+    shareTitle: "¡Mira mi partida en STOP!",
+    downloadImg: "Descargar imagen", generateVideo: "Generar vídeo",
+    rendering: "Renderizando…", share: "Compartir", close: "Cerrar",
+    recordingHint: "Tarda ~12 s · listo para TikTok / Reels",
+    notSupported: "Tu navegador no permite grabar vídeo · usa la imagen",
+  },
+  en: {
+    brand: "STOP", letterLabel: "LETTER", pts: "pts",
+    cta: "CAN YOU\nBEAT ME?", ctaSub: "stopjuegodepalabras.com",
+    tagline: "stopjuegodepalabras.com",
+    subtitleHook: "This is what happened 👇",
+    subtitleLetter: "With this letter…",
+    subtitleCats: "These were my answers",
+    subtitleScore: "FINAL SCORE",
+    subtitleCta: "Bet you can't beat me 👆",
+    shareTitle: "Look at my STOP game!",
+    downloadImg: "Download image", generateVideo: "Generate video",
+    rendering: "Rendering…", share: "Share", close: "Close",
+    recordingHint: "Takes ~12 s · ready for TikTok / Reels",
+    notSupported: "Your browser can't record video · use the image",
+  },
+  pt: {
+    brand: "STOP", letterLabel: "LETRA", pts: "pts",
+    cta: "CONSEGUES\nGANHAR-ME?", ctaSub: "stopjuegodepalabras.com",
+    tagline: "stopjuegodepalabras.com",
+    subtitleHook: "Olha o que aconteceu 👇",
+    subtitleLetter: "Com esta letra…",
+    subtitleCats: "Estas foram as minhas respostas",
+    subtitleScore: "PONTUAÇÃO FINAL",
+    subtitleCta: "Tenta superar-me 👆",
+    shareTitle: "Vê a minha partida no STOP!",
+    downloadImg: "Descarregar imagem", generateVideo: "Gerar vídeo",
+    rendering: "A renderizar…", share: "Partilhar", close: "Fechar",
+    recordingHint: "Demora ~12 s · pronto para TikTok / Reels",
+    notSupported: "O teu browser não grava vídeo · usa a imagem",
+  },
+  fr: {
+    brand: "STOP", letterLabel: "LETTRE", pts: "pts",
+    cta: "TU PEUX\nME BATTRE ?", ctaSub: "stopjuegodepalabras.com",
+    tagline: "stopjuegodepalabras.com",
+    subtitleHook: "Voici ce qui s'est passé 👇",
+    subtitleLetter: "Avec cette lettre…",
+    subtitleCats: "Voici mes réponses",
+    subtitleScore: "SCORE FINAL",
+    subtitleCta: "Essaie de me battre 👆",
+    shareTitle: "Regarde ma partie STOP !",
+    downloadImg: "Télécharger l'image", generateVideo: "Générer la vidéo",
+    rendering: "Rendu en cours…", share: "Partager", close: "Fermer",
+    recordingHint: "~12 s · prêt pour TikTok / Reels",
+    notSupported: "Ton navigateur ne grave pas la vidéo · utilise l'image",
+  },
 };
 
-// ── Drawing primitives ──────────────────────────────────────────────────────
+// Headline picker — punchy meme-style copy based on result.  Returns an
+// array because some outcomes look better with a two-line stack
+// (hook + emoji punchline).
+function pickHeadline(
+  lang: Lang,
+  totalScore: number,
+  entries: ClipEntry[],
+  ctx?: ClipContext,
+): { lines: string[]; tone: "win" | "loss" | "neutral" | "wow" } {
+  const validCount = entries.filter(e => e.score > 0).length;
+  const has100 = totalScore >= 100;
+  const has50 = totalScore >= 50;
+  const has0 = totalScore <= 5;
+
+  const L = {
+    es: {
+      impWin:   ["YO RESOLVÍ", "LA PALABRA\nIMPOSIBLE 💀"],
+      impLoss:  ["NO PUDE CON", "LA PALABRA\nIMPOSIBLE 😭"],
+      multiW:   ["LOS DESTROCÉ", `${totalScore} pts 👑`],
+      multiL:   ["ME HUMILLARON", `con ${totalScore} pts 💀`],
+      perfect:  ["PARTIDA", "PERFECTA 🔥"],
+      high:     [`${totalScore} PUNTOS`, "en una sola letra 🤯"],
+      mid:      ["MI PARTIDA", "EN STOP"],
+      low:      ["HICE", `${totalScore} pts 😂`],
+      zero:     ["ME QUEDÉ EN", "BLANCO 💀"],
+    },
+    en: {
+      impWin:   ["I SOLVED THE", "IMPOSSIBLE\nWORD 💀"],
+      impLoss:  ["I COULDN'T DO", "THE IMPOSSIBLE\nWORD 😭"],
+      multiW:   ["I CRUSHED", `THEM · ${totalScore} pts 👑`],
+      multiL:   ["I GOT", `HUMILIATED · ${totalScore} 💀`],
+      perfect:  ["PERFECT", "GAME 🔥"],
+      high:     [`${totalScore} POINTS`, "in one letter 🤯"],
+      mid:      ["MY STOP", "GAME"],
+      low:      ["I SCORED", `${totalScore} pts 😂`],
+      zero:     ["I CHOKED", "HARD 💀"],
+    },
+    pt: {
+      impWin:   ["EU RESOLVI A", "PALAVRA\nIMPOSSÍVEL 💀"],
+      impLoss:  ["NÃO CONSEGUI", "A PALAVRA\nIMPOSSÍVEL 😭"],
+      multiW:   ["DESTRUÍ TODOS", `${totalScore} pts 👑`],
+      multiL:   ["FUI HUMILHADO", `com ${totalScore} pts 💀`],
+      perfect:  ["PARTIDA", "PERFEITA 🔥"],
+      high:     [`${totalScore} PONTOS`, "numa letra só 🤯"],
+      mid:      ["A MINHA", "PARTIDA"],
+      low:      ["FIZ", `${totalScore} pts 😂`],
+      zero:     ["FIQUEI EM", "BRANCO 💀"],
+    },
+    fr: {
+      impWin:   ["J'AI RÉSOLU LE", "MOT\nIMPOSSIBLE 💀"],
+      impLoss:  ["JE N'AI PAS PU", "AVEC LE MOT\nIMPOSSIBLE 😭"],
+      multiW:   ["JE LES AI", `ÉCRASÉS · ${totalScore} 👑`],
+      multiL:   ["ILS M'ONT", `HUMILIÉ · ${totalScore} 💀`],
+      perfect:  ["PARTIE", "PARFAITE 🔥"],
+      high:     [`${totalScore} POINTS`, "en une lettre 🤯"],
+      mid:      ["MA PARTIE", "STOP"],
+      low:      ["J'AI FAIT", `${totalScore} pts 😂`],
+      zero:     ["J'AI FAIT", "ZÉRO 💀"],
+    },
+  } as const;
+  const dict = L[lang] ?? L.es;
+
+  if (ctx?.mode === "impossible") {
+    return ctx.impossibleWin
+      ? { lines: [...dict.impWin], tone: "wow" }
+      : { lines: [...dict.impLoss], tone: "loss" };
+  }
+  if (ctx?.mode === "multi" && ctx?.rank != null) {
+    if (ctx.rank === 1) return { lines: [...dict.multiW], tone: "win" };
+    if (ctx.totalPlayers && ctx.rank === ctx.totalPlayers) return { lines: [...dict.multiL], tone: "loss" };
+  }
+  if (validCount >= 8 && has100) return { lines: [...dict.perfect], tone: "wow" };
+  if (has100) return { lines: [...dict.high], tone: "win" };
+  if (has0)   return { lines: [...dict.zero], tone: "loss" };
+  if (has50)  return { lines: [...dict.mid], tone: "neutral" };
+  return { lines: [...dict.low], tone: "loss" };
+}
+
+// ── Easing / math ───────────────────────────────────────────────────────────
 function easeOutBack(t: number): number {
-  const c1 = 1.70158;
-  const c3 = c1 + 1;
+  const c1 = 1.70158, c3 = c1 + 1;
   return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
+}
+function easeInOutCubic(t: number) {
+  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 }
 function easeOutCubic(t: number) { return 1 - Math.pow(1 - t, 3); }
 function clamp01(v: number) { return Math.max(0, Math.min(1, v)); }
+function lerp(a: number, b: number, t: number) { return a + (b - a) * t; }
 
-function drawBackground(ctx: CanvasRenderingContext2D, tMs: number) {
-  // Animated gradient with subtle hue drift.
-  const drift = (Math.sin(tMs / 1500) + 1) * 0.5;
-  const g = ctx.createLinearGradient(0, 0, 0, H);
-  g.addColorStop(0, PALETTE.bgTop);
-  g.addColorStop(0.5 + drift * 0.1, "#3b1e6e");
-  g.addColorStop(1, PALETTE.bgBottom);
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, W, H);
+// ── Timeline acts ───────────────────────────────────────────────────────────
+const ACTS = {
+  hook:    { start: 0,    end: 2200 },   // headline punch-in
+  letter:  { start: 2200, end: 3700 },   // letter zoom
+  cats:    { start: 3700, end: 7700 },   // categories cascade
+  score:   { start: 7700, end: 9200 },   // final score + confetti
+  cta:     { start: 9200, end: 10500 },  // call-to-action card
+};
+function actProgress(tMs: number, act: { start: number; end: number }) {
+  return clamp01((tMs - act.start) / (act.end - act.start));
+}
 
-  // Floating soft blobs — cheap "confetti" feel.
-  for (let i = 0; i < 14; i++) {
-    const x = (i * 137 + tMs * 0.03) % (W + 200) - 100;
-    const y = (i * 211 + tMs * 0.05) % (H + 200) - 100;
-    const r = 40 + ((i * 17) % 30);
-    const grad = ctx.createRadialGradient(x, y, 0, x, y, r);
-    grad.addColorStop(0, `rgba(255,193,7,${0.07 + (i % 3) * 0.02})`);
-    grad.addColorStop(1, "rgba(255,193,7,0)");
-    ctx.fillStyle = grad;
-    ctx.fillRect(x - r, y - r, r * 2, r * 2);
+// ── Particles (confetti) ────────────────────────────────────────────────────
+interface Particle { x: number; y: number; vx: number; vy: number; rot: number; vr: number; color: string; size: number }
+function makeConfetti(seed = 0): Particle[] {
+  const colors = ["#fbbf24", "#f59e0b", "#ef4444", "#22c55e", "#a855f7", "#ec4899", "#3b82f6"];
+  const arr: Particle[] = [];
+  // Pseudo-random so we get the same confetti every render (preview <> recording).
+  let s = seed || 9301;
+  const rng = () => { s = (s * 9301 + 49297) % 233280; return s / 233280; };
+  for (let i = 0; i < 60; i++) {
+    arr.push({
+      x: rng() * W,
+      y: -50 - rng() * 200,
+      vx: (rng() - 0.5) * 180,
+      vy: 220 + rng() * 220,
+      rot: rng() * Math.PI * 2,
+      vr: (rng() - 0.5) * 8,
+      color: colors[Math.floor(rng() * colors.length)],
+      size: 6 + rng() * 10,
+    });
   }
+  return arr;
 }
 
-function drawBrand(ctx: CanvasRenderingContext2D, tMs: number, s: typeof STRINGS["es"]) {
-  // 0–1 s : STOP logo scales in from 0 to 1
-  const p = clamp01(tMs / 900);
-  const scale = easeOutBack(p);
+function drawConfetti(ctx: CanvasRenderingContext2D, particles: Particle[], localMs: number) {
+  const t = localMs / 1000;
   ctx.save();
-  ctx.translate(W / 2, 220);
-  ctx.scale(scale, scale);
-  ctx.fillStyle = PALETTE.accent;
-  ctx.font = `900 220px "Baloo 2", system-ui, sans-serif`;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.shadowColor = "rgba(0,0,0,0.4)";
-  ctx.shadowBlur = 18;
-  ctx.shadowOffsetY = 6;
-  ctx.fillText(s.brand, 0, 0);
-  ctx.restore();
-}
-
-function drawLetter(ctx: CanvasRenderingContext2D, tMs: number, letter: string, s: typeof STRINGS["es"]) {
-  // 1 – 2.5 s : letter chip pops in
-  if (tMs < 900) return;
-  const local = clamp01((tMs - 900) / 700);
-  const scale = easeOutBack(local);
-  const opacity = local;
-  ctx.save();
-  ctx.globalAlpha = opacity;
-  ctx.translate(W / 2, 470);
-  ctx.scale(scale, scale);
-
-  // Label
-  ctx.fillStyle = PALETTE.muted;
-  ctx.font = `700 34px "Baloo 2", system-ui, sans-serif`;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText(s.round, 0, -110);
-
-  // Big letter chip
-  const chipR = 130;
-  const grad = ctx.createLinearGradient(0, -chipR, 0, chipR);
-  grad.addColorStop(0, PALETTE.accent);
-  grad.addColorStop(1, PALETTE.accent2);
-  ctx.fillStyle = grad;
-  ctx.shadowColor = "rgba(245,158,11,0.55)";
-  ctx.shadowBlur = 40;
-  ctx.beginPath();
-  ctx.arc(0, 0, chipR, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.shadowBlur = 0;
-
-  ctx.fillStyle = "#0d1757";
-  ctx.font = `900 200px "Baloo 2", system-ui, sans-serif`;
-  ctx.fillText(letter.toUpperCase(), 0, 8);
-  ctx.restore();
-}
-
-function drawEntries(ctx: CanvasRenderingContext2D, tMs: number, entries: ClipEntry[]) {
-  // 2.5 – 6 s : categories + words reveal staggered
-  if (tMs < 1700) return;
-  const list = entries.slice(0, 4);
-  const startY = 740;
-  const rowH = 110;
-  list.forEach((e, i) => {
-    const localStart = 1700 + i * 350;
-    if (tMs < localStart) return;
-    const p = clamp01((tMs - localStart) / 450);
-    const y = startY + i * rowH;
-    const slide = (1 - easeOutCubic(p)) * 80;
-
+  for (const p of particles) {
+    const x = p.x + p.vx * t;
+    const y = p.y + p.vy * t + 0.5 * 600 * t * t * 0.5; // mild gravity
+    const rot = p.rot + p.vr * t;
+    if (y > H + 40) continue;
     ctx.save();
-    ctx.globalAlpha = p;
-    ctx.translate(slide, 0);
-
-    // Row bg
-    const rowGrad = ctx.createLinearGradient(60, 0, W - 60, 0);
-    rowGrad.addColorStop(0, "rgba(255,255,255,0.10)");
-    rowGrad.addColorStop(1, "rgba(255,255,255,0.04)");
-    ctx.fillStyle = rowGrad;
-    roundRect(ctx, 60, y - 40, W - 120, 80, 18);
-    ctx.fill();
-
-    // Category
-    ctx.fillStyle = PALETTE.muted;
-    ctx.font = `700 24px "Baloo 2", system-ui, sans-serif`;
-    ctx.textAlign = "left";
-    ctx.textBaseline = "middle";
-    ctx.fillText(truncate(e.category, 28).toUpperCase(), 90, y - 12);
-
-    // Word
-    ctx.fillStyle = e.score >= 10 ? PALETTE.good : (e.score >= 5 ? PALETTE.accent : PALETTE.text);
-    ctx.font = `900 38px "Baloo 2", system-ui, sans-serif`;
-    ctx.fillText(truncate(e.word || "—", 22), 90, y + 18);
-
-    // Points pill on right
-    if (e.score > 0) {
-      ctx.textAlign = "right";
-      ctx.fillStyle = PALETTE.accent;
-      ctx.font = `900 36px "Baloo 2", system-ui, sans-serif`;
-      ctx.fillText(`+${e.score}`, W - 90, y);
-    }
+    ctx.translate(x, y);
+    ctx.rotate(rot);
+    ctx.fillStyle = p.color;
+    ctx.fillRect(-p.size / 2, -p.size / 4, p.size, p.size / 2);
     ctx.restore();
-  });
-}
-
-function drawFinalScore(ctx: CanvasRenderingContext2D, tMs: number, totalScore: number, playerName: string, s: typeof STRINGS["es"]) {
-  // 6 – 7.5 s : big total score with celebratory pop
-  if (tMs < 5800) return;
-  const local = clamp01((tMs - 5800) / 700);
-  const scale = easeOutBack(local);
-  ctx.save();
-  ctx.globalAlpha = local;
-  ctx.translate(W / 2, 1110);
-  ctx.scale(scale, scale);
-
-  // Player name
-  ctx.fillStyle = PALETTE.muted;
-  ctx.font = `700 30px "Baloo 2", system-ui, sans-serif`;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText(truncate(playerName, 28), 0, -70);
-
-  // Big score
-  ctx.fillStyle = PALETTE.accent;
-  ctx.font = `900 130px "Baloo 2", system-ui, sans-serif`;
-  ctx.shadowColor = "rgba(0,0,0,0.45)";
-  ctx.shadowBlur = 14;
-  ctx.shadowOffsetY = 4;
-  ctx.fillText(String(totalScore), 0, 8);
-
-  ctx.shadowBlur = 0;
-  ctx.shadowOffsetY = 0;
-  ctx.fillStyle = PALETTE.text;
-  ctx.font = `700 34px "Baloo 2", system-ui, sans-serif`;
-  ctx.fillText(s.pts.toUpperCase(), 0, 90);
+  }
   ctx.restore();
 }
 
-function drawWatermark(ctx: CanvasRenderingContext2D, tMs: number, s: typeof STRINGS["es"]) {
-  // 7+ s : URL CTA bar fades in
-  if (tMs < 6500) return;
-  const opacity = clamp01((tMs - 6500) / 600);
-  ctx.save();
-  ctx.globalAlpha = opacity * 0.95;
-  ctx.fillStyle = "rgba(0,0,0,0.55)";
-  roundRect(ctx, 100, H - 80, W - 200, 56, 28);
-  ctx.fill();
-  ctx.fillStyle = PALETTE.text;
-  ctx.font = `800 26px "Baloo 2", system-ui, sans-serif`;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText("🎮 " + s.tryIt, W / 2, H - 52);
-  ctx.restore();
-}
-
+// ── Drawing primitives ──────────────────────────────────────────────────────
 function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
   ctx.beginPath();
   ctx.moveTo(x + r, y);
@@ -273,43 +301,394 @@ function truncate(s: string, n: number) {
   return s.length > n ? s.slice(0, n - 1) + "…" : s;
 }
 
+// Auto-fit large text to a max width by shrinking the font size.
+function fitText(
+  ctx: CanvasRenderingContext2D, text: string, maxWidth: number,
+  baseFont: string, baseSize: number, minSize = 28,
+): number {
+  let size = baseSize;
+  ctx.font = `${baseFont.replace("{px}", String(size))}`;
+  while (ctx.measureText(text).width > maxWidth && size > minSize) {
+    size -= 4;
+    ctx.font = `${baseFont.replace("{px}", String(size))}`;
+  }
+  return size;
+}
+
+function drawBackground(ctx: CanvasRenderingContext2D, tMs: number) {
+  const drift = (Math.sin(tMs / 1500) + 1) * 0.5;
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, PALETTE.bgTop);
+  g.addColorStop(0.5 + drift * 0.1, "#3b1e6e");
+  g.addColorStop(1, PALETTE.bgBottom);
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+
+  // Soft floating blobs.
+  for (let i = 0; i < 12; i++) {
+    const x = (i * 137 + tMs * 0.03) % (W + 200) - 100;
+    const y = (i * 211 + tMs * 0.05) % (H + 200) - 100;
+    const r = 50 + ((i * 17) % 40);
+    const grad = ctx.createRadialGradient(x, y, 0, x, y, r);
+    grad.addColorStop(0, `rgba(255,193,7,${0.06 + (i % 3) * 0.02})`);
+    grad.addColorStop(1, "rgba(255,193,7,0)");
+    ctx.fillStyle = grad;
+    ctx.fillRect(x - r, y - r, r * 2, r * 2);
+  }
+}
+
+// Bottom subtitle bar — dynamic copy per act, persistent presence.
+function drawSubtitle(ctx: CanvasRenderingContext2D, text: string, tMs: number) {
+  if (!text) return;
+  const pulse = 0.85 + 0.15 * Math.sin(tMs / 220);
+  ctx.save();
+  ctx.fillStyle = "rgba(0,0,0,0.55)";
+  roundRect(ctx, 60, H - 220, W - 120, 70, 35);
+  ctx.fill();
+  ctx.fillStyle = PALETTE.text;
+  ctx.font = `900 30px "Baloo 2", system-ui, sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.globalAlpha = pulse;
+  ctx.fillText(text, W / 2, H - 185);
+  ctx.restore();
+}
+
+// Persistent watermark / handle at very bottom.
+function drawTagline(ctx: CanvasRenderingContext2D, text: string) {
+  ctx.save();
+  ctx.fillStyle = "rgba(0,0,0,0.4)";
+  roundRect(ctx, 100, H - 90, W - 200, 56, 28);
+  ctx.fill();
+  ctx.fillStyle = PALETTE.text;
+  ctx.font = `800 26px "Baloo 2", system-ui, sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText("🎮 " + text, W / 2, H - 62);
+  ctx.restore();
+}
+
+// ACT 1 — Hook: meme headline punching in with zoom + shake.
+function drawHook(
+  ctx: CanvasRenderingContext2D, tMs: number,
+  headline: { lines: string[]; tone: string }, copy: Copy,
+) {
+  const p = actProgress(tMs, ACTS.hook);
+  if (p <= 0) return;
+
+  // Punch-in: scale from 0.3 to 1.05 then settle to 1.0.
+  let scale: number;
+  if (p < 0.25) scale = lerp(0.3, 1.15, easeOutBack(p / 0.25));
+  else if (p < 0.45) scale = lerp(1.15, 1.0, (p - 0.25) / 0.2);
+  else scale = 1.0;
+
+  // Micro shake on impact.
+  const shake = p < 0.3 ? Math.sin(p * 80) * 6 * (1 - p / 0.3) : 0;
+
+  // Tone-coded accent ribbon
+  const toneColor = headline.tone === "win" ? PALETTE.good
+    : headline.tone === "loss" ? PALETTE.bad
+    : headline.tone === "wow" ? PALETTE.accent
+    : PALETTE.cta;
+
+  ctx.save();
+  ctx.translate(W / 2 + shake, 360);
+  ctx.scale(scale, scale);
+
+  // Brand chip
+  ctx.fillStyle = toneColor;
+  ctx.shadowColor = "rgba(0,0,0,0.45)";
+  ctx.shadowBlur = 14;
+  ctx.shadowOffsetY = 5;
+  roundRect(ctx, -110, -270, 220, 70, 35);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.shadowOffsetY = 0;
+  ctx.fillStyle = "#0d1757";
+  ctx.font = `900 48px "Baloo 2", system-ui, sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(copy.brand, 0, -235);
+
+  // Headline lines — auto-fit each
+  const lines = headline.lines.flatMap(l => l.split("\n"));
+  let y = -100;
+  for (const line of lines) {
+    const size = fitText(ctx, line, W - 120, `900 {px}px "Baloo 2", system-ui, sans-serif`, 96, 56);
+    ctx.font = `900 ${size}px "Baloo 2", system-ui, sans-serif`;
+    ctx.fillStyle = PALETTE.text;
+    ctx.shadowColor = "rgba(0,0,0,0.6)";
+    ctx.shadowBlur = 12;
+    ctx.shadowOffsetY = 4;
+    ctx.fillText(line, 0, y);
+    y += size + 14;
+  }
+  ctx.restore();
+}
+
+// ACT 2 — Letter dramatic zoom.
+function drawLetter(ctx: CanvasRenderingContext2D, tMs: number, letter: string, copy: Copy) {
+  const p = actProgress(tMs, ACTS.letter);
+  if (p <= 0) return;
+  const opacity = clamp01(p / 0.2);
+  // Dramatic zoom: starts at 0.5 → overshoots 1.2 → settles 1.0.
+  let scale: number;
+  if (p < 0.35) scale = lerp(0.5, 1.25, easeOutBack(p / 0.35));
+  else if (p < 0.55) scale = lerp(1.25, 1.0, (p - 0.35) / 0.2);
+  else scale = 1.0;
+  // Slow rotation kiss for drama
+  const rot = Math.sin(p * Math.PI) * 0.08;
+
+  ctx.save();
+  ctx.globalAlpha = opacity;
+  ctx.translate(W / 2, 540);
+  ctx.scale(scale, scale);
+  ctx.rotate(rot);
+
+  ctx.fillStyle = PALETTE.muted;
+  ctx.font = `800 36px "Baloo 2", system-ui, sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(copy.letterLabel, 0, -200);
+
+  const chipR = 170;
+  const grad = ctx.createLinearGradient(0, -chipR, 0, chipR);
+  grad.addColorStop(0, PALETTE.accent);
+  grad.addColorStop(1, PALETTE.accent2);
+  ctx.fillStyle = grad;
+  ctx.shadowColor = "rgba(245,158,11,0.65)";
+  ctx.shadowBlur = 60;
+  ctx.beginPath();
+  ctx.arc(0, 0, chipR, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+
+  ctx.fillStyle = "#0d1757";
+  ctx.font = `900 260px "Baloo 2", system-ui, sans-serif`;
+  ctx.fillText(letter.toUpperCase(), 0, 10);
+  ctx.restore();
+}
+
+// ACT 3 — Category rows cascading in with score punch.
+function drawEntries(ctx: CanvasRenderingContext2D, tMs: number, entries: ClipEntry[]) {
+  const p = actProgress(tMs, ACTS.cats);
+  if (p <= 0) return;
+  const list = entries.slice(0, 4);
+  const localStart = ACTS.cats.start;
+  const rowMs = (ACTS.cats.end - ACTS.cats.start - 600) / Math.max(list.length, 1);
+  const startY = 420;
+  const rowH = 130;
+
+  list.forEach((e, i) => {
+    const rowT = localStart + i * rowMs;
+    if (tMs < rowT) return;
+    const rp = clamp01((tMs - rowT) / 500);
+    const y = startY + i * rowH;
+    const slide = (1 - easeOutCubic(rp)) * 120;
+    const punch = rp < 0.3 ? 1 + (1 - rp / 0.3) * 0.15 : 1;
+
+    ctx.save();
+    ctx.globalAlpha = rp;
+    ctx.translate(slide, 0);
+    ctx.translate(W / 2, y);
+    ctx.scale(punch, punch);
+    ctx.translate(-W / 2, -y);
+
+    // Row background
+    const rowGrad = ctx.createLinearGradient(50, 0, W - 50, 0);
+    rowGrad.addColorStop(0, "rgba(255,255,255,0.12)");
+    rowGrad.addColorStop(1, "rgba(255,255,255,0.04)");
+    ctx.fillStyle = rowGrad;
+    roundRect(ctx, 50, y - 50, W - 100, 100, 22);
+    ctx.fill();
+
+    // Category label
+    ctx.fillStyle = PALETTE.muted;
+    ctx.font = `700 26px "Baloo 2", system-ui, sans-serif`;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillText(truncate(e.category, 26).toUpperCase(), 80, y - 18);
+
+    // Word — auto-fit
+    const wordColor = e.score >= 10 ? PALETTE.good : e.score >= 5 ? PALETTE.accent : PALETTE.bad;
+    ctx.fillStyle = wordColor;
+    const size = fitText(ctx, e.word || "—", W - 260, `900 {px}px "Baloo 2", system-ui, sans-serif`, 46, 28);
+    ctx.font = `900 ${size}px "Baloo 2", system-ui, sans-serif`;
+    ctx.fillText(truncate(e.word || "—", 26), 80, y + 22);
+
+    // Points pill — count-up animation
+    const pointsT = clamp01((rp - 0.3) / 0.5);
+    const shown = Math.round(e.score * easeOutCubic(pointsT));
+    ctx.textAlign = "right";
+    ctx.fillStyle = PALETTE.accent;
+    ctx.font = `900 42px "Baloo 2", system-ui, sans-serif`;
+    ctx.fillText(e.score > 0 ? `+${shown}` : "0", W - 80, y);
+
+    ctx.restore();
+  });
+}
+
+// ACT 4 — Final total score with confetti.
+function drawScore(
+  ctx: CanvasRenderingContext2D, tMs: number,
+  totalScore: number, playerName: string, copy: Copy, confetti: Particle[],
+) {
+  const p = actProgress(tMs, ACTS.score);
+  if (p <= 0) return;
+  const local = tMs - ACTS.score.start;
+
+  // Centerpiece: huge score with bounce
+  const scale = p < 0.3 ? easeOutBack(p / 0.3) : 1 + Math.sin((p - 0.3) * 12) * 0.03 * Math.max(0, 1 - (p - 0.3) * 4);
+
+  ctx.save();
+  // Dim background ever so slightly for focus
+  ctx.fillStyle = `rgba(0,0,0,${0.25 * clamp01(p * 3)})`;
+  ctx.fillRect(0, 0, W, H);
+
+  ctx.translate(W / 2, H / 2 - 80);
+  ctx.scale(scale, scale);
+
+  ctx.fillStyle = PALETTE.muted;
+  ctx.font = `800 34px "Baloo 2", system-ui, sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(truncate(playerName, 22), 0, -180);
+
+  ctx.fillStyle = PALETTE.accent;
+  ctx.font = `900 78px "Baloo 2", system-ui, sans-serif`;
+  ctx.fillText(copy.subtitleScore, 0, -100);
+
+  // Count-up score
+  const shown = Math.round(totalScore * easeOutCubic(clamp01(p / 0.5)));
+  ctx.fillStyle = PALETTE.text;
+  ctx.font = `900 260px "Baloo 2", system-ui, sans-serif`;
+  ctx.shadowColor = "rgba(0,0,0,0.5)";
+  ctx.shadowBlur = 24;
+  ctx.shadowOffsetY = 8;
+  ctx.fillText(String(shown), 0, 60);
+  ctx.shadowBlur = 0;
+  ctx.shadowOffsetY = 0;
+
+  ctx.fillStyle = PALETTE.text;
+  ctx.font = `800 38px "Baloo 2", system-ui, sans-serif`;
+  ctx.fillText(copy.pts.toUpperCase(), 0, 200);
+  ctx.restore();
+
+  // Confetti starts the moment the score appears.
+  drawConfetti(ctx, confetti, local);
+}
+
+// ACT 5 — CTA card.  Full-screen "¿PUEDES GANARME?" + URL.
+function drawCta(ctx: CanvasRenderingContext2D, tMs: number, copy: Copy) {
+  const p = actProgress(tMs, ACTS.cta);
+  if (p <= 0) return;
+  const opacity = easeInOutCubic(clamp01(p / 0.3));
+
+  // Full-screen tinted overlay
+  ctx.save();
+  ctx.fillStyle = `rgba(13,4,32,${opacity * 0.92})`;
+  ctx.fillRect(0, 0, W, H);
+
+  // Big CTA text — multi-line
+  const scale = lerp(0.85, 1.0, easeOutBack(clamp01(p / 0.35)));
+  ctx.translate(W / 2, H / 2 - 80);
+  ctx.scale(scale, scale);
+  ctx.globalAlpha = opacity;
+
+  const lines = copy.cta.split("\n");
+  let y = -90;
+  for (const line of lines) {
+    const size = fitText(ctx, line, W - 100, `900 {px}px "Baloo 2", system-ui, sans-serif`, 130, 70);
+    ctx.font = `900 ${size}px "Baloo 2", system-ui, sans-serif`;
+    ctx.fillStyle = PALETTE.accent;
+    ctx.shadowColor = "rgba(0,0,0,0.6)";
+    ctx.shadowBlur = 16;
+    ctx.shadowOffsetY = 6;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(line, 0, y);
+    y += size + 8;
+  }
+  ctx.shadowBlur = 0;
+  ctx.shadowOffsetY = 0;
+
+  // URL pill
+  const pillY = y + 80;
+  ctx.fillStyle = PALETTE.cta;
+  roundRect(ctx, -260, pillY - 40, 520, 80, 40);
+  ctx.fill();
+  ctx.fillStyle = PALETTE.text;
+  ctx.font = `900 36px "Baloo 2", system-ui, sans-serif`;
+  ctx.fillText("🎮 " + copy.ctaSub, 0, pillY);
+  ctx.restore();
+}
+
+function subtitleFor(tMs: number, copy: Copy): string {
+  if (tMs < ACTS.letter.start) return copy.subtitleHook;
+  if (tMs < ACTS.cats.start) return copy.subtitleLetter;
+  if (tMs < ACTS.score.start) return copy.subtitleCats;
+  if (tMs < ACTS.cta.start) return copy.subtitleScore;
+  return copy.subtitleCta;
+}
+
+// Master draw — composites every act for a given timestamp.
 function drawFrame(
   ctx: CanvasRenderingContext2D,
   tMs: number,
-  props: { letter: string; entries: ClipEntry[]; totalScore: number; playerName: string },
-  s: typeof STRINGS["es"],
+  data: {
+    letter: string; entries: ClipEntry[]; totalScore: number; playerName: string;
+    headline: { lines: string[]; tone: string }; confetti: Particle[];
+  },
+  copy: Copy,
 ) {
   drawBackground(ctx, tMs);
-  drawBrand(ctx, tMs, s);
-  drawLetter(ctx, tMs, props.letter, s);
-  drawEntries(ctx, tMs, props.entries);
-  drawFinalScore(ctx, tMs, props.totalScore, props.playerName, s);
-  drawWatermark(ctx, tMs, s);
+  drawHook(ctx, tMs, data.headline, copy);
+  drawLetter(ctx, tMs, data.letter, copy);
+  drawEntries(ctx, tMs, data.entries);
+  drawScore(ctx, tMs, data.totalScore, data.playerName, copy, data.confetti);
+  drawCta(ctx, tMs, copy);
+
+  // Subtitle + tagline hide during CTA (CTA replaces them).
+  if (tMs < ACTS.cta.start) {
+    drawSubtitle(ctx, subtitleFor(tMs, copy), tMs);
+    drawTagline(ctx, copy.tagline);
+  }
 }
 
 // ── Component ───────────────────────────────────────────────────────────────
 export function ClipGenerator(props: ClipGeneratorProps) {
-  const { open, onClose, playerName, letter, entries, totalScore, language = "es", onShared } = props;
-  const s = STRINGS[language] ?? STRINGS.es;
+  const { open, onClose, playerName, letter, entries, totalScore, language = "es", context, onShared } = props;
+  const lang = (["es", "en", "pt", "fr"].includes(language) ? language : "es") as Lang;
+  const copy = STRINGS[lang];
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rafRef = useRef<number | null>(null);
   const startRef = useRef<number>(0);
-  // Set to true when the modal closes so any in-flight recording/render aborts
-  // and no stray share/download fires after the user dismissed the modal.
   const cancelRef = useRef<boolean>(false);
   const recRafRef = useRef<number | null>(null);
   const recTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const recStreamRef = useRef<MediaStream | null>(null);
   const [rendering, setRendering] = useState(false);
-  const [lastBlob, setLastBlob] = useState<{ url: string; kind: "image" | "video"; ext: string } | null>(null);
 
-  // Detect if browser can record video at all.
+  // Stable per-open data — headline + confetti seed shouldn't change on re-render.
+  const dataRef = useRef<{
+    headline: { lines: string[]; tone: string };
+    confetti: Particle[];
+  } | null>(null);
+  if (open && !dataRef.current) {
+    dataRef.current = {
+      headline: pickHeadline(lang, totalScore, entries, context),
+      confetti: makeConfetti(totalScore + entries.length + letter.charCodeAt(0)),
+    };
+  }
+  useEffect(() => { if (!open) dataRef.current = null; }, [open]);
+
   const canRecord = typeof window !== "undefined"
     && "MediaRecorder" in window
     && typeof (HTMLCanvasElement.prototype as any).captureStream === "function";
 
-  // Preview animation while modal is open — loops every DURATION_MS.
+  // Preview loop
   useEffect(() => {
     if (!open) return;
     const canvas = canvasRef.current;
@@ -319,23 +698,18 @@ export function ClipGenerator(props: ClipGeneratorProps) {
     startRef.current = performance.now();
     const loop = () => {
       const elapsed = (performance.now() - startRef.current) % (DURATION_MS + 1500);
-      drawFrame(ctx, Math.min(elapsed, DURATION_MS), { letter, entries, totalScore, playerName }, s);
+      const data = dataRef.current;
+      if (data) drawFrame(ctx, Math.min(elapsed, DURATION_MS), {
+        letter, entries, totalScore, playerName,
+        headline: data.headline, confetti: data.confetti,
+      }, copy);
       rafRef.current = requestAnimationFrame(loop);
     };
     rafRef.current = requestAnimationFrame(loop);
-    return () => {
-      if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
-    };
-  }, [open, letter, entries, totalScore, playerName, s]);
+    return () => { if (rafRef.current != null) cancelAnimationFrame(rafRef.current); };
+  }, [open, letter, entries, totalScore, playerName, copy]);
 
-  // Free blob URLs when modal closes / new blob.
-  useEffect(() => {
-    return () => { if (lastBlob) URL.revokeObjectURL(lastBlob.url); };
-  }, [lastBlob]);
-  useEffect(() => { if (!open && lastBlob) { URL.revokeObjectURL(lastBlob.url); setLastBlob(null); } }, [open]); // eslint-disable-line
-
-  // Hard cancellation when the modal closes — stops any in-flight recording,
-  // releases MediaStream tracks, and prevents post-close share/download.
+  // Cancellation when modal closes
   useEffect(() => {
     if (open) { cancelRef.current = false; return; }
     cancelRef.current = true;
@@ -354,37 +728,39 @@ export function ClipGenerator(props: ClipGeneratorProps) {
   const downloadFile = (blob: Blob, name: string) => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = url;
-    a.download = name;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    a.href = url; a.download = name;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
     setTimeout(() => URL.revokeObjectURL(url), 5000);
   };
 
-  // Try Web Share API with a file; fallback to download.
   const shareOrDownload = async (blob: Blob, name: string, mime: string) => {
     const file = new File([blob], name, { type: mime });
     const nav = navigator as any;
     if (nav.canShare && nav.canShare({ files: [file] })) {
       try {
-        await nav.share({ files: [file], title: s.title, text: s.title });
+        await nav.share({ files: [file], title: copy.shareTitle, text: copy.shareTitle });
         onShared?.();
         return;
-      } catch { /* user cancelled or share failed — fall through */ }
+      } catch { /* fall through */ }
     }
     downloadFile(blob, name);
     onShared?.();
   };
 
+  // For the static PNG, freeze the SCORE frame — that's the most shareable
+  // single image (big number + name + confetti caught mid-air).
   const handleDownloadImage = async () => {
-    // Render the final celebratory frame (DURATION_MS) to a fresh hi-res canvas
-    // so the saved image always shows the score, regardless of preview position.
     const c = document.createElement("canvas");
     c.width = W; c.height = H;
     const ctx = c.getContext("2d");
     if (!ctx) return;
-    drawFrame(ctx, DURATION_MS - 100, { letter, entries, totalScore, playerName }, s);
+    const data = dataRef.current;
+    if (!data) return;
+    const frameMs = ACTS.score.start + 1000;
+    drawFrame(ctx, frameMs, {
+      letter, entries, totalScore, playerName,
+      headline: data.headline, confetti: data.confetti,
+    }, copy);
     c.toBlob(async (blob) => {
       if (!blob) return;
       await shareOrDownload(blob, `stop-${letter}-${totalScore}.png`, "image/png");
@@ -397,24 +773,19 @@ export function ClipGenerator(props: ClipGeneratorProps) {
     setRendering(true);
     let stream: MediaStream | null = null;
     try {
-      // Use a fresh offscreen canvas so the preview loop and the recorded
-      // animation can't fight over the same context.  Pin to fixed FPS.
       const rec = document.createElement("canvas");
       rec.width = W; rec.height = H;
       const ctx = rec.getContext("2d");
       if (!ctx) return;
+      const data = dataRef.current;
+      if (!data) return;
       stream = (rec as any).captureStream(FPS) as MediaStream;
       recStreamRef.current = stream;
 
-      // Try MIME candidates in order; some browsers (e.g. Safari) lie via
-      // isTypeSupported, so we also catch construction failures and fall back.
       const candidates = [
-        "video/mp4;codecs=h264",
-        "video/mp4",
-        "video/webm;codecs=vp9",
-        "video/webm;codecs=vp8",
-        "video/webm",
-        "", // last resort: let the browser pick
+        "video/mp4;codecs=h264", "video/mp4",
+        "video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm",
+        "",
       ];
       let recorder: MediaRecorder | null = null;
       let mime = "";
@@ -422,11 +793,11 @@ export function ClipGenerator(props: ClipGeneratorProps) {
         try {
           if (m && (window as any).MediaRecorder?.isTypeSupported && !(window as any).MediaRecorder.isTypeSupported(m)) continue;
           recorder = m
-            ? new MediaRecorder(stream, { mimeType: m, videoBitsPerSecond: 4_000_000 })
-            : new MediaRecorder(stream, { videoBitsPerSecond: 4_000_000 });
+            ? new MediaRecorder(stream, { mimeType: m, videoBitsPerSecond: 5_000_000 })
+            : new MediaRecorder(stream, { videoBitsPerSecond: 5_000_000 });
           mime = recorder.mimeType || m || "video/webm";
           break;
-        } catch { /* try next candidate */ }
+        } catch { /* try next */ }
       }
       if (!recorder) return;
       recorderRef.current = recorder;
@@ -444,24 +815,24 @@ export function ClipGenerator(props: ClipGeneratorProps) {
         const tick = () => {
           if (cancelRef.current) { resolve(); return; }
           const tMs = performance.now() - t0;
-          drawFrame(ctx, Math.min(tMs, DURATION_MS), { letter, entries, totalScore, playerName }, s);
+          drawFrame(ctx, Math.min(tMs, DURATION_MS), {
+            letter, entries, totalScore, playerName,
+            headline: data.headline, confetti: data.confetti,
+          }, copy);
           if (tMs >= DURATION_MS) { resolve(); return; }
           recRafRef.current = requestAnimationFrame(tick);
         };
         recRafRef.current = requestAnimationFrame(tick);
       });
       if (cancelRef.current) return;
-
-      // Hold the final frame for ~1 s.
-      await new Promise<void>(r => { recTimeoutRef.current = setTimeout(() => r(), 1000); });
+      await new Promise<void>(r => { recTimeoutRef.current = setTimeout(() => r(), 800); });
       if (cancelRef.current) return;
 
-      try { recorder.stop(); } catch { /* already stopped on cancel */ }
+      try { recorder.stop(); } catch { /* noop */ }
       const blob = await done;
       if (cancelRef.current) return;
       await shareOrDownload(blob, `stop-${letter}-${totalScore}.${ext}`, mime);
     } finally {
-      // Always release the capture stream so a new recording starts clean.
       stream?.getTracks().forEach(tr => { try { tr.stop(); } catch { /* noop */ } });
       recStreamRef.current = null;
       recorderRef.current = null;
@@ -486,16 +857,15 @@ export function ClipGenerator(props: ClipGeneratorProps) {
         >
           <button
             onClick={onClose}
-            aria-label={s.close}
+            aria-label={copy.close}
             className="absolute -top-2 -right-2 z-10 w-9 h-9 rounded-full flex items-center justify-center"
             style={{ background: "rgba(0,0,0,0.7)", border: "1px solid rgba(255,255,255,0.2)" }}
           >
             <X className="w-4 h-4 text-white" />
           </button>
 
-          {/* Canvas preview — scaled down to fit modal */}
           <div className="rounded-3xl overflow-hidden mx-auto shadow-2xl"
-            style={{ aspectRatio: `${W} / ${H}`, width: "100%", maxWidth: 320, background: "#0d0420" }}>
+            style={{ aspectRatio: `${W} / ${H}`, width: "100%", maxWidth: 340, background: "#0d0420" }}>
             <canvas
               ref={canvasRef}
               width={W}
@@ -504,7 +874,7 @@ export function ClipGenerator(props: ClipGeneratorProps) {
             />
           </div>
 
-          <p className="text-center text-white/55 text-xs px-4">{s.recordingHint}</p>
+          <p className="text-center text-white/55 text-xs px-4">{copy.recordingHint}</p>
 
           <div className="flex flex-col gap-2">
             <button
@@ -513,7 +883,7 @@ export function ClipGenerator(props: ClipGeneratorProps) {
               className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl font-black disabled:opacity-50"
               style={{ background: "linear-gradient(135deg, #fbbf24, #f59e0b)", color: "#0d1757" }}
             >
-              <Download className="w-4 h-4" /> {s.downloadImg}
+              <Download className="w-4 h-4" /> {copy.downloadImg}
             </button>
 
             {canRecord ? (
@@ -524,16 +894,15 @@ export function ClipGenerator(props: ClipGeneratorProps) {
                 style={{ background: "linear-gradient(135deg, #a855f7, #4f46e5)" }}
               >
                 {rendering ? (
-                  <><Loader2 className="w-4 h-4 animate-spin" /> {s.rendering}</>
+                  <><Loader2 className="w-4 h-4 animate-spin" /> {copy.rendering}</>
                 ) : (
-                  <><Video className="w-4 h-4" /> {s.generateVideo}</>
+                  <><Video className="w-4 h-4" /> {copy.generateVideo}</>
                 )}
               </button>
             ) : (
-              <p className="text-center text-white/50 text-xs">{s.notSupported}</p>
+              <p className="text-center text-white/50 text-xs">{copy.notSupported}</p>
             )}
 
-            {/* Native share button for mobile — same payload as image */}
             {typeof navigator !== "undefined" && (navigator as any).canShare && (
               <button
                 onClick={handleDownloadImage}
@@ -541,7 +910,7 @@ export function ClipGenerator(props: ClipGeneratorProps) {
                 className="w-full flex items-center justify-center gap-2 py-2 rounded-2xl text-white/70 text-sm"
                 style={{ background: "rgba(255,255,255,0.06)" }}
               >
-                <Share2 className="w-4 h-4" /> {s.share}
+                <Share2 className="w-4 h-4" /> {copy.share}
               </button>
             )}
           </div>

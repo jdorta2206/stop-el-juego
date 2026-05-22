@@ -1338,6 +1338,10 @@ export default function SoloGame() {
           letter={currentLetter}
           totalScore={totalScore}
           language={getCurrentLang()}
+          context={{
+            mode: "solo",
+            opponentBestScore: aiTotalScore,
+          }}
           entries={categories
             .map((cat) => {
               const r = (results?.results ?? {})[cat]?.player;
