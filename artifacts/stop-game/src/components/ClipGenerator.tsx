@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Download, Video, Loader2, Share2 } from "lucide-react";
+import { X, Download, Loader2, Share2 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CLIP GENERATOR  v2 — viral output
@@ -92,9 +92,9 @@ const STRINGS: Record<Lang, Copy> = {
     subtitleScore: "PUNTUACIÓN FINAL",
     subtitleCta: "Te reto a superarme 👆",
     shareTitle: "¡Mira mi partida en STOP!",
-    downloadImg: "Descargar imagen", generateVideo: "Generar vídeo",
-    rendering: "Renderizando…", share: "Compartir", close: "Cerrar",
-    recordingHint: "Tarda ~12 s · listo para TikTok / Reels",
+    downloadImg: "Descargar imagen", generateVideo: "Compartir vídeo en TikTok / Reels",
+    rendering: "Generando vídeo…", share: "Compartir", close: "Cerrar",
+    recordingHint: "Tarda ~12 s · luego elige TikTok, Reels, Instagram…",
     notSupported: "Tu navegador no permite grabar vídeo · usa la imagen",
   },
   en: {
@@ -107,9 +107,9 @@ const STRINGS: Record<Lang, Copy> = {
     subtitleScore: "FINAL SCORE",
     subtitleCta: "Bet you can't beat me 👆",
     shareTitle: "Look at my STOP game!",
-    downloadImg: "Download image", generateVideo: "Generate video",
-    rendering: "Rendering…", share: "Share", close: "Close",
-    recordingHint: "Takes ~12 s · ready for TikTok / Reels",
+    downloadImg: "Download image", generateVideo: "Share video to TikTok / Reels",
+    rendering: "Generating video…", share: "Share", close: "Close",
+    recordingHint: "Takes ~12 s · then pick TikTok, Reels, Instagram…",
     notSupported: "Your browser can't record video · use the image",
   },
   pt: {
@@ -122,9 +122,9 @@ const STRINGS: Record<Lang, Copy> = {
     subtitleScore: "PONTUAÇÃO FINAL",
     subtitleCta: "Tenta superar-me 👆",
     shareTitle: "Vê a minha partida no STOP!",
-    downloadImg: "Descarregar imagem", generateVideo: "Gerar vídeo",
-    rendering: "A renderizar…", share: "Partilhar", close: "Fechar",
-    recordingHint: "Demora ~12 s · pronto para TikTok / Reels",
+    downloadImg: "Descarregar imagem", generateVideo: "Partilhar vídeo no TikTok / Reels",
+    rendering: "A gerar vídeo…", share: "Partilhar", close: "Fechar",
+    recordingHint: "Demora ~12 s · depois escolhe TikTok, Reels, Instagram…",
     notSupported: "O teu browser não grava vídeo · usa a imagem",
   },
   fr: {
@@ -137,9 +137,9 @@ const STRINGS: Record<Lang, Copy> = {
     subtitleScore: "SCORE FINAL",
     subtitleCta: "Essaie de me battre 👆",
     shareTitle: "Regarde ma partie STOP !",
-    downloadImg: "Télécharger l'image", generateVideo: "Générer la vidéo",
-    rendering: "Rendu en cours…", share: "Partager", close: "Fermer",
-    recordingHint: "~12 s · prêt pour TikTok / Reels",
+    downloadImg: "Télécharger l'image", generateVideo: "Partager la vidéo sur TikTok / Reels",
+    rendering: "Génération de la vidéo…", share: "Partager", close: "Fermer",
+    recordingHint: "~12 s · ensuite choisis TikTok, Reels, Instagram…",
     notSupported: "Ton navigateur ne grave pas la vidéo · utilise l'image",
   },
 };
@@ -244,6 +244,14 @@ const ACTS = {
 };
 function actProgress(tMs: number, act: { start: number; end: number }) {
   return clamp01((tMs - act.start) / (act.end - act.start));
+}
+// Visibility for an act with a short fade-out tail so frames don't pile up
+// when the next act begins.  Returns 0 before start, 1 during the act, then
+// linearly fades to 0 within `fadeMs` after `act.end`.
+function actAlpha(tMs: number, act: { start: number; end: number }, fadeMs = 350): number {
+  if (tMs < act.start) return 0;
+  if (tMs <= act.end) return 1;
+  return clamp01(1 - (tMs - act.end) / fadeMs);
 }
 
 // ── Particles (confetti) ────────────────────────────────────────────────────
@@ -375,6 +383,8 @@ function drawHook(
 ) {
   const p = actProgress(tMs, ACTS.hook);
   if (p <= 0) return;
+  const fade = actAlpha(tMs, ACTS.hook);
+  if (fade <= 0) return;
 
   // Punch-in: scale from 0.3 to 1.05 then settle to 1.0.
   let scale: number;
@@ -392,6 +402,7 @@ function drawHook(
     : PALETTE.cta;
 
   ctx.save();
+  ctx.globalAlpha *= fade;
   ctx.translate(W / 2 + shake, 360);
   ctx.scale(scale, scale);
 
@@ -430,7 +441,9 @@ function drawHook(
 function drawLetter(ctx: CanvasRenderingContext2D, tMs: number, letter: string, copy: Copy) {
   const p = actProgress(tMs, ACTS.letter);
   if (p <= 0) return;
-  const opacity = clamp01(p / 0.2);
+  const fade = actAlpha(tMs, ACTS.letter);
+  if (fade <= 0) return;
+  const opacity = clamp01(p / 0.2) * fade;
   // Dramatic zoom: starts at 0.5 → overshoots 1.2 → settles 1.0.
   let scale: number;
   if (p < 0.35) scale = lerp(0.5, 1.25, easeOutBack(p / 0.35));
@@ -473,6 +486,8 @@ function drawLetter(ctx: CanvasRenderingContext2D, tMs: number, letter: string, 
 function drawEntries(ctx: CanvasRenderingContext2D, tMs: number, entries: ClipEntry[]) {
   const p = actProgress(tMs, ACTS.cats);
   if (p <= 0) return;
+  const fade = actAlpha(tMs, ACTS.cats);
+  if (fade <= 0) return;
   const list = entries.slice(0, 4);
   const localStart = ACTS.cats.start;
   const rowMs = (ACTS.cats.end - ACTS.cats.start - 600) / Math.max(list.length, 1);
@@ -488,7 +503,7 @@ function drawEntries(ctx: CanvasRenderingContext2D, tMs: number, entries: ClipEn
     const punch = rp < 0.3 ? 1 + (1 - rp / 0.3) * 0.15 : 1;
 
     ctx.save();
-    ctx.globalAlpha = rp;
+    ctx.globalAlpha *= rp * fade;
     ctx.translate(slide, 0);
     ctx.translate(W / 2, y);
     ctx.scale(punch, punch);
@@ -535,14 +550,17 @@ function drawScore(
 ) {
   const p = actProgress(tMs, ACTS.score);
   if (p <= 0) return;
+  const fade = actAlpha(tMs, ACTS.score);
+  if (fade <= 0) return;
   const local = tMs - ACTS.score.start;
 
   // Centerpiece: huge score with bounce
   const scale = p < 0.3 ? easeOutBack(p / 0.3) : 1 + Math.sin((p - 0.3) * 12) * 0.03 * Math.max(0, 1 - (p - 0.3) * 4);
 
   ctx.save();
+  ctx.globalAlpha *= fade;
   // Dim background ever so slightly for focus
-  ctx.fillStyle = `rgba(0,0,0,${0.25 * clamp01(p * 3)})`;
+  ctx.fillStyle = `rgba(0,0,0,${0.25 * clamp01(p * 3) * fade})`;
   ctx.fillRect(0, 0, W, H);
 
   ctx.translate(W / 2, H / 2 - 80);
@@ -756,7 +774,10 @@ export function ClipGenerator(props: ClipGeneratorProps) {
     if (!ctx) return;
     const data = dataRef.current;
     if (!data) return;
-    const frameMs = ACTS.score.start + 1000;
+    // Pick a frame ~1.4s into the score act: by then the entries have faded
+    // (fade-out at ACTS.cats.end + 350ms ≈ 8050ms) and only the score card
+    // + confetti remain — perfect single-frame still for sharing.
+    const frameMs = ACTS.score.start + 1400;
     drawFrame(ctx, frameMs, {
       letter, entries, totalScore, playerName,
       headline: data.headline, confetti: data.confetti,
@@ -877,42 +898,31 @@ export function ClipGenerator(props: ClipGeneratorProps) {
           <p className="text-center text-white/55 text-xs px-4">{copy.recordingHint}</p>
 
           <div className="flex flex-col gap-2">
-            <button
-              onClick={handleDownloadImage}
-              disabled={rendering}
-              className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl font-black disabled:opacity-50"
-              style={{ background: "linear-gradient(135deg, #fbbf24, #f59e0b)", color: "#0d1757" }}
-            >
-              <Download className="w-4 h-4" /> {copy.downloadImg}
-            </button>
-
             {canRecord ? (
               <button
                 onClick={handleGenerateVideo}
                 disabled={rendering}
-                className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl font-black text-white disabled:opacity-60"
-                style={{ background: "linear-gradient(135deg, #a855f7, #4f46e5)" }}
+                className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl font-black text-white disabled:opacity-60 text-base"
+                style={{ background: "linear-gradient(135deg, #ec4899, #a855f7, #4f46e5)", boxShadow: "0 10px 30px rgba(168,85,247,0.4)" }}
               >
                 {rendering ? (
-                  <><Loader2 className="w-4 h-4 animate-spin" /> {copy.rendering}</>
+                  <><Loader2 className="w-5 h-5 animate-spin" /> {copy.rendering}</>
                 ) : (
-                  <><Video className="w-4 h-4" /> {copy.generateVideo}</>
+                  <><Share2 className="w-5 h-5" /> {copy.generateVideo}</>
                 )}
               </button>
             ) : (
-              <p className="text-center text-white/50 text-xs">{copy.notSupported}</p>
+              <p className="text-center text-white/60 text-xs px-2">{copy.notSupported}</p>
             )}
 
-            {typeof navigator !== "undefined" && (navigator as any).canShare && (
-              <button
-                onClick={handleDownloadImage}
-                disabled={rendering}
-                className="w-full flex items-center justify-center gap-2 py-2 rounded-2xl text-white/70 text-sm"
-                style={{ background: "rgba(255,255,255,0.06)" }}
-              >
-                <Share2 className="w-4 h-4" /> {copy.share}
-              </button>
-            )}
+            <button
+              onClick={handleDownloadImage}
+              disabled={rendering}
+              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-2xl font-bold text-sm disabled:opacity-50"
+              style={{ background: "rgba(251,191,36,0.18)", color: "#fbbf24", border: "1px solid rgba(251,191,36,0.35)" }}
+            >
+              <Download className="w-4 h-4" /> {copy.downloadImg}
+            </button>
           </div>
         </motion.div>
       </motion.div>
