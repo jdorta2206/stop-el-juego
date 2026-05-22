@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, timestamp, boolean, bigint } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, timestamp, boolean, bigint, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -118,6 +118,32 @@ export const dailyResultsTable = pgTable("daily_results", {
 export const insertDailyResultSchema = createInsertSchema(dailyResultsTable).omit({ id: true, createdAt: true });
 export type InsertDailyResult = z.infer<typeof insertDailyResultSchema>;
 export type DailyResult = typeof dailyResultsTable.$inferSelect;
+
+// ── Impossible Word challenge ─────────────────────────────────────────────────
+// One brutal letter + niche category per UTC day. Wordle-style: 1 attempt,
+// 60 s timer, viral "got it / gave up" share with global stats.
+export const impossibleResultsTable = pgTable("impossible_results", {
+  id: serial("id").primaryKey(),
+  playerId: text("player_id").notNull(),
+  playerName: text("player_name").notNull(),
+  challengeDate: text("challenge_date").notNull(), // YYYY-MM-DD UTC
+  language: text("language").notNull().default("es"),
+  letter: text("letter").notNull(),
+  category: text("category").notNull(),
+  attemptedWord: text("attempted_word").notNull().default(""),
+  won: boolean("won").notNull().default(false),
+  timeMs: integer("time_ms").notNull().default(60000),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => ({
+  // One attempt per player per (date, language). Enforced at DB level so two
+  // concurrent submits can't both insert.
+  uniqPlayerDateLang: uniqueIndex("impossible_results_player_date_lang_uniq")
+    .on(t.playerId, t.challengeDate, t.language),
+}));
+
+export const insertImpossibleResultSchema = createInsertSchema(impossibleResultsTable).omit({ id: true, createdAt: true });
+export type InsertImpossibleResult = z.infer<typeof insertImpossibleResultSchema>;
+export type ImpossibleResult = typeof impossibleResultsTable.$inferSelect;
 
 // ── Tournaments ───────────────────────────────────────────────────────────────
 export const tournamentsTable = pgTable("tournaments", {

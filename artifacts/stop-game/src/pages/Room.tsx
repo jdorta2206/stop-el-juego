@@ -2473,22 +2473,37 @@ function StreamerModeCard({ room, playerId }: { room: any; playerId: string }) {
         </Button>
       </div>
       {isPublic && (
-        <div className="flex flex-col gap-1.5 mt-1">
-          <div className="flex gap-2">
-            <input readOnly value={liveUrl}
-              onClick={(e) => (e.target as HTMLInputElement).select()}
-              className="flex-1 bg-black/40 text-white/80 text-[11px] px-2 py-1 rounded border border-white/10 font-mono" />
-            <Button size="sm" variant="ghost" onClick={() => copy(liveUrl, "live")}>
-              {copied === "live" ? "✓" : "Live"}
-            </Button>
-          </div>
-          <div className="flex gap-2">
-            <input readOnly value={overlayUrl}
-              onClick={(e) => (e.target as HTMLInputElement).select()}
-              className="flex-1 bg-black/40 text-white/80 text-[11px] px-2 py-1 rounded border border-white/10 font-mono" />
-            <Button size="sm" variant="ghost" onClick={() => copy(overlayUrl, "obs")}>
-              {copied === "obs" ? "✓" : "OBS"}
-            </Button>
+        <div className="flex gap-3 mt-1">
+          {/* QR for viewers — uses a free QR image service to avoid bundling a lib. */}
+          <img
+            src={`https://api.qrserver.com/v1/create-qr-code/?size=110x110&margin=4&color=ffffff&bgcolor=18181b&data=${encodeURIComponent(liveUrl)}`}
+            alt="QR"
+            width={88}
+            height={88}
+            loading="lazy"
+            className="rounded-lg flex-shrink-0"
+            style={{ background: "#18181b", border: "1px solid rgba(255,255,255,0.12)" }}
+          />
+          <div className="flex flex-col gap-1.5 flex-1 min-w-0">
+            <div className="flex gap-2">
+              <input readOnly value={liveUrl}
+                onClick={(e) => (e.target as HTMLInputElement).select()}
+                className="flex-1 min-w-0 bg-black/40 text-white/80 text-[11px] px-2 py-1 rounded border border-white/10 font-mono" />
+              <Button size="sm" variant="ghost" onClick={() => copy(liveUrl, "live")}>
+                {copied === "live" ? "✓" : "Live"}
+              </Button>
+            </div>
+            <div className="flex gap-2">
+              <input readOnly value={overlayUrl}
+                onClick={(e) => (e.target as HTMLInputElement).select()}
+                className="flex-1 min-w-0 bg-black/40 text-white/80 text-[11px] px-2 py-1 rounded border border-white/10 font-mono" />
+              <Button size="sm" variant="ghost" onClick={() => copy(overlayUrl, "obs")}>
+                {copied === "obs" ? "✓" : "OBS"}
+              </Button>
+            </div>
+            <p className="text-[10px] text-white/45 leading-tight">
+              📷 QR para que viewers entren · OBS = añade como Browser Source 480×720, fondo transparente
+            </p>
           </div>
         </div>
       )}

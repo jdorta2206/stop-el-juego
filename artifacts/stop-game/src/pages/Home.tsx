@@ -596,6 +596,57 @@ export default function Home() {
             {isPremium ? `⭐ ${t.premium.active}` : `${t.premium.title} — ${t.premium.features[0]}`}
           </motion.button>
 
+          {/* Streamer directory — discover live public rooms */}
+          <Link href="/streamers">
+            <motion.div
+              whileHover={{ scale: 1.02, y: -2 }}
+              whileTap={{ scale: 0.98 }}
+              className="w-full flex items-center gap-4 px-5 py-4 rounded-2xl cursor-pointer"
+              style={{
+                background: "linear-gradient(135deg, rgba(168,85,247,0.22), rgba(79,70,229,0.22))",
+                border: "1.5px solid rgba(168,85,247,0.45)",
+              }}
+            >
+              <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 relative"
+                style={{ background: "linear-gradient(135deg, #a855f7, #4f46e5)" }}>
+                <span className="text-xl">📺</span>
+                <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500 border-2 border-[#1a0f2e]" />
+                </span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-white font-black text-base">{(t as any).streamer?.homeCard ?? "En directo"}</p>
+                <p className="text-white/55 text-xs">{(t as any).streamer?.homeCardSub ?? "Mira partidas de streamers en vivo"}</p>
+              </div>
+              <span className="text-purple-300 font-black text-lg">→</span>
+            </motion.div>
+          </Link>
+
+          {/* Impossible Word — viral daily hook */}
+          <Link href="/imposible">
+            <motion.div
+              whileHover={{ scale: 1.02, y: -2 }}
+              whileTap={{ scale: 0.98 }}
+              className="w-full flex items-center gap-4 px-5 py-4 rounded-2xl cursor-pointer"
+              style={{
+                background: "linear-gradient(135deg, rgba(220,38,38,0.28), rgba(124,45,18,0.28))",
+                border: "2px solid rgba(239,68,68,0.55)",
+                boxShadow: "0 6px 22px rgba(220,38,38,0.25)",
+              }}
+            >
+              <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 text-2xl"
+                style={{ background: "linear-gradient(135deg, #ef4444, #7f1d1d)" }}>
+                🔥
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-white font-black text-base">{(t as any).impossible?.homeCard ?? "Palabra Imposible"}</p>
+                <p className="text-white/65 text-xs">{(t as any).impossible?.homeCardSub ?? "¿Te atreves con el reto de hoy?"}</p>
+              </div>
+              <span className="text-[#fca5a5] font-black text-lg">→</span>
+            </motion.div>
+          </Link>
+
           {/* Daily Challenge card */}
           <Link href="/reto">
             <motion.div

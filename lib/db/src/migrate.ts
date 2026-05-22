@@ -160,6 +160,25 @@ export async function ensureIndexes(): Promise<void> {
        ON play_subscriptions (player_id)`,
     `CREATE INDEX IF NOT EXISTS play_subscriptions_player_state_expiry_idx
        ON play_subscriptions (player_id, state, expiry_time_ms)`,
+
+    // ── impossible_results (Palabra Imposible daily) ─────────────────
+    `CREATE TABLE IF NOT EXISTS impossible_results (
+       id serial PRIMARY KEY,
+       player_id text NOT NULL,
+       player_name text NOT NULL,
+       challenge_date text NOT NULL,
+       language text NOT NULL DEFAULT 'es',
+       letter text NOT NULL,
+       category text NOT NULL,
+       attempted_word text NOT NULL DEFAULT '',
+       won boolean NOT NULL DEFAULT false,
+       time_ms integer NOT NULL DEFAULT 60000,
+       created_at timestamp NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS impossible_results_player_date_lang_uniq
+       ON impossible_results (player_id, challenge_date, language)`,
+    `CREATE INDEX IF NOT EXISTS impossible_results_date_lang_idx
+       ON impossible_results (challenge_date, language)`,
   ];
 
   for (const stmt of stmts) {

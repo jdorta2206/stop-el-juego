@@ -18,11 +18,13 @@ const Terms          = lazy(() => import("@/pages/Terms"));
 const About          = lazy(() => import("@/pages/About"));
 const HowToPlay      = lazy(() => import("@/pages/HowToPlay"));
 const DailyChallenge = lazy(() => import("@/pages/DailyChallenge"));
+const Impossible     = lazy(() => import("@/pages/Impossible"));
 const Friends        = lazy(() => import("@/pages/Friends"));
 const Strategies     = lazy(() => import("@/pages/Strategies"));
 const PlayerProfile  = lazy(() => import("@/pages/PlayerProfile"));
 const Tournament     = lazy(() => import("@/pages/Tournament"));
 const Live           = lazy(() => import("@/pages/Live"));
+const StreamerDirectory = lazy(() => import("@/pages/StreamerDirectory"));
 const Overlay        = lazy(() => import("@/pages/Overlay"));
 const DeleteAccount  = lazy(() => import("@/pages/DeleteAccount"));
 const SeasonPass     = lazy(() => import("@/pages/SeasonPass"));
@@ -47,6 +49,8 @@ function Router() {
       <Route path="/multiplayer" component={Multiplayer} />
       <Route path="/room/:id" component={Room} />
       <Route path="/live/:code" component={Live} />
+      <Route path="/streamers" component={StreamerDirectory} />
+      <Route path="/en-vivo" component={StreamerDirectory} />
       <Route path="/overlay/:code" component={Overlay} />
       <Route path="/ranking" component={Ranking} />
       <Route path="/privacy" component={Privacy} />
@@ -54,6 +58,8 @@ function Router() {
       <Route path="/acerca" component={About} />
       <Route path="/como-jugar" component={HowToPlay} />
       <Route path="/reto" component={DailyChallenge} />
+      <Route path="/imposible" component={Impossible} />
+      <Route path="/impossible" component={Impossible} />
       <Route path="/amigos" component={Friends} />
       <Route path="/estrategias" component={Strategies} />
       <Route path="/player/:id" component={PlayerProfile} />
