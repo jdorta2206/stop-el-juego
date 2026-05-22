@@ -87,14 +87,32 @@ export default function Achievements() {
                   opacity: isUnlocked ? 1 : 0.72,
                 }}
               >
-                <div
-                  className="text-4xl mb-2"
-                  style={{
-                    filter: isUnlocked ? "none" : "grayscale(1) brightness(0.6)",
-                  }}
-                >
-                  {a.icon}
-                </div>
+                {a.image ? (
+                  <img
+                    src={a.image}
+                    alt={name}
+                    width={64}
+                    height={64}
+                    loading="lazy"
+                    className="w-16 h-16 mb-2 select-none"
+                    style={{
+                      filter: isUnlocked
+                        ? "drop-shadow(0 4px 10px rgba(249,168,37,0.35))"
+                        : "grayscale(1) brightness(0.55)",
+                      transition: "filter 0.4s",
+                    }}
+                    draggable={false}
+                  />
+                ) : (
+                  <div
+                    className="text-4xl mb-2"
+                    style={{
+                      filter: isUnlocked ? "none" : "grayscale(1) brightness(0.6)",
+                    }}
+                  >
+                    {a.icon}
+                  </div>
+                )}
                 <p className="text-white font-black text-sm leading-tight mb-1">{name}</p>
                 <p className="text-white/70 text-xs leading-snug">{desc}</p>
                 <div

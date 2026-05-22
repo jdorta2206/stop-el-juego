@@ -27,60 +27,66 @@ export interface RoundResult {
 export interface AchievementDef {
   id: string;
   icon: string;
+  /** Optional path to an AI-generated badge PNG (preferred over emoji). */
+  image?: string;
   nameKey: string;
   descKey: string;
   xpReward: number;
   check: (stats: AchievementStats) => boolean;
 }
 
+// Centralized base path so every achievement def stays one-line readable
+// and the BASE_URL prefix (artifact path /stop-game/) is applied uniformly.
+const IMG = (id: string) => `${import.meta.env.BASE_URL}achievements/${id}.png`;
+
 export const ACHIEVEMENTS: AchievementDef[] = [
   {
-    id: "first_win", icon: "🏆", nameKey: "first_win_name", descKey: "first_win_desc", xpReward: 50,
+    id: "first_win", icon: "🏆", image: IMG("first_win"), nameKey: "first_win_name", descKey: "first_win_desc", xpReward: 50,
     check: s => s.totalWins >= 1,
   },
   {
-    id: "combo3", icon: "🔥", nameKey: "combo3_name", descKey: "combo3_desc", xpReward: 100,
+    id: "combo3", icon: "🔥", image: IMG("combo3"), nameKey: "combo3_name", descKey: "combo3_desc", xpReward: 100,
     check: s => s.maxCombo >= 3,
   },
   {
-    id: "speed_demon", icon: "⚡", nameKey: "speed_demon_name", descKey: "speed_demon_desc", xpReward: 75,
+    id: "speed_demon", icon: "⚡", image: IMG("speed_demon"), nameKey: "speed_demon_name", descKey: "speed_demon_desc", xpReward: 75,
     check: s => s.wonSpeedRound,
   },
   {
-    id: "chaos_master", icon: "🌀", nameKey: "chaos_master_name", descKey: "chaos_master_desc", xpReward: 150,
+    id: "chaos_master", icon: "🌀", image: IMG("chaos_master"), nameKey: "chaos_master_name", descKey: "chaos_master_desc", xpReward: 150,
     check: s => s.wonChaosRound,
   },
   {
-    id: "wordsmith", icon: "📝", nameKey: "wordsmith_name", descKey: "wordsmith_desc", xpReward: 100,
+    id: "wordsmith", icon: "📝", image: IMG("wordsmith"), nameKey: "wordsmith_name", descKey: "wordsmith_desc", xpReward: 100,
     check: s => s.validWordsRecord >= 7,
   },
   {
-    id: "veteran", icon: "🎖️", nameKey: "veteran_name", descKey: "veteran_desc", xpReward: 150,
+    id: "veteran", icon: "🎖️", image: IMG("veteran"), nameKey: "veteran_name", descKey: "veteran_desc", xpReward: 150,
     check: s => s.totalGames >= 25,
   },
   {
-    id: "champion", icon: "🥊", nameKey: "champion_name", descKey: "champion_desc", xpReward: 200,
+    id: "champion", icon: "🥊", image: IMG("champion"), nameKey: "champion_name", descKey: "champion_desc", xpReward: 200,
     check: s => s.totalWins >= 10,
   },
   {
-    id: "unstoppable", icon: "👑", nameKey: "unstoppable_name", descKey: "unstoppable_desc", xpReward: 500,
+    id: "unstoppable", icon: "👑", image: IMG("unstoppable"), nameKey: "unstoppable_name", descKey: "unstoppable_desc", xpReward: 500,
     check: s => s.totalWins >= 50,
   },
   // Streak milestones — celebrated by the streak calendar UI on Home.
   {
-    id: "streak_3", icon: "🔥", nameKey: "streak_3_name", descKey: "streak_3_desc", xpReward: 75,
+    id: "streak_3", icon: "🔥", image: IMG("streak_3"), nameKey: "streak_3_name", descKey: "streak_3_desc", xpReward: 75,
     check: s => s.longestStreak >= 3,
   },
   {
-    id: "streak_7", icon: "🌟", nameKey: "streak_7_name", descKey: "streak_7_desc", xpReward: 150,
+    id: "streak_7", icon: "🌟", image: IMG("streak_7"), nameKey: "streak_7_name", descKey: "streak_7_desc", xpReward: 150,
     check: s => s.longestStreak >= 7,
   },
   {
-    id: "streak_14", icon: "💎", nameKey: "streak_14_name", descKey: "streak_14_desc", xpReward: 300,
+    id: "streak_14", icon: "💎", image: IMG("streak_14"), nameKey: "streak_14_name", descKey: "streak_14_desc", xpReward: 300,
     check: s => s.longestStreak >= 14,
   },
   {
-    id: "streak_30", icon: "👑", nameKey: "streak_30_name", descKey: "streak_30_desc", xpReward: 750,
+    id: "streak_30", icon: "👑", image: IMG("streak_30"), nameKey: "streak_30_name", descKey: "streak_30_desc", xpReward: 750,
     check: s => s.longestStreak >= 30,
   },
 ];

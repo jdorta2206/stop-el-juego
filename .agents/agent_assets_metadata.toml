@@ -6,6 +6,78 @@ uri = "file://attached_assets/generated_images/playstore_featured_graphic.png"
 type = "image"
 title = "generated_image"
 
+[[generated]]
+id = "P6dsNjnvlDGOdastHQNzl"
+uri = "file://artifacts/stop-game/public/achievements/first_win.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "O-QWhgE2LWSJcRNDRM1Vz"
+uri = "file://artifacts/stop-game/public/achievements/combo3.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "U5dkaiAmy1-gdAcgNoiqk"
+uri = "file://artifacts/stop-game/public/achievements/speed_demon.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "_PabLra-Xqqs45jpeNE6a"
+uri = "file://artifacts/stop-game/public/achievements/chaos_master.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "fDKeIc6WOSxSUFkdUrkLc"
+uri = "file://artifacts/stop-game/public/achievements/wordsmith.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "geeZAGgaRWWYzJjIFGlbm"
+uri = "file://artifacts/stop-game/public/achievements/veteran.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "sc_5yzvzEVB-BvW1zhmyZ"
+uri = "file://artifacts/stop-game/public/achievements/champion.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "QIDsFxXiOiuIEGU9WjjWq"
+uri = "file://artifacts/stop-game/public/achievements/unstoppable.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "-Id1MDa4JyVrxf4H4saMs"
+uri = "file://artifacts/stop-game/public/achievements/streak_3.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "VJi_1vFa6SPVv0xNU4gNt"
+uri = "file://artifacts/stop-game/public/achievements/streak_7.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "nn8Jw0s7VgosCGG86qFWl"
+uri = "file://artifacts/stop-game/public/achievements/streak_14.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "zinn_0ESysB-0o1uAbSn7"
+uri = "file://artifacts/stop-game/public/achievements/streak_30.png"
+type = "image"
+title = "generated_image"
+
 [[outputs]]
 id = "xs_jQLvgKvRDfgpmF15P1"
 uri = "file://testers.csv"

@@ -531,6 +531,11 @@ export default function Ranking() {
                             <Flame size={9} /> {(p as any).currentStreak}
                           </p>
                         )}
+                        {((p as any).achievementCount ?? 0) > 0 && (
+                          <p className="text-[10px] text-yellow-300 font-black flex items-center justify-center gap-0.5 mt-0.5">
+                            <Trophy size={9} /> {(p as any).achievementCount}/12
+                          </p>
+                        )}
                       </div>
 
                       {/* Podium action buttons */}
@@ -692,6 +697,15 @@ export default function Ranking() {
                               {(p.currentStreak ?? 0) >= 2 && (
                                 <span className={`flex items-center gap-0.5 text-[10px] font-bold ${isMe ? "text-black/60" : "text-orange-400"}`}>
                                   <Flame size={9} />{p.currentStreak}
+                                </span>
+                              )}
+                              {((p as any).achievementCount ?? 0) > 0 && (
+                                <span
+                                  className={`flex items-center gap-0.5 text-[10px] font-black tracking-tight ${isMe ? "text-black/70" : "text-yellow-300/95"}`}
+                                  title="Logros desbloqueados"
+                                >
+                                  <Trophy size={9} />
+                                  {(p as any).achievementCount}/12
                                 </span>
                               )}
                             </div>

@@ -98,6 +98,7 @@ router.get("/scores", async (req, res) => {
       currentStreak: p.current_streak ?? 0,
       longestStreak: p.longest_streak ?? 0,
       isPremium: p.is_premium ?? false,
+      achievementCount: parseAchievementCount(p.achievements_json),
       title: getTitle(i + 1),
       createdAt: p.created_at,
       updatedAt: p.updated_at,
@@ -241,6 +242,18 @@ router.post("/scores", scoreLimiter, async (req, res) => {
   res.status(201).json({ ...player, rank: 0 });
 });
 
+// Shared helper: derive achievement count from the JSON column. Lives at
+// module scope so weekly/monthly handlers can include the same X/12 badge
+// the all-time leaderboard surfaces.
+function parseAchievementCount(json: unknown): number {
+  try {
+    const parsed = JSON.parse((json as string) ?? "[]");
+    return Array.isArray(parsed) ? parsed.length : 0;
+  } catch {
+    return 0;
+  }
+}
+
 router.get("/weekly", async (req, res) => {
   const rows = await db.execute(sql`
     SELECT
@@ -249,13 +262,14 @@ router.get("/weekly", async (req, res) => {
       ps.avatar_color     AS "avatarColor",
       ps.current_streak   AS "currentStreak",
       ps.is_premium       AS "isPremium",
+      ps.achievements_json AS "achievementsJson",
       SUM(gh.score)       AS "totalScore",
       COUNT(*)            AS "gamesPlayed",
       SUM(CASE WHEN gh.won THEN 1 ELSE 0 END) AS "wins"
     FROM game_history gh
     LEFT JOIN player_scores ps ON gh.player_id = ps.player_id
     WHERE gh.created_at >= date_trunc('week', NOW() AT TIME ZONE 'UTC')
-    GROUP BY gh.player_id, ps.player_name, ps.avatar_color, ps.current_streak, ps.is_premium
+    GROUP BY gh.player_id, ps.player_name, ps.avatar_color, ps.current_streak, ps.is_premium, ps.achievements_json
     ORDER BY SUM(gh.score) DESC
     LIMIT 100
   `);
@@ -269,6 +283,7 @@ router.get("/weekly", async (req, res) => {
     wins:          Number(p.wins ?? 0),
     currentStreak: Number(p.currentStreak ?? 0),
     isPremium:     p.isPremium ?? false,
+    achievementCount: parseAchievementCount(p.achievementsJson),
     title:         getTitle(i + 1),
     rank:          i + 1,
   }));
@@ -291,13 +306,14 @@ router.get("/monthly", async (_req, res) => {
       ps.avatar_color     AS "avatarColor",
       ps.current_streak   AS "currentStreak",
       ps.is_premium       AS "isPremium",
+      ps.achievements_json AS "achievementsJson",
       SUM(gh.score)       AS "totalScore",
       COUNT(*)            AS "gamesPlayed",
       SUM(CASE WHEN gh.won THEN 1 ELSE 0 END) AS "wins"
     FROM game_history gh
     LEFT JOIN player_scores ps ON gh.player_id = ps.player_id
     WHERE gh.created_at >= date_trunc('month', NOW() AT TIME ZONE 'UTC')
-    GROUP BY gh.player_id, ps.player_name, ps.avatar_color, ps.current_streak, ps.is_premium
+    GROUP BY gh.player_id, ps.player_name, ps.avatar_color, ps.current_streak, ps.is_premium, ps.achievements_json
     ORDER BY SUM(gh.score) DESC
     LIMIT 100
   `);
@@ -311,6 +327,7 @@ router.get("/monthly", async (_req, res) => {
     wins:          Number(p.wins ?? 0),
     currentStreak: Number(p.currentStreak ?? 0),
     isPremium:     p.isPremium ?? false,
+    achievementCount: parseAchievementCount(p.achievementsJson),
     title:         getTitle(i + 1),
     rank:          i + 1,
   }));

@@ -99,7 +99,11 @@ export default function SoloGame() {
   const [showPremiumModal, setShowPremiumModal] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [lastXpGain, setLastXpGain] = useState(0);
-  const { packs: customPacks } = useCustomPacks(isPremium ? player?.id : null);
+  const { packs: customPacks, loading: customPacksLoading } = useCustomPacks(isPremium ? player?.id : null);
+  // Set by the URL-param effect below when ?auto=1 is requested AND the
+  // selected pack is a custom one — startGame() is deferred until the
+  // packs hook finishes loading so the pack actually resolves.
+  const pendingAutoStartRef = useRef(false);
   const packId = getSafePackId(getSelectedPackId(), isPremium, customPacks);
   const activePack = getPackById(packId, customPacks);
   const packCats = () => packId === "classic" ? getCategories() : getPackCategories(packId, getCurrentLang(), customPacks);
@@ -357,12 +361,36 @@ export default function SoloGame() {
       setShowPremiumModal(true);
     }
     // Auto-start: open the page already in a match. Used by the home "JUGAR YA" hero.
+    // If the user has a custom pack selected, defer the start until the
+    // custom packs list has been fetched — otherwise getSafePackId() would
+    // see customPacks=[] and silently downgrade them to "classic".
     if (params.get("auto") === "1") {
       window.history.replaceState({}, "", window.location.pathname + (params.get("mode") ? `?mode=${params.get("mode")}` : ""));
-      setTimeout(() => startGame(), 60);
+      const selectedAtBoot = getSelectedPackId();
+      const needsCustomLoad = selectedAtBoot.startsWith("custom:");
+      if (!needsCustomLoad) {
+        setTimeout(() => startGame(), 60);
+      } else {
+        // The effect below watching customPacksLoading will fire startGame
+        // once the hook finishes its initial fetch.
+        pendingAutoStartRef.current = true;
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Companion to the auto-start effect above: when the user picked a custom
+  // pack, wait for useCustomPacks to settle before kicking off the round so
+  // the categories resolve correctly (otherwise getSafePackId silently
+  // downgrades to "classic"). Idempotent thanks to the ref guard.
+  useEffect(() => {
+    if (!pendingAutoStartRef.current) return;
+    if (customPacksLoading) return;
+    pendingAutoStartRef.current = false;
+    const id = setTimeout(() => startGame(), 60);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customPacksLoading]);
 
   const validateMutation = useValidateRound();
   const submitScoreMutation = useSubmitScore();

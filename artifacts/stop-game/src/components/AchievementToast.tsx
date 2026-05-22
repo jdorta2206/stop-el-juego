@@ -40,13 +40,25 @@ export function AchievementToast({ achievement, onDone, tAchievements }: Achieve
               boxShadow: "0 8px 40px rgba(249,168,37,0.2), 0 4px 20px rgba(0,0,0,0.6)",
             }}
           >
-            <motion.span
-              animate={{ rotate: [0, -10, 10, -5, 0], scale: [1, 1.3, 1] }}
-              transition={{ duration: 0.5, delay: 0.1 }}
-              className="text-3xl flex-shrink-0"
+            <motion.div
+              animate={{ rotate: [0, -10, 10, -5, 0], scale: [1, 1.25, 1] }}
+              transition={{ duration: 0.55, delay: 0.1 }}
+              className="flex-shrink-0"
             >
-              {achievement.icon}
-            </motion.span>
+              {achievement.image ? (
+                <img
+                  src={achievement.image}
+                  alt={name}
+                  width={44}
+                  height={44}
+                  className="w-11 h-11 select-none"
+                  style={{ filter: "drop-shadow(0 0 8px rgba(249,168,37,0.55))" }}
+                  draggable={false}
+                />
+              ) : (
+                <span className="text-3xl">{achievement.icon}</span>
+              )}
+            </motion.div>
             <div className="flex-1 min-w-0">
               <p className="text-[#f9a825] font-black text-xs uppercase tracking-wider">{tAchievements.new}</p>
               <p className="text-white font-black text-base leading-tight truncate">{name}</p>
