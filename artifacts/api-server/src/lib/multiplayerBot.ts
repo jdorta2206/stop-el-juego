@@ -254,10 +254,15 @@ const CRAZY_CATEGORIES_ES = [
 ];
 
 export function resolveCategoriesForRound(
-  pack: "standard" | "crazy" | "mix" | undefined,
+  pack: "standard" | "crazy" | "mix" | "custom" | undefined,
   letter: string,
   round: number,
+  customCategories?: string[],
 ): string[] {
+  if (pack === "custom" && customCategories && customCategories.length > 0) {
+    // Cap at 12 — UI/scoring assume bounded category counts.
+    return customCategories.slice(0, 12);
+  }
   if (pack === "crazy") return CRAZY_CATEGORIES_ES;
   if (pack === "mix") {
     const seed = (letter || "A").charCodeAt(0) * 31 + (round || 1) * 7;

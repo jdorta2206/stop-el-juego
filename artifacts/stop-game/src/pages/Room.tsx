@@ -15,6 +15,7 @@ import { usePlayer } from "@/hooks/use-player";
 import { Share2, Play, ArrowLeft, Trophy, CheckCircle2, Circle, Volume2, VolumeX, Layers } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { CATEGORIES_ES } from "@/lib/utils";
+import { useCustomPacks } from "@/lib/useCustomPacks";
 import confetti from "canvas-confetti";
 import { RoomInvitePanel } from "@/components/RoomInvitePanel";
 import { ChallengeNotification } from "@/components/ChallengeNotification";
@@ -93,6 +94,9 @@ export default function Room() {
   const { player } = usePlayer();
   const { isPremium: meIsPremium } = usePremium(player?.id);
   const { followedIds, follow, unfollow } = useFollows(player?.id);
+  // The host's own custom packs (premium feature). Non-premium players see
+  // an empty list and the custom-pack section in the lobby is hidden for them.
+  const { packs: myCustomPacks } = useCustomPacks(meIsPremium ? player?.id : null);
 
   // Sync spy budget with premium status: 2/round if premium, 1/round otherwise
   useEffect(() => {
@@ -126,14 +130,21 @@ export default function Room() {
   const [rematchCode, setRematchCode] = useState<string | null>(null);
   const [rematchLoading, setRematchLoading] = useState(false);
   const lastTypingPing = useRef(0);
-  const [categoryPack, setCategoryPack] = useState<"standard" | "crazy" | "mix">("standard");
+  const [categoryPack, setCategoryPack] = useState<"standard" | "crazy" | "mix" | "custom">("standard");
+  // When a Premium host picks one of their own custom packs, the categories
+  // travel via the room state (`customCategories`) so every player — including
+  // non-premium guests — sees the same set without needing access to the
+  // host's private pack list.
+  const [activeCustomCategories, setActiveCustomCategories] = useState<string[] | null>(null);
+  const [activeCustomLabel, setActiveCustomLabel] = useState<string | null>(null);
   const [roundCategories, setRoundCategories] = useState<string[]>(CATEGORIES_ES);
   const CRAZY_CATEGORIES_ES = [
     "Excusa para llegar tarde", "Película que finges haber visto", "Animal que querrías de mascota",
     "Cosa que no debes decir en una cita", "Superhéroe inventado", "Profesión del futuro",
     "Cosa que encuentras bajo el sofá", "Deporte que nunca se inventó",
   ];
-  const computeCategories = useCallback((pack: "standard" | "crazy" | "mix", letter: string, round: number) => {
+  const computeCategories = useCallback((pack: "standard" | "crazy" | "mix" | "custom", letter: string, round: number, customCats?: string[] | null) => {
+    if (pack === "custom" && customCats && customCats.length > 0) return customCats.slice(0, 12);
     if (pack === "crazy") return CRAZY_CATEGORIES_ES;
     if (pack === "mix") {
       const seed = letter.charCodeAt(0) * 31 + round * 7;
@@ -399,11 +410,15 @@ export default function Room() {
   useEffect(() => { phaseRef.current = phase; }, [phase]);
   useEffect(() => { roomCodeRef.current = roomCode || ""; }, [roomCode]);
 
-  // Sync categoryPack from room data
+  // Sync categoryPack + custom categories from room data
   useEffect(() => {
     const pack = (room as any)?.categoryPack;
-    if (pack && ["standard", "crazy", "mix"].includes(pack)) setCategoryPack(pack);
-  }, [(room as any)?.categoryPack]);
+    if (pack && ["standard", "crazy", "mix", "custom"].includes(pack)) setCategoryPack(pack);
+    const cc = (room as any)?.customCategories;
+    setActiveCustomCategories(Array.isArray(cc) ? cc : null);
+    const cl = (room as any)?.customPackLabel;
+    setActiveCustomLabel(typeof cl === "string" ? cl : null);
+  }, [(room as any)?.categoryPack, (room as any)?.customCategories, (room as any)?.customPackLabel]);
 
   // Sync typing presence from room data (excluding self)
   useEffect(() => {
@@ -476,13 +491,15 @@ export default function Room() {
     } catch {} finally { setRematchLoading(false); }
   }, [rematchCode, rematchLoading, player, roomCode, setLocation]);
 
-  // Recompute categories when round starts
+  // Recompute categories when round starts. Custom packs use the categories
+  // broadcast through room state so every client (host or not) renders the
+  // exact same set the bot/scoring backend resolves on the server.
   useEffect(() => {
     if (phase === "playing" && currentLetter && currentRound) {
-      setRoundCategories(computeCategories(categoryPack, currentLetter, currentRound));
+      setRoundCategories(computeCategories(categoryPack, currentLetter, currentRound, activeCustomCategories));
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, currentLetter, currentRound]);
+  }, [phase, currentLetter, currentRound, categoryPack, activeCustomCategories]);
 
   // Process incoming reactions from room polling
   useEffect(() => {
@@ -535,17 +552,24 @@ export default function Room() {
     } catch {}
   }, [player, roomCode]);
 
-  const saveCategoryPack = useCallback(async (pack: "standard" | "crazy" | "mix") => {
+  const saveCategoryPack = useCallback(async (
+    pack: "standard" | "crazy" | "mix" | "custom",
+    extras?: { customCategories?: string[]; customLabel?: string },
+  ) => {
     if (!player || !roomCode) return;
     setCategoryPack(pack);
     try {
-      await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/category-pack`, {
+      const res = await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/category-pack`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ hostId: player.id, pack }),
+        body: JSON.stringify({ hostId: player.id, pack, ...(extras ?? {}) }),
       });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        toast({ title: data?.error ?? "No se pudo cambiar categorías", variant: "destructive" });
+      }
     } catch {}
-  }, [player, roomCode]);
+  }, [player, roomCode, toast]);
 
   const stopAllTimers = useCallback(() => {
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
@@ -565,7 +589,7 @@ export default function Room() {
       bluffedWords[cat] = responsesSnapshotRef.current[cat] ?? "";
     }
     // Speed bonus: stopper gets +5 if they filled ALL categories
-    const allFilled = CATEGORIES_ES.every(cat => (responsesSnapshotRef.current[cat] ?? "").trim().length >= 2);
+    const allFilled = roundCategories.every(cat => (responsesSnapshotRef.current[cat] ?? "").trim().length >= 2);
     const finalScore = isStopper && allFilled ? score + 5 : score;
     // 🕵️ Nota: el coste -10 por ESPIAR lo aplica el servidor autoritativamente.
     const payload = {
@@ -851,9 +875,9 @@ export default function Room() {
   // ~0.7s por categoría (12 cats ≈ 8s total) + arranque rápido.
   useEffect(() => {
     if (phase !== "between_rounds") return;
-    if (revealedCount >= CATEGORIES_ES.length) return;
+    if (revealedCount >= roundCategories.length) return;
     const t = window.setTimeout(() => {
-      setRevealedCount(prev => Math.min(prev + 1, CATEGORIES_ES.length));
+      setRevealedCount(prev => Math.min(prev + 1, roundCategories.length));
     }, revealedCount === 0 ? 200 : 700);
     return () => window.clearTimeout(t);
   }, [phase, revealedCount]);
@@ -1233,6 +1257,53 @@ export default function Room() {
                   </button>
                 ))}
               </div>
+
+              {/* Premium custom packs — only visible to a premium host who has
+                  at least one saved pack. Non-host players see the active
+                  custom pack as a read-only label below. */}
+              {isHost && meIsPremium && myCustomPacks.length > 0 && (
+                <div className="mt-3 pt-3 border-t border-white/10">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-yellow-300/80 mb-2">
+                    ✨ Tus packs personalizados
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {myCustomPacks.map(pack => {
+                      const isActive = categoryPack === "custom" && activeCustomLabel === pack.name;
+                      return (
+                        <button
+                          key={pack.id}
+                          onClick={() => saveCategoryPack("custom", {
+                            customCategories: pack.categories,
+                            customLabel: pack.name,
+                          })}
+                          className="flex flex-col items-start gap-0.5 py-2 px-3 rounded-xl text-left transition-all"
+                          style={{
+                            background: isActive ? "rgba(250,204,21,0.18)" : "rgba(255,255,255,0.05)",
+                            border: `2px solid ${isActive ? "rgba(250,204,21,0.7)" : "rgba(255,255,255,0.08)"}`,
+                          }}
+                        >
+                          <span className="text-sm font-black text-white truncate w-full">
+                            {pack.icon ? `${pack.icon} ` : ""}{pack.name}
+                          </span>
+                          <span className="text-[10px] text-white/40">{pack.categories.length} categorías</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Show the active custom pack name to non-host players (and to
+                  hosts when one is selected) so everyone knows what's coming. */}
+              {categoryPack === "custom" && activeCustomLabel && (
+                <div className="mt-3 pt-3 border-t border-white/10 flex items-center gap-2">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-yellow-300/80">Activo:</span>
+                  <span className="text-xs font-black text-white truncate">✨ {activeCustomLabel}</span>
+                  {activeCustomCategories && (
+                    <span className="text-[10px] text-white/40 ml-auto">{activeCustomCategories.length} cats</span>
+                  )}
+                </div>
+              )}
             </Card>
 
             {/* Invite panel — invite friends directly to this room */}
@@ -1812,7 +1883,7 @@ export default function Room() {
           const normLetter = normalizeForScore(currentLetter || room?.currentLetter || "");
           // Build uniqueness map: for each category, which normalized values appear >1 times
           const duplicatesByCategory: Record<string, Set<string>> = {};
-          for (const cat of CATEGORIES_ES) {
+          for (const cat of roundCategories) {
             const vals = players
               .map((p: any) => normalizeForScore(p.answers?.[cat] ?? ""))
               .filter(v => v.length >= 2 && v.startsWith(normLetter));
@@ -1821,7 +1892,7 @@ export default function Room() {
             for (const v of vals) { if (seen.has(v)) dupes.add(v); else seen.add(v); }
             duplicatesByCategory[cat] = dupes;
           }
-          const showScores = revealedCount >= CATEGORIES_ES.length;
+          const showScores = revealedCount >= roundCategories.length;
           const roundNumber = currentRound > 1 ? currentRound - 1 : maxRounds;
           return (
             <motion.div key="between_rounds"
@@ -1839,7 +1910,7 @@ export default function Room() {
                 <>
                   {/* Category reveal grid */}
                   <div className="space-y-2 flex-1 overflow-y-auto">
-                    {CATEGORIES_ES.map((cat, catIdx) => {
+                    {roundCategories.map((cat, catIdx) => {
                       const revealed = catIdx < revealedCount;
                       return (
                         <motion.div key={cat}
@@ -1935,8 +2006,8 @@ export default function Room() {
                     })}
                   </div>
                   <Button size="lg" className="w-full shrink-0"
-                    onClick={() => setRevealedCount(CATEGORIES_ES.length)}>
-                    ⏭ Ver puntuaciones ({revealedCount}/{CATEGORIES_ES.length})
+                    onClick={() => setRevealedCount(roundCategories.length)}>
+                    ⏭ Ver puntuaciones ({revealedCount}/{roundCategories.length})
                   </Button>
                 </>
               ) : (

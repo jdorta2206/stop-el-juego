@@ -153,7 +153,15 @@ const botDeps = {
 // ── In-memory stores (ephemeral, no DB needed) ─────────────────────────────
 type Reaction = { id: string; emoji: string; playerName: string; ts: number };
 const roomReactions = new Map<string, Reaction[]>();
-const roomCategoryPacks = new Map<string, "standard" | "crazy" | "mix">();
+// Pack selection for each room. "custom" requires a premium host and carries
+// the actual categories list + a human label (so all clients see the same
+// set without needing to load the host's private custom pack collection).
+type RoomPackConfig = {
+  pack: "standard" | "crazy" | "mix" | "custom";
+  customCategories?: string[];
+  customLabel?: string;
+};
+const roomCategoryPacks = new Map<string, RoomPackConfig>();
 
 type QuickPhrase = { id: string; playerName: string; text: string; ts: number };
 const roomPhrases = new Map<string, QuickPhrase[]>();
@@ -268,7 +276,9 @@ function formatRoom(room: any) {
     maxRounds: room.maxRounds,
     maxPlayers: room.maxPlayers ?? 8,
     gameMode: room.gameMode ?? "classic",
-    categoryPack: roomCategoryPacks.get(code) ?? "standard",
+    categoryPack: (roomCategoryPacks.get(code)?.pack) ?? "standard",
+    customCategories: roomCategoryPacks.get(code)?.customCategories ?? null,
+    customPackLabel: roomCategoryPacks.get(code)?.customLabel ?? null,
     language: room.language,
     isPublic: room.isPublic ?? false,
     players: parsePlayers(room.playersJson),
@@ -576,6 +586,15 @@ router.post("/", async (req, res) => {
     isReady: false,
   }];
 
+  // Defensive: room codes are recycled (6-char alphanumeric, collision-checked
+  // against DB but not against in-memory state). Clear any leftover ephemeral
+  // state for this code so a new host can't inherit a previous host's custom
+  // pack or transient reactions/typing.
+  roomCategoryPacks.delete(roomCode);
+  roomReactions.delete(roomCode);
+  roomPhrases.delete(roomCode);
+  roomTyping.delete(roomCode);
+
   const [room] = await db.insert(roomsTable).values({
     roomCode,
     hostId,
@@ -770,10 +789,11 @@ router.post("/:roomCode/start", async (req, res) => {
   const botsInRoom = resetPlayers.filter((p: any) => p.isBot);
   if (botsInRoom.length > 0) {
     const updatedRoom = updateResult[0];
-    const pack = (roomCategoryPacks.get(roomCode.toUpperCase()) ?? "standard") as "standard" | "crazy" | "mix";
+    const packCfg = roomCategoryPacks.get(roomCode.toUpperCase());
+    const pack = packCfg?.pack ?? "standard";
     const letterForRound = (updatedRoom.currentLetter ?? "A").toUpperCase();
     const roundForRound = updatedRoom.currentRound ?? newRound;
-    const categories = resolveCategoriesForRound(pack, letterForRound, roundForRound);
+    const categories = resolveCategoriesForRound(pack, letterForRound, roundForRound, packCfg?.customCategories);
     scheduleBotsForRound({
       roomCode: roomCode.toUpperCase(),
       bots: botsInRoom.map((b: any) => ({ playerId: b.playerId })),
@@ -993,15 +1013,37 @@ router.post("/:roomCode/react", writeLimiter, async (req, res) => {
   res.json({ ok: true });
 });
 
-// POST /rooms/:roomCode/category-pack — host sets category pack (standard/crazy/mix)
+// POST /rooms/:roomCode/category-pack — host sets category pack
+// (standard/crazy/mix, or "custom" with categories+label for premium hosts)
 router.post("/:roomCode/category-pack", async (req, res) => {
   const code = paramStr(req.params.roomCode).toUpperCase();
-  const { hostId, pack } = req.body as { hostId: string; pack: "standard" | "crazy" | "mix" };
+  const body = req.body as {
+    hostId: string;
+    pack: "standard" | "crazy" | "mix" | "custom";
+    customCategories?: string[];
+    customLabel?: string;
+  };
+  const { hostId, pack } = body;
   const rooms = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, code)).limit(1);
   if (rooms.length === 0) { res.status(404).json({ error: "Room not found" }); return; }
   if (rooms[0].hostId !== hostId) { res.status(403).json({ error: "Not host" }); return; }
-  if (!["standard", "crazy", "mix"].includes(pack)) { res.status(400).json({ error: "Invalid pack" }); return; }
-  roomCategoryPacks.set(code, pack);
+  if (!["standard", "crazy", "mix", "custom"].includes(pack)) { res.status(400).json({ error: "Invalid pack" }); return; }
+
+  if (pack === "custom") {
+    // Gate behind premium server-side — client UI hides it but never trust the client.
+    const hostPremium = await isPlayerPremium(hostId);
+    if (!hostPremium) { res.status(403).json({ error: "Premium required for custom packs" }); return; }
+    const cats = Array.isArray(body.customCategories) ? body.customCategories : [];
+    const clean = cats
+      .map(c => typeof c === "string" ? c.trim() : "")
+      .filter(c => c.length > 0 && c.length <= 60)
+      .slice(0, 12);
+    if (clean.length < 3) { res.status(400).json({ error: "Need at least 3 categories" }); return; }
+    const label = (typeof body.customLabel === "string" ? body.customLabel.trim() : "").slice(0, 40) || "Personalizado";
+    roomCategoryPacks.set(code, { pack: "custom", customCategories: clean, customLabel: label });
+  } else {
+    roomCategoryPacks.set(code, { pack });
+  }
   // 🚀 Notify all players the host changed the category pack
   try { broadcastAndFormat(rooms[0]); } catch {}
   res.json({ ok: true, categoryPack: pack });
