@@ -31,6 +31,8 @@ const SeasonPass     = lazy(() => import("@/pages/SeasonPass"));
 const Achievements   = lazy(() => import("@/pages/Achievements"));
 const Collection     = lazy(() => import("@/pages/Collection"));
 const Notifications  = lazy(() => import("@/pages/Notifications"));
+const Blog           = lazy(() => import("@/pages/Blog"));
+const BlogPost       = lazy(() => import("@/pages/BlogPost"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -72,6 +74,8 @@ function Router() {
       <Route path="/collection" component={Collection} />
       <Route path="/notificaciones" component={Notifications} />
       <Route path="/notifications" component={Notifications} />
+      <Route path="/blog" component={Blog} />
+      <Route path="/blog/:slug" component={BlogPost} />
       {/* Google Play "Account deletion URL" requirement (es + en aliases) */}
       <Route path="/eliminar-cuenta" component={DeleteAccount} />
       <Route path="/delete-account" component={DeleteAccount} />
