@@ -1,6 +1,7 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { Share2, X, Copy, Check } from "lucide-react";
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 
 interface MultiplayerShareData {
   players: Array<{ playerId: string; playerName: string; score: number; avatarColor?: string }>;
@@ -165,14 +166,16 @@ export function ShareResultsModal({
   const whatsapp = `https://wa.me/?text=${encodeURIComponent(shareMessage)}`;
   const twitter = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareMessage)}`;
 
-  return (
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
     <AnimatePresence>
       {open && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 flex items-end justify-center p-4"
+          className="fixed inset-0 z-[9999] flex items-end justify-center p-4"
           style={{ background: "rgba(0,0,0,0.7)" }}
           onClick={onClose}
         >
@@ -333,6 +336,7 @@ export function ShareResultsModal({
           </motion.div>
         </motion.div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
 }

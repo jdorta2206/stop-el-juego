@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Download, Loader2, Share2 } from "lucide-react";
 
@@ -742,6 +743,7 @@ export function ClipGenerator(props: ClipGeneratorProps) {
   }, [open]);
 
   if (!open) return null;
+  if (typeof document === "undefined") return null;
 
   const downloadFile = (blob: Blob, name: string) => {
     const url = URL.createObjectURL(blob);
@@ -863,11 +865,11 @@ export function ClipGenerator(props: ClipGeneratorProps) {
     }
   };
 
-  return (
+  return createPortal(
     <AnimatePresence>
       <motion.div
         initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-        className="fixed inset-0 z-[200] flex items-center justify-center p-4"
+        className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
         style={{ background: "rgba(0,0,0,0.85)", backdropFilter: "blur(8px)" }}
         onClick={onClose}
       >
@@ -926,6 +928,7 @@ export function ClipGenerator(props: ClipGeneratorProps) {
           </div>
         </motion.div>
       </motion.div>
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
 }
