@@ -16,6 +16,7 @@ import { RewardedAd, BannerAd } from "@/components/AdSystem";
 import { ContextualPremiumPrompt } from "@/components/ContextualPremiumPrompt";
 import { PremiumModal } from "@/components/PremiumModal";
 import { ShareResultsModal } from "@/components/ShareResultsModal";
+import { ClipGenerator } from "@/components/ClipGenerator";
 import { recordExternalStat } from "@/hooks/useAchievements";
 import { usePremium } from "@/lib/usePremium";
 import { Tv2, Crown, Volume2, VolumeX, Zap, Star, Flame, Trophy } from "lucide-react";
@@ -99,6 +100,7 @@ export default function SoloGame() {
   const [hintReveal, setHintReveal] = useState<{ category: string; word: string } | null>(null);
   const [showPremiumModal, setShowPremiumModal] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
+  const [showClipModal, setShowClipModal] = useState(false);
   const [lastXpGain, setLastXpGain] = useState(0);
   const { packs: customPacks, loading: customPacksLoading } = useCustomPacks(isPremium ? player?.id : null);
   // Set by the URL-param effect below when ?auto=1 is requested AND the
@@ -1326,6 +1328,23 @@ export default function SoloGame() {
               ? { wasCorrect: playerJudgedAi === aiBluffReveal.wasActuallyBluffing, category: aiBluffReveal.category }
               : null
           }
+          onShared={() => recordExternalStat(player?.id, { timesShared: 1 })}
+        />
+
+        <ClipGenerator
+          open={showClipModal}
+          onClose={() => setShowClipModal(false)}
+          playerName={player?.name ?? "Jugador"}
+          letter={currentLetter}
+          totalScore={totalScore}
+          language={getCurrentLang()}
+          entries={categories
+            .map((cat) => {
+              const r = (results?.results ?? {})[cat]?.player;
+              return { category: cat, word: r?.response ?? "—", score: r?.score ?? 0 };
+            })
+            .sort((a, b) => b.score - a.score)
+            .slice(0, 4)}
           onShared={() => recordExternalStat(player?.id, { timesShared: 1 })}
         />
 
@@ -2730,6 +2749,14 @@ export default function SoloGame() {
                         className="flex items-center justify-center gap-2"
                       >
                         <Star size={16} /> {t.game.shareResults}
+                      </Button>
+                      <Button
+                        size="lg"
+                        onClick={() => setShowClipModal(true)}
+                        className="col-span-2 flex items-center justify-center gap-2 font-black"
+                        style={{ background: "linear-gradient(135deg, #a855f7, #4f46e5)", color: "white" }}
+                      >
+                        🎬 {(t as any).game.shareClip ?? "Crear clip para TikTok"}
                       </Button>
                     </>
                   )

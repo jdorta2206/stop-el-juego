@@ -18,6 +18,7 @@ import { CATEGORIES_ES } from "@/lib/utils";
 import { useCustomPacks } from "@/lib/useCustomPacks";
 import confetti from "canvas-confetti";
 import { RoomInvitePanel } from "@/components/RoomInvitePanel";
+import { ClipGenerator } from "@/components/ClipGenerator";
 import { ChallengeNotification } from "@/components/ChallengeNotification";
 import { usePresence } from "@/lib/usePresence";
 import { Roulette } from "@/components/Roulette";
@@ -115,6 +116,7 @@ export default function Room() {
   const [muted, setMuted] = useState(false);
   const [revealedCount, setRevealedCount] = useState(0);
   const [showShareModal, setShowShareModal] = useState(false);
+  const [showClipModal, setShowClipModal] = useState(false);
   const [floatingReactions, setFloatingReactions] = useState<Array<{ id: string; emoji: string; playerName: string }>>([]);
   const seenReactionIds = useRef<Set<string>>(new Set());
   const [showPhrases, setShowPhrases] = useState(false);
@@ -1159,6 +1161,29 @@ export default function Room() {
           onShared={() => recordExternalStat(player?.id, { timesShared: 1 })}
         />
       )}
+
+      {/* Clip generator — multiplayer rooms don't surface per-category answers
+          here, so we ship a podium-style clip with just letter + total score. */}
+      {showClipModal && currentLetter && (() => {
+        const me = players.find((p: any) => p.playerId === player?.id);
+        const sorted = [...players].sort((a: any, b: any) => (b.score ?? 0) - (a.score ?? 0)).slice(0, 4);
+        return (
+          <ClipGenerator
+            open={showClipModal}
+            onClose={() => setShowClipModal(false)}
+            playerName={me?.playerName ?? player?.name ?? "Jugador"}
+            letter={currentLetter}
+            totalScore={me?.score ?? 0}
+            language="es"
+            entries={sorted.map((p: any, i: number) => ({
+              category: `${i + 1}º · ${p.playerName}`,
+              word: `${p.score ?? 0} pts`,
+              score: p.playerId === player?.id ? 10 : 0,
+            }))}
+            onShared={() => recordExternalStat(player?.id, { timesShared: 1 })}
+          />
+        );
+      })()}
 
       <AnimatePresence mode="wait">
 
@@ -2359,6 +2384,16 @@ export default function Room() {
             >
               <Share2 className="w-5 h-5" />
               Compartir resultado 🎮
+            </motion.button>
+
+            {/* Clip TikTok button */}
+            <motion.button
+              whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
+              onClick={() => setShowClipModal(true)}
+              className="w-full flex items-center justify-center gap-3 py-3.5 rounded-2xl font-black text-base text-white"
+              style={{ background: "linear-gradient(135deg, #a855f7, #4f46e5)" }}
+            >
+              🎬 Crear clip para TikTok
             </motion.button>
 
             {tournamentCtx && (

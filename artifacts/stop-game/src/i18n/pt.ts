@@ -72,6 +72,7 @@ const pt = {
     evaluating: "Avaliando respostas...",
     quickMode: "⚡ MODO RÁPIDO",
     shareResults: "Compartilhar resultados",
+    shareClip: "Criar clip para TikTok",
     shareText: "Joguei STOP com a letra",
     shareScore: "e fiz",
     shareChallenge: "Tente me superar!",

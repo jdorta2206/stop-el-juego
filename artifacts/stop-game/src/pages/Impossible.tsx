@@ -117,18 +117,19 @@ export default function Impossible() {
     const timeSec = Math.round(((myAttempt?.timeMs ?? outcome?.timeMs ?? ROUND_MS) / 1000));
     const date = combo?.date ?? new Date().toISOString().slice(0, 10);
     const stats = outcome?.stats ?? combo?.stats;
-    const pct = stats && stats.attempts > 0 ? Math.round((stats.wins / stats.attempts) * 100) : null;
+    const s = stats;
+    const pct = s && s.attempts > 0 ? Math.round((s.wins / s.attempts) * 100) : null;
     const url = `${window.location.origin}/imposible`;
     const wonLine = won ? `🟩 ${t.impossible.gotIt}: ${w} (${timeSec}s)` : `🟥 ${t.impossible.gaveUp}`;
     const txt = [
       `🔥 STOP ${t.impossible.title} · ${date}`,
       `${t.impossible.letterLabel}: ${combo?.letter} · ${combo?.category}`,
       wonLine,
-      pct !== null ? `📊 ${pct}% ${t.impossible.success} (${stats.wins}/${stats.attempts})` : "",
+      pct !== null && s ? `📊 ${pct}% ${t.impossible.success} (${s.wins}/${s.attempts})` : "",
       url,
     ].filter(Boolean).join("\n");
     await shareText(txt, t.impossible.title);
-    recordExternalStat({ timesShared: 1 }, player?.id);
+    recordExternalStat(player?.id, { timesShared: 1 });
   };
 
   const won = !!(outcome?.won || myAttempt?.won);
