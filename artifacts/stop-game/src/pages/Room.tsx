@@ -191,6 +191,18 @@ export default function Room() {
   const submitMutation = useSubmitRoomResults();
   const queryClient = useQueryClient();
 
+  // When SSE is active it pushes updates in real-time — polling is just a safety fallback
+  const pollingInterval = sseActive
+    ? 30_000
+    : phase === "bluffvoting"                                          ? 800
+    : phase === "playing" || phase === "freeze" || phase === "submitted" ? 1200
+    : /* lobby / between_rounds / finished / spinning */                  1500;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: room, error } = useGetRoom(roomCode || "", {
+    query: { refetchInterval: pollingInterval, enabled: !!roomCode } as any
+  });
+
   // ── SSE: real-time push updates (replaces polling for critical game moments) ──
   useEffect(() => {
     if (!roomCode || !player?.id) return;
@@ -354,18 +366,6 @@ export default function Room() {
     phase === "lobby" ? (player || null) : null,
     roomCode
   );
-
-  // When SSE is active it pushes updates in real-time — polling is just a safety fallback
-  const pollingInterval = sseActive
-    ? 30_000
-    : phase === "bluffvoting"                                          ? 800
-    : phase === "playing" || phase === "freeze" || phase === "submitted" ? 1200
-    : /* lobby / between_rounds / finished / spinning */                  1500;
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: room, error } = useGetRoom(roomCode || "", {
-    query: { refetchInterval: pollingInterval, enabled: !!roomCode } as any
-  });
 
   const isHost = room?.hostId === player?.id;
   const roomStatus = (room?.status as string) || "";

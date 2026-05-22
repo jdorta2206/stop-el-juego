@@ -916,7 +916,7 @@ export default function SoloGame() {
       if (collectedThisRound.length) recordRound(collectedThisRound);
 
       // Track achievement progress
-      const isCustomPackActive = packId !== "classic" && customPacks.some(p => p.id === packId);
+      const isCustomPackActive = packId !== "classic" && customPacks.some(p => String(p.id) === packId);
       afterRound({
         won,
         validWords: validWordCount,
