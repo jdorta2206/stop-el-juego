@@ -78,6 +78,24 @@ uri = "file://artifacts/stop-game/public/achievements/streak_30.png"
 type = "image"
 title = "generated_image"
 
+[[generated]]
+id = "ZPzQg1W59WZ07BGjQqMCR"
+uri = "file://artifacts/stop-game/public/achievements/creator.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "tlG294BGRtS6sU76OSkaw"
+uri = "file://artifacts/stop-game/public/achievements/viral.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "MRkaECTs812r0ZvI62-fe"
+uri = "file://artifacts/stop-game/public/achievements/shutout.png"
+type = "image"
+title = "generated_image"
+
 [[outputs]]
 id = "xs_jQLvgKvRDfgpmF15P1"
 uri = "file://testers.csv"

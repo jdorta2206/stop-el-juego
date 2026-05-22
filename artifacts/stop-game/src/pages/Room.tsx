@@ -25,6 +25,7 @@ import { useTicker } from "@/hooks/useTicker";
 import { useSound } from "@/hooks/useSound";
 import { useHaptic } from "@/hooks/useHaptic";
 import { ShareResultsModal } from "@/components/ShareResultsModal";
+import { recordExternalStat } from "@/hooks/useAchievements";
 import { CountUp } from "@/components/CountUp";
 import { getApiUrl } from "@/lib/utils";
 import { saveActiveRoom, clearActiveRoom, touchActiveRoom } from "@/lib/activeRoom";
@@ -500,6 +501,24 @@ export default function Room() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, currentLetter, currentRound, categoryPack, activeCustomCategories]);
+
+  // Track the `creator` achievement: any multiplayer round actually played
+  // with a custom pack unlocks it. We fire once per `roomCode` to avoid
+  // double-counting on re-renders. Both host and guests can unlock — guests
+  // because experiencing a friend's pack also counts as engagement.
+  const creatorTrackedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (
+      phase === "playing" &&
+      categoryPack === "custom" &&
+      activeCustomCategories && activeCustomCategories.length > 0 &&
+      player?.id &&
+      creatorTrackedRef.current !== roomCode
+    ) {
+      creatorTrackedRef.current = roomCode ?? null;
+      recordExternalStat(player.id, { usedCustomPack: true });
+    }
+  }, [phase, categoryPack, activeCustomCategories, player?.id, roomCode]);
 
   // Process incoming reactions from room polling
   useEffect(() => {
@@ -1137,6 +1156,7 @@ export default function Room() {
             myPlayerId: player?.id ?? "",
             letter: currentLetter,
           }}
+          onShared={() => recordExternalStat(player?.id, { timesShared: 1 })}
         />
       )}
 

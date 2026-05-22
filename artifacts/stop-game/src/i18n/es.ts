@@ -177,6 +177,12 @@ const es = {
     streak_14_desc: "Juega 14 días seguidos",
     streak_30_name: "Leyenda mensual",
     streak_30_desc: "Juega 30 días seguidos",
+    creator_name: "Creador",
+    creator_desc: "Juega una partida con tu pack personalizado",
+    viral_name: "Viral",
+    viral_desc: "Comparte 10 resultados",
+    shutout_name: "Paliza total",
+    shutout_desc: "Gana dejando a la IA con 0 puntos",
   },
 
   collection: {

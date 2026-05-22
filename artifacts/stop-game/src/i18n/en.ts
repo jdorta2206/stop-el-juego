@@ -177,6 +177,12 @@ const en = {
     streak_14_desc: "Play 14 days in a row",
     streak_30_name: "Monthly legend",
     streak_30_desc: "Play 30 days in a row",
+    creator_name: "Creator",
+    creator_desc: "Play a game with your own custom pack",
+    viral_name: "Viral",
+    viral_desc: "Share 10 results",
+    shutout_name: "Total shutout",
+    shutout_desc: "Win while the AI scores 0",
   },
 
   multiplayer: {

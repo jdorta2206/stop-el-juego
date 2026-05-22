@@ -3,6 +3,11 @@ import { getApiUrl } from "@/lib/utils";
 
 const STATS_KEY = "stop_achievement_stats_v1";
 const UNLOCKED_KEY = "stop_achievements_unlocked_v1";
+// Used by `recordExternalStat` to hand off unlocks to whichever screen mounts
+// `useAchievements` next (Home is the canonical toast surface, but Room/Solo
+// might not be mounted when the event fires). Cleared once the toast picks
+// it up.
+const PENDING_UNLOCK_KEY = "stop_pending_achievement_v1";
 
 export interface AchievementStats {
   totalWins: number;
@@ -13,6 +18,9 @@ export interface AchievementStats {
   validWordsRecord: number;
   xpTotal: number;
   longestStreak: number;
+  usedCustomPack: boolean;
+  timesShared: number;
+  aiZeroWin: boolean;
 }
 
 export interface RoundResult {
@@ -22,6 +30,10 @@ export interface RoundResult {
   wasSpeedRound: boolean;
   wasChaosRound: boolean;
   xpGained: number;
+  /** Player won this round AND the AI scored 0 — unlocks `shutout`. */
+  aiZeroWin?: boolean;
+  /** Round was played with a custom (user-defined) category pack — unlocks `creator`. */
+  usedCustomPack?: boolean;
 }
 
 export interface AchievementDef {
@@ -89,6 +101,23 @@ export const ACHIEVEMENTS: AchievementDef[] = [
     id: "streak_30", icon: "👑", image: IMG("streak_30"), nameKey: "streak_30_name", descKey: "streak_30_desc", xpReward: 750,
     check: s => s.longestStreak >= 30,
   },
+  // ── Recent additions ──────────────────────────────────────────────────────
+  // "Creator": premium feature engagement — playing a round with your own
+  // custom category pack (solo or as host in multiplayer).
+  {
+    id: "creator", icon: "🎨", image: IMG("creator"), nameKey: "creator_name", descKey: "creator_desc", xpReward: 200,
+    check: s => s.usedCustomPack,
+  },
+  // "Viral": shared 10 results via the Wordle-style share modal.
+  {
+    id: "viral", icon: "📣", image: IMG("viral"), nameKey: "viral_name", descKey: "viral_desc", xpReward: 200,
+    check: s => s.timesShared >= 10,
+  },
+  // "Shutout": won a solo round with the AI scoring 0 points — extremely rare.
+  {
+    id: "shutout", icon: "✨", image: IMG("shutout"), nameKey: "shutout_name", descKey: "shutout_desc", xpReward: 300,
+    check: s => s.aiZeroWin,
+  },
 ];
 
 // Streak milestone thresholds — kept in sync with the four streak achievements
@@ -108,6 +137,7 @@ function defaultStats(): AchievementStats {
     totalWins: 0, totalGames: 0, maxCombo: 0,
     wonSpeedRound: false, wonChaosRound: false,
     validWordsRecord: 0, xpTotal: 0, longestStreak: 0,
+    usedCustomPack: false, timesShared: 0, aiZeroWin: false,
   };
 }
 
@@ -144,6 +174,9 @@ function mergeStats(local: AchievementStats, remote: Partial<AchievementStats>):
     validWordsRecord: Math.max(local.validWordsRecord, Number(remote.validWordsRecord ?? 0)),
     xpTotal: Math.max(local.xpTotal, Number(remote.xpTotal ?? 0)),
     longestStreak: Math.max(local.longestStreak, Number(remote.longestStreak ?? 0)),
+    usedCustomPack: local.usedCustomPack || Boolean(remote.usedCustomPack),
+    timesShared: Math.max(local.timesShared, Number(remote.timesShared ?? 0)),
+    aiZeroWin: local.aiZeroWin || Boolean(remote.aiZeroWin),
   };
 }
 
@@ -245,6 +278,9 @@ export function useAchievements(playerId?: string) {
       validWordsRecord: Math.max(current.validWordsRecord, result.validWords),
       xpTotal: current.xpTotal + result.xpGained,
       longestStreak: current.longestStreak,
+      usedCustomPack: current.usedCustomPack || Boolean(result.usedCustomPack),
+      timesShared: current.timesShared,
+      aiZeroWin: current.aiZeroWin || Boolean(result.aiZeroWin),
     };
     saveStatsLocal(next);
     setStats(next);
@@ -322,5 +358,87 @@ export function useAchievements(playerId?: string) {
 
   const clearNewlyUnlocked = useCallback(() => setNewlyUnlocked(null), []);
 
+  // Listen for unlocks triggered outside of this hook (e.g. ShareResultsModal,
+  // Room.tsx) so the global AchievementToast on Home surfaces them too.
+  useEffect(() => {
+    const consume = (def: AchievementDef) => {
+      setUnlocked(prev => {
+        if (prev.has(def.id)) return prev;
+        const merged = new Set([...prev, def.id]);
+        saveUnlocked(merged);
+        return merged;
+      });
+      // Refresh stats from storage since the external helper persisted them.
+      setStats(loadStats());
+      setNewlyUnlocked(def);
+    };
+    const handler = (e: Event) => {
+      const def = (e as CustomEvent<AchievementDef>).detail;
+      if (!def) return;
+      consume(def);
+      // Clear the persisted pending unlock — this listener already showed it.
+      try { sessionStorage.removeItem(PENDING_UNLOCK_KEY); } catch {}
+    };
+    window.addEventListener("stop:achievement-unlocked", handler);
+
+    // Replay any pending unlock that fired on a page where this hook wasn't
+    // mounted (e.g. Room.tsx during a multiplayer game). Done on every mount
+    // — not just first sync — so navigating back to Home reliably toasts.
+    try {
+      const raw = sessionStorage.getItem(PENDING_UNLOCK_KEY);
+      if (raw) {
+        const id = JSON.parse(raw) as string;
+        const def = ACHIEVEMENTS.find(a => a.id === id);
+        if (def) consume(def);
+        sessionStorage.removeItem(PENDING_UNLOCK_KEY);
+      }
+    } catch {}
+
+    return () => window.removeEventListener("stop:achievement-unlocked", handler);
+  }, []);
+
   return { stats, unlocked, newlyUnlocked, afterRound, clearNewlyUnlocked, checkStreakMilestone };
+}
+
+/**
+ * Stand-alone helper for events that happen *outside* the `useAchievements`
+ * hook (sharing a result, joining a multiplayer round with a custom pack, …).
+ *
+ * Persists stat deltas locally and on the server, evaluates the achievement
+ * list, and dispatches a `stop:achievement-unlocked` window event so any
+ * mounted `useAchievements` hook surfaces the toast.
+ *
+ * `timesShared` is treated as an INCREMENT; boolean flags are OR-merged.
+ */
+export function recordExternalStat(
+  playerId: string | undefined,
+  patch: { usedCustomPack?: boolean; timesShared?: number; aiZeroWin?: boolean },
+) {
+  const current = loadStats();
+  const next: AchievementStats = {
+    ...current,
+    usedCustomPack: current.usedCustomPack || Boolean(patch.usedCustomPack),
+    timesShared: current.timesShared + (patch.timesShared ?? 0),
+    aiZeroWin: current.aiZeroWin || Boolean(patch.aiZeroWin),
+  };
+  if (JSON.stringify(next) === JSON.stringify(current)) return;
+  saveStatsLocal(next);
+
+  const currentUnlocked = loadUnlocked();
+  const newUnlocked = new Set(currentUnlocked);
+  let justUnlocked: AchievementDef | null = null;
+  for (const ach of ACHIEVEMENTS) {
+    if (!newUnlocked.has(ach.id) && ach.check(next)) {
+      newUnlocked.add(ach.id);
+      if (!justUnlocked) justUnlocked = ach;
+    }
+  }
+  if (justUnlocked) {
+    saveUnlocked(newUnlocked);
+    // Persist for screens that don't mount this hook (Room.tsx). Storing the
+    // id only — the consumer resolves the full def from ACHIEVEMENTS.
+    try { sessionStorage.setItem(PENDING_UNLOCK_KEY, JSON.stringify(justUnlocked.id)); } catch {}
+    window.dispatchEvent(new CustomEvent<AchievementDef>("stop:achievement-unlocked", { detail: justUnlocked }));
+  }
+  if (playerId) saveToServer(playerId, [...newUnlocked], next);
 }

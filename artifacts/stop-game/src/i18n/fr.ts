@@ -177,6 +177,12 @@ const fr = {
     streak_14_desc: "Joue 14 jours d'affilée",
     streak_30_name: "Légende mensuelle",
     streak_30_desc: "Joue 30 jours d'affilée",
+    creator_name: "Créateur",
+    creator_desc: "Joue une partie avec ton pack personnalisé",
+    viral_name: "Viral",
+    viral_desc: "Partage 10 résultats",
+    shutout_name: "Raclée totale",
+    shutout_desc: "Gagne en laissant l'IA à 0 point",
   },
 
   multiplayer: {

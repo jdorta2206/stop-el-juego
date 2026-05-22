@@ -16,6 +16,7 @@ import { RewardedAd, BannerAd } from "@/components/AdSystem";
 import { ContextualPremiumPrompt } from "@/components/ContextualPremiumPrompt";
 import { PremiumModal } from "@/components/PremiumModal";
 import { ShareResultsModal } from "@/components/ShareResultsModal";
+import { recordExternalStat } from "@/hooks/useAchievements";
 import { usePremium } from "@/lib/usePremium";
 import { Tv2, Crown, Volume2, VolumeX, Zap, Star, Flame, Trophy } from "lucide-react";
 import { useT } from "@/i18n/useT";
@@ -913,6 +914,7 @@ export default function SoloGame() {
       if (collectedThisRound.length) recordRound(collectedThisRound);
 
       // Track achievement progress
+      const isCustomPackActive = packId !== "classic" && customPacks.some(p => p.id === packId);
       afterRound({
         won,
         validWords: validWordCount,
@@ -920,6 +922,8 @@ export default function SoloGame() {
         wasSpeedRound: randomEvent === "speed",
         wasChaosRound: isChaosMode,
         xpGained: 0, // will be counted in nextRound
+        aiZeroWin: won && as_ === 0,
+        usedCustomPack: isCustomPackActive,
       });
 
       if (wonAfterBonus) {
@@ -1322,6 +1326,7 @@ export default function SoloGame() {
               ? { wasCorrect: playerJudgedAi === aiBluffReveal.wasActuallyBluffing, category: aiBluffReveal.category }
               : null
           }
+          onShared={() => recordExternalStat(player?.id, { timesShared: 1 })}
         />
 
         {/* Achievement toast notification */}

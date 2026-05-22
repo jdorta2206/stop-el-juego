@@ -1,6 +1,6 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { Share2, X, Copy, Check } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 interface MultiplayerShareData {
   players: Array<{ playerId: string; playerName: string; score: number; avatarColor?: string }>;
@@ -30,6 +30,9 @@ interface ShareResultsModalProps {
   bluffResults?: Array<{ category: string; caught: boolean; scoreChange: number }>;
   aiJudged?: { wasCorrect: boolean; category: string } | null;
   multiplayerData?: MultiplayerShareData;
+  /** Fired exactly once per share action (copy / native share / WhatsApp /
+   *  Twitter click) so callers can track the `viral` achievement. */
+  onShared?: () => void;
 }
 
 function buildWordleGrid(
@@ -57,8 +60,20 @@ export function ShareResultsModal({
   bluffResults,
   aiJudged,
   multiplayerData,
+  onShared,
 }: ShareResultsModalProps) {
   const [copied, setCopied] = useState(false);
+  // Guard so a single open of the modal only counts as one share event, even
+  // if the user copies AND opens WhatsApp. Reset on every open so SoloGame —
+  // where this component stays mounted across multiple games — still counts
+  // the second, third, … share.
+  const [sharedOnce, setSharedOnce] = useState(false);
+  useEffect(() => { if (open) setSharedOnce(false); }, [open]);
+  const fireShared = () => {
+    if (sharedOnce) return;
+    setSharedOnce(true);
+    onShared?.();
+  };
 
   const url = gameUrl || window.location.origin;
 
@@ -132,6 +147,7 @@ export function ShareResultsModal({
       await navigator.clipboard.writeText(shareMessage);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+      fireShared();
     } catch {}
   };
 
@@ -139,6 +155,7 @@ export function ShareResultsModal({
     if (navigator.share) {
       try {
         await navigator.share({ title: "STOP - El Juego", text: shareMessage, url });
+        fireShared();
       } catch {}
     } else {
       handleCopy();
@@ -262,6 +279,7 @@ export function ShareResultsModal({
                   href={whatsapp}
                   target="_blank"
                   rel="noopener noreferrer"
+                  onClick={fireShared}
                   className="flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-sm text-white transition-all hover:opacity-90 active:scale-95"
                   style={{ background: "#25D366" }}
                 >
@@ -274,6 +292,7 @@ export function ShareResultsModal({
                   href={twitter}
                   target="_blank"
                   rel="noopener noreferrer"
+                  onClick={fireShared}
                   className="flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-sm text-white transition-all hover:opacity-90 active:scale-95"
                   style={{ background: "#000" }}
                 >

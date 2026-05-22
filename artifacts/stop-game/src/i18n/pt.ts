@@ -177,6 +177,12 @@ const pt = {
     streak_14_desc: "Jogue 14 dias seguidos",
     streak_30_name: "Lenda mensal",
     streak_30_desc: "Jogue 30 dias seguidos",
+    creator_name: "Criador",
+    creator_desc: "Jogue uma partida com seu pack personalizado",
+    viral_name: "Viral",
+    viral_desc: "Compartilhe 10 resultados",
+    shutout_name: "Surra total",
+    shutout_desc: "Vença deixando a IA com 0 pontos",
   },
 
   multiplayer: {
