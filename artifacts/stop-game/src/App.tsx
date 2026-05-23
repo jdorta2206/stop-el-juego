@@ -45,10 +45,20 @@ const queryClient = new QueryClient({
 
 function Router() {
   const [location] = useLocation();
-  // Push SPA route changes to GTM dataLayer so GA4 (or any tag) sees every page view.
+  // SPA route change → enviar page_view a GA4 (directo) + dataLayer (GTM).
   useEffect(() => {
-    (window as any).dataLayer = (window as any).dataLayer || [];
-    (window as any).dataLayer.push({
+    const w = window as any;
+    w.dataLayer = w.dataLayer || [];
+    // GA4 directo (gtag.js)
+    if (typeof w.gtag === "function") {
+      w.gtag("event", "page_view", {
+        page_path: location,
+        page_title: document.title,
+        page_location: window.location.href,
+      });
+    }
+    // GTM (para Meta Pixel, TikTok Pixel u otros tags futuros)
+    w.dataLayer.push({
       event: "page_view",
       page_path: location,
       page_title: document.title,

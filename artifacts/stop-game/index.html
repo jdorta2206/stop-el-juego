@@ -13,7 +13,17 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="STOP" />
 
-    <!-- Google Tag Manager — analítica + pixels (GA4, Meta, TikTok…) configurables desde tagmanager.google.com -->
+    <!-- Google Analytics 4 (gtag.js) — directo, sin necesidad de configurar GTM -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-735TVGF6F5"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      // send_page_view:false — lo gestionamos manualmente en cada cambio de ruta (SPA)
+      gtag('config', 'G-735TVGF6F5', { send_page_view: false });
+    </script>
+
+    <!-- Google Tag Manager — para añadir Meta Pixel, TikTok Pixel u otros tags sin tocar código -->
     <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
     new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
     j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
