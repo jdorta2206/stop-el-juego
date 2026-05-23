@@ -1,4 +1,4 @@
-import { Switch, Route, Router as WouterRouter } from "wouter";
+import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState, useEffect, lazy, Suspense } from "react";
 import { MotionConfig } from "framer-motion";
@@ -44,6 +44,17 @@ const queryClient = new QueryClient({
 });
 
 function Router() {
+  const [location] = useLocation();
+  // Push SPA route changes to GTM dataLayer so GA4 (or any tag) sees every page view.
+  useEffect(() => {
+    (window as any).dataLayer = (window as any).dataLayer || [];
+    (window as any).dataLayer.push({
+      event: "page_view",
+      page_path: location,
+      page_title: document.title,
+      page_location: window.location.href,
+    });
+  }, [location]);
   return (
     <Switch>
       <Route path="/" component={Home} />
