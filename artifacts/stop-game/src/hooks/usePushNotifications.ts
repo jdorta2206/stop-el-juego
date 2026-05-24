@@ -29,9 +29,31 @@ export function usePushNotifications(playerId: string | undefined, language: str
     navigator.serviceWorker.ready.then((reg) => {
       reg.pushManager.getSubscription().then((sub) => {
         setIsSubscribed(!!sub);
+        // Backfill del origin para suscripciones legacy: si el usuario ya
+        // estaba suscrito antes de añadir la columna `origin`, su fila tiene
+        // NULL y no podemos saber si vino de replit.app o de .com. Aquí
+        // re-anunciamos la suscripción enviando window.location.origin, así
+        // el servidor la asocia al dominio canónico desde el que está
+        // jugando ahora. Las suscripciones que sigan en replit.app quedarán
+        // marcadas como tales y serán filtradas por el helper de envío.
+        if (sub && playerId) {
+          const tzOffsetMinutes = -new Date().getTimezoneOffset();
+          fetch(`${API_BASE}/api/notifications/subscribe`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              playerId,
+              subscription: sub.toJSON(),
+              language,
+              // Sin hourLocal: el UPSERT del servidor preserva el valor existente.
+              tzOffsetMinutes,
+              origin: window.location.origin,
+            }),
+          }).catch(() => {});
+        }
       });
     }).catch(() => {});
-  }, []);
+  }, [playerId, language]);
 
   const subscribe = useCallback(async () => {
     if (!VAPID_PUBLIC || !("serviceWorker" in navigator)) return false;
@@ -62,6 +84,10 @@ export function usePushNotifications(playerId: string | undefined, language: str
           language,
           hourLocal: 20,
           tzOffsetMinutes,
+          // El servidor usa esto para descartar suscripciones creadas desde
+          // stop-el-juego.replit.app cuando el dominio canónico es
+          // stopjuegodepalabras.com (evita notificaciones duplicadas).
+          origin: typeof window !== "undefined" ? window.location.origin : undefined,
         }),
       });
 

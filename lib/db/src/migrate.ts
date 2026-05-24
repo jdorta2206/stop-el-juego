@@ -55,6 +55,11 @@ export async function ensureIndexes(): Promise<void> {
        ADD COLUMN IF NOT EXISTS tz_offset_minutes integer NOT NULL DEFAULT 0`,
     `ALTER TABLE push_subscriptions
        ADD COLUMN IF NOT EXISTS muted_until bigint NOT NULL DEFAULT 0`,
+    // Origin del navegador donde se hizo la suscripción. Permite filtrar
+    // suscripciones duplicadas creadas desde stop-el-juego.replit.app cuando
+    // el dominio canónico es stopjuegodepalabras.com.
+    `ALTER TABLE push_subscriptions
+       ADD COLUMN IF NOT EXISTS origin text`,
 
     // ── tournaments ──────────────────────────────────────────────────
     `CREATE INDEX IF NOT EXISTS tournaments_is_public_status_created_at_desc_idx

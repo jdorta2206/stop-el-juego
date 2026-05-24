@@ -184,6 +184,10 @@ export const pushSubscriptionsTable = pgTable("push_subscriptions", {
   hourLocal: integer("hour_local").notNull().default(20),
   tzOffsetMinutes: integer("tz_offset_minutes").notNull().default(0),
   mutedUntil: bigint("muted_until", { mode: "number" }).notNull().default(0),
+  // Origin del navegador donde se hizo la suscripción (ej: "https://stopjuegodepalabras.com").
+  // Permite filtrar duplicados cuando un mismo dispositivo se suscribe en dos
+  // dominios distintos (replit.app vs .com). NULL para suscripciones legacy.
+  origin: text("origin"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

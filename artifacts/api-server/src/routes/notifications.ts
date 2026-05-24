@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import webpush from "web-push";
 import { db } from "@workspace/db";
 import { pushSubscriptionsTable } from "@workspace/db";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, isNull, like, not, or, sql } from "drizzle-orm";
 import { sendPushToAllSubscribers } from "../lib/pushHelper";
 
 const router: IRouter = Router();
@@ -26,7 +26,7 @@ router.get("/vapid-public-key", (_req, res) => {
 // fires at the player's chosen local time instead of a global UTC hour.
 // Falls back to (20:00, 0) if absent for back-compat with older clients.
 router.post("/subscribe", async (req, res) => {
-  const { playerId, subscription, language, hourLocal, tzOffsetMinutes } = req.body;
+  const { playerId, subscription, language, hourLocal, tzOffsetMinutes, origin: bodyOrigin } = req.body;
   if (!playerId || !subscription?.endpoint) {
     res.status(400).json({ error: "Missing playerId or subscription" });
     return;
@@ -46,28 +46,99 @@ router.post("/subscribe", async (req, res) => {
   const tz = Number.isFinite(tzOffsetMinutes) && tzOffsetMinutes >= -14 * 60 && tzOffsetMinutes <= 14 * 60
     ? Math.floor(tzOffsetMinutes) : 0;
 
+  // Detectar origen del navegador para poder filtrar suscripciones duplicadas
+  // entre stop-el-juego.replit.app y stopjuegodepalabras.com. Preferimos el
+  // valor enviado explícitamente por el cliente; si no, lo deducimos de las
+  // cabeceras estándar Origin/Referer.
+  let origin: string | null = typeof bodyOrigin === "string" && bodyOrigin ? bodyOrigin : null;
+  if (!origin) {
+    const headerOrigin = (req.headers.origin as string | undefined) || "";
+    if (headerOrigin) {
+      origin = headerOrigin;
+    } else {
+      const referer = (req.headers.referer as string | undefined) || "";
+      if (referer) {
+        try { origin = new URL(referer).origin; } catch {}
+      }
+    }
+  }
+
+  // UPSERT con dos protecciones:
+  //  1. No degradar identidad: si la fila ya tiene un player_id "real" (no
+  //     "anonymous") y la nueva petición trae "anonymous" — caso típico de
+  //     una request rezagada del backfill anónimo después de que el usuario
+  //     ya hizo login — conservamos el id real. Evita que invitaciones y
+  //     pushes dirigidos al usuario logueado se pierdan.
+  //  2. Origin: si llega origin nuevo lo guardamos, si llega NULL respetamos
+  //     el que ya hubiera.
+  const runInsert = async (withOrigin: boolean) => {
+    if (withOrigin) {
+      await db.execute(sql`
+        INSERT INTO push_subscriptions (
+          player_id, endpoint, p256dh, auth, language,
+          hour_local, tz_offset_minutes, enabled, muted_until, origin
+        )
+        VALUES (
+          ${playerId}, ${endpoint}, ${p256dh}, ${auth}, ${language || "es"},
+          ${hour}, ${tz}, TRUE, 0, ${origin}
+        )
+        ON CONFLICT (endpoint) DO UPDATE
+          SET player_id         = CASE
+                                    WHEN EXCLUDED.player_id = 'anonymous'
+                                     AND push_subscriptions.player_id <> 'anonymous'
+                                    THEN push_subscriptions.player_id
+                                    ELSE EXCLUDED.player_id
+                                  END,
+              language          = EXCLUDED.language,
+              tz_offset_minutes = EXCLUDED.tz_offset_minutes,
+              enabled           = TRUE,
+              origin            = COALESCE(EXCLUDED.origin, push_subscriptions.origin)
+      `);
+    } else {
+      // Fallback para el window de arranque en producción donde la columna
+      // origin aún no ha sido creada por ensureIndexes(): la suscripción se
+      // guarda sin origin y se backfilleará en la próxima visita.
+      await db.execute(sql`
+        INSERT INTO push_subscriptions (
+          player_id, endpoint, p256dh, auth, language,
+          hour_local, tz_offset_minutes, enabled, muted_until
+        )
+        VALUES (
+          ${playerId}, ${endpoint}, ${p256dh}, ${auth}, ${language || "es"},
+          ${hour}, ${tz}, TRUE, 0
+        )
+        ON CONFLICT (endpoint) DO UPDATE
+          SET player_id         = CASE
+                                    WHEN EXCLUDED.player_id = 'anonymous'
+                                     AND push_subscriptions.player_id <> 'anonymous'
+                                    THEN push_subscriptions.player_id
+                                    ELSE EXCLUDED.player_id
+                                  END,
+              language          = EXCLUDED.language,
+              tz_offset_minutes = EXCLUDED.tz_offset_minutes,
+              enabled           = TRUE
+      `);
+    }
+  };
+
   try {
-    await db.execute(sql`
-      INSERT INTO push_subscriptions (
-        player_id, endpoint, p256dh, auth, language,
-        hour_local, tz_offset_minutes, enabled, muted_until
-      )
-      VALUES (
-        ${playerId}, ${endpoint}, ${p256dh}, ${auth}, ${language || "es"},
-        ${hour}, ${tz}, TRUE, 0
-      )
-      ON CONFLICT (endpoint) DO UPDATE
-        SET player_id         = EXCLUDED.player_id,
-            language          = EXCLUDED.language,
-            -- Preserve the user chosen reminder hour on resubscribe.
-            -- Only tz_offset_minutes is refreshed because the device
-            -- offset can change with DST or travel; the hour stays what
-            -- the player explicitly picked in /notificaciones.
-            tz_offset_minutes = EXCLUDED.tz_offset_minutes,
-            enabled           = TRUE
-    `);
+    await runInsert(true);
     res.json({ ok: true });
   } catch (e: any) {
+    // Si la columna origin aún no existe (race con ensureIndexes en cold
+    // start), reintentar sin ella en vez de devolver 500 — así no perdemos
+    // suscripciones durante los primeros segundos tras un deploy.
+    if (/column .*origin.* does not exist/i.test(e?.message ?? "")) {
+      try {
+        await runInsert(false);
+        res.json({ ok: true, note: "origin column not yet migrated" });
+        return;
+      } catch (e2: any) {
+        console.error("Subscribe error (fallback):", e2.message);
+        res.status(500).json({ error: "Failed to save subscription" });
+        return;
+      }
+    }
     console.error("Subscribe error:", e.message);
     res.status(500).json({ error: "Failed to save subscription" });
   }
@@ -196,8 +267,16 @@ router.post("/send-invite", async (req, res) => {
   };
   const msg = INVITE_MSGS[lang] || INVITE_MSGS.es;
 
+  // Filtra suscripciones del dominio replit.app: solo enviamos invitaciones a
+  // las del dominio canónico (stopjuegodepalabras.com) o a las legacy sin origin.
   const rows = await db.select().from(pushSubscriptionsTable)
-    .where(eq(pushSubscriptionsTable.playerId, targetPlayerId));
+    .where(and(
+      eq(pushSubscriptionsTable.playerId, targetPlayerId),
+      or(
+        isNull(pushSubscriptionsTable.origin),
+        not(like(pushSubscriptionsTable.origin, '%replit.app%')),
+      ),
+    ));
 
   let sent = 0;
   await Promise.allSettled(rows.map(async (row) => {

@@ -1,7 +1,17 @@
 import webpush from "web-push";
 import { db } from "@workspace/db";
 import { pushSubscriptionsTable, followsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { and, eq, not, like, or, isNull, sql } from "drizzle-orm";
+
+// Filtro reutilizable: ignora suscripciones cuyo origin sea el dominio
+// auxiliar stop-el-juego.replit.app. El dominio canónico es
+// stopjuegodepalabras.com (y el TWA de Play Store usa ese mismo dominio).
+// Las filas legacy con origin NULL siguen recibiendo notificaciones para no
+// romper a los usuarios que ya estaban suscritos antes de añadir esta columna.
+const excludeReplitOrigin = or(
+  isNull(pushSubscriptionsTable.origin),
+  not(like(pushSubscriptionsTable.origin, '%replit.app%')),
+);
 
 const VAPID_PUBLIC  = process.env.VAPID_PUBLIC_KEY  || "";
 const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY || "";
@@ -29,7 +39,7 @@ export async function sendPushToPlayer(playerId: string, payload: PushPayload): 
   if (!VAPID_PUBLIC || !VAPID_PRIVATE) return 0;
 
   const rows = await db.select().from(pushSubscriptionsTable)
-    .where(eq(pushSubscriptionsTable.playerId, playerId));
+    .where(and(eq(pushSubscriptionsTable.playerId, playerId), excludeReplitOrigin));
 
   let sent = 0;
   await Promise.allSettled(rows.map(async (row) => {
@@ -62,8 +72,9 @@ export async function sendPushToAllSubscribers(
   if (!VAPID_PUBLIC || !VAPID_PRIVATE) return { sent: 0, failed: 0, removed: 0 };
 
   const rows = language
-    ? await db.select().from(pushSubscriptionsTable).where(eq(pushSubscriptionsTable.language, language))
-    : await db.select().from(pushSubscriptionsTable);
+    ? await db.select().from(pushSubscriptionsTable)
+        .where(and(eq(pushSubscriptionsTable.language, language), excludeReplitOrigin))
+    : await db.select().from(pushSubscriptionsTable).where(excludeReplitOrigin);
 
   let sent = 0, failed = 0;
   const toDelete: string[] = [];
