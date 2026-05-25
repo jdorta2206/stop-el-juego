@@ -24,7 +24,7 @@ const NAV_ITEMS = [
 ] as const;
 
 export function Layout({ children }: { children: ReactNode }) {
-  const { player, isLoaded, needsAuth, savePlayer, updateProfile, logout } = usePlayer();
+  const { player, isLoaded, needsAuth, savePlayer, updateProfile, logout, dismissAuth } = usePlayer();
   const { isPremium } = usePremium(player?.id);
   const { t, lang } = useT();
   const [location] = useLocation();
@@ -111,6 +111,7 @@ export function Layout({ children }: { children: ReactNode }) {
           <AuthModal
             onSave={savePlayer}
             initial={player}
+            onDismiss={dismissAuth}
           />
         )}
       </AnimatePresence>

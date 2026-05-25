@@ -145,7 +145,13 @@ export function usePlayer() {
           setNeedsAuth(false);
         } else {
           setPlayer(null);
-          setNeedsAuth(true);
+          // 🚦 Respect a "dismissed" flag so users who chose to browse
+          // anonymously aren't gated again on every navigation/cold start.
+          // The flag is cleared on logout and on any explicit showAuth()
+          // call (gated action like multiplayer/save score).
+          let dismissed = false;
+          try { dismissed = localStorage.getItem("stop_auth_dismissed_v1") === "1"; } catch {}
+          setNeedsAuth(!dismissed);
         }
         setIsLoaded(true);
       });
@@ -185,10 +191,25 @@ export function usePlayer() {
   const logout = () => {
     writeStoredPlayer(null);
     setPlayer(null);
+    try { localStorage.removeItem("stop_auth_dismissed_v1"); } catch {}
     setNeedsAuth(true);
   };
 
-  const showAuth = () => setNeedsAuth(true);
+  // Dismiss the auth modal and remember that choice so we don't gate
+  // navigation again on this device until the user logs out or hits a
+  // gated action.
+  const dismissAuth = () => {
+    try { localStorage.setItem("stop_auth_dismissed_v1", "1"); } catch {}
+    setNeedsAuth(false);
+  };
 
-  return { player, isLoaded, needsAuth, savePlayer, updateProfile, saveFbToken, logout, showAuth };
+  // Force the auth modal open (used by gated actions like create-room,
+  // join-tournament, save-score). Clears the dismissed flag so it actually
+  // re-renders the modal.
+  const showAuth = () => {
+    try { localStorage.removeItem("stop_auth_dismissed_v1"); } catch {}
+    setNeedsAuth(true);
+  };
+
+  return { player, isLoaded, needsAuth, savePlayer, updateProfile, saveFbToken, logout, showAuth, dismissAuth };
 }

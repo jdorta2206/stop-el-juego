@@ -25,9 +25,16 @@ const LOGO_URL = `${import.meta.env.BASE_URL}images/stop-logo.png`;
 interface AuthModalProps {
   onSave: (profile: PlayerProfile) => void;
   initial?: PlayerProfile | null;
+  /**
+   * Optional: lets the user dismiss the modal and browse anonymously.
+   * When provided, an "✕" close button + "Explorar sin cuenta" link
+   * appear on the login step. Gated actions (multiplayer, save score)
+   * re-open the modal via usePlayer().showAuth().
+   */
+  onDismiss?: () => void;
 }
 
-export function AuthModal({ onSave, initial }: AuthModalProps) {
+export function AuthModal({ onSave, initial, onDismiss }: AuthModalProps) {
   const { t } = useT();
   const [step, setStep] = useState<"login" | "profile" | "welcome_back">(initial ? "profile" : "login");
   const [name, setName] = useState(initial?.name || "");
@@ -125,6 +132,17 @@ export function AuthModal({ onSave, initial }: AuthModalProps) {
         >
           {/* Header */}
           <div className="text-center pt-8 pb-4 px-6 relative">
+            {/* Close button (only when dismissible AND on login step —
+                we don't want to lose half-filled profile data). */}
+            {onDismiss && step === "login" && (
+              <button
+                onClick={onDismiss}
+                aria-label="Cerrar"
+                className="absolute top-3 left-3 w-8 h-8 rounded-full flex items-center justify-center text-white/50 hover:text-white hover:bg-white/10 transition-colors text-lg leading-none"
+              >
+                ✕
+              </button>
+            )}
             {/* Language selector top-right */}
             <div className="absolute top-4 right-4">
               <LanguageSelector />
@@ -310,6 +328,17 @@ export function AuthModal({ onSave, initial }: AuthModalProps) {
                     <Mail className="w-4 h-4" />
                     {t.auth.guest}
                   </button>
+
+                  {/* Anonymous browse: dismisses the modal without
+                      creating any profile. Re-opens on gated actions. */}
+                  {onDismiss && (
+                    <button
+                      onClick={onDismiss}
+                      className="w-full text-white/40 text-xs font-bold text-center py-2 hover:text-white/70 transition-colors"
+                    >
+                      Explorar sin cuenta →
+                    </button>
+                  )}
                 </motion.div>
               ) : (
                 <motion.div
