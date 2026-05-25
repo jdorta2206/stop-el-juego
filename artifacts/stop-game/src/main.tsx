@@ -4,16 +4,12 @@ import App from "./App";
 import "./index.css";
 import { ensureOfflineBundle } from "./lib/offlineGame";
 
-// Redirección al dominio canónico. Antes de instalar la suscripción de
-// notificaciones evitamos que el usuario navegue por stop-el-juego.replit.app
-// (origen no canónico que provocaba notificaciones push duplicadas: una desde
-// "Chrome • stop-el-juego.replit.app" y otra desde "STOP • stopjuegodepalabras.com").
-// Solo redirigimos el dominio exacto de Replit para no romper previews (*.replit.dev)
-// ni el TWA de Play Store (que ya carga stopjuegodepalabras.com).
-if (typeof window !== "undefined" && window.location.hostname === "stop-el-juego.replit.app") {
-  const target = "https://stopjuegodepalabras.com" + window.location.pathname + window.location.search + window.location.hash;
-  window.location.replace(target);
-}
+// Nota: se intentó redirigir stop-el-juego.replit.app → stopjuegodepalabras.com
+// para deduplicar suscripciones push, pero rompía el TWA del Play Store (la
+// app Android está empaquetada apuntando al dominio replit.app, y un redirect
+// JS saca al usuario del scope declarado en los digital asset links, dejando
+// la app atascada en el splash). La deduplicación de notificaciones se hace
+// 100% en el servidor filtrando `origin LIKE '%replit.app%'`.
 
 createRoot(document.getElementById("root")!).render(
   <HelmetProvider>
