@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { tournamentsTable } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
+import { requirePlayerIdentity, type AuthedRequest } from "../lib/playerAuth.js";
 
 const router: IRouter = Router();
 
@@ -228,12 +229,17 @@ router.post("/:code/start-match", async (req, res) => {
   res.json(formatTournament(updated));
 });
 
-// POST /api/tournaments/:code/match-result — record winner, advance bracket
-router.post("/:code/match-result", async (req, res) => {
+// POST /api/tournaments/:code/match-result — record winner, advance bracket.
+// 🔐 Authenticated: only signed-in players can write. Caller must be a
+// participant of the match (p1 or p2) or the tournament host. winnerId is
+// validated against the actual match participants so the body field can't
+// be forged to inject an arbitrary winner.
+router.post("/:code/match-result", requirePlayerIdentity, async (req: AuthedRequest, res) => {
   const code = req.params.code.toUpperCase();
   const { matchId, winnerId, winnerName } = req.body as {
     matchId: string; winnerId: string; winnerName: string;
   };
+  const callerId = req.playerId!;
   const rows = await db.select().from(tournamentsTable).where(eq(tournamentsTable.code, code)).limit(1);
   if (!rows.length) { res.status(404).json({ error: "Not found" }); return; }
 
@@ -245,7 +251,36 @@ router.post("/:code/match-result", async (req, res) => {
   const matchIdx = currentRound.findIndex((m: any) => m.id === matchId);
   if (matchIdx === -1) { res.status(404).json({ error: "Match not found" }); return; }
 
-  currentRound[matchIdx] = { ...currentRound[matchIdx], winnerId, winnerName, status: "done" };
+  const match = currentRound[matchIdx];
+
+  // 🔐 Authorization: caller must be one of the two match participants OR
+  // the tournament host. Anyone else trying to write the result is blocked.
+  const isParticipant = callerId === match.p1Id || callerId === match.p2Id;
+  const isHost = callerId === t.hostId;
+  if (!isParticipant && !isHost) {
+    res.status(403).json({ error: "Not authorized for this match" });
+    return;
+  }
+
+  // 🔐 Winner must be one of the actual participants. Without this, a
+  // legitimate participant could submit `winnerId = "attacker"` and win.
+  if (winnerId !== match.p1Id && winnerId !== match.p2Id) {
+    res.status(400).json({ error: "Winner is not a match participant" });
+    return;
+  }
+
+  // 🛡️ Idempotency guard. Multiple clients (host + winner + losers as fallback)
+  // may report the same match-result to survive a host disconnect. If the
+  // match is already "done", just return the current bracket — never re-apply
+  // advanceBracket() because that could double-advance winners into the next
+  // round and corrupt the tree. First write wins; later (legitimate) reports
+  // are no-ops.
+  if (match.status === "done") {
+    res.json(formatTournament(t));
+    return;
+  }
+
+  currentRound[matchIdx] = { ...match, winnerId, winnerName, status: "done" };
   bracket.rounds[bracket.currentRound] = currentRound;
 
   // Try to advance bracket
@@ -253,12 +288,23 @@ router.post("/:code/match-result", async (req, res) => {
 
   const newStatus = bracket.champion ? "completed" : "active";
 
-  const [updated] = await db.update(tournamentsTable)
+  // 🔒 Optimistic concurrency: only advance the bracket if the row hasn't
+  // changed since we read it. Two concurrent reporters could both pass the
+  // status check above before either had written; with this guard the loser
+  // gets 0 rows back and we re-fetch and bail (idempotent no-op).
+  const updatedRows = await db.update(tournamentsTable)
     .set({ bracketJson: JSON.stringify(bracket), status: newStatus, updatedAt: new Date() })
-    .where(eq(tournamentsTable.code, code))
+    .where(and(eq(tournamentsTable.code, code), eq(tournamentsTable.updatedAt, t.updatedAt)))
     .returning();
 
-  res.json(formatTournament(updated));
+  if (updatedRows.length === 0) {
+    // Someone else won the race — return their state.
+    const fresh = await db.select().from(tournamentsTable).where(eq(tournamentsTable.code, code)).limit(1);
+    res.json(formatTournament(fresh[0] ?? t));
+    return;
+  }
+
+  res.json(formatTournament(updatedRows[0]));
 });
 
 export default router;

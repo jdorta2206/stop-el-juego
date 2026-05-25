@@ -29,6 +29,7 @@ import { ShareResultsModal } from "@/components/ShareResultsModal";
 import { recordExternalStat } from "@/hooks/useAchievements";
 import { CountUp } from "@/components/CountUp";
 import { getApiUrl } from "@/lib/utils";
+import { reportSeasonEvent } from "@/hooks/useSeason";
 import { saveActiveRoom, clearActiveRoom, touchActiveRoom } from "@/lib/activeRoom";
 import { useT } from "@/i18n/useT";
 import { useToast } from "@/hooks/use-toast";
@@ -381,6 +382,11 @@ export default function Room() {
   // show-the-card timeout so we can clean it up on unmount/navigation.
   const reviewPrompt = useReviewPrompt();
   const reviewCountedRef = useRef(false);
+  // 🎖️ Per-match guard for Season Pass event reporting. Without this,
+  // remounts / re-renders / SSE reconnects while roomStatus="finished" would
+  // re-fire reportSeasonEvent and inflate mission counters. Reset whenever
+  // we leave the finished phase (rematch starts a fresh match → new credit).
+  const seasonReportedRef = useRef(false);
   const reviewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => {
     if (reviewTimerRef.current) clearTimeout(reviewTimerRef.current);
@@ -775,6 +781,18 @@ export default function Room() {
     if (roomStatus !== "finished" && reviewCountedRef.current) {
       reviewCountedRef.current = false;
     }
+    if (roomStatus !== "finished" && seasonReportedRef.current) {
+      seasonReportedRef.current = false;
+      // Also clear the persistent guard so the NEXT match (rematch in the
+      // same room) can credit again. Only cleared when we actually leave
+      // the finished phase — refreshing the page while still finished keeps
+      // the key, blocking re-credit.
+      try {
+        if (player?.id && roomCode) {
+          localStorage.removeItem(`season_reported_${roomCode.toUpperCase()}_${player.id}`);
+        }
+      } catch { /* storage disabled — fall through */ }
+    }
 
     if (roomStatus === "finished") {
       stopAllTimers();
@@ -816,14 +834,65 @@ export default function Room() {
         }, iWon ? 4000 : 5500);
       }
       queryClient.invalidateQueries({ queryKey: ["/api/ranking/scores"] });
-      // Tournament: report match result (host only to avoid duplicate calls)
-      if (tournamentCtx && player && sortedPlayers.length > 0 && room?.hostId === player.id) {
+
+      // 🎖️ Season Pass missions — multiplayer & tournament were missing this,
+      // so missions like "play N games", "win N games", "score X points",
+      // "find N words" never progressed outside Solo. The /api/season/event
+      // endpoint is additive (server increments counters), so we MUST dedupe
+      // per match on the client — otherwise remounts/SSE reconnects in the
+      // finished phase would double-credit missions. Computed from the LOCAL
+      // player only; each client reports its own progress.
+      // Persistent dedupe key (survives remount/refresh during finished).
+      // The in-memory ref alone isn't enough because closing the tab and
+      // reopening on the result screen would re-fire additive missions.
+      const seasonKey = player?.id && roomCode
+        ? `season_reported_${roomCode.toUpperCase()}_${player.id}`
+        : null;
+      let alreadyReported = false;
+      try {
+        if (seasonKey) alreadyReported = localStorage.getItem(seasonKey) === "1";
+      } catch { /* storage disabled — rely on in-memory ref only */ }
+
+      if (player?.id && !seasonReportedRef.current && !alreadyReported) {
+        seasonReportedRef.current = true;
+        try { if (seasonKey) localStorage.setItem(seasonKey, "1"); } catch { /* ignore */ }
+        const me = (players as any[]).find(p => p.playerId === player.id);
+        reportSeasonEvent(player.id, "play_game", 1);
+        if (iWon) reportSeasonEvent(player.id, "win_game", 1);
+        if (me) {
+          // Total accumulated score this match — used as the "round_score"
+          // event since multiplayer doesn't split per-round on the client.
+          const myScore = Number(me.score) || 0;
+          if (myScore > 0) reportSeasonEvent(player.id, "round_score", myScore);
+          // Count valid (non-empty) answers in the final round as a proxy
+          // for "valid_words". Underreports vs solo but never overreports.
+          const ans = (me.answers ?? {}) as Record<string, string>;
+          const validCount = Object.values(ans).filter(w => String(w || "").trim().length > 0).length;
+          if (validCount > 0) reportSeasonEvent(player.id, "valid_words", validCount);
+        }
+      }
+
+      // 🏆 Tournament match-result reporting with host-failure resilience.
+      // Previously host-only — if the host disconnected at the result screen,
+      // the bracket stalled forever. Now: host reports immediately; the
+      // winner reports as a backup after 3s; everyone else after 8s. The
+      // server is idempotent (POST is a no-op if match already "done"), so
+      // duplicates are harmless and the bracket always advances.
+      if (tournamentCtx && player && sortedPlayers.length > 0) {
         const winner = sortedPlayers[0] as any;
-        fetch(`${getApiUrl()}/api/tournaments/${tournamentCtx.code}/match-result`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ matchId: tournamentCtx.matchId, winnerId: winner.playerId, winnerName: winner.playerName }),
-        }).catch(() => {});
+        const iAmHost = room?.hostId === player.id;
+        const iAmWinner = winner.playerId === player.id;
+        const delayMs = iAmHost ? 0 : iAmWinner ? 3000 : 8000;
+        const reportMatch = () => {
+          fetch(`${getApiUrl()}/api/tournaments/${tournamentCtx.code}/match-result`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ matchId: tournamentCtx.matchId, winnerId: winner.playerId, winnerName: winner.playerName }),
+            credentials: "include",
+          }).catch(() => {});
+        };
+        if (delayMs === 0) reportMatch();
+        else setTimeout(reportMatch, delayMs);
       }
       return;
     }
