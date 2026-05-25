@@ -29,12 +29,7 @@ interface AuthModalProps {
 
 export function AuthModal({ onSave, initial }: AuthModalProps) {
   const { t } = useT();
-  // Si el `initial` es un perfil de invitado auto-generado, queremos mostrar
-  // la pantalla de login (Google/FB/IG) — el usuario hizo showAuth() porque
-  // quiere conectar una cuenta real. Solo saltamos directos a "profile" si
-  // hay un login real previo (Google, Facebook, etc).
-  const isRealLogin = !!initial && initial.loginMethod && initial.loginMethod !== "guest";
-  const [step, setStep] = useState<"login" | "profile" | "welcome_back">(isRealLogin ? "profile" : "login");
+  const [step, setStep] = useState<"login" | "profile" | "welcome_back">(initial ? "profile" : "login");
   const [name, setName] = useState(initial?.name || "");
   const [avatarColor, setAvatarColor] = useState(initial?.avatarColor || AVATAR_COLORS[0]);
   const [loginMethod, setLoginMethod] = useState<string | null>(null);
