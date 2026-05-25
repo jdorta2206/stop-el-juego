@@ -974,7 +974,7 @@ export default function SoloGame() {
         bonus: isBonus,
       }
     }, {
-      onSuccess: () => {
+      onSuccess: (response: any) => {
         queryClient.invalidateQueries({ queryKey: ["/api/ranking/scores"] });
         const msg = isBonus
           ? (lang === "en" ? `+${finalScore} bonus pts added!` :
@@ -986,6 +986,20 @@ export default function SoloGame() {
              lang === "fr" ? `+${finalScore} pts enregistrés au classement !` :
              `¡+${finalScore} pts guardados en el ranking!`);
         toast({ title: "🏆 " + msg });
+
+        // ⚡ Happy Hour bonus toast — server validated the bonus and tells us
+        // exactly what was awarded. Show a second prominent toast so the
+        // player actually feels the x2 reward (otherwise XP/coin growth is
+        // invisible until they look at their profile).
+        const rewards = response?.rewards;
+        if (rewards?.happyHourActive && (rewards.coinsAwarded > 0 || rewards.xpAwarded > 0)) {
+          const hhMsg =
+            lang === "en" ? `⚡ HAPPY HOUR x${rewards.multiplier}! +${rewards.coinsAwarded} coins, +${rewards.xpAwarded} XP` :
+            lang === "pt" ? `⚡ HAPPY HOUR x${rewards.multiplier}! +${rewards.coinsAwarded} moedas, +${rewards.xpAwarded} XP` :
+            lang === "fr" ? `⚡ HAPPY HOUR x${rewards.multiplier} ! +${rewards.coinsAwarded} pièces, +${rewards.xpAwarded} XP` :
+            `⚡ ¡HAPPY HOUR x${rewards.multiplier}! +${rewards.coinsAwarded} monedas, +${rewards.xpAwarded} XP`;
+          setTimeout(() => toast({ title: hhMsg }), 1200);
+        }
       },
       onError: () => {
         // 📡 Sin conexión: aparcamos la puntuación en la outbox para

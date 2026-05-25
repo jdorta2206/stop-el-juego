@@ -1,10 +1,52 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { playerScoresTable, gameHistoryTable } from "@workspace/db";
+import { playerScoresTable, gameHistoryTable, pushSubscriptionsTable } from "@workspace/db";
 import { eq, desc, sql } from "drizzle-orm";
 import { sendPushToPlayer } from "../lib/pushHelper";
 import { SubmitScoreBody, GetLeaderboardQueryParams } from "@workspace/api-zod";
 import { scoreLimiter } from "../middlewares/rateLimit";
+import {
+  isHappyHourActiveForTzOffset,
+  HAPPY_HOUR_MULTIPLIER,
+} from "../lib/happyHour";
+
+/**
+ * Base coin reward per game submission (before any Happy Hour x2).
+ * Coins also flow from Season Pass tier claims; this small per-game drip
+ * gives every player a constant sense of wallet growth and gives Happy
+ * Hour something concrete to double.
+ */
+function calcCoinGain(score: number, won: boolean, mode: string, isBonus: boolean): number {
+  if (isBonus) return 0; // bonus submissions already double the base score; don't double-dip coins
+  const base = Math.max(1, Math.floor(score / 30));   // ~1 coin per 30 pts
+  const winBonus = won ? 3 : 0;
+  const modeBonus = mode === "multiplayer" ? 2 : mode === "daily" ? 1 : 0;
+  return base + winBonus + modeBonus;
+}
+
+/** Best-effort tz lookup — uses the player's MOST RECENT enabled push
+ * subscription so a deterministic row wins and the result aligns with the
+ * cron's notification-targeting filter (which also gates on enabled=true).
+ *
+ * Limitation acknowledged: tz_offset_minutes is client-supplied at subscribe
+ * time, so a determined cheater could resubscribe with a fake offset to
+ * trigger x2. The worst-case impact is they double their own progression in
+ * a casual game — acceptable for v1. If abuse appears, fold in IP-geo
+ * cross-check or a server-issued tz token. */
+async function lookupPlayerTzOffset(playerId: string): Promise<number | null> {
+  try {
+    const rows = await db
+      .select({ tz: pushSubscriptionsTable.tzOffsetMinutes })
+      .from(pushSubscriptionsTable)
+      .where(sql`${pushSubscriptionsTable.playerId} = ${playerId}
+              AND ${pushSubscriptionsTable.enabled} = TRUE`)
+      .orderBy(desc(pushSubscriptionsTable.id))
+      .limit(1);
+    return rows[0]?.tz ?? null;
+  } catch {
+    return null;
+  }
+}
 
 const router: IRouter = Router();
 
@@ -152,8 +194,20 @@ router.post("/scores", scoreLimiter, async (req, res) => {
         )
     : [];
 
-  // XP / Level
-  const xpGain = calcXpGain(score, won ?? false, mode ?? "solo");
+  // XP / Level + Happy Hour bonus.
+  // We resolve the player's local timezone from their push subscription so
+  // the server (not the client) decides when x2 applies — anti-cheat. If we
+  // can't determine tz (player never subscribed to push), no bonus is
+  // granted; this is a natural prompt for them to enable notifications.
+  const baseXpGain = calcXpGain(score, won ?? false, mode ?? "solo");
+  const baseCoinGain = calcCoinGain(score, won ?? false, mode ?? "solo", isBonus);
+  const tzOffset = await lookupPlayerTzOffset(playerId);
+  const happyHourActive =
+    tzOffset !== null && isHappyHourActiveForTzOffset(tzOffset);
+  const xpMultiplier = happyHourActive ? HAPPY_HOUR_MULTIPLIER : 1;
+  const coinMultiplier = happyHourActive ? HAPPY_HOUR_MULTIPLIER : 1;
+  const xpGain = baseXpGain * xpMultiplier;
+  const coinGain = baseCoinGain * coinMultiplier;
   const newXp = (existing[0]?.xp ?? 0) + xpGain;
   const newLevel = calcLevel(newXp);
 
@@ -182,6 +236,7 @@ router.post("/scores", scoreLimiter, async (req, res) => {
         }),
         xp: sql`${playerScoresTable.xp} + ${xpGain}`,
         level: newLevel,
+        ...(coinGain > 0 ? { coins: sql`${playerScoresTable.coins} + ${coinGain}` } : {}),
         ...(!isBonus && updatedToday ? {
           currentStreak: newStreak,
           longestStreak: newLongest,
@@ -212,6 +267,7 @@ router.post("/scores", scoreLimiter, async (req, res) => {
         streakDaysJson: isBonus ? "[]" : JSON.stringify([today]),
         xp: xpGain,
         level: calcLevel(xpGain),
+        coins: coinGain,
       })
       .returning();
     player = created;
@@ -239,7 +295,17 @@ router.post("/scores", scoreLimiter, async (req, res) => {
     won: won ?? false,
   });
 
-  res.status(201).json({ ...player, rank: 0 });
+  res.status(201).json({
+    ...player,
+    rank: 0,
+    // Reward breakdown so the client can show "+12 monedas (x2 Happy Hour!)" toast.
+    rewards: {
+      xpAwarded: xpGain,
+      coinsAwarded: coinGain,
+      happyHourActive,
+      multiplier: happyHourActive ? HAPPY_HOUR_MULTIPLIER : 1,
+    },
+  });
 });
 
 // Shared helper: derive achievement count from the JSON column. Lives at

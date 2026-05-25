@@ -20,6 +20,18 @@ router.get("/vapid-public-key", (_req, res) => {
   res.json({ key: VAPID_PUBLIC });
 });
 
+// GET /api/notifications/happy-hour?tzOffsetMinutes=120
+// Returns the current Happy Hour state for a caller-supplied tz offset.
+// Used by the client banner countdown when it wants the server's authoritative
+// window (otherwise the hook computes locally to avoid the network hit).
+router.get("/happy-hour", async (req, res) => {
+  const raw = Number(req.query.tzOffsetMinutes);
+  const tz = Number.isFinite(raw) && raw >= -14 * 60 && raw <= 14 * 60 ? Math.floor(raw) : 0;
+  const { getHappyHourWindowUtcMs, HAPPY_HOUR_MULTIPLIER } = await import("../lib/happyHour");
+  const win = getHappyHourWindowUtcMs(tz);
+  res.json({ ...win, multiplier: HAPPY_HOUR_MULTIPLIER });
+});
+
 // POST /api/notifications/subscribe
 // Accepts optional `hourLocal` (0-23) and `tzOffsetMinutes` (UTC offset as
 // returned by `new Date().getTimezoneOffset() * -1`) so the daily reminder

@@ -3,6 +3,11 @@ import { db } from "@workspace/db";
 import { sendPushToAllSubscribers, sendPushToPlayer } from "./pushHelper";
 import { SEASON_LENGTH_DAYS, themeForStartDate } from "./seasonConfig";
 import { finalizePreviousSeason } from "../routes/season";
+import {
+  HAPPY_HOUR_PRE_LOCAL_MIN,
+  HAPPY_HOUR_LIVE_LOCAL_MIN,
+  HAPPY_HOUR_LAST_LOCAL_MIN,
+} from "./happyHour";
 
 const LANGUAGES = ["es", "en", "pt", "fr"] as const;
 
@@ -290,6 +295,105 @@ async function sendPerUserDailyNotifications() {
   }
 }
 
+/**
+ * Per-user Happy Hour notifications. Three time slots, each fired when a
+ * player's local minute-of-day matches the target (with a 5-min cron-cadence
+ * tolerance window — same pattern as `sendPerUserDailyNotifications`).
+ *
+ *  pre  → 20:45 local  ("starts in 15 min")
+ *  live → 21:00 local  ("ACTIVE now — x2 monedas y XP")
+ *  last → 21:50 local  ("10 min left, ¡última oportunidad!")
+ */
+const HAPPY_HOUR_MSGS: Record<
+  "pre" | "live" | "last",
+  Record<string, { title: string; body: string }>
+> = {
+  pre: {
+    es: { title: "⏰ Happy Hour en 15 min", body: "Monedas y XP x2 durante 1 hora. ¡Prepárate!" },
+    en: { title: "⏰ Happy Hour in 15 min", body: "x2 coins and XP for 1 hour. Get ready!" },
+    pt: { title: "⏰ Happy Hour em 15 min", body: "Moedas e XP x2 durante 1 hora. Prepara-te!" },
+    fr: { title: "⏰ Happy Hour dans 15 min", body: "Pièces et XP x2 pendant 1 heure. Prêt ?" },
+  },
+  live: {
+    es: { title: "⚡ ¡HAPPY HOUR ACTIVA!", body: "Monedas y XP x2 durante 60 min. ¡Juega ahora!" },
+    en: { title: "⚡ HAPPY HOUR LIVE!", body: "x2 coins and XP for 60 min. Play now!" },
+    pt: { title: "⚡ HAPPY HOUR ATIVA!", body: "Moedas e XP x2 durante 60 min. Joga já!" },
+    fr: { title: "⚡ HAPPY HOUR EN COURS !", body: "Pièces et XP x2 pendant 60 min. Joue maintenant !" },
+  },
+  last: {
+    es: { title: "⏳ Quedan 10 min de Happy Hour", body: "Una última partida x2 antes de que acabe." },
+    en: { title: "⏳ 10 min of Happy Hour left", body: "One last x2 game before it ends." },
+    pt: { title: "⏳ Restam 10 min de Happy Hour", body: "Um último jogo x2 antes que acabe." },
+    fr: { title: "⏳ 10 min restantes de Happy Hour", body: "Une dernière partie x2 avant la fin." },
+  },
+};
+
+async function sendHappyHourNotifications() {
+  try {
+    const now = Date.now();
+    const utcNow = new Date(now);
+    const utcMinutesOfDay = utcNow.getUTCHours() * 60 + utcNow.getUTCMinutes();
+
+    // For each of the three slots, find subscriptions whose local
+    // minute-of-day falls inside the 5-min tolerance window starting at the
+    // target. Pattern mirrors sendPerUserDailyNotifications (positive
+    // modulus via +10080 minutes).
+    const slots: Array<{ key: "pre" | "live" | "last"; target: number; url: string }> = [
+      { key: "pre", target: HAPPY_HOUR_PRE_LOCAL_MIN, url: "/" },
+      { key: "live", target: HAPPY_HOUR_LIVE_LOCAL_MIN, url: "/solo?mode=quick&auto=1" },
+      { key: "last", target: HAPPY_HOUR_LAST_LOCAL_MIN, url: "/solo?mode=quick&auto=1" },
+    ];
+
+    // Multi-instance idempotency: each (slot, UTC-5min-bucket) is claimed at
+    // most once across the cluster. A given tz cohort falls inside exactly
+    // one UTC bucket per day per slot, so locking by bucket guarantees one
+    // notification per player per slot per day, while still allowing
+    // different tz cohorts (different buckets) to fire on the same day.
+    const today = utcNow.toISOString().slice(0, 10);
+    const utcBucket = Math.floor(utcMinutesOfDay / 5);
+
+    for (const slot of slots) {
+      const lockKey = `hh_${slot.key}_${today}_${utcBucket}`;
+      const claimed = await claimDailyLock(today, lockKey);
+      if (!claimed) {
+        continue; // another instance already handled this slot+bucket
+      }
+
+      const rows = (await db.execute(sql`
+        SELECT player_id, language
+        FROM push_subscriptions
+        WHERE enabled = TRUE
+          AND muted_until < ${now}
+          AND (((${utcMinutesOfDay}::int + tz_offset_minutes + 10080) % 1440)) >= ${slot.target}
+          AND (((${utcMinutesOfDay}::int + tz_offset_minutes + 10080) % 1440)) < ${slot.target + 5}
+        LIMIT 10000
+      `)) as unknown as { rows?: Array<{ player_id: string; language: string }> };
+
+      const candidates = rows.rows ?? [];
+      if (candidates.length === 0) continue;
+
+      const seen = new Set<string>();
+      let sent = 0;
+      for (const row of candidates) {
+        if (seen.has(row.player_id)) continue;
+        seen.add(row.player_id);
+        const lang = HAPPY_HOUR_MSGS[slot.key][row.language] ? row.language : "es";
+        const msg = HAPPY_HOUR_MSGS[slot.key][lang];
+        const n = await sendPushToPlayer(row.player_id, {
+          ...msg,
+          icon: "/images/icon-192.png",
+          badge: "/images/badge-96.png",
+          url: slot.url,
+        });
+        sent += n;
+      }
+      console.log(`[happyHourCron] slot=${slot.key} sent=${sent} candidates=${candidates.length}`);
+    }
+  } catch (e) {
+    console.error("[happyHourCron] error:", e);
+  }
+}
+
 export function startDailyCron() {
   // Check every 5 minutes if it's time to send notifications.
   // Both fires use a per-key DB lock so only ONE instance sends across the cluster.
@@ -306,6 +410,11 @@ export function startDailyCron() {
     // hit at most once because the 5-min window check on local minute
     // ensures the same player only matches in one 5-min slice per day.
     await sendPerUserDailyNotifications();
+
+    // Happy Hour: three timezone-aware notifications per player per day
+    // (pre/live/last-call). Same per-tz SQL filter as daily reminders, so
+    // the candidate set stays tiny and we never blast the whole table.
+    await sendHappyHourNotifications();
 
     // 19:00–19:05 UTC → streak rescue. 19:00 UTC was chosen because it
     // falls inside daytime/evening waking hours for every supported locale

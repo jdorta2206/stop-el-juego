@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Button, Input } from "./ui";
 import { AuthModal } from "./AuthModal";
 import { InstallAppBanner } from "./InstallAppBanner";
+import { HappyHourBanner } from "./HappyHourBanner";
 import { LanguageSelector } from "./LanguageSelector";
 import { AVATAR_COLORS } from "@/lib/utils";
 import { useT } from "@/i18n/useT";
@@ -184,6 +185,9 @@ export function Layout({ children }: { children: ReactNode }) {
           )}
         </div>
       </header>
+
+      {/* Happy Hour banner — visible 30 min before start and during the active hour. */}
+      <HappyHourBanner />
 
       {/* Main content */}
       <main className="flex-1 w-full max-w-5xl mx-auto px-4 pb-24 z-10 flex flex-col">
