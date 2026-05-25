@@ -9,6 +9,55 @@ const router = Router();
 
 const APP_ORIGIN = process.env["APP_ORIGIN"] || "https://3697d7d1-ea3c-4cf5-b00f-386041779844-00-emhgnr1gq77c.kirk.replit.dev";
 
+// Domains where it's safe to bounce the user back after OAuth. We keep this
+// allowlist so a hostile referer can't turn our bridge into an open redirect.
+// OAuth always runs on APP_ORIGIN (the only origin registered in the
+// Google/Facebook/Instagram consoles), but the user may have started from
+// stopjuegodepalabras.com (the TWA domain) — in that case we want them back
+// where they came from so the TWA stays inside its trusted scope.
+const SAFE_RETURN_ORIGINS = new Set<string>([
+  "https://stop-el-juego.replit.app",
+  "https://stopjuegodepalabras.com",
+  "https://www.stopjuegodepalabras.com",
+  APP_ORIGIN, // dev/prod canonical
+]);
+
+function pickReturnOrigin(req: Request, requestedOrigin: string | null): string {
+  if (requestedOrigin && SAFE_RETURN_ORIGINS.has(requestedOrigin)) {
+    return requestedOrigin;
+  }
+  // Try to infer from Referer when the client didn't pass an explicit origin
+  // (e.g. legacy OAuth links). Falls back to APP_ORIGIN otherwise.
+  const ref = req.get("referer") || "";
+  try {
+    const refOrigin = new URL(ref).origin;
+    if (SAFE_RETURN_ORIGINS.has(refOrigin)) return refOrigin;
+  } catch { /* malformed referer — ignore */ }
+  return APP_ORIGIN;
+}
+
+/** Encode {returnPath, returnOrigin} into the OAuth `state` param. Keep it
+ *  short — Google/Facebook accept up to ~2KB but smaller is safer. */
+function encodeAuthState(returnPath: string, returnOrigin: string): string {
+  return encodeURIComponent(JSON.stringify({ r: returnPath, o: returnOrigin }));
+}
+
+/** Inverse of `encodeAuthState`. Tolerates legacy raw-path states so the
+ *  switch-over doesn't strand in-flight OAuth flows after deploy. */
+function decodeAuthState(raw: string | undefined): { returnPath: string; returnOrigin: string } {
+  if (!raw) return { returnPath: "/", returnOrigin: APP_ORIGIN };
+  try {
+    const parsed = JSON.parse(decodeURIComponent(raw));
+    if (parsed && typeof parsed === "object" && typeof parsed.r === "string") {
+      const o = typeof parsed.o === "string" && SAFE_RETURN_ORIGINS.has(parsed.o)
+        ? parsed.o
+        : APP_ORIGIN;
+      return { returnPath: parsed.r, returnOrigin: o };
+    }
+  } catch { /* not JSON — treat as legacy raw path */ }
+  return { returnPath: raw.startsWith("/") ? raw : "/", returnOrigin: APP_ORIGIN };
+}
+
 // ── Dedup cache: prevent double-use of OAuth codes (mobile browsers fire callback twice) ──
 const usedCodes = new Set<string>();
 function claimCode(code: string): boolean {
@@ -23,8 +72,15 @@ function bridgePage(key: string, value: string, returnPath: string) {
   return bridgePageMulti([[key, value]], returnPath);
 }
 
-// Multi-key bridge page — writes multiple sessionStorage entries before redirecting
-function bridgePageMulti(items: [string, string][], returnPath: string) {
+// Multi-key bridge page — writes multiple sessionStorage entries before redirecting.
+// `returnOrigin` lets us bounce the user back to the domain they came from
+// (e.g. stopjuegodepalabras.com) instead of hardcoded APP_ORIGIN, so the TWA
+// stays inside its trusted scope. Defaults to APP_ORIGIN for legacy callers.
+function bridgePageMulti(
+  items: [string, string][],
+  returnPath: string,
+  returnOrigin: string = APP_ORIGIN,
+) {
   // Most items are session-scoped (existing OAuth profile handoff). The
   // PLAYER_TOKEN_BRIDGE_KEY entry, however, must persist across tabs and
   // browser restarts so daily Season Pass missions keep accumulating — write
@@ -46,7 +102,7 @@ function bridgePageMulti(items: [string, string][], returnPath: string) {
   try {
     ${setItems}
   } catch(e) {}
-  window.location.replace(${JSON.stringify(APP_ORIGIN + returnPath)});
+  window.location.replace(${JSON.stringify(returnOrigin + returnPath)});
 </script>
 </body></html>`;
 }
@@ -59,7 +115,9 @@ router.get("/google/start", (req: Request, res: Response) => {
     return res.redirect(`${APP_ORIGIN}/?auth_error=google_not_configured`);
   }
   const redirectUri = `${APP_ORIGIN}/api/auth/google/callback`;
-  const state = req.query["return"] as string || "/";
+  const returnPath = (req.query["return"] as string) || "/";
+  const returnOrigin = pickReturnOrigin(req, null);
+  const state = encodeAuthState(returnPath, returnOrigin);
   const params = new URLSearchParams({
     client_id: GOOGLE_CLIENT_ID,
     redirect_uri: redirectUri,
@@ -74,7 +132,7 @@ router.get("/google/start", (req: Request, res: Response) => {
 
 router.get("/google/callback", async (req: Request, res: Response) => {
   const code  = req.query["code"]  as string | undefined;
-  const state = req.query["state"] as string || "/";
+  const { returnPath, returnOrigin } = decodeAuthState(req.query["state"] as string | undefined);
   const error = req.query["error"] as string | undefined;
 
   const GOOGLE_CLIENT_ID     = process.env["VITE_GOOGLE_CLIENT_ID"];
@@ -87,7 +145,7 @@ router.get("/google/callback", async (req: Request, res: Response) => {
     return res.redirect(`${APP_ORIGIN}/?auth_error=google_not_configured`);
   }
   if (!claimCode(`google_${code}`)) {
-    return res.redirect(`${APP_ORIGIN}${state}`);
+    return res.redirect(`${returnOrigin}${returnPath}`);
   }
 
   try {
@@ -143,7 +201,7 @@ router.get("/google/callback", async (req: Request, res: Response) => {
     res.send(bridgePageMulti([
       ["oauth_user", user],
       ...(sessionToken ? [[PLAYER_TOKEN_BRIDGE_KEY, sessionToken] as [string, string]] : []),
-    ], state));
+    ], returnPath, returnOrigin));
   } catch (err) {
     console.error("Google OAuth error:", err);
     res.redirect(`${APP_ORIGIN}/?auth_error=google_failed`);
@@ -158,7 +216,9 @@ router.get("/facebook/start", (req: Request, res: Response) => {
     return res.redirect(`${APP_ORIGIN}/?auth_error=facebook_not_configured`);
   }
   const redirectUri = `${APP_ORIGIN}/api/auth/facebook/callback`;
-  const state = req.query["return"] as string || "/";
+  const returnPath = (req.query["return"] as string) || "/";
+  const returnOrigin = pickReturnOrigin(req, null);
+  const state = encodeAuthState(returnPath, returnOrigin);
   const params = new URLSearchParams({
     client_id: FACEBOOK_APP_ID,
     redirect_uri: redirectUri,
@@ -171,7 +231,7 @@ router.get("/facebook/start", (req: Request, res: Response) => {
 
 router.get("/facebook/callback", async (req: Request, res: Response) => {
   const code  = req.query["code"]  as string | undefined;
-  const state = req.query["state"] as string || "/";
+  const { returnPath, returnOrigin } = decodeAuthState(req.query["state"] as string | undefined);
   const error = req.query["error"] as string | undefined;
 
   const FACEBOOK_APP_ID     = process.env["VITE_FACEBOOK_APP_ID"];
@@ -184,7 +244,7 @@ router.get("/facebook/callback", async (req: Request, res: Response) => {
     return res.redirect(`${APP_ORIGIN}/?auth_error=facebook_not_configured`);
   }
   if (!claimCode(`fb_${code}`)) {
-    return res.redirect(`${APP_ORIGIN}${state}`);
+    return res.redirect(`${returnOrigin}${returnPath}`);
   }
 
   try {
@@ -219,7 +279,7 @@ router.get("/facebook/callback", async (req: Request, res: Response) => {
       ["oauth_user", user],
       ["fb_access_token", tokenData.access_token],
       ...(sessionToken ? [[PLAYER_TOKEN_BRIDGE_KEY, sessionToken] as [string, string]] : []),
-    ], state));
+    ], returnPath, returnOrigin));
   } catch (err) {
     console.error("Facebook OAuth error:", err);
     res.redirect(`${APP_ORIGIN}/?auth_error=facebook_failed`);
@@ -234,7 +294,9 @@ router.get("/instagram/start", (req: Request, res: Response) => {
     return res.redirect(`${APP_ORIGIN}/?auth_error=instagram_not_configured`);
   }
   const redirectUri = `${APP_ORIGIN}/api/auth/instagram/callback`;
-  const state = req.query["return"] as string || "/";
+  const returnPath = (req.query["return"] as string) || "/";
+  const returnOrigin = pickReturnOrigin(req, null);
+  const state = encodeAuthState(returnPath, returnOrigin);
   const params = new URLSearchParams({
     client_id: INSTAGRAM_CLIENT_ID,
     redirect_uri: redirectUri,
@@ -247,7 +309,7 @@ router.get("/instagram/start", (req: Request, res: Response) => {
 
 router.get("/instagram/callback", async (req: Request, res: Response) => {
   const code  = req.query["code"]  as string | undefined;
-  const state = req.query["state"] as string || "/";
+  const { returnPath, returnOrigin } = decodeAuthState(req.query["state"] as string | undefined);
   const error = req.query["error"] as string | undefined;
 
   const INSTAGRAM_CLIENT_ID     = process.env["INSTAGRAM_CLIENT_ID"];
@@ -260,7 +322,7 @@ router.get("/instagram/callback", async (req: Request, res: Response) => {
     return res.redirect(`${APP_ORIGIN}/?auth_error=instagram_not_configured`);
   }
   if (!claimCode(`ig_${code}`)) {
-    return res.redirect(`${APP_ORIGIN}${state}`);
+    return res.redirect(`${returnOrigin}${returnPath}`);
   }
 
   try {
@@ -301,7 +363,7 @@ router.get("/instagram/callback", async (req: Request, res: Response) => {
     res.send(bridgePageMulti([
       ["oauth_user", user],
       ...(sessionToken ? [[PLAYER_TOKEN_BRIDGE_KEY, sessionToken] as [string, string]] : []),
-    ], state));
+    ], returnPath, returnOrigin));
   } catch (err) {
     console.error("Instagram OAuth error:", err);
     res.redirect(`${APP_ORIGIN}/?auth_error=instagram_failed`);
@@ -333,7 +395,9 @@ router.get("/apple/start", (req: Request, res: Response) => {
     return res.redirect(`${APP_ORIGIN}/?auth_error=apple_not_configured`);
   }
   const redirectUri = `${APP_ORIGIN}/api/auth/apple/callback`;
-  const state = req.query["return"] as string || "/";
+  const returnPath = (req.query["return"] as string) || "/";
+  const returnOrigin = pickReturnOrigin(req, null);
+  const state = encodeAuthState(returnPath, returnOrigin);
   const params = new URLSearchParams({
     client_id: APPLE_CLIENT_ID,
     redirect_uri: redirectUri,
@@ -348,7 +412,7 @@ router.get("/apple/start", (req: Request, res: Response) => {
 // Apple sends a POST (form_post response_mode)
 router.post("/apple/callback", async (req: Request, res: Response) => {
   const code  = req.body?.["code"]  as string | undefined;
-  const state = req.body?.["state"] as string || "/";
+  const { returnPath, returnOrigin } = decodeAuthState(req.body?.["state"] as string | undefined);
   const error = req.body?.["error"] as string | undefined;
 
   const APPLE_CLIENT_ID = process.env["APPLE_CLIENT_ID"];
@@ -360,7 +424,7 @@ router.post("/apple/callback", async (req: Request, res: Response) => {
     return res.redirect(`${APP_ORIGIN}/?auth_error=apple_not_configured`);
   }
   if (!claimCode(`apple_${code}`)) {
-    return res.redirect(`${APP_ORIGIN}${state}`);
+    return res.redirect(`${returnOrigin}${returnPath}`);
   }
 
   try {
@@ -413,7 +477,7 @@ router.post("/apple/callback", async (req: Request, res: Response) => {
     res.send(bridgePageMulti([
       ["oauth_user", user],
       ...(sessionToken ? [[PLAYER_TOKEN_BRIDGE_KEY, sessionToken] as [string, string]] : []),
-    ], state));
+    ], returnPath, returnOrigin));
   } catch (err) {
     console.error("Apple OAuth error:", err);
     res.redirect(`${APP_ORIGIN}/?auth_error=apple_failed`);
@@ -428,7 +492,9 @@ router.get("/tiktok/start", (req: Request, res: Response) => {
     return res.redirect(`${APP_ORIGIN}/?auth_error=tiktok_not_configured`);
   }
   const redirectUri = `${APP_ORIGIN}/api/auth/tiktok/callback`;
-  const state = req.query["return"] as string || "/";
+  const returnPath = (req.query["return"] as string) || "/";
+  const returnOrigin = pickReturnOrigin(req, null);
+  const state = encodeAuthState(returnPath, returnOrigin);
   const params = new URLSearchParams({
     client_key: TIKTOK_CLIENT_KEY,
     redirect_uri: redirectUri,
@@ -441,7 +507,7 @@ router.get("/tiktok/start", (req: Request, res: Response) => {
 
 router.get("/tiktok/callback", async (req: Request, res: Response) => {
   const code  = req.query["code"]  as string | undefined;
-  const state = req.query["state"] as string || "/";
+  const { returnPath, returnOrigin } = decodeAuthState(req.query["state"] as string | undefined);
   const error = req.query["error"] as string | undefined;
 
   const TIKTOK_CLIENT_KEY    = process.env["TIKTOK_CLIENT_KEY"]?.trim();
@@ -499,7 +565,7 @@ router.get("/tiktok/callback", async (req: Request, res: Response) => {
     res.send(bridgePageMulti([
       ["oauth_user", user],
       ...(sessionToken ? [[PLAYER_TOKEN_BRIDGE_KEY, sessionToken] as [string, string]] : []),
-    ], state));
+    ], returnPath, returnOrigin));
   } catch (err) {
     console.error("TikTok OAuth error:", err);
     res.redirect(`${APP_ORIGIN}/?auth_error=tiktok_failed`);

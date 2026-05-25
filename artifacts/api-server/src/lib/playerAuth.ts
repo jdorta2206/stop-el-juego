@@ -102,7 +102,13 @@ export function issuePlayerToken(res: Response, playerId: string): string | null
   if (!token) return null;
   res.cookie(COOKIE_NAME, token, {
     httpOnly: true,
-    sameSite: "lax",
+    // "none" + secure lets the cookie ride cross-origin fetches with
+    // credentials:include, which is required for the TWA case: the OAuth
+    // callback sets the cookie on the canonical domain (stop-el-juego),
+    // but the TWA loads from stopjuegodepalabras.com. With sameSite=lax
+    // the cross-origin /api/auth/me fetch couldn't carry the cookie and
+    // the user kept seeing the login modal on every cold start.
+    sameSite: "none",
     secure: true,
     maxAge: TTL_MS,
     path: "/",

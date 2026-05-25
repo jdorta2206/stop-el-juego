@@ -3,18 +3,17 @@ import { AVATAR_COLORS, getApiUrl } from "@/lib/utils";
 
 const SESSION_TOKEN_KEY = "stop_session_token";
 
-/**
- * Silently restore the player profile from the backend session cookie
- * (or x-stop-token header fallback) on cold start. This solves the TWA
- * problem where the Android WebView wipes localStorage between cold starts,
- * forcing the user to re-login every time. The httpOnly cookie set by the
- * OAuth callback (and the bridge-stored token) is more durable than
- * app-readable localStorage, and the server can rebuild the profile from
- * the player_scores table via the playerId encoded in the signed cookie.
- */
-async function tryRestoreSession(): Promise<PlayerProfile | null> {
+// Canonical OAuth domain. The Google/Facebook/Instagram consoles only know
+// about this host, so OAuth always sets the session cookie here even when
+// the user originally came from the TWA domain (stopjuegodepalabras.com).
+// We try the user's current origin first (same-site, cookie always rides),
+// then fall back to canonical with credentials:include so the cookie set
+// by a previous OAuth on the canonical domain still restores the session
+// across domains. The cookie's sameSite="none" makes this fetch work.
+const CANONICAL_API_ORIGIN = "https://stop-el-juego.replit.app";
+
+async function tryRestoreFrom(apiBase: string): Promise<PlayerProfile | null> {
   try {
-    const apiBase = getApiUrl();
     const headers: Record<string, string> = {};
     try {
       const tok = localStorage.getItem(SESSION_TOKEN_KEY);
@@ -26,12 +25,16 @@ async function tryRestoreSession(): Promise<PlayerProfile | null> {
     });
     if (!res.ok) return null;
     const data = await res.json();
-    if (!data?.id || !data?.name) return null;
-    // Cache the refreshed token so subsequent calls can still authenticate
-    // even if cookies get wiped before localStorage does.
+    if (!data?.id) return null;
+    // Cache the refreshed token so subsequent same-origin calls authenticate
+    // via x-stop-token header even if the cross-domain cookie gets wiped.
     if (data.token) {
       try { localStorage.setItem(SESSION_TOKEN_KEY, data.token); } catch {}
     }
+    // If /me returns id but no name (logged in via OAuth, never finished
+    // profile setup), don't return — let the modal show so they can pick
+    // a name. Caller treats null as "no usable session".
+    if (!data.name) return null;
     return {
       id: data.id,
       name: data.name,
@@ -43,6 +46,31 @@ async function tryRestoreSession(): Promise<PlayerProfile | null> {
   } catch {
     return null;
   }
+}
+
+/**
+ * Silently restore the player profile on cold start. Tries the current
+ * origin first (works when the user is already on the canonical domain or
+ * when the cookie is present on whichever domain they're on), then falls
+ * back to the canonical OAuth domain so users who logged in there but
+ * cold-start the TWA on stopjuegodepalabras.com still get auto-signed-in.
+ * The canonical fetch uses credentials:include + sameSite="none" cookies,
+ * so the existing httpOnly session cookie set during OAuth is sent across
+ * origins and the profile is rebuilt without re-login.
+ */
+async function tryRestoreSession(): Promise<PlayerProfile | null> {
+  const localBase = getApiUrl();
+  const sameOrigin = await tryRestoreFrom(localBase);
+  if (sameOrigin) return sameOrigin;
+  // Only try canonical when it's actually different from current origin —
+  // avoids a wasted duplicate fetch when the user is already on canonical.
+  try {
+    if (typeof window !== "undefined" &&
+        new URL(localBase).origin !== CANONICAL_API_ORIGIN) {
+      return await tryRestoreFrom(CANONICAL_API_ORIGIN);
+    }
+  } catch { /* malformed URL — ignore */ }
+  return null;
 }
 
 export interface PlayerProfile {

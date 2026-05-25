@@ -39,7 +39,43 @@ app.post(
   }
 );
 
-app.use(cors({ origin: true, credentials: true }));
+// CORS allowlist. Locked down because the session cookie is now sameSite=None,
+// which means browsers WILL send it on cross-origin credentialed fetches. With
+// the previous `origin: true` reflection, any malicious site could call
+// /api/auth/me with credentials and steal the bearer token returned in the
+// JSON response. The allowlist ensures only our known frontends can read
+// authenticated responses; everything else gets a credential-less response
+// (browser blocks the read).
+const CORS_ALLOWLIST = new Set<string>([
+  "https://stop-el-juego.replit.app",
+  "https://stopjuegodepalabras.com",
+  "https://www.stopjuegodepalabras.com",
+  // Dev domain (Replit preview). Pulled from env so it can be rotated without
+  // a code change. APP_ORIGIN also covers the canonical prod domain above.
+  process.env["APP_ORIGIN"] || "",
+].filter(Boolean));
+
+app.use(
+  cors({
+    origin: (origin, cb) => {
+      // Same-origin requests (server-to-server, curl) have no Origin header —
+      // allow them since CORS isn't being enforced anyway.
+      if (!origin) return cb(null, true);
+      if (CORS_ALLOWLIST.has(origin)) return cb(null, true);
+      // Allow any *.replit.dev preview URL (dev environments rotate hosts).
+      try {
+        const host = new URL(origin).hostname;
+        if (host.endsWith(".replit.dev") || host.endsWith(".kirk.replit.dev")) {
+          return cb(null, true);
+        }
+      } catch { /* malformed origin */ }
+      // Unknown origin → reject by passing false. The browser will then
+      // refuse to expose any response body to the calling script.
+      return cb(null, false);
+    },
+    credentials: true,
+  }),
+);
 app.use(cookieParser());
 app.use(express.json({ limit: "256kb" })); // small body cap protects against memory abuse
 app.use(express.urlencoded({ extended: true, limit: "64kb" }));
