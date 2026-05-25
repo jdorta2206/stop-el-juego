@@ -1,7 +1,9 @@
 import { Router } from "express";
 import type { Request, Response } from "express";
 import jwt from "jsonwebtoken";
-import { issuePlayerToken, PLAYER_TOKEN_BRIDGE_KEY } from "../lib/playerAuth";
+import { issuePlayerToken, PLAYER_TOKEN_BRIDGE_KEY, readPlayerId } from "../lib/playerAuth";
+import { db, playerScoresTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
 
 const router = Router();
 
@@ -501,6 +503,81 @@ router.get("/tiktok/callback", async (req: Request, res: Response) => {
   } catch (err) {
     console.error("TikTok OAuth error:", err);
     res.redirect(`${APP_ORIGIN}/?auth_error=tiktok_failed`);
+  }
+});
+
+// ── /me — silent session restore ───────────────────────────────────────────────
+// Lets the client re-hydrate the player profile on cold start using the
+// long-lived signed cookie (or x-stop-token header in TWA/cross-origin
+// scenarios where cookies don't reach this origin). Returns 200 with the
+// profile if we recognize the session, 401 otherwise. Also re-issues the
+// cookie to slide the expiration window forward — every visit extends the
+// session by another year so casual players never get kicked out.
+router.get("/me", async (req: Request, res: Response) => {
+  const playerId = readPlayerId(req);
+  if (!playerId) {
+    return res.status(401).json({ error: "Not authenticated" });
+  }
+
+  // Derive loginMethod from the playerId prefix (google_, fb_, instagram_,
+  // apple_, tiktok_). This matches how OAuth callbacks construct the IDs.
+  const prefixMap: Record<string, string> = {
+    google_: "google",
+    fb_: "facebook",
+    instagram_: "instagram",
+    apple_: "apple",
+    tiktok_: "tiktok",
+  };
+  let loginMethod: string | null = null;
+  for (const [prefix, method] of Object.entries(prefixMap)) {
+    if (playerId.startsWith(prefix)) {
+      loginMethod = method;
+      break;
+    }
+  }
+
+  try {
+    const rows = await db
+      .select({
+        playerId: playerScoresTable.playerId,
+        playerName: playerScoresTable.playerName,
+        avatarColor: playerScoresTable.avatarColor,
+      })
+      .from(playerScoresTable)
+      .where(eq(playerScoresTable.playerId, playerId))
+      .limit(1);
+
+    const row = rows[0];
+
+    // Slide the cookie expiration forward on every successful restore so
+    // active players never expire.
+    const refreshedToken = issuePlayerToken(res, playerId);
+
+    if (!row) {
+      // Cookie valid but no profile row yet (logged in, never played).
+      // Tell client we know who they are so they can keep the session, but
+      // they may want to log in again to capture their name/avatar.
+      return res.json({
+        id: playerId,
+        name: null,
+        avatarColor: null,
+        loginMethod,
+        picture: null,
+        token: refreshedToken,
+      });
+    }
+
+    return res.json({
+      id: row.playerId,
+      name: row.playerName,
+      avatarColor: row.avatarColor,
+      loginMethod,
+      picture: null,
+      token: refreshedToken,
+    });
+  } catch (err) {
+    console.error("[auth/me] error:", err);
+    return res.status(500).json({ error: "Internal error" });
   }
 });
 

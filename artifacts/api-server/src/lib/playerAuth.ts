@@ -1,7 +1,7 @@
 import crypto from "crypto";
 import type { Request, Response, NextFunction } from "express";
 
-const TTL_MS = 30 * 24 * 3600 * 1000;
+const TTL_MS = 365 * 24 * 3600 * 1000;
 const COOKIE_NAME = "stop_pt";
 const HEADER_NAME = "x-stop-token";
 

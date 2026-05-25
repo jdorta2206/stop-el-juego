@@ -103,7 +103,6 @@ router.post("/submit", async (req, res) => {
         const r = await validateWordWithAi({
           word: trimmed,
           category: combo.category,
-          letter: combo.letter,
           lang: language,
           playerId,
         });

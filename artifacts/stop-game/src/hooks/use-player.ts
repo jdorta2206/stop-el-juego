@@ -1,5 +1,49 @@
 import { useState, useEffect } from "react";
-import { AVATAR_COLORS } from "@/lib/utils";
+import { AVATAR_COLORS, getApiUrl } from "@/lib/utils";
+
+const SESSION_TOKEN_KEY = "stop_session_token";
+
+/**
+ * Silently restore the player profile from the backend session cookie
+ * (or x-stop-token header fallback) on cold start. This solves the TWA
+ * problem where the Android WebView wipes localStorage between cold starts,
+ * forcing the user to re-login every time. The httpOnly cookie set by the
+ * OAuth callback (and the bridge-stored token) is more durable than
+ * app-readable localStorage, and the server can rebuild the profile from
+ * the player_scores table via the playerId encoded in the signed cookie.
+ */
+async function tryRestoreSession(): Promise<PlayerProfile | null> {
+  try {
+    const apiBase = getApiUrl();
+    const headers: Record<string, string> = {};
+    try {
+      const tok = localStorage.getItem(SESSION_TOKEN_KEY);
+      if (tok) headers["x-stop-token"] = tok;
+    } catch {}
+    const res = await fetch(`${apiBase}/api/auth/me`, {
+      credentials: "include",
+      headers,
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data?.id || !data?.name) return null;
+    // Cache the refreshed token so subsequent calls can still authenticate
+    // even if cookies get wiped before localStorage does.
+    if (data.token) {
+      try { localStorage.setItem(SESSION_TOKEN_KEY, data.token); } catch {}
+    }
+    return {
+      id: data.id,
+      name: data.name,
+      avatarColor: data.avatarColor || AVATAR_COLORS[0],
+      loginMethod: data.loginMethod ?? null,
+      picture: data.picture ?? null,
+      fbAccessToken: null,
+    };
+  } catch {
+    return null;
+  }
+}
 
 export interface PlayerProfile {
   id: string;
@@ -45,18 +89,45 @@ export function usePlayer() {
   const [needsAuth, setNeedsAuth] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
+
     const refresh = () => {
       const stored = readStoredPlayer();
       setPlayer(stored);
       setNeedsAuth(!stored);
     };
-    refresh();
-    setIsLoaded(true);
+
+    const stored = readStoredPlayer();
+    if (stored) {
+      // Already have a local profile → no network needed.
+      setPlayer(stored);
+      setNeedsAuth(false);
+      setIsLoaded(true);
+    } else {
+      // No localStorage profile (first visit, or TWA wiped storage).
+      // Try to silently restore from the long-lived backend session before
+      // showing the login modal. This is the key fix: if the user had ever
+      // logged in (Google/Facebook/Instagram/Apple/TikTok), the server still
+      // recognizes their signed cookie/token and rebuilds their profile.
+      tryRestoreSession().then((restored) => {
+        if (cancelled) return;
+        if (restored) {
+          writeStoredPlayer(restored);
+          setPlayer(restored);
+          setNeedsAuth(false);
+        } else {
+          setPlayer(null);
+          setNeedsAuth(true);
+        }
+        setIsLoaded(true);
+      });
+    }
 
     const handler = () => refresh();
     window.addEventListener(PLAYER_EVENT, handler);
     window.addEventListener("storage", handler);
     return () => {
+      cancelled = true;
       window.removeEventListener(PLAYER_EVENT, handler);
       window.removeEventListener("storage", handler);
     };
