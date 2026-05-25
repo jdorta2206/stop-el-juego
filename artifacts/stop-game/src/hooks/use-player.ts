@@ -46,9 +46,32 @@ export function usePlayer() {
 
   useEffect(() => {
     const refresh = () => {
-      const stored = readStoredPlayer();
+      let stored = readStoredPlayer();
+      // Auto-creación de perfil invitado en la primera visita: en vez de
+      // bloquear al usuario con el modal de login al abrir la app, le creamos
+      // un perfil anónimo persistente y entra directo a jugar. Puede iniciar
+      // sesión con Google/Facebook luego desde su perfil (botón "Cambiar
+      // cuenta" / showAuth). Esto resuelve el caso TWA donde el localStorage
+      // del dominio replit.app se pierde con frecuencia y la app pedía login
+      // en cada cold start, frustrando al usuario.
+      if (!stored) {
+        const randomId = (typeof crypto !== "undefined" && crypto.randomUUID)
+          ? crypto.randomUUID()
+          : "guest_" + Math.random().toString(36).slice(2) + Date.now().toString(36);
+        const guestNumber = Math.floor(1000 + Math.random() * 9000);
+        const guestProfile: PlayerProfile = {
+          id: randomId,
+          name: `Jugador ${guestNumber}`,
+          avatarColor: AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)],
+          loginMethod: "guest",
+          picture: null,
+          fbAccessToken: null,
+        };
+        writeStoredPlayer(guestProfile);
+        stored = guestProfile;
+      }
       setPlayer(stored);
-      setNeedsAuth(!stored);
+      setNeedsAuth(false);
     };
     refresh();
     setIsLoaded(true);
