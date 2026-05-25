@@ -439,6 +439,34 @@ async function purgeStaleRooms() {
       and(eq(roomsTable.status, "waiting"), lt(roomsTable.updatedAt, twoHoursAgo))
     );
     await db.delete(roomsTable).where(lt(roomsTable.updatedAt, sixHoursAgo));
+
+    // 🧹 In-memory map cleanup: drop entries for any room code that no
+    // longer exists in the DB. Without this, sseClients/roomReactions/
+    // roomPhrases/roomTyping grow unbounded as games end and rooms get
+    // purged. We compare against the live set of codes rather than
+    // selecting "stale" codes upfront (which was throwing at boot).
+    const liveCodesSet = new Set<string>();
+    try {
+      const live = await db.select({ code: roomsTable.roomCode }).from(roomsTable);
+      for (const r of live) if (r?.code) liveCodesSet.add(r.code);
+    } catch {
+      // If the live-codes query fails we conservatively skip in-memory
+      // cleanup this cycle rather than risk dropping active rooms.
+      return;
+    }
+    const dropOrphans = (m: Map<string, unknown>) => {
+      for (const code of m.keys()) if (!liveCodesSet.has(code)) m.delete(code);
+    };
+    // SSE: close leftover client connections before dropping the set.
+    for (const code of sseClients.keys()) {
+      if (liveCodesSet.has(code)) continue;
+      const set = sseClients.get(code);
+      if (set) for (const c of set) { try { c.res.end(); } catch { /* already closed */ } }
+      sseClients.delete(code);
+    }
+    dropOrphans(roomReactions as Map<string, unknown>);
+    dropOrphans(roomPhrases as Map<string, unknown>);
+    dropOrphans(roomTyping as Map<string, unknown>);
   } catch (err) {
     console.error("[purgeStaleRooms] failed:", (err as Error).message);
   }

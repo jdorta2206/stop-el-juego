@@ -109,22 +109,37 @@ function App() {
   const [splashDone, setSplashDone] = useState(false);
   const lang = (localStorage.getItem("stop_lang") ?? "es") as string;
 
-  // ── Hardware back button (TWA / Android) — close open dialogs/dropdowns
-  // before letting the OS pop back. Without this, pressing back on the home
-  // screen instantly closes the TWA app, which is a common Play Store
-  // complaint. We seed one history entry on mount and intercept popstate.
+  // ── Hardware back button (TWA / Android). Three behaviors layered:
+  //   1) If a modal/dropdown is open (data-modal-open="true"), close it.
+  //   2) Else, if we're not at "/", navigate back to "/" (instead of letting
+  //      the TWA exit straight from a deep page — common Play Store complaint).
+  //   3) Else (already at "/"), let the OS exit normally.
+  // We seed one dummy history entry per render-loop iteration so each press
+  // hits this handler before the OS sees it.
   useEffect(() => {
-    try {
-      window.history.pushState({ stopApp: true }, "");
-    } catch { /* ignore */ }
+    const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+    const isAtHome = () => {
+      const p = window.location.pathname.replace(base, "") || "/";
+      return p === "/" || p === "";
+    };
+    try { window.history.pushState({ stopApp: true }, ""); } catch { /* ignore */ }
     const onPop = () => {
-      // If any modal/dropdown sets data-modal-open on body, just close it
-      // and re-push the dummy entry so back doesn't exit the app.
       const open = document.body.dataset.modalOpen;
       if (open === "true") {
         try {
           document.body.dataset.modalOpen = "false";
           window.dispatchEvent(new CustomEvent("stop:back"));
+          window.history.pushState({ stopApp: true }, "");
+        } catch { /* ignore */ }
+        return;
+      }
+      // Not at home → navigate home and re-seed the dummy entry so a second
+      // back press will fall through to exit. Using replaceState + assign
+      // because wouter isn't directly available at this layer.
+      if (!isAtHome()) {
+        try {
+          window.history.replaceState({ stopApp: true }, "", `${base}/`);
+          window.dispatchEvent(new PopStateEvent("popstate"));
           window.history.pushState({ stopApp: true }, "");
         } catch { /* ignore */ }
       }
@@ -141,7 +156,20 @@ function App() {
           <SplashScreen onDone={() => setSplashDone(true)} lang={lang} />
           {splashDone && (
             <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-              <Suspense fallback={null}>
+              <Suspense fallback={
+                // Branded loader instead of blank screen — keeps the user
+                // anchored when navigating to a lazy-loaded route on slow 4G.
+                <div
+                  className="fixed inset-0 flex items-center justify-center pointer-events-none"
+                  style={{ background: "#1a1a2e" }}
+                  aria-label="Cargando"
+                >
+                  <div
+                    className="w-12 h-12 rounded-full border-4 border-white/10 animate-spin"
+                    style={{ borderTopColor: "#fbbf24" }}
+                  />
+                </div>
+              }>
                 <Router />
               </Suspense>
             </WouterRouter>

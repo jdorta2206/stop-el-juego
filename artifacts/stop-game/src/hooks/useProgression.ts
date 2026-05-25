@@ -86,15 +86,15 @@ export function useProgression(playerId?: string) {
     fetch(`${API}/api/ranking/profile/${playerId}`)
       .then(r => r.ok ? r.json() : null)
       .then((data: { xp?: number } | null) => {
-        if (data?.xp != null && data.xp > 0) {
-          setXp(prev => {
-            const serverXp = data.xp as number;
-            if (serverXp > prev) {
-              try { localStorage.setItem(XP_KEY, String(serverXp)); } catch {}
-              return serverXp;
-            }
-            return prev;
-          });
+        // Always trust the server as the source of truth. Previously we only
+        // synced when serverXp > localXp, which left the client stuck on an
+        // inflated value if the server had legitimately corrected it down
+        // (refund, anti-cheat clawback, manual support fix). Server wins
+        // unconditionally on mount.
+        if (data?.xp != null && data.xp >= 0) {
+          const serverXp = data.xp;
+          setXp(serverXp);
+          try { localStorage.setItem(XP_KEY, String(serverXp)); } catch {}
         }
       })
       .catch(() => {});

@@ -130,6 +130,15 @@ export default function Room() {
   const [visiblePhrases, setVisiblePhrases] = useState<Array<{ id: string; playerName: string; text: string }>>([]);
   const seenPhraseIds = useRef<Set<string>>(new Set());
   const [sseActive, setSseActive] = useState(false);
+  // Show the "Reconnecting…" pill only if SSE has been down for more than
+  // ~2s — avoids a flicker during normal handshake. Cleared the moment
+  // sseActive flips back to true. Kept as state so the pill animates in.
+  const [showReconnecting, setShowReconnecting] = useState(false);
+  useEffect(() => {
+    if (sseActive) { setShowReconnecting(false); return; }
+    const t = setTimeout(() => setShowReconnecting(true), 2000);
+    return () => clearTimeout(t);
+  }, [sseActive]);
   const [typingPlayers, setTypingPlayers] = useState<Array<{ playerId: string; playerName: string }>>([]);
   const [rematchCode, setRematchCode] = useState<string | null>(null);
   const [rematchLoading, setRematchLoading] = useState(false);
@@ -1069,6 +1078,31 @@ export default function Room() {
     <Layout>
       {/* ✨ Entrance animation when a new player joins (Premium = golden burst) */}
       <PlayerEntranceToast players={players} meId={player?.id} />
+
+      {/* 🔌 Real-time connection lost indicator. SSE polls fall back to HTTP
+          polling, but the user has no visual cue they may be seeing stale
+          state — fixed by surfacing a discreet pill after a 2s grace window. */}
+      <AnimatePresence>
+        {showReconnecting && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.2 }}
+            className="fixed top-2 left-1/2 -translate-x-1/2 z-[60] px-3 py-1.5 rounded-full text-[11px] font-black uppercase tracking-wide flex items-center gap-1.5 pointer-events-none"
+            style={{
+              background: "rgba(251,191,36,0.95)",
+              color: "#1a1a2e",
+              boxShadow: "0 4px 16px rgba(0,0,0,0.35)",
+            }}
+            role="status"
+            aria-live="polite"
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-[#1a1a2e] animate-pulse" />
+            Reconectando…
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* 📚 First-multiplayer-game coachmark */}
       <AnimatePresence>

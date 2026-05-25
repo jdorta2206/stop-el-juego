@@ -340,7 +340,30 @@ export default function Home() {
         {/* 🔴 EN VIVO ahora — public streamer rooms */}
         <LiveRoomsSection />
 
-        {/* 👥 Amigos jugando ahora — quick join */}
+        {/* 👥 Amigos jugando ahora — quick join. Empty-state CTA shows even
+            when no friends are online so new users see the social layer
+            exists and have a clear path to invite people (retention loop). */}
+        {friendsOnline.length === 0 && (
+          <Link href="/amigos">
+            <motion.div
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.12 }}
+              className="w-full px-3 py-2.5 rounded-xl cursor-pointer"
+              style={{ background: "rgba(255,255,255,0.04)", border: "1.5px dashed rgba(255,255,255,0.18)" }}
+              data-testid="empty-friends-cta"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-bold text-white/70">
+                  👥 Invita amigos y juega retos juntos
+                </span>
+                <span className="text-[10px] font-black text-amber-300 uppercase tracking-wide">
+                  Añadir →
+                </span>
+              </div>
+            </motion.div>
+          </Link>
+        )}
         {friendsOnline.length > 0 && (
           <motion.div
             initial={{ opacity: 0, y: 6 }}
