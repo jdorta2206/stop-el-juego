@@ -687,28 +687,79 @@ export default function SoloGame() {
       setBluffBonusScore(bonusDelta);
     }
 
-    // Set up AI bluff reveal data (using API response)
+    // Set up AI bluff reveal data (using API response).
+    //
+    // 🩹 BUG FIX: previously we just trusted aiBluffSetup.category even when
+    // the AI had nothing to show there (empty "—"). That asked the player
+    // "¿real o mentira?" about a blank — impossible to judge fairly.
+    //
+    // New behaviour:
+    //   1. If the initially picked bluff category has an AI answer → keep it.
+    //   2. Else, re-pick from any category where AI DOES have an answer.
+    //      • If aiBluffSetup.wasActuallyBluffing was true, prefer a category
+    //        where the AI answer is INVALID (score = 0 but response != "")
+    //        so the bluff is actually a bluff. If none, fall back to any
+    //        non-empty answer and mark it as honest.
+    //      • Else, pick any non-empty answer and mark as honest.
+    //   3. If NO category has any AI answer → skip the AI bluff phase entirely.
+    let aiBluffSetupForReveal: AiBluffReveal | null = null;
     if (aiBluffSetup && apiData) {
-      const catResult = (apiData as { results?: Record<string, { ai?: { response?: string; score?: number } }> }).results?.[aiBluffSetup.category];
-      const aiAnswer = catResult?.ai?.response ?? "";
-      const aiGotPoints = (catResult?.ai?.score ?? 0) > 0;
+      type Cat = { ai?: { response?: string; score?: number } };
+      const allResults = (apiData as { results?: Record<string, Cat> }).results ?? {};
 
-      // The AI can only TRULY bluff (show a fake answer) when it had NO valid word.
-      // If the AI has a real valid answer (score > 0), it is NEVER bluffing — it's honest.
-      // This prevents situations like "YouTube" being incorrectly labeled as a lie.
-      const wasActuallyBluffing = !aiGotPoints && aiBluffSetup.wasActuallyBluffing;
+      const pick = (cat: string): { cat: string; answer: string; aiGotPoints: boolean } | null => {
+        const r = allResults[cat];
+        const answer = (r?.ai?.response ?? "").trim();
+        if (!answer) return null;
+        return { cat, answer, aiGotPoints: (r?.ai?.score ?? 0) > 0 };
+      };
 
-      setAiBluffReveal({
-        category: aiBluffSetup.category,
-        answer: aiAnswer,
-        wasActuallyBluffing,
-        scoreChange: 0,
-      });
+      let chosen = pick(aiBluffSetup.category);
+      if (!chosen) {
+        // Try to honour the original "was bluffing" intent first: find a
+        // category whose AI answer is non-empty but invalid (a real fake).
+        if (aiBluffSetup.wasActuallyBluffing) {
+          for (const cat of currentCategories) {
+            const r = allResults[cat];
+            const answer = (r?.ai?.response ?? "").trim();
+            if (answer && (r?.ai?.score ?? 0) === 0) {
+              chosen = { cat, answer, aiGotPoints: false };
+              break;
+            }
+          }
+        }
+        // Fallback: any non-empty AI answer (will be revealed as honest).
+        if (!chosen) {
+          for (const cat of currentCategories) {
+            const c = pick(cat);
+            if (c) { chosen = c; break; }
+          }
+        }
+      }
+
+      if (chosen) {
+        // wasActuallyBluffing is only true when the AI HAS a word AND that
+        // word is invalid (score 0). A valid scoring answer is always honest.
+        const wasActuallyBluffing = !chosen.aiGotPoints && aiBluffSetup.wasActuallyBluffing;
+        aiBluffSetupForReveal = {
+          category: chosen.cat,
+          answer: chosen.answer,
+          wasActuallyBluffing,
+          scoreChange: 0,
+        };
+        setAiBluffReveal(aiBluffSetupForReveal);
+      } else {
+        // No usable AI answer this round — silently drop the bluff phase
+        // rather than asking the player to judge a blank.
+        setAiBluffReveal(null);
+      }
     }
 
-    // Go to JUDGING if there's anything to judge, otherwise go straight to results
-    if (hasPlayerBluffs || aiBluffSetup) {
-      setJudgingPhase("player_bluffs");
+    // Go to JUDGING only if there's anything REAL to judge. Player bluffs
+    // always count; AI bluff only counts when we actually have an answer
+    // to show (aiBluffSetupForReveal !== null).
+    if (hasPlayerBluffs || aiBluffSetupForReveal) {
+      setJudgingPhase(hasPlayerBluffs ? "player_bluffs" : "ai_bluff");
       setGameState("JUDGING");
     } else {
       setGameState("RESULTS");
