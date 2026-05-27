@@ -192,10 +192,10 @@ export default function About() {
               ¿Tienes sugerencias, encontraste un error, quieres reportar un jugador o necesitas eliminar tu cuenta? Escríbenos a:
             </p>
             <a
-              href="mailto:stopeljuegodepalabras@gmail.com"
+              href="mailto:dorynex@stopjuegodepalabras.com"
               className="inline-block px-6 py-3 rounded-2xl font-bold text-[hsl(222,47%,11%)] bg-[hsl(48,96%,57%)] hover:opacity-90 transition-opacity"
             >
-              stopeljuegodepalabras@gmail.com
+              dorynex@stopjuegodepalabras.com
             </a>
             <p className="mt-4 text-sm text-white/50">
               Respondemos en un plazo máximo de 48 horas laborables. Para solicitudes de eliminación de datos personales, consulta nuestra <Link href="/privacy" className="underline text-white/70">Política de Privacidad</Link>.

@@ -256,7 +256,7 @@ export function Layout({ children }: { children: ReactNode }) {
             {lang === "en" ? "Notifications" : lang === "pt" ? "Notificações" : lang === "fr" ? "Notifications" : "Notificaciones"}
           </Link>
           <a
-            href="mailto:stopeljuegodepalabras@gmail.com"
+            href="mailto:dorynex@stopjuegodepalabras.com"
             className="text-white/40 hover:text-white/70 text-xs transition-colors"
           >
             Contacto

@@ -19,11 +19,11 @@ export default function Privacy() {
         </div>
         <div>
           <h2 className="text-xl font-bold text-white mb-2">4. Eliminación de datos</h2>
-          <p>Puedes solicitar la eliminación completa de tu cuenta y todos tus datos en cualquier momento. Para ello, envía un correo electrónico a <a href="mailto:stopeljuegodepalabras@gmail.com" className="text-[hsl(48,96%,57%)] underline">stopeljuegodepalabras@gmail.com</a> con el asunto <strong>"Eliminar mis datos"</strong> indicando el nombre de usuario o correo con el que iniciaste sesión. Procesaremos tu solicitud en un plazo máximo de 30 días. Se eliminarán: tu nombre, foto de perfil, puntuaciones, historial de partidas y datos de suscripción.</p>
+          <p>Puedes solicitar la eliminación completa de tu cuenta y todos tus datos en cualquier momento. Para ello, envía un correo electrónico a <a href="mailto:dorynex@stopjuegodepalabras.com" className="text-[hsl(48,96%,57%)] underline">dorynex@stopjuegodepalabras.com</a> con el asunto <strong>"Eliminar mis datos"</strong> indicando el nombre de usuario o correo con el que iniciaste sesión. Procesaremos tu solicitud en un plazo máximo de 30 días. Se eliminarán: tu nombre, foto de perfil, puntuaciones, historial de partidas y datos de suscripción.</p>
         </div>
         <div>
           <h2 className="text-xl font-bold text-white mb-2">5. Contacto</h2>
-          <p>Para cualquier consulta sobre privacidad o para ejercer tus derechos de acceso, rectificación o eliminación, contacta con nosotros en: <a href="mailto:stopeljuegodepalabras@gmail.com" className="text-[hsl(48,96%,57%)] underline">stopeljuegodepalabras@gmail.com</a></p>
+          <p>Para cualquier consulta sobre privacidad o para ejercer tus derechos de acceso, rectificación o eliminación, contacta con nosotros en: <a href="mailto:dorynex@stopjuegodepalabras.com" className="text-[hsl(48,96%,57%)] underline">dorynex@stopjuegodepalabras.com</a></p>
         </div>
       </section>
 
@@ -39,8 +39,8 @@ export default function Privacy() {
         </a>
         <p className="text-white/50 text-xs mt-3">
           También puedes escribirnos directamente a{" "}
-          <a href="mailto:stopeljuegodepalabras@gmail.com" className="text-[hsl(48,96%,57%)] underline">
-            stopeljuegodepalabras@gmail.com
+          <a href="mailto:dorynex@stopjuegodepalabras.com" className="text-[hsl(48,96%,57%)] underline">
+            dorynex@stopjuegodepalabras.com
           </a>{" "}
           con el asunto "Eliminar mis datos".
         </p>

@@ -868,7 +868,7 @@ export default function Home() {
             <Link href="/acerca" className="hover:text-[#f9a825] transition-colors">Acerca de</Link>
             <Link href="/privacy" className="hover:text-[#f9a825] transition-colors">Privacidad</Link>
             <Link href="/terms" className="hover:text-[#f9a825] transition-colors">Términos</Link>
-            <a href="mailto:stopeljuegodepalabras@gmail.com" className="hover:text-[#f9a825] transition-colors">Contacto</a>
+            <a href="mailto:dorynex@stopjuegodepalabras.com" className="hover:text-[#f9a825] transition-colors">Contacto</a>
           </nav>
           <p className="mt-4 text-xs text-white/30">
             STOP — El Juego de Palabras · © 2026 Dorynex Studio

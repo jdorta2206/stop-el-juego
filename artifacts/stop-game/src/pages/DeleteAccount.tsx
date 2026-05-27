@@ -14,7 +14,7 @@ export default function DeleteAccount() {
       `Motivo (opcional): ${reason}\n\n` +
       `Confirmo que entiendo que esta acción es irreversible.\n\nGracias.`
     );
-    window.location.href = `mailto:stopeljuegodepalabras@gmail.com?subject=${subject}&body=${body}`;
+    window.location.href = `mailto:dorynex@stopjuegodepalabras.com?subject=${subject}&body=${body}`;
     setSent(true);
   };
 
@@ -27,8 +27,8 @@ export default function DeleteAccount() {
         <p className="text-white/50 text-sm mb-2">STOP! Juego de Palabras Online</p>
         <p className="text-white/60 mb-8">
           Desarrollador: <strong>Dorynex</strong> · Contacto:{" "}
-          <a href="mailto:stopeljuegodepalabras@gmail.com" className="text-[hsl(48,96%,57%)] underline">
-            stopeljuegodepalabras@gmail.com
+          <a href="mailto:dorynex@stopjuegodepalabras.com" className="text-[hsl(48,96%,57%)] underline">
+            dorynex@stopjuegodepalabras.com
           </a>
         </p>
 
@@ -70,8 +70,8 @@ export default function DeleteAccount() {
               </li>
               <li>
                 <strong>Opción manual:</strong> envía un email a{" "}
-                <a href="mailto:stopeljuegodepalabras@gmail.com" className="text-[hsl(48,96%,57%)] underline">
-                  stopeljuegodepalabras@gmail.com
+                <a href="mailto:dorynex@stopjuegodepalabras.com" className="text-[hsl(48,96%,57%)] underline">
+                  dorynex@stopjuegodepalabras.com
                 </a>{" "}
                 con el asunto <strong>"Eliminar mis datos"</strong> indicando el email o nombre de usuario con el que iniciaste sesión.
               </li>
@@ -90,8 +90,8 @@ export default function DeleteAccount() {
               <p className="text-sm text-white/60">
                 Si tu app de correo no se abrió automáticamente, copia esta dirección y mándanos un email manualmente:
                 <br />
-                <a href="mailto:stopeljuegodepalabras@gmail.com" className="text-[hsl(48,96%,57%)] underline">
-                  stopeljuegodepalabras@gmail.com
+                <a href="mailto:dorynex@stopjuegodepalabras.com" className="text-[hsl(48,96%,57%)] underline">
+                  dorynex@stopjuegodepalabras.com
                 </a>
               </p>
               <button
