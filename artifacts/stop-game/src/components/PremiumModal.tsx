@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Star, Zap, ShieldOff, Crown } from "lucide-react";
+import { X, BarChart3, Crown, DoorOpen, Package } from "lucide-react";
 import { fetchPremiumProducts, startCheckout, openCustomerPortal, notifyPremiumRefresh } from "@/lib/usePremium";
 import { usePaymentChannel } from "@/hooks/usePaymentChannel";
 import { purchasePremiumOnPlay } from "@/lib/playBilling";
@@ -39,11 +39,15 @@ export function PremiumModal({
   const [error, setError] = useState<string | null>(null);
   const [loadingProducts, setLoadingProducts] = useState(false);
 
+  // Premium value props — intentionally NOT pay-to-win. No score multipliers,
+  // no scoring perks, no leaderboard advantages. Cosmetic + utility only:
+  // stats/history, golden frame & avatars, unlimited private rooms, all
+  // category packs included.
   const FEATURES = [
-    { icon: ShieldOff, label: t.premium.features[0] },
-    { icon: Zap, label: t.premium.features[1] },
-    { icon: Crown, label: t.premium.features[2] },
-    { icon: Star, label: t.premium.features[3] },
+    { icon: BarChart3, label: t.premium.features[0] },
+    { icon: Crown, label: t.premium.features[1] },
+    { icon: DoorOpen, label: t.premium.features[2] },
+    { icon: Package, label: t.premium.features[3] },
   ];
 
   useEffect(() => {
