@@ -1,0 +1,1 @@
+- [Adding a new DB table](db-schema-new-tables.md) — composite TS pkg needs `tsc -b` rebuild; prod tables must go in migrate.ts ensureIndexes (no drizzle push in prod); push TUI ignores piped stdin.

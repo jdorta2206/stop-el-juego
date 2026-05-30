@@ -15,6 +15,7 @@ import seasonRouter from "./season";
 import inventoryRouter from "./inventory";
 import playBillingRouter from "./playBilling";
 import customPacksRouter from "./customPacks";
+import guestStatsRouter from "./guestStats";
 
 const router: IRouter = Router();
 
@@ -34,5 +35,6 @@ router.use("/season", seasonRouter);
 router.use("/inventory", inventoryRouter);
 router.use("/billing/play", playBillingRouter);
 router.use("/custom-packs", customPacksRouter);
+router.use("/guest-stats", guestStatsRouter);
 
 export default router;

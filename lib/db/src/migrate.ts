@@ -115,6 +115,16 @@ export async function ensureIndexes(): Promise<void> {
        updated_at timestamp NOT NULL DEFAULT NOW()
      )`,
 
+    // ── guest_stats ──────────────────────────────────────────────────
+    // Anonymous, aggregate-only daily counters of guest (not-logged-in)
+    // activity. Created here so a fresh boot works without a separate
+    // drizzle-kit migration step.
+    `CREATE TABLE IF NOT EXISTS guest_stats (
+       day text PRIMARY KEY,
+       games integer NOT NULL DEFAULT 0,
+       conversions integer NOT NULL DEFAULT 0
+     )`,
+
     // ── seasons / season_progress ────────────────────────────────────
     // Tables created here (alongside cron_locks) so the API works on a fresh
     // boot without requiring a separate drizzle-kit migration step.

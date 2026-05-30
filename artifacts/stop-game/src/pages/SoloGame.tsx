@@ -25,6 +25,7 @@ import { useTicker } from "@/hooks/useTicker";
 import { useStreak } from "@/hooks/useStreak";
 import { useProgression, calcXpFromResults } from "@/hooks/useProgression";
 import { reportSeasonEvent } from "@/hooks/useSeason";
+import { trackGuestGame, trackGuestConversion } from "@/lib/guestStats";
 import { useSound } from "@/hooks/useSound";
 import { useToast } from "@/hooks/use-toast";
 import { pickRandomPersonality, getAIComment, type AIPersonality } from "@/data/aiPersonalities";
@@ -1096,6 +1097,7 @@ export default function SoloGame() {
   useEffect(() => {
     if (gameState !== "RESULTS" || round < maxRounds || submittedRef.current) return;
     submittedRef.current = true;
+    if (!player || player.loginMethod === "guest") trackGuestGame();
     submitToLeaderboard(totalScore, aiTotalScore);
     if (isDailyMode) submitDailyResult(totalScore);
     // Fallback path — the inline block already reports events on the normal
@@ -2758,7 +2760,10 @@ export default function SoloGame() {
                   <motion.button
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
-                    onClick={showAuth}
+                    onClick={() => {
+                      trackGuestConversion();
+                      showAuth();
+                    }}
                     className="w-full py-3 rounded-xl font-black text-sm tracking-wide flex items-center justify-center gap-2"
                     style={{
                       background: "linear-gradient(135deg, #f9a825, #f57f17)",
