@@ -2716,24 +2716,65 @@ export default function SoloGame() {
                 );
               })()}
 
-              {/* Guest warning: score not saved */}
+              {/* Guest prompt: score not saved → convert to a logged-in account
+                  so the player appears in the weekly/global ranking. Guests are
+                  never written to the leaderboard server-side, so this is the
+                  only path to get them counted. */}
               {round >= maxRounds && (!player || player.loginMethod === "guest") && (
                 <motion.div
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="mb-3 rounded-xl px-4 py-3 flex items-start gap-3 cursor-pointer"
-                  style={{ background: "rgba(249,168,37,0.15)", border: "1.5px solid rgba(249,168,37,0.45)" }}
-                  onClick={showAuth}
+                  initial={{ opacity: 0, y: 8, scale: 0.97 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  transition={{ delay: 0.6, type: "spring", bounce: 0.4 }}
+                  className="mb-3 rounded-2xl px-4 py-4"
+                  style={{
+                    background: "linear-gradient(135deg, rgba(249,168,37,0.22), rgba(181,48,26,0.18))",
+                    border: "2px solid rgba(249,168,37,0.6)",
+                    boxShadow: "0 4px 20px rgba(249,168,37,0.18)",
+                  }}
                 >
-                  <span className="text-xl mt-0.5">⚠️</span>
-                  <div>
-                    <p className="text-yellow-300 font-black text-sm leading-tight">
-                      {lang === "pt" ? "Pontuação não salva" : lang === "en" ? "Score not saved" : lang === "fr" ? "Score non enregistré" : "Puntuación no guardada"}
-                    </p>
-                    <p className="text-yellow-200/70 text-xs mt-0.5">
-                      {lang === "pt" ? "Inicia sessão para aparecer no ranking" : lang === "en" ? "Sign in to appear on the leaderboard" : lang === "fr" ? "Connecte-toi pour apparaître au classement" : "Inicia sesión para aparecer en el ranking"}
-                    </p>
+                  <div className="flex items-start gap-3 mb-3">
+                    <span className="text-2xl mt-0.5">🏆</span>
+                    <div>
+                      <p className="text-yellow-300 font-black text-sm leading-tight">
+                        {lang === "pt"
+                          ? `Os teus ${totalScore} pontos não foram guardados`
+                          : lang === "en"
+                          ? `Your ${totalScore} points weren't saved`
+                          : lang === "fr"
+                          ? `Tes ${totalScore} points n'ont pas été enregistrés`
+                          : `Tus ${totalScore} puntos no se han guardado`}
+                      </p>
+                      <p className="text-yellow-200/80 text-xs mt-1 leading-snug">
+                        {lang === "pt"
+                          ? "Inicia sessão para guardar a pontuação e aparecer no ranking. É grátis!"
+                          : lang === "en"
+                          ? "Sign in to save your score and appear on the leaderboard. It's free!"
+                          : lang === "fr"
+                          ? "Connecte-toi pour sauvegarder ton score et apparaître au classement. C'est gratuit !"
+                          : "Inicia sesión para guardar tu puntuación y aparecer en el ranking. ¡Es gratis!"}
+                      </p>
+                    </div>
                   </div>
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={showAuth}
+                    className="w-full py-3 rounded-xl font-black text-sm tracking-wide flex items-center justify-center gap-2"
+                    style={{
+                      background: "linear-gradient(135deg, #f9a825, #f57f17)",
+                      color: "#0d1757",
+                      boxShadow: "0 3px 14px rgba(249,168,37,0.4)",
+                    }}
+                  >
+                    <Star size={16} />
+                    {lang === "pt"
+                      ? "Iniciar sessão e guardar"
+                      : lang === "en"
+                      ? "Sign in & save my score"
+                      : lang === "fr"
+                      ? "Se connecter et sauvegarder"
+                      : "Iniciar sesión y guardar"}
+                  </motion.button>
                 </motion.div>
               )}
 
