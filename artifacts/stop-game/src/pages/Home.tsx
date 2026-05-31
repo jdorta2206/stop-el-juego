@@ -779,8 +779,8 @@ export default function Home() {
           </motion.div>
         )}
 
-        {/* Banner deshabilitado — Adsterra redirige a páginas externas en TWA */}
-        {/* {!isPremium && <BannerAd className="my-4" />} */}
+        {/* Banner solo en navegador web (BannerAd se auto-oculta dentro del TWA). */}
+        {!isPremium && <BannerAd className="my-4" />}
 
         {/* Share row */}
         <motion.div

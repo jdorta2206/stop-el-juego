@@ -2,6 +2,29 @@ import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Play, Gift, Zap, Star } from "lucide-react";
 import { getT } from "@/i18n/index";
+import { detectPaymentChannel, hasAndroidAppReferrer } from "@/lib/playBilling";
+
+// Banner ads must appear ONLY in real web browsers, NEVER inside the Play Store
+// TWA / an installed standalone app: Adsterra banners can redirect/hijack the
+// screen, which violates Google Play's "Disruptive Ads" policy and risks the
+// app being removed. Detection is FAIL-CLOSED — banners stay hidden until we
+// positively confirm a plain browser context (see BannerAd's effect).
+function inStandaloneOrTwaSync(): boolean {
+  if (typeof window === "undefined") return true;
+  try {
+    if (hasAndroidAppReferrer()) return true;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("source") === "twa" || params.get("utm_source") === "twa") return true;
+    const ua = navigator.userAgent || "";
+    const isStandalone =
+      (window.matchMedia?.("(display-mode: standalone)").matches ?? false) ||
+      (window.matchMedia?.("(display-mode: fullscreen)").matches ?? false);
+    if (isStandalone && /Android/i.test(ua)) return true;
+    return false;
+  } catch {
+    return true; // any error → assume TWA, hide banners
+  }
+}
 
 // ─── Ad network config ───────────────────────────────────────────────────────
 // Currently using Adsterra (320x50 iframe banner). Override via env if needed.
@@ -168,6 +191,8 @@ export function BannerAd({ className = "" }: { className?: string }) {
   const insRef = useRef<HTMLModElement>(null);
   const [adIndex, setAdIndex] = useState(0);
   const [visible, setVisible] = useState(true);
+  // Fail-closed: hidden until we positively confirm a plain web browser.
+  const [adsAllowed, setAdsAllowed] = useState(false);
 
   useEffect(() => {
     // Push manual slot if configured
@@ -176,7 +201,24 @@ export function BannerAd({ className = "" }: { className?: string }) {
     }
   }, []);
 
-  if (!visible) return null;
+  // Resolve the runtime context once. Banners are allowed ONLY when we are NOT
+  // in a standalone/TWA shell AND the authoritative Play Billing probe reports
+  // a non-Play (browser) channel. Any ambiguity or error keeps them hidden, so
+  // a banner can never leak into the Play Store app (Disruptive Ads policy).
+  useEffect(() => {
+    if (ADS_DISABLED || inStandaloneOrTwaSync()) return;
+    let cancelled = false;
+    detectPaymentChannel()
+      .then((channel) => {
+        if (!cancelled && channel === "stripe") setAdsAllowed(true);
+      })
+      .catch(() => {/* fail-closed: stay hidden */});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (!visible || !adsAllowed) return null;
 
   // ── Adsterra banner (current production network) ──
   if (ADSTERRA_BANNER_KEY) {

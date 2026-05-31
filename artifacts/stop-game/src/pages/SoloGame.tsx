@@ -1623,7 +1623,8 @@ export default function SoloGame() {
                 </button>
               ) : (
                 <>
-                  {/* BannerAd deshabilitado — Adsterra redirige en TWA */}
+                  {/* Banner solo en navegador web (se auto-oculta dentro del TWA). */}
+                  <BannerAd />
                 </>
               )}
             </motion.div>
