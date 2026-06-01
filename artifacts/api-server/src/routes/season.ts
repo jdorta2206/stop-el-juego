@@ -15,6 +15,8 @@ import {
   type Mission,
 } from "../lib/seasonConfig";
 import { requirePlayerIdentity, readPlayerId, type AuthedRequest } from "../lib/playerAuth";
+import { isUserPremium } from "../lib/premiumStatus";
+import { stripeStorage } from "../stripeStorage";
 
 interface SqlResult<T> {
   rows?: T[];
@@ -25,10 +27,6 @@ interface ProgressRowSql {
   xp: number;
   missions_json: string;
   claimed_tiers: string;
-}
-
-interface PlayerPremiumRow {
-  is_premium: boolean | null;
 }
 
 const router: IRouter = Router();
@@ -610,20 +608,21 @@ router.post("/claim-mission", requirePlayerIdentity, async (req: AuthedRequest, 
     const progress = await getOrCreateProgress(playerId, season.id);
     const today = todayUTC();
 
+    // Unified entitlement (Stripe + Play), resolved BEFORE the tx so we never
+    // hold the season_progress row lock during external billing lookups. This
+    // mirrors the client UI check; the raw player_scores.is_premium column can
+    // lag a live subscription and would silently deny the premium XP bonus.
+    // Self-heal the column so other readers stay consistent.
+    const isPremium = await isUserPremium(playerId);
+    void stripeStorage.updatePlayerStripeInfo(playerId, { isPremium }).catch(() => {});
+
     // Atomic claim guard: lock row, re-check claimed flag, update inside the same tx.
-    // is_premium is read INSIDE the tx (read-committed snapshot) so the XP
-    // bonus reflects entitlement state at commit time, not before.
     const claim = await db.transaction(async (tx) => {
       const locked = (await tx.execute(sql`
         SELECT id, xp, missions_json FROM season_progress WHERE id = ${progress.id} FOR UPDATE
       `)) as unknown as SqlResult<Pick<ProgressRowSql, "id" | "xp" | "missions_json">>;
       const row = locked.rows?.[0];
       if (!row) return { ok: false as const, error: "Progress row not found", status: 404 };
-
-      const premRows = (await tx.execute(sql`
-        SELECT is_premium FROM player_scores WHERE player_id = ${playerId} LIMIT 1
-      `)) as unknown as SqlResult<PlayerPremiumRow>;
-      const isPremium = premRows.rows?.[0]?.is_premium === true;
 
       const blob = parseMissions(row.missions_json, today);
       const m = blob.missions.find((x) => x.id === missionId);
@@ -697,10 +696,13 @@ router.post("/claim-tier", requirePlayerIdentity, async (req: AuthedRequest, res
     const progress = await getOrCreateProgress(playerId, season.id);
 
     if (track === "premium") {
-      const rows = (await db.execute(sql`
-        SELECT is_premium FROM player_scores WHERE player_id = ${playerId} LIMIT 1
-      `)) as unknown as SqlResult<PlayerPremiumRow>;
-      const isPremium = rows.rows?.[0]?.is_premium === true;
+      // Source of truth = unified entitlement (Stripe + Google Play), the SAME
+      // check the client UI uses. Reading the raw player_scores.is_premium
+      // column here would 403 a paying user whenever that column lags behind a
+      // live subscription. Self-heal the column (both directions) so other
+      // readers (multiplayer, ranking) stay consistent.
+      const isPremium = await isUserPremium(playerId);
+      void stripeStorage.updatePlayerStripeInfo(playerId, { isPremium }).catch(() => {});
       if (!isPremium) {
         res.status(403).json({ error: "Premium subscription required" });
         return;
