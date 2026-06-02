@@ -1,3 +1,5 @@
+import path from "path";
+import { existsSync } from "fs";
 import express, { type Express } from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
@@ -85,6 +87,29 @@ app.use(express.urlencoded({ extended: true, limit: "64kb" }));
 app.use("/api", generalLimiter);
 
 app.use("/api", router);
+
+// 🚂 Single-service mode (e.g. Railway): serve the built game client from the
+// same origin as the API so the whole app runs as ONE deployable. Gated behind
+// SERVE_CLIENT so Replit (which serves the client from a separate Vite service)
+// is completely unaffected — this block never runs unless SERVE_CLIENT=1.
+if (process.env["SERVE_CLIENT"] === "1") {
+  const clientDist =
+    process.env["CLIENT_DIST_PATH"] ||
+    path.resolve(process.cwd(), "artifacts/stop-game/dist/public");
+  if (!existsSync(path.join(clientDist, "index.html"))) {
+    console.warn(
+      `[SERVE_CLIENT] index.html not found at ${clientDist} — the client build is missing or mislocated. Run "pnpm run build:railway" before starting.`,
+    );
+  }
+  app.use(express.static(clientDist));
+  // SPA fallback: any GET that isn't an /api route returns index.html so
+  // client-side routing (wouter) works on hard refresh / deep links. The regex
+  // treats both `/api` and `/api/...` as API paths so they never fall through
+  // to the HTML shell.
+  app.get(/^\/(?!api(?:\/|$)).*/, (_req, res) => {
+    res.sendFile(path.join(clientDist, "index.html"));
+  });
+}
 
 // 🛡️ Global JSON error handler — prevents the server from sending HTML 500s
 // (which break the client because it expects JSON). Express 5 auto-forwards

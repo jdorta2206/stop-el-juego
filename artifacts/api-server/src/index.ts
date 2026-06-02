@@ -24,8 +24,17 @@ async function initStripe() {
 
     const stripeSync = await getStripeSync();
 
-    const domains = process.env["REPLIT_DOMAINS"] || process.env["REPLIT_DEV_DOMAIN"] || "";
-    const webhookHost = domains.split(",")[0];
+    const domains =
+      process.env["REPLIT_DOMAINS"] ||
+      process.env["REPLIT_DEV_DOMAIN"] ||
+      process.env["RAILWAY_PUBLIC_DOMAIN"] ||
+      "";
+    // Normalize to a bare host: tolerate values given as full URLs
+    // (e.g. "https://foo.up.railway.app") so we never build "https://https://…".
+    const webhookHost = domains
+      .split(",")[0]
+      .replace(/^https?:\/\//, "")
+      .replace(/\/.*$/, "");
     if (webhookHost) {
       console.log("Setting up managed Stripe webhook...");
       const webhookBaseUrl = `https://${webhookHost}`;
