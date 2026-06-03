@@ -12,8 +12,10 @@ export interface OAuthUser {
 // Which providers are configured (secrets exist)
 export const isGoogleConfigured    = !!import.meta.env.VITE_GOOGLE_CLIENT_ID;
 export const isFacebookConfigured  = !!import.meta.env.VITE_FACEBOOK_APP_ID;
-// Instagram Business API — app is live in production
-export const isInstagramConfigured = true;
+// Instagram login disabled: Meta's current Instagram API only allows
+// professional/business accounts, so normal players can't sign in with it.
+// Use Facebook (Meta) login instead, which works for everyone.
+export const isInstagramConfigured = false;
 // TikTok requires domain verification + app review (like Instagram) — re-enable after deployment
 export const isTikTokConfigured    = false;
 // Apple Sign In — requires Apple Developer Program ($99/yr) + Service ID + private key

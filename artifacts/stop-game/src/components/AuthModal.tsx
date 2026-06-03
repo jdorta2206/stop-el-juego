@@ -6,13 +6,11 @@ import { Mail, User, Palette, AlertCircle } from "lucide-react";
 import {
   signInWithGoogle,
   signInWithFacebook,
-  signInWithInstagram,
   signInWithTikTok,
   signInWithApple,
   checkOAuthReturn,
   isGoogleConfigured,
   isFacebookConfigured,
-  isInstagramConfigured,
   isTikTokConfigured,
   isAppleConfigured,
   type OAuthUser,
@@ -255,30 +253,6 @@ export function AuthModal({ onSave, initial, onDismiss }: AuthModalProps) {
                     }
                     label={t.auth.facebook}
                     bg="#1877F2"
-                    textColor="white"
-                    soonLabel={t.auth.soon}
-                  />
-
-                  <SocialButton
-                    onClick={signInWithInstagram}
-                    configured={isInstagramConfigured}
-                    icon={
-                      <svg viewBox="0 0 24 24" className="w-5 h-5">
-                        <defs>
-                          <linearGradient id="ig-grad" x1="0%" y1="100%" x2="100%" y2="0%">
-                            <stop offset="0%" stopColor="#f09433" />
-                            <stop offset="25%" stopColor="#e6683c" />
-                            <stop offset="50%" stopColor="#dc2743" />
-                            <stop offset="75%" stopColor="#cc2366" />
-                            <stop offset="100%" stopColor="#bc1888" />
-                          </linearGradient>
-                        </defs>
-                        <rect width="24" height="24" rx="5" fill="url(#ig-grad)" />
-                        <path d="M12 7.5A4.5 4.5 0 1 0 16.5 12 4.505 4.505 0 0 0 12 7.5zm0 7.5a3 3 0 1 1 3-3 3 3 0 0 1-3 3zm5.885-8.153a1.05 1.05 0 1 1-1.05-1.05 1.05 1.05 0 0 1 1.05 1.05z" fill="white"/>
-                      </svg>
-                    }
-                    label={t.auth.instagram}
-                    bg="linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888)"
                     textColor="white"
                     soonLabel={t.auth.soon}
                   />

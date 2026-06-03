@@ -6,3 +6,4 @@
 - [Cross-origin OAuth handoff](oauth-cross-origin-handoff.md) — OAuth runs on APP_ORIGIN but user lands on www/TWA; per-origin storage + blocked 3rd-party cookie lose the session → pass token in URL #hash, import via consumeAuthHandoff() in main.tsx.
 - [Multiplayer round advance](multiplayer-round-advance.md) — round end can't depend on inbound POST; needs background sweeper covering stopped+playing; round-end side effects only after optimistic write wins.
 - [Railway / external deploy](railway-deploy.md) — runs as ONE service (server serves client, gated by SERVE_CLIENT); force pnpm not npm; build:railway/start:railway + railway.json.
+- [Instagram login deprecated](instagram-login-deprecated.md) — IG API now needs professional accounts; login removed from STOP, use Facebook instead.
