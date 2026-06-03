@@ -7,3 +7,4 @@
 - [Multiplayer round advance](multiplayer-round-advance.md) — round end can't depend on inbound POST; needs background sweeper covering stopped+playing; round-end side effects only after optimistic write wins.
 - [Railway / external deploy](railway-deploy.md) — runs as ONE service (server serves client, gated by SERVE_CLIENT); force pnpm not npm; build:railway/start:railway + railway.json.
 - [Instagram login deprecated](instagram-login-deprecated.md) — IG API now needs professional accounts; login removed from STOP, use Facebook instead.
+- [Railway can't reach Replit internal DB](railway-db-unreachable.md) — www 500s because Railway can't open Replit's internal helium DB; needs a shared external Postgres + full schema load.
