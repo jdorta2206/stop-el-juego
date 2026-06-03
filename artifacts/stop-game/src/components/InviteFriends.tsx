@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { publicLink } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   X, Copy, Check, Phone, Facebook, Instagram, MessageSquare, Share2, UserPlus, Link2
@@ -11,9 +12,8 @@ interface InviteFriendsProps {
 }
 
 function buildInviteLink(player: PlayerProfile) {
-  const base = window.location.origin + import.meta.env.BASE_URL.replace(/\/$/, "");
   const params = new URLSearchParams({ ref: player.id, from: player.name });
-  return `${base}?${params}`;
+  return publicLink(`?${params}`);
 }
 
 function buildWhatsAppMsg(player: PlayerProfile, url: string) {

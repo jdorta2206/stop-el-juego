@@ -12,6 +12,22 @@ export function getApiUrl(): string {
   return env?.VITE_API_URL ?? window.location.origin;
 }
 
+/**
+ * Canonical public site URL for SHAREABLE links (invites, room/tournament/live
+ * links, result shares). NEVER use window.location.origin for these: when a
+ * link is created from inside the Replit editor preview it captures the dev
+ * domain (e.g. *.replit.dev) and the link breaks once the workspace stops.
+ * API/OAuth/push calls keep using getApiUrl()/origin — only user-facing share
+ * links use this.
+ */
+export const PUBLIC_SITE_URL = "https://www.stopjuegodepalabras.com";
+
+/** Build an absolute link on the public site (production is served at root). */
+export function publicLink(path = ""): string {
+  const clean = path.replace(/^\/+/, "");
+  return clean ? `${PUBLIC_SITE_URL}/${clean}` : `${PUBLIC_SITE_URL}/`;
+}
+
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }

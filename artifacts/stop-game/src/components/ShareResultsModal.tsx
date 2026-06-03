@@ -1,4 +1,5 @@
 import { motion, AnimatePresence } from "framer-motion";
+import { PUBLIC_SITE_URL } from "@/lib/utils";
 import { Share2, X, Copy, Check } from "lucide-react";
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
@@ -76,7 +77,7 @@ export function ShareResultsModal({
     onShared?.();
   };
 
-  const url = gameUrl || window.location.origin;
+  const url = gameUrl || PUBLIC_SITE_URL;
 
   // ── Multiplayer mode ────────────────────────────────────────────────────────
   const mpMessage = (() => {

@@ -5,7 +5,7 @@ import { Layout } from "@/components/Layout";
 import { ArrowLeft, Flame, Share2, Clock, Trophy, X as XIcon, Skull } from "lucide-react";
 import { useT } from "@/i18n/useT";
 import { usePlayer } from "@/hooks/use-player";
-import { getApiUrl, shareText } from "@/lib/utils";
+import { getApiUrl, shareText, publicLink } from "@/lib/utils";
 import { recordExternalStat } from "@/hooks/useAchievements";
 
 const API = getApiUrl();
@@ -119,7 +119,7 @@ export default function Impossible() {
     const stats = outcome?.stats ?? combo?.stats;
     const s = stats;
     const pct = s && s.attempts > 0 ? Math.round((s.wins / s.attempts) * 100) : null;
-    const url = `${window.location.origin}/imposible`;
+    const url = publicLink("imposible");
     const wonLine = won ? `🟩 ${t.impossible.gotIt}: ${w} (${timeSec}s)` : `🟥 ${t.impossible.gaveUp}`;
     const txt = [
       `🔥 STOP ${t.impossible.title} · ${date}`,

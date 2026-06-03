@@ -4,7 +4,7 @@ import { useLocation, useRoute } from "wouter";
 import { usePlayer } from "@/hooks/use-player";
 import { usePresence, sendChallenge, type OnlinePlayer } from "@/lib/usePresence";
 import { useFollows } from "@/lib/useFollows";
-import { getApiUrl } from "@/lib/utils";
+import { getApiUrl, publicLink } from "@/lib/utils";
 import {
   Trophy, Users, Play, Copy, Check, ChevronRight,
   Swords, Crown, ArrowLeft, Loader2, Plus, LogIn, Share2, MessageCircle, Send
@@ -222,7 +222,7 @@ export default function Tournament() {
 
   const getInviteUrl = () => {
     if (!tournament) return "";
-    return `${window.location.origin}${import.meta.env.BASE_URL}torneo/${tournament.code}`;
+    return publicLink(`torneo/${tournament.code}`);
   };
 
   const getInviteText = () => {

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "wouter";
 import { Button } from "@/components/ui";
-import { getApiUrl } from "@/lib/utils";
+import { getApiUrl, publicLink } from "@/lib/utils";
 import { Eye, ArrowLeft, Trophy, Share2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -63,10 +63,10 @@ export default function Live() {
 
   const players = (room.players ?? []).slice().sort((a: any, b: any) => (b.score || 0) - (a.score || 0));
   const stoppedBy = room.stopper?.stopperName;
-  const overlayUrl = `${window.location.origin}${import.meta.env.BASE_URL}overlay/${code}`;
+  const overlayUrl = publicLink(`overlay/${code}`);
 
   const share = async () => {
-    const url = `${window.location.origin}${import.meta.env.BASE_URL}live/${code}`;
+    const url = publicLink(`live/${code}`);
     if (navigator.share) {
       try { await navigator.share({ title: "STOP en vivo", text: `Mira esta partida en vivo de STOP — ${room.hostName}`, url }); }
       catch { /* canceled */ }

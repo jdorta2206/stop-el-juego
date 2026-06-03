@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { publicLink } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { UserPlus, Check, Send, Users, MessageSquare, ChevronDown, ChevronUp } from "lucide-react";
 import { fetchOnlinePlayers, sendRoomInvite, type OnlinePlayer } from "@/lib/usePresence";
@@ -49,8 +50,8 @@ function InviteRow({ friend, player, roomCode }: { friend: FriendEntry; player: 
   };
 
   const handleInviteWhatsApp = () => {
-    const base = window.location.origin + import.meta.env.BASE_URL.replace(/\/$/, "");
-    const msg = `¡${player.name} te invita a jugar STOP! 🎮\nÚnete a la sala ${roomCode}: ${base}/room/${roomCode}`;
+    const link = publicLink(`room/${roomCode}`);
+    const msg = `¡${player.name} te invita a jugar STOP! 🎮\nÚnete a la sala ${roomCode}: ${link}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
     setState("sent");
   };
@@ -261,8 +262,8 @@ export function RoomInvitePanel({ player, roomCode }: RoomInvitePanelProps) {
               <div className="pt-2 border-t border-white/10 mt-1">
                 <button
                   onClick={() => {
-                    const base = window.location.origin + import.meta.env.BASE_URL.replace(/\/$/, "");
-                    const msg = `¡${player.name} te invita a jugar STOP! 🎮\nÚnete a la sala con código: ${roomCode}\n${base}/room/${roomCode}`;
+                    const link = publicLink(`room/${roomCode}`);
+                    const msg = `¡${player.name} te invita a jugar STOP! 🎮\nÚnete a la sala con código: ${roomCode}\n${link}`;
                     window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
                   }}
                   className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold transition-all hover:opacity-90"

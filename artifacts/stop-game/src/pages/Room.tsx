@@ -28,7 +28,7 @@ import { useHaptic } from "@/hooks/useHaptic";
 import { ShareResultsModal } from "@/components/ShareResultsModal";
 import { recordExternalStat } from "@/hooks/useAchievements";
 import { CountUp } from "@/components/CountUp";
-import { getApiUrl } from "@/lib/utils";
+import { getApiUrl, publicLink } from "@/lib/utils";
 import { reportSeasonEvent } from "@/hooks/useSeason";
 import { saveActiveRoom, clearActiveRoom, touchActiveRoom } from "@/lib/activeRoom";
 import { useT } from "@/i18n/useT";
@@ -2578,8 +2578,8 @@ function StreamerModeCard({ room, playerId }: { room: any; playerId: string }) {
   const isPublic = !!room?.isPublic;
   const code = room?.roomCode;
   const apiBase = (import.meta.env.VITE_API_BASE_URL || "") as string;
-  const liveUrl = `${window.location.origin}${import.meta.env.BASE_URL}live/${code}`;
-  const overlayUrl = `${window.location.origin}${import.meta.env.BASE_URL}overlay/${code}`;
+  const liveUrl = publicLink(`live/${code}`);
+  const overlayUrl = publicLink(`overlay/${code}`);
 
   const toggle = async () => {
     if (!code || !playerId) return;
