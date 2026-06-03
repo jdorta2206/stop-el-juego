@@ -3,6 +3,13 @@ import { HelmetProvider } from "react-helmet-async";
 import App from "./App";
 import "./index.css";
 import { ensureOfflineBundle } from "./lib/offlineGame";
+import { consumeAuthHandoff } from "./lib/oauth";
+
+// Import any cross-origin OAuth handoff carried in the URL hash into THIS
+// origin's storage BEFORE React mounts, so the session restore / AuthModal
+// pick it up immediately (fixes social login bouncing back to the login
+// screen when the user returns from the canonical OAuth domain).
+consumeAuthHandoff();
 
 // Nota: se intentó redirigir stop-el-juego.replit.app → stopjuegodepalabras.com
 // para deduplicar suscripciones push, pero rompía el TWA del Play Store (la

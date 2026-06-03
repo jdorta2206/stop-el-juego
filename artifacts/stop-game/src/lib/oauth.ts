@@ -35,6 +35,42 @@ export function signInWithInstagram() { startOAuth("instagram"); }
 export function signInWithTikTok()    { startOAuth("tiktok"); }
 export function signInWithApple()     { startOAuth("apple"); }
 
+// Cross-origin OAuth handoff. The backend bridge runs on the canonical OAuth
+// domain (stop-el-juego.replit.app) but redirects the user back to whatever
+// origin they started from (e.g. www.stopjuegodepalabras.com / the TWA).
+// sessionStorage/localStorage are per-origin, so the bridge ALSO encodes the
+// handoff items (oauth_user, the session token, fb_access_token) in the URL
+// hash. Import them into THIS origin's storage on load, then strip the hash so
+// the token never lingers in the address bar / browser history. Must run
+// BEFORE anything reads that storage (usePlayer restore, AuthModal).
+export function consumeAuthHandoff(): void {
+  try {
+    const hash = window.location.hash;
+    if (!hash || hash.indexOf("stopauth=") === -1) return;
+    const m = hash.match(/stopauth=([^&]+)/);
+    if (!m || !m[1]) return;
+    const items = JSON.parse(decodeURIComponent(m[1])) as [string, string][];
+    // Only import keys the server bridge is known to emit, so a hand-crafted
+    // hash can't poison arbitrary storage entries.
+    const ALLOWED = new Set(["oauth_user", "fb_access_token", "stop_session_token"]);
+    for (const [k, v] of items) {
+      if (!ALLOWED.has(k) || typeof v !== "string") continue;
+      try {
+        // Keep this in sync with the server bridge: the session token persists
+        // in localStorage; everything else is session-scoped.
+        const store = k === "stop_session_token" ? window.localStorage : window.sessionStorage;
+        store.setItem(k, v);
+      } catch { /* storage unavailable — ignore */ }
+    }
+    // Remove only the stopauth fragment, preserving any other hash content.
+    let cleaned = hash.replace(/(^#|&)stopauth=[^&]*/, "");
+    if (cleaned === "#") cleaned = "";
+    if (cleaned && cleaned[0] !== "#") cleaned = "#" + cleaned.replace(/^&/, "");
+    const newUrl = window.location.pathname + window.location.search + cleaned;
+    window.history.replaceState({}, "", newUrl);
+  } catch { /* malformed handoff — ignore */ }
+}
+
 // After the backend callback, the bridge page writes `oauth_user` to
 // sessionStorage before redirecting back here. Read it once.
 export function checkOAuthReturn(): OAuthUser | null {

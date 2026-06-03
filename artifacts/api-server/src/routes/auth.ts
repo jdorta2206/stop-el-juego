@@ -89,17 +89,32 @@ function bridgePageMulti(
   returnPath: string,
   returnOrigin: string = APP_ORIGIN,
 ) {
-  // Most items are session-scoped (existing OAuth profile handoff). The
+  // Most items are session-scoped (OAuth profile handoff). The
   // PLAYER_TOKEN_BRIDGE_KEY entry, however, must persist across tabs and
   // browser restarts so daily Season Pass missions keep accumulating — write
-  // it to localStorage as a durable cross-origin fallback for the
-  // httpOnly auth cookie set in the same response.
+  // it to localStorage. NOTE: these writes only help when returnOrigin equals
+  // APP_ORIGIN (same-origin). For the cross-origin case the items are also
+  // carried in the URL hash below (see handoffDest) and imported by the
+  // destination origin; that is the path that actually fixes cross-domain login.
   const setItems = items
     .map(([k, v]) => {
       const store = k === PLAYER_TOKEN_BRIDGE_KEY ? "localStorage" : "sessionStorage";
       return `${store}.setItem(${JSON.stringify(k)}, ${JSON.stringify(v)});`;
     })
     .join("\n    ");
+
+  // Cross-origin handoff. The storage writes above land on APP_ORIGIN (where
+  // this bridge is served), but the user is being redirected to returnOrigin
+  // (e.g. www.stopjuegodepalabras.com / the TWA), a DIFFERENT origin whose
+  // sessionStorage/localStorage are separate — so those writes are invisible
+  // there and the session wouldn't "stick" (user bounced back to login). To
+  // fix that we ALSO carry the items in the URL hash: the destination imports
+  // them into its OWN storage on load (consumeAuthHandoff). The hash fragment
+  // is never sent to servers / access logs and is stripped client-side on
+  // arrival so the token doesn't linger in the address bar.
+  const baseDest = returnOrigin + returnPath;
+  const handoffDest = baseDest + (baseDest.includes("#") ? "&" : "#") +
+    "stopauth=" + encodeURIComponent(JSON.stringify(items));
   return `<!DOCTYPE html><html><head><meta charset="utf-8">
 <title>Conectando...</title>
 <style>body{background:#0d1757;color:white;font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;}
@@ -110,7 +125,7 @@ function bridgePageMulti(
   try {
     ${setItems}
   } catch(e) {}
-  window.location.replace(${JSON.stringify(returnOrigin + returnPath)});
+  window.location.replace(${JSON.stringify(handoffDest)});
 </script>
 </body></html>`;
 }
