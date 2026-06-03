@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { roomsTable, playerScoresTable, gameHistoryTable } from "@workspace/db";
-import { eq, and, lt, inArray, sql } from "drizzle-orm";
+import { eq, and, or, lt, inArray, sql } from "drizzle-orm";
 import { CreateRoomBody, JoinRoomBody, SubmitRoomResultsBody } from "@workspace/api-zod";
 import { calculateStreak, appendStreakDay } from "./ranking";
 import { writeLimiter } from "../middlewares/rateLimit";
@@ -121,6 +121,13 @@ function isPlayerOnline(code: string, playerId: string): boolean {
   for (const c of set) if (c.playerId === playerId) return true;
   return false;
 }
+
+// ⏱️ Round-advance grace windows (module-level so the in-handler sweep AND the
+// background sweepStuckRooms() failsafe share identical timings).
+// SUBMIT_GRACE_MS: after STOP, how long we wait before zeroing non-submitters.
+// PRESENCE_GRACE_MS: buffer before treating an SSE drop as "offline".
+const SUBMIT_GRACE_MS = 15_000;
+const PRESENCE_GRACE_MS = 4_000;
 
 function broadcastRoom(code: string, roomPayload: object) {
   const clients = sseClients.get(code);
@@ -427,6 +434,180 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string) {
   }));
 }
 
+// Run the stuck-player sweep and, if everyone is ready, compute the next
+// round state. Extracted so BOTH the /results handler and the background
+// sweepStuckRooms() failsafe use identical logic — otherwise the round could
+// only ever advance when a /results POST physically arrives, which deadlocks
+// the whole table if the last pending player's submission is lost on the wire.
+// The instant a round "ended" for grace-window math: an explicit STOP if one
+// was pressed, otherwise the natural timer deadline (roundStartedAt + duration).
+// This lets the failsafe sweep advance BOTH rounds that were STOPped AND rounds
+// that simply ran out of time without anyone pressing STOP — both can otherwise
+// deadlock if a player's /results never reaches the server.
+function roundEndTimestamp(room: any): number | undefined {
+  const meta = parseBluffMeta(room.stopperJson);
+  const explicitStop: number | undefined =
+    meta?.stopTimestamp ?? meta?.stopper?.stopTimestamp;
+  if (typeof explicitStop === "number") return explicitStop;
+  const startedAt = meta?.roundStartedAt;
+  if (typeof startedAt === "number") return startedAt + roundDurationSecs(room) * 1000;
+  return undefined;
+}
+
+function finalizeRoundState(room: any, players: any[]): {
+  sweptPlayers: any[];
+  newStatus: string;
+  newLetter: string | null;
+  newRound: number;
+  newStopperJson: string | null;
+} {
+  const codeUpper = (room.roomCode as string).toUpperCase();
+  const endTs = roundEndTimestamp(room);
+
+  const sweptPlayers = (() => {
+    if (!endTs) return players;
+    const sinceStop = Date.now() - endTs;
+    const gracePassed = sinceStop > SUBMIT_GRACE_MS;
+    // Only treat "offline" as fatal AFTER the presence buffer: a one-second
+    // SSE blip on a 4G network shouldn't zero a player whose /results is
+    // already on the wire.
+    const presenceArmed = sinceStop > PRESENCE_GRACE_MS;
+    return players.map((p: any) => {
+      if (p.isReady) return p;
+      if (gracePassed) {
+        return { ...p, isReady: true, roundScore: 0, finishedAt: Date.now() };
+      }
+      if (presenceArmed && !isPlayerOnline(codeUpper, p.playerId)) {
+        return { ...p, isReady: true, roundScore: 0, finishedAt: Date.now() };
+      }
+      return p;
+    });
+  })();
+
+  const allReady = sweptPlayers.every((p: any) => p.isReady);
+
+  let newStatus = room.status;
+  let newLetter = room.currentLetter;
+  let newRound = room.currentRound;
+  let newStopperJson = room.stopperJson;
+
+  if (allReady) {
+    // Check if any player bluffed
+    const bluffers = sweptPlayers.filter((p: any) => p.bluffedCategories?.length > 0);
+    const nonBluffers = sweptPlayers.filter((p: any) => !p.bluffedCategories?.length);
+
+    if (bluffers.length > 0 && nonBluffers.length > 0) {
+      // Enter bluff-voting phase: give opponents 15 seconds to vote
+      const bluffDeadline = new Date(Date.now() + 15_000).toISOString();
+      const bluffVotes: Record<string, any> = {};
+      for (const b of bluffers) {
+        bluffVotes[b.playerId] = {};
+        for (const cat of b.bluffedCategories) {
+          bluffVotes[b.playerId][cat] = {}; // { voterId: "lie"|"real" }
+        }
+      }
+      const existingMeta = parseBluffMeta(room.stopperJson);
+      newStopperJson = JSON.stringify({
+        stopper: existingMeta?.stopper ?? existingMeta,
+        bluffVotes,
+        bluffDeadline,
+      });
+      newStatus = "bluffvoting";
+    } else {
+      // No bluffs — advance normally
+      newRound = room.currentRound + 1;
+      const isGameOver = newRound > room.maxRounds;
+      if (isGameOver) {
+        newStatus = "finished";
+        newRound = room.maxRounds;
+      } else {
+        newStatus = "waiting";
+        newLetter = randomLetter();
+      }
+      // 🧹 Clear stopperJson so the next /start gets a fresh roundStartedAt
+      // (otherwise the old timestamp lingers and the next round's deadline
+      // would start in the past on slow clients).
+      newStopperJson = null;
+      // NOTE: side effects (leaderboard submit on game-over, spy/live map
+      // cleanup) are intentionally NOT done here. They run in the CALLER via
+      // applyRoundAdvanceSideEffects() and ONLY after the optimistic-concurrency
+      // DB write WINS — otherwise a /results POST and the background sweeper
+      // racing the same round would BOTH fire the side effects (the loser would
+      // still have submitted scores to the leaderboard twice).
+    }
+  }
+
+  return { sweptPlayers, newStatus, newLetter, newRound, newStopperJson };
+}
+
+// Side effects that must happen EXACTLY ONCE per round transition — only call
+// this after the optimistic-concurrency update succeeded (the caller won the
+// race), passing the players/state that were actually persisted.
+function applyRoundAdvanceSideEffects(room: any, sweptPlayers: any[], newStatus: string) {
+  if (newStatus === "waiting" || newStatus === "finished") {
+    const codeUpper = (room.roomCode as string).toUpperCase();
+    // 🕵️ Reset spy budgets and stale live responses for the new round.
+    roomSpyUsage.delete(codeUpper);
+    roomLiveResponses.delete(codeUpper);
+  }
+  if (newStatus === "finished") {
+    // 🏆 Persist final scores to the global leaderboard exactly once.
+    submitAllScoresToLeaderboard(sweptPlayers, room.currentLetter || "A").catch(() => {});
+  }
+}
+
+// 🚑 Background failsafe: advance rounds stuck in "stopped" past the submit
+// grace window even when NO further /results POST arrives. Without this a
+// round deadlocks forever if the last pending player's submission never
+// reaches the server (their SSE stays "online" so the in-handler sweep never
+// fires for them, and there's no other player left to trigger it).
+async function sweepStuckRooms() {
+  try {
+    // Scan BOTH "stopped" (someone pressed STOP) and "playing" (the round timer
+    // ran out with no STOP) — either can deadlock if a submission is lost.
+    const stuck = await db.select().from(roomsTable)
+      .where(or(eq(roomsTable.status, "stopped"), eq(roomsTable.status, "playing")));
+    for (const room of stuck) {
+      const endTs = roundEndTimestamp(room);
+      // Before the grace window elapses the normal /results path still advances
+      // the round; only step in once it has fully passed. A fresh/in-progress
+      // "playing" round has its deadline in the future, so it's skipped here.
+      if (!endTs || Date.now() - endTs <= SUBMIT_GRACE_MS) continue;
+
+      const players = parsePlayers(room.playersJson);
+      const { sweptPlayers, newStatus, newLetter, newRound, newStopperJson } =
+        finalizeRoundState(room, players);
+
+      // Nothing to persist if the sweep didn't actually move the room forward.
+      if (newStatus === room.status && newRound === room.currentRound) continue;
+
+      // Optimistic concurrency: a concurrent /results may have just advanced
+      // it — guard on updatedAt so only one writer wins; retry next tick.
+      const updateResult = await db.update(roomsTable)
+        .set({
+          playersJson: JSON.stringify(sweptPlayers),
+          currentRound: newRound,
+          currentLetter: newLetter,
+          status: newStatus,
+          stopperJson: newStopperJson,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(roomsTable.roomCode, room.roomCode), eq(roomsTable.updatedAt, room.updatedAt)))
+        .returning();
+
+      if (updateResult.length === 0) continue;
+
+      // We won the write — now (and only now) run one-shot side effects.
+      applyRoundAdvanceSideEffects(room, sweptPlayers, newStatus);
+      // Push the unstuck state to every connected client (incl. the player
+      // who was frozen on "Enviando…") via SSE.
+      broadcastAndFormat(updateResult[0]);
+    }
+  } catch (err) {
+    console.error("[sweepStuckRooms] failed:", (err as Error).message);
+  }
+}
+
 // Delete stale rooms (guests/hosts leave without cleanup).
 // - "waiting" rooms older than 2 hours
 // - any other state ("playing"/"stopped"/"finished"/"bluffvoting") older than 6 hours
@@ -482,6 +663,14 @@ const g = globalThis as any;
 if (g[PURGE_TIMER_KEY]) clearInterval(g[PURGE_TIMER_KEY]);
 purgeStaleRooms().catch(() => {});
 g[PURGE_TIMER_KEY] = setInterval(() => { purgeStaleRooms().catch(() => {}); }, 30 * 60 * 1000);
+
+// 🚑 Stuck-room failsafe: every 3s, force-advance any round deadlocked in
+// "stopped" past the submit grace window. This is what guarantees a table can
+// never hang forever on "Esperando a los demás jugadores" when a player's
+// submission is lost. Guarded against tsx hot-reload duplicating the timer.
+const SWEEP_TIMER_KEY = "__stopSweepStuckRoomsTimer";
+if (g[SWEEP_TIMER_KEY]) clearInterval(g[SWEEP_TIMER_KEY]);
+g[SWEEP_TIMER_KEY] = setInterval(() => { sweepStuckRooms().catch(() => {}); }, 3_000);
 
 // GET /rooms/public — list open public rooms (also purges stale rooms)
 // Sanitize a formatted room for public spectator/overlay views.
@@ -1542,11 +1731,8 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
   // keep typing words for 30+ seconds. Any /results that arrives after this
   // cutoff is accepted but scored ZERO (see hard cutoff below) — the player
   // can't gain points by stalling.
-  const SUBMIT_GRACE_MS = 15_000;
-  // Buffer for SSE flicker / mobile reconnects: we won't auto-zero a player
-  // for "offline" until at least this long after STOP. Prevents false
-  // negatives from one-off socket drops on flaky networks.
-  const PRESENCE_GRACE_MS = 4_000;
+  // (SUBMIT_GRACE_MS / PRESENCE_GRACE_MS are module-level constants now so the
+  // background sweeper can reuse the exact same windows.)
   const stopMeta = parseBluffMeta(room.stopperJson);
   const stopTimestamp: number | undefined =
     stopMeta?.stopTimestamp ?? stopMeta?.stopper?.stopTimestamp;
@@ -1633,82 +1819,11 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
     return p;
   });
 
-  // 🧹 Stuck-player sweep: if STOP was called, mark non-ready players as
-  // ready with 0 points so the round advances. Two trigger conditions:
-  //   1. Grace window expired → zero everyone still pending (failsafe).
-  //   2. Player has no live SSE connection → zero immediately (they closed
-  //      the tab / lost network) instead of stalling the whole table for 8s.
-  const codeUpper = roomCode.toUpperCase();
-  const sweptPlayers = (() => {
-    if (!stopTimestamp) return updatedPlayers;
-    const sinceStop = Date.now() - stopTimestamp;
-    const gracePassed = sinceStop > SUBMIT_GRACE_MS;
-    // Only treat "offline" as fatal AFTER the presence buffer: a one-second
-    // SSE blip on a 4G network shouldn't zero a player whose /results is
-    // already on the wire.
-    const presenceArmed = sinceStop > PRESENCE_GRACE_MS;
-    return updatedPlayers.map((p: any) => {
-      if (p.isReady) return p;
-      if (gracePassed) {
-        return { ...p, isReady: true, roundScore: 0, finishedAt: Date.now() };
-      }
-      if (presenceArmed && !isPlayerOnline(codeUpper, p.playerId)) {
-        return { ...p, isReady: true, roundScore: 0, finishedAt: Date.now() };
-      }
-      return p;
-    });
-  })();
-
-  const allReady = sweptPlayers.every((p: any) => p.isReady);
-
-  let newStatus = room.status;
-  let newLetter = room.currentLetter;
-  let newRound = room.currentRound;
-  let newStopperJson = room.stopperJson;
-
-  if (allReady) {
-    // Check if any player bluffed
-    const bluffers = sweptPlayers.filter((p: any) => p.bluffedCategories?.length > 0);
-    const nonBluffers = sweptPlayers.filter((p: any) => !p.bluffedCategories?.length);
-
-    if (bluffers.length > 0 && nonBluffers.length > 0) {
-      // Enter bluff-voting phase: give opponents 15 seconds to vote
-      const bluffDeadline = new Date(Date.now() + 15_000).toISOString();
-      const bluffVotes: Record<string, any> = {};
-      for (const b of bluffers) {
-        bluffVotes[b.playerId] = {};
-        for (const cat of b.bluffedCategories) {
-          bluffVotes[b.playerId][cat] = {}; // { voterId: "lie"|"real" }
-        }
-      }
-      const existingMeta = parseBluffMeta(room.stopperJson);
-      newStopperJson = JSON.stringify({
-        stopper: existingMeta?.stopper ?? existingMeta,
-        bluffVotes,
-        bluffDeadline,
-      });
-      newStatus = "bluffvoting";
-    } else {
-      // No bluffs — advance normally
-      newRound = room.currentRound + 1;
-      const isGameOver = newRound > room.maxRounds;
-      if (isGameOver) {
-        newStatus = "finished";
-        newRound = room.maxRounds;
-        submitAllScoresToLeaderboard(sweptPlayers, room.currentLetter || "A").catch(() => {});
-      } else {
-        newStatus = "waiting";
-        newLetter = randomLetter();
-      }
-      // 🧹 Clear stopperJson so the next /start gets a fresh roundStartedAt
-      // (otherwise the old timestamp lingers and the next round's deadline
-      // would start in the past on slow clients).
-      newStopperJson = null;
-      // 🕵️ Reset spy budgets and stale live responses for the new round
-      roomSpyUsage.delete(roomCode.toUpperCase());
-      roomLiveResponses.delete(roomCode.toUpperCase());
-    }
-  }
+  // 🧹 Stuck-player sweep + round advance — shared with the background
+  // sweepStuckRooms() failsafe so a round can never deadlock waiting on a
+  // submission that never physically arrives.
+  const { sweptPlayers, newStatus, newLetter, newRound, newStopperJson } =
+    finalizeRoundState(room, updatedPlayers);
 
   // Optimistic concurrency: only update if the room hasn't changed since we read it.
   // If a concurrent /results submission won the race, return the latest state instead.
@@ -1731,6 +1846,8 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
     return;
   }
 
+  // We won the write — run one-shot side effects (leaderboard + map cleanup).
+  applyRoundAdvanceSideEffects(room, sweptPlayers, newStatus);
   res.json(broadcastAndFormat(updateResult[0]));
 });
 
