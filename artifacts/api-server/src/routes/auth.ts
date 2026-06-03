@@ -7,7 +7,15 @@ import { eq } from "drizzle-orm";
 
 const router = Router();
 
-const APP_ORIGIN = process.env["APP_ORIGIN"] || "https://3697d7d1-ea3c-4cf5-b00f-386041779844-00-emhgnr1gq77c.kirk.replit.dev";
+// Canonical origin where OAuth runs — it's the ONLY origin registered as the
+// redirect_uri in the Google/Facebook/Instagram consoles, and after auth we
+// bounce the user back to whatever SAFE_RETURN_ORIGIN they came from (e.g.
+// www.stopjuegodepalabras.com / the TWA). Configurable per-environment via the
+// APP_ORIGIN env var. The fallback MUST be a LIVE, registered production origin:
+// using the Replit dev-preview domain here meant any deploy without APP_ORIGIN
+// set (e.g. the external host serving www) bounced social login to the stopped
+// dev workspace and showed Replit's "Run this app" placeholder.
+const APP_ORIGIN = process.env["APP_ORIGIN"] || "https://stop-el-juego.replit.app";
 
 // Domains where it's safe to bounce the user back after OAuth. We keep this
 // allowlist so a hostile referer can't turn our bridge into an open redirect.

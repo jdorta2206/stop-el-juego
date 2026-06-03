@@ -2,5 +2,6 @@
 - [Banner ads web-only / fail-closed](ads-twa-policy.md) — Adsterra banners only in browser, NEVER Play TWA (Disruptive Ads = ban); gate fail-closed via detectPaymentChannel, not heuristics.
 - [Premium source of truth](premium-source-of-truth.md) — server premium gates must use isUserPremium() (unified Stripe+Play), never raw player_scores.is_premium (lags → 403 for paying users).
 - [Shareable links → canonical domain](share-links-canonical-domain.md) — invite/room/share links use publicLink()/PUBLIC_SITE_URL, never window.location.origin (leaks replit.dev preview); API/OAuth/push keep origin.
+- [OAuth APP_ORIGIN fallback](oauth-app-origin.md) — social-login redirect_uri = APP_ORIGIN; its hardcoded fallback must be a live registered origin (stop-el-juego.replit.app), never the dev preview.
 - [Multiplayer round advance](multiplayer-round-advance.md) — round end can't depend on inbound POST; needs background sweeper covering stopped+playing; round-end side effects only after optimistic write wins.
 - [Railway / external deploy](railway-deploy.md) — runs as ONE service (server serves client, gated by SERVE_CLIENT); force pnpm not npm; build:railway/start:railway + railway.json.
