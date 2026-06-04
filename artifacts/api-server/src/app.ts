@@ -4,6 +4,7 @@ import express, { type Express } from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import router from "./routes";
+import adminPanel from "./routes/admin";
 import { WebhookHandlers } from "./webhookHandlers";
 import { generalLimiter } from "./middlewares/rateLimit";
 
@@ -87,6 +88,11 @@ app.use(express.urlencoded({ extended: true, limit: "64kb" }));
 app.use("/api", generalLimiter);
 
 app.use("/api", router);
+
+// 🔒 Private owner-only analytics panel (HTTP Basic Auth). Mounted at /test
+// BEFORE the SPA fallback so it isn't swallowed by the client router. Not under
+// /api so it's a plain browser URL: https://<domain>/test
+app.use("/test", adminPanel);
 
 // 🚂 Single-service mode (e.g. Railway): serve the built game client from the
 // same origin as the API so the whole app runs as ONE deployable. Gated behind
