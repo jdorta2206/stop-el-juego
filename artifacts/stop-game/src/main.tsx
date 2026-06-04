@@ -4,6 +4,12 @@ import App from "./App";
 import "./index.css";
 import { ensureOfflineBundle } from "./lib/offlineGame";
 import { consumeAuthHandoff } from "./lib/oauth";
+import { captureInstalledAppVersion } from "./lib/appVersion";
+
+// Capture the Android (TWA) app version reported on the launch URL / UA before
+// any navigation can drop the `?appVersion=` query param. Persists it so the
+// update prompt can tell whether the user is actually on an old build.
+captureInstalledAppVersion();
 
 // Import any cross-origin OAuth handoff carried in the URL hash into THIS
 // origin's storage BEFORE React mounts, so the session restore / AuthModal

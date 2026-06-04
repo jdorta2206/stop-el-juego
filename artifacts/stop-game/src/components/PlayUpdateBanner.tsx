@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useT } from "@/i18n/useT";
 import { detectPaymentChannel } from "@/lib/playBilling";
+import { isAppUpdateRecommended } from "@/lib/appVersion";
 
 const TWA_PACKAGE = "app.replit.stop_el_juego.twa";
 const PLAY_STORE_URL = `https://play.google.com/store/apps/details?id=${TWA_PACKAGE}`;
@@ -49,8 +50,12 @@ export function PlayUpdateBanner() {
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
 
-    // Let the app paint first, then surface the prompt.
+    // Let the app paint first, then surface the prompt. Only nudge users who
+    // are actually behind: the TWA reports its version (URL / UA) and we compare
+    // it to the minimum recommended version, so users already on the latest
+    // build are spared the prompt entirely.
     const reveal = () => {
+      if (!isAppUpdateRecommended()) return;
       timer = setTimeout(() => {
         if (!cancelled) setShow(true);
       }, 700);
