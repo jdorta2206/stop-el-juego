@@ -3,13 +3,25 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useT } from "@/i18n/useT";
 import { detectPaymentChannel } from "@/lib/playBilling";
 
-const PLAY_STORE_URL =
-  "https://play.google.com/store/apps/details?id=app.replit.stop_el_juego.twa";
+const TWA_PACKAGE = "app.replit.stop_el_juego.twa";
+const PLAY_STORE_URL = `https://play.google.com/store/apps/details?id=${TWA_PACKAGE}`;
 
 // Dismissed flag is per-session: the prompt reappears each time the app is
 // opened (so users still on the old build keep being nudged), but it won't
 // nag again within the same session once they tap "update" or "later".
 const DISMISS_KEY = "stop_play_update_prompt_v1";
+
+// True only when launched from OUR specific installed app. A TWA navigates
+// with document.referrer === "android-app://<its package>", so matching our
+// exact package id catches every version of the app (even old builds that
+// don't expose Play Billing) while ignoring links opened from other Android
+// apps (which carry a different package in the referrer).
+function isOwnAppReferrer(): boolean {
+  return (
+    typeof document !== "undefined" &&
+    document.referrer.startsWith(`android-app://${TWA_PACKAGE}`)
+  );
+}
 
 export function PlayUpdateBanner() {
   const { lang } = useT();
@@ -22,18 +34,24 @@ export function PlayUpdateBanner() {
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
 
-    // Authoritative "inside the Play Store app" check: detectPaymentChannel
-    // returns "play" only when Chrome resolves the Play Billing Digital Goods
-    // service, which it exposes exclusively inside the installed TWA. This
-    // avoids false positives from a generic android-app:// referrer (e.g. the
-    // link opened from another Android app in a normal browser tab).
-    detectPaymentChannel().then((channel) => {
-      if (cancelled || channel !== "play") return;
-      // Let the app paint first, then surface the prompt.
+    // Let the app paint first, then surface the prompt.
+    const reveal = () => {
       timer = setTimeout(() => {
         if (!cancelled) setShow(true);
       }, 700);
-    });
+    };
+
+    if (isOwnAppReferrer()) {
+      // Old or new build of our app — show the update nudge.
+      reveal();
+    } else {
+      // Fallback for TWA sessions where the referrer is empty (deep links,
+      // restored sessions): use the authoritative Play Billing check, which
+      // Chrome only resolves inside the installed TWA.
+      detectPaymentChannel().then((channel) => {
+        if (!cancelled && channel === "play") reveal();
+      });
+    }
 
     return () => {
       cancelled = true;
