@@ -40,3 +40,17 @@ the latest commit on GitHub master.
 web UI (e.g. commit "Actualizar app.ts"), creating remote-only commits the repl
 doesn't have → PUSH_REJECTED. The repl must **Pull (merge) before Push**. The agent
 cannot run git (`.git` guarded), so this is a manual user step in the Git pane.
+
+## www and the bare apex resolve to DIFFERENT backends
+
+`www.stopjuegodepalabras.com` → Railway (the NEW app build; serves the latest client
+incl. the update banner). The bare apex `stopjuegodepalabras.com` (no www) → a
+SEPARATE legacy server with a BROKEN TLS cert — NOT Railway. So deploying to Railway
+does NOT reach old-app users whose start URL is the bare apex. The OLD installed app
+opens the bare apex; the NEW app opens www.
+
+**Decision for the in-app "update" nudge:** the banner is gated by hostname — it is
+hidden on `www.stopjuegodepalabras.com` (the final/clean build) and shown on every
+other host (old builds). For old users to actually receive it, the bare apex must be
+pointed at the same Railway service as www. Note: Google Play already shows
+"Actualizar" to users on an older version — that native update path works regardless.
