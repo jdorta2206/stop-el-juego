@@ -127,7 +127,23 @@ if (process.env["SERVE_CLIENT"] === "1") {
       `[SERVE_CLIENT] index.html not found at ${clientDist} — the client build is missing or mislocated. Run "pnpm run build:railway" before starting.`,
     );
   }
-  app.use(express.static(clientDist));
+  // Digital Asset Links: Android needs /.well-known/assetlinks.json to verify the
+  // TWA and run it full-screen (without the browser toolbar). express.static
+  // ignores dotfile dirs (.well-known) by default and the SPA fallback below would
+  // otherwise return index.html for it, breaking verification. Serve it explicitly.
+  app.get("/.well-known/assetlinks.json", (_req, res) => {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.sendFile(
+      path.join(clientDist, ".well-known", "assetlinks.json"),
+      { dotfiles: "allow" },
+      (err) => {
+        if (err && !res.headersSent)
+          res.status(404).json({ error: "assetlinks.json not found" });
+      },
+    );
+  });
+  // Allow other dotfiles under .well-known to be served as real files too.
+  app.use(express.static(clientDist, { dotfiles: "allow" }));
   // SPA fallback: any GET that isn't an /api route returns index.html so
   // client-side routing (wouter) works on hard refresh / deep links. The regex
   // treats both `/api` and `/api/...` as API paths so they never fall through

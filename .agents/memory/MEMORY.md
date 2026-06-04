@@ -1,1 +1,2 @@
 - [Deployment hosts & client sharing](deployment-hosts.md) — two prod hosts share ONE stop-game client build but deploy via different pipelines (Replit-direct vs Railway/GitHub).
+- [TWA assetlinks / .well-known serving](twa-assetlinks.md) — app shows browser toolbar when /.well-known/assetlinks.json isn't served as JSON; dotfiles ignored by default on express.static, res.sendFile and vite preview.

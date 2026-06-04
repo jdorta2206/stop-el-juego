@@ -1,7 +1,45 @@
 import { defineConfig } from "vite";
+import type { Connect, PluginOption } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
+import fs from "fs";
+
+// Sirve /.well-known/assetlinks.json directamente, sin pasar por el fallback SPA.
+// Necesario porque algunos servidores estáticos (p.ej. `vite preview`) no entregan
+// archivos dentro de carpetas que empiezan por punto, y Android necesita ese archivo
+// para verificar la TWA y mostrarla a pantalla completa (sin la barra del navegador).
+function wellKnownAssetlinks(): PluginOption {
+  const filePath = path.resolve(
+    import.meta.dirname,
+    "public/.well-known/assetlinks.json"
+  );
+  const middleware: Connect.NextHandleFunction = (req, res, next) => {
+    const url = (req.url || "").split("?")[0];
+    if (url === "/.well-known/assetlinks.json") {
+      try {
+        const data = fs.readFileSync(filePath, "utf-8");
+        res.setHeader("Content-Type", "application/json");
+        res.setHeader("Access-Control-Allow-Origin", "*");
+        res.setHeader("Cache-Control", "public, max-age=3600");
+        res.end(data);
+        return;
+      } catch {
+        // si no existe, seguimos con el flujo normal
+      }
+    }
+    next();
+  };
+  return {
+    name: "serve-well-known-assetlinks",
+    configureServer(server) {
+      server.middlewares.use(middleware);
+    },
+    configurePreviewServer(server) {
+      server.middlewares.use(middleware);
+    },
+  };
+}
 
 const isBuild = process.env.NODE_ENV === "production" || process.argv.includes("build");
 
@@ -33,7 +71,7 @@ const replitPlugins =
 
 export default defineConfig({
   base: basePath,
-  plugins: [react(), tailwindcss(), ...replitPlugins],
+  plugins: [react(), tailwindcss(), wellKnownAssetlinks(), ...replitPlugins],
   resolve: {
     alias: {
       "@": path.resolve(import.meta.dirname, "src"),
