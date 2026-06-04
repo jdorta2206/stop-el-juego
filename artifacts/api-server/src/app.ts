@@ -94,6 +94,26 @@ app.use("/api", router);
 // /api so it's a plain browser URL: https://<domain>/test
 app.use("/test", adminPanel);
 
+// ========== 🎯 CHEQUEO DE VERSIÓN MÍNIMA (añadido) ==========
+const MIN_APP_VERSION = "1.3.4.0";
+const PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=app.replit.stop_el_juego.twa";
+
+app.get('/api/check-version', (req, res) => {
+  const version = req.query.v as string | undefined;
+  if (!version) {
+    return res.json({ allowed: true });
+  }
+  const isAllowed = version >= MIN_APP_VERSION;
+  res.json({
+    allowed: isAllowed,
+    updateUrl: isAllowed ? null : PLAY_STORE_URL,
+    message: isAllowed
+      ? null
+      : "Tu versión de STOP es muy antigua. Actualiza desde Google Play para seguir jugando."
+  });
+});
+// ========== FIN DEL CHEQUEO DE VERSIÓN ==========
+
 // 🚂 Single-service mode (e.g. Railway): serve the built game client from the
 // same origin as the API so the whole app runs as ONE deployable. Gated behind
 // SERVE_CLIENT so Replit (which serves the client from a separate Vite service)
