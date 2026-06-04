@@ -5,6 +5,32 @@ import { startDailyCron } from "./lib/dailyCron";
 import { revokeFakePremium } from "./lib/permanentPremium";
 import { ensureIndexes } from "@workspace/db";
 
+// ========== CONFIGURACIÓN DE VERSIÓN MÍNIMA ==========
+// Versión mínima aceptable (la primera que ya apunta a Railway)
+const MIN_APP_VERSION = "1.3.4.0";
+const PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=app.replit.stop_el_juego.twa";
+
+// Endpoint para que las nuevas versiones comprueben si deben actualizar
+app.get('/api/check-version', (req, res) => {
+  const version = req.query.v as string | undefined;
+  if (!version) {
+    // Si no se envía versión, asumimos que es una versión moderna (no bloqueamos)
+    return res.json({ allowed: true });
+  }
+  // Comparación simple de versiones (asumiendo formato "1.2.3" o similar)
+  // Nota: esta comparación funciona para versiones numéricas de un dígito.
+  // Para versiones como "1.10.0" requeriría una función más compleja, pero para tu caso sirve.
+  const isAllowed = version >= MIN_APP_VERSION;
+  res.json({
+    allowed: isAllowed,
+    updateUrl: isAllowed ? null : PLAY_STORE_URL,
+    message: isAllowed
+      ? null
+      : "Tu versión de STOP es muy antigua. Actualiza desde Google Play para seguir jugando."
+  });
+});
+// ========== FIN DEL CHEQUEO DE VERSIÓN ==========
+
 // ---- PÁGINAS PARA POLÍTICA DE PRIVACIDAD Y ELIMINACIÓN DE CUENTA ----
 app.get('/privacy', (req, res) => {
   res.send(`
