@@ -5,6 +5,50 @@ import { startDailyCron } from "./lib/dailyCron";
 import { revokeFakePremium } from "./lib/permanentPremium";
 import { ensureIndexes } from "@workspace/db";
 
+// ---- PÁGINAS PARA POLÍTICA DE PRIVACIDAD Y ELIMINACIÓN DE CUENTA ----
+app.get('/privacy', (req, res) => {
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+    <head><title>Política de Privacidad - STOP</title></head>
+    <body style="font-family: Arial, sans-serif; max-width: 800px; margin: 40px auto; padding: 20px; line-height: 1.5;">
+      <h1>Política de Privacidad de STOP</h1>
+      <p><strong>Última actualización:</strong> 4 de junio de 2026</p>
+      <h2>Información que recopilamos</h2>
+      <p>Para jugar a STOP, puedes iniciar sesión con Google, Facebook o Instagram. Recopilamos tu nombre, correo electrónico e identificador de la red social. También guardamos tus partidas, puntuaciones, logros y progreso en el juego.</p>
+      <h2>Uso de los datos</h2>
+      <p>Los datos se utilizan para operar el juego, mostrar clasificaciones, y mejorar la experiencia del usuario. No vendemos ni compartimos tus datos con terceros.</p>
+      <h2>Eliminación de datos</h2>
+      <p>Puedes eliminar tu cuenta y todos tus datos desde nuestra <a href="https://www.stopjuegodepalabras.com/delete-account">página de eliminación de cuenta</a> o enviando un correo a dorynex@stopjuegodepalabras.com.</p>
+      <h2>Contacto</h2>
+      <p>dorynex@stopjuegodepalabras.com</p>
+      <p><a href="https://www.stopjuegodepalabras.com">Volver al juego</a></p>
+    </body>
+    </html>
+  `);
+});
+
+app.get('/delete-account', (req, res) => {
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+    <head><title>Eliminar Cuenta - STOP</title></head>
+    <body style="font-family: Arial, sans-serif; max-width: 800px; margin: 40px auto; padding: 20px; line-height: 1.5;">
+      <h1>Solicitud de Eliminación de Cuenta</h1>
+      <p>Para eliminar permanentemente tu cuenta y todos tus datos asociados (partidas, puntuaciones, logros, etc.), sigue estos pasos:</p>
+      <ol>
+        <li>Envía un correo electrónico a <strong>dorynex@stopjuegodepalabras.com</strong> desde la dirección de correo que usas en STOP.</li>
+        <li>El asunto debe ser: <strong>"ELIMINAR MI CUENTA"</strong>.</li>
+        <li>Incluye en el mensaje tu nombre de usuario (si lo recuerdas).</li>
+      </ol>
+      <p>Procesaremos tu solicitud en un plazo máximo de 7 días. Una vez eliminada, no podrás recuperar tus datos.</p>
+      <p><a href="https://www.stopjuegodepalabras.com">Volver al juego</a></p>
+    </body>
+    </html>
+  `);
+});
+// ---- FIN DE LAS PÁGINAS ----
+
 async function initStripe() {
   const databaseUrl = process.env["DATABASE_URL"];
   if (!databaseUrl) {
