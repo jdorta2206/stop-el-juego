@@ -8,6 +8,7 @@ import { Button, Input } from "./ui";
 import { AuthModal } from "./AuthModal";
 import { InstallAppBanner } from "./InstallAppBanner";
 import { HappyHourBanner } from "./HappyHourBanner";
+import { PlayUpdateBanner } from "./PlayUpdateBanner";
 import { LanguageSelector } from "./LanguageSelector";
 import { AVATAR_COLORS } from "@/lib/utils";
 import { useT } from "@/i18n/useT";
@@ -267,6 +268,9 @@ export function Layout({ children }: { children: ReactNode }) {
 
       {/* Standalone install banner (Android beforeinstallprompt + iOS Safari instructions) */}
       <InstallAppBanner />
+
+      {/* "Update available" modal — only shown inside the installed Android app (Play Store TWA) */}
+      <PlayUpdateBanner />
 
       {/* Proactive install + notification prompt */}
       <AnimatePresence>
