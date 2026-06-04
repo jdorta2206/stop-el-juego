@@ -1,0 +1,100 @@
+Sí, puedes tener un enlace privado (solo para ti) que te muestre estadísticas diarias de conexiones, separando invitados de usuarios registrados. Es muy útil y fácil de implementar sin necesidad de herramientas externas.
+
+🛠️ Solución: Endpoint privado en tu propio backend
+Añade una ruta protegida por autenticación (con una clave secreta que solo tú conozcas) que consulte tu base de datos y devuelva métricas en formato JSON (o incluso una pequeña interfaz HTML con gráficos).
+
+🧠 ¿Qué necesitas?
+Tu base de datos PostgreSQL (Railway) ya guarda cada partida y sesión de usuario (tablas game_history, player_scores, guest_stats si la tienes, o puedes crear una tabla analytics_events).
+
+Una ruta en tu API, por ejemplo /api/admin/stats, que solo acepte peticiones con un token secreto en el Authorization header o como parámetro.
+
+📊 Métricas que puedes obtener fácilmente
+Métrica	Fuente de datos
+Usuarios registrados activos hoy	player_scores con updated_at > hoy
+Invitados únicos hoy	Tabla guest_stats o game_history donde player_id sea null o empiece por guest_
+Total de partidas jugadas hoy	game_history con created_at > hoy
+Nuevos registros hoy	player_scores con created_at > hoy
+Usuarios activos por hora	game_history agrupado por hora
+📝 Ejemplo de código (Node.js + Express)
+En tu archivo de rutas (por ejemplo artifacts/api-server/src/routes/admin.ts):
+
+typescript
+import express from 'express';
+import { db } from '../db'; // tu conexión a PostgreSQL
+
+const router = express.Router();
+
+// Middleware de autenticación privada
+const adminAuth = (req, res, next) => {
+  const token = req.headers['authorization'] || req.query.token;
+  if (token !== process.env.ADMIN_SECRET_TOKEN) {
+    return res.status(401).json({ error: 'No autorizado' });
+  }
+  next();
+};
+
+router.get('/stats', adminAuth, async (req, res) => {
+  try {
+    // Usuarios registrados que jugaron hoy
+    const registeredToday = await db.query(`
+      SELECT COUNT(DISTINCT player_id) 
+      FROM game_history 
+      WHERE created_at >= CURRENT_DATE
+        AND player_id NOT LIKE 'guest_%'
+    `);
+    
+    // Invitados únicos hoy (suponiendo que los invitados tienen player_id que empieza por 'guest_')
+    const guestsToday = await db.query(`
+      SELECT COUNT(DISTINCT player_id) 
+      FROM game_history 
+      WHERE created_at >= CURRENT_DATE
+        AND player_id LIKE 'guest_%'
+    `);
+    
+    // También puedes contar partidas totales
+    const totalGames = await db.query(`
+      SELECT COUNT(*) 
+      FROM game_history 
+      WHERE created_at >= CURRENT_DATE
+    `);
+    
+    res.json({
+      date: new Date().toISOString().slice(0,10),
+      registered: parseInt(registeredToday.rows[0].count),
+      guests: parseInt(guestsToday.rows[0].count),
+      totalGames: parseInt(totalGames.rows[0].count)
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error interno' });
+  }
+});
+
+export default router;
+🔐 Configuración de seguridad
+Genera un token secreto largo (puedes usar openssl rand -hex 32) y guárdalo como variable de entorno ADMIN_SECRET_TOKEN en Railway.
+
+Cuando quieras ver las estadísticas, accede a https://www.stopjuegodepalabras.com/api/admin/stats?token=TU_TOKEN_SECRETO (o con header).
+
+Para mayor seguridad, restringe el acceso por IP (solo la tuya) o añade autenticación básica HTTP.
+
+📱 Si prefieres una página web sencilla (dashboard)
+Puedes hacer que la misma ruta /api/admin/stats devuelva HTML en lugar de JSON (detectando el header Accept). Así, con tu token, verás una tabla bonita.
+
+📈 Alternativa sin código (Google Analytics)
+Si no quieres programar, ya tienes GA4 instalado. Puedes crear un panel de control personalizado en Google Analytics que te muestre:
+
+Usuarios activos (segmentados por "tipo de usuario" si usas dimensiones personalizadas)
+
+Eventos de login vs invitado
+
+Pero GA4 no distingue automáticamente entre invitados y registrados, tendrías que enviar un evento personalizado (user_type) desde tu código.
+
+🚀 Resumen de lo que ganas
+Enlace privado que solo tú puedes usar (con token).
+
+Datos actualizados en tiempo real (cada consulta a la BD).
+
+Sin costes adicionales (ya tienes la BD).
+
+Fácil de integrar en tu API existente.
