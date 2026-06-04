@@ -4,9 +4,10 @@ description: Where the real STOP player data lives and how to extract/migrate it
 ---
 
 The workspace/dev Postgres (`helium`, `DATABASE_URL` in Replit dev) holds **fake seed
-data** — placeholder players like MasterSTOP/WordKing/SpeedQuill. The **real** players
-(MGK ~12.6k, "J D" premium, Silvia Modeq, Jose Zaragoza…) live ONLY in the **Replit
-deployment's production database** that serves `stop-el-juego.replit.app`.
+data** — obvious placeholder display names. The **real** players (a few hundred accounts
+with genuine scores/premium flags) live ONLY in the **Replit deployment's production
+database** that serves `stop-el-juego.replit.app`. Tell them apart: dev rows have
+synthetic names; prod has real user accounts and `google_…`/`facebook_…` player ids.
 
 **Why:** dev and prod are separate Replit-managed databases. Never assume the dev DB
 rows represent production. Any data migration/export MUST source from production.

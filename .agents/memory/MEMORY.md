@@ -9,3 +9,4 @@
 - [Instagram login deprecated](instagram-login-deprecated.md) — IG API now needs professional accounts; login removed from STOP, use Facebook instead.
 - [Railway can't reach Replit internal DB](railway-db-unreachable.md) — www 500s because Railway can't open Replit's internal helium DB; needs a shared external Postgres + full schema load.
 - [Prod data ≠ dev DB](prod-data-vs-dev-db.md) — dev DB has FAKE seed players; real players live only in Replit prod DB (read via executeSql env:production); how prod→Railway migration was done.
+- [Private admin panel /test](private-admin-panel.md) — owner-only Basic-Auth stats dashboard; mount before SPA fallback, fail-closed; needs ADMIN_PANEL_* + DATABASE_URL on Railway too.

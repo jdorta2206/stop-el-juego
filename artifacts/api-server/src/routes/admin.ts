@@ -41,7 +41,11 @@ function basicAuth(req: Request, res: Response, next: NextFunction) {
     const idx = decoded.indexOf(":");
     const gotUser = decoded.slice(0, idx);
     const gotPass = decoded.slice(idx + 1);
-    if (safeEqual(gotUser, user) && safeEqual(gotPass, pass)) {
+    // Compute BOTH comparisons unconditionally (no short-circuit) so a failing
+    // username can't be distinguished from a failing password by timing.
+    const okUser = safeEqual(gotUser, user);
+    const okPass = safeEqual(gotPass, pass);
+    if (okUser && okPass) {
       next();
       return;
     }
@@ -85,12 +89,13 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
       `)
     ).rows[0] as Record<string, unknown>;
 
-    // Invitados de hoy (guest_stats usa fecha UTC).
+    // Invitados de hoy. Usamos el día de Europe/Madrid para que TODAS las
+    // tarjetas de "Hoy" cambien de día a la vez (medianoche española).
     const guestToday = (
       await db.execute(sql`
         SELECT COALESCE(games,0) AS games, COALESCE(conversions,0) AS conversions
         FROM guest_stats
-        WHERE day = to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD')
+        WHERE day = to_char(now() AT TIME ZONE 'Europe/Madrid', 'YYYY-MM-DD')
       `)
     ).rows[0] as Record<string, unknown> | undefined;
 
