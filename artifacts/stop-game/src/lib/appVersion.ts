@@ -14,7 +14,7 @@ const STORAGE_KEY = "stop_app_version";
 // Bump this to the latest published versionName whenever you ship an Android
 // build you want everyone on. Anyone whose installed version is >= this value
 // will NOT see the "update available" prompt.
-export const MIN_RECOMMENDED_APP_VERSION = "1.0.0";
+export const MIN_RECOMMENDED_APP_VERSION = "1.3.4.0";
 
 function clean(v: string | null | undefined): string | null {
   if (!v) return null;
