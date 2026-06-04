@@ -54,3 +54,22 @@ hidden on `www.stopjuegodepalabras.com` (the final/clean build) and shown on eve
 other host (old builds). For old users to actually receive it, the bare apex must be
 pointed at the same Railway service as www. Note: Google Play already shows
 "Actualizar" to users on an older version — that native update path works regardless.
+
+## The 3 hosts drift to 3 DIFFERENT builds at once
+
+Because each host has its own pipeline, they can each serve a different build of the
+SAME client simultaneously: `stop-el-juego.replit.app` = newest (direct Replit
+republish, fully under our control); `www…` = whatever last reached GitHub→Railway;
+bare apex = the separate legacy server, usually the oldest. Always verify per host by
+`curl`-ing the site and grepping the built JS for marker strings (e.g. `stop_app_version`
+for the version-gate build, `www.stopjuegodepalabras.com` for the host-gate build).
+The cleanest cure is to consolidate all hosts onto one always-updated origin.
+
+## The installed TWA runs as a Custom Tab → TWA-only detection silently fails
+
+The user's app opens WITH a browser toolbar (X + address bar + share + overflow),
+i.e. a Chrome Custom Tab, NOT a verified full-screen TWA. In that mode
+`document.referrer === android-app://<pkg>` and the Digital Goods / Play Billing
+check are unreliable/absent, so a banner gated only on those signals never appears.
+To reach these users the detection must fall back to a broader signal (e.g. Android
+UA on the app's non-www domains), or the app must load a host we control.
