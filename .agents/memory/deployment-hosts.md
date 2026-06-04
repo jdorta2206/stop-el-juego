@@ -25,3 +25,18 @@ step and has repeatedly been blocked (UNAUTHENTICATED = reconnect GitHub; PUSH_R
 **How to apply:** when a client change is "urgent" and GitHub is stuck, ship it via
 the Replit republish (works independently of GitHub). Only the www/Railway host is
 gated on GitHub.
+
+## The Android app (TWA) loads the Railway host, not replit.app
+
+The Play Store app (package `app.replit.stop_el_juego.twa`) loads
+**stopjuegodepalabras.com (Railway)** as its start URL. So any client change must
+reach **GitHub → Railway** to be visible *inside the app*. Publishing only to
+stop-el-juego.replit.app is NOT enough — users won't see it. Diagnose "feature not
+showing in the app" by checking whether the built JS on stopjuegodepalabras.com
+contains the new code (e.g. `curl` the site, grep the bundle), and compare against
+the latest commit on GitHub master.
+
+**Why pushes keep getting rejected:** the user edits files directly in the GitHub
+web UI (e.g. commit "Actualizar app.ts"), creating remote-only commits the repl
+doesn't have → PUSH_REJECTED. The repl must **Pull (merge) before Push**. The agent
+cannot run git (`.git` guarded), so this is a manual user step in the Git pane.
