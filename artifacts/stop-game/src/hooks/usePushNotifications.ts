@@ -2,7 +2,15 @@ import { useState, useEffect, useCallback } from "react";
 import { getApiUrl } from "@/lib/utils";
 
 const API_BASE = getApiUrl();
-const VAPID_PUBLIC = import.meta.env.VITE_VAPID_PUBLIC_KEY || "";
+// VAPID *public* key. It is public by design (it ships to every browser in the
+// bundle and is sent with each push subscription), so we keep a hardcoded
+// fallback to guarantee the notifications UI (bell + toggle) renders on hosts
+// where the VITE_VAPID_PUBLIC_KEY build var isn't set (e.g. the Railway-served
+// www domain). The env var still takes priority when present. The matching
+// *private* key must NEVER be hardcoded — it stays server-side only.
+const VAPID_PUBLIC =
+  import.meta.env.VITE_VAPID_PUBLIC_KEY ||
+  "BOwVNL3sEONgyFulirkX5dzwQo662Yj2_C846OSMrTSfiz4GFwEsl3_1NY3x_GqJIco8P7Ls85u56IRC3Y8Bj2c";
 
 function urlB64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
