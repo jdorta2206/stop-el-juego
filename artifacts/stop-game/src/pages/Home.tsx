@@ -10,7 +10,7 @@ import { usePremium } from "@/lib/usePremium";
 import { useFollows, useFriendsOnline } from "@/lib/useFollows";
 import { usePlayer } from "@/hooks/use-player";
 import { useT } from "@/i18n/useT";
-import { useStreak } from "@/hooks/useStreak";
+import { useDisplayStreak } from "@/hooks/useDisplayStreak";
 import { useAchievements } from "@/hooks/useAchievements";
 import { StreakCalendarModal } from "@/components/StreakCalendar";
 import { FTUEWelcomeModal } from "@/components/FTUEWelcomeModal";
@@ -33,7 +33,7 @@ export default function Home() {
   const { friends } = useFollows(player?.id);
   const friendsOnline = useFriendsOnline(player?.id, friends);
   const { t } = useT();
-  const { streak, playedToday } = useStreak();
+  const { streak, playedToday } = useDisplayStreak();
   const streakAtRisk = streak.current > 0 && !playedToday;
   const { unlocked, newlyUnlocked, clearNewlyUnlocked, checkStreakMilestone } = useAchievements(player?.id);
   const [showStreakCalendar, setShowStreakCalendar] = useState(false);

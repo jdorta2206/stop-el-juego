@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 import { useT } from "@/i18n/useT";
 import { usePlayer } from "@/hooks/use-player";
 import { ArrowLeft, Trophy, Calendar, Flame } from "lucide-react";
-import { useStreak } from "@/hooks/useStreak";
+import { useDisplayStreak } from "@/hooks/useDisplayStreak";
 import { useReviewPrompt } from "@/hooks/useReviewPrompt";
 import { ReviewPromptCard } from "@/components/ReviewPromptCard";
 import { getApiUrl } from "@/lib/utils";
@@ -42,7 +42,7 @@ function getTimeUntilMidnight(): string {
 export default function DailyChallenge() {
   const { t, lang } = useT();
   const { player } = usePlayer();
-  const { streak } = useStreak();
+  const { streak } = useDisplayStreak();
   const [, setLocation] = useLocation();
   const [challenge, setChallenge] = useState<DailyChallenge | null>(null);
   const [rankings, setRankings] = useState<DailyRanking[]>([]);

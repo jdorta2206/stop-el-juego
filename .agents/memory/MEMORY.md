@@ -1,3 +1,4 @@
 - [Deployment hosts & client sharing](deployment-hosts.md) — two prod hosts share ONE stop-game client build but deploy via different pipelines (Replit-direct vs Railway/GitHub).
 - [TWA assetlinks / .well-known serving](twa-assetlinks.md) — app shows browser toolbar when /.well-known/assetlinks.json isn't served as JSON; dotfiles ignored by default on express.static, res.sendFile and vite preview.
 - [Update-banner gating](update-banner-gating.md) — all APK versions load the same site, so gate the "update" banner by reported app version, never by host (host-gating hid it for everyone).
+- [Streak source of truth](streak-source-of-truth.md) — streaks are authoritative server-side (player_scores); display from useGetStreakCalendar, not localStorage. Most "retention plan" features already exist.

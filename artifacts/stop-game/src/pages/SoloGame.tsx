@@ -991,6 +991,9 @@ export default function SoloGame() {
     }, {
       onSuccess: (response: any) => {
         queryClient.invalidateQueries({ queryKey: ["/api/ranking/scores"] });
+        // The server updates the streak on score submit; refresh the calendar
+        // query so Home / Daily show the new authoritative streak right away.
+        queryClient.invalidateQueries({ queryKey: ["/api/ranking/streak/calendar"] });
         const msg = isBonus
           ? (lang === "en" ? `+${finalScore} bonus pts added!` :
              lang === "pt" ? `+${finalScore} pts bónus adicionados!` :
