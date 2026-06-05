@@ -37,6 +37,16 @@ export default function Home() {
   const streakAtRisk = streak.current > 0 && !playedToday;
   const { unlocked, newlyUnlocked, clearNewlyUnlocked, checkStreakMilestone } = useAchievements(player?.id);
   const [showStreakCalendar, setShowStreakCalendar] = useState(false);
+  // Whether today's daily challenge was already played (same localStorage key
+  // the DailyChallenge page uses), so the banner reflects the player's state.
+  const [dailyDone] = useState(() => {
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      return !!localStorage.getItem(`stop_daily_${today}`);
+    } catch {
+      return false;
+    }
+  });
   const ftue = useFTUE();
   const [showFTUEWelcome, setShowFTUEWelcome] = useState(false);
 
@@ -279,6 +289,70 @@ export default function Home() {
           onDone={clearNewlyUnlocked}
           tAchievements={t.achievements as unknown as { [key: string]: string; new: string; xpBonus: string }}
         />
+
+        {/* 🎯 Reto del Día — prominent daily-challenge entry, shown to everyone
+            so the daily loop is the first thing players see when opening the app. */}
+        <Link href="/reto">
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1, type: "spring", bounce: 0.4 }}
+            whileHover={{ scale: 1.02, y: -2 }}
+            whileTap={{ scale: 0.98 }}
+            className="relative w-full overflow-hidden rounded-2xl cursor-pointer"
+            style={{
+              background: "linear-gradient(135deg, #1a237e 0%, #4527a0 55%, #b5301a 100%)",
+              border: "2px solid rgba(249,168,37,0.55)",
+              boxShadow: "0 8px 30px rgba(0,0,0,0.35)",
+            }}
+            data-testid="daily-challenge-banner"
+          >
+            <span
+              aria-hidden
+              className="absolute inset-0 pointer-events-none"
+              style={{ background: "radial-gradient(circle at 18% 20%, rgba(255,255,255,0.18), transparent 55%)" }}
+            />
+            <div className="relative flex items-center gap-3 px-4 py-4">
+              <motion.div
+                className="flex-shrink-0 w-12 h-12 rounded-2xl flex items-center justify-center text-2xl"
+                style={{ background: "rgba(249,168,37,0.18)", border: "1px solid rgba(249,168,37,0.5)" }}
+                animate={{ rotate: [0, -6, 6, 0] }}
+                transition={{ repeat: Infinity, duration: 3.2, repeatDelay: 1 }}
+              >
+                🎯
+              </motion.div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-[#f9a825]">
+                    {t.daily.title}
+                  </p>
+                  {!dailyDone && (
+                    <span className="relative flex h-2 w-2" aria-hidden>
+                      <span className="absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75 animate-ping" />
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-400" />
+                    </span>
+                  )}
+                </div>
+                <p className="text-white font-black text-base leading-tight truncate">
+                  {t.daily.subtitle}
+                </p>
+                <p className="text-white/55 text-[11px] leading-tight mt-0.5 truncate">
+                  {t.daily.newChallenge}
+                </p>
+              </div>
+              <div
+                className="flex-shrink-0 px-3 py-2 rounded-xl font-black text-xs text-center whitespace-nowrap"
+                style={
+                  dailyDone
+                    ? { background: "rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.7)" }
+                    : { background: "#f9a825", color: "#0d1757" }
+                }
+              >
+                {dailyDone ? `${t.daily.played} ✓` : `${t.daily.play} →`}
+              </div>
+            </div>
+          </motion.div>
+        </Link>
 
         {/* 🎟️ Season Pass banner — only shown when there's a mission ready to claim */}
         {player && season && seasonProgress && seasonProgress.hasUnclaimedMissions && (
