@@ -12,18 +12,12 @@ const PLAY_STORE_URL = `https://play.google.com/store/apps/details?id=${TWA_PACK
 // nag again within the same session once they tap "update" or "later".
 const DISMISS_KEY = "stop_play_update_prompt_v1";
 
-// The NEW app build loads this exact host and is considered final/perfect, so
-// it must stay clean (no update nudge). Every OTHER host (the old build's start
-// URL, e.g. the bare domain without www) belongs to users who downloaded an
-// earlier version and should be nudged to update.
-const NEW_CLEAN_HOST = "www.stopjuegodepalabras.com";
-
-function isNewCleanBuild(): boolean {
-  return (
-    typeof window !== "undefined" &&
-    window.location.hostname.toLowerCase() === NEW_CLEAN_HOST
-  );
-}
+// Who sees the "update" nudge is decided ONLY by the installed app version, not
+// by which host the app loads. The new and old builds can load the SAME host
+// (e.g. www.stopjuegodepalabras.com), so gating by host hid the prompt for
+// everyone running the app. The version check (isAppUpdateRecommended) is the
+// single source of truth: a build that reports a version >= the threshold is
+// spared, and an old build that reports nothing is nudged.
 
 // True only when launched from OUR specific installed app. A TWA navigates
 // with document.referrer === "android-app://<its package>", so matching our
@@ -43,8 +37,6 @@ export function PlayUpdateBanner() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    // The new build (www host) is final — never nudge there.
-    if (isNewCleanBuild()) return;
     if (sessionStorage.getItem(DISMISS_KEY)) return;
 
     let cancelled = false;

@@ -49,11 +49,10 @@ SEPARATE legacy server with a BROKEN TLS cert — NOT Railway. So deploying to R
 does NOT reach old-app users whose start URL is the bare apex. The OLD installed app
 opens the bare apex; the NEW app opens www.
 
-**Decision for the in-app "update" nudge:** the banner is gated by hostname — it is
-hidden on `www.stopjuegodepalabras.com` (the final/clean build) and shown on every
-other host (old builds). For old users to actually receive it, the bare apex must be
-pointed at the same Railway service as www. Note: Google Play already shows
-"Actualizar" to users on an older version — that native update path works regardless.
+**Decision for the in-app "update" nudge:** gate by REPORTED APP VERSION, not host.
+Host-gating was removed because every APK loads the same site (see
+`update-banner-gating.md`). Google Play already shows "Actualizar" to users on an
+older version — that native update path works regardless.
 
 ## The 3 hosts drift to 3 DIFFERENT builds at once
 
