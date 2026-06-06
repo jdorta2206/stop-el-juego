@@ -8,7 +8,6 @@ import { Button, Input } from "./ui";
 import { AuthModal } from "./AuthModal";
 import { InstallAppBanner } from "./InstallAppBanner";
 import { HappyHourBanner } from "./HappyHourBanner";
-import { PlayUpdateBanner } from "./PlayUpdateBanner";
 import { LanguageSelector } from "./LanguageSelector";
 import { AVATAR_COLORS } from "@/lib/utils";
 import { useT } from "@/i18n/useT";
@@ -269,9 +268,6 @@ export function Layout({ children }: { children: ReactNode }) {
       {/* Standalone install banner (Android beforeinstallprompt + iOS Safari instructions) */}
       <InstallAppBanner />
 
-      {/* "Update available" modal — only shown inside the installed Android app (Play Store TWA) */}
-      <PlayUpdateBanner />
-
       {/* Proactive install + notification prompt */}
       <AnimatePresence>
         {showNotifPrompt && (
@@ -428,163 +424,8 @@ export function Layout({ children }: { children: ReactNode }) {
                   >
                     {editName.charAt(0).toUpperCase() || "?"}
                   </div>
-                  {isPremium && (
-                    <div
-                      className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full flex items-center justify-center shadow-lg"
-                      style={{ background: "linear-gradient(135deg, #f9a825, #f57c00)" }}
-                    >
-                      <Crown className="w-3.5 h-3.5 text-white" />
-                    </div>
-                  )}
-                </div>
-                {isPremium && (
-                  <span
-                    className="inline-flex items-center gap-1 px-3 py-0.5 rounded-full text-[10px] font-black"
-                    style={{ background: "linear-gradient(135deg, rgba(249,168,37,0.2), rgba(245,124,0,0.15))", border: "1.5px solid rgba(249,168,37,0.5)", color: "#f9a825" }}
-                  >
-                    <Crown className="w-3 h-3" /> PREMIUM
-                  </span>
-                )}
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-white/60 uppercase tracking-wider mb-1 block">
-                  {t.multiplayer.playerName}
-                </label>
-                <Input
-                  value={editName}
-                  onChange={e => setEditName(e.target.value)}
-                  maxLength={14}
-                  placeholder={t.multiplayer.enterName}
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-white/60 uppercase tracking-wider mb-2 block">
-                  Avatar
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  {AVATAR_COLORS.map(color => (
-                    <button
-                      key={color}
-                      onClick={() => setEditColor(color)}
-                      className="w-9 h-9 rounded-full border-4 transition-all hover:scale-110"
-                      style={{
-                        backgroundColor: color,
-                        borderColor: editColor === color ? "white" : "transparent",
-                        boxShadow: editColor === color ? "0 0 0 2px rgba(255,255,255,0.4)" : "none",
-                      }}
-                    />
-                  ))}
-                </div>
-              </div>
-
-              {/* Notification toggle in profile */}
-              {isSupported && permission !== "unsupported" && (
-                <div>
-                  <label className="text-xs font-bold text-white/60 uppercase tracking-wider mb-2 block">
-                    🔔 {lang === "en" ? "Notifications" : lang === "pt" ? "Notificações" : lang === "fr" ? "Notifications" : "Notificaciones"}
-                  </label>
-                  {permission === "denied" ? (
-                    <div className="flex items-center gap-2 py-2 px-3 rounded-xl" style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)" }}>
-                      <span className="text-red-400 text-xs font-bold flex-1">
-                        {lang === "en" ? "Blocked in browser settings. Go to Settings → Apps → Chrome → Notifications to enable." : lang === "pt" ? "Bloqueado. Vai a Definições → Apps → Chrome → Notificações." : lang === "fr" ? "Bloqué. Va dans Réglages → Apps → Chrome → Notifications." : "Bloqueadas. Ve a Ajustes → Apps → Chrome → Notificaciones para activarlas."}
-                      </span>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={async () => {
-                        if (isSubscribed) {
-                          await unsubscribe();
-                          setNotifToast("🔕 Notificaciones desactivadas");
-                        } else {
-                          const ok = await subscribe();
-                          if (ok) {
-                            setNotifToast("🔔 ¡Notificaciones activadas! Ahora aparecerás en Ajustes → Notificaciones");
-                            localStorage.setItem("stop_notif_prompt_v1", "1");
-                          }
-                        }
-                        setTimeout(() => setNotifToast(null), 5000);
-                      }}
-                      disabled={notifLoading}
-                      className="w-full flex items-center gap-3 py-3 px-4 rounded-xl transition-all active:scale-95"
-                      style={isSubscribed
-                        ? { background: "rgba(74,222,128,0.12)", border: "1px solid rgba(74,222,128,0.35)" }
-                        : { background: "rgba(249,168,37,0.12)", border: "1px solid rgba(249,168,37,0.35)" }
-                      }
-                    >
-                      <span className="text-2xl">{isSubscribed ? "🔔" : "🔕"}</span>
-                      <div className="flex-1 text-left">
-                        <p className="text-white font-black text-sm">
-                          {isSubscribed
-                            ? (lang === "en" ? "Notifications ON" : lang === "pt" ? "Notificações ATIVAS" : lang === "fr" ? "Notifications ACTIVÉES" : "Notificaciones ACTIVADAS")
-                            : (lang === "en" ? "Activate notifications" : lang === "pt" ? "Ativar notificações" : lang === "fr" ? "Activer les notifications" : "Activar notificaciones")}
-                        </p>
-                        <p className="text-white/50 text-xs">
-                          {isSubscribed
-                            ? (lang === "en" ? "Tap to disable" : lang === "pt" ? "Toca para desativar" : lang === "fr" ? "Appuie pour désactiver" : "Toca para desactivar")
-                            : (lang === "en" ? "Get daily challenge alerts" : lang === "pt" ? "Recebe alertas do desafio diário" : lang === "fr" ? "Reçois les alertes du défi quotidien" : "Recibe el reto diario en tu pantalla")}
-                        </p>
-                      </div>
-                      <span className="text-xs font-black px-2 py-1 rounded-lg" style={{ background: isSubscribed ? "rgba(74,222,128,0.2)" : "rgba(249,168,37,0.25)", color: isSubscribed ? "#4ade80" : "#f9a825" }}>
-                        {notifLoading ? "..." : isSubscribed ? (lang === "en" ? "ON" : "ON") : (lang === "en" ? "OFF" : "OFF")}
-                      </span>
-                    </button>
-                  )}
-                </div>
-              )}
-
-              <Button className="w-full" onClick={handleSaveProfile}>
-                ✓ Guardar
-              </Button>
-
-              <button
-                onClick={() => { setShowProfile(false); logout(); }}
-                className="w-full flex items-center justify-center gap-2 text-white/40 text-sm hover:text-white/70 transition-colors py-1"
-              >
-                <LogOut className="w-4 h-4" /> {t.nav.logout}
-              </button>
-            </div>
-          </Modal>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-}
-
-function Modal({
-  children,
-  title,
-  onClose,
-}: {
-  children: ReactNode;
-  title: string;
-  onClose: () => void;
-}) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-        onClick={onClose}
-      />
-      <motion.div
-        initial={{ scale: 0.9, opacity: 0, y: 20 }}
-        animate={{ scale: 1, opacity: 1, y: 0 }}
-        exit={{ scale: 0.9, opacity: 0, y: 20 }}
-        className="relative z-10 w-full max-w-sm rounded-3xl p-6 shadow-2xl"
-        style={{
-          background: "linear-gradient(145deg, #1a237e 0%, #0d1757 100%)",
-          border: "2px solid rgba(249,168,37,0.3)",
-        }}
-      >
-        {title && (
-          <h2 className="text-xl font-black text-white mb-5 text-center">{title}</h2>
-        )}
-        {children}
-      </motion.div>
-    </div>
-  );
-}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const colors = [...AVATAR_COLO
