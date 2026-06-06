@@ -428,4 +428,57 @@ export function Layout({ children }: { children: ReactNode }) {
                     variant="outline"
                     size="sm"
                     onClick={() => {
-                      const colors = [...AVATAR_COLO
+                      const colors = [...AVATAR_COLORS];
+                      const currentIndex = colors.indexOf(editColor);
+                      const nextColor = colors[(currentIndex + 1) % colors.length];
+                      setEditColor(nextColor);
+                    }}
+                    className="absolute -bottom-2 -right-2 rounded-full p-1 bg-[#0d1757] border-white/20"
+                  >
+                    🎨
+                  </Button>
+                </div>
+                <Input
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  placeholder={t.profile.namePlaceholder}
+                  maxLength={20}
+                  className="text-center"
+                />
+                <div className="flex gap-2 w-full">
+                  <Button
+                    onClick={handleSaveProfile}
+                    className="flex-1 bg-gradient-to-r from-[#f9a825] to-[#f57f17] text-[#0d1757] font-bold"
+                  >
+                    {t.common.save}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowProfile(false)}
+                    className="flex-1"
+                  >
+                    {t.common.cancel}
+                  </Button>
+                </div>
+                <Button
+                  variant="ghost"
+                  onClick={logout}
+                  className="text-red-400 hover:text-red-300 w-full mt-2"
+                >
+                  <LogOut className="w-4 h-4 mr-2" />
+                  {t.profile.logout}
+                </Button>
+                {isPremium && (
+                  <div className="flex items-center gap-1 text-[#f9a825] text-xs mt-2">
+                    <Crown className="w-3 h-3 fill-[#f9a825]" />
+                    <span>{t.profile.premium}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </Modal>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
