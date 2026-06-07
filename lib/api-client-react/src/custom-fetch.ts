@@ -321,9 +321,34 @@ export async function customFetch<T = unknown>(
     headers.set("accept", DEFAULT_JSON_ACCEPT);
   }
 
+  // 🔐 Attach the player session token (cross-origin fallback for blocked
+  // third-party cookies) so authenticated endpoints can bind the request to the
+  // caller's account. No-op outside the browser or when not logged in.
+  if (!headers.has("x-stop-token") && typeof window !== "undefined") {
+    try {
+      const w = window as unknown as {
+        localStorage?: Storage;
+        sessionStorage?: Storage;
+      };
+      const tok =
+        w.localStorage?.getItem("stop_session_token") ||
+        w.sessionStorage?.getItem("stop_session_token");
+      if (tok) headers.set("x-stop-token", tok);
+    } catch {
+      // Storage may be unavailable (SSR / privacy mode) — skip the header.
+    }
+  }
+
   const requestInfo = { method, url: resolveUrl(resolvedInput) };
 
-  const response = await fetch(resolvedInput, { ...init, method, headers });
+  const response = await fetch(resolvedInput, {
+    ...init,
+    method,
+    headers,
+    // Send the session cookie too — it's the primary auth source; the
+    // x-stop-token header above is the cross-domain fallback.
+    credentials: init.credentials ?? "include",
+  });
 
   if (!response.ok) {
     const errorData = await parseErrorBody(response, method);

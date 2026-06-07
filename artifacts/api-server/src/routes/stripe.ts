@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { stripeStorage } from "../stripeStorage";
 import { stripeService } from "../stripeService";
 import { getUncachableStripeClient } from "../stripeClient";
+import { verifyClaimedIdentity } from "../lib/playerAuth";
 
 const router: IRouter = Router();
 
@@ -98,6 +99,11 @@ router.post("/checkout", async (req, res) => {
     if (!playerId || !priceId) {
       return res.status(400).json({ error: "playerId and priceId required" });
     }
+    // 🔒 A logged-in account can only check out for ITSELF — blocks anyone from
+    // creating a Stripe session against another player's id (which is public).
+    if (!verifyClaimedIdentity(req, playerId)) {
+      return res.status(403).json({ error: "Identity verification failed" });
+    }
 
     let player = await stripeStorage.getPlayer(playerId);
     let customerId = player?.stripeCustomerId || null;
@@ -133,6 +139,11 @@ router.post("/portal", async (req, res) => {
   try {
     const { playerId } = req.body as { playerId: string };
     if (!playerId) return res.status(400).json({ error: "playerId required" });
+    // 🔒 Critical IDOR fix: only the authenticated owner can open the billing
+    // portal for their id — otherwise anyone could cancel another user's sub.
+    if (!verifyClaimedIdentity(req, playerId)) {
+      return res.status(403).json({ error: "Identity verification failed" });
+    }
 
     const player = await stripeStorage.getPlayer(playerId);
     if (!player?.stripeCustomerId) {

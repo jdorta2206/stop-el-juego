@@ -131,3 +131,39 @@ export function clearPlayerToken(res: Response): void {
 }
 
 export const PLAYER_TOKEN_BRIDGE_KEY = "stop_session_token";
+
+/**
+ * OAuth-account id prefixes. Logged-in users get an id like `google_123`,
+ * `fb_…`, etc. Guests use a random `crypto.randomUUID()` with none of these.
+ */
+const OAUTH_ID_PREFIXES = ["google_", "fb_", "ig_", "apple_", "tt_"];
+
+/** True when this playerId belongs to a logged-in OAuth account (not a guest). */
+export function isLoggedInId(playerId: string | null | undefined): boolean {
+  return !!playerId && OAUTH_ID_PREFIXES.some((p) => playerId.startsWith(p));
+}
+
+/** True when the server can mint/verify tokens (SESSION_SECRET configured). */
+export function isAuthConfigured(): boolean {
+  return getSigningSecret() !== null;
+}
+
+/**
+ * Identity binding for routes shared by BOTH guests and logged-in users
+ * (Stripe billing, leaderboard, custom packs). It blocks IDOR/impersonation of
+ * real accounts WITHOUT breaking the guest-first multiplayer model:
+ *   - Guests (random-UUID ids): always allowed — they have no token to verify.
+ *   - Logged-in (OAuth-prefixed) ids: REQUIRE a signed token matching the
+ *     claimed id, so nobody can act on another account by guessing its public id.
+ * Fails OPEN when auth isn't configured so a missing secret can't lock everyone
+ * out of the live game. Returns true when the request may proceed.
+ */
+export function verifyClaimedIdentity(
+  req: Request,
+  claimedId: string | null | undefined,
+): boolean {
+  if (!claimedId) return true;
+  if (!isLoggedInId(claimedId)) return true;
+  if (!isAuthConfigured()) return true;
+  return readPlayerId(req) === claimedId;
+}

@@ -4,6 +4,7 @@ import { db } from "@workspace/db";
 import { pushSubscriptionsTable } from "@workspace/db";
 import { and, eq, isNull, like, not, or, sql } from "drizzle-orm";
 import { sendPushToAllSubscribers } from "../lib/pushHelper";
+import { inviteLimiter } from "../middlewares/rateLimit";
 
 const router: IRouter = Router();
 
@@ -234,8 +235,12 @@ router.delete("/unsubscribe", async (req, res) => {
 
 // POST /api/notifications/send-daily  (called by cron or manual trigger)
 router.post("/send-daily", async (req, res) => {
+  // 🔒 Fail CLOSED: if no CRON_SECRET is configured, this endpoint is disabled
+  // (was previously OPEN to the public when the secret was unset, letting anyone
+  // blast a push to every subscriber). The in-process daily cron sends pushes
+  // directly — it does NOT call this HTTP route — so closing it is safe.
   const secret = req.headers["x-cron-secret"];
-  if (secret !== process.env.CRON_SECRET && process.env.CRON_SECRET) {
+  if (!process.env.CRON_SECRET || secret !== process.env.CRON_SECRET) {
     res.status(403).json({ error: "Forbidden" }); return;
   }
   if (!VAPID_PUBLIC || !VAPID_PRIVATE) {
@@ -261,7 +266,7 @@ router.post("/send-daily", async (req, res) => {
 });
 
 // POST /api/notifications/send-invite — notify a specific player (room invite)
-router.post("/send-invite", async (req, res) => {
+router.post("/send-invite", inviteLimiter, async (req, res) => {
   const { targetPlayerId, fromName, roomCode, language } = req.body;
   if (!targetPlayerId || !fromName || !roomCode) {
     res.status(400).json({ error: "Missing fields" }); return;

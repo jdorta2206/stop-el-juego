@@ -13,6 +13,24 @@ export function getApiUrl(): string {
 }
 
 /**
+ * Headers that bind a request to the logged-in player's account. The server
+ * uses the signed session token to reject anyone trying to act under another
+ * player's id (Stripe billing, leaderboard, custom packs). Empty for guests /
+ * when not logged in — those requests proceed unauthenticated as before.
+ */
+export function authHeaders(): Record<string, string> {
+  if (typeof window === "undefined") return {};
+  try {
+    const tok =
+      window.localStorage?.getItem("stop_session_token") ||
+      window.sessionStorage?.getItem("stop_session_token");
+    return tok ? { "x-stop-token": tok } : {};
+  } catch {
+    return {};
+  }
+}
+
+/**
  * Canonical public site URL for SHAREABLE links (invites, room/tournament/live
  * links, result shares). NEVER use window.location.origin for these: when a
  * link is created from inside the Replit editor preview it captures the dev

@@ -5,7 +5,7 @@ import confetti from "canvas-confetti";
 import { Layout } from "@/components/Layout";
 import { Button, Card, Input, Progress } from "@/components/ui";
 import { Roulette } from "@/components/Roulette";
-import { getCategories, getAlphabet, getCurrentLang, getApiUrl } from "@/lib/utils";
+import { getCategories, getAlphabet, getCurrentLang, getApiUrl, authHeaders } from "@/lib/utils";
 import { ensureOfflineBundle, validateRoundOffline, getAiWordOffline, getCachedOfflineBundle, enqueueScoreOutbox, flushScoreOutbox } from "@/lib/offlineGame";
 import { getSelectedPackId, getPackCategories, getSafePackId, getPackById } from "@/data/categoryPacks";
 import { useCustomPacks } from "@/lib/useCustomPacks";
@@ -1116,7 +1116,8 @@ export default function SoloGame() {
     if (!player || player.loginMethod === "guest") return;
     fetch(`${getApiUrl()}/api/daily/submit`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      credentials: "include",
       body: JSON.stringify({
         playerId: player.id,
         playerName: player.name,

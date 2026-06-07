@@ -65,13 +65,17 @@ app.use(
       // allow them since CORS isn't being enforced anyway.
       if (!origin) return cb(null, true);
       if (CORS_ALLOWLIST.has(origin)) return cb(null, true);
-      // Allow any *.replit.dev preview URL (dev environments rotate hosts).
-      try {
-        const host = new URL(origin).hostname;
-        if (host.endsWith(".replit.dev") || host.endsWith(".kirk.replit.dev")) {
-          return cb(null, true);
-        }
-      } catch { /* malformed origin */ }
+      // Allow any *.replit.dev preview URL — but ONLY outside production, so the
+      // live deploy trusts the explicit allowlist alone and a *.replit.dev
+      // origin can't ride the user's cookies against prod.
+      if (process.env.NODE_ENV !== "production") {
+        try {
+          const host = new URL(origin).hostname;
+          if (host.endsWith(".replit.dev") || host.endsWith(".kirk.replit.dev")) {
+            return cb(null, true);
+          }
+        } catch { /* malformed origin */ }
+      }
       // Unknown origin → reject by passing false. The browser will then
       // refuse to expose any response body to the calling script.
       return cb(null, false);

@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db, dailyResultsTable } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
+import { verifyClaimedIdentity } from "../lib/playerAuth";
 
 const router: IRouter = Router();
 
@@ -54,6 +55,11 @@ router.post("/submit", async (req, res) => {
   const { playerId, playerName, avatarColor, score, letter, language } = req.body;
   if (!playerId || !playerName || score == null || !letter) {
     res.status(400).json({ error: "Missing required fields" });
+    return;
+  }
+  // 🔒 Only the authenticated owner may submit a daily score for a logged-in id.
+  if (!verifyClaimedIdentity(req, playerId)) {
+    res.status(403).json({ error: "Identity verification failed" });
     return;
   }
 

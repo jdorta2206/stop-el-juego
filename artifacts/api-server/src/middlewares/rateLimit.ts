@@ -61,3 +61,13 @@ export const scoreLimiter = rateLimit({
   limit: 30,
   keyGenerator: playerKey,
 });
+
+// Invite/notification limiter — 20 push invites / 5 min / IP. The send-invite
+// endpoint triggers a real push to another player, so it must be throttled to
+// prevent using it as a notification-spam relay.
+export const inviteLimiter = rateLimit({
+  ...baseOpts,
+  windowMs: 5 * 60_000,
+  limit: 20,
+  keyGenerator: (req) => ipKeyGenerator(req.ip ?? ""),
+});

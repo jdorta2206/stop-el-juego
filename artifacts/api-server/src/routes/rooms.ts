@@ -603,6 +603,43 @@ async function sweepStuckRooms() {
       // who was frozen on "Enviando…") via SSE.
       broadcastAndFormat(updateResult[0]);
     }
+
+    // 🃏 Also rescue rooms stuck in "bluffvoting": resolution only happens when
+    // a client polls /vote or /resolve-bluffs. If everyone closes the tab the
+    // round would hang until the 6h purge. Force-resolve once the bluff deadline
+    // plus the submit grace window has passed. Same CAS guard as the endpoints
+    // so we never double-submit final scores.
+    const stuckBluff = await db.select().from(roomsTable)
+      .where(eq(roomsTable.status, "bluffvoting"));
+    for (const room of stuckBluff) {
+      const meta = parseBluffMeta(room.stopperJson) ?? {};
+      const deadline = meta.bluffDeadline ? new Date(meta.bluffDeadline).getTime() : 0;
+      if (!deadline || Date.now() - deadline <= SUBMIT_GRACE_MS) continue;
+
+      const players = parsePlayers(room.playersJson);
+      const bluffVotes = meta.bluffVotes ?? {};
+      const resolved = resolveBluffs(players, bluffVotes);
+      const newRound = room.currentRound + 1;
+      const isGameOver = newRound > room.maxRounds;
+      const newStatus = isGameOver ? "finished" : "waiting";
+
+      const [updated] = await db.update(roomsTable)
+        .set({
+          playersJson: JSON.stringify(resolved),
+          currentRound: isGameOver ? room.maxRounds : newRound,
+          currentLetter: isGameOver ? room.currentLetter : randomLetter(),
+          status: newStatus,
+          stopperJson: JSON.stringify({ stopper: meta.stopper, bluffResults: bluffVotes }),
+          updatedAt: new Date(),
+        })
+        .where(and(eq(roomsTable.roomCode, room.roomCode), eq(roomsTable.status, "bluffvoting")))
+        .returning();
+      if (!updated) continue;
+      if (isGameOver) {
+        submitAllScoresToLeaderboard(resolved, room.currentLetter || "A").catch(() => {});
+      }
+      broadcastAndFormat(updated);
+    }
   } catch (err) {
     console.error("[sweepStuckRooms] failed:", (err as Error).message);
   }
@@ -1298,46 +1335,59 @@ router.post("/:roomCode/category-pack", async (req, res) => {
 router.post("/:roomCode/use-card", async (req, res) => {
   const code = paramStr(req.params.roomCode).toUpperCase();
   const { playerId } = req.body as { playerId: string };
-  const rooms = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, code)).limit(1);
-  if (rooms.length === 0) { res.status(404).json({ error: "Room not found" }); return; }
 
-  const room = rooms[0];
-  const players: any[] = parsePlayers(room.playersJson);
-  const me = players.find(p => p.playerId === playerId);
-  if (!me || me.powerCardUsed || !me.powerCard) {
-    res.status(400).json({ error: "Card not available" }); return;
-  }
+  // 🔒 Optimistic-concurrency loop. The card effect is a read-modify-write on
+  // the players JSON blob; a naive version could (a) be clobbered by a
+  // concurrent /results write (lost answers) or (b) let a double-click apply the
+  // card twice. We CAS on `updatedAt`: re-read fresh state each attempt and only
+  // commit if nothing else wrote in between, otherwise retry with the new state.
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const [room] = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, code)).limit(1);
+    if (!room) { res.status(404).json({ error: "Room not found" }); return; }
 
-  let updatedPlayers = players.map(p =>
-    p.playerId === playerId ? { ...p, powerCardUsed: true } : p
-  );
+    const players: any[] = parsePlayers(room.playersJson);
+    const me = players.find(p => p.playerId === playerId);
+    if (!me || me.powerCardUsed || !me.powerCard) {
+      res.status(400).json({ error: "Card not available" }); return;
+    }
 
-  // Apply server-side effects
-  const card = me.powerCard as string;
-  if (card === "sabotage" || card === "steal") {
-    // Steal 10 pts from the current leader (not self)
-    const sorted = [...updatedPlayers].filter(p => p.playerId !== playerId).sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
-    if (sorted.length > 0) {
-      const leaderId = sorted[0].playerId;
+    let updatedPlayers = players.map(p =>
+      p.playerId === playerId ? { ...p, powerCardUsed: true } : p
+    );
+
+    // Apply server-side effects
+    const card = me.powerCard as string;
+    if (card === "sabotage" || card === "steal") {
+      // Steal 10 pts from the current leader (not self)
+      const sorted = [...updatedPlayers].filter(p => p.playerId !== playerId).sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+      if (sorted.length > 0) {
+        const leaderId = sorted[0].playerId;
+        updatedPlayers = updatedPlayers.map(p =>
+          p.playerId === leaderId ? { ...p, score: Math.max(0, (p.score ?? 0) - 10) } : p
+        );
+      }
+    } else if (card === "shield") {
       updatedPlayers = updatedPlayers.map(p =>
-        p.playerId === leaderId ? { ...p, score: Math.max(0, (p.score ?? 0) - 10) } : p
+        p.playerId === playerId ? { ...p, bluffImmune: true } : p
       );
     }
-  } else if (card === "shield") {
-    updatedPlayers = updatedPlayers.map(p =>
-      p.playerId === playerId ? { ...p, bluffImmune: true } : p
-    );
+    // lightning and double_or_nothing are handled client-side (time bonus / score multiplier)
+
+    const [updated] = await db.update(roomsTable)
+      .set({ playersJson: JSON.stringify(updatedPlayers), updatedAt: new Date() })
+      .where(and(eq(roomsTable.roomCode, code), eq(roomsTable.updatedAt, room.updatedAt)))
+      .returning();
+
+    if (!updated) continue; // someone else wrote first — retry with fresh state
+
+    // 🚀 Notify all players when a power card is used (sabotage/steal/shield affect everyone)
+    const formatted = broadcastAndFormat(updated);
+    res.json({ ok: true, card, room: formatted });
+    return;
   }
-  // lightning and double_or_nothing are handled client-side (time bonus / score multiplier)
 
-  const [updated] = await db.update(roomsTable)
-    .set({ playersJson: JSON.stringify(updatedPlayers), updatedAt: new Date() })
-    .where(eq(roomsTable.roomCode, code))
-    .returning();
-
-  // 🚀 Notify all players when a power card is used (sabotage/steal/shield affect everyone)
-  const formatted = broadcastAndFormat(updated);
-  res.json({ ok: true, card, room: formatted });
+  // Lost the race 5 times in a row (extreme contention) — let the client retry.
+  res.status(409).json({ error: "Room busy, try again" });
 });
 
 // GET /rooms/:roomCode/events — SSE stream for real-time room state
@@ -1933,9 +1983,10 @@ router.post("/:roomCode/bluff-vote", writeLimiter, async (req, res) => {
     const newRound = room.currentRound + 1;
     const isGameOver = newRound > room.maxRounds;
     const newStatus = isGameOver ? "finished" : "waiting";
-    if (isGameOver) {
-      submitAllScoresToLeaderboard(resolved, room.currentLetter || "A").catch(() => {});
-    }
+    // 🔒 CAS on status="bluffvoting": only the request that actually flips the
+    // room OUT of bluffvoting wins. Prevents this handler AND /resolve-bluffs
+    // (or two concurrent voters) from BOTH submitting final scores — the old
+    // code submitted to the leaderboard before the write, so a race double-paid.
     const [updated] = await db.update(roomsTable)
       .set({
         playersJson: JSON.stringify(resolved),
@@ -1945,8 +1996,17 @@ router.post("/:roomCode/bluff-vote", writeLimiter, async (req, res) => {
         stopperJson: JSON.stringify({ stopper: meta.stopper, bluffResults: bluffVotes }),
         updatedAt: new Date(),
       })
-      .where(eq(roomsTable.roomCode, roomCode.toUpperCase()))
+      .where(and(eq(roomsTable.roomCode, roomCode.toUpperCase()), eq(roomsTable.status, "bluffvoting")))
       .returning();
+    if (!updated) {
+      // Someone else already resolved this round — return current state, no submit.
+      const [cur] = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, roomCode.toUpperCase())).limit(1);
+      res.json(formatRoom(cur));
+      return;
+    }
+    if (isGameOver) {
+      submitAllScoresToLeaderboard(resolved, room.currentLetter || "A").catch(() => {});
+    }
     // 🚀 Broadcast resolution to all players (was waiting for polling — main lag in bluff phase)
     res.json(broadcastAndFormat(updated));
     return;
@@ -1988,10 +2048,9 @@ router.post("/:roomCode/resolve-bluffs", async (req, res) => {
   const newRound = room.currentRound + 1;
   const isGameOver = newRound > room.maxRounds;
   const newStatus = isGameOver ? "finished" : "waiting";
-  if (isGameOver) {
-    submitAllScoresToLeaderboard(resolved, room.currentLetter || "A").catch(() => {});
-  }
 
+  // 🔒 Same CAS guard as the vote handler: only submit scores if THIS request
+  // is the one that transitions the room out of "bluffvoting".
   const [updated] = await db.update(roomsTable)
     .set({
       playersJson: JSON.stringify(resolved),
@@ -2001,8 +2060,16 @@ router.post("/:roomCode/resolve-bluffs", async (req, res) => {
       stopperJson: JSON.stringify({ stopper: meta.stopper, bluffResults: bluffVotes }),
       updatedAt: new Date(),
     })
-    .where(eq(roomsTable.roomCode, roomCode.toUpperCase()))
+    .where(and(eq(roomsTable.roomCode, roomCode.toUpperCase()), eq(roomsTable.status, "bluffvoting")))
     .returning();
+  if (!updated) {
+    const [cur] = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, roomCode.toUpperCase())).limit(1);
+    res.json(formatRoom(cur));
+    return;
+  }
+  if (isGameOver) {
+    submitAllScoresToLeaderboard(resolved, room.currentLetter || "A").catch(() => {});
+  }
 
   res.json(broadcastAndFormat(updated));
 });

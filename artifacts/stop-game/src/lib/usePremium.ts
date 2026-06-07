@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { getApiUrl } from "@/lib/utils";
+import { getApiUrl, authHeaders } from "@/lib/utils";
 import { restorePlayPurchases, detectPaymentChannel } from "@/lib/playBilling";
 
 const API_BASE = getApiUrl();
@@ -114,7 +114,8 @@ export async function startCheckout(opts: {
 }) {
   const res = await fetch(`${API_BASE}/api/stripe/checkout`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    credentials: "include",
     body: JSON.stringify(opts),
   });
   const data = await res.json();
@@ -125,7 +126,8 @@ export async function startCheckout(opts: {
 export async function openCustomerPortal(playerId: string) {
   const res = await fetch(`${API_BASE}/api/stripe/portal`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    credentials: "include",
     body: JSON.stringify({ playerId }),
   });
   const data = await res.json();

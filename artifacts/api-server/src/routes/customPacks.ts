@@ -5,6 +5,7 @@ import { eq, and, desc } from "drizzle-orm";
 import { z } from "zod";
 import { isUserPremium } from "../lib/premiumStatus";
 import { writeLimiter } from "../middlewares/rateLimit";
+import { verifyClaimedIdentity } from "../lib/playerAuth";
 
 const router: IRouter = Router();
 
@@ -57,6 +58,11 @@ router.get("/:playerId", async (req, res) => {
     res.status(400).json({ error: "Missing playerId" });
     return;
   }
+  // 🔒 Block reading another logged-in user's packs by guessing their id.
+  if (!verifyClaimedIdentity(req, playerId)) {
+    res.status(403).json({ error: "Identity verification failed" });
+    return;
+  }
   const premium = await isUserPremium(playerId);
   if (!premium) {
     res.json({ data: [], premium: false });
@@ -78,6 +84,10 @@ router.post("/", writeLimiter, async (req, res) => {
     return;
   }
   const { playerId, name, icon, color, language, categories } = parsed.data;
+  if (!verifyClaimedIdentity(req, playerId)) {
+    res.status(403).json({ error: "Identity verification failed" });
+    return;
+  }
   const premium = await isUserPremium(playerId);
   if (!premium) {
     res.status(403).json({ error: "Premium subscription required" });
@@ -120,6 +130,10 @@ router.put("/:id", writeLimiter, async (req, res) => {
     return;
   }
   const { playerId, name, icon, color, language, categories } = parsed.data;
+  if (!verifyClaimedIdentity(req, playerId)) {
+    res.status(403).json({ error: "Identity verification failed" });
+    return;
+  }
   const premium = await isUserPremium(playerId);
   if (!premium) {
     res.status(403).json({ error: "Premium subscription required" });
@@ -155,6 +169,10 @@ router.delete("/:id", writeLimiter, async (req, res) => {
   const playerId = String(req.query.playerId ?? "").trim();
   if (!Number.isFinite(id) || !playerId) {
     res.status(400).json({ error: "Invalid id or playerId" });
+    return;
+  }
+  if (!verifyClaimedIdentity(req, playerId)) {
+    res.status(403).json({ error: "Identity verification failed" });
     return;
   }
   const deleted = await db

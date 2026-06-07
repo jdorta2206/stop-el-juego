@@ -5,6 +5,7 @@ import { eq, desc, sql } from "drizzle-orm";
 import { sendPushToPlayer } from "../lib/pushHelper";
 import { SubmitScoreBody, GetLeaderboardQueryParams } from "@workspace/api-zod";
 import { scoreLimiter } from "../middlewares/rateLimit";
+import { verifyClaimedIdentity } from "../lib/playerAuth";
 import {
   isHappyHourActiveForTzOffset,
   HAPPY_HOUR_MULTIPLIER,
@@ -158,6 +159,15 @@ router.post("/scores", scoreLimiter, async (req, res) => {
   }
 
   const { playerId, playerName, avatarColor, score: rawScore, letter, mode, won, bonus } = body.data;
+
+  // 🔒 A logged-in account's leaderboard entry can only be written by that
+  // account — stops anyone from injecting scores under another player's id.
+  // Guests (random-UUID ids) are unaffected; the client only submits for
+  // logged-in users anyway.
+  if (!verifyClaimedIdentity(req, playerId)) {
+    res.status(403).json({ error: "Identity verification failed" });
+    return;
+  }
 
   // 🎁 Bonus submissions (e.g. rewarded-video doubling) only ADD points and
   // XP to the player — they don't count as a separate game played, win, or
