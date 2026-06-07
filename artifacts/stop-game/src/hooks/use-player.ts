@@ -189,10 +189,40 @@ export function usePlayer() {
   };
 
   const logout = () => {
+    // The session cookie is httpOnly, so only the server can delete it. Fire a
+    // best-effort logout on the current origin, the configured API origin, and
+    // the canonical OAuth origin (the TWA's cross-domain cookie lives there).
+    // `keepalive` lets these survive the redirect below.
+    const origins = new Set<string>();
+    try { origins.add(window.location.origin); } catch {}
+    try { const b = getApiUrl(); if (b) origins.add(new URL(b, window.location.origin).origin); } catch {}
+    origins.add(CANONICAL_API_ORIGIN);
+    for (const origin of origins) {
+      try {
+        void fetch(`${origin}/api/auth/logout`, {
+          method: "POST",
+          credentials: "include",
+          keepalive: true,
+        }).catch(() => {});
+      } catch {}
+    }
+
+    // Wipe every local trace of the identity so a fresh load starts clean.
     writeStoredPlayer(null);
-    setPlayer(null);
     try { localStorage.removeItem("stop_auth_dismissed_v1"); } catch {}
-    setNeedsAuth(true);
+    try { localStorage.removeItem(SESSION_TOKEN_KEY); } catch {}
+
+    // Hard-redirect to home instead of mutating state in place. Tearing the
+    // player out from under a mounted player-dependent page (Room/SoloGame/
+    // Tournament/DailyChallenge read player.* at render time) throws and trips
+    // the error boundary ("¡Algo salió mal!"). A reload lands in the known-good
+    // cold-start logged-out view, which renders fine for guests/new users.
+    try {
+      window.location.href = import.meta.env.BASE_URL || "/";
+    } catch {
+      setPlayer(null);
+      setNeedsAuth(true);
+    }
   };
 
   // Dismiss the auth modal and remember that choice so we don't gate

@@ -116,4 +116,18 @@ export function issuePlayerToken(res: Response, playerId: string): string | null
   return token;
 }
 
+/**
+ * Clear the auth cookie on logout. Must mirror the EXACT attributes used in
+ * issuePlayerToken (sameSite/secure/path) — browsers only delete a cookie when
+ * the clearing attributes match the ones it was set with.
+ */
+export function clearPlayerToken(res: Response): void {
+  res.clearCookie(COOKIE_NAME, {
+    httpOnly: true,
+    sameSite: "none",
+    secure: true,
+    path: "/",
+  });
+}
+
 export const PLAYER_TOKEN_BRIDGE_KEY = "stop_session_token";

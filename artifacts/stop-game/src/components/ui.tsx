@@ -78,6 +78,53 @@ export const Input = forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTML
 );
 Input.displayName = "Input";
 
+// --- MODAL ---
+export function Modal({
+  onClose,
+  title,
+  children,
+  className,
+}: {
+  onClose: () => void;
+  title?: React.ReactNode;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 12 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 12 }}
+        transition={{ type: "spring", stiffness: 300, damping: 26 }}
+        onClick={(e) => e.stopPropagation()}
+        className={cn(
+          "relative w-full max-w-md rounded-2xl border border-white/15 bg-[#0d1757] p-6 shadow-2xl",
+          className
+        )}
+      >
+        <button
+          onClick={onClose}
+          aria-label="Close"
+          className="absolute top-3 right-3 flex h-8 w-8 items-center justify-center rounded-full text-white/60 hover:bg-white/10 hover:text-white transition-colors"
+        >
+          ✕
+        </button>
+        {title ? (
+          <h2 className="mb-4 pr-8 font-display text-xl font-bold text-white">{title}</h2>
+        ) : null}
+        {children}
+      </motion.div>
+    </motion.div>
+  );
+}
+
 // --- PROGRESS ---
 export function Progress({ value, className, indicatorClass }: { value: number; className?: string, indicatorClass?: string }) {
   return (

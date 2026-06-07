@@ -1,7 +1,7 @@
 import { Router } from "express";
 import type { Request, Response } from "express";
 import jwt from "jsonwebtoken";
-import { issuePlayerToken, PLAYER_TOKEN_BRIDGE_KEY, readPlayerId } from "../lib/playerAuth";
+import { issuePlayerToken, clearPlayerToken, PLAYER_TOKEN_BRIDGE_KEY, readPlayerId } from "../lib/playerAuth";
 import { db, playerScoresTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 
@@ -672,6 +672,17 @@ router.get("/me", async (req: Request, res: Response) => {
     console.error("[auth/me] error:", err);
     return res.status(500).json({ error: "Internal error" });
   }
+});
+
+// ── /logout — clear the session cookie ──────────────────────────────────────
+// The session cookie is httpOnly, so the client can't delete it itself. This
+// endpoint clears it (with attributes matching how it was set). Idempotent and
+// always 200 so the client can fire it best-effort during logout without
+// caring about the result. The client also wipes its localStorage profile and
+// bridge token; this handles the cross-origin httpOnly cookie.
+router.post("/logout", (_req: Request, res: Response) => {
+  clearPlayerToken(res);
+  res.json({ ok: true });
 });
 
 export default router;

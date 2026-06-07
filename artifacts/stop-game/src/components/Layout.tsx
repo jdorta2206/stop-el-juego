@@ -4,7 +4,7 @@ import { usePlayer } from "@/hooks/use-player";
 import { usePremium } from "@/lib/usePremium";
 import { Crown, LogOut, Bell, BellOff, Home, Trophy, Users, Calendar } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Button, Input } from "./ui";
+import { Button, Input, Modal } from "./ui";
 import { AuthModal } from "./AuthModal";
 import { InstallAppBanner } from "./InstallAppBanner";
 import { HappyHourBanner } from "./HappyHourBanner";
@@ -414,7 +414,7 @@ export function Layout({ children }: { children: ReactNode }) {
       {/* Profile modal */}
       <AnimatePresence>
         {showProfile && (
-          <Modal onClose={() => setShowProfile(false)} title={t.nav.home}>
+          <Modal onClose={() => setShowProfile(false)} title={lang === "en" ? "Profile" : lang === "pt" ? "Perfil" : lang === "fr" ? "Profil" : "Perfil"}>
             <div className="space-y-5">
               <div className="flex flex-col items-center gap-3">
                 <div className="relative">
@@ -441,7 +441,7 @@ export function Layout({ children }: { children: ReactNode }) {
                 <Input
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
-                  placeholder={t.profile.namePlaceholder}
+                  placeholder={lang === "en" ? "Your name" : lang === "pt" ? "Seu nome" : lang === "fr" ? "Ton nom" : "Tu nombre"}
                   maxLength={20}
                   className="text-center"
                 />
@@ -450,14 +450,14 @@ export function Layout({ children }: { children: ReactNode }) {
                     onClick={handleSaveProfile}
                     className="flex-1 bg-gradient-to-r from-[#f9a825] to-[#f57f17] text-[#0d1757] font-bold"
                   >
-                    {t.common.save}
+                    {lang === "en" ? "Save" : lang === "pt" ? "Salvar" : lang === "fr" ? "Enregistrer" : "Guardar"}
                   </Button>
                   <Button
                     variant="outline"
                     onClick={() => setShowProfile(false)}
                     className="flex-1"
                   >
-                    {t.common.cancel}
+                    {lang === "en" ? "Cancel" : lang === "pt" ? "Cancelar" : lang === "fr" ? "Annuler" : "Cancelar"}
                   </Button>
                 </div>
                 <Button
@@ -466,12 +466,12 @@ export function Layout({ children }: { children: ReactNode }) {
                   className="text-red-400 hover:text-red-300 w-full mt-2"
                 >
                   <LogOut className="w-4 h-4 mr-2" />
-                  {t.profile.logout}
+                  {t.nav.logout}
                 </Button>
                 {isPremium && (
                   <div className="flex items-center gap-1 text-[#f9a825] text-xs mt-2">
                     <Crown className="w-3 h-3 fill-[#f9a825]" />
-                    <span>{t.profile.premium}</span>
+                    <span>{t.nav.premium}</span>
                   </div>
                 )}
               </div>

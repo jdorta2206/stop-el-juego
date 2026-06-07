@@ -17,3 +17,4 @@
 - [Streak source of truth](streak-source-of-truth.md) — Player streaks are authoritative on the server; client display must read the server, not localStorage.
 - [TWA full-screen / assetlinks fingerprint](twa-assetlinks.md) — Why the Android TWA suddenly shows the browser address bar and how to fix it.
 - [Update-banner gating (old vs new app)](update-banner-gating.md) — Why the "Actualizar en Google Play" banner must be gated by reported version, never by host.
+- [Profile modal & logout flow](profile-modal-and-logout.md) — why the header profile modal once crashed the error boundary (undefined Modal + missing i18n keys), and how logout must clear the httpOnly cookie cross-origin then hard-redirect.
