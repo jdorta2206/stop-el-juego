@@ -28,3 +28,13 @@ copied to dist on build, and served by api-server's explicit
 `/.well-known/assetlinks.json` route (express.static skips dotfile dirs). Changes
 only reach the TWA after the **www domain** is redeployed (wherever its DNS
 points — Replit deploy and/or the GitHub→Railway push).
+
+## Deploy mechanism (confirmed)
+- www = Railway, auto-deploys from GitHub repo `jdorta2206/stop-el-juego` (branch
+  `master`, public). Replit checkpoints reach that repo, and Railway rebuilds
+  automatically — the both-fingerprints fix appeared on GitHub master and went
+  live on www without a manual push.
+- After the server serves the correct assetlinks, the **phone still caches** the
+  old Digital Asset Links verification: user must fully close+reopen the TWA, and
+  if the address bar persists, clear the app's cache once
+  (Settings → Apps → STOP → Storage → Clear cache).
