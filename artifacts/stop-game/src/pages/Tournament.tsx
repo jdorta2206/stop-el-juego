@@ -4,7 +4,7 @@ import { useLocation, useRoute } from "wouter";
 import { usePlayer } from "@/hooks/use-player";
 import { usePresence, sendChallenge, type OnlinePlayer } from "@/lib/usePresence";
 import { useFollows } from "@/lib/useFollows";
-import { getApiUrl, publicLink } from "@/lib/utils";
+import { getApiUrl, publicLink, authHeaders } from "@/lib/utils";
 import {
   Trophy, Users, Play, Copy, Check, ChevronRight,
   Swords, Crown, ArrowLeft, Loader2, Plus, LogIn, Share2, MessageCircle, Send
@@ -192,10 +192,10 @@ export default function Tournament() {
     try {
       const roomRes = await fetch(`${API}/api/rooms`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({
-          hostId: match.p1Id,
-          hostName: match.p1Name,
+          hostId: player.id,
+          hostName: player.name,
           maxRounds: 3,
         }),
       });

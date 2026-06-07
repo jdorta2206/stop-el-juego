@@ -28,7 +28,7 @@ import { useHaptic } from "@/hooks/useHaptic";
 import { ShareResultsModal } from "@/components/ShareResultsModal";
 import { recordExternalStat } from "@/hooks/useAchievements";
 import { CountUp } from "@/components/CountUp";
-import { getApiUrl, publicLink, authHeaders } from "@/lib/utils";
+import { getApiUrl, publicLink, authHeaders, getSessionToken } from "@/lib/utils";
 import { reportSeasonEvent } from "@/hooks/useSeason";
 import { saveActiveRoom, clearActiveRoom, touchActiveRoom } from "@/lib/activeRoom";
 import { useT } from "@/i18n/useT";
@@ -218,7 +218,8 @@ export default function Room() {
     if (!roomCode || !player?.id) return;
     const code = roomCode.toUpperCase();
     const API = getApiUrl();
-    const url = `${API}/api/rooms/${code}/events?playerId=${player.id}`;
+    const tok = getSessionToken();
+    const url = `${API}/api/rooms/${code}/events?playerId=${player.id}${tok ? `&token=${encodeURIComponent(tok)}` : ""}`;
     let es: EventSource;
     let retryTimeout: ReturnType<typeof setTimeout>;
     let closed = false;
@@ -339,11 +340,21 @@ export default function Room() {
     clearActiveRoom();
     const url = `${getApiUrl()}/api/rooms/${code.toUpperCase()}/leave`;
     const body = JSON.stringify({ playerId });
-    // sendBeacon works even when the page is being unloaded
-    if (navigator.sendBeacon) {
-      navigator.sendBeacon(url, new Blob([body], { type: "application/json" }));
-    } else {
-      fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body, keepalive: true }).catch(() => {});
+    // keepalive fetch (works during unload, like sendBeacon) BUT can carry the
+    // x-stop-token header + cookie, so the server can verify identity. sendBeacon
+    // can't set headers; fall back to it (cookie-only) if keepalive is unavailable.
+    try {
+      fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        credentials: "include",
+        body,
+        keepalive: true,
+      }).catch(() => {
+        if (navigator.sendBeacon) navigator.sendBeacon(url, new Blob([body], { type: "application/json" }));
+      });
+    } catch {
+      if (navigator.sendBeacon) navigator.sendBeacon(url, new Blob([body], { type: "application/json" }));
     }
   }, []); // no deps — reads everything from refs/localStorage directly
 
@@ -597,7 +608,7 @@ export default function Room() {
     try {
       const res = await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/category-pack`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ hostId: player.id, pack, ...(extras ?? {}) }),
       });
       if (!res.ok) {
@@ -2587,7 +2598,7 @@ function StreamerModeCard({ room, playerId }: { room: any; playerId: string }) {
     try {
       await fetch(`${apiBase}/api/rooms/${encodeURIComponent(code)}/visibility`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ hostId: playerId, isPublic: !isPublic }),
       });
     } finally {

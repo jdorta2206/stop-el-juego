@@ -41,10 +41,27 @@ Known caller hotspots beyond the obvious page component:
 - `ranking/progress/:playerId` POST is called from hooks
   `usePersonalBest`, `useAchievements`, `useCollection` (sync-to-server). Its
   GET is unguarded, so only the POSTs need `authHeaders()`.
+- `rooms` create is called from THREE places: Multiplayer (generated client,
+  auto-token), `Tournament.startMatch`, and `Tournament` create-room. When you
+  guard create with `verifyClaimedIdentity(hostId)`, hostId MUST be the CALLER's
+  id, not some other participant's. `startMatch` originally used `match.p1Id` but
+  either player can start the match → use `player.id` or p2 gets 403.
 A missed caller = legit logged-in users get 403 once `SESSION_SECRET` is set.
 
-## Endpoints intentionally left UNGUARDED
-- `rooms/:code/leave` — fired via `navigator.sendBeacon` on unload, which cannot
-  set custom headers; guarding it would 403 legit logged-in users. Low risk.
+## SSE / sendBeacon can't send custom headers — use query token or cookie
+EventSource and `navigator.sendBeacon` cannot set `x-stop-token`. For guarded
+flows that use them:
+- Private-room SSE `rooms/:code/events` accepts the token via `?token=` query
+  param (`verifyPlayerToken(query.token) ?? readPlayerId(req)`), since EventSource
+  can't add headers. Tradeoff: token lands in server/proxy logs — treat as a
+  pragmatic bridge, consider short-lived SSE-scoped tokens later.
+- `rooms/:code/leave` was switched client-side from sendBeacon-first to a
+  keepalive `fetch` (carries `authHeaders()` + credentials) with sendBeacon as
+  fallback, so logged-in identity rides on unload.
+
+## Guard status of room endpoints (as of third audit pass)
+GUARDED with `verifyClaimedIdentity`: `rooms` create (hostId), `:code/visibility`
+(hostId), `:code/category-pack` (hostId), `:code/leave` (playerId), plus private
+`:code/events` SSE (token match for logged-in members).
 - `resolve-bluffs` and cosmetic high-frequency endpoints (react/typing/spy/
-  funvote/phrase/category-pack) carry no player-data-mutating identity.
+  funvote/phrase) carry no player-data-mutating identity and stay unguarded.

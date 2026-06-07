@@ -5,7 +5,7 @@ import { eq, and, or, lt, inArray, sql } from "drizzle-orm";
 import { CreateRoomBody, JoinRoomBody, SubmitRoomResultsBody } from "@workspace/api-zod";
 import { calculateStreak, appendStreakDay } from "./ranking";
 import { writeLimiter } from "../middlewares/rateLimit";
-import { verifyClaimedIdentity } from "../lib/playerAuth";
+import { verifyClaimedIdentity, verifyPlayerToken, readPlayerId, isLoggedInId, isAuthConfigured } from "../lib/playerAuth";
 import {
   pickBotIdentity,
   makeBotPlayer,
@@ -780,6 +780,10 @@ router.patch("/:roomCode/visibility", async (req, res) => {
   if (typeof isPublic !== "boolean" || !hostId) {
     res.status(400).json({ error: "Missing hostId or isPublic" }); return;
   }
+  // 🔒 Bind to the token first so a leaked hostId can't be replayed by a third party.
+  if (!verifyClaimedIdentity(req, hostId)) {
+    res.status(403).json({ error: "Identity verification failed" }); return;
+  }
   const rows = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, roomCode));
   if (!rows.length) { res.status(404).json({ error: "Room not found" }); return; }
   if (rows[0].hostId !== hostId) { res.status(403).json({ error: "Only host can change visibility" }); return; }
@@ -821,6 +825,10 @@ router.post("/", async (req, res) => {
   if (!body.success) { res.status(400).json({ error: "Invalid request body" }); return; }
 
   const { hostId, hostName, avatarColor, loginMethod, maxRounds, language, isPublic } = body.data;
+  // 🔒 A logged-in account can only create a room AS ITSELF. Guests (UUID ids) pass.
+  if (!verifyClaimedIdentity(req, hostId)) {
+    res.status(403).json({ error: "Identity verification failed" }); return;
+  }
   const gameMode = (body.data as any).gameMode ?? "classic";
   const maxPlayers = (body.data as any).maxPlayers ?? 8;
 
@@ -1168,6 +1176,13 @@ router.post("/:roomCode/leave", async (req, res) => {
   const { playerId } = req.body as { playerId: string };
 
   if (!playerId) { res.status(400).json({ error: "playerId required" }); return; }
+  // 🔒 Only the player themselves (or a guest) can trigger a leave — stops a
+  // third party who knows a member's id from force-removing them or hijacking
+  // the host migration. Token rides via the auth cookie (sendBeacon/keepalive)
+  // or x-stop-token header. Fails open for guests / unconfigured auth.
+  if (!verifyClaimedIdentity(req, playerId)) {
+    res.status(403).json({ error: "Identity verification failed" }); return;
+  }
 
   // Use a transaction with row-locking so that two simultaneous /leave calls
   // (or a /leave racing with a /join) can't both decide they are the last
@@ -1319,6 +1334,10 @@ router.post("/:roomCode/category-pack", async (req, res) => {
     customLabel?: string;
   };
   const { hostId, pack } = body;
+  // 🔒 Bind to the token first so a leaked hostId can't be replayed by a third party.
+  if (!verifyClaimedIdentity(req, hostId)) {
+    res.status(403).json({ error: "Identity verification failed" }); return;
+  }
   const rooms = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, code)).limit(1);
   if (rooms.length === 0) { res.status(404).json({ error: "Room not found" }); return; }
   if (rooms[0].hostId !== hostId) { res.status(403).json({ error: "Not host" }); return; }
@@ -1428,6 +1447,17 @@ router.get("/:roomCode/events", async (req, res) => {
     const members = parsePlayers(roomRow.playersJson);
     const isMember = !!playerId && members.some((p: any) => p.playerId === playerId);
     if (!isMember) { res.status(403).json({ error: "Not a member of this room" }); return; }
+    // 🔒 If the claimed member is a logged-in account, prove ownership. EventSource
+    // cannot send custom headers, so accept the signed token via the `token` query
+    // param (falls back to the auth cookie). Guests (UUID ids) carry no token and
+    // are gated only by knowing their own random id. Fails open when auth is unset.
+    if (isLoggedInId(playerId) && isAuthConfigured()) {
+      const queryToken = typeof req.query["token"] === "string" ? (req.query["token"] as string) : undefined;
+      const verified = verifyPlayerToken(queryToken) ?? readPlayerId(req);
+      if (verified !== playerId) {
+        res.status(403).json({ error: "Identity verification failed" }); return;
+      }
+    }
   }
 
   // 3. Bound the per-room subscription set so a single hot room can't drown the box.

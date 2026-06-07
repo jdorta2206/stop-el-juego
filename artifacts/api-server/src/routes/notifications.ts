@@ -275,12 +275,20 @@ router.post("/send-invite", inviteLimiter, async (req, res) => {
     res.status(503).json({ error: "VAPID not configured" }); return;
   }
 
+  // The sender name is client-supplied (guests have no server-side name to look
+  // up), so we can't fully prevent a spoofed display name — but we DO neutralise
+  // it as an abuse vector: strip control chars/newlines and cap the length so it
+  // can't be used to inject misleading multi-line content into the push payload.
+  const safeFromName = String(fromName).replace(/[\r\n\u0000-\u001F\u007F]/g, " ").trim().slice(0, 40) || "Alguien";
+  const safeRoomCode = String(roomCode).replace(/[^A-Za-z0-9]/g, "").slice(0, 12).toUpperCase();
+  if (!safeRoomCode) { res.status(400).json({ error: "Invalid roomCode" }); return; }
+
   const lang = language || "es";
   const INVITE_MSGS: Record<string, { title: string; body: string }> = {
-    es: { title: "🎮 ¡Te invitan a jugar STOP!", body: `${fromName} quiere jugar contigo. Sala: ${roomCode}` },
-    en: { title: "🎮 You're invited to STOP!", body: `${fromName} wants to play with you. Room: ${roomCode}` },
-    pt: { title: "🎮 Convidado para jogar STOP!", body: `${fromName} quer jogar contigo. Sala: ${roomCode}` },
-    fr: { title: "🎮 Invité à jouer à STOP !", body: `${fromName} veut jouer avec toi. Salle : ${roomCode}` },
+    es: { title: "🎮 ¡Te invitan a jugar STOP!", body: `${safeFromName} quiere jugar contigo. Sala: ${safeRoomCode}` },
+    en: { title: "🎮 You're invited to STOP!", body: `${safeFromName} wants to play with you. Room: ${safeRoomCode}` },
+    pt: { title: "🎮 Convidado para jogar STOP!", body: `${safeFromName} quer jogar contigo. Sala: ${safeRoomCode}` },
+    fr: { title: "🎮 Invité à jouer à STOP !", body: `${safeFromName} veut jouer avec toi. Salle : ${safeRoomCode}` },
   };
   const msg = INVITE_MSGS[lang] || INVITE_MSGS.es;
 
@@ -300,7 +308,7 @@ router.post("/send-invite", inviteLimiter, async (req, res) => {
     try {
       await webpush.sendNotification(
         { endpoint: row.endpoint, keys: { p256dh: row.p256dh, auth: row.auth } },
-        JSON.stringify({ ...msg, icon: "/images/icon-192.png", badge: "/images/badge-96.png", url: `/multijugador?room=${roomCode}` })
+        JSON.stringify({ ...msg, icon: "/images/icon-192.png", badge: "/images/badge-96.png", url: `/multijugador?room=${safeRoomCode}` })
       );
       sent++;
     } catch {}

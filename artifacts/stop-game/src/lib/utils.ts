@@ -18,16 +18,22 @@ export function getApiUrl(): string {
  * player's id (Stripe billing, leaderboard, custom packs). Empty for guests /
  * when not logged in — those requests proceed unauthenticated as before.
  */
-export function authHeaders(): Record<string, string> {
-  if (typeof window === "undefined") return {};
+export function getSessionToken(): string | null {
+  if (typeof window === "undefined") return null;
   try {
-    const tok =
+    return (
       window.localStorage?.getItem("stop_session_token") ||
-      window.sessionStorage?.getItem("stop_session_token");
-    return tok ? { "x-stop-token": tok } : {};
+      window.sessionStorage?.getItem("stop_session_token") ||
+      null
+    );
   } catch {
-    return {};
+    return null;
   }
+}
+
+export function authHeaders(): Record<string, string> {
+  const tok = getSessionToken();
+  return tok ? { "x-stop-token": tok } : {};
 }
 
 /**
