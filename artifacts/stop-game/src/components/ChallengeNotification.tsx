@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Swords, X, Check, DoorOpen } from "lucide-react";
 import { respondToChallenge, type IncomingChallenge } from "@/lib/usePresence";
 import { useLocation } from "wouter";
+import { authHeaders } from "@/lib/utils";
 
 interface ChallengeNotificationProps {
   challenge: IncomingChallenge;
@@ -50,7 +51,8 @@ export function ChallengeNotification({ challenge, onDismiss }: ChallengeNotific
         const apiBase = (import.meta as any).env?.VITE_API_URL ?? window.location.origin;
         await fetch(`${apiBase}/api/rooms/${challenge.roomCode.toUpperCase()}/join`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...authHeaders() },
+          credentials: "include",
           body: JSON.stringify({
             playerId: playerData.id,
             playerName: playerData.name,

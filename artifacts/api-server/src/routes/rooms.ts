@@ -5,6 +5,7 @@ import { eq, and, or, lt, inArray, sql } from "drizzle-orm";
 import { CreateRoomBody, JoinRoomBody, SubmitRoomResultsBody } from "@workspace/api-zod";
 import { calculateStreak, appendStreakDay } from "./ranking";
 import { writeLimiter } from "../middlewares/rateLimit";
+import { verifyClaimedIdentity } from "../lib/playerAuth";
 import {
   pickBotIdentity,
   makeBotPlayer,
@@ -888,6 +889,10 @@ router.post("/:roomCode/join", async (req, res) => {
 
   const code = roomCode.toUpperCase();
   const { playerId, playerName, avatarColor, loginMethod } = body.data;
+  // 🔒 A logged-in account can only join AS ITSELF. Guests (UUID ids) pass.
+  if (!verifyClaimedIdentity(req, playerId)) {
+    res.status(403).json({ error: "Identity verification failed" }); return;
+  }
   const joinerPremium = await isPlayerPremium(playerId);
 
   const myNorm = normalizePlayerName(playerName);
@@ -998,6 +1003,10 @@ router.post("/:roomCode/start", async (req, res) => {
     res.status(403).json({ error: "Only the host can start the game" });
     return;
   }
+  // 🔒 Bind a logged-in host to its real identity (guests pass through).
+  if (!verifyClaimedIdentity(req, hostId)) {
+    res.status(403).json({ error: "Identity verification failed" }); return;
+  }
   // 🔁 Idempotency: /start is only valid from the lobby ("waiting") state.
   // While "playing" or "stopped", a duplicate /start (host double-tap, retry
   // after a flaky network) must NOT re-randomize the letter, wipe scores, or
@@ -1092,6 +1101,10 @@ router.post("/:roomCode/add-bot", async (req, res) => {
   const roomCode = paramStr(req.params.roomCode);
   const { hostId } = (req.body ?? {}) as { hostId?: string };
   const code = roomCode.toUpperCase();
+  // 🔒 Bind a logged-in host to its real identity (guests pass through).
+  if (!verifyClaimedIdentity(req, hostId)) {
+    res.status(403).json({ error: "Identity verification failed" }); return;
+  }
 
   // 🔒 Row-locked transaction so concurrent /join + /add-bot can't trample
   // each other (last-write-wins on playersJson would silently lose a player).
@@ -1335,6 +1348,11 @@ router.post("/:roomCode/category-pack", async (req, res) => {
 router.post("/:roomCode/use-card", async (req, res) => {
   const code = paramStr(req.params.roomCode).toUpperCase();
   const { playerId } = req.body as { playerId: string };
+
+  // 🔒 A logged-in account can only use a card AS ITSELF (guests pass through).
+  if (!verifyClaimedIdentity(req, playerId)) {
+    res.status(403).json({ error: "Identity verification failed" }); return;
+  }
 
   // 🔒 Optimistic-concurrency loop. The card effect is a read-modify-write on
   // the players JSON blob; a naive version could (a) be clobbered by a
@@ -1630,6 +1648,10 @@ router.post("/:roomCode/funvote", writeLimiter, async (req, res) => {
 router.post("/:roomCode/rematch", async (req, res) => {
   const oldCode = paramStr(req.params.roomCode).toUpperCase();
   const { playerId, playerName, avatarColor } = req.body as { playerId: string; playerName: string; avatarColor?: string };
+  // 🔒 A logged-in account can only request a rematch AS ITSELF (guests pass).
+  if (!verifyClaimedIdentity(req, playerId)) {
+    res.status(403).json({ error: "Identity verification failed" }); return;
+  }
 
   // Already created by another player → just return it
   const existingNew = roomRematch.get(oldCode);
@@ -1710,6 +1732,10 @@ router.post("/:roomCode/stop", async (req, res) => {
   const { playerId, playerName } = req.body;
 
   if (!playerId) { res.status(400).json({ error: "playerId required" }); return; }
+  // 🔒 A logged-in account can only call STOP AS ITSELF (guests pass through).
+  if (!verifyClaimedIdentity(req, playerId)) {
+    res.status(403).json({ error: "Identity verification failed" }); return;
+  }
 
   const rooms = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, roomCode.toUpperCase())).limit(1);
   if (rooms.length === 0) { res.status(404).json({ error: "Room not found" }); return; }
@@ -1776,6 +1802,12 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
   const roomCode = paramStr(req.params.roomCode);
   const body = SubmitRoomResultsBody.safeParse(req.body);
   if (!body.success) { res.status(400).json({ error: "Invalid request body" }); return; }
+
+  // 🔒 A logged-in account can only submit results AS ITSELF — blocks score
+  // injection under another account's id. Guests (UUID ids) pass through.
+  if (!verifyClaimedIdentity(req, body.data.playerId)) {
+    res.status(403).json({ error: "Identity verification failed" }); return;
+  }
 
   const rooms = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, roomCode.toUpperCase())).limit(1);
   if (rooms.length === 0) { res.status(404).json({ error: "Room not found" }); return; }
@@ -1942,6 +1974,10 @@ router.post("/:roomCode/bluff-vote", writeLimiter, async (req, res) => {
   if (!voterId || !accusedPlayerId || !category || !["lie","real"].includes(vote)) {
     res.status(400).json({ error: "Invalid vote data" });
     return;
+  }
+  // 🔒 A logged-in account can only vote AS ITSELF (guests pass through).
+  if (!verifyClaimedIdentity(req, voterId)) {
+    res.status(403).json({ error: "Identity verification failed" }); return;
   }
 
   const rooms = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, roomCode.toUpperCase())).limit(1);

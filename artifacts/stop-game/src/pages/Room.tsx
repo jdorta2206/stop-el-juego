@@ -28,7 +28,7 @@ import { useHaptic } from "@/hooks/useHaptic";
 import { ShareResultsModal } from "@/components/ShareResultsModal";
 import { recordExternalStat } from "@/hooks/useAchievements";
 import { CountUp } from "@/components/CountUp";
-import { getApiUrl, publicLink } from "@/lib/utils";
+import { getApiUrl, publicLink, authHeaders } from "@/lib/utils";
 import { reportSeasonEvent } from "@/hooks/useSeason";
 import { saveActiveRoom, clearActiveRoom, touchActiveRoom } from "@/lib/activeRoom";
 import { useT } from "@/i18n/useT";
@@ -478,7 +478,7 @@ export default function Room() {
     try {
       const res = await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/add-bot`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ hostId: player.id }),
       });
       if (!res.ok) {
@@ -501,7 +501,7 @@ export default function Room() {
     try {
       const r = await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/rematch`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ playerId: player.id, playerName: player.name ?? "?", avatarColor: (player as any).avatarColor }),
       });
       const j = await r.json();
@@ -761,7 +761,7 @@ export default function Room() {
     try {
       await fetch(`${apiBase}/api/rooms/${roomCode.toUpperCase()}/bluff-vote`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ voterId: player.id, accusedPlayerId, category, vote }),
       });
     } catch { /* silent */ }
@@ -1008,7 +1008,7 @@ export default function Room() {
     try {
       await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/stop`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ playerId: player.id, playerName: player.name }),
       });
       // 🛡️ Race fix: only kick off the freeze locally if polling hasn't already
@@ -1028,7 +1028,7 @@ export default function Room() {
     try {
       const r = await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/start`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         // 🔐 Server now requires hostId to authorize round start.
         body: JSON.stringify({ hostId: player.id }),
       });
@@ -1617,7 +1617,7 @@ export default function Room() {
                         if (!player || !roomCode) return;
                         try {
                           const r = await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/use-card`, {
-                            method: "POST", headers: { "Content-Type": "application/json" },
+                            method: "POST", headers: { "Content-Type": "application/json", ...authHeaders() },
                             body: JSON.stringify({ playerId: player.id }),
                           });
                           const data = await r.json();

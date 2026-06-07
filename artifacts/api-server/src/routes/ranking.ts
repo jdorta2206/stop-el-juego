@@ -629,6 +629,11 @@ router.get("/progress/:playerId", async (req, res) => {
 // ── POST /ranking/progress/:playerId — save achievements + stats + personal bests ──
 router.post("/progress/:playerId", async (req, res) => {
   const { playerId } = req.params;
+  // 🔒 A logged-in account can only write ITS OWN progress (achievements, stats,
+  // personal bests, collected words). Guests (UUID ids) pass through unchanged.
+  if (!verifyClaimedIdentity(req, playerId)) {
+    res.status(403).json({ error: "Identity verification failed" }); return;
+  }
   const { achievements, stats, personalBests, collectedWords } = req.body as {
     achievements?: string[];
     stats?: Record<string, unknown>;
