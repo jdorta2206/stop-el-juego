@@ -648,6 +648,11 @@ async function purgeStaleRooms() {
     dropOrphans(roomReactions as Map<string, unknown>);
     dropOrphans(roomPhrases as Map<string, unknown>);
     dropOrphans(roomTyping as Map<string, unknown>);
+    dropOrphans(roomCategoryPacks as Map<string, unknown>);
+    dropOrphans(roomLiveResponses as Map<string, unknown>);
+    dropOrphans(roomSpyUsage as Map<string, unknown>);
+    dropOrphans(roomRematch as Map<string, unknown>);
+    dropOrphans(roomFunVotes as Map<string, unknown>);
   } catch (err) {
     console.error("[purgeStaleRooms] failed:", (err as Error).message);
   }
@@ -722,7 +727,7 @@ router.get("/live", async (_req, res) => {
 
 // GET /rooms/:code/spectate — sanitized public view (no auth required)
 router.get("/:roomCode/spectate", async (req, res) => {
-  const roomCode = paramStr(req.params.roomCode);
+  const roomCode = paramStr(req.params.roomCode).toUpperCase();
   const rows = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, roomCode));
   if (!rows.length) { res.status(404).json({ error: "Room not found" }); return; }
   const room = rows[0];
@@ -732,7 +737,7 @@ router.get("/:roomCode/spectate", async (req, res) => {
 
 // PATCH /rooms/:code/visibility — host toggles streamer mode (isPublic)
 router.patch("/:roomCode/visibility", async (req, res) => {
-  const roomCode = paramStr(req.params.roomCode);
+  const roomCode = paramStr(req.params.roomCode).toUpperCase();
   const { hostId, isPublic } = req.body ?? {};
   if (typeof isPublic !== "boolean" || !hostId) {
     res.status(400).json({ error: "Missing hostId or isPublic" }); return;
@@ -862,7 +867,9 @@ router.post("/:roomCode/join", async (req, res) => {
   type JoinOutcome =
     | { kind: "ok"; row: any }
     | { kind: "notFound" }
-    | { kind: "nameTaken" };
+    | { kind: "nameTaken" }
+    | { kind: "started" }
+    | { kind: "full" };
 
   const outcome: JoinOutcome = await db.transaction(async (tx) => {
     const rows = await tx.execute(
@@ -883,6 +890,13 @@ router.post("/:roomCode/join", async (req, res) => {
 
     const existing = players.find((p: any) => p.playerId === playerId);
     if (!existing) {
+      // 🔒 New joiners only (existing players always reconnect): the lobby must
+      // still be open ("waiting") and not full. Without this, a stranger could
+      // jump into a game already in progress or push the room past its cap.
+      const status = raw.status;
+      if (status && status !== "waiting") return { kind: "started" } as const;
+      const maxPlayers = raw.max_players ?? raw.maxPlayers ?? 8;
+      if (players.length >= maxPlayers) return { kind: "full" } as const;
       players.push({
         playerId,
         playerName,
@@ -910,6 +924,20 @@ router.post("/:roomCode/join", async (req, res) => {
     res.status(409).json({
       error: "name_taken",
       message: "Ese nombre ya está en uso en esta sala. Prueba con otro o añade un número.",
+    });
+    return;
+  }
+  if (outcome.kind === "started") {
+    res.status(409).json({
+      error: "in_progress",
+      message: "La partida ya ha empezado. No puedes unirte hasta que termine.",
+    });
+    return;
+  }
+  if (outcome.kind === "full") {
+    res.status(409).json({
+      error: "room_full",
+      message: "La sala está llena.",
     });
     return;
   }

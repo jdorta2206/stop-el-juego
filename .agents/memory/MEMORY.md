@@ -1,5 +1,19 @@
-- [Deployment hosts & client sharing](deployment-hosts.md) — two prod hosts share ONE stop-game client build but deploy via different pipelines (Replit-direct vs Railway/GitHub).
-- [TWA assetlinks / .well-known serving](twa-assetlinks.md) — app shows browser toolbar when /.well-known/assetlinks.json isn't served as JSON; dotfiles ignored by default on express.static, res.sendFile and vite preview.
-- [Update-banner gating](update-banner-gating.md) — all APK versions load the same site, so gate the "update" banner by reported app version, never by host (host-gating hid it for everyone).
-- [Streak source of truth](streak-source-of-truth.md) — streaks are authoritative server-side (player_scores); display from useGetStreakCalendar, not localStorage. Most "retention plan" features already exist.
-- [Web-push VAPID keys](notifications-vapid.md) — hardcode the *public* key as fallback so the bell/toggle renders on any host; never hardcode the private key.
+<!-- Index of memory topic files. One bullet per line: - [Title](file.md) — hook -->
+- [Banner ads must be fail-closed vs Play TWA](ads-twa-policy.md) — Why/how banner ads are gated to web-only and never the Play Store app
+- [Adding a new DB table (STOP monorepo)](db-schema-new-tables.md) — The exact steps to add a Drizzle table so it works in dev AND production
+- [Deployment hosts & client sharing](deployment-hosts.md) — How the STOP game's two production hosts relate and deploy, so client changes are shipped to the right place.
+- [Instagram login needs professional accounts](instagram-login-deprecated.md) — Why Instagram social login was removed from STOP; what the redirect_uri vs professional-account errors mean
+- [Multiplayer round advance must not depend on inbound POST](multiplayer-round-advance.md) — Why STOP-game rounds need a background failsafe sweeper, and the rules for round-end side effects
+- [Web-push VAPID keys across hosts](notifications-vapid.md) — Why the notifications bell/toggle can vanish on non-Replit hosts and how the public key is handled.
+- [OAuth APP_ORIGIN must default to a live registered origin](oauth-app-origin.md) — Why social login broke with the Replit "Run this app" placeholder
+- [Cross-origin OAuth session handoff via URL hash](oauth-cross-origin-handoff.md) — Why social login "completes but doesn't stick" when OAuth domain != app domain
+- [Premium entitlement single source of truth](premium-source-of-truth.md) — Server premium gating must use isUserPremium(), never the raw is_premium column
+- [Private owner analytics panel (/test)](private-admin-panel.md) — How the hidden stats dashboard is wired and what it needs to work on Railway
+- [Production data is NOT in the workspace/dev DB](prod-data-vs-dev-db.md) — Where the real STOP player data lives and how to extract/migrate it
+- [Railway can't reach Replit internal DB](railway-db-unreachable.md) — Why www (Railway) gives 500 on DB routes while replit.app works; the shared-DB constraint and schema gotcha
+- [Railway / external single-service deploy](railway-deploy.md) — How this pnpm monorepo deploys as ONE service (server+client+Postgres) outside Replit, without breaking Replit.
+- [STOP multiplayer identity / room-route auth model](room-auth-model.md) — Why room routes intentionally do NOT enforce requirePlayerIdentity, and why a server-only impersonation fix is impossible.
+- [Shareable links must use the canonical public domain](share-links-canonical-domain.md) — Why invite/room/share links must never be built from window.location.origin
+- [Streak source of truth](streak-source-of-truth.md) — Player streaks are authoritative on the server; client display must read the server, not localStorage.
+- [TWA full-screen / assetlinks fingerprint](twa-assetlinks.md) — Why the Android TWA suddenly shows the browser address bar and how to fix it.
+- [Update-banner gating (old vs new app)](update-banner-gating.md) — Why the "Actualizar en Google Play" banner must be gated by reported version, never by host.

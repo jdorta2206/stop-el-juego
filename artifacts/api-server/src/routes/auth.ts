@@ -613,8 +613,12 @@ router.get("/me", async (req: Request, res: Response) => {
   const prefixMap: Record<string, string> = {
     google_: "google",
     fb_: "facebook",
+    // OAuth callbacks mint Instagram ids as `ig_<id>` and TikTok as `tt_<id>`.
+    // The longer `instagram_`/`tiktok_` keys stay for any legacy-format ids.
+    ig_: "instagram",
     instagram_: "instagram",
     apple_: "apple",
+    tt_: "tiktok",
     tiktok_: "tiktok",
   };
   let loginMethod: string | null = null;

@@ -98,12 +98,28 @@ app.use("/test", adminPanel);
 const MIN_APP_VERSION = "1.3.4.0";
 const PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=app.replit.stop_el_juego.twa";
 
+// Compare dotted numeric versions segment-by-segment so "1.10.0" > "1.3.4.0".
+// A plain string compare broke on multi-digit segments and would wrongly block
+// newer builds. Returns negative / 0 / positive like the usual comparator.
+function compareVersions(a: string, b: string): number {
+  const pa = a.split(".").map((n) => parseInt(n, 10) || 0);
+  const pb = b.split(".").map((n) => parseInt(n, 10) || 0);
+  const len = Math.max(pa.length, pb.length);
+  for (let i = 0; i < len; i++) {
+    const da = pa[i] ?? 0;
+    const dbv = pb[i] ?? 0;
+    if (da !== dbv) return da < dbv ? -1 : 1;
+  }
+  return 0;
+}
+
 app.get('/api/check-version', (req, res) => {
   const version = req.query.v as string | undefined;
   if (!version) {
-    return res.json({ allowed: true });
+    res.json({ allowed: true });
+    return;
   }
-  const isAllowed = version >= MIN_APP_VERSION;
+  const isAllowed = compareVersions(version, MIN_APP_VERSION) >= 0;
   res.json({
     allowed: isAllowed,
     updateUrl: isAllowed ? null : PLAY_STORE_URL,
