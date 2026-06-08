@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { db, dailyResultsTable } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
 import { verifyClaimedIdentity } from "../lib/playerAuth";
+import { sumVerifiedBase, ceilingFromBase, absoluteCeiling } from "../lib/scoreToken";
 
 const router: IRouter = Router();
 
@@ -52,7 +53,7 @@ router.get("/", (req, res) => {
 
 // POST /api/daily/submit  → save a player's score for today
 router.post("/submit", async (req, res) => {
-  const { playerId, playerName, avatarColor, score, letter, language } = req.body;
+  const { playerId, playerName, avatarColor, score, letter, language, scoreTokens } = req.body;
   if (!playerId || !playerName || score == null || !letter) {
     res.status(400).json({ error: "Missing required fields" });
     return;
@@ -62,6 +63,14 @@ router.post("/submit", async (req, res) => {
     res.status(403).json({ error: "Identity verification failed" });
     return;
   }
+
+  // 🔒 Anti-cheat clamp — same scheme as the global leaderboard: clamp the
+  // posted score to a ceiling derived from the verified round voucher(s), or a
+  // flat absolute ceiling when none are present (offline play). Never reject,
+  // only clamp, so a legit daily score is never lost.
+  const { base: verifiedBase, verified } = sumVerifiedBase(scoreTokens);
+  const dailyCeiling = verified > 0 ? ceilingFromBase(verifiedBase) : absoluteCeiling("daily");
+  const safeScore = Math.max(0, Math.min(Number(score) || 0, dailyCeiling));
 
   const today = getTodayUTC();
 
@@ -79,10 +88,10 @@ router.post("/submit", async (req, res) => {
 
   if (existing.length > 0) {
     // Update if new score is higher
-    if (score > existing[0].score) {
+    if (safeScore > existing[0].score) {
       await db
         .update(dailyResultsTable)
-        .set({ score, playerName, avatarColor: avatarColor || existing[0].avatarColor })
+        .set({ score: safeScore, playerName, avatarColor: avatarColor || existing[0].avatarColor })
         .where(
           and(
             eq(dailyResultsTable.playerId, playerId),
@@ -99,7 +108,7 @@ router.post("/submit", async (req, res) => {
     playerName,
     avatarColor: avatarColor || "#e53e3e",
     challengeDate: today,
-    score,
+    score: safeScore,
     letter,
     language: language || "es",
   });

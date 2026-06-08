@@ -21,4 +21,11 @@ rewarded video doubling). The server still adds `score` to
 already counted on the original (non-bonus) submission.
  */
   bonus?: boolean;
+  /** Signed round vouchers issued by `/game/validate` during this game.
+The server sums their attested base scores and clamps the
+submitted `score` to a realistic ceiling derived from that base —
+this is the anti-cheat guard. Omitted for offline submissions,
+which fall back to a flat absolute ceiling.
+ */
+  scoreTokens?: string[];
 }

@@ -409,6 +409,11 @@ export default function SoloGame() {
   const categoriesRef = useRef<string[]>([]);
   const bluffedCategoriesRef = useRef<Set<string>>(new Set());
   const currentLetterRef = useRef<string>("");
+  // 🔒 Anti-cheat vouchers: each round's `/validate` call returns a signed
+  // token attesting the server-computed base score. We accumulate them across
+  // the game and hand them back on submit so the server can clamp a fabricated
+  // total. Reset per new game (where totalScore resets to 0), not per round.
+  const scoreTokensRef = useRef<string[]>([]);
 
   const startGame = () => {
     // Snapshot the tutorial state at the moment the player presses Play so
@@ -642,6 +647,10 @@ export default function SoloGame() {
         results: emptyResults,
       } as unknown as ValidateRoundResponse;
     }
+    // 🔒 Capture this round's anti-cheat voucher (online play only — the
+    // offline fallback payload has none). Accumulated for the final submit.
+    if (apiData?.scoreToken) scoreTokensRef.current.push(apiData.scoreToken);
+
     // Persist whichever payload we ended up with so the RESULTS effect
     // and the UI read the *current* round's data, not the prior mutation.
     setRoundResults(apiData);
@@ -987,6 +996,7 @@ export default function SoloGame() {
         mode: isDailyMode ? "daily" : "solo",
         won,
         bonus: isBonus,
+        scoreTokens: scoreTokensRef.current,
       }
     }, {
       onSuccess: (response: any) => {
@@ -1035,6 +1045,7 @@ export default function SoloGame() {
             mode: isDailyMode ? "daily" : "solo",
             won,
             bonus: isBonus,
+            scoreTokens: scoreTokensRef.current,
           });
           const offMsg =
             lang === "en" ? "Offline — score will sync when you're back." :
@@ -1125,6 +1136,7 @@ export default function SoloGame() {
         score: finalScore,
         letter: dailyLetter || currentLetter,
         language: getCurrentLang(),
+        scoreTokens: scoreTokensRef.current,
       }),
     }).catch(() => {});
   };
@@ -1159,6 +1171,7 @@ export default function SoloGame() {
       setGameState("LOBBY");
       setRound(1);
       setTotalScore(0);
+      scoreTokensRef.current = [];
       setAiTotalScore(0);
       setBestRoundScore(0);
       setDoubleUsed(false);

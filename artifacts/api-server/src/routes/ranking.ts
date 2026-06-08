@@ -6,6 +6,7 @@ import { sendPushToPlayer } from "../lib/pushHelper";
 import { SubmitScoreBody, GetLeaderboardQueryParams } from "@workspace/api-zod";
 import { scoreLimiter } from "../middlewares/rateLimit";
 import { verifyClaimedIdentity } from "../lib/playerAuth";
+import { sumVerifiedBase, ceilingFromBase, absoluteCeiling } from "../lib/scoreToken";
 import {
   isHappyHourActiveForTzOffset,
   HAPPY_HOUR_MULTIPLIER,
@@ -158,7 +159,7 @@ router.post("/scores", scoreLimiter, async (req, res) => {
     return;
   }
 
-  const { playerId, playerName, avatarColor, score: rawScore, letter, mode, won, bonus } = body.data;
+  const { playerId, playerName, avatarColor, score: rawScore, letter, mode, won, bonus, scoreTokens } = body.data;
 
   // 🔒 A logged-in account's leaderboard entry can only be written by that
   // account — stops anyone from injecting scores under another player's id.
@@ -174,8 +175,20 @@ router.post("/scores", scoreLimiter, async (req, res) => {
   // streak day, since the original submission already accounted for those.
   const isBonus = bonus === true;
 
+  // 🔒 Anti-cheat clamp. `/game/validate` issued a signed voucher per round
+  // attesting the server-computed base score; the client returns them here.
+  // We sum the verified base and clamp the posted score to a realistic ceiling
+  // derived from it, so a fabricated total (and the coins/XP derived from it)
+  // gets cut while every legit game — including client-side modifier bonuses —
+  // passes through. Tokenless submissions (offline play) fall back to a flat
+  // absolute ceiling. We never reject, only clamp, so a real score is never
+  // lost.
+  const { base: verifiedBase, verified } = sumVerifiedBase(scoreTokens);
+  const ceiling = verified > 0 ? ceilingFromBase(verifiedBase) : absoluteCeiling(mode);
+  const cappedRaw = Math.max(0, Math.min(rawScore, ceiling));
+
   // Apply 1.5x multiplier for multiplayer games
-  const score = mode === "multiplayer" ? Math.round(rawScore * 1.5) : rawScore;
+  const score = mode === "multiplayer" ? Math.round(cappedRaw * 1.5) : cappedRaw;
 
   const existing = await db
     .select()

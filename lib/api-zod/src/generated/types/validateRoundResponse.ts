@@ -11,4 +11,11 @@ export interface ValidateRoundResponse {
   results: ValidateRoundResponseResults;
   playerTotalScore: number;
   aiTotalScore: number;
+  /** Signed, single-use voucher attesting the server-computed base
+score for this round (`playerTotalScore`). The client returns it
+(alongside any other rounds' tokens) when submitting the final
+game score, so the server can verify the score wasn't fabricated.
+Absent when the round was validated offline.
+ */
+  scoreToken?: string;
 }

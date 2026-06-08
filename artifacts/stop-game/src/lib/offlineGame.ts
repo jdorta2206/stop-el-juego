@@ -247,6 +247,10 @@ export type OutboxScorePayload = {
   mode: string;
   won: boolean;
   bonus?: boolean;
+  // 🔒 Anti-cheat vouchers gathered during the game. Usually empty for queued
+  // (offline) submissions since offline rounds are validated locally and get
+  // no token — those fall back to the server's absolute ceiling.
+  scoreTokens?: string[];
 };
 
 export type OutboxEntry = {

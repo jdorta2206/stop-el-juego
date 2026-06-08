@@ -51,6 +51,12 @@ export const ValidateRoundResponse = zod.object({
   ),
   playerTotalScore: zod.number(),
   aiTotalScore: zod.number(),
+  scoreToken: zod
+    .string()
+    .optional()
+    .describe(
+      "Signed, single-use voucher attesting the server-computed base\nscore for this round (`playerTotalScore`). The client returns it\n(alongside any other rounds' tokens) when submitting the final\ngame score, so the server can verify the score wasn't fabricated.\nAbsent when the round was validated offline.\n",
+    ),
 });
 
 /**
@@ -103,6 +109,12 @@ export const SubmitScoreBody = zod.object({
     .optional()
     .describe(
       "When true, the score is treated as a bonus increment (e.g. from a\nrewarded video doubling). The server still adds `score` to\n`totalScore` and grants XP, but skips incrementing\n`gamesPlayed`\/`wins` and does not bump the daily streak — those\nalready counted on the original (non-bonus) submission.\n",
+    ),
+  scoreTokens: zod
+    .array(zod.string())
+    .optional()
+    .describe(
+      "Signed round vouchers issued by `\/game\/validate` during this game.\nThe server sums their attested base scores and clamps the\nsubmitted `score` to a realistic ceiling derived from that base —\nthis is the anti-cheat guard. Omitted for offline submissions,\nwhich fall back to a flat absolute ceiling.\n",
     ),
 });
 

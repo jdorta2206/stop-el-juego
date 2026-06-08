@@ -57,6 +57,13 @@ export interface ValidateRoundResponse {
   results: ValidateRoundResponseResults;
   playerTotalScore: number;
   aiTotalScore: number;
+  /** Signed, single-use voucher attesting the server-computed base
+score for this round (`playerTotalScore`). The client returns it
+(alongside any other rounds' tokens) when submitting the final
+game score, so the server can verify the score wasn't fabricated.
+Absent when the round was validated offline.
+ */
+  scoreToken?: string;
 }
 
 export interface PlayerScore {
@@ -104,6 +111,13 @@ rewarded video doubling). The server still adds `score` to
 already counted on the original (non-bonus) submission.
  */
   bonus?: boolean;
+  /** Signed round vouchers issued by `/game/validate` during this game.
+The server sums their attested base scores and clamps the
+submitted `score` to a realistic ceiling derived from that base —
+this is the anti-cheat guard. Omitted for offline submissions,
+which fall back to a flat absolute ceiling.
+ */
+  scoreTokens?: string[];
 }
 
 export interface StreakCalendarDay {
