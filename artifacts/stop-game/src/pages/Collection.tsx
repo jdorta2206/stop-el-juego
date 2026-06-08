@@ -154,6 +154,11 @@ export default function Collection() {
                         <div className="h-full rounded-full bg-[#f9a825]" style={{ width: `${pct}%` }} />
                       </div>
                       <p className="text-[10px] text-white/40 mt-0.5">{s.progress} / {s.target}</p>
+                      {s.wordsComplete && !s.complete && s.minGames > 0 && (
+                        <p className="text-[10px] text-amber-400/80 mt-0.5">
+                          🎮 Juega {Math.max(0, s.minGames - s.gamesPlayed)} partida{Math.max(0, s.minGames - s.gamesPlayed) === 1 ? "" : "s"} más para reclamar
+                        </p>
+                      )}
                     </div>
                     {s.claimed ? (
                       <span className="text-[10px] font-black text-emerald-400 uppercase flex items-center gap-1">

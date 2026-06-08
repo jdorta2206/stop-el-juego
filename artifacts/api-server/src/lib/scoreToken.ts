@@ -16,9 +16,29 @@ import crypto from "crypto";
 // ceiling, and a voucher requires real validated play to obtain, so there's
 // nothing to gain by using someone else's. Single-use (jti) + a short TTL stop
 // replay.
+//
+// 🔒 Anti-farming: a voucher is cheap to mint (one /validate call), so a script
+// could stockpile thousands and pool them to inflate one submission. Two guards
+// stop that: (1) `sumVerifiedBase` counts only the TOP-N vouchers by base where
+// N is the mode's max rounds (a real game can't produce more rounds than that),
+// so pooling extra vouchers never raises the ceiling beyond a legit game; and
+// (2) every *valid* voucher in the batch is burned (marked used) even when not
+// counted, so the surplus can't be replayed in a later submission.
 
 const TTL_MS = 30 * 60 * 1000; // a game is short — vouchers expire quickly.
 const KIND_ROUND = "r";
+
+// Max scoring rounds a legit game of each mode can produce. Used to cap how many
+// vouchers count toward a single submission's ceiling (see sumVerifiedBase).
+const MAX_ROUNDS_BY_MODE: Record<string, number> = {
+  daily: 1,
+  solo: 3,
+  multiplayer: 12,
+};
+
+export function maxRoundsForMode(mode: string | undefined): number {
+  return MAX_ROUNDS_BY_MODE[mode ?? "solo"] ?? MAX_ROUNDS_BY_MODE["solo"];
+}
 
 let warnedMissingSecret = false;
 
@@ -66,13 +86,16 @@ export function issueScoreToken(base: number): string | null {
 }
 
 /**
- * Verify a batch of vouchers and return the summed attested base of the ones
- * that are valid, unexpired and unused. Invalid/expired/replayed tokens are
- * skipped (never throws) so a partly-bad batch still yields its legit portion.
- * Consumed tokens are marked used so they can't be replayed.
+ * Verify a batch of vouchers and return the summed attested base of the valid
+ * ones, counting at most `maxTokens` of them (the highest bases) so pooled /
+ * farmed vouchers can't inflate the ceiling beyond a legit game. Invalid /
+ * expired / replayed tokens are skipped (never throws) so a partly-bad batch
+ * still yields its legit portion. EVERY valid voucher in the batch is marked
+ * used — even the surplus beyond `maxTokens` — so it can't be replayed later.
  */
 export function sumVerifiedBase(
   tokens: unknown,
+  maxTokens = Number.POSITIVE_INFINITY,
 ): { base: number; verified: number } {
   if (!Array.isArray(tokens) || tokens.length === 0) return { base: 0, verified: 0 };
   const secret = getSigningSecret();
@@ -80,8 +103,7 @@ export function sumVerifiedBase(
   const now = Date.now();
   pruneUsed(now);
 
-  let base = 0;
-  let verified = 0;
+  const validBases: number[] = [];
   for (const token of tokens) {
     if (typeof token !== "string") continue;
     const parts = token.split(".");
@@ -107,11 +129,17 @@ export function sumVerifiedBase(
     const b = Number(baseStr);
     if (!Number.isFinite(b) || b < 0) continue;
 
+    // Burn every valid voucher so the surplus beyond the cap can't be reused.
     usedJti.set(jti, exp);
-    base += b;
-    verified++;
+    validBases.push(b);
   }
-  return { base, verified };
+
+  // Count only the top-N vouchers by base — a real game can't exceed N rounds.
+  validBases.sort((a, b) => b - a);
+  const cap = Number.isFinite(maxTokens) ? Math.max(0, Math.floor(maxTokens)) : validBases.length;
+  const counted = validBases.slice(0, cap);
+  const base = counted.reduce((sum, n) => sum + n, 0);
+  return { base, verified: counted.length };
 }
 
 /**

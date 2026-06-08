@@ -68,7 +68,7 @@ router.post("/submit", async (req, res) => {
   // posted score to a ceiling derived from the verified round voucher(s), or a
   // flat absolute ceiling when none are present (offline play). Never reject,
   // only clamp, so a legit daily score is never lost.
-  const { base: verifiedBase, verified } = sumVerifiedBase(scoreTokens);
+  const { base: verifiedBase, verified } = sumVerifiedBase(scoreTokens, 1);
   const dailyCeiling = verified > 0 ? ceilingFromBase(verifiedBase) : absoluteCeiling("daily");
   const safeScore = Math.max(0, Math.min(Number(score) || 0, dailyCeiling));
 

@@ -18,6 +18,12 @@ backs each payout**:
   the *headline* reward is an **exclusive unbuyable frame**, not coins.
   **Why:** same reasoning as the title-unlock integrity rule — never base a large coin
   payout on client-merged progress.
+  **Frame forgeability fix (no DB change):** every frame-granting set now also carries
+  a `minGames` floor checked against server-authoritative `games_played`. A set is
+  `complete` only when `wordsComplete && games_played >= minGames`, and rewards.ts
+  re-checks the floor INSIDE the `FOR UPDATE` claim lock. So even a forged word map
+  can't claim an exclusive frame without really having played the games. UI shows
+  "Juega N partidas más para reclamar" when words are done but the floor isn't met.
 - **Daily shop deals** → discounted prices chosen deterministically from the **UTC
   date** (seeded RNG, no DB). Server re-derives today's price on buy (`dealPriceFor`)
   and never trusts a client price. Deals reset 00:00 UTC.

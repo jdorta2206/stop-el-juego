@@ -28,6 +28,12 @@ export interface CollectionSetView {
   complete: boolean;
   claimed: boolean;
   reward: SetReward;
+  /** Games floor (0 when none) + the player's current games_played, so the UI
+   *  can explain a frame that needs more real play. */
+  minGames: number;
+  gamesPlayed: number;
+  /** Word target met regardless of the games floor. */
+  wordsComplete: boolean;
 }
 
 export interface CollectionRewards {

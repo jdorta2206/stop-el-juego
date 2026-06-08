@@ -69,15 +69,19 @@ router.get("/collection", requirePlayerIdentity, async (req: AuthedRequest, res)
   const playerId = req.playerId!;
   try {
     const rows = (await db.execute(sql`
-      SELECT collected_words_json, collection_claims_json
+      SELECT collected_words_json, collection_claims_json, games_played
       FROM player_scores WHERE player_id = ${playerId} LIMIT 1
-    `)) as unknown as SqlResult<{ collected_words_json: string; collection_claims_json: string }>;
+    `)) as unknown as SqlResult<{ collected_words_json: string; collection_claims_json: string; games_played: number }>;
     const row = rows.rows?.[0];
     if (!row) { res.status(404).json({ error: "Player not found" }); return; }
     const stats = computeCollectionStats(row.collected_words_json);
     res.json({
       stats,
-      sets: evaluateCollectionSets(stats, parseStrArray(row.collection_claims_json)),
+      sets: evaluateCollectionSets(
+        stats,
+        parseStrArray(row.collection_claims_json),
+        Number(row.games_played ?? 0),
+      ),
     });
   } catch (e: unknown) {
     console.error("[rewards/collection/get] error:", e instanceof Error ? e.message : String(e));
@@ -95,11 +99,11 @@ router.post("/collection/claim", requirePlayerIdentity, async (req: AuthedReques
   try {
     const result = await db.transaction(async (tx) => {
       const locked = (await tx.execute(sql`
-        SELECT id, coins, inventory_json, collected_words_json, collection_claims_json
+        SELECT id, coins, inventory_json, collected_words_json, collection_claims_json, games_played
         FROM player_scores WHERE player_id = ${playerId} FOR UPDATE
       `)) as unknown as SqlResult<{
         id: number; coins: number; inventory_json: string;
-        collected_words_json: string; collection_claims_json: string;
+        collected_words_json: string; collection_claims_json: string; games_played: number;
       }>;
       const row = locked.rows?.[0];
       if (!row) return { ok: false as const, status: 404, error: "Player not found" };
@@ -110,6 +114,14 @@ router.post("/collection/claim", requirePlayerIdentity, async (req: AuthedReques
       const stats = computeCollectionStats(row.collected_words_json);
       if (set.progress(stats) < set.target) {
         return { ok: false as const, status: 400, error: "Set not complete" };
+      }
+
+      // 🔒 Anti-cheat games floor (forge-proof). Frame-granting sets require a
+      // minimum server-authoritative games_played, so a fabricated word count
+      // alone can't unlock the exclusive cosmetic. Recomputed inside the lock.
+      const minGames = set.minGames ?? 0;
+      if (minGames > 0 && Number(row.games_played ?? 0) < minGames) {
+        return { ok: false as const, status: 400, error: "Not enough games played" };
       }
 
       const inv = parseInventory(row.inventory_json);

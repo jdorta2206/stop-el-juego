@@ -6,7 +6,7 @@ import { sendPushToPlayer } from "../lib/pushHelper";
 import { SubmitScoreBody, GetLeaderboardQueryParams } from "@workspace/api-zod";
 import { scoreLimiter } from "../middlewares/rateLimit";
 import { verifyClaimedIdentity } from "../lib/playerAuth";
-import { sumVerifiedBase, ceilingFromBase, absoluteCeiling } from "../lib/scoreToken";
+import { sumVerifiedBase, ceilingFromBase, absoluteCeiling, maxRoundsForMode } from "../lib/scoreToken";
 import {
   isHappyHourActiveForTzOffset,
   HAPPY_HOUR_MULTIPLIER,
@@ -183,7 +183,7 @@ router.post("/scores", scoreLimiter, async (req, res) => {
   // passes through. Tokenless submissions (offline play) fall back to a flat
   // absolute ceiling. We never reject, only clamp, so a real score is never
   // lost.
-  const { base: verifiedBase, verified } = sumVerifiedBase(scoreTokens);
+  const { base: verifiedBase, verified } = sumVerifiedBase(scoreTokens, maxRoundsForMode(mode));
   const ceiling = verified > 0 ? ceilingFromBase(verifiedBase) : absoluteCeiling(mode);
   const cappedRaw = Math.max(0, Math.min(rawScore, ceiling));
 
