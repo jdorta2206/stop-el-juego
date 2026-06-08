@@ -8,6 +8,7 @@ import {
   HAPPY_HOUR_LIVE_LOCAL_MIN,
   HAPPY_HOUR_LAST_LOCAL_MIN,
 } from "./happyHour";
+import { getDailyDeals } from "./dailyShop";
 
 const LANGUAGES = ["es", "en", "pt", "fr"] as const;
 
@@ -22,6 +23,18 @@ const CRON_KEY = "daily_notifications";
 const STREAK_RESCUE_KEY = "streak_rescue_notifications";
 const SEASON_ROLLOVER_KEY = "season_rollover";
 const SEASON_CLAIM_KEY = "season_claim_notifications";
+
+// Daily-deals nudge fires at ~10:00 each player's local time (deals already
+// reset at 00:00 UTC, so they're fresh all morning). Timezone-aware via the
+// same per-tz window + UTC-bucket lock as Happy Hour.
+const DAILY_DEALS_LOCAL_MIN = 10 * 60; // 10:00 local
+
+const DEALS_MSGS: Record<string, (pct: number) => { title: string; body: string }> = {
+  es: (p) => ({ title: "🏷️ ¡Nuevas ofertas hoy!", body: `La tienda del día tiene hasta -${p}% de descuento. ¡Míralas antes de que cambien a medianoche!` }),
+  en: (p) => ({ title: "🏷️ New deals today!", body: `Today's shop has up to -${p}% off. Check them out before they change at midnight!` }),
+  pt: (p) => ({ title: "🏷️ Novas ofertas hoje!", body: `A loja do dia tem até -${p}% de desconto. Vê antes que mudem à meia-noite!` }),
+  fr: (p) => ({ title: "🏷️ Nouvelles offres aujourd'hui !", body: `La boutique du jour a jusqu'à -${p}% de réduction. Regarde avant qu'elles changent à minuit !` }),
+};
 
 const SEASON_CLAIM_MSGS: Record<string, { title: string; body: string }> = {
   es: { title: "🏆 ¡Misiones listas para reclamar!", body: "Has completado misiones del Season Pass. Reclama el XP antes de que roten." },
@@ -394,6 +407,60 @@ async function sendHappyHourNotifications() {
   }
 }
 
+/**
+ * Daily-deals nudge. One timezone-aware slot per player per day: fires when a
+ * player's local minute-of-day enters the 5-min window at DAILY_DEALS_LOCAL_MIN.
+ * Idempotent across instances via a per-(day, UTC-5min-bucket) lock — same
+ * pattern as Happy Hour. The body advertises today's real best discount,
+ * recomputed from the deterministic daily-shop seed.
+ */
+async function sendDailyDealsNotifications() {
+  try {
+    const now = Date.now();
+    const utcNow = new Date(now);
+    const utcMinutesOfDay = utcNow.getUTCHours() * 60 + utcNow.getUTCMinutes();
+    const today = utcNow.toISOString().slice(0, 10);
+    const utcBucket = Math.floor(utcMinutesOfDay / 5);
+
+    const claimed = await claimDailyLock(today, `deals_${today}_${utcBucket}`);
+    if (!claimed) return; // another instance owns this bucket
+
+    const rows = (await db.execute(sql`
+      SELECT player_id, language
+      FROM push_subscriptions
+      WHERE enabled = TRUE
+        AND muted_until < ${now}
+        AND (((${utcMinutesOfDay}::int + tz_offset_minutes + 10080) % 1440)) >= ${DAILY_DEALS_LOCAL_MIN}
+        AND (((${utcMinutesOfDay}::int + tz_offset_minutes + 10080) % 1440)) < ${DAILY_DEALS_LOCAL_MIN + 5}
+      LIMIT 10000
+    `)) as unknown as { rows?: Array<{ player_id: string; language: string }> };
+
+    const candidates = rows.rows ?? [];
+    if (candidates.length === 0) return;
+
+    const maxDiscount = Math.max(0, ...getDailyDeals(utcNow).deals.map((d) => d.discountPct));
+
+    const seen = new Set<string>();
+    let sent = 0;
+    for (const row of candidates) {
+      if (seen.has(row.player_id)) continue;
+      seen.add(row.player_id);
+      const lang = DEALS_MSGS[row.language] ? row.language : "es";
+      const msg = DEALS_MSGS[lang](maxDiscount);
+      const n = await sendPushToPlayer(row.player_id, {
+        ...msg,
+        icon: "/images/icon-192.png",
+        badge: "/images/badge-96.png",
+        url: `/player/${row.player_id}`,
+      });
+      sent += n;
+    }
+    console.log(`[dailyDealsCron] sent=${sent} candidates=${candidates.length} maxDiscount=${maxDiscount}`);
+  } catch (e) {
+    console.error("[dailyDealsCron] error:", e);
+  }
+}
+
 export function startDailyCron() {
   // Check every 5 minutes if it's time to send notifications.
   // Both fires use a per-key DB lock so only ONE instance sends across the cluster.
@@ -415,6 +482,11 @@ export function startDailyCron() {
     // (pre/live/last-call). Same per-tz SQL filter as daily reminders, so
     // the candidate set stays tiny and we never blast the whole table.
     await sendHappyHourNotifications();
+
+    // Daily-deals nudge — timezone-aware, once per player per day at ~10:00
+    // local. Tells them fresh shop discounts are live (they reset 00:00 UTC).
+    // Same per-tz bucket-lock as Happy Hour so it never double-sends.
+    await sendDailyDealsNotifications();
 
     // 19:00–19:05 UTC → streak rescue. 19:00 UTC was chosen because it
     // falls inside daytime/evening waking hours for every supported locale
@@ -455,7 +527,7 @@ export function startDailyCron() {
     }
   }, 5 * 60 * 1000);
 
-  console.log("[dailyCron] Crons started — daily 09:00 UTC, streak rescue 19:00 UTC, season rollover 08:00 UTC, season claim 21:00 UTC");
+  console.log("[dailyCron] Crons started — per-user daily, happy hour, daily deals ~10:00 local, streak rescue 19:00 UTC, season rollover 08:00 UTC, season claim 21:00 UTC");
 }
 
 /**

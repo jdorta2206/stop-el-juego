@@ -22,6 +22,15 @@ backs each payout**:
   date** (seeded RNG, no DB). Server re-derives today's price on buy (`dealPriceFor`)
   and never trusts a client price. Deals reset 00:00 UTC.
 
+## Retention nudge
+A daily-deals push ("🏷️ ¡Nuevas ofertas hoy!") is sent once/player/day at ~10:00
+their LOCAL time from `dailyCron.ts`, reusing the Happy-Hour per-tz window +
+`deals_<day>_<utcBucket>` lock pattern. Body advertises today's real max discount
+recomputed from `getDailyDeals()`; deep-links to `/player/<id>` (own profile = shop).
+**Why:** deals reset 00:00 UTC and are invisible unless the player opens the app — the
+push is what closes the renewable loop. Any new daily nudge should copy this tz-bucket
+pattern, NOT a fixed-UTC blast (which hits everyone at a bad local hour).
+
 ## Claim/buy invariants (all reward + buy POST routes)
 Every coin-granting or coin-spending mutation MUST: run in a `db.transaction`, lock
 the player row with `SELECT ... FOR UPDATE`, re-check eligibility/ownership/claimed
