@@ -15,6 +15,8 @@ import { useCallback, useEffect, useState } from "react";
 import { type OnlinePlayer } from "@/lib/usePresence";
 import { useInventory, type ShopItem } from "@/hooks/useInventory";
 import { useRewards } from "@/hooks/useRewards";
+import { celebrateReward } from "@/lib/celebrate";
+import { rewardFrameName } from "@/lib/rewardFrames";
 
 // ── Level system based on total games played ───────────────────────────────
 // Tiers 1-6 are fixed. Beyond 200 games the ladder becomes INFINITE: players
@@ -205,6 +207,9 @@ const TITLE_META_BY_ID: Record<string, { label: string; icon: string; color: str
   millonario:    { label: "Millonario",    icon: "💰", color: "#fbbf24" },
   coleccionista: { label: "Coleccionista", icon: "🏆", color: "#f472b6" },
   leyenda_viva:  { label: "Leyenda Viva",  icon: "👑", color: "#fde047" },
+  gran_leyenda:  { label: "Gran Leyenda",  icon: "🌟", color: "#cbd5e1" },
+  leyenda_eterna:{ label: "Leyenda Eterna",icon: "💫", color: "#fbbf24" },
+  semidios:      { label: "Semidiós",      icon: "🔱", color: "#67e8f9" },
 };
 const AVATAR_GLYPH_BY_ID: Record<string, string> = {
   avatar_premium_5:  "🎯",
@@ -292,7 +297,8 @@ export default function PlayerProfile() {
     setBusyAction(`claim:prestige:${tier}`);
     const r = await claimPrestige(tier);
     setBusyAction(null);
-    if (r.error) window.alert(r.error);
+    if (r.error) { window.alert(r.error); return; }
+    celebrateReward();
   }, [claimPrestige]);
 
   // Live-ticking clock so the daily-deal countdown updates without a refetch.
@@ -301,6 +307,15 @@ export default function PlayerProfile() {
     const t = setInterval(() => setNow(Date.now()), 30_000);
     return () => clearInterval(t);
   }, []);
+
+  // Deep link from the daily-deals push (/player/<id>#tienda): once the shop is
+  // rendered, scroll it into view so the player lands straight on the offers.
+  useEffect(() => {
+    if (!isMe || !inventory) return;
+    if (typeof window === "undefined" || window.location.hash !== "#tienda") return;
+    const el = document.getElementById("tienda");
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [isMe, inventory]);
 
   const { isFollowing, follow, unfollow } = useFollows(
     isLoggedIn ? me?.id ?? null : null,
@@ -649,7 +664,7 @@ export default function PlayerProfile() {
               });
               const resetIn = inventory.dealsResetAt ? inventory.dealsResetAt - now : 0;
               return (
-                <div>
+                <div id="tienda" className="scroll-mt-24">
                   <div className="flex items-center justify-between mb-1.5 mt-1">
                     <p className="text-xs font-bold text-white/50">Tienda</p>
                     {deals.length > 0 && inventory.dealsResetAt && (
@@ -748,7 +763,7 @@ export default function PlayerProfile() {
                       <p className="text-sm font-bold truncate">{m.label}</p>
                       <p className="text-[11px] text-amber-400 flex items-center gap-1.5">
                         <span className="flex items-center gap-1"><Coins className="w-3 h-3" /> {m.reward.coins}</span>
-                        {m.reward.frame && <span className="text-white/50">+ marco exclusivo</span>}
+                        {m.reward.frame && <span className="text-white/50">+ {rewardFrameName(m.reward.frame)}</span>}
                       </p>
                     </div>
                     {m.claimed ? (

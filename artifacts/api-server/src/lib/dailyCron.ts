@@ -451,7 +451,7 @@ async function sendDailyDealsNotifications() {
         ...msg,
         icon: "/images/icon-192.png",
         badge: "/images/badge-96.png",
-        url: `/player/${row.player_id}`,
+        url: `/player/${row.player_id}#tienda`,
       });
       sent += n;
     }

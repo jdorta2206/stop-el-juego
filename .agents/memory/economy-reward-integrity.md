@@ -25,11 +25,28 @@ backs each payout**:
 ## Retention nudge
 A daily-deals push ("🏷️ ¡Nuevas ofertas hoy!") is sent once/player/day at ~10:00
 their LOCAL time from `dailyCron.ts`, reusing the Happy-Hour per-tz window +
-`deals_<day>_<utcBucket>` lock pattern. Body advertises today's real max discount
-recomputed from `getDailyDeals()`; deep-links to `/player/<id>` (own profile = shop).
+bucket lock pattern. Body advertises today's real max discount; deep-links to the
+player's own profile with the shop section anchored/scrolled into view.
 **Why:** deals reset 00:00 UTC and are invisible unless the player opens the app — the
-push is what closes the renewable loop. Any new daily nudge should copy this tz-bucket
-pattern, NOT a fixed-UTC blast (which hits everyone at a bad local hour).
+push is what closes the renewable loop, and a deep-link straight to the shop converts
+better than dropping them at the profile top. Any new daily nudge should copy this
+tz-bucket pattern, NOT a fixed-UTC blast (which hits everyone at a bad local hour).
+
+## Frontend mirrors of server cosmetic/title catalogs MUST stay in sync
+Titles, reward-frame names, and frame colors each have a server source of truth and a
+hand-maintained frontend mirror. Adding/renaming an entry server-side without updating
+its mirror causes a silent UI gap (e.g. a blank equipped-title pill, or a generic
+"marco exclusivo" instead of the real frame name).
+**Why:** there is no build-time parity check — drift is only caught by eyeballing the UI.
+**How to apply:** when you touch a title or reward-frame entry on the server, grep the
+stop-game side for the matching mirror and update it in the same change.
+
+## Prestige titles are economic-safe
+Prestige-gated titles unlock off the prestige tier (derived from server-authoritative
+games_played), so they're forge-proof like every other title predicate, and their tiers
+intentionally line up with the milestone reward frames so reaching a frame tier also
+grants a matching title. **Why:** keeps "earned by playing" honest and the two reward
+ladders feel coherent rather than arbitrary.
 
 ## Claim/buy invariants (all reward + buy POST routes)
 Every coin-granting or coin-spending mutation MUST: run in a `db.transaction`, lock

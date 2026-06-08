@@ -51,6 +51,9 @@ export const TITLES: TitleDef[] = [
   { id: "sabio",         label: "Sabio",         icon: "🧠", color: "#a855f7", desc: "Acumula 150.000 puntos totales.",      req: (s) => s.totalScore >= 150000 },
   { id: "coleccionista", label: "Coleccionista", icon: "🏆", color: "#f472b6", desc: "Gana 100 partidas.",                   req: (s) => s.wins >= 100 },
   { id: "leyenda_viva",  label: "Leyenda Viva",  icon: "👑", color: "#fde047", desc: "Alcanza el rango Leyenda (200 partidas).", req: (s) => s.prestige >= 1 },
+  { id: "gran_leyenda",  label: "Gran Leyenda",  icon: "🌟", color: "#cbd5e1", desc: "Alcanza Leyenda 5.",                      req: (s) => s.prestige >= 5 },
+  { id: "leyenda_eterna",label: "Leyenda Eterna",icon: "💫", color: "#fbbf24", desc: "Alcanza Leyenda 10.",                     req: (s) => s.prestige >= 10 },
+  { id: "semidios",      label: "Semidiós",      icon: "🔱", color: "#67e8f9", desc: "Alcanza Leyenda 20.",                     req: (s) => s.prestige >= 20 },
 ];
 
 const TITLE_BY_ID = new Map(TITLES.map((t) => [t.id, t]));

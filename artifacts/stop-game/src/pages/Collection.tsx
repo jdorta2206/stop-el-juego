@@ -6,6 +6,8 @@ import { ArrowLeft, BookOpen, Search } from "lucide-react";
 import { usePlayer } from "@/hooks/use-player";
 import { useCollection } from "@/hooks/useCollection";
 import { useRewards } from "@/hooks/useRewards";
+import { celebrateReward } from "@/lib/celebrate";
+import { rewardFrameName } from "@/lib/rewardFrames";
 import { RARITY_ORDER, RARITY_META, type Rarity } from "@/lib/collection";
 import { useT } from "@/i18n/useT";
 import { Coins, Gift, Check } from "lucide-react";
@@ -27,7 +29,8 @@ export default function Collection() {
     setClaiming(setId);
     const r = await claimCollection(setId);
     setClaiming(null);
-    if (r.error) window.alert(r.error);
+    if (r.error) { window.alert(r.error); return; }
+    celebrateReward();
   };
 
   const all = useMemo(() => Object.values(collection), [collection]);
@@ -145,7 +148,7 @@ export default function Collection() {
                         {s.reward.coins ? (
                           <span className="flex items-center gap-1"><Coins className="w-3 h-3" /> {s.reward.coins}</span>
                         ) : null}
-                        {s.reward.frame && <span className="text-white/50">+ marco exclusivo</span>}
+                        {s.reward.frame && <span className="text-white/50">+ {rewardFrameName(s.reward.frame)}</span>}
                       </p>
                       <div className="mt-1 h-1.5 bg-white/10 rounded-full overflow-hidden">
                         <div className="h-full rounded-full bg-[#f9a825]" style={{ width: `${pct}%` }} />
