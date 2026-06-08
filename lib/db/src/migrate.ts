@@ -82,6 +82,11 @@ export async function ensureIndexes(): Promise<void> {
     // Equipped custom title (unlocked by playing, never bought). NULL = none.
     `ALTER TABLE player_scores
        ADD COLUMN IF NOT EXISTS equipped_title text`,
+    // Self-renewing reward claim guards (prestige milestones + collection sets).
+    `ALTER TABLE player_scores
+       ADD COLUMN IF NOT EXISTS prestige_claims_json text NOT NULL DEFAULT '[]'`,
+    `ALTER TABLE player_scores
+       ADD COLUMN IF NOT EXISTS collection_claims_json text NOT NULL DEFAULT '[]'`,
     // Tracks the most recent finished season for which the player has been
     // shown the "Quedaste #N" recap modal. NULL = never notified.
     `ALTER TABLE player_scores

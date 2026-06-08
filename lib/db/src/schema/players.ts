@@ -39,6 +39,14 @@ export const playerScoresTable = pgTable("player_scores", {
   // server only persists which one the player chose to display. Validated on
   // equip against the unlock criteria in titleCatalog.ts.
   equippedTitle: text("equipped_title"),
+  // ── Self-renewing reward claims (double-claim guards) ─────────────────
+  // JSON array of prestige milestone tiers already claimed (e.g. [1,2,3]).
+  // Prestige is derived from games_played (server-authoritative) so these
+  // coin rewards are safe. Append-only.
+  prestigeClaimsJson: text("prestige_claims_json").notNull().default("[]"),
+  // JSON array of collection SET ids already claimed (e.g. ["total_150"]).
+  // Eligibility recomputed server-side from collected_words_json on claim.
+  collectionClaimsJson: text("collection_claims_json").notNull().default("[]"),
   // Latest season for which the end-of-season recap modal has been shown.
   notifiedFinalSeasonId: integer("notified_final_season_id"),
   // ── Word Collection ───────────────────────────────────────────────────

@@ -5,19 +5,30 @@ import { Layout } from "@/components/Layout";
 import { ArrowLeft, BookOpen, Search } from "lucide-react";
 import { usePlayer } from "@/hooks/use-player";
 import { useCollection } from "@/hooks/useCollection";
+import { useRewards } from "@/hooks/useRewards";
 import { RARITY_ORDER, RARITY_META, type Rarity } from "@/lib/collection";
 import { useT } from "@/i18n/useT";
+import { Coins, Gift, Check } from "lucide-react";
 
 type Filter = "all" | Rarity;
 
 export default function Collection() {
   const { player } = usePlayer();
   const { collection } = useCollection(player?.id);
+  const { collection: rewards, claimCollection } = useRewards(player?.id);
   const { t } = useT();
   const tC = (t as { collection?: Record<string, string> }).collection ?? {};
 
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
+  const [claiming, setClaiming] = useState<string | null>(null);
+
+  const handleClaimSet = async (setId: string) => {
+    setClaiming(setId);
+    const r = await claimCollection(setId);
+    setClaiming(null);
+    if (r.error) window.alert(r.error);
+  };
 
   const all = useMemo(() => Object.values(collection), [collection]);
   const counts = useMemo(() => {
@@ -100,6 +111,69 @@ export default function Collection() {
             })}
           </div>
         </motion.div>
+
+        {/* Recompensas de colección — completar sets da monedas + marcos exclusivos */}
+        {rewards && rewards.sets.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="rounded-2xl p-4 space-y-2.5"
+            style={{ background: "rgba(0,0,0,0.25)", border: "2px solid rgba(255,255,255,0.10)" }}
+          >
+            <div className="flex items-center gap-2">
+              <Gift className="w-5 h-5 text-[#f9a825]" />
+              <h2 className="text-lg font-black text-white">
+                {tC.rewardsTitle ?? "Recompensas de Colección"}
+              </h2>
+            </div>
+            <div className="space-y-1.5">
+              {rewards.sets.map((s) => {
+                const pct = Math.min(100, Math.round((s.progress / s.target) * 100));
+                return (
+                  <div
+                    key={s.id}
+                    className="flex items-center gap-3 p-2.5 rounded-xl"
+                    style={{
+                      background: "rgba(0,0,0,0.30)",
+                      border: `1.5px solid ${s.complete && !s.claimed ? "rgba(249,168,37,0.45)" : "rgba(255,255,255,0.10)"}`,
+                    }}
+                  >
+                    <span className="text-2xl w-8 text-center">{s.icon}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-white truncate">{s.label}</p>
+                      <p className="text-[11px] text-amber-400 flex items-center gap-1.5">
+                        {s.reward.coins ? (
+                          <span className="flex items-center gap-1"><Coins className="w-3 h-3" /> {s.reward.coins}</span>
+                        ) : null}
+                        {s.reward.frame && <span className="text-white/50">+ marco exclusivo</span>}
+                      </p>
+                      <div className="mt-1 h-1.5 bg-white/10 rounded-full overflow-hidden">
+                        <div className="h-full rounded-full bg-[#f9a825]" style={{ width: `${pct}%` }} />
+                      </div>
+                      <p className="text-[10px] text-white/40 mt-0.5">{s.progress} / {s.target}</p>
+                    </div>
+                    {s.claimed ? (
+                      <span className="text-[10px] font-black text-emerald-400 uppercase flex items-center gap-1">
+                        <Check className="w-3 h-3" /> Listo
+                      </span>
+                    ) : s.complete ? (
+                      <button
+                        onClick={() => handleClaimSet(s.id)}
+                        disabled={claiming === s.id}
+                        className="px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all disabled:opacity-40"
+                        style={{ background: "rgba(249,168,37,0.2)", border: "1px solid rgba(249,168,37,0.5)", color: "#f9a825" }}
+                      >
+                        {claiming === s.id ? "…" : "Reclamar"}
+                      </button>
+                    ) : (
+                      <span className="text-[10px] font-bold text-white/30 uppercase">{pct}%</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </motion.div>
+        )}
 
         {/* Filters */}
         <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">

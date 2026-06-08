@@ -38,12 +38,23 @@ export interface TitleView {
   unlocked: boolean;
 }
 
+// Daily rotating deal — a shop item discounted today only. The server picks
+// these deterministically from the UTC date and recomputes the price on buy.
+export interface DailyDeal {
+  id: string;
+  originalPrice: number;
+  price: number;
+  discountPct: number;
+}
+
 export interface InventorySnapshot {
   coins: number;
   equipped: { avatar: string | null; frame: string | null; title: string | null };
   owned: { avatars: CosmeticMeta[]; frames: CosmeticMeta[] };
   titles: TitleView[];
   shop: ShopItem[];
+  dailyDeals?: DailyDeal[];
+  dealsResetAt?: number;
 }
 
 export function useInventory(playerId?: string | null) {

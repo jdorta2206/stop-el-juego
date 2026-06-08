@@ -5,14 +5,16 @@ import { Button } from "@/components/ui";
 import {
   Trophy, Flame, Gamepad2, Users, Star, ArrowLeft,
   UserPlus, UserCheck, Clock, Sword, Crown, Coins, ShoppingBag, Check,
+  Tag, Sparkles,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { usePlayer } from "@/hooks/use-player";
 import { getApiUrl } from "@/lib/utils";
 import { useFollows } from "@/lib/useFollows";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { type OnlinePlayer } from "@/lib/usePresence";
 import { useInventory, type ShopItem } from "@/hooks/useInventory";
+import { useRewards } from "@/hooks/useRewards";
 
 // ── Level system based on total games played ───────────────────────────────
 // Tiers 1-6 are fixed. Beyond 200 games the ladder becomes INFINITE: players
@@ -152,6 +154,17 @@ const FRAME_COLORS_BY_ID: Record<string, string> = {
   frame_shop_rayo:    "#38bdf8",
   frame_shop_lava:    "#ef4444",
   frame_shop_galaxia: "#a855f7",
+  // Marcos exclusivos de recompensa (colección / prestigio) — no comprables.
+  // Mantener en sync con REWARD_FRAMES (servidor, inventoryCatalog.ts).
+  frame_collection_hunter:   "#38bdf8",
+  frame_collection_legend:   "#f472b6",
+  frame_collection_master:   "#06b6d4",
+  frame_collection_explorer: "#22c55e",
+  frame_collection_mythic:   "#a855f7",
+  frame_prestige_bronze:   "#cd7f32",
+  frame_prestige_silver:   "#cbd5e1",
+  frame_prestige_gold:     "#fbbf24",
+  frame_prestige_diamond:  "#67e8f9",
 };
 
 // Marcos legendarios → clase CSS de animación aplicada al aro del avatar.
@@ -194,6 +207,15 @@ const AVATAR_GLYPH_BY_ID: Record<string, string> = {
   avatar_shop_alien:   "👽",
 };
 
+// "5h 12m" / "47m" until the next daily-deal reset (00:00 UTC).
+function formatCountdown(msUntil: number): string {
+  if (msUntil <= 0) return "muy pronto";
+  const totalMin = Math.floor(msUntil / 60000);
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
 function StatCard({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="flex flex-col items-center gap-1 p-4 bg-black/30 rounded-2xl border border-white/10">
@@ -235,8 +257,10 @@ export default function PlayerProfile() {
   // Inventory only loads for the player's own profile — there's no public
   // endpoint, and other players' equipped cosmetics ship via the profile
   // payload below (see `data.equippedAvatar` / `data.equippedFrame`).
-  const { inventory, equip, buy } = useInventory(isMe ? me?.id : null);
+  const { inventory, refresh: refreshInventory, equip, buy } = useInventory(isMe ? me?.id : null);
   const [busyAction, setBusyAction] = useState<string | null>(null);
+  // Prestige claims refresh the inventory so newly granted coins/frames appear.
+  const { prestige, claimPrestige } = useRewards(isMe ? me?.id : null, refreshInventory);
 
   const handleEquip = useCallback(async (kind: "avatar" | "frame" | "title", value: string | null) => {
     setBusyAction(`equip:${kind}:${value ?? ""}`);
@@ -252,6 +276,20 @@ export default function PlayerProfile() {
       window.alert(r.error === "Insufficient coins" ? "No tienes suficientes monedas" : r.error);
     }
   }, [buy]);
+
+  const handleClaimPrestige = useCallback(async (tier: number) => {
+    setBusyAction(`claim:prestige:${tier}`);
+    const r = await claimPrestige(tier);
+    setBusyAction(null);
+    if (r.error) window.alert(r.error);
+  }, [claimPrestige]);
+
+  // Live-ticking clock so the daily-deal countdown updates without a refetch.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(t);
+  }, []);
 
   const { isFollowing, follow, unfollow } = useFollows(
     isLoggedIn ? me?.id ?? null : null,
@@ -588,48 +626,143 @@ export default function PlayerProfile() {
               )}
             </div>
 
-            {/* Tienda de monedas */}
-            <div>
-              <p className="text-xs font-bold text-white/50 mb-1.5 mt-1">Tienda</p>
-              <div className="space-y-1.5">
-                {inventory.shop.map((item) => {
-                  const owned =
-                    item.kind === "avatar"
-                      ? inventory.owned.avatars.some((a) => a.id === item.id)
-                      : inventory.owned.frames.some((f) => f.id === item.id);
-                  const canAfford = inventory.coins >= item.price;
-                  return (
-                    <div
-                      key={item.id}
-                      className="flex items-center gap-3 p-2.5 rounded-xl bg-black/30 border border-white/10"
-                    >
-                      <span className={`text-2xl w-8 text-center ${isLegendaryFrame(item.id) ? "legendary-glyph" : ""}`} style={{ color: item.color }}>{item.glyph}</span>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-bold truncate">{item.label}</p>
-                        <p className="text-[11px] text-amber-400 flex items-center gap-1">
-                          <Coins className="w-3 h-3" /> {item.price}
-                        </p>
-                      </div>
-                      {owned ? (
-                        <span className="text-[10px] font-black text-emerald-400 uppercase">Comprado</span>
-                      ) : (
-                        <button
-                          onClick={() => handleBuy(item)}
-                          disabled={!canAfford || busyAction === `buy:${item.id}`}
-                          className="px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all disabled:opacity-40"
-                          style={{
-                            background: canAfford ? "rgba(249,168,37,0.2)" : "rgba(255,255,255,0.05)",
-                            border: canAfford ? "1px solid rgba(249,168,37,0.5)" : "1px solid rgba(255,255,255,0.1)",
-                            color: canAfford ? "#f9a825" : "rgba(255,255,255,0.4)",
-                          }}
+            {/* Tienda de monedas — con ofertas rotatorias del día */}
+            {(() => {
+              const deals = inventory.dailyDeals ?? [];
+              const dealById = new Map(deals.map((d) => [d.id, d]));
+              // Items on offer first, then the rest — at full price.
+              const ordered = [...inventory.shop].sort((a, b) => {
+                const da = dealById.has(a.id) ? 0 : 1;
+                const db = dealById.has(b.id) ? 0 : 1;
+                return da - db;
+              });
+              const resetIn = inventory.dealsResetAt ? inventory.dealsResetAt - now : 0;
+              return (
+                <div>
+                  <div className="flex items-center justify-between mb-1.5 mt-1">
+                    <p className="text-xs font-bold text-white/50">Tienda</p>
+                    {deals.length > 0 && inventory.dealsResetAt && (
+                      <span className="flex items-center gap-1 text-[10px] font-bold text-amber-400/80">
+                        <Tag className="w-3 h-3" /> Ofertas nuevas en {formatCountdown(resetIn)}
+                      </span>
+                    )}
+                  </div>
+                  <div className="space-y-1.5">
+                    {ordered.map((item) => {
+                      const owned =
+                        item.kind === "avatar"
+                          ? inventory.owned.avatars.some((a) => a.id === item.id)
+                          : inventory.owned.frames.some((f) => f.id === item.id);
+                      const deal = dealById.get(item.id);
+                      const price = deal ? deal.price : item.price;
+                      const canAfford = inventory.coins >= price;
+                      return (
+                        <div
+                          key={item.id}
+                          className="flex items-center gap-3 p-2.5 rounded-xl bg-black/30 border"
+                          style={{ borderColor: deal ? "rgba(249,168,37,0.45)" : "rgba(255,255,255,0.1)" }}
                         >
-                          {busyAction === `buy:${item.id}` ? "…" : "Comprar"}
-                        </button>
-                      )}
+                          <span className={`text-2xl w-8 text-center ${isLegendaryFrame(item.id) ? "legendary-glyph" : ""}`} style={{ color: item.color }}>{item.glyph}</span>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <p className="text-sm font-bold truncate">{item.label}</p>
+                              {deal && (
+                                <span className="text-[9px] font-black text-amber-400 bg-amber-400/15 border border-amber-400/40 rounded px-1 py-0.5 leading-none">
+                                  −{deal.discountPct}%
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[11px] text-amber-400 flex items-center gap-1">
+                              <Coins className="w-3 h-3" /> {price}
+                              {deal && (
+                                <span className="text-white/30 line-through">{deal.originalPrice}</span>
+                              )}
+                            </p>
+                          </div>
+                          {owned ? (
+                            <span className="text-[10px] font-black text-emerald-400 uppercase">Comprado</span>
+                          ) : (
+                            <button
+                              onClick={() => handleBuy(item)}
+                              disabled={!canAfford || busyAction === `buy:${item.id}`}
+                              className="px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all disabled:opacity-40"
+                              style={{
+                                background: canAfford ? "rgba(249,168,37,0.2)" : "rgba(255,255,255,0.05)",
+                                border: canAfford ? "1px solid rgba(249,168,37,0.5)" : "1px solid rgba(255,255,255,0.1)",
+                                color: canAfford ? "#f9a825" : "rgba(255,255,255,0.4)",
+                              }}
+                            >
+                              {busyAction === `buy:${item.id}` ? "…" : "Comprar"}
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
+          </motion.div>
+        )}
+
+        {/* ── RECOMPENSAS DE LEYENDA (prestigio) ── */}
+        {isMe && prestige && prestige.milestones.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.13 }}
+            className="space-y-3 p-4 rounded-2xl border border-white/10 bg-black/30"
+          >
+            <div>
+              <h2 className="font-display font-black text-lg flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-amber-400" /> Recompensas de Leyenda
+              </h2>
+              <p className="text-xs text-white/40 mt-0.5">
+                Cada nivel de Leyenda que alcanzas te da monedas, y los hitos te dan marcos exclusivos.
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              {prestige.milestones.map((m) => {
+                const frameColor = m.reward.frame ? FRAME_COLORS_BY_ID[m.reward.frame] : null;
+                return (
+                  <div
+                    key={m.tier}
+                    className="flex items-center gap-3 p-2.5 rounded-xl bg-black/30 border"
+                    style={{ borderColor: m.claimable ? "rgba(249,168,37,0.45)" : "rgba(255,255,255,0.1)" }}
+                  >
+                    <span className="text-2xl w-8 text-center" style={{ color: frameColor ?? "#a855f7" }}>
+                      {m.reward.frame ? "🖼️" : "✨"}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold truncate">{m.label}</p>
+                      <p className="text-[11px] text-amber-400 flex items-center gap-1.5">
+                        <span className="flex items-center gap-1"><Coins className="w-3 h-3" /> {m.reward.coins}</span>
+                        {m.reward.frame && <span className="text-white/50">+ marco exclusivo</span>}
+                      </p>
                     </div>
-                  );
-                })}
-              </div>
+                    {m.claimed ? (
+                      <span className="text-[10px] font-black text-emerald-400 uppercase flex items-center gap-1">
+                        <Check className="w-3 h-3" /> Reclamado
+                      </span>
+                    ) : m.claimable ? (
+                      <button
+                        onClick={() => handleClaimPrestige(m.tier)}
+                        disabled={busyAction === `claim:prestige:${m.tier}`}
+                        className="px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all disabled:opacity-40"
+                        style={{
+                          background: "rgba(249,168,37,0.2)",
+                          border: "1px solid rgba(249,168,37,0.5)",
+                          color: "#f9a825",
+                        }}
+                      >
+                        {busyAction === `claim:prestige:${m.tier}` ? "…" : "Reclamar"}
+                      </button>
+                    ) : (
+                      <span className="text-[10px] font-bold text-white/30 uppercase">Bloqueado</span>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </motion.div>
         )}

@@ -26,6 +26,13 @@ visuals" — so the frontend re-declares color/glyph/FX keyed by the same IDs.
 The buy/equip routes are **price-agnostic and atomic** (row-locked tx), so high-cost
 coin-sink items need NO backend logic change — only a catalog entry with the price.
 
+**Reward-only frames** (earned, never bought) live in a separate server map
+`REWARD_FRAMES` (inventoryCatalog.ts), resolved by `resolveCosmetic` but deliberately
+absent from `SHOP_ITEMS` so they're unbuyable. Their ids (`frame_collection_*`,
+`frame_prestige_*`) STILL must be mirrored in client `FRAME_COLORS_BY_ID`
+(PlayerProfile.tsx) or the equipped ring falls back to the level color — same rule as
+shop frames, just a different server source map.
+
 **"Leyenda" the leaderboard title** = global rank #1 (derived, not stored). Separately,
 the profile **level ladder** ("Nivel") is derived from `gamesPlayed`, and past 200 games
 it becomes **infinite prestige**: Leyenda I/II/III…, +1 tier per 100 games, escalating

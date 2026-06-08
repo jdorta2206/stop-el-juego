@@ -1,3 +1,4 @@
 - [Push notifications prod config](push-notifications-prod-config.md) — all push silently dead when Railway host lacks VAPID_PUBLIC_KEY/PRIVATE_KEY; dev works via `.replit`. Mirror the SAME keypair to Railway.
 - [Player identity & auth model](player-auth-model.md) — guest (UUID) vs logged-in (provider_ prefix + signed token); verifyClaimedIdentity rules, guarded room endpoints, SSE/sendBeacon header limits.
 - [Cosmetic catalog sync](cosmetic-catalog-sync.md) — avatars/frames/titles hand-mirrored server↔client; titles earned-by-playing must use ONLY server-authoritative stats; infinite prestige (Leyenda I/II/III) from gamesPlayed duplicated client+server.
+- [Economy reward integrity](economy-reward-integrity.md) — prestige coins safe (games_played authoritative); collection coins forgeable (client-merged words) → moderate+cosmetic headline; daily deals UTC-deterministic, price re-derived on buy; all claims atomic row-locked + double-claim guarded.

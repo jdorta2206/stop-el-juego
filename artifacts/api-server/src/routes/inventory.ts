@@ -4,6 +4,7 @@ import { eq, sql } from "drizzle-orm";
 import { requirePlayerIdentity, type AuthedRequest } from "../lib/playerAuth";
 import { resolveCosmetic, shopItem, SHOP_ITEMS } from "../lib/inventoryCatalog";
 import { computeTitleStats, evaluateTitles, isTitleUnlocked } from "../lib/titleCatalog";
+import { getDailyDeals, dealPriceFor } from "../lib/dailyShop";
 
 interface SqlResult<T> {
   rows?: T[];
@@ -86,6 +87,8 @@ router.get("/", requirePlayerIdentity, async (req: AuthedRequest, res) => {
       // Titles are earned by playing — full catalog annotated with unlocked state.
       titles: evaluateTitles(titleStats),
       shop: SHOP_ITEMS,
+      // Tienda rotatoria: today's discounted deals + when they refresh (epoch ms).
+      ...(() => { const d = getDailyDeals(); return { dailyDeals: d.deals, dealsResetAt: d.resetAt }; })(),
     });
   } catch (e: unknown) {
     console.error("[inventory/get] error:", e instanceof Error ? e.message : String(e));
@@ -176,14 +179,17 @@ router.post("/buy", requirePlayerIdentity, async (req: AuthedRequest, res) => {
       if (owned.includes(item.id)) {
         return { ok: false as const, status: 400, error: "Already owned" };
       }
-      if (row.coins < item.price) {
+      // Honor today's daily deal price, recomputed server-side (never trust
+      // a price from the client). Falls back to the full catalog price.
+      const price = dealPriceFor(item.id) ?? item.price;
+      if (row.coins < price) {
         return { ok: false as const, status: 400, error: "Insufficient coins" };
       }
 
       if (item.kind === "avatar") inv.avatars.push(item.id);
       else inv.frames.push(item.id);
 
-      const newCoins = row.coins - item.price;
+      const newCoins = row.coins - price;
       await tx.update(playerScoresTable)
         .set({ coins: newCoins, inventoryJson: JSON.stringify(inv), updatedAt: new Date() })
         .where(eq(playerScoresTable.id, row.id));

@@ -77,11 +77,32 @@ export function resolveCosmetic(id: string): CosmeticMeta | null {
       color: meta.color,
     };
   }
+  // Reward-only frames (collection sets + prestige milestones). NOT in
+  // SHOP_ITEMS, so they can't be bought — only earned. Visuals (animated)
+  // resolved client-side by id; the server only needs label/glyph/color.
+  const reward = REWARD_FRAMES[id];
+  if (reward) return { id, kind: "frame", label: reward.label, glyph: reward.glyph, color: reward.color };
   // Shop items
   const shop = SHOP_ITEMS.find((s) => s.id === id);
   if (shop) return { id: shop.id, kind: shop.kind, label: shop.label, glyph: shop.glyph, color: shop.color };
   return null;
 }
+
+// ── Reward-only frames (unbuyable; earned via collection sets / prestige) ───
+// Keep the client mirror (PlayerProfile.tsx FRAME_VISUALS) in sync with these.
+export const REWARD_FRAMES: Record<string, { label: string; glyph: string; color: string }> = {
+  // Collection sets
+  frame_collection_hunter:  { label: "Marco Cazador de Palabras", glyph: "🔎", color: "#38bdf8" },
+  frame_collection_legend:  { label: "Marco Coleccionista",       glyph: "📖", color: "#f472b6" },
+  frame_collection_master:  { label: "Marco Erudito",             glyph: "📚", color: "#06b6d4" },
+  frame_collection_explorer:{ label: "Marco Explorador",          glyph: "🧭", color: "#22c55e" },
+  frame_collection_mythic:  { label: "Marco Mítico",              glyph: "🦄", color: "#a855f7" },
+  // Prestige milestones
+  frame_prestige_bronze:   { label: "Marco Leyenda Bronce",   glyph: "🥉", color: "#cd7f32" },
+  frame_prestige_silver:   { label: "Marco Leyenda Plata",    glyph: "🥈", color: "#cbd5e1" },
+  frame_prestige_gold:     { label: "Marco Leyenda Oro",      glyph: "🥇", color: "#fbbf24" },
+  frame_prestige_diamond:  { label: "Marco Leyenda Diamante", glyph: "💠", color: "#67e8f9" },
+};
 
 // ── Champion frames (top 3 of a season) ─────────────────────────────────────
 // Awarded automatically by season rollover. Visuals shared across seasons —
