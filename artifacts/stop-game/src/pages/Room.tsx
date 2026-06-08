@@ -210,7 +210,11 @@ export default function Room() {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: room, error } = useGetRoom(roomCode || "", {
-    query: { refetchInterval: pollingInterval, enabled: !!roomCode } as any
+    query: { refetchInterval: pollingInterval, enabled: !!roomCode } as any,
+    // 🔑 Prove membership so private rooms return the full roster. Logged-in
+    // users are identified by their global x-stop-token; guests have no token,
+    // so we assert their own id via x-viewer-id (not a secret to them).
+    ...(player?.id ? { request: { headers: { "x-viewer-id": player.id } } } : {}),
   });
 
   // ── SSE: real-time push updates (replaces polling for critical game moments) ──

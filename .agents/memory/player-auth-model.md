@@ -11,8 +11,22 @@ Player ids come in two shapes:
 - **Logged-in**: prefixed with a provider using an UNDERSCORE, e.g. `google_`,
   `fb_`, `ig_`, `apple_`, `tt_` (NOT hyphens — audits get this wrong).
   These carry a signed session token in `x-stop-token` (also stored in
-  localStorage/sessionStorage as `stop_session_token`). Token TTL is 1 YEAR, so
-  no mid-game expiry risk.
+  localStorage/sessionStorage as `stop_session_token`).
+
+## Session token TTL is SHORT (30d) + sliding refresh — not 1 year
+`TTL_MS` in `lib/playerAuth.ts` bounds both the token `exp` and the cookie
+`maxAge`. It is deliberately ~30 days (was 1 year — flagged by audit as too long
+a theft window). Active users never notice because the session SLIDES:
+- `/auth/me` re-issues a fresh token on every restore and returns it in the body;
+  the client saves it (`use-player.ts` `tryRestoreFrom`).
+- The web client ALSO fires a non-blocking `/auth/me` on each app load when the
+  stored profile is a logged-in id, sliding the window forward.
+**Why:** with a short TTL but refresh only on cold-start-without-profile, an
+active logged-in user (who has a localStorage profile and never hits `/auth/me`)
+would silently expire after 30d and start getting 403s on guarded routes. The
+background slide closes that gap. Only accounts dormant >30d must re-auth.
+**Edge (accepted):** a tab kept open >30d with no reload can still expire
+mid-session until the next load — rare, fails closed (403), not a security hole.
 
 ## Rule: verifyClaimedIdentity(req, claimedId)
 - Non-prefixed (guest) ids → pass.

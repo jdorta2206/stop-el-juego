@@ -1,7 +1,12 @@
 import crypto from "crypto";
 import type { Request, Response, NextFunction } from "express";
 
-const TTL_MS = 365 * 24 * 3600 * 1000;
+// Session token / cookie lifetime. Kept short (30 days) to bound the blast
+// radius of a leaked token. Active players never notice expiry because
+// /auth/me re-issues a fresh token on every session restore (sliding window),
+// and the web client also slides it forward in the background on each load for
+// logged-in users — so only accounts dormant for >30 days must re-authenticate.
+const TTL_MS = 30 * 24 * 3600 * 1000;
 const COOKIE_NAME = "stop_pt";
 const HEADER_NAME = "x-stop-token";
 

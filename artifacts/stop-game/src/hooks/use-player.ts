@@ -84,6 +84,13 @@ export interface PlayerProfile {
 
 const STORAGE_KEY = "stop_player_v2";
 
+// OAuth-account id prefixes (mirror of the server's list). Guests use a random
+// UUID with none of these, so they have no session token to slide.
+const OAUTH_ID_PREFIXES = ["google_", "fb_", "ig_", "apple_", "tt_"];
+function isLoggedInId(id: string | null | undefined): boolean {
+  return !!id && OAUTH_ID_PREFIXES.some((p) => id.startsWith(p));
+}
+
 // 🔄 Cross-component sync: every mounted `usePlayer` instance had its own
 // useState, so a rename in <Layout> never reached <Multiplayer> until that
 // page remounted. The join request kept sending the old name and the server's
@@ -127,10 +134,18 @@ export function usePlayer() {
 
     const stored = readStoredPlayer();
     if (stored) {
-      // Already have a local profile → no network needed.
+      // Already have a local profile → no network needed for the UI.
       setPlayer(stored);
       setNeedsAuth(false);
       setIsLoaded(true);
+      // 🔄 Sliding-session refresh: with a short token TTL, an active logged-in
+      // player would otherwise expire after 30 days. Fire a non-blocking
+      // /auth/me (it re-issues + returns a fresh token, saved by tryRestoreFrom)
+      // so each app load slides the window forward. Guests have no token to
+      // refresh; failure is ignored (the cached profile stays usable).
+      if (isLoggedInId(stored.id)) {
+        void tryRestoreFrom(getApiUrl());
+      }
     } else {
       // No localStorage profile (first visit, or TWA wiped storage).
       // Try to silently restore from the long-lived backend session before

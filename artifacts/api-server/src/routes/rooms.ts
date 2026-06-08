@@ -307,6 +307,28 @@ function formatRoom(room: any) {
   };
 }
 
+// Minimal, non-identifying view of a private room for non-members. Carries just
+// enough for the client to validate existence/joinability (and for the resume
+// banner to detect "I'm not a member" — players is empty so membership is false)
+// without leaking who is inside, their scores, or in-round answers.
+function sanitizedRoomPreview(full: any) {
+  return {
+    id: full.id,
+    roomCode: full.roomCode,
+    status: full.status,
+    isPublic: full.isPublic,
+    gameMode: full.gameMode,
+    language: full.language,
+    currentRound: full.currentRound,
+    maxRounds: full.maxRounds,
+    maxPlayers: full.maxPlayers,
+    playerCount: Array.isArray(full.players) ? full.players.length : 0,
+    players: [],
+    hostId: null,
+    restricted: true,
+  };
+}
+
 // Resolve bluff votes: majority "lie" = caught, otherwise not caught. Adjust scores.
 function resolveBluffs(players: any[], bluffVotes: Record<string, any>): any[] {
   return players.map((p: any) => {
@@ -886,7 +908,39 @@ router.get("/:roomCode", async (req, res) => {
   const roomCode = paramStr(req.params.roomCode);
   const rooms = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, roomCode.toUpperCase())).limit(1);
   if (rooms.length === 0) { res.status(404).json({ error: "Room not found" }); return; }
-  res.json(formatRoom(rooms[0]));
+  const full = formatRoom(rooms[0]);
+
+  // 🔒 Private-room privacy. Public (streamer-mode) rooms are spectatable by
+  // design, so they keep returning the full payload. For a PRIVATE room we only
+  // hand the full roster (every player's id/name/score/answers + hostId) to
+  // people who are actually in it; a stranger who merely knows the code gets a
+  // minimal preview. This closes the info leak AND removes the main way an
+  // attacker learned a guest's id (from this very response) to impersonate them.
+  if (full.isPublic !== true) {
+    // Identity resolution. A cryptographically verified token (logged-in users
+    // send x-stop-token / cookie globally) is always trusted. A *self-asserted*
+    // id (?viewerId= or x-viewer-id header) is only trusted when it is a GUEST
+    // id: guest ids aren't discoverable once this gate hides the roster, so they
+    // act as a weak bearer secret. A LOGGED-IN id must NOT be self-assertable —
+    // those ids are public (e.g. the leaderboard), so trusting an unverified
+    // logged-in assertion would let a stranger read any private room that
+    // contains a known account. Logged-in membership therefore requires a real
+    // token match (mirrors verifyClaimedIdentity); no downgrade to assertion.
+    const verified = readPlayerId(req);
+    const asserted =
+      paramStr(req.query["viewerId"]) || paramStr(req.headers["x-viewer-id"]);
+    const viewerId = verified || (asserted && !isLoggedInId(asserted) ? asserted : "");
+    const players = Array.isArray(full.players) ? (full.players as any[]) : [];
+    const isMember =
+      !!viewerId &&
+      (full.hostId === viewerId || players.some((p) => p?.playerId === viewerId));
+    if (!isMember) {
+      res.json(sanitizedRoomPreview(full));
+      return;
+    }
+  }
+
+  res.json(full);
 });
 
 // POST /rooms/:roomCode/join
