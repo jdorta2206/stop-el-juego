@@ -31,7 +31,11 @@ coin-sink items need NO backend logic change — only a catalog entry with the p
 absent from `SHOP_ITEMS` so they're unbuyable. Their ids (`frame_collection_*`,
 `frame_prestige_*`) STILL must be mirrored in client `FRAME_COLORS_BY_ID`
 (PlayerProfile.tsx) or the equipped ring falls back to the level color — same rule as
-shop frames, just a different server source map.
+shop frames, just a different server source map. They are ALSO animated: each id has a
+`frame-fx-*` entry in `LEGENDARY_FRAME_FX` (PlayerProfile.tsx) + matching CSS in
+index.css (`reward-glow` pulse for most; rotating conic `::before` for the two cumbre
+frames `frame_collection_mythic` / `frame_prestige_diamond`). The point of these frames
+IS to look special — keep them animated, not flat rings.
 
 **"Leyenda" the leaderboard title** = global rank #1 (derived, not stored). Separately,
 the profile **level ladder** ("Nivel") is derived from `gamesPlayed`, and past 200 games

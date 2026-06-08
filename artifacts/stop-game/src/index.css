@@ -132,6 +132,42 @@
     animation: splash-ring-spin 6s linear infinite;
   }
 
+  /* ── Marcos exclusivos de recompensa (colección / prestigio) ─────────────
+     No se compran: se ganan completando sets o subiendo de prestigio. Cada uno
+     pulsa con su color para sentirse especial. Mantener IDs en sync con
+     LEGENDARY_FRAME_FX (PlayerProfile.tsx). */
+  @keyframes reward-glow {
+    0%, 100% { box-shadow: 0 0 12px 2px var(--rg-a); }
+    50%      { box-shadow: 0 0 26px 8px var(--rg-b); }
+  }
+  .frame-fx-hunter, .frame-fx-legend, .frame-fx-master, .frame-fx-explorer,
+  .frame-fx-bronze, .frame-fx-silver, .frame-fx-gold {
+    animation: reward-glow 1.9s ease-in-out infinite;
+  }
+  .frame-fx-hunter   { border-color: #38bdf8 !important; --rg-a: rgba(56,189,248,.5);  --rg-b: rgba(56,189,248,.95); }
+  .frame-fx-legend   { border-color: #f472b6 !important; --rg-a: rgba(244,114,182,.5); --rg-b: rgba(244,114,182,.95); }
+  .frame-fx-master   { border-color: #06b6d4 !important; --rg-a: rgba(6,182,212,.5);   --rg-b: rgba(6,182,212,.95); }
+  .frame-fx-explorer { border-color: #22c55e !important; --rg-a: rgba(34,197,94,.5);   --rg-b: rgba(34,197,94,.95); }
+  .frame-fx-bronze   { border-color: #cd7f32 !important; --rg-a: rgba(205,127,50,.5);  --rg-b: rgba(205,127,50,.95); }
+  .frame-fx-silver   { border-color: #e2e8f0 !important; --rg-a: rgba(203,213,225,.55); --rg-b: rgba(255,255,255,.95); }
+  .frame-fx-gold     { border-color: #fbbf24 !important; --rg-a: rgba(251,191,36,.6);  --rg-b: rgba(251,191,36,1); }
+
+  /* Los dos marcos cumbre (colección mítica + prestigio diamante) llevan un aro
+     de gradiente giratorio detrás del avatar, como el marco "galaxia". */
+  .frame-fx-mythic, .frame-fx-diamond { position: relative; }
+  .frame-fx-mythic  { border-color: #a855f7 !important; box-shadow: 0 0 22px 4px rgba(168,85,247,.55) !important; }
+  .frame-fx-mythic::before {
+    content: ""; position: absolute; inset: -7px; border-radius: 9999px; z-index: -1;
+    background: conic-gradient(from 0deg, #a855f7, #ec4899, #22d3ee, #f472b6, #a855f7);
+    filter: blur(3px); animation: splash-ring-spin 6s linear infinite;
+  }
+  .frame-fx-diamond { border-color: #67e8f9 !important; box-shadow: 0 0 22px 4px rgba(103,232,249,.6) !important; }
+  .frame-fx-diamond::before {
+    content: ""; position: absolute; inset: -7px; border-radius: 9999px; z-index: -1;
+    background: conic-gradient(from 0deg, #67e8f9, #a5f3fc, #ffffff, #22d3ee, #67e8f9);
+    filter: blur(3px); animation: splash-ring-spin 5s linear infinite;
+  }
+
   /* Glyph glow para previews de marcos legendarios (tienda + inventario). */
   @keyframes legendary-glyph-pulse {
     0%, 100% { filter: drop-shadow(0 0 3px rgba(255,255,255,.3)); transform: scale(1); }
