@@ -15,6 +15,21 @@ import { type OnlinePlayer } from "@/lib/usePresence";
 import { useInventory, type ShopItem } from "@/hooks/useInventory";
 
 // ── Level system based on total games played ───────────────────────────────
+// Tiers 1-6 are fixed. Beyond 200 games the ladder becomes INFINITE: players
+// enter "Leyenda" and climb prestige tiers (Leyenda I, II, III…) forever, each
+// with an escalating color + aura. This is the long-term retention loop — there
+// is always a next tier to chase. Derived purely from gamesPlayed, so it needs
+// no DB column and shows on every profile automatically.
+interface LevelInfo {
+  label: string;
+  icon: string;
+  color: string;
+  min: number;
+  max: number;
+  prestige: number;   // 0 = fixed tier; >=1 = Leyenda tier number
+  aura?: string;      // CSS class for the prestige glow
+}
+
 const LEVELS = [
   { min: 0,   max: 4,   label: "Principiante", icon: "🌱", color: "#6b7280" },
   { min: 5,   max: 14,  label: "Amateur",       icon: "🎮", color: "#3b82f6" },
@@ -22,18 +37,59 @@ const LEVELS = [
   { min: 30,  max: 49,  label: "Veterano",      icon: "🛡️", color: "#f59e0b" },
   { min: 50,  max: 99,  label: "Experto",       icon: "🔥", color: "#ef4444" },
   { min: 100, max: 199, label: "Maestro",       icon: "⭐", color: "#f97316" },
-  { min: 200, max: Infinity, label: "Leyenda",  icon: "👑", color: "#eab308" },
 ];
 
-function getLevel(gamesPlayed: number) {
-  return LEVELS.find(l => gamesPlayed >= l.min && gamesPlayed <= l.max) ?? LEVELS[0];
+const PRESTIGE_MIN = 200;   // games to reach Leyenda I
+const PRESTIGE_STEP = 100;  // games per additional prestige tier
+const PRESTIGE_COLORS = ["#eab308", "#f59e0b", "#ef4444", "#ec4899", "#a855f7", "#6366f1", "#0ea5e9", "#22d3ee"];
+const PRESTIGE_AURA = ["prestige-aura-1", "prestige-aura-2", "prestige-aura-3", "prestige-aura-4", "prestige-aura-5"];
+
+function toRoman(n: number): string {
+  const map: [number, string][] = [
+    [1000, "M"], [900, "CM"], [500, "D"], [400, "CD"], [100, "C"], [90, "XC"],
+    [50, "L"], [40, "XL"], [10, "X"], [9, "IX"], [5, "V"], [4, "IV"], [1, "I"],
+  ];
+  let out = "", x = Math.max(1, n);
+  for (const [v, sym] of map) while (x >= v) { out += sym; x -= v; }
+  return out;
 }
 
-function getLevelProgress(gamesPlayed: number) {
+function prestigeLevel(tier: number): LevelInfo {
+  const idx = tier - 1;
+  const min = PRESTIGE_MIN + idx * PRESTIGE_STEP;
+  return {
+    label: `Leyenda ${toRoman(tier)}`,
+    icon: "👑",
+    color: PRESTIGE_COLORS[Math.min(idx, PRESTIGE_COLORS.length - 1)],
+    aura: PRESTIGE_AURA[Math.min(idx, PRESTIGE_AURA.length - 1)],
+    min,
+    max: min + PRESTIGE_STEP - 1,
+    prestige: tier,
+  };
+}
+
+function getLevel(gamesPlayed: number): LevelInfo {
+  if (gamesPlayed >= PRESTIGE_MIN) {
+    return prestigeLevel(Math.floor((gamesPlayed - PRESTIGE_MIN) / PRESTIGE_STEP) + 1);
+  }
+  const l = LEVELS.find(l => gamesPlayed >= l.min && gamesPlayed <= l.max) ?? LEVELS[0];
+  return { ...l, prestige: 0 };
+}
+
+function getNextLevel(gamesPlayed: number): LevelInfo | null {
+  if (gamesPlayed >= PRESTIGE_MIN) {
+    return prestigeLevel(Math.floor((gamesPlayed - PRESTIGE_MIN) / PRESTIGE_STEP) + 2);
+  }
+  const idx = LEVELS.findIndex(l => gamesPlayed >= l.min && gamesPlayed <= l.max);
+  if (idx >= 0 && idx < LEVELS.length - 1) return { ...LEVELS[idx + 1], prestige: 0 };
+  return prestigeLevel(1); // next after Maestro is Leyenda I
+}
+
+function getLevelProgress(gamesPlayed: number): number {
   const lvl = getLevel(gamesPlayed);
-  if (lvl.max === Infinity) return 100;
   const span = lvl.max - lvl.min + 1;
-  return Math.round(((gamesPlayed - lvl.min) / span) * 100);
+  if (!isFinite(span) || span <= 0) return 100;
+  return Math.min(100, Math.round(((gamesPlayed - lvl.min) / span) * 100));
 }
 
 // ── Mode labels ────────────────────────────────────────────────────────────
@@ -109,6 +165,23 @@ const LEGENDARY_FRAME_FX: Record<string, string> = {
 function isLegendaryFrame(id?: string | null): boolean {
   return !!id && id in LEGENDARY_FRAME_FX;
 }
+// Title metadata mirror of the server catalog (titleCatalog.ts) — used to render
+// the equipped title pill on ANY profile (own or others'), since the profile
+// payload only carries the title id. Keep id → { label, icon, color } in sync.
+const TITLE_META_BY_ID: Record<string, { label: string; icon: string; color: string }> = {
+  novato:        { label: "Novato",        icon: "🌱", color: "#9ca3af" },
+  jugador:       { label: "Jugador",       icon: "🎮", color: "#3b82f6" },
+  veterano:      { label: "Veterano",      icon: "🛡️", color: "#f59e0b" },
+  en_racha:      { label: "En Racha",      icon: "🔥", color: "#f97316" },
+  imparable:     { label: "El Imparable",  icon: "⚡", color: "#eab308" },
+  ganador:       { label: "Ganador",       icon: "🏅", color: "#22c55e" },
+  invencible:    { label: "Invencible",    icon: "⚔️", color: "#ef4444" },
+  erudito:       { label: "Erudito",       icon: "📚", color: "#06b6d4" },
+  sabio:         { label: "Sabio",         icon: "🧠", color: "#a855f7" },
+  millonario:    { label: "Millonario",    icon: "💰", color: "#fbbf24" },
+  coleccionista: { label: "Coleccionista", icon: "🏆", color: "#f472b6" },
+  leyenda_viva:  { label: "Leyenda Viva",  icon: "👑", color: "#fde047" },
+};
 const AVATAR_GLYPH_BY_ID: Record<string, string> = {
   avatar_premium_5:  "🎯",
   avatar_premium_10: "🔥",
@@ -165,7 +238,7 @@ export default function PlayerProfile() {
   const { inventory, equip, buy } = useInventory(isMe ? me?.id : null);
   const [busyAction, setBusyAction] = useState<string | null>(null);
 
-  const handleEquip = useCallback(async (kind: "avatar" | "frame", value: string | null) => {
+  const handleEquip = useCallback(async (kind: "avatar" | "frame" | "title", value: string | null) => {
     setBusyAction(`equip:${kind}:${value ?? ""}`);
     await equip(kind, value);
     setBusyAction(null);
@@ -235,7 +308,7 @@ export default function PlayerProfile() {
   const recentGames: any[] = data.recentGames ?? [];
   const level = getLevel(data.gamesPlayed);
   const progress = getLevelProgress(data.gamesPlayed);
-  const nextLevel = LEVELS[LEVELS.indexOf(level) + 1];
+  const nextLevel = getNextLevel(data.gamesPlayed);
 
   return (
     <Layout>
@@ -285,7 +358,7 @@ export default function PlayerProfile() {
               );
             })()}
             <span
-              className="absolute -bottom-1 -right-1 text-xl"
+              className={`absolute -bottom-1 -right-1 text-xl ${level.aura ?? ""}`}
               title={level.label}
             >
               {level.icon}
@@ -294,6 +367,23 @@ export default function PlayerProfile() {
 
           <div className="text-center">
             <h1 className="text-3xl font-display font-black">{data.playerName}</h1>
+            {/* Equipped title (earned by playing). Falls back gracefully if the
+                stored id isn't in the client mirror. */}
+            {(() => {
+              const titleId = isMe
+                ? (inventory?.equipped.title ?? data.equippedTitle)
+                : data.equippedTitle;
+              const meta = titleId ? TITLE_META_BY_ID[titleId] : null;
+              if (!meta) return null;
+              return (
+                <span
+                  className="inline-flex items-center gap-1 mt-1 px-2.5 py-0.5 rounded-full text-xs font-black"
+                  style={{ color: meta.color, background: meta.color + "1f", border: `1.5px solid ${meta.color}66` }}
+                >
+                  <span>{meta.icon}</span> {meta.label}
+                </span>
+              );
+            })()}
             <p className="font-bold mt-0.5" style={{ color: "#f9a825" }}>{data.title}</p>
             <p className="text-white/40 text-sm mt-0.5">Puesto #{data.globalRank} global</p>
             {data.isPremium && (
@@ -340,7 +430,7 @@ export default function PlayerProfile() {
         >
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
-              <span className="text-2xl">{level.icon}</span>
+              <span className={`text-2xl ${level.aura ?? ""}`}>{level.icon}</span>
               <div>
                 <p className="font-black text-sm" style={{ color: level.color }}>Nivel: {level.label}</p>
                 <p className="text-xs text-white/40">{data.gamesPlayed} partidas jugadas</p>
@@ -457,6 +547,45 @@ export default function PlayerProfile() {
                   <p className="text-[11px] text-white/30 italic">Reclama niveles del Pase para conseguirlos.</p>
                 )}
               </div>
+            </div>
+
+            {/* Títulos — se ganan jugando, no se compran */}
+            <div>
+              <p className="text-xs font-bold text-white/50 mb-1.5">Títulos <span className="text-white/30 font-normal">(se ganan jugando)</span></p>
+              <div className="flex gap-2 flex-wrap">
+                <CosmeticChip
+                  glyph="—" label="Sin título"
+                  equipped={(inventory.equipped.title ?? null) === null}
+                  busy={busyAction === "equip:title:"}
+                  onClick={() => handleEquip("title", null)}
+                />
+                {(inventory.titles ?? []).filter((t) => t.unlocked).map((t) => (
+                  <CosmeticChip
+                    key={t.id} glyph={t.icon} label={t.label} color={t.color}
+                    equipped={inventory.equipped.title === t.id}
+                    busy={busyAction === `equip:title:${t.id}`}
+                    onClick={() => handleEquip("title", t.id)}
+                  />
+                ))}
+              </div>
+              {(inventory.titles ?? []).some((t) => !t.unlocked) && (
+                <>
+                  <p className="text-[10px] font-bold text-white/30 mt-2 mb-1.5 uppercase">Por desbloquear</p>
+                  <div className="flex gap-2 flex-wrap">
+                    {(inventory.titles ?? []).filter((t) => !t.unlocked).map((t) => (
+                      <div
+                        key={t.id}
+                        title={t.desc}
+                        className="flex flex-col items-center gap-1 px-2 py-1.5 rounded-lg opacity-40"
+                        style={{ border: "1.5px dashed rgba(255,255,255,0.15)", minWidth: 56 }}
+                      >
+                        <span className="text-xl leading-none grayscale">🔒</span>
+                        <span className="text-[9px] font-bold text-white/60 leading-tight text-center max-w-[60px] truncate">{t.label}</span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Tienda de monedas */}

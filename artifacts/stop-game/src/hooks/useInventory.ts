@@ -13,6 +13,7 @@ function authHeaders(): Record<string, string> {
 }
 
 export type CosmeticKind = "avatar" | "frame";
+export type EquipKind = "avatar" | "frame" | "title";
 
 export interface CosmeticMeta {
   id: string;
@@ -26,10 +27,22 @@ export interface ShopItem extends CosmeticMeta {
   price: number;
 }
 
+// Titles are earned by playing — the server returns the full catalog with each
+// title's unlocked state so the UI can show locked ones as goals.
+export interface TitleView {
+  id: string;
+  label: string;
+  icon: string;
+  color: string;
+  desc: string;
+  unlocked: boolean;
+}
+
 export interface InventorySnapshot {
   coins: number;
-  equipped: { avatar: string | null; frame: string | null };
+  equipped: { avatar: string | null; frame: string | null; title: string | null };
   owned: { avatars: CosmeticMeta[]; frames: CosmeticMeta[] };
+  titles: TitleView[];
   shop: ShopItem[];
 }
 
@@ -52,7 +65,7 @@ export function useInventory(playerId?: string | null) {
 
   useEffect(() => { refresh(); }, [refresh]);
 
-  const equip = useCallback(async (kind: CosmeticKind, value: string | null) => {
+  const equip = useCallback(async (kind: EquipKind, value: string | null) => {
     if (!playerId) return null;
     const res = await fetch(`${API}/api/inventory/equip`, {
       method: "POST",

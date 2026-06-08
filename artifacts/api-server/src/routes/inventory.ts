@@ -3,6 +3,7 @@ import { db, playerScoresTable, indexesReady } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
 import { requirePlayerIdentity, type AuthedRequest } from "../lib/playerAuth";
 import { resolveCosmetic, shopItem, SHOP_ITEMS } from "../lib/inventoryCatalog";
+import { computeTitleStats, evaluateTitles, isTitleUnlocked } from "../lib/titleCatalog";
 
 interface SqlResult<T> {
   rows?: T[];
@@ -13,6 +14,13 @@ interface InventoryRow {
   inventory_json: string;
   equipped_avatar: string | null;
   equipped_frame: string | null;
+  equipped_title: string | null;
+  games_played: number;
+  wins: number;
+  current_streak: number;
+  longest_streak: number;
+  level: number;
+  total_score: number;
 }
 
 interface OwnedInventory {
@@ -45,7 +53,8 @@ function parseInventory(raw: string): OwnedInventory {
 
 async function loadInventoryRow(playerId: string): Promise<InventoryRow | null> {
   const rows = (await db.execute(sql`
-    SELECT coins, inventory_json, equipped_avatar, equipped_frame
+    SELECT coins, inventory_json, equipped_avatar, equipped_frame, equipped_title,
+           games_played, wins, current_streak, longest_streak, level, total_score
     FROM player_scores WHERE player_id = ${playerId} LIMIT 1
   `)) as unknown as SqlResult<InventoryRow>;
   return rows.rows?.[0] ?? null;
@@ -62,9 +71,10 @@ router.get("/", requirePlayerIdentity, async (req: AuthedRequest, res) => {
       return;
     }
     const inv = parseInventory(row.inventory_json);
+    const titleStats = computeTitleStats(row);
     res.json({
       coins: row.coins,
-      equipped: { avatar: row.equipped_avatar, frame: row.equipped_frame },
+      equipped: { avatar: row.equipped_avatar, frame: row.equipped_frame, title: row.equipped_title },
       owned: {
         avatars: inv.avatars
           .map((id) => resolveCosmetic(id))
@@ -73,6 +83,8 @@ router.get("/", requirePlayerIdentity, async (req: AuthedRequest, res) => {
           .map((id) => resolveCosmetic(id))
           .filter((c): c is NonNullable<ReturnType<typeof resolveCosmetic>> => c !== null && c.kind === "frame"),
       },
+      // Titles are earned by playing — full catalog annotated with unlocked state.
+      titles: evaluateTitles(titleStats),
       shop: SHOP_ITEMS,
     });
   } catch (e: unknown) {
@@ -86,7 +98,7 @@ router.get("/", requirePlayerIdentity, async (req: AuthedRequest, res) => {
 router.post("/equip", requirePlayerIdentity, async (req: AuthedRequest, res) => {
   const playerId = req.playerId!;
   const { kind, value } = (req.body ?? {}) as { kind?: string; value?: string | null };
-  if (kind !== "avatar" && kind !== "frame") {
+  if (kind !== "avatar" && kind !== "frame" && kind !== "title") {
     res.status(400).json({ error: "Invalid kind" });
     return;
   }
@@ -95,15 +107,24 @@ router.post("/equip", requirePlayerIdentity, async (req: AuthedRequest, res) => 
     const row = await loadInventoryRow(playerId);
     if (!row) { res.status(404).json({ error: "Player not found" }); return; }
 
-    if (value !== null && value !== undefined && value !== "") {
-      const meta = resolveCosmetic(value);
+    const hasValue = value !== null && value !== undefined && value !== "";
+
+    if (hasValue && kind === "title") {
+      // Titles aren't in inventory_json — they're unlocked by meeting the
+      // play criteria. Validate against the player's live stats.
+      if (!isTitleUnlocked(value as string, computeTitleStats(row))) {
+        res.status(403).json({ error: "Title not unlocked" });
+        return;
+      }
+    } else if (hasValue) {
+      const meta = resolveCosmetic(value as string);
       if (!meta || meta.kind !== kind) {
         res.status(400).json({ error: "Unknown cosmetic" });
         return;
       }
       const inv = parseInventory(row.inventory_json);
       const owned = kind === "avatar" ? inv.avatars : inv.frames;
-      if (!owned.includes(value)) {
+      if (!owned.includes(value as string)) {
         res.status(403).json({ error: "Cosmetic not owned" });
         return;
       }
@@ -114,9 +135,13 @@ router.post("/equip", requirePlayerIdentity, async (req: AuthedRequest, res) => 
       await db.update(playerScoresTable)
         .set({ equippedAvatar: finalValue, updatedAt: new Date() })
         .where(eq(playerScoresTable.playerId, playerId));
-    } else {
+    } else if (kind === "frame") {
       await db.update(playerScoresTable)
         .set({ equippedFrame: finalValue, updatedAt: new Date() })
+        .where(eq(playerScoresTable.playerId, playerId));
+    } else {
+      await db.update(playerScoresTable)
+        .set({ equippedTitle: finalValue, updatedAt: new Date() })
         .where(eq(playerScoresTable.playerId, playerId));
     }
     res.json({ ok: true, kind, value: finalValue });

@@ -540,6 +540,7 @@ router.get("/profile/:playerId", async (req, res) => {
     isPremium: ps.isPremium ?? false,
     equippedAvatar: ps.equippedAvatar ?? null,
     equippedFrame: ps.equippedFrame ?? null,
+    equippedTitle: ps.equippedTitle ?? null,
     globalRank,
     monthlyScore,
     title: getTitle(globalRank),

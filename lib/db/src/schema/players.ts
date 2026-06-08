@@ -34,6 +34,11 @@ export const playerScoresTable = pgTable("player_scores", {
   // Server validates ownership on equip.
   equippedAvatar: text("equipped_avatar"),
   equippedFrame: text("equipped_frame"),
+  // Currently equipped TITLE id (e.g. "imparable"). Null = no custom title.
+  // Titles are UNLOCKED BY PLAYING (derived from stats), never bought; the
+  // server only persists which one the player chose to display. Validated on
+  // equip against the unlock criteria in titleCatalog.ts.
+  equippedTitle: text("equipped_title"),
   // Latest season for which the end-of-season recap modal has been shown.
   notifiedFinalSeasonId: integer("notified_final_season_id"),
   // ── Word Collection ───────────────────────────────────────────────────

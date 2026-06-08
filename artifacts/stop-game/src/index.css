@@ -139,6 +139,41 @@
   }
   .legendary-glyph { animation: legendary-glyph-pulse 1.8s ease-in-out infinite; display: inline-block; }
 
+  /* Prestige auras — infinite "Leyenda" tiers (Leyenda I, II, III…). Applied to
+     the level icon/badge; each tier escalates intensity, speed and color. */
+  .prestige-aura-1, .prestige-aura-2, .prestige-aura-3,
+  .prestige-aura-4, .prestige-aura-5 { display: inline-block; }
+
+  @keyframes prestige-1 {
+    0%, 100% { filter: drop-shadow(0 0 3px rgba(234,179,8,.5)); transform: scale(1); }
+    50%      { filter: drop-shadow(0 0 9px rgba(234,179,8,.9)); transform: scale(1.1); }
+  }
+  .prestige-aura-1 { animation: prestige-1 1.8s ease-in-out infinite; }
+
+  @keyframes prestige-2 {
+    0%, 100% { filter: drop-shadow(0 0 4px rgba(245,158,11,.6)); transform: scale(1) rotate(-2deg); }
+    50%      { filter: drop-shadow(0 0 12px rgba(245,158,11,1)); transform: scale(1.14) rotate(2deg); }
+  }
+  .prestige-aura-2 { animation: prestige-2 1.5s ease-in-out infinite; }
+
+  @keyframes prestige-3 {
+    0%, 100% { filter: drop-shadow(0 0 5px rgba(239,68,68,.65)); transform: scale(1) rotate(-3deg); }
+    50%      { filter: drop-shadow(0 0 16px rgba(239,68,68,1)); transform: scale(1.18) rotate(3deg); }
+  }
+  .prestige-aura-3 { animation: prestige-3 1.3s ease-in-out infinite; }
+
+  @keyframes prestige-4 {
+    0%, 100% { filter: drop-shadow(0 0 6px rgba(236,72,153,.7)); transform: scale(1) rotate(-4deg); }
+    50%      { filter: drop-shadow(0 0 20px rgba(236,72,153,1)); transform: scale(1.22) rotate(4deg); }
+  }
+  .prestige-aura-4 { animation: prestige-4 1.1s ease-in-out infinite; }
+
+  @keyframes prestige-5 {
+    0%, 100% { filter: drop-shadow(0 0 8px rgba(168,85,247,.8)) drop-shadow(0 0 2px rgba(34,211,238,.6)); transform: scale(1) rotate(-5deg); }
+    50%      { filter: drop-shadow(0 0 26px rgba(168,85,247,1)) drop-shadow(0 0 10px rgba(34,211,238,.9)); transform: scale(1.26) rotate(5deg); }
+  }
+  .prestige-aura-5 { animation: prestige-5 0.95s ease-in-out infinite; }
+
   /* Respect user's OS-level reduced motion setting (Android, iOS, Windows, etc.) */
   @media (prefers-reduced-motion: reduce) {
     .splash-ring-rotate { animation: none; }

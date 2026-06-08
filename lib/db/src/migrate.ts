@@ -79,6 +79,9 @@ export async function ensureIndexes(): Promise<void> {
        ADD COLUMN IF NOT EXISTS equipped_avatar text`,
     `ALTER TABLE player_scores
        ADD COLUMN IF NOT EXISTS equipped_frame text`,
+    // Equipped custom title (unlocked by playing, never bought). NULL = none.
+    `ALTER TABLE player_scores
+       ADD COLUMN IF NOT EXISTS equipped_title text`,
     // Tracks the most recent finished season for which the player has been
     // shown the "Quedaste #N" recap modal. NULL = never notified.
     `ALTER TABLE player_scores

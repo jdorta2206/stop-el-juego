@@ -26,6 +26,27 @@ visuals" — so the frontend re-declares color/glyph/FX keyed by the same IDs.
 The buy/equip routes are **price-agnostic and atomic** (row-locked tx), so high-cost
 coin-sink items need NO backend logic change — only a catalog entry with the price.
 
-**"Leyenda" is NOT a level** — it's global leaderboard rank #1 (a derived title, not
-stored). True per-player "infinite prestige" must be built on XP levels (everyone can
-climb), not on the rank title (only one player holds it).
+**"Leyenda" the leaderboard title** = global rank #1 (derived, not stored). Separately,
+the profile **level ladder** ("Nivel") is derived from `gamesPlayed`, and past 200 games
+it becomes **infinite prestige**: Leyenda I/II/III…, +1 tier per 100 games, escalating
+color + CSS aura. This is duplicated by hand: client `PlayerProfile.tsx`
+(getLevel/getNextLevel + PRESTIGE_* consts + `.prestige-aura-N` CSS) and server
+`titleCatalog.prestigeTier()` (200 base, +100/tier) — keep both in lockstep.
+
+## Unlockable titles (earned by playing)
+A THIRD hand-mirrored catalog, separate from avatars/frames:
+- Server = `artifacts/api-server/src/lib/titleCatalog.ts` (`TITLES`, predicates,
+  `computeTitleStats`, `evaluateTitles`, `isTitleUnlocked`). GET /api/inventory returns
+  the full catalog annotated with `unlocked`; equip route accepts `kind:"title"` and
+  validates via `isTitleUnlocked` against LIVE stats (NOT inventory ownership — titles
+  are never bought). Profile route returns `equippedTitle`.
+- Client = `TITLE_META_BY_ID` in `PlayerProfile.tsx` (id → label/icon/color) to render
+  the equipped pill on ANY profile; `desc`/`unlocked` come from the server payload.
+  Keep ids/labels/icons/colors in sync with the server list.
+
+**Integrity rule — title unlock predicates must read ONLY server-authoritative counters**
+(`games_played`, `wins`, `current_streak`, `longest_streak`, `total_score`, derived
+`prestige`). **Why:** `achievements_json` and `collected_words_json` are client-merged via
+POST /ranking/progress (never-remove merge), so basing an "earned by playing" unlock on
+them lets a crafted request self-award the title. Original drafts used collectedWords/
+achievementCount and were re-based onto totalScore/wins for exactly this reason.

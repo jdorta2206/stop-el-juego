@@ -1,3 +1,3 @@
 - [Push notifications prod config](push-notifications-prod-config.md) — all push silently dead when Railway host lacks VAPID_PUBLIC_KEY/PRIVATE_KEY; dev works via `.replit`. Mirror the SAME keypair to Railway.
 - [Player identity & auth model](player-auth-model.md) — guest (UUID) vs logged-in (provider_ prefix + signed token); verifyClaimedIdentity rules, guarded room endpoints, SSE/sendBeacon header limits.
-- [Cosmetic catalog sync](cosmetic-catalog-sync.md) — avatars/frames duplicated server↔client by hand; new ones need both sides (+CSS for animated frames); buy/equip is price-agnostic so coin sinks are catalog-only; "Leyenda"=rank#1, not a level.
+- [Cosmetic catalog sync](cosmetic-catalog-sync.md) — avatars/frames/titles hand-mirrored server↔client; titles earned-by-playing must use ONLY server-authoritative stats; infinite prestige (Leyenda I/II/III) from gamesPlayed duplicated client+server.
