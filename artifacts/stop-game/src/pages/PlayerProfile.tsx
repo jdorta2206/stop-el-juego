@@ -47,13 +47,14 @@ const MODE_LABELS: Record<string, { label: string; icon: string }> = {
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 function CosmeticChip({
-  glyph, label, equipped, busy, color, onClick,
+  glyph, label, equipped, busy, color, glowing, onClick,
 }: {
   glyph: string;
   label: string;
   equipped: boolean;
   busy: boolean;
   color?: string;
+  glowing?: boolean;
   onClick: () => void;
 }) {
   return (
@@ -68,7 +69,7 @@ function CosmeticChip({
         minWidth: 56,
       }}
     >
-      <span className="text-xl leading-none" style={{ color }}>{glyph}</span>
+      <span className={`text-xl leading-none ${glowing ? "legendary-glyph" : ""}`} style={{ color }}>{glyph}</span>
       <span className="text-[9px] font-bold text-white/70 leading-tight text-center max-w-[60px] truncate">{label}</span>
       {equipped && (
         <span className="absolute -top-1 -right-1 bg-emerald-500 rounded-full p-0.5">
@@ -90,7 +91,24 @@ const FRAME_COLORS_BY_ID: Record<string, string> = {
   frame_free_25: "#a78bfa",
   frame_free_30: "#f472b6",
   frame_shop_neon: "#22d3ee",
+  // Marcos legendarios (animados) — color base del aro; el efecto va por CSS.
+  frame_shop_fuego:   "#fb923c",
+  frame_shop_rayo:    "#38bdf8",
+  frame_shop_lava:    "#ef4444",
+  frame_shop_galaxia: "#a855f7",
 };
+
+// Marcos legendarios → clase CSS de animación aplicada al aro del avatar.
+// Mantener en sync con SHOP_ITEMS (servidor) e index.css (keyframes).
+const LEGENDARY_FRAME_FX: Record<string, string> = {
+  frame_shop_fuego:   "frame-fx-fuego",
+  frame_shop_rayo:    "frame-fx-rayo",
+  frame_shop_lava:    "frame-fx-lava",
+  frame_shop_galaxia: "frame-fx-galaxia",
+};
+function isLegendaryFrame(id?: string | null): boolean {
+  return !!id && id in LEGENDARY_FRAME_FX;
+}
 const AVATAR_GLYPH_BY_ID: Record<string, string> = {
   avatar_premium_5:  "🎯",
   avatar_premium_10: "🔥",
@@ -250,13 +268,14 @@ export default function PlayerProfile() {
                 ? inventory?.equipped.avatar ?? data.equippedAvatar
                 : data.equippedAvatar;
               const frameColor = equippedFrame ? FRAME_COLORS_BY_ID[equippedFrame] : null;
+              const fxClass = equippedFrame ? LEGENDARY_FRAME_FX[equippedFrame] : null;
               return (
                 <div
-                  className="w-24 h-24 rounded-full flex items-center justify-center text-4xl font-black text-white shadow-2xl border-4"
+                  className={`w-24 h-24 rounded-full flex items-center justify-center text-4xl font-black text-white shadow-2xl border-4 ${fxClass ?? ""}`}
                   style={{
                     backgroundColor: data.avatarColor || "#e53e3e",
                     borderColor: frameColor ?? level.color + "88",
-                    boxShadow: frameColor ? `0 0 18px ${frameColor}66` : undefined,
+                    boxShadow: fxClass ? undefined : (frameColor ? `0 0 18px ${frameColor}66` : undefined),
                   }}
                 >
                   {equippedAvatar && AVATAR_GLYPH_BY_ID[equippedAvatar]
@@ -428,6 +447,7 @@ export default function PlayerProfile() {
                 {inventory.owned.frames.map((c) => (
                   <CosmeticChip
                     key={c.id} glyph={c.glyph} label={c.label} color={c.color}
+                    glowing={isLegendaryFrame(c.id)}
                     equipped={inventory.equipped.frame === c.id}
                     busy={busyAction === `equip:frame:${c.id}`}
                     onClick={() => handleEquip("frame", c.id)}
@@ -454,7 +474,7 @@ export default function PlayerProfile() {
                       key={item.id}
                       className="flex items-center gap-3 p-2.5 rounded-xl bg-black/30 border border-white/10"
                     >
-                      <span className="text-2xl w-8 text-center" style={{ color: item.color }}>{item.glyph}</span>
+                      <span className={`text-2xl w-8 text-center ${isLegendaryFrame(item.id) ? "legendary-glyph" : ""}`} style={{ color: item.color }}>{item.glyph}</span>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-bold truncate">{item.label}</p>
                         <p className="text-[11px] text-amber-400 flex items-center gap-1">

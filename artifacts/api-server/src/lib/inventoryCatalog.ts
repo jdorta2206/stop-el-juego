@@ -109,6 +109,13 @@ export const SHOP_ITEMS: ShopItem[] = [
   { id: "avatar_shop_unicorn", kind: "avatar", label: "Avatar Unicornio", glyph: "🦄", price: 300 },
   { id: "avatar_shop_alien",   kind: "avatar", label: "Avatar Alien",    glyph: "👽", price: 250 },
   { id: "frame_shop_neon",     kind: "frame",  label: "Marco Neón",      glyph: "▣",  color: "#22d3ee", price: 400 },
+  // ── Marcos legendarios (animados) — sumideros de monedas de largo plazo ──
+  // Visuales animados resueltos en el cliente por id (ver PlayerProfile.tsx).
+  // El servidor solo necesita label/glyph/color/price; el efecto es CSS.
+  { id: "frame_shop_fuego",    kind: "frame",  label: "Marco Fuego",     glyph: "🔥", color: "#fb923c", price: 25000 },
+  { id: "frame_shop_rayo",     kind: "frame",  label: "Marco Rayo",      glyph: "⚡", color: "#38bdf8", price: 50000 },
+  { id: "frame_shop_lava",     kind: "frame",  label: "Marco Lava",      glyph: "🌋", color: "#ef4444", price: 100000 },
+  { id: "frame_shop_galaxia",  kind: "frame",  label: "Marco Galaxia",   glyph: "🌌", color: "#a855f7", price: 250000 },
 ];
 
 export function shopItem(id: string): ShopItem | null {

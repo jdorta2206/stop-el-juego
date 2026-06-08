@@ -91,6 +91,54 @@
     animation: splash-ring-spin 12s linear infinite;
   }
 
+  /* ── Marcos legendarios animados (sumideros de monedas) ──────────────────
+     Cada clase anima el aro (border + box-shadow) del avatar. Las animaciones
+     del cascade ganan sobre los estilos inline, así que el aro base se sustituye
+     mientras corre la animación. Mantener IDs en sync con LEGENDARY_FRAME_FX. */
+  @keyframes frame-fuego {
+    0%, 100% { border-color: #fb923c; box-shadow: 0 0 14px 2px rgba(251,146,60,.6), 0 0 26px 6px rgba(239,68,68,.35); }
+    50%      { border-color: #fbbf24; box-shadow: 0 0 22px 5px rgba(251,191,36,.9), 0 0 40px 12px rgba(239,68,68,.5); }
+  }
+  .frame-fx-fuego { animation: frame-fuego 1.4s ease-in-out infinite; }
+
+  @keyframes frame-rayo {
+    0%, 100% { border-color: #38bdf8; box-shadow: 0 0 12px 2px rgba(56,189,248,.6); }
+    46%      { border-color: #7dd3fc; box-shadow: 0 0 10px 2px rgba(56,189,248,.4); }
+    50%      { border-color: #e0f2fe; box-shadow: 0 0 28px 9px rgba(224,242,254,.95); }
+    54%      { border-color: #38bdf8; box-shadow: 0 0 12px 2px rgba(56,189,248,.5); }
+  }
+  .frame-fx-rayo { animation: frame-rayo 1.9s ease-in-out infinite; }
+
+  @keyframes frame-lava {
+    0%, 100% { border-color: #ef4444; box-shadow: 0 0 16px 3px rgba(239,68,68,.55), inset 0 0 8px rgba(124,45,18,.5); }
+    50%      { border-color: #f97316; box-shadow: 0 0 30px 9px rgba(249,115,22,.85), inset 0 0 12px rgba(180,83,9,.6); }
+  }
+  .frame-fx-lava { animation: frame-lava 2.6s ease-in-out infinite; }
+
+  /* Galaxia: aro de gradiente cónico giratorio detrás del avatar. */
+  .frame-fx-galaxia {
+    position: relative;
+    border-color: #a855f7 !important;
+    box-shadow: 0 0 22px 4px rgba(168,85,247,.55) !important;
+  }
+  .frame-fx-galaxia::before {
+    content: "";
+    position: absolute;
+    inset: -7px;
+    border-radius: 9999px;
+    z-index: -1;
+    background: conic-gradient(from 0deg, #a855f7, #6366f1, #ec4899, #22d3ee, #a855f7);
+    filter: blur(3px);
+    animation: splash-ring-spin 6s linear infinite;
+  }
+
+  /* Glyph glow para previews de marcos legendarios (tienda + inventario). */
+  @keyframes legendary-glyph-pulse {
+    0%, 100% { filter: drop-shadow(0 0 3px rgba(255,255,255,.3)); transform: scale(1); }
+    50%      { filter: drop-shadow(0 0 9px currentColor); transform: scale(1.12); }
+  }
+  .legendary-glyph { animation: legendary-glyph-pulse 1.8s ease-in-out infinite; display: inline-block; }
+
   /* Respect user's OS-level reduced motion setting (Android, iOS, Windows, etc.) */
   @media (prefers-reduced-motion: reduce) {
     .splash-ring-rotate { animation: none; }
