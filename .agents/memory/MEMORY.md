@@ -1,3 +1,2 @@
-- [Player identity & auth model](player-auth-model.md) — how guest vs OAuth ids are distinguished and why server identity binding must fail-open without SESSION_SECRET.
-- [Rooms concurrency invariants](rooms-concurrency.md) — bluff scoring + use-card must CAS on room state; never submit scores before the state-transition write wins.
-- [api-server dev runtime](api-server-runtime.md) — tsx without watch; restart workflow after edits; binds to PORT (8080 in dev), routes under /api.
+- [Push notifications prod config](push-notifications-prod-config.md) — all push silently dead when Railway host lacks VAPID_PUBLIC_KEY/PRIVATE_KEY; dev works via `.replit`. Mirror the SAME keypair to Railway.
+- [Player identity & auth model](player-auth-model.md) — guest (UUID) vs logged-in (provider_ prefix + signed token); verifyClaimedIdentity rules, guarded room endpoints, SSE/sendBeacon header limits.
