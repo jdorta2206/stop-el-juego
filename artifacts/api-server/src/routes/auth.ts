@@ -1,11 +1,43 @@
 import { Router } from "express";
 import type { Request, Response } from "express";
 import jwt from "jsonwebtoken";
+import crypto from "crypto";
 import { issuePlayerToken, clearPlayerToken, PLAYER_TOKEN_BRIDGE_KEY, readPlayerId } from "../lib/playerAuth";
 import { db, playerScoresTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 
 const router = Router();
+
+// ── OAuth response shapes ───────────────────────────────────────────────────
+// External JSON from each provider. We only declare the fields we actually read;
+// everything is optional because the provider may omit fields or return an error
+// body instead of the success body.
+interface OAuthTokenResponse {
+  access_token?: string;
+  id_token?: string;
+  open_id?: string;
+  data?: { access_token?: string; open_id?: string };
+  error?: string;
+  error_type?: string;
+  error_description?: string;
+  error_message?: string;
+}
+interface OAuthProfile {
+  sub?: string;
+  id?: string;
+  name?: string;
+  username?: string;
+  display_name?: string;
+  email?: string;
+  picture?: string | { data?: { url?: string } };
+  profile_picture_url?: string;
+  avatar_url?: string;
+  open_id?: string;
+}
+interface TikTokUserResponse {
+  data?: { user?: OAuthProfile };
+  user?: OAuthProfile;
+}
 
 // Canonical origin where OAuth runs — it's the ONLY origin registered as the
 // redirect_uri in the Google/Facebook/Instagram consoles, and after auth we
@@ -64,6 +96,132 @@ function decodeAuthState(raw: string | undefined): { returnPath: string; returnO
     }
   } catch { /* not JSON — treat as legacy raw path */ }
   return { returnPath: raw.startsWith("/") ? raw : "/", returnOrigin: APP_ORIGIN };
+}
+
+// ── CSRF hardening for the OAuth `state` param ──────────────────────────────
+// `state` used to carry only navigation info (returnPath/returnOrigin), so it
+// gave no protection against login-CSRF. We now (a) HMAC-sign the state with
+// SESSION_SECRET plus a timestamp (15-min TTL) and (b) bind it to the browser
+// with a single-use httpOnly nonce cookie set at /start.
+//
+// Cross-origin caveat: /start runs on the user's current origin (e.g. www via
+// Railway) but the provider always redirects to the callback on APP_ORIGIN
+// (stop-el-juego.replit.app). The Lax nonce cookie set at /start therefore only
+// reaches the callback when BOTH ran on the same origin (replit.app / dev). So
+// we ENFORCE binding only when the nonce cookie is present and FAIL OPEN when
+// it's absent (the cross-origin www path), keeping the fragile live login
+// working everywhere while still adding real CSRF protection on the
+// same-origin path. Apple (form_post → cross-site POST) never sends the Lax
+// cookie either, so it also fails open — fine, it isn't enabled.
+const OAUTH_NONCE_COOKIE = "stop_oauth_nonce";
+const STATE_TTL_MS = 15 * 60 * 1000;
+
+function stateSecret(): string | null {
+  const s = process.env["SESSION_SECRET"];
+  return s && s.length >= 16 ? s : null;
+}
+
+const NONCE_COOKIE_OPTS = {
+  httpOnly: true,
+  sameSite: "lax" as const,
+  secure: true,
+  path: "/",
+};
+
+/** Set a single-use nonce cookie and return a signed state carrying it. Falls
+ *  back to the legacy unsigned encoding when no secret is configured. */
+function beginAuthState(res: Response, returnPath: string, returnOrigin: string): string {
+  const secret = stateSecret();
+  if (!secret) return encodeAuthState(returnPath, returnOrigin);
+  const nonce = crypto.randomBytes(16).toString("base64url");
+  res.cookie(OAUTH_NONCE_COOKIE, nonce, { ...NONCE_COOKIE_OPTS, maxAge: STATE_TTL_MS });
+  const body = Buffer.from(
+    JSON.stringify({ r: returnPath, o: returnOrigin, n: nonce, t: Date.now() }),
+  ).toString("base64url");
+  const sig = crypto.createHmac("sha256", secret).update(body).digest("base64url");
+  return `v1.${body}.${sig}`;
+}
+
+function parseSignedState(
+  raw: string | undefined,
+): { r: string; o: string; n: string; t: number } | null {
+  if (!raw || !raw.startsWith("v1.")) return null;
+  const secret = stateSecret();
+  if (!secret) return null;
+  const parts = raw.split(".");
+  if (parts.length !== 3) return null;
+  const [, body, sig] = parts;
+  if (!body || !sig) return null;
+  const expected = crypto.createHmac("sha256", secret).update(body).digest("base64url");
+  let ok = false;
+  try {
+    ok =
+      sig.length === expected.length &&
+      crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected));
+  } catch {
+    return null;
+  }
+  if (!ok) return null;
+  try {
+    const p = JSON.parse(Buffer.from(body, "base64url").toString()) as Record<string, unknown>;
+    if (typeof p["r"] === "string" && typeof p["n"] === "string" && typeof p["t"] === "number") {
+      const o =
+        typeof p["o"] === "string" && SAFE_RETURN_ORIGINS.has(p["o"])
+          ? (p["o"] as string)
+          : APP_ORIGIN;
+      return { r: p["r"] as string, o, n: p["n"] as string, t: p["t"] as number };
+    }
+  } catch {
+    /* malformed payload */
+  }
+  return null;
+}
+
+/** Resolve the return target AND check CSRF. Enforcement is limited to the
+ *  same-origin path (nonce cookie present); the cross-origin path fails open. */
+function verifyAuthState(
+  req: Request,
+  res: Response,
+): { returnPath: string; returnOrigin: string; csrfFail: boolean } {
+  const raw = (req.query?.["state"] ?? req.body?.["state"]) as string | undefined;
+  const nonceCookie = req.cookies?.[OAUTH_NONCE_COOKIE] as string | undefined;
+  if (nonceCookie) res.clearCookie(OAUTH_NONCE_COOKIE, NONCE_COOKIE_OPTS);
+
+  const signed = parseSignedState(raw);
+
+  // Same-origin path: a nonce cookie was issued for THIS flow, so we MUST see a
+  // valid signed state whose embedded nonce matches. Anything else (unsigned /
+  // legacy / malformed / stale / mismatched) is a CSRF failure — never fall back
+  // to the legacy decode here, or an attacker could downgrade to bypass the nonce.
+  if (nonceCookie) {
+    if (!signed) {
+      return { returnPath: "/", returnOrigin: APP_ORIGIN, csrfFail: true };
+    }
+    const age = Date.now() - signed.t;
+    const fresh = age <= STATE_TTL_MS && age >= -60_000;
+    let match = false;
+    try {
+      match =
+        nonceCookie.length === signed.n.length &&
+        crypto.timingSafeEqual(Buffer.from(nonceCookie), Buffer.from(signed.n));
+    } catch {
+      match = false;
+    }
+    if (!fresh || !match) {
+      return { returnPath: signed.r, returnOrigin: signed.o, csrfFail: true };
+    }
+    return { returnPath: signed.r, returnOrigin: signed.o, csrfFail: false };
+  }
+
+  // No nonce cookie reached this host (cross-origin www/TWA, Apple form_post,
+  // legacy links, or no SESSION_SECRET configured): fail open so login works.
+  if (signed) {
+    // Trust the integrity-checked (HMAC) payload for the return target.
+    return { returnPath: signed.r, returnOrigin: signed.o, csrfFail: false };
+  }
+  // Legacy / unsigned state — preserve prior behavior.
+  const legacy = decodeAuthState(raw);
+  return { returnPath: legacy.returnPath, returnOrigin: legacy.returnOrigin, csrfFail: false };
 }
 
 // ── Dedup cache: prevent double-use of OAuth codes (mobile browsers fire callback twice) ──
@@ -140,7 +298,7 @@ router.get("/google/start", (req: Request, res: Response) => {
   const redirectUri = `${APP_ORIGIN}/api/auth/google/callback`;
   const returnPath = (req.query["return"] as string) || "/";
   const returnOrigin = pickReturnOrigin(req, null);
-  const state = encodeAuthState(returnPath, returnOrigin);
+  const state = beginAuthState(res, returnPath, returnOrigin);
   const params = new URLSearchParams({
     client_id: GOOGLE_CLIENT_ID,
     redirect_uri: redirectUri,
@@ -155,7 +313,8 @@ router.get("/google/start", (req: Request, res: Response) => {
 
 router.get("/google/callback", async (req: Request, res: Response) => {
   const code  = req.query["code"]  as string | undefined;
-  const { returnPath, returnOrigin } = decodeAuthState(req.query["state"] as string | undefined);
+  const { returnPath, returnOrigin, csrfFail } = verifyAuthState(req, res);
+  if (csrfFail) return res.redirect(`${APP_ORIGIN}/?auth_error=csrf`);
   const error = req.query["error"] as string | undefined;
 
   const GOOGLE_CLIENT_ID     = process.env["VITE_GOOGLE_CLIENT_ID"];
@@ -186,26 +345,26 @@ router.get("/google/callback", async (req: Request, res: Response) => {
         grant_type: "authorization_code",
       }),
     });
-    const tokenData = (await tokenRes.json()) as any;
+    const tokenData = (await tokenRes.json()) as OAuthTokenResponse;
     console.log("Google token response keys:", Object.keys(tokenData));
     if (tokenData.error) {
       console.error("Google token error:", tokenData.error, tokenData.error_description);
       throw new Error(`Google error: ${tokenData.error} - ${tokenData.error_description}`);
     }
 
-    let payload: any = null;
+    let payload: OAuthProfile | null = null;
 
     if (tokenData.id_token) {
       // Decode JWT payload
       payload = JSON.parse(
         Buffer.from(tokenData.id_token.split(".")[1], "base64url").toString()
-      );
+      ) as OAuthProfile;
     } else if (tokenData.access_token) {
       // Fallback: use userinfo endpoint
       const userinfoRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
         headers: { Authorization: `Bearer ${tokenData.access_token}` },
       });
-      payload = (await userinfoRes.json()) as any;
+      payload = (await userinfoRes.json()) as OAuthProfile;
       console.log("Google userinfo payload:", JSON.stringify(payload));
     } else {
       throw new Error("No id_token or access_token in Google response");
@@ -241,7 +400,7 @@ router.get("/facebook/start", (req: Request, res: Response) => {
   const redirectUri = `${APP_ORIGIN}/api/auth/facebook/callback`;
   const returnPath = (req.query["return"] as string) || "/";
   const returnOrigin = pickReturnOrigin(req, null);
-  const state = encodeAuthState(returnPath, returnOrigin);
+  const state = beginAuthState(res, returnPath, returnOrigin);
   const params = new URLSearchParams({
     client_id: FACEBOOK_APP_ID,
     redirect_uri: redirectUri,
@@ -254,7 +413,8 @@ router.get("/facebook/start", (req: Request, res: Response) => {
 
 router.get("/facebook/callback", async (req: Request, res: Response) => {
   const code  = req.query["code"]  as string | undefined;
-  const { returnPath, returnOrigin } = decodeAuthState(req.query["state"] as string | undefined);
+  const { returnPath, returnOrigin, csrfFail } = verifyAuthState(req, res);
+  if (csrfFail) return res.redirect(`${APP_ORIGIN}/?auth_error=csrf`);
   const error = req.query["error"] as string | undefined;
 
   const FACEBOOK_APP_ID     = process.env["VITE_FACEBOOK_APP_ID"];
@@ -278,21 +438,21 @@ router.get("/facebook/callback", async (req: Request, res: Response) => {
       `https://graph.facebook.com/v19.0/oauth/access_token?` +
       new URLSearchParams({ client_id: FACEBOOK_APP_ID, redirect_uri: redirectUri, client_secret: FACEBOOK_APP_SECRET, code })
     );
-    const tokenData = (await tokenRes.json()) as any;
+    const tokenData = (await tokenRes.json()) as OAuthTokenResponse;
     if (!tokenData.access_token) throw new Error("No access_token");
 
     // Fetch profile
     const meRes = await fetch(
       `https://graph.facebook.com/me?fields=id,name,email,picture.type(large)&access_token=${tokenData.access_token}`
     );
-    const me = (await meRes.json()) as any;
+    const me = (await meRes.json()) as OAuthProfile;
 
     const playerId = `fb_${me.id}`;
     const user = JSON.stringify({
       id:       playerId,
       name:     me.name,
       email:    me.email,
-      picture:  me.picture?.data?.url || null,
+      picture:  (typeof me.picture === "object" ? me.picture.data?.url : undefined) || null,
       provider: "facebook",
     });
 
@@ -319,7 +479,7 @@ router.get("/instagram/start", (req: Request, res: Response) => {
   const redirectUri = `${APP_ORIGIN}/api/auth/instagram/callback`;
   const returnPath = (req.query["return"] as string) || "/";
   const returnOrigin = pickReturnOrigin(req, null);
-  const state = encodeAuthState(returnPath, returnOrigin);
+  const state = beginAuthState(res, returnPath, returnOrigin);
   const params = new URLSearchParams({
     client_id: INSTAGRAM_CLIENT_ID,
     redirect_uri: redirectUri,
@@ -332,7 +492,8 @@ router.get("/instagram/start", (req: Request, res: Response) => {
 
 router.get("/instagram/callback", async (req: Request, res: Response) => {
   const code  = req.query["code"]  as string | undefined;
-  const { returnPath, returnOrigin } = decodeAuthState(req.query["state"] as string | undefined);
+  const { returnPath, returnOrigin, csrfFail } = verifyAuthState(req, res);
+  if (csrfFail) return res.redirect(`${APP_ORIGIN}/?auth_error=csrf`);
   const error = req.query["error"] as string | undefined;
 
   const INSTAGRAM_CLIENT_ID     = process.env["INSTAGRAM_CLIENT_ID"];
@@ -362,7 +523,7 @@ router.get("/instagram/callback", async (req: Request, res: Response) => {
         code,
       }),
     });
-    const tokenData = (await tokenRes.json()) as any;
+    const tokenData = (await tokenRes.json()) as OAuthTokenResponse;
     console.log("Instagram token keys:", Object.keys(tokenData));
     if (tokenData.error_type || tokenData.error) {
       throw new Error(`Instagram error: ${tokenData.error_type || tokenData.error} - ${tokenData.error_message || tokenData.error_description}`);
@@ -372,7 +533,7 @@ router.get("/instagram/callback", async (req: Request, res: Response) => {
     const meRes = await fetch(
       `https://graph.instagram.com/v21.0/me?fields=id,username,profile_picture_url&access_token=${tokenData.access_token}`
     );
-    const me = (await meRes.json()) as any;
+    const me = (await meRes.json()) as OAuthProfile;
 
     const playerId = `ig_${me.id}`;
     const user = JSON.stringify({
@@ -420,7 +581,7 @@ router.get("/apple/start", (req: Request, res: Response) => {
   const redirectUri = `${APP_ORIGIN}/api/auth/apple/callback`;
   const returnPath = (req.query["return"] as string) || "/";
   const returnOrigin = pickReturnOrigin(req, null);
-  const state = encodeAuthState(returnPath, returnOrigin);
+  const state = beginAuthState(res, returnPath, returnOrigin);
   const params = new URLSearchParams({
     client_id: APPLE_CLIENT_ID,
     redirect_uri: redirectUri,
@@ -435,7 +596,8 @@ router.get("/apple/start", (req: Request, res: Response) => {
 // Apple sends a POST (form_post response_mode)
 router.post("/apple/callback", async (req: Request, res: Response) => {
   const code  = req.body?.["code"]  as string | undefined;
-  const { returnPath, returnOrigin } = decodeAuthState(req.body?.["state"] as string | undefined);
+  const { returnPath, returnOrigin, csrfFail } = verifyAuthState(req, res);
+  if (csrfFail) return res.redirect(`${APP_ORIGIN}/?auth_error=csrf`);
   const error = req.body?.["error"] as string | undefined;
 
   const APPLE_CLIENT_ID = process.env["APPLE_CLIENT_ID"];
@@ -466,7 +628,7 @@ router.post("/apple/callback", async (req: Request, res: Response) => {
         redirect_uri: redirectUri,
       }),
     });
-    const tokenData = (await tokenRes.json()) as any;
+    const tokenData = (await tokenRes.json()) as OAuthTokenResponse;
     if (tokenData.error) throw new Error(`Apple error: ${tokenData.error}`);
     if (!tokenData.id_token) throw new Error("No id_token from Apple");
 
@@ -517,7 +679,7 @@ router.get("/tiktok/start", (req: Request, res: Response) => {
   const redirectUri = `${APP_ORIGIN}/api/auth/tiktok/callback`;
   const returnPath = (req.query["return"] as string) || "/";
   const returnOrigin = pickReturnOrigin(req, null);
-  const state = encodeAuthState(returnPath, returnOrigin);
+  const state = beginAuthState(res, returnPath, returnOrigin);
   const params = new URLSearchParams({
     client_key: TIKTOK_CLIENT_KEY,
     redirect_uri: redirectUri,
@@ -530,7 +692,8 @@ router.get("/tiktok/start", (req: Request, res: Response) => {
 
 router.get("/tiktok/callback", async (req: Request, res: Response) => {
   const code  = req.query["code"]  as string | undefined;
-  const { returnPath, returnOrigin } = decodeAuthState(req.query["state"] as string | undefined);
+  const { returnPath, returnOrigin, csrfFail } = verifyAuthState(req, res);
+  if (csrfFail) return res.redirect(`${APP_ORIGIN}/?auth_error=csrf`);
   const error = req.query["error"] as string | undefined;
 
   const TIKTOK_CLIENT_KEY    = process.env["TIKTOK_CLIENT_KEY"]?.trim();
@@ -560,7 +723,7 @@ router.get("/tiktok/callback", async (req: Request, res: Response) => {
         redirect_uri: redirectUri,
       }),
     });
-    const tokenData = (await tokenRes.json()) as any;
+    const tokenData = (await tokenRes.json()) as OAuthTokenResponse;
     console.log("TikTok token keys:", Object.keys(tokenData));
     if (tokenData.error) throw new Error(`TikTok token error: ${tokenData.error}`);
 
@@ -573,7 +736,7 @@ router.get("/tiktok/callback", async (req: Request, res: Response) => {
       "https://open.tiktokapis.com/v2/user/info/?fields=open_id,display_name,avatar_url",
       { headers: { Authorization: `Bearer ${accessToken}` } }
     );
-    const meData = (await meRes.json()) as any;
+    const meData = (await meRes.json()) as TikTokUserResponse;
     const me = meData.data?.user || meData.user || {};
 
     const playerId = `tt_${me.open_id || openId}`;

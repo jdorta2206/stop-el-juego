@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { ValidateRoundBody, ValidateRoundResponse } from "@workspace/api-zod";
 import { validateWordWithAi } from "../lib/aiWordValidator";
 import { issueScoreToken } from "../lib/scoreToken";
+import { normalizeWord, isSafeInput } from "../lib/wordRules";
 
 const router: IRouter = Router();
 
@@ -1329,29 +1330,7 @@ const NEVER_VALID_WORDS = new Set([
 ]);
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function normalizeWord(word: string): string {
-  // Protect Ñ/ñ with a placeholder BEFORE NFD decomposition,
-  // otherwise "ñ" → "n" + combining-tilde → "n" (indistinguishable from N)
-  return word.toLowerCase().trim()
-    .replace(/ñ/g, "~")               // protect ñ from NFD
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")  // strip other accent marks
-    .replace(/[^a-z~\s]/g, "")        // strip numbers, emojis, symbols
-    .replace(/\s+/g, " ")             // collapse multiple spaces into one
-    .replace(/~/g, "ñ")               // restore ñ
-    .trim();
-}
-
-/** Hard limits to prevent abuse: max 60 chars, must contain a real letter, no absurd repetitions */
-function isSafeInput(word: string): boolean {
-  if (!word || word.trim().length === 0) return false;
-  if (word.length > 60) return false;
-  if (!/[a-záéíóúàèìòùäëïöüñ]/i.test(word)) return false;
-  // Reject keyboard-mashing: 4+ consecutive identical characters (e.g. "aaaa", "bbbbb")
-  if (/(.)\1{3,}/.test(word.toLowerCase())) return false;
-  return true;
-}
+// `normalizeWord` and `isSafeInput` live in ../lib/wordRules (pure, unit-tested).
 
 function findCategoryWords(langDict: Record<string, string[]>, category: string): string[] {
   const norm = normalizeWord(category);
