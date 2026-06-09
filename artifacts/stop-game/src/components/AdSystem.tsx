@@ -35,7 +35,7 @@ const ADS_DISABLED = import.meta.env.VITE_ADS_DISABLED === "1";
 const ADSTERRA_BANNER_KEY = ADS_DISABLED
   ? undefined
   : ((import.meta.env.VITE_ADSTERRA_BANNER_KEY as string | undefined) ??
-     "20fbacba6cfa090f0fdc325a456cc87b");
+     "1212cb86d493b763d38d4523eec88cac");
 const ADSTERRA_BANNER_W = 320;
 const ADSTERRA_BANNER_H = 50;
 
