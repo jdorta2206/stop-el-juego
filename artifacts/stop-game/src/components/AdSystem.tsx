@@ -43,7 +43,7 @@ const ADSTERRA_BANNER_H = 50;
 const ADSTERRA_RECT_KEY = ADS_DISABLED
   ? undefined
   : ((import.meta.env.VITE_ADSTERRA_RECT_KEY as string | undefined) ??
-     "8a1eada922ebe1e12f69cae426193885");
+     "44e53a601009fd7a4e31a86c4fa9c9c1");
 const ADSTERRA_RECT_W = 300;
 const ADSTERRA_RECT_H = 250;
 
