@@ -19,10 +19,10 @@ import { celebrateReward } from "@/lib/celebrate";
 import { rewardFrameName } from "@/lib/rewardFrames";
 import { CosmeticShop } from "@/components/CosmeticShop";
 import { LEGENDARY_FRAME_FX } from "@/lib/cosmeticHelpers";
-// Importaciones del Pack Mundial (solo Stripe, eliminamos Google Play)
+// Importaciones del Pack Mundial (solo Stripe)
 import { checkoutWorldCupPack } from "@/lib/worldCupPack";
 
-// ── Level system based on total games played ───────────────────────────────
+// Niveles (sin cambios)
 interface LevelInfo {
   label: string;
   icon: string;
@@ -285,7 +285,6 @@ export default function PlayerProfile() {
     celebrateReward();
   }, [claimPrestige]);
 
-  // Deep link for shop
   useEffect(() => {
     if (!isMe || !inventory) return;
     if (typeof window === "undefined" || window.location.hash !== "#tienda") return;
@@ -320,7 +319,7 @@ export default function PlayerProfile() {
     setFollowState("idle");
   }, [data, me, alreadyFollowing, follow, unfollow, followState]);
 
-  // 🔥 FUNCIÓN CORREGIDA: siempre usa Stripe (evita error de Google Play)
+  // 🔥 Stripe only
   const handlePurchasePack = async () => {
     setPackPurchasing(true);
     setPackError(null);
@@ -371,7 +370,6 @@ export default function PlayerProfile() {
     <Layout>
       <div className="flex-1 flex flex-col max-w-md mx-auto w-full py-6 gap-6 pb-10">
 
-        {/* Back button */}
         <button
           onClick={() => setLocation("/ranking")}
           className="flex items-center gap-2 text-white/50 hover:text-white text-sm font-bold transition-colors self-start"
@@ -379,7 +377,6 @@ export default function PlayerProfile() {
           <ArrowLeft size={16} /> Ranking
         </button>
 
-        {/* Hero section */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -452,7 +449,6 @@ export default function PlayerProfile() {
           </div>
         </motion.div>
 
-        {/* Level & XP progress */}
         <div className="space-y-2 px-2">
           <div className="flex justify-between text-sm">
             <span className="text-white/50">Nivel {level.label}</span>
@@ -468,14 +464,12 @@ export default function PlayerProfile() {
           )}
         </div>
 
-        {/* Stats cards (partidas, racha, etc.) */}
         <div className="grid grid-cols-3 gap-2">
           <StatCard label="Partidas" value={data.gamesPlayed} />
           <StatCard label="Victorias" value={data.wins} />
           <StatCard label="Racha máx" value={data.longestStreak || 0} />
         </div>
 
-        {/* Modos jugados */}
         {modeKeys.length > 0 && (
           <div className="flex flex-wrap gap-2 justify-center">
             {modeKeys.map(m => (
@@ -486,7 +480,6 @@ export default function PlayerProfile() {
           </div>
         )}
 
-        {/* Pack Mundial (solo para el propio perfil) */}
         {isMe && (
           <div className="mt-2 p-4 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-600 shadow-lg">
             <div className="flex items-center justify-between gap-3">
@@ -496,4 +489,14 @@ export default function PlayerProfile() {
                 </p>
                 <p className="text-sm text-white/90">
                   27 cosméticos: avatares, banderas, marcos y fondos
-                </
+                </p>
+                {packError && (
+                  <p className="text-xs text-red-200 mt-1">{packError}</p>
+                )}
+              </div>
+              <button
+                onClick={handlePurchasePack}
+                disabled={packPurchasing}
+                className="bg-white text-orange-600 font-bold px-5 py-2 rounded-xl shadow-md disabled:opacity-50"
+              >
+ 
