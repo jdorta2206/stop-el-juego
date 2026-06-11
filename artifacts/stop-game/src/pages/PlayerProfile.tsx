@@ -19,11 +19,10 @@ import { celebrateReward } from "@/lib/celebrate";
 import { rewardFrameName } from "@/lib/rewardFrames";
 import { CosmeticShop } from "@/components/CosmeticShop";
 import { LEGENDARY_FRAME_FX } from "@/lib/cosmeticHelpers";
-// Importaciones del Pack Mundial
-import { checkoutWorldCupPack, purchaseWorldCupPackOnPlay } from "@/lib/worldCupPack";
+// Importaciones del Pack Mundial (solo Stripe, eliminamos Google Play)
+import { checkoutWorldCupPack } from "@/lib/worldCupPack";
 
 // ── Level system based on total games played ───────────────────────────────
-// (el código de niveles permanece exactamente igual)
 interface LevelInfo {
   label: string;
   icon: string;
@@ -321,19 +320,12 @@ export default function PlayerProfile() {
     setFollowState("idle");
   }, [data, me, alreadyFollowing, follow, unfollow, followState]);
 
-  // Función para comprar el Pack Mundial (detecta entorno)
+  // 🔥 FUNCIÓN CORREGIDA: siempre usa Stripe (evita error de Google Play)
   const handlePurchasePack = async () => {
     setPackPurchasing(true);
     setPackError(null);
     try {
-      // Detect if inside TWA (standalone mode)
-      const isInApp = window.matchMedia('(display-mode: standalone)').matches;
-      if (isInApp) {
-        await purchaseWorldCupPackOnPlay();
-      } else {
-        await checkoutWorldCupPack();
-      }
-      // Si la compra se inicia correctamente, no mostramos mensaje aquí (la redirección o el flujo de pago lo hará)
+      await checkoutWorldCupPack();
     } catch (err: any) {
       console.error(err);
       setPackError(err.message || "Error al iniciar la compra");
@@ -497,4 +489,11 @@ export default function PlayerProfile() {
         {/* Pack Mundial (solo para el propio perfil) */}
         {isMe && (
           <div className="mt-2 p-4 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-600 shadow-lg">
-            <div clas
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="font-black text-white text-lg flex items-center gap-2">
+                  <span>⚽</span> Pack Mundial
+                </p>
+                <p className="text-sm text-white/90">
+                  27 cosméticos: avatares, banderas, marcos y fondos
+                </
