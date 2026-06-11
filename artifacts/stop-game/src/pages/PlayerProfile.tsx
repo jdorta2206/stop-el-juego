@@ -18,9 +18,7 @@ import { useRewards } from "@/hooks/useRewards";
 import { celebrateReward } from "@/lib/celebrate";
 import { rewardFrameName } from "@/lib/rewardFrames";
 import { CosmeticShop } from "@/components/CosmeticShop";
-import { LEGENDARY_FRAME_FX } from "@/lib/cosmeticHelpers";
-
-// Niveles (sin cambios)
+import { LEGENDARY_FRAME_FX } from "@/lib/cosmeticHelpers";// Niveles (sin cambios)
 interface LevelInfo {
   label: string;
   icon: string;
@@ -252,7 +250,6 @@ function timeAgo(dateStr: string): string {
   if (d < 7)  return `hace ${d}d`;
   return new Date(dateStr).toLocaleDateString("es-ES", { day: "numeric", month: "short" });
 }
-
 export default function PlayerProfile() {
   const { id } = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
