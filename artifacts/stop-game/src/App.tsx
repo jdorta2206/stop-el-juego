@@ -24,6 +24,7 @@ const Impossible     = lazy(() => import("@/pages/Impossible"));
 const Friends        = lazy(() => import("@/pages/Friends"));
 const Strategies     = lazy(() => import("@/pages/Strategies"));
 const PlayerProfile  = lazy(() => import("@/pages/PlayerProfile"));
+const Tienda         = lazy(() => import("@/pages/Tienda"));
 const Tournament     = lazy(() => import("@/pages/Tournament"));
 const Live           = lazy(() => import("@/pages/Live"));
 const StreamerDirectory = lazy(() => import("@/pages/StreamerDirectory"));
@@ -88,6 +89,8 @@ function Router() {
       <Route path="/amigos" component={Friends} />
       <Route path="/estrategias" component={Strategies} />
       <Route path="/player/:id" component={PlayerProfile} />
+      <Route path="/tienda" component={Tienda} />
+      <Route path="/shop" component={Tienda} />
       <Route path="/torneo" component={Tournament} />
       <Route path="/torneo/:code" component={Tournament} />
       <Route path="/season" component={SeasonPass} />

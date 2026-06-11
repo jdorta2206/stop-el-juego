@@ -2,7 +2,7 @@ import { ReactNode, useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
 import { usePlayer } from "@/hooks/use-player";
 import { usePremium } from "@/lib/usePremium";
-import { Crown, LogOut, Bell, BellOff, Home, Trophy, Users, Calendar } from "lucide-react";
+import { Crown, LogOut, Bell, BellOff, Home, Trophy, Users, Calendar, ShoppingBag } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button, Input, Modal } from "./ui";
 import { AuthModal } from "./AuthModal";
@@ -19,6 +19,7 @@ const LOGO_URL = `${import.meta.env.BASE_URL}images/stop-logo.png`;
 const NAV_ITEMS = [
   { href: "/", icon: Home, label: "Inicio" },
   { href: "/ranking", icon: Trophy, label: "Ranking" },
+  { href: "/tienda", icon: ShoppingBag, label: "Tienda" },
   { href: "/amigos", icon: Users, label: "Amigos" },
   { href: "/reto", icon: Calendar, label: "Reto" },
 ] as const;
@@ -212,7 +213,7 @@ export function Layout({ children }: { children: ReactNode }) {
             <Link key={href} href={href}>
               <motion.div
                 whileTap={{ scale: 0.88 }}
-                className="flex flex-col items-center gap-0.5 px-4 py-1 rounded-2xl transition-all cursor-pointer min-w-[60px]"
+                className="flex flex-col items-center gap-0.5 px-2.5 py-1 rounded-2xl transition-all cursor-pointer min-w-[52px]"
                 style={isActive
                   ? { background: "rgba(249,168,37,0.15)" }
                   : {}
