@@ -44,6 +44,19 @@ color + CSS aura. This is duplicated by hand: client `PlayerProfile.tsx`
 (getLevel/getNextLevel + PRESTIGE_* consts + `.prestige-aura-N` CSS) and server
 `titleCatalog.prestigeTier()` (200 base, +100/tier) — keep both in lockstep.
 
+## Backgrounds ("fondos") — 3rd shop cosmetic kind, stored in inventory_json
+A NEW `CosmeticKind "background"` shop category that deliberately has **no DB
+column** to avoid a prod migration. Owned ids + the equipped id both live inside
+`player_scores.inventory_json` (`backgrounds: string[]` + `equippedBackground`),
+parsed/written by `inventory.ts parseInventory`. Buy pushes to `inv.backgrounds`;
+equip does an **atomic read-modify-write under `SELECT … FOR UPDATE`** (NOT a plain
+update) so a concurrent `/buy` or reward claim can't clobber inventory_json
+(lost-update race — required by review). Client mirror: `BACKGROUND_CSS_BY_ID`
+(PlayerProfile.tsx) maps id→CSS gradient; same hand-sync rule as avatars/frames.
+**Limitation:** the equipped background renders ONLY on the player's OWN profile —
+the public profile/ranking payload still only carries avatar/frame/title columns,
+so it can't show on others' profiles without also surfacing equippedBackground there.
+
 ## Unlockable titles (earned by playing)
 A THIRD hand-mirrored catalog, separate from avatars/frames:
 - Server = `artifacts/api-server/src/lib/titleCatalog.ts` (`TITLES`, predicates,

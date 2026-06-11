@@ -151,6 +151,17 @@ const FRAME_COLORS_BY_ID: Record<string, string> = {
   frame_free_25: "#a78bfa",
   frame_free_30: "#f472b6",
   frame_shop_neon: "#22d3ee",
+  // Marcos estáticos de la tienda (solo color del aro).
+  frame_shop_plata:     "#94a3b8",
+  frame_shop_esmeralda: "#10b981",
+  frame_shop_menta:     "#34d399",
+  frame_shop_coral:     "#fb7185",
+  frame_shop_rosa:      "#ec4899",
+  frame_shop_rubi:      "#e11d48",
+  frame_shop_zafiro:    "#2563eb",
+  frame_shop_indigo:    "#6366f1",
+  frame_shop_amatista:  "#9333ea",
+  frame_shop_dorado:    "#f59e0b",
   // Marcos legendarios (animados) — color base del aro; el efecto va por CSS.
   frame_shop_fuego:   "#fb923c",
   frame_shop_rayo:    "#38bdf8",
@@ -218,9 +229,52 @@ const AVATAR_GLYPH_BY_ID: Record<string, string> = {
   avatar_premium_20: "🌟",
   avatar_premium_25: "👑",
   avatar_premium_30: "💎",
-  avatar_shop_rocket:  "🚀",
-  avatar_shop_unicorn: "🦄",
-  avatar_shop_alien:   "👽",
+  avatar_shop_rocket:    "🚀",
+  avatar_shop_pizza:     "🍕",
+  avatar_shop_burger:    "🍔",
+  avatar_shop_cat:       "🐱",
+  avatar_shop_dog:       "🐶",
+  avatar_shop_alien:     "👽",
+  avatar_shop_unicorn:   "🦄",
+  avatar_shop_ghost:     "👻",
+  avatar_shop_ninja:     "🥷",
+  avatar_shop_robot:     "🤖",
+  avatar_shop_flower:    "🌸",
+  avatar_shop_fox:       "🦊",
+  avatar_shop_clown:     "🤡",
+  avatar_shop_gamepad:   "🎮",
+  avatar_shop_butterfly: "🦋",
+  avatar_shop_owl:       "🦉",
+  avatar_shop_panda:     "🐼",
+  avatar_shop_star:      "✨",
+  avatar_shop_octopus:   "🐙",
+  avatar_shop_skull:     "💀",
+  avatar_shop_lion:      "🦁",
+  avatar_shop_tiger:     "🐯",
+  avatar_shop_devil:     "😈",
+  avatar_shop_angel:     "😇",
+  avatar_shop_pirate:    "🏴‍☠️",
+  avatar_shop_dragon:    "🐉",
+  avatar_shop_rainbow:   "🌈",
+  avatar_shop_wizard:    "🧙",
+  avatar_shop_crystal:   "🔮",
+  avatar_shop_phoenix:   "🦅",
+  avatar_shop_money:     "🤑",
+};
+
+// Fondos (backgrounds) → degradado CSS aplicado a la tarjeta del perfil.
+// Categoría nueva: mantener en sync con SHOP_ITEMS (servidor, kind "background").
+const BACKGROUND_CSS_BY_ID: Record<string, string> = {
+  bg_shop_noche:     "linear-gradient(135deg, #1e3a8a, #0f172a)",
+  bg_shop_caramelo:  "linear-gradient(135deg, #f472b6, #a78bfa)",
+  bg_shop_atardecer: "linear-gradient(135deg, #f97316, #db2777)",
+  bg_shop_oceano:    "linear-gradient(135deg, #0ea5e9, #1d4ed8)",
+  bg_shop_bosque:    "linear-gradient(135deg, #16a34a, #065f46)",
+  bg_shop_neon:      "linear-gradient(135deg, #06b6d4, #d946ef)",
+  bg_shop_galaxia:   "linear-gradient(135deg, #7c3aed, #1e1b4b)",
+  bg_shop_aurora:    "linear-gradient(135deg, #22d3ee, #a855f7, #ec4899)",
+  bg_shop_fuego:     "linear-gradient(135deg, #ef4444, #7f1d1d)",
+  bg_shop_oro:       "linear-gradient(135deg, #fbbf24, #b45309)",
 };
 
 // "5h 12m" / "47m" until the next daily-deal reset (00:00 UTC).
@@ -278,7 +332,7 @@ export default function PlayerProfile() {
   // Prestige claims refresh the inventory so newly granted coins/frames appear.
   const { prestige, claimPrestige } = useRewards(isMe ? me?.id : null, refreshInventory);
 
-  const handleEquip = useCallback(async (kind: "avatar" | "frame" | "title", value: string | null) => {
+  const handleEquip = useCallback(async (kind: "avatar" | "frame" | "title" | "background", value: string | null) => {
     setBusyAction(`equip:${kind}:${value ?? ""}`);
     await equip(kind, value);
     setBusyAction(null);
@@ -373,6 +427,9 @@ export default function PlayerProfile() {
   const level = getLevel(data.gamesPlayed);
   const progress = getLevelProgress(data.gamesPlayed);
   const nextLevel = getNextLevel(data.gamesPlayed);
+  // Equipped background (own profile only — it lives in the inventory snapshot).
+  const equippedBg = isMe ? inventory?.equipped.background ?? null : null;
+  const heroBgCss = equippedBg ? BACKGROUND_CSS_BY_ID[equippedBg] : null;
 
   return (
     <Layout>
@@ -390,7 +447,8 @@ export default function PlayerProfile() {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="flex flex-col items-center gap-3"
+          className={`flex flex-col items-center gap-3 ${heroBgCss ? "rounded-3xl p-5 border border-white/10 shadow-xl" : ""}`}
+          style={heroBgCss ? { background: heroBgCss } : undefined}
         >
           <div className="relative">
             {/* Equipped frame (if any) wins over the level-color border.
@@ -613,6 +671,30 @@ export default function PlayerProfile() {
               </div>
             </div>
 
+            {/* Fondos poseídos */}
+            <div>
+              <p className="text-xs font-bold text-white/50 mb-1.5">Fondos</p>
+              <div className="flex gap-2 flex-wrap">
+                <CosmeticChip
+                  glyph="—" label="Sin fondo"
+                  equipped={(inventory.equipped.background ?? null) === null}
+                  busy={busyAction === "equip:background:"}
+                  onClick={() => handleEquip("background", null)}
+                />
+                {inventory.owned.backgrounds.map((c) => (
+                  <CosmeticChip
+                    key={c.id} glyph={c.glyph} label={c.label} color={c.color}
+                    equipped={inventory.equipped.background === c.id}
+                    busy={busyAction === `equip:background:${c.id}`}
+                    onClick={() => handleEquip("background", c.id)}
+                  />
+                ))}
+                {inventory.owned.backgrounds.length === 0 && (
+                  <p className="text-[11px] text-white/30 italic">Cómpralos en la tienda para personalizar tu perfil.</p>
+                )}
+              </div>
+            </div>
+
             {/* Títulos — se ganan jugando, no se compran */}
             <div>
               <p className="text-xs font-bold text-white/50 mb-1.5">Títulos <span className="text-white/30 font-normal">(se ganan jugando)</span></p>
@@ -678,7 +760,9 @@ export default function PlayerProfile() {
                       const owned =
                         item.kind === "avatar"
                           ? inventory.owned.avatars.some((a) => a.id === item.id)
-                          : inventory.owned.frames.some((f) => f.id === item.id);
+                          : item.kind === "frame"
+                          ? inventory.owned.frames.some((f) => f.id === item.id)
+                          : inventory.owned.backgrounds.some((b) => b.id === item.id);
                       const deal = dealById.get(item.id);
                       const price = deal ? deal.price : item.price;
                       const canAfford = inventory.coins >= price;

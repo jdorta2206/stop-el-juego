@@ -12,8 +12,8 @@ function authHeaders(): Record<string, string> {
   return tok ? { "X-Stop-Token": tok } : {};
 }
 
-export type CosmeticKind = "avatar" | "frame";
-export type EquipKind = "avatar" | "frame" | "title";
+export type CosmeticKind = "avatar" | "frame" | "background";
+export type EquipKind = "avatar" | "frame" | "title" | "background";
 
 export interface CosmeticMeta {
   id: string;
@@ -49,8 +49,8 @@ export interface DailyDeal {
 
 export interface InventorySnapshot {
   coins: number;
-  equipped: { avatar: string | null; frame: string | null; title: string | null };
-  owned: { avatars: CosmeticMeta[]; frames: CosmeticMeta[] };
+  equipped: { avatar: string | null; frame: string | null; title: string | null; background: string | null };
+  owned: { avatars: CosmeticMeta[]; frames: CosmeticMeta[]; backgrounds: CosmeticMeta[] };
   titles: TitleView[];
   shop: ShopItem[];
   dailyDeals?: DailyDeal[];

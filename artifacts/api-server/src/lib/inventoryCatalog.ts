@@ -8,7 +8,7 @@
 // `label` and `glyph` fields to render them; nothing on the server side
 // needs the visuals.
 
-export type CosmeticKind = "avatar" | "frame";
+export type CosmeticKind = "avatar" | "frame" | "background";
 
 export interface CosmeticMeta {
   id: string;
@@ -126,10 +126,69 @@ export interface ShopItem extends CosmeticMeta {
 }
 
 export const SHOP_ITEMS: ShopItem[] = [
-  { id: "avatar_shop_rocket",  kind: "avatar", label: "Avatar Cohete",   glyph: "🚀", price: 200 },
-  { id: "avatar_shop_unicorn", kind: "avatar", label: "Avatar Unicornio", glyph: "🦄", price: 300 },
-  { id: "avatar_shop_alien",   kind: "avatar", label: "Avatar Alien",    glyph: "👽", price: 250 },
-  { id: "frame_shop_neon",     kind: "frame",  label: "Marco Neón",      glyph: "▣",  color: "#22d3ee", price: 400 },
+  // ── Avatares ────────────────────────────────────────────────────────────
+  // Solo necesitan un emoji (glyph); el cliente lo pinta. Precios variados
+  // para que siempre haya algo asequible y algo aspiracional.
+  { id: "avatar_shop_rocket",   kind: "avatar", label: "Avatar Cohete",     glyph: "🚀", price: 200 },
+  { id: "avatar_shop_pizza",    kind: "avatar", label: "Avatar Pizza",      glyph: "🍕", price: 200 },
+  { id: "avatar_shop_burger",   kind: "avatar", label: "Avatar Hamburguesa",glyph: "🍔", price: 200 },
+  { id: "avatar_shop_cat",      kind: "avatar", label: "Avatar Gato",       glyph: "🐱", price: 250 },
+  { id: "avatar_shop_dog",      kind: "avatar", label: "Avatar Perro",      glyph: "🐶", price: 250 },
+  { id: "avatar_shop_alien",    kind: "avatar", label: "Avatar Alien",      glyph: "👽", price: 250 },
+  { id: "avatar_shop_unicorn",  kind: "avatar", label: "Avatar Unicornio",  glyph: "🦄", price: 300 },
+  { id: "avatar_shop_ghost",    kind: "avatar", label: "Avatar Fantasma",   glyph: "👻", price: 300 },
+  { id: "avatar_shop_ninja",    kind: "avatar", label: "Avatar Ninja",      glyph: "🥷", price: 350 },
+  { id: "avatar_shop_robot",    kind: "avatar", label: "Avatar Robot",      glyph: "🤖", price: 350 },
+  { id: "avatar_shop_flower",   kind: "avatar", label: "Avatar Flor",       glyph: "🌸", price: 350 },
+  { id: "avatar_shop_fox",      kind: "avatar", label: "Avatar Zorro",      glyph: "🦊", price: 400 },
+  { id: "avatar_shop_clown",    kind: "avatar", label: "Avatar Payaso",     glyph: "🤡", price: 400 },
+  { id: "avatar_shop_gamepad",  kind: "avatar", label: "Avatar Mando",      glyph: "🎮", price: 400 },
+  { id: "avatar_shop_butterfly",kind: "avatar", label: "Avatar Mariposa",   glyph: "🦋", price: 500 },
+  { id: "avatar_shop_owl",      kind: "avatar", label: "Avatar Búho",       glyph: "🦉", price: 500 },
+  { id: "avatar_shop_panda",    kind: "avatar", label: "Avatar Panda",      glyph: "🐼", price: 600 },
+  { id: "avatar_shop_star",     kind: "avatar", label: "Avatar Estrella",   glyph: "✨", price: 600 },
+  { id: "avatar_shop_octopus",  kind: "avatar", label: "Avatar Pulpo",      glyph: "🐙", price: 700 },
+  { id: "avatar_shop_skull",    kind: "avatar", label: "Avatar Calavera",   glyph: "💀", price: 700 },
+  { id: "avatar_shop_lion",     kind: "avatar", label: "Avatar León",       glyph: "🦁", price: 800 },
+  { id: "avatar_shop_tiger",    kind: "avatar", label: "Avatar Tigre",      glyph: "🐯", price: 800 },
+  { id: "avatar_shop_devil",    kind: "avatar", label: "Avatar Diablillo",  glyph: "😈", price: 900 },
+  { id: "avatar_shop_angel",    kind: "avatar", label: "Avatar Ángel",      glyph: "😇", price: 900 },
+  { id: "avatar_shop_pirate",   kind: "avatar", label: "Avatar Pirata",     glyph: "🏴‍☠️", price: 1000 },
+  { id: "avatar_shop_dragon",   kind: "avatar", label: "Avatar Dragón",     glyph: "🐉", price: 1200 },
+  { id: "avatar_shop_rainbow",  kind: "avatar", label: "Avatar Arcoíris",   glyph: "🌈", price: 1200 },
+  { id: "avatar_shop_wizard",   kind: "avatar", label: "Avatar Mago",       glyph: "🧙", price: 1500 },
+  { id: "avatar_shop_crystal",  kind: "avatar", label: "Avatar Bola Mágica",glyph: "🔮", price: 2000 },
+  { id: "avatar_shop_phoenix",  kind: "avatar", label: "Avatar Fénix",      glyph: "🦅", price: 2500 },
+  { id: "avatar_shop_money",    kind: "avatar", label: "Avatar Millonario", glyph: "🤑", price: 5000 },
+
+  // ── Marcos estáticos (aro de color) ──────────────────────────────────────
+  // Solo necesitan color en el cliente (FRAME_COLORS_BY_ID); sin CSS extra.
+  { id: "frame_shop_neon",      kind: "frame",  label: "Marco Neón",      glyph: "▣", color: "#22d3ee", price: 400 },
+  { id: "frame_shop_plata",     kind: "frame",  label: "Marco Plata",     glyph: "▣", color: "#94a3b8", price: 500 },
+  { id: "frame_shop_esmeralda", kind: "frame",  label: "Marco Esmeralda", glyph: "▣", color: "#10b981", price: 600 },
+  { id: "frame_shop_menta",     kind: "frame",  label: "Marco Menta",     glyph: "▣", color: "#34d399", price: 600 },
+  { id: "frame_shop_coral",     kind: "frame",  label: "Marco Coral",     glyph: "▣", color: "#fb7185", price: 700 },
+  { id: "frame_shop_rosa",      kind: "frame",  label: "Marco Rosa",      glyph: "▣", color: "#ec4899", price: 700 },
+  { id: "frame_shop_rubi",      kind: "frame",  label: "Marco Rubí",      glyph: "▣", color: "#e11d48", price: 800 },
+  { id: "frame_shop_zafiro",    kind: "frame",  label: "Marco Zafiro",    glyph: "▣", color: "#2563eb", price: 800 },
+  { id: "frame_shop_indigo",    kind: "frame",  label: "Marco Índigo",    glyph: "▣", color: "#6366f1", price: 900 },
+  { id: "frame_shop_amatista",  kind: "frame",  label: "Marco Amatista",  glyph: "▣", color: "#9333ea", price: 1000 },
+  { id: "frame_shop_dorado",    kind: "frame",  label: "Marco Dorado",    glyph: "▣", color: "#f59e0b", price: 1500 },
+
+  // ── Fondos (backgrounds) ─────────────────────────────────────────────────
+  // Categoría nueva: el cliente pinta un degradado por id (BACKGROUND_CSS_BY_ID).
+  // El servidor solo necesita label/glyph/price; color = tono representativo.
+  { id: "bg_shop_noche",     kind: "background", label: "Fondo Noche",     glyph: "🌙", color: "#1e3a8a", price: 1000 },
+  { id: "bg_shop_caramelo",  kind: "background", label: "Fondo Caramelo",  glyph: "🍬", color: "#f472b6", price: 1200 },
+  { id: "bg_shop_atardecer", kind: "background", label: "Fondo Atardecer", glyph: "🌅", color: "#f97316", price: 1500 },
+  { id: "bg_shop_oceano",    kind: "background", label: "Fondo Océano",    glyph: "🌊", color: "#0ea5e9", price: 1500 },
+  { id: "bg_shop_bosque",    kind: "background", label: "Fondo Bosque",    glyph: "🌲", color: "#16a34a", price: 1500 },
+  { id: "bg_shop_neon",      kind: "background", label: "Fondo Neón",      glyph: "💜", color: "#d946ef", price: 1800 },
+  { id: "bg_shop_galaxia",   kind: "background", label: "Fondo Galaxia",   glyph: "🌌", color: "#7c3aed", price: 2000 },
+  { id: "bg_shop_aurora",    kind: "background", label: "Fondo Aurora",    glyph: "🌈", color: "#22d3ee", price: 2500 },
+  { id: "bg_shop_fuego",     kind: "background", label: "Fondo Fuego",     glyph: "🔥", color: "#ef4444", price: 3000 },
+  { id: "bg_shop_oro",       kind: "background", label: "Fondo Oro",       glyph: "👑", color: "#fbbf24", price: 5000 },
+
   // ── Marcos legendarios (animados) — sumideros de monedas de largo plazo ──
   // Visuales animados resueltos en el cliente por id (ver PlayerProfile.tsx).
   // El servidor solo necesita label/glyph/color/price; el efecto es CSS.

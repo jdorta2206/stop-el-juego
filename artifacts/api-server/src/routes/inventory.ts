@@ -27,6 +27,8 @@ interface InventoryRow {
 interface OwnedInventory {
   avatars: string[];
   frames: string[];
+  backgrounds: string[];
+  equippedBackground: string | null;
 }
 
 const router: IRouter = Router();
@@ -46,9 +48,11 @@ function parseInventory(raw: string): OwnedInventory {
     return {
       avatars: Array.isArray(parsed.avatars) ? parsed.avatars : [],
       frames: Array.isArray(parsed.frames) ? parsed.frames : [],
+      backgrounds: Array.isArray(parsed.backgrounds) ? parsed.backgrounds : [],
+      equippedBackground: typeof parsed.equippedBackground === "string" ? parsed.equippedBackground : null,
     };
   } catch {
-    return { avatars: [], frames: [] };
+    return { avatars: [], frames: [], backgrounds: [], equippedBackground: null };
   }
 }
 
@@ -75,7 +79,7 @@ router.get("/", requirePlayerIdentity, async (req: AuthedRequest, res) => {
     const titleStats = computeTitleStats(row);
     res.json({
       coins: row.coins,
-      equipped: { avatar: row.equipped_avatar, frame: row.equipped_frame, title: row.equipped_title },
+      equipped: { avatar: row.equipped_avatar, frame: row.equipped_frame, title: row.equipped_title, background: inv.equippedBackground },
       owned: {
         avatars: inv.avatars
           .map((id) => resolveCosmetic(id))
@@ -83,6 +87,9 @@ router.get("/", requirePlayerIdentity, async (req: AuthedRequest, res) => {
         frames: inv.frames
           .map((id) => resolveCosmetic(id))
           .filter((c): c is NonNullable<ReturnType<typeof resolveCosmetic>> => c !== null && c.kind === "frame"),
+        backgrounds: inv.backgrounds
+          .map((id) => resolveCosmetic(id))
+          .filter((c): c is NonNullable<ReturnType<typeof resolveCosmetic>> => c !== null && c.kind === "background"),
       },
       // Titles are earned by playing — full catalog annotated with unlocked state.
       titles: evaluateTitles(titleStats),
@@ -101,7 +108,7 @@ router.get("/", requirePlayerIdentity, async (req: AuthedRequest, res) => {
 router.post("/equip", requirePlayerIdentity, async (req: AuthedRequest, res) => {
   const playerId = req.playerId!;
   const { kind, value } = (req.body ?? {}) as { kind?: string; value?: string | null };
-  if (kind !== "avatar" && kind !== "frame" && kind !== "title") {
+  if (kind !== "avatar" && kind !== "frame" && kind !== "title" && kind !== "background") {
     res.status(400).json({ error: "Invalid kind" });
     return;
   }
@@ -126,7 +133,7 @@ router.post("/equip", requirePlayerIdentity, async (req: AuthedRequest, res) => 
         return;
       }
       const inv = parseInventory(row.inventory_json);
-      const owned = kind === "avatar" ? inv.avatars : inv.frames;
+      const owned = kind === "avatar" ? inv.avatars : kind === "frame" ? inv.frames : inv.backgrounds;
       if (!owned.includes(value as string)) {
         res.status(403).json({ error: "Cosmetic not owned" });
         return;
@@ -142,10 +149,27 @@ router.post("/equip", requirePlayerIdentity, async (req: AuthedRequest, res) => 
       await db.update(playerScoresTable)
         .set({ equippedFrame: finalValue, updatedAt: new Date() })
         .where(eq(playerScoresTable.playerId, playerId));
-    } else {
+    } else if (kind === "title") {
       await db.update(playerScoresTable)
         .set({ equippedTitle: finalValue, updatedAt: new Date() })
         .where(eq(playerScoresTable.playerId, playerId));
+    } else {
+      // Backgrounds live inside inventory_json (no dedicated column) so the
+      // feature needs no DB migration. Atomic read-modify-write under a row
+      // lock so a concurrent /buy or reward claim (which also rewrite
+      // inventory_json) can't clobber the owned arrays (lost-update race).
+      await db.transaction(async (tx) => {
+        const locked = (await tx.execute(sql`
+          SELECT inventory_json FROM player_scores WHERE player_id = ${playerId} FOR UPDATE
+        `)) as unknown as SqlResult<{ inventory_json: string }>;
+        const lockedRow = locked.rows?.[0];
+        if (!lockedRow) return;
+        const inv = parseInventory(lockedRow.inventory_json);
+        inv.equippedBackground = finalValue;
+        await tx.update(playerScoresTable)
+          .set({ inventoryJson: JSON.stringify(inv), updatedAt: new Date() })
+          .where(eq(playerScoresTable.playerId, playerId));
+      });
     }
     res.json({ ok: true, kind, value: finalValue });
   } catch (e: unknown) {
@@ -175,7 +199,7 @@ router.post("/buy", requirePlayerIdentity, async (req: AuthedRequest, res) => {
       if (!row) return { ok: false as const, status: 404, error: "Player not found" };
 
       const inv = parseInventory(row.inventory_json);
-      const owned = item.kind === "avatar" ? inv.avatars : inv.frames;
+      const owned = item.kind === "avatar" ? inv.avatars : item.kind === "frame" ? inv.frames : inv.backgrounds;
       if (owned.includes(item.id)) {
         return { ok: false as const, status: 400, error: "Already owned" };
       }
@@ -187,7 +211,8 @@ router.post("/buy", requirePlayerIdentity, async (req: AuthedRequest, res) => {
       }
 
       if (item.kind === "avatar") inv.avatars.push(item.id);
-      else inv.frames.push(item.id);
+      else if (item.kind === "frame") inv.frames.push(item.id);
+      else inv.backgrounds.push(item.id);
 
       const newCoins = row.coins - price;
       await tx.update(playerScoresTable)
