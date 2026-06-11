@@ -146,6 +146,54 @@ export async function sendPushToAllSubscribers(
   return { sent, failed, removed: toDelete.length };
 }
 
+// Localized one-shot broadcast. Unlike calling sendPushToAllSubscribers once
+// per language (which dedupes only WITHIN each call and would double-notify a
+// player who has rows stored under different language values), this fetches
+// every eligible subscription ONCE, dedupes by player ONCE across all
+// languages, and then picks the localized payload per chosen row — falling
+// back to `fallbackLang` for rows whose language is null/unknown so nobody is
+// silently skipped.
+export async function sendLocalizedBroadcast(
+  payloadByLang: Record<string, PushPayload>,
+  fallbackLang = "es",
+): Promise<{ sent: number; failed: number; removed: number }> {
+  if (!VAPID_PUBLIC || !VAPID_PRIVATE) return { sent: 0, failed: 0, removed: 0 };
+  const fallback = payloadByLang[fallbackLang];
+  if (!fallback) return { sent: 0, failed: 0, removed: 0 };
+
+  const rows = await db.select().from(pushSubscriptionsTable).where(excludeReplitOrigin);
+  const picked = dedupeByPlayer(rows);
+
+  let sent = 0, failed = 0;
+  const toDelete: string[] = [];
+
+  await Promise.allSettled(picked.map(async (row) => {
+    const payload = (row.language && payloadByLang[row.language]) || fallback;
+    try {
+      await webpush.sendNotification(
+        { endpoint: row.endpoint, keys: { p256dh: row.p256dh, auth: row.auth } },
+        JSON.stringify({
+          title: payload.title,
+          body: payload.body,
+          icon: payload.icon || "/images/icon-192.png",
+          badge: payload.badge || "/images/badge-96.png",
+          url: payload.url || "/",
+        })
+      );
+      sent++;
+    } catch (e: any) {
+      failed++;
+      if (e.statusCode === 410 || e.statusCode === 404) toDelete.push(row.endpoint);
+    }
+  }));
+
+  for (const ep of toDelete) {
+    await cleanStaleEndpoint(ep);
+  }
+
+  return { sent, failed, removed: toDelete.length };
+}
+
 // Notify all followers of a player that they're online
 // Uses in-memory dedupe so each follower only gets 1 notification per 30 min per friend
 const friendOnlineNotifiedAt = new Map<string, number>();

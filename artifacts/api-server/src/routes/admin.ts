@@ -3,6 +3,7 @@ import { timingSafeEqual } from "crypto";
 import { db } from "@workspace/db";
 import { sql } from "drizzle-orm";
 import { authLimiter } from "../middlewares/rateLimit";
+import { sendLocalizedBroadcast, type PushPayload } from "../lib/pushHelper";
 
 const router: IRouter = Router();
 
@@ -232,6 +233,13 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
   </table>
 
   <a class="btn" href="">🔄 Actualizar</a>
+
+  <h2>Notificaciones</h2>
+  <form method="post" action="/test/notify-mundial" onsubmit="return confirm('¿Enviar la notificación del Pack Mundial a TODOS los jugadores suscritos?');">
+    <p class="sub" style="margin:0 0 8px;">Envía a todos los suscriptores: «⚽ ¡Nuevo Pack Mundial! Elige tu equipo y equípate como él». Al tocarla, se abre la Tienda.</p>
+    <button class="btn" type="submit" style="cursor:pointer; background:transparent; font-size:1rem;">📣 Enviar notificación Pack Mundial</button>
+  </form>
+
   <div class="foot">Acceso privado. No compartas esta dirección ni tus credenciales.</div>
 </body></html>`;
 
@@ -239,6 +247,81 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
   } catch (err: any) {
     console.error("[admin panel] error:", err?.message ?? err);
     res.status(500).type("html").send("<h1>Error</h1><p>No se pudieron cargar las estadísticas.</p>");
+  }
+});
+
+// ── Difusión: notificación del Pack Mundial ────────────────────────────────
+// Mensaje localizado por idioma. La URL apunta a la Tienda (/tienda) para que
+// al tocar la notificación se abra directamente la tienda con el Pack Mundial.
+const MUNDIAL_PUSH: Record<string, PushPayload> = {
+  es: { title: "⚽ ¡Nuevo Pack Mundial!", body: "Elige tu equipo y equípate como él: avatares, marcos y fondos del Mundial te esperan en la Tienda.", icon: "/images/icon-192.png", badge: "/images/badge-96.png", url: "/tienda" },
+  en: { title: "⚽ New World Cup Pack!", body: "Pick your team and gear up like them: World Cup avatars, frames and backgrounds are waiting in the Shop.", icon: "/images/icon-192.png", badge: "/images/badge-96.png", url: "/tienda" },
+  pt: { title: "⚽ Novo Pack Mundial!", body: "Escolhe a tua seleção e equipa-te como ela: avatares, molduras e fundos do Mundial à tua espera na Loja.", icon: "/images/icon-192.png", badge: "/images/badge-96.png", url: "/tienda" },
+  fr: { title: "⚽ Nouveau Pack Mondial !", body: "Choisis ton équipe et équipe-toi comme elle : avatars, cadres et fonds de la Coupe du Monde t'attendent dans la Boutique.", icon: "/images/icon-192.png", badge: "/images/badge-96.png", url: "/tienda" },
+};
+
+// Same-origin guard for state-changing admin POSTs. Basic Auth credentials are
+// cached and auto-replayed by the browser, so a cross-site auto-submitting form
+// could otherwise trigger a mass push while the owner has an authenticated
+// session. We require Origin (or Referer) to match the request host, and reject
+// when neither is present (a real form submit from the panel always sends them).
+function sameOrigin(req: Request): boolean {
+  const host = req.headers.host;
+  if (!host) return false;
+  const origin = req.headers.origin;
+  if (origin) {
+    try { return new URL(origin).host === host; } catch { return false; }
+  }
+  const referer = req.headers.referer;
+  if (referer) {
+    try { return new URL(referer).host === host; } catch { return false; }
+  }
+  return false;
+}
+
+// POST /test/notify-mundial — el propietario lo dispara desde el panel privado.
+// Envía la notificación del Pack Mundial a TODOS los suscriptores, con el texto
+// traducido al idioma de cada suscripción (es por defecto). No se envía nada de
+// forma automática: solo al pulsar el botón del panel (protegido por Basic Auth
+// + comprobación de mismo origen contra CSRF).
+router.post("/notify-mundial", authLimiter, basicAuth, async (req: Request, res: Response) => {
+  if (!sameOrigin(req)) {
+    res.status(403).type("html").send('<h1>Solicitud bloqueada</h1><p>Origen no válido.</p><a href="/test">← Volver</a>');
+    return;
+  }
+  try {
+    const { sent, failed, removed } = await sendLocalizedBroadcast(MUNDIAL_PUSH, "es");
+
+    const html = `<!doctype html>
+<html lang="es"><head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<meta name="robots" content="noindex,nofollow"/>
+<title>STOP · Notificación enviada</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin:0; font-family: system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:#0f1216; color:#e8edf2; padding:24px; }
+  h1 { font-size:1.3rem; margin:0 0 12px; }
+  .card { background:#1a2029; border:1px solid #283140; border-radius:14px; padding:18px; max-width:420px; }
+  .row { display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid #232b36; }
+  .row:last-child { border-bottom:none; }
+  .row .v { font-weight:700; }
+  .ok { color:#4ade80; }
+  a.btn { display:inline-block; margin-top:16px; color:#4ade80; text-decoration:none; border:1px solid #2c6b45; padding:8px 16px; border-radius:8px; }
+</style>
+</head><body>
+  <h1>✅ Notificación del Pack Mundial enviada</h1>
+  <div class="card">
+    <div class="row"><span>Enviadas</span><span class="v ok">${num(sent)}</span></div>
+    <div class="row"><span>Fallidas</span><span class="v">${num(failed)}</span></div>
+    <div class="row"><span>Suscripciones caducadas (limpiadas)</span><span class="v">${num(removed)}</span></div>
+  </div>
+  <a class="btn" href="/test">← Volver al panel</a>
+</body></html>`;
+    res.status(200).type("html").send(html);
+  } catch (err: any) {
+    console.error("[admin notify-mundial] error:", err?.message ?? err);
+    res.status(500).type("html").send('<h1>Error</h1><p>No se pudo enviar la notificación.</p><a href="/test">← Volver</a>');
   }
 });
 
