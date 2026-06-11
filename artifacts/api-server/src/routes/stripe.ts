@@ -3,6 +3,13 @@ import { stripeStorage } from "../stripeStorage";
 import { stripeService } from "../stripeService";
 import { getUncachableStripeClient } from "../stripeClient";
 import { verifyClaimedIdentity } from "../lib/playerAuth";
+import {
+  WORLD_CUP_PACK_SKU,
+  WORLD_CUP_PACK_PRICE_CENTS,
+  WORLD_CUP_PACK_CURRENCY,
+  WORLD_CUP_PACK_NAME,
+  grantWorldCupPack,
+} from "../lib/worldCupPack";
 
 const router: IRouter = Router();
 
@@ -129,6 +136,122 @@ router.post("/checkout", async (req, res) => {
     return res.json({ url: session.url });
   } catch (err: any) {
     console.error("stripe/checkout error:", err.message);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /api/stripe/checkout-pack
+// Body: { playerId, email?, sku }
+// One-time payment for the World Cup pack. Same auth + customer plumbing as
+// the subscription checkout, but mode:"payment" with an inline price.
+router.post("/checkout-pack", async (req, res) => {
+  try {
+    const { playerId, email, sku } = req.body as {
+      playerId: string;
+      email?: string;
+      sku: string;
+    };
+    if (!playerId || !sku) {
+      return res.status(400).json({ error: "playerId and sku required" });
+    }
+    if (sku !== WORLD_CUP_PACK_SKU) {
+      return res.status(400).json({ error: "Unknown pack" });
+    }
+    // 🔒 A logged-in account can only check out for ITSELF.
+    if (!verifyClaimedIdentity(req, playerId)) {
+      return res.status(403).json({ error: "Identity verification failed" });
+    }
+
+    const player = await stripeStorage.getPlayer(playerId);
+    let customerId = player?.stripeCustomerId || null;
+    if (!customerId) {
+      const customer = await stripeService.createCustomer(
+        email || `${playerId}@stop-game.app`,
+        playerId
+      );
+      customerId = customer.id;
+      await stripeStorage.updatePlayerStripeInfo(playerId, {
+        stripeCustomerId: customerId,
+      });
+    }
+
+    const session = await stripeService.createPackCheckoutSession(
+      customerId,
+      {
+        name: WORLD_CUP_PACK_NAME,
+        amountCents: WORLD_CUP_PACK_PRICE_CENTS,
+        currency: WORLD_CUP_PACK_CURRENCY,
+        metadata: { playerId, sku },
+      },
+      `${APP_ORIGIN}/?pack=success&session_id={CHECKOUT_SESSION_ID}`,
+      `${APP_ORIGIN}/?pack=cancel`
+    );
+
+    return res.json({ url: session.url });
+  } catch (err: any) {
+    console.error("stripe/checkout-pack error:", err.message);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /api/stripe/claim-pack
+// Body: { playerId, sessionId? }
+// Self-healing grant: confirms a genuine paid pack purchase against Stripe
+// (the source of truth, like /status) and then grants the cosmetics. Safe to
+// call repeatedly — grantWorldCupPack is idempotent.
+router.post("/claim-pack", async (req, res) => {
+  try {
+    const { playerId, sessionId } = req.body as {
+      playerId: string;
+      sessionId?: string;
+    };
+    if (!playerId) return res.status(400).json({ error: "playerId required" });
+    if (!verifyClaimedIdentity(req, playerId)) {
+      return res.status(403).json({ error: "Identity verification failed" });
+    }
+
+    const stripe = await getUncachableStripeClient();
+    const player = await stripeStorage.getPlayer(playerId);
+    const customerId = player?.stripeCustomerId || null;
+
+    let paid = false;
+    if (sessionId) {
+      const session = await stripe.checkout.sessions.retrieve(sessionId);
+      const sessionCustomer =
+        typeof session.customer === "string"
+          ? session.customer
+          : session.customer?.id ?? null;
+      // Bind the session to THIS player (metadata.playerId) and require it to
+      // be a paid one-time pack session. The customer match is an extra guard
+      // when we already know the player's customer id.
+      paid =
+        session.mode === "payment" &&
+        session.payment_status === "paid" &&
+        session.metadata?.["sku"] === WORLD_CUP_PACK_SKU &&
+        session.metadata?.["playerId"] === playerId &&
+        (!customerId || sessionCustomer === customerId);
+    } else if (customerId) {
+      // Fallback when the session_id was lost (e.g. user reopened the app):
+      // scan this customer's recent sessions for a paid pack purchase.
+      const sessions = await stripe.checkout.sessions.list({
+        customer: customerId,
+        limit: 30,
+      });
+      paid = sessions.data.some(
+        (s) =>
+          s.mode === "payment" &&
+          s.payment_status === "paid" &&
+          s.metadata?.["sku"] === WORLD_CUP_PACK_SKU
+      );
+    }
+
+    if (!paid) return res.json({ granted: false });
+
+    const r = await grantWorldCupPack(playerId);
+    if (!r.ok) return res.status(r.status).json({ error: r.error });
+    return res.json({ granted: true, items: r.granted, total: r.total });
+  } catch (err: any) {
+    console.error("stripe/claim-pack error:", err.message);
     return res.status(500).json({ error: "Internal server error" });
   }
 });

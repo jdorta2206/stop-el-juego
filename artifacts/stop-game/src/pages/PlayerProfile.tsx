@@ -17,6 +17,9 @@ import { useInventory, type ShopItem } from "@/hooks/useInventory";
 import { useRewards } from "@/hooks/useRewards";
 import { celebrateReward } from "@/lib/celebrate";
 import { rewardFrameName } from "@/lib/rewardFrames";
+import { usePaymentChannel } from "@/hooks/usePaymentChannel";
+import { purchaseWorldCupPackOnPlay } from "@/lib/playBilling";
+import { startPackCheckout, WORLD_CUP_PACK_PRICE_LABEL } from "@/lib/worldCupPack";
 
 // ── Level system based on total games played ───────────────────────────────
 // Tiers 1-6 are fixed. Beyond 200 games the ladder becomes INFINITE: players
@@ -376,6 +379,36 @@ export default function PlayerProfile() {
       window.alert(r.error === "Insufficient coins" ? "No tienes suficientes monedas" : r.error);
     }
   }, [buy]);
+
+  // Channel-aware "Pack Mundial" one-time purchase. On the Play TWA we run
+  // Google Play Billing and verify server-side; on the web we redirect to a
+  // Stripe one-time checkout. Both grant the same cosmetics; the server grant
+  // is idempotent.
+  const { channel } = usePaymentChannel();
+  const handleBuyPack = useCallback(async () => {
+    if (!me?.id) return;
+    // Wait until channel detection settles — a too-fast tap inside the TWA
+    // must not fall through to the Stripe web path before "play" is resolved.
+    if (channel === "loading") return;
+    setBusyAction("buy:pack");
+    try {
+      if (channel === "play") {
+        const r = await purchaseWorldCupPackOnPlay();
+        if (r.granted) {
+          await refreshInventory();
+          celebrateReward();
+          window.alert("¡Pack Mundial desbloqueado! Ya tienes todos los cosméticos del Mundial. ⚽");
+        }
+      } else {
+        const { url } = await startPackCheckout({ playerId: me.id });
+        window.location.href = url;
+      }
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : "No se pudo completar la compra");
+    } finally {
+      setBusyAction(null);
+    }
+  }, [me?.id, channel, refreshInventory]);
 
   const handleClaimPrestige = useCallback(async (tier: number) => {
     setBusyAction(`claim:prestige:${tier}`);
@@ -844,6 +877,29 @@ export default function PlayerProfile() {
                         <p className="text-sm font-black text-white flex items-center gap-1.5">⚽ Especial Mundial</p>
                         <span className="text-[9px] font-black text-amber-300 bg-amber-400/15 border border-amber-400/40 rounded px-1.5 py-0.5 uppercase">Evento</span>
                       </div>
+                      {isMe && (
+                        <button
+                          onClick={handleBuyPack}
+                          disabled={busyAction === "buy:pack" || channel === "loading"}
+                          className="w-full mb-2.5 flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl transition-all disabled:opacity-50"
+                          style={{
+                            background: "linear-gradient(135deg, #16a34a, #dc2626)",
+                            border: "1px solid rgba(255,255,255,0.25)",
+                          }}
+                        >
+                          <span className="text-left">
+                            <span className="block text-[13px] font-black text-white leading-tight">
+                              🏆 Pack Mundial — todo desbloqueado
+                            </span>
+                            <span className="block text-[10px] font-bold text-white/80 leading-tight">
+                              Consigue TODOS los cosméticos del Mundial de una vez
+                            </span>
+                          </span>
+                          <span className="shrink-0 px-2.5 py-1 rounded-lg bg-white/95 text-[12px] font-black text-emerald-700">
+                            {busyAction === "buy:pack" ? "…" : WORLD_CUP_PACK_PRICE_LABEL}
+                          </span>
+                        </button>
+                      )}
                       <div className="space-y-1.5">
                         {wcOrdered.map((item) => renderRow(item))}
                       </div>

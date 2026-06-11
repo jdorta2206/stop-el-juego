@@ -1,6 +1,6 @@
 import { google } from "googleapis";
 import type { androidpublisher_v3 } from "googleapis";
-import { db, playSubscriptionsTable } from "@workspace/db";
+import { db, playSubscriptionsTable, playProductPurchasesTable } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
 
 // ── Service Account loading ──────────────────────────────────────────────
@@ -177,6 +177,130 @@ export async function acknowledgeSubscription(
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error("[playBilling] acknowledge failed:", msg);
+  }
+}
+
+// ── One-time product (managed product) verification ─────────────────────
+// Subscriptions use purchases.subscriptions.*; one-time products (the World
+// Cup pack) use purchases.products.*. Same service account + scope. We never
+// trust the client's claim — we re-fetch the purchase from Google and check
+// purchaseState before granting the entitlement.
+
+export interface VerifiedProduct {
+  productId: string;
+  purchaseToken: string;
+  orderId: string | null;
+  purchaseState: number; // 0 = purchased, 1 = canceled, 2 = pending
+  acknowledgementState: number; // 0 = not acknowledged, 1 = acknowledged
+  isPurchased: boolean;
+  raw: Record<string, unknown>;
+}
+
+export async function verifyProductPurchase(
+  productId: string,
+  purchaseToken: string,
+): Promise<VerifiedProduct | { error: string; status: number }> {
+  const packageName = getPackageName();
+  if (!packageName) {
+    return { error: "ANDROID_PACKAGE_NAME not configured", status: 503 };
+  }
+  const client = await getClient();
+  if (!client) {
+    return { error: "Play Billing not configured", status: 503 };
+  }
+  try {
+    const response = await client.purchases.products.get({
+      packageName,
+      productId,
+      token: purchaseToken,
+    });
+    const p = response.data;
+    const purchaseState = Number(p.purchaseState ?? 1);
+    return {
+      productId,
+      purchaseToken,
+      orderId: p.orderId ?? null,
+      purchaseState,
+      acknowledgementState: Number(p.acknowledgementState ?? 0),
+      isPurchased: purchaseState === 0,
+      raw: p as Record<string, unknown>,
+    };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[playBilling] verifyProductPurchase failed:", msg);
+    return { error: `Google Play API error: ${msg}`, status: 502 };
+  }
+}
+
+// Anti-replay ledger for one-time products. Binds a purchase token to the
+// first player who verifies it; a different player replaying the same token
+// is refused. Returns `ownershipMismatch` so the route can deny the grant.
+// Idempotent: the same player re-verifying their own token is allowed (so
+// auto-restore / network retries still grant via the idempotent inventory
+// grant downstream).
+export async function recordProductPurchase(
+  playerId: string,
+  v: VerifiedProduct,
+): Promise<{ ownershipMismatch: boolean }> {
+  const existing = await db
+    .select({ playerId: playProductPurchasesTable.playerId })
+    .from(playProductPurchasesTable)
+    .where(eq(playProductPurchasesTable.purchaseToken, v.purchaseToken))
+    .limit(1);
+  if (existing[0] && existing[0].playerId !== playerId) {
+    return { ownershipMismatch: true };
+  }
+
+  await db
+    .insert(playProductPurchasesTable)
+    .values({
+      playerId,
+      productId: v.productId,
+      purchaseToken: v.purchaseToken,
+      orderId: v.orderId ?? null,
+      purchaseState: v.purchaseState,
+      rawJson: JSON.stringify(v.raw),
+    })
+    .onConflictDoUpdate({
+      target: playProductPurchasesTable.purchaseToken,
+      set: {
+        // playerId intentionally NOT updated — never transfer ownership.
+        productId: v.productId,
+        orderId: v.orderId ?? null,
+        purchaseState: v.purchaseState,
+        rawJson: JSON.stringify(v.raw),
+        updatedAt: new Date(),
+      },
+    });
+  return { ownershipMismatch: false };
+}
+
+// Acknowledge a one-time product purchase. Like acknowledgeSubscription,
+// Google auto-refunds purchases not acknowledged within 3 days. Idempotent
+// (skips when already acknowledged) and never throws — a failed ack must not
+// block the entitlement; the next /verify-pack call retries.
+export async function acknowledgeProduct(
+  productId: string,
+  purchaseToken: string,
+  alreadyAcknowledged: boolean,
+): Promise<void> {
+  if (alreadyAcknowledged) return;
+  const packageName = getPackageName();
+  if (!packageName) return;
+  const client = await getClient();
+  if (!client) return;
+  try {
+    await client.purchases.products.acknowledge({
+      packageName,
+      productId,
+      token: purchaseToken,
+    });
+    console.log(
+      `[playBilling] acknowledged product ${productId} (token ${purchaseToken.slice(0, 12)}…)`,
+    );
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[playBilling] acknowledgeProduct failed:", msg);
   }
 }
 

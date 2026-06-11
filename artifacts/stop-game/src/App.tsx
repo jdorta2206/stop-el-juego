@@ -5,6 +5,8 @@ import { MotionConfig } from "framer-motion";
 import { Toaster } from "@/components/ui/toaster";
 import { SplashScreen } from "@/components/SplashScreen";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { usePlayer } from "@/hooks/use-player";
+import { claimStripePack } from "@/lib/worldCupPack";
 import Home from "@/pages/Home";
 import SoloGame from "@/pages/SoloGame";
 import Multiplayer from "@/pages/Multiplayer";
@@ -105,6 +107,44 @@ function Router() {
   );
 }
 
+// Handles the Stripe one-time pack return. Stripe redirects to
+// `/?pack=success&session_id=...` (always the root, not the profile), so the
+// claim must run app-wide. Grants the cosmetics server-side, then strips the
+// query params so a refresh doesn't re-trigger it. The grant is idempotent.
+function PackClaimHandler() {
+  const { player } = usePlayer();
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("pack") !== "success") return;
+    const playerId = player?.id;
+    if (!playerId) return; // wait until the player profile is loaded
+
+    const sessionId = params.get("session_id") || undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await claimStripePack({ playerId, sessionId });
+        if (!cancelled && r.granted) {
+          window.alert("¡Pack Mundial desbloqueado! Ya tienes todos los cosméticos del Mundial. ⚽");
+        }
+      } catch {
+        /* silent — the user can retry from the shop, grant is idempotent */
+      } finally {
+        // Strip pack params regardless so a refresh doesn't loop.
+        const url = new URL(window.location.href);
+        url.searchParams.delete("pack");
+        url.searchParams.delete("session_id");
+        window.history.replaceState({}, "", url.toString());
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [player?.id]);
+  return null;
+}
+
 function App() {
   const [splashDone, setSplashDone] = useState(false);
   const lang = (localStorage.getItem("stop_lang") ?? "es") as string;
@@ -153,6 +193,7 @@ function App() {
       {/* reducedMotion="user" → respects OS-level "Reduce animations" toggle */}
       <MotionConfig reducedMotion="user">
         <ErrorBoundary>
+          <PackClaimHandler />
           <SplashScreen onDone={() => setSplashDone(true)} lang={lang} />
           {splashDone && (
             <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>

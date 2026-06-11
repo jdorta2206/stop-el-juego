@@ -4,12 +4,16 @@ import { stripeStorage } from "../stripeStorage";
 import {
   isPlayBillingConfigured,
   verifyPurchase,
+  verifyProductPurchase,
+  recordProductPurchase,
+  acknowledgeProduct,
   upsertPlaySubscription,
   updatePlaySubscriptionByToken,
   acknowledgeSubscription,
 } from "../lib/playBillingService";
 import { isUserPremium } from "../lib/premiumStatus";
 import { verifyPubSubJwt } from "../lib/pubsubAuth";
+import { WORLD_CUP_PACK_SKU, grantWorldCupPack } from "../lib/worldCupPack";
 
 const router: IRouter = Router();
 
@@ -76,6 +80,58 @@ router.post("/verify", async (req: Request, res: Response) => {
     expiryTimeMs: v.expiryTimeMs,
     state: v.state,
   });
+});
+
+// ── POST /api/billing/play/verify-pack ───────────────────────────────────
+// One-time World Cup pack purchase. Body: { productId, purchaseToken }.
+// Mirrors /verify but for a managed product: re-validate against Google,
+// acknowledge, then grant ALL World Cup cosmetics. grantWorldCupPack is
+// idempotent so a retried verify (auto-restore, network retry) is safe.
+router.post("/verify-pack", async (req: Request, res: Response) => {
+  if (!isPlayBillingConfigured()) {
+    return res.status(503).json({
+      error: "Play Billing not configured on server",
+      hint: "Set GOOGLE_PLAY_SERVICE_ACCOUNT_JSON and ANDROID_PACKAGE_NAME secrets",
+    });
+  }
+  const playerId = readPlayerId(req);
+  if (!playerId) return res.status(401).json({ error: "Not authenticated" });
+
+  const { productId, purchaseToken } = req.body as {
+    productId?: string;
+    purchaseToken?: string;
+  };
+  if (!productId || !purchaseToken) {
+    return res.status(400).json({ error: "productId and purchaseToken required" });
+  }
+  if (productId !== WORLD_CUP_PACK_SKU) {
+    // Whitelist — prevents a compromised client from claiming another SKU.
+    return res.status(400).json({ error: "Unknown product" });
+  }
+
+  const v = await verifyProductPurchase(productId, purchaseToken);
+  if ("error" in v) {
+    return res.status(v.status).json({ error: v.error });
+  }
+  if (!v.isPurchased) {
+    // purchaseState 1 (canceled) or 2 (pending) → no entitlement yet.
+    return res.status(402).json({ error: "Compra no completada", granted: false });
+  }
+
+  // Anti-replay: bind this purchase token to the player. A different player
+  // replaying the same token (shared/stolen token) is refused — the original
+  // buyer keeps the entitlement. The same player re-verifying is allowed.
+  const owned = await recordProductPurchase(playerId, v);
+  if (owned.ownershipMismatch) {
+    return res.status(409).json({ error: "Esta compra ya pertenece a otra cuenta", granted: false });
+  }
+
+  // Acknowledge ASAP — Google auto-refunds unacknowledged purchases in 3 days.
+  await acknowledgeProduct(v.productId, v.purchaseToken, v.acknowledgementState === 1);
+
+  const r = await grantWorldCupPack(playerId);
+  if (!r.ok) return res.status(r.status).json({ error: r.error });
+  return res.json({ granted: true, items: r.granted, total: r.total });
 });
 
 // ── POST /api/billing/play/webhook ───────────────────────────────────────

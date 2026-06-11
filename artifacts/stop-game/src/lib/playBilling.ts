@@ -1,4 +1,4 @@
-import { getApiUrl } from "@/lib/utils";
+import { getApiUrl, authHeaders } from "@/lib/utils";
 
 const API_BASE = getApiUrl();
 
@@ -29,6 +29,8 @@ interface DigitalGoodsWindow extends Window {
 
 const PLAY_BILLING_METHOD = "https://play.google.com/billing";
 const PRODUCT_ID = "premium_monthly";
+// One-time managed product unlocking every World Cup cosmetic at once.
+export const PACK_PRODUCT_ID = "pack_mundial";
 
 let cachedService: DigitalGoodsService | null = null;
 let cachedChannel: "play" | "stripe" | null = null;
@@ -150,6 +152,60 @@ export async function purchasePremiumOnPlay(playerId: string): Promise<PlayPurch
     throw new Error(errMsg);
   }
   return verifyData;
+}
+
+// ── World Cup pack price label (for the buy button inside the TWA) ───────
+export async function fetchPlayPackPriceLabel(): Promise<string | null> {
+  const svc = await tryGetService();
+  if (!svc) return null;
+  try {
+    const details = await svc.getDetails([PACK_PRODUCT_ID]);
+    const item = details[0];
+    if (!item) return null;
+    return new Intl.NumberFormat(navigator.language || "es-ES", {
+      style: "currency",
+      currency: item.price.currency,
+    }).format(Number(item.price.value));
+  } catch {
+    return null;
+  }
+}
+
+// ── World Cup pack purchase (one-time) via Google Play ──────────────────
+// Same PaymentRequest flow as premium, but the SKU is a managed product and
+// the server grants cosmetics instead of premium.
+export async function purchaseWorldCupPackOnPlay(): Promise<{ granted: boolean }> {
+  const svc = await tryGetService();
+  if (!svc) throw new Error("Google Play Billing no está disponible aquí");
+
+  const methodData = [
+    { supportedMethods: PLAY_BILLING_METHOD, data: { sku: PACK_PRODUCT_ID } },
+  ];
+  const details = {
+    total: { label: "Pack Mundial", amount: { currency: "EUR", value: "0" } },
+  };
+
+  const request = new PaymentRequest(methodData, details);
+  const response = await request.show();
+  await response.complete("success").catch(() => {});
+
+  const purchaseToken = (response.details as { purchaseToken?: string }).purchaseToken;
+  if (!purchaseToken) throw new Error("No se recibió purchaseToken de Google Play");
+
+  const res = await fetch(`${API_BASE}/api/billing/play/verify-pack`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    credentials: "include",
+    body: JSON.stringify({ productId: PACK_PRODUCT_ID, purchaseToken }),
+  });
+  const data = (await res.json().catch(() => ({}))) as
+    | { granted: boolean }
+    | { error: string };
+  if (!res.ok || "error" in data) {
+    const msg = "error" in data ? data.error : "Validación falló";
+    throw new Error(msg);
+  }
+  return data;
 }
 
 // ── Restore (e.g. user already paid on another device) ──────────────────

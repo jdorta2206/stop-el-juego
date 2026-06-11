@@ -36,3 +36,31 @@ export const insertPlaySubscriptionSchema = createInsertSchema(playSubscriptions
 });
 export type InsertPlaySubscription = z.infer<typeof insertPlaySubscriptionSchema>;
 export type PlaySubscription = typeof playSubscriptionsTable.$inferSelect;
+
+// Google Play one-time (managed) product purchases — e.g. the World Cup pack.
+// Subscriptions live in `play_subscriptions`; these are non-renewing entitlements.
+// One row per purchase token. The token is bound to whichever player first
+// verifies it; a different player replaying the same token is refused (the
+// same anti-replay guard used for subscriptions). The actual cosmetic
+// entitlement is granted into the player's inventory — this row is the
+// idempotency + ownership ledger, not the entitlement itself.
+export const playProductPurchasesTable = pgTable("play_product_purchases", {
+  id: serial("id").primaryKey(),
+  playerId: text("player_id").notNull(),
+  productId: text("product_id").notNull(), // e.g. pack_mundial
+  purchaseToken: text("purchase_token").notNull().unique(),
+  orderId: text("order_id"),
+  // 0 = purchased, 1 = canceled, 2 = pending (Google purchaseState).
+  purchaseState: bigint("purchase_state", { mode: "number" }).notNull().default(0),
+  rawJson: text("raw_json").notNull().default("{}"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertPlayProductPurchaseSchema = createInsertSchema(playProductPurchasesTable).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertPlayProductPurchase = z.infer<typeof insertPlayProductPurchaseSchema>;
+export type PlayProductPurchase = typeof playProductPurchasesTable.$inferSelect;
