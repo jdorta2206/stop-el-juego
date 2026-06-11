@@ -189,6 +189,41 @@ export const SHOP_ITEMS: ShopItem[] = [
   { id: "bg_shop_fuego",     kind: "background", label: "Fondo Fuego",     glyph: "🔥", color: "#ef4444", price: 3000 },
   { id: "bg_shop_oro",       kind: "background", label: "Fondo Oro",       glyph: "👑", color: "#fbbf24", price: 5000 },
 
+  // ── ⚽ ESPECIAL MUNDIAL ───────────────────────────────────────────────────
+  // Evento del Mundial de fútbol. IDs con `_wc_` para que el cliente los
+  // agrupe en su propia sección. Avatares de fútbol + banderas de selecciones,
+  // marcos y fondos temáticos. Todo comprable con monedas.
+  { id: "avatar_wc_ball",    kind: "avatar", label: "Avatar Balón",        glyph: "⚽", price: 200 },
+  { id: "avatar_wc_jersey",  kind: "avatar", label: "Avatar Camiseta",     glyph: "👕", price: 300 },
+  { id: "avatar_wc_goal",    kind: "avatar", label: "Avatar Portería",     glyph: "🥅", price: 300 },
+  { id: "avatar_wc_gloves",  kind: "avatar", label: "Avatar Guantes",      glyph: "🧤", price: 350 },
+  { id: "avatar_wc_boots",   kind: "avatar", label: "Avatar Botas",        glyph: "👟", price: 350 },
+  { id: "avatar_wc_medal",   kind: "avatar", label: "Avatar Medalla",      glyph: "🥇", price: 800 },
+  { id: "avatar_wc_trophy",  kind: "avatar", label: "Avatar Copa Mundial", glyph: "🏆", price: 1500 },
+  // Banderas de selecciones
+  { id: "avatar_wc_flag_es", kind: "avatar", label: "Selección España",       glyph: "🇪🇸", price: 400 },
+  { id: "avatar_wc_flag_br", kind: "avatar", label: "Selección Brasil",       glyph: "🇧🇷", price: 400 },
+  { id: "avatar_wc_flag_ar", kind: "avatar", label: "Selección Argentina",    glyph: "🇦🇷", price: 400 },
+  { id: "avatar_wc_flag_fr", kind: "avatar", label: "Selección Francia",      glyph: "🇫🇷", price: 400 },
+  { id: "avatar_wc_flag_de", kind: "avatar", label: "Selección Alemania",     glyph: "🇩🇪", price: 400 },
+  { id: "avatar_wc_flag_pt", kind: "avatar", label: "Selección Portugal",     glyph: "🇵🇹", price: 400 },
+  { id: "avatar_wc_flag_it", kind: "avatar", label: "Selección Italia",       glyph: "🇮🇹", price: 400 },
+  { id: "avatar_wc_flag_nl", kind: "avatar", label: "Selección Países Bajos", glyph: "🇳🇱", price: 400 },
+  { id: "avatar_wc_flag_mx", kind: "avatar", label: "Selección México",       glyph: "🇲🇽", price: 400 },
+  { id: "avatar_wc_flag_us", kind: "avatar", label: "Selección EE. UU.",      glyph: "🇺🇸", price: 400 },
+  { id: "avatar_wc_flag_uy", kind: "avatar", label: "Selección Uruguay",      glyph: "🇺🇾", price: 400 },
+  { id: "avatar_wc_flag_co", kind: "avatar", label: "Selección Colombia",     glyph: "🇨🇴", price: 400 },
+  { id: "avatar_wc_flag_jp", kind: "avatar", label: "Selección Japón",        glyph: "🇯🇵", price: 400 },
+  // Marcos del Mundial
+  { id: "frame_wc_cesped", kind: "frame", label: "Marco Césped", glyph: "▣", color: "#16a34a", price: 600 },
+  { id: "frame_wc_espana", kind: "frame", label: "Marco España", glyph: "▣", color: "#dc2626", price: 800 },
+  { id: "frame_wc_copa",   kind: "frame", label: "Marco Copa",   glyph: "▣", color: "#f59e0b", price: 1200 },
+  // Fondos del Mundial
+  { id: "bg_wc_cesped", kind: "background", label: "Fondo Estadio",       glyph: "⚽",  color: "#16a34a", price: 1500 },
+  { id: "bg_wc_noche",  kind: "background", label: "Fondo Estadio Noche", glyph: "🏟️", color: "#1e3a8a", price: 1500 },
+  { id: "bg_wc_espana", kind: "background", label: "Fondo España",        glyph: "🇪🇸", color: "#dc2626", price: 2000 },
+  { id: "bg_wc_copa",   kind: "background", label: "Fondo Mundial",       glyph: "🏆", color: "#fbbf24", price: 2500 },
+
   // ── Marcos legendarios (animados) — sumideros de monedas de largo plazo ──
   // Visuales animados resueltos en el cliente por id (ver PlayerProfile.tsx).
   // El servidor solo necesita label/glyph/color/price; el efecto es CSS.

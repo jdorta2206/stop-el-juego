@@ -167,6 +167,10 @@ const FRAME_COLORS_BY_ID: Record<string, string> = {
   frame_shop_rayo:    "#38bdf8",
   frame_shop_lava:    "#ef4444",
   frame_shop_galaxia: "#a855f7",
+  // ⚽ Especial Mundial — marcos temáticos (solo color del aro).
+  frame_wc_cesped: "#16a34a",
+  frame_wc_espana: "#dc2626",
+  frame_wc_copa:   "#f59e0b",
   // Marcos exclusivos de recompensa (colección / prestigio) — no comprables.
   // Mantener en sync con REWARD_FRAMES (servidor, inventoryCatalog.ts).
   frame_collection_hunter:   "#38bdf8",
@@ -260,6 +264,27 @@ const AVATAR_GLYPH_BY_ID: Record<string, string> = {
   avatar_shop_crystal:   "🔮",
   avatar_shop_phoenix:   "🦅",
   avatar_shop_money:     "🤑",
+  // ⚽ Especial Mundial — avatares de fútbol + banderas de selecciones.
+  avatar_wc_ball:    "⚽",
+  avatar_wc_jersey:  "👕",
+  avatar_wc_goal:    "🥅",
+  avatar_wc_gloves:  "🧤",
+  avatar_wc_boots:   "👟",
+  avatar_wc_medal:   "🥇",
+  avatar_wc_trophy:  "🏆",
+  avatar_wc_flag_es: "🇪🇸",
+  avatar_wc_flag_br: "🇧🇷",
+  avatar_wc_flag_ar: "🇦🇷",
+  avatar_wc_flag_fr: "🇫🇷",
+  avatar_wc_flag_de: "🇩🇪",
+  avatar_wc_flag_pt: "🇵🇹",
+  avatar_wc_flag_it: "🇮🇹",
+  avatar_wc_flag_nl: "🇳🇱",
+  avatar_wc_flag_mx: "🇲🇽",
+  avatar_wc_flag_us: "🇺🇸",
+  avatar_wc_flag_uy: "🇺🇾",
+  avatar_wc_flag_co: "🇨🇴",
+  avatar_wc_flag_jp: "🇯🇵",
 };
 
 // Fondos (backgrounds) → degradado CSS aplicado a la tarjeta del perfil.
@@ -275,6 +300,11 @@ const BACKGROUND_CSS_BY_ID: Record<string, string> = {
   bg_shop_aurora:    "linear-gradient(135deg, #22d3ee, #a855f7, #ec4899)",
   bg_shop_fuego:     "linear-gradient(135deg, #ef4444, #7f1d1d)",
   bg_shop_oro:       "linear-gradient(135deg, #fbbf24, #b45309)",
+  // ⚽ Especial Mundial — fondos temáticos.
+  bg_wc_cesped: "linear-gradient(135deg, #22c55e, #065f46)",
+  bg_wc_noche:  "linear-gradient(135deg, #1e3a8a, #0f172a)",
+  bg_wc_espana: "linear-gradient(135deg, #dc2626, #fbbf24)",
+  bg_wc_copa:   "linear-gradient(135deg, #fbbf24, #b45309)",
 };
 
 // "5h 12m" / "47m" until the next daily-deal reset (00:00 UTC).
@@ -734,19 +764,91 @@ export default function PlayerProfile() {
               )}
             </div>
 
-            {/* Tienda de monedas — con ofertas rotatorias del día */}
+            {/* Tienda de monedas — con ofertas rotatorias del día + Especial Mundial */}
             {(() => {
               const deals = inventory.dailyDeals ?? [];
               const dealById = new Map(deals.map((d) => [d.id, d]));
+              const isWcItem = (id: string) => id.includes("_wc_");
               // Items on offer first, then the rest — at full price.
               const ordered = [...inventory.shop].sort((a, b) => {
                 const da = dealById.has(a.id) ? 0 : 1;
                 const db = dealById.has(b.id) ? 0 : 1;
                 return da - db;
               });
+              const wcOrdered = ordered.filter((i) => isWcItem(i.id));
+              const restOrdered = ordered.filter((i) => !isWcItem(i.id));
               const resetIn = inventory.dealsResetAt ? inventory.dealsResetAt - now : 0;
+              const renderRow = (item: (typeof ordered)[number]) => {
+                const owned =
+                  item.kind === "avatar"
+                    ? inventory.owned.avatars.some((a) => a.id === item.id)
+                    : item.kind === "frame"
+                    ? inventory.owned.frames.some((f) => f.id === item.id)
+                    : inventory.owned.backgrounds.some((b) => b.id === item.id);
+                const deal = dealById.get(item.id);
+                const price = deal ? deal.price : item.price;
+                const canAfford = inventory.coins >= price;
+                return (
+                  <div
+                    key={item.id}
+                    className="flex items-center gap-3 p-2.5 rounded-xl bg-black/30 border"
+                    style={{ borderColor: deal ? "rgba(249,168,37,0.45)" : "rgba(255,255,255,0.1)" }}
+                  >
+                    <span className={`text-2xl w-8 text-center ${isLegendaryFrame(item.id) ? "legendary-glyph" : ""}`} style={{ color: item.color }}>{item.glyph}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-sm font-bold truncate">{item.label}</p>
+                        {deal && (
+                          <span className="text-[9px] font-black text-amber-400 bg-amber-400/15 border border-amber-400/40 rounded px-1 py-0.5 leading-none">
+                            −{deal.discountPct}%
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-amber-400 flex items-center gap-1">
+                        <Coins className="w-3 h-3" /> {price}
+                        {deal && (
+                          <span className="text-white/30 line-through">{deal.originalPrice}</span>
+                        )}
+                      </p>
+                    </div>
+                    {owned ? (
+                      <span className="text-[10px] font-black text-emerald-400 uppercase">Comprado</span>
+                    ) : (
+                      <button
+                        onClick={() => handleBuy(item)}
+                        disabled={!canAfford || busyAction === `buy:${item.id}`}
+                        className="px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all disabled:opacity-40"
+                        style={{
+                          background: canAfford ? "rgba(249,168,37,0.2)" : "rgba(255,255,255,0.05)",
+                          border: canAfford ? "1px solid rgba(249,168,37,0.5)" : "1px solid rgba(255,255,255,0.1)",
+                          color: canAfford ? "#f9a825" : "rgba(255,255,255,0.4)",
+                        }}
+                      >
+                        {busyAction === `buy:${item.id}` ? "…" : "Comprar"}
+                      </button>
+                    )}
+                  </div>
+                );
+              };
               return (
                 <div id="tienda" className="scroll-mt-24">
+                  {wcOrdered.length > 0 && (
+                    <div
+                      className="mb-4 p-3 rounded-2xl border"
+                      style={{
+                        borderColor: "rgba(249,168,37,0.4)",
+                        background: "linear-gradient(135deg, rgba(22,163,74,0.14), rgba(220,38,38,0.12))",
+                      }}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-sm font-black text-white flex items-center gap-1.5">⚽ Especial Mundial</p>
+                        <span className="text-[9px] font-black text-amber-300 bg-amber-400/15 border border-amber-400/40 rounded px-1.5 py-0.5 uppercase">Evento</span>
+                      </div>
+                      <div className="space-y-1.5">
+                        {wcOrdered.map((item) => renderRow(item))}
+                      </div>
+                    </div>
+                  )}
                   <div className="flex items-center justify-between mb-1.5 mt-1">
                     <p className="text-xs font-bold text-white/50">Tienda</p>
                     {deals.length > 0 && inventory.dealsResetAt && (
@@ -756,58 +858,7 @@ export default function PlayerProfile() {
                     )}
                   </div>
                   <div className="space-y-1.5">
-                    {ordered.map((item) => {
-                      const owned =
-                        item.kind === "avatar"
-                          ? inventory.owned.avatars.some((a) => a.id === item.id)
-                          : item.kind === "frame"
-                          ? inventory.owned.frames.some((f) => f.id === item.id)
-                          : inventory.owned.backgrounds.some((b) => b.id === item.id);
-                      const deal = dealById.get(item.id);
-                      const price = deal ? deal.price : item.price;
-                      const canAfford = inventory.coins >= price;
-                      return (
-                        <div
-                          key={item.id}
-                          className="flex items-center gap-3 p-2.5 rounded-xl bg-black/30 border"
-                          style={{ borderColor: deal ? "rgba(249,168,37,0.45)" : "rgba(255,255,255,0.1)" }}
-                        >
-                          <span className={`text-2xl w-8 text-center ${isLegendaryFrame(item.id) ? "legendary-glyph" : ""}`} style={{ color: item.color }}>{item.glyph}</span>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-1.5">
-                              <p className="text-sm font-bold truncate">{item.label}</p>
-                              {deal && (
-                                <span className="text-[9px] font-black text-amber-400 bg-amber-400/15 border border-amber-400/40 rounded px-1 py-0.5 leading-none">
-                                  −{deal.discountPct}%
-                                </span>
-                              )}
-                            </div>
-                            <p className="text-[11px] text-amber-400 flex items-center gap-1">
-                              <Coins className="w-3 h-3" /> {price}
-                              {deal && (
-                                <span className="text-white/30 line-through">{deal.originalPrice}</span>
-                              )}
-                            </p>
-                          </div>
-                          {owned ? (
-                            <span className="text-[10px] font-black text-emerald-400 uppercase">Comprado</span>
-                          ) : (
-                            <button
-                              onClick={() => handleBuy(item)}
-                              disabled={!canAfford || busyAction === `buy:${item.id}`}
-                              className="px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all disabled:opacity-40"
-                              style={{
-                                background: canAfford ? "rgba(249,168,37,0.2)" : "rgba(255,255,255,0.05)",
-                                border: canAfford ? "1px solid rgba(249,168,37,0.5)" : "1px solid rgba(255,255,255,0.1)",
-                                color: canAfford ? "#f9a825" : "rgba(255,255,255,0.4)",
-                              }}
-                            >
-                              {busyAction === `buy:${item.id}` ? "…" : "Comprar"}
-                            </button>
-                          )}
-                        </div>
-                      );
-                    })}
+                    {restOrdered.map((item) => renderRow(item))}
                   </div>
                 </div>
               );

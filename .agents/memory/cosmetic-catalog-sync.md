@@ -57,6 +57,14 @@ update) so a concurrent `/buy` or reward claim can't clobber inventory_json
 the public profile/ranking payload still only carries avatar/frame/title columns,
 so it can't show on others' profiles without also surfacing equippedBackground there.
 
+## Event grouping convention (`_wc_` etc.)
+Limited-time event cosmetics use an id substring (first one: `_wc_` for the World
+Cup) so the client shop can pull them into their own highlighted section
+(PlayerProfile.tsx `isWcItem` filter → "⚽ Especial Mundial" block) while the rest
+fall under the normal "Tienda". They're otherwise ordinary coin-buyable SHOP_ITEMS
+(avatars incl. flag emojis, frames, backgrounds). Reuse this id-substring pattern
+for future events instead of adding a real "event" field.
+
 ## Unlockable titles (earned by playing)
 A THIRD hand-mirrored catalog, separate from avatars/frames:
 - Server = `artifacts/api-server/src/lib/titleCatalog.ts` (`TITLES`, predicates,
