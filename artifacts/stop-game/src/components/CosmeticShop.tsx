@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Check, Coins, ShoppingBag, Tag } from "lucide-react";
 import { usePaymentChannel } from "@/hooks/usePaymentChannel";
-import { purchaseWorldCupPackOnPlay } from "@/lib/playBilling";
+import { purchaseWorldCupPackOnPlay, isPlayPurchaseCancelled, isPlayBillingUnavailable } from "@/lib/playBilling";
 import { startPackCheckout, WORLD_CUP_PACK_PRICE_LABEL } from "@/lib/worldCupPack";
 import { isLegendaryFrame, formatCountdown } from "@/lib/cosmeticHelpers";
 import { celebrateReward } from "@/lib/celebrate";
@@ -91,17 +91,33 @@ export function CosmeticShop({
     // must not fall through to the Stripe web path before "play" is resolved.
     if (channel === "loading") return;
     setBusyAction("buy:pack");
+
+    const goStripe = async () => {
+      const { url } = await startPackCheckout({ playerId });
+      window.location.href = url;
+    };
+
     try {
       if (channel === "play") {
-        const r = await purchaseWorldCupPackOnPlay();
-        if (r.granted) {
-          await refresh();
-          celebrateReward();
-          window.alert("¡Pack Mundial desbloqueado! Ya tienes todos los cosméticos del Mundial. ⚽");
+        try {
+          const r = await purchaseWorldCupPackOnPlay();
+          if (r.granted) {
+            await refresh();
+            celebrateReward();
+            window.alert("¡Pack Mundial desbloqueado! Ya tienes todos los cosméticos del Mundial. ⚽");
+          }
+        } catch (e) {
+          // User closed the Google Play sheet — abort quietly, no error popup.
+          if (isPlayPurchaseCancelled(e)) return;
+          // The Digital Goods service resolved (so we picked "play") but this
+          // build/device can't actually run Play Billing — instead of showing
+          // "payment method not supported", fall back to Stripe checkout so the
+          // purchase still completes.
+          if (isPlayBillingUnavailable(e)) { await goStripe(); return; }
+          throw e;
         }
       } else {
-        const { url } = await startPackCheckout({ playerId });
-        window.location.href = url;
+        await goStripe();
       }
     } catch (e) {
       window.alert(e instanceof Error ? e.message : "No se pudo completar la compra");

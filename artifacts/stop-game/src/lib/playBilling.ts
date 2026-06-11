@@ -208,6 +208,29 @@ export async function purchaseWorldCupPackOnPlay(): Promise<{ granted: boolean }
   return data;
 }
 
+// ── Error classification for the purchase UI ────────────────────────────
+// The Digital Goods service can resolve (so we pick the "play" channel) on a
+// TWA whose AAB was NOT actually built with Play Billing enabled. In that case
+// `PaymentRequest.show()` rejects with a NotSupportedError ("The payment method
+// 'https://play.google.com/billing' is not supported"). We treat that — and our
+// own "no está disponible" guard — as "fall back to Stripe" rather than dead-
+// ending the user. A user-dismissed Play sheet (AbortError) must NOT fall back.
+export function isPlayPurchaseCancelled(e: unknown): boolean {
+  return typeof DOMException !== "undefined"
+    && e instanceof DOMException
+    && e.name === "AbortError";
+}
+
+export function isPlayBillingUnavailable(e: unknown): boolean {
+  if (typeof DOMException !== "undefined" && e instanceof DOMException && e.name === "NotSupportedError") {
+    return true;
+  }
+  const msg = (e instanceof Error ? e.message : String(e ?? "")).toLowerCase();
+  return msg.includes("not supported")
+    || msg.includes("no está disponible")
+    || msg.includes("play.google.com/billing");
+}
+
 // ── Restore (e.g. user already paid on another device) ──────────────────
 // Walks listPurchases() and re-verifies each token against the server.
 // Useful on app start so a returning subscriber sees premium without having
