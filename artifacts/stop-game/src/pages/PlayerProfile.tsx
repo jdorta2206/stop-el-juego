@@ -495,4 +495,34 @@ export default function PlayerProfile() {
                 </div>
                 <button
                   onClick={() => handleClaimPrestige(r.tier)}
-                  disabled={busyActio
+                  disabled={busyAction === `claim:prestige:${r.tier}`}
+                  className="px-3 py-1 rounded-lg bg-secondary text-black font-bold text-sm"
+                >
+                  {busyAction === `claim:prestige:${r.tier}` ? "..." : "Reclamar"}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {recentGames.length > 0 && (
+          <div className="space-y-2">
+            <h3 className="text-sm font-bold text-white/70">📋 Últimas partidas</h3>
+            <div className="space-y-1">
+              {recentGames.slice(0, 5).map((g: any, idx: number) => (
+                <div key={idx} className="flex justify-between items-center p-2 rounded-lg bg-white/5 border border-white/5 text-xs">
+                  <span className="text-white/60">{timeAgo(g.createdAt)}</span>
+                  <span className="flex items-center gap-1">
+                    {g.won ? <Trophy size={12} className="text-secondary" /> : <Flame size={12} className="text-red-500" />}
+                    <span className="font-bold text-white">{g.score}</span>
+                  </span>
+                  <span className="text-white/40">{MODE_LABELS[g.mode]?.label ?? g.mode}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </Layout>
+  );
+}
