@@ -499,4 +499,5 @@ export default function PlayerProfile() {
                 disabled={packPurchasing}
                 className="bg-white text-orange-600 font-bold px-5 py-2 rounded-xl shadow-md disabled:opacity-50"
               >
+
     
