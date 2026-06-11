@@ -19,8 +19,6 @@ import { celebrateReward } from "@/lib/celebrate";
 import { rewardFrameName } from "@/lib/rewardFrames";
 import { CosmeticShop } from "@/components/CosmeticShop";
 import { LEGENDARY_FRAME_FX } from "@/lib/cosmeticHelpers";
-// Importaciones del Pack Mundial (solo Stripe)
-import { checkoutWorldCupPack } from "@/lib/worldCupPack";
 
 // Niveles (sin cambios)
 interface LevelInfo {
@@ -274,8 +272,6 @@ export default function PlayerProfile() {
   const { inventory, refresh: refreshInventory, equip, buy } = useInventory(isMe ? me?.id : null);
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const { prestige, claimPrestige } = useRewards(isMe ? me?.id : null, refreshInventory);
-  const [packPurchasing, setPackPurchasing] = useState(false);
-  const [packError, setPackError] = useState<string | null>(null);
 
   const handleClaimPrestige = useCallback(async (tier: number) => {
     setBusyAction(`claim:prestige:${tier}`);
@@ -318,21 +314,6 @@ export default function PlayerProfile() {
     }
     setFollowState("idle");
   }, [data, me, alreadyFollowing, follow, unfollow, followState]);
-
-  // Stripe only
-  const handlePurchasePack = async () => {
-    setPackPurchasing(true);
-    setPackError(null);
-    try {
-      await checkoutWorldCupPack();
-    } catch (err: any) {
-      console.error(err);
-      setPackError(err.message || "Error al iniciar la compra");
-      setTimeout(() => setPackError(null), 5000);
-    } finally {
-      setPackPurchasing(false);
-    }
-  };
 
   if (isLoading) {
     return (
@@ -480,23 +461,38 @@ export default function PlayerProfile() {
           </div>
         )}
 
-        {isMe && (
-          <div className="mt-2 p-4 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-600 shadow-lg">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="font-black text-white text-lg flex items-center gap-2">
-                  <span>⚽</span> Pack Mundial
-                </p>
-                <p className="text-sm text-white/90">
-                  27 cosméticos: avatares, banderas, marcos y fondos
-                </p>
-                {packError && (
-                  <p className="text-xs text-red-200 mt-1">{packError}</p>
-                )}
-              </div>
-              <button
-                onClick={handlePurchasePack}
-                disabled={packPurchasing}
-                className="bg-white text-orange-600 font-bold px-5 py-2 rounded-xl shadow-md disabled:opacity-50"
-              >
-    
+        {!isMe && isLoggedIn && (
+          <div className="flex justify-center">
+            <button
+              onClick={handleFollow}
+              disabled={followState === "loading"}
+              className={`flex items-center gap-2 px-5 py-2 rounded-full font-bold transition-colors ${alreadyFollowing ? "bg-white/10 text-white/70" : "bg-secondary text-black"}`}
+            >
+              {alreadyFollowing ? <UserCheck size={16} /> : <UserPlus size={16} />}
+              {alreadyFollowing ? "Siguiendo" : "Seguir"}
+            </button>
+          </div>
+        )}
+
+        {isMe && inventory && (
+          <div id="tienda" className="scroll-mt-20">
+            <CosmeticShop
+              inventory={inventory}
+              onEquip={equip}
+              onBuy={buy}
+            />
+          </div>
+        )}
+
+        {isMe && prestige?.availableRewards && prestige.availableRewards.length > 0 && (
+          <div className="space-y-2">
+            <h3 className="text-sm font-bold text-white/70">🏆 Recompensas de prestigio</h3>
+            {prestige.availableRewards.map(r => (
+              <div key={r.tier} className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/10">
+                <div>
+                  <p className="font-bold">{r.title}</p>
+                  <p className="text-xs text-white/50">{r.description}</p>
+                </div>
+                <button
+                  onClick={() => handleClaimPrestige(r.tier)}
+                  disabled={busyActio
