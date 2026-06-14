@@ -1,10 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { Check, Coins, ShoppingBag, Tag } from "lucide-react";
 import { usePaymentChannel } from "@/hooks/usePaymentChannel";
-import { purchaseWorldCupPackOnPlay, isPlayPurchaseCancelled, isPlayBillingUnavailable } from "@/lib/playBilling";
 import { startPackCheckout, WORLD_CUP_PACK_PRICE_LABEL } from "@/lib/worldCupPack";
 import { isLegendaryFrame, formatCountdown } from "@/lib/cosmeticHelpers";
-import { celebrateReward } from "@/lib/celebrate";
 import type { InventorySnapshot, ShopItem, EquipKind } from "@/hooks/useInventory";
 
 function CosmeticChip({
@@ -47,15 +45,9 @@ interface CosmeticShopProps {
   refresh: () => Promise<void> | void;
   buy: (itemId: string) => Promise<{ error?: string } | void>;
   equip: (kind: EquipKind, value: string | null) => Promise<{ error?: string } | void>;
-  /** Show the "Mi inventario" owned cosmetics + equip controls (own profile/shop). */
   showInventory?: boolean;
 }
 
-/**
- * Reusable coin shop + owned-cosmetics manager. Fed the inventory snapshot and
- * its mutators by the parent so a single source of truth stays in sync (the
- * player profile also reacts to prestige claims that grant coins/frames).
- */
 export function CosmeticShop({
   playerId, inventory, refresh, buy, equip, showInventory = true,
 }: CosmeticShopProps) {
@@ -82,54 +74,31 @@ export function CosmeticShop({
     }
   }, [buy]);
 
-  // Channel-aware "Pack Mundial" one-time purchase. On the Play TWA we run
-  // Google Play Billing and verify server-side; on the web we redirect to a
-  // Stripe one-time checkout. Both grant the same cosmetics; the server grant
-  // is idempotent.
+  // ============================================================
+  // PACK MUNDIAL - SIEMPRE USA STRIPE (tarjeta/Google Pay)
+  // ============================================================
   const handleBuyPack = useCallback(async () => {
-    // Wait until channel detection settles — a too-fast tap inside the TWA
-    // must not fall through to the Stripe web path before "play" is resolved.
     if (channel === "loading") return;
     setBusyAction("buy:pack");
 
-    const goStripe = async () => {
-      const { url } = await startPackCheckout({ playerId });
-      window.location.href = url;
-    };
-
     try {
-      if (channel === "play") {
-        try {
-          const r = await purchaseWorldCupPackOnPlay();
-          if (r.granted) {
-            await refresh();
-            celebrateReward();
-            window.alert("¡Pack Mundial desbloqueado! Ya tienes todos los cosméticos del Mundial. ⚽");
-          }
-        } catch (e) {
-          // User closed the Google Play sheet — abort quietly, no error popup.
-          if (isPlayPurchaseCancelled(e)) return;
-          // The Digital Goods service resolved (so we picked "play") but this
-          // build/device can't actually run Play Billing — instead of showing
-          // "payment method not supported", fall back to Stripe checkout so the
-          // purchase still completes.
-          if (isPlayBillingUnavailable(e)) { await goStripe(); return; }
-          throw e;
-        }
+      const { url } = await startPackCheckout({ playerId });
+      if (url) {
+        window.location.href = url;
       } else {
-        await goStripe();
+        throw new Error("No se recibió URL de pago");
       }
-    } catch (e) {
-      window.alert(e instanceof Error ? e.message : "No se pudo completar la compra");
+    } catch (error) {
+      console.error("Error al iniciar pago del Pack Mundial:", error);
+      window.alert(error instanceof Error ? error.message : "No se pudo iniciar el pago. Inténtalo de nuevo.");
     } finally {
       setBusyAction(null);
     }
-  }, [channel, playerId, refresh]);
+  }, [channel, playerId]);
 
   const deals = inventory.dailyDeals ?? [];
   const dealById = new Map(deals.map((d) => [d.id, d]));
   const isWcItem = (id: string) => id.includes("_wc_");
-  // Items on offer first, then the rest — at full price.
   const ordered = [...inventory.shop].sort((a, b) => {
     const da = dealById.has(a.id) ? 0 : 1;
     const db = dealById.has(b.id) ? 0 : 1;
@@ -206,7 +175,6 @@ export function CosmeticShop({
 
       {showInventory && (
         <>
-          {/* Avatares poseídos */}
           <div>
             <p className="text-xs font-bold text-white/50 mb-1.5">Avatares</p>
             <div className="flex gap-2 flex-wrap">
@@ -230,7 +198,6 @@ export function CosmeticShop({
             </div>
           </div>
 
-          {/* Marcos poseídos */}
           <div>
             <p className="text-xs font-bold text-white/50 mb-1.5">Marcos</p>
             <div className="flex gap-2 flex-wrap">
@@ -255,7 +222,6 @@ export function CosmeticShop({
             </div>
           </div>
 
-          {/* Fondos poseídos */}
           <div>
             <p className="text-xs font-bold text-white/50 mb-1.5">Fondos</p>
             <div className="flex gap-2 flex-wrap">
@@ -279,7 +245,6 @@ export function CosmeticShop({
             </div>
           </div>
 
-          {/* Títulos — se ganan jugando, no se compran */}
           <div>
             <p className="text-xs font-bold text-white/50 mb-1.5">Títulos <span className="text-white/30 font-normal">(se ganan jugando)</span></p>
             <div className="flex gap-2 flex-wrap">
@@ -320,7 +285,6 @@ export function CosmeticShop({
         </>
       )}
 
-      {/* Tienda de monedas — con ofertas rotatorias del día + Especial Mundial */}
       <div id="tienda" className="scroll-mt-24">
         {wcOrdered.length > 0 && (
           <div
