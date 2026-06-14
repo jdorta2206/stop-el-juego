@@ -1,7 +1,7 @@
 {
   "_comment": "Bubblewrap manifest template for the STOP Trusted Web Activity. Copy this file into the local clone of your TWA project (NOT this repo — Bubblewrap expects it at the root of its own working directory) and run `bubblewrap update && bubblewrap build`. The fields marked TODO must be replaced with real values from your Play Console / signing keystore before building. The `playBilling` feature flag below is what unlocks the Digital Goods API on the JavaScript side; without it window.getDigitalGoodsService is undefined and the app falls back to Stripe.",
   "packageId": "com.dorynex.stop",
-  "host": "stop-el-juego.replit.app",
+  "host": "www.stopjuegodepalabras.com",
   "name": "STOP - El Juego",
   "launcherName": "STOP",
   "display": "standalone",
@@ -12,13 +12,13 @@
   "navigationDividerColorDark": "#0d1757",
   "backgroundColor": "#0d1757",
   "enableNotifications": true,
-  "startUrl": "/",
-  "iconUrl": "https://stop-el-juego.replit.app/images/icon-512.png",
-  "maskableIconUrl": "https://stop-el-juego.replit.app/images/icon-maskable-512.png",
-  "monochromeIconUrl": "https://stop-el-juego.replit.app/images/icon-mono-512.png",
+  "startUrl": "https://www.stopjuegodepalabras.com/",
+  "iconUrl": "https://www.stopjuegodepalabras.com/images/icon-512.png",
+  "maskableIconUrl": "https://www.stopjuegodepalabras.com/images/icon-maskable-512.png",
+  "monochromeIconUrl": "https://www.stopjuegodepalabras.com/images/icon-mono-512.png",
   "shortcuts": [],
   "generatorApp": "bubblewrap-cli",
-  "webManifestUrl": "https://stop-el-juego.replit.app/manifest.json",
+  "webManifestUrl": "https://www.stopjuegodepalabras.com/manifest.json",
   "fallbackType": "customtabs",
   "features": {
     "playBilling": {
@@ -31,13 +31,13 @@
   "enableSiteSettingsShortcut": false,
   "isChromeOSOnly": false,
   "isMetaQuest": false,
-  "fullScopeUrl": "https://stop-el-juego.replit.app/",
+  "fullScopeUrl": "https://www.stopjuegodepalabras.com/",
   "minSdkVersion": 21,
   "orientation": "portrait",
   "_TODO_signingKey": {
     "path": "./android.keystore",
     "alias": "android"
   },
-  "appVersionName": "1.1.0",
-  "appVersionCode": 11
+  "appVersionName": "1.1.1",
+  "appVersionCode": 12
 }
