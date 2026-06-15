@@ -164,19 +164,44 @@ router.post("/checkout-pack", async (req, res) => {
 
     const player = await stripeStorage.getPlayer(playerId);
     let customerId = player?.stripeCustomerId || null;
+    
+    // ============================================================
+    // VALIDAR QUE EL CUSTOMER EXISTA EN STRIPE
+    // ============================================================
+    let validCustomerId: string | undefined;
+    if (customerId) {
+      try {
+        const stripe = await getUncachableStripeClient();
+        const customer = await stripe.customers.retrieve(customerId);
+        if (customer && !customer.deleted) {
+          validCustomerId = customerId;
+          console.log(`Customer ${customerId} validated successfully`);
+        } else {
+          console.warn(`Customer ${customerId} is deleted, will create new one`);
+          customerId = null;
+        }
+      } catch (error: any) {
+        console.warn(`Invalid Stripe customer ${customerId}: ${error.message}. Creating new customer.`);
+        customerId = null;
+      }
+    }
+
+    // Si no hay customer válido, crear uno nuevo
     if (!customerId) {
       const customer = await stripeService.createCustomer(
         email || `${playerId}@stop-game.app`,
         playerId
       );
       customerId = customer.id;
+      validCustomerId = customerId;
       await stripeStorage.updatePlayerStripeInfo(playerId, {
         stripeCustomerId: customerId,
       });
+      console.log(`Created new customer ${customerId} for player ${playerId}`);
     }
 
     const session = await stripeService.createPackCheckoutSession(
-      customerId,
+      validCustomerId || customerId,
       {
         name: WORLD_CUP_PACK_NAME,
         amountCents: WORLD_CUP_PACK_PRICE_CENTS,
