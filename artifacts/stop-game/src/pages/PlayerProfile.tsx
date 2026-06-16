@@ -494,4 +494,32 @@ export default function PlayerProfile() {
           <div className="space-y-2">
             <h3 className="text-sm font-bold text-white/70">🏆 Recompensas de prestigio</h3>
             {prestige.availableRewards.map(r => (
-              <div key={r.tier} className="flex items-center justify-between p-3 rounded-xl bg-white
+              <div key={r.tier} className="flex items-center justify-between p-3 rounded-xl <p className="text-xs text-white/50">{r.description}</p>
+                </div>
+                <button
+                  onClick={() => handleClaimPrestige(r.tier)}
+                  disabled={busyAction === `claim:prestige:${r.tier}`}
+                  className="px-4 py-1.5 rounded-full bg-secondary text-black font-bold text-sm disabled:opacity-50"
+                >
+                  {busyAction === `claim:prestige:${r.tier}` ? "…" : "Reclamar"}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {recentGames.length > 0 && (
+          <div className="space-y-2">
+            <h3 className="text-sm font-bold text-white/70">📋 Últimas partidas</h3>
+            {recentGames.map((game, idx) => (
+              <div key={idx} className="flex items-center justify-between p-2 rounded-xl bg-white/5 border border-white/5 text-sm">
+                <span className="text-white/70">{MODE_LABELS[game.mode]?.icon || "🎮"} {MODE_LABELS[game.mode]?.label || game.mode}</span>
+                <span className="text-white/40 text-xs">{timeAgo(game.createdAt)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </Layout>
+  );
+}
