@@ -494,7 +494,10 @@ export default function PlayerProfile() {
           <div className="space-y-2">
             <h3 className="text-sm font-bold text-white/70">🏆 Recompensas de prestigio</h3>
             {prestige.availableRewards.map(r => (
-              <div key={r.tier} className="flex items-center justify-between p-3 rounded-xl <p className="text-xs text-white/50">{r.description}</p>
+              <div key={r.tier} className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/10">
+                <div>
+                  <p className="font-bold">{r.title}</p>
+                  <p className="text-xs text-white/50">{r.description}</p>
                 </div>
                 <button
                   onClick={() => handleClaimPrestige(r.tier)}
