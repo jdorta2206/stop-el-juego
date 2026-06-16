@@ -263,16 +263,57 @@ function parseBluffMeta(json: string | null): any | null {
   try { return JSON.parse(json); } catch { return null; }
 }
 
-function formatRoom(room: any) {
+// ============================================================
+// 🆕 OBTENER COSMÉTICOS DE PLAYER_SCORES PARA UNA LISTA DE PLAYERS
+// ============================================================
+async function fetchCosmeticsForPlayers(playerIds: string[]): Promise<Record<string, { equippedAvatar: string | null, equippedFrame: string | null, equippedBackground: string | null }>> {
+  if (playerIds.length === 0) return {};
+  try {
+    const rows = await db
+      .select({
+        playerId: playerScoresTable.playerId,
+        equippedAvatar: playerScoresTable.equippedAvatar,
+        equippedFrame: playerScoresTable.equippedFrame,
+        equippedBackground: playerScoresTable.equippedBackground,
+      })
+      .from(playerScoresTable)
+      .where(inArray(playerScoresTable.playerId, playerIds));
+    const map: Record<string, any> = {};
+    for (const row of rows) {
+      map[row.playerId] = {
+        equippedAvatar: row.equippedAvatar ?? null,
+        equippedFrame: row.equippedFrame ?? null,
+        equippedBackground: row.equippedBackground ?? null,
+      };
+    }
+    return map;
+  } catch {
+    return {};
+  }
+}
+
+// ============================================================
+// FORMAT ROOM – ahora con opción de incluir cosméticos
+// ============================================================
+function formatRoom(room: any, cosmeticsMap?: Record<string, any>) {
   const meta = parseBluffMeta(room.stopperJson);
   const code = room.roomCode as string;
   const durationSecs = roundDurationSecs(room);
-  // Server-authoritative round deadline. The client uses this to compute the
-  // visible countdown so all players see the SAME remaining time, regardless
-  // of polling jitter, SSE reconnects or local clock drift.
   const startedAtRaw = meta?.roundStartedAt;
   const roundStartedAt = typeof startedAtRaw === "number" ? startedAtRaw : null;
   const roundEndsAt = roundStartedAt ? roundStartedAt + durationSecs * 1000 : null;
+
+  let players = parsePlayers(room.playersJson);
+  // Si se proporcionan cosméticos, fusionarlos con cada jugador
+  if (cosmeticsMap) {
+    players = players.map((p: any) => ({
+      ...p,
+      equippedAvatar: cosmeticsMap[p.playerId]?.equippedAvatar ?? null,
+      equippedFrame: cosmeticsMap[p.playerId]?.equippedFrame ?? null,
+      equippedBackground: cosmeticsMap[p.playerId]?.equippedBackground ?? null,
+    }));
+  }
+
   return {
     id: room.id,
     roomCode: code,
@@ -289,11 +330,10 @@ function formatRoom(room: any) {
     customPackLabel: roomCategoryPacks.get(code)?.customLabel ?? null,
     language: room.language,
     isPublic: room.isPublic ?? false,
-    players: parsePlayers(room.playersJson),
+    players,
     stopper: meta?.stopper ?? null,
     bluffData: meta?.bluffVotes ?? null,
     bluffVoteDeadline: meta?.bluffDeadline ?? null,
-    // ⏱️ Server-authoritative round timing (the only source of truth)
     roundStartedAt,
     roundEndsAt,
     roundDurationSecs: durationSecs,
@@ -792,7 +832,14 @@ router.get("/:roomCode/spectate", async (req, res) => {
   if (!rows.length) { res.status(404).json({ error: "Room not found" }); return; }
   const room = rows[0];
   if (!room.isPublic) { res.status(403).json({ error: "Room is private" }); return; }
-  res.json(sanitizeRoomForSpectator(formatRoom(room)));
+
+  // Obtener cosméticos para los jugadores de la sala (para espectadores)
+  const players = parsePlayers(room.playersJson);
+  const playerIds = players.map((p: any) => p.playerId).filter(Boolean);
+  const cosmeticsMap = await fetchCosmeticsForPlayers(playerIds);
+
+  const formatted = formatRoom(room, cosmeticsMap);
+  res.json(sanitizeRoomForSpectator(formatted));
 });
 
 // PATCH /rooms/:code/visibility — host toggles streamer mode (isPublic)
@@ -908,7 +955,15 @@ router.get("/:roomCode", async (req, res) => {
   const roomCode = paramStr(req.params.roomCode);
   const rooms = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, roomCode.toUpperCase())).limit(1);
   if (rooms.length === 0) { res.status(404).json({ error: "Room not found" }); return; }
-  const full = formatRoom(rooms[0]);
+
+  const room = rooms[0];
+
+  // 🆕 Obtener cosméticos para los jugadores de la sala
+  const players = parsePlayers(room.playersJson);
+  const playerIds = players.map((p: any) => p.playerId).filter(Boolean);
+  const cosmeticsMap = await fetchCosmeticsForPlayers(playerIds);
+
+  const full = formatRoom(room, cosmeticsMap);
 
   // 🔒 Private-room privacy. Public (streamer-mode) rooms are spectatable by
   // design, so they keep returning the full payload. For a PRIVATE room we only
@@ -930,7 +985,6 @@ router.get("/:roomCode", async (req, res) => {
     const asserted =
       paramStr(req.query["viewerId"]) || paramStr(req.headers["x-viewer-id"]);
     const viewerId = verified || (asserted && !isLoggedInId(asserted) ? asserted : "");
-    const players = Array.isArray(full.players) ? (full.players as any[]) : [];
     const isMember =
       !!viewerId &&
       (full.hostId === viewerId || players.some((p) => p?.playerId === viewerId));
@@ -1527,8 +1581,12 @@ router.get("/:roomCode/events", async (req, res) => {
   res.setHeader("X-Accel-Buffering", "no");
   res.flushHeaders?.();
 
-  // Send current state immediately
-  res.write(`data: ${JSON.stringify(formatRoom(roomRow))}\n\n`);
+  // Send current state immediately (con cosméticos)
+  const players = parsePlayers(roomRow.playersJson);
+  const playerIds = players.map((p: any) => p.playerId).filter(Boolean);
+  const cosmeticsMap = await fetchCosmeticsForPlayers(playerIds);
+  const initialPayload = formatRoom(roomRow, cosmeticsMap);
+  res.write(`data: ${JSON.stringify(initialPayload)}\n\n`);
 
   const client: SseClient = { res, playerId };
   if (!sseClients.has(code)) sseClients.set(code, new Set());
