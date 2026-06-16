@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, followsTable, playerScoresTable } from "@workspace/db";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 const router: IRouter = Router();
 
@@ -9,7 +9,7 @@ router.get("/list/:followerId", async (req, res) => {
   const { followerId } = req.params;
   if (!followerId) return res.status(400).json({ error: "followerId required" });
 
-  // Primero obtenemos la lista de seguidos (sin JOIN)
+  // Primero obtenemos la lista de seguidos
   const follows = await db
     .select()
     .from(followsTable)
