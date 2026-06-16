@@ -1,17 +1,31 @@
 import { Router, type IRouter } from "express";
-import { db, followsTable } from "@workspace/db";
+import { db, followsTable, playerScoresTable } from "@workspace/db";
 import { and, eq } from "drizzle-orm";
 
 const router: IRouter = Router();
 
-// GET /api/friends/list/:followerId — get all followed players
+// GET /api/friends/list/:followerId — get all followed players with their latest cosmetics
 router.get("/list/:followerId", async (req, res) => {
   const { followerId } = req.params;
   if (!followerId) return res.status(400).json({ error: "followerId required" });
 
+  // Join with player_scores to get up‑to‑date names, colors, premium and equipped cosmetics
   const rows = await db
-    .select()
+    .select({
+      followerId: followsTable.followerId,
+      followedId: followsTable.followedId,
+      followedName: playerScoresTable.playerName,           // freshest name
+      followedPicture: followsTable.followedPicture,        // kept from follow time
+      followedAvatarColor: playerScoresTable.avatarColor,   // freshest color
+      followedProvider: followsTable.followedProvider,
+      // 🆕 COSMÉTICOS EQUIPADOS
+      equippedAvatar: playerScoresTable.equippedAvatar,
+      equippedFrame: playerScoresTable.equippedFrame,
+      equippedBackground: playerScoresTable.equippedBackground,
+      isPremium: playerScoresTable.isPremium,
+    })
     .from(followsTable)
+    .leftJoin(playerScoresTable, eq(followsTable.followedId, playerScoresTable.playerId))
     .where(eq(followsTable.followerId, followerId));
 
   return res.json({ friends: rows });
@@ -46,6 +60,9 @@ router.post("/follow", async (req, res) => {
     return res.json({ ok: true, alreadyFollowing: true });
   }
 
+  // Store the follow relationship. We keep a snapshot of the followed player's
+  // name/color at follow time as a fallback, but the GET endpoint will always
+  // fetch the latest data from player_scores via the JOIN.
   await db.insert(followsTable).values({
     followerId,
     followedId,
