@@ -235,34 +235,123 @@ export function Layout({ children }: { children: ReactNode }) {
         })}
       </nav>
 
-      {/* Footer */}
-      <footer className="w-full border-t border-white/10 mt-4 py-4 px-4 z-10">
-        <div className="max-w-5xl mx-auto flex flex-wrap items-center justify-center gap-x-5 gap-y-1">
-          <Link href="/acerca" className="text-white/40 hover:text-white/70 text-xs transition-colors">
-            Acerca de
-          </Link>
-          <Link href="/como-jugar" className="text-white/40 hover:text-white/70 text-xs transition-colors">
-            Cómo jugar
-          </Link>
-          <Link href="/estrategias" className="text-white/40 hover:text-white/70 text-xs transition-colors">
-            Estrategias
-          </Link>
-          <Link href="/privacy" className="text-white/40 hover:text-white/70 text-xs transition-colors">
-            Privacidad
-          </Link>
-          <Link href="/terms" className="text-white/40 hover:text-white/70 text-xs transition-colors">
-            Términos
-          </Link>
-          <Link href="/notificaciones" className="text-white/40 hover:text-white/70 text-xs transition-colors">
-            {lang === "en" ? "Notifications" : lang === "pt" ? "Notificações" : lang === "fr" ? "Notifications" : "Notificaciones"}
-          </Link>
-          <a
-            href="mailto:dorynex@stopjuegodepalabras.com"
-            className="text-white/40 hover:text-white/70 text-xs transition-colors"
-          >
-            Contacto
-          </a>
-          <span className="text-white/20 text-xs">© 2026 STOP El Juego</span>
+      {/* ============================================================ */}
+      {/* FOOTER MEJORADO (con secciones organizadas)                   */}
+      {/* ============================================================ */}
+      <footer className="w-full border-t border-white/10 mt-8 py-8 px-4 z-10 bg-black/20">
+        <div className="max-w-5xl mx-auto grid grid-cols-2 sm:grid-cols-4 gap-6 text-sm">
+          {/* Sección 1: Juego */}
+          <div>
+            <h4 className="text-white font-bold text-xs uppercase tracking-wider mb-3">Juego</h4>
+            <ul className="space-y-2">
+              <li>
+                <Link href="/como-jugar" className="text-white/50 hover:text-white/80 transition-colors text-xs">
+                  Cómo jugar
+                </Link>
+              </li>
+              <li>
+                <Link href="/ranking" className="text-white/50 hover:text-white/80 transition-colors text-xs">
+                  Ranking
+                </Link>
+              </li>
+              <li>
+                <Link href="/tienda" className="text-white/50 hover:text-white/80 transition-colors text-xs">
+                  Tienda
+                </Link>
+              </li>
+              <li>
+                <Link href="/reto" className="text-white/50 hover:text-white/80 transition-colors text-xs">
+                  Reto diario
+                </Link>
+              </li>
+            </ul>
+          </div>
+
+          {/* Sección 2: Información */}
+          <div>
+            <h4 className="text-white font-bold text-xs uppercase tracking-wider mb-3">Información</h4>
+            <ul className="space-y-2">
+              <li>
+                <Link href="/acerca" className="text-white/50 hover:text-white/80 transition-colors text-xs">
+                  Acerca de
+                </Link>
+              </li>
+              <li>
+                <Link href="/blog" className="text-white/50 hover:text-white/80 transition-colors text-xs">
+                  Blog
+                </Link>
+              </li>
+              <li>
+                <Link href="/contacto" className="text-white/50 hover:text-white/80 transition-colors text-xs">
+                  Contacto
+                </Link>
+              </li>
+              <li>
+                <a href="mailto:dorynex@stopjuegodepalabras.com" className="text-white/50 hover:text-white/80 transition-colors text-xs">
+                  Email: dorynex@stopjuegodepalabras.com
+                </a>
+              </li>
+            </ul>
+          </div>
+
+          {/* Sección 3: Legal */}
+          <div>
+            <h4 className="text-white font-bold text-xs uppercase tracking-wider mb-3">Legal</h4>
+            <ul className="space-y-2">
+              <li>
+                <Link href="/privacidad" className="text-white/50 hover:text-white/80 transition-colors text-xs">
+                  Política de privacidad
+                </Link>
+              </li>
+              <li>
+                <Link href="/terminos" className="text-white/50 hover:text-white/80 transition-colors text-xs">
+                  Términos y condiciones
+                </Link>
+              </li>
+              <li>
+                <Link href="/cookies" className="text-white/50 hover:text-white/80 transition-colors text-xs">
+                  Política de cookies
+                </Link>
+              </li>
+            </ul>
+          </div>
+
+          {/* Sección 4: Síguenos */}
+          <div>
+            <h4 className="text-white font-bold text-xs uppercase tracking-wider mb-3">Síguenos</h4>
+            <ul className="space-y-2">
+              <li>
+                <a href="#" className="text-white/50 hover:text-white/80 transition-colors text-xs">
+                  Twitter
+                </a>
+              </li>
+              <li>
+                <a href="#" className="text-white/50 hover:text-white/80 transition-colors text-xs">
+                  Instagram
+                </a>
+              </li>
+              <li>
+                <a href="#" className="text-white/50 hover:text-white/80 transition-colors text-xs">
+                  Facebook
+                </a>
+              </li>
+              <li>
+                <a href="#" className="text-white/50 hover:text-white/80 transition-colors text-xs">
+                  TikTok
+                </a>
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        {/* Línea inferior con copyright */}
+        <div className="max-w-5xl mx-auto mt-6 pt-4 border-t border-white/5 text-center">
+          <p className="text-white/20 text-[10px]">
+            &copy; {new Date().getFullYear()} STOP - El Juego de Palabras. Todos los derechos reservados.
+          </p>
+          <p className="text-white/10 text-[9px] mt-1">
+            Hecho con ❤️ en Leganés, Madrid, España
+          </p>
         </div>
       </footer>
 
