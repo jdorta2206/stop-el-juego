@@ -1,6 +1,6 @@
 import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui";
-import { Mail, Phone, MapPin } from "lucide-react";
+import { Mail, Phone, MapPin, Twitter, Instagram, Facebook } from "lucide-react";
 
 export default function Contact() {
   return (
@@ -8,7 +8,8 @@ export default function Contact() {
       <div className="max-w-3xl mx-auto px-4 py-12">
         <h1 className="text-4xl font-black text-white mb-6">Contacto</h1>
         <p className="text-white/70 mb-8">
-          ¿Preguntas, sugerencias o problemas? Escríbenos y te responderemos lo antes posible.
+          ¿Preguntas, sugerencias, problemas técnicos o simplemente quieres saludar?
+          Escríbenos y te responderemos lo antes posible.
         </p>
 
         <div className="grid md:grid-cols-2 gap-8">
@@ -21,7 +22,7 @@ export default function Contact() {
                   type="text"
                   name="name"
                   required
-                  className="w-full px-4 py-2 rounded-xl bg-black/30 border border-white/10 text-white"
+                  className="w-full px-4 py-2 rounded-xl bg-black/30 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-secondary"
                 />
               </div>
               <div>
@@ -30,7 +31,7 @@ export default function Contact() {
                   type="email"
                   name="email"
                   required
-                  className="w-full px-4 py-2 rounded-xl bg-black/30 border border-white/10 text-white"
+                  className="w-full px-4 py-2 rounded-xl bg-black/30 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-secondary"
                 />
               </div>
               <div>
@@ -39,7 +40,7 @@ export default function Contact() {
                   name="message"
                   rows={4}
                   required
-                  className="w-full px-4 py-2 rounded-xl bg-black/30 border border-white/10 text-white"
+                  className="w-full px-4 py-2 rounded-xl bg-black/30 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-secondary"
                 ></textarea>
               </div>
               <Button type="submit" className="w-full bg-secondary text-black font-bold">
@@ -69,9 +70,15 @@ export default function Contact() {
                 También puedes contactarnos a través de nuestras redes sociales:
               </p>
               <div className="flex gap-4 mt-3">
-                <a href="#" className="text-white/70 hover:text-white">Twitter</a>
-                <a href="#" className="text-white/70 hover:text-white">Instagram</a>
-                <a href="#" className="text-white/70 hover:text-white">Facebook</a>
+                <a href="#" className="text-white/70 hover:text-white transition-colors">
+                  <Twitter className="w-5 h-5" />
+                </a>
+                <a href="#" className="text-white/70 hover:text-white transition-colors">
+                  <Instagram className="w-5 h-5" />
+                </a>
+                <a href="#" className="text-white/70 hover:text-white transition-colors">
+                  <Facebook className="w-5 h-5" />
+                </a>
               </div>
             </div>
           </div>
