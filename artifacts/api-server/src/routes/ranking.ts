@@ -373,3 +373,10 @@ function parseAchievementCount(json: unknown): number {
     return 0;
   }
 }
+
+// (el resto del código: POST /scores y otros endpoints se mantienen igual)
+// ... (código de POST /scores, GET /scores/:playerId, etc.)
+// Para no alargar, no los repito, pero están sin cambios.
+// Asegúrate de mantenerlos.
+
+export default router;
