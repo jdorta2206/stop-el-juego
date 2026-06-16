@@ -60,22 +60,55 @@ export function CosmeticShop({
     return () => clearInterval(t);
   }, []);
 
+  // ============================================================
+  // EQUIPAR COSMÉTICO - AHORA REFRESCA EL INVENTARIO
+  // ============================================================
   const handleEquip = useCallback(async (kind: EquipKind, value: string | null) => {
     setBusyAction(`equip:${kind}:${value ?? ""}`);
-    try { await equip(kind, value); } finally { setBusyAction(null); }
-  }, [equip]);
+    try {
+      const result = await equip(kind, value);
+      if (result && "error" in result && result.error) {
+        window.alert("Error al equipar: " + result.error);
+        return;
+      }
+      // Esperar un momento para que el backend procese
+      await new Promise(resolve => setTimeout(resolve, 300));
+      // Refrescar el inventario y perfil
+      await refresh();
+      // Si existe una función global para refrescar el perfil, llamarla
+      if (typeof window !== "undefined" && (window as any).refreshPlayerProfile) {
+        (window as any).refreshPlayerProfile();
+      }
+      // Pequeño feedback visual (opcional)
+      window.alert(`✅ ${value ? "Equipado" : "Equipo por defecto"} correctamente`);
+    } catch (error: any) {
+      console.error("Error equipando:", error);
+      window.alert("Error al equipar: " + (error.message || "Intenta de nuevo"));
+    } finally {
+      setBusyAction(null);
+    }
+  }, [equip, refresh]);
 
+  // ============================================================
+  // COMPRAR CON MONEDAS - YA REFRESCA EL INVENTARIO
+  // ============================================================
   const handleBuy = useCallback(async (item: ShopItem) => {
     setBusyAction(`buy:${item.id}`);
     const r = await buy(item.id);
     setBusyAction(null);
     if (r && "error" in r && r.error) {
       window.alert(r.error === "Insufficient coins" ? "No tienes suficientes monedas" : r.error);
+      return;
     }
-  }, [buy]);
+    // Refrescar inventario y perfil después de comprar
+    await refresh();
+    if (typeof window !== "undefined" && (window as any).refreshPlayerProfile) {
+      (window as any).refreshPlayerProfile();
+    }
+  }, [buy, refresh]);
 
   // ============================================================
-  // PACK MUNDIAL - SIEMPRE USA STRIPE (tarjeta/Google Pay)
+  // PACK MUNDIAL - STRIPE
   // ============================================================
   const handleBuyPack = useCallback(async () => {
     if (channel === "loading") return;
@@ -96,6 +129,7 @@ export function CosmeticShop({
     }
   }, [channel, playerId]);
 
+  // El resto del código (renderizado, etc.) se mantiene igual
   const deals = inventory.dailyDeals ?? [];
   const dealById = new Map(deals.map((d) => [d.id, d]));
   const isWcItem = (id: string) => id.includes("_wc_");
