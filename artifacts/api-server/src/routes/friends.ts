@@ -4,31 +4,62 @@ import { and, eq } from "drizzle-orm";
 
 const router: IRouter = Router();
 
-// GET /api/friends/list/:followerId — get all followed players with their latest cosmetics
+// GET /api/friends/list/:followerId — get all followed players with latest data
 router.get("/list/:followerId", async (req, res) => {
   const { followerId } = req.params;
   if (!followerId) return res.status(400).json({ error: "followerId required" });
 
-  // Join with player_scores to get up‑to‑date names, colors, premium and equipped cosmetics
-  const rows = await db
+  // Primero obtenemos la lista de seguidos (sin JOIN)
+  const follows = await db
+    .select()
+    .from(followsTable)
+    .where(eq(followsTable.followerId, followerId));
+
+  if (follows.length === 0) {
+    return res.json({ friends: [] });
+  }
+
+  // Extraemos los IDs de los seguidos
+  const followedIds = follows.map(f => f.followedId);
+
+  // Obtenemos los datos actualizados de esos jugadores desde player_scores
+  const playersData = await db
     .select({
-      followerId: followsTable.followerId,
-      followedId: followsTable.followedId,
-      followedName: playerScoresTable.playerName,           // freshest name
-      followedPicture: followsTable.followedPicture,        // kept from follow time
-      followedAvatarColor: playerScoresTable.avatarColor,   // freshest color
-      followedProvider: followsTable.followedProvider,
-      // 🆕 COSMÉTICOS EQUIPADOS
+      playerId: playerScoresTable.playerId,
+      playerName: playerScoresTable.playerName,
+      avatarColor: playerScoresTable.avatarColor,
       equippedAvatar: playerScoresTable.equippedAvatar,
       equippedFrame: playerScoresTable.equippedFrame,
       equippedBackground: playerScoresTable.equippedBackground,
       isPremium: playerScoresTable.isPremium,
     })
-    .from(followsTable)
-    .leftJoin(playerScoresTable, eq(followsTable.followedId, playerScoresTable.playerId))
-    .where(eq(followsTable.followerId, followerId));
+    .from(playerScoresTable)
+    .where(inArray(playerScoresTable.playerId, followedIds));
 
-  return res.json({ friends: rows });
+  // Creamos un mapa para acceso rápido
+  const playerMap = new Map();
+  for (const p of playersData) {
+    playerMap.set(p.playerId, p);
+  }
+
+  // Combinamos los datos de follows con los de player_scores
+  const result = follows.map(f => {
+    const p = playerMap.get(f.followedId);
+    return {
+      followerId: f.followerId,
+      followedId: f.followedId,
+      followedName: p?.playerName ?? f.followedName,
+      followedPicture: f.followedPicture,
+      followedAvatarColor: p?.avatarColor ?? f.followedAvatarColor,
+      followedProvider: f.followedProvider,
+      equippedAvatar: p?.equippedAvatar ?? null,
+      equippedFrame: p?.equippedFrame ?? null,
+      equippedBackground: p?.equippedBackground ?? null,
+      isPremium: p?.isPremium ?? false,
+    };
+  });
+
+  return res.json({ friends: result });
 });
 
 // POST /api/friends/follow — follow a player
@@ -50,7 +81,6 @@ router.post("/follow", async (req, res) => {
     return res.status(400).json({ error: "Cannot follow yourself" });
   }
 
-  // Check already following
   const existing = await db
     .select()
     .from(followsTable)
@@ -60,9 +90,6 @@ router.post("/follow", async (req, res) => {
     return res.json({ ok: true, alreadyFollowing: true });
   }
 
-  // Store the follow relationship. We keep a snapshot of the followed player's
-  // name/color at follow time as a fallback, but the GET endpoint will always
-  // fetch the latest data from player_scores via the JOIN.
   await db.insert(followsTable).values({
     followerId,
     followedId,
