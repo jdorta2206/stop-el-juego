@@ -18,7 +18,9 @@ import { useRewards } from "@/hooks/useRewards";
 import { celebrateReward } from "@/lib/celebrate";
 import { rewardFrameName } from "@/lib/rewardFrames";
 import { CosmeticShop } from "@/components/CosmeticShop";
-import { LEGENDARY_FRAME_FX } from "@/lib/cosmeticHelpers";// Niveles (sin cambios)
+import { LEGENDARY_FRAME_FX } from "@/lib/cosmeticHelpers";
+
+// Niveles (sin cambios)
 interface LevelInfo {
   label: string;
   icon: string;
@@ -250,6 +252,7 @@ function timeAgo(dateStr: string): string {
   if (d < 7)  return `hace ${d}d`;
   return new Date(dateStr).toLocaleDateString("es-ES", { day: "numeric", month: "short" });
 }
+
 export default function PlayerProfile() {
   const { id } = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
@@ -471,12 +474,18 @@ export default function PlayerProfile() {
           </div>
         )}
 
+        {/* ============================================================
+            SECCIÓN CORREGIDA: CosmeticShop con todas las props necesarias
+            ============================================================ */}
         {isMe && inventory && (
           <div id="tienda" className="scroll-mt-20">
             <CosmeticShop
+              playerId={me.id}
               inventory={inventory}
-              onEquip={equip}
-              onBuy={buy}
+              refresh={refreshInventory}
+              buy={buy}
+              equip={equip}
+              showInventory={true}
             />
           </div>
         )}
@@ -485,41 +494,4 @@ export default function PlayerProfile() {
           <div className="space-y-2">
             <h3 className="text-sm font-bold text-white/70">🏆 Recompensas de prestigio</h3>
             {prestige.availableRewards.map(r => (
-              <div key={r.tier} className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/10">
-                <div>
-                  <p className="font-bold">{r.title}</p>
-                  <p className="text-xs text-white/50">{r.description}</p>
-                </div>
-                <button
-                  onClick={() => handleClaimPrestige(r.tier)}
-                  disabled={busyAction === `claim:prestige:${r.tier}`}
-                  className="px-3 py-1 rounded-lg bg-secondary text-black font-bold text-sm"
-                >
-                  {busyAction === `claim:prestige:${r.tier}` ? "..." : "Reclamar"}
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {recentGames.length > 0 && (
-          <div className="space-y-2">
-            <h3 className="text-sm font-bold text-white/70">📋 Últimas partidas</h3>
-            <div className="space-y-1">
-              {recentGames.slice(0, 5).map((g: any, idx: number) => (
-                <div key={idx} className="flex justify-between items-center p-2 rounded-lg bg-white/5 border border-white/5 text-xs">
-                  <span className="text-white/60">{timeAgo(g.createdAt)}</span>
-                  <span className="flex items-center gap-1">
-                    {g.won ? <Trophy size={12} className="text-secondary" /> : <Flame size={12} className="text-red-500" />}
-                    <span className="font-bold text-white">{g.score}</span>
-                  </span>
-                  <span className="text-white/40">{MODE_LABELS[g.mode]?.label ?? g.mode}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-    </Layout>
-  );
-}
+              <div key={r.tier} className="flex items-center justify-between p-3 rounded-xl bg-white
