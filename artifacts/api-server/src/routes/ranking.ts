@@ -112,6 +112,16 @@ export function calculateStreak(
   return { newStreak, updatedToday: true };
 }
 
+// Shared helper: derive achievement count from the JSON column.
+function parseAchievementCount(json: unknown): number {
+  try {
+    const parsed = JSON.parse((json as string) ?? "[]");
+    return Array.isArray(parsed) ? parsed.length : 0;
+  } catch {
+    return 0;
+  }
+}
+
 // ============================================================
 // ENDPOINT: RANKING GLOBAL (all-time)
 // ============================================================
@@ -364,19 +374,230 @@ router.get("/profile/:playerId", async (req, res) => {
   });
 });
 
-// Shared helper: derive achievement count from the JSON column.
-function parseAchievementCount(json: unknown): number {
-  try {
-    const parsed = JSON.parse((json as string) ?? "[]");
-    return Array.isArray(parsed) ? parsed.length : 0;
-  } catch {
-    return 0;
+// ============================================================
+// ENDPOINT: ENVIAR PUNTUACIÓN (POST /scores)
+// ============================================================
+router.post("/scores", scoreLimiter, async (req, res) => {
+  const body = SubmitScoreBody.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: "Invalid request body" });
+    return;
   }
-}
 
-// (el resto del código: POST /scores y otros endpoints se mantienen igual)
-// ... (código de POST /scores, GET /scores/:playerId, etc.)
-// Para no alargar, no los repito, pero están sin cambios.
-// Asegúrate de mantenerlos.
+  const { playerId, playerName, avatarColor, score: rawScore, letter, mode, won, bonus, scoreTokens } = body.data;
+
+  // 🔒 A logged-in account's leaderboard entry can only be written by that
+  // account — stops anyone from injecting scores under another player's id.
+  // Guests (random-UUID ids) are unaffected; the client only submits for
+  // logged-in users anyway.
+  if (!verifyClaimedIdentity(req, playerId)) {
+    res.status(403).json({ error: "Identity verification failed" });
+    return;
+  }
+
+  // 🎁 Bonus submissions (e.g. rewarded-video doubling) only ADD points and
+  // XP to the player — they don't count as a separate game played, win, or
+  // streak day, since the original submission already accounted for those.
+  const isBonus = bonus === true;
+
+  // 🔒 Anti-cheat clamp. `/game/validate` issued a signed voucher per round
+  // attesting the server-computed base score; the client returns them here.
+  // We sum the verified base and clamp the posted score to a realistic ceiling
+  // derived from it, so a fabricated total (and the coins/XP derived from it)
+  // gets cut while every legit game — including client-side modifier bonuses —
+  // passes through. Tokenless submissions (offline play) fall back to a flat
+  // absolute ceiling. We never reject, only clamp, so a real score is never
+  // lost.
+  const { base: verifiedBase, verified } = sumVerifiedBase(scoreTokens, maxRoundsForMode(mode));
+  const ceiling = verified > 0 ? ceilingFromBase(verifiedBase) : absoluteCeiling(mode);
+  const cappedRaw = Math.max(0, Math.min(rawScore, ceiling));
+
+  // Apply 1.5x multiplier for multiplayer games
+  const score = mode === "multiplayer" ? Math.round(cappedRaw * 1.5) : cappedRaw;
+
+  const existing = await db
+    .select()
+    .from(playerScoresTable)
+    .where(eq(playerScoresTable.playerId, playerId))
+    .limit(1);
+
+  const oldTotal = existing.length > 0 ? existing[0].totalScore : 0;
+  const newTotal = oldTotal + score;
+
+  // Streak calculation
+  const today = new Date().toISOString().split("T")[0];
+  const lastPlayedDate = existing[0]?.lastPlayedDate ?? null;
+  const { newStreak, updatedToday } = calculateStreak(lastPlayedDate, existing[0]?.currentStreak ?? 0);
+  const newLongest = Math.max(existing[0]?.longestStreak ?? 0, newStreak);
+
+  // Detect overtaken players BEFORE updating
+  const overtaken = score > 0 && newTotal > oldTotal
+    ? await db
+        .select({ playerId: playerScoresTable.playerId, playerName: playerScoresTable.playerName })
+        .from(playerScoresTable)
+        .where(
+          sql`${playerScoresTable.totalScore} > ${oldTotal}
+          AND ${playerScoresTable.totalScore} <= ${newTotal}
+          AND ${playerScoresTable.playerId} != ${playerId}`
+        )
+    : [];
+
+  // XP / Level + Happy Hour bonus.
+  // We resolve the player's local timezone from their push subscription so
+  // the server (not the client) decides when x2 applies — anti-cheat. If we
+  // can't determine tz (player never subscribed to push), no bonus is
+  // granted; this is a natural prompt for them to enable notifications.
+  const baseXpGain = calcXpGain(score, won ?? false, mode ?? "solo");
+  const baseCoinGain = calcCoinGain(score, won ?? false, mode ?? "solo", isBonus);
+  const tzOffset = await lookupPlayerTzOffset(playerId);
+  const happyHourActive =
+    tzOffset !== null && isHappyHourActiveForTzOffset(tzOffset);
+  const xpMultiplier = happyHourActive ? HAPPY_HOUR_MULTIPLIER : 1;
+  const coinMultiplier = happyHourActive ? HAPPY_HOUR_MULTIPLIER : 1;
+  const xpGain = baseXpGain * xpMultiplier;
+  const coinGain = baseCoinGain * coinMultiplier;
+  const newXp = (existing[0]?.xp ?? 0) + xpGain;
+  const newLevel = calcLevel(newXp);
+
+  // Streak calendar — append today to the rolling 30-day list when this is
+  // the first play of the day (mirrors `updatedToday` semantics).
+  const newStreakDaysJson = (!isBonus && updatedToday)
+    ? appendStreakDay(existing[0]?.streakDaysJson, today)
+    : undefined;
+
+  let player;
+  if (existing.length > 0) {
+    // ⚛️ ATOMIC update — incrementing totalScore/gamesPlayed/wins/xp via SQL
+    // expressions (instead of read-modify-write) so two concurrent score
+    // submissions for the same player can never overwrite each other.
+    // Streak fields use the snapshot we just computed; this matches existing
+    // semantics and only updates them once per day per the helper logic.
+    const [updated] = await db
+      .update(playerScoresTable)
+      .set({
+        playerName,
+        avatarColor: avatarColor ?? existing[0].avatarColor,
+        totalScore: sql`${playerScoresTable.totalScore} + ${score}`,
+        ...(isBonus ? {} : {
+          gamesPlayed: sql`${playerScoresTable.gamesPlayed} + 1`,
+          wins: sql`${playerScoresTable.wins} + ${won ? 1 : 0}`,
+        }),
+        xp: sql`${playerScoresTable.xp} + ${xpGain}`,
+        level: newLevel,
+        ...(coinGain > 0 ? { coins: sql`${playerScoresTable.coins} + ${coinGain}` } : {}),
+        ...(!isBonus && updatedToday ? {
+          currentStreak: newStreak,
+          longestStreak: newLongest,
+          lastPlayedDate: today,
+          streakDaysJson: newStreakDaysJson,
+        } : {}),
+        updatedAt: new Date(),
+      })
+      .where(eq(playerScoresTable.playerId, playerId))
+      .returning();
+    player = updated;
+  } else {
+    const [created] = await db
+      .insert(playerScoresTable)
+      .values({
+        playerId,
+        playerName,
+        avatarColor: avatarColor ?? "#e53e3e",
+        totalScore: score,
+        // 🎁 If a bonus submission arrives before the base submission for a
+        // brand-new player (network race), do NOT count it as a played game,
+        // win, or streak day — the upcoming base request will fill those in.
+        gamesPlayed: isBonus ? 0 : 1,
+        wins: isBonus ? 0 : (won ? 1 : 0),
+        currentStreak: isBonus ? 0 : 1,
+        longestStreak: isBonus ? 0 : 1,
+        lastPlayedDate: isBonus ? null : today,
+        streakDaysJson: isBonus ? "[]" : JSON.stringify([today]),
+        xp: xpGain,
+        level: calcLevel(xpGain),
+        coins: coinGain,
+      })
+      .returning();
+    player = created;
+  }
+
+  // Send "you've been overtaken" push notifications
+  if (overtaken.length > 0) {
+    await Promise.allSettled(
+      overtaken.map(op =>
+        sendPushToPlayer(op.playerId, {
+          title: "¡Te han superado! 😤",
+          body: `${playerName} acaba de quitarte el puesto en el ranking global. ¡Hora de vengarse!`,
+          url: "/ranking",
+        })
+      )
+    );
+  }
+
+  // Record game history
+  await db.insert(gameHistoryTable).values({
+    playerId,
+    score,
+    letter,
+    mode: mode ?? "solo",
+    won: won ?? false,
+  });
+
+  res.status(201).json({
+    ...player,
+    rank: 0,
+    // Reward breakdown so the client can show "+12 monedas (x2 Happy Hour!)" toast.
+    rewards: {
+      xpAwarded: xpGain,
+      coinsAwarded: coinGain,
+      happyHourActive,
+      multiplier: happyHourActive ? HAPPY_HOUR_MULTIPLIER : 1,
+    },
+  });
+});
+
+// ============================================================
+// ENDPOINT: OBTENER PUNTUACIÓN DE UN JUGADOR (GET /scores/:playerId)
+// ============================================================
+router.get("/scores/:playerId", async (req, res) => {
+  const { playerId } = req.params;
+
+  const scores = await db
+    .select()
+    .from(playerScoresTable)
+    .where(eq(playerScoresTable.playerId, playerId))
+    .limit(1);
+
+  if (scores.length === 0) {
+    res.status(404).json({ error: "Player not found" });
+    return;
+  }
+
+  const ps = scores[0];
+
+  // Run rank, best score, and recent games in parallel
+  const [rankRow, bestRow, recentGames] = await Promise.all([
+    db.execute(sql`
+      SELECT COUNT(*) AS cnt FROM player_scores WHERE total_score > ${ps.totalScore}
+    `),
+    db.execute(sql`
+      SELECT COALESCE(MAX(score), 0) AS best FROM game_history WHERE player_id = ${playerId}
+    `),
+    db
+      .select()
+      .from(gameHistoryTable)
+      .where(eq(gameHistoryTable.playerId, playerId))
+      .orderBy(desc(gameHistoryTable.createdAt))
+      .limit(10),
+  ]);
+
+  const globalRank = Number((rankRow.rows[0] as any)?.cnt ?? 0) + 1;
+  const bestScore = Number((bestRow.rows[0] as any)?.best ?? 0);
+
+  res.json({
+    score: { ...ps, rank: globalRank, globalRank, bestScore },
+    recentGames,
+  });
+});
 
 export default router;
