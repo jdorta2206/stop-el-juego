@@ -112,6 +112,9 @@ export function calculateStreak(
   return { newStreak, updatedToday: true };
 }
 
+// ============================================================
+// ENDPOINT: RANKING GLOBAL (all-time)
+// ============================================================
 router.get("/scores", async (req, res) => {
   const query = GetLeaderboardQueryParams.safeParse(req.query);
   const limit = query.success ? (query.data.limit ?? 20) : 20;
@@ -147,202 +150,18 @@ router.get("/scores", async (req, res) => {
       createdAt: p.created_at,
       updatedAt: p.updated_at,
       rank: i + 1,
+      // 🆕 COSMÉTICOS EQUIPADOS (para mostrar en el ranking)
+      equippedAvatar: p.equipped_avatar ?? null,
+      equippedFrame: p.equipped_frame ?? null,
+      equippedBackground: p.equipped_background ?? null,
     })),
     total,
   });
 });
 
-router.post("/scores", scoreLimiter, async (req, res) => {
-  const body = SubmitScoreBody.safeParse(req.body);
-  if (!body.success) {
-    res.status(400).json({ error: "Invalid request body" });
-    return;
-  }
-
-  const { playerId, playerName, avatarColor, score: rawScore, letter, mode, won, bonus, scoreTokens } = body.data;
-
-  // 🔒 A logged-in account's leaderboard entry can only be written by that
-  // account — stops anyone from injecting scores under another player's id.
-  // Guests (random-UUID ids) are unaffected; the client only submits for
-  // logged-in users anyway.
-  if (!verifyClaimedIdentity(req, playerId)) {
-    res.status(403).json({ error: "Identity verification failed" });
-    return;
-  }
-
-  // 🎁 Bonus submissions (e.g. rewarded-video doubling) only ADD points and
-  // XP to the player — they don't count as a separate game played, win, or
-  // streak day, since the original submission already accounted for those.
-  const isBonus = bonus === true;
-
-  // 🔒 Anti-cheat clamp. `/game/validate` issued a signed voucher per round
-  // attesting the server-computed base score; the client returns them here.
-  // We sum the verified base and clamp the posted score to a realistic ceiling
-  // derived from it, so a fabricated total (and the coins/XP derived from it)
-  // gets cut while every legit game — including client-side modifier bonuses —
-  // passes through. Tokenless submissions (offline play) fall back to a flat
-  // absolute ceiling. We never reject, only clamp, so a real score is never
-  // lost.
-  const { base: verifiedBase, verified } = sumVerifiedBase(scoreTokens, maxRoundsForMode(mode));
-  const ceiling = verified > 0 ? ceilingFromBase(verifiedBase) : absoluteCeiling(mode);
-  const cappedRaw = Math.max(0, Math.min(rawScore, ceiling));
-
-  // Apply 1.5x multiplier for multiplayer games
-  const score = mode === "multiplayer" ? Math.round(cappedRaw * 1.5) : cappedRaw;
-
-  const existing = await db
-    .select()
-    .from(playerScoresTable)
-    .where(eq(playerScoresTable.playerId, playerId))
-    .limit(1);
-
-  const oldTotal = existing.length > 0 ? existing[0].totalScore : 0;
-  const newTotal = oldTotal + score;
-
-  // Streak calculation
-  const today = new Date().toISOString().split("T")[0];
-  const lastPlayedDate = existing[0]?.lastPlayedDate ?? null;
-  const { newStreak, updatedToday } = calculateStreak(lastPlayedDate, existing[0]?.currentStreak ?? 0);
-  const newLongest = Math.max(existing[0]?.longestStreak ?? 0, newStreak);
-
-  // Detect overtaken players BEFORE updating
-  const overtaken = score > 0 && newTotal > oldTotal
-    ? await db
-        .select({ playerId: playerScoresTable.playerId, playerName: playerScoresTable.playerName })
-        .from(playerScoresTable)
-        .where(
-          sql`${playerScoresTable.totalScore} > ${oldTotal}
-          AND ${playerScoresTable.totalScore} <= ${newTotal}
-          AND ${playerScoresTable.playerId} != ${playerId}`
-        )
-    : [];
-
-  // XP / Level + Happy Hour bonus.
-  // We resolve the player's local timezone from their push subscription so
-  // the server (not the client) decides when x2 applies — anti-cheat. If we
-  // can't determine tz (player never subscribed to push), no bonus is
-  // granted; this is a natural prompt for them to enable notifications.
-  const baseXpGain = calcXpGain(score, won ?? false, mode ?? "solo");
-  const baseCoinGain = calcCoinGain(score, won ?? false, mode ?? "solo", isBonus);
-  const tzOffset = await lookupPlayerTzOffset(playerId);
-  const happyHourActive =
-    tzOffset !== null && isHappyHourActiveForTzOffset(tzOffset);
-  const xpMultiplier = happyHourActive ? HAPPY_HOUR_MULTIPLIER : 1;
-  const coinMultiplier = happyHourActive ? HAPPY_HOUR_MULTIPLIER : 1;
-  const xpGain = baseXpGain * xpMultiplier;
-  const coinGain = baseCoinGain * coinMultiplier;
-  const newXp = (existing[0]?.xp ?? 0) + xpGain;
-  const newLevel = calcLevel(newXp);
-
-  // Streak calendar — append today to the rolling 30-day list when this is
-  // the first play of the day (mirrors `updatedToday` semantics).
-  const newStreakDaysJson = (!isBonus && updatedToday)
-    ? appendStreakDay(existing[0]?.streakDaysJson, today)
-    : undefined;
-
-  let player;
-  if (existing.length > 0) {
-    // ⚛️ ATOMIC update — incrementing totalScore/gamesPlayed/wins/xp via SQL
-    // expressions (instead of read-modify-write) so two concurrent score
-    // submissions for the same player can never overwrite each other.
-    // Streak fields use the snapshot we just computed; this matches existing
-    // semantics and only updates them once per day per the helper logic.
-    const [updated] = await db
-      .update(playerScoresTable)
-      .set({
-        playerName,
-        avatarColor: avatarColor ?? existing[0].avatarColor,
-        totalScore: sql`${playerScoresTable.totalScore} + ${score}`,
-        ...(isBonus ? {} : {
-          gamesPlayed: sql`${playerScoresTable.gamesPlayed} + 1`,
-          wins: sql`${playerScoresTable.wins} + ${won ? 1 : 0}`,
-        }),
-        xp: sql`${playerScoresTable.xp} + ${xpGain}`,
-        level: newLevel,
-        ...(coinGain > 0 ? { coins: sql`${playerScoresTable.coins} + ${coinGain}` } : {}),
-        ...(!isBonus && updatedToday ? {
-          currentStreak: newStreak,
-          longestStreak: newLongest,
-          lastPlayedDate: today,
-          streakDaysJson: newStreakDaysJson,
-        } : {}),
-        updatedAt: new Date(),
-      })
-      .where(eq(playerScoresTable.playerId, playerId))
-      .returning();
-    player = updated;
-  } else {
-    const [created] = await db
-      .insert(playerScoresTable)
-      .values({
-        playerId,
-        playerName,
-        avatarColor: avatarColor ?? "#e53e3e",
-        totalScore: score,
-        // 🎁 If a bonus submission arrives before the base submission for a
-        // brand-new player (network race), do NOT count it as a played game,
-        // win, or streak day — the upcoming base request will fill those in.
-        gamesPlayed: isBonus ? 0 : 1,
-        wins: isBonus ? 0 : (won ? 1 : 0),
-        currentStreak: isBonus ? 0 : 1,
-        longestStreak: isBonus ? 0 : 1,
-        lastPlayedDate: isBonus ? null : today,
-        streakDaysJson: isBonus ? "[]" : JSON.stringify([today]),
-        xp: xpGain,
-        level: calcLevel(xpGain),
-        coins: coinGain,
-      })
-      .returning();
-    player = created;
-  }
-
-  // Send "you've been overtaken" push notifications
-  if (overtaken.length > 0) {
-    await Promise.allSettled(
-      overtaken.map(op =>
-        sendPushToPlayer(op.playerId, {
-          title: "¡Te han superado! 😤",
-          body: `${playerName} acaba de quitarte el puesto en el ranking global. ¡Hora de vengarse!`,
-          url: "/ranking",
-        })
-      )
-    );
-  }
-
-  // Record game history
-  await db.insert(gameHistoryTable).values({
-    playerId,
-    score,
-    letter,
-    mode: mode ?? "solo",
-    won: won ?? false,
-  });
-
-  res.status(201).json({
-    ...player,
-    rank: 0,
-    // Reward breakdown so the client can show "+12 monedas (x2 Happy Hour!)" toast.
-    rewards: {
-      xpAwarded: xpGain,
-      coinsAwarded: coinGain,
-      happyHourActive,
-      multiplier: happyHourActive ? HAPPY_HOUR_MULTIPLIER : 1,
-    },
-  });
-});
-
-// Shared helper: derive achievement count from the JSON column. Lives at
-// module scope so weekly/monthly handlers can include the same X/12 badge
-// the all-time leaderboard surfaces.
-function parseAchievementCount(json: unknown): number {
-  try {
-    const parsed = JSON.parse((json as string) ?? "[]");
-    return Array.isArray(parsed) ? parsed.length : 0;
-  } catch {
-    return 0;
-  }
-}
-
+// ============================================================
+// ENDPOINT: RANKING SEMANAL
+// ============================================================
 router.get("/weekly", async (req, res) => {
   const rows = await db.execute(sql`
     SELECT
@@ -352,13 +171,18 @@ router.get("/weekly", async (req, res) => {
       ps.current_streak   AS "currentStreak",
       ps.is_premium       AS "isPremium",
       ps.achievements_json AS "achievementsJson",
+      -- 🆕 COSMÉTICOS EQUIPADOS
+      ps.equipped_avatar  AS "equippedAvatar",
+      ps.equipped_frame   AS "equippedFrame",
+      ps.equipped_background AS "equippedBackground",
       SUM(gh.score)       AS "totalScore",
       COUNT(*)            AS "gamesPlayed",
       SUM(CASE WHEN gh.won THEN 1 ELSE 0 END) AS "wins"
     FROM game_history gh
     LEFT JOIN player_scores ps ON gh.player_id = ps.player_id
     WHERE gh.created_at >= date_trunc('week', NOW() AT TIME ZONE 'UTC')
-    GROUP BY gh.player_id, ps.player_name, ps.avatar_color, ps.current_streak, ps.is_premium, ps.achievements_json
+    GROUP BY gh.player_id, ps.player_name, ps.avatar_color, ps.current_streak, ps.is_premium, ps.achievements_json,
+             ps.equipped_avatar, ps.equipped_frame, ps.equipped_background
     ORDER BY SUM(gh.score) DESC
     LIMIT 100
   `);
@@ -375,6 +199,10 @@ router.get("/weekly", async (req, res) => {
     achievementCount: parseAchievementCount(p.achievementsJson),
     title:         getTitle(i + 1),
     rank:          i + 1,
+    // 🆕 COSMÉTICOS EQUIPADOS
+    equippedAvatar: p.equippedAvatar ?? null,
+    equippedFrame: p.equippedFrame ?? null,
+    equippedBackground: p.equippedBackground ?? null,
   }));
 
   const now = new Date();
@@ -387,6 +215,9 @@ router.get("/weekly", async (req, res) => {
   res.json({ players, nextReset: nextReset.toISOString() });
 });
 
+// ============================================================
+// ENDPOINT: RANKING MENSUAL
+// ============================================================
 router.get("/monthly", async (_req, res) => {
   const rows = await db.execute(sql`
     SELECT
@@ -396,13 +227,18 @@ router.get("/monthly", async (_req, res) => {
       ps.current_streak   AS "currentStreak",
       ps.is_premium       AS "isPremium",
       ps.achievements_json AS "achievementsJson",
+      -- 🆕 COSMÉTICOS EQUIPADOS
+      ps.equipped_avatar  AS "equippedAvatar",
+      ps.equipped_frame   AS "equippedFrame",
+      ps.equipped_background AS "equippedBackground",
       SUM(gh.score)       AS "totalScore",
       COUNT(*)            AS "gamesPlayed",
       SUM(CASE WHEN gh.won THEN 1 ELSE 0 END) AS "wins"
     FROM game_history gh
     LEFT JOIN player_scores ps ON gh.player_id = ps.player_id
     WHERE gh.created_at >= date_trunc('month', NOW() AT TIME ZONE 'UTC')
-    GROUP BY gh.player_id, ps.player_name, ps.avatar_color, ps.current_streak, ps.is_premium, ps.achievements_json
+    GROUP BY gh.player_id, ps.player_name, ps.avatar_color, ps.current_streak, ps.is_premium, ps.achievements_json,
+             ps.equipped_avatar, ps.equipped_frame, ps.equipped_background
     ORDER BY SUM(gh.score) DESC
     LIMIT 100
   `);
@@ -419,6 +255,10 @@ router.get("/monthly", async (_req, res) => {
     achievementCount: parseAchievementCount(p.achievementsJson),
     title:         getTitle(i + 1),
     rank:          i + 1,
+    // 🆕 COSMÉTICOS EQUIPADOS
+    equippedAvatar: p.equippedAvatar ?? null,
+    equippedFrame: p.equippedFrame ?? null,
+    equippedBackground: p.equippedBackground ?? null,
   }));
 
   const now = new Date();
@@ -427,47 +267,9 @@ router.get("/monthly", async (_req, res) => {
   res.json({ players, nextReset: nextReset.toISOString() });
 });
 
-router.get("/scores/:playerId", async (req, res) => {
-  const { playerId } = req.params;
-
-  const scores = await db
-    .select()
-    .from(playerScoresTable)
-    .where(eq(playerScoresTable.playerId, playerId))
-    .limit(1);
-
-  if (scores.length === 0) {
-    res.status(404).json({ error: "Player not found" });
-    return;
-  }
-
-  const ps = scores[0];
-
-  // Run rank, best score, and recent games in parallel
-  const [rankRow, bestRow, recentGames] = await Promise.all([
-    db.execute(sql`
-      SELECT COUNT(*) AS cnt FROM player_scores WHERE total_score > ${ps.totalScore}
-    `),
-    db.execute(sql`
-      SELECT COALESCE(MAX(score), 0) AS best FROM game_history WHERE player_id = ${playerId}
-    `),
-    db
-      .select()
-      .from(gameHistoryTable)
-      .where(eq(gameHistoryTable.playerId, playerId))
-      .orderBy(desc(gameHistoryTable.createdAt))
-      .limit(10),
-  ]);
-
-  const globalRank = Number((rankRow.rows[0] as any)?.cnt ?? 0) + 1;
-  const bestScore = Number((bestRow.rows[0] as any)?.best ?? 0);
-
-  res.json({
-    score: { ...ps, rank: globalRank, globalRank, bestScore },
-    recentGames,
-  });
-});
-
+// ============================================================
+// ENDPOINT: PERFIL DE JUGADOR
+// ============================================================
 router.get("/profile/:playerId", async (req, res) => {
   const { playerId } = req.params;
 
@@ -547,187 +349,27 @@ router.get("/profile/:playerId", async (req, res) => {
     wins: ps.wins,
     currentStreak: ps.currentStreak ?? 0,
     longestStreak: ps.longestStreak ?? 0,
-    lastPlayedDate: ps.lastPlayedDate ?? null,
+    isPremium: ps.isPremium ?? false,
     xp: ps.xp ?? 0,
     level: ps.level ?? 1,
-    isPremium: ps.isPremium ?? false,
-    equippedAvatar: ps.equippedAvatar ?? null,
-    equippedFrame: ps.equippedFrame ?? null,
-    equippedTitle: ps.equippedTitle ?? null,
+    coins: ps.coins ?? 0,
     globalRank,
     monthlyScore,
-    title: getTitle(globalRank),
     modeStats,
     recentGames,
+    // 🆕 COSMÉTICOS EQUIPADOS (para mostrar en el perfil público)
+    equippedAvatar: ps.equippedAvatar ?? null,
+    equippedFrame: ps.equippedFrame ?? null,
+    equippedBackground: ps.equippedBackground ?? null,
   });
 });
 
-// ── GET /ranking/streak/calendar/:playerId — last 30 days played flags ─────
-router.get("/streak/calendar/:playerId", async (req, res) => {
-  const { playerId } = req.params;
-  const [ps] = await db
-    .select({
-      currentStreak: playerScoresTable.currentStreak,
-      longestStreak: playerScoresTable.longestStreak,
-      lastPlayedDate: playerScoresTable.lastPlayedDate,
-      streakDaysJson: playerScoresTable.streakDaysJson,
-    })
-    .from(playerScoresTable)
-    .where(eq(playerScoresTable.playerId, playerId))
-    .limit(1);
-
-  // Build the rolling 30-day window ending today (UTC).
-  const today = new Date();
-  today.setUTCHours(0, 0, 0, 0);
-  const todayStr = today.toISOString().slice(0, 10);
-
-  let playedSet = new Set<string>();
-  if (ps) {
-    try { playedSet = new Set<string>(JSON.parse(ps.streakDaysJson ?? "[]")); } catch {}
+// Shared helper: derive achievement count from the JSON column.
+function parseAchievementCount(json: unknown): number {
+  try {
+    const parsed = JSON.parse((json as string) ?? "[]");
+    return Array.isArray(parsed) ? parsed.length : 0;
+  } catch {
+    return 0;
   }
-
-  const days: { date: string; played: boolean; isToday: boolean }[] = [];
-  for (let i = 29; i >= 0; i--) {
-    const d = new Date(today);
-    d.setUTCDate(d.getUTCDate() - i);
-    const dateStr = d.toISOString().slice(0, 10);
-    days.push({ date: dateStr, played: playedSet.has(dateStr), isToday: dateStr === todayStr });
-  }
-
-  res.json({
-    playerId,
-    today: todayStr,
-    currentStreak: ps?.currentStreak ?? 0,
-    longestStreak: ps?.longestStreak ?? 0,
-    lastPlayedDate: ps?.lastPlayedDate ?? null,
-    days,
-  });
-});
-
-// ── GET /ranking/progress/:playerId — achievements + personal bests ────────
-router.get("/progress/:playerId", async (req, res) => {
-  const { playerId } = req.params;
-  const [ps] = await db
-    .select({
-      achievementsJson: playerScoresTable.achievementsJson,
-      achievementStatsJson: playerScoresTable.achievementStatsJson,
-      personalBestsJson: playerScoresTable.personalBestsJson,
-      collectedWordsJson: playerScoresTable.collectedWordsJson,
-      longestStreak: playerScoresTable.longestStreak,
-    })
-    .from(playerScoresTable)
-    .where(eq(playerScoresTable.playerId, playerId))
-    .limit(1);
-
-  if (!ps) {
-    res.json({ achievements: [], stats: {}, personalBests: {}, collectedWords: {} });
-    return;
-  }
-  let achievements: string[] = [];
-  let stats: Record<string, unknown> = {};
-  let personalBests: Record<string, number> = {};
-  let collectedWords: Record<string, unknown> = {};
-  try { achievements = JSON.parse(ps.achievementsJson ?? "[]"); } catch {}
-  try { stats = JSON.parse(ps.achievementStatsJson ?? "{}"); } catch {}
-  try { personalBests = JSON.parse(ps.personalBestsJson ?? "{}"); } catch {}
-  try { collectedWords = JSON.parse(ps.collectedWordsJson ?? "{}"); } catch {}
-  // Merge the authoritative server-side longestStreak into stats so the
-  // achievements client can backfill streak milestones (3/7/14/30) for
-  // players whose local achievement state was wiped or never persisted.
-  const serverLongest = ps.longestStreak ?? 0;
-  const storedLongest = Number(stats.longestStreak ?? 0);
-  if (serverLongest > storedLongest) stats.longestStreak = serverLongest;
-  res.json({ achievements, stats, personalBests, collectedWords });
-});
-
-// ── POST /ranking/progress/:playerId — save achievements + stats + personal bests ──
-router.post("/progress/:playerId", async (req, res) => {
-  const { playerId } = req.params;
-  // 🔒 A logged-in account can only write ITS OWN progress (achievements, stats,
-  // personal bests, collected words). Guests (UUID ids) pass through unchanged.
-  if (!verifyClaimedIdentity(req, playerId)) {
-    res.status(403).json({ error: "Identity verification failed" }); return;
-  }
-  const { achievements, stats, personalBests, collectedWords } = req.body as {
-    achievements?: string[];
-    stats?: Record<string, unknown>;
-    personalBests?: Record<string, number>;
-    collectedWords?: Record<string, { name: string; cat: string; r: string; d: number }>;
-  };
-
-  const [existing] = await db
-    .select({
-      achievementsJson: playerScoresTable.achievementsJson,
-      achievementStatsJson: playerScoresTable.achievementStatsJson,
-      personalBestsJson: playerScoresTable.personalBestsJson,
-      collectedWordsJson: playerScoresTable.collectedWordsJson,
-    })
-    .from(playerScoresTable)
-    .where(eq(playerScoresTable.playerId, playerId))
-    .limit(1);
-
-  if (!existing) { res.json({ ok: false, reason: "player_not_found" }); return; }
-
-  // Merge achievements: never remove
-  let curAch: string[] = [];
-  let curStats: Record<string, unknown> = {};
-  let curBests: Record<string, number> = {};
-  let curCollected: Record<string, { name: string; cat: string; r: string; d: number }> = {};
-  try { curAch = JSON.parse(existing.achievementsJson ?? "[]"); } catch {}
-  try { curStats = JSON.parse(existing.achievementStatsJson ?? "{}"); } catch {}
-  try { curBests = JSON.parse(existing.personalBestsJson ?? "{}"); } catch {}
-  try { curCollected = JSON.parse(existing.collectedWordsJson ?? "{}"); } catch {}
-
-  const mergedAch = [...new Set([...curAch, ...(achievements ?? [])])];
-
-  // Merge stats: take the higher numeric value, OR for booleans
-  const mergedStats = { ...curStats };
-  for (const [k, v] of Object.entries(stats ?? {})) {
-    const cur = mergedStats[k];
-    if (typeof v === "boolean") mergedStats[k] = Boolean(cur) || v;
-    else if (typeof v === "number") mergedStats[k] = Math.max(Number(cur ?? 0), v);
-  }
-
-  // Merge personal bests: take max score per mode
-  const mergedBests = { ...curBests };
-  for (const [mode, score] of Object.entries(personalBests ?? {})) {
-    if ((mergedBests[mode] ?? 0) < score) mergedBests[mode] = score;
-  }
-
-  // Merge collected words: first-write wins (preserves original discovery
-  // date + rarity). Capped at 5000 entries to keep the JSON column bounded.
-  const mergedCollected = { ...curCollected };
-  for (const [k, v] of Object.entries(collectedWords ?? {})) {
-    if (!mergedCollected[k] && v && typeof v === "object") mergedCollected[k] = v;
-  }
-  let collectedToSave = mergedCollected;
-  const COLLECTED_CAP = 5000;
-  if (Object.keys(collectedToSave).length > COLLECTED_CAP) {
-    // Keep the most recent entries if we ever blow past the cap.
-    const entries = Object.entries(collectedToSave)
-      .sort((a, b) => (b[1]?.d ?? 0) - (a[1]?.d ?? 0))
-      .slice(0, COLLECTED_CAP);
-    collectedToSave = Object.fromEntries(entries);
-  }
-
-  await db
-    .update(playerScoresTable)
-    .set({
-      achievementsJson: JSON.stringify(mergedAch),
-      achievementStatsJson: JSON.stringify(mergedStats),
-      personalBestsJson: JSON.stringify(mergedBests),
-      collectedWordsJson: JSON.stringify(collectedToSave),
-      updatedAt: new Date(),
-    })
-    .where(eq(playerScoresTable.playerId, playerId));
-
-  res.json({
-    ok: true,
-    achievements: mergedAch,
-    stats: mergedStats,
-    personalBests: mergedBests,
-    collectedWords: collectedToSave,
-  });
-});
-
-export default router;
+}
