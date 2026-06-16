@@ -12,29 +12,14 @@ import {
   HAPPY_HOUR_MULTIPLIER,
 } from "../lib/happyHour";
 
-/**
- * Base coin reward per game submission (before any Happy Hour x2).
- * Coins also flow from Season Pass tier claims; this small per-game drip
- * gives every player a constant sense of wallet growth and gives Happy
- * Hour something concrete to double.
- */
 function calcCoinGain(score: number, won: boolean, mode: string, isBonus: boolean): number {
-  if (isBonus) return 0; // bonus submissions already double the base score; don't double-dip coins
-  const base = Math.max(1, Math.floor(score / 30));   // ~1 coin per 30 pts
+  if (isBonus) return 0;
+  const base = Math.max(1, Math.floor(score / 30));
   const winBonus = won ? 3 : 0;
   const modeBonus = mode === "multiplayer" ? 2 : mode === "daily" ? 1 : 0;
   return base + winBonus + modeBonus;
 }
 
-/** Best-effort tz lookup — uses the player's MOST RECENT enabled push
- * subscription so a deterministic row wins and the result aligns with the
- * cron's notification-targeting filter (which also gates on enabled=true).
- *
- * Limitation acknowledged: tz_offset_minutes is client-supplied at subscribe
- * time, so a determined cheater could resubscribe with a fake offset to
- * trigger x2. The worst-case impact is they double their own progression in
- * a casual game — acceptable for v1. If abuse appears, fold in IP-geo
- * cross-check or a server-issued tz token. */
 async function lookupPlayerTzOffset(playerId: string): Promise<number | null> {
   try {
     const rows = await db
@@ -52,7 +37,6 @@ async function lookupPlayerTzOffset(playerId: string): Promise<number | null> {
 
 const router: IRouter = Router();
 
-// ── XP / Level (mirrors useProgression.ts thresholds) ─────────────────────
 const LEVEL_THRESHOLDS = [
   0, 100, 250, 450, 700, 1000, 1400, 1900, 2500, 3200,
   4000, 5000, 6200, 7600, 9200, 11000, 13000, 15500, 18500, 22000,
@@ -68,13 +52,12 @@ export function calcLevel(xp: number): number {
 }
 
 export function calcXpGain(score: number, won: boolean, mode: string): number {
-  const base = Math.max(0, Math.floor(score / 5));         // 1 XP per 5 pts
+  const base = Math.max(0, Math.floor(score / 5));
   const winBonus = won ? 30 : 0;
   const modeBonus = mode === "multiplayer" ? 20 : mode === "daily" ? 15 : 0;
   return base + winBonus + modeBonus;
 }
 
-// Assign a display title based on global rank
 export function getTitle(rank: number): string {
   if (rank === 1) return "👑 Leyenda";
   if (rank <= 3) return "🏆 Campeón";
@@ -85,15 +68,10 @@ export function getTitle(rank: number): string {
   return "🌱 Novato";
 }
 
-// Append today's date to a player's rolling 30-day streak-days JSON column
-// in a deterministic, deduped, sorted manner. Centralized here so solo
-// (`/ranking/scores`) and multiplayer (`rooms.ts`) persistence paths can't
-// drift. Caller is responsible for gating on "first play of the day".
 export function appendStreakDay(prevJson: string | null | undefined, today: string): string {
   let days: string[] = [];
   try { days = JSON.parse(prevJson ?? "[]"); } catch {}
   if (!days.includes(today)) days.push(today);
-  // Keep only the most recent 30 unique dates (sorted ascending).
   days = [...new Set(days)].sort().slice(-30);
   return JSON.stringify(days);
 }
@@ -102,9 +80,8 @@ export function calculateStreak(
   lastPlayedDate: string | null,
   currentStreak: number
 ): { newStreak: number; updatedToday: boolean } {
-  const today = new Date().toISOString().split("T")[0]; // YYYY-MM-DD UTC
+  const today = new Date().toISOString().split("T")[0];
   if (lastPlayedDate === today) {
-    // Already played today — don't change streak
     return { newStreak: currentStreak, updatedToday: false };
   }
   const yesterday = new Date(Date.now() - 86_400_000).toISOString().split("T")[0];
@@ -112,7 +89,6 @@ export function calculateStreak(
   return { newStreak, updatedToday: true };
 }
 
-// Shared helper: derive achievement count from the JSON column.
 function parseAchievementCount(json: unknown): number {
   try {
     const parsed = JSON.parse((json as string) ?? "[]");
@@ -123,7 +99,7 @@ function parseAchievementCount(json: unknown): number {
 }
 
 // ============================================================
-// ENDPOINT: RANKING GLOBAL (all-time)
+// RANKING GLOBAL
 // ============================================================
 router.get("/scores", async (req, res) => {
   const query = GetLeaderboardQueryParams.safeParse(req.query);
@@ -160,17 +136,13 @@ router.get("/scores", async (req, res) => {
       createdAt: p.created_at,
       updatedAt: p.updated_at,
       rank: i + 1,
-      // 🆕 COSMÉTICOS EQUIPADOS (para mostrar en el ranking)
-      equippedAvatar: p.equipped_avatar ?? null,
-      equippedFrame: p.equipped_frame ?? null,
-      equippedBackground: p.equipped_background ?? null,
     })),
     total,
   });
 });
 
 // ============================================================
-// ENDPOINT: RANKING SEMANAL
+// RANKING SEMANAL
 // ============================================================
 router.get("/weekly", async (req, res) => {
   const rows = await db.execute(sql`
@@ -181,18 +153,13 @@ router.get("/weekly", async (req, res) => {
       ps.current_streak   AS "currentStreak",
       ps.is_premium       AS "isPremium",
       ps.achievements_json AS "achievementsJson",
-      -- 🆕 COSMÉTICOS EQUIPADOS
-      ps.equipped_avatar  AS "equippedAvatar",
-      ps.equipped_frame   AS "equippedFrame",
-      ps.equipped_background AS "equippedBackground",
       SUM(gh.score)       AS "totalScore",
       COUNT(*)            AS "gamesPlayed",
       SUM(CASE WHEN gh.won THEN 1 ELSE 0 END) AS "wins"
     FROM game_history gh
     LEFT JOIN player_scores ps ON gh.player_id = ps.player_id
     WHERE gh.created_at >= date_trunc('week', NOW() AT TIME ZONE 'UTC')
-    GROUP BY gh.player_id, ps.player_name, ps.avatar_color, ps.current_streak, ps.is_premium, ps.achievements_json,
-             ps.equipped_avatar, ps.equipped_frame, ps.equipped_background
+    GROUP BY gh.player_id, ps.player_name, ps.avatar_color, ps.current_streak, ps.is_premium, ps.achievements_json
     ORDER BY SUM(gh.score) DESC
     LIMIT 100
   `);
@@ -209,10 +176,6 @@ router.get("/weekly", async (req, res) => {
     achievementCount: parseAchievementCount(p.achievementsJson),
     title:         getTitle(i + 1),
     rank:          i + 1,
-    // 🆕 COSMÉTICOS EQUIPADOS
-    equippedAvatar: p.equippedAvatar ?? null,
-    equippedFrame: p.equippedFrame ?? null,
-    equippedBackground: p.equippedBackground ?? null,
   }));
 
   const now = new Date();
@@ -226,7 +189,7 @@ router.get("/weekly", async (req, res) => {
 });
 
 // ============================================================
-// ENDPOINT: RANKING MENSUAL
+// RANKING MENSUAL
 // ============================================================
 router.get("/monthly", async (_req, res) => {
   const rows = await db.execute(sql`
@@ -237,18 +200,13 @@ router.get("/monthly", async (_req, res) => {
       ps.current_streak   AS "currentStreak",
       ps.is_premium       AS "isPremium",
       ps.achievements_json AS "achievementsJson",
-      -- 🆕 COSMÉTICOS EQUIPADOS
-      ps.equipped_avatar  AS "equippedAvatar",
-      ps.equipped_frame   AS "equippedFrame",
-      ps.equipped_background AS "equippedBackground",
       SUM(gh.score)       AS "totalScore",
       COUNT(*)            AS "gamesPlayed",
       SUM(CASE WHEN gh.won THEN 1 ELSE 0 END) AS "wins"
     FROM game_history gh
     LEFT JOIN player_scores ps ON gh.player_id = ps.player_id
     WHERE gh.created_at >= date_trunc('month', NOW() AT TIME ZONE 'UTC')
-    GROUP BY gh.player_id, ps.player_name, ps.avatar_color, ps.current_streak, ps.is_premium, ps.achievements_json,
-             ps.equipped_avatar, ps.equipped_frame, ps.equipped_background
+    GROUP BY gh.player_id, ps.player_name, ps.avatar_color, ps.current_streak, ps.is_premium, ps.achievements_json
     ORDER BY SUM(gh.score) DESC
     LIMIT 100
   `);
@@ -265,10 +223,6 @@ router.get("/monthly", async (_req, res) => {
     achievementCount: parseAchievementCount(p.achievementsJson),
     title:         getTitle(i + 1),
     rank:          i + 1,
-    // 🆕 COSMÉTICOS EQUIPADOS
-    equippedAvatar: p.equippedAvatar ?? null,
-    equippedFrame: p.equippedFrame ?? null,
-    equippedBackground: p.equippedBackground ?? null,
   }));
 
   const now = new Date();
@@ -278,12 +232,11 @@ router.get("/monthly", async (_req, res) => {
 });
 
 // ============================================================
-// ENDPOINT: PERFIL DE JUGADOR
+// PERFIL DE JUGADOR
 // ============================================================
 router.get("/profile/:playerId", async (req, res) => {
   const { playerId } = req.params;
 
-  // Base player stats
   const scoreRows = await db
     .select()
     .from(playerScoresTable)
@@ -297,7 +250,6 @@ router.get("/profile/:playerId", async (req, res) => {
 
   const ps = scoreRows[0];
 
-  // Run all queries in parallel
   const [rankRow, monthlyRow, modeRows, recentRows] = await Promise.all([
     db.execute(sql`
       SELECT COUNT(*) AS cnt FROM player_scores WHERE total_score > ${ps.totalScore}
@@ -367,15 +319,11 @@ router.get("/profile/:playerId", async (req, res) => {
     monthlyScore,
     modeStats,
     recentGames,
-    // 🆕 COSMÉTICOS EQUIPADOS (para mostrar en el perfil público)
-    equippedAvatar: ps.equippedAvatar ?? null,
-    equippedFrame: ps.equippedFrame ?? null,
-    equippedBackground: ps.equippedBackground ?? null,
   });
 });
 
 // ============================================================
-// ENDPOINT: ENVIAR PUNTUACIÓN (POST /scores)
+// POST /scores
 // ============================================================
 router.post("/scores", scoreLimiter, async (req, res) => {
   const body = SubmitScoreBody.safeParse(req.body);
@@ -386,33 +334,16 @@ router.post("/scores", scoreLimiter, async (req, res) => {
 
   const { playerId, playerName, avatarColor, score: rawScore, letter, mode, won, bonus, scoreTokens } = body.data;
 
-  // 🔒 A logged-in account's leaderboard entry can only be written by that
-  // account — stops anyone from injecting scores under another player's id.
-  // Guests (random-UUID ids) are unaffected; the client only submits for
-  // logged-in users anyway.
   if (!verifyClaimedIdentity(req, playerId)) {
     res.status(403).json({ error: "Identity verification failed" });
     return;
   }
 
-  // 🎁 Bonus submissions (e.g. rewarded-video doubling) only ADD points and
-  // XP to the player — they don't count as a separate game played, win, or
-  // streak day, since the original submission already accounted for those.
   const isBonus = bonus === true;
 
-  // 🔒 Anti-cheat clamp. `/game/validate` issued a signed voucher per round
-  // attesting the server-computed base score; the client returns them here.
-  // We sum the verified base and clamp the posted score to a realistic ceiling
-  // derived from it, so a fabricated total (and the coins/XP derived from it)
-  // gets cut while every legit game — including client-side modifier bonuses —
-  // passes through. Tokenless submissions (offline play) fall back to a flat
-  // absolute ceiling. We never reject, only clamp, so a real score is never
-  // lost.
   const { base: verifiedBase, verified } = sumVerifiedBase(scoreTokens, maxRoundsForMode(mode));
   const ceiling = verified > 0 ? ceilingFromBase(verifiedBase) : absoluteCeiling(mode);
   const cappedRaw = Math.max(0, Math.min(rawScore, ceiling));
-
-  // Apply 1.5x multiplier for multiplayer games
   const score = mode === "multiplayer" ? Math.round(cappedRaw * 1.5) : cappedRaw;
 
   const existing = await db
@@ -424,13 +355,11 @@ router.post("/scores", scoreLimiter, async (req, res) => {
   const oldTotal = existing.length > 0 ? existing[0].totalScore : 0;
   const newTotal = oldTotal + score;
 
-  // Streak calculation
   const today = new Date().toISOString().split("T")[0];
   const lastPlayedDate = existing[0]?.lastPlayedDate ?? null;
   const { newStreak, updatedToday } = calculateStreak(lastPlayedDate, existing[0]?.currentStreak ?? 0);
   const newLongest = Math.max(existing[0]?.longestStreak ?? 0, newStreak);
 
-  // Detect overtaken players BEFORE updating
   const overtaken = score > 0 && newTotal > oldTotal
     ? await db
         .select({ playerId: playerScoresTable.playerId, playerName: playerScoresTable.playerName })
@@ -442,11 +371,6 @@ router.post("/scores", scoreLimiter, async (req, res) => {
         )
     : [];
 
-  // XP / Level + Happy Hour bonus.
-  // We resolve the player's local timezone from their push subscription so
-  // the server (not the client) decides when x2 applies — anti-cheat. If we
-  // can't determine tz (player never subscribed to push), no bonus is
-  // granted; this is a natural prompt for them to enable notifications.
   const baseXpGain = calcXpGain(score, won ?? false, mode ?? "solo");
   const baseCoinGain = calcCoinGain(score, won ?? false, mode ?? "solo", isBonus);
   const tzOffset = await lookupPlayerTzOffset(playerId);
@@ -459,19 +383,12 @@ router.post("/scores", scoreLimiter, async (req, res) => {
   const newXp = (existing[0]?.xp ?? 0) + xpGain;
   const newLevel = calcLevel(newXp);
 
-  // Streak calendar — append today to the rolling 30-day list when this is
-  // the first play of the day (mirrors `updatedToday` semantics).
   const newStreakDaysJson = (!isBonus && updatedToday)
     ? appendStreakDay(existing[0]?.streakDaysJson, today)
     : undefined;
 
   let player;
   if (existing.length > 0) {
-    // ⚛️ ATOMIC update — incrementing totalScore/gamesPlayed/wins/xp via SQL
-    // expressions (instead of read-modify-write) so two concurrent score
-    // submissions for the same player can never overwrite each other.
-    // Streak fields use the snapshot we just computed; this matches existing
-    // semantics and only updates them once per day per the helper logic.
     const [updated] = await db
       .update(playerScoresTable)
       .set({
@@ -504,9 +421,6 @@ router.post("/scores", scoreLimiter, async (req, res) => {
         playerName,
         avatarColor: avatarColor ?? "#e53e3e",
         totalScore: score,
-        // 🎁 If a bonus submission arrives before the base submission for a
-        // brand-new player (network race), do NOT count it as a played game,
-        // win, or streak day — the upcoming base request will fill those in.
         gamesPlayed: isBonus ? 0 : 1,
         wins: isBonus ? 0 : (won ? 1 : 0),
         currentStreak: isBonus ? 0 : 1,
@@ -521,7 +435,6 @@ router.post("/scores", scoreLimiter, async (req, res) => {
     player = created;
   }
 
-  // Send "you've been overtaken" push notifications
   if (overtaken.length > 0) {
     await Promise.allSettled(
       overtaken.map(op =>
@@ -534,7 +447,6 @@ router.post("/scores", scoreLimiter, async (req, res) => {
     );
   }
 
-  // Record game history
   await db.insert(gameHistoryTable).values({
     playerId,
     score,
@@ -546,7 +458,6 @@ router.post("/scores", scoreLimiter, async (req, res) => {
   res.status(201).json({
     ...player,
     rank: 0,
-    // Reward breakdown so the client can show "+12 monedas (x2 Happy Hour!)" toast.
     rewards: {
       xpAwarded: xpGain,
       coinsAwarded: coinGain,
@@ -557,7 +468,7 @@ router.post("/scores", scoreLimiter, async (req, res) => {
 });
 
 // ============================================================
-// ENDPOINT: OBTENER PUNTUACIÓN DE UN JUGADOR (GET /scores/:playerId)
+// GET /scores/:playerId
 // ============================================================
 router.get("/scores/:playerId", async (req, res) => {
   const { playerId } = req.params;
@@ -575,7 +486,6 @@ router.get("/scores/:playerId", async (req, res) => {
 
   const ps = scores[0];
 
-  // Run rank, best score, and recent games in parallel
   const [rankRow, bestRow, recentGames] = await Promise.all([
     db.execute(sql`
       SELECT COUNT(*) AS cnt FROM player_scores WHERE total_score > ${ps.totalScore}
