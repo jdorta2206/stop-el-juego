@@ -36,6 +36,8 @@ const Collection     = lazy(() => import("@/pages/Collection"));
 const Notifications  = lazy(() => import("@/pages/Notifications"));
 const Blog           = lazy(() => import("@/pages/Blog"));
 const BlogPost       = lazy(() => import("@/pages/BlogPost"));
+// 🆕 Importar Contact (página de contacto)
+const Contact        = lazy(() => import("@/pages/Contact"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -105,6 +107,9 @@ function Router() {
       {/* Google Play "Account deletion URL" requirement (es + en aliases) */}
       <Route path="/eliminar-cuenta" component={DeleteAccount} />
       <Route path="/delete-account" component={DeleteAccount} />
+      {/* 🆕 Contacto */}
+      <Route path="/contacto" component={Contact} />
+      <Route path="/contact" component={Contact} />
       <Route component={NotFound} />
     </Switch>
   );
