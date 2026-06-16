@@ -254,9 +254,12 @@ function timeAgo(dateStr: string): string {
 }
 
 export default function PlayerProfile() {
-  const { id } = useParams<{ id: string }>();
+  const params = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
   const { player: me } = usePlayer();
+
+  // Si no hay id en la URL (ej: /perfil), usa el id del jugador autenticado (tu propio perfil)
+  const id = params.id || me?.id || null;
 
   const { data, isLoading, isError } = useQuery({
     queryKey: [`/api/ranking/profile/${id}`],
