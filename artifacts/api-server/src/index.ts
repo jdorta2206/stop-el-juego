@@ -54,6 +54,26 @@ app.get('/delete-account', (req, res) => {
 });
 // ---- FIN DE LAS PÁGINAS ----
 
+// ---- RUTA PARA EL FORMULARIO DE CONTACTO ----
+app.post('/api/contact', async (req, res) => {
+  try {
+    const { name, email, message } = req.body;
+    if (!name || !email || !message) {
+      return res.status(400).json({ error: "Faltan campos obligatorios" });
+    }
+    // Aquí puedes procesar el mensaje: guardar en BD, enviar email, etc.
+    console.log(`📩 Nuevo mensaje de contacto:`);
+    console.log(`  Nombre: ${name}`);
+    console.log(`  Email: ${email}`);
+    console.log(`  Mensaje: ${message}`);
+    res.json({ ok: true, message: "Mensaje enviado correctamente" });
+  } catch (error) {
+    console.error("Error en /api/contact:", error);
+    res.status(500).json({ error: "Error interno del servidor" });
+  }
+});
+// ---- FIN RUTA DE CONTACTO ----
+
 async function initStripe() {
   const databaseUrl = process.env["DATABASE_URL"];
   if (!databaseUrl) {
