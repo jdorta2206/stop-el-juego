@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+
+  <!-- Páginas principales -->
   <url>
     <loc>https://www.stopjuegodepalabras.com/</loc>
     <changefreq>daily</changefreq>
@@ -35,5 +37,132 @@
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
-  <!-- Puedes añadir más URLs del blog dinámicamente si quieres -->
+  <url>
+    <loc>https://www.stopjuegodepalabras.com/ranking</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://www.stopjuegodepalabras.com/tienda</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.stopjuegodepalabras.com/reto</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://www.stopjuegodepalabras.com/faq</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+
+  <!-- 21 Artículos del blog -->
+  <url>
+    <loc>https://www.stopjuegodepalabras.com/blog/beneficios-cognitivos-jugar-stop</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.stopjuegodepalabras.com/blog/categorias-originales-stop</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.stopjuegodepalabras.com/blog/como-jugar-stop-reglas-completas</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.stopjuegodepalabras.com/blog/como-organizar-torneo-stop</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.stopjuegodepalabras.com/blog/errores-comunes-pierden-puntos-stop</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.stopjuegodepalabras.com/blog/estrategias-avanzadas-stop</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.stopjuegodepalabras.com/blog/estrategias-ganar-stop</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.stopjuegodepalabras.com/blog/historia-del-stop-juego-palabras</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.stopjuegodepalabras.com/blog/palabras-con-h-para-stop</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.stopjuegodepalabras.com/blog/palabras-con-k-para-stop</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.stopjuegodepalabras.com/blog/palabras-con-n-para-stop</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.stopjuegodepalabras.com/blog/palabras-con-w-para-stop</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.stopjuegodepalabras.com/blog/palabras-con-x-para-stop</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.stopjuegodepalabras.com/blog/palabras-con-y-para-stop</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.stopjuegodepalabras.com/blog/palabras-con-z-para-stop</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.stopjuegodepalabras.com/blog/palabras-raras-pero-validas-stop</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.stopjuegodepalabras.com/blog/pensar-palabras-rapido-bajo-presion</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.stopjuegodepalabras.com/blog/regionalismos-stop-paises-hispanos</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.stopjuegodepalabras.com/blog/stop-en-pareja-dinamicas</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.stopjuegodepalabras.com/blog/stop-para-ninos-educativo</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://www.stopjuegodepalabras.com/blog/stop-vs-scattergories-vs-tutti-frutti</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+
 </urlset>
