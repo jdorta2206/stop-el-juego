@@ -3,7 +3,7 @@ import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
-import { Gamepad2, Trophy, Users, Star, Sparkles, ArrowRight } from "lucide-react";
+import { Gamepad2, Trophy, Users, Star, Sparkles, ArrowRight, Calendar, Clock } from "lucide-react";
 
 export default function Home() {
   const { player } = usePlayer();
@@ -11,8 +11,8 @@ export default function Home() {
 
   return (
     <Layout>
-      <div className="flex flex-col items-center gap-6 py-6 px-4 max-w-4xl mx-auto">
-        {/* Hero (exactamente como estaba antes) */}
+      <div className="flex flex-col items-center gap-8 py-6 px-4 max-w-4xl mx-auto">
+        {/* Hero */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -55,24 +55,70 @@ export default function Home() {
           </div>
         </motion.div>
 
-        {/* Modos de juego (exactamente como estaba antes) */}
+        {/* ============================================================ */}
+        {/* BANNER DEL RETO DIARIO (COMO ESTABA ANTES)                   */}
+        {/* ============================================================ */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="w-full max-w-2xl bg-gradient-to-r from-yellow-600/20 to-orange-600/20 rounded-2xl p-5 border border-yellow-500/30 flex flex-col md:flex-row items-center justify-between gap-4"
+        >
+          <div className="flex items-center gap-3">
+            <div className="bg-yellow-500/20 p-3 rounded-xl">
+              <Calendar className="w-8 h-8 text-yellow-400" />
+            </div>
+            <div>
+              <h3 className="text-white font-bold text-lg">Reto del día</h3>
+              <p className="text-white/60 text-sm">Una letra, todos compiten</p>
+            </div>
+          </div>
+          <Button
+            onClick={() => setLocation("/reto")}
+            className="bg-yellow-500 text-black font-bold px-6 py-2 rounded-xl hover:bg-yellow-400 transition-colors"
+          >
+            Jugar reto →
+          </Button>
+        </motion.div>
+
+        {/* ============================================================ */}
+        {/* ESTADÍSTICAS RÁPIDAS (PARTIDAS, RACHA, ETC.)                */}
+        {/* ============================================================ */}
+        <div className="grid grid-cols-3 gap-3 w-full max-w-lg">
+          <div className="bg-white/5 rounded-xl p-3 text-center border border-white/5">
+            <p className="text-2xl font-black text-white">35</p>
+            <p className="text-xs text-white/50">días</p>
+          </div>
+          <div className="bg-white/5 rounded-xl p-3 text-center border border-white/5">
+            <p className="text-2xl font-black text-yellow-400">14</p>
+            <p className="text-xs text-white/50">nivel</p>
+          </div>
+          <div className="bg-white/5 rounded-xl p-3 text-center border border-white/5">
+            <p className="text-2xl font-black text-green-400">8.7k</p>
+            <p className="text-xs text-white/50">XP</p>
+          </div>
+        </div>
+
+        {/* ============================================================ */}
+        {/* MODOS DE JUEGO (IGUAL QUE ANTES)                             */}
+        {/* ============================================================ */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full max-w-3xl">
-          <div className="bg-white/5 rounded-2xl p-4 text-center border border-white/10">
+          <div className="bg-white/5 rounded-2xl p-4 text-center border border-white/10 hover:bg-white/10 transition-colors cursor-pointer" onClick={() => setLocation("/solo")}>
             <Gamepad2 className="w-8 h-8 text-secondary mx-auto mb-2" />
             <p className="text-white font-bold">Solo</p>
             <p className="text-xs text-white/50">Vs IA</p>
           </div>
-          <div className="bg-white/5 rounded-2xl p-4 text-center border border-white/10">
+          <div className="bg-white/5 rounded-2xl p-4 text-center border border-white/10 hover:bg-white/10 transition-colors cursor-pointer" onClick={() => setLocation("/multiplayer")}>
             <Users className="w-8 h-8 text-secondary mx-auto mb-2" />
             <p className="text-white font-bold">Multijugador</p>
             <p className="text-xs text-white/50">En tiempo real</p>
           </div>
-          <div className="bg-white/5 rounded-2xl p-4 text-center border border-white/10">
+          <div className="bg-white/5 rounded-2xl p-4 text-center border border-white/10 hover:bg-white/10 transition-colors cursor-pointer" onClick={() => setLocation("/reto")}>
             <Star className="w-8 h-8 text-secondary mx-auto mb-2" />
             <p className="text-white font-bold">Reto diario</p>
             <p className="text-xs text-white/50">Nuevo cada día</p>
           </div>
-          <div className="bg-white/5 rounded-2xl p-4 text-center border border-white/10">
+          <div className="bg-white/5 rounded-2xl p-4 text-center border border-white/10 hover:bg-white/10 transition-colors cursor-pointer" onClick={() => setLocation("/ranking")}>
             <Trophy className="w-8 h-8 text-secondary mx-auto mb-2" />
             <p className="text-white font-bold">Ranking</p>
             <p className="text-xs text-white/50">Global</p>
@@ -80,47 +126,16 @@ export default function Home() {
         </div>
 
         {/* ============================================================ */}
-        {/* CONTENIDO DE VALOR PARA ADSENSE (al final, visible pero sin molestar) */}
+        {/* CONTENIDO DE VALOR PARA ADSENSE (abajo del todo, no molesta) */}
         {/* ============================================================ */}
-        <div className="w-full mt-12 border-t border-white/10 pt-8">
-          <h2 className="text-2xl font-black text-white text-center mb-6">¿Qué es STOP?</h2>
-          <div className="text-white/70 text-sm leading-relaxed space-y-3 max-w-3xl mx-auto">
-            <p>
-              STOP es un juego de palabras multijugador inspirado en el clásico Tutti Frutti o Scattergories. 
-              Los jugadores compiten para encontrar palabras que empiecen por una letra aleatoria y que 
-              encajen en categorías como Nombre, Lugar, Animal, Objeto, Color, Fruta y Marca.
-            </p>
-            <p>
-              El juego está disponible en español, inglés, portugués y francés, y se puede jugar en modo 
-              solo contra la IA, en partidas multijugador en tiempo real, o en retos diarios.
-            </p>
-            <p>
-              Cada partida es una carrera contrarreloj: tienes 60 segundos para escribir una palabra por 
-              cada categoría. Las respuestas originales suman 10 puntos, y el jugador con más puntos al 
-              final de las rondas gana la partida.
-            </p>
-            <p>
-              STOP no solo es entretenido, sino que también ayuda a mejorar el vocabulario, la rapidez 
-              mental y la capacidad de concentración. Es ideal para jugar en familia, con amigos o en 
-              eventos escolares.
+        <div className="w-full mt-8 pt-6 border-t border-white/10">
+          <div className="text-center">
+            <p className="text-white/40 text-xs max-w-xl mx-auto">
+              STOP es un juego de palabras gratuito donde compites por letras y categorías.
+              Mejora tu vocabulario y diviértete con amigos. Conoce más en nuestro{' '}
+              <a href="/blog" className="text-secondary hover:underline">blog</a>.
             </p>
           </div>
-          <div className="text-center mt-6">
-            <a href="/blog" className="text-secondary hover:underline text-sm font-bold">
-              📚 Leer más en nuestro blog
-            </a>
-          </div>
-        </div>
-
-        {/* CTA final (opcional) */}
-        <div className="w-full text-center py-4">
-          <Button
-            onClick={() => setLocation(player ? "/jugar" : "/login")}
-            className="bg-secondary text-black font-bold px-8 py-4 text-base rounded-xl shadow-lg hover:shadow-secondary/30 transition-all"
-          >
-            {player ? "Jugar ahora" : "Iniciar sesión y jugar"}
-            <ArrowRight className="w-5 h-5 ml-2" />
-          </Button>
         </div>
       </div>
     </Layout>
