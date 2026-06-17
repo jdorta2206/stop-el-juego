@@ -1,52 +1,32 @@
+import { Layout } from "@/components/Layout";
+
 export default function Privacy() {
   return (
-    <div className="min-h-screen bg-[hsl(222,47%,11%)] text-white px-6 py-12 max-w-2xl mx-auto">
-      <h1 className="text-3xl font-black mb-2 text-[hsl(48,96%,57%)]">Política de Privacidad</h1>
-      <p className="text-white/50 text-sm mb-8">Última actualización: marzo 2026</p>
-
-      <section className="space-y-6 text-white/80 leading-relaxed">
-        <div>
-          <h2 className="text-xl font-bold text-white mb-2">1. Información que recopilamos</h2>
-          <p>Cuando inicias sesión con Google, Facebook, Instagram o TikTok, recopilamos únicamente tu nombre público y foto de perfil para personalizar tu experiencia en el juego y mostrar tu nombre en el ranking global.</p>
+    <Layout>
+      <div className="max-w-3xl mx-auto px-4 py-12">
+        <h1 className="text-4xl font-black text-white mb-6">Política de privacidad</h1>
+        <div className="text-white/80 leading-relaxed space-y-4">
+          <p><strong>Última actualización:</strong> 17 de junio de 2026</p>
+          <p>En STOP valoramos tu privacidad. Esta política explica cómo recopilamos, usamos y protegemos tu información.</p>
+          <h2 className="text-2xl font-bold text-white mt-6">1. Información que recopilamos</h2>
+          <p>Recopilamos tu nombre de usuario, correo electrónico (si inicias sesión con Google u otra red social), y las partidas que juegas para mostrar el ranking y tu progreso.</p>
+          <h2 className="text-2xl font-bold text-white mt-6">2. Uso de la información</h2>
+          <p>Usamos tu información para:</p>
+          <ul className="list-disc list-inside pl-4">
+            <li>Mostrar tu perfil y ranking.</li>
+            <li>Procesar pagos (a través de Stripe o Google Play).</li>
+            <li>Enviarte notificaciones si las activas.</li>
+            <li>Mejorar el juego y la experiencia de usuario.</li>
+          </ul>
+          <h2 className="text-2xl font-bold text-white mt-6">3. Cookies</h2>
+          <p>Usamos cookies para recordar tu sesión y preferencias. No usamos cookies de seguimiento de terceros.</p>
+          <h2 className="text-2xl font-bold text-white mt-6">4. Terceros</h2>
+          <p>Compartimos datos mínimos con Stripe (para pagos) y Google (para autenticación y notificaciones). No vendemos tus datos.</p>
+          <h2 className="text-2xl font-bold text-white mt-6">5. Tus derechos</h2>
+          <p>Puedes solicitar la eliminación de tus datos escribiendo a <a href="mailto:dorynex@stopjuegodepalabras.com" className="text-secondary hover:underline">dorynex@stopjuegodepalabras.com</a>.</p>
+          <p className="mt-4 text-sm text-white/40">Si tienes dudas, contáctanos en <a href="/contacto" className="text-secondary hover:underline">nuestra página de contacto</a>.</p>
         </div>
-        <div>
-          <h2 className="text-xl font-bold text-white mb-2">2. Cómo usamos tu información</h2>
-          <p>Usamos tu nombre e imagen exclusivamente dentro del juego: mostrar tu perfil durante las partidas y en la tabla de clasificación. No compartimos tu información con terceros ni la usamos con fines comerciales.</p>
-        </div>
-        <div>
-          <h2 className="text-xl font-bold text-white mb-2">3. Almacenamiento de datos</h2>
-          <p>Tu información de sesión se almacena de forma segura en nuestra base de datos. No almacenamos contraseñas ni tokens de acceso a largo plazo.</p>
-        </div>
-        <div>
-          <h2 className="text-xl font-bold text-white mb-2">4. Eliminación de datos</h2>
-          <p>Puedes solicitar la eliminación completa de tu cuenta y todos tus datos en cualquier momento. Para ello, envía un correo electrónico a <a href="mailto:dorynex@stopjuegodepalabras.com" className="text-[hsl(48,96%,57%)] underline">dorynex@stopjuegodepalabras.com</a> con el asunto <strong>"Eliminar mis datos"</strong> indicando el nombre de usuario o correo con el que iniciaste sesión. Procesaremos tu solicitud en un plazo máximo de 30 días. Se eliminarán: tu nombre, foto de perfil, puntuaciones, historial de partidas y datos de suscripción.</p>
-        </div>
-        <div>
-          <h2 className="text-xl font-bold text-white mb-2">5. Contacto</h2>
-          <p>Para cualquier consulta sobre privacidad o para ejercer tus derechos de acceso, rectificación o eliminación, contacta con nosotros en: <a href="mailto:dorynex@stopjuegodepalabras.com" className="text-[hsl(48,96%,57%)] underline">dorynex@stopjuegodepalabras.com</a></p>
-        </div>
-      </section>
-
-      <div className="mt-10 p-6 rounded-2xl border border-[hsl(48,96%,57%)]/30 bg-[hsl(48,96%,57%)]/5">
-        <h3 className="text-lg font-black text-[hsl(48,96%,57%)] mb-2">🗑️ Solicitar eliminación de cuenta y datos</h3>
-        <p className="text-white/70 text-sm mb-4">Tienes una página dedicada con un formulario y todos los detalles del proceso:</p>
-        <a
-          href="/eliminar-cuenta"
-          className="inline-block px-6 py-3 rounded-xl font-black text-sm"
-          style={{ background: "hsl(48,96%,57%)", color: "hsl(222,47%,11%)" }}
-        >
-          Ir a "Eliminar mi cuenta"
-        </a>
-        <p className="text-white/50 text-xs mt-3">
-          También puedes escribirnos directamente a{" "}
-          <a href="mailto:dorynex@stopjuegodepalabras.com" className="text-[hsl(48,96%,57%)] underline">
-            dorynex@stopjuegodepalabras.com
-          </a>{" "}
-          con el asunto "Eliminar mis datos".
-        </p>
       </div>
-
-      <a href="/" className="inline-block mt-8 text-[hsl(48,96%,57%)] hover:underline">← Volver al juego</a>
-    </div>
+    </Layout>
   );
 }
