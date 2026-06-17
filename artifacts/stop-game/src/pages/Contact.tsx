@@ -54,7 +54,7 @@ export default function Contact() {
             <div className="bg-white/5 rounded-2xl p-6 border border-white/10">
               <div className="flex items-center gap-3 mb-4">
                 <Mail className="w-5 h-5 text-secondary" />
-                <span className="text-white font-bold">jdorta2206@gmail.com</span>
+                <span className="text-white font-bold">dorynex@stopjuegodepalabras.com</span>
               </div>
               <div className="flex items-center gap-3 mb-4">
                 <Phone className="w-5 h-5 text-secondary" />
