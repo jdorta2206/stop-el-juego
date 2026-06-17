@@ -17,6 +17,7 @@ import NotFound from "@/pages/not-found";
 // Lazy-loaded routes — keep initial bundle small for fast first paint on Android
 const Privacy        = lazy(() => import("@/pages/Privacy"));
 const Terms          = lazy(() => import("@/pages/Terms"));
+const FAQ            = lazy(() => import("@/pages/FAQ"));
 const About          = lazy(() => import("@/pages/About"));
 const HowToPlay      = lazy(() => import("@/pages/HowToPlay"));
 const DailyChallenge = lazy(() => import("@/pages/DailyChallenge"));
@@ -81,6 +82,10 @@ function Router() {
       <Route path="/en-vivo" component={StreamerDirectory} />
       <Route path="/overlay/:code" component={Overlay} />
       <Route path="/ranking" component={Ranking} />
+      {/* 🆕 Rutas legales y de información */}
+      <Route path="/privacidad" component={Privacy} />
+      <Route path="/terminos" component={Terms} />
+      <Route path="/faq" component={FAQ} />
       <Route path="/privacy" component={Privacy} />
       <Route path="/terms" component={Terms} />
       <Route path="/acerca" component={About} />
