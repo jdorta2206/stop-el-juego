@@ -1,375 +1,364 @@
 import { useState, useEffect, useCallback } from "react";
-import { Check, Coins, ShoppingBag, Tag } from "lucide-react";
+import { usePlayer } from "@/hooks/use-player";
+import { useInventory } from "@/hooks/useInventory";
+import { Button } from "@/components/ui";
+import { getApiUrl } from "@/lib/utils";
+import { toast } from "sonner";
+import { Check, Crown, Sparkles, Gift, Coins } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import { usePaymentChannel } from "@/hooks/usePaymentChannel";
+import { purchaseWorldCupPackOnPlay, isPlayPurchaseCancelled } from "@/lib/playBilling";
 import { startPackCheckout, WORLD_CUP_PACK_PRICE_LABEL } from "@/lib/worldCupPack";
-import { isLegendaryFrame, formatCountdown } from "@/lib/cosmeticHelpers";
-import type { InventorySnapshot, ShopItem, EquipKind } from "@/hooks/useInventory";
+import { celebrateReward } from "@/lib/celebrate";
 
-function CosmeticChip({
-  glyph, label, equipped, busy, color, glowing, onClick,
-}: {
-  glyph: string;
-  label: string;
-  equipped: boolean;
-  busy: boolean;
-  color?: string;
-  glowing?: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={busy || equipped}
-      title={label}
-      className="relative flex flex-col items-center gap-1 px-2 py-1.5 rounded-lg transition-all disabled:opacity-90"
-      style={{
-        background: equipped ? "rgba(34,197,94,0.15)" : "rgba(255,255,255,0.05)",
-        border: equipped ? "1.5px solid rgba(34,197,94,0.5)" : "1.5px solid rgba(255,255,255,0.1)",
-        minWidth: 56,
-      }}
-    >
-      <span className={`text-xl leading-none ${glowing ? "legendary-glyph" : ""}`} style={{ color }}>{glyph}</span>
-      <span className="text-[9px] font-bold text-white/70 leading-tight text-center max-w-[60px] truncate">{label}</span>
-      {equipped && (
-        <span className="absolute -top-1 -right-1 bg-emerald-500 rounded-full p-0.5">
-          <Check className="w-2.5 h-2.5 text-white" />
-        </span>
-      )}
-    </button>
-  );
+interface CosmeticItem {
+  id: string;
+  name: string;
+  description: string;
+  price: number;
+  type: "avatar" | "frame" | "title" | "background";
+  rarity: "common" | "rare" | "epic" | "legendary";
+  icon: string;
+  owned?: boolean;
+  equipped?: boolean;
 }
 
-interface CosmeticShopProps {
-  playerId: string;
-  inventory: InventorySnapshot;
-  refresh: () => Promise<void> | void;
-  buy: (itemId: string) => Promise<{ error?: string } | void>;
-  equip: (kind: EquipKind, value: string | null) => Promise<{ error?: string } | void>;
-  showInventory?: boolean;
-}
+const RARITY_COLORS = {
+  common: "from-gray-400 to-gray-600",
+  rare: "from-blue-400 to-blue-600",
+  epic: "from-purple-400 to-purple-600",
+  legendary: "from-yellow-400 to-orange-500",
+};
 
-export function CosmeticShop({
-  playerId, inventory, refresh, buy, equip, showInventory = true,
-}: CosmeticShopProps) {
-  const [busyAction, setBusyAction] = useState<string | null>(null);
-  const [now, setNow] = useState(() => Date.now());
+const RARITY_BG = {
+  common: "bg-gray-500/20 border-gray-500/30",
+  rare: "bg-blue-500/20 border-blue-500/30",
+  epic: "bg-purple-500/20 border-purple-500/30",
+  legendary: "bg-gradient-to-r from-yellow-500/20 to-orange-500/20 border-yellow-500/30",
+};
+
+// Cosmeticos del Pack Mundial (27 ítems)
+const WORLD_CUP_COSMETICS: CosmeticItem[] = [
+  { id: "avatar_wc_ball", name: "Balón Mundial", description: "Avatar del balón oficial", price: 0, type: "avatar", rarity: "epic", icon: "⚽" },
+  { id: "avatar_wc_jersey", name: "Camiseta Mundial", description: "Avatar de la camiseta", price: 0, type: "avatar", rarity: "epic", icon: "👕" },
+  { id: "avatar_wc_goal", name: "Gol", description: "Avatar celebrando gol", price: 0, type: "avatar", rarity: "epic", icon: "🥅" },
+  { id: "avatar_wc_gloves", name: "Guantes de Portero", description: "Avatar de guantes", price: 0, type: "avatar", rarity: "rare", icon: "🧤" },
+  { id: "avatar_wc_boots", name: "Botines", description: "Avatar de botines", price: 0, type: "avatar", rarity: "rare", icon: "👟" },
+  { id: "avatar_wc_medal", name: "Medalla", description: "Avatar de medalla", price: 0, type: "avatar", rarity: "epic", icon: "🥇" },
+  { id: "avatar_wc_trophy", name: "Trofeo", description: "Avatar del trofeo", price: 0, type: "avatar", rarity: "legendary", icon: "🏆" },
+  { id: "avatar_wc_flag_es", name: "Bandera España", description: "Avatar bandera de España", price: 0, type: "avatar", rarity: "rare", icon: "🇪🇸" },
+  { id: "avatar_wc_flag_br", name: "Bandera Brasil", description: "Avatar bandera de Brasil", price: 0, type: "avatar", rarity: "rare", icon: "🇧🇷" },
+  { id: "avatar_wc_flag_ar", name: "Bandera Argentina", description: "Avatar bandera de Argentina", price: 0, type: "avatar", rarity: "rare", icon: "🇦🇷" },
+  { id: "avatar_wc_flag_fr", name: "Bandera Francia", description: "Avatar bandera de Francia", price: 0, type: "avatar", rarity: "rare", icon: "🇫🇷" },
+  { id: "avatar_wc_flag_de", name: "Bandera Alemania", description: "Avatar bandera de Alemania", price: 0, type: "avatar", rarity: "rare", icon: "🇩🇪" },
+  { id: "avatar_wc_flag_pt", name: "Bandera Portugal", description: "Avatar bandera de Portugal", price: 0, type: "avatar", rarity: "rare", icon: "🇵🇹" },
+  { id: "avatar_wc_flag_it", name: "Bandera Italia", description: "Avatar bandera de Italia", price: 0, type: "avatar", rarity: "rare", icon: "🇮🇹" },
+  { id: "avatar_wc_flag_nl", name: "Bandera Países Bajos", description: "Avatar bandera de Países Bajos", price: 0, type: "avatar", rarity: "rare", icon: "🇳🇱" },
+  { id: "avatar_wc_flag_mx", name: "Bandera México", description: "Avatar bandera de México", price: 0, type: "avatar", rarity: "rare", icon: "🇲🇽" },
+  { id: "avatar_wc_flag_us", name: "Bandera USA", description: "Avatar bandera de USA", price: 0, type: "avatar", rarity: "rare", icon: "🇺🇸" },
+  { id: "avatar_wc_flag_uy", name: "Bandera Uruguay", description: "Avatar bandera de Uruguay", price: 0, type: "avatar", rarity: "rare", icon: "🇺🇾" },
+  { id: "avatar_wc_flag_co", name: "Bandera Colombia", description: "Avatar bandera de Colombia", price: 0, type: "avatar", rarity: "rare", icon: "🇨🇴" },
+  { id: "avatar_wc_flag_jp", name: "Bandera Japón", description: "Avatar bandera de Japón", price: 0, type: "avatar", rarity: "rare", icon: "🇯🇵" },
+  { id: "frame_wc_cesped", name: "Marco Césped", description: "Marco de césped mundialista", price: 0, type: "frame", rarity: "epic", icon: "🌿" },
+  { id: "frame_wc_espana", name: "Marco España", description: "Marco de la selección española", price: 0, type: "frame", rarity: "legendary", icon: "🇪🇸" },
+  { id: "frame_wc_copa", name: "Marco Copa Mundial", description: "Marco del trofeo", price: 0, type: "frame", rarity: "legendary", icon: "🏆" },
+  { id: "bg_wc_cesped", name: "Fondo Césped", description: "Fondo de césped", price: 0, type: "background", rarity: "epic", icon: "🌿" },
+  { id: "bg_wc_noche", name: "Fondo Noche de Final", description: "Fondo de la final", price: 0, type: "background", rarity: "legendary", icon: "🌙" },
+  { id: "bg_wc_espana", name: "Fondo España", description: "Fondo de la selección", price: 0, type: "background", rarity: "legendary", icon: "🇪🇸" },
+  { id: "bg_wc_copa", name: "Fondo Copa Mundial", description: "Fondo del trofeo", price: 0, type: "background", rarity: "legendary", icon: "🏆" },
+];
+
+export function CosmeticShop() {
+  const { player } = usePlayer();
+  const { inventory, refresh: refreshInventory, buy, equip } = useInventory(player?.id || null);
+  const [selectedCategory, setSelectedCategory] = useState<"all" | "avatar" | "frame" | "background">("all");
+  const [purchasing, setPurchasing] = useState<string | null>(null);
+  const [equipping, setEquipping] = useState<string | null>(null);
+  const [showPackModal, setShowPackModal] = useState(false);
   const { channel } = usePaymentChannel();
 
-  useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 30_000);
-    return () => clearInterval(t);
-  }, []);
+  const hasWorldCupPack = inventory?.items?.some(item => 
+    WORLD_CUP_COSMETICS.some(c => c.id === item.id)
+  ) ?? false;
 
   // ============================================================
-  // EQUIPAR COSMÉTICO - AHORA REFRESCA EL INVENTARIO
-  // ============================================================
-  const handleEquip = useCallback(async (kind: EquipKind, value: string | null) => {
-    setBusyAction(`equip:${kind}:${value ?? ""}`);
-    try {
-      const result = await equip(kind, value);
-      if (result && "error" in result && result.error) {
-        window.alert("Error al equipar: " + result.error);
-        return;
-      }
-      // Esperar un momento para que el backend procese
-      await new Promise(resolve => setTimeout(resolve, 300));
-      // Refrescar el inventario y perfil
-      await refresh();
-      // Si existe una función global para refrescar el perfil, llamarla
-      if (typeof window !== "undefined" && (window as any).refreshPlayerProfile) {
-        (window as any).refreshPlayerProfile();
-      }
-      // Pequeño feedback visual (opcional)
-      window.alert(`✅ ${value ? "Equipado" : "Equipo por defecto"} correctamente`);
-    } catch (error: any) {
-      console.error("Error equipando:", error);
-      window.alert("Error al equipar: " + (error.message || "Intenta de nuevo"));
-    } finally {
-      setBusyAction(null);
-    }
-  }, [equip, refresh]);
-
-  // ============================================================
-  // COMPRAR CON MONEDAS - YA REFRESCA EL INVENTARIO
-  // ============================================================
-  const handleBuy = useCallback(async (item: ShopItem) => {
-    setBusyAction(`buy:${item.id}`);
-    const r = await buy(item.id);
-    setBusyAction(null);
-    if (r && "error" in r && r.error) {
-      window.alert(r.error === "Insufficient coins" ? "No tienes suficientes monedas" : r.error);
-      return;
-    }
-    // Refrescar inventario y perfil después de comprar
-    await refresh();
-    if (typeof window !== "undefined" && (window as any).refreshPlayerProfile) {
-      (window as any).refreshPlayerProfile();
-    }
-  }, [buy, refresh]);
-
-  // ============================================================
-  // PACK MUNDIAL - STRIPE
+  // handleBuyPack – COMPRA DEL PACK MUNDIAL (Google Play o Stripe)
   // ============================================================
   const handleBuyPack = useCallback(async () => {
     if (channel === "loading") return;
-    setBusyAction("buy:pack");
+    setPurchasing("pack_mundial");
+
+    const goStripe = async () => {
+      const { url } = await startPackCheckout({ playerId: player?.id || "" });
+      window.location.href = url;
+    };
 
     try {
-      const { url } = await startPackCheckout({ playerId });
-      if (url) {
-        window.location.href = url;
-      } else {
-        throw new Error("No se recibió URL de pago");
+      // ✅ DETECTAR SI ESTAMOS DENTRO DE LA APP DE PLAY STORE
+      const isTwa = typeof window !== "undefined" &&
+        document.referrer?.startsWith("android-app://") &&
+        typeof window.getDigitalGoodsService === "function";
+
+      if (channel === "play" || isTwa) {
+        // 🔵 USA GOOGLE PLAY BILLING
+        const result = await purchaseWorldCupPackOnPlay();
+        if (result.granted) {
+          await refreshInventory();
+          celebrateReward();
+          window.alert("¡Pack Mundial desbloqueado! Ya tienes todos los cosméticos del Mundial. ⚽");
+          setPurchasing(null);
+          return;
+        }
+        setPurchasing(null);
+        return;
       }
-    } catch (error) {
-      console.error("Error al iniciar pago del Pack Mundial:", error);
-      window.alert(error instanceof Error ? error.message : "No se pudo iniciar el pago. Inténtalo de nuevo.");
+
+      // 🌐 EN LA WEB USA STRIPE
+      await goStripe();
+    } catch (error: any) {
+      if (isPlayPurchaseCancelled(error)) {
+        setPurchasing(null);
+        return;
+      }
+      console.error("Error al comprar Pack Mundial:", error);
+      window.alert(error instanceof Error ? error.message : "No se pudo completar la compra");
     } finally {
-      setBusyAction(null);
+      setPurchasing(null);
     }
-  }, [channel, playerId]);
+  }, [channel, player?.id, refreshInventory]);
 
-  // El resto del código (renderizado, etc.) se mantiene igual
-  const deals = inventory.dailyDeals ?? [];
-  const dealById = new Map(deals.map((d) => [d.id, d]));
-  const isWcItem = (id: string) => id.includes("_wc_");
-  const ordered = [...inventory.shop].sort((a, b) => {
-    const da = dealById.has(a.id) ? 0 : 1;
-    const db = dealById.has(b.id) ? 0 : 1;
-    return da - db;
+  const handleEquip = useCallback(async (kind: any, value: string | null) => {
+    setEquipping(`${kind}:${value}`);
+    try {
+      const result = await equip(kind, value);
+      if (result?.error) {
+        toast.error(result.error);
+        return;
+      }
+      await refreshInventory();
+      toast.success("¡Cosmético equipado!");
+    } catch (error) {
+      console.error("Error equipando:", error);
+      toast.error("Error al equipar");
+    } finally {
+      setEquipping(null);
+    }
+  }, [equip, refreshInventory]);
+
+  const handleBuy = useCallback(async (item: CosmeticItem) => {
+    if (!player?.id) {
+      toast.error("Debes iniciar sesión");
+      return;
+    }
+    if (item.price <= 0) return;
+
+    setPurchasing(item.id);
+    const result = await buy(item.id, item.price);
+    setPurchasing(null);
+
+    if (result?.error) {
+      toast.error(result.error);
+      return;
+    }
+    await refreshInventory();
+    toast.success(`¡${item.name} adquirido!`);
+  }, [buy, player?.id, refreshInventory]);
+
+  const filteredCosmetics = WORLD_CUP_COSMETICS.filter(item => {
+    if (selectedCategory === "all") return true;
+    return item.type === selectedCategory;
   });
-  const wcOrdered = ordered.filter((i) => isWcItem(i.id));
-  const restOrdered = ordered.filter((i) => !isWcItem(i.id));
-  const resetIn = inventory.dealsResetAt ? inventory.dealsResetAt - now : 0;
 
-  const renderRow = (item: ShopItem) => {
-    const owned =
-      item.kind === "avatar"
-        ? inventory.owned.avatars.some((a) => a.id === item.id)
-        : item.kind === "frame"
-        ? inventory.owned.frames.some((f) => f.id === item.id)
-        : inventory.owned.backgrounds.some((b) => b.id === item.id);
-    const deal = dealById.get(item.id);
-    const price = deal ? deal.price : item.price;
-    const canAfford = inventory.coins >= price;
-    return (
-      <div
-        key={item.id}
-        className="flex items-center gap-3 p-2.5 rounded-xl bg-black/30 border"
-        style={{ borderColor: deal ? "rgba(249,168,37,0.45)" : "rgba(255,255,255,0.1)" }}
-      >
-        <span className={`text-2xl w-8 text-center ${isLegendaryFrame(item.id) ? "legendary-glyph" : ""}`} style={{ color: item.color }}>{item.glyph}</span>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5">
-            <p className="text-sm font-bold truncate">{item.label}</p>
-            {deal && (
-              <span className="text-[9px] font-black text-amber-400 bg-amber-400/15 border border-amber-400/40 rounded px-1 py-0.5 leading-none">
-                −{deal.discountPct}%
-              </span>
-            )}
-          </div>
-          <p className="text-[11px] text-amber-400 flex items-center gap-1">
-            <Coins className="w-3 h-3" /> {price}
-            {deal && (
-              <span className="text-white/30 line-through">{deal.originalPrice}</span>
-            )}
-          </p>
-        </div>
-        {owned ? (
-          <span className="text-[10px] font-black text-emerald-400 uppercase">Comprado</span>
-        ) : (
-          <button
-            onClick={() => handleBuy(item)}
-            disabled={!canAfford || busyAction === `buy:${item.id}`}
-            className="px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all disabled:opacity-40"
-            style={{
-              background: canAfford ? "rgba(249,168,37,0.2)" : "rgba(255,255,255,0.05)",
-              border: canAfford ? "1px solid rgba(249,168,37,0.5)" : "1px solid rgba(255,255,255,0.1)",
-              color: canAfford ? "#f9a825" : "rgba(255,255,255,0.4)",
-            }}
-          >
-            {busyAction === `buy:${item.id}` ? "…" : "Comprar"}
-          </button>
-        )}
-      </div>
-    );
+  const isOwned = (itemId: string) => {
+    return inventory?.items?.some(i => i.id === itemId) ?? false;
+  };
+
+  const isEquipped = (itemId: string) => {
+    return inventory?.equipped && Object.values(inventory.equipped).includes(itemId);
   };
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <h2 className="font-display font-black text-lg flex items-center gap-2">
-          <ShoppingBag className="w-5 h-5 text-secondary" /> {showInventory ? "Mi inventario" : "Tienda"}
-        </h2>
-        <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-400/15 border border-amber-400/40">
-          <Coins className="w-4 h-4 text-amber-400" />
-          <span className="font-black text-amber-400 text-sm">{inventory.coins}</span>
-        </span>
-      </div>
-
-      {showInventory && (
-        <>
-          <div>
-            <p className="text-xs font-bold text-white/50 mb-1.5">Avatares</p>
-            <div className="flex gap-2 flex-wrap">
-              <CosmeticChip
-                glyph="—" label="Por defecto"
-                equipped={inventory.equipped.avatar === null}
-                busy={busyAction === "equip:avatar:"}
-                onClick={() => handleEquip("avatar", null)}
-              />
-              {inventory.owned.avatars.map((c) => (
-                <CosmeticChip
-                  key={c.id} glyph={c.glyph} label={c.label}
-                  equipped={inventory.equipped.avatar === c.id}
-                  busy={busyAction === `equip:avatar:${c.id}`}
-                  onClick={() => handleEquip("avatar", c.id)}
-                />
-              ))}
-              {inventory.owned.avatars.length === 0 && (
-                <p className="text-[11px] text-white/30 italic">Reclama niveles del Pase para conseguirlos.</p>
-              )}
+    <div className="space-y-6">
+      {/* Banner Pack Mundial */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-yellow-600 via-orange-600 to-red-600 p-6 shadow-2xl">
+        <div className="absolute inset-0 bg-black/20" />
+        <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="text-6xl">🌍</div>
+            <div>
+              <h3 className="text-2xl font-black text-white">Pack Mundial</h3>
+              <p className="text-white/80 text-sm">27 cosméticos exclusivos del Mundial</p>
+              <div className="flex items-center gap-2 mt-1">
+                <span className="bg-black/30 px-2 py-0.5 rounded text-xs text-white">🌱 20 avatares</span>
+                <span className="bg-black/30 px-2 py-0.5 rounded text-xs text-white">🖼️ 3 marcos</span>
+                <span className="bg-black/30 px-2 py-0.5 rounded text-xs text-white">🎨 4 fondos</span>
+              </div>
             </div>
           </div>
-
-          <div>
-            <p className="text-xs font-bold text-white/50 mb-1.5">Marcos</p>
-            <div className="flex gap-2 flex-wrap">
-              <CosmeticChip
-                glyph="—" label="Sin marco"
-                equipped={inventory.equipped.frame === null}
-                busy={busyAction === "equip:frame:"}
-                onClick={() => handleEquip("frame", null)}
-              />
-              {inventory.owned.frames.map((c) => (
-                <CosmeticChip
-                  key={c.id} glyph={c.glyph} label={c.label} color={c.color}
-                  glowing={isLegendaryFrame(c.id)}
-                  equipped={inventory.equipped.frame === c.id}
-                  busy={busyAction === `equip:frame:${c.id}`}
-                  onClick={() => handleEquip("frame", c.id)}
-                />
-              ))}
-              {inventory.owned.frames.length === 0 && (
-                <p className="text-[11px] text-white/30 italic">Reclama niveles del Pase para conseguirlos.</p>
-              )}
-            </div>
-          </div>
-
-          <div>
-            <p className="text-xs font-bold text-white/50 mb-1.5">Fondos</p>
-            <div className="flex gap-2 flex-wrap">
-              <CosmeticChip
-                glyph="—" label="Sin fondo"
-                equipped={(inventory.equipped.background ?? null) === null}
-                busy={busyAction === "equip:background:"}
-                onClick={() => handleEquip("background", null)}
-              />
-              {inventory.owned.backgrounds.map((c) => (
-                <CosmeticChip
-                  key={c.id} glyph={c.glyph} label={c.label} color={c.color}
-                  equipped={inventory.equipped.background === c.id}
-                  busy={busyAction === `equip:background:${c.id}`}
-                  onClick={() => handleEquip("background", c.id)}
-                />
-              ))}
-              {inventory.owned.backgrounds.length === 0 && (
-                <p className="text-[11px] text-white/30 italic">Cómpralos en la tienda para personalizar tu perfil.</p>
-              )}
-            </div>
-          </div>
-
-          <div>
-            <p className="text-xs font-bold text-white/50 mb-1.5">Títulos <span className="text-white/30 font-normal">(se ganan jugando)</span></p>
-            <div className="flex gap-2 flex-wrap">
-              <CosmeticChip
-                glyph="—" label="Sin título"
-                equipped={(inventory.equipped.title ?? null) === null}
-                busy={busyAction === "equip:title:"}
-                onClick={() => handleEquip("title", null)}
-              />
-              {(inventory.titles ?? []).filter((t) => t.unlocked).map((t) => (
-                <CosmeticChip
-                  key={t.id} glyph={t.icon} label={t.label} color={t.color}
-                  equipped={inventory.equipped.title === t.id}
-                  busy={busyAction === `equip:title:${t.id}`}
-                  onClick={() => handleEquip("title", t.id)}
-                />
-              ))}
-            </div>
-            {(inventory.titles ?? []).some((t) => !t.unlocked) && (
-              <>
-                <p className="text-[10px] font-bold text-white/30 mt-2 mb-1.5 uppercase">Por desbloquear</p>
-                <div className="flex gap-2 flex-wrap">
-                  {(inventory.titles ?? []).filter((t) => !t.unlocked).map((t) => (
-                    <div
-                      key={t.id}
-                      title={t.desc}
-                      className="flex flex-col items-center gap-1 px-2 py-1.5 rounded-lg opacity-40"
-                      style={{ border: "1.5px dashed rgba(255,255,255,0.15)", minWidth: 56 }}
-                    >
-                      <span className="text-xl leading-none grayscale">🔒</span>
-                      <span className="text-[9px] font-bold text-white/60 leading-tight text-center max-w-[60px] truncate">{t.label}</span>
-                    </div>
-                  ))}
+          <div className="flex items-center gap-4">
+            {hasWorldCupPack ? (
+              <div className="bg-green-500/20 backdrop-blur px-6 py-3 rounded-xl border border-green-400">
+                <div className="flex items-center gap-2 text-green-300 font-bold">
+                  <Check className="w-5 h-5" />
+                  ¡Ya lo tienes!
                 </div>
-              </>
+              </div>
+            ) : (
+              <Button
+                onClick={handleBuyPack}
+                disabled={purchasing === "pack_mundial"}
+                className="bg-white text-black hover:bg-white/90 font-bold px-8 py-6 text-lg rounded-xl shadow-lg"
+              >
+                {purchasing === "pack_mundial" ? (
+                  "Procesando..."
+                ) : (
+                  <>
+                    <Crown className="w-5 h-5 mr-2 text-yellow-500" />
+                    {WORLD_CUP_PACK_PRICE_LABEL}
+                  </>
+                )}
+              </Button>
             )}
           </div>
-        </>
-      )}
-
-      <div id="tienda" className="scroll-mt-24">
-        {wcOrdered.length > 0 && (
-          <div
-            className="mb-4 p-3 rounded-2xl border"
-            style={{
-              borderColor: "rgba(249,168,37,0.4)",
-              background: "linear-gradient(135deg, rgba(22,163,74,0.14), rgba(220,38,38,0.12))",
-            }}
-          >
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-sm font-black text-white flex items-center gap-1.5">⚽ Especial Mundial</p>
-              <span className="text-[9px] font-black text-amber-300 bg-amber-400/15 border border-amber-400/40 rounded px-1.5 py-0.5 uppercase">Evento</span>
-            </div>
-            <button
-              onClick={handleBuyPack}
-              disabled={busyAction === "buy:pack" || channel === "loading"}
-              className="w-full mb-2.5 flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl transition-all disabled:opacity-50"
-              style={{
-                background: "linear-gradient(135deg, #16a34a, #dc2626)",
-                border: "1px solid rgba(255,255,255,0.25)",
-              }}
-            >
-              <span className="text-left">
-                <span className="block text-[13px] font-black text-white leading-tight">
-                  🏆 Pack Mundial — todo desbloqueado
-                </span>
-                <span className="block text-[10px] font-bold text-white/80 leading-tight">
-                  Consigue TODOS los cosméticos del Mundial de una vez
-                </span>
-              </span>
-              <span className="shrink-0 px-2.5 py-1 rounded-lg bg-white/95 text-[12px] font-black text-emerald-700">
-                {busyAction === "buy:pack" ? "…" : WORLD_CUP_PACK_PRICE_LABEL}
-              </span>
-            </button>
-            <div className="space-y-1.5">
-              {wcOrdered.map((item) => renderRow(item))}
-            </div>
-          </div>
-        )}
-        <div className="flex items-center justify-between mb-1.5 mt-1">
-          <p className="text-xs font-bold text-white/50">Tienda</p>
-          {deals.length > 0 && inventory.dealsResetAt && (
-            <span className="flex items-center gap-1 text-[10px] font-bold text-amber-400/80">
-              <Tag className="w-3 h-3" /> Ofertas nuevas en {formatCountdown(resetIn)}
-            </span>
-          )}
-        </div>
-        <div className="space-y-1.5">
-          {restOrdered.map((item) => renderRow(item))}
         </div>
       </div>
+
+      {/* Categorías */}
+      <div className="flex gap-2 overflow-x-auto pb-2">
+        {[
+          { id: "all", label: "Todos", icon: "🎨" },
+          { id: "avatar", label: "Avatares", icon: "👤" },
+          { id: "frame", label: "Marcos", icon: "🖼️" },
+          { id: "background", label: "Fondos", icon: "🎨" },
+        ].map(cat => (
+          <button
+            key={cat.id}
+            onClick={() => setSelectedCategory(cat.id as any)}
+            className={`px-4 py-2 rounded-xl font-bold text-sm transition-all flex items-center gap-2 ${
+              selectedCategory === cat.id
+                ? "bg-gradient-to-r from-yellow-500 to-orange-500 text-black"
+                : "bg-white/10 text-white/70 hover:bg-white/20"
+            }`}
+          >
+            <span>{cat.icon}</span>
+            {cat.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Grid de cosméticos */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+        {filteredCosmetics.map((item) => {
+          const owned = isOwned(item.id);
+          const equipped = isEquipped(item.id);
+          const rarityBg = RARITY_BG[item.rarity];
+
+          return (
+            <motion.div
+              key={item.id}
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className={`relative rounded-xl border p-3 transition-all ${rarityBg} ${
+                owned ? "opacity-80" : "hover:scale-105 hover:shadow-xl"
+              }`}
+            >
+              {owned && (
+                <div className="absolute top-2 right-2 bg-green-500 rounded-full p-0.5">
+                  <Check className="w-3 h-3 text-white" />
+                </div>
+              )}
+              {equipped && (
+                <div className="absolute top-2 left-2 bg-yellow-500 rounded-full p-0.5">
+                  <Sparkles className="w-3 h-3 text-white" />
+                </div>
+              )}
+              <div className="text-4xl text-center mb-2">{item.icon}</div>
+              <div className="text-center">
+                <p className="text-white font-bold text-sm truncate">{item.name}</p>
+                <p className="text-white/40 text-xs truncate">{item.description}</p>
+                {item.price > 0 && !owned && (
+                  <div className="flex items-center justify-center gap-1 mt-2 text-yellow-400 text-sm font-bold">
+                    <Coins className="w-3 h-3" />
+                    {item.price}
+                  </div>
+                )}
+                {!owned && item.price === 0 && (
+                  <div className="flex items-center justify-center gap-1 mt-2 text-green-400 text-xs">
+                    <Gift className="w-3 h-3" />
+                    Pack exclusivo
+                  </div>
+                )}
+                {!owned && item.price > 0 && (
+                  <Button
+                    onClick={() => handleBuy(item)}
+                    disabled={purchasing === item.id}
+                    className="w-full mt-2 py-1 text-xs bg-gradient-to-r from-yellow-500 to-orange-500 text-black font-bold"
+                  >
+                    {purchasing === item.id ? "..." : "COMPRAR"}
+                  </Button>
+                )}
+                {owned && !equipped && (
+                  <Button
+                    onClick={() => handleEquip(item.type, item.id)}
+                    disabled={equipping === `${item.type}:${item.id}`}
+                    variant="outline"
+                    className="w-full mt-2 py-1 text-xs border-white/20 text-white/80"
+                  >
+                    {equipping === `${item.type}:${item.id}` ? "..." : "EQUIPAR"}
+                  </Button>
+                )}
+                {equipped && (
+                  <div className="w-full mt-2 py-1 text-xs text-center text-yellow-400 font-bold">
+                    EQUIPADO
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          );
+        })}
+      </div>
+
+      {/* Modal de confirmación */}
+      <AnimatePresence>
+        {showPackModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4"
+            onClick={() => setShowPackModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl p-6 max-w-md w-full border border-yellow-500/30"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="text-center">
+                <div className="text-6xl mb-4">🌍</div>
+                <h3 className="text-2xl font-black text-white mb-2">Pack Mundial</h3>
+                <p className="text-white/70 mb-4">
+                  Adquiere 27 cosméticos exclusivos del Mundial por solo <span className="text-yellow-400 font-bold">2,99 €</span>
+                </p>
+                <div className="space-y-2 mb-6 text-left">
+                  <p className="text-white/80 text-sm flex items-center gap-2">⚽ 20 avatares de banderas y fútbol</p>
+                  <p className="text-white/80 text-sm flex items-center gap-2">🖼️ 3 marcos temáticos</p>
+                  <p className="text-white/80 text-sm flex items-center gap-2">🎨 4 fondos exclusivos</p>
+                </div>
+                <div className="flex gap-3">
+                  <Button onClick={() => setShowPackModal(false)} variant="outline" className="flex-1">
+                    Cancelar
+                  </Button>
+                  <Button onClick={handleBuyPack} className="flex-1 bg-gradient-to-r from-yellow-500 to-orange-500 text-black font-bold">
+                    Comprar por 2,99 €
+                  </Button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
