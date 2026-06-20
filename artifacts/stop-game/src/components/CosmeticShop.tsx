@@ -73,24 +73,20 @@ export function CosmeticShop() {
   const [purchasing, setPurchasing] = useState<string | null>(null);
   const [equipping, setEquipping] = useState<string | null>(null);
   const [showPackModal, setShowPackModal] = useState(false);
-  // 🔥 Usamos el mismo hook que PremiumModal para detectar el canal
   const { channel } = usePaymentChannel();
 
   const hasWorldCupPack = inventory?.items?.some(item => 
     WORLD_CUP_COSMETICS.some(c => c.id === item.id)
   ) ?? false;
 
-  // ============================================================
-  // handleBuyPack – Usa el canal de pago detectado por usePaymentChannel
-  // ============================================================
   const handleBuyPack = useCallback(async () => {
     if (channel === "loading") return;
     setPurchasing("pack_mundial");
 
     try {
-      // ✅ Si el canal es "play", usamos Google Play Billing
       if (channel === "play") {
-        const result = await purchaseWorldCupPackOnPlay();
+        // 🔵 GOOGLE PLAY BILLING (dentro de la app)
+        const result = await purchaseWorldCupPackOnPlay(player?.id || "");
         if (result.granted) {
           await refreshInventory();
           celebrateReward();
@@ -98,12 +94,11 @@ export function CosmeticShop() {
           setPurchasing(null);
           return;
         }
-        // Si falla (ej: usuario cancela), no hacemos nada más
         setPurchasing(null);
         return;
       }
 
-      // 🌐 En cualquier otro caso (web, escritorio, etc.) usamos Stripe
+      // 🌐 STRIPE (web o fallback)
       const { url } = await startPackCheckout({ playerId: player?.id || "" });
       if (url) {
         window.location.href = url;
