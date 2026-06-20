@@ -62,8 +62,8 @@ router.post("/verify", async (req: Request, res: Response) => {
 // ============================================================
 router.post("/verify-pack", async (req: Request, res: Response) => {
   try {
-    const { productId, purchaseToken } = req.body;
-    if (!productId || !purchaseToken) {
+    const { playerId, productId, purchaseToken } = req.body;
+    if (!playerId || !productId || !purchaseToken) {
       return res.status(400).json({ error: "Faltan campos obligatorios" });
     }
 
@@ -96,9 +96,11 @@ router.post("/verify-pack", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Compra no válida" });
     }
 
-    // 🔥 Aquí puedes llamar a la función que otorga los cosméticos
-    // Por simplicidad asumimos éxito
-    console.log(`✅ Pack Mundial verificado para token ${purchaseToken}`);
+    // 🔥 CONCEDER LOS COSMÉTICOS DEL PACK MUNDIAL
+    // Aquí llamas a la función que otorga los 27 cosméticos
+    // Por ejemplo: await grantWorldCupPack(playerId);
+    console.log(`✅ Pack Mundial verificado para jugador ${playerId}`);
+
     res.json({ granted: true });
 
   } catch (error: any) {
