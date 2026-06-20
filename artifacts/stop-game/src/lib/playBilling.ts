@@ -6,31 +6,14 @@ const PREMIUM_SKU = "premium_monthly";
 const WORLD_CUP_SKU = "pack_mundial";
 
 /**
- * Detecta si el canal de pago es Google Play o Stripe.
- * Se ejecuta una sola vez al cargar la app.
+ * Detecta si estamos en una TWA de Play Store con Google Play Billing disponible.
+ * Esta función se puede llamar desde cualquier componente sin depender de un hook.
  */
-export async function detectPaymentChannel(): Promise<"play" | "stripe"> {
-  if (typeof window === "undefined") return "stripe";
-
-  // 1. Detectar si estamos en una TWA de Play Store
+export function isPlayBillingAvailable(): boolean {
+  if (typeof window === "undefined") return false;
   const isTwa = document.referrer?.startsWith("android-app://") ?? false;
-
-  // 2. Detectar si la API de Google Play Billing está disponible
-  const hasPlayBilling = typeof window.getDigitalGoodsService === "function";
-
-  // 3. Si estamos en una TWA y la API existe, usamos Google Play
-  if (isTwa && hasPlayBilling) {
-    try {
-      // Verificar que realmente funciona
-      const service = await window.getDigitalGoodsService("https://play.google.com/billing");
-      if (service) return "play";
-    } catch {
-      // Si falla, usamos Stripe
-      return "stripe";
-    }
-  }
-
-  return "stripe";
+  const hasApi = typeof window.getDigitalGoodsService === "function";
+  return isTwa && hasApi;
 }
 
 /**
@@ -61,7 +44,7 @@ export async function fetchPlayProduct(): Promise<PlayProduct | null> {
  * Compra la suscripción Premium (mensual) con Google Play Billing.
  */
 export async function purchasePremiumOnPlay(playerId: string): Promise<{ isPremium: boolean }> {
-  if (typeof window === "undefined" || !window.getDigitalGoodsService) {
+  if (!isPlayBillingAvailable()) {
     throw new Error("Google Play Billing no está disponible en este entorno");
   }
 
@@ -93,10 +76,10 @@ export async function purchasePremiumOnPlay(playerId: string): Promise<{ isPremi
 
 /**
  * Compra el Pack Mundial (pago único) con Google Play Billing.
- * AHORA RECIBE playerId para poder conceder los cosméticos.
+ * AHORA recibe playerId para poder conceder los cosméticos.
  */
 export async function purchaseWorldCupPackOnPlay(playerId: string): Promise<{ granted: boolean }> {
-  if (typeof window === "undefined" || !window.getDigitalGoodsService) {
+  if (!isPlayBillingAvailable()) {
     throw new Error("Google Play Billing no está disponible en este entorno");
   }
 
