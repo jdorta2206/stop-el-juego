@@ -5,8 +5,7 @@ import { Button } from "@/components/ui";
 import { toast } from "sonner";
 import { Check, Crown, Sparkles, Gift, Coins } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { usePaymentChannel } from "@/hooks/usePaymentChannel";
-import { purchaseWorldCupPackOnPlay, isPlayPurchaseCancelled } from "@/lib/playBilling";
+import { purchaseWorldCupPackOnPlay, isPlayPurchaseCancelled, isPlayBillingAvailable } from "@/lib/playBilling";
 import { startPackCheckout, WORLD_CUP_PACK_PRICE_LABEL } from "@/lib/worldCupPack";
 import { celebrateReward } from "@/lib/celebrate";
 
@@ -73,18 +72,22 @@ export function CosmeticShop() {
   const [purchasing, setPurchasing] = useState<string | null>(null);
   const [equipping, setEquipping] = useState<string | null>(null);
   const [showPackModal, setShowPackModal] = useState(false);
-  const { channel } = usePaymentChannel();
 
   const hasWorldCupPack = inventory?.items?.some(item => 
     WORLD_CUP_COSMETICS.some(c => c.id === item.id)
   ) ?? false;
 
+  // ============================================================
+  // handleBuyPack – DETECCIÓN MANUAL (SIN usePaymentChannel)
+  // ============================================================
   const handleBuyPack = useCallback(async () => {
-    if (channel === "loading") return;
     setPurchasing("pack_mundial");
 
+    // 🔍 Detección manual: ¿estamos en una TWA con Play Billing?
+    const isInApp = isPlayBillingAvailable();
+
     try {
-      if (channel === "play") {
+      if (isInApp) {
         // 🔵 GOOGLE PLAY BILLING (dentro de la app)
         const result = await purchaseWorldCupPackOnPlay(player?.id || "");
         if (result.granted) {
@@ -94,6 +97,7 @@ export function CosmeticShop() {
           setPurchasing(null);
           return;
         }
+        // Si falla (ej: usuario cancela), no hacemos nada más
         setPurchasing(null);
         return;
       }
@@ -115,7 +119,7 @@ export function CosmeticShop() {
     } finally {
       setPurchasing(null);
     }
-  }, [channel, player?.id, refreshInventory]);
+  }, [player?.id, refreshInventory]);
 
   const handleEquip = useCallback(async (kind: any, value: string | null) => {
     setEquipping(`${kind}:${value}`);
@@ -196,7 +200,7 @@ export function CosmeticShop() {
             ) : (
               <Button
                 onClick={handleBuyPack}
-                disabled={purchasing === "pack_mundial" || channel === "loading"}
+                disabled={purchasing === "pack_mundial"}
                 className="bg-white text-black hover:bg-white/90 font-bold px-8 py-6 text-lg rounded-xl shadow-lg"
               >
                 {purchasing === "pack_mundial" ? (
