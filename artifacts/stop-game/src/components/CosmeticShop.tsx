@@ -2,10 +2,10 @@ import { useState, useCallback } from "react";
 import { usePlayer } from "@/hooks/use-player";
 import { useInventory } from "@/hooks/useInventory";
 import { Button } from "@/components/ui";
-import { getApiUrl } from "@/lib/utils";
 import { toast } from "sonner";
 import { Check, Crown, Sparkles, Gift, Coins } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { usePaymentChannel } from "@/hooks/usePaymentChannel";
 import { purchaseWorldCupPackOnPlay, isPlayPurchaseCancelled } from "@/lib/playBilling";
 import { startPackCheckout, WORLD_CUP_PACK_PRICE_LABEL } from "@/lib/worldCupPack";
 import { celebrateReward } from "@/lib/celebrate";
@@ -73,25 +73,23 @@ export function CosmeticShop() {
   const [purchasing, setPurchasing] = useState<string | null>(null);
   const [equipping, setEquipping] = useState<string | null>(null);
   const [showPackModal, setShowPackModal] = useState(false);
+  // 🔥 Usamos el mismo hook que PremiumModal para detectar el canal
+  const { channel } = usePaymentChannel();
 
   const hasWorldCupPack = inventory?.items?.some(item => 
     WORLD_CUP_COSMETICS.some(c => c.id === item.id)
   ) ?? false;
 
   // ============================================================
-  // COMPRA DEL PACK MUNDIAL – DETECCIÓN ROBUSTA
+  // handleBuyPack – Usa el canal de pago detectado por usePaymentChannel
   // ============================================================
   const handleBuyPack = useCallback(async () => {
+    if (channel === "loading") return;
     setPurchasing("pack_mundial");
 
-    // Detectar si estamos en una TWA de Play Store
-    const isInApp = typeof window !== "undefined" &&
-      document.referrer?.startsWith("android-app://") &&
-      typeof window.getDigitalGoodsService === "function";
-
     try {
-      if (isInApp) {
-        // 🔵 Usar Google Play Billing dentro de la app
+      // ✅ Si el canal es "play", usamos Google Play Billing
+      if (channel === "play") {
         const result = await purchaseWorldCupPackOnPlay();
         if (result.granted) {
           await refreshInventory();
@@ -105,7 +103,7 @@ export function CosmeticShop() {
         return;
       }
 
-      // 🌐 En la web o si falla la detección, usar Stripe
+      // 🌐 En cualquier otro caso (web, escritorio, etc.) usamos Stripe
       const { url } = await startPackCheckout({ playerId: player?.id || "" });
       if (url) {
         window.location.href = url;
@@ -113,7 +111,6 @@ export function CosmeticShop() {
         throw new Error("No se recibió URL de Stripe");
       }
     } catch (error: any) {
-      // Si el usuario cancela la compra en Google Play, no mostramos error
       if (isPlayPurchaseCancelled(error)) {
         setPurchasing(null);
         return;
@@ -123,7 +120,7 @@ export function CosmeticShop() {
     } finally {
       setPurchasing(null);
     }
-  }, [player?.id, refreshInventory]);
+  }, [channel, player?.id, refreshInventory]);
 
   const handleEquip = useCallback(async (kind: any, value: string | null) => {
     setEquipping(`${kind}:${value}`);
@@ -204,7 +201,7 @@ export function CosmeticShop() {
             ) : (
               <Button
                 onClick={handleBuyPack}
-                disabled={purchasing === "pack_mundial"}
+                disabled={purchasing === "pack_mundial" || channel === "loading"}
                 className="bg-white text-black hover:bg-white/90 font-bold px-8 py-6 text-lg rounded-xl shadow-lg"
               >
                 {purchasing === "pack_mundial" ? (
