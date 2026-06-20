@@ -21,7 +21,6 @@ export async function purchasePremiumOnPlay(playerId: string): Promise<{ isPremi
     throw new Error(`Error en la compra: código ${responseCode}`);
   }
 
-  // Verificar con el backend
   const res = await fetch("/api/billing/play/verify", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -56,7 +55,6 @@ export async function purchaseWorldCupPackOnPlay(): Promise<{ granted: boolean }
     throw new Error(`Error en la compra: código ${responseCode}`);
   }
 
-  // Verificar con el backend
   const res = await fetch("/api/billing/play/verify-pack", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -74,16 +72,10 @@ export async function purchaseWorldCupPackOnPlay(): Promise<{ granted: boolean }
   return { granted: true };
 }
 
-/**
- * Detecta si una excepción es de cancelación por el usuario.
- */
 export function isPlayPurchaseCancelled(error: any): boolean {
   return error?.code === "PURCHASE_CANCELLED" || error?.message?.includes("cancel");
 }
 
-/**
- * Detecta si el error indica que Play Billing no está disponible.
- */
 export function isPlayBillingUnavailable(error: any): boolean {
   return error?.message?.includes("Google Play Billing no está disponible");
 }
