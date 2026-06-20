@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { usePlayer } from "@/hooks/use-player";
 import { useInventory } from "@/hooks/useInventory";
 import { Button } from "@/components/ui";
@@ -6,7 +6,6 @@ import { getApiUrl } from "@/lib/utils";
 import { toast } from "sonner";
 import { Check, Crown, Sparkles, Gift, Coins } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { usePaymentChannel } from "@/hooks/usePaymentChannel";
 import { purchaseWorldCupPackOnPlay, isPlayPurchaseCancelled } from "@/lib/playBilling";
 import { startPackCheckout, WORLD_CUP_PACK_PRICE_LABEL } from "@/lib/worldCupPack";
 import { celebrateReward } from "@/lib/celebrate";
@@ -37,7 +36,6 @@ const RARITY_BG = {
   legendary: "bg-gradient-to-r from-yellow-500/20 to-orange-500/20 border-yellow-500/30",
 };
 
-// Cosmeticos del Pack Mundial (27 ítems)
 const WORLD_CUP_COSMETICS: CosmeticItem[] = [
   { id: "avatar_wc_ball", name: "Balón Mundial", description: "Avatar del balón oficial", price: 0, type: "avatar", rarity: "epic", icon: "⚽" },
   { id: "avatar_wc_jersey", name: "Camiseta Mundial", description: "Avatar de la camiseta", price: 0, type: "avatar", rarity: "epic", icon: "👕" },
@@ -75,32 +73,25 @@ export function CosmeticShop() {
   const [purchasing, setPurchasing] = useState<string | null>(null);
   const [equipping, setEquipping] = useState<string | null>(null);
   const [showPackModal, setShowPackModal] = useState(false);
-  const { channel } = usePaymentChannel();
 
   const hasWorldCupPack = inventory?.items?.some(item => 
     WORLD_CUP_COSMETICS.some(c => c.id === item.id)
   ) ?? false;
 
   // ============================================================
-  // handleBuyPack – COMPRA DEL PACK MUNDIAL (Google Play o Stripe)
+  // COMPRA DEL PACK MUNDIAL – DETECCIÓN ROBUSTA
   // ============================================================
   const handleBuyPack = useCallback(async () => {
-    if (channel === "loading") return;
     setPurchasing("pack_mundial");
 
-    const goStripe = async () => {
-      const { url } = await startPackCheckout({ playerId: player?.id || "" });
-      window.location.href = url;
-    };
+    // Detectar si estamos en una TWA de Play Store
+    const isInApp = typeof window !== "undefined" &&
+      document.referrer?.startsWith("android-app://") &&
+      typeof window.getDigitalGoodsService === "function";
 
     try {
-      // ✅ DETECTAR SI ESTAMOS DENTRO DE LA APP DE PLAY STORE
-      const isTwa = typeof window !== "undefined" &&
-        document.referrer?.startsWith("android-app://") &&
-        typeof window.getDigitalGoodsService === "function";
-
-      if (channel === "play" || isTwa) {
-        // 🔵 USA GOOGLE PLAY BILLING
+      if (isInApp) {
+        // 🔵 Usar Google Play Billing dentro de la app
         const result = await purchaseWorldCupPackOnPlay();
         if (result.granted) {
           await refreshInventory();
@@ -109,13 +100,20 @@ export function CosmeticShop() {
           setPurchasing(null);
           return;
         }
+        // Si falla (ej: usuario cancela), no hacemos nada más
         setPurchasing(null);
         return;
       }
 
-      // 🌐 EN LA WEB USA STRIPE
-      await goStripe();
+      // 🌐 En la web o si falla la detección, usar Stripe
+      const { url } = await startPackCheckout({ playerId: player?.id || "" });
+      if (url) {
+        window.location.href = url;
+      } else {
+        throw new Error("No se recibió URL de Stripe");
+      }
     } catch (error: any) {
+      // Si el usuario cancela la compra en Google Play, no mostramos error
       if (isPlayPurchaseCancelled(error)) {
         setPurchasing(null);
         return;
@@ -125,7 +123,7 @@ export function CosmeticShop() {
     } finally {
       setPurchasing(null);
     }
-  }, [channel, player?.id, refreshInventory]);
+  }, [player?.id, refreshInventory]);
 
   const handleEquip = useCallback(async (kind: any, value: string | null) => {
     setEquipping(`${kind}:${value}`);
