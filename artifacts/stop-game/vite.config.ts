@@ -69,6 +69,9 @@ const replitPlugins =
       ]
     : [];
 
+// Generamos un timestamp único para cada build
+const buildTimestamp = Date.now();
+
 export default defineConfig({
   base: basePath,
   plugins: [react(), tailwindcss(), wellKnownAssetlinks(), ...replitPlugins],
@@ -82,6 +85,14 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        // Añadimos el timestamp al nombre de los archivos para forzar cache-busting
+        entryFileNames: `assets/[name].[hash].${buildTimestamp}.js`,
+        chunkFileNames: `assets/[name].[hash].${buildTimestamp}.js`,
+        assetFileNames: `assets/[name].[hash].[ext]`,
+      },
+    },
   },
   server: {
     port,
