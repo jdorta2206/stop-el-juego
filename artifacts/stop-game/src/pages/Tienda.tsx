@@ -27,7 +27,6 @@ export default function Tienda() {
   return (
     <Layout>
       <div className="max-w-3xl mx-auto px-4 py-6">
-        {/* Título y monedas */}
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-3xl font-black text-white flex items-center gap-2">
             <ShoppingBag className="w-7 h-7 text-secondary" />
@@ -40,17 +39,14 @@ export default function Tienda() {
           </div>
         </div>
 
-        {/* Pack Mundial - BANNER DESTACADO (con la lógica correcta) */}
         <div className="mb-8">
           <CosmeticShop />
         </div>
 
-        {/* El resto de la tienda (cosméticos con monedas) */}
         <div className="mt-6">
           <CosmeticShop showInventory={true} />
         </div>
 
-        {/* Botón Premium (opcional) */}
         <div className="mt-8 text-center">
           <Button
             onClick={() => setShowPremiumModal(true)}
