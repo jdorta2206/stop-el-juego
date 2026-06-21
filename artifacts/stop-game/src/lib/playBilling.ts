@@ -6,71 +6,22 @@ const PREMIUM_SKU = "premium_monthly";
 const WORLD_CUP_SKU = "pack_mundial";
 
 /**
- * Detecta si estamos en una TWA de Play Store con Google Play Billing disponible.
- * Ahora depende de window.getDigitalGoodsService, no de document.referrer.
+ * Detecta si el canal de pago es Google Play o Stripe.
+ * Esta función se usa en otros componentes (AdSystem, usePremium, etc.)
  */
-export function isPlayBillingAvailable(): boolean {
+export function detectPaymentChannel(): "play" | "stripe" {
+  if (typeof window === "undefined") return "stripe";
+  const isTwa = document.referrer?.startsWith("android-app://") ?? false;
+  const hasApi = typeof window.getDigitalGoodsService === "function";
+  return isTwa && hasApi ? "play" : "stripe";
+}
+
+/**
+ * Detecta si estamos en una TWA de Play Store (para mostrar banners, etc.)
+ */
+export function hasAndroidAppReferrer(): boolean {
   if (typeof window === "undefined") return false;
-  // ✅ Priorizamos la presencia de la API, no el referrer
-  return typeof window.getDigitalGoodsService === "function";
-}
-
-/**
- * Obtiene los detalles del producto de Google Play (para mostrar el precio localizado).
- */
-export async function fetchPlayProduct(): Promise<PlayProduct | null> {
-  if (typeof window === "undefined" || !window.getDigitalGoodsService) {
-    return null;
-  }
-
-  try {
-    const service = await window.getDigitalGoodsService("https://play.google.com/billing");
-    const details = await service.getDetails([PREMIUM_SKU]);
-    if (details && details.length > 0) {
-      return {
-        id: details[0].productId,
-        title: details[0].title,
-        priceLabel: details[0].price,
-      };
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Compra la suscripción Premium (mensual) con Google Play Billing.
- */
-export async function purchasePremiumOnPlay(playerId: string): Promise<{ isPremium: boolean }> {
-  if (!isPlayBillingAvailable()) {
-    throw new Error("Google Play Billing no está disponible en este entorno");
-  }
-
-  const service = await window.getDigitalGoodsService("https://play.google.com/billing");
-  const { responseCode, purchaseData } = await service.purchase(PREMIUM_SKU);
-
-  if (responseCode !== 0) {
-    if (responseCode === 5) throw new Error("PURCHASE_CANCELLED");
-    throw new Error(`Error en la compra: código ${responseCode}`);
-  }
-
-  const res = await fetch("/api/billing/play/verify", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      playerId,
-      productId: PREMIUM_SKU,
-      purchaseToken: purchaseData.purchaseToken,
-    }),
-  });
-
-  const data = await res.json();
-  if (!res.ok || !data.isPremium) {
-    throw new Error(data.error || "Error al verificar la suscripción");
-  }
-
-  return { isPremium: true };
+  return document.referrer?.startsWith("android-app://") ?? false;
 }
 
 /**
@@ -78,7 +29,7 @@ export async function purchasePremiumOnPlay(playerId: string): Promise<{ isPremi
  * Recibe playerId para conceder los cosméticos.
  */
 export async function purchaseWorldCupPackOnPlay(playerId: string): Promise<{ granted: boolean }> {
-  if (!isPlayBillingAvailable()) {
+  if (typeof window === "undefined" || !window.getDigitalGoodsService) {
     throw new Error("Google Play Billing no está disponible en este entorno");
   }
 
@@ -108,16 +59,16 @@ export async function purchaseWorldCupPackOnPlay(playerId: string): Promise<{ gr
   return { granted: true };
 }
 
+/**
+ * Detecta si el usuario canceló la compra.
+ */
 export function isPlayPurchaseCancelled(error: any): boolean {
   return error?.code === "PURCHASE_CANCELLED" || error?.message?.includes("cancel");
 }
 
+/**
+ * Detecta si el error indica que Play Billing no está disponible.
+ */
 export function isPlayBillingUnavailable(error: any): boolean {
   return error?.message?.includes("Google Play Billing no está disponible");
-}
-
-export interface PlayProduct {
-  id: string;
-  title: string;
-  priceLabel: string;
 }
