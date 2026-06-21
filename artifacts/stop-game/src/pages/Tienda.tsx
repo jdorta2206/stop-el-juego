@@ -1,78 +1,65 @@
-import { Link } from "wouter";
-import { motion } from "framer-motion";
-import { ArrowLeft, ShoppingBag, Sparkles } from "lucide-react";
-import { Layout } from "@/components/Layout";
+import { useState } from "react";
 import { usePlayer } from "@/hooks/use-player";
 import { useInventory } from "@/hooks/useInventory";
+import { Layout } from "@/components/Layout";
 import { CosmeticShop } from "@/components/CosmeticShop";
+import { Button } from "@/components/ui";
+import { useLocation } from "wouter";
+import { motion } from "framer-motion";
+import { ShoppingBag, Crown, Sparkles, Gift } from "lucide-react";
 
 export default function Tienda() {
-  const { player: me, isLoaded } = usePlayer();
-  const { inventory, refresh, buy, equip } = useInventory(me?.id);
+  const { player } = usePlayer();
+  const { inventory, refresh, buy, equip } = useInventory(player?.id || null);
+  const [, setLocation] = useLocation();
+  const [showPremiumModal, setShowPremiumModal] = useState(false);
+
+  if (!player || !inventory) {
+    return (
+      <Layout>
+        <div className="flex-1 flex items-center justify-center">
+          <div className="animate-pulse text-white/40">Cargando tienda...</div>
+        </div>
+      </Layout>
+    );
+  }
 
   return (
     <Layout>
-      <div className="max-w-2xl mx-auto w-full px-4 pb-28 pt-2 space-y-4">
-        <Link href="/" className="inline-flex items-center gap-1.5 text-white/50 hover:text-white/80 text-sm font-bold transition-colors">
-          <ArrowLeft size={16} /> Inicio
-        </Link>
-
-        {/* Hero */}
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="relative overflow-hidden p-5 rounded-3xl border border-white/10"
-          style={{ background: "linear-gradient(135deg, rgba(249,168,37,0.18), rgba(220,38,38,0.12))" }}
-        >
-          <div className="flex items-center gap-3">
-            <span className="flex items-center justify-center w-12 h-12 rounded-2xl bg-amber-400/20 border border-amber-400/40 shrink-0">
-              <ShoppingBag className="w-6 h-6 text-amber-300" />
+      <div className="max-w-3xl mx-auto px-4 py-6">
+        {/* Título y monedas */}
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-3xl font-black text-white flex items-center gap-2">
+            <ShoppingBag className="w-7 h-7 text-secondary" />
+            Tienda
+          </h1>
+          <div className="flex items-center gap-2 bg-amber-400/15 px-4 py-2 rounded-full border border-amber-400/40">
+            <span className="text-amber-400 font-black text-sm">
+              🪙 {inventory.coins}
             </span>
-            <div>
-              <h1 className="font-display font-black text-2xl leading-tight">Tienda</h1>
-              <p className="text-sm text-white/60 leading-snug">
-                Avatares, marcos y fondos para personalizar tu perfil.
-              </p>
-            </div>
           </div>
-          <p className="mt-3 text-[13px] text-white/70 flex items-center gap-1.5">
-            <Sparkles className="w-4 h-4 text-amber-300 shrink-0" />
-            Gana monedas jugando y desbloquea cosméticos exclusivos.
-          </p>
-        </motion.div>
+        </div>
 
-        {!isLoaded ? (
-          <div className="text-center py-16 text-white/40 text-sm">Cargando…</div>
-        ) : !me?.id ? (
-          <div className="text-center py-16 px-6 rounded-3xl border border-white/10 bg-black/30 space-y-3">
-            <p className="text-4xl">🛍️</p>
-            <p className="font-bold text-white/80">Crea tu perfil para abrir la tienda</p>
-            <p className="text-sm text-white/50">Juega una partida para empezar a ganar monedas y comprar cosméticos.</p>
-            <Link
-              href="/"
-              className="inline-block mt-1 px-5 py-2.5 rounded-xl font-black text-sm bg-amber-400/20 border border-amber-400/50 text-amber-300 hover:bg-amber-400/30 transition-colors"
-            >
-              Empezar a jugar
-            </Link>
-          </div>
-        ) : !inventory ? (
-          <div className="text-center py-16 text-white/40 text-sm">Cargando tienda…</div>
-        ) : (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.08 }}
-            className="p-4 rounded-2xl border border-white/10 bg-black/30"
+        {/* Pack Mundial - BANNER DESTACADO (con la lógica correcta) */}
+        <div className="mb-8">
+          <CosmeticShop />
+        </div>
+
+        {/* El resto de la tienda (cosméticos con monedas) */}
+        <div className="mt-6">
+          <CosmeticShop showInventory={true} />
+        </div>
+
+        {/* Botón Premium (opcional) */}
+        <div className="mt-8 text-center">
+          <Button
+            onClick={() => setShowPremiumModal(true)}
+            className="bg-gradient-to-r from-yellow-500 to-orange-500 text-black font-bold px-6 py-3 rounded-xl shadow-lg"
           >
-            <CosmeticShop
-              playerId={me.id}
-              inventory={inventory}
-              refresh={refresh}
-              buy={buy}
-              equip={equip}
-            />
-          </motion.div>
-        )}
+            <Crown className="w-5 h-5 mr-2" />
+            Hacerse Premium
+          </Button>
+        </div>
       </div>
     </Layout>
   );
