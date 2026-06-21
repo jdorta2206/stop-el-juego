@@ -80,57 +80,62 @@ export function CosmeticShop() {
   ) ?? false;
 
   // ============================================================
-  // handleBuyPack – con ALERTA de diagnóstico
+  // handleBuyPack – con fallback: intenta Google Play, si falla usa Stripe
   // ============================================================
   const handleBuyPack = useCallback(async () => {
     setPurchasing("pack_mundial");
 
-    // 🔍 DIAGNÓSTICO CON ALERTA (se ve en el móvil)
-    const hasPlayBilling = typeof window !== "undefined" &&
-      typeof window.getDigitalGoodsService === "function";
-
-    alert(
-      `🔍 Diagnóstico:\n` +
-      `- channel: ${channel}\n` +
-      `- getDigitalGoodsService: ${hasPlayBilling ? "✅ disponible" : "❌ no disponible"}\n` +
-      `- isInApp (forzado): ${hasPlayBilling || channel === "play"}`
-    );
-
-    const isInApp = hasPlayBilling || channel === "play";
-
     try {
-      if (isInApp) {
-        // 🔵 GOOGLE PLAY BILLING
-        const result = await purchaseWorldCupPackOnPlay(player?.id || "");
-        if (result.granted) {
-          await refreshInventory();
-          celebrateReward();
-          window.alert("¡Pack Mundial desbloqueado!");
-          setPurchasing(null);
-          return;
+      // 🔵 PRIMERO INTENTAMOS GOOGLE PLAY BILLING
+      // Si está disponible, se abrirá la ventana nativa de Google Play.
+      const result = await purchaseWorldCupPackOnPlay(player?.id || "");
+      if (result.granted) {
+        await refreshInventory();
+        celebrateReward();
+        window.alert("¡Pack Mundial desbloqueado! Ya tienes todos los cosméticos del Mundial. ⚽");
+        setPurchasing(null);
+        return;
+      }
+      // Si no se concede, no hacemos nada más
+      setPurchasing(null);
+      return;
+    } catch (error: any) {
+      // Si el usuario cancela la compra, no mostramos Stripe
+      if (isPlayPurchaseCancelled(error)) {
+        setPurchasing(null);
+        return;
+      }
+
+      // Si el error es que Google Play Billing no está disponible (por ejemplo, en web),
+      // entonces usamos Stripe como fallback.
+      const isUnavailable = error?.message?.includes("Google Play Billing no está disponible") ||
+        error?.message?.includes("getDigitalGoodsService") ||
+        error?.code === "PLAY_BILLING_UNAVAILABLE";
+
+      if (isUnavailable) {
+        // 🌐 STRIPE (fallback)
+        try {
+          const { url } = await startPackCheckout({ playerId: player?.id || "" });
+          if (url) {
+            window.location.href = url;
+          } else {
+            throw new Error("No se recibió URL de Stripe");
+          }
+        } catch (stripeError: any) {
+          console.error("Error al iniciar Stripe:", stripeError);
+          window.alert("No se pudo iniciar el pago. Inténtalo de nuevo.");
         }
         setPurchasing(null);
         return;
       }
 
-      // 🌐 STRIPE (fallback)
-      const { url } = await startPackCheckout({ playerId: player?.id || "" });
-      if (url) {
-        window.location.href = url;
-      } else {
-        throw new Error("No se recibió URL de Stripe");
-      }
-    } catch (error: any) {
-      if (isPlayPurchaseCancelled(error)) {
-        setPurchasing(null);
-        return;
-      }
+      // Otro tipo de error (ej: producto no encontrado, error de red)
       console.error("Error al comprar Pack Mundial:", error);
       window.alert(error instanceof Error ? error.message : "No se pudo completar la compra");
     } finally {
       setPurchasing(null);
     }
-  }, [channel, player?.id, refreshInventory]);
+  }, [player?.id, refreshInventory]);
 
   const handleEquip = useCallback(async (kind: any, value: string | null) => {
     setEquipping(`${kind}:${value}`);
