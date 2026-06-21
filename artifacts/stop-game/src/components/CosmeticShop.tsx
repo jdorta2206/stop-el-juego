@@ -80,25 +80,32 @@ export function CosmeticShop() {
   ) ?? false;
 
   // ============================================================
-  // handleBuyPack – DETECCIÓN ROBUSTA (sin depender de document.referrer)
+  // handleBuyPack – con ALERTA de diagnóstico
   // ============================================================
   const handleBuyPack = useCallback(async () => {
     setPurchasing("pack_mundial");
 
-    // 🔍 Detección robusta: priorizamos window.getDigitalGoodsService
+    // 🔍 DIAGNÓSTICO CON ALERTA (se ve en el móvil)
     const hasPlayBilling = typeof window !== "undefined" &&
       typeof window.getDigitalGoodsService === "function";
+
+    alert(
+      `🔍 Diagnóstico:\n` +
+      `- channel: ${channel}\n` +
+      `- getDigitalGoodsService: ${hasPlayBilling ? "✅ disponible" : "❌ no disponible"}\n` +
+      `- isInApp (forzado): ${hasPlayBilling || channel === "play"}`
+    );
 
     const isInApp = hasPlayBilling || channel === "play";
 
     try {
       if (isInApp) {
-        // 🔵 GOOGLE PLAY BILLING (dentro de la app)
+        // 🔵 GOOGLE PLAY BILLING
         const result = await purchaseWorldCupPackOnPlay(player?.id || "");
         if (result.granted) {
           await refreshInventory();
           celebrateReward();
-          window.alert("¡Pack Mundial desbloqueado! Ya tienes todos los cosméticos del Mundial. ⚽");
+          window.alert("¡Pack Mundial desbloqueado!");
           setPurchasing(null);
           return;
         }
@@ -106,7 +113,7 @@ export function CosmeticShop() {
         return;
       }
 
-      // 🌐 STRIPE (web o fallback)
+      // 🌐 STRIPE (fallback)
       const { url } = await startPackCheckout({ playerId: player?.id || "" });
       if (url) {
         window.location.href = url;
