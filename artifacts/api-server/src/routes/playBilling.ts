@@ -2,6 +2,7 @@ import { Router, Request, Response } from "express";
 import { db, playerScoresTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { google } from "googleapis";
+import { grantWorldCupPack } from "../lib/worldCupPack"; // <-- IMPORTANTE: ajusta la ruta si es necesario
 
 const router = Router();
 
@@ -58,7 +59,7 @@ router.post("/verify", async (req: Request, res: Response) => {
 });
 
 // ============================================================
-// VERIFICAR PACK MUNDIAL (pago único)
+// VERIFICAR PACK MUNDIAL (pago único) – CON GRANT
 // ============================================================
 router.post("/verify-pack", async (req: Request, res: Response) => {
   try {
@@ -97,11 +98,14 @@ router.post("/verify-pack", async (req: Request, res: Response) => {
     }
 
     // 🔥 CONCEDER LOS COSMÉTICOS DEL PACK MUNDIAL
-    // Aquí llamas a la función que otorga los 27 cosméticos
-    // Por ejemplo: await grantWorldCupPack(playerId);
-    console.log(`✅ Pack Mundial verificado para jugador ${playerId}`);
+    const grantResult = await grantWorldCupPack(playerId);
+    if (!grantResult.ok) {
+      console.error("❌ Error al conceder el pack:", grantResult.error);
+      return res.status(500).json({ error: "Error al conceder los cosméticos" });
+    }
 
-    res.json({ granted: true });
+    console.log(`✅ Pack Mundial concedido a ${playerId}`);
+    res.json({ granted: true, items: grantResult.granted, total: grantResult.total });
 
   } catch (error: any) {
     console.error("❌ Error en /verify-pack:", error.message);
