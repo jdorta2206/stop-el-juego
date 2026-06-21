@@ -8,43 +8,36 @@ export const WORLD_CUP_PACK_PRICE_LABEL = "2,99 €";
 
 /**
  * Inicia el proceso de compra del Pack Mundial.
- * - Si estamos en la app de Play Store (Google Play Billing disponible), intenta con Google Play.
- * - Si falla o no está disponible, usa Stripe como fallback.
+ * - SIEMPRE intenta Google Play Billing primero (si está disponible).
+ * - Si falla (porque no está disponible o por otro error), usa Stripe como fallback.
  */
 export async function startPackCheckout(opts: {
   playerId: string;
   email?: string;
 }): Promise<{ url: string }> {
-  // ✅ DETECTAR SI ESTAMOS EN LA APP DE PLAY STORE
-  const hasPlayBilling = typeof window !== "undefined" &&
-    typeof window.getDigitalGoodsService === "function";
-
-  if (hasPlayBilling) {
-    // 🔵 USAR GOOGLE PLAY BILLING
-    try {
-      console.log("🔵 Intentando Google Play Billing para Pack Mundial");
-      const result = await purchaseWorldCupPackOnPlay(opts.playerId);
-      console.log("✅ Resultado de Google Play:", result);
-      if (result.granted) {
-        // Éxito: recargar la página para actualizar el inventario
-        window.location.reload();
-        // Devolvemos una URL vacía pero con un flag de éxito
-        return { url: "" };
-      }
-      throw new Error("No se pudo completar la compra con Google Play");
-    } catch (error: any) {
-      if (isPlayPurchaseCancelled(error)) {
-        // Usuario canceló, no hacemos nada
-        console.log("ℹ️ Usuario canceló la compra en Google Play");
-        return { url: "" };
-      }
-      // Si falla por otro motivo, intentamos con Stripe como fallback
-      console.warn("❌ Google Play Billing falló, usando Stripe como fallback:", error.message);
-      // Continuamos a Stripe
+  // 🔵 INTENTAR GOOGLE PLAY BILLING SIEMPRE (sin comprobación previa)
+  try {
+    console.log("🔵 Intentando Google Play Billing para Pack Mundial");
+    const result = await purchaseWorldCupPackOnPlay(opts.playerId);
+    console.log("✅ Resultado de Google Play:", result);
+    if (result.granted) {
+      // Éxito: recargar la página para actualizar el inventario
+      window.location.reload();
+      return { url: "" };
     }
+    // Si no se concede, lanzamos error para ir a Stripe
+    throw new Error("No se pudo completar la compra con Google Play");
+  } catch (error: any) {
+    // Si el usuario cancela, no hacemos nada
+    if (isPlayPurchaseCancelled(error)) {
+      console.log("ℹ️ Usuario canceló la compra en Google Play");
+      return { url: "" };
+    }
+    // Si falla por cualquier otro motivo (incluyendo no disponible), usamos Stripe
+    console.warn("❌ Google Play Billing falló, usando Stripe:", error.message);
   }
 
-  // 🌐 STRIPE (fallback para web o si Play Billing falla)
+  // 🌐 STRIPE (fallback)
   console.log("🌐 Usando Stripe para Pack Mundial");
   const res = await fetch(`${API_BASE}/api/stripe/checkout-pack`, {
     method: "POST",
@@ -59,7 +52,6 @@ export async function startPackCheckout(opts: {
 
 /**
  * Confirma la compra del Pack Mundial (Stripe) y concede los cosméticos.
- * Solo se usa después de Stripe.
  */
 export async function claimStripePack(opts: {
   playerId: string;
