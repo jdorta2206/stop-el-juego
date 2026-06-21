@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { Check, Crown, Sparkles, Gift, Coins } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { usePaymentChannel } from "@/hooks/usePaymentChannel";
-import { purchaseWorldCupPackOnPlay, isPlayPurchaseCancelled } from "@/lib/playBilling";
+import { purchaseWorldCupPackOnPlay, isPlayPurchaseCancelled, isPlayBillingUnavailable } from "@/lib/playBilling";
 import { startPackCheckout, WORLD_CUP_PACK_PRICE_LABEL } from "@/lib/worldCupPack";
 import { celebrateReward } from "@/lib/celebrate";
 
@@ -80,14 +80,13 @@ export function CosmeticShop() {
   ) ?? false;
 
   // ============================================================
-  // handleBuyPack – con fallback: intenta Google Play, si falla usa Stripe
+  // handleBuyPack – con fallback y alerta de error
   // ============================================================
   const handleBuyPack = useCallback(async () => {
     setPurchasing("pack_mundial");
 
     try {
-      // 🔵 PRIMERO INTENTAMOS GOOGLE PLAY BILLING
-      // Si está disponible, se abrirá la ventana nativa de Google Play.
+      // 🔵 INTENTAR GOOGLE PLAY BILLING
       const result = await purchaseWorldCupPackOnPlay(player?.id || "");
       if (result.granted) {
         await refreshInventory();
@@ -96,24 +95,18 @@ export function CosmeticShop() {
         setPurchasing(null);
         return;
       }
-      // Si no se concede, no hacemos nada más
+      // Si no se concede, no hacemos nada
       setPurchasing(null);
       return;
     } catch (error: any) {
-      // Si el usuario cancela la compra, no mostramos Stripe
+      // Si el usuario cancela, no mostramos Stripe
       if (isPlayPurchaseCancelled(error)) {
         setPurchasing(null);
         return;
       }
 
-      // Si el error es que Google Play Billing no está disponible (por ejemplo, en web),
-      // entonces usamos Stripe como fallback.
-      const isUnavailable = error?.message?.includes("Google Play Billing no está disponible") ||
-        error?.message?.includes("getDigitalGoodsService") ||
-        error?.code === "PLAY_BILLING_UNAVAILABLE";
-
-      if (isUnavailable) {
-        // 🌐 STRIPE (fallback)
+      // Si el error es "no disponible", usamos Stripe como fallback
+      if (isPlayBillingUnavailable(error)) {
         try {
           const { url } = await startPackCheckout({ playerId: player?.id || "" });
           if (url) {
@@ -129,9 +122,14 @@ export function CosmeticShop() {
         return;
       }
 
-      // Otro tipo de error (ej: producto no encontrado, error de red)
+      // 🔴 ERROR DESCONOCIDO: mostrar alerta con el error para que lo veas
       console.error("Error al comprar Pack Mundial:", error);
-      window.alert(error instanceof Error ? error.message : "No se pudo completar la compra");
+      window.alert(
+        `❌ Error al comprar el Pack Mundial:\n\n` +
+        `${error.message || "Error desconocido"}\n\n` +
+        `Revisa que el producto "pack_mundial" exista en Google Play Console.\n` +
+        `Si el error persiste, contacta con soporte.`
+      );
     } finally {
       setPurchasing(null);
     }
