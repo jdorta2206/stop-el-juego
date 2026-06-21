@@ -1,31 +1,21 @@
-# Usar una imagen de Node con pnpm preinstalado
+# Etapa de construcción
 FROM node:20-slim AS builder
 
 # Instalar pnpm globalmente
 RUN npm install -g pnpm
 
-# Crear directorio de trabajo
 WORKDIR /app
 
-# Copiar archivos de configuración del workspace
-COPY pnpm-workspace.yaml ./
-COPY package.json ./
-COPY pnpm-lock.yaml* ./
-
-# Copiar los package.json de los workspaces
-COPY artifacts/stop-game/package.json ./artifacts/stop-game/package.json
-COPY artifacts/api-server/package.json ./artifacts/api-server/package.json
+# Copiar TODOS los archivos del repositorio (incluye todos los workspaces)
+COPY . .
 
 # Instalar dependencias (sin --frozen-lockfile)
 RUN pnpm install --no-frozen-lockfile
 
-# Copiar el resto del código fuente
-COPY . .
-
 # Construir el frontend y el backend
 RUN pnpm run build:railway
 
-# Segunda etapa: imagen ligera para producción
+# --- Segunda etapa: imagen ligera para producción ---
 FROM node:20-slim
 
 WORKDIR /app
@@ -36,11 +26,11 @@ COPY --from=builder /app/node_modules /app/node_modules
 COPY --from=builder /app/package.json /app/package.json
 COPY --from=builder /app/pnpm-workspace.yaml /app/pnpm-workspace.yaml
 
-# Instalar solo las dependencias de producción (opcional)
+# Instalar solo dependencias de producción (opcional, pero ahorra espacio)
 RUN npm install -g pnpm && pnpm install --prod --no-frozen-lockfile
 
-# Exponer el puerto que usa el backend (Railway asigna el puerto)
+# Exponer el puerto que usa el backend
 EXPOSE 8080
 
-# Comando de inicio (el mismo que antes)
+# Comando de inicio
 CMD ["pnpm", "run", "start:railway"]
