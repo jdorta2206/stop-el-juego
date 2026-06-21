@@ -1,12 +1,12 @@
-import { useState, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { usePlayer } from "@/hooks/use-player";
 import { useInventory } from "@/hooks/useInventory";
 import { Button } from "@/components/ui";
+import { getApiUrl } from "@/lib/utils";
 import { toast } from "sonner";
 import { Check, Crown, Sparkles, Gift, Coins } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { usePaymentChannel } from "@/hooks/usePaymentChannel";
-import { purchaseWorldCupPackOnPlay, isPlayPurchaseCancelled } from "@/lib/playBilling";
 import { startPackCheckout, WORLD_CUP_PACK_PRICE_LABEL } from "@/lib/worldCupPack";
 import { celebrateReward } from "@/lib/celebrate";
 
@@ -79,56 +79,25 @@ export function CosmeticShop() {
     WORLD_CUP_COSMETICS.some(c => c.id === item.id)
   ) ?? false;
 
-  // ============================================================
-  // handleBuyPack – con alertas de diagnóstico
-  // ============================================================
   const handleBuyPack = useCallback(async () => {
-    // 🔴 ALERTA: muestra el canal detectado
-    alert(`🔍 [CosmeticShop] Canal detectado: ${channel}`);
-
-    if (channel === "loading") {
-      toast.info("Preparando método de pago...");
-      return;
-    }
-
+    if (channel === "loading") return;
     setPurchasing("pack_mundial");
 
     try {
-      if (channel === "play") {
-        // 🔵 GOOGLE PLAY BILLING
-        alert("✅ Usando Google Play Billing (channel === play)");
-        const result = await purchaseWorldCupPackOnPlay(player?.id || "");
-        if (result.granted) {
-          await refreshInventory();
-          celebrateReward();
-          window.alert("¡Pack Mundial desbloqueado! 🎉");
-          setPurchasing(null);
-          return;
-        }
-        window.alert("❌ No se pudo completar la compra con Google Play");
-        setPurchasing(null);
-        return;
-      }
-
-      // 🌐 STRIPE (si channel no es "play")
-      alert("🌐 Usando Stripe (channel !== play)");
       const { url } = await startPackCheckout({ playerId: player?.id || "" });
       if (url) {
         window.location.href = url;
       } else {
-        throw new Error("No se recibió URL de Stripe");
+        // Si startPackCheckout devuelve URL vacía (porque usó Google Play y recargó), no hacemos nada
+        setPurchasing(null);
       }
     } catch (error: any) {
-      if (isPlayPurchaseCancelled(error)) {
-        setPurchasing(null);
-        return;
-      }
       console.error("Error al comprar Pack Mundial:", error);
-      window.alert(`❌ Error: ${error.message || "Error desconocido"}`);
+      window.alert(error instanceof Error ? error.message : "No se pudo completar la compra");
     } finally {
       setPurchasing(null);
     }
-  }, [channel, player?.id, refreshInventory]);
+  }, [channel, player?.id]);
 
   const handleEquip = useCallback(async (kind: any, value: string | null) => {
     setEquipping(`${kind}:${value}`);
@@ -209,7 +178,7 @@ export function CosmeticShop() {
             ) : (
               <Button
                 onClick={handleBuyPack}
-                disabled={purchasing === "pack_mundial"}
+                disabled={purchasing === "pack_mundial" || channel === "loading"}
                 className="bg-white text-black hover:bg-white/90 font-bold px-8 py-6 text-lg rounded-xl shadow-lg"
               >
                 {purchasing === "pack_mundial" ? (
