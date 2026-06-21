@@ -5,10 +5,7 @@
 const PREMIUM_SKU = "premium_monthly";
 const WORLD_CUP_SKU = "pack_mundial";
 
-/**
- * Detecta si el canal de pago es Google Play o Stripe.
- * Esta función se usa en otros componentes (AdSystem, usePremium, etc.)
- */
+// Funciones auxiliares para otros componentes
 export function detectPaymentChannel(): "play" | "stripe" {
   if (typeof window === "undefined") return "stripe";
   const isTwa = document.referrer?.startsWith("android-app://") ?? false;
@@ -16,9 +13,6 @@ export function detectPaymentChannel(): "play" | "stripe" {
   return isTwa && hasApi ? "play" : "stripe";
 }
 
-/**
- * Detecta si estamos en una TWA de Play Store (para mostrar banners, etc.)
- */
 export function hasAndroidAppReferrer(): boolean {
   if (typeof window === "undefined") return false;
   return document.referrer?.startsWith("android-app://") ?? false;
@@ -59,16 +53,10 @@ export async function purchaseWorldCupPackOnPlay(playerId: string): Promise<{ gr
   return { granted: true };
 }
 
-/**
- * Detecta si el usuario canceló la compra.
- */
 export function isPlayPurchaseCancelled(error: any): boolean {
   return error?.code === "PURCHASE_CANCELLED" || error?.message?.includes("cancel");
 }
 
-/**
- * Detecta si el error indica que Play Billing no está disponible.
- */
 export function isPlayBillingUnavailable(error: any): boolean {
   return error?.message?.includes("Google Play Billing no está disponible");
 }
