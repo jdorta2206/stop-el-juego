@@ -7,13 +7,12 @@ const WORLD_CUP_SKU = "pack_mundial";
 
 /**
  * Detecta si estamos en una TWA de Play Store con Google Play Billing disponible.
- * Esta función se puede llamar desde cualquier componente sin depender de un hook.
+ * Ahora depende de window.getDigitalGoodsService, no de document.referrer.
  */
 export function isPlayBillingAvailable(): boolean {
   if (typeof window === "undefined") return false;
-  const isTwa = document.referrer?.startsWith("android-app://") ?? false;
-  const hasApi = typeof window.getDigitalGoodsService === "function";
-  return isTwa && hasApi;
+  // ✅ Priorizamos la presencia de la API, no el referrer
+  return typeof window.getDigitalGoodsService === "function";
 }
 
 /**
@@ -76,7 +75,7 @@ export async function purchasePremiumOnPlay(playerId: string): Promise<{ isPremi
 
 /**
  * Compra el Pack Mundial (pago único) con Google Play Billing.
- * AHORA recibe playerId para poder conceder los cosméticos.
+ * Recibe playerId para conceder los cosméticos.
  */
 export async function purchaseWorldCupPackOnPlay(playerId: string): Promise<{ granted: boolean }> {
   if (!isPlayBillingAvailable()) {
