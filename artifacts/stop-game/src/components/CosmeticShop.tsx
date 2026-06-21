@@ -1,13 +1,13 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { usePlayer } from "@/hooks/use-player";
 import { useInventory } from "@/hooks/useInventory";
 import { Button } from "@/components/ui";
-import { getApiUrl } from "@/lib/utils";
 import { toast } from "sonner";
 import { Check, Crown, Sparkles, Gift, Coins } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { usePaymentChannel } from "@/hooks/usePaymentChannel";
-import { startPackCheckout, WORLD_CUP_PACK_PRICE_LABEL } from "@/lib/worldCupPack";
+import { purchaseWorldCupPackOnPlay, isPlayPurchaseCancelled } from "@/lib/playBilling";
+import { WORLD_CUP_PACK_PRICE_LABEL } from "@/lib/worldCupPack";
 import { celebrateReward } from "@/lib/celebrate";
 
 interface CosmeticItem {
@@ -79,25 +79,36 @@ export function CosmeticShop() {
     WORLD_CUP_COSMETICS.some(c => c.id === item.id)
   ) ?? false;
 
+  // ============================================================
+  // handleBuyPack – LLAMA DIRECTAMENTE A GOOGLE PLAY BILLING
+  // ============================================================
   const handleBuyPack = useCallback(async () => {
     if (channel === "loading") return;
     setPurchasing("pack_mundial");
 
     try {
-      const { url } = await startPackCheckout({ playerId: player?.id || "" });
-      if (url) {
-        window.location.href = url;
-      } else {
-        // Si startPackCheckout devuelve URL vacía (porque usó Google Play y recargó), no hacemos nada
+      // 🔥 LLAMADA DIRECTA A GOOGLE PLAY BILLING
+      const result = await purchaseWorldCupPackOnPlay(player?.id || "");
+      if (result.granted) {
+        await refreshInventory();
+        celebrateReward();
+        window.alert("¡Pack Mundial desbloqueado! 🎉");
         setPurchasing(null);
+        return;
       }
+      window.alert("❌ No se pudo completar la compra con Google Play");
     } catch (error: any) {
+      if (isPlayPurchaseCancelled(error)) {
+        // Usuario canceló, no hacer nada
+        setPurchasing(null);
+        return;
+      }
       console.error("Error al comprar Pack Mundial:", error);
-      window.alert(error instanceof Error ? error.message : "No se pudo completar la compra");
+      window.alert(`❌ Error: ${error.message || "Error desconocido"}`);
     } finally {
       setPurchasing(null);
     }
-  }, [channel, player?.id]);
+  }, [channel, player?.id, refreshInventory]);
 
   const handleEquip = useCallback(async (kind: any, value: string | null) => {
     setEquipping(`${kind}:${value}`);
