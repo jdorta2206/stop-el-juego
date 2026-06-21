@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { Check, Crown, Sparkles, Gift, Coins } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { usePaymentChannel } from "@/hooks/usePaymentChannel";
-import { purchaseWorldCupPackOnPlay, isPlayPurchaseCancelled } from "@/lib/playBilling";
+import { purchaseWorldCupPackOnPlay } from "@/lib/playBilling";
 import { WORLD_CUP_PACK_PRICE_LABEL } from "@/lib/worldCupPack";
 import { celebrateReward } from "@/lib/celebrate";
 
@@ -80,14 +80,16 @@ export function CosmeticShop() {
   ) ?? false;
 
   // ============================================================
-  // handleBuyPack – LLAMA DIRECTAMENTE A GOOGLE PLAY BILLING
+  // COMPRA DIRECTA CON GOOGLE PLAY BILLING (SIN STRIPE)
   // ============================================================
   const handleBuyPack = useCallback(async () => {
-    if (channel === "loading") return;
+    if (channel === "loading") {
+      toast.info("Preparando método de pago...");
+      return;
+    }
     setPurchasing("pack_mundial");
 
     try {
-      // 🔥 LLAMADA DIRECTA A GOOGLE PLAY BILLING
       const result = await purchaseWorldCupPackOnPlay(player?.id || "");
       if (result.granted) {
         await refreshInventory();
@@ -96,10 +98,10 @@ export function CosmeticShop() {
         setPurchasing(null);
         return;
       }
-      window.alert("❌ No se pudo completar la compra con Google Play");
+      window.alert("❌ No se pudo completar la compra con Google Play. Inténtalo de nuevo.");
     } catch (error: any) {
-      if (isPlayPurchaseCancelled(error)) {
-        // Usuario canceló, no hacer nada
+      if (error?.code === "PURCHASE_CANCELLED") {
+        // Usuario canceló
         setPurchasing(null);
         return;
       }
@@ -162,7 +164,6 @@ export function CosmeticShop() {
 
   return (
     <div className="space-y-6">
-      {/* Banner Pack Mundial */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-yellow-600 via-orange-600 to-red-600 p-6 shadow-2xl">
         <div className="absolute inset-0 bg-black/20" />
         <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-4">
@@ -206,7 +207,6 @@ export function CosmeticShop() {
         </div>
       </div>
 
-      {/* Categorías */}
       <div className="flex gap-2 overflow-x-auto pb-2">
         {[
           { id: "all", label: "Todos", icon: "🎨" },
@@ -229,7 +229,6 @@ export function CosmeticShop() {
         ))}
       </div>
 
-      {/* Grid de cosméticos */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
         {filteredCosmetics.map((item) => {
           const owned = isOwned(item.id);
@@ -301,7 +300,6 @@ export function CosmeticShop() {
         })}
       </div>
 
-      {/* Modal de confirmación */}
       <AnimatePresence>
         {showPackModal && (
           <motion.div
@@ -321,9 +319,7 @@ export function CosmeticShop() {
               <div className="text-center">
                 <div className="text-6xl mb-4">🌍</div>
                 <h3 className="text-2xl font-black text-white mb-2">Pack Mundial</h3>
-                <p className="text-white/70 mb-4">
-                  Adquiere 27 cosméticos exclusivos del Mundial por solo <span className="text-yellow-400 font-bold">2,99 €</span>
-                </p>
+                <p className="text-white/70 mb-4">Adquiere 27 cosméticos exclusivos del Mundial por solo <span className="text-yellow-400 font-bold">2,99 €</span></p>
                 <div className="space-y-2 mb-6 text-left">
                   <p className="text-white/80 text-sm flex items-center gap-2">⚽ 20 avatares de banderas y fútbol</p>
                   <p className="text-white/80 text-sm flex items-center gap-2">🖼️ 3 marcos temáticos</p>
