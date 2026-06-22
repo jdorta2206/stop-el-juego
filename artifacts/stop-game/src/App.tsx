@@ -219,6 +219,51 @@ function App() {
     };
   }, []);
 
+  // 🔍 INTERCEPTAR REDIRECCIONES A STRIPE
+  useEffect(() => {
+    const blockStripe = (url: string) => {
+      if (url && url.includes('checkout.stripe.com')) {
+        alert('🔴 Se ha intentado redirigir a Stripe');
+        console.trace('Redirección a Stripe desde:', new Error().stack);
+        return true;
+      }
+      return false;
+    };
+
+    // Interceptar window.location.href (asignación)
+    const originalHrefSetter = Object.getOwnPropertyDescriptor(window.location, 'href')?.set;
+    if (originalHrefSetter) {
+      Object.defineProperty(window.location, 'href', {
+        set: function(url) {
+          if (blockStripe(url)) return;
+          originalHrefSetter.call(this, url);
+        }
+      });
+    }
+
+    // Interceptar window.location.assign
+    const originalAssign = window.location.assign;
+    window.location.assign = function(url) {
+      if (blockStripe(url)) return;
+      return originalAssign.call(this, url);
+    };
+
+    // Interceptar window.location.replace
+    const originalReplace = window.location.replace;
+    window.location.replace = function(url) {
+      if (blockStripe(url)) return;
+      return originalReplace.call(this, url);
+    };
+
+    return () => {
+      if (originalHrefSetter) {
+        Object.defineProperty(window.location, 'href', { set: originalHrefSetter });
+      }
+      window.location.assign = originalAssign;
+      window.location.replace = originalReplace;
+    };
+  }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
       {/* reducedMotion="user" → respects OS-level "Reduce animations" toggle */}
