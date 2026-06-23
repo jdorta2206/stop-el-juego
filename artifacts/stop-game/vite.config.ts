@@ -69,8 +69,9 @@ const replitPlugins =
       ]
     : [];
 
-// Generamos un timestamp único para cada build
-const buildTimestamp = Date.now();
+// ⚡ TIMESTAMP FIJO PARA FORZAR CACHÉ (cámbialo en cada despliegue para forzar una nueva versión)
+// Usa el formato AAAAMMDD (ej: 20260623 para el 23 de junio de 2026)
+const buildTimestamp = 20260623;
 
 export default defineConfig({
   base: basePath,
