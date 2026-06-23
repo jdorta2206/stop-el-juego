@@ -8,7 +8,7 @@
     "typecheck:libs": "tsc --build",
     "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck",
     "test": "pnpm -r --if-present run test",
-    "build:railway": "cd artifacts/stop-game && pnpm run build && cd ../api-server && pnpm run build",
+    "build:railway": "pnpm -C artifacts/stop-game build && pnpm -C artifacts/api-server build",
     "start:railway": "SERVE_CLIENT=1 node artifacts/api-server/dist/index.cjs"
   },
   "packageManager": "pnpm@10.26.1",
