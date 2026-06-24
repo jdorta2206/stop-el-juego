@@ -65,7 +65,18 @@ const WORLD_CUP_COSMETICS: CosmeticItem[] = [
   { id: "bg_wc_copa", name: "Fondo Copa Mundial", description: "Fondo del trofeo", price: 0, type: "background", rarity: "legendary", icon: "🏆" },
 ];
 
-export function CosmeticShop() {
+// Props aceptadas (opcionales) para compatibilidad con Tienda.tsx y PlayerProfile.tsx
+interface CosmeticShopProps {
+  playerId?: string;
+  inventory?: any;
+  refresh?: () => void;
+  buy?: (itemId: string) => void;
+  equip?: (kind: string, value: string | null) => void;
+  showInventory?: boolean;
+}
+
+export function CosmeticShop(props: CosmeticShopProps) {
+  // Ignoramos las props, usamos nuestros propios hooks
   const { player } = usePlayer();
   const { inventory, refresh: refreshInventory, buy, equip } = useInventory(player?.id || null);
   const [selectedCategory, setSelectedCategory] = useState<"all" | "avatar" | "frame" | "background">("all");
