@@ -5,10 +5,7 @@ import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 import fs from "fs";
 
-// Sirve /.well-known/assetlinks.json directamente, sin pasar por el fallback SPA.
-// Necesario porque algunos servidores estáticos (p.ej. `vite preview`) no entregan
-// archivos dentro de carpetas que empiezan por punto, y Android necesita ese archivo
-// para verificar la TWA y mostrarla a pantalla completa (sin la barra del navegador).
+// Sirve /.well-known/assetlinks.json
 function wellKnownAssetlinks(): PluginOption {
   const filePath = path.resolve(
     import.meta.dirname,
@@ -25,7 +22,7 @@ function wellKnownAssetlinks(): PluginOption {
         res.end(data);
         return;
       } catch {
-        // si no existe, seguimos con el flujo normal
+        // si no existe, seguir
       }
     }
     next();
@@ -42,35 +39,26 @@ function wellKnownAssetlinks(): PluginOption {
 }
 
 const isBuild = process.env.NODE_ENV === "production" || process.argv.includes("build");
-
 const rawPort = process.env.PORT;
 const port = rawPort ? Number(rawPort) : 5173;
-
 if (!isBuild && rawPort && (Number.isNaN(port) || port <= 0)) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
-
 const basePath = process.env.BASE_PATH || "/";
 
 const replitPlugins =
   !isBuild && process.env.REPL_ID !== undefined
     ? [
-        await import("@replit/vite-plugin-runtime-error-modal").then((m) =>
-          m.default()
-        ),
+        await import("@replit/vite-plugin-runtime-error-modal").then((m) => m.default()),
         await import("@replit/vite-plugin-cartographer").then((m) =>
           m.cartographer({
             root: path.resolve(import.meta.dirname, ".."),
           })
         ),
-        await import("@replit/vite-plugin-dev-banner").then((m) =>
-          m.devBanner()
-        ),
+        await import("@replit/vite-plugin-dev-banner").then((m) => m.devBanner()),
       ]
     : [];
 
-// ⚡ TIMESTAMP FIJO PARA FORZAR CACHÉ (cámbialo en cada despliegue para forzar una nueva versión)
-// Usa el formato AAAAMMDD (ej: 20260623 para el 23 de junio de 2026)
 const buildTimestamp = 20260623;
 
 export default defineConfig({
@@ -82,13 +70,12 @@ export default defineConfig({
       "@assets": path.resolve(import.meta.dirname, "..", "..", "attached_assets"),
     },
   },
-  root: path.resolve(import.meta.dirname),
+  // root: eliminado → Vite usa el directorio actual (artifacts/stop-game)
   build: {
-    outDir: path.resolve(import.meta.dirname, "dist/public"),
+    outDir: "dist", // ahora los archivos van a artifacts/stop-game/dist
     emptyOutDir: true,
     rollupOptions: {
       output: {
-        // Añadimos el timestamp al nombre de los archivos para forzar cache-busting
         entryFileNames: `assets/[name].[hash].${buildTimestamp}.js`,
         chunkFileNames: `assets/[name].[hash].${buildTimestamp}.js`,
         assetFileNames: `assets/[name].[hash].[ext]`,
