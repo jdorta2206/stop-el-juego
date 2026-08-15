@@ -2,7 +2,8 @@ import { sql } from "drizzle-orm";
 import { db } from "./index";
 
 /**
- * Creates all critical indexes idempotently. Safe to call on every boot.
+ * Creates all critical indexes/schema additions idempotently.
+ * The server must not accept traffic until this completes successfully.
  */
 let _indexesReady = false;
 export function indexesReady(): boolean {
@@ -33,6 +34,7 @@ export async function ensureIndexes(): Promise<void> {
     `ALTER TABLE player_scores ADD COLUMN IF NOT EXISTS equipped_avatar text`,
     `ALTER TABLE player_scores ADD COLUMN IF NOT EXISTS equipped_frame text`,
     `ALTER TABLE player_scores ADD COLUMN IF NOT EXISTS equipped_title text`,
+    `ALTER TABLE player_scores ADD COLUMN IF NOT EXISTS equipped_background text`,
     `ALTER TABLE player_scores ADD COLUMN IF NOT EXISTS prestige_claims_json text NOT NULL DEFAULT '[]'`,
     `ALTER TABLE player_scores ADD COLUMN IF NOT EXISTS collection_claims_json text NOT NULL DEFAULT '[]'`,
     `ALTER TABLE player_scores ADD COLUMN IF NOT EXISTS notified_final_season_id integer`,
@@ -41,8 +43,6 @@ export async function ensureIndexes(): Promise<void> {
     `CREATE INDEX IF NOT EXISTS season_finals_player_id_idx ON season_finals (player_id)`,
     `CREATE INDEX IF NOT EXISTS daily_results_date_score_desc_idx ON daily_results (challenge_date, score DESC)`,
     `CREATE INDEX IF NOT EXISTS daily_results_player_date_idx ON daily_results (player_id, challenge_date)`,
-    // Critical race guard: a player can have at most one ranked result per day/language.
-    // The route also handles a concurrent unique-violation idempotently.
     `CREATE UNIQUE INDEX IF NOT EXISTS daily_results_player_date_lang_uidx ON daily_results (player_id, challenge_date, language)`,
     `CREATE TABLE IF NOT EXISTS cron_locks (lock_key text PRIMARY KEY, last_run_date text NOT NULL, updated_at timestamp NOT NULL DEFAULT NOW())`,
     `CREATE TABLE IF NOT EXISTS guest_stats (day text PRIMARY KEY, games integer NOT NULL DEFAULT 0, conversions integer NOT NULL DEFAULT 0)`,
@@ -63,13 +63,16 @@ export async function ensureIndexes(): Promise<void> {
   for (const stmt of stmts) {
     try {
       await db.execute(sql.raw(stmt));
-    } catch (err: any) {
-      // A concurrent startup can race on DDL. Existing-object errors are safe.
-      if (!/already exists/i.test(err?.message ?? "")) {
-        console.error("[ensureIndexes] failed:", err?.message ?? err);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      // IF NOT EXISTS handles normal repeat/concurrent startup cases. Any other
+      // failure is fatal: serving traffic against a partially prepared schema is unsafe.
+      if (!/already exists/i.test(message)) {
+        throw new Error(`[ensureIndexes] failed: ${message}`, { cause: err });
       }
     }
   }
+
   _indexesReady = true;
   console.log("[ensureIndexes] All indexes verified");
 }
