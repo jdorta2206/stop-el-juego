@@ -54,3 +54,5 @@ jobs:
 
       - name: API build
         run: pnpm --filter @workspace/api-server build
+
+      # Release gate: every stage above must pass before a merge to master.
