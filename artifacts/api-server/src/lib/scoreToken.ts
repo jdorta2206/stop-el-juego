@@ -57,9 +57,15 @@ export function sumVerifiedBase(
   const now = Date.now();
   pruneUsed(now);
   const validBases: number[] = [];
+  const cap = Number.isFinite(maxTokens) ? Math.max(0, Math.floor(maxTokens)) : tokens.length;
+  if (cap === 0) return { base: 0, verified: 0 };
 
-  for (const token of tokens) {
-    if (typeof token !== "string") continue;
+  // Never process an attacker-controlled unbounded token array. Only the
+  // number of vouchers that the selected game mode can legitimately produce
+  // can contribute to a score.
+  const candidates = tokens.slice(0, cap);
+  for (const token of candidates) {
+    if (typeof token !== "string" || token.length > 512) continue;
     const parts = token.split(".");
     if (parts.length !== 5) continue;
     const [baseStr, kind, expStr, jti, sig] = parts;
@@ -71,7 +77,8 @@ export function sumVerifiedBase(
       const a = Buffer.from(sig);
       const b = Buffer.from(expected);
       ok = a.length === b.length && crypto.timingSafeEqual(a, b);
-    } catch {
+    } catch (error) {
+      console.warn("[scoreToken] malformed voucher signature", error);
       ok = false;
     }
     if (!ok) continue;
@@ -79,19 +86,18 @@ export function sumVerifiedBase(
     const exp = Number(expStr);
     const b = Number(baseStr);
     if (!Number.isSafeInteger(exp) || exp <= now) continue;
-    if (!Number.isFinite(b) || b < 0 || b > 100_000) continue;
+    if (!Number.isFinite(b) || !Number.isSafeInteger(b) || b < 0 || b > 100_000) continue;
     if (usedJti.has(jti)) continue;
 
     usedJti.set(jti, exp);
-    validBases.push(Math.floor(b));
+    validBases.push(b);
   }
 
   validBases.sort((a, b) => b - a);
-  const cap = Number.isFinite(maxTokens) ? Math.max(0, Math.floor(maxTokens)) : validBases.length;
   const counted = validBases.slice(0, cap);
   return { base: counted.reduce((sum, n) => sum + n, 0), verified: counted.length };
 }
 
 export function ceilingFromBase(base: number): number {
-  return base * 4 + 50;
+  return Math.max(0, Math.floor(base)) * 4 + 50;
 }
