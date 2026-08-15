@@ -7,7 +7,9 @@ export function saveActiveRoom(code: string, playerId: string) {
   try {
     const payload: ActiveRoom = { code, playerId, ts: Date.now() };
     localStorage.setItem(KEY, JSON.stringify(payload));
-  } catch {}
+  } catch {
+    // localStorage may be unavailable (private browsing or storage quota).
+  }
 }
 
 export function touchActiveRoom() {
@@ -17,7 +19,9 @@ export function touchActiveRoom() {
     const parsed = JSON.parse(raw) as ActiveRoom;
     if (!parsed?.code || !parsed?.playerId) return;
     localStorage.setItem(KEY, JSON.stringify({ ...parsed, ts: Date.now() }));
-  } catch {}
+  } catch {
+    // A stale/corrupt local recovery entry must never interrupt gameplay.
+  }
 }
 
 export function loadActiveRoom(): ActiveRoom | null {
@@ -32,10 +36,15 @@ export function loadActiveRoom(): ActiveRoom | null {
     }
     return parsed;
   } catch {
+    // Invalid local data is treated as no active room.
     return null;
   }
 }
 
 export function clearActiveRoom() {
-  try { localStorage.removeItem(KEY); } catch {}
+  try {
+    localStorage.removeItem(KEY);
+  } catch {
+    // Storage cleanup is best-effort and must never block navigation.
+  }
 }
