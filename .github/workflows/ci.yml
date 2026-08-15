@@ -56,3 +56,4 @@ jobs:
         run: pnpm --filter @workspace/api-server build
 
       # Release gate: every stage above must pass before a merge to master.
+      # CI trigger refresh: validate the current audit/security-hardening tip.
