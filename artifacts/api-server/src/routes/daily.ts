@@ -126,10 +126,11 @@ router.post("/submit", async (req, res) => {
       letter: challenge.letter,
       language: normalizedLanguage,
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     // A unique DB constraint handles concurrent first submissions. Return the
     // same idempotent response rather than creating a second result.
-    if (/unique|duplicate/i.test(err?.message ?? "")) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (/unique|duplicate/i.test(message)) {
       res.json({ updated: false, alreadyPlayed: true });
       return;
     }
@@ -152,7 +153,15 @@ router.get("/rankings", async (req, res) => {
     .orderBy(desc(dailyResultsTable.score))
     .limit(10);
 
-  res.json({ date: today, rankings: results.map((r, i) => ({ ...r, rank: i + 1 })) });
+  res.json({
+    date: today,
+    rankings: results.map((r, i) => ({
+      rank: i + 1,
+      playerName: r.playerName,
+      avatarColor: r.avatarColor,
+      score: r.score,
+    })),
+  });
 });
 
 export default router;
