@@ -95,8 +95,12 @@ async function main(): Promise<void> {
   const port = Number(rawPort);
   if (Number.isNaN(port) || port <= 0) throw new Error(`Invalid PORT value: "${rawPort}"`);
 
+  // Prepare and validate the database before opening the HTTP listener. If a
+  // critical schema/index operation fails, startup aborts instead of serving
+  // users against a partially prepared production database.
+  await ensureIndexes();
+
   app.listen(port, () => console.log(`Server listening on port ${port}`));
-  ensureIndexes().catch((err: unknown) => console.error("[ensureIndexes] failed at startup:", err instanceof Error ? err.message : err));
   startDailyCron();
   revokeFakePremium();
   initStripe().catch((err: unknown) => console.error("Stripe init failed:", err instanceof Error ? err.message : err));
