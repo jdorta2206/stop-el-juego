@@ -17,13 +17,14 @@ import rewardsRouter from "./rewards";
 import playBillingRouter from "./playBilling";
 import customPacksRouter from "./customPacks";
 import guestStatsRouter from "./guestStats";
+import { requireRoomMemberIdentity } from "../middlewares/roomMemberAuth";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
 router.use("/game", gameRouter);
 router.use("/ranking", rankingRouter);
-router.use("/rooms", roomsRouter);
+router.use("/rooms", requireRoomMemberIdentity, roomsRouter);
 router.use("/auth", authRouter);
 router.use("/stripe", stripeRouter);
 router.use("/presence", presenceRouter);
