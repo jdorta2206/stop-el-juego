@@ -9,9 +9,12 @@ router.get("/list/:followerId", async (req, res) => {
   const { followerId } = req.params;
   if (!followerId) return res.status(400).json({ error: "followerId required" });
 
+  // Keep the follows list outside the inner try so the error fallback can
+  // safely use the already-fetched source-of-truth records.
+  let follows: Array<typeof followsTable.$inferSelect> = [];
+
   try {
-    // 1. Obtener la lista de seguidos
-    const follows = await db
+    follows = await db
       .select()
       .from(followsTable)
       .where(eq(followsTable.followerId, followerId));
@@ -20,13 +23,18 @@ router.get("/list/:followerId", async (req, res) => {
       return res.json({ friends: [] });
     }
 
-    // 2. Obtener los IDs de los seguidos
-    const followedIds = follows.map(f => f.followedId);
+    const followedIds = follows.map((f) => f.followedId);
 
-    // 3. Obtener datos actualizados de player_scores para esos IDs
-    let playersData: any[] = [];
+    let playersData: Array<{
+      playerId: string;
+      playerName: string;
+      avatarColor: string;
+      equippedAvatar: string | null;
+      equippedFrame: string | null;
+      isPremium: boolean;
+    }> = [];
+
     try {
-      // Intentamos obtener datos, pero si falla (por columnas que no existen), seguimos con datos vacíos
       playersData = await db
         .select({
           playerId: playerScoresTable.playerId,
@@ -34,13 +42,12 @@ router.get("/list/:followerId", async (req, res) => {
           avatarColor: playerScoresTable.avatarColor,
           equippedAvatar: playerScoresTable.equippedAvatar,
           equippedFrame: playerScoresTable.equippedFrame,
-          equippedBackground: playerScoresTable.equippedBackground,
           isPremium: playerScoresTable.isPremium,
         })
         .from(playerScoresTable)
         .where(inArray(playerScoresTable.playerId, followedIds));
     } catch (err) {
-      // Si falla (por columnas faltantes), intentamos solo con los campos básicos
+      console.warn("Could not load optional player cosmetics; using basic profile data", err);
       playersData = await db
         .select({
           playerId: playerScoresTable.playerId,
@@ -49,17 +56,17 @@ router.get("/list/:followerId", async (req, res) => {
           isPremium: playerScoresTable.isPremium,
         })
         .from(playerScoresTable)
-        .where(inArray(playerScoresTable.playerId, followedIds));
+        .where(inArray(playerScoresTable.playerId, followedIds))
+        .then((rows) => rows.map((p) => ({
+          ...p,
+          equippedAvatar: null,
+          equippedFrame: null,
+        })));
     }
 
-    // 4. Crear mapa para acceso rápido
-    const playerMap = new Map();
-    for (const p of playersData) {
-      playerMap.set(p.playerId, p);
-    }
+    const playerMap = new Map(playersData.map((p) => [p.playerId, p]));
 
-    // 5. Combinar datos
-    const result = follows.map(f => {
+    const result = follows.map((f) => {
       const p = playerMap.get(f.followedId);
       return {
         followerId: f.followerId,
@@ -70,7 +77,6 @@ router.get("/list/:followerId", async (req, res) => {
         followedProvider: f.followedProvider,
         equippedAvatar: p?.equippedAvatar ?? null,
         equippedFrame: p?.equippedFrame ?? null,
-        equippedBackground: p?.equippedBackground ?? null,
         isPremium: p?.isPremium ?? false,
       };
     });
@@ -78,8 +84,7 @@ router.get("/list/:followerId", async (req, res) => {
     return res.json({ friends: result });
   } catch (error) {
     console.error("Error en /friends/list:", error);
-    // En caso de error, devolver al menos la lista básica con los datos guardados en follows
-    const fallback = follows.map(f => ({
+    const fallback = follows.map((f) => ({
       followerId: f.followerId,
       followedId: f.followedId,
       followedName: f.followedName,
@@ -88,14 +93,12 @@ router.get("/list/:followerId", async (req, res) => {
       followedProvider: f.followedProvider,
       equippedAvatar: null,
       equippedFrame: null,
-      equippedBackground: null,
       isPremium: false,
     }));
     return res.json({ friends: fallback });
   }
 });
 
-// POST /api/friends/follow — follow a player (sin cambios)
 router.post("/follow", async (req, res) => {
   const { followerId, followedId, followedName, followedPicture, followedAvatarColor, followedProvider } =
     req.body as {
@@ -135,7 +138,6 @@ router.post("/follow", async (req, res) => {
   return res.json({ ok: true });
 });
 
-// DELETE /api/friends/unfollow — unfollow a player (sin cambios)
 router.delete("/unfollow", async (req, res) => {
   const { followerId, followedId } = req.body as { followerId: string; followedId: string };
 
