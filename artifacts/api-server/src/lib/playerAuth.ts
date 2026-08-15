@@ -12,12 +12,6 @@ const HEADER_NAME = "x-stop-token";
 
 let warnedMissingSecret = false;
 
-/**
- * Resolve the signing secret lazily so the API can boot even if SESSION_SECRET
- * is not yet configured — only routes that actually mint/verify tokens fail
- * (with a clear log) instead of taking down the whole server. Returns null
- * when no usable secret is present.
- */
 function getSigningSecret(): string | null {
   const s = process.env["SESSION_SECRET"];
   if (s && s.length >= 16) return s;
@@ -62,7 +56,8 @@ export function verifyPlayerToken(token: string | undefined | null): string | nu
     return null;
   }
   if (!ok) return null;
-  if (Date.now() > Number(exp)) return null;
+  const expMs = Number(exp);
+  if (!Number.isFinite(expMs) || expMs <= 0 || Date.now() > expMs) return null;
   return pid;
 }
 
@@ -97,22 +92,11 @@ export function requirePlayerIdentity(
   next();
 }
 
-/**
- * Set the auth cookie on the response and return the token (also embedded in
- * localStorage by the OAuth bridge page so cross-origin clients without
- * cookies can send it via X-Stop-Token). Returns null if the secret isn't set.
- */
 export function issuePlayerToken(res: Response, playerId: string): string | null {
   const token = signPlayerToken(playerId);
   if (!token) return null;
   res.cookie(COOKIE_NAME, token, {
     httpOnly: true,
-    // "none" + secure lets the cookie ride cross-origin fetches with
-    // credentials:include, which is required for the TWA case: the OAuth
-    // callback sets the cookie on the canonical domain (stop-el-juego),
-    // but the TWA loads from stopjuegodepalabras.com. With sameSite=lax
-    // the cross-origin /api/auth/me fetch couldn't carry the cookie and
-    // the user kept seeing the login modal on every cold start.
     sameSite: "none",
     secure: true,
     maxAge: TTL_MS,
@@ -121,11 +105,6 @@ export function issuePlayerToken(res: Response, playerId: string): string | null
   return token;
 }
 
-/**
- * Clear the auth cookie on logout. Must mirror the EXACT attributes used in
- * issuePlayerToken (sameSite/secure/path) — browsers only delete a cookie when
- * the clearing attributes match the ones it was set with.
- */
 export function clearPlayerToken(res: Response): void {
   res.clearCookie(COOKIE_NAME, {
     httpOnly: true,
@@ -137,38 +116,28 @@ export function clearPlayerToken(res: Response): void {
 
 export const PLAYER_TOKEN_BRIDGE_KEY = "stop_session_token";
 
-/**
- * OAuth-account id prefixes. Logged-in users get an id like `google_123`,
- * `fb_…`, etc. Guests use a random `crypto.randomUUID()` with none of these.
- */
 const OAUTH_ID_PREFIXES = ["google_", "fb_", "ig_", "apple_", "tt_"];
 
-/** True when this playerId belongs to a logged-in OAuth account (not a guest). */
 export function isLoggedInId(playerId: string | null | undefined): boolean {
   return !!playerId && OAUTH_ID_PREFIXES.some((p) => playerId.startsWith(p));
 }
 
-/** True when the server can mint/verify tokens (SESSION_SECRET configured). */
 export function isAuthConfigured(): boolean {
   return getSigningSecret() !== null;
 }
 
 /**
- * Identity binding for routes shared by BOTH guests and logged-in users
- * (Stripe billing, leaderboard, custom packs). It blocks IDOR/impersonation of
- * real accounts WITHOUT breaking the guest-first multiplayer model:
- *   - Guests (random-UUID ids): always allowed — they have no token to verify.
- *   - Logged-in (OAuth-prefixed) ids: REQUIRE a signed token matching the
- *     claimed id, so nobody can act on another account by guessing its public id.
- * Fails OPEN when auth isn't configured so a missing secret can't lock everyone
- * out of the live game. Returns true when the request may proceed.
+ * Identity binding for routes shared by BOTH guests and logged-in users.
+ * Guest ids remain intentionally anonymous. OAuth ids are fail-closed: if
+ * authentication is unavailable, an authenticated-account operation is
+ * rejected rather than falling back to an unauthenticated identity check.
  */
 export function verifyClaimedIdentity(
   req: Request,
   claimedId: string | null | undefined,
 ): boolean {
-  if (!claimedId) return true;
+  if (!claimedId) return false;
   if (!isLoggedInId(claimedId)) return true;
-  if (!isAuthConfigured()) return true;
+  if (!isAuthConfigured()) return false;
   return readPlayerId(req) === claimedId;
 }
