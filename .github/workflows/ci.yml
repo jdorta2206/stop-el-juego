@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [master, audit/security-hardening]
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.12.4
+          run_install: false
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: API typecheck
+        run: pnpm --filter @workspace/api-server typecheck
+
+      - name: API tests
+        run: pnpm --filter @workspace/api-server test
+
+      - name: Frontend lint
+        run: pnpm --filter @workspace/stop-game lint
+
+      - name: Frontend build
+        run: pnpm --filter @workspace/stop-game build
+
+      - name: API build
+        run: pnpm --filter @workspace/api-server build
