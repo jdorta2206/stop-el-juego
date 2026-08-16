@@ -1,4 +1,5 @@
 import * as AppleAuthentication from "expo-apple-authentication";
+import * as Crypto from "expo-crypto";
 import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
 
@@ -10,8 +11,10 @@ export type StopSession = {
   user: {
     id: string;
     name: string | null;
+    email?: string | null;
     picture?: string | null;
-    loginMethod: string;
+    provider?: string;
+    loginMethod?: string;
   };
 };
 
@@ -27,35 +30,84 @@ export async function loadSession(): Promise<StopSession | null> {
 }
 
 export async function clearSession(): Promise<void> {
+  const session = await loadSession();
   await SecureStore.deleteItemAsync(SESSION_KEY);
   try {
-    await fetch(`${API_BASE_URL}/api/auth/logout`, { method: "POST" });
+    await fetch(`${API_BASE_URL}/api/auth/logout`, {
+      method: "POST",
+      headers: session?.token ? { "x-stop-token": session.token } : undefined,
+    });
   } catch {
     // Local logout must still succeed if the server is temporarily unavailable.
   }
 }
 
+function createNonce(): string {
+  return Crypto.randomUUID();
+}
+
 /**
- * Native Apple credential acquisition.
- *
- * The credential is deliberately NOT treated as an authenticated STOP session
- * on-device. The identityToken must be exchanged/verified by our backend before
- * we create the normal STOP player token. This prevents accepting a forged
- * client-side player id.
+ * Native Apple credential acquisition followed by server-side verification.
+ * The app never turns Apple.user into a trusted STOP identity by itself.
  */
-export async function signInWithApple(): Promise<AppleAuthentication.AppleAuthenticationCredential> {
+export async function signInWithApple(): Promise<StopSession> {
   if (Platform.OS !== "ios") {
     throw new Error("Apple Sign In is only available on iOS.");
   }
   const available = await AppleAuthentication.isAvailableAsync();
   if (!available) throw new Error("Apple Sign In no está disponible en este dispositivo.");
 
-  return AppleAuthentication.signInAsync({
+  const nonce = createNonce();
+  const credential = await AppleAuthentication.signInAsync({
     requestedScopes: [
       AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
       AppleAuthentication.AppleAuthenticationScope.EMAIL,
     ],
+    nonce,
   });
+
+  if (!credential.identityToken) {
+    throw new Error("Apple no devolvió un identity token válido.");
+  }
+
+  const fullName = [credential.fullName?.givenName, credential.fullName?.familyName]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+
+  const response = await fetch(`${API_BASE_URL}/api/auth/apple/native`, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      identityToken: credential.identityToken,
+      nonce,
+      user: credential.user,
+      email: credential.email,
+      name: fullName || undefined,
+    }),
+  });
+
+  if (!response.ok) {
+    const body = await response.text().catch(() => "");
+    throw new Error(body || `Apple authentication failed (${response.status})`);
+  }
+
+  const data = (await response.json()) as {
+    ok: boolean;
+    token: string;
+    user: StopSession["user"];
+  };
+
+  if (!data.ok || !data.token || !data.user?.id) {
+    throw new Error("Respuesta de autenticación Apple no válida.");
+  }
+
+  const session: StopSession = { token: data.token, user: data.user };
+  await saveSession(session);
+  return session;
 }
 
 export async function saveSession(session: StopSession): Promise<void> {
