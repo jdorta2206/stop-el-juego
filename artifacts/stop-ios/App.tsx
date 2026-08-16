@@ -1,20 +1,27 @@
+import { useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import { checkApiHealth } from './src/api';
 
 export default function App() {
+  const [apiStatus, setApiStatus] = useState<'checking' | 'online' | 'offline'>('checking');
+
+  useEffect(() => {
+    checkApiHealth().then(() => setApiStatus('online')).catch(() => setApiStatus('offline'));
+  }, []);
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
         <Text style={styles.logo}>STOP!</Text>
         <Text style={styles.title}>Juego de Palabras Online</Text>
-        <Text style={styles.subtitle}>
-          Versión iOS en construcción. Esta app se conectará al mismo backend que la versión web.
-        </Text>
+        <Text style={styles.subtitle}>Estamos preparando la versión nativa para iPhone.</Text>
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Preparando tu partida</Text>
+          <Text style={styles.cardTitle}>Conexión con STOP</Text>
           <Text style={styles.cardText}>
-            Aquí construiremos la experiencia nativa de iPhone: partidas, multijugador, ranking,
-            retos, perfil y recompensas.
+            {apiStatus === 'checking' && 'Comprobando el servidor…'}
+            {apiStatus === 'online' && '✓ Servidor conectado correctamente'}
+            {apiStatus === 'offline' && '✕ No se ha podido conectar con el servidor'}
           </Text>
         </View>
         <StatusBar style="auto" />
