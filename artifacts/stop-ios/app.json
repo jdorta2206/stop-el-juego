@@ -2,13 +2,14 @@
   "expo": {
     "name": "STOP! Juego de Palabras Online",
     "slug": "stop-juego-de-palabras",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "scheme": "stopjuego",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.dorynex.stopjuegodepalabras"
+      "bundleIdentifier": "com.dorynex.stopjuegodepalabras",
+      "usesAppleSignIn": true
     },
     "android": {
       "package": "com.dorynex.stopjuegodepalabras"
@@ -16,7 +17,9 @@
     "web": {
       "bundler": "metro"
     },
-    "plugins": [],
+    "plugins": [
+      "expo-apple-authentication"
+    ],
     "extra": {
       "apiBaseUrl": "https://workspaceapi-server-production-178e6.up.railway.app"
     }
