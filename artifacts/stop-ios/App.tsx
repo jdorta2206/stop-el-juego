@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { checkApiHealth } from "./src/api";
+import { GameScreen } from "./src/GameScreen";
 import type { Screen } from "./src/types";
 
 export default function App() {
@@ -12,11 +13,12 @@ export default function App() {
     checkApiHealth().then(() => setApiStatus("online")).catch(() => setApiStatus("offline"));
   }, []);
 
-  if (screen === "play" || screen === "ranking" || screen === "profile") {
+  if (screen === "play") return <GameScreen onExit={() => setScreen("home")} />;
+
+  if (screen === "ranking" || screen === "profile") {
     const content = {
-      play: ["🎯", "Jugar", "El motor de juego nativo se conectará aquí al backend real de STOP."],
-      ranking: ["🏆", "Ranking", "Aquí conectaremos el ranking real de STOP."],
-      profile: ["👤", "Tu perfil", "Aquí conectaremos cuenta, XP, niveles, logros y colección."],
+      ranking: ["🏆", "Ranking", "El ranking real se conectará en el siguiente bloque."],
+      profile: ["👤", "Tu perfil", "Cuenta, XP, niveles, logros y colección se conectarán en el siguiente bloque."],
     }[screen];
 
     return (
@@ -41,7 +43,7 @@ export default function App() {
           <Text style={styles.logo}>STOP!</Text>
           <Text style={styles.title}>Juego de Palabras Online</Text>
           <View style={styles.statusPill}>
-            <View style={[styles.dot, apiStatus === "checking" && styles.dotChecking]} />
+            <View style={[styles.dot, apiStatus === "checking" && styles.dotChecking, apiStatus === "offline" && styles.dotOffline]} />
             <Text style={styles.statusText}>
               {apiStatus === "checking" ? "Comprobando servidor…" : apiStatus === "online" ? "Servidor conectado" : "Servidor no disponible"}
             </Text>
@@ -52,7 +54,7 @@ export default function App() {
           <Text style={styles.cardEmoji}>🎯</Text>
           <View style={styles.cardContent}>
             <Text style={styles.cardTitle}>Jugar</Text>
-            <Text style={styles.cardText}>Empieza una partida de STOP</Text>
+            <Text style={styles.cardText}>Empieza una partida real de STOP</Text>
           </View>
           <Text style={styles.arrow}>›</Text>
         </TouchableOpacity>
@@ -93,6 +95,7 @@ const styles = StyleSheet.create({
   statusPill: { flexDirection: "row", alignItems: "center", alignSelf: "flex-start", marginTop: 12, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, backgroundColor: "#e9f8ee" },
   dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#24a148", marginRight: 7 },
   dotChecking: { opacity: 0.35 },
+  dotOffline: { backgroundColor: "#d92d20" },
   statusText: { fontSize: 13, fontWeight: "600" },
   playCard: { flexDirection: "row", alignItems: "center", padding: 20, borderRadius: 20, backgroundColor: "#151f63", minHeight: 105 },
   cardEmoji: { fontSize: 30 },
