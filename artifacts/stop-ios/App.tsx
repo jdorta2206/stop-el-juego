@@ -1,24 +1,51 @@
 import { useEffect, useState } from "react";
 import { StatusBar } from "expo-status-bar";
+import * as AppleAuthentication from "expo-apple-authentication";
 import { SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { checkApiHealth } from "./src/api";
+import { loadSession, signInWithApple, clearSession, type StopSession } from "./src/auth";
 import { GameScreen } from "./src/GameScreen";
 import type { Screen } from "./src/types";
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>("home");
   const [apiStatus, setApiStatus] = useState<"checking" | "online" | "offline">("checking");
+  const [session, setSession] = useState<StopSession | null>(null);
+  const [authBusy, setAuthBusy] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [appleAvailable, setAppleAvailable] = useState(false);
 
   useEffect(() => {
     checkApiHealth().then(() => setApiStatus("online")).catch(() => setApiStatus("offline"));
+    loadSession().then(setSession).catch(() => setSession(null));
+    AppleAuthentication.isAvailableAsync().then(setAppleAvailable).catch(() => setAppleAvailable(false));
   }, []);
+
+  async function handleAppleLogin() {
+    setAuthBusy(true);
+    setAuthError(null);
+    try {
+      const nextSession = await signInWithApple();
+      setSession(nextSession);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "No se pudo iniciar sesión con Apple.";
+      if (!message.toLowerCase().includes("cancel")) setAuthError(message);
+    } finally {
+      setAuthBusy(false);
+    }
+  }
+
+  async function handleLogout() {
+    await clearSession();
+    setSession(null);
+  }
 
   if (screen === "play") return <GameScreen onExit={() => setScreen("home")} />;
 
   if (screen === "ranking" || screen === "profile") {
     const content = {
       ranking: ["🏆", "Ranking", "El ranking real se conectará en el siguiente bloque."],
-      profile: ["👤", "Tu perfil", "Cuenta, XP, niveles, logros y colección se conectarán en el siguiente bloque."],
+      profile: ["👤", "Tu perfil", session ? `Conectado como ${session.user.name || "jugador STOP"}` : "Inicia sesión para cargar tu perfil real."],
     }[screen];
 
     return (
@@ -27,6 +54,11 @@ export default function App() {
           <Text style={styles.emoji}>{content[0]}</Text>
           <Text style={styles.heading}>{content[1]}</Text>
           <Text style={styles.body}>{content[2]}</Text>
+          {screen === "profile" && session && (
+            <TouchableOpacity style={styles.secondary} onPress={handleLogout}>
+              <Text style={styles.secondaryText}>Cerrar sesión</Text>
+            </TouchableOpacity>
+          )}
           <TouchableOpacity style={styles.primary} onPress={() => setScreen("home")}>
             <Text style={styles.primaryText}>Volver</Text>
           </TouchableOpacity>
@@ -49,6 +81,27 @@ export default function App() {
             </Text>
           </View>
         </View>
+
+        {!session && appleAvailable && (
+          <View style={styles.authBox}>
+            <Text style={styles.authTitle}>Guarda tu progreso</Text>
+            <AppleAuthentication.AppleAuthenticationButton
+              buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
+              buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
+              cornerRadius={10}
+              style={styles.appleButton}
+              onPress={handleAppleLogin}
+            />
+            {authBusy && <Text style={styles.authHint}>Conectando con Apple…</Text>}
+            {authError && <Text style={styles.error}>{authError}</Text>}
+          </View>
+        )}
+
+        {session && (
+          <View style={styles.loggedIn}>
+            <Text style={styles.loggedInText}>✓ Sesión iniciada · {session.user.name || "Jugador STOP"}</Text>
+          </View>
+        )}
 
         <TouchableOpacity style={styles.playCard} onPress={() => setScreen("play")} activeOpacity={0.85}>
           <Text style={styles.cardEmoji}>🎯</Text>
@@ -89,7 +142,7 @@ function NavButton({ label, active, onPress }: { label: string; active: boolean;
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: "#f7f8fc" },
   container: { flex: 1, paddingHorizontal: 20 },
-  hero: { paddingTop: 30, paddingBottom: 24 },
+  hero: { paddingTop: 30, paddingBottom: 18 },
   logo: { fontSize: 48, fontWeight: "900", letterSpacing: 1 },
   title: { fontSize: 20, fontWeight: "700", marginTop: 2 },
   statusPill: { flexDirection: "row", alignItems: "center", alignSelf: "flex-start", marginTop: 12, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, backgroundColor: "#e9f8ee" },
@@ -97,6 +150,13 @@ const styles = StyleSheet.create({
   dotChecking: { opacity: 0.35 },
   dotOffline: { backgroundColor: "#d92d20" },
   statusText: { fontSize: 13, fontWeight: "600" },
+  authBox: { backgroundColor: "white", padding: 16, borderRadius: 18, marginBottom: 12 },
+  authTitle: { fontSize: 17, fontWeight: "800", marginBottom: 10 },
+  appleButton: { width: "100%", height: 48 },
+  authHint: { textAlign: "center", marginTop: 8, color: "#5d6170", fontSize: 13 },
+  error: { textAlign: "center", marginTop: 8, color: "#b42318", fontSize: 13 },
+  loggedIn: { backgroundColor: "#e9f8ee", padding: 11, borderRadius: 12, marginBottom: 12 },
+  loggedInText: { textAlign: "center", color: "#166534", fontWeight: "700", fontSize: 13 },
   playCard: { flexDirection: "row", alignItems: "center", padding: 20, borderRadius: 20, backgroundColor: "#151f63", minHeight: 105 },
   cardEmoji: { fontSize: 30 },
   cardContent: { flex: 1, marginLeft: 15 },
@@ -116,4 +176,6 @@ const styles = StyleSheet.create({
   body: { fontSize: 16, lineHeight: 23, textAlign: "center", color: "#5d6170", marginTop: 12 },
   primary: { marginTop: 24, backgroundColor: "#151f63", paddingHorizontal: 30, paddingVertical: 13, borderRadius: 14 },
   primaryText: { color: "white", fontWeight: "800", fontSize: 16 },
+  secondary: { marginTop: 18, paddingHorizontal: 24, paddingVertical: 11, borderRadius: 12, backgroundColor: "#eceef3" },
+  secondaryText: { fontWeight: "700", color: "#2f3442" },
 });
