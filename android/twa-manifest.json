@@ -1,6 +1,6 @@
 {
-  "_comment": "Bubblewrap manifest template for the STOP Trusted Web Activity. Copy this file into the local clone of your TWA project (NOT this repo — Bubblewrap expects it at the root of its own working directory) and run `bubblewrap update && bubblewrap build`. The fields marked TODO must be replaced with real values from your Play Console / signing keystore before building. The `playBilling` feature flag below is what unlocks the Digital Goods API on the JavaScript side; without it window.getDigitalGoodsService is undefined and the app falls back to Stripe.",
-  "packageId": "com.dorynex.stop",
+  "_comment": "Bubblewrap manifest for the STOP Trusted Web Activity. The packageId must remain identical to the application already published in Google Play. Play Billing is enabled so the TWA exposes the Digital Goods API instead of falling back to Stripe.",
+  "packageId": "app.replit.stop_el_juego.twa",
   "host": "www.stopjuegodepalabras.com",
   "name": "STOP - El Juego",
   "launcherName": "STOP",
@@ -26,7 +26,7 @@
     }
   },
   "alphaDependencies": {
-    "enabled": false
+    "enabled": true
   },
   "enableSiteSettingsShortcut": false,
   "isChromeOSOnly": false,
@@ -38,6 +38,6 @@
     "path": "./android.keystore",
     "alias": "android"
   },
-  "appVersionName": "1.1.1",
-  "appVersionCode": 12
+  "appVersionName": "1.1.2",
+  "appVersionCode": 13
 }
