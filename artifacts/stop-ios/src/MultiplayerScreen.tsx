@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, SafeAreaView, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { apiFetch } from "./api";
 import type { StopSession } from "./auth";
 
@@ -48,6 +48,17 @@ export function MultiplayerScreen({ session, onExit }: { session: StopSession; o
     try { const joined = await apiFetch<Room>(`/api/rooms/${encodeURIComponent(roomCode)}/join`, { method: "POST", body: JSON.stringify(player) }); setRoom(joined); setCode(joined.roomCode); }
     catch (e) { setError(errorMessage(e, "No se pudo entrar en la sala.")); } finally { setBusy(false); }
   }
+  async function shareRoom() {
+    if (!room?.roomCode) return;
+    try {
+      await Share.share({
+        title: "Únete a mi partida de STOP",
+        message: `🎮 ¡Únete a mi partida de STOP!\n\nCódigo de sala: ${room.roomCode}\n\nJuega conmigo desde iPhone, Android o Web.`,
+      });
+    } catch (e) {
+      setError(errorMessage(e, "No se pudo abrir el menú de compartir."));
+    }
+  }
   async function startRound() {
     if (!room || !isHost) return; setBusy(true); setError(null);
     try { const started = await apiFetch<Room>(`/api/rooms/${encodeURIComponent(room.roomCode)}/start`, { method: "POST", body: JSON.stringify({ hostId: player.playerId }) }); setRoom(started); setAnswers({}); setSubmitted(false); setRoundKey(`${started.roomCode}:${started.currentRound}`); }
@@ -81,7 +92,7 @@ export function MultiplayerScreen({ session, onExit }: { session: StopSession; o
     return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.container}><Text style={styles.emoji}>🏆</Text><Text style={styles.title}>¡Partida terminada!</Text><Text style={styles.subtitle}>Resultados finales</Text>{ranked.map((p, i) => <View key={p.playerId} style={[styles.player, i === 0 && styles.winner]}><Text style={styles.playerName}>{i + 1}. {p.playerName}</Text><Text style={styles.playerScore}>{p.score ?? 0} pts</Text></View>)}<TouchableOpacity style={styles.primary} onPress={onExit}><Text style={styles.primaryText}>Volver al inicio</Text></TouchableOpacity></ScrollView></SafeAreaView>;
   }
 
-  if (room) return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.container}><Text style={styles.title}>Sala {room.roomCode}</Text><Text style={styles.subtitle}>Comparte el código con tus amigos.</Text><View style={styles.code}><Text style={styles.codeLabel}>CÓDIGO</Text><Text style={styles.codeValue}>{room.roomCode}</Text></View><Text style={styles.section}>Jugadores {room.players?.length ?? 0}/{room.maxPlayers ?? 8}</Text>{(room.players ?? []).map(p => <View key={p.playerId} style={styles.player}><Text style={styles.playerName}>{p.playerName}</Text><Text>{p.playerId === room.hostId ? "👑" : "✓"}</Text></View>)}{isHost ? <TouchableOpacity style={styles.primary} disabled={busy} onPress={() => void startRound}>{busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>{room.currentRound && room.currentRound > 0 ? "Siguiente ronda" : "▶ Empezar partida"}</Text>}</TouchableOpacity> : <Text style={styles.waitText}>⏳ Esperando a que el anfitrión empiece…</Text>}{error && <Text style={styles.error}>{error}</Text>}<TouchableOpacity style={styles.back} onPress={onExit}><Text style={styles.backText}>Salir</Text></TouchableOpacity></ScrollView></SafeAreaView>;
+  if (room) return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.container}><Text style={styles.title}>Sala {room.roomCode}</Text><Text style={styles.subtitle}>Comparte el código con tus amigos.</Text><View style={styles.code}><Text style={styles.codeLabel}>CÓDIGO</Text><Text style={styles.codeValue}>{room.roomCode}</Text></View><TouchableOpacity style={styles.shareButton} onPress={() => void shareRoom}><Text style={styles.shareText}>📤 Compartir invitación</Text></TouchableOpacity><Text style={styles.section}>Jugadores {room.players?.length ?? 0}/{room.maxPlayers ?? 8}</Text>{(room.players ?? []).map(p => <View key={p.playerId} style={styles.player}><Text style={styles.playerName}>{p.playerName}</Text><Text>{p.playerId === room.hostId ? "👑" : "✓"}</Text></View>)}{isHost ? <TouchableOpacity style={styles.primary} disabled={busy} onPress={() => void startRound}>{busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>{room.currentRound && room.currentRound > 0 ? "Siguiente ronda" : "▶ Empezar partida"}</Text>}</TouchableOpacity> : <Text style={styles.waitText}>⏳ Esperando a que el anfitrión empiece…</Text>}{error && <Text style={styles.error}>{error}</Text>}<TouchableOpacity style={styles.back} onPress={onExit}><Text style={styles.backText}>Salir</Text></TouchableOpacity></ScrollView></SafeAreaView>;
 
   return <SafeAreaView style={styles.safe}><View style={styles.container}><Text style={styles.title}>Multijugador</Text><Text style={styles.subtitle}>Juega con iPhone, Android y Web en la misma sala.</Text><TouchableOpacity style={styles.primary} disabled={busy} onPress={() => void createRoom}>{busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>＋ Crear sala</Text>}</TouchableOpacity><View style={styles.separator}><View style={styles.line}/><Text style={styles.or}>o</Text><View style={styles.line}/></View><TextInput value={code} onChangeText={setCode} autoCapitalize="characters" autoCorrect={false} maxLength={6} placeholder="CÓDIGO DE SALA" style={styles.input}/><TouchableOpacity style={styles.secondary} disabled={busy || code.trim().length < 4} onPress={() => void joinRoom}><Text style={styles.secondaryText}>Entrar en sala</Text></TouchableOpacity>{error && <Text style={styles.error}>{error}</Text>}<TouchableOpacity style={styles.back} onPress={onExit}><Text style={styles.backText}>Volver</Text></TouchableOpacity></View></SafeAreaView>;
 }
@@ -91,6 +102,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 28, fontWeight: "900", color: "#151f63", marginBottom: 8 }, subtitle: { fontSize: 15, color: "#5d6170", marginBottom: 20 },
   primary: { minHeight: 52, borderRadius: 14, backgroundColor: "#151f63", alignItems: "center", justifyContent: "center", marginTop: 16 }, primaryText: { color: "#fff", fontSize: 17, fontWeight: "800" },
   secondary: { minHeight: 50, borderRadius: 14, backgroundColor: "#e9ebf2", alignItems: "center", justifyContent: "center", marginTop: 12 }, secondaryText: { color: "#151f63", fontSize: 16, fontWeight: "800" },
+  shareButton: { minHeight: 48, borderRadius: 14, backgroundColor: "#e9ebf2", alignItems: "center", justifyContent: "center", marginBottom: 18 }, shareText: { color: "#151f63", fontSize: 16, fontWeight: "800" },
   separator: { flexDirection: "row", alignItems: "center", marginVertical: 20 }, line: { flex: 1, height: 1, backgroundColor: "#dfe2eb" }, or: { marginHorizontal: 12, color: "#777b89", fontWeight: "700" },
   input: { backgroundColor: "white", borderWidth: 1, borderColor: "#dfe2eb", borderRadius: 14, paddingHorizontal: 15, paddingVertical: 13, fontSize: 17 }, code: { marginVertical: 20, backgroundColor: "#151f63", borderRadius: 18, padding: 20, alignItems: "center" },
   codeLabel: { color: "#fff", opacity: 0.7, fontSize: 11, fontWeight: "800", letterSpacing: 2 }, codeValue: { color: "#fff", fontSize: 36, fontWeight: "900", letterSpacing: 5, marginTop: 4 }, section: { fontSize: 18, fontWeight: "800", marginBottom: 10 },
