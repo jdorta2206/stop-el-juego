@@ -18,7 +18,8 @@
       "bundler": "metro"
     },
     "plugins": [
-      "expo-apple-authentication"
+      "expo-apple-authentication",
+      "expo-dev-client"
     ],
     "extra": {
       "apiBaseUrl": "https://workspaceapi-server-production-178e6.up.railway.app"
