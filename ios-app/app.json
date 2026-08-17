@@ -1,0 +1,20 @@
+{
+  "expo": {
+    "name": "STOP! Juego de Palabras",
+    "slug": "stop-juego-de-palabras",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "stopjuego",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.stopjuegodepalabras.app",
+      "usesAppleSignIn": true
+    },
+    "plugins": [
+      "expo-apple-authentication",
+      "expo-secure-store",
+      "react-native-webview"
+    ]
+  }
+}
