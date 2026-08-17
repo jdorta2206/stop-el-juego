@@ -1,0 +1,80 @@
+import { useCallback, useEffect, useState } from "react";
+import { RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { apiFetch } from "./api";
+import type { StopSession } from "./auth";
+
+const ACHIEVEMENTS = [
+  ["first_win", "🏆", "Primera victoria", "Gana tu primera partida", 50],
+  ["combo3", "🔥", "En racha", "Consigue un combo de 3", 100],
+  ["speed_demon", "⚡", "Rayo", "Gana una ronda rápida", 75],
+  ["chaos_master", "🌀", "Maestro del caos", "Gana una ronda Caos", 150],
+  ["wordsmith", "📝", "Maestro de palabras", "Consigue 7 palabras válidas", 100],
+  ["veteran", "🎖️", "Veterano", "Juega 25 partidas", 150],
+  ["champion", "🥊", "Campeón", "Gana 10 partidas", 200],
+  ["unstoppable", "👑", "Imparable", "Gana 50 partidas", 500],
+  ["streak_3", "🔥", "Racha de 3", "Mantén una racha de 3 días", 75],
+  ["streak_7", "🌟", "Racha de 7", "Mantén una racha de 7 días", 150],
+  ["streak_14", "💎", "Racha de 14", "Mantén una racha de 14 días", 300],
+  ["streak_30", "👑", "Racha de 30", "Mantén una racha de 30 días", 750],
+  ["creator", "🎨", "Creador", "Juega con un pack personalizado", 200],
+  ["viral", "📣", "Viral", "Comparte 10 resultados", 200],
+  ["shutout", "✨", "Imparable contra la IA", "Gana dejando a la IA a cero", 300],
+] as const;
+
+type ProgressResponse = { achievements?: string[]; stats?: Record<string, unknown> };
+
+export function AchievementsScreen({ session, onExit }: { session: StopSession; onExit: () => void }) {
+  const [unlocked, setUnlocked] = useState<Set<string>>(new Set());
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      setError(null);
+      const data = await apiFetch<ProgressResponse>(`/api/ranking/progress/${session.user.id}`);
+      setUnlocked(new Set(Array.isArray(data.achievements) ? data.achievements : []));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudieron cargar los logros.");
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [session.user.id]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const got = ACHIEVEMENTS.filter(([id]) => unlocked.has(id)).length;
+  const pct = Math.round((got / ACHIEVEMENTS.length) * 100);
+
+  return (
+    <View style={styles.safe}>
+      <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} />}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={onExit} style={styles.back}><Text style={styles.backText}>‹</Text></TouchableOpacity>
+          <Text style={styles.title}>🏆 Logros</Text>
+        </View>
+        <View style={styles.progressCard}>
+          <View style={styles.progressRow}><Text style={styles.progressCount}>{got} / {ACHIEVEMENTS.length}</Text><Text style={styles.progressPct}>{pct}%</Text></View>
+          <View style={styles.track}><View style={[styles.fill, { width: `${pct}%` }]} /></View>
+        </View>
+        {error && <View style={styles.error}><Text style={styles.errorText}>{error}</Text><TouchableOpacity onPress={load}><Text style={styles.retry}>Reintentar</Text></TouchableOpacity></View>}
+        {loading && <Text style={styles.loading}>Cargando logros…</Text>}
+        <View style={styles.grid}>
+          {ACHIEVEMENTS.map(([id, icon, name, desc, xp]) => {
+            const isUnlocked = unlocked.has(id);
+            return <View key={id} style={[styles.card, isUnlocked && styles.cardUnlocked]}>
+              <Text style={[styles.icon, !isUnlocked && styles.locked]}>{isUnlocked ? icon : "🔒"}</Text>
+              <Text style={styles.name}>{name}</Text>
+              <Text style={styles.desc}>{desc}</Text>
+              <Text style={[styles.xp, !isUnlocked && styles.xpLocked]}>+{xp} XP</Text>
+            </View>;
+          })}
+        </View>
+      </ScrollView>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({ safe:{flex:1,backgroundColor:"#f7f8fc"}, content:{padding:20,paddingBottom:40}, header:{flexDirection:"row",alignItems:"center",gap:12,marginBottom:16}, back:{width:42,height:42,borderRadius:14,backgroundColor:"white",alignItems:"center",justifyContent:"center"}, backText:{fontSize:34,lineHeight:36}, title:{fontSize:27,fontWeight:"900"}, progressCard:{backgroundColor:"#fff8e7",borderRadius:18,padding:16,marginBottom:14}, progressRow:{flexDirection:"row",justifyContent:"space-between",alignItems:"baseline",marginBottom:9}, progressCount:{fontSize:19,fontWeight:"900"}, progressPct:{fontSize:15,fontWeight:"900"}, track:{height:9,borderRadius:6,backgroundColor:"#eadfca",overflow:"hidden"}, fill:{height:"100%",borderRadius:6,backgroundColor:"#f2a900"}, grid:{flexDirection:"row",flexWrap:"wrap",gap:10}, card:{width:"31.5%",minHeight:155,borderRadius:16,padding:10,backgroundColor:"white",borderWidth:1,borderColor:"#e4e6ed",alignItems:"center",justifyContent:"center"}, cardUnlocked:{borderColor:"#f2c45c",backgroundColor:"#fffaf0"}, icon:{fontSize:34,marginBottom:7}, locked:{opacity:.55}, name:{fontSize:13,fontWeight:"900",textAlign:"center"}, desc:{fontSize:10,color:"#666b78",textAlign:"center",marginTop:5,lineHeight:14}, xp:{fontSize:10,fontWeight:"900",marginTop:8}, xpLocked:{color:"#8a8d97"}, error:{padding:12,borderRadius:12,backgroundColor:"#fff0f0",marginBottom:12}, errorText:{color:"#a61b1b",fontSize:13}, retry:{marginTop:7,fontWeight:"900"}, loading:{textAlign:"center",marginVertical:15,color:"#666b78"}
+});
