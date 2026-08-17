@@ -1,13 +1,16 @@
 import { API_BASE_URL } from './config';
+import { loadSession } from './auth';
 
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const session = await loadSession();
+  const headers = new Headers(init?.headers);
+  headers.set('Accept', 'application/json');
+  headers.set('Content-Type', 'application/json');
+  if (session?.token) headers.set('x-stop-token', session.token);
+
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-      ...(init?.headers ?? {}),
-    },
+    headers,
   });
 
   if (!response.ok) {
