@@ -1,1 +1,1 @@
-export type Screen = "home" | "play" | "ranking" | "profile";
+export type Screen = "home" | "play" | "multiplayer" | "ranking" | "profile";
