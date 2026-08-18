@@ -58,5 +58,5 @@ echo
 echo "=============================================="
 echo " AAB generado. Busca: app-release-bundle.aab"
 echo " Package: app.replit.stop_el_juego.twa"
-echo " Version: 1.3.6.0 / versionCode 14"
+echo " Version: 1.3.6.1 / versionCode 15"
 echo "=============================================="
