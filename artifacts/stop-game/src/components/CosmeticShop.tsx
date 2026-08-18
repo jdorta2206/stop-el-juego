@@ -5,7 +5,7 @@ import { Button } from "@/components/ui";
 import { toast } from "sonner";
 import { Check, Crown, Sparkles, Gift, Coins } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { purchaseWorldCupPackOnPlay } from "@/lib/playBilling";
+import { purchaseWorldCupPackOnPlay, detectPaymentChannel } from "@/lib/playBilling";
 import { startPackCheckout, WORLD_CUP_PACK_PRICE_LABEL } from "@/lib/worldCupPack";
 import { celebrateReward } from "@/lib/celebrate";
 
@@ -65,7 +65,6 @@ const WORLD_CUP_COSMETICS: CosmeticItem[] = [
   { id: "bg_wc_copa", name: "Fondo Copa Mundial", description: "Fondo del trofeo", price: 0, type: "background", rarity: "legendary", icon: "🏆" },
 ];
 
-// Props aceptadas (opcionales) para compatibilidad con Tienda.tsx y PlayerProfile.tsx
 interface CosmeticShopProps {
   playerId?: string;
   inventory?: any;
@@ -76,7 +75,6 @@ interface CosmeticShopProps {
 }
 
 export function CosmeticShop(props: CosmeticShopProps) {
-  // Ignoramos las props, usamos nuestros propios hooks
   const { player } = usePlayer();
   const { inventory, refresh: refreshInventory, buy, equip } = useInventory(player?.id || null);
   const [selectedCategory, setSelectedCategory] = useState<"all" | "avatar" | "frame" | "background">("all");
@@ -84,44 +82,38 @@ export function CosmeticShop(props: CosmeticShopProps) {
   const [equipping, setEquipping] = useState<string | null>(null);
   const [showPackModal, setShowPackModal] = useState(false);
 
-  const hasWorldCupPack = inventory?.items?.some(item => 
+  const hasWorldCupPack = inventory?.items?.some(item =>
     WORLD_CUP_COSMETICS.some(c => c.id === item.id)
   ) ?? false;
 
-  // 🔍 Detectar entorno
-  const isInApp = typeof window !== "undefined" &&
-    typeof window.getDigitalGoodsService === "function";
+  // Play Store/TWA is decided by the shared billing-channel detector.
+  // Never use Stripe as a fallback from the Play Store app.
+  const isInApp = detectPaymentChannel() === "play";
 
-  // ============================================================
-  // COMPRA: Decide entre Google Play y Stripe según el entorno
-  // ============================================================
   const handleBuyPack = useCallback(async () => {
     setPurchasing("pack_mundial");
 
     try {
       if (isInApp) {
-        // 🔵 GOOGLE PLAY BILLING (dentro de la app)
         const result = await purchaseWorldCupPackOnPlay(player?.id || "");
         if (result.granted) {
           await refreshInventory();
           celebrateReward();
           window.alert("¡Pack Mundial desbloqueado! 🎉");
-          setPurchasing(null);
           return;
         }
-        window.alert("❌ No se pudo completar la compra con Google Play.");
+        throw new Error("No se pudo completar la compra con Google Play.");
+      }
+
+      // Web only: Stripe remains available outside the Play Store app.
+      const { url } = await startPackCheckout({ playerId: player?.id || "" });
+      if (url) {
+        window.location.href = url;
       } else {
-        // 🌐 STRIPE (web)
-        const { url } = await startPackCheckout({ playerId: player?.id || "" });
-        if (url) {
-          window.location.href = url;
-        } else {
-          throw new Error("No se recibió URL de Stripe");
-        }
+        throw new Error("No se recibió URL de Stripe");
       }
     } catch (error: any) {
-      if (error?.code === "PURCHASE_CANCELLED") {
-        setPurchasing(null);
+      if (error?.code === "PURCHASE_CANCELLED" || error?.name === "AbortError") {
         return;
       }
       console.error("Error al comprar Pack Mundial:", error);
@@ -231,7 +223,6 @@ export function CosmeticShop(props: CosmeticShopProps) {
         </div>
       </div>
 
-      {/* Categorías */}
       <div className="flex gap-2 overflow-x-auto pb-2">
         {[
           { id: "all", label: "Todos", icon: "🎨" },
@@ -254,7 +245,6 @@ export function CosmeticShop(props: CosmeticShopProps) {
         ))}
       </div>
 
-      {/* Grid de cosméticos */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
         {filteredCosmetics.map((item) => {
           const owned = isOwned(item.id);
