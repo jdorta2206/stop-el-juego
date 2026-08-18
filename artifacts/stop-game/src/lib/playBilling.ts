@@ -28,16 +28,19 @@ declare global {
 }
 
 /**
- * Google Play Billing is available when the Digital Goods API is exposed
- * by the TWA/browser and the Google Play billing provider can be opened.
- * Do not rely on document.referrer: it is not a reliable signal for every
- * installed TWA configuration.
+ * The Digital Goods API is the authoritative signal for Google Play Billing.
+ * We deliberately do NOT pretend that Android/TWA detection alone means that
+ * Play Billing is available: the native TWA must actually expose the provider.
  */
 export function hasGooglePlayBillingApi(): boolean {
-  return typeof window !== "undefined" && typeof window.getDigitalGoodsService === "function";
+  return typeof window !== "undefined"
+    && typeof window.getDigitalGoodsService === "function"
+    && typeof PaymentRequest === "function";
 }
 
 export function detectPaymentChannel(): "play" | "stripe" {
+  // Web/browser => Stripe.
+  // Play Store TWA with the billing bridge => Play Billing.
   return hasGooglePlayBillingApi() ? "play" : "stripe";
 }
 
@@ -48,13 +51,16 @@ export function hasAndroidAppReferrer(): boolean {
 
 async function getPlayBillingService(): Promise<DigitalGoodsService> {
   if (!hasGooglePlayBillingApi()) {
-    throw new Error("Google Play Billing no está disponible en este entorno");
+    throw new Error(
+      "Google Play Billing no está disponible. La aplicación Android debe generarse con Play Billing habilitado."
+    );
   }
 
   try {
     return await window.getDigitalGoodsService!(PLAY_BILLING_METHOD);
-  } catch {
-    throw new Error("Google Play Billing no está disponible en este entorno");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Google Play Billing no está disponible: ${message}`);
   }
 }
 
@@ -69,7 +75,6 @@ export async function purchaseWorldCupPackOnPlay(playerId: string): Promise<{ gr
 
   const service = await getPlayBillingService();
 
-  // Verificamos que Google Play conoce el SKU antes de abrir el pago.
   const details = await service.getDetails([WORLD_CUP_SKU]);
   if (!details.some((item) => item.itemId === WORLD_CUP_SKU)) {
     throw new Error(`Google Play no encuentra el producto ${WORLD_CUP_SKU}.`);
@@ -90,6 +95,9 @@ export async function purchaseWorldCupPackOnPlay(playerId: string): Promise<{ gr
   };
 
   const request = new PaymentRequest(paymentMethods, paymentDetails);
+
+  // Do not fall back to Stripe if Play cannot open the native payment sheet.
+  // A Play-distributed app must use the Play Billing path for digital goods.
   const paymentResponse = await request.show();
   const responseDetails = paymentResponse.details as { purchaseToken?: string; token?: string };
   const purchaseToken = responseDetails.purchaseToken ?? responseDetails.token;
@@ -120,8 +128,6 @@ export async function purchaseWorldCupPackOnPlay(playerId: string): Promise<{ gr
     throw new Error(data.error || "Error al verificar el Pack Mundial");
   }
 
-  // La concesión se hace en servidor. Si la versión de Digital Goods
-  // expone acknowledge(), lo usamos para evitar una compra pendiente.
   if (service.acknowledge) {
     await service.acknowledge(purchaseToken, "onetime").catch((error) => {
       console.warn("No se pudo confirmar la compra en Digital Goods API:", error);
@@ -147,7 +153,9 @@ export function isPlayBillingUnavailable(error: unknown): boolean {
   return candidate.name === "NotSupportedError"
     || message.includes("not supported")
     || message.includes("no está disponible")
-    || message.includes("no esta disponible");
+    || message.includes("no esta disponible")
+    || message.includes("billing no está disponible")
+    || message.includes("billing no esta disponible");
 }
 
 export { PREMIUM_SKU, WORLD_CUP_SKU };
