@@ -28,20 +28,13 @@ declare global {
 }
 
 /**
- * The Digital Goods API is the authoritative signal for Google Play Billing.
- * We deliberately do NOT pretend that Android/TWA detection alone means that
- * Play Billing is available: the native TWA must actually expose the provider.
+ * Digital Goods API is the strongest signal that the TWA has the native
+ * Google Play Billing bridge. PaymentRequest is deliberately NOT required
+ * here because it is the purchase mechanism, not the bridge detector.
  */
 export function hasGooglePlayBillingApi(): boolean {
   return typeof window !== "undefined"
-    && typeof window.getDigitalGoodsService === "function"
-    && typeof PaymentRequest === "function";
-}
-
-export function detectPaymentChannel(): "play" | "stripe" {
-  // Web/browser => Stripe.
-  // Play Store TWA with the billing bridge => Play Billing.
-  return hasGooglePlayBillingApi() ? "play" : "stripe";
+    && typeof window.getDigitalGoodsService === "function";
 }
 
 export function hasAndroidAppReferrer(): boolean {
@@ -49,10 +42,32 @@ export function hasAndroidAppReferrer(): boolean {
   return document.referrer?.startsWith("android-app://") ?? false;
 }
 
+/**
+ * A Play-distributed TWA must never silently fall back to Stripe for digital
+ * goods. Also recognise Android standalone/TWA mode so a missing bridge
+ * produces a Billing error rather than opening Stripe checkout.
+ */
+export function isLikelyPlayTwa(): boolean {
+  if (hasGooglePlayBillingApi()) return true;
+  if (hasAndroidAppReferrer()) return true;
+
+  if (typeof navigator === "undefined" || typeof window === "undefined") {
+    return false;
+  }
+
+  const isAndroid = /Android/i.test(navigator.userAgent);
+  const isStandalone = window.matchMedia?.("(display-mode: standalone)")?.matches ?? false;
+  return isAndroid && isStandalone;
+}
+
+export function detectPaymentChannel(): "play" | "stripe" {
+  return isLikelyPlayTwa() ? "play" : "stripe";
+}
+
 async function getPlayBillingService(): Promise<DigitalGoodsService> {
   if (!hasGooglePlayBillingApi()) {
     throw new Error(
-      "Google Play Billing no está disponible. La aplicación Android debe generarse con Play Billing habilitado."
+      "Google Play Billing no está disponible en esta aplicación. Cierra y vuelve a abrir la app desde Google Play."
     );
   }
 
@@ -67,8 +82,8 @@ async function getPlayBillingService(): Promise<DigitalGoodsService> {
 /**
  * Compra el Pack Mundial (pago único) con Google Play Billing.
  *
- * IMPORTANTE: Digital Goods API NO tiene service.purchase(). La compra se
- * inicia mediante PaymentRequest con el método https://play.google.com/billing.
+ * Digital Goods API inicia la compra mediante PaymentRequest con el método
+ * https://play.google.com/billing.
  */
 export async function purchaseWorldCupPackOnPlay(playerId: string): Promise<{ granted: boolean }> {
   if (!playerId) throw new Error("Debes iniciar sesión para comprar el Pack Mundial.");
@@ -85,8 +100,6 @@ export async function purchaseWorldCupPackOnPlay(playerId: string): Promise<{ gr
     data: { sku: WORLD_CUP_SKU },
   }];
 
-  // Payment Request exige un total, pero Play Billing ignora estos valores
-  // y utiliza el precio configurado en Play Console.
   const paymentDetails = {
     total: {
       label: "Pack Mundial",
@@ -94,10 +107,13 @@ export async function purchaseWorldCupPackOnPlay(playerId: string): Promise<{ gr
     },
   };
 
-  const request = new PaymentRequest(paymentMethods, paymentDetails);
+  if (typeof PaymentRequest !== "function") {
+    throw new Error(
+      "Google Play Billing está activado, pero este TWA no expone PaymentRequest. Hay que regenerar el paquete Android con Play Billing habilitado."
+    );
+  }
 
-  // Do not fall back to Stripe if Play cannot open the native payment sheet.
-  // A Play-distributed app must use the Play Billing path for digital goods.
+  const request = new PaymentRequest(paymentMethods, paymentDetails);
   const paymentResponse = await request.show();
   const responseDetails = paymentResponse.details as { purchaseToken?: string; token?: string };
   const purchaseToken = responseDetails.purchaseToken ?? responseDetails.token;
