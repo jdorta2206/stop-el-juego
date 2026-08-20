@@ -5,6 +5,7 @@
 const PLAY_BILLING_METHOD = "https://play.google.com/billing";
 const PREMIUM_SKU = "premium_monthly";
 const WORLD_CUP_SKU = "pack_mundial";
+const PLAY_TWA_MARKER = "source=googleplay-twa";
 
 type DigitalGoodsService = {
   getDetails: (itemIds: string[]) => Promise<Array<{
@@ -27,11 +28,6 @@ declare global {
   }
 }
 
-/**
- * Digital Goods API is the strongest signal that the TWA has the native
- * Google Play Billing bridge. PaymentRequest is deliberately NOT required
- * here because it is the purchase mechanism, not the bridge detector.
- */
 export function hasGooglePlayBillingApi(): boolean {
   return typeof window !== "undefined"
     && typeof window.getDigitalGoodsService === "function";
@@ -43,11 +39,17 @@ export function hasAndroidAppReferrer(): boolean {
 }
 
 /**
- * A Play-distributed TWA must never silently fall back to Stripe for digital
- * goods. Also recognise Android standalone/TWA mode so a missing bridge
- * produces a Billing error rather than opening Stripe checkout.
+ * The TWA start URL contains a marker generated specifically for the
+ * Google-Play-distributed Android package. This is deterministic and does
+ * not depend on the Digital Goods API being injected before React renders.
  */
+export function hasPlayTwaMarker(): boolean {
+  if (typeof window === "undefined") return false;
+  return window.location.search.includes(PLAY_TWA_MARKER);
+}
+
 export function isLikelyPlayTwa(): boolean {
+  if (hasPlayTwaMarker()) return true;
   if (hasGooglePlayBillingApi()) return true;
   if (hasAndroidAppReferrer()) return true;
 
@@ -55,7 +57,8 @@ export function isLikelyPlayTwa(): boolean {
     return false;
   }
 
-  const isAndroid = /Android/i.test(navigator.userAgent);
+  const ua = navigator.userAgent || "";
+  const isAndroid = /Android/i.test(ua);
   const isStandalone = window.matchMedia?.("(display-mode: standalone)")?.matches ?? false;
   return isAndroid && isStandalone;
 }
@@ -79,17 +82,10 @@ async function getPlayBillingService(): Promise<DigitalGoodsService> {
   }
 }
 
-/**
- * Compra el Pack Mundial (pago único) con Google Play Billing.
- *
- * Digital Goods API inicia la compra mediante PaymentRequest con el método
- * https://play.google.com/billing.
- */
 export async function purchaseWorldCupPackOnPlay(playerId: string): Promise<{ granted: boolean }> {
   if (!playerId) throw new Error("Debes iniciar sesión para comprar el Pack Mundial.");
 
   const service = await getPlayBillingService();
-
   const details = await service.getDetails([WORLD_CUP_SKU]);
   if (!details.some((item) => item.itemId === WORLD_CUP_SKU)) {
     throw new Error(`Google Play no encuentra el producto ${WORLD_CUP_SKU}.`);
@@ -127,18 +123,10 @@ export async function purchaseWorldCupPackOnPlay(playerId: string): Promise<{ gr
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
-    body: JSON.stringify({
-      playerId,
-      purchaseToken,
-      productId: WORLD_CUP_SKU,
-    }),
+    body: JSON.stringify({ playerId, purchaseToken, productId: WORLD_CUP_SKU }),
   });
 
-  const data = (await res.json().catch(() => ({}))) as {
-    granted?: boolean;
-    error?: string;
-  };
-
+  const data = (await res.json().catch(() => ({}))) as { granted?: boolean; error?: string };
   if (!res.ok || !data.granted) {
     await paymentResponse.complete("fail").catch(() => undefined);
     throw new Error(data.error || "Error al verificar el Pack Mundial");
