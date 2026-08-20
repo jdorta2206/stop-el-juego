@@ -1,5 +1,5 @@
 {
-  "_comment": "Bubblewrap manifest for the STOP Trusted Web Activity. The packageId must remain identical to the application already published in Google Play. Play Billing is enabled so the TWA exposes the Digital Goods API instead of falling back to Stripe.",
+  "_comment": "Bubblewrap manifest for the STOP Trusted Web Activity. The packageId must remain identical to the application already published in Google Play. Play Billing is enabled and the start URL contains a deterministic Google Play TWA marker so Pack Mundial cannot fall back to Stripe.",
   "packageId": "app.replit.stop_el_juego.twa",
   "host": "www.stopjuegodepalabras.com",
   "name": "STOP - El Juego",
@@ -12,7 +12,7 @@
   "navigationDividerColorDark": "#0d1757",
   "backgroundColor": "#0d1757",
   "enableNotifications": true,
-  "startUrl": "https://www.stopjuegodepalabras.com/",
+  "startUrl": "https://www.stopjuegodepalabras.com/?source=googleplay-twa",
   "iconUrl": "https://www.stopjuegodepalabras.com/images/icon-512.png",
   "maskableIconUrl": "https://www.stopjuegodepalabras.com/images/icon-maskable-512.png",
   "monochromeIconUrl": "https://www.stopjuegodepalabras.com/images/icon-mono-512.png",
@@ -38,6 +38,6 @@
     "path": "./android.keystore",
     "alias": "android"
   },
-  "appVersionName": "1.3.6.2",
-  "appVersionCode": 16
+  "appVersionName": "1.3.6.3",
+  "appVersionCode": 17
 }
