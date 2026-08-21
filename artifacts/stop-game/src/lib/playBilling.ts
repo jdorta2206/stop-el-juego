@@ -48,8 +48,27 @@ export function hasPlayTwaMarker(): boolean {
   return window.location.search.includes(PLAY_TWA_MARKER);
 }
 
+/**
+ * PWABuilder/Bubblewrap also reports the installed Android build through
+ * `?appVersion=` or the `STOPApp/<version>` UA token. This signal exists on
+ * the very first React render, unlike getDigitalGoodsService(), which Chrome
+ * may inject a little later. Pack Mundial used to miss Play at that moment
+ * and permanently choose the Stripe branch for that render.
+ */
+export function hasTwaVersionSignal(): boolean {
+  if (typeof window === "undefined" || typeof navigator === "undefined") return false;
+  try {
+    const appVersion = new URLSearchParams(window.location.search).get("appVersion");
+    if (appVersion) return true;
+  } catch {
+    // Ignore malformed URL/search access.
+  }
+  return /STOPApp\/[0-9][0-9.]*/i.test(navigator.userAgent || "");
+}
+
 export function isLikelyPlayTwa(): boolean {
   if (hasPlayTwaMarker()) return true;
+  if (hasTwaVersionSignal()) return true;
   if (hasGooglePlayBillingApi()) return true;
   if (hasAndroidAppReferrer()) return true;
 
