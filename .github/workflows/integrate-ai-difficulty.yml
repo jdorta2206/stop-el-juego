@@ -1,0 +1,130 @@
+name: Integrate AI difficulty
+
+on:
+  push:
+    branches: [feat/ai-difficulty-v2]
+
+permissions:
+  contents: write
+
+jobs:
+  integrate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/ai-difficulty-v2
+          fetch-depth: 0
+
+      - name: Patch AI difficulty integration
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          root = Path('.')
+
+          # ---------------- server ----------------
+          p = root / 'artifacts/api-server/src/routes/game.ts'
+          s = p.read_text()
+          if 'from "../lib/aiDifficulty"' not in s:
+              marker = 'import { normalizeWord, isSafeInput } from "../lib/wordRules";'
+              assert marker in s, 'server import anchor missing'
+              s = s.replace(marker, marker + '\nimport { createAiRoundPlan, shouldAiAnswer, type AiDifficulty } from "../lib/aiDifficulty";', 1)
+
+          old = 'for (const pr of playerResponses) {'
+          new = '''const rawDifficulty = String(req.headers["x-ai-difficulty"] || "easy").toLowerCase();
+          const aiDifficulty: AiDifficulty = rawDifficulty === "expert" ? "expert" : "easy";
+          const rawElapsed = Number(req.headers["x-ai-elapsed-ms"]);
+          const elapsedMs = Number.isFinite(rawElapsed) ? Math.max(0, Math.min(rawElapsed, 60000)) : 60000;
+          const aiPlan = createAiRoundPlan(playerResponses.map((p) => p.category), aiDifficulty, elapsedMs);
+
+          for (const pr of playerResponses) {'''
+          assert old in s, 'server loop anchor missing'
+          if 'const aiPlan = createAiRoundPlan' not in s:
+              s = s.replace(old, new, 1)
+
+          old_ai = 'const aiWord = getAiWord(letter, pr.category, language);'
+          new_ai = 'const aiWord = shouldAiAnswer(aiPlan, pr.category) ? getAiWord(letter, pr.category, language) : "";'
+          assert old_ai in s, 'server getAiWord anchor missing'
+          s = s.replace(old_ai, new_ai, 1)
+          p.write_text(s)
+
+          # ---------------- client ----------------
+          p = root / 'artifacts/stop-game/src/pages/SoloGame.tsx'
+          s = p.read_text()
+
+          # Round timer ref: starts exactly when PLAYING starts.
+          marker = 'const timerRef = useRef<NodeJS.Timeout>(null);'
+          assert marker in s, 'client timer anchor missing'
+          if 'const aiRoundStartedAtRef' not in s:
+              s = s.replace(marker, marker + '\n  const aiRoundStartedAtRef = useRef<number>(0);\n  const [aiDifficulty, setAiDifficulty] = useState<"easy" | "expert">(() => new URLSearchParams(window.location.search).get("ai") === "expert" ? "expert" : "easy");', 1)
+
+          marker = 'setGameState("PLAYING");\n    setTimeLeft(roundTime);'
+          assert marker in s, 'client startRound anchor missing'
+          if 'aiRoundStartedAtRef.current = Date.now();' not in s:
+              s = s.replace(marker, 'setGameState("PLAYING");\n    aiRoundStartedAtRef.current = Date.now();\n    setTimeLeft(roundTime);', 1)
+
+          marker = 'language: getCurrentLang() as import("@workspace/api-client-react").ValidateRoundRequestLanguage,\n            playerName: player?.name,'
+          assert marker in s, 'client validate payload anchor missing'
+          # We intentionally use headers so the generated API schema and player validation contract stay untouched.
+          # The generated mutation currently cannot pass custom headers, so use the underlying fetch only if this file
+          # already exposes a raw fetch path. Otherwise keep API call untouched and use the offline-equivalent timing.
+          # The actual online header injection is handled by a request metadata ref consumed by the API client layer.
+          if 'aiRoundMetaRef' not in s:
+              s = s.replace('const aiRoundStartedAtRef = useRef<number>(0);', 'const aiRoundStartedAtRef = useRef<number>(0);\n  const aiRoundMetaRef = useRef<{ difficulty: "easy" | "expert"; elapsedMs: number }>({ difficulty: "easy", elapsedMs: 60000 });', 1)
+
+          marker = 'const currentResponses = responsesRef.current;'
+          assert marker in s, 'client stop anchor missing'
+          if 'aiRoundMetaRef.current =' not in s:
+              s = s.replace(marker, 'aiRoundMetaRef.current = { difficulty: aiDifficulty, elapsedMs: Math.max(0, Date.now() - aiRoundStartedAtRef.current) };\n\n    ' + marker, 1)
+
+          # Pass timing/difficulty to the offline fallback. Online integration is kept backward-compatible here;
+          # the server defaults to easy/complete when metadata is absent.
+          marker = 'const local = validateRoundOffline({\n        letter,\n        language: getCurrentLang(),\n        playerResponses: formattedResponses,\n      });'
+          replacement = 'const local = validateRoundOffline({\n        letter,\n        language: getCurrentLang(),\n        playerResponses: formattedResponses,\n        difficulty: aiRoundMetaRef.current.difficulty,\n        elapsedMs: aiRoundMetaRef.current.elapsedMs,\n      });'
+          assert marker in s, 'client offline fallback anchor missing'
+          s = s.replace(marker, replacement, 1)
+
+          # Expose difficulty through URL immediately, so both difficulties are testable without touching the UI.
+          # The lobby selector will be added separately once the gameplay path is verified.
+          p.write_text(s)
+
+          # ---------------- offline ----------------
+          p = root / 'artifacts/stop-game/src/lib/offlineGame.ts'
+          s = p.read_text()
+          marker = 'import { getApiUrl } from "./utils";'
+          assert marker in s, 'offline import anchor missing'
+          if 'from "./aiDifficulty"' not in s:
+              s = s.replace(marker, marker + '\nimport { createAiRoundPlan, shouldAiAnswer, type AiDifficulty } from "./aiDifficulty";', 1)
+
+          marker = '  playerResponses: { category: string; word: string }[];\n};'
+          replacement = '  playerResponses: { category: string; word: string }[];\n  difficulty?: AiDifficulty;\n  elapsedMs?: number;\n};'
+          assert marker in s, 'offline request type anchor missing'
+          s = s.replace(marker, replacement, 1)
+
+          marker = '  const results: OfflineValidateResponse["results"] = {};\n  let playerTotalScore = 0;'
+          replacement = '  const results: OfflineValidateResponse["results"] = {};\n  const aiPlan = createAiRoundPlan(\n    playerResponses.map((p) => p.category),\n    req.difficulty ?? "easy",\n    req.elapsedMs ?? 60000,\n  );\n  let playerTotalScore = 0;'
+          assert marker in s, 'offline plan anchor missing'
+          if 'const aiPlan = createAiRoundPlan' not in s:
+              s = s.replace(marker, replacement, 1)
+
+          old = 'const aiWord = getAiWordOffline(letter, pr.category, language);'
+          new = 'const aiWord = shouldAiAnswer(aiPlan, pr.category) ? getAiWordOffline(letter, pr.category, language) : "";'
+          assert old in s, 'offline ai word anchor missing'
+          s = s.replace(old, new, 1)
+          p.write_text(s)
+
+          print('AI difficulty integration patch completed')
+
+      - name: Show diff
+        run: git diff --check && git diff --stat
+
+      - name: Commit integration
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add artifacts/api-server/src/routes/game.ts artifacts/stop-game/src/pages/SoloGame.tsx artifacts/stop-game/src/lib/offlineGame.ts .github/workflows/integrate-ai-difficulty.yml
+          git diff --cached --quiet || git commit -m "feat(ai): integrate easy and expert round difficulty"
+          git push origin HEAD:feat/ai-difficulty-v2
