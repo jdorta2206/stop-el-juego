@@ -1,0 +1,107 @@
+name: Apply AI difficulty migration
+
+on:
+  push:
+    branches: [master]
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    if: github.event.head_commit.message != 'chore(ai): apply difficulty engine'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Patch Solo AI safely
+        shell: python
+        run: |
+          from pathlib import Path
+
+          game = Path('artifacts/api-server/src/routes/game.ts')
+          text = game.read_text(encoding='utf-8')
+          if 'aiDifficulty' not in text:
+              text = text.replace(
+                  'import { normalizeWord, isSafeInput } from "../lib/wordRules";\n',
+                  'import { normalizeWord, isSafeInput } from "../lib/wordRules";\nimport { isUserPremium } from "../lib/premiumStatus";\nimport { createAiRoundPlan, shouldAiAnswer } from "../lib/aiDifficulty";\n',
+                  1,
+              )
+              old = '''  const playerId =\n    (req.header("x-player-id") as string | undefined) ||\n    (typeof (req as { playerId?: unknown }).playerId === "string"\n      ? ((req as { playerId?: string }).playerId ?? null)\n      : null);'''
+              new = old + '''\n\n  // AI difficulty is server-authoritative. Premium is never trusted from the client.\n  const isPremium = playerId ? await isUserPremium(playerId).catch(() => false) : false;\n  const rawElapsedMs = Number(req.header("x-round-elapsed-ms") || "60000");\n  const elapsedMs = Number.isFinite(rawElapsedMs)\n    ? Math.max(0, Math.min(rawElapsedMs, 120000))\n    : 60000;\n  const aiPlan = createAiRoundPlan(\n    playerResponses.map(pr => pr.category),\n    isPremium,\n    elapsedMs,\n  );'''
+              if old not in text:
+                  raise SystemExit('game.ts playerId anchor not found')
+              text = text.replace(old, new, 1)
+              old2 = '    const aiWord = getAiWord(letter, pr.category, language);'
+              new2 = '    const aiWord = shouldAiAnswer(aiPlan, pr.category)\n      ? getAiWord(letter, pr.category, language)\n      : "";'
+              if old2 not in text:
+                  raise SystemExit('game.ts AI call anchor not found')
+              text = text.replace(old2, new2, 1)
+              game.write_text(text, encoding='utf-8')
+
+          solo = Path('artifacts/stop-game/src/pages/SoloGame.tsx')
+          text = solo.read_text(encoding='utf-8')
+          if 'x-round-elapsed-ms' not in text:
+              text = text.replace(
+                  'useValidateRound, useSubmitScore, type CategoryResult, type ValidateRoundResponse',
+                  'validateRound, useSubmitScore, type CategoryResult, type ValidateRoundResponse',
+                  1,
+              )
+              text = text.replace('  const validateMutation = useValidateRound();\n', '', 1)
+              anchor = '  const scoreTokensRef = useRef<string[]>([]);\n'
+              replacement = anchor + '  // Monotonic-ish wall-clock snapshot used only to tell the server how long the round lasted.\n  const roundStartedAtRef = useRef<number>(0);\n'
+              if anchor not in text:
+                  raise SystemExit('SoloGame refs anchor not found')
+              text = text.replace(anchor, replacement, 1)
+              anchor2 = '    setGameState("PLAYING");\n    setTimeLeft(roundTime);'
+              replacement2 = '    roundStartedAtRef.current = Date.now();\n    setGameState("PLAYING");\n    setTimeLeft(roundTime);'
+              if anchor2 not in text:
+                  raise SystemExit('SoloGame startRound anchor not found')
+              text = text.replace(anchor2, replacement2, 1)
+              old_call = '''        validateMutation.mutateAsync({\n          data: {\n            letter,\n            language: getCurrentLang() as import("@workspace/api-client-react").ValidateRoundRequestLanguage,\n            playerName: player?.name,\n            playerResponses: formattedResponses,\n          }\n        })'''
+              new_call = '''        validateRound(\n          {\n            letter,\n            language: getCurrentLang() as import("@workspace/api-client-react").ValidateRoundRequestLanguage,\n            playerName: player?.name,\n            playerResponses: formattedResponses,\n          },\n          {\n            headers: {\n              ...authHeaders(),\n              "x-round-elapsed-ms": String(Math.max(0, Date.now() - roundStartedAtRef.current)),\n            },\n          },\n        )'''
+              if old_call not in text:
+                  raise SystemExit('SoloGame validate call anchor not found')
+              text = text.replace(old_call, new_call, 1)
+              old_offline = '''      const local = validateRoundOffline({\n        letter,\n        language: getCurrentLang(),\n        playerResponses: formattedResponses,\n      });'''
+              new_offline = '''      const local = validateRoundOffline({\n        letter,\n        language: getCurrentLang(),\n        playerResponses: formattedResponses,\n        isPremium,\n        elapsedMs: Math.max(0, Date.now() - roundStartedAtRef.current),\n      });'''
+              if old_offline not in text:
+                  raise SystemExit('SoloGame offline call anchor not found')
+              text = text.replace(old_offline, new_offline, 1)
+              solo.write_text(text, encoding='utf-8')
+
+          offline = Path('artifacts/stop-game/src/lib/offlineGame.ts')
+          text = offline.read_text(encoding='utf-8')
+          if 'createAiRoundPlan' not in text:
+              text = text.replace(
+                  'import { getApiUrl } from "./utils";\n',
+                  'import { getApiUrl } from "./utils";\nimport { createAiRoundPlan, shouldAiAnswer } from "./aiDifficulty";\n',
+                  1,
+              )
+              text = text.replace(
+                  '  playerResponses: { category: string; word: string }[];\n};',
+                  '  playerResponses: { category: string; word: string }[];\n  isPremium?: boolean;\n  elapsedMs?: number;\n};',
+                  1,
+              )
+              text = text.replace(
+                  '  const { letter, language, playerResponses } = req;\n',
+                  '  const { letter, language, playerResponses, isPremium = false, elapsedMs = 60000 } = req;\n  const aiPlan = createAiRoundPlan(playerResponses.map(pr => pr.category), isPremium, elapsedMs);\n',
+                  1,
+              )
+              text = text.replace(
+                  '    const aiWord = getAiWordOffline(letter, pr.category, language);',
+                  '    const aiWord = shouldAiAnswer(aiPlan, pr.category)\n      ? getAiWordOffline(letter, pr.category, language)\n      : "";',
+                  1,
+              )
+              offline.write_text(text, encoding='utf-8')
+
+          print('AI difficulty migration applied successfully')
+      - name: Commit migration
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add artifacts/api-server/src/routes/game.ts artifacts/stop-game/src/pages/SoloGame.tsx artifacts/stop-game/src/lib/offlineGame.ts .github/workflows/_ai_difficulty_migration.yml
+          git rm .github/workflows/_ai_difficulty_migration.yml
+          git diff --cached --quiet && exit 0
+          git commit -m "chore(ai): apply difficulty engine"
+          git push
