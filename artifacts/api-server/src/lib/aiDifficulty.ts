@@ -1,4 +1,4 @@
-export type AiDifficulty = "free" | "premium";
+export type AiDifficulty = "easy" | "expert";
 
 type AiCategoryPlan = {
   readyAtMs: number;
@@ -8,13 +8,13 @@ type AiCategoryPlan = {
 export type AiRoundPlan = Map<string, AiCategoryPlan>;
 
 const CONFIG = {
-  free: {
+  easy: {
     reactionMinMs: 1500,
     reactionMaxMs: 4000,
     minAccuracy: 0.40,
     maxAccuracy: 0.60,
   },
-  premium: {
+  expert: {
     reactionMinMs: 500,
     reactionMaxMs: 1500,
     minAccuracy: 0.80,
@@ -26,31 +26,39 @@ function randomInt(min: number, max: number): number {
   return min + Math.floor(Math.random() * (max - min + 1));
 }
 
+/**
+ * Builds the answers the AI would have produced by the time the player stops.
+ * No timers are created here: the caller supplies the elapsed round time.
+ */
 export function createAiRoundPlan(
   categories: string[],
-  isPremium: boolean,
+  difficulty: AiDifficulty,
   elapsedMs: number,
 ): AiRoundPlan {
-  const difficulty: AiDifficulty = isPremium ? "premium" : "free";
   const cfg = CONFIG[difficulty];
   const uniqueCategories = [...new Set(categories)];
+  if (uniqueCategories.length === 0) return new Map();
 
-  // Bounded accuracy keeps the AI human-like instead of occasionally producing
-  // absurd all-right or all-wrong rounds from independent random rolls.
   const minSuccesses = Math.ceil(uniqueCategories.length * cfg.minAccuracy);
-  const maxSuccesses = Math.max(minSuccesses, Math.floor(uniqueCategories.length * cfg.maxAccuracy));
+  const maxSuccesses = Math.max(
+    minSuccesses,
+    Math.floor(uniqueCategories.length * cfg.maxAccuracy),
+  );
   const targetSuccesses = randomInt(minSuccesses, maxSuccesses);
+  const elapsed = Math.max(0, elapsedMs);
 
-  const ranked = uniqueCategories.map((category) => ({
-    category,
-    readyAtMs: randomInt(cfg.reactionMinMs, cfg.reactionMaxMs),
-  })).sort((a, b) => a.readyAtMs - b.readyAtMs);
+  const ranked = uniqueCategories
+    .map((category) => ({
+      category,
+      readyAtMs: randomInt(cfg.reactionMinMs, cfg.reactionMaxMs),
+    }))
+    .sort((a, b) => a.readyAtMs - b.readyAtMs);
 
   const plan: AiRoundPlan = new Map();
   ranked.forEach((item, index) => {
     plan.set(item.category, {
       readyAtMs: item.readyAtMs,
-      succeeds: index < targetSuccesses && item.readyAtMs <= Math.max(0, elapsedMs),
+      succeeds: index < targetSuccesses && item.readyAtMs <= elapsed,
     });
   });
 
@@ -58,5 +66,5 @@ export function createAiRoundPlan(
 }
 
 export function shouldAiAnswer(plan: AiRoundPlan, category: string): boolean {
-  return !!plan.get(category)?.succeeds;
+  return plan.get(category)?.succeeds === true;
 }
