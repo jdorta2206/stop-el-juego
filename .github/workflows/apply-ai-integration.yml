@@ -1,0 +1,142 @@
+name: Apply AI difficulty integration
+
+on:
+  push:
+    branches: [feat/ai-difficulty-v2]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/ai-difficulty-v2
+          fetch-depth: 0
+
+      - name: Patch integration points
+        shell: python
+        run: |
+          from pathlib import Path
+
+          def once(s, old, new, label):
+              n = s.count(old)
+              if n != 1:
+                  raise SystemExit(f"{label}: expected 1 match, got {n}")
+              return s.replace(old, new, 1)
+
+          # SERVER
+          p = Path("artifacts/api-server/src/routes/game.ts")
+          s = p.read_text()
+          if 'createAiRoundPlan' not in s:
+              s = once(s,
+                  'import { normalizeWord, isSafeInput } from "../lib/wordRules";\n',
+                  'import { normalizeWord, isSafeInput } from "../lib/wordRules";\nimport { createAiRoundPlan, shouldAiAnswer, type AiDifficulty } from "../lib/aiDifficulty";\n',
+                  'server import')
+          if 'const aiPlan = createAiRoundPlan' not in s:
+              s = once(s,
+                  'for (const pr of playerResponses) {',
+                  '''const rawDifficulty = String(req.header("x-ai-difficulty") || "easy").toLowerCase();
+          const aiDifficulty: AiDifficulty = rawDifficulty === "expert" ? "expert" : "easy";
+          const rawElapsed = Number(req.header("x-ai-elapsed-ms"));
+          const elapsedMs = Number.isFinite(rawElapsed) ? Math.max(0, Math.min(rawElapsed, 60000)) : 60000;
+          const aiPlan = createAiRoundPlan(playerResponses.map((p) => p.category), aiDifficulty, elapsedMs);
+
+          for (const pr of playerResponses) {''',
+                  'server plan')
+          s = s.replace(
+              'const aiWord = getAiWord(letter, pr.category, language);',
+              'const aiWord = shouldAiAnswer(aiPlan, pr.category) ? getAiWord(letter, pr.category, language) : "";',
+              1,
+          )
+          p.write_text(s)
+
+          # CLIENT
+          p = Path("artifacts/stop-game/src/pages/SoloGame.tsx")
+          s = p.read_text()
+          s = once(s,
+              'import { useValidateRound, useSubmitScore, type CategoryResult, type ValidateRoundResponse } from "@workspace/api-client-react";',
+              'import { useSubmitScore, type CategoryResult, type ValidateRoundResponse } from "@workspace/api-client-react";',
+              'client import')
+          s = once(s, '  const validateMutation = useValidateRound();\n', '', 'validate mutation declaration')
+          old = '''        validateMutation.mutateAsync({
+          data: {
+            letter,
+            language: getCurrentLang() as import("@workspace/api-client-react").ValidateRoundRequestLanguage,
+            playerName: player?.name,
+            playerResponses: formattedResponses,
+          }
+        })'''
+          new = '''        fetch(`${getApiUrl()}/api/game/validate`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...authHeaders(),
+            "x-ai-difficulty": aiRoundMetaRef.current.difficulty,
+            "x-ai-elapsed-ms": String(aiRoundMetaRef.current.elapsedMs),
+          },
+          body: JSON.stringify({
+            letter,
+            language: getCurrentLang(),
+            playerName: player?.name,
+            playerResponses: formattedResponses,
+          }),
+        }).then(async (response) => {
+          if (!response.ok) throw new Error(`validate-${response.status}`);
+          return response.json() as Promise<ValidateRoundResponse>;
+        })'''
+          s = once(s, old, new, 'client validation call')
+          p.write_text(s)
+
+          # OFFLINE: already accepts difficulty/elapsed; ensure it uses the plan.
+          p = Path("artifacts/stop-game/src/lib/offlineGame.ts")
+          s = p.read_text()
+          if 'createAiRoundPlan' not in s:
+              s = once(s,
+                  'import { getApiUrl } from "./utils";\n',
+                  'import { getApiUrl } from "./utils";\nimport { createAiRoundPlan, shouldAiAnswer, type AiDifficulty } from "./aiDifficulty";\n',
+                  'offline import')
+          if 'difficulty?: AiDifficulty;' not in s:
+              s = once(s,
+                  '  playerResponses: { category: string; word: string }[];\n};',
+                  '  playerResponses: { category: string; word: string }[];\n  difficulty?: AiDifficulty;\n  elapsedMs?: number;\n};',
+                  'offline request metadata')
+          if 'const aiPlan = createAiRoundPlan' not in s:
+              s = once(s,
+                  '  const results: OfflineValidateResponse["results"] = {};\n  let playerTotalScore = 0;',
+                  '''  const results: OfflineValidateResponse["results"] = {};
+  const aiPlan = createAiRoundPlan(
+    req.playerResponses.map((p) => p.category),
+    req.difficulty ?? "easy",
+    req.elapsedMs ?? 60000,
+  );
+  let playerTotalScore = 0;''',
+                  'offline plan')
+          if 'shouldAiAnswer(aiPlan' not in s:
+              s = once(s,
+                  'const aiWord = getAiWordOffline(letter, pr.category, language);',
+                  'const aiWord = shouldAiAnswer(aiPlan, pr.category) ? getAiWordOffline(letter, pr.category, language) : "";',
+                  'offline ai answer')
+          p.write_text(s)
+
+      - name: Verify source and build
+        shell: bash
+        run: |
+          corepack enable
+          pnpm install --frozen-lockfile
+          pnpm exec tsc --noEmit -p artifacts/api-server/tsconfig.json
+          pnpm exec tsc --noEmit -p artifacts/stop-game/tsconfig.json
+          git diff --check
+
+      - name: Commit integration and remove temporary workflow
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          rm -f .github/workflows/apply-ai-integration.yml attached_assets/.ai-difficulty-integration-trigger
+          git add artifacts/api-server/src/routes/game.ts artifacts/stop-game/src/pages/SoloGame.tsx artifacts/stop-game/src/lib/offlineGame.ts .github/workflows/apply-ai-integration.yml attached_assets/.ai-difficulty-integration-trigger
+          git commit -m "feat(ai): integrate easy and expert solo difficulty"
+          git push origin HEAD:feat/ai-difficulty-v2
