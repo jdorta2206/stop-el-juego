@@ -1,0 +1,60 @@
+name: Fix AI online metadata
+
+on:
+  push:
+    branches: [feat/ai-difficulty-v2]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/ai-difficulty-v2
+          fetch-depth: 0
+      - name: Patch online validation metadata
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('artifacts/stop-game/src/pages/SoloGame.tsx')
+          s = p.read_text()
+          if 'validateRound,' not in s:
+              s = s.replace('useValidateRound, useSubmitScore, type CategoryResult, type ValidateRoundResponse', 'useValidateRound, validateRound, useSubmitScore, type CategoryResult, type ValidateRoundResponse', 1)
+          old = '''validateMutation.mutateAsync({
+          data: {
+            letter,
+            language: getCurrentLang() as import("@workspace/api-client-react").ValidateRoundRequestLanguage,
+            playerName: player?.name,
+            playerResponses: formattedResponses,
+          }
+        })'''
+          new = '''validateRound({
+          letter,
+          language: getCurrentLang() as import("@workspace/api-client-react").ValidateRoundRequestLanguage,
+          playerName: player?.name,
+          playerResponses: formattedResponses,
+        }, {
+          headers: {
+            ...authHeaders(),
+            "x-ai-difficulty": aiDifficulty,
+            "x-ai-elapsed-ms": String(Math.max(0, Date.now() - aiRoundStartedAtRef.current)),
+          },
+        })'''
+          if old not in s:
+              raise SystemExit('online validate call anchor missing')
+          s = s.replace(old, new, 1)
+          p.write_text(s)
+          print('online metadata integrated')
+      - name: Verify diff
+        run: git diff --check
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add artifacts/stop-game/src/pages/SoloGame.tsx
+          git diff --cached --quiet || git commit -m "feat(ai): send difficulty and elapsed time to validation"
+          git push origin HEAD:feat/ai-difficulty-v2
