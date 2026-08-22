@@ -7,6 +7,7 @@ import { createNativeBridgeScript, NativeBridgeEvent } from './iosBridge';
 
 const GAME_URL = 'https://www.stopjuegodepalabras.com';
 const GAME_HOST = 'www.stopjuegodepalabras.com';
+const OAUTH_CALLBACK_PREFIX = 'stopjuego://oauth';
 
 function isGameUrl(url: string) {
   try {
@@ -17,9 +18,37 @@ function isGameUrl(url: string) {
   }
 }
 
+function isOAuthCallback(url: string) {
+  return url.toLowerCase().startsWith(OAUTH_CALLBACK_PREFIX);
+}
+
+function oauthCallbackToWebUrl(url: string) {
+  // The backend already supports stopjuego://oauth as a safe mobile return
+  // origin. Its bridge page puts the authenticated handoff in the URL fragment.
+  // Bring that callback back into the same WebView so the existing web session
+  // and OAuth handoff logic can finish without opening Safari or another app.
+  return `${GAME_URL}${url.slice(OAUTH_CALLBACK_PREFIX.length) || '/'}`;
+}
+
 export default function App() {
   const webViewRef = useRef<WebView>(null);
   const [ready, setReady] = useState(false);
+
+  const finishOAuthInWebView = useCallback((url: string) => {
+    const target = oauthCallbackToWebUrl(url);
+    webViewRef.current?.injectJavaScript(`window.location.replace(${JSON.stringify(target)}); true;`);
+  }, []);
+
+  useEffect(() => {
+    Linking.getInitialURL().then((url) => {
+      if (url && isOAuthCallback(url)) finishOAuthInWebView(url);
+    }).catch(() => undefined);
+
+    const subscription = Linking.addEventListener('url', ({ url }) => {
+      if (isOAuthCallback(url)) finishOAuthInWebView(url);
+    });
+    return () => subscription.remove();
+  }, [finishOAuthInWebView]);
 
   const postAppState = useCallback((state: string) => {
     webViewRef.current?.injectJavaScript(`
@@ -41,9 +70,13 @@ export default function App() {
 
     if (isGameUrl(url)) return true;
 
-    // Keep normal iOS schemes (Apple sign-in callbacks, mail, tel, etc.) out
-    // of the WebView and let iOS handle them natively.
-    if (/^(mailto:|tel:|sms:|stopjuego:)/i.test(url)) {
+    if (isOAuthCallback(url)) {
+      finishOAuthInWebView(url);
+      return false;
+    }
+
+    // Keep ordinary iOS schemes out of the WebView and let iOS handle them.
+    if (/^(mailto:|tel:|sms:)/i.test(url)) {
       void Linking.openURL(url);
       return false;
     }
@@ -55,7 +88,7 @@ export default function App() {
     }
 
     return true;
-  }, []);
+  }, [finishOAuthInWebView]);
 
   const handleMessage = useCallback((event: WebViewMessageEvent) => {
     try {
@@ -64,8 +97,6 @@ export default function App() {
         setReady(true);
         return;
       }
-      // Native actions will be connected here later (StoreKit, share sheet,
-      // notifications, etc.). We deliberately keep this layer passive for now.
       if (message.type === 'native-action') return;
     } catch {
       // Ignore non-bridge messages from the web app.
