@@ -1,0 +1,29 @@
+name: AI difficulty inspect
+on:
+  push:
+    branches: [feat/ai-difficulty-v2]
+
+jobs:
+  inspect:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect validation flow
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          for p in [
+              'artifacts/api-server/src/routes/game.ts',
+              'artifacts/stop-game/src/pages/SoloGame.tsx',
+              'artifacts/stop-game/src/lib/offlineGame.ts',
+              'lib/api-zod/src/generated/types/validateRoundRequest.ts',
+          ]:
+              print('\n===== '+p+' =====')
+              s=Path(p).read_text()
+              for needle in ['getAiWord', '/api/game/validate', 'validateRound', 'fetch(', 'axios', 'ValidateRoundBody', 'validateRoundRequest']:
+                  i=s.find(needle)
+                  if i>=0:
+                      print('---',needle,'---')
+                      print(s[max(0,i-1000):i+2500])
+          PY
