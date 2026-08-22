@@ -5,6 +5,7 @@
 // Si el jugador entra al avión sin internet pero ya jugó antes, las partidas
 // solo siguen funcionando con esta copia local del diccionario.
 import { getApiUrl } from "./utils";
+import { createAiRoundPlan, shouldAiAnswer, type AiDifficulty } from "./aiDifficulty";
 
 export type OfflineBundle = {
   version: string;
@@ -17,6 +18,8 @@ export type OfflineValidateRequest = {
   letter: string;
   language: string;
   playerResponses: { category: string; word: string }[];
+  difficulty?: AiDifficulty;
+  elapsedMs?: number;
 };
 
 export type OfflineValidateResponse = {
@@ -182,12 +185,17 @@ export function validateRoundOffline(req: OfflineValidateRequest): OfflineValida
 
   const { letter, language, playerResponses } = req;
   const results: OfflineValidateResponse["results"] = {};
+  const aiPlan = createAiRoundPlan(
+    playerResponses.map((p) => p.category),
+    req.difficulty ?? "easy",
+    req.elapsedMs ?? 60000,
+  );
   let playerTotalScore = 0;
   let aiTotalScore = 0;
 
   for (const pr of playerResponses) {
     const playerWord = pr.word?.trim() || "";
-    const aiWord = getAiWordOffline(letter, pr.category, language);
+    const aiWord = shouldAiAnswer(aiPlan, pr.category) ? getAiWordOffline(letter, pr.category, language) : "";
     const normPlayerWord = normalizeWord(playerWord);
 
     const isPlayerWordValid = isWordValid(bundle, playerWord, letter, pr.category, language);
