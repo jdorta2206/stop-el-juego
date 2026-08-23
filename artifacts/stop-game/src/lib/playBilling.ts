@@ -161,6 +161,57 @@ export async function purchaseWorldCupPackOnPlay(playerId: string): Promise<{ gr
   return { granted: true };
 }
 
+/**
+ * Restores existing Google Play subscription purchases when the user opens
+ * the Android TWA. Digital Goods API exposes existing purchases through
+ * listPurchases(); each token is sent to the server, which verifies it with
+ * Google Play before granting premium. This is intentionally a no-op on the
+ * normal web/Stripe channel.
+ */
+export async function restorePlayPurchases(playerId?: string | null): Promise<void> {
+  if (!isLikelyPlayTwa()) return;
+  const service = await getPlayBillingService();
+  const purchases = await service.listPurchases();
+  const premiumPurchases = purchases.filter(
+    (purchase) => purchase.itemId === PREMIUM_SKU && !!purchase.purchaseToken,
+  );
+
+  if (premiumPurchases.length === 0) return;
+
+  // The server verifies every token against Google Play. If playerId is not
+  // available yet, simply skip restoration and let the next premium refresh
+  // retry once the player is known.
+  if (!playerId) return;
+
+  for (const purchase of premiumPurchases) {
+    try {
+      const res = await fetch("/api/billing/play/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          playerId,
+          purchaseToken: purchase.purchaseToken,
+          productId: PREMIUM_SKU,
+        }),
+      });
+
+      if (!res.ok) {
+        console.warn("No se pudo restaurar la compra de Google Play:", await res.text().catch(() => ""));
+        continue;
+      }
+
+      if (service.acknowledge) {
+        await service.acknowledge(purchase.purchaseToken, "subscription").catch((error) => {
+          console.warn("No se pudo confirmar la compra restaurada en Digital Goods API:", error);
+        });
+      }
+    } catch (error) {
+      console.warn("Error restaurando compra de Google Play:", error);
+    }
+  }
+}
+
 export function isPlayPurchaseCancelled(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
   const candidate = error as { name?: string; code?: string; message?: string };
