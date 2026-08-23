@@ -24,7 +24,6 @@
       window.dataLayer = window.dataLayer || [];
       function gtag(){dataLayer.push(arguments);}
       gtag('js', new Date());
-      // send_page_view:false — lo gestionamos manualmente en cada cambio de ruta (SPA)
       gtag('config', 'G-735TVGF6F5', { send_page_view: false });
     </script>
 
@@ -74,21 +73,40 @@
         background: radial-gradient(ellipse at 50% 45%, #5a1208 0%, #1a063a 55%, #060318 100%);
         transition: opacity 0.35s ease;
       }
-      #html-splash.fade-out {
-        opacity: 0;
-        pointer-events: none;
-      }
+      #html-splash.fade-out { opacity: 0; pointer-events: none; }
       #html-splash img {
-        width: 160px;
-        height: 160px;
-        border-radius: 50%;
+        width: 160px; height: 160px; border-radius: 50%;
         filter: drop-shadow(0 0 28px rgba(181,48,26,0.95)) drop-shadow(0 4px 16px rgba(0,0,0,0.8));
         animation: splash-pulse 1.6s ease-in-out infinite;
       }
       @keyframes splash-pulse {
         0%, 100% { transform: scale(1); filter: drop-shadow(0 0 28px rgba(181,48,26,0.95)) drop-shadow(0 4px 16px rgba(0,0,0,0.8)); }
-        50%       { transform: scale(1.06); filter: drop-shadow(0 0 42px rgba(181,48,26,1)) drop-shadow(0 4px 20px rgba(0,0,0,0.9)); }
+        50% { transform: scale(1.06); filter: drop-shadow(0 0 42px rgba(181,48,26,1)) drop-shadow(0 4px 20px rgba(0,0,0,0.9)); }
       }
+
+      /* AI difficulty selector — lives in index.html so it is available on
+         both normal Solo and Daily Challenge without changing the game flow. */
+      #stop-ai-difficulty {
+        width: min(92vw, 390px);
+        margin: 0 auto 18px;
+        padding: 14px;
+        border-radius: 18px;
+        background: rgba(255,255,255,.07);
+        border: 1px solid rgba(255,255,255,.14);
+        color: #fff;
+        box-sizing: border-box;
+        font-family: Inter, system-ui, sans-serif;
+      }
+      #stop-ai-difficulty .title { font-weight: 900; font-size: 16px; }
+      #stop-ai-difficulty .sub { color: rgba(255,255,255,.55); font-size: 12px; margin-top: 3px; }
+      #stop-ai-difficulty .buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-top: 11px; }
+      #stop-ai-difficulty button {
+        border: 1px solid rgba(255,255,255,.15);
+        border-radius: 13px; padding: 11px 8px; color: #fff;
+        background: rgba(255,255,255,.06); font-weight: 900; font-size: 14px; cursor: pointer;
+      }
+      #stop-ai-difficulty button.active.easy { background: linear-gradient(135deg,#22c55e,#16a34a); border-color: #86efac; }
+      #stop-ai-difficulty button.active.expert { background: linear-gradient(135deg,#ef4444,#b91c1c); border-color: #fca5a5; }
     </style>
   </head>
   <body>
@@ -96,10 +114,81 @@
     <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-KP7P4GBK"
     height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
-    <div id="html-splash">
-      <img src="/images/stop-logo.png" alt="STOP" />
-    </div>
+    <div id="html-splash"><img src="/images/stop-logo.png" alt="STOP" /></div>
     <div id="root"></div>
+
+    <script>
+      (function () {
+        'use strict';
+
+        // The server already supports x-ai-difficulty. Add it centrally so the
+        // generated React API client does not need to be regenerated.
+        var originalFetch = window.fetch.bind(window);
+        window.fetch = function (input, init) {
+          try {
+            var rawUrl = typeof input === 'string' ? input : (input && input.url) || '';
+            var url = new URL(rawUrl, window.location.href);
+            if (url.pathname === '/api/game/validate') {
+              var headers = new Headers((init && init.headers) || (typeof input !== 'string' && input && input.headers) || {});
+              headers.set('x-ai-difficulty', new URLSearchParams(window.location.search).get('ai') === 'expert' ? 'expert' : 'easy');
+              init = Object.assign({}, init || {}, { headers: headers });
+            }
+          } catch (_) {}
+          return originalFetch(input, init);
+        };
+
+        function isSoloLobby() {
+          if (window.location.pathname !== '/solo') return false;
+          var text = document.body ? document.body.innerText : '';
+          return /Solo contra la IA|Solo vs AI|solo.*IA/i.test(text) && !!document.querySelector('#root button');
+        }
+
+        function renderDifficulty() {
+          if (!isSoloLobby()) {
+            var old = document.getElementById('stop-ai-difficulty');
+            if (old) old.remove();
+            return;
+          }
+          if (document.getElementById('stop-ai-difficulty')) return;
+
+          var heading = Array.prototype.find.call(document.querySelectorAll('h1,h2,h3'), function (el) {
+            return /Solo contra la IA|Solo vs AI/i.test(el.textContent || '');
+          });
+          if (!heading) return;
+
+          var panel = document.createElement('div');
+          panel.id = 'stop-ai-difficulty';
+          var selected = new URLSearchParams(window.location.search).get('ai') === 'expert' ? 'expert' : 'easy';
+          panel.innerHTML = '<div class="title">🤖 Dificultad de la IA</div>' +
+            '<div class="sub">Elige cómo de difícil será tu rival.</div>' +
+            '<div class="buttons">' +
+              '<button data-ai="easy" class="' + (selected === 'easy' ? 'active easy' : '') + '">🟢 Fácil</button>' +
+              '<button data-ai="expert" class="' + (selected === 'expert' ? 'active expert' : '') + '">🔥 Experto</button>' +
+            '</div>';
+
+          panel.querySelectorAll('button').forEach(function (button) {
+            button.addEventListener('click', function () {
+              var value = button.getAttribute('data-ai') === 'expert' ? 'expert' : 'easy';
+              var u = new URL(window.location.href);
+              u.searchParams.set('ai', value);
+              window.location.href = u.toString();
+            });
+          });
+
+          var container = heading.parentElement || heading;
+          container.parentElement ? container.parentElement.insertBefore(panel, container.nextSibling) : document.body.appendChild(panel);
+        }
+
+        var observer = new MutationObserver(function () { renderDifficulty(); });
+        function bootDifficulty() {
+          renderDifficulty();
+          observer.observe(document.body, { childList: true, subtree: true });
+        }
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bootDifficulty);
+        else bootDifficulty();
+      })();
+    </script>
+
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
