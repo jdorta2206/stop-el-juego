@@ -1,0 +1,49 @@
+name: Fix AI selector visibility
+
+on:
+  push:
+    branches: [master]
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: "!contains(github.event.head_commit.message, '[ai-selector-fix]')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch selector and Jugar Ya flow
+        shell: python
+        run: |
+          from pathlib import Path
+
+          app = Path('artifacts/stop-game/src/App.tsx')
+          s = app.read_text(encoding='utf-8')
+          old = '      {!isSpecialMode && (\n'
+          new = '      {(\n'
+          if old not in s:
+              raise SystemExit('App.tsx selector condition not found')
+          s = s.replace(old, new, 1)
+          app.write_text(s, encoding='utf-8')
+
+          index = Path('artifacts/stop-game/index.html')
+          s = index.read_text(encoding='utf-8')
+          marker = '    <script type="module" src="/src/main.tsx"></script>'
+          inject = '''    <script>\n      // JUGAR YA: let the player choose Fácil/Experto before SoloGame auto-starts.\n      // Preserve every other query parameter (daily, mode, letter, cats, etc.).\n      (function () {\n        try {\n          var u = new URL(window.location.href);\n          if (u.searchParams.get('auto') === '1') {\n            u.searchParams.delete('auto');\n            var q = u.searchParams.toString();\n            window.history.replaceState({}, '', u.pathname + (q ? '?' + q : '') + u.hash);\n          }\n        } catch (_) {}\n      })();\n    </script>\n\n'''
+          if marker not in s:
+              raise SystemExit('index.html module marker not found')
+          if 'JUGAR YA: let the player choose Fácil/Experto' not in s:
+              s = s.replace(marker, inject + marker, 1)
+          index.write_text(s, encoding='utf-8')
+
+          # Remove this one-shot workflow after applying the fix.
+          wf = Path('.github/workflows/fix-ai-selector-now.yml')
+          wf.unlink(missing_ok=True)
+      - name: Commit fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add artifacts/stop-game/src/App.tsx artifacts/stop-game/index.html .github/workflows/fix-ai-selector-now.yml
+          git commit -m "fix: show AI difficulty before solo games [ai-selector-fix]" || exit 0
+          git push origin HEAD:master
