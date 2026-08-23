@@ -3,19 +3,11 @@ import { usePlayer } from "@/hooks/use-player";
 import { useInventory, type ShopItem } from "@/hooks/useInventory";
 import { Button } from "@/components/ui";
 import { toast } from "sonner";
-import { Check, Crown, Sparkles, Coins, ShoppingBag } from "lucide-react";
+import { Crown, Sparkles, Coins, ShoppingBag, ChevronDown, ChevronUp } from "lucide-react";
 import { motion } from "framer-motion";
 import { purchaseWorldCupPackOnPlay, detectPaymentChannel } from "@/lib/playBilling";
 import { startPackCheckout, WORLD_CUP_PACK_PRICE_LABEL } from "@/lib/worldCupPack";
 import { celebrateReward } from "@/lib/celebrate";
-
-const WORLD_CUP_IDS = [
-  "avatar_wc_ball", "avatar_wc_jersey", "avatar_wc_goal", "avatar_wc_gloves", "avatar_wc_boots",
-  "avatar_wc_medal", "avatar_wc_trophy", "avatar_wc_flag_es", "avatar_wc_flag_br", "avatar_wc_flag_ar",
-  "avatar_wc_flag_fr", "avatar_wc_flag_de", "avatar_wc_flag_pt", "avatar_wc_flag_it", "avatar_wc_flag_nl",
-  "avatar_wc_flag_mx", "avatar_wc_flag_us", "avatar_wc_flag_uy", "avatar_wc_flag_co", "avatar_wc_flag_jp",
-  "frame_wc_cesped", "frame_wc_espana", "frame_wc_copa", "bg_wc_cesped", "bg_wc_noche", "bg_wc_espana", "bg_wc_copa",
-];
 
 const CATEGORY_LABELS = {
   all: "Todos",
@@ -35,17 +27,20 @@ export function CosmeticShop() {
   const { inventory, refresh, buy, equip } = useInventory(player?.id || null);
   const [category, setCategory] = useState<Category>("all");
   const [busy, setBusy] = useState<string | null>(null);
+  const [showWorldCup, setShowWorldCup] = useState(false);
 
   const shopItems = useMemo(() => {
     const items = (inventory?.shop ?? []) as ShopItem[];
     return category === "all" ? items : items.filter((item) => item.kind === category);
   }, [inventory?.shop, category]);
 
-  const isOwned = useCallback((item: ShopItem) => ownedIds(inventory, item.kind).has(item.id), [inventory]);
+  const worldCupItems = useMemo(
+    () => ((inventory?.shop ?? []) as ShopItem[]).filter((item) => item.id.includes("_wc_")),
+    [inventory?.shop],
+  );
 
-  const isEquipped = useCallback((item: ShopItem) => {
-    return inventory?.equipped?.[item.kind] === item.id;
-  }, [inventory]);
+  const isOwned = useCallback((item: ShopItem) => ownedIds(inventory, item.kind).has(item.id), [inventory]);
+  const isEquipped = useCallback((item: ShopItem) => inventory?.equipped?.[item.kind] === item.id, [inventory]);
 
   const handleBuy = useCallback(async (item: ShopItem) => {
     if (!player?.id) {
@@ -116,34 +111,54 @@ export function CosmeticShop() {
     }
   }, [player?.id, refresh]);
 
-  const hasWorldCup = (inventory?.owned?.avatars ?? []).some((item: any) => WORLD_CUP_IDS.includes(item.id))
-    || (inventory?.owned?.frames ?? []).some((item: any) => WORLD_CUP_IDS.includes(item.id))
-    || (inventory?.owned?.backgrounds ?? []).some((item: any) => WORLD_CUP_IDS.includes(item.id));
-
   return (
     <div className="space-y-5">
       <div className="rounded-2xl bg-gradient-to-r from-yellow-600 via-orange-600 to-red-600 p-4 sm:p-6 shadow-xl">
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="text-5xl">🌍</div>
-            <div>
-              <h3 className="text-xl sm:text-2xl font-black text-white">Pack Mundial</h3>
-              <p className="text-white/80 text-sm">27 cosméticos exclusivos</p>
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="text-5xl">🌍</div>
+              <div>
+                <h3 className="text-xl sm:text-2xl font-black text-white">Pack Mundial</h3>
+                <p className="text-white/80 text-sm">27 cosméticos exclusivos</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                onClick={() => setShowWorldCup((value) => !value)}
+                variant="outline"
+                className="bg-white/10 text-white border-white/30 font-black px-4 py-3 rounded-xl"
+              >
+                {showWorldCup ? <ChevronUp className="w-5 h-5 mr-2" /> : <ChevronDown className="w-5 h-5 mr-2" />}
+                Ver contenido
+              </Button>
+              <Button
+                onClick={handleWorldCupPack}
+                disabled={busy === "pack_mundial"}
+                className="bg-white text-black font-black px-5 py-3 rounded-xl shadow-lg"
+              >
+                <Crown className="w-5 h-5 mr-2 text-yellow-500" />
+                {busy === "pack_mundial" ? "Procesando..." : WORLD_CUP_PACK_PRICE_LABEL}
+              </Button>
             </div>
           </div>
-          {hasWorldCup ? (
-            <div className="px-5 py-3 rounded-xl bg-green-500/20 border border-green-300 text-green-100 font-bold flex items-center gap-2">
-              <Check className="w-5 h-5" /> Ya lo tienes
-            </div>
-          ) : (
-            <Button
-              onClick={handleWorldCupPack}
-              disabled={busy === "pack_mundial"}
-              className="bg-white text-black font-black px-5 py-3 rounded-xl shadow-lg"
-            >
-              <Crown className="w-5 h-5 mr-2 text-yellow-500" />
-              {busy === "pack_mundial" ? "Procesando..." : WORLD_CUP_PACK_PRICE_LABEL}
-            </Button>
+
+          {showWorldCup && (
+            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} className="rounded-xl bg-black/20 border border-white/15 p-3 sm:p-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+                {worldCupItems.map((item) => {
+                  const owned = isOwned(item);
+                  return (
+                    <div key={item.id} className="rounded-lg bg-white/10 border border-white/10 p-2 text-center min-w-0">
+                      <div className="text-2xl">{item.glyph}</div>
+                      <div className="text-white text-xs font-bold truncate">{item.label}</div>
+                      <div className="text-white/50 text-[10px]">{owned ? "Desbloqueado" : `${item.price} 🪙`}</div>
+                    </div>
+                  );
+                })}
+              </div>
+              <p className="mt-3 text-center text-white/60 text-xs">El Pack Mundial desbloquea los cosméticos del evento. También puedes conseguirlos individualmente con monedas.</p>
+            </motion.div>
           )}
         </div>
       </div>
@@ -153,19 +168,11 @@ export function CosmeticShop() {
           <div className="flex items-center gap-2">
             <ShoppingBag className="w-5 h-5 text-yellow-400" />
             <h3 className="text-lg font-black text-white">Tienda de monedas</h3>
-            <span className="ml-1 px-3 py-1 rounded-full bg-yellow-400/15 border border-yellow-400/30 text-yellow-300 font-black text-sm">
-              🪙 {inventory?.coins ?? 0}
-            </span>
+            <span className="ml-1 px-3 py-1 rounded-full bg-yellow-400/15 border border-yellow-400/30 text-yellow-300 font-black text-sm">🪙 {inventory?.coins ?? 0}</span>
           </div>
           <div className="flex gap-2 overflow-x-auto">
             {(Object.keys(CATEGORY_LABELS) as Category[]).map((key) => (
-              <button
-                key={key}
-                onClick={() => setCategory(key)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${
-                  category === key ? "bg-yellow-500 text-black" : "bg-white/10 text-white/70"
-                }`}
-              >
+              <button key={key} onClick={() => setCategory(key)} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${category === key ? "bg-yellow-500 text-black" : "bg-white/10 text-white/70"}`}>
                 {CATEGORY_LABELS[key]}
               </button>
             ))}
@@ -182,44 +189,14 @@ export function CosmeticShop() {
               const purchasing = busy === item.id;
               const equipping = busy === `equip:${item.id}`;
               return (
-                <motion.div
-                  key={item.id}
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="rounded-xl border border-white/10 bg-black/20 p-3 min-w-0"
-                >
+                <motion.div key={item.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="rounded-xl border border-white/10 bg-black/20 p-3 min-w-0">
                   <div className="text-4xl text-center mb-2">{item.glyph}</div>
                   <p className="text-white font-bold text-sm text-center truncate">{item.label}</p>
                   <p className="text-white/40 text-[11px] text-center capitalize">{item.kind}</p>
-                  {!owned && (
-                    <div className="mt-2 flex items-center justify-center gap-1 text-yellow-300 font-black text-sm">
-                      <Coins className="w-3.5 h-3.5" /> {item.price}
-                    </div>
-                  )}
-                  {owned && !equipped && (
-                    <Button
-                      onClick={() => handleEquip(item)}
-                      disabled={equipping}
-                      variant="outline"
-                      className="w-full mt-2 py-1.5 text-xs border-white/20 text-white"
-                    >
-                      {equipping ? "..." : "EQUIPAR"}
-                    </Button>
-                  )}
-                  {equipped && (
-                    <div className="mt-2 py-1.5 text-center text-xs font-black text-yellow-300 flex items-center justify-center gap-1">
-                      <Sparkles className="w-3.5 h-3.5" /> EQUIPADO
-                    </div>
-                  )}
-                  {!owned && (
-                    <Button
-                      onClick={() => handleBuy(item)}
-                      disabled={purchasing}
-                      className="w-full mt-2 py-1.5 text-xs bg-gradient-to-r from-yellow-500 to-orange-500 text-black font-black"
-                    >
-                      {purchasing ? "..." : "COMPRAR"}
-                    </Button>
-                  )}
+                  {!owned && <div className="mt-2 flex items-center justify-center gap-1 text-yellow-300 font-black text-sm"><Coins className="w-3.5 h-3.5" /> {item.price}</div>}
+                  {owned && !equipped && <Button onClick={() => handleEquip(item)} disabled={equipping} variant="outline" className="w-full mt-2 py-1.5 text-xs border-white/20 text-white">{equipping ? "..." : "EQUIPAR"}</Button>}
+                  {equipped && <div className="mt-2 py-1.5 text-center text-xs font-black text-yellow-300 flex items-center justify-center gap-1"><Sparkles className="w-3.5 h-3.5" /> EQUIPADO</div>}
+                  {!owned && <Button onClick={() => handleBuy(item)} disabled={purchasing} className="w-full mt-2 py-1.5 text-xs bg-gradient-to-r from-yellow-500 to-orange-500 text-black font-black">{purchasing ? "..." : "COMPRAR"}</Button>}
                 </motion.div>
               );
             })}
