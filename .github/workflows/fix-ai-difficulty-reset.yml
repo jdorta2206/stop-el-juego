@@ -1,0 +1,39 @@
+name: Fix AI difficulty reset
+
+on:
+  push:
+    branches: [master]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, 'fix: reset AI difficulty selector for every new game') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Reset difficulty when returning to lobby
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('artifacts/stop-game/src/pages/SoloGame.tsx')
+          s = p.read_text()
+          old = '''      setRoundWon(null);\n      setBestResult(null);\n    } else {'''
+          new = '''      setRoundWon(null);\n      setBestResult(null);\n      // Every new game starts with a fresh difficulty choice. The player can\n      // select Easy or Expert again before pressing Jugar.\n      setAiDifficulty("easy");\n    } else {'''
+          if new in s:
+              print('Difficulty reset already present; nothing to do.')
+              raise SystemExit(0)
+          if old not in s:
+              raise SystemExit('Target block not found; refusing to modify the file.')
+          p.write_text(s.replace(old, new, 1))
+          PY
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add artifacts/stop-game/src/pages/SoloGame.tsx
+          git commit -m "fix: reset AI difficulty selector for every new game"
+          git push
