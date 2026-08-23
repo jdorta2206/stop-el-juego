@@ -1,28 +1,35 @@
 import { useState, useCallback, useEffect, useRef } from "react";
-import { getApiUrl, authHeaders } from "@/lib/utils";
+import { getApiUrl } from "@/lib/utils";
 
 const STORAGE_KEY = "stop_best_score_v2";
 
 type GameMode = "normal" | "quick" | "chaos" | "daily" | "random";
 type BestScores = Partial<Record<GameMode, number>>;
 
+/**
+ * The backend already exposes per-mode best scores through
+ * /api/ranking/profile/:playerId. The old implementation called the removed
+ * /api/ranking/progress/:playerId endpoint, which produced a 404 on the web.
+ */
 async function syncBestsFromServer(playerId: string): Promise<BestScores> {
   try {
-    const r = await fetch(`${getApiUrl()}/api/ranking/progress/${playerId}`);
+    const r = await fetch(`${getApiUrl()}/api/ranking/profile/${encodeURIComponent(playerId)}`, {
+      credentials: "include",
+    });
     if (!r.ok) return {};
     const data = await r.json();
-    return (data.personalBests && typeof data.personalBests === "object") ? data.personalBests : {};
-  } catch { return {}; }
-}
+    const modeStats = data?.modeStats;
+    if (!modeStats || typeof modeStats !== "object") return {};
 
-async function saveBestsToServer(playerId: string, personalBests: BestScores) {
-  try {
-    await fetch(`${getApiUrl()}/api/ranking/progress/${playerId}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...authHeaders() },
-      body: JSON.stringify({ personalBests }),
-    });
-  } catch {}
+    const bests: BestScores = {};
+    for (const [mode, stats] of Object.entries(modeStats as Record<string, { bestScore?: number }>)) {
+      const score = Number(stats?.bestScore ?? 0);
+      if (score >= 0) bests[mode as GameMode] = score;
+    }
+    return bests;
+  } catch {
+    return {};
+  }
 }
 
 export function usePersonalBest(mode: GameMode, playerId?: string) {
@@ -32,7 +39,7 @@ export function usePersonalBest(mode: GameMode, playerId?: string) {
   });
   const syncedRef = useRef(false);
 
-  // ── Sync from server on mount (server wins for each mode if higher) ──────
+  // Server history is the source of truth for the initial best score.
   useEffect(() => {
     if (!playerId || syncedRef.current) return;
     syncedRef.current = true;
@@ -65,10 +72,9 @@ export function usePersonalBest(mode: GameMode, playerId?: string) {
       const updated: BestScores = { ...bests, [mode]: score };
       try { localStorage.setItem(STORAGE_KEY, JSON.stringify(updated)); } catch {}
       setBests(updated);
-      if (playerId) saveBestsToServer(playerId, updated);
     }
     return { isNew, diff: score - prev };
-  }, [bests, mode, playerId]);
+  }, [bests, mode]);
 
   return { best, updateBest };
 }
