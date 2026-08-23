@@ -1,8 +1,10 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { getApiUrl, authHeaders } from "@/lib/utils";
-import { restorePlayPurchases, detectPaymentChannel } from "@/lib/playBilling";
+import { restorePlayPurchases, detectPaymentChannel, hasGooglePlayBillingApi } from "@/lib/playBilling";
 
 const API_BASE = getApiUrl();
+const PLAY_BILLING_METHOD = "https://play.google.com/billing";
+const PREMIUM_SKU = "premium_monthly";
 
 export interface PremiumStatus {
   isPremium: boolean;
@@ -10,10 +12,14 @@ export interface PremiumStatus {
   error: string | null;
 }
 
-// Custom DOM event other components fire after a successful purchase or
-// portal action — listeners refetch immediately so premium UI updates
-// without a page reload (required by the no-reload UX of the Play flow,
-// where window.location.href would lose Digital Goods state).
+export interface PlayPremiumProduct {
+  itemId: string;
+  title?: string;
+  description?: string;
+  priceLabel?: string;
+  price?: { value: string; currency: string };
+}
+
 export const PREMIUM_REFRESH_EVENT = "stop:premium-refresh";
 
 export function notifyPremiumRefresh() {
@@ -22,11 +28,12 @@ export function notifyPremiumRefresh() {
   }
 }
 
-export function usePremium(playerId: string | null | undefined): PremiumStatus {
+export function usePremium(playerId: string | null | undefined): PremiumStatus & { playProduct: PlayPremiumProduct | null } {
   const [isPremium, setIsPremium] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [refreshTick, setRefreshTick] = useState(0);
+  const [playProduct, setPlayProduct] = useState<PlayPremiumProduct | null>(null);
 
   useEffect(() => {
     const handler = () => setRefreshTick((t) => t + 1);
@@ -35,29 +42,49 @@ export function usePremium(playerId: string | null | undefined): PremiumStatus {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+
+    const loadPlayProduct = async () => {
+      if (!hasGooglePlayBillingApi()) return;
+      try {
+        const service = await window.getDigitalGoodsService!(PLAY_BILLING_METHOD);
+        const details = await service.getDetails([PREMIUM_SKU]);
+        const product = details.find((item) => item.itemId === PREMIUM_SKU);
+        if (!cancelled && product) {
+          setPlayProduct({
+            itemId: PREMIUM_SKU,
+            title: product.title,
+            description: product.description,
+            price: product.price,
+            priceLabel: product.price
+              ? new Intl.NumberFormat("es-ES", {
+                  style: "currency",
+                  currency: product.price.currency,
+                }).format(Number(product.price.value))
+              : undefined,
+          });
+        }
+      } catch {
+        // Digital Goods may be injected shortly after React starts.
+      }
+    };
+
+    if (detectPaymentChannel() === "play") loadPlayProduct();
+    return () => { cancelled = true; };
+  }, [refreshTick]);
+
+  useEffect(() => {
     if (!playerId) return;
 
     let cancelled = false;
     setLoading(true);
     setError(null);
 
-    // Auto-restore: if we're inside the Play Store TWA, replay any existing
-    // purchases through /verify on every app open. This self-heals the case
-    // where the original /verify failed (server config, permission
-    // propagation, network) and the user is left with a paid subscription
-    // the server doesn't know about. No-op on Stripe / regular web.
     const channel = detectPaymentChannel();
     if (channel === "play") {
-      restorePlayPurchases(playerId).catch(() => {
-        // Silent — restore is best-effort, the status fetch below is the
-        // source of truth for the UI.
-      });
+      restorePlayPurchases(playerId).catch(() => undefined);
     }
 
-    // Unified premium status — checks Stripe AND Google Play, so a TWA user
-    // with a Play subscription gets premium even though they have no Stripe
-    // customer id. Falls back to /api/stripe/status if the unified endpoint
-    // returns 5xx (e.g. cold start race during deploy).
     fetch(`${API_BASE}/api/billing/play/status?playerId=${encodeURIComponent(playerId)}`, {
       credentials: "include",
     })
@@ -78,12 +105,10 @@ export function usePremium(playerId: string | null | undefined): PremiumStatus {
         if (!cancelled) setLoading(false);
       });
 
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [playerId, refreshTick]);
 
-  return { isPremium, loading, error };
+  return { isPremium, loading, error, playProduct };
 }
 
 export async function fetchPremiumProducts() {
