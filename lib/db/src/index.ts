@@ -10,22 +10,22 @@ if (!process.env.DATABASE_URL) {
   );
 }
 
-// Tuned pool for high concurrency. Most managed Postgres tiers allow ~100
-// concurrent client connections; we leave headroom for migrations / Stripe sync
-// and other consumers. Idle connections are recycled aggressively to free server
-// slots, and statement_timeout prevents a runaway query from hogging a slot.
+// Railway/Postgres: keep the pool deliberately small and recycle idle sockets.
+// A large pool (50 clients) is unnecessary for the single Railway replica and
+// can amplify transient database disconnects when several cron jobs run together.
 export const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  max: Number(process.env.PG_POOL_MAX ?? 50),
-  min: 4,
-  idleTimeoutMillis: 30_000,
+  max: Number(process.env.PG_POOL_MAX ?? 20),
+  min: 0,
+  idleTimeoutMillis: 60_000,
   connectionTimeoutMillis: 10_000,
-  // Hard cap query duration server-side (60s). Anything slower indicates
-  // a missing index or a runaway scan and we'd rather fail fast.
+  keepAlive: true,
+  keepAliveInitialDelayMillis: 10_000,
   statement_timeout: 60_000,
 });
 
-// Don't crash the process on transient connection errors — log and continue.
+// PostgreSQL/Railway can close an idle socket transiently. node-postgres removes
+// the failed idle client from the pool; logging it must never terminate the app.
 pool.on("error", (err) => {
   console.error("[pg pool] idle client error:", err.message);
 });
