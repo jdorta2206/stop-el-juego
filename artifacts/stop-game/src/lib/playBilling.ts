@@ -54,10 +54,16 @@ export function hasTwaVersionSignal(): boolean {
   return /STOPApp\/[0-9][0-9.]*/i.test(navigator.userAgent || "");
 }
 
+/**
+ * IMPORTANT: the Digital Goods API can exist in ordinary desktop Chrome too.
+ * Its presence alone must NEVER classify the public website as a Google Play
+ * TWA. The old check did exactly that and made the web use the Play path.
+ * Keep the API check for actual purchases, but use only TWA-specific signals
+ * to choose the payment channel.
+ */
 export function isLikelyPlayTwa(): boolean {
   if (hasPlayTwaMarker()) return true;
   if (hasTwaVersionSignal()) return true;
-  if (hasGooglePlayBillingApi()) return true;
   if (hasAndroidAppReferrer()) return true;
 
   if (typeof navigator === "undefined" || typeof window === "undefined") {
@@ -82,7 +88,9 @@ async function getPlayBillingService(): Promise<DigitalGoodsService> {
   }
 
   try {
-    return await window.getDigitalGoodsService!(PLAY_BILLING_METHOD);
+    // Promise.resolve also handles implementations that expose the service
+    // synchronously instead of returning a native Promise.
+    return await Promise.resolve(window.getDigitalGoodsService!(PLAY_BILLING_METHOD));
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(`Google Play Billing no está disponible: ${message}`);
@@ -115,8 +123,6 @@ async function playPayment(
     {
       total: {
         label,
-        // Google Play supplies the real price; this amount is only the
-        // PaymentRequest placeholder required by the Digital Goods bridge.
         amount: { currency: "EUR", value: "0.00" },
       },
     },
@@ -153,26 +159,13 @@ async function playPayment(
   await paymentResponse.complete("success").catch(() => undefined);
 }
 
-/** Compra STOP Premium mediante Google Play dentro del TWA. */
 export async function purchasePremiumOnPlay(playerId: string): Promise<{ isPremium: boolean }> {
-  await playPayment(
-    playerId,
-    PREMIUM_SKU,
-    "STOP Premium",
-    "/api/billing/play/verify",
-    "subscription",
-  );
+  await playPayment(playerId, PREMIUM_SKU, "STOP Premium", "/api/billing/play/verify", "subscription");
   return { isPremium: true };
 }
 
 export async function purchaseWorldCupPackOnPlay(playerId: string): Promise<{ granted: boolean }> {
-  await playPayment(
-    playerId,
-    WORLD_CUP_SKU,
-    "Pack Mundial",
-    "/api/billing/play/verify-pack",
-    "onetime",
-  );
+  await playPayment(playerId, WORLD_CUP_SKU, "Pack Mundial", "/api/billing/play/verify-pack", "onetime");
   return { granted: true };
 }
 
@@ -192,11 +185,7 @@ export async function restorePlayPurchases(playerId?: string | null): Promise<vo
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({
-          playerId,
-          purchaseToken: purchase.purchaseToken,
-          productId: PREMIUM_SKU,
-        }),
+        body: JSON.stringify({ playerId, purchaseToken: purchase.purchaseToken, productId: PREMIUM_SKU }),
       });
 
       if (!res.ok) {
