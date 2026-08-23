@@ -1,1 +1,0 @@
-Temporary trigger for the AI difficulty UI integration workflow.
