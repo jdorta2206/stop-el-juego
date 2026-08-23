@@ -48,7 +48,7 @@ export function usePremium(playerId: string | null | undefined): PremiumStatus {
     // the server doesn't know about. No-op on Stripe / regular web.
     detectPaymentChannel().then((channel) => {
       if (cancelled || channel !== "play") return;
-      restorePlayPurchases().catch(() => {
+      restorePlayPurchases(playerId).catch(() => {
         // Silent — restore is best-effort, the status fetch below is the
         // source of truth for the UI.
       });
