@@ -25,10 +25,6 @@
       "id": "app.replit.stop_el_juego.twa"
     }
   ],
-  "scope_extensions": [
-    { "origin": "https://stopeljuego.com" },
-    { "origin": "https://www.stopeljuego.com" }
-  ],
   "icons": [
     {
       "src": "/images/stop-logo.png",
@@ -87,6 +83,7 @@
   "share_target": {
     "action": "/multiplayer",
     "method": "GET",
+    "enctype": "application/x-www-form-urlencoded",
     "params": {
       "title": "title",
       "text": "text",
