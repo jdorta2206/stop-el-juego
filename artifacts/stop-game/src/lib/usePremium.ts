@@ -47,7 +47,7 @@ export function usePremium(playerId: string | null | undefined): PremiumStatus &
     const loadPlayProduct = async () => {
       if (!hasGooglePlayBillingApi()) return;
       try {
-        const service = await window.getDigitalGoodsService!(PLAY_BILLING_METHOD);
+        const service = await Promise.resolve(window.getDigitalGoodsService!(PLAY_BILLING_METHOD));
         const details = await service.getDetails([PREMIUM_SKU]);
         const product = details.find((item) => item.itemId === PREMIUM_SKU);
         if (!cancelled && product) {
@@ -65,10 +65,12 @@ export function usePremium(playerId: string | null | undefined): PremiumStatus &
           });
         }
       } catch {
-        // Digital Goods may be injected shortly after React starts.
+        // Digital Goods is unavailable on normal web or may be injected later in the TWA.
       }
     };
 
+    // Only load the Play product inside an actual Play TWA. Desktop Chrome may
+    // expose Digital Goods too, but that must not change the web payment path.
     if (detectPaymentChannel() === "play") loadPlayProduct();
     return () => { cancelled = true; };
   }, [refreshTick]);
@@ -85,18 +87,19 @@ export function usePremium(playerId: string | null | undefined): PremiumStatus &
       restorePlayPurchases(playerId).catch(() => undefined);
     }
 
-    fetch(`${API_BASE}/api/billing/play/status?playerId=${encodeURIComponent(playerId)}`, {
-      credentials: "include",
-    })
+    // The web uses Stripe. Google Play status is queried only inside the TWA.
+    // This avoids the old 404 spam from /api/billing/play/status on the web.
+    const statusUrl = channel === "play"
+      ? `${API_BASE}/api/billing/play/status?playerId=${encodeURIComponent(playerId)}`
+      : `${API_BASE}/api/stripe/status?playerId=${encodeURIComponent(playerId)}`;
+
+    fetch(statusUrl, { credentials: "include", headers: authHeaders() })
       .then(async (r) => {
-        if (r.ok) return r.json();
-        const fallback = await fetch(
-          `${API_BASE}/api/stripe/status?playerId=${encodeURIComponent(playerId)}`,
-        );
-        return fallback.json();
+        if (!r.ok) return { isPremium: false };
+        return r.json();
       })
       .then((data) => {
-        if (!cancelled) setIsPremium(data.isPremium === true);
+        if (!cancelled) setIsPremium(data?.isPremium === true);
       })
       .catch((err) => {
         if (!cancelled) setError(err.message);
