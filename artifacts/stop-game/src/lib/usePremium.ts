@@ -46,13 +46,13 @@ export function usePremium(playerId: string | null | undefined): PremiumStatus {
     // where the original /verify failed (server config, permission
     // propagation, network) and the user is left with a paid subscription
     // the server doesn't know about. No-op on Stripe / regular web.
-    detectPaymentChannel().then((channel) => {
-      if (cancelled || channel !== "play") return;
+    const channel = detectPaymentChannel();
+    if (channel === "play") {
       restorePlayPurchases(playerId).catch(() => {
         // Silent — restore is best-effort, the status fetch below is the
         // source of truth for the UI.
       });
-    });
+    }
 
     // Unified premium status — checks Stripe AND Google Play, so a TWA user
     // with a Play subscription gets premium even though they have no Stripe
