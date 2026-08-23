@@ -139,9 +139,12 @@ app.get('/api/check-version', (req, res) => {
 // SERVE_CLIENT so Replit (which serves the client from a separate Vite service)
 // is completely unaffected — this block never runs unless SERVE_CLIENT=1.
 if (process.env["SERVE_CLIENT"] === "1") {
+  // build:railway copies the frontend build into api-server/dist/public.
+  // Keep CLIENT_DIST_PATH as an override, but default to the actual runtime
+  // location produced by the Railway build script.
   const clientDist =
     process.env["CLIENT_DIST_PATH"] ||
-    path.resolve(process.cwd(), "artifacts/stop-game/dist/public");
+    path.resolve(process.cwd(), "artifacts/api-server/dist/public");
   if (!existsSync(path.join(clientDist, "index.html"))) {
     console.warn(
       `[SERVE_CLIENT] index.html not found at ${clientDist} — the client build is missing or mislocated. Run "pnpm run build:railway" before starting.`,
