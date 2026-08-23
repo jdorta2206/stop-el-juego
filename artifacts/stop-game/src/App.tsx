@@ -201,69 +201,6 @@ function App() {
     return () => window.removeEventListener("popstate", onPop);
   }, []);
 
-  // 🔍 INTERCEPTAR FETCH PARA DETECTAR LLAMADAS A STRIPE
-  useEffect(() => {
-    const originalFetch = window.fetch;
-    window.fetch = function(...args) {
-      const url = typeof args[0] === 'string' ? args[0] : args[0]?.url;
-      if (url && url.includes('/api/stripe/checkout-pack')) {
-        alert('🔴 Se ha intentado llamar a /api/stripe/checkout-pack');
-        console.trace('Petición a Stripe desde:', new Error().stack);
-        // Devuelve un error para que no redirija a Stripe
-        return Promise.reject(new Error('Bloqueado para pruebas'));
-      }
-      return originalFetch.apply(this, args);
-    };
-    return () => {
-      window.fetch = originalFetch;
-    };
-  }, []);
-
-  // 🔍 INTERCEPTAR REDIRECCIONES A STRIPE
-  useEffect(() => {
-    const blockStripe = (url: string) => {
-      if (url && url.includes('checkout.stripe.com')) {
-        alert('🔴 Se ha intentado redirigir a Stripe');
-        console.trace('Redirección a Stripe desde:', new Error().stack);
-        return true;
-      }
-      return false;
-    };
-
-    // Interceptar window.location.href (asignación)
-    const originalHrefSetter = Object.getOwnPropertyDescriptor(window.location, 'href')?.set;
-    if (originalHrefSetter) {
-      Object.defineProperty(window.location, 'href', {
-        set: function(url) {
-          if (blockStripe(url)) return;
-          originalHrefSetter.call(this, url);
-        }
-      });
-    }
-
-    // Interceptar window.location.assign
-    const originalAssign = window.location.assign;
-    window.location.assign = function(url) {
-      if (blockStripe(url)) return;
-      return originalAssign.call(this, url);
-    };
-
-    // Interceptar window.location.replace
-    const originalReplace = window.location.replace;
-    window.location.replace = function(url) {
-      if (blockStripe(url)) return;
-      return originalReplace.call(this, url);
-    };
-
-    return () => {
-      if (originalHrefSetter) {
-        Object.defineProperty(window.location, 'href', { set: originalHrefSetter });
-      }
-      window.location.assign = originalAssign;
-      window.location.replace = originalReplace;
-    };
-  }, []);
-
   return (
     <QueryClientProvider client={queryClient}>
       {/* reducedMotion="user" → respects OS-level "Reduce animations" toggle */}
