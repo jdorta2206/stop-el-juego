@@ -6,27 +6,10 @@ const API_BASE = getApiUrl();
 const PLAY_BILLING_METHOD = "https://play.google.com/billing";
 const PREMIUM_SKU = "premium_monthly";
 
-export interface PremiumStatus {
-  isPremium: boolean;
-  loading: boolean;
-  error: string | null;
-}
-
-export interface PlayPremiumProduct {
-  itemId: string;
-  title?: string;
-  description?: string;
-  priceLabel?: string;
-  price?: { value: string; currency: string };
-}
-
+export interface PremiumStatus { isPremium: boolean; loading: boolean; error: string | null; }
+export interface PlayPremiumProduct { itemId: string; title?: string; description?: string; priceLabel?: string; price?: { value: string; currency: string }; }
 export const PREMIUM_REFRESH_EVENT = "stop:premium-refresh";
-
-export function notifyPremiumRefresh() {
-  if (typeof window !== "undefined") {
-    window.dispatchEvent(new CustomEvent(PREMIUM_REFRESH_EVENT));
-  }
-}
+export function notifyPremiumRefresh() { if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(PREMIUM_REFRESH_EVENT)); }
 
 export function usePremium(playerId: string | null | undefined): PremiumStatus & { playProduct: PlayPremiumProduct | null } {
   const [isPremium, setIsPremium] = useState(false);
@@ -43,70 +26,43 @@ export function usePremium(playerId: string | null | undefined): PremiumStatus &
 
   useEffect(() => {
     let cancelled = false;
-
     const loadPlayProduct = async () => {
       if (!hasGooglePlayBillingApi()) return;
       try {
         const service = await Promise.resolve(window.getDigitalGoodsService!(PLAY_BILLING_METHOD));
         const details = await service.getDetails([PREMIUM_SKU]);
         const product = details.find((item) => item.itemId === PREMIUM_SKU);
-        if (!cancelled && product) {
-          setPlayProduct({
-            itemId: PREMIUM_SKU,
-            title: product.title,
-            description: product.description,
-            price: product.price,
-            priceLabel: product.price
-              ? new Intl.NumberFormat("es-ES", {
-                  style: "currency",
-                  currency: product.price.currency,
-                }).format(Number(product.price.value))
-              : undefined,
-          });
-        }
-      } catch {
-        // Digital Goods is unavailable on normal web or may be injected later in the TWA.
-      }
+        if (!cancelled && product) setPlayProduct({
+          itemId: PREMIUM_SKU,
+          title: product.title,
+          description: product.description,
+          price: product.price,
+          priceLabel: product.price ? new Intl.NumberFormat("es-ES", { style: "currency", currency: product.price.currency }).format(Number(product.price.value)) : undefined,
+        });
+      } catch {}
     };
-
-    // Only load the Play product inside an actual Play TWA. Desktop Chrome may
-    // expose Digital Goods too, but that must not change the web payment path.
     if (detectPaymentChannel() === "play") loadPlayProduct();
     return () => { cancelled = true; };
   }, [refreshTick]);
 
   useEffect(() => {
-    if (!playerId) return;
-
+    if (!playerId) { setIsPremium(false); setLoading(false); return; }
     let cancelled = false;
     setLoading(true);
     setError(null);
 
-    const channel = detectPaymentChannel();
-    if (channel === "play") {
-      restorePlayPurchases(playerId).catch(() => undefined);
-    }
+    const restorePromise = detectPaymentChannel() === "play"
+      ? restorePlayPurchases(playerId).catch(() => undefined)
+      : Promise.resolve();
 
-    // The web uses Stripe. Google Play status is queried only inside the TWA.
-    // This avoids the old 404 spam from /api/billing/play/status on the web.
-    const statusUrl = channel === "play"
-      ? `${API_BASE}/api/billing/play/status?playerId=${encodeURIComponent(playerId)}`
-      : `${API_BASE}/api/stripe/status?playerId=${encodeURIComponent(playerId)}`;
-
-    fetch(statusUrl, { credentials: "include", headers: authHeaders() })
-      .then(async (r) => {
-        if (!r.ok) return { isPremium: false };
-        return r.json();
-      })
-      .then((data) => {
-        if (!cancelled) setIsPremium(data?.isPremium === true);
-      })
-      .catch((err) => {
-        if (!cancelled) setError(err.message);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
+    // ONE entitlement source for the entire game. Google Play Premium is
+    // therefore visible on the public web as well as inside the TWA.
+    restorePromise
+      .then(() => fetch(`${API_BASE}/api/billing/play/status?playerId=${encodeURIComponent(playerId)}`, { credentials: "include", headers: authHeaders() }))
+      .then(async (r) => r.ok ? r.json() : { isPremium: false })
+      .then((data) => { if (!cancelled) setIsPremium(data?.isPremium === true); })
+      .catch((err) => { if (!cancelled) setError(err instanceof Error ? err.message : String(err)); })
+      .finally(() => { if (!cancelled) setLoading(false); });
 
     return () => { cancelled = true; };
   }, [playerId, refreshTick]);
@@ -117,47 +73,18 @@ export function usePremium(playerId: string | null | undefined): PremiumStatus &
 export async function fetchPremiumProducts() {
   const res = await fetch(`${API_BASE}/api/stripe/products`);
   if (!res.ok) throw new Error("Failed to load products");
-  return res.json() as Promise<{
-    data: Array<{
-      id: string;
-      name: string;
-      description: string;
-      active: boolean;
-      prices: Array<{
-        id: string;
-        unit_amount: number;
-        currency: string;
-        recurring: { interval: string } | null;
-        active: boolean;
-      }>;
-    }>;
-  }>;
+  return res.json() as Promise<{ data: Array<{ id: string; name: string; description: string; active: boolean; prices: Array<{ id: string; unit_amount: number; currency: string; recurring: { interval: string } | null; active: boolean }> }> }>;
 }
 
-export async function startCheckout(opts: {
-  playerId: string;
-  playerName: string;
-  email?: string;
-  priceId: string;
-}) {
-  const res = await fetch(`${API_BASE}/api/stripe/checkout`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...authHeaders() },
-    credentials: "include",
-    body: JSON.stringify(opts),
-  });
+export async function startCheckout(opts: { playerId: string; playerName: string; email?: string; priceId: string }) {
+  const res = await fetch(`${API_BASE}/api/stripe/checkout`, { method: "POST", headers: { "Content-Type": "application/json", ...authHeaders() }, credentials: "include", body: JSON.stringify(opts) });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || "Checkout failed");
   return data as { url: string };
 }
 
 export async function openCustomerPortal(playerId: string) {
-  const res = await fetch(`${API_BASE}/api/stripe/portal`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...authHeaders() },
-    credentials: "include",
-    body: JSON.stringify({ playerId }),
-  });
+  const res = await fetch(`${API_BASE}/api/stripe/portal`, { method: "POST", headers: { "Content-Type": "application/json", ...authHeaders() }, credentials: "include", body: JSON.stringify({ playerId }) });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || "Portal failed");
   return data as { url: string };
