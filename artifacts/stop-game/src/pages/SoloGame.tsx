@@ -1636,7 +1636,7 @@ export default function SoloGame() {
                   </motion.div>
                 )}
               </div>
-                            {!isDailyMode && !isQuickMode && !isChaosMode && !isRandomMode && (
+                            {true && (
                 <div
                   data-ai-difficulty-selector
                   className="w-full max-w-sm rounded-2xl p-4 text-left"

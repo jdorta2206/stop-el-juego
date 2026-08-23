@@ -50,78 +50,7 @@ const queryClient = new QueryClient({
 });
 
 function SoloRoute() {
-  const [, setLocation] = useLocation();
-  const [difficulty, setDifficulty] = useState<"easy" | "expert">(() =>
-    new URLSearchParams(window.location.search).get("ai") === "expert" ? "expert" : "easy",
-  );
-
-  const isSpecialMode = (() => {
-    const params = new URLSearchParams(window.location.search);
-    return params.get("daily") === "true" || ["quick", "chaos", "random"].includes(params.get("mode") || "");
-  })();
-
-  const chooseDifficulty = (next: "easy" | "expert") => {
-    setDifficulty(next);
-    const url = new URL(window.location.href);
-    url.searchParams.set("ai", next);
-    // Reload so SoloGame consumes the selected difficulty from its existing
-    // URL-based state without changing any of the game's existing contracts.
-    window.location.assign(url.toString());
-  };
-
-  return (
-    <div className="relative min-h-screen">
-      <SoloGame />
-      {(
-        <div
-          data-solo-ai-selector
-          className="fixed z-[70] left-1/2 -translate-x-1/2 top-2 w-[calc(100%-1.5rem)] max-w-sm rounded-2xl p-3 shadow-2xl backdrop-blur-md"
-          style={{
-            background: "rgba(10,16,45,0.94)",
-            border: "1px solid rgba(255,255,255,0.16)",
-          }}
-        >
-          <div className="flex items-center justify-between gap-3 mb-2">
-            <div>
-              <p className="text-white font-black text-sm">🤖 Dificultad de la IA</p>
-              <p className="text-white/45 text-[10px]">Elige qué difícil será el rival</p>
-            </div>
-            <span className="text-white/45 text-[10px] font-black uppercase">
-              {difficulty === "expert" ? "Experto" : "Fácil"}
-            </span>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => chooseDifficulty("easy")}
-              aria-pressed={difficulty === "easy"}
-              className="rounded-xl px-3 py-2.5 text-sm font-black transition-all"
-              style={{
-                background: difficulty === "easy" ? "linear-gradient(135deg, #4ade80, #16a34a)" : "rgba(255,255,255,0.07)",
-                color: difficulty === "easy" ? "#071b0d" : "rgba(255,255,255,0.8)",
-                border: difficulty === "easy" ? "2px solid rgba(255,255,255,0.55)" : "1px solid rgba(255,255,255,0.12)",
-              }}
-            >
-              🟢 Fácil
-            </button>
-            <button
-              type="button"
-              onClick={() => chooseDifficulty("expert")}
-              aria-pressed={difficulty === "expert"}
-              className="rounded-xl px-3 py-2.5 text-sm font-black transition-all"
-              style={{
-                background: difficulty === "expert" ? "linear-gradient(135deg, #f59e0b, #dc2626)" : "rgba(255,255,255,0.07)",
-                color: "white",
-                border: difficulty === "expert" ? "2px solid rgba(255,255,255,0.55)" : "1px solid rgba(255,255,255,0.12)",
-              }}
-            >
-              🔥 Experto
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
+  return <SoloGame />;
 }
 
 function Router() {
