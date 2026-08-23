@@ -9,7 +9,8 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.dorynex.stopjuegodepalabras",
-      "usesAppleSignIn": true
+      "usesAppleSignIn": true,
+      "buildNumber": "1"
     },
     "android": {
       "package": "com.dorynex.stopjuegodepalabras"
@@ -19,7 +20,8 @@
     },
     "plugins": [
       "expo-apple-authentication",
-      "expo-dev-client"
+      "expo-dev-client",
+      "expo-iap"
     ],
     "extra": {
       "apiBaseUrl": "https://workspaceapi-server-production-178e6.up.railway.app"
