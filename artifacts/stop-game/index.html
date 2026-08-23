@@ -3,8 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
-    <title>STOP - El Juego v2</title>
-    <!-- 🔥 VERSIÓN 2.0 - FORZANDO NUEVO FRONTEND PARA TWA -->
+    <title>STOP - El Juego v2.0.1</title>
+    <!-- 🔥 VERSIÓN 2.0.1 - Selector Fácil/Experto visible en cada nueva partida -->
     <!-- 🚂 Railway: frontend + API are built and served as one production service. -->
     <link rel="icon" type="image/png" href="/images/stop-logo.png" />
     <link rel="apple-touch-icon" href="/images/icon-192.png" />
@@ -14,11 +14,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="STOP" />
-
-    <!-- Google AdSense: identificación directa de la cuenta para verificación -->
     <meta name="google-adsense-account" content="ca-pub-4807272408824742" />
-
-    <!-- Google Analytics 4 (gtag.js) — directo, sin necesidad de configurar GTM -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-735TVGF6F5"></script>
     <script>
       window.dataLayer = window.dataLayer || [];
@@ -26,78 +22,44 @@
       gtag('js', new Date());
       gtag('config', 'G-735TVGF6F5', { send_page_view: false });
     </script>
-
-    <!-- Google Tag Manager — para añadir Meta Pixel, TikTok Pixel u otros tags sin tocar código -->
     <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
     new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
     j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
     'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
     })(window,document,'script','dataLayer','GTM-KP7P4GBK');</script>
-
-    <!-- Google AdSense — verificación de propiedad + carga de anuncios -->
-    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4807272408824742"
-            crossorigin="anonymous"></script>
-
-    <!-- Open Graph — WhatsApp, Instagram, Facebook, Telegram -->
-    <meta property="og:type"        content="website" />
-    <meta property="og:site_name"   content="STOP - El Juego" />
-    <meta property="og:url"         content="https://play.google.com/store/apps/details?id=app.replit.stop_el_juego.twa" />
-    <meta property="og:title"       content="STOP - El Juego de las Palabras" />
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4807272408824742" crossorigin="anonymous"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="STOP - El Juego" />
+    <meta property="og:url" content="https://play.google.com/store/apps/details?id=app.replit.stop_el_juego.twa" />
+    <meta property="og:title" content="STOP - El Juego de las Palabras" />
     <meta property="og:description" content="¡El clásico juego de las categorías ahora online! Juega solo o con amigos y sube al ranking global. 🎯 Descárgalo gratis en Google Play." />
-    <meta property="og:image"       content="https://www.stopjuegodepalabras.com/opengraph.jpg" />
-    <meta property="og:image:width"  content="1280" />
+    <meta property="og:image" content="https://www.stopjuegodepalabras.com/opengraph.jpg" />
+    <meta property="og:image:width" content="1280" />
     <meta property="og:image:height" content="720" />
-    <meta property="og:image:alt"   content="STOP - El Juego de las Palabras" />
-    <meta property="og:locale"      content="es_ES" />
-
-    <!-- Twitter / X card -->
-    <meta name="twitter:card"        content="summary_large_image" />
-    <meta name="twitter:title"       content="STOP - El Juego de las Palabras" />
+    <meta property="og:image:alt" content="STOP - El Juego de las Palabras" />
+    <meta property="og:locale" content="es_ES" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="STOP - El Juego de las Palabras" />
     <meta name="twitter:description" content="¡El clásico juego de las categorías ahora online! Juega solo o con amigos y sube al ranking global. 🎯 También en Google Play." />
-    <meta name="twitter:image"       content="https://www.stopjuegodepalabras.com/opengraph.jpg" />
-
-    <!-- SEO general -->
+    <meta name="twitter:image" content="https://www.stopjuegodepalabras.com/opengraph.jpg" />
     <meta name="description" content="¡El clásico juego de las categorías ahora online! Juega solo o con amigos y sube al ranking global. También disponible en Google Play." />
-    <meta name="keywords"    content="STOP, juego de palabras, categorías, online, multijugador, ranking" />
+    <meta name="keywords" content="STOP, juego de palabras, categorías, online, multijugador, ranking" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-      #html-splash {
-        position: fixed;
-        inset: 0;
-        z-index: 99999;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background: radial-gradient(ellipse at 50% 45%, #5a1208 0%, #1a063a 55%, #060318 100%);
-        transition: opacity 0.35s ease;
-      }
+      #html-splash { position: fixed; inset: 0; z-index: 99999; display: flex; align-items: center; justify-content: center; background: radial-gradient(ellipse at 50% 45%, #5a1208 0%, #1a063a 55%, #060318 100%); transition: opacity 0.35s ease; }
       #html-splash.fade-out { opacity: 0; pointer-events: none; }
-      #html-splash img {
-        width: 160px; height: 160px; border-radius: 50%;
-        filter: drop-shadow(0 0 28px rgba(181,48,26,0.95)) drop-shadow(0 4px 16px rgba(0,0,0,0.8));
-        animation: splash-pulse 1.6s ease-in-out infinite;
-      }
-      @keyframes splash-pulse {
-        0%, 100% { transform: scale(1); filter: drop-shadow(0 0 28px rgba(181,48,26,0.95)) drop-shadow(0 4px 16px rgba(0,0,0,0.8)); }
-        50% { transform: scale(1.06); filter: drop-shadow(0 0 42px rgba(181,48,26,1)) drop-shadow(0 4px 20px rgba(0,0,0,0.9)); }
-      }
-
+      #html-splash img { width: 160px; height: 160px; border-radius: 50%; filter: drop-shadow(0 0 28px rgba(181,48,26,0.95)) drop-shadow(0 4px 16px rgba(0,0,0,0.8)); animation: splash-pulse 1.6s ease-in-out infinite; }
+      @keyframes splash-pulse { 0%,100% { transform: scale(1); filter: drop-shadow(0 0 28px rgba(181,48,26,0.95)) drop-shadow(0 4px 16px rgba(0,0,0,0.8)); } 50% { transform: scale(1.06); filter: drop-shadow(0 0 42px rgba(181,48,26,1)) drop-shadow(0 4px 20px rgba(0,0,0,0.9)); } }
     </style>
   </head>
   <body>
-    <!-- Google Tag Manager (noscript) -->
-    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-KP7P4GBK"
-    height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
-
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-KP7P4GBK" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     <div id="html-splash"><img src="/images/stop-logo.png" alt="STOP" /></div>
     <div id="root"></div>
-
-
-
     <script>
-      // JUGAR YA: let the player choose Fácil/Experto before SoloGame auto-starts.
+      // JUGAR YA: never auto-start the match; the player must be able to choose Fácil/Experto.
       // Preserve every other query parameter (daily, mode, letter, cats, etc.).
       (function () {
         try {
@@ -110,7 +72,6 @@
         } catch (_) {}
       })();
     </script>
-
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
