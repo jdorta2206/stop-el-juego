@@ -1636,7 +1636,56 @@ export default function SoloGame() {
                   </motion.div>
                 )}
               </div>
-              <Button size="xl" onClick={startGame}>{t.game.round} {round}</Button>
+                            {!isDailyMode && !isQuickMode && !isChaosMode && !isRandomMode && (
+                <div
+                  data-ai-difficulty-selector
+                  className="w-full max-w-sm rounded-2xl p-4 text-left"
+                  style={{
+                    background: "rgba(0,0,0,0.22)",
+                    border: "1px solid rgba(255,255,255,0.14)",
+                  }}
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <p className="text-white font-black text-base">🤖 {lang === "en" ? "AI difficulty" : "Dificultad de la IA"}</p>
+                      <p className="text-white/50 text-xs mt-0.5">
+                        {lang === "en" ? "Choose how challenging the opponent is" : "Elige qué difícil será el rival"}
+                      </p>
+                    </div>
+                    <span className="text-xs font-black text-white/40 uppercase">{aiDifficulty === "expert" ? "95%" : "60%"}</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setAiDifficulty("easy")}
+                      aria-pressed={aiDifficulty === "easy"}
+                      className="rounded-xl px-3 py-3 font-black transition-all"
+                      style={{
+                        background: aiDifficulty === "easy" ? "linear-gradient(135deg, #4ade80, #16a34a)" : "rgba(255,255,255,0.07)",
+                        color: aiDifficulty === "easy" ? "#071b0d" : "rgba(255,255,255,0.75)",
+                        border: aiDifficulty === "easy" ? "2px solid rgba(255,255,255,0.55)" : "1px solid rgba(255,255,255,0.12)",
+                      }}
+                    >
+                      🟢 {lang === "en" ? "Easy" : "Fácil"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAiDifficulty("expert")}
+                      aria-pressed={aiDifficulty === "expert"}
+                      className="rounded-xl px-3 py-3 font-black transition-all"
+                      style={{
+                        background: aiDifficulty === "expert" ? "linear-gradient(135deg, #f59e0b, #dc2626)" : "rgba(255,255,255,0.07)",
+                        color: "white",
+                        border: aiDifficulty === "expert" ? "2px solid rgba(255,255,255,0.55)" : "1px solid rgba(255,255,255,0.12)",
+                      }}
+                    >
+                      🔥 {lang === "en" ? "Expert" : "Experto"}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+<Button size="xl" onClick={startGame}>{t.game.round} {round}</Button>
 
               {isPremium ? (
                 <button
