@@ -161,3 +161,35 @@ const pages = [
         <p><strong>Día 4:</strong> Practica con un diccionario de sinónimos. Aprende al menos 3 sinónimos de 5 palabras que uses con frecuencia.</p>
         <p><strong>Día 5:</strong> Juega a STOP en modo difícil contra la IA. Trata de usar palabras menos comunes en cada categoría.</p>
         <p><strong>Día 6:</strong> Participa en partidas rápidas contra otros jugadores. Observa las palabras que usan y aprende de ellas.</p>
+        <p><strong>Día 7:</strong> Repasa todas las palabras nuevas que hayas aprendido durante la semana y juega una partida en el nivel más difícil para comprobar cuánto has mejorado.</p>
+      </article>
+    `
+  }
+];
+
+if (!fs.existsSync(distPath)) {
+  console.warn('[prerender] dist directory not found:', distPath);
+  process.exit(0);
+}
+
+const indexPath = path.join(distPath, 'index.html');
+if (!fs.existsSync(indexPath)) {
+  console.warn('[prerender] index.html not found:', indexPath);
+  process.exit(0);
+}
+
+const baseHtml = fs.readFileSync(indexPath, 'utf8');
+
+for (const page of pages) {
+  const html = baseHtml
+    .replace(/<title>[\s\S]*?<\/title>/i, `<title>${page.title}</title>`)
+    .replace(/<meta\s+name=["']description["'][^>]*>/i, `<meta name="description" content="${page.description.replace(/"/g, '&quot;')}">`)
+    .replace('</head>', `<meta name="robots" content="index,follow">\n</head>`)
+    .replace('<div id="root"></div>', `<div id="root">${page.content}</div>`);
+
+  const outputDir = path.join(distPath, page.route);
+  fs.mkdirSync(outputDir, { recursive: true });
+  fs.writeFileSync(path.join(outputDir, 'index.html'), html);
+}
+
+console.log(`[prerender] Generated ${pages.length} static pages`);
