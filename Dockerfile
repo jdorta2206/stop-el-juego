@@ -26,6 +26,9 @@ COPY --from=builder /app/node_modules /app/node_modules
 COPY --from=builder /app/package.json /app/package.json
 COPY --from=builder /app/pnpm-workspace.yaml /app/pnpm-workspace.yaml
 
+# Railway: el frontend ya queda copiado por build:railway en api-server/dist/public.
+# El backend lo sirve desde el mismo proceso mediante SERVE_CLIENT=1.
+
 # Instalar solo dependencias de producción (opcional, pero ahorra espacio)
 RUN npm install -g pnpm && pnpm install --prod --no-frozen-lockfile
 
