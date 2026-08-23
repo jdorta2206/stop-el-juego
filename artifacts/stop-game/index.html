@@ -189,6 +189,21 @@
       })();
     </script>
 
+    <script>
+      // JUGAR YA: let the player choose Fácil/Experto before SoloGame auto-starts.
+      // Preserve every other query parameter (daily, mode, letter, cats, etc.).
+      (function () {
+        try {
+          var u = new URL(window.location.href);
+          if (u.searchParams.get('auto') === '1') {
+            u.searchParams.delete('auto');
+            var q = u.searchParams.toString();
+            window.history.replaceState({}, '', u.pathname + (q ? '?' + q : '') + u.hash);
+          }
+        } catch (_) {}
+      })();
+    </script>
+
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

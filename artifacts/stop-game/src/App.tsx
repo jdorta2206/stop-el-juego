@@ -72,7 +72,7 @@ function SoloRoute() {
   return (
     <div className="relative min-h-screen">
       <SoloGame />
-      {!isSpecialMode && (
+      {(
         <div
           data-solo-ai-selector
           className="fixed z-[70] left-1/2 -translate-x-1/2 top-2 w-[calc(100%-1.5rem)] max-w-sm rounded-2xl p-3 shadow-2xl backdrop-blur-md"
