@@ -1,0 +1,79 @@
+name: Fix AI selector visibility
+
+on:
+  push:
+    branches: [master]
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fix selectors
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          # App.tsx: remove the global overlay selector. SoloGame already has
+          # the real selector inside the LOBBY, so it disappears automatically
+          # when PLAYING/RESULTS begins.
+          p = Path('artifacts/stop-game/src/App.tsx')
+          s = p.read_text()
+          start = s.find('function SoloRoute() {')
+          end = s.find('\nfunction Router()', start)
+          assert start >= 0 and end >= 0, 'SoloRoute anchors missing'
+          s = s[:start] + 'function SoloRoute() {\n  return <SoloGame />;\n}\n' + s[end:]
+          p.write_text(s)
+
+          # index.html: remove the old DOM-injected selector. It was outside
+          # React and therefore survived the transition from LOBBY to PLAYING.
+          p = Path('artifacts/stop-game/index.html')
+          s = p.read_text()
+          marker = '        // The server already supports x-ai-difficulty.'
+          start = s.find(marker)
+          if start >= 0:
+              script_start = s.rfind('    <script>', 0, start)
+              script_end = s.find('    </script>', start)
+              assert script_start >= 0 and script_end >= 0, 'index selector script anchors missing'
+              script_end += len('    </script>')
+              s = s[:script_start] + s[script_end:]
+
+          # The CSS is harmless, but remove it too so the legacy selector is
+          # completely gone from the production HTML.
+          css_start = s.find('      /* AI difficulty selector — lives in index.html')
+          if css_start >= 0:
+              css_end = s.find('    </style>', css_start)
+              assert css_end >= 0, 'index selector CSS end missing'
+              s = s[:css_start] + s[css_end:]
+          p.write_text(s)
+
+          # SoloGame: the real selector belongs to the LOBBY. Make it available
+          # for Daily/Quick/Chaos/Random too, while never rendering it during
+          # gameplay because the surrounding condition is gameState === LOBBY.
+          p = Path('artifacts/stop-game/src/pages/SoloGame.tsx')
+          s = p.read_text()
+          old = '!isDailyMode && !isQuickMode && !isChaosMode && !isRandomMode'
+          assert old in s, 'SoloGame difficulty condition missing'
+          s = s.replace(old, 'true', 1)
+          p.write_text(s)
+
+          print('AI selector visibility fixed')
+
+      - name: Validate
+        run: git diff --check
+
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add artifacts/stop-game/src/App.tsx artifacts/stop-game/index.html artifacts/stop-game/src/pages/SoloGame.tsx .github/workflows/fix-ai-selector-visibility.yml
+          git diff --cached --quiet || git commit -m "fix: keep AI difficulty selector only in solo lobby"
+          git push origin master
