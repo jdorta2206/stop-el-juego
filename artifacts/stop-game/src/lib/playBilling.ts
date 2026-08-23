@@ -38,23 +38,11 @@ export function hasAndroidAppReferrer(): boolean {
   return document.referrer?.startsWith("android-app://") ?? false;
 }
 
-/**
- * The TWA start URL contains a marker generated specifically for the
- * Google-Play-distributed Android package. This is deterministic and does
- * not depend on the Digital Goods API being injected before React renders.
- */
 export function hasPlayTwaMarker(): boolean {
   if (typeof window === "undefined") return false;
   return window.location.search.includes(PLAY_TWA_MARKER);
 }
 
-/**
- * PWABuilder/Bubblewrap also reports the installed Android build through
- * `?appVersion=` or the `STOPApp/<version>` UA token. This signal exists on
- * the very first React render, unlike getDigitalGoodsService(), which Chrome
- * may inject a little later. Pack Mundial used to miss Play at that moment
- * and permanently choose the Stripe branch for that render.
- */
 export function hasTwaVersionSignal(): boolean {
   if (typeof window === "undefined" || typeof navigator === "undefined") return false;
   try {
@@ -101,26 +89,20 @@ async function getPlayBillingService(): Promise<DigitalGoodsService> {
   }
 }
 
-export async function purchaseWorldCupPackOnPlay(playerId: string): Promise<{ granted: boolean }> {
-  if (!playerId) throw new Error("Debes iniciar sesión para comprar el Pack Mundial.");
+async function playPayment(
+  playerId: string,
+  sku: string,
+  label: string,
+  verifyEndpoint: string,
+  productType: "onetime" | "subscription",
+): Promise<void> {
+  if (!playerId) throw new Error("Debes iniciar sesión para comprar.");
 
   const service = await getPlayBillingService();
-  const details = await service.getDetails([WORLD_CUP_SKU]);
-  if (!details.some((item) => item.itemId === WORLD_CUP_SKU)) {
-    throw new Error(`Google Play no encuentra el producto ${WORLD_CUP_SKU}.`);
+  const details = await service.getDetails([sku]);
+  if (!details.some((item) => item.itemId === sku)) {
+    throw new Error(`Google Play no encuentra el producto ${sku}.`);
   }
-
-  const paymentMethods = [{
-    supportedMethods: PLAY_BILLING_METHOD,
-    data: { sku: WORLD_CUP_SKU },
-  }];
-
-  const paymentDetails = {
-    total: {
-      label: "Pack Mundial",
-      amount: { currency: "EUR", value: "0.00" },
-    },
-  };
 
   if (typeof PaymentRequest !== "function") {
     throw new Error(
@@ -128,7 +110,18 @@ export async function purchaseWorldCupPackOnPlay(playerId: string): Promise<{ gr
     );
   }
 
-  const request = new PaymentRequest(paymentMethods, paymentDetails);
+  const request = new PaymentRequest(
+    [{ supportedMethods: PLAY_BILLING_METHOD, data: { sku } }],
+    {
+      total: {
+        label,
+        // Google Play supplies the real price; this amount is only the
+        // PaymentRequest placeholder required by the Digital Goods bridge.
+        amount: { currency: "EUR", value: "0.00" },
+      },
+    },
+  );
+
   const paymentResponse = await request.show();
   const responseDetails = paymentResponse.details as { purchaseToken?: string; token?: string };
   const purchaseToken = responseDetails.purchaseToken ?? responseDetails.token;
@@ -138,36 +131,51 @@ export async function purchaseWorldCupPackOnPlay(playerId: string): Promise<{ gr
     throw new Error("Google Play no devolvió el token de compra.");
   }
 
-  const res = await fetch("/api/billing/play/verify-pack", {
+  const res = await fetch(verifyEndpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
-    body: JSON.stringify({ playerId, purchaseToken, productId: WORLD_CUP_SKU }),
+    body: JSON.stringify({ playerId, purchaseToken, productId: sku }),
   });
 
-  const data = (await res.json().catch(() => ({}))) as { granted?: boolean; error?: string };
-  if (!res.ok || !data.granted) {
+  const data = (await res.json().catch(() => ({}))) as { granted?: boolean; isPremium?: boolean; error?: string };
+  if (!res.ok || (!data.granted && !data.isPremium)) {
     await paymentResponse.complete("fail").catch(() => undefined);
-    throw new Error(data.error || "Error al verificar el Pack Mundial");
+    throw new Error(data.error || "Error al verificar la compra de Google Play");
   }
 
   if (service.acknowledge) {
-    await service.acknowledge(purchaseToken, "onetime").catch((error) => {
+    await service.acknowledge(purchaseToken, productType).catch((error) => {
       console.warn("No se pudo confirmar la compra en Digital Goods API:", error);
     });
   }
 
   await paymentResponse.complete("success").catch(() => undefined);
+}
+
+/** Compra STOP Premium mediante Google Play dentro del TWA. */
+export async function purchasePremiumOnPlay(playerId: string): Promise<{ isPremium: boolean }> {
+  await playPayment(
+    playerId,
+    PREMIUM_SKU,
+    "STOP Premium",
+    "/api/billing/play/verify",
+    "subscription",
+  );
+  return { isPremium: true };
+}
+
+export async function purchaseWorldCupPackOnPlay(playerId: string): Promise<{ granted: boolean }> {
+  await playPayment(
+    playerId,
+    WORLD_CUP_SKU,
+    "Pack Mundial",
+    "/api/billing/play/verify-pack",
+    "onetime",
+  );
   return { granted: true };
 }
 
-/**
- * Restores existing Google Play subscription purchases when the user opens
- * the Android TWA. Digital Goods API exposes existing purchases through
- * listPurchases(); each token is sent to the server, which verifies it with
- * Google Play before granting premium. This is intentionally a no-op on the
- * normal web/Stripe channel.
- */
 export async function restorePlayPurchases(playerId?: string | null): Promise<void> {
   if (!isLikelyPlayTwa()) return;
   const service = await getPlayBillingService();
@@ -176,12 +184,7 @@ export async function restorePlayPurchases(playerId?: string | null): Promise<vo
     (purchase) => purchase.itemId === PREMIUM_SKU && !!purchase.purchaseToken,
   );
 
-  if (premiumPurchases.length === 0) return;
-
-  // The server verifies every token against Google Play. If playerId is not
-  // available yet, simply skip restoration and let the next premium refresh
-  // retry once the player is known.
-  if (!playerId) return;
+  if (premiumPurchases.length === 0 || !playerId) return;
 
   for (const purchase of premiumPurchases) {
     try {
