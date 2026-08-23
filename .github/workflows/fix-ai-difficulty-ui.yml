@@ -1,0 +1,141 @@
+name: Fix AI difficulty UI
+
+on:
+  push:
+    branches: [master]
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Patch AI difficulty
+        shell: python
+        run: |
+          from pathlib import Path
+
+          # ---------------- server ----------------
+          p = Path('artifacts/api-server/src/routes/game.ts')
+          s = p.read_text()
+
+          if 'const aiPlan = createAiRoundPlan' not in s:
+              marker = 'for (const pr of playerResponses) {'
+              replacement = '''const rawDifficulty = String(req.headers["x-ai-difficulty"] || "easy").toLowerCase();
+          const aiDifficulty: AiDifficulty = rawDifficulty === "expert" ? "expert" : "easy";
+          const rawElapsed = Number(req.headers["x-ai-elapsed-ms"]);
+          const elapsedMs = Number.isFinite(rawElapsed) ? Math.max(0, Math.min(rawElapsed, 60000)) : 60000;
+          const aiPlan = createAiRoundPlan(playerResponses.map((p) => p.category), aiDifficulty, elapsedMs);
+
+          for (const pr of playerResponses) {'''
+              if marker not in s:
+                  raise SystemExit('server loop anchor missing')
+              s = s.replace(marker, replacement, 1)
+
+          old_ai = 'const aiWord = getAiWord(letter, pr.category, language);'
+          new_ai = 'const aiWord = shouldAiAnswer(aiPlan, pr.category) ? getAiWord(letter, pr.category, language) : "";'
+          if old_ai in s:
+              s = s.replace(old_ai, new_ai, 1)
+          p.write_text(s)
+
+          # ---------------- client ----------------
+          p = Path('artifacts/stop-game/src/pages/SoloGame.tsx')
+          s = p.read_text()
+
+          marker = 'const validateMutation = useValidateRound();'
+          replacement = '''const validateRequestHeadersRef = useRef<Record<string, string>>({});
+          const validateMutation = useValidateRound({
+            request: { headers: validateRequestHeadersRef.current },
+          });'''
+          if marker in s and 'validateRequestHeadersRef' not in s:
+              s = s.replace(marker, replacement, 1)
+
+          marker = '    aiRoundMetaRef.current = { difficulty: aiDifficulty, elapsedMs: Math.max(0, Date.now() - aiRoundStartedAtRef.current) };'
+          replacement = '''    aiRoundMetaRef.current = { difficulty: aiDifficulty, elapsedMs: Math.max(0, Date.now() - aiRoundStartedAtRef.current) };
+    validateRequestHeadersRef.current["x-ai-difficulty"] = aiDifficulty;
+    validateRequestHeadersRef.current["x-ai-elapsed-ms"] = String(aiRoundMetaRef.current.elapsedMs);'''
+          if marker in s and 'x-ai-difficulty' not in s:
+              s = s.replace(marker, replacement, 1)
+
+          # Visible selector in the lobby. It is deliberately available for
+          # normal solo AND daily mode; the daily page navigates into this lobby.
+          marker = '''              <Button size="xl" onClick={startGame}>{t.game.round} {round}</Button>'''
+          selector = '''              <div
+                className="w-full max-w-sm rounded-2xl p-4 space-y-3"
+                style={{
+                  background: "rgba(255,255,255,0.06)",
+                  border: "1px solid rgba(255,255,255,0.12)",
+                }}
+              >
+                <div className="text-left">
+                  <p className="text-white font-black text-base">🤖 Dificultad de la IA</p>
+                  <p className="text-white/45 text-xs mt-0.5">Elige cómo de difícil será tu rival.</p>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAiDifficulty("easy");
+                      const u = new URL(window.location.href);
+                      u.searchParams.set("ai", "easy");
+                      window.history.replaceState({}, "", u.toString());
+                    }}
+                    className="rounded-xl px-3 py-3 font-black text-sm transition-all"
+                    style={{
+                      background: aiDifficulty === "easy" ? "linear-gradient(135deg,#22c55e,#16a34a)" : "rgba(255,255,255,0.07)",
+                      color: "white",
+                      border: aiDifficulty === "easy" ? "2px solid rgba(134,239,172,0.8)" : "1px solid rgba(255,255,255,0.12)",
+                    }}
+                  >
+                    🟢 Fácil
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAiDifficulty("expert");
+                      const u = new URL(window.location.href);
+                      u.searchParams.set("ai", "expert");
+                      window.history.replaceState({}, "", u.toString());
+                    }}
+                    className="rounded-xl px-3 py-3 font-black text-sm transition-all"
+                    style={{
+                      background: aiDifficulty === "expert" ? "linear-gradient(135deg,#ef4444,#b91c1c)" : "rgba(255,255,255,0.07)",
+                      color: "white",
+                      border: aiDifficulty === "expert" ? "2px solid rgba(252,165,165,0.85)" : "1px solid rgba(255,255,255,0.12)",
+                    }}
+                  >
+                    🔥 Experto
+                  </button>
+                </div>
+              </div>
+
+              <Button size="xl" onClick={startGame}>{t.game.round} {round}</Button>'''
+          if marker in s and '🤖 Dificultad de la IA' not in s:
+              s = s.replace(marker, selector, 1)
+
+          p.write_text(s)
+
+          print('AI difficulty UI + online integration patched')
+
+      - name: Verify
+        run: |
+          git diff --check
+          grep -q 'Dificultad de la IA' artifacts/stop-game/src/pages/SoloGame.tsx
+          grep -q 'x-ai-difficulty' artifacts/stop-game/src/pages/SoloGame.tsx
+          grep -q 'createAiRoundPlan' artifacts/api-server/src/routes/game.ts
+          grep -q 'shouldAiAnswer(aiPlan' artifacts/api-server/src/routes/game.ts
+
+      - name: Commit and remove temporary workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/fix-ai-difficulty-ui.yml
+          git add artifacts/api-server/src/routes/game.ts artifacts/stop-game/src/pages/SoloGame.tsx
+          git commit -m "fix(ai): show easy/expert selector and apply difficulty"
+          git push origin HEAD:master
