@@ -2,7 +2,7 @@ name: iOS App Check
 
 on:
   push:
-    branches: [ios-app]
+    branches: [ios-app-prep-2026]
     paths:
       - 'artifacts/stop-ios/**'
       - '.github/workflows/ios-check.yml'
