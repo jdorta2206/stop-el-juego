@@ -400,6 +400,9 @@ export default function SoloGame() {
   const submitScoreMutation = useSubmitScore();
   const queryClient = useQueryClient();
   const timerRef = useRef<NodeJS.Timeout>(null);
+  const aiRoundStartedAtRef = useRef<number>(0);
+  const aiRoundMetaRef = useRef<{ difficulty: "easy" | "expert"; elapsedMs: number }>({ difficulty: "easy", elapsedMs: 60000 });
+  const [aiDifficulty, setAiDifficulty] = useState<"easy" | "expert">(() => new URLSearchParams(window.location.search).get("ai") === "expert" ? "expert" : "easy");
   // Guards to prevent handleStop / results-accumulation from firing more than once per round
   const stoppedRef = useRef(false);
   const resultsAppliedRef = useRef(false);
@@ -501,6 +504,7 @@ export default function SoloGame() {
     setAiBluffSetup({ category: aiBluffCat, wasActuallyBluffing: Math.random() < 0.5 });
 
     setGameState("PLAYING");
+    aiRoundStartedAtRef.current = Date.now();
     setTimeLeft(roundTime);
     setRewardedUsed(false);
     setHintUsed(false);
@@ -586,6 +590,8 @@ export default function SoloGame() {
     setGameState("EVALUATING");
 
     // Use refs to always get the latest state values (avoids stale closure bug)
+    aiRoundMetaRef.current = { difficulty: aiDifficulty, elapsedMs: Math.max(0, Date.now() - aiRoundStartedAtRef.current) };
+
     const currentResponses = responsesRef.current;
     const currentCategories = categoriesRef.current;
     const currentBluffed = bluffedCategoriesRef.current;
@@ -623,6 +629,8 @@ export default function SoloGame() {
         letter,
         language: getCurrentLang(),
         playerResponses: formattedResponses,
+        difficulty: aiRoundMetaRef.current.difficulty,
+        elapsedMs: aiRoundMetaRef.current.elapsedMs,
       });
       if (local) {
         apiData = local;

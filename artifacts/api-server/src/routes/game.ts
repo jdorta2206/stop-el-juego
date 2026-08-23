@@ -3,6 +3,7 @@ import { ValidateRoundBody, ValidateRoundResponse } from "@workspace/api-zod";
 import { validateWordWithAi } from "../lib/aiWordValidator";
 import { issueScoreToken } from "../lib/scoreToken";
 import { normalizeWord, isSafeInput } from "../lib/wordRules";
+import { createAiRoundPlan, shouldAiAnswer, type AiDifficulty } from "../lib/aiDifficulty";
 
 const router: IRouter = Router();
 
@@ -1500,9 +1501,15 @@ router.post("/validate", async (req, res) => {
   let playerTotalScore = 0;
   let aiTotalScore = 0;
 
-  for (const pr of playerResponses) {
+  const rawDifficulty = String(req.headers["x-ai-difficulty"] || "easy").toLowerCase();
+const aiDifficulty: AiDifficulty = rawDifficulty === "expert" ? "expert" : "easy";
+const rawElapsed = Number(req.headers["x-ai-elapsed-ms"]);
+const elapsedMs = Number.isFinite(rawElapsed) ? Math.max(0, Math.min(rawElapsed, 60000)) : 60000;
+const aiPlan = createAiRoundPlan(playerResponses.map((p) => p.category), aiDifficulty, elapsedMs);
+
+for (const pr of playerResponses) {
     const playerWord = pr.word?.trim() || "";
-    const aiWord = getAiWord(letter, pr.category, language);
+    const aiWord = shouldAiAnswer(aiPlan, pr.category) ? getAiWord(letter, pr.category, language) : "";
 
     const normPlayerWord = normalizeWord(playerWord);
 
