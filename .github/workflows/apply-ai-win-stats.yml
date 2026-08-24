@@ -34,13 +34,13 @@ jobs:
           s = s.replace(old, new, 1)
 
           old = '''        xp: sql`${playerScoresTable.xp} + ${xpGain}`,\n        level: newLevel,'''
-          new = '''        xp: sql`${playerScoresTable.xp} + ${xpGain}`,\n        achievementStatsJson: sql`jsonb_set(\n          jsonb_set(\n            COALESCE(NULLIF(${playerScoresTable.achievementStatsJson}, '')::jsonb, '{}'::jsonb),\n            '{aiEasyWins}',\n            to_jsonb(COALESCE((${playerScoresTable.achievementStatsJson}::jsonb ->> 'aiEasyWins')::integer, 0) + ${aiEasyWinAward})\n          ),\n          '{aiExpertWins}',\n          to_jsonb(COALESCE((${playerScoresTable.achievementStatsJson}::jsonb ->> 'aiExpertWins')::integer, 0) + ${aiExpertWinAward})\n        )::text`,\n        level: newLevel,'''
+          new = '''        xp: sql`${playerScoresTable.xp} + ${xpGain}`,\n        achievementStatsJson: sql`jsonb_set(\n          jsonb_set(\n            COALESCE(NULLIF(${playerScoresTable.achievementStatsJson}, '')::jsonb, '{}'::jsonb),\n            '{aiEasyGames}',\n            to_jsonb(COALESCE((${playerScoresTable.achievementStatsJson}::jsonb ->> 'aiEasyGames')::integer, 0) + ${aiEasyWinAward})\n          ),\n          '{aiExpertGames}',\n          to_jsonb(COALESCE((${playerScoresTable.achievementStatsJson}::jsonb ->> 'aiExpertGames')::integer, 0) + ${aiExpertWinAward})\n        )::text`,\n        level: newLevel,'''
           if old not in s:
               raise SystemExit('existing-player update target not found')
           s = s.replace(old, new, 1)
 
           old = '''        xp: xpGain,\n        level: calcLevel(xpGain),\n        coins: coinGain,'''
-          new = '''        xp: xpGain,\n        level: calcLevel(xpGain),\n        achievementStatsJson: JSON.stringify({\n          aiEasyWins: aiEasyWinAward,\n          aiExpertWins: aiExpertWinAward,\n        }),\n        coins: coinGain,'''
+          new = '''        xp: xpGain,\n        level: calcLevel(xpGain),\n        achievementStatsJson: JSON.stringify({\n          aiEasyGames: aiEasyWinAward,\n          aiExpertGames: aiExpertWinAward,\n        }),\n        coins: coinGain,'''
           if old not in s:
               raise SystemExit('new-player values target not found')
           s = s.replace(old, new, 1)
