@@ -18,6 +18,9 @@ type AchievementStats = {
   usedCustomPack: boolean;
   timesShared: number;
   aiZeroWin: boolean;
+  // Server-authoritative counters populated only from signed score vouchers.
+  aiEasyGames: number;
+  aiExpertGames: number;
 };
 
 function parseJsonObject(raw: string | null | undefined): JsonObject {
@@ -61,6 +64,10 @@ function mergeAchievementStats(currentRaw: string | null | undefined, incoming: 
     usedCustomPack: Boolean(current.usedCustomPack) || Boolean(incomingObj.usedCustomPack),
     timesShared: Math.max(finiteNumber(current.timesShared), finiteNumber(incomingObj.timesShared)),
     aiZeroWin: Boolean(current.aiZeroWin) || Boolean(incomingObj.aiZeroWin),
+    // NEVER accept these two from the browser. They are incremented only by
+    // /ranking/scores after validating HMAC-signed AI-difficulty vouchers.
+    aiEasyGames: Math.max(0, Math.floor(finiteNumber(current.aiEasyGames))),
+    aiExpertGames: Math.max(0, Math.floor(finiteNumber(current.aiExpertGames))),
   };
 }
 
@@ -86,7 +93,7 @@ router.get("/progress/:playerId", async (req, res) => {
         playerId,
         collectedWords: {},
         achievements: [],
-        stats: { coins: 0, xp: 0, level: 1 },
+        stats: { coins: 0, xp: 0, level: 1, aiEasyGames: 0, aiExpertGames: 0 },
       });
     }
 
@@ -141,9 +148,9 @@ router.post("/progress/:playerId", async (req, res) => {
     const currentAchievements = parseJsonArray(rows[0].achievementsJson);
     const mergedAchievements = [...new Set([...currentAchievements, ...incomingAchievements])];
 
-    // Achievement stats are monotonic: numeric counters/records only move up
-    // and boolean milestones can only move from false to true. This prevents a
-    // stale client from erasing progress already stored on the server.
+    // Client-originated achievement stats are monotonic, but the two AI
+    // difficulty counters are explicitly excluded from incoming data. Their
+    // only authoritative writer is /ranking/scores after HMAC verification.
     const mergedStats = hasStats
       ? mergeAchievementStats(rows[0].achievementStatsJson, req.body.stats)
       : mergeAchievementStats(rows[0].achievementStatsJson, {});
