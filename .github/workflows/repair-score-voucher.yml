@@ -1,0 +1,37 @@
+name: Repair score voucher
+
+on:
+  push:
+    branches: [master]
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: "!contains(github.event.head_commit.message, '[score-voucher-repair]')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: master
+      - name: Restore game route from parent and bind difficulty
+        run: |
+          set -euo pipefail
+          git checkout HEAD^ -- artifacts/api-server/src/routes/game.ts
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('artifacts/api-server/src/routes/game.ts')
+          s = p.read_text()
+          old = 'const scoreToken = issueScoreToken(playerTotalScore);'
+          new = 'const scoreToken = issueScoreToken(playerTotalScore, aiDifficulty);'
+          if old not in s:
+              raise SystemExit('Expected voucher issuance call not found')
+          p.write_text(s.replace(old, new, 1))
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add artifacts/api-server/src/routes/game.ts
+          git commit -m '[score-voucher-repair] restore game route and bind AI difficulty'
+          git push origin HEAD:master
