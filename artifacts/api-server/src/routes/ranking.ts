@@ -120,7 +120,14 @@ router.get("/scores", async (req, res) => {
   const total = Number((totalRows.rows[0] as any)?.count ?? 0);
 
   res.json({
-    players: players.map((p, i) => ({
+    players: players.map((p, i) => {
+      let aiStats: { aiEasyGames?: unknown; aiExpertGames?: unknown } = {};
+      try {
+        const parsed = JSON.parse(String(p.achievement_stats_json ?? "{}"));
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) aiStats = parsed;
+      } catch {}
+
+      return {
       id: p.id,
       playerId: p.player_id,
       playerName: p.player_name,
@@ -132,11 +139,14 @@ router.get("/scores", async (req, res) => {
       longestStreak: p.longest_streak ?? 0,
       isPremium: p.is_premium ?? false,
       achievementCount: parseAchievementCount(p.achievements_json),
+      aiEasyGames: Math.max(0, Math.floor(Number(aiStats.aiEasyGames ?? 0))),
+      aiExpertGames: Math.max(0, Math.floor(Number(aiStats.aiExpertGames ?? 0))),
       title: getTitle(i + 1),
       createdAt: p.created_at,
       updatedAt: p.updated_at,
       rank: i + 1,
-    })),
+      };
+    }),
     total,
   });
 });
