@@ -1,0 +1,60 @@
+name: Apply verified AI win stats patch
+
+on:
+  push:
+    branches: [master]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.event.head_commit.message != 'chore: persist verified AI difficulty wins'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+      - name: Patch ranking route
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('artifacts/api-server/src/routes/ranking.ts')
+          s = p.read_text()
+          old = 'const { base: verifiedBase, verified, allExpert } = sumVerifiedBase(scoreTokens, maxRoundsForMode(mode));'
+          new = '''const { base: verifiedBase, verified, allExpert, easyCount } = sumVerifiedBase(scoreTokens, maxRoundsForMode(mode));
+          // Difficulty achievements are server-authoritative: only a won solo
+          // submission backed by valid signed vouchers can increment them.
+          // Mixed easy/expert rounds increment neither counter.
+          const aiEasyWinAward = !isBonus && mode === "solo" && won === true && verified > 0 && easyCount === verified ? 1 : 0;
+          const aiExpertWinAward = !isBonus && mode === "solo" && won === true && allExpert ? 1 : 0;'''
+          if old not in s:
+              raise SystemExit('target destructuring not found')
+          s = s.replace(old, new, 1)
+
+          old = '''        xp: sql`${playerScoresTable.xp} + ${xpGain}`,\n        level: newLevel,'''
+          new = '''        xp: sql`${playerScoresTable.xp} + ${xpGain}`,\n        achievementStatsJson: sql`jsonb_set(\n          jsonb_set(\n            COALESCE(NULLIF(${playerScoresTable.achievementStatsJson}, '')::jsonb, '{}'::jsonb),\n            '{aiEasyWins}',\n            to_jsonb(COALESCE((${playerScoresTable.achievementStatsJson}::jsonb ->> 'aiEasyWins')::integer, 0) + ${aiEasyWinAward})\n          ),\n          '{aiExpertWins}',\n          to_jsonb(COALESCE((${playerScoresTable.achievementStatsJson}::jsonb ->> 'aiExpertWins')::integer, 0) + ${aiExpertWinAward})\n        )::text`,\n        level: newLevel,'''
+          if old not in s:
+              raise SystemExit('existing-player update target not found')
+          s = s.replace(old, new, 1)
+
+          old = '''        xp: xpGain,\n        level: calcLevel(xpGain),\n        coins: coinGain,'''
+          new = '''        xp: xpGain,\n        level: calcLevel(xpGain),\n        achievementStatsJson: JSON.stringify({\n          aiEasyWins: aiEasyWinAward,\n          aiExpertWins: aiExpertWinAward,\n        }),\n        coins: coinGain,'''
+          if old not in s:
+              raise SystemExit('new-player values target not found')
+          s = s.replace(old, new, 1)
+
+          p.write_text(s)
+      - name: Commit source patch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add artifacts/api-server/src/routes/ranking.ts
+          git commit -m 'chore: persist verified AI difficulty wins'
+          git push origin master
+      - name: Remove temporary workflow
+        run: |
+          git rm .github/workflows/apply-ai-win-stats.yml
+          git commit -m 'chore: remove temporary AI stats patch workflow'
+          git push origin master
