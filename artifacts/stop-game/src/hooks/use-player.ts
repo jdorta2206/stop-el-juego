@@ -108,7 +108,22 @@ export function usePlayer() {
       setNeedsAuth(false);
       setIsLoaded(true);
       if (isLoggedInId(stored.id)) {
-        void tryRestoreFrom(getApiUrl());
+        // A stale local profile must not masquerade as an authenticated account.
+        // Restore the signed session immediately; on a confirmed failed restore,
+        // clear the stale identity so protected endpoints don't loop on 401/403.
+        void tryRestoreSession().then((restored) => {
+          if (cancelled) return;
+          if (restored) {
+            writeStoredPlayer(restored);
+            setPlayer(restored);
+            setNeedsAuth(false);
+            return;
+          }
+          try { localStorage.removeItem(SESSION_TOKEN_KEY); } catch {}
+          writeStoredPlayer(null);
+          setPlayer(null);
+          setNeedsAuth(true);
+        });
       }
     } else {
       tryRestoreSession().then((restored) => {
