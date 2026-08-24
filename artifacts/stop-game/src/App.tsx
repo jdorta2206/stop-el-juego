@@ -50,6 +50,18 @@ const queryClient = new QueryClient({
 });
 
 function SoloRoute() {
+  // Legacy/home links may still carry ?auto=1. The current game contract is
+  // explicit: every new solo game must first show the Easy/Expert selector.
+  // Strip the legacy auto-start flag before SoloGame renders so its mount
+  // effect cannot bypass the lobby and start a round invisibly.
+  if (typeof window !== "undefined") {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("auto") === "1") {
+      params.delete("auto");
+      const query = params.toString();
+      window.history.replaceState({}, "", `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`);
+    }
+  }
   return <SoloGame />;
 }
 
