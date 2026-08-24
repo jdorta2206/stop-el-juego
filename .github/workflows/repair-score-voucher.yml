@@ -16,7 +16,7 @@ jobs:
         with:
           fetch-depth: 0
           ref: master
-      - name: Restore game route from parent and bind difficulty
+      - name: Restore game route and wire signed difficulty
         run: |
           set -euo pipefail
           git checkout HEAD^ -- artifacts/api-server/src/routes/game.ts
@@ -30,8 +30,48 @@ jobs:
               raise SystemExit('Expected voucher issuance call not found')
           p.write_text(s.replace(old, new, 1))
           PY
+      - name: Wire verified Expert state into submissions
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          ranking = Path('artifacts/api-server/src/routes/ranking.ts')
+          s = ranking.read_text()
+          old = 'const { base: verifiedBase, verified } = sumVerifiedBase(scoreTokens, maxRoundsForMode(mode));'
+          new = 'const { base: verifiedBase, verified, allExpert } = sumVerifiedBase(scoreTokens, maxRoundsForMode(mode));'
+          if old not in s:
+              raise SystemExit('Expected ranking voucher destructuring not found')
+          s = s.replace(old, new, 1)
+          old = 'multiplier: happyHourActive ? HAPPY_HOUR_MULTIPLIER : 1,\n    },\n  });'
+          new = 'multiplier: happyHourActive ? HAPPY_HOUR_MULTIPLIER : 1,\n      expertVerified: allExpert,\n    },\n  });'
+          if old not in s:
+              raise SystemExit('Expected ranking reward response not found')
+          ranking.write_text(s.replace(old, new, 1))
+
+          daily = Path('artifacts/api-server/src/routes/daily.ts')
+          s = daily.read_text()
+          old = 'const { base: verifiedBase, verified } = sumVerifiedBase(scoreTokens, 1);'
+          new = 'const { base: verifiedBase, verified, allExpert } = sumVerifiedBase(scoreTokens, 1);'
+          if old not in s:
+              raise SystemExit('Expected daily voucher destructuring not found')
+          s = s.replace(old, new, 1)
+          old = 'res.json({ updated: true, alreadyPlayed: true });'
+          new = 'res.json({ updated: true, alreadyPlayed: true, expertVerified: allExpert });'
+          if old not in s:
+              raise SystemExit('Expected daily update response not found')
+          s = s.replace(old, new, 1)
+          old = 'res.status(201).json({ submitted: true });'
+          new = 'res.status(201).json({ submitted: true, expertVerified: allExpert });'
+          if old not in s:
+              raise SystemExit('Expected daily submit response not found')
+          daily.write_text(s.replace(old, new, 1))
+          PY
+      - name: Commit repair
+        run: |
+          set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add artifacts/api-server/src/routes/game.ts
-          git commit -m '[score-voucher-repair] restore game route and bind AI difficulty'
+          git add artifacts/api-server/src/routes/game.ts artifacts/api-server/src/routes/ranking.ts artifacts/api-server/src/routes/daily.ts
+          git diff --cached --quiet && exit 0
+          git commit -m '[score-voucher-repair] bind AI difficulty to signed vouchers'
           git push origin HEAD:master
