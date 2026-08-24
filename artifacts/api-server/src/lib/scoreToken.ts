@@ -63,19 +63,25 @@ export function issueScoreToken(
 }
 
 /**
- * Verify vouchers and return the summed attested base plus whether every
- * counted voucher was issued for Expert difficulty. Every valid voucher is
- * burned, including surplus vouchers beyond maxTokens.
+ * Verify vouchers and return the summed attested base plus verified difficulty
+ * counts. Every valid voucher is burned, including surplus vouchers beyond
+ * maxTokens. `allExpert` is deliberately false for mixed/empty submissions.
  */
 export function sumVerifiedBase(
   tokens: unknown,
   maxTokens = Number.POSITIVE_INFINITY,
-): { base: number; verified: number; allExpert: boolean } {
+): {
+  base: number;
+  verified: number;
+  allExpert: boolean;
+  easyCount: number;
+  expertCount: number;
+} {
   if (!Array.isArray(tokens) || tokens.length === 0) {
-    return { base: 0, verified: 0, allExpert: false };
+    return { base: 0, verified: 0, allExpert: false, easyCount: 0, expertCount: 0 };
   }
   const secret = getSigningSecret();
-  if (!secret) return { base: 0, verified: 0, allExpert: false };
+  if (!secret) return { base: 0, verified: 0, allExpert: false, easyCount: 0, expertCount: 0 };
   const now = Date.now();
   pruneUsed(now);
 
@@ -116,7 +122,9 @@ export function sumVerifiedBase(
   const counted = validEntries.slice(0, cap);
   const base = counted.reduce((sum, e) => sum + e.base, 0);
   const allExpert = counted.length > 0 && counted.every((e) => e.expert);
-  return { base, verified: counted.length, allExpert };
+  const expertCount = counted.reduce((sum, e) => sum + (e.expert ? 1 : 0), 0);
+  const easyCount = counted.length - expertCount;
+  return { base, verified: counted.length, allExpert, easyCount, expertCount };
 }
 
 export function ceilingFromBase(base: number): number {
