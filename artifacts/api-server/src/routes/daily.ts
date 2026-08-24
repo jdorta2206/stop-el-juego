@@ -68,7 +68,7 @@ router.post("/submit", async (req, res) => {
   // posted score to a ceiling derived from the verified round voucher(s), or a
   // flat absolute ceiling when none are present (offline play). Never reject,
   // only clamp, so a legit daily score is never lost.
-  const { base: verifiedBase, verified } = sumVerifiedBase(scoreTokens, 1);
+  const { base: verifiedBase, verified, allExpert } = sumVerifiedBase(scoreTokens, 1);
   const dailyCeiling = verified > 0 ? ceilingFromBase(verifiedBase) : absoluteCeiling("daily");
   const safeScore = Math.max(0, Math.min(Number(score) || 0, dailyCeiling));
 
@@ -99,7 +99,7 @@ router.post("/submit", async (req, res) => {
           )
         );
     }
-    res.json({ updated: true, alreadyPlayed: true });
+    res.json({ updated: true, alreadyPlayed: true, expertVerified: allExpert });
     return;
   }
 
@@ -113,7 +113,7 @@ router.post("/submit", async (req, res) => {
     language: language || "es",
   });
 
-  res.status(201).json({ submitted: true });
+  res.status(201).json({ submitted: true, expertVerified: allExpert });
 });
 
 // GET /api/daily/rankings?language=es  → top 10 players for today

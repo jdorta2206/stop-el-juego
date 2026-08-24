@@ -341,7 +341,7 @@ router.post("/scores", scoreLimiter, async (req, res) => {
 
   const isBonus = bonus === true;
 
-  const { base: verifiedBase, verified } = sumVerifiedBase(scoreTokens, maxRoundsForMode(mode));
+  const { base: verifiedBase, verified, allExpert } = sumVerifiedBase(scoreTokens, maxRoundsForMode(mode));
   const ceiling = verified > 0 ? ceilingFromBase(verifiedBase) : absoluteCeiling(mode);
   const cappedRaw = Math.max(0, Math.min(rawScore, ceiling));
   const score = mode === "multiplayer" ? Math.round(cappedRaw * 1.5) : cappedRaw;
@@ -463,6 +463,7 @@ router.post("/scores", scoreLimiter, async (req, res) => {
       coinsAwarded: coinGain,
       happyHourActive,
       multiplier: happyHourActive ? HAPPY_HOUR_MULTIPLIER : 1,
+      expertVerified: allExpert,
     },
   });
 });
