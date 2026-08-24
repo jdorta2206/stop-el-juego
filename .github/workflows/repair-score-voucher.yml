@@ -29,9 +29,11 @@ jobs:
           s = p.read_text()
           old = 'const scoreToken = issueScoreToken(playerTotalScore);'
           new = 'const scoreToken = issueScoreToken(playerTotalScore, aiDifficulty);'
-          if old not in s:
+          if old in s:
+              s = s.replace(old, new, 1)
+          elif new not in s:
               raise SystemExit('Expected voucher issuance call not found')
-          p.write_text(s.replace(old, new, 1))
+          p.write_text(s)
           PY
       - name: Wire verified Expert state into submissions and AI stats
         run: |
@@ -43,69 +45,59 @@ jobs:
 
           old = 'const { base: verifiedBase, verified } = sumVerifiedBase(scoreTokens, maxRoundsForMode(mode));'
           new = 'const { base: verifiedBase, verified, allExpert, easyCount, expertCount } = sumVerifiedBase(scoreTokens, maxRoundsForMode(mode));'
-          if old not in s:
+          if old in s:
+              s = s.replace(old, new, 1)
+          elif 'easyCount, expertCount' not in s:
               raise SystemExit('Expected ranking voucher destructuring not found')
-          s = s.replace(old, new, 1)
 
-          old = 'function parseAchievementCount(json: unknown): number {'
+          marker = 'function parseAchievementCount(json: unknown): number {'
           helper = '''function parseAchievementStats(json: unknown): Record<string, unknown> {\n  try {\n    const parsed = JSON.parse((json as string) ?? "{}");\n    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};\n  } catch {\n    return {};\n  }\n}\n\nfunction updateAiDifficultyStats(raw: string | null | undefined, easyCount: number, expertCount: number): string {\n  const stats = parseAchievementStats(raw);\n  const currentEasy = Number(stats.aiEasyGames ?? 0);\n  const currentExpert = Number(stats.aiExpertGames ?? 0);\n  return JSON.stringify({\n    ...stats,\n    aiEasyGames: Math.max(0, Math.floor(currentEasy)) + Math.max(0, Math.floor(easyCount)),\n    aiExpertGames: Math.max(0, Math.floor(currentExpert)) + Math.max(0, Math.floor(expertCount)),\n  });\n}\n\n'''
-          if old not in s:
-              raise SystemExit('Expected achievement count helper not found')
-          s = s.replace(old, helper + old, 1)
+          if 'function updateAiDifficultyStats(' not in s:
+              if marker not in s:
+                  raise SystemExit('Expected achievement count helper not found')
+              s = s.replace(marker, helper + marker, 1)
 
-          old = '  const existing = await db\n'
-          new = '  // Difficulty counters are server-authoritative: only signed vouchers can increment them.\n  const aiDifficultyStats = !isBonus && mode !== "multiplayer" && verified > 0\n    ? updateAiDifficultyStats(existing[0]?.achievementStatsJson, easyCount, expertCount)\n    : null;\n\n  const existing = await db\n'
-          # existing is declared below, so compute after the query instead; use a marker instead.
-          # Undo this temporary replacement and inject after the existing query block.
-          if old not in s:
-              raise SystemExit('Expected existing-player query marker not found')
-          # Do not insert code before `existing` is available.
           marker = '    .limit(1);\n\n  const oldTotal = existing.length > 0 ? existing[0].totalScore : 0;'
           replacement = '    .limit(1);\n\n  // Difficulty counters are server-authoritative: only signed vouchers can increment them.\n  const aiDifficultyStats = !isBonus && mode !== "multiplayer" && verified > 0\n    ? updateAiDifficultyStats(existing[0]?.achievementStatsJson, easyCount, expertCount)\n    : null;\n\n  const oldTotal = existing.length > 0 ? existing[0].totalScore : 0;'
-          if marker not in s:
-              raise SystemExit('Expected existing query completion marker not found')
-          s = s.replace(marker, replacement, 1)
+          if 'const aiDifficultyStats =' not in s:
+              if marker not in s:
+                  raise SystemExit('Expected existing query completion marker not found')
+              s = s.replace(marker, replacement, 1)
 
           old = '        xp: sql`${playerScoresTable.xp} + ${xpGain}`,\n        level: newLevel,'
           new = '        xp: sql`${playerScoresTable.xp} + ${xpGain}`,\n        level: newLevel,\n        ...(aiDifficultyStats ? { achievementStatsJson: aiDifficultyStats } : {}),'
-          if old not in s:
-              raise SystemExit('Expected existing-player XP update marker not found')
-          s = s.replace(old, new, 1)
+          if old in s:
+              s = s.replace(old, new, 1)
 
           old = '        coins: coinGain,\n      })'
           new = '        coins: coinGain,\n        achievementStatsJson: updateAiDifficultyStats(null, easyCount, expertCount),\n      })'
-          if old not in s:
-              raise SystemExit('Expected new-player insert marker not found')
-          s = s.replace(old, new, 1)
-
-          old = '      rank: 0,\n    rewards: {'
-          new = '      rank: 0,\n    rewards: {'
-          # No-op marker kept for clarity; expertVerified remains below.
+          if old in s:
+              s = s.replace(old, new, 1)
 
           old = '      expertVerified: allExpert,\n    },\n  });'
           new = '      expertVerified: allExpert,\n      aiEasyGamesAwarded: !isBonus && mode !== "multiplayer" ? easyCount : 0,\n      aiExpertGamesAwarded: !isBonus && mode !== "multiplayer" ? expertCount : 0,\n    },\n  });'
-          if old not in s:
-              raise SystemExit('Expected ranking reward response not found')
-          s = s.replace(old, new, 1)
+          if old in s:
+              s = s.replace(old, new, 1)
+
           ranking.write_text(s)
 
           daily = Path('artifacts/api-server/src/routes/daily.ts')
           s = daily.read_text()
           old = 'const { base: verifiedBase, verified } = sumVerifiedBase(scoreTokens, 1);'
           new = 'const { base: verifiedBase, verified, allExpert } = sumVerifiedBase(scoreTokens, 1);'
-          if old not in s:
+          if old in s:
+              s = s.replace(old, new, 1)
+          elif 'verified, allExpert' not in s:
               raise SystemExit('Expected daily voucher destructuring not found')
-          s = s.replace(old, new, 1)
           old = 'res.json({ updated: true, alreadyPlayed: true });'
           new = 'res.json({ updated: true, alreadyPlayed: true, expertVerified: allExpert });'
-          if old not in s:
-              raise SystemExit('Expected daily update response not found')
-          s = s.replace(old, new, 1)
+          if old in s:
+              s = s.replace(old, new, 1)
           old = 'res.status(201).json({ submitted: true });'
           new = 'res.status(201).json({ submitted: true, expertVerified: allExpert });'
-          if old not in s:
-              raise SystemExit('Expected daily submit response not found')
-          daily.write_text(s.replace(old, new, 1))
+          if old in s:
+              s = s.replace(old, new, 1)
+          daily.write_text(s)
           PY
       - name: Commit repair
         run: |
