@@ -1,5 +1,5 @@
-const CACHE = "stop-v9";
-const DATA_CACHE = "stop-data-v1";
+const CACHE = "stop-v10";
+const DATA_CACHE = "stop-data-v2";
 const STATIC = [
   "/",
   "/manifest.json",
@@ -9,17 +9,34 @@ const STATIC = [
 ];
 const OFFLINE_BUNDLE_PATH = "/api/game/offline-bundle";
 
+async function cacheResponse(cacheName, request, response) {
+  if (!response || !response.ok) return;
+  // Clone immediately, before any consumer can read the response body.
+  // cache.put() consumes its Response, so never pass the live response object.
+  const copy = response.clone();
+  const cache = await caches.open(cacheName);
+  await cache.put(request, copy);
+}
+
 self.addEventListener("install", (e) => {
   e.waitUntil(
     Promise.all([
       caches.open(CACHE).then((c) => Promise.all(STATIC.map((url) =>
         fetch(url, { cache: "reload" })
-          .then((res) => (res.ok ? c.put(url, res) : null))
+          .then((res) => {
+            if (!res.ok) return null;
+            const copy = res.clone();
+            return c.put(url, copy);
+          })
           .catch(() => null)
       ))),
       caches.open(DATA_CACHE).then((c) =>
         fetch(OFFLINE_BUNDLE_PATH, { cache: "reload" })
-          .then((res) => (res.ok ? c.put(OFFLINE_BUNDLE_PATH, res) : null))
+          .then((res) => {
+            if (!res.ok) return null;
+            const copy = res.clone();
+            return c.put(OFFLINE_BUNDLE_PATH, copy);
+          })
           .catch(() => null)
       ),
     ]).then(() => self.skipWaiting())
@@ -39,43 +56,74 @@ self.addEventListener("fetch", (e) => {
   if (e.request.method !== "GET") return;
   const url = new URL(e.request.url);
 
-  if (url.pathname === OFFLINE_BUNDLE_PATH) {
-    e.respondWith(caches.open(DATA_CACHE).then((c) => c.match(e.request).then((cached) => {
-      const fresh = fetch(e.request).then((res) => {
-        if (res.ok) c.put(e.request, res.clone());
-        return res;
-      }).catch(() => cached);
-      return cached || fresh;
-    })));
-    return;
-  }
-
-  if (url.pathname.startsWith("/api/")) {
+  // API calls must always go directly to the server. In particular, never
+  // cache authentication responses or consume their Response body in the SW.
+  if (url.pathname.startsWith("/api/") && url.pathname !== OFFLINE_BUNDLE_PATH) {
     e.respondWith(fetch(e.request).catch(() => caches.match(e.request)));
     return;
   }
 
+  if (url.pathname === OFFLINE_BUNDLE_PATH) {
+    e.respondWith((async () => {
+      const cache = await caches.open(DATA_CACHE);
+      const cached = await cache.match(e.request);
+      try {
+        const response = await fetch(e.request);
+        if (response.ok) {
+          const copy = response.clone();
+          await cache.put(e.request, copy);
+        }
+        return response;
+      } catch {
+        return cached || Response.error();
+      }
+    })());
+    return;
+  }
+
   if (e.request.mode === "navigate" || e.request.headers.get("accept")?.includes("text/html")) {
-    e.respondWith(fetch(e.request).then((res) => {
-      const clone = res.clone();
-      caches.open(CACHE).then((c) => c.put(e.request, clone));
-      return res;
-    }).catch(() => caches.match(e.request).then((m) => m || caches.match("/"))));
+    e.respondWith((async () => {
+      try {
+        const response = await fetch(e.request);
+        if (response.ok) {
+          const copy = response.clone();
+          const cache = await caches.open(CACHE);
+          await cache.put(e.request, copy);
+        }
+        return response;
+      } catch {
+        return (await caches.match(e.request)) || (await caches.match("/"));
+      }
+    })());
     return;
   }
 
   if (url.pathname.match(/\.[0-9a-f]{8,}\.(js|css)$/) || url.pathname.startsWith("/images/")) {
-    e.respondWith(caches.match(e.request).then((cached) => cached || fetch(e.request).then((res) => {
-      if (res.ok) caches.open(CACHE).then((c) => c.put(e.request, res.clone()));
-      return res;
-    })));
+    e.respondWith((async () => {
+      const cached = await caches.match(e.request);
+      if (cached) return cached;
+      try {
+        const response = await fetch(e.request);
+        if (response.ok) await cacheResponse(CACHE, e.request, response);
+        return response;
+      } catch {
+        return Response.error();
+      }
+    })());
     return;
   }
 
-  e.respondWith(fetch(e.request).then((res) => {
-    if (res.ok && url.origin === self.location.origin) caches.open(CACHE).then((c) => c.put(e.request, res.clone()));
-    return res;
-  }).catch(() => caches.match(e.request)));
+  e.respondWith((async () => {
+    try {
+      const response = await fetch(e.request);
+      if (response.ok && url.origin === self.location.origin) {
+        await cacheResponse(CACHE, e.request, response);
+      }
+      return response;
+    } catch {
+      return (await caches.match(e.request)) || Response.error();
+    }
+  })());
 });
 
 self.addEventListener("message", (e) => {
