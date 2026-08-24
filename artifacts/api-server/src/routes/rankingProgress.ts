@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, playerScoresTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { verifyClaimedIdentity } from "../lib/playerAuth";
 
 const router = Router();
@@ -77,6 +77,7 @@ function mergeAchievementStats(currentRaw: string | null | undefined, incoming: 
 router.get("/progress/:playerId", async (req, res) => {
   const playerId = String(req.params.playerId || "").trim();
   if (!playerId) return res.status(400).json({ error: "Missing playerId", collectedWords: {}, achievements: [] });
+  if (!verifyClaimedIdentity(req, playerId)) return res.status(403).json({ error: "Identity verification failed" });
 
   try {
     const rows = await db.select({
@@ -130,45 +131,62 @@ router.post("/progress/:playerId", async (req, res) => {
   }
 
   try {
-    const rows = await db.select({
-      id: playerScoresTable.id,
-      collectedWordsJson: playerScoresTable.collectedWordsJson,
-      achievementsJson: playerScoresTable.achievementsJson,
-      achievementStatsJson: playerScoresTable.achievementStatsJson,
-    }).from(playerScoresTable).where(eq(playerScoresTable.playerId, playerId)).limit(1);
+    // Compare-and-swap the whole progress row. Without this guard, two tabs
+    // could read the same old JSON, merge different discoveries, and the last
+    // writer would silently erase the first writer's newly collected words.
+    // Retry a few times on contention so legitimate simultaneous round-end
+    // writes converge instead of losing progress.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const rows = await db.select({
+        id: playerScoresTable.id,
+        collectedWordsJson: playerScoresTable.collectedWordsJson,
+        achievementsJson: playerScoresTable.achievementsJson,
+        achievementStatsJson: playerScoresTable.achievementStatsJson,
+        updatedAt: playerScoresTable.updatedAt,
+      }).from(playerScoresTable).where(eq(playerScoresTable.playerId, playerId)).limit(1);
 
-    if (!rows.length) return res.status(404).json({ error: "Player not found" });
+      if (!rows.length) return res.status(404).json({ error: "Player not found" });
 
-    const currentCollection = parseJsonObject(rows[0].collectedWordsJson);
-    const mergedCollection: JsonObject = { ...currentCollection };
-    for (const [key, value] of Object.entries(incomingCollection as JsonObject)) {
-      if (!(key in mergedCollection)) mergedCollection[key] = value;
+      const currentCollection = parseJsonObject(rows[0].collectedWordsJson);
+      const mergedCollection: JsonObject = { ...currentCollection };
+      for (const [key, value] of Object.entries(incomingCollection as JsonObject)) {
+        if (!(key in mergedCollection)) mergedCollection[key] = value;
+      }
+
+      const currentAchievements = parseJsonArray(rows[0].achievementsJson);
+      const mergedAchievements = [...new Set([...currentAchievements, ...incomingAchievements])];
+
+      // Client-originated achievement stats are monotonic, but the two AI
+      // difficulty counters are explicitly excluded from incoming data. Their
+      // only authoritative writer is /ranking/scores after HMAC verification.
+      const mergedStats = hasStats
+        ? mergeAchievementStats(rows[0].achievementStatsJson, req.body.stats)
+        : mergeAchievementStats(rows[0].achievementStatsJson, {});
+
+      const nextUpdatedAt = new Date();
+      const updated = await db.update(playerScoresTable).set({
+        collectedWordsJson: JSON.stringify(mergedCollection),
+        achievementsJson: JSON.stringify(mergedAchievements),
+        achievementStatsJson: JSON.stringify(mergedStats),
+        updatedAt: nextUpdatedAt,
+      }).where(and(
+        eq(playerScoresTable.id, rows[0].id),
+        eq(playerScoresTable.updatedAt, rows[0].updatedAt),
+      )).returning({ id: playerScoresTable.id });
+
+      if (updated.length) {
+        return res.json({
+          ok: true,
+          playerId,
+          collectedWords: mergedCollection,
+          achievements: mergedAchievements,
+          stats: mergedStats,
+        });
+      }
+      // Another request won the compare-and-swap. Re-read and merge again.
     }
 
-    const currentAchievements = parseJsonArray(rows[0].achievementsJson);
-    const mergedAchievements = [...new Set([...currentAchievements, ...incomingAchievements])];
-
-    // Client-originated achievement stats are monotonic, but the two AI
-    // difficulty counters are explicitly excluded from incoming data. Their
-    // only authoritative writer is /ranking/scores after HMAC verification.
-    const mergedStats = hasStats
-      ? mergeAchievementStats(rows[0].achievementStatsJson, req.body.stats)
-      : mergeAchievementStats(rows[0].achievementStatsJson, {});
-
-    await db.update(playerScoresTable).set({
-      collectedWordsJson: JSON.stringify(mergedCollection),
-      achievementsJson: JSON.stringify(mergedAchievements),
-      achievementStatsJson: JSON.stringify(mergedStats),
-      updatedAt: new Date(),
-    }).where(eq(playerScoresTable.id, rows[0].id));
-
-    return res.json({
-      ok: true,
-      playerId,
-      collectedWords: mergedCollection,
-      achievements: mergedAchievements,
-      stats: mergedStats,
-    });
+    return res.status(409).json({ error: "Progress changed concurrently; please retry" });
   } catch (error) {
     console.error("[ranking/progress] POST failed:", error);
     return res.status(500).json({ error: "Could not save progress" });
