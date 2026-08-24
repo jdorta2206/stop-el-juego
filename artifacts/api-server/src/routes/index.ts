@@ -5,6 +5,7 @@ import rankingRouter from "./ranking";
 import rankingProgressRouter from "./rankingProgress";
 import roomsRouter from "./rooms";
 import authRouter from "./auth";
+import appleNativeAuthRouter from "./appleNativeAuth";
 import stripeRouter from "./stripe";
 import presenceRouter from "./presence";
 import friendsRouter from "./friends";
@@ -18,27 +19,6 @@ import rewardsRouter from "./rewards";
 import playBillingRouter from "./playBilling";
 import customPacksRouter from "./customPacks";
 import guestStatsRouter from "./guestStats";
-
-const router: IRouter = Router();
-
-router.use(healthRouter);
-router.use("/game", gameRouter);
-router.use("/ranking", rankingRouter);
-router.use("/ranking", rankingProgressRouter);
-router.use("/rooms", roomsRouter);
-router.use("/auth", authRouter);
-router.use("/stripe", stripeRouter);
-router.use("/presence", presenceRouter);
-router.use("/friends", friendsRouter);
-router.use("/daily", dailyRouter);
-router.use("/impossible", impossibleRouter);
-router.use("/notifications", notificationsRouter);
-router.use("/tournaments", tournamentsRouter);
-router.use("/season", seasonRouter);
-router.use("/inventory", inventoryRouter);
-router.use("/rewards", rewardsRouter);
-router.use("/billing/play", playBillingRouter);
-router.use("/custom-packs", customPacksRouter);
-router.use("/guest-stats", guestStatsRouter);
-
+const router:IRouter=Router();
+router.use(healthRouter);router.use("/game",gameRouter);router.use("/ranking",rankingRouter);router.use("/ranking",rankingProgressRouter);router.use("/rooms",roomsRouter);router.use("/auth",authRouter);router.use("/auth",appleNativeAuthRouter);router.use("/stripe",stripeRouter);router.use("/presence",presenceRouter);router.use("/friends",friendsRouter);router.use("/daily",dailyRouter);router.use("/impossible",impossibleRouter);router.use("/notifications",notificationsRouter);router.use("/tournaments",tournamentsRouter);router.use("/season",seasonRouter);router.use("/inventory",inventoryRouter);router.use("/rewards",rewardsRouter);router.use("/billing/play",playBillingRouter);router.use("/custom-packs",customPacksRouter);router.use("/guest-stats",guestStatsRouter);
 export default router;
