@@ -7,7 +7,7 @@ import {
 } from "@/lib/collection";
 
 // Namespace local cache by playerId so switching accounts on the same
-// device never mixes collections (and never propagates another player's
+device never mixes collections (and never propagates another player's
 // words up to this player's server row).
 const LEGACY_KEY = "stop_collection_v1";
 function localKey(playerId?: string) {
@@ -41,7 +41,10 @@ function migrateLegacy(playerId?: string) {
 
 async function syncFromServer(playerId: string): Promise<CollectionMap> {
   try {
-    const r = await fetch(`${getApiUrl()}/api/ranking/progress/${playerId}`);
+    const r = await fetch(`${getApiUrl()}/api/ranking/progress/${playerId}`, {
+      credentials: "include",
+      headers: authHeaders(),
+    });
     if (!r.ok) return {};
     const data = await r.json();
     return data.collectedWords && typeof data.collectedWords === "object"
@@ -54,6 +57,7 @@ async function saveToServer(playerId: string, collected: CollectionMap) {
   try {
     await fetch(`${getApiUrl()}/api/ranking/progress/${playerId}`, {
       method: "POST",
+      credentials: "include",
       headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify({ collectedWords: collected }),
     });
