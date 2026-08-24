@@ -1,0 +1,97 @@
+name: Fix ranking AI stats
+
+on:
+  push:
+    branches: [master]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.event.head_commit.message != 'chore: apply ranking AI stats directly'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+
+      - name: Patch ranking backend
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('artifacts/api-server/src/routes/ranking.ts')
+          s = p.read_text()
+
+          old = 'const { base: verifiedBase, verified, allExpert } = sumVerifiedBase(scoreTokens, maxRoundsForMode(mode));'
+          new = '''const { base: verifiedBase, verified, allExpert, easyCount } = sumVerifiedBase(scoreTokens, maxRoundsForMode(mode));
+          const aiEasyWinAward = !isBonus && mode === "solo" && won === true && verified > 0 && easyCount === verified ? 1 : 0;
+          const aiExpertWinAward = !isBonus && mode === "solo" && won === true && allExpert ? 1 : 0;'''
+          if old in s:
+              s = s.replace(old, new, 1)
+
+          old = '''        xp: sql`${playerScoresTable.xp} + ${xpGain}`,\n        level: newLevel,'''
+          new = '''        xp: sql`${playerScoresTable.xp} + ${xpGain}`,\n        achievementStatsJson: sql`jsonb_set(\n          jsonb_set(\n            COALESCE(NULLIF(${playerScoresTable.achievementStatsJson}, '')::jsonb, '{}'::jsonb),\n            '{aiEasyWins}',\n            to_jsonb(COALESCE((${playerScoresTable.achievementStatsJson}::jsonb ->> 'aiEasyWins')::integer, 0) + ${aiEasyWinAward})\n          ),\n          '{aiExpertWins}',\n          to_jsonb(COALESCE((${playerScoresTable.achievementStatsJson}::jsonb ->> 'aiExpertWins')::integer, 0) + ${aiExpertWinAward})\n        )::text`,\n        level: newLevel,'''
+          if old in s and 'achievementStatsJson: sql`jsonb_set' not in s:
+              s = s.replace(old, new, 1)
+
+          old = '''        xp: xpGain,\n        level: calcLevel(xpGain),\n        coins: coinGain,'''
+          new = '''        xp: xpGain,\n        level: calcLevel(xpGain),\n        achievementStatsJson: JSON.stringify({\n          aiEasyWins: aiEasyWinAward,\n          aiExpertWins: aiExpertWinAward,\n        }),\n        coins: coinGain,'''
+          if old in s and 'achievementStatsJson: JSON.stringify' not in s:
+              s = s.replace(old, new, 1)
+
+          p.write_text(s)
+
+      - name: Patch ranking API response
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('artifacts/api-server/src/routes/ranking.ts')
+          s = p.read_text()
+          marker = '''function parseAchievementCount(json: unknown): number {\n  try {\n    const parsed = JSON.parse((json as string) ?? "[]");\n    return Array.isArray(parsed) ? parsed.length : 0;\n  } catch {\n    return 0;\n  }\n}\n'''
+          helper = marker + '''\nfunction parseAiWinStats(json: unknown): { aiEasyWins: number; aiExpertWins: number } {\n  try {\n    const parsed = JSON.parse((json as string) ?? "{}");\n    return {\n      aiEasyWins: Math.max(0, Math.floor(Number(parsed?.aiEasyWins ?? 0))),\n      aiExpertWins: Math.max(0, Math.floor(Number(parsed?.aiExpertWins ?? 0))),\n    };\n  } catch {\n    return { aiEasyWins: 0, aiExpertWins: 0 };\n  }\n}\n'''
+          if 'function parseAiWinStats' not in s:
+              if marker not in s: raise SystemExit('achievement helper not found')
+              s = s.replace(marker, helper, 1)
+
+          s = s.replace('''      achievementCount: parseAchievementCount(p.achievements_json),\n      title: getTitle(i + 1),''', '''      achievementCount: parseAchievementCount(p.achievements_json),\n      ...parseAiWinStats(p.achievement_stats_json),\n      title: getTitle(i + 1),''', 1)
+
+          select_old = '''      ps.achievements_json AS "achievementsJson",\n      SUM(gh.score)       AS "totalScore",'''
+          select_new = '''      ps.achievements_json AS "achievementsJson",\n      ps.achievement_stats_json AS "achievementStatsJson",\n      SUM(gh.score)       AS "totalScore",'''
+          s = s.replace(select_old, select_new, 2)
+
+          group_old = '''    GROUP BY gh.player_id, ps.player_name, ps.avatar_color, ps.current_streak, ps.is_premium, ps.achievements_json\n'''
+          group_new = '''    GROUP BY gh.player_id, ps.player_name, ps.avatar_color, ps.current_streak, ps.is_premium, ps.achievements_json, ps.achievement_stats_json\n'''
+          s = s.replace(group_old, group_new, 2)
+
+          map_old = '''    achievementCount: parseAchievementCount(p.achievementsJson),\n    title:         getTitle(i + 1),'''
+          map_new = '''    achievementCount: parseAchievementCount(p.achievementsJson),\n    ...parseAiWinStats(p.achievementStatsJson),\n    title:         getTitle(i + 1),'''
+          s = s.replace(map_old, map_new, 2)
+          p.write_text(s)
+
+      - name: Patch ranking UI
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('artifacts/stop-game/src/pages/Ranking.tsx')
+          s = p.read_text()
+
+          old = '''                        {((p as any).achievementCount ?? 0) > 0 && (\n                          <p className="text-[10px] text-yellow-300 font-black flex items-center justify-center gap-0.5 mt-0.5">\n                            <Trophy size={9} /> {(p as any).achievementCount}/12\n                          </p>\n                        )}'''
+          new = old + '''\n                        <div className="mt-1 text-[9px] font-bold leading-tight flex flex-col items-center gap-0.5">\n                          <span className="text-green-300">🤖 Fácil: {(p as any).aiEasyWins ?? 0}</span>\n                          <span className="text-purple-300">🧠 Experta: {(p as any).aiExpertWins ?? 0}</span>\n                        </div>'''
+          if old in s and '🤖 Fácil:' not in s:
+              s = s.replace(old, new, 1)
+
+          old = '''                        {/* Score */}\n                        <div className={`text-right font-black ${isMe ? "text-black" : p.noGames ? "text-white/30" : "text-secondary"}`}>\n                          {p.noGames ? "—" : p.totalScore}\n                        </div>'''
+          new = '''                        {/* Score + AI wins */}\n                        <div className="flex flex-col items-end min-w-[105px]">\n                          <div className={`text-right font-black ${isMe ? "text-black" : p.noGames ? "text-white/30" : "text-secondary"}`}>\n                            {p.noGames ? "—" : p.totalScore}\n                          </div>\n                          {!p.noGames && (\n                            <div className={`text-[9px] font-bold leading-tight text-right mt-0.5 ${isMe ? "text-black/70" : "text-white/70"}`}>\n                              <span className={isMe ? "text-black/70" : "text-green-300"}>Fácil {(p as any).aiEasyWins ?? 0}</span>\n                              <span className="mx-1 opacity-40">·</span>\n                              <span className={isMe ? "text-black/70" : "text-purple-300"}>Experta {(p as any).aiExpertWins ?? 0}</span>\n                            </div>\n                          )}\n                        </div>'''
+          if old in s and 'Score + AI wins' not in s:
+              s = s.replace(old, new, 1)
+          p.write_text(s)
+
+      - name: Commit patched files
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add artifacts/api-server/src/routes/ranking.ts artifacts/stop-game/src/pages/Ranking.tsx
+          git diff --cached --quiet || git commit -m 'chore: apply ranking AI stats directly'
+          git push origin master
