@@ -2,11 +2,16 @@ import { useState, useEffect } from "react";
 import { AVATAR_COLORS, getApiUrl } from "@/lib/utils";
 
 const SESSION_TOKEN_KEY = "stop_session_token";
-
-// Production is now unified on the public Railway domain. Do not fall back to
-// the retired Replit host: doing so creates failed cross-origin auth requests
-// and can leave the web app with a stale session source.
 const CANONICAL_API_ORIGIN = "https://www.stopjuegodepalabras.com";
+
+export interface PlayerProfile {
+  id: string;
+  name: string;
+  avatarColor: string;
+  loginMethod?: string | null;
+  picture?: string | null;
+  fbAccessToken?: string | null;
+}
 
 async function tryRestoreFrom(apiBase: string): Promise<PlayerProfile | null> {
   try {
@@ -21,11 +26,10 @@ async function tryRestoreFrom(apiBase: string): Promise<PlayerProfile | null> {
     });
     if (!res.ok) return null;
     const data = await res.json();
-    if (!data?.id) return null;
+    if (!data?.id || !data?.name) return null;
     if (data.token) {
       try { localStorage.setItem(SESSION_TOKEN_KEY, data.token); } catch {}
     }
-    if (!data.name) return null;
     return {
       id: data.id,
       name: data.name,
@@ -39,27 +43,27 @@ async function tryRestoreFrom(apiBase: string): Promise<PlayerProfile | null> {
   }
 }
 
-/** Restore the player from the current production origin, with the canonical
- * domain as a fallback only when the configured API is genuinely different. */
-async function tryRestoreSession(): Promise<PlayerProfile | null> {
-  const localBase = getApiUrl();
-  const sameOrigin = await tryRestoreFrom(localBase);
-  if (sameOrigin) return sameOrigin;
-  try {
-    if (typeof window !== "undefined" && new URL(localBase).origin !== CANONICAL_API_ORIGIN) {
-      return await tryRestoreFrom(CANONICAL_API_ORIGIN);
-    }
-  } catch { /* malformed URL — ignore */ }
-  return null;
-}
+let restorePromise: Promise<PlayerProfile | null> | null = null;
 
-export interface PlayerProfile {
-  id: string;
-  name: string;
-  avatarColor: string;
-  loginMethod?: string | null;
-  picture?: string | null;
-  fbAccessToken?: string | null;
+/**
+ * Restore the signed session once per page load. Multiple usePlayer() instances
+ * share this Promise so mounting several components cannot create a burst of
+ * identical /api/auth/me requests.
+ */
+function tryRestoreSession(): Promise<PlayerProfile | null> {
+  if (restorePromise) return restorePromise;
+  restorePromise = (async () => {
+    const localBase = getApiUrl();
+    const sameOrigin = await tryRestoreFrom(localBase);
+    if (sameOrigin) return sameOrigin;
+    try {
+      if (typeof window !== "undefined" && new URL(localBase, window.location.origin).origin !== CANONICAL_API_ORIGIN) {
+        return await tryRestoreFrom(CANONICAL_API_ORIGIN);
+      }
+    } catch {}
+    return null;
+  })();
+  return restorePromise;
 }
 
 const STORAGE_KEY = "stop_player_v2";
@@ -108,25 +112,22 @@ export function usePlayer() {
       setNeedsAuth(false);
       setIsLoaded(true);
       if (isLoggedInId(stored.id)) {
-        // A stale local profile must not masquerade as an authenticated account.
-        // Restore the signed session immediately; on a confirmed failed restore,
-        // clear the stale identity so protected endpoints don't loop on 401/403.
         void tryRestoreSession().then((restored) => {
           if (cancelled) return;
           if (restored) {
             writeStoredPlayer(restored);
             setPlayer(restored);
             setNeedsAuth(false);
-            return;
+          } else {
+            try { localStorage.removeItem(SESSION_TOKEN_KEY); } catch {}
+            writeStoredPlayer(null);
+            setPlayer(null);
+            setNeedsAuth(true);
           }
-          try { localStorage.removeItem(SESSION_TOKEN_KEY); } catch {}
-          writeStoredPlayer(null);
-          setPlayer(null);
-          setNeedsAuth(true);
         });
       }
     } else {
-      tryRestoreSession().then((restored) => {
+      void tryRestoreSession().then((restored) => {
         if (cancelled) return;
         if (restored) {
           writeStoredPlayer(restored);
@@ -161,8 +162,7 @@ export function usePlayer() {
   const updateProfile = (updates: Partial<PlayerProfile>) => {
     const current = player ?? readStoredPlayer();
     if (!current) return;
-    const updated = { ...current, ...updates };
-    savePlayer(updated);
+    savePlayer({ ...current, ...updates });
   };
 
   const saveFbToken = (token: string) => {
@@ -191,6 +191,7 @@ export function usePlayer() {
     writeStoredPlayer(null);
     try { localStorage.removeItem("stop_auth_dismissed_v1"); } catch {}
     try { localStorage.removeItem(SESSION_TOKEN_KEY); } catch {}
+    restorePromise = null;
 
     try {
       window.location.href = import.meta.env.BASE_URL || "/";
