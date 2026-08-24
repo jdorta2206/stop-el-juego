@@ -21,10 +21,9 @@ if (typeof window !== "undefined") {
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    // Versioned registration forces browsers holding an old /sw.js response to
-    // fetch and install the current service worker, which in turn refreshes the
-    // HTML shell and stops serving stale June builds of the web app.
-    navigator.serviceWorker.register("/sw.js?v=20260823", { updateViaCache: "none" })
+    // Versioned registration plus updateViaCache:none forces browsers holding
+    // an older worker response to fetch and install the current worker.
+    navigator.serviceWorker.register("/sw.js?v=20260824", { updateViaCache: "none" })
       .then((registration) => {
         setInterval(() => registration.update(), 60_000);
 
