@@ -1,0 +1,164 @@
+name: Apply ranking AI stats display
+
+on:
+  push:
+    branches: [master]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.event.head_commit.message != 'chore: persist AI stats in ranking display'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+
+      - name: Patch ranking API
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('artifacts/api-server/src/routes/ranking.ts')
+          s = p.read_text()
+
+          old = '''function parseAchievementCount(json: unknown): number {
+  try {
+    const parsed = JSON.parse((json as string) ?? "[]");
+    return Array.isArray(parsed) ? parsed.length : 0;
+  } catch {
+    return 0;
+  }
+}
+'''
+          new = '''function parseAchievementCount(json: unknown): number {
+  try {
+    const parsed = JSON.parse((json as string) ?? "[]");
+    return Array.isArray(parsed) ? parsed.length : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function parseAiWinStats(json: unknown): { aiEasyWins: number; aiExpertWins: number } {
+  try {
+    const parsed = JSON.parse((json as string) ?? "{}");
+    return {
+      aiEasyWins: Math.max(0, Math.floor(Number(parsed?.aiEasyWins ?? 0))),
+      aiExpertWins: Math.max(0, Math.floor(Number(parsed?.aiExpertWins ?? 0))),
+    };
+  } catch {
+    return { aiEasyWins: 0, aiExpertWins: 0 };
+  }
+}
+'''
+          if old not in s:
+              raise SystemExit('parseAchievementCount target not found')
+          s = s.replace(old, new, 1)
+
+          old = '''      achievementCount: parseAchievementCount(p.achievements_json),
+      title: getTitle(i + 1),'''
+          new = '''      achievementCount: parseAchievementCount(p.achievements_json),
+      ...parseAiWinStats(p.achievement_stats_json),
+      title: getTitle(i + 1),'''
+          if old not in s:
+              raise SystemExit('global ranking target not found')
+          s = s.replace(old, new, 1)
+
+          old = '''      ps.achievements_json AS "achievementsJson",
+      SUM(gh.score)       AS "totalScore",'''
+          new = '''      ps.achievements_json AS "achievementsJson",
+      ps.achievement_stats_json AS "achievementStatsJson",
+      SUM(gh.score)       AS "totalScore",'''
+          if s.count(old) < 2:
+              raise SystemExit('weekly/monthly select target not found twice')
+          s = s.replace(old, new, 2)
+
+          old = '''    GROUP BY gh.player_id, ps.player_name, ps.avatar_color, ps.current_streak, ps.is_premium, ps.achievements_json
+'''
+          new = '''    GROUP BY gh.player_id, ps.player_name, ps.avatar_color, ps.current_streak, ps.is_premium, ps.achievements_json, ps.achievement_stats_json
+'''
+          if s.count(old) < 2:
+              raise SystemExit('weekly/monthly group target not found twice')
+          s = s.replace(old, new, 2)
+
+          old = '''    achievementCount: parseAchievementCount(p.achievementsJson),
+    title:         getTitle(i + 1),'''
+          new = '''    achievementCount: parseAchievementCount(p.achievementsJson),
+    ...parseAiWinStats(p.achievementStatsJson),
+    title:         getTitle(i + 1),'''
+          if s.count(old) < 2:
+              raise SystemExit('weekly/monthly map target not found twice')
+          s = s.replace(old, new, 2)
+
+          p.write_text(s)
+
+      - name: Patch ranking UI
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('artifacts/stop-game/src/pages/Ranking.tsx')
+          s = p.read_text()
+
+          old = '''                        {((p as any).currentStreak ?? 0) >= 2 && (
+                          <p className="text-[10px] text-orange-400 font-bold flex items-center justify-center gap-0.5 mt-0.5">
+                            <Flame size={9} /> {(p as any).currentStreak}
+                          </p>
+                        )}'''
+          new = '''                        {((p as any).currentStreak ?? 0) >= 2 && (
+                          <p className="text-[10px] text-orange-400 font-bold flex items-center justify-center gap-0.5 mt-0.5">
+                            <Flame size={9} /> {(p as any).currentStreak}
+                          </p>
+                        )}
+                        {(((p as any).aiEasyWins ?? 0) > 0 || ((p as any).aiExpertWins ?? 0) > 0) && (
+                          <div className="mt-1 text-[9px] font-bold leading-tight flex flex-col items-center gap-0.5">
+                            <span className="text-green-300">🤖 Fácil: {(p as any).aiEasyWins ?? 0}</span>
+                            <span className="text-purple-300">🧠 Experta: {(p as any).aiExpertWins ?? 0}</span>
+                          </div>
+                        )}'''
+          if old not in s:
+              raise SystemExit('podium stats target not found')
+          s = s.replace(old, new, 1)
+
+          old = '''                        {/* Score */}
+                        <div className={`text-right font-black ${isMe ? "text-black" : p.noGames ? "text-white/30" : "text-secondary"}`}>
+                          {p.noGames ? "—" : p.totalScore}
+                        </div>
+
+                        {/* Actions */}'''
+          new = '''                        {/* Score */}
+                        <div className="flex flex-col items-end min-w-[105px]">
+                          <div className={`text-right font-black ${isMe ? "text-black" : p.noGames ? "text-white/30" : "text-secondary"}`}>
+                            {p.noGames ? "—" : p.totalScore}
+                          </div>
+                          {!p.noGames && (((p as any).aiEasyWins ?? 0) > 0 || ((p as any).aiExpertWins ?? 0) > 0) && (
+                            <div className="text-[9px] font-bold leading-tight text-right mt-0.5">
+                              <span className="text-green-300">Fácil {(p as any).aiEasyWins ?? 0}</span>
+                              <span className="text-white/30"> · </span>
+                              <span className="text-purple-300">Experta {(p as any).aiExpertWins ?? 0}</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Actions */}'''
+          if old not in s:
+              raise SystemExit('row stats target not found')
+          s = s.replace(old, new, 1)
+
+          p.write_text(s)
+
+      - name: Commit source patch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add artifacts/api-server/src/routes/ranking.ts artifacts/stop-game/src/pages/Ranking.tsx
+          git commit -m 'chore: persist AI stats in ranking display'
+          git push origin master
+
+      - name: Remove temporary workflow
+        run: |
+          git rm .github/workflows/apply-ranking-ai-display.yml
+          git commit -m 'chore: remove temporary ranking AI display workflow'
+          git push origin master
