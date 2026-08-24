@@ -7,6 +7,9 @@ on:
 permissions:
   contents: write
 
+env:
+  GAME_ROUTE_BASELINE: 1a4e705df3041398f377f24d777fbd2efd3b1eaf
+
 jobs:
   repair:
     if: "!contains(github.event.head_commit.message, '[score-voucher-repair]')"
@@ -19,7 +22,7 @@ jobs:
       - name: Restore game route and wire signed difficulty
         run: |
           set -euo pipefail
-          git checkout HEAD^ -- artifacts/api-server/src/routes/game.ts
+          git checkout "$GAME_ROUTE_BASELINE" -- artifacts/api-server/src/routes/game.ts
           python - <<'PY'
           from pathlib import Path
           p = Path('artifacts/api-server/src/routes/game.ts')
