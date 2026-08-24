@@ -102,16 +102,9 @@ export function usePlayer() {
 
     const refresh = () => {
       const stored = readStoredPlayer();
-      setPlayer(stored);
-      setNeedsAuth(!stored);
-    };
-
-    const stored = readStoredPlayer();
-    if (stored) {
-      setPlayer(stored);
-      setNeedsAuth(false);
-      setIsLoaded(true);
-      if (isLoggedInId(stored.id)) {
+      // Never treat a stored OAuth profile as an authenticated session merely
+      // because it exists in localStorage. The server session is authoritative.
+      if (stored && isLoggedInId(stored.id)) {
         void tryRestoreSession().then((restored) => {
           if (cancelled) return;
           if (restored) {
@@ -124,8 +117,42 @@ export function usePlayer() {
             setPlayer(null);
             setNeedsAuth(true);
           }
+          setIsLoaded(true);
         });
+        return;
       }
+      setPlayer(stored);
+      setNeedsAuth(!stored);
+      setIsLoaded(true);
+    };
+
+    const stored = readStoredPlayer();
+    if (stored && isLoggedInId(stored.id)) {
+      // Keep the profile out of authenticated React state until /api/auth/me
+      // confirms the server-side session. This prevents private queries from
+      // firing during the short window where localStorage is stale.
+      void tryRestoreSession().then((restored) => {
+        if (cancelled) return;
+        if (restored) {
+          writeStoredPlayer(restored);
+          setPlayer(restored);
+          setNeedsAuth(false);
+        } else {
+          try { localStorage.removeItem(SESSION_TOKEN_KEY); } catch {}
+          writeStoredPlayer(null);
+          setPlayer(null);
+          let dismissed = false;
+          try { dismissed = localStorage.getItem("stop_auth_dismissed_v1") === "1"; } catch {}
+          setNeedsAuth(!dismissed);
+        }
+        setIsLoaded(true);
+      });
+    } else if (stored) {
+      // Non-OAuth/local profiles are not server-authenticated identities.
+      // Preserve their existing local-player behavior.
+      setPlayer(stored);
+      setNeedsAuth(false);
+      setIsLoaded(true);
     } else {
       void tryRestoreSession().then((restored) => {
         if (cancelled) return;
