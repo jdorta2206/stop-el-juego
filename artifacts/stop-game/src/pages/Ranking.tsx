@@ -22,6 +22,18 @@ function OnlineDot({ isOnline }: { isOnline: boolean }) {
   );
 }
 
+function AiDifficultyStats({ player, compact = false }: { player: any; compact?: boolean }) {
+  const easy = Math.max(0, Math.floor(Number(player?.aiEasyGames ?? 0)));
+  const expert = Math.max(0, Math.floor(Number(player?.aiExpertGames ?? 0)));
+  return (
+    <div className={`flex items-center gap-1.5 flex-wrap ${compact ? "text-[9px]" : "text-[10px]"} font-bold leading-none mt-1`}>
+      <span className="text-sky-300/90">🤖 Fácil {easy}</span>
+      <span className="text-white/25">•</span>
+      <span className="text-red-300/90">🔥 Experta {expert}</span>
+    </div>
+  );
+}
+
 function FollowBtn({
   isFollowing,
   onToggle,
@@ -308,13 +320,11 @@ export default function Ranking() {
 
   return (
     <Layout>
-      {/* Incoming challenge overlay */}
       {incomingChallenge && (
         <ChallengeNotification challenge={incomingChallenge} onDismiss={dismissChallenge} />
       )}
 
       <div className="flex-1 flex flex-col max-w-3xl mx-auto w-full py-8 space-y-6">
-
         <div className="text-center">
           <h1 className="text-4xl md:text-5xl font-display font-black text-white flex items-center justify-center gap-4">
             <Trophy className="w-10 h-10 text-secondary" />
@@ -329,158 +339,60 @@ export default function Ranking() {
           )}
           {isLoggedInPlayer && player && (
             <div className="mt-3 flex flex-col items-center gap-2">
-              <button
-                onClick={() => setLocation(`/player/${encodeURIComponent(player.id)}`)}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold transition-all hover:scale-105"
-                style={{ background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.15)", color: "rgba(255,255,255,0.7)" }}
-              >
-                <div className="w-5 h-5 rounded-full flex items-center justify-center text-white text-[10px] font-black" style={{ backgroundColor: player.avatarColor || "#e53e3e" }}>
-                  {player.name.charAt(0).toUpperCase()}
-                </div>
+              <button onClick={() => setLocation(`/player/${encodeURIComponent(player.id)}`)} className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold transition-all hover:scale-105" style={{ background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.15)", color: "rgba(255,255,255,0.7)" }}>
+                <div className="w-5 h-5 rounded-full flex items-center justify-center text-white text-[10px] font-black" style={{ backgroundColor: player.avatarColor || "#e53e3e" }}>{player.name.charAt(0).toUpperCase()}</div>
                 Mi Perfil
               </button>
               <div className="flex items-center gap-2 text-[11px] font-bold text-white/55">
-                <span>Récord global:</span>
-                <span className="text-secondary">
-                  #{myDisplayStats?.globalRank ?? "—"}
-                </span>
-                <span>•</span>
-                <span>Mejor partida:</span>
-                <span className="text-secondary">
-                  {myDisplayStats?.bestScore ?? 0}
-                </span>
+                <span>Récord global:</span><span className="text-secondary">#{myDisplayStats?.globalRank ?? "—"}</span><span>•</span><span>Mejor partida:</span><span className="text-secondary">{myDisplayStats?.bestScore ?? 0}</span>
               </div>
             </div>
           )}
         </div>
 
         <div className="flex justify-center">
-          <div className="bg-black/30 p-1 rounded-full flex gap-1">
-            <button
-              className={`px-4 py-2 rounded-full font-bold transition-all flex items-center gap-2 ${filter === "weekly" ? "bg-amber-500 text-black shadow-md" : "text-white hover:bg-white/10"}`}
-              onClick={() => setFilter("weekly")}
-            >
-              <CalendarClock className="w-4 h-4" />
-              {lang === "en" ? "Week" : lang === "pt" ? "Semana" : lang === "fr" ? "Semaine" : "Semana"}
-            </button>
-            <button
-              className={`px-4 py-2 rounded-full font-bold transition-all flex items-center gap-2 ${filter === "monthly" ? "bg-purple-500 text-white shadow-md" : "text-white hover:bg-white/10"}`}
-              onClick={() => setFilter("monthly")}
-            >
-              <Star className="w-4 h-4" />
-              {lang === "en" ? "Month" : lang === "pt" ? "Mês" : lang === "fr" ? "Mois" : "Mes"}
-            </button>
-            <button
-              className={`px-4 py-2 rounded-full font-bold transition-all flex items-center gap-2 ${filter === "global" ? "bg-secondary text-black shadow-md" : "text-white hover:bg-white/10"}`}
-              onClick={() => setFilter("global")}
-            >
-              <Trophy className="w-4 h-4" />
-              {lang === "en" ? "All-time" : lang === "pt" ? "Histórico" : lang === "fr" ? "Total" : "Histórico"}
-            </button>
-            <button
-              className={`px-4 py-2 rounded-full font-bold transition-all flex items-center gap-2 ${filter === "friends" ? "bg-secondary text-black shadow-md" : "text-white hover:bg-white/10"}`}
-              onClick={() => setFilter("friends")}
-            >
-              <Users className="w-4 h-4" />
-              {lang === "en" ? "Friends" : lang === "pt" ? "Amigos" : lang === "fr" ? "Amis" : "Amigos"}
-            </button>
+          <div className="bg-black/30 p-1 rounded-full flex gap-1 max-w-full overflow-x-auto">
+            <button className={`px-4 py-2 rounded-full font-bold transition-all flex items-center gap-2 whitespace-nowrap ${filter === "weekly" ? "bg-amber-500 text-black shadow-md" : "text-white hover:bg-white/10"}`} onClick={() => setFilter("weekly")}><CalendarClock className="w-4 h-4" />{lang === "en" ? "Week" : lang === "pt" ? "Semana" : lang === "fr" ? "Semaine" : "Semana"}</button>
+            <button className={`px-4 py-2 rounded-full font-bold transition-all flex items-center gap-2 whitespace-nowrap ${filter === "monthly" ? "bg-purple-500 text-white shadow-md" : "text-white hover:bg-white/10"}`} onClick={() => setFilter("monthly")}><Star className="w-4 h-4" />{lang === "en" ? "Month" : lang === "pt" ? "Mês" : lang === "fr" ? "Mois" : "Mes"}</button>
+            <button className={`px-4 py-2 rounded-full font-bold transition-all flex items-center gap-2 whitespace-nowrap ${filter === "global" ? "bg-secondary text-black shadow-md" : "text-white hover:bg-white/10"}`} onClick={() => setFilter("global")}><Trophy className="w-4 h-4" />{lang === "en" ? "All-time" : lang === "pt" ? "Histórico" : lang === "fr" ? "Total" : "Histórico"}</button>
+            <button className={`px-4 py-2 rounded-full font-bold transition-all flex items-center gap-2 whitespace-nowrap ${filter === "friends" ? "bg-secondary text-black shadow-md" : "text-white hover:bg-white/10"}`} onClick={() => setFilter("friends")}><Users className="w-4 h-4" />{lang === "en" ? "Friends" : lang === "pt" ? "Amigos" : lang === "fr" ? "Amis" : "Amigos"}</button>
           </div>
         </div>
 
-        {/* Weekly countdown banner */}
         {filter === "weekly" && weekCountdown && (
-          <motion.div
-            initial={{ opacity: 0, y: -8 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="flex items-center justify-center gap-2 py-2 px-4 rounded-2xl text-sm font-bold"
-            style={{ background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.3)", color: "#f59e0b" }}
-          >
+          <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="flex items-center justify-center gap-2 py-2 px-4 rounded-2xl text-sm font-bold" style={{ background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.3)", color: "#f59e0b" }}>
             <CalendarClock className="w-4 h-4 flex-shrink-0" />
-            {lang === "en" ? `Resets in ${weekCountdown}` :
-             lang === "pt" ? `Reinicia em ${weekCountdown}` :
-             lang === "fr" ? `Réinitialise dans ${weekCountdown}` :
-             `Reinicia en ${weekCountdown}`}
-            {" "}·{" "}
-            {lang === "en" ? "Who will win this week?" :
-             lang === "pt" ? "Quem vai ganhar esta semana?" :
-             lang === "fr" ? "Qui va gagner cette semaine ?" :
-             "¿Quién gana esta semana?"}
+            {lang === "en" ? `Resets in ${weekCountdown}` : lang === "pt" ? `Reinicia em ${weekCountdown}` : lang === "fr" ? `Réinitialise dans ${weekCountdown}` : `Reinicia en ${weekCountdown}`} · {lang === "en" ? "Who will win this week?" : lang === "pt" ? "Quem vai ganhar esta semana?" : lang === "fr" ? "Qui va gagner cette semaine ?" : "¿Quién gana esta semana?"}
           </motion.div>
         )}
 
-        {/* Monthly countdown banner */}
         {filter === "monthly" && monthCountdown && (
-          <motion.div
-            initial={{ opacity: 0, y: -8 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="flex items-center justify-center gap-2 py-2 px-4 rounded-2xl text-sm font-bold"
-            style={{ background: "rgba(168,85,247,0.12)", border: "1px solid rgba(168,85,247,0.3)", color: "#c084fc" }}
-          >
+          <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="flex items-center justify-center gap-2 py-2 px-4 rounded-2xl text-sm font-bold" style={{ background: "rgba(168,85,247,0.12)", border: "1px solid rgba(168,85,247,0.3)", color: "#c084fc" }}>
             <Star className="w-4 h-4 flex-shrink-0" />
-            {lang === "en" ? `Resets in ${monthCountdown}` :
-             lang === "pt" ? `Reinicia em ${monthCountdown}` :
-             lang === "fr" ? `Réinitialise dans ${monthCountdown}` :
-             `Reinicia en ${monthCountdown}`}
-            {" "}·{" "}
-            {lang === "en" ? "Top monthly champions" :
-             lang === "pt" ? "Campeões do mês" :
-             lang === "fr" ? "Champions du mois" :
-             "¡Campeones del mes!"}
+            {lang === "en" ? `Resets in ${monthCountdown}` : lang === "pt" ? `Reinicia em ${monthCountdown}` : lang === "fr" ? `Réinitialise dans ${monthCountdown}` : `Reinicia en ${monthCountdown}`} · {lang === "en" ? "Top monthly champions" : lang === "pt" ? "Campeões do mês" : lang === "fr" ? "Champions du mois" : "¡Campeones del mes!"}
           </motion.div>
         )}
 
         {(filter === "weekly" ? weeklyLoading : filter === "monthly" ? monthlyLoading : isLoading) ? (
-          <div className="space-y-3">
-            {[1,2,3,4,5].map(i => (
-              <div key={i} className="h-16 bg-white/10 rounded-xl animate-pulse" />
-            ))}
-          </div>
+          <div className="space-y-3">{[1,2,3,4,5].map(i => <div key={i} className="h-16 bg-white/10 rounded-xl animate-pulse" />)}</div>
         ) : players.length === 0 && filter === "friends" ? (
-          <div className="p-16 text-center text-white/50 font-bold bg-black/20 rounded-2xl border border-white/10">
-            <Users className="w-12 h-12 mx-auto mb-4 opacity-20" />
-            <p>Ningún amigo aparece en el ranking aún.</p>
-            <p className="text-sm mt-2 text-white/30">
-              Agrega amigos desde el ranking global con el botón <UserPlus className="inline w-3 h-3" /> Agregar.
-            </p>
-          </div>
+          <div className="p-16 text-center text-white/50 font-bold bg-black/20 rounded-2xl border border-white/10"><Users className="w-12 h-12 mx-auto mb-4 opacity-20" /><p>Ningún amigo aparece en el ranking aún.</p><p className="text-sm mt-2 text-white/30">Agrega amigos desde el ranking global con el botón <UserPlus className="inline w-3 h-3" /> Agregar.</p></div>
         ) : players.length === 0 && filter === "weekly" ? (
-          <div className="p-16 text-center text-white/50 font-bold bg-black/20 rounded-2xl border border-white/10">
-            <CalendarClock className="w-12 h-12 mx-auto mb-4 opacity-20" />
-            <p className="text-lg">
-              {lang === "en" ? "No games this week yet. Be the first!" :
-               lang === "pt" ? "Nenhum jogo esta semana ainda. Sê o primeiro!" :
-               lang === "fr" ? "Aucune partie cette semaine. Sois le premier !" :
-               "Nadie ha jugado esta semana aún. ¡Sé el primero!"}
-            </p>
-          </div>
+          <div className="p-16 text-center text-white/50 font-bold bg-black/20 rounded-2xl border border-white/10"><CalendarClock className="w-12 h-12 mx-auto mb-4 opacity-20" /><p className="text-lg">{lang === "en" ? "No games this week yet. Be the first!" : lang === "pt" ? "Nenhum jogo esta semana ainda. Sê o primeiro!" : lang === "fr" ? "Aucune partie cette semaine. Sois le premier !" : "Nadie ha jugado esta semana aún. ¡Sé el primero!"}</p></div>
         ) : players.length === 0 && filter === "monthly" ? (
-          <div className="p-16 text-center text-white/50 font-bold bg-black/20 rounded-2xl border border-white/10">
-            <Star className="w-12 h-12 mx-auto mb-4 opacity-20" />
-            <p className="text-lg">
-              {lang === "en" ? "No games this month yet. Be the first!" :
-               lang === "pt" ? "Nenhum jogo este mês ainda. Sê o primeiro!" :
-               lang === "fr" ? "Aucune partie ce mois. Sois le premier !" :
-               "Nadie ha jugado este mes aún. ¡Sé el primero!"}
-            </p>
-          </div>
+          <div className="p-16 text-center text-white/50 font-bold bg-black/20 rounded-2xl border border-white/10"><Star className="w-12 h-12 mx-auto mb-4 opacity-20" /><p className="text-lg">{lang === "en" ? "No games this month yet. Be the first!" : lang === "pt" ? "Nenhum jogo este mês ainda. Sê o primeiro!" : lang === "fr" ? "Aucune partie ce mois. Sois le premier !" : "Nadie ha jugado este mes aún. ¡Sé el primero!"}</p></div>
         ) : players.length === 0 ? (
-          <div className="p-16 text-center text-white/50 font-bold bg-black/20 rounded-2xl border border-white/10">
-            <Trophy className="w-12 h-12 mx-auto mb-4 opacity-20" />
-            <p>{t.ranking.noRanking}</p>
-          </div>
+          <div className="p-16 text-center text-white/50 font-bold bg-black/20 rounded-2xl border border-white/10"><Trophy className="w-12 h-12 mx-auto mb-4 opacity-20" /><p>{t.ranking.noRanking}</p></div>
         ) : (
           <>
             {filter === "friends" && followedFriends.length > 0 && friendsTabPlayers.some((p: any) => p.noGames) && (
               <div className="px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-xs text-white/40 text-center">
-                {friendsTabPlayers.filter((p: any) => p.noGames).length === 1
-                  ? "1 amigo aún no ha jugado una partida registrada."
-                  : `${friendsTabPlayers.filter((p: any) => p.noGames).length} amigos aún no han jugado una partida registrada.`}
+                {friendsTabPlayers.filter((p: any) => p.noGames).length === 1 ? "1 amigo aún no ha jugado una partida registrada." : `${friendsTabPlayers.filter((p: any) => p.noGames).length} amigos aún no han jugado una partida registrada.`}
               </div>
             )}
 
-            {/* ── PODIUM ── */}
             {top3.length > 0 && (
-              <div className="flex items-end justify-center gap-4 py-4">
+              <div className="flex items-end justify-center gap-4 py-4 overflow-x-auto">
                 {PODIUM_ORDER.map(visualIdx => {
                   const p = top3[visualIdx];
                   if (!p) return <div key={visualIdx} className="w-24" />;
@@ -492,75 +404,29 @@ export default function Ranking() {
                   const alreadyFollowing = isFollowing(p.playerId) || followedIds.has(p.playerId);
 
                   return (
-                    <motion.div
-                      key={p.playerId}
-                      initial={{ opacity: 0, y: 40 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: visualIdx * 0.15, type: "spring", bounce: 0.4 }}
-                      className="flex flex-col items-center gap-2 cursor-pointer"
-                      onClick={() => setPreviewPlayer(p)}
-                    >
+                    <motion.div key={p.playerId} initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: visualIdx * 0.15, type: "spring", bounce: 0.4 }} className="flex flex-col items-center gap-2 cursor-pointer min-w-[96px]" onClick={() => setPreviewPlayer(p)}>
                       <span className="text-2xl">{m.label}</span>
-                      <motion.div
-                        animate={visualIdx === 0 ? { y: [0, -4, 0] } : {}}
-                        transition={{ repeat: Infinity, duration: 2 }}
-                        className={`${m.size} rounded-full flex items-center justify-center font-black text-white shadow-xl border-4 relative`}
-                        style={{ background: p.avatarColor || "#555", borderColor: m.border }}
-                      >
+                      <motion.div animate={visualIdx === 0 ? { y: [0, -4, 0] } : {}} transition={{ repeat: Infinity, duration: 2 }} className={`${m.size} rounded-full flex items-center justify-center font-black text-white shadow-xl border-4 relative`} style={{ background: p.avatarColor || "#555", borderColor: m.border }}>
                         {p.playerName.charAt(0).toUpperCase()}
-                        {isMe && (
-                          <span className="absolute -top-2 -right-2 bg-secondary text-black text-[9px] font-black px-1.5 py-0.5 rounded-full">{t.game.you.toUpperCase()}</span>
-                        )}
-                        {isOnline && !isMe && (
-                          <span className="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full bg-green-400 border-2 border-[hsl(222_47%_11%)] shadow-[0_0_6px_#4ade80]" />
-                        )}
-                        {(p as any).isPremium && !isMe && (
-                          <span className="absolute -bottom-1 -left-1 w-4 h-4 rounded-full flex items-center justify-center shadow" style={{ background: "linear-gradient(135deg, #f9a825, #f57c00)" }}>
-                            <Crown className="w-2.5 h-2.5 text-white" />
-                          </span>
-                        )}
+                        {isMe && <span className="absolute -top-2 -right-2 bg-secondary text-black text-[9px] font-black px-1.5 py-0.5 rounded-full">{t.game.you.toUpperCase()}</span>}
+                        {isOnline && !isMe && <span className="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full bg-green-400 border-2 border-[hsl(222_47%_11%)] shadow-[0_0_6px_#4ade80]" />}
+                        {(p as any).isPremium && !isMe && <span className="absolute -bottom-1 -left-1 w-4 h-4 rounded-full flex items-center justify-center shadow" style={{ background: "linear-gradient(135deg, #f9a825, #f57c00)" }}><Crown className="w-2.5 h-2.5 text-white" /></span>}
                       </motion.div>
                       <div className="text-center">
-                        <p className="font-black text-sm truncate max-w-[80px]">{p.playerName}</p>
-                        {(p as any).title && <p className="text-[10px] text-white/40 leading-tight truncate max-w-[80px]">{(p as any).title}</p>}
-                        <p className={`font-black ${(p as any).noGames ? "text-white/30 text-xs" : "text-secondary"}`}>
-                          {(p as any).noGames ? "Sin partidas" : `${p.totalScore} ${t.game.points}`}
-                        </p>
-                        {((p as any).currentStreak ?? 0) >= 2 && (
-                          <p className="text-[10px] text-orange-400 font-bold flex items-center justify-center gap-0.5 mt-0.5">
-                            <Flame size={9} /> {(p as any).currentStreak}
-                          </p>
-                        )}
-                        {((p as any).achievementCount ?? 0) > 0 && (
-                          <p className="text-[10px] text-yellow-300 font-black flex items-center justify-center gap-0.5 mt-0.5">
-                            <Trophy size={9} /> {(p as any).achievementCount}/12
-                          </p>
-                        )}
+                        <p className="font-black text-sm truncate max-w-[90px]">{p.playerName}</p>
+                        {(p as any).title && <p className="text-[10px] text-white/40 leading-tight truncate max-w-[90px]">{(p as any).title}</p>}
+                        <p className={`font-black ${(p as any).noGames ? "text-white/30 text-xs" : "text-secondary"}`}>{(p as any).noGames ? "Sin partidas" : `${p.totalScore} ${t.game.points}`}</p>
+                        {filter === "global" && <AiDifficultyStats player={p} compact />}
+                        {((p as any).currentStreak ?? 0) >= 2 && <p className="text-[10px] text-orange-400 font-bold flex items-center justify-center gap-0.5 mt-0.5"><Flame size={9} /> {(p as any).currentStreak}</p>}
+                        {((p as any).achievementCount ?? 0) > 0 && <p className="text-[10px] text-yellow-300 font-black flex items-center justify-center gap-0.5 mt-0.5"><Trophy size={9} /> {(p as any).achievementCount}/12</p>}
                       </div>
-
-                      {/* Podium action buttons */}
                       {!isMe && isLoggedIn && (
                         <div className="flex flex-col items-center gap-1">
-                          <FollowBtn
-                            isFollowing={alreadyFollowing}
-                            onToggle={() =>
-                              alreadyFollowing
-                                ? unfollowPlayer(p.playerId)
-                                : followOffline(p)
-                            }
-                          />
-                          {isOnline && onlineData && (
-                            <ChallengeBtn onlinePlayer={onlineData} currentPlayer={player} lang={lang} />
-                          )}
+                          <FollowBtn isFollowing={alreadyFollowing} onToggle={() => alreadyFollowing ? unfollowPlayer(p.playerId) : followOffline(p)} />
+                          {isOnline && onlineData && <ChallengeBtn onlinePlayer={onlineData} currentPlayer={player} lang={lang} />}
                         </div>
                       )}
-
-                      <div
-                        className={`${podiumHeights[visualIdx]} w-24 rounded-t-xl flex items-end justify-center pb-2`}
-                        style={{ background: `linear-gradient(to bottom, ${m.border}33, ${m.border}11)`, border: `1px solid ${m.border}44` }}
-                      >
-                        <span className="font-black text-2xl opacity-30">#{visualIdx + 1}</span>
-                      </div>
+                      <div className={`${podiumHeights[visualIdx]} w-24 rounded-t-xl flex items-end justify-center pb-2`} style={{ background: `linear-gradient(to bottom, ${m.border}33, ${m.border}11)`, border: `1px solid ${m.border}44` }}><span className="font-black text-2xl opacity-30">#{visualIdx + 1}</span></div>
                     </motion.div>
                   );
                 })}
@@ -568,82 +434,39 @@ export default function Ranking() {
             )}
 
             {previewPlayer && (
-              <div
-                className="fixed inset-0 z-50 flex items-end justify-center p-4 bg-black/60"
-                onClick={() => setPreviewPlayer(null)}
-              >
-                <div
-                  className="w-full max-w-sm rounded-3xl p-4 bg-[#0e0a2e] border border-white/10 shadow-2xl"
-                  onClick={(e) => e.stopPropagation()}
-                >
+              <div className="fixed inset-0 z-50 flex items-end justify-center p-4 bg-black/60" onClick={() => setPreviewPlayer(null)}>
+                <div className="w-full max-w-sm rounded-3xl p-4 bg-[#0e0a2e] border border-white/10 shadow-2xl" onClick={(e) => e.stopPropagation()}>
                   <div className="flex items-center gap-3">
-                    <div className="w-14 h-14 rounded-full flex items-center justify-center text-white font-black text-xl"
-                      style={{ backgroundColor: previewPlayer.avatarColor || "#555" }}>
-                      {previewPlayer.playerName.charAt(0).toUpperCase()}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="font-black text-white text-lg truncate">{previewPlayer.playerName}</p>
-                        {(previewPlayer as any).isPremium && (
-                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-black flex-shrink-0" style={{ background: "rgba(249,168,37,0.2)", border: "1px solid rgba(249,168,37,0.4)", color: "#f9a825" }}>
-                            <Crown className="w-2.5 h-2.5" /> PRO
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-xs text-white/40 truncate">{(previewPlayer as any).title || "Jugador"}</p>
-                    </div>
-                    <button
-                      className="px-3 py-1.5 rounded-full text-xs font-bold bg-white/10 text-white"
-                      onClick={() => openProfile(previewPlayer.playerId)}
-                    >
-                      Ver perfil
-                    </button>
+                    <div className="w-14 h-14 rounded-full flex items-center justify-center text-white font-black text-xl" style={{ backgroundColor: previewPlayer.avatarColor || "#555" }}>{previewPlayer.playerName.charAt(0).toUpperCase()}</div>
+                    <div className="flex-1 min-w-0"><div className="flex items-center gap-2"><p className="font-black text-white text-lg truncate">{previewPlayer.playerName}</p>{(previewPlayer as any).isPremium && <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-black flex-shrink-0" style={{ background: "rgba(249,168,37,0.2)", border: "1px solid rgba(249,168,37,0.4)", color: "#f9a825" }}><Crown className="w-2.5 h-2.5" /> PRO</span>}</div><p className="text-xs text-white/40 truncate">{(previewPlayer as any).title || "Jugador"}</p></div>
+                    <button className="px-3 py-1.5 rounded-full text-xs font-bold bg-white/10 text-white" onClick={() => openProfile(previewPlayer.playerId)}>Ver perfil</button>
                   </div>
                 </div>
               </div>
             )}
 
-            {/* ── MY POSITION CARD ── */}
             {(() => {
-              // On weekly: only show if the user is IN the weekly list (no global-stats fallback)
-              // On global: show from list or fallback from personal stats
-              const displayEntry =
-                filter === "weekly"
-                  ? (myEntry && myRank && myRank > 3 ? myEntry : null)
-                  : (myEntry && myRank && myRank > 3 ? myEntry : myFallbackEntry);
+              const displayEntry = filter === "weekly" ? (myEntry && myRank && myRank > 3 ? myEntry : null) : (myEntry && myRank && myRank > 3 ? myEntry : myFallbackEntry);
               const displayRank = myRank && myRank > 3 ? myRank : null;
               if (!displayEntry || filter === "friends") return null;
               return (
                 <Card className="p-3 bg-secondary/10 border border-secondary/30">
                   <div className="flex items-center gap-3">
-                    <span className="text-secondary font-black text-lg w-10 text-center">
-                      {displayRank ? `#${displayRank}` : "—"}
-                    </span>
-                    <div className="w-9 h-9 rounded-full flex items-center justify-center text-white font-bold shadow" style={{ backgroundColor: (displayEntry as any).avatarColor || "#555" }}>
-                      {(displayEntry as any).playerName?.charAt(0).toUpperCase()}
-                    </div>
+                    <span className="text-secondary font-black text-lg w-10 text-center">{displayRank ? `#${displayRank}` : "—"}</span>
+                    <div className="w-9 h-9 rounded-full flex items-center justify-center text-white font-bold shadow" style={{ backgroundColor: (displayEntry as any).avatarColor || "#555" }}>{(displayEntry as any).playerName?.charAt(0).toUpperCase()}</div>
                     <span className="flex-1 font-black">{(displayEntry as any).playerName} <span className="text-secondary text-xs">({t.game.you})</span></span>
                     <span className="text-white/60 text-sm">{(displayEntry as any).gamesPlayed}</span>
                     <span className="text-secondary font-black text-lg">{(displayEntry as any).totalScore} {t.game.points}</span>
                   </div>
-                  {(displayEntry as any).globalRank != null && (
-                    <p className="mt-2 text-[11px] text-white/45 font-bold">
-                      Récord global: #{(displayEntry as any).globalRank} · Mejor partida: {(displayEntry as any).bestScore ?? 0}
-                    </p>
-                  )}
+                  {filter === "global" && <AiDifficultyStats player={displayEntry} />}
+                  {(displayEntry as any).globalRank != null && <p className="mt-2 text-[11px] text-white/45 font-bold">Récord global: #{(displayEntry as any).globalRank} · Mejor partida: {(displayEntry as any).bestScore ?? 0}</p>}
                 </Card>
               );
             })()}
 
-            {/* ── REST OF LIST ── */}
             {rest.length > 0 && (
               <Card className="p-2 bg-black/20 border-white/10 shadow-xl">
-                <div className="grid grid-cols-[36px_1fr_64px_auto] gap-2 px-3 py-2 text-xs font-bold text-white/40 uppercase tracking-wider">
-                  <div className="text-center">#</div>
-                  <div>{t.ranking.player}</div>
-                  <div className="text-right">{t.ranking.score}</div>
-                  <div />
-                </div>
+                <div className="grid grid-cols-[36px_1fr_64px_auto] gap-2 px-3 py-2 text-xs font-bold text-white/40 uppercase tracking-wider"><div className="text-center">#</div><div>{t.ranking.player}</div><div className="text-right">{t.ranking.score}</div><div /></div>
                 <div className="flex flex-col gap-1">
                   {rest.map((p: any, idx: number) => {
                     const position = filter === "global" ? idx + 4 : players.indexOf(p) + 1;
@@ -651,97 +474,30 @@ export default function Ranking() {
                     const isOnline = onlineMap.has(p.playerId);
                     const onlineData = onlineMap.get(p.playerId);
                     const alreadyFollowing = isFollowing(p.playerId) || followedIds.has(p.playerId);
-
                     return (
-                      <motion.div
-                        key={p.playerId}
-                        initial={{ opacity: 0, x: -10 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: idx * 0.04 }}
-                        onClick={() => !isMe && !p.noGames && setLocation(`/player/${encodeURIComponent(p.playerId)}`)}
-                        className={`grid grid-cols-[36px_1fr_64px_auto] gap-2 px-3 py-2.5 items-center rounded-xl transition-all ${
-                          isMe
-                            ? "bg-secondary text-black font-black shadow-md shadow-secondary/20"
-                            : p.noGames
-                            ? "bg-white/5 border border-white/5 text-white/40 font-bold"
-                            : "bg-card/60 hover:bg-card border border-white/5 text-white font-bold cursor-pointer hover:border-secondary/30"
-                        }`}
-                      >
-                        {/* Position */}
-                        <div className={`text-center font-bold text-sm ${isMe ? "text-black/60" : "text-white/30"}`}>
-                          {p.noGames ? "-" : position}
-                        </div>
-
-                        {/* Player name + online dot + streak + title */}
+                      <motion.div key={p.playerId} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: idx * 0.04 }} onClick={() => !isMe && !p.noGames && setLocation(`/player/${encodeURIComponent(p.playerId)}`)} className={`grid grid-cols-[36px_1fr_64px_auto] gap-2 px-3 py-2.5 items-center rounded-xl transition-all ${isMe ? "bg-secondary text-black font-black shadow-md shadow-secondary/20" : p.noGames ? "bg-white/5 border border-white/5 text-white/40 font-bold" : "bg-card/60 hover:bg-card border border-white/5 text-white font-bold cursor-pointer hover:border-secondary/30"}`}>
+                        <div className={`text-center font-bold text-sm ${isMe ? "text-black/60" : "text-white/30"}`}>{p.noGames ? "-" : position}</div>
                         <div className="flex items-center gap-2 overflow-hidden">
                           <div className="relative flex-shrink-0">
-                            <div
-                              className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs shadow"
-                              style={{ backgroundColor: p.avatarColor || "#555" }}
-                            >
-                              {p.playerName.charAt(0).toUpperCase()}
-                            </div>
-                            {isOnline && (
-                              <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-green-400 border-2 border-[hsl(222_47%_11%)] shadow-[0_0_4px_#4ade80]" />
-                            )}
-                            {(p as any).isPremium && (
-                              <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full flex items-center justify-center" style={{ background: "linear-gradient(135deg, #f9a825, #f57c00)" }}>
-                                <Crown className="w-2 h-2 text-white" />
-                              </span>
-                            )}
+                            <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs shadow" style={{ backgroundColor: p.avatarColor || "#555" }}>{p.playerName.charAt(0).toUpperCase()}</div>
+                            {isOnline && <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-green-400 border-2 border-[hsl(222_47%_11%)] shadow-[0_0_4px_#4ade80]" />}
+                            {(p as any).isPremium && <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full flex items-center justify-center" style={{ background: "linear-gradient(135deg, #f9a825, #f57c00)" }}><Crown className="w-2 h-2 text-white" /></span>}
                           </div>
                           <div className="min-w-0">
                             <div className="flex items-center gap-1.5 flex-wrap">
                               <span className="truncate text-sm">{p.playerName}</span>
                               {isMe && <span className={`text-[10px] font-bold ${isMe ? "text-black/50" : "text-white/40"}`}>({t.game.you})</span>}
-                              {(p.currentStreak ?? 0) >= 2 && (
-                                <span className={`flex items-center gap-0.5 text-[10px] font-bold ${isMe ? "text-black/60" : "text-orange-400"}`}>
-                                  <Flame size={9} />{p.currentStreak}
-                                </span>
-                              )}
-                              {((p as any).achievementCount ?? 0) > 0 && (
-                                <span
-                                  className={`flex items-center gap-0.5 text-[10px] font-black tracking-tight ${isMe ? "text-black/70" : "text-yellow-300/95"}`}
-                                  title="Logros desbloqueados"
-                                >
-                                  <Trophy size={9} />
-                                  {(p as any).achievementCount}/12
-                                </span>
-                              )}
+                              {(p.currentStreak ?? 0) >= 2 && <span className={`flex items-center gap-0.5 text-[10px] font-bold ${isMe ? "text-black/60" : "text-orange-400"}`}><Flame size={9} />{p.currentStreak}</span>}
+                              {((p as any).achievementCount ?? 0) > 0 && <span className={`flex items-center gap-0.5 text-[10px] font-black tracking-tight ${isMe ? "text-black/70" : "text-yellow-300/95"}`} title="Logros desbloqueados"><Trophy size={9} />{(p as any).achievementCount}/12</span>}
                             </div>
-                            {p.title && !isMe && (
-                              <p className="text-[10px] text-white/40 font-medium leading-none mt-0.5 truncate">{p.title}</p>
-                            )}
-                            {isOnline && !isMe && (
-                              <p className="text-[10px] text-green-400/80 font-medium leading-none mt-0.5">
-                                {onlineData?.roomCode ? `En sala: ${onlineData.roomCode}` : "En el menú"}
-                              </p>
-                            )}
+                            {filter === "global" && <AiDifficultyStats player={p} compact />}
+                            {p.title && !isMe && <p className="text-[10px] text-white/40 font-medium leading-none mt-0.5 truncate">{p.title}</p>}
+                            {isOnline && !isMe && <p className="text-[10px] text-green-400/80 font-medium leading-none mt-0.5">{onlineData?.roomCode ? `En sala: ${onlineData.roomCode}` : "En el menú"}</p>}
                           </div>
                         </div>
-
-                        {/* Score */}
-                        <div className={`text-right font-black ${isMe ? "text-black" : p.noGames ? "text-white/30" : "text-secondary"}`}>
-                          {p.noGames ? "—" : p.totalScore}
-                        </div>
-
-                        {/* Actions */}
+                        <div className={`text-right font-black ${isMe ? "text-black" : p.noGames ? "text-white/30" : "text-secondary"}`}>{p.noGames ? "—" : p.totalScore}</div>
                         <div className="flex items-center gap-1 justify-end">
-                          {!isMe && isLoggedIn && (
-                            <>
-                              <FollowBtn
-                                isFollowing={alreadyFollowing}
-                                onToggle={() =>
-                                  alreadyFollowing
-                                    ? unfollowPlayer(p.playerId)
-                                    : followOffline(p)
-                                }
-                              />
-                              {isOnline && onlineData && (
-                                <ChallengeBtn onlinePlayer={onlineData} currentPlayer={player} lang={lang} />
-                              )}
-                            </>
-                          )}
+                          {!isMe && isLoggedIn && <><FollowBtn isFollowing={alreadyFollowing} onToggle={() => alreadyFollowing ? unfollowPlayer(p.playerId) : followOffline(p)} />{isOnline && onlineData && <ChallengeBtn onlinePlayer={onlineData} currentPlayer={player} lang={lang} />}</>}
                         </div>
                       </motion.div>
                     );
