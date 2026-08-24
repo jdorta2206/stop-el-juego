@@ -8,37 +8,38 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { usePlayer } from "@/hooks/use-player";
 import { claimStripePack } from "@/lib/worldCupPack";
 import Home from "@/pages/Home";
-import SoloGame from "@/pages/SoloGame";
-import Multiplayer from "@/pages/Multiplayer";
-import Room from "@/pages/Room";
-import Ranking from "@/pages/Ranking";
 import NotFound from "@/pages/not-found";
 
-// Lazy-loaded routes — keep initial bundle small for fast first paint on Android
-const Privacy        = lazy(() => import("@/pages/Privacy"));
-const Terms          = lazy(() => import("@/pages/Terms"));
-const FAQ            = lazy(() => import("@/pages/FAQ"));
-const About          = lazy(() => import("@/pages/About"));
-const HowToPlay      = lazy(() => import("@/pages/HowToPlay"));
+// Keep the initial mobile/TWA bundle limited to the home screen. Gameplay and
+// secondary pages are loaded only when their route is opened, so an error in a
+// heavy page can never prevent the app shell from booting on Android.
+const SoloGame = lazy(() => import("@/pages/SoloGame"));
+const Multiplayer = lazy(() => import("@/pages/Multiplayer"));
+const Room = lazy(() => import("@/pages/Room"));
+const Ranking = lazy(() => import("@/pages/Ranking"));
+const Privacy = lazy(() => import("@/pages/Privacy"));
+const Terms = lazy(() => import("@/pages/Terms"));
+const FAQ = lazy(() => import("@/pages/FAQ"));
+const About = lazy(() => import("@/pages/About"));
+const HowToPlay = lazy(() => import("@/pages/HowToPlay"));
 const DailyChallenge = lazy(() => import("@/pages/DailyChallenge"));
-const Impossible     = lazy(() => import("@/pages/Impossible"));
-const Friends        = lazy(() => import("@/pages/Friends"));
-const Strategies     = lazy(() => import("@/pages/Strategies"));
-const PlayerProfile  = lazy(() => import("@/pages/PlayerProfile"));
-const Tienda         = lazy(() => import("@/pages/Tienda"));
-const Tournament     = lazy(() => import("@/pages/Tournament"));
-const Live           = lazy(() => import("@/pages/Live"));
+const Impossible = lazy(() => import("@/pages/Impossible"));
+const Friends = lazy(() => import("@/pages/Friends"));
+const Strategies = lazy(() => import("@/pages/Strategies"));
+const PlayerProfile = lazy(() => import("@/pages/PlayerProfile"));
+const Tienda = lazy(() => import("@/pages/Tienda"));
+const Tournament = lazy(() => import("@/pages/Tournament"));
+const Live = lazy(() => import("@/pages/Live"));
 const StreamerDirectory = lazy(() => import("@/pages/StreamerDirectory"));
-const Overlay        = lazy(() => import("@/pages/Overlay"));
-const DeleteAccount  = lazy(() => import("@/pages/DeleteAccount"));
-const SeasonPass     = lazy(() => import("@/pages/SeasonPass"));
-const Achievements   = lazy(() => import("@/pages/Achievements"));
-const Collection     = lazy(() => import("@/pages/Collection"));
-const Notifications  = lazy(() => import("@/pages/Notifications"));
-const Blog           = lazy(() => import("@/pages/Blog"));
-const BlogPost       = lazy(() => import("@/pages/BlogPost"));
-// 🆕 Importar Contact (página de contacto)
-const Contact        = lazy(() => import("@/pages/Contact"));
+const Overlay = lazy(() => import("@/pages/Overlay"));
+const DeleteAccount = lazy(() => import("@/pages/DeleteAccount"));
+const SeasonPass = lazy(() => import("@/pages/SeasonPass"));
+const Achievements = lazy(() => import("@/pages/Achievements"));
+const Collection = lazy(() => import("@/pages/Collection"));
+const Notifications = lazy(() => import("@/pages/Notifications"));
+const Blog = lazy(() => import("@/pages/Blog"));
+const BlogPost = lazy(() => import("@/pages/BlogPost"));
+const Contact = lazy(() => import("@/pages/Contact"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -50,10 +51,6 @@ const queryClient = new QueryClient({
 });
 
 function SoloRoute() {
-  // Legacy/home links may still carry ?auto=1. The current game contract is
-  // explicit: every new solo game must first show the Easy/Expert selector.
-  // Strip the legacy auto-start flag before SoloGame renders so its mount
-  // effect cannot bypass the lobby and start a round invisibly.
   if (typeof window !== "undefined") {
     const params = new URLSearchParams(window.location.search);
     if (params.get("auto") === "1") {
@@ -67,11 +64,9 @@ function SoloRoute() {
 
 function Router() {
   const [location] = useLocation();
-  // SPA route change → enviar page_view a GA4 (directo) + dataLayer (GTM).
   useEffect(() => {
     const w = window as any;
     w.dataLayer = w.dataLayer || [];
-    // GA4 directo (gtag.js)
     if (typeof w.gtag === "function") {
       w.gtag("event", "page_view", {
         page_path: location,
@@ -79,7 +74,6 @@ function Router() {
         page_location: window.location.href,
       });
     }
-    // GTM (para Meta Pixel, TikTok Pixel u otros tags futuros)
     w.dataLayer.push({
       event: "page_view",
       page_path: location,
@@ -98,7 +92,6 @@ function Router() {
       <Route path="/en-vivo" component={StreamerDirectory} />
       <Route path="/overlay/:code" component={Overlay} />
       <Route path="/ranking" component={Ranking} />
-      {/* 🆕 Rutas legales y de información */}
       <Route path="/privacidad" component={Privacy} />
       <Route path="/terminos" component={Terms} />
       <Route path="/faq" component={FAQ} />
@@ -125,10 +118,8 @@ function Router() {
       <Route path="/notifications" component={Notifications} />
       <Route path="/blog" component={Blog} />
       <Route path="/blog/:slug" component={BlogPost} />
-      {/* Google Play "Account deletion URL" requirement (es + en aliases) */}
       <Route path="/eliminar-cuenta" component={DeleteAccount} />
       <Route path="/delete-account" component={DeleteAccount} />
-      {/* 🆕 Contacto */}
       <Route path="/contacto" component={Contact} />
       <Route path="/contact" component={Contact} />
       <Route component={NotFound} />
@@ -136,10 +127,6 @@ function Router() {
   );
 }
 
-// Handles the Stripe one-time pack return. Stripe redirects to
-// `/?pack=success&session_id=...` (always the root, not the profile), so the
-// claim must run app-wide. Grants the cosmetics server-side, then strips the
-// query params so a refresh doesn't re-trigger it. The grant is idempotent.
 function PackClaimHandler() {
   const { player } = usePlayer();
   useEffect(() => {
@@ -147,7 +134,7 @@ function PackClaimHandler() {
     const params = new URLSearchParams(window.location.search);
     if (params.get("pack") !== "success") return;
     const playerId = player?.id;
-    if (!playerId) return; // wait until the player profile is loaded
+    if (!playerId) return;
 
     const sessionId = params.get("session_id") || undefined;
     let cancelled = false;
@@ -160,7 +147,6 @@ function PackClaimHandler() {
       } catch {
         /* silent — the user can retry from the shop, grant is idempotent */
       } finally {
-        // Strip pack params regardless so a refresh doesn't loop.
         const url = new URL(window.location.href);
         url.searchParams.delete("pack");
         url.searchParams.delete("session_id");
@@ -178,13 +164,6 @@ function App() {
   const [splashDone, setSplashDone] = useState(false);
   const lang = (localStorage.getItem("stop_lang") ?? "es") as string;
 
-  // ── Hardware back button (TWA / Android). Three behaviors layered:
-  //   1) If a modal/dropdown is open (data-modal-open="true"), close it.
-  //   2) Else, if we're not at "/", navigate back to "/" (instead of letting
-  //      the TWA exit straight from a deep page — common Play Store complaint).
-  //   3) Else (already at "/"), let the OS exit normally.
-  // We seed one dummy history entry per render-loop iteration so each press
-  // hits this handler before the OS sees it.
   useEffect(() => {
     const base = import.meta.env.BASE_URL.replace(/\/$/, "");
     const isAtHome = () => {
@@ -216,7 +195,6 @@ function App() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      {/* reducedMotion="user" → respects OS-level "Reduce animations" toggle */}
       <MotionConfig reducedMotion="user">
         <ErrorBoundary>
           <PackClaimHandler />
