@@ -12,7 +12,7 @@ import { useGetStreakCalendar } from "@workspace/api-client-react";
 // `recordPlay()` (the local fallback; the server records its own streak on score
 // submit).
 export function useDisplayStreak() {
-  const { player } = usePlayer();
+  const { player, isLoaded } = usePlayer();
   const local = useStreak();
   const playerId = player?.id;
   const isGuest = !playerId || playerId === "guest";
@@ -20,7 +20,10 @@ export function useDisplayStreak() {
   const { data } = useGetStreakCalendar(playerId ?? "", {
     query: {
       queryKey: ["/api/ranking/streak/calendar", playerId],
-      enabled: !isGuest,
+      // Do not fire private ranking requests until usePlayer has completed the
+      // server-side session check. This prevents a stale localStorage profile
+      // from producing a 403 while /api/auth/me is still being validated.
+      enabled: isLoaded && !isGuest,
       staleTime: 30_000,
     },
   });
