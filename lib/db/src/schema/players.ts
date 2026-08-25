@@ -18,20 +18,44 @@ export const playerScoresTable = pgTable("player_scores", {
   currentStreak: integer("current_streak").notNull().default(0),
   longestStreak: integer("longest_streak").notNull().default(0),
   lastPlayedDate: text("last_played_date"), // YYYY-MM-DD UTC
+  // JSON array of YYYY-MM-DD strings — the most recent days the player played.
+  // Capped at the last 30 days at write time so it stays small and bounded.
   streakDaysJson: text("streak_days_json").notNull().default("[]"),
   xp: integer("xp").notNull().default(0),
   level: integer("level").notNull().default(1),
-  achievementsJson: text("achievements_json").notNull().default("[]"),
-  achievementStatsJson: text("achievement_stats_json").notNull().default("{}"),
-  personalBestsJson: text("personal_bests_json").notNull().default("{}"),
+  achievementsJson: text("achievements_json").notNull().default("[]"),         // array of unlocked achievement IDs
+  achievementStatsJson: text("achievement_stats_json").notNull().default("{}"), // { totalWins, totalGames, maxCombo, … }
+  personalBestsJson: text("personal_bests_json").notNull().default("{}"),   // { normal, quick, chaos, daily } → number
+  // ── Season Pass real rewards ──────────────────────────────────────────
+  // Coin balance (earned from claiming Season Pass tiers, spendable in shop).
   coins: integer("coins").notNull().default(0),
+  // Owned cosmetics: `{ avatars: string[], frames: string[] }`. Items are
+  // added via Season Pass tier claims or coin purchases; never removed.
   inventoryJson: text("inventory_json").notNull().default("{\"avatars\":[],\"frames\":[]}"),
+  // Currently equipped cosmetics. Null = use default avatar/no frame.
+  // Server validates ownership on equip.
   equippedAvatar: text("equipped_avatar"),
   equippedFrame: text("equipped_frame"),
+  // Currently equipped TITLE id (e.g. "imparable"). Null = no custom title.
+  // Titles are UNLOCKED BY PLAYING (derived from stats), never bought; the
+  // server only persists which one the player chose to display. Validated on
+  // equip against the unlock criteria in titleCatalog.ts.
   equippedTitle: text("equipped_title"),
+  // ── Self-renewing reward claims (double-claim guards) ─────────────────
+  // JSON array of prestige milestone tiers already claimed (e.g. [1,2,3]).
+  // Prestige is derived from games_played (server-authoritative) so these
+  // coin rewards are safe. Append-only.
   prestigeClaimsJson: text("prestige_claims_json").notNull().default("[]"),
+  // JSON array of collection SET ids already claimed (e.g. ["total_150"]).
+  // Eligibility recomputed server-side from collected_words_json on claim.
   collectionClaimsJson: text("collection_claims_json").notNull().default("[]"),
+  // Latest season for which the end-of-season recap modal has been shown.
   notifiedFinalSeasonId: integer("notified_final_season_id"),
+  // ── Word Collection ───────────────────────────────────────────────────
+  // JSON map of unique valid words the player has discovered, keyed by the
+  // normalized word (lowercased, accents stripped). Value is { name, cat,
+  // r, d }: original-cased name, first category found, rarity, discoveredAt
+  // millis. Append-only at write time; never shrinks. Used by /coleccion.
   collectedWordsJson: text("collected_words_json").notNull().default("{}"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -64,6 +88,11 @@ export const roomsTable = pgTable("rooms", {
   currentRound: integer("current_round").notNull().default(0),
   maxRounds: integer("max_rounds").notNull().default(3),
   maxPlayers: integer("max_players").notNull().default(8),
+  maxPlayers: integer("max_players").notNull().default(8),
+  gameMode: text("game_mode").notNull().default("classic"), // classic | blitz | challenge
+  language: text("language").notNull().default("es"),
+  playersJson: text("players_json").notNull().default("[]"),
+  stopperJson: text("stopper_json"),
   isPublic: boolean("is_public").notNull().default(false),
   hostName: text("host_name").notNull().default(""),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -94,7 +123,7 @@ export const dailyResultsTable = pgTable("daily_results", {
   playerId: text("player_id").notNull(),
   playerName: text("player_name").notNull(),
   avatarColor: text("avatar_color").notNull().default("#e53e3e"),
-  challengeDate: text("challenge_date").notNull(),
+  challengeDate: text("challenge_date").notNull(), // YYYY-MM-DD
   score: integer("score").notNull().default(0),
   letter: text("letter").notNull(),
   language: text("language").notNull().default("es"),
