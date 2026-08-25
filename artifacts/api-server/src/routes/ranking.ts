@@ -438,6 +438,7 @@ router.post("/scores", scoreLimiter, async (req, res) => {
         level: newLevel,
         ...(aiDifficultyStats ? { achievementStatsJson: aiDifficultyStats } : {}),
         ...(aiDifficultyStats ? { achievementStatsJson: aiDifficultyStats } : {}),
+        ...(aiDifficultyStats ? { achievementStatsJson: aiDifficultyStats } : {}),
         ...(coinGain > 0 ? { coins: sql`${playerScoresTable.coins} + ${coinGain}` } : {}),
         ...(!isBonus && updatedToday ? {
           currentStreak: newStreak,
