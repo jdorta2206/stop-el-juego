@@ -89,6 +89,26 @@ export function calculateStreak(
   return { newStreak, updatedToday: true };
 }
 
+function parseAchievementStats(json: unknown): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse((json as string) ?? "{}");
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
+  } catch {
+    return {};
+  }
+}
+
+function updateAiDifficultyStats(raw: string | null | undefined, easyCount: number, expertCount: number): string {
+  const stats = parseAchievementStats(raw);
+  const currentEasy = Number(stats.aiEasyGames ?? 0);
+  const currentExpert = Number(stats.aiExpertGames ?? 0);
+  return JSON.stringify({
+    ...stats,
+    aiEasyGames: Math.max(0, Math.floor(currentEasy)) + Math.max(0, Math.floor(easyCount)),
+    aiExpertGames: Math.max(0, Math.floor(currentExpert)) + Math.max(0, Math.floor(expertCount)),
+  });
+}
+
 function parseAchievementCount(json: unknown): number {
   try {
     const parsed = JSON.parse((json as string) ?? "[]");
@@ -360,6 +380,11 @@ router.post("/scores", scoreLimiter, async (req, res) => {
     .where(eq(playerScoresTable.playerId, playerId))
     .limit(1);
 
+  // Difficulty counters are server-authoritative: only signed vouchers can increment them.
+  const aiDifficultyStats = !isBonus && mode !== "multiplayer" && verified > 0
+    ? updateAiDifficultyStats(existing[0]?.achievementStatsJson, easyCount, expertCount)
+    : null;
+
   const oldTotal = existing.length > 0 ? existing[0].totalScore : 0;
   const newTotal = oldTotal + score;
 
@@ -411,6 +436,7 @@ router.post("/scores", scoreLimiter, async (req, res) => {
         ...(aiExpertGame ? { aiExpertGames: sql`${playerScoresTable.aiExpertGames} + 1` } : {}),
         xp: sql`${playerScoresTable.xp} + ${xpGain}`,
         level: newLevel,
+        ...(aiDifficultyStats ? { achievementStatsJson: aiDifficultyStats } : {}),
         ...(coinGain > 0 ? { coins: sql`${playerScoresTable.coins} + ${coinGain}` } : {}),
         ...(!isBonus && updatedToday ? {
           currentStreak: newStreak,
@@ -442,6 +468,7 @@ router.post("/scores", scoreLimiter, async (req, res) => {
         xp: xpGain,
         level: calcLevel(xpGain),
         coins: coinGain,
+        achievementStatsJson: updateAiDifficultyStats(null, easyCount, expertCount),
       })
       .returning();
     player = created;
@@ -476,6 +503,8 @@ router.post("/scores", scoreLimiter, async (req, res) => {
       happyHourActive,
       multiplier: happyHourActive ? HAPPY_HOUR_MULTIPLIER : 1,
       expertVerified: allExpert,
+      aiEasyGamesAwarded: !isBonus && mode !== "multiplayer" ? easyCount : 0,
+      aiExpertGamesAwarded: !isBonus && mode !== "multiplayer" ? expertCount : 0,
     },
   });
 });
