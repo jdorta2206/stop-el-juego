@@ -1,0 +1,44 @@
+name: Fix AI game counters
+
+on:
+  push:
+    branches: [master]
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Patch AI game counter conditions
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('artifacts/api-server/src/routes/ranking.ts')
+          s = p.read_text()
+          old_easy = 'const aiEasyGame = !isBonus && mode === "solo" && verified === maxRounds && easyCount === maxRounds;'
+          old_expert = 'const aiExpertGame = !isBonus && mode === "solo" && verified === maxRounds && allExpert && expertCount === maxRounds;'
+          new_easy = 'const aiEasyGame = !isBonus && mode === "solo" && verified > 0 && easyCount > 0 && expertCount === 0;'
+          new_expert = 'const aiExpertGame = !isBonus && mode === "solo" && verified > 0 && expertCount > 0 && easyCount === 0;'
+          if old_easy not in s or old_expert not in s:
+              raise SystemExit('Expected AI counter conditions were not found; refusing to modify the file.')
+          s = s.replace(old_easy, new_easy, 1).replace(old_expert, new_expert, 1)
+          p.write_text(s)
+          PY
+
+      - name: Commit patch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add artifacts/api-server/src/routes/ranking.ts
+          git diff --cached --quiet && exit 0
+          git commit -m 'fix: count verified AI difficulty games reliably'
+          git push
+
+      - name: Remove one-shot workflow
+        if: success()
+        run: |
+          git rm .github/workflows/fix-ai-game-count.yml
+          git commit -m 'chore: remove one-shot AI counter patch workflow'
+          git push
