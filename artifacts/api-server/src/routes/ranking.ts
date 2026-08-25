@@ -120,14 +120,7 @@ router.get("/scores", async (req, res) => {
   const total = Number((totalRows.rows[0] as any)?.count ?? 0);
 
   res.json({
-    players: players.map((p, i) => {
-      let aiStats: { aiEasyGames?: unknown; aiExpertGames?: unknown } = {};
-      try {
-        const parsed = JSON.parse(String(p.achievement_stats_json ?? "{}"));
-        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) aiStats = parsed;
-      } catch {}
-
-      return {
+    players: players.map((p, i) => ({
       id: p.id,
       playerId: p.player_id,
       playerName: p.player_name,
@@ -139,14 +132,13 @@ router.get("/scores", async (req, res) => {
       longestStreak: p.longest_streak ?? 0,
       isPremium: p.is_premium ?? false,
       achievementCount: parseAchievementCount(p.achievements_json),
-      aiEasyGames: Math.max(0, Math.floor(Number(aiStats.aiEasyGames ?? 0))),
-      aiExpertGames: Math.max(0, Math.floor(Number(aiStats.aiExpertGames ?? 0))),
+      aiEasyGames: Math.max(0, Math.floor(Number(p.ai_easy_games ?? 0))),
+      aiExpertGames: Math.max(0, Math.floor(Number(p.ai_expert_games ?? 0))),
       title: getTitle(i + 1),
       createdAt: p.created_at,
       updatedAt: p.updated_at,
       rank: i + 1,
-      };
-    }),
+    })),
     total,
   });
 });
@@ -350,11 +342,17 @@ router.post("/scores", scoreLimiter, async (req, res) => {
   }
 
   const isBonus = bonus === true;
-
-  const { base: verifiedBase, verified, allExpert } = sumVerifiedBase(scoreTokens, maxRoundsForMode(mode));
+  const maxRounds = maxRoundsForMode(mode);
+  const { base: verifiedBase, verified, allExpert, easyCount, expertCount } = sumVerifiedBase(scoreTokens, maxRounds);
   const ceiling = verified > 0 ? ceilingFromBase(verifiedBase) : absoluteCeiling(mode);
   const cappedRaw = Math.max(0, Math.min(rawScore, ceiling));
   const score = mode === "multiplayer" ? Math.round(cappedRaw * 1.5) : cappedRaw;
+
+  // Count exactly one AI game only when a complete solo submission is
+  // cryptographically verified as one difficulty. Mixed/partial submissions
+  // are deliberately not counted, so the client cannot manufacture stats.
+  const aiEasyGame = !isBonus && mode === "solo" && verified === maxRounds && easyCount === maxRounds;
+  const aiExpertGame = !isBonus && mode === "solo" && verified === maxRounds && allExpert && expertCount === maxRounds;
 
   const existing = await db
     .select()
@@ -409,6 +407,8 @@ router.post("/scores", scoreLimiter, async (req, res) => {
           gamesPlayed: sql`${playerScoresTable.gamesPlayed} + 1`,
           wins: sql`${playerScoresTable.wins} + ${won ? 1 : 0}`,
         }),
+        ...(aiEasyGame ? { aiEasyGames: sql`${playerScoresTable.aiEasyGames} + 1` } : {}),
+        ...(aiExpertGame ? { aiExpertGames: sql`${playerScoresTable.aiExpertGames} + 1` } : {}),
         xp: sql`${playerScoresTable.xp} + ${xpGain}`,
         level: newLevel,
         ...(coinGain > 0 ? { coins: sql`${playerScoresTable.coins} + ${coinGain}` } : {}),
@@ -433,6 +433,8 @@ router.post("/scores", scoreLimiter, async (req, res) => {
         totalScore: score,
         gamesPlayed: isBonus ? 0 : 1,
         wins: isBonus ? 0 : (won ? 1 : 0),
+        aiEasyGames: aiEasyGame ? 1 : 0,
+        aiExpertGames: aiExpertGame ? 1 : 0,
         currentStreak: isBonus ? 0 : 1,
         longestStreak: isBonus ? 0 : 1,
         lastPlayedDate: isBonus ? null : today,
