@@ -88,7 +88,6 @@ export const roomsTable = pgTable("rooms", {
   currentRound: integer("current_round").notNull().default(0),
   maxRounds: integer("max_rounds").notNull().default(3),
   maxPlayers: integer("max_players").notNull().default(8),
-  maxPlayers: integer("max_players").notNull().default(8),
   gameMode: text("game_mode").notNull().default("classic"), // classic | blitz | challenge
   language: text("language").notNull().default("es"),
   playersJson: text("players_json").notNull().default("[]"),
@@ -118,6 +117,7 @@ export const insertFollowSchema = createInsertSchema(followsTable).omit({ id: tr
 export type InsertFollow = z.infer<typeof insertFollowSchema>;
 export type Follow = typeof followsTable.$inferSelect;
 
+// ── Daily challenge results ───────────────────────────────────────────────────
 export const dailyResultsTable = pgTable("daily_results", {
   id: serial("id").primaryKey(),
   playerId: text("player_id").notNull(),
@@ -134,11 +134,14 @@ export const insertDailyResultSchema = createInsertSchema(dailyResultsTable).omi
 export type InsertDailyResult = z.infer<typeof insertDailyResultSchema>;
 export type DailyResult = typeof dailyResultsTable.$inferSelect;
 
+// ── Impossible Word challenge ─────────────────────────────────────────────────
+// One brutal letter + niche category per UTC day. Wordle-style: 1 attempt,
+// 60 s timer, viral "got it / gave up" share with global stats.
 export const impossibleResultsTable = pgTable("impossible_results", {
   id: serial("id").primaryKey(),
   playerId: text("player_id").notNull(),
   playerName: text("player_name").notNull(),
-  challengeDate: text("challenge_date").notNull(),
+  challengeDate: text("challenge_date").notNull(), // YYYY-MM-DD UTC
   language: text("language").notNull().default("es"),
   letter: text("letter").notNull(),
   category: text("category").notNull(),
@@ -147,24 +150,28 @@ export const impossibleResultsTable = pgTable("impossible_results", {
   timeMs: integer("time_ms").notNull().default(60000),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (t) => ({
-  uniqPlayerDateLang: uniqueIndex("impossible_results_player_date_lang_uniq").on(t.playerId, t.challengeDate, t.language),
+  // One attempt per player per (date, language). Enforced at DB level so two
+  // concurrent submits can't both insert.
+  uniqPlayerDateLang: uniqueIndex("impossible_results_player_date_lang_uniq")
+    .on(t.playerId, t.challengeDate, t.language),
 }));
 
 export const insertImpossibleResultSchema = createInsertSchema(impossibleResultsTable).omit({ id: true, createdAt: true });
 export type InsertImpossibleResult = z.infer<typeof insertImpossibleResultSchema>;
 export type ImpossibleResult = typeof impossibleResultsTable.$inferSelect;
 
+// ── Tournaments ───────────────────────────────────────────────────────────────
 export const tournamentsTable = pgTable("tournaments", {
   id: serial("id").primaryKey(),
   code: text("code").notNull().unique(),
   hostId: text("host_id").notNull(),
   hostName: text("host_name").notNull().default(""),
   name: text("name").notNull(),
-  status: text("status").notNull().default("waiting"),
-  size: integer("size").notNull().default(4),
+  status: text("status").notNull().default("waiting"), // waiting | active | completed
+  size: integer("size").notNull().default(4), // 4 or 8
   isPublic: boolean("is_public").notNull().default(false),
   playersJson: text("players_json").notNull().default("[]"),
-  bracketJson: text("bracket_json"),
+  bracketJson: text("bracket_json"), // full bracket with rounds, matches, winners
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -173,6 +180,7 @@ export const insertTournamentSchema = createInsertSchema(tournamentsTable).omit(
 export type InsertTournament = z.infer<typeof insertTournamentSchema>;
 export type Tournament = typeof tournamentsTable.$inferSelect;
 
+// ── Push notification subscriptions ──────────────────────────────────────────
 export const pushSubscriptionsTable = pgTable("push_subscriptions", {
   id: serial("id").primaryKey(),
   playerId: text("player_id").notNull(),
@@ -180,10 +188,20 @@ export const pushSubscriptionsTable = pgTable("push_subscriptions", {
   p256dh: text("p256dh").notNull(),
   auth: text("auth").notNull(),
   language: text("language").notNull().default("es"),
+  // Per-user notification preferences. Master switch + preferred local hour
+  // (0-23) for the daily reminder + UTC offset in minutes so the server can
+  // tell when "20:00 local" is for this player without storing a tz name.
+  // `mutedUntil` is epoch ms; 0 = not muted. Used by the "snooze 7 days"
+  // button. Defaults are tuned for a Spanish user (20:00 local) since that's
+  // the largest cohort; the client overwrites these on subscribe with the
+  // real values from `new Date().getTimezoneOffset()` and the user's pick.
   enabled: boolean("enabled").notNull().default(true),
   hourLocal: integer("hour_local").notNull().default(20),
   tzOffsetMinutes: integer("tz_offset_minutes").notNull().default(0),
   mutedUntil: bigint("muted_until", { mode: "number" }).notNull().default(0),
+  // Origin del navegador donde se hizo la suscripción (ej: "https://stopjuegodepalabras.com").
+  // Permite filtrar duplicados cuando un mismo dispositivo se suscribe en dos
+  // dominios distintos (replit.app vs .com). NULL para suscripciones legacy.
   origin: text("origin"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
@@ -192,10 +210,13 @@ export const insertPushSubscriptionSchema = createInsertSchema(pushSubscriptions
 export type InsertPushSubscription = z.infer<typeof insertPushSubscriptionSchema>;
 export type PushSubscription = typeof pushSubscriptionsTable.$inferSelect;
 
+// ── Season Pass ──────────────────────────────────────────────────────────────
+// 4-week seasons with daily rotating missions and 30 tiers (free + premium).
+// `themeJson` is a small JSON blob: { name, color, emoji, tagline }.
 export const seasonsTable = pgTable("seasons", {
   id: serial("id").primaryKey(),
-  startDate: text("start_date").notNull(),
-  endDate: text("end_date").notNull(),
+  startDate: text("start_date").notNull(), // YYYY-MM-DD UTC inclusive
+  endDate: text("end_date").notNull(),     // YYYY-MM-DD UTC inclusive
   themeJson: text("theme_json").notNull().default("{}"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
@@ -204,6 +225,9 @@ export const insertSeasonSchema = createInsertSchema(seasonsTable).omit({ id: tr
 export type InsertSeason = z.infer<typeof insertSeasonSchema>;
 export type Season = typeof seasonsTable.$inferSelect;
 
+// One row per (player, season). `missionsJson` is { date: 'YYYY-MM-DD',
+// missions: [{ id, target, progress, completed, claimed, xpReward }] }.
+// `claimedTiers` is { free: number[], premium: number[] }.
 export const seasonProgressTable = pgTable("season_progress", {
   id: serial("id").primaryKey(),
   playerId: text("player_id").notNull(),
