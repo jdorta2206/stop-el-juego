@@ -416,7 +416,7 @@ export default function Ranking() {
                         <p className="font-black text-sm truncate max-w-[90px]">{p.playerName}</p>
                         {(p as any).title && <p className="text-[10px] text-white/40 leading-tight truncate max-w-[90px]">{(p as any).title}</p>}
                         <p className={`font-black ${(p as any).noGames ? "text-white/30 text-xs" : "text-secondary"}`}>{(p as any).noGames ? "Sin partidas" : `${p.totalScore} ${t.game.points}`}</p>
-                        {filter === "global" && <AiDifficultyStats player={p} compact />}
+                        {filter !== "friends" && <AiDifficultyStats player={p} compact />}
                         {((p as any).currentStreak ?? 0) >= 2 && <p className="text-[10px] text-orange-400 font-bold flex items-center justify-center gap-0.5 mt-0.5"><Flame size={9} /> {(p as any).currentStreak}</p>}
                         {((p as any).achievementCount ?? 0) > 0 && <p className="text-[10px] text-yellow-300 font-black flex items-center justify-center gap-0.5 mt-0.5"><Trophy size={9} /> {(p as any).achievementCount}/12</p>}
                       </div>
@@ -490,7 +490,7 @@ export default function Ranking() {
                               {(p.currentStreak ?? 0) >= 2 && <span className={`flex items-center gap-0.5 text-[10px] font-bold ${isMe ? "text-black/60" : "text-orange-400"}`}><Flame size={9} />{p.currentStreak}</span>}
                               {((p as any).achievementCount ?? 0) > 0 && <span className={`flex items-center gap-0.5 text-[10px] font-black tracking-tight ${isMe ? "text-black/70" : "text-yellow-300/95"}`} title="Logros desbloqueados"><Trophy size={9} />{(p as any).achievementCount}/12</span>}
                             </div>
-                            {filter === "global" && <AiDifficultyStats player={p} compact />}
+                            {filter !== "friends" && <AiDifficultyStats player={p} compact />}
                             {p.title && !isMe && <p className="text-[10px] text-white/40 font-medium leading-none mt-0.5 truncate">{p.title}</p>}
                             {isOnline && !isMe && <p className="text-[10px] text-green-400/80 font-medium leading-none mt-0.5">{onlineData?.roomCode ? `En sala: ${onlineData.roomCode}` : "En el menú"}</p>}
                           </div>
