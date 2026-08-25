@@ -1,0 +1,38 @@
+name: Show AI stats in all rankings
+
+on:
+  push:
+    branches: [master]
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Apply minimal ranking UI fix
+        shell: python
+        run: |
+          from pathlib import Path
+          path = Path("artifacts/stop-game/src/pages/Ranking.tsx")
+          text = path.read_text(encoding="utf-8")
+          old = 'filter === "global" && <AiDifficultyStats player={p} compact />'
+          new = 'filter !== "friends" && <AiDifficultyStats player={p} compact />'
+          count = text.count(old)
+          if count != 2:
+              raise SystemExit(f"Expected 2 ranking AI-stat render points, found {count}. No changes made.")
+          path.write_text(text.replace(old, new), encoding="utf-8")
+
+      - name: Commit and remove one-time workflow
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add artifacts/stop-game/src/pages/Ranking.tsx .github/workflows/show-ai-stats-all-rankings.yml
+          git commit -m "fix: show AI difficulty stats in weekly and monthly rankings"
+          git rm .github/workflows/show-ai-stats-all-rankings.yml
+          git commit -m "chore: remove one-time ranking UI workflow"
+          git push
