@@ -1,0 +1,73 @@
+name: Fix AI difficulty token propagation
+
+on:
+  push:
+    branches: [master]
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Patch SoloGame validate request
+        shell: python
+        run: |
+          from pathlib import Path
+
+          p = Path('artifacts/stop-game/src/pages/SoloGame.tsx')
+          s = p.read_text()
+
+          old_import = 'import { useValidateRound, useSubmitScore, type CategoryResult, type ValidateRoundResponse } from "@workspace/api-client-react";'
+          new_import = 'import { validateRound, useSubmitScore, type CategoryResult, type ValidateRoundResponse } from "@workspace/api-client-react";'
+          assert old_import in s, 'api-client import anchor missing'
+          s = s.replace(old_import, new_import, 1)
+
+          old_hook = '  const validateMutation = useValidateRound();\n'
+          assert old_hook in s, 'validate hook anchor missing'
+          s = s.replace(old_hook, '', 1)
+
+          old_call = '''        validateMutation.mutateAsync({
+          data: {
+            letter,
+            language: getCurrentLang() as import("@workspace/api-client-react").ValidateRoundRequestLanguage,
+            playerName: player?.name,
+            playerResponses: formattedResponses,
+          }
+        }),'''
+          new_call = '''        validateRound({
+          letter,
+          language: getCurrentLang() as import("@workspace/api-client-react").ValidateRoundRequestLanguage,
+          playerName: player?.name,
+          playerResponses: formattedResponses,
+        }, {
+          headers: {
+            "x-ai-difficulty": aiRoundMetaRef.current.difficulty,
+            "x-ai-elapsed-ms": String(aiRoundMetaRef.current.elapsedMs),
+          },
+        }),'''
+          assert old_call in s, 'validate mutation call anchor missing'
+          s = s.replace(old_call, new_call, 1)
+
+          p.write_text(s)
+          print('AI difficulty headers now reach /api/game/validate')
+
+      - name: Validate
+        run: git diff --check
+
+      - name: Commit and remove workflow
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add artifacts/stop-game/src/pages/SoloGame.tsx
+          git commit -m "fix: send selected AI difficulty to validation" || exit 0
+          git rm .github/workflows/fix-ai-difficulty-token.yml
+          git commit -m "chore: remove one-time AI difficulty fix workflow"
+          git push origin master
