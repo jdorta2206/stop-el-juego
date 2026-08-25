@@ -1,0 +1,27 @@
+name: Restore SoloGame safely
+
+on:
+  push:
+    paths:
+      - '.github/workflows/restore-solo-game.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Restore SoloGame from known-good commit
+        run: |
+          git checkout da8095f60d05d94348f98a8a736ece7bf3c6aede -- artifacts/stop-game/src/pages/SoloGame.tsx
+          test "$(wc -l < artifacts/stop-game/src/pages/SoloGame.tsx)" -gt 2500
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add artifacts/stop-game/src/pages/SoloGame.tsx
+          git commit -m "Restore SoloGame from known-good version" || exit 0
+          git push
