@@ -1,0 +1,40 @@
+name: Restore SoloGame safely
+
+on:
+  push:
+    branches: [master]
+
+permissions:
+  contents: write
+
+jobs:
+  restore:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout master
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+
+      - name: Restore SoloGame from known-good AI difficulty commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git checkout 981527473bceca8f42f31a1e9d3745d69d15336e -- artifacts/stop-game/src/pages/SoloGame.tsx
+          test -s artifacts/stop-game/src/pages/SoloGame.tsx
+          git diff --check
+          git diff --stat
+
+      - name: Remove temporary workflow
+        run: rm -f .github/workflows/restore-sologame-safe.yml
+
+      - name: Commit and push restoration
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add artifacts/stop-game/src/pages/SoloGame.tsx .github/workflows/restore-sologame-safe.yml
+          git commit -m "fix(ai): restore SoloGame after accidental truncation"
+          git push origin HEAD:master
