@@ -8,12 +8,6 @@ import { sql } from "drizzle-orm";
 // Railway deployment trigger: keep the API service in sync with the frontend build.
 // The root build copies artifacts/stop-game/dist into the API public directory.
 
-// NOTE: /api/check-version lives in app.ts (registered once, with a proper
-// numeric version comparison). The duplicate definition that used to be here
-// was removed — two handlers for the same path was confusing and the string
-// comparison wrongly blocked multi-digit versions like "1.10.0".
-
-// ---- PÁGINAS PARA POLÍTICA DE PRIVACIDAD Y ELIMINACIÓN DE CUENTA ----
 app.get('/privacy', (req, res) => {
   res.send(`
     <!DOCTYPE html>
@@ -55,9 +49,7 @@ app.get('/delete-account', (req, res) => {
     </html>
   `);
 });
-// ---- FIN DE LAS PÁGINAS ----
 
-// ---- RUTA PARA EL FORMULARIO DE CONTACTO ----
 app.post('/api/contact', async (req, res) => {
   try {
     const { name, email, message } = req.body;
@@ -74,7 +66,6 @@ app.post('/api/contact', async (req, res) => {
     res.status(500).json({ error: "Error interno del servidor" });
   }
 });
-// ---- FIN RUTA DE CONTACTO ----
 
 async function ensureAiDifficultyColumns() {
   try {
@@ -82,7 +73,16 @@ async function ensureAiDifficultyColumns() {
       ADD COLUMN IF NOT EXISTS ai_easy_games integer NOT NULL DEFAULT 0`);
     await db.execute(sql`ALTER TABLE player_scores
       ADD COLUMN IF NOT EXISTS ai_expert_games integer NOT NULL DEFAULT 0`);
-    console.log("[ai-stats] Difficulty counters ready");
+
+    // Recover any verified AI counters already written by the previous temporary
+    // patch into achievement_stats_json. Never lower an existing column value.
+    await db.execute(sql`UPDATE player_scores
+      SET ai_easy_games = GREATEST(ai_easy_games, COALESCE(NULLIF(achievement_stats_json, '')::jsonb ->> 'aiEasyGames', '0')::integer),
+          ai_expert_games = GREATEST(ai_expert_games, COALESCE(NULLIF(achievement_stats_json, '')::jsonb ->> 'aiExpertGames', '0')::integer)
+      WHERE achievement_stats_json IS NOT NULL
+        AND achievement_stats_json <> ''`);
+
+    console.log("[ai-stats] Difficulty counters ready and backfilled");
   } catch (error: any) {
     console.error("[ai-stats] Failed to ensure difficulty counters:", error?.message ?? error);
   }
@@ -156,14 +156,12 @@ async function main() {
     console.error("[ensureIndexes] failed at startup:", err?.message ?? err);
   });
 
-  // Ensure the AI counters exist without requiring a manual database migration.
-  // Idempotent and safe to run on every boot.
   ensureAiDifficultyColumns();
-
   startDailyCron();
-  // Premium entitlement is resolved live by isUserPremium() and self-healed by
-  // the billing status endpoints. Do not run a destructive boot-time sweep here:
-  // it can revoke a valid Stripe subscription whose cached subscription id is stale.
+
+  // Premium is resolved live by isUserPremium() through the billing endpoints.
+  // Do not run a destructive boot-time sweep that can revoke a valid subscription
+  // just because a cached subscription id is stale.
 
   initStripe().catch((err) => {
     console.error("Stripe init failed:", err.message);
