@@ -2,8 +2,8 @@ import { runMigrations } from "stripe-replit-sync";
 import { getStripeSync } from "./stripeClient";
 import app from "./app";
 import { startDailyCron } from "./lib/dailyCron";
-import { revokeFakePremium } from "./lib/permanentPremium";
-import { ensureIndexes } from "@workspace/db";
+import { ensureIndexes, db } from "@workspace/db";
+import { sql } from "drizzle-orm";
 
 // Railway deployment trigger: keep the API service in sync with the frontend build.
 // The root build copies artifacts/stop-game/dist into the API public directory.
@@ -64,7 +64,6 @@ app.post('/api/contact', async (req, res) => {
     if (!name || !email || !message) {
       return res.status(400).json({ error: "Faltan campos obligatorios" });
     }
-    // Aquí puedes procesar el mensaje: guardar en BD, enviar email, etc.
     console.log(`📩 Nuevo mensaje de contacto:`);
     console.log(`  Nombre: ${name}`);
     console.log(`  Email: ${email}`);
@@ -76,6 +75,18 @@ app.post('/api/contact', async (req, res) => {
   }
 });
 // ---- FIN RUTA DE CONTACTO ----
+
+async function ensureAiDifficultyColumns() {
+  try {
+    await db.execute(sql`ALTER TABLE player_scores
+      ADD COLUMN IF NOT EXISTS ai_easy_games integer NOT NULL DEFAULT 0`);
+    await db.execute(sql`ALTER TABLE player_scores
+      ADD COLUMN IF NOT EXISTS ai_expert_games integer NOT NULL DEFAULT 0`);
+    console.log("[ai-stats] Difficulty counters ready");
+  } catch (error: any) {
+    console.error("[ai-stats] Failed to ensure difficulty counters:", error?.message ?? error);
+  }
+}
 
 async function initStripe() {
   const databaseUrl = process.env["DATABASE_URL"];
@@ -101,8 +112,6 @@ async function initStripe() {
       process.env["REPLIT_DEV_DOMAIN"] ||
       process.env["RAILWAY_PUBLIC_DOMAIN"] ||
       "";
-    // Normalize to a bare host: tolerate values given as full URLs
-    // (e.g. "https://foo.up.railway.app") so we never build "https://https://…".
     const webhookHost = domains
       .split(",")[0]
       .replace(/^https?:\/\//, "")
@@ -139,22 +148,22 @@ async function main() {
     throw new Error(`Invalid PORT value: "${rawPort}"`);
   }
 
-  // Start listening immediately so the deployment platform detects the port.
-  // Stripe initializes in the background — it can take several seconds.
   app.listen(port, () => {
     console.log(`Server listening on port ${port}`);
   });
 
-  // Ensure all critical indexes exist before serving heavy traffic.
-  // Idempotent — safe to run on every boot.
   ensureIndexes().catch((err: any) => {
     console.error("[ensureIndexes] failed at startup:", err?.message ?? err);
   });
 
+  // Ensure the AI counters exist without requiring a manual database migration.
+  // Idempotent and safe to run on every boot.
+  ensureAiDifficultyColumns();
+
   startDailyCron();
-  // 🚫 One-shot cleanup at boot: revoke premium from any account without an
-  // active Stripe subscription. Idempotent — only premium comes from Stripe now.
-  revokeFakePremium();
+  // Premium entitlement is resolved live by isUserPremium() and self-healed by
+  // the billing status endpoints. Do not run a destructive boot-time sweep here:
+  // it can revoke a valid Stripe subscription whose cached subscription id is stale.
 
   initStripe().catch((err) => {
     console.error("Stripe init failed:", err.message);
