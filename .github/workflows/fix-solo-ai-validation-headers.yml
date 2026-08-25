@@ -1,0 +1,61 @@
+name: Fix solo AI validation difficulty
+
+on:
+  push:
+    branches: [master]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Patch SoloGame validation request
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('artifacts/stop-game/src/pages/SoloGame.tsx')
+          s = p.read_text()
+          old = '''        validateMutation.mutateAsync({
+          data: {
+            letter,
+            language: getCurrentLang() as import("@workspace/api-client-react").ValidateRoundRequestLanguage,
+            playerName: player?.name,
+            playerResponses: formattedResponses,
+          }
+        }),'''
+          new = '''        fetch(getApiUrl("/api/game/validate"), {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...authHeaders(),
+            "x-ai-difficulty": aiRoundMetaRef.current.difficulty,
+            "x-ai-elapsed-ms": String(aiRoundMetaRef.current.elapsedMs),
+          },
+          body: JSON.stringify({
+            letter,
+            language: getCurrentLang(),
+            playerName: player?.name,
+            playerResponses: formattedResponses,
+          }),
+        }).then(async (res) => {
+          if (!res.ok) throw new Error(`validate-${res.status}`);
+          return await res.json() as ValidateRoundResponse;
+        }),'''
+          if old not in s:
+              raise SystemExit('Expected validation block not found; refusing to modify the file')
+          p.write_text(s.replace(old, new, 1))
+          PY
+
+      - name: Commit patch and remove one-shot workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add artifacts/stop-game/src/pages/SoloGame.tsx
+          git commit -m "fix: send AI difficulty when validating solo rounds"
+          git rm .github/workflows/fix-solo-ai-validation-headers.yml
+          git commit -m "chore: remove one-shot AI validation patch workflow"
+          git push
