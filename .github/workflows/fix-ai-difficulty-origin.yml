@@ -1,0 +1,39 @@
+name: Fix AI difficulty origin
+
+on:
+  push:
+    branches: [master]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, 'fix: send selected AI difficulty to validation') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Send selected AI difficulty to validation
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('artifacts/stop-game/src/pages/SoloGame.tsx')
+          s = p.read_text()
+          old = '''      const TIMEOUT_MS = 25000;\n      apiData = await Promise.race([\n        validateMutation.mutateAsync({\n          data: {\n            letter,\n            language: getCurrentLang() as import("@workspace/api-client-react").ValidateRoundRequestLanguage,\n            playerName: player?.name,\n            playerResponses: formattedResponses,\n          }\n        }),\n        new Promise<ValidateRoundResponse>((_, reject) =>\n          setTimeout(() => reject(new Error("validate-timeout")), TIMEOUT_MS)\n        ),\n      ]);'''
+          new = '''      const TIMEOUT_MS = 25000;\n      const validationController = new AbortController();\n      const validationTimer = setTimeout(() => validationController.abort(), TIMEOUT_MS);\n      try {\n        const validationResponse = await fetch(`${getApiUrl()}/api/game/validate`, {\n          method: "POST",\n          credentials: "include",\n          signal: validationController.signal,\n          headers: {\n            "Content-Type": "application/json",\n            ...authHeaders(),\n            "x-ai-difficulty": aiRoundMetaRef.current.difficulty,\n            "x-ai-elapsed-ms": String(aiRoundMetaRef.current.elapsedMs),\n            ...(player?.id ? { "x-player-id": player.id } : {}),\n          },\n          body: JSON.stringify({\n            letter,\n            language: getCurrentLang(),\n            playerName: player?.name,\n            playerResponses: formattedResponses,\n          }),\n        });\n        if (!validationResponse.ok) throw new Error(`validate-${validationResponse.status}`);\n        apiData = await validationResponse.json() as ValidateRoundResponse;\n      } finally {\n        clearTimeout(validationTimer);\n      }'''
+          if new in s:
+              print('AI difficulty validation patch already present; nothing to do.')
+              raise SystemExit(0)
+          if old not in s:
+              raise SystemExit('Target validation block not found; refusing to modify the file.')
+          p.write_text(s.replace(old, new, 1))
+          PY
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add artifacts/stop-game/src/pages/SoloGame.tsx
+          git commit -m "fix: send selected AI difficulty to validation"
+          git push
