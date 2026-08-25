@@ -1,0 +1,65 @@
+name: Patch AI difficulty counters
+
+on:
+  push:
+    branches:
+      - fix/ai-difficulty-stats-safe
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.event.head_commit.message != 'Patch verified AI difficulty counters'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Apply minimal ranking patch
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('artifacts/api-server/src/routes/ranking.ts')
+          s = p.read_text()
+
+          old = 'const { base: verifiedBase, verified, allExpert } = sumVerifiedBase(scoreTokens, maxRoundsForMode(mode));'
+          new = '''const { base: verifiedBase, verified, allExpert, expertCount } = sumVerifiedBase(scoreTokens, maxRoundsForMode(mode));
+          const aiExpertGame = !isBonus && mode === "solo" && verified > 0 && allExpert ? 1 : 0;
+          const aiEasyGame = !isBonus && mode === "solo" && verified > 0 && expertCount === 0 ? 1 : 0;'''
+          if old not in s:
+              raise SystemExit('Expected score-token destructuring not found')
+          s = s.replace(old, new, 1)
+
+          old = '''          wins: sql`${playerScoresTable.wins} + ${won ? 1 : 0}`,
+        }),'''
+          new = '''          wins: sql`${playerScoresTable.wins} + ${won ? 1 : 0}`,
+          aiEasyGames: sql`${playerScoresTable.aiEasyGames} + ${aiEasyGame}`,
+          aiExpertGames: sql`${playerScoresTable.aiExpertGames} + ${aiExpertGame}`,
+        }),'''
+          if old not in s:
+              raise SystemExit('Expected player update block not found')
+          s = s.replace(old, new, 1)
+
+          old = '''        gamesPlayed: isBonus ? 0 : 1,
+        wins: isBonus ? 0 : (won ? 1 : 0),
+        currentStreak: isBonus ? 0 : 1,'''
+          new = '''        gamesPlayed: isBonus ? 0 : 1,
+        wins: isBonus ? 0 : (won ? 1 : 0),
+        aiEasyGames: aiEasyGame,
+        aiExpertGames: aiExpertGame,
+        currentStreak: isBonus ? 0 : 1,'''
+          if old not in s:
+              raise SystemExit('Expected player insert block not found')
+          s = s.replace(old, new, 1)
+
+          p.write_text(s)
+
+      - name: Commit patch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add artifacts/api-server/src/routes/ranking.ts
+          git diff --cached --check
+          git diff --cached -- artifacts/api-server/src/routes/ranking.ts
+          git commit -m 'Patch verified AI difficulty counters'
+          git push
