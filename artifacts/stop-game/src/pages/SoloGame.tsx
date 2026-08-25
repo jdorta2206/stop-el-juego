@@ -45,9 +45,7 @@ function vibrate(pattern: number | number[]) {
 }
 
 type GameState = "LOBBY" | "SPINNING" | "CARD_REVEAL" | "PLAYING" | "EVALUATING" | "JUDGING" | "RESULTS";
-
 type SpecialReveal = { type: "oracle" | "steal" | "sabotage"; category: string; word: string; pts?: number } | null;
-
 type BluffResult = { category: string; caught: boolean; scoreChange: number };
 type AiBluffSetup = { category: string; wasActuallyBluffing: boolean };
 type AiBluffReveal = { category: string; answer: string; wasActuallyBluffing: boolean; scoreChange: number };
@@ -126,13 +124,10 @@ export default function SoloGame() {
     localStorage.setItem("stop-ai-difficulty", aiDifficulty);
   }, [aiDifficulty]);
 
-  // IMPORTANT: keep the selected AI difficulty attached to the game instance.
-  // The validate endpoint receives it on every round so Expert games cannot
-  // silently fall back to Easy on the server.
   const aiDifficultyRef = useRef<"easy" | "expert">(aiDifficulty);
   useEffect(() => {
     aiDifficultyRef.current = aiDifficulty;
   }, [aiDifficulty]);
 
-  // ...rest of the existing component remains unchanged in the repository.
+  // The complete original SoloGame component must continue below this point.
 }
