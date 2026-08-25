@@ -175,13 +175,15 @@ router.get("/weekly", async (req, res) => {
       ps.current_streak   AS "currentStreak",
       ps.is_premium       AS "isPremium",
       ps.achievements_json AS "achievementsJson",
+      ps.ai_easy_games    AS "aiEasyGames",
+      ps.ai_expert_games  AS "aiExpertGames",
       SUM(gh.score)       AS "totalScore",
       COUNT(*)            AS "gamesPlayed",
       SUM(CASE WHEN gh.won THEN 1 ELSE 0 END) AS "wins"
     FROM game_history gh
     LEFT JOIN player_scores ps ON gh.player_id = ps.player_id
     WHERE gh.created_at >= date_trunc('week', NOW() AT TIME ZONE 'UTC')
-    GROUP BY gh.player_id, ps.player_name, ps.avatar_color, ps.current_streak, ps.is_premium, ps.achievements_json
+    GROUP BY gh.player_id, ps.player_name, ps.avatar_color, ps.current_streak, ps.is_premium, ps.achievements_json, ps.ai_easy_games, ps.ai_expert_games
     ORDER BY SUM(gh.score) DESC
     LIMIT 100
   `);
@@ -196,6 +198,8 @@ router.get("/weekly", async (req, res) => {
     currentStreak: Number(p.currentStreak ?? 0),
     isPremium:     p.isPremium ?? false,
     achievementCount: parseAchievementCount(p.achievementsJson),
+    aiEasyGames:   Math.max(0, Math.floor(Number(p.aiEasyGames ?? 0))),
+    aiExpertGames: Math.max(0, Math.floor(Number(p.aiExpertGames ?? 0))),
     title:         getTitle(i + 1),
     rank:          i + 1,
   }));
@@ -222,13 +226,15 @@ router.get("/monthly", async (_req, res) => {
       ps.current_streak   AS "currentStreak",
       ps.is_premium       AS "isPremium",
       ps.achievements_json AS "achievementsJson",
+      ps.ai_easy_games    AS "aiEasyGames",
+      ps.ai_expert_games  AS "aiExpertGames",
       SUM(gh.score)       AS "totalScore",
       COUNT(*)            AS "gamesPlayed",
       SUM(CASE WHEN gh.won THEN 1 ELSE 0 END) AS "wins"
     FROM game_history gh
     LEFT JOIN player_scores ps ON gh.player_id = ps.player_id
     WHERE gh.created_at >= date_trunc('month', NOW() AT TIME ZONE 'UTC')
-    GROUP BY gh.player_id, ps.player_name, ps.avatar_color, ps.current_streak, ps.is_premium, ps.achievements_json
+    GROUP BY gh.player_id, ps.player_name, ps.avatar_color, ps.current_streak, ps.is_premium, ps.achievements_json, ps.ai_easy_games, ps.ai_expert_games
     ORDER BY SUM(gh.score) DESC
     LIMIT 100
   `);
@@ -243,6 +249,8 @@ router.get("/monthly", async (_req, res) => {
     currentStreak: Number(p.currentStreak ?? 0),
     isPremium:     p.isPremium ?? false,
     achievementCount: parseAchievementCount(p.achievementsJson),
+    aiEasyGames:   Math.max(0, Math.floor(Number(p.aiEasyGames ?? 0))),
+    aiExpertGames: Math.max(0, Math.floor(Number(p.aiExpertGames ?? 0))),
     title:         getTitle(i + 1),
     rank:          i + 1,
   }));
@@ -436,8 +444,6 @@ router.post("/scores", scoreLimiter, async (req, res) => {
         ...(aiExpertGame ? { aiExpertGames: sql`${playerScoresTable.aiExpertGames} + 1` } : {}),
         xp: sql`${playerScoresTable.xp} + ${xpGain}`,
         level: newLevel,
-        ...(aiDifficultyStats ? { achievementStatsJson: aiDifficultyStats } : {}),
-        ...(aiDifficultyStats ? { achievementStatsJson: aiDifficultyStats } : {}),
         ...(aiDifficultyStats ? { achievementStatsJson: aiDifficultyStats } : {}),
         ...(coinGain > 0 ? { coins: sql`${playerScoresTable.coins} + ${coinGain}` } : {}),
         ...(!isBonus && updatedToday ? {
