@@ -5,57 +5,18 @@ import { startDailyCron } from "./lib/dailyCron";
 import { ensureIndexes, db } from "@workspace/db";
 import { sql } from "drizzle-orm";
 
-// Railway deployment trigger: keep the API service in sync with the frontend build.
-// The root build copies artifacts/stop-game/dist into the API public directory.
-
 app.get('/privacy', (req, res) => {
-  res.send(`
-    <!DOCTYPE html>
-    <html>
-    <head><title>Política de Privacidad - STOP</title></head>
-    <body style="font-family: Arial, sans-serif; max-width: 800px; margin: 40px auto; padding: 20px; line-height: 1.5;">
-      <h1>Política de Privacidad de STOP</h1>
-      <p><strong>Última actualización:</strong> 4 de junio de 2026</p>
-      <h2>Información que recopilamos</h2>
-      <p>Para jugar a STOP, puedes iniciar sesión con Google, Facebook o Instagram. Recopilamos tu nombre, correo electrónico e identificador de la red social. También guardamos tus partidas, puntuaciones, logros y progreso en el juego.</p>
-      <h2>Uso de los datos</h2>
-      <p>Los datos se utilizan para operar el juego, mostrar clasificaciones, y mejorar la experiencia del usuario. No vendemos ni compartimos tus datos con terceros.</p>
-      <h2>Eliminación de datos</h2>
-      <p>Puedes eliminar tu cuenta y todos tus datos desde nuestra <a href="https://www.stopjuegodepalabras.com/delete-account">página de eliminación de cuenta</a> o enviando un correo a dorynex@stopjuegodepalabras.com.</p>
-      <h2>Contacto</h2>
-      <p>dorynex@stopjuegodepalabras.com</p>
-      <p><a href="https://www.stopjuegodepalabras.com">Volver al juego</a></p>
-    </body>
-    </html>
-  `);
+  res.send(`<!DOCTYPE html><html><head><title>Política de Privacidad - STOP</title></head><body style="font-family: Arial, sans-serif; max-width: 800px; margin: 40px auto; padding: 20px; line-height: 1.5;"><h1>Política de Privacidad de STOP</h1><p><strong>Última actualización:</strong> 4 de junio de 2026</p><h2>Información que recopilamos</h2><p>Para jugar a STOP, puedes iniciar sesión con Google, Facebook o Instagram. Recopilamos tu nombre, correo electrónico e identificador de la red social. También guardamos tus partidas, puntuaciones, logros y progreso en el juego.</p><h2>Uso de los datos</h2><p>Los datos se utilizan para operar el juego, mostrar clasificaciones, y mejorar la experiencia del usuario. No vendemos ni compartimos tus datos con terceros.</p><h2>Eliminación de datos</h2><p>Puedes eliminar tu cuenta y todos tus datos desde nuestra <a href="https://www.stopjuegodepalabras.com/delete-account">página de eliminación de cuenta</a> o enviando un correo a dorynex@stopjuegodepalabras.com.</p><h2>Contacto</h2><p>dorynex@stopjuegodepalabras.com</p><p><a href="https://www.stopjuegodepalabras.com">Volver al juego</a></p></body></html>`);
 });
 
 app.get('/delete-account', (req, res) => {
-  res.send(`
-    <!DOCTYPE html>
-    <html>
-    <head><title>Eliminar Cuenta - STOP</title></head>
-    <body style="font-family: Arial, sans-serif; max-width: 800px; margin: 40px auto; padding: 20px; line-height: 1.5;">
-      <h1>Solicitud de Eliminación de Cuenta</h1>
-      <p>Para eliminar permanentemente tu cuenta y todos tus datos asociados (partidas, puntuaciones, logros, etc.), sigue estos pasos:</p>
-      <ol>
-        <li>Envía un correo electrónico a <strong>dorynex@stopjuegodepalabras.com</strong> desde la dirección de correo que usas en STOP.</li>
-        <li>El asunto debe ser: <strong>"ELIMINAR MI CUENTA"</strong>.</li>
-        <li>Incluye en el mensaje tu nombre de usuario (si lo recuerdas).</li>
-      </ol>
-      <p>Procesaremos tu solicitud en un plazo máximo de 7 días. Una vez eliminada, no podrás recuperar tus datos.</p>
-      <p><a href="https://www.stopjuegodepalabras.com">Volver al juego</a></p>
-    </body>
-    </html>
-  `);
+  res.send(`<!DOCTYPE html><html><head><title>Eliminar Cuenta - STOP</title></head><body style="font-family: Arial, sans-serif; max-width: 800px; margin: 40px auto; padding: 20px; line-height: 1.5;"><h1>Solicitud de Eliminación de Cuenta</h1><p>Para eliminar permanentemente tu cuenta y todos tus datos asociados (partidas, puntuaciones, logros, etc.), sigue estos pasos:</p><ol><li>Envía un correo electrónico a <strong>dorynex@stopjuegodepalabras.com</strong> desde la dirección de correo que usas en STOP.</li><li>El asunto debe ser: <strong>"ELIMINAR MI CUENTA"</strong>.</li><li>Incluye en el mensaje tu nombre de usuario (si lo recuerdas).</li></ol><p>Procesaremos tu solicitud en un plazo máximo de 7 días. Una vez eliminada, no podrás recuperar tus datos.</p><p><a href="https://www.stopjuegodepalabras.com">Volver al juego</a></p></body></html>`);
 });
 
 app.post('/api/contact', async (req, res) => {
   try {
     const { name, email, message } = req.body;
-    if (!name || !email || !message) {
-      return res.status(400).json({ error: "Faltan campos obligatorios" });
-    }
+    if (!name || !email || !message) return res.status(400).json({ error: "Faltan campos obligatorios" });
     console.log(`📩 Nuevo mensaje de contacto:`);
     console.log(`  Nombre: ${name}`);
     console.log(`  Email: ${email}`);
@@ -69,20 +30,21 @@ app.post('/api/contact', async (req, res) => {
 
 async function ensureAiDifficultyColumns() {
   try {
-    await db.execute(sql`ALTER TABLE player_scores
-      ADD COLUMN IF NOT EXISTS ai_easy_games integer NOT NULL DEFAULT 0`);
-    await db.execute(sql`ALTER TABLE player_scores
-      ADD COLUMN IF NOT EXISTS ai_expert_games integer NOT NULL DEFAULT 0`);
+    await db.execute(sql`ALTER TABLE player_scores ADD COLUMN IF NOT EXISTS ai_easy_games integer NOT NULL DEFAULT 0`);
+    await db.execute(sql`ALTER TABLE player_scores ADD COLUMN IF NOT EXISTS ai_expert_games integer NOT NULL DEFAULT 0`);
 
-    // Recover any verified AI counters already written by the previous temporary
-    // patch into achievement_stats_json. Never lower an existing column value.
+    // Recover only the old one-game counters written by the temporary patch.
+    // Current authoritative counters are stored in the dedicated columns.
     await db.execute(sql`UPDATE player_scores
-      SET ai_easy_games = GREATEST(ai_easy_games, COALESCE(NULLIF(achievement_stats_json, '')::jsonb ->> 'aiEasyGames', '0')::integer),
-          ai_expert_games = GREATEST(ai_expert_games, COALESCE(NULLIF(achievement_stats_json, '')::jsonb ->> 'aiExpertGames', '0')::integer)
-      WHERE achievement_stats_json IS NOT NULL
-        AND achievement_stats_json <> ''`);
+      SET ai_easy_games = CASE
+            WHEN ai_easy_games = 0 AND COALESCE(NULLIF(achievement_stats_json, '')::jsonb ->> 'aiEasyGames', '0')::integer = 1 THEN 1
+            ELSE ai_easy_games END,
+          ai_expert_games = CASE
+            WHEN ai_expert_games = 0 AND COALESCE(NULLIF(achievement_stats_json, '')::jsonb ->> 'aiExpertGames', '0')::integer = 1 THEN 1
+            ELSE ai_expert_games END
+      WHERE achievement_stats_json IS NOT NULL AND achievement_stats_json <> ''`);
 
-    console.log("[ai-stats] Difficulty counters ready and backfilled");
+    console.log("[ai-stats] Difficulty counters ready");
   } catch (error: any) {
     console.error("[ai-stats] Failed to ensure difficulty counters:", error?.message ?? error);
   }
@@ -90,85 +52,40 @@ async function ensureAiDifficultyColumns() {
 
 async function initStripe() {
   const databaseUrl = process.env["DATABASE_URL"];
-  if (!databaseUrl) {
-    console.warn("DATABASE_URL not set — skipping Stripe initialization");
-    return;
-  }
+  if (!databaseUrl) { console.warn("DATABASE_URL not set — skipping Stripe initialization"); return; }
   const stripeKey = process.env["STRIPE_SECRET_KEY"];
-  if (!stripeKey) {
-    console.warn("STRIPE_SECRET_KEY not set — skipping Stripe initialization");
-    return;
-  }
-
+  if (!stripeKey) { console.warn("STRIPE_SECRET_KEY not set — skipping Stripe initialization"); return; }
   try {
     console.log("Initializing Stripe schema...");
     await runMigrations({ databaseUrl } as any);
     console.log("Stripe schema ready");
-
     const stripeSync = await getStripeSync();
-
-    const domains =
-      process.env["REPLIT_DOMAINS"] ||
-      process.env["REPLIT_DEV_DOMAIN"] ||
-      process.env["RAILWAY_PUBLIC_DOMAIN"] ||
-      "";
-    const webhookHost = domains
-      .split(",")[0]
-      .replace(/^https?:\/\//, "")
-      .replace(/\/.*$/, "");
+    const domains = process.env["REPLIT_DOMAINS"] || process.env["REPLIT_DEV_DOMAIN"] || process.env["RAILWAY_PUBLIC_DOMAIN"] || "";
+    const webhookHost = domains.split(",")[0].replace(/^https?:\/\//, "").replace(/\/.*$/, "");
     if (webhookHost) {
       console.log("Setting up managed Stripe webhook...");
-      const webhookBaseUrl = `https://${webhookHost}`;
-      await stripeSync.findOrCreateManagedWebhook(
-        `${webhookBaseUrl}/api/stripe/webhook`
-      );
+      await stripeSync.findOrCreateManagedWebhook(`https://${webhookHost}/api/stripe/webhook`);
       console.log("Stripe webhook configured");
     }
-
     console.log("Syncing Stripe data...");
-    stripeSync
-      .syncBackfill()
-      .then(() => console.log("Stripe data synced"))
-      .catch((err: Error) => console.error("Stripe sync error:", err.message));
-  } catch (error: any) {
-    console.error("Failed to initialize Stripe:", error.message);
-  }
+    stripeSync.syncBackfill().then(() => console.log("Stripe data synced")).catch((err: Error) => console.error("Stripe sync error:", err.message));
+  } catch (error: any) { console.error("Failed to initialize Stripe:", error.message); }
 }
 
 async function main() {
   const rawPort = process.env["PORT"];
-
-  if (!rawPort) {
-    throw new Error("PORT environment variable is required but was not provided.");
-  }
-
+  if (!rawPort) throw new Error("PORT environment variable is required but was not provided.");
   const port = Number(rawPort);
+  if (Number.isNaN(port) || port <= 0) throw new Error(`Invalid PORT value: "${rawPort}"`);
 
-  if (Number.isNaN(port) || port <= 0) {
-    throw new Error(`Invalid PORT value: "${rawPort}"`);
-  }
-
-  app.listen(port, () => {
-    console.log(`Server listening on port ${port}`);
-  });
-
-  ensureIndexes().catch((err: any) => {
-    console.error("[ensureIndexes] failed at startup:", err?.message ?? err);
-  });
-
+  app.listen(port, () => console.log(`Server listening on port ${port}`));
+  ensureIndexes().catch((err: any) => console.error("[ensureIndexes] failed at startup:", err?.message ?? err));
   ensureAiDifficultyColumns();
   startDailyCron();
 
   // Premium is resolved live by isUserPremium() through the billing endpoints.
-  // Do not run a destructive boot-time sweep that can revoke a valid subscription
-  // just because a cached subscription id is stale.
-
-  initStripe().catch((err) => {
-    console.error("Stripe init failed:", err.message);
-  });
+  // No destructive boot-time sweep: it could revoke a valid subscription whose cached id is stale.
+  initStripe().catch((err) => console.error("Stripe init failed:", err.message));
 }
 
-main().catch((err) => {
-  console.error("Fatal startup error:", err);
-  process.exit(1);
-});
+main().catch((err) => { console.error("Fatal startup error:", err); process.exit(1); });
