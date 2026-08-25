@@ -92,6 +92,31 @@ export async function ensureIndexes(): Promise<void> {
     `ALTER TABLE player_scores
        ADD COLUMN IF NOT EXISTS notified_final_season_id integer`,
 
+    // ── AI difficulty counters ───────────────────────────────────────
+    // These counters are authoritative columns. Keep legacy JSON counters in
+    // sync for compatibility, and backfill existing verified values on boot.
+    `ALTER TABLE player_scores
+       ADD COLUMN IF NOT EXISTS ai_easy_games integer NOT NULL DEFAULT 0`,
+    `ALTER TABLE player_scores
+       ADD COLUMN IF NOT EXISTS ai_expert_games integer NOT NULL DEFAULT 0`,
+    `UPDATE player_scores
+       SET ai_easy_games = GREATEST(
+             ai_easy_games,
+             CASE
+               WHEN achievement_stats_json ~ '"aiEasyGames"[[:space:]]*:[[:space:]]*[0-9]+'
+               THEN (substring(achievement_stats_json from '"aiEasyGames"[[:space:]]*:[[:space:]]*([0-9]+)'))::integer
+               ELSE 0
+             END
+           ),
+           ai_expert_games = GREATEST(
+             ai_expert_games,
+             CASE
+               WHEN achievement_stats_json ~ '"aiExpertGames"[[:space:]]*:[[:space:]]*[0-9]+'
+               THEN (substring(achievement_stats_json from '"aiExpertGames"[[:space:]]*:[[:space:]]*([0-9]+)'))::integer
+               ELSE 0
+             END
+           )`,
+
     // ── season_finals ────────────────────────────────────────────────
     // One row per (player, season) frozen at season rollover. Used to
     // power the end-of-season recap modal and the champion cosmetic.
