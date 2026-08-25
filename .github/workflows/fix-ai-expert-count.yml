@@ -1,0 +1,47 @@
+name: Fix AI expert game counting
+
+on:
+  push:
+    branches: [master]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Patch expert-game detection
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('artifacts/api-server/src/routes/ranking.ts')
+          s = p.read_text()
+          old = 'const aiExpertGame = !isBonus && mode === "solo" && verified === maxRounds && allExpert && expertCount === maxRounds;'
+          new = 'const minVerifiedForAiGame = Math.max(1, Math.ceil(maxRounds * 2 / 3));\n  const aiExpertGame = !isBonus && mode === "solo" && verified >= minVerifiedForAiGame && expertCount === verified && expertCount > 0;'
+          if old not in s:
+              raise SystemExit('Target line not found; refusing to modify the file.')
+          p.write_text(s.replace(old, new, 1))
+          PY
+
+      - name: Commit patch
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add artifacts/api-server/src/routes/ranking.ts
+          git diff --cached --quiet && exit 0
+          git commit -m "fix: count verified expert solo games with one missing voucher"
+          git push
+
+      - name: Remove one-shot workflow
+        if: success()
+        shell: bash
+        run: |
+          git rm .github/workflows/fix-ai-expert-count.yml || true
+          git commit -m "chore: remove one-shot AI expert count workflow" || true
+          git push || true
