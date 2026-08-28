@@ -1,36 +1,33 @@
 # Etapa de construcción
 FROM node:20-slim AS builder
 
-# Instalar pnpm globalmente
 RUN npm install -g pnpm
 
 WORKDIR /app
 
-# Copiar TODOS los archivos del repositorio (incluye todos los workspaces)
+# Copiar el repositorio completo para que pnpm vea todos los workspaces.
 COPY . .
 
-# Instalar dependencias (sin --frozen-lockfile)
-RUN pnpm install --no-frozen-lockfile
+# Evitar que una instalación cacheada/incompleta deje fuera dependencias del frontend.
+RUN rm -rf node_modules artifacts/*/node_modules lib/*/node_modules lib/*/*/node_modules
+RUN pnpm install --no-frozen-lockfile --force
 
-# Construir el frontend y el backend
+# Construir exactamente la versión de producción.
 RUN pnpm run build:railway
 
-# --- Segunda etapa: imagen ligera para producción ---
+# --- Segunda etapa: imagen de producción ---
 FROM node:20-slim
 
 WORKDIR /app
 
-# Copiar solo lo necesario desde el builder
 COPY --from=builder /app/artifacts /app/artifacts
+COPY --from=builder /app/lib /app/lib
 COPY --from=builder /app/node_modules /app/node_modules
 COPY --from=builder /app/package.json /app/package.json
 COPY --from=builder /app/pnpm-workspace.yaml /app/pnpm-workspace.yaml
 
-# Instalar solo dependencias de producción (opcional, pero ahorra espacio)
-RUN npm install -g pnpm && pnpm install --prod --no-frozen-lockfile
+RUN npm install -g pnpm
 
-# Exponer el puerto que usa el backend
 EXPOSE 8080
 
-# Comando de inicio
 CMD ["pnpm", "run", "start:railway"]
