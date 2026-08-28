@@ -10,13 +10,49 @@ export function isPlayBillingAvailable(): boolean {
   return typeof window.getDigitalGoodsService === "function";
 }
 
+export function hasGooglePlayBillingApi(): boolean {
+  return isPlayBillingAvailable();
+}
+
+export function hasAndroidAppReferrer(): boolean {
+  if (typeof document === "undefined") return false;
+  return document.referrer?.startsWith("android-app://") ?? false;
+}
+
+export function hasPlayTwaMarker(): boolean {
+  if (typeof window === "undefined") return false;
+  return window.location.search.includes("source=googleplay-twa");
+}
+
+export function hasTwaVersionSignal(): boolean {
+  if (typeof window === "undefined" || typeof navigator === "undefined") return false;
+  try {
+    const appVersion = new URLSearchParams(window.location.search).get("appVersion");
+    if (appVersion) return true;
+  } catch {}
+  return /STOPApp\/[0-9][0-9.]*/i.test(navigator.userAgent || "");
+}
+
+export function isLikelyPlayTwa(): boolean {
+  if (hasPlayTwaMarker()) return true;
+  if (hasTwaVersionSignal()) return true;
+  if (hasGooglePlayBillingApi()) return true;
+  if (hasAndroidAppReferrer()) return true;
+  if (typeof navigator === "undefined" || typeof window === "undefined") return false;
+  const ua = navigator.userAgent || "";
+  const isAndroid = /Android/i.test(ua);
+  const isStandalone = window.matchMedia?.("(display-mode: standalone)")?.matches ?? false;
+  return isAndroid && isStandalone;
+}
+
 export async function fetchPlayProduct(): Promise<PlayProduct | null> {
   if (typeof window === "undefined" || !window.getDigitalGoodsService) return null;
   try {
     const service = await window.getDigitalGoodsService("https://play.google.com/billing");
     const details = await service.getDetails([PREMIUM_SKU]);
     if (details && details.length > 0) {
-      return { id: details[0].productId, title: details[0].title, priceLabel: details[0].price };
+      const product = details[0] as any;
+      return { id: product.productId ?? product.itemId, title: product.title, priceLabel: product.price };
     }
     return null;
   } catch {
@@ -27,7 +63,7 @@ export async function fetchPlayProduct(): Promise<PlayProduct | null> {
 export async function purchasePremiumOnPlay(playerId: string): Promise<{ isPremium: boolean }> {
   if (!isPlayBillingAvailable()) throw new Error("Google Play Billing no está disponible en este entorno");
   const service = await window.getDigitalGoodsService("https://play.google.com/billing");
-  const { responseCode, purchaseData } = await service.purchase(PREMIUM_SKU);
+  const { responseCode, purchaseData } = await (service as any).purchase(PREMIUM_SKU);
   if (responseCode !== 0) {
     if (responseCode === 5) throw new Error("PURCHASE_CANCELLED");
     throw new Error(`Error en la compra: código ${responseCode}`);
@@ -45,7 +81,7 @@ export async function purchasePremiumOnPlay(playerId: string): Promise<{ isPremi
 export async function purchaseWorldCupPackOnPlay(playerId: string): Promise<{ granted: boolean }> {
   if (!isPlayBillingAvailable()) throw new Error("Google Play Billing no está disponible en este entorno");
   const service = await window.getDigitalGoodsService("https://play.google.com/billing");
-  const { responseCode, purchaseData } = await service.purchase(WORLD_CUP_SKU);
+  const { responseCode, purchaseData } = await (service as any).purchase(WORLD_CUP_SKU);
   if (responseCode !== 0) {
     if (responseCode === 5) throw { code: "PURCHASE_CANCELLED" };
     throw new Error(`Error en la compra: código ${responseCode}`);
@@ -64,7 +100,7 @@ export async function restorePlayPurchases(): Promise<boolean> {
   if (typeof window === "undefined" || !window.getDigitalGoodsService) return false;
   try {
     const service = await window.getDigitalGoodsService("https://play.google.com/billing");
-    const purchases = await service.listPurchases();
+    const purchases = await (service as any).listPurchases();
     for (const purchase of purchases) {
       if (purchase.itemId !== PREMIUM_SKU || !purchase.purchaseToken) continue;
       const res = await fetch("/api/billing/play/verify", {
@@ -83,8 +119,7 @@ export async function restorePlayPurchases(): Promise<boolean> {
 }
 
 export function detectPaymentChannel(): "play" | "stripe" {
-  if (typeof window !== "undefined" && typeof window.getDigitalGoodsService === "function") return "play";
-  return "stripe";
+  return isLikelyPlayTwa() ? "play" : "stripe";
 }
 
 export function isPlayPurchaseCancelled(error: any): boolean {
