@@ -16,10 +16,9 @@ async function tryRestoreFrom(apiBase: string): Promise<PlayerProfile | null> {
       headers,
     });
 
-    // A 401 means the stored session is no longer valid (expired token,
-    // SESSION_SECRET rotation, or a cookie from an old deployment). Remove it
-    // immediately so every component mount does not keep retrying the same
-    // invalid credential and flooding the console.
+    // A missing/expired session is a normal unauthenticated state, not a
+    // render error. Clear the stale token and let the caller decide whether
+    // the login prompt should be shown.
     if (res.status === 401) {
       try { localStorage.removeItem(SESSION_TOKEN_KEY); } catch {}
       return null;
@@ -45,7 +44,7 @@ async function tryRestoreFrom(apiBase: string): Promise<PlayerProfile | null> {
 }
 
 async function tryRestoreSession(): Promise<PlayerProfile | null> {
-  return tryRestoreFrom(getApiUrl());
+  return await tryRestoreFrom(getApiUrl());
 }
 
 export interface PlayerProfile {
@@ -104,20 +103,24 @@ export function usePlayer() {
       setIsLoaded(true);
 
       if (isLoggedInId(stored.id)) {
-        // Validate the persisted account session once. If the token is stale,
-        // clear both the credential and the stale profile instead of leaving
-        // the UI pretending that the account is authenticated.
-        void tryRestoreFrom(getApiUrl()).then((restored) => {
+        // Do not chain .then() here. Some production builds/minifiers can
+        // obscure the failing expression and turn an auth failure into the
+        // misleading "...then is not a function" render crash. The async IIFE
+        // keeps the restore path explicit and guarantees a Promise boundary.
+        void (async () => {
+          const restored = await tryRestoreFrom(getApiUrl());
           if (cancelled || restored) return;
           writeStoredPlayer(null);
           setPlayer(null);
           let dismissed = false;
           try { dismissed = localStorage.getItem("stop_auth_dismissed_v1") === "1"; } catch {}
           setNeedsAuth(!dismissed);
-        });
+        })();
       }
     } else {
-      void tryRestoreSession().then((restored) => {
+      // Same explicit async path for first-load session restoration.
+      void (async () => {
+        const restored = await tryRestoreSession();
         if (cancelled) return;
         if (restored) {
           writeStoredPlayer(restored);
@@ -130,7 +133,7 @@ export function usePlayer() {
           setNeedsAuth(!dismissed);
         }
         setIsLoaded(true);
-      });
+      })();
     }
 
     const handler = () => refresh();
