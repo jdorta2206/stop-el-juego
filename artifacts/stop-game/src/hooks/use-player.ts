@@ -12,18 +12,20 @@ async function tryRestoreFrom(apiBase: string): Promise<PlayerProfile | null> {
       if (token) headers["x-stop-token"] = token;
     } catch {}
 
-    // If there is no STOP session token, there is no authenticated REST
-    // session to restore. Do not make /auth/me return a noisy 401 on every
-    // desktop page load. OAuth sessions created by this app store the token.
-    if (!token) return null;
-
+    // A desktop browser can have the valid httpOnly `stop_pt` auth cookie even
+    // when the localStorage bridge token is missing. Always allow /auth/me to
+    // try the cookie; requiring the local token was making the web silently
+    // fall back to guest mode while the account was still authenticated.
     const res = await fetch(`${apiBase}/api/auth/me`, {
       credentials: "include",
       headers,
+      cache: "no-store",
     });
 
     if (res.status === 401) {
-      try { localStorage.removeItem(SESSION_TOKEN_KEY); } catch {}
+      if (token) {
+        try { localStorage.removeItem(SESSION_TOKEN_KEY); } catch {}
+      }
       return null;
     }
     if (!res.ok) return null;
