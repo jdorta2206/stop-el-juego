@@ -11,6 +11,7 @@ import { generalLimiter } from "./middlewares/rateLimit";
 // Stable 2026-08-21 build marker: no gameplay changes.
 // Railway build trigger: frontend billing export fix is included in this commit.
 // Railway redeploy trigger: 2026-08-28 — no runtime/gameplay change.
+// Deployment sync: use the reviewed GitHub HEAD and the corrected production Docker image.
 const app: Express = express();
 
 // Trust the platform proxy so req.ip resolves correctly behind the LB
