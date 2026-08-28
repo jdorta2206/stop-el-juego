@@ -46,13 +46,13 @@ export function usePremium(playerId: string | null | undefined): PremiumStatus {
     // where the original /verify failed (server config, permission
     // propagation, network) and the user is left with a paid subscription
     // the server doesn't know about. No-op on Stripe / regular web.
-    // detectPaymentChannel is synchronous; do not call .then() on its result.
-    if (detectPaymentChannel() === "play") {
+    detectPaymentChannel().then((channel) => {
+      if (cancelled || channel !== "play") return;
       restorePlayPurchases().catch(() => {
         // Silent — restore is best-effort, the status fetch below is the
         // source of truth for the UI.
       });
-    }
+    });
 
     // Unified premium status — checks Stripe AND Google Play, so a TWA user
     // with a Play subscription gets premium even though they have no Stripe
@@ -118,3 +118,19 @@ export async function startCheckout(opts: {
     credentials: "include",
     body: JSON.stringify(opts),
   });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Checkout failed");
+  return data as { url: string };
+}
+
+export async function openCustomerPortal(playerId: string) {
+  const res = await fetch(`${API_BASE}/api/stripe/portal`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    credentials: "include",
+    body: JSON.stringify({ playerId }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Portal failed");
+  return data as { url: string };
+}
