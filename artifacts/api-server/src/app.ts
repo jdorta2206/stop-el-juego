@@ -8,16 +8,10 @@ import adminPanel from "./routes/admin";
 import { WebhookHandlers } from "./webhookHandlers";
 import { generalLimiter } from "./middlewares/rateLimit";
 
-// Stable 2026-08-21 build marker: no gameplay changes.
-// Railway build trigger: frontend billing export fix is included in this commit.
-// Railway redeploy trigger: 2026-08-28 — no runtime/gameplay change.
-// Deployment sync: use the reviewed GitHub HEAD and the corrected production Docker image.
 const app: Express = express();
 
-// Trust the platform proxy so req.ip resolves correctly behind the LB
 app.set("trust proxy", 1);
 
-// Stripe webhook MUST be registered before express.json() so it receives raw Buffer
 app.post(
   "/api/stripe/webhook",
   express.raw({ type: "application/json" }),
@@ -97,7 +91,8 @@ app.get('/api/check-version', (req, res) => {
 });
 
 if (process.env["SERVE_CLIENT"] === "1") {
-  const clientDist = process.env["CLIENT_DIST_PATH"] || path.resolve(process.cwd(), "artifacts/stop-game/dist/public");
+  // build:railway copies the frontend into the API server's dist/public directory.
+  const clientDist = process.env["CLIENT_DIST_PATH"] || path.resolve(process.cwd(), "artifacts/api-server/dist/public");
   if (!existsSync(path.join(clientDist, "index.html"))) {
     console.warn(`[SERVE_CLIENT] index.html not found at ${clientDist} — the client build is missing or mislocated.`);
   }
