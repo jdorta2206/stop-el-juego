@@ -23,38 +23,51 @@ export function usePremium(playerId: string | null | undefined): PremiumStatus {
   }, []);
 
   useEffect(() => {
-    if (!playerId) return;
+    if (!playerId) {
+      setIsPremium(false);
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
     setLoading(true);
     setError(null);
 
-    try {
-      if (detectPaymentChannel() === "play") {
-        // IMPORTANT: restore must be associated with the currently logged-in
-        // STOP account. The previous call omitted playerId, so /verify rejected
-        // the request and a paid Play subscription could never be restored.
-        void restorePlayPurchases(playerId).then((restored) => {
+    void (async () => {
+      try {
+        if (detectPaymentChannel() === "play") {
+          const restored = await restorePlayPurchases(playerId);
           if (!cancelled && restored) {
             setIsPremium(true);
             notifyPremiumRefresh();
           }
-        }).catch(() => {});
+        }
+      } catch {
+        // Play restore is best-effort; the authoritative status request below
+        // remains the source of truth.
       }
-    } catch {}
+    })();
 
-    fetch(`${API_BASE}/api/billing/play/status?playerId=${encodeURIComponent(playerId)}`, {
-      credentials: "include", headers: authHeaders(),
-    })
-      .then(async (r) => {
-        if (r.ok) return r.json();
-        const fallback = await fetch(`${API_BASE}/api/stripe/status?playerId=${encodeURIComponent(playerId)}`, {
+    void (async () => {
+      try {
+        const r = await fetch(`${API_BASE}/api/billing/play/status?playerId=${encodeURIComponent(playerId)}`, {
           credentials: "include", headers: authHeaders(),
         });
-        return fallback.json();
-      })
-      .then((data) => { if (!cancelled) setIsPremium(data.isPremium === true); })
-      .catch((err) => { if (!cancelled) setError(err.message); })
-      .finally(() => { if (!cancelled) setLoading(false); });
+        let data: any;
+        if (r.ok) {
+          data = await r.json();
+        } else {
+          const fallback = await fetch(`${API_BASE}/api/stripe/status?playerId=${encodeURIComponent(playerId)}`, {
+            credentials: "include", headers: authHeaders(),
+          });
+          data = await fallback.json();
+        }
+        if (!cancelled) setIsPremium(data?.isPremium === true);
+      } catch (err: any) {
+        if (!cancelled) setError(err?.message || "No se pudo comprobar Premium");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
 
     return () => { cancelled = true; };
   }, [playerId, refreshTick]);
