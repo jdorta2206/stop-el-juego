@@ -4,18 +4,10 @@ import { restorePlayPurchases, detectPaymentChannel } from "@/lib/playBilling";
 
 const API_BASE = getApiUrl();
 
-export interface PremiumStatus {
-  isPremium: boolean;
-  loading: boolean;
-  error: string | null;
-}
-
+export interface PremiumStatus { isPremium: boolean; loading: boolean; error: string | null; }
 export const PREMIUM_REFRESH_EVENT = "stop:premium-refresh";
-
 export function notifyPremiumRefresh() {
-  if (typeof window !== "undefined") {
-    window.dispatchEvent(new CustomEvent(PREMIUM_REFRESH_EVENT));
-  }
+  if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(PREMIUM_REFRESH_EVENT));
 }
 
 export function usePremium(playerId: string | null | undefined): PremiumStatus {
@@ -32,51 +24,39 @@ export function usePremium(playerId: string | null | undefined): PremiumStatus {
 
   useEffect(() => {
     if (!playerId) return;
-
     let cancelled = false;
     setLoading(true);
     setError(null);
 
-    // detectPaymentChannel() is intentionally synchronous. The previous code
-    // called .then() on its string return value, causing:
-    // TypeError: Og(...).then is not a function
-    // and taking down the React tree whenever a player was loaded.
     try {
-      const channel = detectPaymentChannel();
-      if (!cancelled && channel === "play") {
-        void restorePlayPurchases().catch(() => {
-          // Silent — restore is best-effort; status fetch is the source of truth.
-        });
+      if (detectPaymentChannel() === "play") {
+        // IMPORTANT: restore must be associated with the currently logged-in
+        // STOP account. The previous call omitted playerId, so /verify rejected
+        // the request and a paid Play subscription could never be restored.
+        void restorePlayPurchases(playerId).then((restored) => {
+          if (!cancelled && restored) {
+            setIsPremium(true);
+            notifyPremiumRefresh();
+          }
+        }).catch(() => {});
       }
-    } catch {
-      // Payment-channel detection must never break the game UI.
-    }
+    } catch {}
 
     fetch(`${API_BASE}/api/billing/play/status?playerId=${encodeURIComponent(playerId)}`, {
-      credentials: "include",
-      headers: authHeaders(),
+      credentials: "include", headers: authHeaders(),
     })
       .then(async (r) => {
         if (r.ok) return r.json();
-        const fallback = await fetch(
-          `${API_BASE}/api/stripe/status?playerId=${encodeURIComponent(playerId)}`,
-          { credentials: "include", headers: authHeaders() },
-        );
+        const fallback = await fetch(`${API_BASE}/api/stripe/status?playerId=${encodeURIComponent(playerId)}`, {
+          credentials: "include", headers: authHeaders(),
+        });
         return fallback.json();
       })
-      .then((data) => {
-        if (!cancelled) setIsPremium(data.isPremium === true);
-      })
-      .catch((err) => {
-        if (!cancelled) setError(err.message);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
+      .then((data) => { if (!cancelled) setIsPremium(data.isPremium === true); })
+      .catch((err) => { if (!cancelled) setError(err.message); })
+      .finally(() => { if (!cancelled) setLoading(false); });
 
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [playerId, refreshTick]);
 
   return { isPremium, loading, error };
@@ -85,34 +65,13 @@ export function usePremium(playerId: string | null | undefined): PremiumStatus {
 export async function fetchPremiumProducts() {
   const res = await fetch(`${API_BASE}/api/stripe/products`);
   if (!res.ok) throw new Error("Failed to load products");
-  return res.json() as Promise<{
-    data: Array<{
-      id: string;
-      name: string;
-      description: string;
-      active: boolean;
-      prices: Array<{
-        id: string;
-        unit_amount: number;
-        currency: string;
-        recurring: { interval: string } | null;
-        active: boolean;
-      }>;
-    }>;
-  }>;
+  return res.json();
 }
 
-export async function startCheckout(opts: {
-  playerId: string;
-  playerName: string;
-  email?: string;
-  priceId: string;
-}) {
+export async function startCheckout(opts: { playerId: string; playerName: string; email?: string; priceId: string }) {
   const res = await fetch(`${API_BASE}/api/stripe/checkout`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...authHeaders() },
-    credentials: "include",
-    body: JSON.stringify(opts),
+    method: "POST", headers: { "Content-Type": "application/json", ...authHeaders() },
+    credentials: "include", body: JSON.stringify(opts),
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || "Checkout failed");
@@ -121,10 +80,8 @@ export async function startCheckout(opts: {
 
 export async function openCustomerPortal(playerId: string) {
   const res = await fetch(`${API_BASE}/api/stripe/portal`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...authHeaders() },
-    credentials: "include",
-    body: JSON.stringify({ playerId }),
+    method: "POST", headers: { "Content-Type": "application/json", ...authHeaders() },
+    credentials: "include", body: JSON.stringify({ playerId }),
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || "Portal failed");
