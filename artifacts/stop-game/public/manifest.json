@@ -26,71 +26,26 @@
     }
   ],
   "scope_extensions": [
-    { "origin": "https://stopeljuego.com" },
-    { "origin": "https://www.stopeljuego.com" }
+    { "type": "origin", "origin": "https://www.stopjuegodepalabras.com" }
   ],
   "icons": [
-    {
-      "src": "/images/stop-logo.png",
-      "sizes": "96x96",
-      "type": "image/png"
-    },
-    {
-      "src": "/images/icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "/images/icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any maskable"
-    }
+    { "src": "/images/stop-logo.png", "sizes": "96x96", "type": "image/png" },
+    { "src": "/images/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/images/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
   ],
   "screenshots": [
-    {
-      "src": "/screenshots/desktop.png",
-      "sizes": "1280x720",
-      "type": "image/png",
-      "form_factor": "wide",
-      "label": "Pantalla de inicio de STOP"
-    },
-    {
-      "src": "/screenshots/mobile.png",
-      "sizes": "390x844",
-      "type": "image/png",
-      "form_factor": "narrow",
-      "label": "STOP en móvil"
-    }
+    { "src": "/screenshots/desktop.png", "sizes": "1280x720", "type": "image/png", "form_factor": "wide", "label": "Pantalla de inicio de STOP" },
+    { "src": "/screenshots/mobile.png", "sizes": "390x844", "type": "image/png", "form_factor": "narrow", "label": "STOP en móvil" }
   ],
   "shortcuts": [
-    {
-      "name": "Jugar Solo",
-      "short_name": "Solo",
-      "url": "/solo",
-      "icons": [{ "src": "/images/icon-192.png", "sizes": "192x192" }]
-    },
-    {
-      "name": "Multijugador",
-      "short_name": "Multi",
-      "url": "/multiplayer",
-      "icons": [{ "src": "/images/icon-192.png", "sizes": "192x192" }]
-    },
-    {
-      "name": "Ranking",
-      "short_name": "Ranking",
-      "url": "/ranking",
-      "icons": [{ "src": "/images/icon-192.png", "sizes": "192x192" }]
-    }
+    { "name": "Jugar Solo", "short_name": "Solo", "url": "/solo", "icons": [{ "src": "/images/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Multijugador", "short_name": "Multi", "url": "/multiplayer", "icons": [{ "src": "/images/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Ranking", "short_name": "Ranking", "url": "/ranking", "icons": [{ "src": "/images/icon-192.png", "sizes": "192x192" }] }
   ],
   "share_target": {
     "action": "/multiplayer",
     "method": "GET",
-    "params": {
-      "title": "title",
-      "text": "text",
-      "url": "url"
-    }
+    "enctype": "application/x-www-form-urlencoded",
+    "params": { "title": "title", "text": "text", "url": "url" }
   }
 }
