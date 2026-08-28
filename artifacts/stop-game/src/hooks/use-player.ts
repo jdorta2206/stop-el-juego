@@ -6,15 +6,30 @@ const SESSION_TOKEN_KEY = "stop_session_token";
 async function tryRestoreFrom(apiBase: string): Promise<PlayerProfile | null> {
   try {
     const headers: Record<string, string> = {};
+    let hasToken = false;
     try {
       const tok = localStorage.getItem(SESSION_TOKEN_KEY);
-      if (tok) headers["x-stop-token"] = tok;
+      if (tok) {
+        headers["x-stop-token"] = tok;
+        hasToken = true;
+      }
     } catch {}
+
     const res = await fetch(`${apiBase}/api/auth/me`, {
       credentials: "include",
       headers,
     });
+
+    // A 401 means the stored session is no longer valid (expired token,
+    // SESSION_SECRET rotation, or a cookie from an old deployment). Remove it
+    // immediately so every component mount does not keep retrying the same
+    // invalid credential and flooding the console.
+    if (res.status === 401) {
+      try { localStorage.removeItem(SESSION_TOKEN_KEY); } catch {}
+      return null;
+    }
     if (!res.ok) return null;
+
     const data = await res.json();
     if (!data?.id || !data.name) return null;
     if (data.token) {
@@ -34,9 +49,6 @@ async function tryRestoreFrom(apiBase: string): Promise<PlayerProfile | null> {
 }
 
 async function tryRestoreSession(): Promise<PlayerProfile | null> {
-  // The canonical production site owns its own session. Do not probe the
-  // retired Replit host from stopjuegodepalabras.com: browsers correctly block
-  // that cross-origin request when CORS is not enabled, producing noisy errors.
   return tryRestoreFrom(getApiUrl());
 }
 
@@ -94,9 +106,22 @@ export function usePlayer() {
       setPlayer(stored);
       setNeedsAuth(false);
       setIsLoaded(true);
-      if (isLoggedInId(stored.id)) void tryRestoreFrom(getApiUrl());
+
+      if (isLoggedInId(stored.id)) {
+        // Validate the persisted account session once. If the token is stale,
+        // clear both the credential and the stale profile instead of leaving
+        // the UI pretending that the account is authenticated.
+        void tryRestoreFrom(getApiUrl()).then((restored) => {
+          if (cancelled || restored) return;
+          writeStoredPlayer(null);
+          setPlayer(null);
+          let dismissed = false;
+          try { dismissed = localStorage.getItem("stop_auth_dismissed_v1") === "1"; } catch {}
+          setNeedsAuth(!dismissed);
+        });
+      }
     } else {
-      tryRestoreSession().then((restored) => {
+      void tryRestoreSession().then((restored) => {
         if (cancelled) return;
         if (restored) {
           writeStoredPlayer(restored);
