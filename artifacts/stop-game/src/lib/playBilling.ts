@@ -3,16 +3,10 @@ const PREMIUM_SKU = "premium_monthly";
 const WORLD_CUP_SKU = "pack_mundial";
 const PLAY_BILLING_METHOD = "https://play.google.com/billing";
 
-export function isPlayBillingAvailable(): boolean {
-  return typeof window !== "undefined" && typeof window.getDigitalGoodsService === "function";
-}
+export function isPlayBillingAvailable(): boolean { return typeof window !== "undefined" && typeof window.getDigitalGoodsService === "function"; }
 export function hasGooglePlayBillingApi(): boolean { return isPlayBillingAvailable(); }
-export function hasAndroidAppReferrer(): boolean {
-  return typeof document !== "undefined" && document.referrer?.startsWith("android-app://") === true;
-}
-export function hasPlayTwaMarker(): boolean {
-  return typeof window !== "undefined" && window.location.search.includes("source=googleplay-twa");
-}
+export function hasAndroidAppReferrer(): boolean { return typeof document !== "undefined" && document.referrer?.startsWith("android-app://") === true; }
+export function hasPlayTwaMarker(): boolean { return typeof window !== "undefined" && window.location.search.includes("source=googleplay-twa"); }
 export function hasTwaVersionSignal(): boolean {
   if (typeof window === "undefined" || typeof navigator === "undefined") return false;
   return new URLSearchParams(window.location.search).has("appVersion") || /STOPApp\/[0-9][0-9.]*/i.test(navigator.userAgent || "");
@@ -20,13 +14,10 @@ export function hasTwaVersionSignal(): boolean {
 export function isLikelyPlayTwa(): boolean {
   if (hasPlayTwaMarker() || hasTwaVersionSignal() || hasGooglePlayBillingApi() || hasAndroidAppReferrer()) return true;
   if (typeof window === "undefined" || typeof navigator === "undefined") return false;
-  return /Android/i.test(navigator.userAgent || "") && (window.matchMedia?.("(display-mode: standalone")?.matches ?? false);
+  return /Android/i.test(navigator.userAgent || "") && (window.matchMedia?.("(display-mode: standalone)")?.matches ?? false);
 }
 function authHeadersSafe(): Record<string, string> {
-  try {
-    const token = localStorage.getItem("stop_session_token") || sessionStorage.getItem("stop_session_token");
-    return token ? { "x-stop-token": token } : {};
-  } catch { return {}; }
+  try { const token = localStorage.getItem("stop_session_token") || sessionStorage.getItem("stop_session_token"); return token ? { "x-stop-token": token } : {}; } catch { return {}; }
 }
 export async function fetchPlayProduct(): Promise<PlayProduct | null> {
   if (!isPlayBillingAvailable()) return null;
@@ -42,16 +33,10 @@ async function makePlayPurchase(sku: string): Promise<{ service: any; response: 
   if (!isPlayBillingAvailable()) throw new Error("Google Play Billing no está disponible en este entorno");
   if (typeof PaymentRequest === "undefined") throw new Error("El pago de Google Play no está disponible en este dispositivo");
   const service = await window.getDigitalGoodsService!(PLAY_BILLING_METHOD);
-  const request = new PaymentRequest(
-    [{ supportedMethods: PLAY_BILLING_METHOD, data: { sku } }],
-    { total: { label: "STOP - El Juego", amount: { currency: "EUR", value: "0" } } },
-  );
+  const request = new PaymentRequest([{ supportedMethods: PLAY_BILLING_METHOD, data: { sku } }], { total: { label: "STOP - El Juego", amount: { currency: "EUR", value: "0" } } });
   const response = await request.show();
   const purchaseToken = response?.details?.purchaseToken ?? response?.details?.token;
-  if (!purchaseToken) {
-    try { await response.complete("fail"); } catch {}
-    throw new Error("Google Play no devolvió el token de compra");
-  }
+  if (!purchaseToken) { try { await response.complete("fail"); } catch {} throw new Error("Google Play no devolvió el token de compra"); }
   return { service, response, purchaseToken };
 }
 export async function purchasePremiumOnPlay(playerId: string): Promise<{ isPremium: boolean }> {
