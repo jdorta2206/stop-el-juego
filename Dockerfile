@@ -1,7 +1,10 @@
 # Etapa de construcción
 FROM node:20-slim AS builder
 
-RUN npm install -g pnpm
+# CI evita que pnpm intente operaciones interactivas durante Railway.
+ENV CI=true
+
+RUN npm install -g pnpm@10.26.1
 WORKDIR /app
 COPY . .
 RUN pnpm install --no-frozen-lockfile
@@ -16,9 +19,8 @@ COPY --from=builder /app/node_modules /app/node_modules
 COPY --from=builder /app/package.json /app/package.json
 COPY --from=builder /app/pnpm-workspace.yaml /app/pnpm-workspace.yaml
 
-# El builder ya contiene las dependencias instaladas.
-# No volvemos a ejecutar pnpm install aquí: ese paso estaba provocando
-# ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY en Railway.
+# Las dependencias ya están instaladas en el builder.
+# No ejecutar pnpm install de nuevo en producción.
 
 EXPOSE 8080
 CMD ["pnpm", "run", "start:railway"]
