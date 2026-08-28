@@ -26,8 +26,8 @@ COPY --from=builder /app/node_modules /app/node_modules
 COPY --from=builder /app/package.json /app/package.json
 COPY --from=builder /app/pnpm-workspace.yaml /app/pnpm-workspace.yaml
 
-# Instalar solo dependencias de producción (opcional, pero ahorra espacio)
-RUN npm install -g pnpm && pnpm install --prod --no-frozen-lockfile
+# Instalar solo dependencias de producción
+RUN npm install -g pnpm && CI=true pnpm install --prod --no-frozen-lockfile
 
 # Exponer el puerto que usa el backend
 EXPOSE 8080
