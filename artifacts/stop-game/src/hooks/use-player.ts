@@ -6,19 +6,22 @@ const SESSION_TOKEN_KEY = "stop_session_token";
 async function tryRestoreFrom(apiBase: string): Promise<PlayerProfile | null> {
   try {
     const headers: Record<string, string> = {};
+    let token: string | null = null;
     try {
-      const tok = localStorage.getItem(SESSION_TOKEN_KEY);
-      if (tok) headers["x-stop-token"] = tok;
+      token = localStorage.getItem(SESSION_TOKEN_KEY);
+      if (token) headers["x-stop-token"] = token;
     } catch {}
+
+    // If there is no STOP session token, there is no authenticated REST
+    // session to restore. Do not make /auth/me return a noisy 401 on every
+    // desktop page load. OAuth sessions created by this app store the token.
+    if (!token) return null;
 
     const res = await fetch(`${apiBase}/api/auth/me`, {
       credentials: "include",
       headers,
     });
 
-    // A missing/expired session is a normal unauthenticated state, not a
-    // render error. Clear the stale token and let the caller decide whether
-    // the login prompt should be shown.
     if (res.status === 401) {
       try { localStorage.removeItem(SESSION_TOKEN_KEY); } catch {}
       return null;
@@ -103,10 +106,6 @@ export function usePlayer() {
       setIsLoaded(true);
 
       if (isLoggedInId(stored.id)) {
-        // Do not chain .then() here. Some production builds/minifiers can
-        // obscure the failing expression and turn an auth failure into the
-        // misleading "...then is not a function" render crash. The async IIFE
-        // keeps the restore path explicit and guarantees a Promise boundary.
         void (async () => {
           const restored = await tryRestoreFrom(getApiUrl());
           if (cancelled || restored) return;
@@ -118,7 +117,6 @@ export function usePlayer() {
         })();
       }
     } else {
-      // Same explicit async path for first-load session restoration.
       void (async () => {
         const restored = await tryRestoreSession();
         if (cancelled) return;
