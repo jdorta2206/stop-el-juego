@@ -8,6 +8,7 @@ import adminPanel from "./routes/admin";
 import { WebhookHandlers } from "./webhookHandlers";
 import { generalLimiter } from "./middlewares/rateLimit";
 
+// Production trigger: frontend/runtime stability fixes are deployed together with the API.
 const app: Express = express();
 
 app.set("trust proxy", 1);
@@ -91,7 +92,6 @@ app.get('/api/check-version', (req, res) => {
 });
 
 if (process.env["SERVE_CLIENT"] === "1") {
-  // build:railway copies the frontend into the API server's dist/public directory.
   const clientDist = process.env["CLIENT_DIST_PATH"] || path.resolve(process.cwd(), "artifacts/api-server/dist/public");
   if (!existsSync(path.join(clientDist, "index.html"))) {
     console.warn(`[SERVE_CLIENT] index.html not found at ${clientDist} — the client build is missing or mislocated.`);
