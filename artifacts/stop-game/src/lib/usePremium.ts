@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { getApiUrl, authHeaders } from "@/lib/utils";
 import { restorePlayPurchases, detectPaymentChannel } from "@/lib/playBilling";
 
@@ -10,10 +10,6 @@ export interface PremiumStatus {
   error: string | null;
 }
 
-// Custom DOM event other components fire after a successful purchase or
-// portal action — listeners refetch immediately so premium UI updates
-// without a page reload (required by the no-reload UX of the Play flow,
-// where window.location.href would lose Digital Goods state).
 export const PREMIUM_REFRESH_EVENT = "stop:premium-refresh";
 
 export function notifyPremiumRefresh() {
@@ -41,30 +37,30 @@ export function usePremium(playerId: string | null | undefined): PremiumStatus {
     setLoading(true);
     setError(null);
 
-    // Auto-restore: if we're inside the Play Store TWA, replay any existing
-    // purchases through /verify on every app open. This self-heals the case
-    // where the original /verify failed (server config, permission
-    // propagation, network) and the user is left with a paid subscription
-    // the server doesn't know about. No-op on Stripe / regular web.
-    detectPaymentChannel().then((channel) => {
-      if (cancelled || channel !== "play") return;
-      restorePlayPurchases().catch(() => {
-        // Silent — restore is best-effort, the status fetch below is the
-        // source of truth for the UI.
-      });
-    });
+    // detectPaymentChannel() is intentionally synchronous. The previous code
+    // called .then() on its string return value, causing:
+    // TypeError: Og(...).then is not a function
+    // and taking down the React tree whenever a player was loaded.
+    try {
+      const channel = detectPaymentChannel();
+      if (!cancelled && channel === "play") {
+        void restorePlayPurchases().catch(() => {
+          // Silent — restore is best-effort; status fetch is the source of truth.
+        });
+      }
+    } catch {
+      // Payment-channel detection must never break the game UI.
+    }
 
-    // Unified premium status — checks Stripe AND Google Play, so a TWA user
-    // with a Play subscription gets premium even though they have no Stripe
-    // customer id. Falls back to /api/stripe/status if the unified endpoint
-    // returns 5xx (e.g. cold start race during deploy).
     fetch(`${API_BASE}/api/billing/play/status?playerId=${encodeURIComponent(playerId)}`, {
       credentials: "include",
+      headers: authHeaders(),
     })
       .then(async (r) => {
         if (r.ok) return r.json();
         const fallback = await fetch(
           `${API_BASE}/api/stripe/status?playerId=${encodeURIComponent(playerId)}`,
+          { credentials: "include", headers: authHeaders() },
         );
         return fallback.json();
       })
