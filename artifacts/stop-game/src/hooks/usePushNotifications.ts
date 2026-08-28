@@ -28,39 +28,58 @@ export function usePushNotifications(playerId: string | undefined, language: str
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!("Notification" in window) || !("serviceWorker" in navigator)) {
-      setPermission("unsupported");
-      return;
-    }
-    setPermission(Notification.permission as NotifPermission);
+    let cancelled = false;
 
-    navigator.serviceWorker.ready.then((reg) => {
-      reg.pushManager.getSubscription().then((sub) => {
+    const initialise = async () => {
+      try {
+        if (!("Notification" in window) || !("serviceWorker" in navigator)) {
+          if (!cancelled) setPermission("unsupported");
+          return;
+        }
+
+        if (!cancelled) setPermission(Notification.permission as NotifPermission);
+
+        // IMPORTANT: use await rather than `.then()` here. Some installed
+        // service-worker shims/TWA environments expose `ready` as a thenable
+        // implementation that is not a native Promise. Calling `.then()` on
+        // that object was able to crash the entire Home render with
+        // `...then is not a function`. Notifications are optional, so any SW
+        // problem must never take down the game UI.
+        const reg = await navigator.serviceWorker.ready;
+        if (cancelled) return;
+
+        const sub = await reg.pushManager.getSubscription();
+        if (cancelled) return;
+
         setIsSubscribed(!!sub);
-        // Backfill del origin para suscripciones legacy: si el usuario ya
-        // estaba suscrito antes de añadir la columna `origin`, su fila tiene
-        // NULL y no podemos saber si vino de replit.app o de .com. Aquí
-        // re-anunciamos la suscripción enviando window.location.origin, así
-        // el servidor la asocia al dominio canónico desde el que está
-        // jugando ahora. Las suscripciones que sigan en replit.app quedarán
-        // marcadas como tales y serán filtradas por el helper de envío.
+
         if (sub && playerId) {
           const tzOffsetMinutes = -new Date().getTimezoneOffset();
-          fetch(`${API_BASE}/api/notifications/subscribe`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              playerId,
-              subscription: sub.toJSON(),
-              language,
-              // Sin hourLocal: el UPSERT del servidor preserva el valor existente.
-              tzOffsetMinutes,
-              origin: window.location.origin,
-            }),
-          }).catch(() => {});
+          try {
+            await fetch(`${API_BASE}/api/notifications/subscribe`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                playerId,
+                subscription: sub.toJSON(),
+                language,
+                // Sin hourLocal: el UPSERT del servidor preserva el valor existente.
+                tzOffsetMinutes,
+                origin: window.location.origin,
+              }),
+            });
+          } catch {
+            // Notification backfill is non-critical; never break the game.
+          }
         }
-      });
-    }).catch(() => {});
+      } catch {
+        // Service-worker/notification support is optional. Never allow it to
+        // produce a render error or block the game from loading.
+      }
+    };
+
+    void initialise();
+    return () => { cancelled = true; };
   }, [playerId, language]);
 
   const subscribe = useCallback(async () => {
@@ -77,11 +96,6 @@ export function usePushNotifications(playerId: string | undefined, language: str
         applicationServerKey: urlB64ToUint8Array(VAPID_PUBLIC),
       });
 
-      // `getTimezoneOffset()` returns positive minutes WEST of UTC; we flip
-      // the sign so the server sees offset minutes EAST (Madrid summer = +120).
-      // We send 20 as the FIRST-TIME default — the server's UPSERT keeps any
-      // previously chosen hour on resubscribe so toggling off/on doesn't
-      // reset the user's pick from /notificaciones.
       const tzOffsetMinutes = -new Date().getTimezoneOffset();
       await fetch(`${API_BASE}/api/notifications/subscribe`, {
         method: "POST",
@@ -92,9 +106,6 @@ export function usePushNotifications(playerId: string | undefined, language: str
           language,
           hourLocal: 20,
           tzOffsetMinutes,
-          // El servidor usa esto para descartar suscripciones creadas desde
-          // stop-el-juego.replit.app cuando el dominio canónico es
-          // stopjuegodepalabras.com (evita notificaciones duplicadas).
           origin: typeof window !== "undefined" ? window.location.origin : undefined,
         }),
       });
@@ -109,9 +120,6 @@ export function usePushNotifications(playerId: string | undefined, language: str
     }
   }, [playerId, language]);
 
-  // ── Preferences (hour, mute, enabled) ───────────────────────────────────
-  // Loaded lazily by the Settings page; not called on mount to avoid an
-  // extra round-trip for users who never visit the settings.
   const getPreferences = useCallback(async (): Promise<{
     enabled: boolean; hourLocal: number; mutedUntil: number; tzOffsetMinutes: number;
   } | null> => {
