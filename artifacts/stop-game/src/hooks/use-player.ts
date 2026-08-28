@@ -6,13 +6,9 @@ const SESSION_TOKEN_KEY = "stop_session_token";
 async function tryRestoreFrom(apiBase: string): Promise<PlayerProfile | null> {
   try {
     const headers: Record<string, string> = {};
-    let hasToken = false;
     try {
       const tok = localStorage.getItem(SESSION_TOKEN_KEY);
-      if (tok) {
-        headers["x-stop-token"] = tok;
-        hasToken = true;
-      }
+      if (tok) headers["x-stop-token"] = tok;
     } catch {}
 
     const res = await fetch(`${apiBase}/api/auth/me`, {
