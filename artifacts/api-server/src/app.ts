@@ -8,6 +8,7 @@ import adminPanel from "./routes/admin";
 import { WebhookHandlers } from "./webhookHandlers";
 import { generalLimiter } from "./middlewares/rateLimit";
 
+// Stable 2026-08-21 build marker: no gameplay changes.
 const app: Express = express();
 
 // Trust the platform proxy so req.ip resolves correctly behind the LB
