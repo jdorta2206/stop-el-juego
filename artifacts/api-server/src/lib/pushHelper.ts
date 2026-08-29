@@ -3,11 +3,6 @@ import { db } from "@workspace/db";
 import { pushSubscriptionsTable, followsTable } from "@workspace/db";
 import { and, eq, not, like, or, isNull, sql } from "drizzle-orm";
 
-// Filtro reutilizable: ignora suscripciones cuyo origin sea el dominio
-// auxiliar stop-el-juego.replit.app. El dominio canónico es
-// stopjuegodepalabras.com (y el TWA de Play Store usa ese mismo dominio).
-// Las filas legacy con origin NULL siguen recibiendo notificaciones para no
-// romper a los usuarios que ya estaban suscritos antes de añadir esta columna.
 const excludeReplitOrigin = or(
   isNull(pushSubscriptionsTable.origin),
   not(like(pushSubscriptionsTable.origin, '%replit.app%')),
@@ -29,15 +24,75 @@ export interface PushPayload {
   url?: string;
 }
 
+// Chrome can automatically suppress notifications from sites it considers
+// disruptive. STOP notifications are legitimate in-game notifications, but
+// the old schedule could produce several reminders in the same day (daily,
+// Happy Hour x3, shop deals, streak rescue, season claims, ranking, etc.).
+// Keep important game events, while throttling promotional/repetitive pushes.
+const promotionalLastSentAt = new Map<string, number>();
+const playerLastSentAt = new Map<string, number>();
+const PROMOTIONAL_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+const GENERAL_COOLDOWN_MS = 60 * 60 * 1000;
+const RANK_COOLDOWN_MS = 6 * 60 * 60 * 1000;
+
+function notificationKind(payload: PushPayload): "daily" | "rank" | "invite" | "friend" | "promo" | "other" {
+  const text = `${payload.title} ${payload.body}`.toLowerCase();
+  if (/reto diario|daily stop challenge|today's stop challenge|desafio diário|défi quotidien/.test(text)) return "daily";
+  if (/te han superado|you.?ve been overtaken|superaram|dépassé/.test(text)) return "rank";
+  if (/te invitan|you.?re invited|convidado|invité/.test(text)) return "invite";
+  if (/amigo conectado|friend online|amigo online|ami connecté/.test(text)) return "friend";
+  if (/happy hour|ofertas hoy|new deals|novas ofertas|nouvelles offres|misiones listas|missions ready|missões prontas|missions prêtes/.test(text)) return "promo";
+  return "other";
+}
+
+function allowNotification(playerId: string, payload: PushPayload): boolean {
+  // Anonymous broadcast subscriptions are intentionally not throttled here:
+  // they have no stable identity and must still receive the daily challenge.
+  if (!playerId || playerId === "anonymous") return true;
+
+  const now = Date.now();
+  const kind = notificationKind(payload);
+  const key = `${playerId}:${kind}`;
+
+  if (kind === "promo") {
+    const last = promotionalLastSentAt.get(key) || 0;
+    if (now - last < PROMOTIONAL_COOLDOWN_MS) return false;
+    promotionalLastSentAt.set(key, now);
+    return true;
+  }
+
+  if (kind === "rank") {
+    const last = playerLastSentAt.get(key) || 0;
+    if (now - last < RANK_COOLDOWN_MS) return false;
+    playerLastSentAt.set(key, now);
+    return true;
+  }
+
+  if (kind === "daily" || kind === "invite" || kind === "friend") return true;
+
+  const last = playerLastSentAt.get(playerId) || 0;
+  if (now - last < GENERAL_COOLDOWN_MS) return false;
+  playerLastSentAt.set(playerId, now);
+  return true;
+}
+
+function cleanupNotificationThrottleMaps() {
+  const cutoff = Date.now() - PROMOTIONAL_COOLDOWN_MS;
+  for (const [key, ts] of promotionalLastSentAt) {
+    if (ts < cutoff) promotionalLastSentAt.delete(key);
+  }
+  const generalCutoff = Date.now() - RANK_COOLDOWN_MS;
+  for (const [key, ts] of playerLastSentAt) {
+    if (ts < generalCutoff) playerLastSentAt.delete(key);
+  }
+}
+
 async function cleanStaleEndpoint(endpoint: string) {
   await db.delete(pushSubscriptionsTable)
     .where(eq(pushSubscriptionsTable.endpoint, endpoint))
     .catch(() => {});
 }
 
-// Dedup helper: a single player can have multiple push subscriptions because
-// the same person may have subscribed from several browsers / domains.
-// Keep ONE subscription per real playerId, but keep EVERY guest install.
 type PushRow = typeof pushSubscriptionsTable.$inferSelect;
 function dedupeByPlayer(rows: PushRow[]): PushRow[] {
   const anon: PushRow[] = [];
@@ -48,9 +103,6 @@ function dedupeByPlayer(rows: PushRow[]): PushRow[] {
     return 1;
   };
   for (const r of rows) {
-    // IMPORTANT: the web/TWA client historically used the literal
-    // "anonymous" for guests. Treat it exactly like an empty playerId,
-    // otherwise ALL guest devices get collapsed into ONE subscription.
     if (!r.playerId || r.playerId === "anonymous") { anon.push(r); continue; }
     const existing = byPlayer.get(r.playerId);
     if (!existing) { byPlayer.set(r.playerId, r); continue; }
@@ -62,6 +114,10 @@ function dedupeByPlayer(rows: PushRow[]): PushRow[] {
 
 export async function sendPushToPlayer(playerId: string, payload: PushPayload): Promise<number> {
   if (!VAPID_PUBLIC || !VAPID_PRIVATE) return 0;
+  if (!allowNotification(playerId, payload)) {
+    console.log(`[push] throttled player=${playerId} kind=${notificationKind(payload)} title=${payload.title}`);
+    return 0;
+  }
 
   const rows = await db.select().from(pushSubscriptionsTable)
     .where(and(eq(pushSubscriptionsTable.playerId, playerId), excludeReplitOrigin));
@@ -85,6 +141,8 @@ export async function sendPushToPlayer(playerId: string, payload: PushPayload): 
     } catch (e: any) {
       if (e.statusCode === 410 || e.statusCode === 404) {
         await cleanStaleEndpoint(row.endpoint);
+      } else {
+        console.error(`[push] send failed status=${e?.statusCode ?? "unknown"} player=${playerId}`);
       }
     }
   }));
@@ -123,6 +181,7 @@ export async function sendPushToAllSubscribers(
     } catch (e: any) {
       failed++;
       if (e.statusCode === 410 || e.statusCode === 404) toDelete.push(row.endpoint);
+      else console.error(`[push] broadcast failed status=${e?.statusCode ?? "unknown"}`);
     }
   }));
 
@@ -164,6 +223,7 @@ export async function sendLocalizedBroadcast(
     } catch (e: any) {
       failed++;
       if (e.statusCode === 410 || e.statusCode === 404) toDelete.push(row.endpoint);
+      else console.error(`[push] localized broadcast failed status=${e?.statusCode ?? "unknown"}`);
     }
   }));
 
@@ -213,6 +273,7 @@ export async function notifyFollowersPlayerOnline(
 }
 
 setInterval(() => {
+  cleanupNotificationThrottleMaps();
   const cutoff = Date.now() - FRIEND_ONLINE_COOLDOWN_MS;
   for (const [key, ts] of friendOnlineNotifiedAt) {
     if (ts < cutoff) friendOnlineNotifiedAt.delete(key);
