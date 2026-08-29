@@ -1,4 +1,4 @@
-const CACHE = "stop-v9";
+const CACHE = "stop-v10";
 const DATA_CACHE = "stop-data-v1";
 const STATIC = ["/", "/manifest.json", "/images/stop-logo.png", "/images/icon-192.png", "/images/icon-512.png"];
 const OFFLINE_BUNDLE_PATH = "/api/game/offline-bundle";
@@ -23,7 +23,6 @@ self.addEventListener("fetch", (e) => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
 
-  // Authentication/session endpoints must never be served from the shell cache.
   if (url.pathname.startsWith("/api/auth/")) {
     e.respondWith(fetch(req, { cache: "no-store" }));
     return;
@@ -48,9 +47,9 @@ self.addEventListener("fetch", (e) => {
   }).catch(() => cached || new Response("Offline", { status: 503 }))));
 });
 
-// Web Push: receive server notifications and display them even when the game
-// is closed/backgrounded. This handler was accidentally removed from sw.js
-// during the auth/service-worker cache cleanup.
+// Web Push: receive server notifications and display them while the game is
+// closed/backgrounded. Keep this handler in the service worker because the
+// TWA uses the browser's Web Push infrastructure.
 self.addEventListener("push", (e) => {
   let data = {};
   try {
