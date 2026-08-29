@@ -12,10 +12,6 @@ async function tryRestoreFrom(apiBase: string): Promise<PlayerProfile | null> {
       if (token) headers["x-stop-token"] = token;
     } catch {}
 
-    // A desktop browser can have the valid httpOnly `stop_pt` auth cookie even
-    // when the localStorage bridge token is missing. Always allow /auth/me to
-    // try the cookie; requiring the local token was making the web silently
-    // fall back to guest mode while the account was still authenticated.
     const res = await fetch(`${apiBase}/api/auth/me`, {
       credentials: "include",
       headers,
@@ -97,27 +93,40 @@ export function usePlayer() {
 
     const refresh = () => {
       const stored = readStoredPlayer();
+      if (stored && !isLoggedInId(stored.id)) {
+        writeStoredPlayer(null);
+        setPlayer(null);
+        setNeedsAuth(true);
+        return;
+      }
       setPlayer(stored);
       setNeedsAuth(!stored);
     };
 
+    // A previous web build could leave a guest profile or a dismissed-auth flag
+    // in localStorage. Neither one is an authenticated account. Clear both so
+    // the desktop web client shows the login/registration modal again.
+    try { localStorage.removeItem("stop_auth_dismissed_v1"); } catch {}
+
     const stored = readStoredPlayer();
-    if (stored) {
+    if (stored && !isLoggedInId(stored.id)) {
+      writeStoredPlayer(null);
+      setPlayer(null);
+      setNeedsAuth(true);
+      setIsLoaded(true);
+    } else if (stored) {
       setPlayer(stored);
       setNeedsAuth(false);
       setIsLoaded(true);
 
-      if (isLoggedInId(stored.id)) {
-        void (async () => {
-          const restored = await tryRestoreFrom(getApiUrl());
-          if (cancelled || restored) return;
-          writeStoredPlayer(null);
-          setPlayer(null);
-          let dismissed = false;
-          try { dismissed = localStorage.getItem("stop_auth_dismissed_v1") === "1"; } catch {}
-          setNeedsAuth(!dismissed);
-        })();
-      }
+      void (async () => {
+        const restored = await tryRestoreFrom(getApiUrl());
+        if (cancelled) return;
+        if (restored) return;
+        writeStoredPlayer(null);
+        setPlayer(null);
+        setNeedsAuth(true);
+      })();
     } else {
       void (async () => {
         const restored = await tryRestoreSession();
@@ -128,9 +137,7 @@ export function usePlayer() {
           setNeedsAuth(false);
         } else {
           setPlayer(null);
-          let dismissed = false;
-          try { dismissed = localStorage.getItem("stop_auth_dismissed_v1") === "1"; } catch {}
-          setNeedsAuth(!dismissed);
+          setNeedsAuth(true);
         }
         setIsLoaded(true);
       })();
@@ -195,7 +202,8 @@ export function usePlayer() {
   };
 
   const dismissAuth = () => {
-    try { localStorage.setItem("stop_auth_dismissed_v1", "1"); } catch {}
+    // Dismissing only affects the current render. It is never persisted, so a
+    // fresh desktop visit will always offer login again.
     setNeedsAuth(false);
   };
 
