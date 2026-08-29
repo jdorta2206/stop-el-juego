@@ -9,8 +9,12 @@ export interface OAuthUser {
   provider: "google" | "facebook" | "instagram" | "tiktok" | "apple";
 }
 
-export const isGoogleConfigured = !!import.meta.env.VITE_GOOGLE_CLIENT_ID;
-export const isFacebookConfigured = !!import.meta.env.VITE_FACEBOOK_APP_ID;
+// Google/Facebook are handled by the backend OAuth bridge. Do not gate the
+// web buttons on VITE_* client variables: those credentials are server-side
+// and the absence of a public client env must not turn a working provider into
+// a disabled "Pronto" button.
+export const isGoogleConfigured = true;
+export const isFacebookConfigured = true;
 export const isInstagramConfigured = false;
 export const isTikTokConfigured = false;
 export const isAppleConfigured = !!import.meta.env.VITE_APPLE_CLIENT_ID;
@@ -22,9 +26,6 @@ function startOAuth(provider: "google" | "facebook" | "instagram" | "tiktok" | "
   const apiBase = (import.meta as { env?: { VITE_API_URL?: string } }).env?.VITE_API_URL
     ?? window.location.origin;
 
-  // Do not rely on Referer to recover the web origin. Modern browser privacy
-  // policies/extensions can omit it. Explicitly send the exact origin so the
-  // OAuth bridge returns the session to the site where login was started.
   const origin = window.location.origin;
   const url = new URL(`${apiBase}/api/auth/${provider}/start`);
   url.searchParams.set("return", returnPath);
@@ -38,9 +39,6 @@ export function signInWithInstagram() { startOAuth("instagram"); }
 export function signInWithTikTok() { startOAuth("tiktok"); }
 export function signInWithApple() { startOAuth("apple"); }
 
-// Cross-origin OAuth handoff. The backend bridge carries the authenticated
-// session token in the URL hash, allowing the destination origin to import it
-// into its own localStorage before React mounts.
 export function consumeAuthHandoff(): void {
   try {
     const hash = window.location.hash;
