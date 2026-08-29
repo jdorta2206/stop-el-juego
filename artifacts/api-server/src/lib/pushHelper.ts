@@ -36,19 +36,8 @@ async function cleanStaleEndpoint(endpoint: string) {
 }
 
 // Dedup helper: a single player can have multiple push subscriptions because
-// the same person may have subscribed from several browsers / domains (e.g.
-// the TWA shell at stopjuegodepalabras.com AND Chrome at stopjuegodepalabras.es
-// AND desktop). The browser treats each origin as a separate site so each
-// produces its own endpoint row in the DB. Without dedup the daily cron would
-// fire one notification per row → the player gets 2-3 duplicate beeps.
-//
-// Policy: keep ONE subscription per playerId, preferring (in order):
-//   1. origin contains the canonical TWA domain "stopjuegodepalabras.com"
-//   2. origin is non-null (any real origin beats a legacy NULL row)
-//   3. highest id (= most recently created subscription)
-//
-// Rows with playerId === "" / falsy are anonymous installs; we keep them all
-// because there's no identity to dedupe by.
+// the same person may have subscribed from several browsers / domains.
+// Keep ONE subscription per real playerId, but keep EVERY guest install.
 type PushRow = typeof pushSubscriptionsTable.$inferSelect;
 function dedupeByPlayer(rows: PushRow[]): PushRow[] {
   const anon: PushRow[] = [];
@@ -59,7 +48,10 @@ function dedupeByPlayer(rows: PushRow[]): PushRow[] {
     return 1;
   };
   for (const r of rows) {
-    if (!r.playerId) { anon.push(r); continue; }
+    // IMPORTANT: the web/TWA client historically used the literal
+    // "anonymous" for guests. Treat it exactly like an empty playerId,
+    // otherwise ALL guest devices get collapsed into ONE subscription.
+    if (!r.playerId || r.playerId === "anonymous") { anon.push(r); continue; }
     const existing = byPlayer.get(r.playerId);
     if (!existing) { byPlayer.set(r.playerId, r); continue; }
     const a = rank(r), b = rank(existing);
@@ -111,12 +103,7 @@ export async function sendPushToAllSubscribers(
         .where(and(eq(pushSubscriptionsTable.language, language), excludeReplitOrigin))
     : await db.select().from(pushSubscriptionsTable).where(excludeReplitOrigin);
 
-  // Same dedup policy as sendPushToPlayer: one push per playerId max, plus
-  // every anonymous (no-playerId) install. Prevents the "two beeps, one in
-  // Spanish + one in Portuguese" issue when a user is subscribed from both
-  // the TWA shell and a browser tab on a sister domain.
   const picked = dedupeByPlayer(rows);
-
   let sent = 0, failed = 0;
   const toDelete: string[] = [];
 
@@ -146,13 +133,6 @@ export async function sendPushToAllSubscribers(
   return { sent, failed, removed: toDelete.length };
 }
 
-// Localized one-shot broadcast. Unlike calling sendPushToAllSubscribers once
-// per language (which dedupes only WITHIN each call and would double-notify a
-// player who has rows stored under different language values), this fetches
-// every eligible subscription ONCE, dedupes by player ONCE across all
-// languages, and then picks the localized payload per chosen row — falling
-// back to `fallbackLang` for rows whose language is null/unknown so nobody is
-// silently skipped.
 export async function sendLocalizedBroadcast(
   payloadByLang: Record<string, PushPayload>,
   fallbackLang = "es",
@@ -194,8 +174,6 @@ export async function sendLocalizedBroadcast(
   return { sent, failed, removed: toDelete.length };
 }
 
-// Notify all followers of a player that they're online
-// Uses in-memory dedupe so each follower only gets 1 notification per 30 min per friend
 const friendOnlineNotifiedAt = new Map<string, number>();
 const FRIEND_ONLINE_COOLDOWN_MS = 30 * 60 * 1000;
 
@@ -207,7 +185,6 @@ export async function notifyFollowersPlayerOnline(
   if (!VAPID_PUBLIC || !VAPID_PRIVATE) return;
 
   try {
-    // Find all followers of this player (people who follow playerId)
     const followers = await db.select().from(followsTable)
       .where(eq(followsTable.followedId, playerId));
 
@@ -228,16 +205,13 @@ export async function notifyFollowersPlayerOnline(
       if (now - lastNotified < FRIEND_ONLINE_COOLDOWN_MS) return;
 
       const sent = await sendPushToPlayer(follower.followerId, msg);
-      if (sent > 0) {
-        friendOnlineNotifiedAt.set(dedupeKey, now);
-      }
+      if (sent > 0) friendOnlineNotifiedAt.set(dedupeKey, now);
     }));
   } catch (e) {
     console.error("[pushHelper] notifyFollowersPlayerOnline error:", e);
   }
 }
 
-// Clean up old dedupe entries every hour
 setInterval(() => {
   const cutoff = Date.now() - FRIEND_ONLINE_COOLDOWN_MS;
   for (const [key, ts] of friendOnlineNotifiedAt) {
