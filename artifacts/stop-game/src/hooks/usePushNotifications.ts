@@ -2,12 +2,6 @@ import { useState, useEffect, useCallback } from "react";
 import { getApiUrl } from "@/lib/utils";
 
 const API_BASE = getApiUrl();
-// VAPID *public* key. It is public by design (it ships to every browser in the
-// bundle and is sent with each push subscription), so we keep a hardcoded
-// fallback to guarantee the notifications UI (bell + toggle) renders on hosts
-// where the VITE_VAPID_PUBLIC_KEY build var isn't set (e.g. the Railway-served
-// www domain). The env var still takes priority when present. The matching
-// *private* key must NEVER be hardcoded — it stays server-side only.
 const VAPID_PUBLIC =
   import.meta.env.VITE_VAPID_PUBLIC_KEY ||
   "BOwVNL3sEONgyFulirkX5dzwQo662Yj2_C846OSMrTSfiz4GFwEsl3_1NY3x_GqJIco8P7Ls85u56IRC3Y8Bj2c";
@@ -21,7 +15,6 @@ function urlB64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
 
 export type NotifPermission = "default" | "granted" | "denied" | "unsupported";
 
-// playerId is optional — guests can still subscribe for daily notifications
 export function usePushNotifications(playerId: string | undefined, language: string) {
   const [permission, setPermission] = useState<NotifPermission>("default");
   const [isSubscribed, setIsSubscribed] = useState(false);
@@ -39,12 +32,6 @@ export function usePushNotifications(playerId: string | undefined, language: str
 
         if (!cancelled) setPermission(Notification.permission as NotifPermission);
 
-        // IMPORTANT: use await rather than `.then()` here. Some installed
-        // service-worker shims/TWA environments expose `ready` as a thenable
-        // implementation that is not a native Promise. Calling `.then()` on
-        // that object was able to crash the entire Home render with
-        // `...then is not a function`. Notifications are optional, so any SW
-        // problem must never take down the game UI.
         const reg = await navigator.serviceWorker.ready;
         if (cancelled) return;
 
@@ -53,28 +40,31 @@ export function usePushNotifications(playerId: string | undefined, language: str
 
         setIsSubscribed(!!sub);
 
-        if (sub && playerId) {
+        // IMPORTANT: re-register an existing browser/TWA subscription even
+        // when there is no account yet. This repairs subscriptions lost from
+        // the server DB after a deploy and keeps guest devices eligible for
+        // daily notifications. The server treats "anonymous" as a guest row.
+        if (sub) {
           const tzOffsetMinutes = -new Date().getTimezoneOffset();
           try {
-            await fetch(`${API_BASE}/api/notifications/subscribe`, {
+            const res = await fetch(`${API_BASE}/api/notifications/subscribe`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
-                playerId,
+                playerId: playerId || "anonymous",
                 subscription: sub.toJSON(),
                 language,
-                // Sin hourLocal: el UPSERT del servidor preserva el valor existente.
                 tzOffsetMinutes,
                 origin: window.location.origin,
               }),
             });
-          } catch {
-            // Notification backfill is non-critical; never break the game.
+            if (!res.ok) console.warn("[push] subscription backfill failed", res.status);
+          } catch (e) {
+            console.warn("[push] subscription backfill error", e);
           }
         }
-      } catch {
-        // Service-worker/notification support is optional. Never allow it to
-        // produce a render error or block the game from loading.
+      } catch (e) {
+        console.warn("[push] initialise error", e);
       }
     };
 
@@ -91,13 +81,14 @@ export function usePushNotifications(playerId: string | undefined, language: str
       setPermission(perm as NotifPermission);
       if (perm !== "granted") { setLoading(false); return false; }
 
-      const sub = await reg.pushManager.subscribe({
+      const existing = await reg.pushManager.getSubscription();
+      const sub = existing || await reg.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlB64ToUint8Array(VAPID_PUBLIC),
       });
 
       const tzOffsetMinutes = -new Date().getTimezoneOffset();
-      await fetch(`${API_BASE}/api/notifications/subscribe`, {
+      const res = await fetch(`${API_BASE}/api/notifications/subscribe`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -110,6 +101,7 @@ export function usePushNotifications(playerId: string | undefined, language: str
         }),
       });
 
+      if (!res.ok) throw new Error(`subscription HTTP ${res.status}`);
       setIsSubscribed(true);
       return true;
     } catch (e) {
