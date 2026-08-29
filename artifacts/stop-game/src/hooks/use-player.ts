@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { AVATAR_COLORS, getApiUrl } from "@/lib/utils";
 
 const SESSION_TOKEN_KEY = "stop_session_token";
+const CANONICAL_API_ORIGIN = "https://www.stopjuegodepalabras.com";
 
 async function tryRestoreFrom(apiBase: string): Promise<PlayerProfile | null> {
   try {
@@ -45,7 +46,19 @@ async function tryRestoreFrom(apiBase: string): Promise<PlayerProfile | null> {
 }
 
 async function tryRestoreSession(): Promise<PlayerProfile | null> {
-  return await tryRestoreFrom(getApiUrl());
+  const localBase = getApiUrl();
+  const restored = await tryRestoreFrom(localBase);
+  if (restored) return restored;
+
+  // The canonical web origin is the final fallback. This protects against
+  // stale VITE_API_URL values, old bookmarks, and deployments that temporarily
+  // resolve the API through a different origin.
+  try {
+    if (new URL(localBase, window.location.origin).origin !== CANONICAL_API_ORIGIN) {
+      return await tryRestoreFrom(CANONICAL_API_ORIGIN);
+    }
+  } catch {}
+  return null;
 }
 
 export interface PlayerProfile {
@@ -103,9 +116,6 @@ export function usePlayer() {
       setNeedsAuth(!stored);
     };
 
-    // A previous web build could leave a guest profile or a dismissed-auth flag
-    // in localStorage. Neither one is an authenticated account. Clear both so
-    // the desktop web client shows the login/registration modal again.
     try { localStorage.removeItem("stop_auth_dismissed_v1"); } catch {}
 
     const stored = readStoredPlayer();
@@ -120,9 +130,15 @@ export function usePlayer() {
       setIsLoaded(true);
 
       void (async () => {
-        const restored = await tryRestoreFrom(getApiUrl());
+        const restored = await tryRestoreSession();
         if (cancelled) return;
-        if (restored) return;
+        if (restored) {
+          writeStoredPlayer(restored);
+          setPlayer(restored);
+          setNeedsAuth(false);
+          return;
+        }
+        // A stale locally stored OAuth profile must not hide the login modal.
         writeStoredPlayer(null);
         setPlayer(null);
         setNeedsAuth(true);
@@ -136,6 +152,8 @@ export function usePlayer() {
           setPlayer(restored);
           setNeedsAuth(false);
         } else {
+          // 401 means there is no authenticated account. Explicitly expose the
+          // AuthModal instead of leaving the UI in an anonymous-but-loaded state.
           setPlayer(null);
           setNeedsAuth(true);
         }
@@ -180,6 +198,7 @@ export function usePlayer() {
       const b = getApiUrl();
       if (b) origins.add(new URL(b, window.location.origin).origin);
     } catch {}
+    origins.add(CANONICAL_API_ORIGIN);
     for (const origin of origins) {
       try {
         void fetch(`${origin}/api/auth/logout`, {
@@ -202,8 +221,7 @@ export function usePlayer() {
   };
 
   const dismissAuth = () => {
-    // Dismissing only affects the current render. It is never persisted, so a
-    // fresh desktop visit will always offer login again.
+    // Dismissing only affects the current render. It is never persisted.
     setNeedsAuth(false);
   };
 
