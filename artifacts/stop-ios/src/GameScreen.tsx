@@ -1,54 +1,42 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
-import { apiFetch } from "./api";
+import { getApiUrl } from "./api";
+import {
+  STOP_CATEGORIES,
+  type StopMode,
+  type ValidationResponse,
+  buildValidationRequest,
+  chooseLetter,
+  getModeDuration,
+  validateRound,
+} from "./game/gameEngine";
 
-type Mode = "normal" | "quick" | "chaos" | "random" | "daily";
-type Category = "Nombre" | "Lugar" | "Animal" | "Objeto" | "Color" | "Fruta" | "Marca";
-type Answers = Record<Category, string>;
-type ValidationResult = {
-  results: Record<string, { player: { response: string; isValid: boolean; score: number } }>;
-  playerTotalScore: number;
-};
+type Answers = Record<string, string>;
 
-const CATEGORIES: Category[] = ["Nombre", "Lugar", "Animal", "Objeto", "Color", "Fruta", "Marca"];
-const ALPHABET_ES = "ABCDEFGHIJKLMNÑOPRSTUVWYZ".split("");
-const EASY_LETTERS = ["A", "C", "E", "I", "L", "M", "P", "R", "S", "T"];
-const emptyAnswers = (): Answers => ({ Nombre: "", Lugar: "", Animal: "", Objeto: "", Color: "", Fruta: "", Marca: "" });
+const MODES: StopMode[] = ["normal", "rapido", "caos", "random", "diario"];
+const emptyAnswers = (): Answers => Object.fromEntries(STOP_CATEGORIES.map(({ id }) => [id, ""]));
 
-function pickLetter(previous?: string, easy = false) {
-  const source = easy ? EASY_LETTERS : ALPHABET_ES;
-  const choices = previous ? source.filter((l) => l !== previous) : source;
-  return choices[Math.floor(Math.random() * choices.length)];
-}
-
-function modeTime(mode: Mode) {
-  if (mode === "quick") return 30;
-  if (mode === "chaos") return 45;
-  if (mode === "random") return 15 + Math.floor(Math.random() * 41);
-  return 60;
-}
-
-function modeLabel(mode: Mode) {
-  if (mode === "quick") return "RÁPIDO · 30s";
-  if (mode === "chaos") return "CAOS · 45s";
+function modeLabel(mode: StopMode) {
+  if (mode === "rapido") return "RÁPIDO · 30s";
+  if (mode === "caos") return "CAOS · 60s";
   if (mode === "random") return "STOP RANDOM";
-  if (mode === "daily") return "RETO DIARIO";
+  if (mode === "diario") return "RETO DIARIO";
   return "NORMAL · 60s";
 }
 
 export function GameScreen({ onExit }: { onExit: () => void }) {
-  const [mode, setMode] = useState<Mode>("normal");
-  const [letter, setLetter] = useState(() => pickLetter());
+  const [mode, setMode] = useState<StopMode>("normal");
+  const [letter, setLetter] = useState(() => chooseLetter());
   const [answers, setAnswers] = useState<Answers>(emptyAnswers);
   const [secondsLeft, setSecondsLeft] = useState(60);
   const [running, setRunning] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [result, setResult] = useState<ValidationResult | null>(null);
+  const [result, setResult] = useState<ValidationResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [totalScore, setTotalScore] = useState(0);
   const submittedRef = useRef(false);
 
-  const roundTime = useMemo(() => mode === "daily" ? 60 : modeTime(mode), [mode, letter]);
+  const roundTime = useMemo(() => getModeDuration(mode), [mode, letter]);
   const progress = secondsLeft / Math.max(1, roundTime);
 
   const finishRound = useCallback(async () => {
@@ -58,11 +46,8 @@ export function GameScreen({ onExit }: { onExit: () => void }) {
     setSubmitting(true);
     setError(null);
     try {
-      const playerResponses = CATEGORIES.map((category) => ({ category, word: answers[category].trim() }));
-      const validation = await apiFetch<ValidationResult>("/api/game/validate", {
-        method: "POST",
-        body: JSON.stringify({ letter, language: "es", playerResponses }),
-      });
+      const request = buildValidationRequest(letter, "es", answers);
+      const validation = await validateRound(getApiUrl(), request);
       setResult(validation);
       setTotalScore((score) => score + validation.playerTotalScore);
     } catch (e) {
@@ -89,12 +74,13 @@ export function GameScreen({ onExit }: { onExit: () => void }) {
     return () => clearInterval(timer);
   }, [running, finishRound]);
 
-  const startGame = (nextMode: Mode = mode) => {
+  const startGame = (nextMode: StopMode = mode) => {
+    const nextLetter = chooseLetter();
+    const duration = getModeDuration(nextMode);
     setMode(nextMode);
-    const daily = nextMode === "daily";
-    setLetter(pickLetter(undefined, daily));
+    setLetter(nextLetter);
     setAnswers(emptyAnswers());
-    setSecondsLeft(nextMode === "daily" ? 60 : modeTime(nextMode));
+    setSecondsLeft(duration);
     setResult(null);
     setError(null);
     setTotalScore(0);
@@ -102,7 +88,7 @@ export function GameScreen({ onExit }: { onExit: () => void }) {
     setRunning(true);
   };
 
-  const updateAnswer = (category: Category, word: string) => {
+  const updateAnswer = (category: string, word: string) => {
     if (running) setAnswers((current) => ({ ...current, [category]: word }));
   };
 
@@ -115,13 +101,13 @@ export function GameScreen({ onExit }: { onExit: () => void }) {
             <Text style={styles.headerTitle}>STOP!</Text><Text style={styles.mode}>SOLO</Text>
           </View>
           <Text style={styles.pageTitle}>Elige cómo jugar</Text>
-          <Text style={styles.pageSub}>La experiencia iOS usa las reglas actuales de STOP. Sin niveles de IA antiguos.</Text>
-          {(["normal", "quick", "chaos", "random", "daily"] as Mode[]).map((item) => (
+          <Text style={styles.pageSub}>Juego nativo iOS con las reglas vigentes de STOP.</Text>
+          {MODES.map((item) => (
             <TouchableOpacity key={item} style={styles.modeCard} onPress={() => startGame(item)} activeOpacity={0.85}>
-              <View style={styles.modeIcon}><Text style={styles.modeEmoji}>{item === "normal" ? "🎯" : item === "quick" ? "⚡" : item === "chaos" ? "🌪️" : item === "random" ? "🎲" : "📅"}</Text></View>
+              <View style={styles.modeIcon}><Text style={styles.modeEmoji}>{item === "normal" ? "🎯" : item === "rapido" ? "⚡" : item === "caos" ? "🌪️" : item === "random" ? "🎲" : "📅"}</Text></View>
               <View style={styles.modeContent}>
                 <Text style={styles.modeTitle}>{modeLabel(item)}</Text>
-                <Text style={styles.modeText}>{item === "normal" ? "La partida clásica de STOP." : item === "quick" ? "Una ronda rápida de 30 segundos." : item === "chaos" ? "Ronda especial con reglas de caos." : item === "random" ? "El tiempo cambia en cada ronda." : "Un reto diario para todos."}</Text>
+                <Text style={styles.modeText}>{item === "normal" ? "La partida clásica de STOP." : item === "rapido" ? "Una ronda rápida." : item === "caos" ? "Ronda especial de Caos." : item === "random" ? "El tiempo cambia en cada ronda." : "El reto diario."}</Text>
               </View><Text style={styles.arrow}>›</Text>
             </TouchableOpacity>
           ))}
@@ -146,11 +132,11 @@ export function GameScreen({ onExit }: { onExit: () => void }) {
           <Text style={styles.infoTitle}>Escribe una palabra por categoría</Text>
           <Text style={styles.infoText}>Todas deben empezar por {letter}. STOP termina la ronda y el servidor valida las respuestas.</Text>
         </View>
-        {CATEGORIES.map((category) => {
-          const item = result?.results?.[category];
-          return <View key={category} style={styles.categoryCard}>
-            <View style={styles.categoryHeader}><Text style={styles.category}>{category}</Text>{item && <Text style={item.player.isValid ? styles.valid : styles.invalid}>{item.player.isValid ? `+${item.player.score}` : "0"}</Text>}</View>
-            <TextInput value={answers[category]} onChangeText={(value) => updateAnswer(category, value)} placeholder={`${letter}…`} editable={running} autoCapitalize="words" returnKeyType="next" style={[styles.input, item && (item.player.isValid ? styles.inputValid : styles.inputInvalid)]} />
+        {STOP_CATEGORIES.map(({ id, label }) => {
+          const item = result?.results?.[id];
+          return <View key={id} style={styles.categoryCard}>
+            <View style={styles.categoryHeader}><Text style={styles.category}>{label}</Text>{item && <Text style={item.player.isValid ? styles.valid : styles.invalid}>{item.player.isValid ? `+${item.player.score}` : "0"}</Text>}</View>
+            <TextInput value={answers[id]} onChangeText={(value) => updateAnswer(id, value)} placeholder={`${letter}…`} editable={running} autoCapitalize="words" returnKeyType="next" style={[styles.input, item && (item.player.isValid ? styles.inputValid : styles.inputInvalid)]} />
           </View>;
         })}
         {error && <View style={styles.errorBox}><Text style={styles.errorText}>{error}</Text></View>}
