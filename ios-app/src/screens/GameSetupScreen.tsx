@@ -3,14 +3,14 @@ import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'rea
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 import { DEFAULT_GAME_CONFIG, GAME_MODES, type NativeGameConfig } from '../game/gameConfig';
-import type { CategoryPackId } from '../game/categoryPacks';
+import type { CategoryPackId } from '../game/gameConfig';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'GameSetup'>;
 
 const PACKS: Array<{ id: CategoryPackId; label: string }> = [
   { id: 'classic', label: 'Clásico' },
   { id: 'football', label: 'Fútbol' },
-  { id: 'cinema-tv', label: 'Cine y TV' },
+  { id: 'cinema', label: 'Cine y TV' },
   { id: 'food', label: 'Comida' },
   { id: 'music', label: 'Música' },
   { id: 'geography', label: 'Geografía' },
@@ -20,7 +20,6 @@ const PACKS: Array<{ id: CategoryPackId; label: string }> = [
 
 export default function GameSetupScreen({ navigation }: Props) {
   const [config, setConfig] = useState<NativeGameConfig>(DEFAULT_GAME_CONFIG);
-
   const start = () => navigation.navigate('Game', { config });
 
   return (
@@ -28,7 +27,6 @@ export default function GameSetupScreen({ navigation }: Props) {
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.title}>Preparar partida</Text>
         <Text style={styles.subtitle}>Elige cómo quieres jugar.</Text>
-
         <Text style={styles.section}>Modo</Text>
         <View style={styles.row}>
           {GAME_MODES.map((mode) => (
@@ -38,7 +36,6 @@ export default function GameSetupScreen({ navigation }: Props) {
             </Pressable>
           ))}
         </View>
-
         <Text style={styles.section}>Categorías</Text>
         <View style={styles.grid}>
           {PACKS.map((pack) => (
@@ -47,7 +44,6 @@ export default function GameSetupScreen({ navigation }: Props) {
             </Pressable>
           ))}
         </View>
-
         <Pressable style={styles.start} onPress={start}><Text style={styles.startText}>EMPEZAR PARTIDA</Text></Pressable>
       </ScrollView>
     </SafeAreaView>
