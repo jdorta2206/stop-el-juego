@@ -1,17 +1,14 @@
 import { useEffect, useState } from "react";
-import { detectPaymentChannel, hasGooglePlayBillingApi, isLikelyPlayTwa } from "@/lib/playBilling";
+import { detectPaymentChannel, isLikelyPlayTwa } from "@/lib/playBilling";
 
 export type PaymentChannel = "play" | "stripe";
 
 /**
- * Payment channel detection must not be a one-shot render-time decision.
+ * Resolve the payment channel without allowing a weak browser capability to
+ * classify ordinary web traffic as a Google Play TWA.
  *
- * In a Google Play TWA, Chrome can inject the Digital Goods API shortly
- * after the React app has rendered. The old implementation initialized to
- * Stripe and called detectPaymentChannel() only once. That created a race:
- * the Premium modal could detect Play after its effect ran, while the
- * one-time Pack Mundial button could already have captured `stripe` and
- * sent the user to Stripe.
+ * The detector in playBilling.ts is the single source of truth. In
+ * particular, getDigitalGoodsService is NOT checked independently here.
  */
 export function usePaymentChannel() {
   const [channel, setChannel] = useState<PaymentChannel | "loading">("loading");
@@ -23,16 +20,17 @@ export function usePaymentChannel() {
     const resolve = () => {
       if (cancelled) return;
 
-      // The TWA marker / Android standalone detection is deterministic and
-      // does not require the Digital Goods API to have been injected yet.
-      if (isLikelyPlayTwa() || hasGooglePlayBillingApi()) {
+      // Only the shared detector may decide that this is Play Billing.
+      // It requires a strong Android/TWA signal or Android-only fallback
+      // signals; a desktop browser can therefore never become "play" just
+      // because DigitalGoodsService happens to exist.
+      if (isLikelyPlayTwa()) {
         setChannel("play");
         return;
       }
 
-      // Give the TWA a short window to inject Digital Goods before deciding
-      // this is ordinary web traffic. This removes the Stripe race without
-      // delaying normal web users for long.
+      // Give a genuine Android TWA a short opportunity to expose its runtime
+      // signals before falling back to ordinary web/Stripe.
       if (Date.now() - startedAt < 3000) {
         window.setTimeout(resolve, 100);
       } else {
