@@ -2,72 +2,77 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { apiFetch } from "./api";
 
-const CATEGORIES = ["Nombre", "Lugar", "Animal", "Objeto", "Color", "Fruta", "Marca"] as const;
-const ALPHABET_ES = "ABCDEFGHIJKLMNÑOPRSTUVWYZ".split("");
-const ROUND_SECONDS = 60;
-
-type Category = (typeof CATEGORIES)[number];
+type Mode = "normal" | "quick" | "chaos" | "random" | "daily";
+type Category = "Nombre" | "Lugar" | "Animal" | "Objeto" | "Color" | "Fruta" | "Marca";
 type Answers = Record<Category, string>;
 type ValidationResult = {
-  results: Record<string, {
-    player: { response: string; isValid: boolean; score: number };
-    ai: { response: string; isValid: boolean; score: number };
-  }>;
+  results: Record<string, { player: { response: string; isValid: boolean; score: number } }>;
   playerTotalScore: number;
-  aiTotalScore: number;
 };
 
-const emptyAnswers = (): Answers => ({
-  Nombre: "", Lugar: "", Animal: "", Objeto: "", Color: "", Fruta: "", Marca: "",
-});
+const CATEGORIES: Category[] = ["Nombre", "Lugar", "Animal", "Objeto", "Color", "Fruta", "Marca"];
+const ALPHABET_ES = "ABCDEFGHIJKLMNÑOPRSTUVWYZ".split("");
+const EASY_LETTERS = ["A", "C", "E", "I", "L", "M", "P", "R", "S", "T"];
+const emptyAnswers = (): Answers => ({ Nombre: "", Lugar: "", Animal: "", Objeto: "", Color: "", Fruta: "", Marca: "" });
 
-function pickLetter(previous?: string) {
-  const choices = previous ? ALPHABET_ES.filter((l) => l !== previous) : ALPHABET_ES;
+function pickLetter(previous?: string, easy = false) {
+  const source = easy ? EASY_LETTERS : ALPHABET_ES;
+  const choices = previous ? source.filter((l) => l !== previous) : source;
   return choices[Math.floor(Math.random() * choices.length)];
 }
 
+function modeTime(mode: Mode) {
+  if (mode === "quick") return 30;
+  if (mode === "chaos") return 45;
+  if (mode === "random") return 15 + Math.floor(Math.random() * 41);
+  return 60;
+}
+
+function modeLabel(mode: Mode) {
+  if (mode === "quick") return "RÁPIDO · 30s";
+  if (mode === "chaos") return "CAOS · 45s";
+  if (mode === "random") return "STOP RANDOM";
+  if (mode === "daily") return "RETO DIARIO";
+  return "NORMAL · 60s";
+}
+
 export function GameScreen({ onExit }: { onExit: () => void }) {
+  const [mode, setMode] = useState<Mode>("normal");
   const [letter, setLetter] = useState(() => pickLetter());
   const [answers, setAnswers] = useState<Answers>(emptyAnswers);
-  const [secondsLeft, setSecondsLeft] = useState(ROUND_SECONDS);
-  const [running, setRunning] = useState(true);
+  const [secondsLeft, setSecondsLeft] = useState(60);
+  const [running, setRunning] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<ValidationResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [totalScore, setTotalScore] = useState(0);
   const submittedRef = useRef(false);
 
-  const roundComplete = !running || !!result;
-  const progress = useMemo(() => secondsLeft / ROUND_SECONDS, [secondsLeft]);
+  const roundTime = useMemo(() => mode === "daily" ? 60 : modeTime(mode), [mode, letter]);
+  const progress = secondsLeft / Math.max(1, roundTime);
 
   const finishRound = useCallback(async () => {
-    if (submittedRef.current || result) return;
+    if (submittedRef.current || !running) return;
     submittedRef.current = true;
     setRunning(false);
     setSubmitting(true);
     setError(null);
-
     try {
-      const playerResponses = CATEGORIES.map((category) => ({
-        category,
-        word: answers[category].trim(),
-      }));
-
+      const playerResponses = CATEGORIES.map((category) => ({ category, word: answers[category].trim() }));
       const validation = await apiFetch<ValidationResult>("/api/game/validate", {
         method: "POST",
-        body: JSON.stringify({
-          letter,
-          language: "es",
-          playerResponses,
-        }),
+        body: JSON.stringify({ letter, language: "es", playerResponses }),
       });
       setResult(validation);
+      setTotalScore((score) => score + validation.playerTotalScore);
     } catch (e) {
       submittedRef.current = false;
+      setRunning(true);
       setError(e instanceof Error ? e.message : "No se ha podido validar la partida.");
     } finally {
       setSubmitting(false);
     }
-  }, [answers, letter, result]);
+  }, [answers, letter, running]);
 
   useEffect(() => {
     if (!running) return;
@@ -84,124 +89,84 @@ export function GameScreen({ onExit }: { onExit: () => void }) {
     return () => clearInterval(timer);
   }, [running, finishRound]);
 
-  const updateAnswer = (category: Category, word: string) => {
-    if (!running) return;
-    setAnswers((current) => ({ ...current, [category]: word }));
-  };
-
-  const startNewRound = () => {
-    setLetter(pickLetter(letter));
+  const startGame = (nextMode: Mode = mode) => {
+    setMode(nextMode);
+    const daily = nextMode === "daily";
+    setLetter(pickLetter(undefined, daily));
     setAnswers(emptyAnswers());
-    setSecondsLeft(ROUND_SECONDS);
+    setSecondsLeft(nextMode === "daily" ? 60 : modeTime(nextMode));
     setResult(null);
     setError(null);
+    setTotalScore(0);
     submittedRef.current = false;
     setRunning(true);
   };
+
+  const updateAnswer = (category: Category, word: string) => {
+    if (running) setAnswers((current) => ({ ...current, [category]: word }));
+  };
+
+  if (!running && !result) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <ScrollView contentContainerStyle={styles.container}>
+          <View style={styles.header}>
+            <TouchableOpacity onPress={onExit}><Text style={styles.back}>‹ Volver</Text></TouchableOpacity>
+            <Text style={styles.headerTitle}>STOP!</Text><Text style={styles.mode}>SOLO</Text>
+          </View>
+          <Text style={styles.pageTitle}>Elige cómo jugar</Text>
+          <Text style={styles.pageSub}>La experiencia iOS usa las reglas actuales de STOP. Sin niveles de IA antiguos.</Text>
+          {(["normal", "quick", "chaos", "random", "daily"] as Mode[]).map((item) => (
+            <TouchableOpacity key={item} style={styles.modeCard} onPress={() => startGame(item)} activeOpacity={0.85}>
+              <View style={styles.modeIcon}><Text style={styles.modeEmoji}>{item === "normal" ? "🎯" : item === "quick" ? "⚡" : item === "chaos" ? "🌪️" : item === "random" ? "🎲" : "📅"}</Text></View>
+              <View style={styles.modeContent}>
+                <Text style={styles.modeTitle}>{modeLabel(item)}</Text>
+                <Text style={styles.modeText}>{item === "normal" ? "La partida clásica de STOP." : item === "quick" ? "Una ronda rápida de 30 segundos." : item === "chaos" ? "Ronda especial con reglas de caos." : item === "random" ? "El tiempo cambia en cada ronda." : "Un reto diario para todos."}</Text>
+              </View><Text style={styles.arrow}>›</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
         <View style={styles.header}>
-          <TouchableOpacity onPress={onExit} accessibilityRole="button">
-            <Text style={styles.back}>‹ Volver</Text>
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>STOP!</Text>
-          <Text style={styles.mode}>SOLO</Text>
+          <TouchableOpacity onPress={onExit}><Text style={styles.back}>‹ Salir</Text></TouchableOpacity>
+          <Text style={styles.headerTitle}>STOP!</Text><Text style={styles.mode}>{modeLabel(mode)}</Text>
         </View>
-
         <View style={styles.letterCard}>
-          <Text style={styles.letterLabel}>LETRA</Text>
-          <Text style={styles.letter}>{letter}</Text>
-          <View style={styles.timerTrack}>
-            <View style={[styles.timerFill, { width: `${Math.max(0, progress) * 100}%` }]} />
-          </View>
+          <Text style={styles.letterLabel}>LETRA</Text><Text style={styles.letter}>{letter}</Text>
+          <View style={styles.timerTrack}><View style={[styles.timerFill, { width: `${Math.max(0, Math.min(1, progress)) * 100}%` }]} /></View>
           <Text style={styles.timer}>{secondsLeft}s</Text>
         </View>
-
         <View style={styles.infoBox}>
           <Text style={styles.infoTitle}>Escribe una palabra por categoría</Text>
           <Text style={styles.infoText}>Todas deben empezar por {letter}. STOP termina la ronda y el servidor valida las respuestas.</Text>
         </View>
-
         {CATEGORIES.map((category) => {
           const item = result?.results?.[category];
-          return (
-            <View key={category} style={styles.categoryCard}>
-              <View style={styles.categoryHeader}>
-                <Text style={styles.category}>{category}</Text>
-                {item && <Text style={item.player.isValid ? styles.valid : styles.invalid}>{item.player.isValid ? `+${item.player.score}` : "0"}</Text>}
-              </View>
-              <TextInput
-                value={answers[category]}
-                onChangeText={(value) => updateAnswer(category, value)}
-                placeholder={`${letter}…`}
-                editable={running}
-                autoCapitalize="words"
-                returnKeyType="next"
-                style={[styles.input, item && (item.player.isValid ? styles.inputValid : styles.inputInvalid)]}
-              />
-              {item && <Text style={styles.aiText}>IA: {item.ai.response || "—"} · {item.ai.score} pts</Text>}
-            </View>
-          );
+          return <View key={category} style={styles.categoryCard}>
+            <View style={styles.categoryHeader}><Text style={styles.category}>{category}</Text>{item && <Text style={item.player.isValid ? styles.valid : styles.invalid}>{item.player.isValid ? `+${item.player.score}` : "0"}</Text>}</View>
+            <TextInput value={answers[category]} onChangeText={(value) => updateAnswer(category, value)} placeholder={`${letter}…`} editable={running} autoCapitalize="words" returnKeyType="next" style={[styles.input, item && (item.player.isValid ? styles.inputValid : styles.inputInvalid)]} />
+          </View>;
         })}
-
         {error && <View style={styles.errorBox}><Text style={styles.errorText}>{error}</Text></View>}
-
-        {result ? (
-          <View style={styles.resultCard}>
-            <Text style={styles.resultTitle}>Ronda terminada</Text>
-            <Text style={styles.resultScore}>{result.playerTotalScore} puntos</Text>
-            <Text style={styles.resultSub}>IA: {result.aiTotalScore} puntos</Text>
-            <TouchableOpacity style={styles.primaryButton} onPress={startNewRound}>
-              <Text style={styles.primaryText}>Jugar otra ronda</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <TouchableOpacity style={styles.stopButton} onPress={() => void finishRound()} disabled={!running || submitting}>
-            {submitting ? <ActivityIndicator color="white" /> : <Text style={styles.stopText}>¡STOP!</Text>}
-            <Text style={styles.stopHint}>{running ? "Terminar y validar" : "Ronda terminada"}</Text>
-          </TouchableOpacity>
-        )}
+        {result ? <View style={styles.resultCard}>
+          <Text style={styles.resultTitle}>Ronda terminada</Text><Text style={styles.resultScore}>{result.playerTotalScore} puntos</Text>
+          <Text style={styles.resultSub}>Acumulado de esta sesión: {totalScore}</Text>
+          <TouchableOpacity style={styles.primaryButton} onPress={() => { setResult(null); setRunning(false); }}><Text style={styles.primaryText}>Elegir otro modo</Text></TouchableOpacity>
+          <TouchableOpacity style={styles.secondaryButton} onPress={() => startGame(mode)}><Text style={styles.secondaryText}>Jugar otra vez</Text></TouchableOpacity>
+        </View> : <TouchableOpacity style={styles.stopButton} onPress={() => void finishRound()} disabled={!running || submitting}>
+          {submitting ? <ActivityIndicator color="white" /> : <Text style={styles.stopText}>¡STOP!</Text>}<Text style={styles.stopHint}>{running ? "Terminar y validar" : "Ronda terminada"}</Text>
+        </TouchableOpacity>}
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: "#f7f8fc" },
-  container: { padding: 18, paddingBottom: 36 },
-  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 16 },
-  back: { color: "#151f63", fontSize: 16, fontWeight: "800" },
-  headerTitle: { fontSize: 22, fontWeight: "900" },
-  mode: { fontSize: 11, fontWeight: "800", color: "#6b7280" },
-  letterCard: { alignItems: "center", backgroundColor: "#151f63", borderRadius: 24, paddingVertical: 20, marginBottom: 12 },
-  letterLabel: { color: "white", opacity: 0.7, fontSize: 12, fontWeight: "800", letterSpacing: 2 },
-  letter: { color: "white", fontSize: 64, lineHeight: 72, fontWeight: "900" },
-  timerTrack: { height: 6, width: "80%", backgroundColor: "rgba(255,255,255,.22)", borderRadius: 3, overflow: "hidden", marginTop: 6 },
-  timerFill: { height: "100%", backgroundColor: "white", borderRadius: 3 },
-  timer: { color: "white", marginTop: 7, fontSize: 14, fontWeight: "800" },
-  infoBox: { backgroundColor: "white", borderRadius: 16, padding: 14, marginBottom: 12 },
-  infoTitle: { fontSize: 15, fontWeight: "800" },
-  infoText: { marginTop: 4, color: "#666b78", lineHeight: 19, fontSize: 13 },
-  categoryCard: { backgroundColor: "white", borderRadius: 16, padding: 12, marginBottom: 9 },
-  categoryHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 7 },
-  category: { fontSize: 15, fontWeight: "800" },
-  valid: { color: "#16803c", fontWeight: "900" },
-  invalid: { color: "#b42318", fontWeight: "900" },
-  input: { borderWidth: 1, borderColor: "#d9dce6", borderRadius: 11, paddingHorizontal: 13, height: 46, fontSize: 16, backgroundColor: "#fbfcff" },
-  inputValid: { borderColor: "#72c58b" },
-  inputInvalid: { borderColor: "#e29a94" },
-  aiText: { marginTop: 6, color: "#666b78", fontSize: 12 },
-  stopButton: { marginTop: 6, borderRadius: 18, backgroundColor: "#c62828", minHeight: 72, alignItems: "center", justifyContent: "center" },
-  stopText: { color: "white", fontSize: 25, fontWeight: "900" },
-  stopHint: { color: "white", opacity: 0.82, fontSize: 12, marginTop: 1 },
-  resultCard: { backgroundColor: "white", borderRadius: 20, padding: 20, marginTop: 6, alignItems: "center" },
-  resultTitle: { fontSize: 20, fontWeight: "900" },
-  resultScore: { fontSize: 42, fontWeight: "900", marginTop: 4, color: "#151f63" },
-  resultSub: { color: "#666b78", fontWeight: "700" },
-  primaryButton: { marginTop: 18, backgroundColor: "#151f63", borderRadius: 14, paddingHorizontal: 24, paddingVertical: 13 },
-  primaryText: { color: "white", fontSize: 15, fontWeight: "800" },
-  errorBox: { backgroundColor: "#fff0ef", borderRadius: 12, padding: 12, marginTop: 3, marginBottom: 10 },
-  errorText: { color: "#b42318", fontSize: 13, textAlign: "center" },
+  safeArea:{flex:1,backgroundColor:"#f7f8fc"}, container:{padding:18,paddingBottom:36}, header:{flexDirection:"row",alignItems:"center",justifyContent:"space-between",marginBottom:16}, back:{color:"#151f63",fontSize:16,fontWeight:"800"}, headerTitle:{fontSize:22,fontWeight:"900"}, mode:{fontSize:10,fontWeight:"800",color:"#6b7280",maxWidth:110,textAlign:"right"}, pageTitle:{fontSize:28,fontWeight:"900",marginBottom:5}, pageSub:{fontSize:14,lineHeight:20,color:"#666b78",marginBottom:16}, modeCard:{flexDirection:"row",alignItems:"center",backgroundColor:"white",borderRadius:18,padding:16,marginBottom:10,minHeight:86}, modeIcon:{width:48,height:48,borderRadius:14,backgroundColor:"#eef0fb",alignItems:"center",justifyContent:"center"}, modeEmoji:{fontSize:25}, modeContent:{flex:1,marginLeft:13}, modeTitle:{fontSize:16,fontWeight:"900"}, modeText:{fontSize:12,color:"#666b78",marginTop:3,lineHeight:17}, arrow:{fontSize:34,color:"#777b89",fontWeight:"300"}, letterCard:{alignItems:"center",backgroundColor:"#151f63",borderRadius:24,paddingVertical:20,marginBottom:12}, letterLabel:{color:"white",opacity:.7,fontSize:12,fontWeight:"800",letterSpacing:2}, letter:{color:"white",fontSize:64,lineHeight:72,fontWeight:"900"}, timerTrack:{height:6,width:"80%",backgroundColor:"rgba(255,255,255,.22)",borderRadius:3,overflow:"hidden",marginTop:6}, timerFill:{height:"100%",backgroundColor:"white",borderRadius:3}, timer:{color:"white",marginTop:7,fontSize:14,fontWeight:"800"}, infoBox:{backgroundColor:"white",borderRadius:16,padding:14,marginBottom:12}, infoTitle:{fontSize:15,fontWeight:"800"}, infoText:{marginTop:4,color:"#666b78",lineHeight:19,fontSize:13}, categoryCard:{backgroundColor:"white",borderRadius:16,padding:12,marginBottom:9}, categoryHeader:{flexDirection:"row",justifyContent:"space-between",alignItems:"center",marginBottom:7}, category:{fontSize:15,fontWeight:"800"}, valid:{color:"#16803c",fontWeight:"900"}, invalid:{color:"#b42318",fontWeight:"900"}, input:{borderWidth:1,borderColor:"#d9dce6",borderRadius:11,paddingHorizontal:13,height:46,fontSize:16,backgroundColor:"#fbfcff"}, inputValid:{borderColor:"#72c58b"}, inputInvalid:{borderColor:"#e29a94"}, stopButton:{marginTop:6,borderRadius:18,backgroundColor:"#c62828",minHeight:72,alignItems:"center",justifyContent:"center"}, stopText:{color:"white",fontSize:25,fontWeight:"900"}, stopHint:{color:"white",opacity:.82,fontSize:12,marginTop:1}, resultCard:{backgroundColor:"white",borderRadius:20,padding:20,marginTop:6,alignItems:"center"}, resultTitle:{fontSize:20,fontWeight:"900"}, resultScore:{fontSize:42,fontWeight:"900",marginTop:4,color:"#151f63"}, resultSub:{color:"#666b78",fontWeight:"700"}, primaryButton:{marginTop:18,backgroundColor:"#151f63",borderRadius:14,paddingHorizontal:24,paddingVertical:13}, primaryText:{color:"white",fontSize:15,fontWeight:"800"}, secondaryButton:{marginTop:9,borderWidth:1,borderColor:"#d9dce6",borderRadius:14,paddingHorizontal:24,paddingVertical:12}, secondaryText:{color:"#151f63",fontSize:15,fontWeight:"800"}, errorBox:{backgroundColor:"#fff0ef",borderRadius:12,padding:12,marginTop:3,marginBottom:10}, errorText:{color:"#b42318",fontSize:13,textAlign:"center"}
 });
