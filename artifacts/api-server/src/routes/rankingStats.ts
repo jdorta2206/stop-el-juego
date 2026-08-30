@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { playerScoresTable, gameHistoryTable } from "@workspace/db";
-import { eq, desc, sql } from "drizzle-orm";
+import { playerScoresTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
 
 const router: IRouter = Router();
 
@@ -18,10 +18,6 @@ function isoDate(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
-/**
- * Authoritative streak calendar used by the web client.
- * The player_scores row is the source of truth; this endpoint only reads it.
- */
 router.get("/streak/calendar/:playerId", async (req, res) => {
   const { playerId } = req.params;
   const [player] = await db
@@ -42,6 +38,7 @@ router.get("/streak/calendar/:playerId", async (req, res) => {
 
   const playedDays = new Set(parseStreakDays(player.streakDaysJson));
   const today = new Date();
+  const todayString = isoDate(today);
   const days = Array.from({ length: 30 }, (_, index) => {
     const date = new Date(today);
     date.setUTCDate(today.getUTCDate() - (29 - index));
@@ -49,7 +46,7 @@ router.get("/streak/calendar/:playerId", async (req, res) => {
     return {
       date: dateString,
       played: playedDays.has(dateString),
-      isToday: dateString === isoDate(today),
+      isToday: dateString === todayString,
     };
   });
 
@@ -61,10 +58,6 @@ router.get("/streak/calendar/:playerId", async (req, res) => {
   });
 });
 
-/**
- * Player progression endpoint kept separate from /scores/:playerId so it can
- * evolve without changing the existing ranking contract.
- */
 router.get("/progress/:playerId", async (req, res) => {
   const { playerId } = req.params;
   const [player] = await db
@@ -77,6 +70,7 @@ router.get("/progress/:playerId", async (req, res) => {
       totalScore: playerScoresTable.totalScore,
       currentStreak: playerScoresTable.currentStreak,
       longestStreak: playerScoresTable.longestStreak,
+      lastPlayedDate: playerScoresTable.lastPlayedDate,
     })
     .from(playerScoresTable)
     .where(eq(playerScoresTable.playerId, playerId))
@@ -95,12 +89,6 @@ router.get("/progress/:playerId", async (req, res) => {
   const xpIntoLevel = Math.max(0, xp - currentThreshold);
   const xpForLevel = Math.max(1, nextThreshold - currentThreshold);
 
-  const [recent] = await db
-    .select({ lastPlayedDate: playerScoresTable.lastPlayedDate })
-    .from(playerScoresTable)
-    .where(eq(playerScoresTable.playerId, playerId))
-    .limit(1);
-
   res.json({
     playerId,
     xp,
@@ -116,7 +104,7 @@ router.get("/progress/:playerId", async (req, res) => {
     xpIntoLevel,
     xpForLevel,
     progress: Math.min(1, xpIntoLevel / xpForLevel),
-    lastPlayedDate: recent?.lastPlayedDate ?? null,
+    lastPlayedDate: player.lastPlayedDate ?? null,
   });
 });
 
