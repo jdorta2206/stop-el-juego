@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { gameHistoryTable, playerScoresTable } from "@workspace/db";
-import { eq, sql } from "drizzle-orm";
+import { playerScoresTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
 import { verifyClaimedIdentity } from "../lib/playerAuth";
 
 const router: IRouter = Router();
@@ -10,8 +10,7 @@ type JsonRecord = Record<string, unknown>;
 
 function parseJson<T>(value: string | null | undefined, fallback: T): T {
   try {
-    const parsed = JSON.parse(value ?? "");
-    return parsed as T;
+    return JSON.parse(value ?? "") as T;
   } catch {
     return fallback;
   }
@@ -37,8 +36,7 @@ function mergeCollectedWords(local: JsonRecord, remote: JsonRecord): JsonRecord 
 }
 
 // Authoritative player progress used by streak, collection, achievements and
-// personal-best UIs. All four are persisted on player_scores, so changing
-// device/browser does not lose progress.
+// personal-best UIs. All four are persisted on player_scores.
 router.get("/progress/:playerId", async (req, res) => {
   const { playerId } = req.params;
   const rows = await db
@@ -64,8 +62,6 @@ router.get("/progress/:playerId", async (req, res) => {
   });
 });
 
-// Calendar data is derived from the same game history used by the server to
-// record scores. This avoids a second source of truth for played days.
 router.get("/streak/calendar/:playerId", async (req, res) => {
   const { playerId } = req.params;
   const rows = await db
@@ -89,7 +85,6 @@ router.get("/streak/calendar/:playerId", async (req, res) => {
   const days = [...new Set(storedDays)].sort().slice(-30);
   const today = new Date().toISOString().slice(0, 10);
 
-  // Keep the response shape expected by the existing calendar component.
   res.json({
     currentStreak: player.currentStreak ?? 0,
     longestStreak: player.longestStreak ?? 0,
@@ -98,8 +93,8 @@ router.get("/streak/calendar/:playerId", async (req, res) => {
   });
 });
 
-// Partial, monotonic updates. Each client feature can persist its own piece
-// without overwriting another feature's progress.
+// Partial monotonic updates. A feature can save its own progress without
+// overwriting another feature's data.
 router.post("/progress/:playerId", async (req, res) => {
   const { playerId } = req.params;
   if (!verifyClaimedIdentity(req, playerId)) {
@@ -120,7 +115,7 @@ router.post("/progress/:playerId", async (req, res) => {
 
   const player = rows[0];
   const body = (req.body ?? {}) as JsonRecord;
-  const updates: Record<string, unknown> = {};
+  const updates: JsonRecord = {};
 
   if (Array.isArray(body.achievements)) {
     const current = parseJson<string[]>(player.achievementsJson, []);
@@ -154,7 +149,7 @@ router.post("/progress/:playerId", async (req, res) => {
   if (Object.keys(updates).length > 0) {
     await db
       .update(playerScoresTable)
-      .set({ ...updates, updatedAt: new Date() })
+      .set(updates as any)
       .where(eq(playerScoresTable.playerId, playerId));
   }
 
