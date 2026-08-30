@@ -2,7 +2,7 @@
   "name": "stop-ios",
   "version": "1.0.0",
   "private": true,
-  "main": "expo-router/entry",
+  "main": "expo/AppEntry.js",
   "scripts": {
     "start": "expo start",
     "ios": "expo run:ios",
