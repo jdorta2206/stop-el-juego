@@ -89,6 +89,7 @@ app.get('/api/check-version', (req, res) => {
     updateUrl: isAllowed ? null : PLAY_STORE_URL,
     message: isAllowed ? null : "Tu versión de STOP es muy antigua. Actualiza desde Google Play para seguir jugando."
   });
+
 });
 
 if (process.env["SERVE_CLIENT"] === "1") {
@@ -102,9 +103,30 @@ if (process.env["SERVE_CLIENT"] === "1") {
       if (err && !res.headersSent) res.status(404).json({ error: "assetlinks.json not found" });
     });
   });
-  app.use(express.static(clientDist, { dotfiles: "allow" }));
-  app.get(/^\/(?!api(?:\/|$)).*/, (_req, res) => {
-    res.sendFile(path.join(clientDist, "index.html"));
+  app.use(express.static(clientDist, {
+    dotfiles: "allow",
+    index: false,
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith("index.html")) {
+        res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+      } else {
+        res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+      }
+    },
+  }));
+
+  // SPA fallback: only application routes should receive index.html.
+  // Never return HTML for a missing JS/CSS/image module, otherwise browsers
+  // reject it with a strict MIME-type error and the whole app fails to boot.
+  app.get(/^\/(?!api(?:\/|$)).*/, (req, res, next) => {
+    const pathname = req.path;
+    if (/\.(?:js|mjs|css|map|json|png|jpe?g|gif|svg|webp|ico|woff2?|ttf|wasm|webmanifest)$/i.test(pathname)) {
+      res.status(404).end();
+      return;
+    }
+    res.sendFile(path.join(clientDist, "index.html"), {
+      headers: { "Cache-Control": "no-cache, no-store, must-revalidate" },
+    }, next);
   });
 }
 
