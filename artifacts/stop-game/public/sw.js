@@ -1,4 +1,4 @@
-const CACHE = "stop-v10";
+const CACHE = "stop-v11";
 const DATA_CACHE = "stop-data-v1";
 const STATIC = ["/", "/manifest.json", "/images/stop-logo.png", "/images/icon-192.png", "/images/icon-512.png"];
 const OFFLINE_BUNDLE_PATH = "/api/game/offline-bundle";
@@ -6,8 +6,8 @@ const OFFLINE_BUNDLE_PATH = "/api/game/offline-bundle";
 self.addEventListener("install", (e) => {
   e.waitUntil(
     Promise.all([
-      caches.open(CACHE).then((c) => Promise.all(STATIC.map((url) => fetch(url, { cache: "reload" }).then((res) => (res.ok ? c.put(url, res) : null)).catch(() => null)))),
-      caches.open(DATA_CACHE).then((c) => fetch(OFFLINE_BUNDLE_PATH, { cache: "reload" }).then((res) => (res.ok ? c.put(OFFLINE_BUNDLE_PATH, res) : null)).catch(() => null)),
+      caches.open(CACHE).then((c) => Promise.all(STATIC.map((url) => fetch(url, { cache: "no-store" }).then((res) => (res.ok ? c.put(url, res) : null)).catch(() => null)))),
+      caches.open(DATA_CACHE).then((c) => fetch(OFFLINE_BUNDLE_PATH, { cache: "no-store" }).then((res) => (res.ok ? c.put(OFFLINE_BUNDLE_PATH, res) : null)).catch(() => null)),
     ]).then(() => self.skipWaiting())
   );
 });
@@ -41,10 +41,29 @@ self.addEventListener("fetch", (e) => {
     return;
   }
 
-  e.respondWith(caches.match(req).then((cached) => cached || fetch(req).then((res) => {
-    if (res.ok && url.pathname.startsWith("/assets/")) caches.open(CACHE).then((cache) => cache.put(req, res.clone())).catch(() => {});
-    return res;
-  }).catch(() => cached || new Response("Offline", { status: 503 }))));
+  // HTML/navigation must always prefer the network. The previous service
+  // worker cached "/" indefinitely, which could leave index.html pointing at
+  // an old hashed JS bundle after a deployment. Keep a cached copy only as an
+  // offline fallback; never serve it before checking the current deployment.
+  if (req.mode === "navigate" || url.pathname === "/" || url.pathname === "/index.html") {
+    e.respondWith(
+      fetch(req, { cache: "no-store" })
+        .then((res) => res)
+        .catch(() => caches.match("/").then((cached) => cached || new Response("Offline", { status: 503 })))
+    );
+    return;
+  }
+
+  // Hashed static assets can safely use cache-first. If an old asset was
+  // removed by a deployment, do not turn the request into HTML.
+  e.respondWith(
+    caches.match(req).then((cached) => cached || fetch(req).then((res) => {
+      if (res.ok && url.pathname.startsWith("/assets/")) {
+        caches.open(CACHE).then((cache) => cache.put(req, res.clone())).catch(() => {});
+      }
+      return res;
+    }).catch(() => cached || new Response("Offline", { status: 503 })))
+  );
 });
 
 // Web Push: receive server notifications and display them while the game is
