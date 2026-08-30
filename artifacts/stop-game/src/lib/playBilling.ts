@@ -12,9 +12,18 @@ export function hasTwaVersionSignal(): boolean {
   return new URLSearchParams(window.location.search).has("appVersion") || /STOPApp\/[0-9][0-9.]*/i.test(navigator.userAgent || "");
 }
 export function isLikelyPlayTwa(): boolean {
-  if (hasPlayTwaMarker() || hasTwaVersionSignal() || hasGooglePlayBillingApi() || hasAndroidAppReferrer()) return true;
+  // Strong signal: Android Web App referrer is supplied by the Android TWA.
+  if (hasAndroidAppReferrer()) return true;
+
+  // A marker alone is not sufficient: URLs can be opened manually in a browser.
   if (typeof window === "undefined" || typeof navigator === "undefined") return false;
-  return /Android/i.test(navigator.userAgent || "") && (window.matchMedia?.("(display-mode: standalone)")?.matches ?? false);
+  const isAndroid = /Android/i.test(navigator.userAgent || "");
+  if (!isAndroid) return false;
+
+  // Android-only signals are useful as a fallback when the TWA referrer is unavailable.
+  if (hasPlayTwaMarker() || hasTwaVersionSignal() || hasGooglePlayBillingApi()) return true;
+
+  return window.matchMedia?.("(display-mode: standalone)")?.matches ?? false;
 }
 function authHeadersSafe(): Record<string, string> {
   try { const token = localStorage.getItem("stop_session_token") || sessionStorage.getItem("stop_session_token"); return token ? { "x-stop-token": token } : {}; } catch { return {}; }
