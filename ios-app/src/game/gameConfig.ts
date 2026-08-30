@@ -1,5 +1,8 @@
 import type { GameMode } from './gameEngine';
-import { getCategoryPack, type CategoryPackId, type SupportedGameLanguage } from './categoryPacks';
+import { getPackCategories, type StopLanguage } from './categoryPacks';
+
+export type CategoryPackId = 'classic' | 'football' | 'cinema' | 'food' | 'music' | 'geography' | 'science' | 'history';
+export type SupportedGameLanguage = StopLanguage;
 
 export type NativeGameConfig = {
   mode: GameMode;
@@ -19,13 +22,17 @@ export const GAME_MODES: Array<{ id: GameMode; label: string; seconds: number }>
 ];
 
 export function getCategoriesForConfig(config: NativeGameConfig) {
-  return getCategoryPack(config.categoryPack, config.language);
+  return getPackCategories(config.categoryPack, config.language).map((name, index) => ({
+    id: `${config.categoryPack}-${index}`,
+    name,
+  }));
 }
 
 export function normalizeGameConfig(config?: Partial<NativeGameConfig>): NativeGameConfig {
+  const categoryPack = config?.categoryPack;
   return {
     mode: config?.mode === 'quick' ? 'quick' : 'normal',
-    language: config?.language === 'es' || config?.language === 'en' || config?.language === 'pt' || config?.language === 'fr' ? config.language : 'es',
-    categoryPack: config?.categoryPack === 'classic' || config?.categoryPack === 'football' || config?.categoryPack === 'cinema-tv' || config?.categoryPack === 'food' || config?.categoryPack === 'music' || config?.categoryPack === 'geography' || config?.categoryPack === 'science' || config?.categoryPack === 'history' ? config.categoryPack : 'classic',
+    language: config?.language === 'en' || config?.language === 'pt' || config?.language === 'fr' ? config.language : 'es',
+    categoryPack: categoryPack === 'football' || categoryPack === 'cinema' || categoryPack === 'food' || categoryPack === 'music' || categoryPack === 'geography' || categoryPack === 'science' || categoryPack === 'history' ? categoryPack : 'classic',
   };
 }
