@@ -4,6 +4,35 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
     <title>STOP! Juego de Palabras Online</title>
+    <!-- Emergency production cache recovery: if an old HTML document is cached,
+         clear the previous SW/cache and reload once with a cache-busting query. -->
+    <script>
+      (function () {
+        try {
+          var key = "stop-html-recovery-v1";
+          if (!sessionStorage.getItem(key)) {
+            sessionStorage.setItem(key, "1");
+            if ("serviceWorker" in navigator) {
+              navigator.serviceWorker.getRegistrations().then(function (regs) {
+                return Promise.all(regs.map(function (r) { return r.unregister(); }));
+              }).then(function () {
+                return caches && caches.keys ? caches.keys().then(function (keys) {
+                  return Promise.all(keys.map(function (k) { return caches.delete(k); }));
+                }) : undefined;
+              }).catch(function () {}).finally(function () {
+                var u = new URL(location.href);
+                u.searchParams.set("_app_refresh", String(Date.now()));
+                location.replace(u.href);
+              });
+            } else {
+              var u = new URL(location.href);
+              u.searchParams.set("_app_refresh", String(Date.now()));
+              location.replace(u.href);
+            }
+          }
+        } catch (_) {}
+      })();
+    </script>
     <!-- Railway: frontend + API are built and served as one production service. -->
     <link rel="icon" type="image/png" href="/images/stop-logo.png" />
     <link rel="apple-touch-icon" href="/images/icon-192.png" />
