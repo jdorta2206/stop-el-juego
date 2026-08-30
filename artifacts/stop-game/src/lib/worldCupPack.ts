@@ -5,12 +5,34 @@ const API_BASE = getApiUrl();
 export const WORLD_CUP_PACK_SKU = "pack_mundial";
 export const WORLD_CUP_PACK_PRICE_LABEL = "2,99 €";
 
-// Esta función está obsoleta. La compra se hace directamente con Google Play.
+/**
+ * Web checkout for the World Cup pack.
+ * Android TWA must NOT call this function: CosmeticShop selects Google Play
+ * through the shared payment-channel detector. This function is the Stripe
+ * path for ordinary web traffic only.
+ */
 export async function startPackCheckout(opts: {
   playerId: string;
   email?: string;
 }): Promise<{ url: string }> {
-  throw new Error("Esta función está obsoleta. Usa Google Play Billing directamente.");
+  if (!opts.playerId) throw new Error("Debes iniciar sesión antes de comprar el Pack Mundial");
+
+  const res = await fetch(`${API_BASE}/api/stripe/checkout-pack`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    credentials: "include",
+    body: JSON.stringify({
+      playerId: opts.playerId,
+      email: opts.email,
+      sku: WORLD_CUP_PACK_SKU,
+    }),
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.url) {
+    throw new Error(data.error || "No se pudo iniciar el pago con Stripe");
+  }
+  return { url: data.url as string };
 }
 
 export async function claimStripePack(opts: {
