@@ -5,29 +5,20 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 
 export type RootStackParamList = {
   Home: undefined;
-  Game: undefined;
-  Ranking: undefined;
-  Profile: undefined;
-  Shop: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
-function HomeScreen({ navigation }: any) {
+function HomeScreen() {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>STOP! Juego de Palabras</Text>
-      <Text style={styles.subtitle}>La aplicación nativa para iPhone</Text>
-      <Pressable style={styles.button} onPress={() => navigation.navigate('Game')}><Text style={styles.buttonText}>Jugar</Text></Pressable>
-      <Pressable style={styles.button} onPress={() => navigation.navigate('Ranking')}><Text style={styles.buttonText}>Ranking</Text></Pressable>
-      <Pressable style={styles.button} onPress={() => navigation.navigate('Profile')}><Text style={styles.buttonText}>Perfil</Text></Pressable>
-      <Pressable style={styles.button} onPress={() => navigation.navigate('Shop')}><Text style={styles.buttonText}>Tienda</Text></Pressable>
+      <Text style={styles.subtitle}>Aplicación nativa de iOS</Text>
+      <Pressable style={styles.button} accessibilityRole="button">
+        <Text style={styles.buttonText}>Jugar</Text>
+      </Pressable>
     </View>
   );
-}
-
-function PlaceholderScreen({ title }: { title: string }) {
-  return <View style={styles.container}><Text style={styles.title}>{title}</Text><Text style={styles.subtitle}>Pantalla nativa en construcción.</Text></View>;
 }
 
 export default function AppNavigator() {
@@ -35,10 +26,6 @@ export default function AppNavigator() {
     <NavigationContainer>
       <Stack.Navigator>
         <Stack.Screen name="Home" component={HomeScreen} options={{ title: 'STOP' }} />
-        <Stack.Screen name="Game" children={() => <PlaceholderScreen title="Partida" />} />
-        <Stack.Screen name="Ranking" children={() => <PlaceholderScreen title="Ranking" />} />
-        <Stack.Screen name="Profile" children={() => <PlaceholderScreen title="Perfil" />} />
-        <Stack.Screen name="Shop" children={() => <PlaceholderScreen title="Tienda" />} />
       </Stack.Navigator>
     </NavigationContainer>
   );
