@@ -14,7 +14,14 @@
     "plugins": [
       "expo-apple-authentication",
       "expo-secure-store",
-      "react-native-webview"
+      "react-native-webview",
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "REPLACE_WITH_GOOGLE_REVERSED_CLIENT_ID"
+        }
+      ],
+      "react-native-fbsdk-next"
     ]
   }
 }
