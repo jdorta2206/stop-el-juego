@@ -3,6 +3,7 @@ import { clearSession, getSession, type NativeSession } from './auth';
 import { signInWithApple } from './appleAuth';
 import { signInWithGoogle } from './googleAuth';
 import { signInWithFacebook } from './facebookAuth';
+import { analyticsHeartbeat } from './api';
 
 type SessionContextValue = {
   session: NativeSession | null;
@@ -25,6 +26,23 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     refresh().finally(() => setLoading(false));
   }, [refresh]);
+
+  // Keep the private /test "online now" metric accurate for iOS. Analytics
+  // failures are intentionally ignored so they can never block gameplay.
+  useEffect(() => {
+    let cancelled = false;
+    const ping = async () => {
+      if (cancelled) return;
+      const current = await getSession();
+      await analyticsHeartbeat(current?.playerId ?? null);
+    };
+    ping();
+    const timer = setInterval(ping, 30_000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, []);
 
   const signInApple = useCallback(async () => {
     const next = await signInWithApple();
