@@ -62,6 +62,28 @@ app.use(express.urlencoded({ extended: true, limit: "64kb" }));
 app.use("/api", generalLimiter);
 app.use("/api", router);
 app.use("/test/analytics", adminAnalytics);
+
+// Keep the existing /test panel untouched while exposing the new analytics
+// dashboard directly inside it. The wrapper only alters successful HTML GET
+// responses; POST actions and error responses continue through unchanged.
+app.use("/test", (req, res, next) => {
+  if (req.method !== "GET" || req.path !== "/") return next();
+
+  const originalSend = res.send.bind(res);
+  res.send = ((body: any) => {
+    if (typeof body !== "string" || !body.includes("</body>")) return originalSend(body);
+    const analyticsPanel = `
+      <section style="margin-top:28px;padding:16px;background:#141a22;border:1px solid #283140;border-radius:14px">
+        <h2 style="margin:0 0 8px;font-size:1.05rem">📊 Analytics del juego</h2>
+        <p style="margin:0 0 12px;color:#8a98a8;font-size:.85rem">Web · Android · iOS · sesiones · partidas · publicidad · eventos</p>
+        <iframe src="/test/analytics" title="Analytics de STOP" style="display:block;width:100%;height:760px;border:1px solid #283140;border-radius:10px;background:#0f1216"></iframe>
+      </section>`;
+    return originalSend(body.replace("</body>", `${analyticsPanel}</body>`));
+  }) as typeof res.send;
+
+  next();
+});
+
 app.use("/test", adminPanel);
 
 const MIN_APP_VERSION = "1.3.4.0";
