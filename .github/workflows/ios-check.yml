@@ -30,6 +30,22 @@ jobs:
       - name: Install dependencies
         run: npm install
       - name: Typecheck
-        run: npm run typecheck
+        id: typecheck
+        continue-on-error: true
+        run: npm run typecheck 2>&1 | tee /tmp/typecheck.log
       - name: Expo doctor
-        run: npx expo-doctor
+        id: doctor
+        continue-on-error: true
+        run: npx expo-doctor 2>&1 | tee /tmp/expo-doctor.log
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-validation-diagnostics
+          path: |
+            /tmp/typecheck.log
+            /tmp/expo-doctor.log
+          if-no-files-found: warn
+      - name: Fail if validation failed
+        if: steps.typecheck.outcome == 'failure' || steps.doctor.outcome == 'failure'
+        run: exit 1
