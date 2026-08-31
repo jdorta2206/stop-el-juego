@@ -4,9 +4,7 @@ import { saveSession, type NativeSession } from './auth';
 
 export async function signInWithFacebook(): Promise<NativeSession> {
   const result = await LoginManager.logInWithPermissions(['public_profile', 'email']);
-  if (result.isCancelled) {
-    throw Object.assign(new Error('Inicio de sesión cancelado.'), { code: 'ERR_REQUEST_CANCELED' });
-  }
+  if (result.isCancelled) throw new Error('Facebook login cancelado.');
 
   const token = await AccessToken.getCurrentAccessToken();
   if (!token?.accessToken) throw new Error('Facebook no devolvió un access token válido.');
