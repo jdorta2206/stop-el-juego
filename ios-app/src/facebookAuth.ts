@@ -1,23 +1,20 @@
+import { AccessToken, LoginManager } from 'react-native-fbsdk-next';
 import { apiFetch } from './api';
 import { saveSession, type NativeSession } from './auth';
 
-/**
- * Native Facebook Login integration point.
- *
- * The access token is obtained by the native Facebook Login SDK. It is then
- * exchanged server-side so the existing Facebook account can be resolved
- * instead of creating a second player profile.
- */
-export async function signInWithFacebook(accessToken: string): Promise<NativeSession> {
-  if (!accessToken) {
-    throw new Error('Facebook no devolvió un access token válido.');
+export async function signInWithFacebook(): Promise<NativeSession> {
+  const result = await LoginManager.logInWithPermissions(['public_profile', 'email']);
+  if (result.isCancelled) {
+    throw Object.assign(new Error('Inicio de sesión cancelado.'), { code: 'ERR_REQUEST_CANCELED' });
   }
+
+  const token = await AccessToken.getCurrentAccessToken();
+  if (!token?.accessToken) throw new Error('Facebook no devolvió un access token válido.');
 
   const session = await apiFetch<NativeSession>('/api/auth/facebook/native', {
     method: 'POST',
-    body: JSON.stringify({ accessToken }),
+    body: JSON.stringify({ accessToken: token.accessToken.toString() }),
   });
-
   await saveSession(session);
   return session;
 }
