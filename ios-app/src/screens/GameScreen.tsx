@@ -4,7 +4,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { authenticatedFetch } from '../auth';
 import { buildValidationPayload, createRound, isFinalRound, nextRound, setAnswer, type GameCategory, type GameRound, type ValidateRoundResult } from '../game/gameEngine';
 import { getCategoriesForConfig, normalizeGameConfig } from '../game/gameConfig';
-import type { RootStackParamList } from '../navigation/AppNavigator';
+import type { RootStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Game'>;
 
