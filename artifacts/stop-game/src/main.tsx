@@ -8,8 +8,6 @@ import { captureInstalledAppVersion, getInstalledAppVersion } from "./lib/appVer
 
 captureInstalledAppVersion();
 
-// Analytics is isolated from gameplay. The Android TWA is identified by the
-// explicit source marker in its launch URL, with appVersion kept as fallback.
 function startAnalyticsHeartbeat() {
   if (typeof window === "undefined") return;
 
@@ -56,12 +54,7 @@ function startAnalyticsHeartbeat() {
 }
 
 startAnalyticsHeartbeat();
-
 consumeAuthHandoff();
-
-// Nota: no redirigir stop-el-juego.replit.app → stopjuegodepalabras.com desde
-// JS porque rompe el scope de la TWA publicada. La deduplicación de push se
-// hace en el servidor.
 
 createRoot(document.getElementById("root")!).render(
   <HelmetProvider>
