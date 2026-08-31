@@ -8,15 +8,7 @@ import HomeScreen from '../screens/HomeScreen';
 import GameSetupScreen from '../screens/GameSetupScreen';
 import GameScreen from '../screens/GameScreen';
 import MultiplayerScreen from '../screens/MultiplayerScreen';
-import type { NativeGameConfig } from '../game/gameConfig';
-
-export type RootStackParamList = {
-  Login: undefined;
-  Home: undefined;
-  GameSetup: undefined;
-  Game: { config?: NativeGameConfig };
-  Multiplayer: undefined;
-};
+import type { RootStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
