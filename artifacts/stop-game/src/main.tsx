@@ -4,12 +4,59 @@ import App from "./App";
 import "./index.css";
 import { ensureOfflineBundle } from "./lib/offlineGame";
 import { consumeAuthHandoff } from "./lib/oauth";
-import { captureInstalledAppVersion } from "./lib/appVersion";
+import { captureInstalledAppVersion, getInstalledAppVersion } from "./lib/appVersion";
 
 // Capture the Android (TWA) app version reported on the launch URL / UA before
 // any navigation can drop the `?appVersion=` query param. Persists it so the
 // update prompt can tell whether the user is actually on an old build.
 captureInstalledAppVersion();
+
+// Analytics is deliberately isolated from gameplay. The Android TWA reports
+// its installed version, so it can be distinguished from a normal web visit.
+// If analytics fails, the game continues normally.
+function startAnalyticsHeartbeat() {
+  if (typeof window === "undefined") return;
+
+  const installedVersion = getInstalledAppVersion();
+  const platform = installedVersion ? "android" : "web";
+  const sessionKey = "stop_analytics_session_id";
+  let sessionId: string;
+
+  try {
+    const stored = sessionStorage.getItem(sessionKey);
+    if (stored) {
+      sessionId = stored;
+    } else {
+      sessionId = `${platform}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+      sessionStorage.setItem(sessionKey, sessionId);
+    }
+  } catch {
+    sessionId = `${platform}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+  }
+
+  const ping = () => {
+    try {
+      const version = getInstalledAppVersion();
+      void fetch(`${window.location.origin}/api/analytics/heartbeat`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Client-Platform": platform,
+          ...(version ? { "X-Client-Version": version } : {}),
+        },
+        body: JSON.stringify({ sessionId }),
+        keepalive: true,
+      }).catch(() => {});
+    } catch {
+      // Analytics must never interfere with gameplay.
+    }
+  };
+
+  ping();
+  window.setInterval(ping, 30_000);
+}
+
+startAnalyticsHeartbeat();
 
 // Import any cross-origin OAuth handoff carried in the URL hash into THIS
 // origin's storage BEFORE React mounts, so the session restore / AuthModal
