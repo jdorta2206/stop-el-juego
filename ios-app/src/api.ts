@@ -1,4 +1,6 @@
 const API_BASE_URL = "https://www.stopjuegodepalabras.com";
+const CLIENT_PLATFORM = "ios";
+const CLIENT_VERSION = "1.0.0";
 
 export class ApiError extends Error {
   status: number;
@@ -23,6 +25,8 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
 
   const headers = new Headers(options.headers);
   headers.set("Accept", "application/json");
+  headers.set("X-Client-Platform", CLIENT_PLATFORM);
+  headers.set("X-Client-Version", CLIENT_VERSION);
   if (options.body !== undefined && !(options.body instanceof FormData) && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
@@ -63,4 +67,4 @@ export const api = {
     apiFetch<T>(path, { ...options, method: "DELETE" }),
 };
 
-export { API_BASE_URL };
+export { API_BASE_URL, CLIENT_PLATFORM, CLIENT_VERSION };
