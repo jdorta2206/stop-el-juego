@@ -8,8 +8,8 @@ type SessionContextValue = {
   session: NativeSession | null;
   loading: boolean;
   signInApple: () => Promise<NativeSession>;
-  signInGoogle: (credential: { idToken: string; accessToken?: string }) => Promise<NativeSession>;
-  signInFacebook: (accessToken: string) => Promise<NativeSession>;
+  signInGoogle: () => Promise<NativeSession>;
+  signInFacebook: () => Promise<NativeSession>;
   signOut: () => Promise<void>;
   refresh: () => Promise<void>;
 };
@@ -20,9 +20,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<NativeSession | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const refresh = useCallback(async () => {
-    setSession(await getSession());
-  }, []);
+  const refresh = useCallback(async () => setSession(await getSession()), []);
 
   useEffect(() => {
     refresh().finally(() => setLoading(false));
@@ -34,14 +32,14 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     return next;
   }, []);
 
-  const signInGoogle = useCallback(async (credential: { idToken: string; accessToken?: string }) => {
-    const next = await signInWithGoogle(credential);
+  const signInGoogle = useCallback(async () => {
+    const next = await signInWithGoogle();
     setSession(next);
     return next;
   }, []);
 
-  const signInFacebook = useCallback(async (accessToken: string) => {
-    const next = await signInWithFacebook(accessToken);
+  const signInFacebook = useCallback(async () => {
+    const next = await signInWithFacebook();
     setSession(next);
     return next;
   }, []);
@@ -55,6 +53,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     () => ({ session, loading, signInApple, signInGoogle, signInFacebook, signOut, refresh }),
     [session, loading, signInApple, signInGoogle, signInFacebook, signOut, refresh],
   );
+
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
 }
 
