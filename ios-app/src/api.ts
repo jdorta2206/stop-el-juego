@@ -1,6 +1,7 @@
 const API_BASE_URL = "https://www.stopjuegodepalabras.com";
 const CLIENT_PLATFORM = "ios";
 const CLIENT_VERSION = "1.0.0";
+const ANALYTICS_SESSION_ID = `ios_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 
 export class ApiError extends Error {
   status: number;
@@ -56,6 +57,32 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
   return data as T;
 }
 
+export async function analyticsHeartbeat(playerId?: string | null, language?: string | null): Promise<void> {
+  try {
+    await apiFetch('/api/analytics/heartbeat', {
+      method: 'POST',
+      body: { sessionId: ANALYTICS_SESSION_ID, playerId: playerId ?? null, language: language ?? null },
+    });
+  } catch {
+    // Analytics must never interfere with gameplay or login.
+  }
+}
+
+export async function analyticsEvent(input: {
+  eventName: string;
+  playerId?: string | null;
+  language?: string | null;
+  mode?: string | null;
+  aiDifficulty?: string | null;
+  metadata?: Record<string, unknown>;
+}): Promise<void> {
+  try {
+    await apiFetch('/api/analytics/event', { method: 'POST', body: { ...input, sessionId: ANALYTICS_SESSION_ID } });
+  } catch {
+    // Analytics must never interfere with gameplay.
+  }
+}
+
 export const api = {
   get: <T>(path: string, options?: Omit<ApiFetchOptions, "method" | "body">) =>
     apiFetch<T>(path, { ...options, method: "GET" }),
@@ -67,4 +94,4 @@ export const api = {
     apiFetch<T>(path, { ...options, method: "DELETE" }),
 };
 
-export { API_BASE_URL, CLIENT_PLATFORM, CLIENT_VERSION };
+export { API_BASE_URL, CLIENT_PLATFORM, CLIENT_VERSION, ANALYTICS_SESSION_ID };
