@@ -51,11 +51,17 @@ async function ensureAnalyticsTables(): Promise<void> {
   `));
 }
 
-// Native/web clients call this periodically. It gives /test a reliable
-// platform-aware "online now" count without exposing personal data publicly.
+// Start schema initialization when the analytics module is loaded (server boot),
+// rather than waiting for the first HTTP request. Routes await the same promise,
+// so concurrent first requests cannot race table creation.
+const analyticsTablesReady = ensureAnalyticsTables().catch((err) => {
+  console.error("[analytics] schema initialization failed:", err);
+  throw err;
+});
+
 router.post("/heartbeat", presenceLimiter, async (req, res) => {
   try {
-    await ensureAnalyticsTables();
+    await analyticsTablesReady;
     const body = (req.body ?? {}) as Record<string, unknown>;
     const sessionId = typeof body.sessionId === "string" ? body.sessionId.trim() : "";
     const playerId = typeof body.playerId === "string" ? body.playerId.trim() : null;
@@ -87,12 +93,9 @@ router.post("/heartbeat", presenceLimiter, async (req, res) => {
   }
 });
 
-// Generic event endpoint for future instrumentation: mode, AI difficulty,
-// language, retention funnel, ads, purchases, etc. It deliberately stores
-// aggregate/product telemetry only; no email, token, or raw request payload.
 router.post("/event", presenceLimiter, async (req, res) => {
   try {
-    await ensureAnalyticsTables();
+    await analyticsTablesReady;
     const body = (req.body ?? {}) as Record<string, unknown>;
     const eventName = typeof body.eventName === "string" ? body.eventName.trim().slice(0, 80) : "";
     if (!eventName) return res.status(400).json({ error: "eventName required" });
@@ -119,11 +122,9 @@ router.post("/event", presenceLimiter, async (req, res) => {
   }
 });
 
-// Private/admin consumers can use this later to power the /test dashboard.
-// The route itself does not expose identities or raw events to normal players.
 router.get("/summary", async (_req, res) => {
   try {
-    await ensureAnalyticsTables();
+    await analyticsTablesReady;
     const rows = await db.execute(sql`
       SELECT platform, COUNT(*)::int AS active
       FROM analytics_sessions
