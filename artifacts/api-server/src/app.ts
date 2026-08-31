@@ -5,6 +5,7 @@ import cors from "cors";
 import cookieParser from "cookie-parser";
 import router from "./routes";
 import adminPanel from "./routes/admin";
+import adminAnalytics from "./routes/adminAnalytics";
 import { WebhookHandlers } from "./webhookHandlers";
 import { generalLimiter } from "./middlewares/rateLimit";
 
@@ -60,6 +61,7 @@ app.use(express.json({ limit: "256kb" }));
 app.use(express.urlencoded({ extended: true, limit: "64kb" }));
 app.use("/api", generalLimiter);
 app.use("/api", router);
+app.use("/test/analytics", adminAnalytics);
 app.use("/test", adminPanel);
 
 const MIN_APP_VERSION = "1.3.4.0";
