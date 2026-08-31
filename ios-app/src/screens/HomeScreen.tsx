@@ -2,7 +2,7 @@ import React from 'react';
 import { Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useSession } from '../session';
-import type { RootStackParamList } from '../navigation/AppNavigator';
+import type { RootStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Home'>;
 
@@ -18,7 +18,7 @@ export default function HomeScreen({ navigation }: Props) {
           {session?.displayName ? `Hola, ${session.displayName}` : 'Listo para jugar'}
         </Text>
 
-        <Pressable style={styles.primary} onPress={() => navigation.navigate('Game')}>
+        <Pressable style={styles.primary} onPress={() => navigation.navigate('Game', {})}>
           <Text style={styles.primaryText}>JUGAR</Text>
         </Pressable>
 
