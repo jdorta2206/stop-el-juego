@@ -1,30 +1,37 @@
+import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
 import { apiFetch } from './api';
 import { saveSession, type NativeSession } from './auth';
 
-/**
- * Native Google Sign-In integration point.
- *
- * The native credential must be supplied by the Google Sign-In SDK and then
- * exchanged with the backend. Keeping the exchange isolated here prevents
- * the UI from depending on Google SDK details and makes account linking
- * explicit: the backend must resolve the existing Google account.
- */
-export async function signInWithGoogle(credential: {
-  idToken: string;
-  accessToken?: string;
-}): Promise<NativeSession> {
-  if (!credential.idToken) {
-    throw new Error('Google no devolvió un ID token válido.');
-  }
+let configured = false;
 
-  const session = await apiFetch<NativeSession>('/api/auth/google/native', {
-    method: 'POST',
-    body: JSON.stringify({
-      idToken: credential.idToken,
-      accessToken: credential.accessToken,
-    }),
+function ensureConfigured() {
+  if (configured) return;
+  GoogleSignin.configure({
+    iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
+    webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+    offlineAccess: false,
   });
+  configured = true;
+}
 
-  await saveSession(session);
-  return session;
+export async function signInWithGoogle(): Promise<NativeSession> {
+  ensureConfigured();
+  try {
+    await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: false }).catch(() => undefined);
+    await GoogleSignin.signIn();
+    const tokens = await GoogleSignin.getTokens();
+    if (!tokens.idToken) throw new Error('Google no devolvió un ID token válido.');
+
+    const session = await apiFetch<NativeSession>('/api/auth/google/native', {
+      method: 'POST',
+      body: JSON.stringify({ idToken: tokens.idToken, accessToken: tokens.accessToken }),
+    });
+    await saveSession(session);
+    return session;
+  } catch (error) {
+    if ((error as { code?: string })?.code === statusCodes.SIGN_IN_CANCELLED) {
+      throw Object.assign(new Error('Inicio de sesión cancelado.'), { code: 'ERR_REQUEST_CANCELED' });
+    }
+    throw error;
+  }
 }
