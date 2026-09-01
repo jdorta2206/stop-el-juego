@@ -40,17 +40,18 @@ export function usePushNotifications(playerId: string | undefined, language: str
         const sub = await reg.pushManager.getSubscription();
         if (cancelled) return;
 
-        let disabled = false;
-        try { disabled = localStorage.getItem(DISABLED_KEY) === "1"; } catch {}
-
-        if (disabled) {
-          setIsSubscribed(false);
+        // Prioritize the browser's actual persisted Push API subscription.
+        if (sub) {
+          setIsSubscribed(true);
+          try { localStorage.removeItem(DISABLED_KEY); } catch {}
+        } else {
+          let disabled = false;
+          try { disabled = localStorage.getItem(DISABLED_KEY) === "1"; } catch {}
+          setIsSubscribed(!disabled);
           return;
         }
 
-        setIsSubscribed(!!sub);
-
-        if (sub && perm === "granted") {
+        if (perm === "granted") {
           const tzOffsetMinutes = -new Date().getTimezoneOffset();
           try {
             const res = await fetch(`${API_BASE}/api/notifications/subscribe`, {
