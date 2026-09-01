@@ -40,17 +40,23 @@ export function usePushNotifications(playerId: string | undefined, language: str
         const sub = await reg.pushManager.getSubscription();
         if (cancelled) return;
 
-        let disabled = false;
-        try { disabled = localStorage.getItem(DISABLED_KEY) === "1"; } catch {}
-
-        if (disabled) {
-          setIsSubscribed(false);
+        // FIXED: Prioritize actual subscription state over disabled flag.
+        // If there IS a valid subscription, user is subscribed regardless of disabled flag.
+        // Only set isSubscribed=false if NO subscription AND disabled flag is set.
+        if (sub) {
+          setIsSubscribed(true);
+          // Clear disabled flag since a subscription exists (ensures clean state going forward)
+          try { localStorage.removeItem(DISABLED_KEY); } catch {}
+        } else {
+          // No subscription in browser
+          let disabled = false;
+          try { disabled = localStorage.getItem(DISABLED_KEY) === "1"; } catch {}
+          setIsSubscribed(!disabled);
           return;
         }
 
-        setIsSubscribed(!!sub);
-
-        if (sub && perm === "granted") {
+        // Only proceed with backfill if subscription exists and permission is granted
+        if (perm === "granted") {
           const tzOffsetMinutes = -new Date().getTimezoneOffset();
           try {
             const res = await fetch(`${API_BASE}/api/notifications/subscribe`, {
@@ -185,3 +191,4 @@ export function usePushNotifications(playerId: string | undefined, language: str
 
   return { permission, isSubscribed, loading, subscribe, unsubscribe, isSupported, getPreferences, updatePreferences };
 }
+
