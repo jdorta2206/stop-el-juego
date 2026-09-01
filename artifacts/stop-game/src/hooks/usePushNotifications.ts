@@ -4,7 +4,8 @@ import { getApiUrl } from "@/lib/utils";
 const API_BASE = getApiUrl();
 const VAPID_PUBLIC =
   import.meta.env.VITE_VAPID_PUBLIC_KEY ||
-  "BOwVNL3sEONgyFulirkX5dzwQo662Yj2_C846OSMrTSfiz4GFwEsl3_1NY3x_GqJIco8P7Ls85u56IRC3Y8Bj2c";
+  "BOwVNL3sEONgyFulirkX5dzwQo662jY2_C846OSMrTSfiz4GFwEsl3_1NY3x_GqJIco8P7Ls85u56IRC3Y8Bj2c";
+const DISABLED_KEY = "stop_push_notifications_disabled";
 
 function urlB64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
@@ -30,7 +31,8 @@ export function usePushNotifications(playerId: string | undefined, language: str
           return;
         }
 
-        if (!cancelled) setPermission(Notification.permission as NotifPermission);
+        const perm = Notification.permission as NotifPermission;
+        if (!cancelled) setPermission(perm);
 
         const reg = await navigator.serviceWorker.ready;
         if (cancelled) return;
@@ -38,13 +40,17 @@ export function usePushNotifications(playerId: string | undefined, language: str
         const sub = await reg.pushManager.getSubscription();
         if (cancelled) return;
 
+        let disabled = false;
+        try { disabled = localStorage.getItem(DISABLED_KEY) === "1"; } catch {}
+
+        if (disabled) {
+          setIsSubscribed(false);
+          return;
+        }
+
         setIsSubscribed(!!sub);
 
-        // IMPORTANT: re-register an existing browser/TWA subscription even
-        // when there is no account yet. This repairs subscriptions lost from
-        // the server DB after a deploy and keeps guest devices eligible for
-        // daily notifications. The server treats "anonymous" as a guest row.
-        if (sub) {
+        if (sub && perm === "granted") {
           const tzOffsetMinutes = -new Date().getTimezoneOffset();
           try {
             const res = await fetch(`${API_BASE}/api/notifications/subscribe`, {
@@ -79,7 +85,9 @@ export function usePushNotifications(playerId: string | undefined, language: str
       const reg = await navigator.serviceWorker.ready;
       const perm = await Notification.requestPermission();
       setPermission(perm as NotifPermission);
-      if (perm !== "granted") { setLoading(false); return false; }
+      if (perm !== "granted") return false;
+
+      try { localStorage.removeItem(DISABLED_KEY); } catch {}
 
       const existing = await reg.pushManager.getSubscription();
       const sub = existing || await reg.pushManager.subscribe({
@@ -151,12 +159,18 @@ export function usePushNotifications(playerId: string | undefined, language: str
     try {
       const reg = await navigator.serviceWorker.ready;
       const sub = await reg.pushManager.getSubscription();
+      try { localStorage.setItem(DISABLED_KEY, "1"); } catch {}
+
       if (sub) {
-        await fetch(`${API_BASE}/api/notifications/unsubscribe`, {
-          method: "DELETE",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ endpoint: sub.endpoint }),
-        });
+        try {
+          await fetch(`${API_BASE}/api/notifications/unsubscribe`, {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ endpoint: sub.endpoint }),
+          });
+        } catch (e) {
+          console.warn("[push] unsubscribe server request failed", e);
+        }
         await sub.unsubscribe();
       }
       setIsSubscribed(false);
