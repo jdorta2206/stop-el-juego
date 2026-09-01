@@ -21,7 +21,12 @@
           "iosUrlScheme": "com.googleusercontent.apps.902072408470-igpu9ns5m3sq4am997tibo2fvaoo59tt"
         }
       ],
-      "react-native-fbsdk-next"
+      [
+        "react-native-fbsdk-next",
+        {
+          "appID": "1379237529947145"
+        }
+      ]
     ]
   }
 }
