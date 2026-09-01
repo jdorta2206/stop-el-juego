@@ -13,6 +13,7 @@ function startAnalyticsHeartbeat() {
 
   const params = new URLSearchParams(window.location.search);
   const isAndroidTwa =
+    document.referrer.startsWith("android-app://app.replit.stop_el_juego.twa") ||
     params.get("source") === "googleplay-twa" ||
     !!getInstalledAppVersion();
   const platform = isAndroidTwa ? "android" : "web";
