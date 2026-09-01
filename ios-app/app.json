@@ -24,7 +24,10 @@
       [
         "react-native-fbsdk-next",
         {
-          "appID": "1379237529947145"
+          "appID": "1379237529947145",
+          "clientToken": "3b41f4178b9eaf7c3ec2a6a1dc6bb437",
+          "displayName": "Stop",
+          "scheme": "fb1379237529947145"
         }
       ]
     ]
