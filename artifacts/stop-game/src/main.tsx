@@ -8,14 +8,32 @@ import { captureInstalledAppVersion, getInstalledAppVersion } from "./lib/appVer
 
 captureInstalledAppVersion();
 
-function startAnalyticsHeartbeat() {
+async function startAnalyticsHeartbeat() {
   if (typeof window === "undefined") return;
 
   const params = new URLSearchParams(window.location.search);
-  const isAndroidTwa =
+  let isAndroidTwa =
     document.referrer.startsWith("android-app://app.replit.stop_el_juego.twa") ||
     params.get("source") === "googleplay-twa" ||
     !!getInstalledAppVersion();
+
+  // A real Android TWA runs in standalone display mode. When available, the
+  // related-apps API confirms that the installed Play app is the one related
+  // to this web app. A normal Android browser is not standalone, so it stays Web.
+  if (!isAndroidTwa && /Android/i.test(navigator.userAgent || "") && window.matchMedia?.("(display-mode: standalone)")?.matches) {
+    try {
+      const getInstalledRelatedApps = (navigator as Navigator & {
+        getInstalledRelatedApps?: () => Promise<Array<{ platform?: string; id?: string }>>;
+      }).getInstalledRelatedApps;
+      const relatedApps = await getInstalledRelatedApps?.();
+      isAndroidTwa = !!relatedApps?.some(
+        (app) => app.platform === "play" && app.id === "app.replit.stop_el_juego.twa"
+      );
+    } catch {
+      // Analytics must never interfere with gameplay.
+    }
+  }
+
   const platform = isAndroidTwa ? "android" : "web";
   const sessionKey = `stop_analytics_session_id_${platform}`;
   let sessionId: string;
@@ -54,7 +72,7 @@ function startAnalyticsHeartbeat() {
   window.setInterval(ping, 30_000);
 }
 
-startAnalyticsHeartbeat();
+void startAnalyticsHeartbeat();
 consumeAuthHandoff();
 
 createRoot(document.getElementById("root")!).render(
