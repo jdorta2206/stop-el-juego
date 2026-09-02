@@ -2,6 +2,7 @@
   "name": "stop-ios",
   "version": "1.0.0",
   "private": true,
+  "packageManager": "yarn@1.22.22",
   "main": "expo/AppEntry.js",
   "scripts": {
     "start": "expo start",
