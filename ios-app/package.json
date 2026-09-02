@@ -3,13 +3,13 @@
   "version": "1.0.0",
   "private": true,
   "main": "expo/AppEntry.js",
+  "packageManager": "npm@10.8.2",
   "scripts": {
     "start": "expo start",
     "ios": "expo run:ios",
     "android": "expo run:android",
     "web": "expo start --web",
-    "typecheck": "tsc --noEmit",
-    "eas-build-pre-install": "corepack pnpm install --lockfile-only --ignore-scripts"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
