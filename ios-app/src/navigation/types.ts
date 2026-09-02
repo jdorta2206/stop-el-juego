@@ -7,6 +7,7 @@ export type RootStackParamList = {
   Ranking: undefined;
   Collection: undefined;
   Prestige: undefined;
+  Friends: undefined;
   GameSetup: undefined;
   Game: { config?: NativeGameConfig };
   Multiplayer: undefined;
