@@ -25,14 +25,17 @@ export default function MultiplayerScreen() {
   }, []);
 
   const refreshRoom = useCallback(async () => {
-    if (!room?.roomCode || !playerId || busy) return;
+    if (!room?.roomCode || !playerId) return;
     try { setRoom(await getRoom(room.roomCode, playerId)); } catch { /* transient network error */ }
-  }, [room?.roomCode, playerId, busy]);
+  }, [room?.roomCode, playerId]);
 
   useEffect(() => { void refreshRooms(); }, [refreshRooms]);
   useEffect(() => {
     if (!room?.roomCode || !playerId || room.status === 'finished') return;
-    const interval = setInterval(() => { void refreshRoom(); }, 2500);
+    // Keep syncing even while STOP/results are being submitted. The backend is
+    // authoritative, so iOS must not temporarily isolate itself from the room
+    // while another client advances the shared round.
+    const interval = setInterval(() => { void refreshRoom(); }, 1000);
     return () => clearInterval(interval);
   }, [room?.roomCode, room?.status, playerId, refreshRoom]);
 
