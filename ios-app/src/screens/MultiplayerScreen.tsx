@@ -84,7 +84,12 @@ export default function MultiplayerScreen() {
     setBusy(true);
     try {
       if (useStop) await stopRoom(room.roomCode, playerId, playerName);
-      await submitRoomResults(room.roomCode, { playerId, answers });
+      await submitRoomResults(room.roomCode, {
+        playerId,
+        roundScore: 0,
+        letter: room.currentLetter ?? 'A',
+        answers,
+      });
       setSubmitted(true);
       setRoom(await getRoom(room.roomCode, playerId));
     } catch (error) {
