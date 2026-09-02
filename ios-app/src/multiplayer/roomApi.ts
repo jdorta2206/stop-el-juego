@@ -83,7 +83,14 @@ export async function stopRoom(roomCode: string, playerId: string, playerName: s
 
 export async function submitRoomResults(
   roomCode: string,
-  data: { playerId: string; answers: Record<string, string>; bluffedCategories?: string[]; bluffedWords?: Record<string, string> },
+  data: {
+    playerId: string;
+    roundScore: number;
+    letter: string;
+    answers: Record<string, string>;
+    bluffedCategories?: string[];
+    bluffedWords?: Record<string, string>;
+  },
 ): Promise<Room> {
   return authenticatedFetch<Room>(`/api/rooms/${encodeURIComponent(roomCode)}/results`, {
     method: 'POST',
