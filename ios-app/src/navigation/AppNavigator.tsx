@@ -6,6 +6,7 @@ import { useSession } from '../session';
 import LoginScreen from '../screens/LoginScreen';
 import HomeScreen from '../screens/HomeScreen';
 import ProfileScreen from '../screens/ProfileScreen';
+import RankingScreen from '../screens/RankingScreen';
 import GameSetupScreen from '../screens/GameSetupScreen';
 import GameScreen from '../screens/GameScreen';
 import MultiplayerScreen from '../screens/MultiplayerScreen';
@@ -30,6 +31,7 @@ export default function AppNavigator() {
           <>
             <Stack.Screen name="Home" component={HomeScreen} options={{ title: 'STOP' }} />
             <Stack.Screen name="Profile" component={ProfileScreen} options={{ title: 'Mi perfil' }} />
+            <Stack.Screen name="Ranking" component={RankingScreen} options={{ title: 'Ranking' }} />
             <Stack.Screen name="GameSetup" component={GameSetupScreen} options={{ title: 'Nueva partida' }} />
             <Stack.Screen name="Game" component={GameScreen} options={{ title: 'STOP' }} />
             <Stack.Screen name="Multiplayer" component={MultiplayerScreen} options={{ title: 'Multijugador' }} />
