@@ -26,6 +26,10 @@ export default function HomeScreen({ navigation }: Props) {
           <Text style={styles.secondaryText}>MULTIJUGADOR</Text>
         </Pressable>
 
+        <Pressable style={styles.secondary} onPress={() => navigation.navigate('Profile')}>
+          <Text style={styles.secondaryText}>MI PERFIL</Text>
+        </Pressable>
+
         <Pressable accessibilityRole="button" onPress={signOut} style={styles.logout}>
           <Text style={styles.logoutText}>Cerrar sesión</Text>
         </Pressable>
@@ -42,8 +46,8 @@ const styles = StyleSheet.create({
   welcome: { marginTop: 14, marginBottom: 28, fontSize: 16 },
   primary: { width: '100%', maxWidth: 360, minHeight: 56, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: '#111', marginBottom: 12 },
   primaryText: { color: '#fff', fontSize: 19, fontWeight: '900' },
-  secondary: { width: '100%', maxWidth: 360, minHeight: 52, borderRadius: 14, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  secondary: { width: '100%', maxWidth: 360, minHeight: 52, borderRadius: 14, borderWidth: 1, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
   secondaryText: { fontSize: 16, fontWeight: '800' },
-  logout: { marginTop: 28, padding: 10 },
+  logout: { marginTop: 16, padding: 10 },
   logoutText: { fontSize: 14, opacity: 0.65 },
 });
