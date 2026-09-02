@@ -18,7 +18,7 @@ export default function HomeScreen({ navigation }: Props) {
           {session?.displayName ? `Hola, ${session.displayName}` : 'Listo para jugar'}
         </Text>
 
-        <Pressable style={styles.primary} onPress={() => navigation.navigate('Game', {})}>
+        <Pressable style={styles.primary} onPress={() => navigation.navigate('GameSetup')}>
           <Text style={styles.primaryText}>JUGAR</Text>
         </Pressable>
 
