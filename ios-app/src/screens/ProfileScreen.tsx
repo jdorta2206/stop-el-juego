@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { api } from '../api';
+import { authenticatedFetch } from '../auth';
 import { useSession } from '../session';
 
 type Profile = {
@@ -28,8 +28,8 @@ export default function ProfileScreen() {
     let active = true;
     if (!session?.playerId) return () => { active = false; };
 
-    api.get(`/api/ranking/profile/${encodeURIComponent(session.playerId)}`)
-      .then((data) => { if (active) setProfile(data as Profile); })
+    authenticatedFetch<Profile>(`/api/ranking/profile/${encodeURIComponent(session.playerId)}`)
+      .then((data) => { if (active) setProfile(data); })
       .catch((err) => { if (active) setError(err instanceof Error ? err.message : 'No se pudo cargar el perfil'); });
 
     return () => { active = false; };
