@@ -30,6 +30,10 @@ export default function HomeScreen({ navigation }: Props) {
           <Text style={styles.secondaryText}>MI PERFIL</Text>
         </Pressable>
 
+        <Pressable style={styles.secondary} onPress={() => navigation.navigate('Ranking')}>
+          <Text style={styles.secondaryText}>RANKING</Text>
+        </Pressable>
+
         <Pressable accessibilityRole="button" onPress={signOut} style={styles.logout}>
           <Text style={styles.logoutText}>Cerrar sesión</Text>
         </Pressable>
