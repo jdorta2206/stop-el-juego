@@ -9,39 +9,26 @@ import ProfileScreen from '../screens/ProfileScreen';
 import RankingScreen from '../screens/RankingScreen';
 import CollectionScreen from '../screens/CollectionScreen';
 import PrestigeScreen from '../screens/PrestigeScreen';
+import FriendsScreen from '../screens/FriendsScreen';
 import GameSetupScreen from '../screens/GameSetupScreen';
 import GameScreen from '../screens/GameScreen';
 import MultiplayerScreen from '../screens/MultiplayerScreen';
 import type { RootStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
-
-function LoadingScreen() {
-  return <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator size="large" /></View>;
-}
-
+function LoadingScreen() { return <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator size="large" /></View>; }
 export default function AppNavigator() {
   const { session, loading } = useSession();
   if (loading) return <LoadingScreen />;
-
-  return (
-    <NavigationContainer>
-      <Stack.Navigator>
-        {!session ? (
-          <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
-        ) : (
-          <>
-            <Stack.Screen name="Home" component={HomeScreen} options={{ title: 'STOP' }} />
-            <Stack.Screen name="Profile" component={ProfileScreen} options={{ title: 'Mi perfil' }} />
-            <Stack.Screen name="Ranking" component={RankingScreen} options={{ title: 'Ranking' }} />
-            <Stack.Screen name="Collection" component={CollectionScreen} options={{ title: 'Colección' }} />
-            <Stack.Screen name="Prestige" component={PrestigeScreen} options={{ title: 'Prestigio' }} />
-            <Stack.Screen name="GameSetup" component={GameSetupScreen} options={{ title: 'Nueva partida' }} />
-            <Stack.Screen name="Game" component={GameScreen} options={{ title: 'STOP' }} />
-            <Stack.Screen name="Multiplayer" component={MultiplayerScreen} options={{ title: 'Multijugador' }} />
-          </>
-        )}
-      </Stack.Navigator>
-    </NavigationContainer>
-  );
+  return <NavigationContainer><Stack.Navigator>{!session ? <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} /> : <>
+    <Stack.Screen name="Home" component={HomeScreen} options={{ title: 'STOP' }} />
+    <Stack.Screen name="Profile" component={ProfileScreen} options={{ title: 'Mi perfil' }} />
+    <Stack.Screen name="Ranking" component={RankingScreen} options={{ title: 'Ranking' }} />
+    <Stack.Screen name="Collection" component={CollectionScreen} options={{ title: 'Colección' }} />
+    <Stack.Screen name="Prestige" component={PrestigeScreen} options={{ title: 'Prestigio' }} />
+    <Stack.Screen name="Friends" component={FriendsScreen} options={{ title: 'Amigos' }} />
+    <Stack.Screen name="GameSetup" component={GameSetupScreen} options={{ title: 'Nueva partida' }} />
+    <Stack.Screen name="Game" component={GameScreen} options={{ title: 'STOP' }} />
+    <Stack.Screen name="Multiplayer" component={MultiplayerScreen} options={{ title: 'Multijugador' }} />
+  </Stack.Navigator></NavigationContainer>;
 }
