@@ -41,8 +41,16 @@ router.get("/", async (req, res) => {
 });
 
 // ── GET /api/impossible/me/:playerId?language=es ────────────────────────────
+// Guests remain supported. For logged-in OAuth ids, the requested id must be
+// backed by the same signed player token so another account's result is not
+// exposed by guessing a public player id.
 router.get("/me/:playerId", async (req, res) => {
   const playerId = req.params.playerId;
+  if (!verifyClaimedIdentity(req, String(playerId))) {
+    res.status(403).json({ error: "Identidad del jugador no válida" });
+    return;
+  }
+
   const language = (req.query.language as string) || "es";
   const today = getTodayUTC();
 
