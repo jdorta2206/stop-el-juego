@@ -1,35 +1,11 @@
 import crypto from "crypto";
+import { db } from "@workspace/db";
+import { sql } from "drizzle-orm";
 
 // ── Score vouchers (anti-cheat for Solo & Daily submissions) ────────────────
-//
-// The leaderboard endpoints used to trust the `score` the client posted, so a
-// player could fabricate any total (and mint the coins/XP derived from it). To
-// close that, `/game/validate` — which already computes the authoritative
-// per-round base score on the server — now hands back a *signed, single-use
-// voucher* attesting that base. The client collects each round's voucher and
-// returns them when submitting the final game score. The submission endpoints
-// then clamp the posted score to a realistic ceiling derived from the verified
-// base, so fabricated scores get cut while every legitimate game (including the
-// client-side modifier bonuses: steal, sabotage, bluff, FTUE) passes through.
-//
-// Vouchers are NOT bound to a player id on purpose: they only set a per-game
-// ceiling, and a voucher requires real validated play to obtain, so there's
-// nothing to gain by using someone else's. Single-use (jti) + a short TTL stop
-// replay.
-//
-// 🔒 Anti-farming: a voucher is cheap to mint (one /validate call), so a script
-// could stockpile thousands and pool them to inflate one submission. Two guards
-// stop that: (1) `sumVerifiedBase` counts only the TOP-N vouchers by base where
-// N is the mode's max rounds (a real game can't produce more rounds than that),
-// so pooling extra vouchers never raises the ceiling beyond a legit game; and
-// (2) every *valid* voucher in the batch is burned (marked used) even when not
-// counted, so the surplus can't be replayed in a later submission.
-
-const TTL_MS = 30 * 60 * 1000; // a game is short — vouchers expire quickly.
+const TTL_MS = 30 * 60 * 1000;
 const KIND_ROUND = "r";
 
-// Max scoring rounds a legit game of each mode can produce. Used to cap how many
-// vouchers count toward a single submission's ceiling (see sumVerifiedBase).
 const MAX_ROUNDS_BY_MODE: Record<string, number> = {
   daily: 1,
   solo: 3,
@@ -55,9 +31,8 @@ function getSigningSecret(): string | null {
   return null;
 }
 
-// Process-local single-use registry. Production runs a single Railway replica,
-// so an in-memory set is enough to stop voucher replay within its TTL. Pruned
-// lazily once it grows, to avoid an unbounded map.
+// Local fallback only. PostgreSQL is the authoritative replay registry; this
+// remains as a graceful fallback if the registry table is temporarily unavailable.
 const usedJti = new Map<string, number>();
 function pruneUsed(now: number): void {
   if (usedJti.size < 1024) return;
@@ -70,11 +45,6 @@ function sign(secret: string, payload: string): string {
   return crypto.createHmac("sha256", secret).update(payload).digest("base64url");
 }
 
-/**
- * Issue a single-use voucher attesting a round's server-computed base score.
- * Returns null when no signing secret is configured (the caller simply omits
- * the token and the submission falls back to the absolute ceiling).
- */
 export function issueScoreToken(base: number): string | null {
   const secret = getSigningSecret();
   if (!secret) return null;
@@ -86,30 +56,27 @@ export function issueScoreToken(base: number): string | null {
 }
 
 /**
- * Verify a batch of vouchers and return the summed attested base of the valid
- * ones, counting at most `maxTokens` of them (the highest bases) so pooled /
- * farmed vouchers can't inflate the ceiling beyond a legit game. Invalid /
- * expired / replayed tokens are skipped (never throws) so a partly-bad batch
- * still yields its legit portion. EVERY valid voucher in the batch is marked
- * used — even the surplus beyond `maxTokens` — so it can't be replayed later.
+ * Verify and atomically burn vouchers in PostgreSQL. A voucher only counts if
+ * its JTI is successfully inserted into the unique registry, so two concurrent
+ * submissions (or multiple server replicas) cannot consume the same voucher.
  */
-export function sumVerifiedBase(
+export async function sumVerifiedBase(
   tokens: unknown,
   maxTokens = Number.POSITIVE_INFINITY,
-): { base: number; verified: number } {
+): Promise<{ base: number; verified: number }> {
   if (!Array.isArray(tokens) || tokens.length === 0) return { base: 0, verified: 0 };
   const secret = getSigningSecret();
   if (!secret) return { base: 0, verified: 0 };
   const now = Date.now();
   pruneUsed(now);
 
-  const validBases: number[] = [];
+  const candidates: Array<{ base: number; jti: string; exp: number }> = [];
   for (const token of tokens) {
     if (typeof token !== "string") continue;
     const parts = token.split(".");
     if (parts.length !== 5) continue;
     const [baseStr, kind, expStr, jti, sig] = parts;
-    if (kind !== KIND_ROUND) continue;
+    if (kind !== KIND_ROUND || !jti || !sig) continue;
 
     const expected = sign(secret, `${baseStr}.${kind}.${expStr}.${jti}`);
     let ok = false;
@@ -123,38 +90,53 @@ export function sumVerifiedBase(
     if (!ok) continue;
 
     const exp = Number(expStr);
-    if (!Number.isFinite(exp) || exp <= now) continue;
-    if (usedJti.has(jti)) continue;
-
-    const b = Number(baseStr);
-    if (!Number.isFinite(b) || b < 0) continue;
-
-    // Burn every valid voucher so the surplus beyond the cap can't be reused.
-    usedJti.set(jti, exp);
-    validBases.push(b);
+    const base = Number(baseStr);
+    if (!Number.isFinite(exp) || exp <= now || !Number.isFinite(base) || base < 0) continue;
+    candidates.push({ base, jti, exp });
   }
 
-  // Count only the top-N vouchers by base — a real game can't exceed N rounds.
-  validBases.sort((a, b) => b - a);
-  const cap = Number.isFinite(maxTokens) ? Math.max(0, Math.floor(maxTokens)) : validBases.length;
-  const counted = validBases.slice(0, cap);
-  const base = counted.reduce((sum, n) => sum + n, 0);
-  return { base, verified: counted.length };
+  if (candidates.length === 0) return { base: 0, verified: 0 };
+
+  const accepted: Array<{ base: number; jti: string; exp: number }> = [];
+  try {
+    // Clean old entries opportunistically; failure is harmless.
+    await db.execute(sql`DELETE FROM score_voucher_uses WHERE expires_at <= ${now}`);
+
+    for (const candidate of candidates) {
+      const result = await db.execute(sql`
+        INSERT INTO score_voucher_uses (jti, expires_at)
+        VALUES (${candidate.jti}, ${candidate.exp})
+        ON CONFLICT (jti) DO NOTHING
+        RETURNING jti
+      `);
+      if (result.rows.length > 0) accepted.push(candidate);
+    }
+  } catch (err: any) {
+    // Never make a database-schema hiccup block legitimate gameplay. Fall back
+    // to the existing process-local replay protection until the table is ready.
+    console.error("[scoreToken] persistent voucher registry unavailable:", err?.message ?? err);
+    const persistentFallback: typeof candidates = [];
+    for (const candidate of candidates) {
+      if (usedJti.has(candidate.jti)) continue;
+      usedJti.set(candidate.jti, candidate.exp);
+      persistentFallback.push(candidate);
+    }
+    accepted.push(...persistentFallback);
+  }
+
+  accepted.sort((a, b) => b.base - a.base);
+  const cap = Number.isFinite(maxTokens) ? Math.max(0, Math.floor(maxTokens)) : accepted.length;
+  const counted = accepted.slice(0, cap);
+  return {
+    base: counted.reduce((sum, item) => sum + item.base, 0),
+    verified: counted.length,
+  };
 }
 
-/**
- * Anti-cheat ceiling derived from the verified base. A legit game adds modifier
- * points on top of the validated word base (steal/sabotage transfer the AI's
- * points, bluff bonus, one-time FTUE catch-up), so we allow generous headroom —
- * only scores far above real play get clamped.
- */
 export function ceilingFromBase(base: number): number {
   return base * 4 + 50;
 }
 
-// Absolute fallback ceilings for tokenless (offline / legacy-client)
-// submissions, keyed by game mode. Set well above any legitimate game so real
-// scores are never cut, but low enough to kill arbitrary injected totals.
 const ABSOLUTE_SCORE_CEILING: Record<string, number> = {
   daily: 600,
   solo: 2000,

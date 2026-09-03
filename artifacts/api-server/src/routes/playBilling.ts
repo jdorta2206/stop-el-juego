@@ -3,6 +3,7 @@ import { db, playerScoresTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { google } from "googleapis";
 import { grantWorldCupPack } from "../lib/worldCupPack";
+import { verifyClaimedIdentity } from "../lib/playerAuth";
 
 const router = Router();
 
@@ -36,6 +37,14 @@ router.post("/verify", async (req: Request, res: Response) => {
     const { playerId, productId, purchaseToken } = req.body;
     if (!playerId || !productId || !purchaseToken) {
       return res.status(400).json({ error: "Faltan campos obligatorios" });
+    }
+
+    // Keep the existing request shape for Android compatibility, but never
+    // let a logged-in account claim a purchase for another player. Guests are
+    // still allowed through this helper for backwards compatibility; they do
+    // not have an OAuth identity to bind and cannot become another account.
+    if (!verifyClaimedIdentity(req, String(playerId))) {
+      return res.status(403).json({ error: "Identidad del jugador no válida" });
     }
 
     const serviceAccountJson = process.env.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON;
@@ -82,6 +91,12 @@ router.post("/verify-pack", async (req: Request, res: Response) => {
     const { playerId, productId, purchaseToken } = req.body;
     if (!playerId || !productId || !purchaseToken) {
       return res.status(400).json({ error: "Faltan campos obligatorios" });
+    }
+
+    // Same identity binding as Premium verification. The body field remains
+    // for compatibility with existing Android clients.
+    if (!verifyClaimedIdentity(req, String(playerId))) {
+      return res.status(403).json({ error: "Identidad del jugador no válida" });
     }
 
     const serviceAccountJson = process.env.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON;
