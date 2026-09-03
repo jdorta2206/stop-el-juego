@@ -3,6 +3,7 @@ import { db, playerScoresTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { google } from "googleapis";
 import { grantWorldCupPack } from "../lib/worldCupPack";
+import { verifyClaimedIdentity } from "../lib/playerAuth";
 
 const router = Router();
 
@@ -36,6 +37,12 @@ router.post("/verify", async (req: Request, res: Response) => {
     const { playerId, productId, purchaseToken } = req.body;
     if (!playerId || !productId || !purchaseToken) {
       return res.status(400).json({ error: "Faltan campos obligatorios" });
+    }
+
+    // Bind logged-in account IDs to the signed player session. Guests remain
+    // compatible with the existing guest-first flow.
+    if (!verifyClaimedIdentity(req, String(playerId))) {
+      return res.status(403).json({ error: "Identidad del jugador no válida" });
     }
 
     const serviceAccountJson = process.env.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON;
@@ -82,6 +89,12 @@ router.post("/verify-pack", async (req: Request, res: Response) => {
     const { playerId, productId, purchaseToken } = req.body;
     if (!playerId || !productId || !purchaseToken) {
       return res.status(400).json({ error: "Faltan campos obligatorios" });
+    }
+
+    // Bind logged-in account IDs to the signed player session. Guests remain
+    // compatible with the existing guest-first flow.
+    if (!verifyClaimedIdentity(req, String(playerId))) {
+      return res.status(403).json({ error: "Identidad del jugador no válida" });
     }
 
     const serviceAccountJson = process.env.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON;
