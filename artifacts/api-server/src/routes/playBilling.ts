@@ -2,7 +2,7 @@ import { Router, Request, Response } from "express";
 import { db, playerScoresTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { google } from "googleapis";
-import { grantWorldCupPack } from "../lib/worldCupPack";
+import { grantWorldCupPack, WORLD_CUP_PACK_SKU } from "../lib/worldCupPack";
 import { verifyClaimedIdentity } from "../lib/playerAuth";
 
 const router = Router();
@@ -95,6 +95,10 @@ router.post("/verify-pack", async (req: Request, res: Response) => {
     // compatible with the existing guest-first flow.
     if (!verifyClaimedIdentity(req, String(playerId))) {
       return res.status(403).json({ error: "Identidad del jugador no válida" });
+    }
+
+    if (productId !== WORLD_CUP_PACK_SKU) {
+      return res.status(400).json({ error: "Producto no válido" });
     }
 
     const serviceAccountJson = process.env.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON;
