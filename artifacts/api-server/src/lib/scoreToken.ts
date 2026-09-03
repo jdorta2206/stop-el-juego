@@ -1,6 +1,6 @@
 import crypto from "crypto";
 import { db, scoreVoucherUsesTable } from "@workspace/db";
-import { eq, lt } from "drizzle-orm";
+import { lt } from "drizzle-orm";
 
 const TTL_MS = 30 * 60 * 1000;
 const KIND_ROUND = "r";
@@ -21,20 +21,15 @@ function getSigningSecret(): string | null {
   if (s && s.length >= 16) return s;
   if (!warnedMissingSecret) {
     warnedMissingSecret = true;
-    console.error(
-      "[scoreToken] SESSION_SECRET missing or too short (<16 chars). Score vouchers are disabled; submissions use the absolute ceiling.",
-    );
+    console.error("[scoreToken] SESSION_SECRET missing or too short (<16 chars). Score vouchers are disabled; submissions use the absolute ceiling.");
   }
   return null;
 }
 
-// Fast local cache only. PostgreSQL is authoritative for replay prevention.
 const usedJti = new Map<string, number>();
 function pruneUsed(now: number): void {
   if (usedJti.size < 1024) return;
-  for (const [jti, exp] of usedJti) {
-    if (exp <= now) usedJti.delete(jti);
-  }
+  for (const [jti, exp] of usedJti) if (exp <= now) usedJti.delete(jti);
 }
 
 function sign(secret: string, payload: string): string {
@@ -52,13 +47,9 @@ export function issueScoreToken(base: number): string | null {
 }
 
 /**
- * Verifies vouchers and burns valid JTIs persistently.
- *
- * Important availability rule: if PostgreSQL is temporarily unavailable, we
- * do NOT throw and do NOT block score submission. Vouchers are simply not
- * counted for that request, so the caller uses its existing absolute ceiling.
- * This preserves gameplay availability while keeping the database authoritative
- * whenever it is healthy.
+ * PostgreSQL is authoritative for voucher replay prevention. A database
+ * failure does not throw from this helper: vouchers are ignored and callers
+ * retain their existing absolute ceiling, keeping normal gameplay available.
  */
 export async function sumVerifiedBase(
   tokens: unknown,
@@ -98,25 +89,19 @@ export async function sumVerifiedBase(
 
   if (candidates.length === 0) return { base: 0, verified: 0 };
 
-  // Burn every valid voucher, including surplus beyond maxTokens. Each insert
-  // is atomic because jti has a UNIQUE index. Only a newly inserted row counts.
   const accepted: number[] = [];
-  let databaseAvailable = true;
   try {
-    // Remove expired ledger rows opportunistically; failure is harmless.
+    // Best-effort cleanup; replay protection itself is never best-effort.
     try {
       await db.delete(scoreVoucherUsesTable).where(lt(scoreVoucherUsesTable.expiresAt, new Date(now)));
     } catch {
-      // Best effort only.
+      // Do not fail the score submission just because cleanup failed.
     }
 
     for (const candidate of candidates) {
       const inserted = await db
         .insert(scoreVoucherUsesTable)
-        .values({
-          jti: candidate.jti,
-          expiresAt: new Date(candidate.exp),
-        })
+        .values({ jti: candidate.jti, expiresAt: new Date(candidate.exp) })
         .onConflictDoNothing({ target: scoreVoucherUsesTable.jti })
         .returning({ id: scoreVoucherUsesTable.id });
 
@@ -126,19 +111,14 @@ export async function sumVerifiedBase(
       }
     }
   } catch (err) {
-    databaseAvailable = false;
     console.error("[scoreToken] persistent voucher ledger unavailable; vouchers ignored for this submission:", err instanceof Error ? err.message : err);
+    return { base: 0, verified: 0 };
   }
-
-  if (!databaseAvailable) return { base: 0, verified: 0 };
 
   accepted.sort((a, b) => b - a);
   const cap = Number.isFinite(maxTokens) ? Math.max(0, Math.floor(maxTokens)) : accepted.length;
   const counted = accepted.slice(0, cap);
-  return {
-    base: counted.reduce((sum, value) => sum + value, 0),
-    verified: counted.length,
-  };
+  return { base: counted.reduce((sum, value) => sum + value, 0), verified: counted.length };
 }
 
 export function ceilingFromBase(base: number): number {
