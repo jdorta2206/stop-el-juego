@@ -3,6 +3,7 @@ import { db, impossibleResultsTable } from "@workspace/db";
 import { eq, and, count, sql } from "drizzle-orm";
 import { getImpossibleCombo } from "../lib/impossibleCombos";
 import { validateWordWithAi } from "../lib/aiWordValidator";
+import { verifyClaimedIdentity } from "../lib/playerAuth";
 
 const router: IRouter = Router();
 
@@ -11,13 +12,11 @@ function getTodayUTC(): string {
 }
 
 // ── GET /api/impossible?language=es ─────────────────────────────────────────
-// Returns today's brutal combo plus global stats (how many won vs attempted).
 router.get("/", async (req, res) => {
   const language = (req.query.language as string) || "es";
   const today = getTodayUTC();
   const combo = getImpossibleCombo(today, language);
 
-  // Global stats — cheap aggregate; one row per attempt today.
   const rows = await db
     .select({
       attempts: count(),
@@ -42,7 +41,6 @@ router.get("/", async (req, res) => {
 });
 
 // ── GET /api/impossible/me/:playerId?language=es ────────────────────────────
-// Has this player already attempted today? Returns their attempt if so.
 router.get("/me/:playerId", async (req, res) => {
   const playerId = req.params.playerId;
   const language = (req.query.language as string) || "es";
@@ -63,19 +61,21 @@ router.get("/me/:playerId", async (req, res) => {
 });
 
 // ── POST /api/impossible/submit ─────────────────────────────────────────────
-// One attempt per player per day. Body: { playerId, playerName, language,
-// word, timeMs, surrendered }. We validate `word` against today's combo
-// using the existing AI validator (cached). `surrendered=true` skips
-// validation and counts as a loss.
+// Guest clients remain supported. For logged-in OAuth ids, the claimed id
+// must match the signed player token so one account cannot submit for another.
 router.post("/submit", async (req, res) => {
   const { playerId, playerName, language = "es", word = "", timeMs = 60000, surrendered = false } = req.body ?? {};
   if (!playerId || !playerName) {
     res.status(400).json({ error: "Missing playerId or playerName" }); return;
   }
 
+  if (!verifyClaimedIdentity(req, String(playerId))) {
+    res.status(403).json({ error: "Identidad del jugador no válida" });
+    return;
+  }
+
   const today = getTodayUTC();
 
-  // Idempotency: if they already submitted today, return the prior result.
   const existing = await db
     .select()
     .from(impossibleResultsTable)
@@ -95,7 +95,6 @@ router.post("/submit", async (req, res) => {
   let won = false;
 
   if (!surrendered && trimmed.length >= 2) {
-    // Must start with the combo letter (case- and accent-insensitive).
     const normalize = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
     const startsRight = normalize(trimmed).startsWith(normalize(combo.letter));
     if (startsRight) {
@@ -108,16 +107,13 @@ router.post("/submit", async (req, res) => {
         });
         won = r.isValid === true;
       } catch {
-        // If AI is unavailable we give the benefit of the doubt rather than
-        // punishing the player for our infra.
-        won = true;
+        // Infrastructure failure is never a win. The attempt is recorded as a
+        // loss so the validator cannot be abused as a fail-open reward path.
+        won = false;
       }
     }
   }
 
-  // Race-safe insert: unique index on (player_id, challenge_date, language)
-  // means two concurrent submits can't both insert. The loser of the race
-  // returns 0 rows and we fall back to the existing row.
   const inserted = await db.insert(impossibleResultsTable).values({
     playerId,
     playerName,
@@ -140,7 +136,6 @@ router.post("/submit", async (req, res) => {
     return;
   }
 
-  // Updated global stats.
   const rows = await db
     .select({
       attempts: count(),
