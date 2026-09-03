@@ -142,7 +142,7 @@ if (process.env["SERVE_CLIENT"] === "1") {
   // SPA fallback: only application routes should receive index.html.
   // Never return HTML for a missing JS/CSS/image module, otherwise browsers
   // reject it with a strict MIME-type error and the whole app fails to boot.
-  app.get(/^\/(?!api(?:\/|$)).*/, (req, res, next) => {
+  app.get(/^\/(?!api(?:\/|$)).*/, (req, res) => {
     const pathname = req.path;
     if (/\.(?:js|mjs|css|map|json|png|jpe?g|gif|svg|webp|ico|woff2?|ttf|wasm|webmanifest)$/i.test(pathname)) {
       res.status(404).end();
@@ -150,7 +150,7 @@ if (process.env["SERVE_CLIENT"] === "1") {
     }
     res.sendFile(path.join(clientDist, "index.html"), {
       headers: { "Cache-Control": "no-cache, no-store, must-revalidate" },
-    }, next);
+    });
   });
 }
 
