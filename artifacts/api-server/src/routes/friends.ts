@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db, followsTable, playerScoresTable } from "@workspace/db";
 import { and, eq, inArray } from "drizzle-orm";
+import { verifyClaimedIdentity } from "../lib/playerAuth";
 
 const router: IRouter = Router();
 
@@ -8,6 +9,10 @@ const router: IRouter = Router();
 router.get("/list/:followerId", async (req, res) => {
   const { followerId } = req.params;
   if (!followerId) return res.status(400).json({ error: "followerId required" });
+
+  if (!verifyClaimedIdentity(req, followerId)) {
+    return res.status(403).json({ error: "Identidad del jugador no válida" });
+  }
 
   try {
     // 1. Obtener la lista de seguidos
@@ -24,9 +29,9 @@ router.get("/list/:followerId", async (req, res) => {
     const followedIds = follows.map(f => f.followedId);
 
     // 3. Obtener datos actualizados de player_scores para esos IDs
+    // equippedBackground no es una columna de player_scores en el schema actual.
     let playersData: any[] = [];
     try {
-      // Intentamos obtener datos, pero si falla (por columnas que no existen), seguimos con datos vacíos
       playersData = await db
         .select({
           playerId: playerScoresTable.playerId,
@@ -34,13 +39,13 @@ router.get("/list/:followerId", async (req, res) => {
           avatarColor: playerScoresTable.avatarColor,
           equippedAvatar: playerScoresTable.equippedAvatar,
           equippedFrame: playerScoresTable.equippedFrame,
-          equippedBackground: playerScoresTable.equippedBackground,
           isPremium: playerScoresTable.isPremium,
         })
         .from(playerScoresTable)
         .where(inArray(playerScoresTable.playerId, followedIds));
     } catch (err) {
-      // Si falla (por columnas faltantes), intentamos solo con los campos básicos
+      console.error("Error obteniendo datos cosméticos de friends:", err);
+      // Si falla, intentamos solo con los campos básicos.
       playersData = await db
         .select({
           playerId: playerScoresTable.playerId,
@@ -70,7 +75,7 @@ router.get("/list/:followerId", async (req, res) => {
         followedProvider: f.followedProvider,
         equippedAvatar: p?.equippedAvatar ?? null,
         equippedFrame: p?.equippedFrame ?? null,
-        equippedBackground: p?.equippedBackground ?? null,
+        equippedBackground: null,
         isPremium: p?.isPremium ?? false,
       };
     });
@@ -95,7 +100,7 @@ router.get("/list/:followerId", async (req, res) => {
   }
 });
 
-// POST /api/friends/follow — follow a player (sin cambios)
+// POST /api/friends/follow — follow a player
 router.post("/follow", async (req, res) => {
   const { followerId, followedId, followedName, followedPicture, followedAvatarColor, followedProvider } =
     req.body as {
@@ -112,6 +117,9 @@ router.post("/follow", async (req, res) => {
   }
   if (followerId === followedId) {
     return res.status(400).json({ error: "Cannot follow yourself" });
+  }
+  if (!verifyClaimedIdentity(req, followerId)) {
+    return res.status(403).json({ error: "Identidad del jugador no válida" });
   }
 
   const existing = await db
@@ -135,12 +143,15 @@ router.post("/follow", async (req, res) => {
   return res.json({ ok: true });
 });
 
-// DELETE /api/friends/unfollow — unfollow a player (sin cambios)
+// DELETE /api/friends/unfollow — unfollow a player
 router.delete("/unfollow", async (req, res) => {
   const { followerId, followedId } = req.body as { followerId: string; followedId: string };
 
   if (!followerId || !followedId) {
     return res.status(400).json({ error: "followerId and followedId required" });
+  }
+  if (!verifyClaimedIdentity(req, followerId)) {
+    return res.status(403).json({ error: "Identidad del jugador no válida" });
   }
 
   await db
