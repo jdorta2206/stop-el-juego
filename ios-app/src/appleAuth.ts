@@ -1,4 +1,5 @@
 import * as AppleAuthentication from 'expo-apple-authentication';
+import * as Crypto from 'expo-crypto';
 import { apiFetch } from './api';
 import { saveSession, type NativeSession } from './auth';
 
@@ -10,11 +11,16 @@ export async function signInWithApple(): Promise<NativeSession> {
   const available = await AppleAuthentication.isAvailableAsync();
   if (!available) throw new Error('Sign in with Apple no está disponible en este dispositivo.');
 
+  // Bind this authentication request to the identity token returned by Apple.
+  // The backend must verify the same nonce from the token claims.
+  const nonce = Crypto.randomUUID();
+
   const credential = await AppleAuthentication.signInAsync({
     requestedScopes: [
       AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
       AppleAuthentication.AppleAuthenticationScope.EMAIL,
     ],
+    nonce,
   });
 
   if (!credential.identityToken) {
@@ -29,6 +35,7 @@ export async function signInWithApple(): Promise<NativeSession> {
       user: credential.user,
       email: credential.email,
       fullName: credential.fullName,
+      nonce,
     }),
   });
 
