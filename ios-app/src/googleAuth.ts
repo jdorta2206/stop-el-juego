@@ -1,4 +1,5 @@
 import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
+import { Platform } from 'react-native';
 import { apiFetch } from './api';
 import { saveSession, type NativeSession } from './auth';
 
@@ -16,7 +17,9 @@ function configureGoogle() {
 
 export async function signInWithGoogle(): Promise<NativeSession> {
   configureGoogle();
-  await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: false });
+  if (Platform.OS === 'android') {
+    await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: false });
+  }
   const result = await GoogleSignin.signIn();
   const idToken = result.data?.idToken;
   if (!idToken) throw new Error('Google no devolvió un ID token válido.');
