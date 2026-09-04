@@ -157,7 +157,7 @@ if (process.env["SERVE_CLIENT"] === "1") {
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error("[API ERROR]", err?.message ?? err, err?.stack);
   if (res.headersSent) return;
-  res.status(500).json({ error: "Internal server error", message: err?.message ?? "Unknown error" });
+  res.status(500).json({ error: "Internal server error" });
 });
 
 export default app;
