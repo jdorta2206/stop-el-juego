@@ -1,16 +1,20 @@
 import { Router, Request, Response } from "express";
 import { db, playerScoresTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
-import { google } from "googleapis";
+import {
+  verifyPurchase,
+  verifyProductPurchase,
+  upsertPlaySubscription,
+  recordProductPurchase,
+  acknowledgeSubscription,
+  acknowledgeProduct,
+} from "../lib/playBillingService";
 import { grantWorldCupPack, WORLD_CUP_PACK_SKU } from "../lib/worldCupPack";
 import { verifyClaimedIdentity } from "../lib/playerAuth";
 
 const router = Router();
 
 // GET /api/billing/play/status?playerId=xxx
-// Compatibility/read endpoint used by the web client. The authoritative
-// Premium flag is stored on the player's server-side record after a verified
-// Google Play purchase; no client-supplied Premium flag is trusted here.
 router.get("/status", async (req: Request, res: Response) => {
   try {
     const playerId = String(req.query.playerId || "").trim();
@@ -39,44 +43,38 @@ router.post("/verify", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Faltan campos obligatorios" });
     }
 
-    // Bind logged-in account IDs to the signed player session. Guests remain
-    // compatible with the existing guest-first flow.
     if (!verifyClaimedIdentity(req, String(playerId))) {
       return res.status(403).json({ error: "Identidad del jugador no válida" });
     }
 
-    const serviceAccountJson = process.env.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON;
-    if (!serviceAccountJson) {
-      console.error("❌ GOOGLE_PLAY_SERVICE_ACCOUNT_JSON no configurado");
-      return res.status(500).json({ error: "Servicio no configurado" });
+    const verified = await verifyPurchase(String(productId), String(purchaseToken));
+    if ("error" in verified) {
+      return res.status(verified.status).json({ error: verified.error });
+    }
+    if (!verified.isEntitled) {
+      return res.status(400).json({ error: "Suscripción no válida o no activa" });
     }
 
-    const packageName = process.env.ANDROID_PACKAGE_NAME || "app.replit.stop_el_juego.twa";
-    const auth = new google.auth.GoogleAuth({
-      credentials: JSON.parse(serviceAccountJson),
-      scopes: ["https://www.googleapis.com/auth/androidpublisher"],
-    });
-    const androidPublisher = google.androidpublisher({ version: "v3", auth });
-
-    const result = await androidPublisher.purchases.subscriptions.get({
-      packageName,
-      subscriptionId: productId,
-      token: purchaseToken,
-    });
-
-    const purchase = result.data;
-    if (!purchase || purchase.paymentState !== 1) {
-      return res.status(400).json({ error: "Suscripción no válida" });
+    const ownership = await upsertPlaySubscription(String(playerId), verified);
+    if (ownership.ownershipMismatch) {
+      return res.status(409).json({ error: "Esta compra pertenece a otra cuenta" });
     }
 
-    await db.update(playerScoresTable)
+    await acknowledgeSubscription(
+      verified.productId,
+      verified.purchaseToken,
+      verified.acknowledgementState === 1,
+    );
+
+    await db
+      .update(playerScoresTable)
       .set({ isPremium: true })
-      .where(eq(playerScoresTable.playerId, playerId));
+      .where(eq(playerScoresTable.playerId, String(playerId)));
 
     console.log(`✅ Premium activado para ${playerId}`);
-    return res.json({ isPremium: true });
+    return res.json({ isPremium: true, expiryTimeMs: verified.expiryTimeMs });
   } catch (error: any) {
-    console.error("❌ Error en /verify:", error.message);
+    console.error("❌ Error en /verify:", error?.message || error);
     return res.status(500).json({ error: "Error al verificar la suscripción" });
   }
 });
@@ -91,8 +89,6 @@ router.post("/verify-pack", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Faltan campos obligatorios" });
     }
 
-    // Bind logged-in account IDs to the signed player session. Guests remain
-    // compatible with the existing guest-first flow.
     if (!verifyClaimedIdentity(req, String(playerId))) {
       return res.status(403).json({ error: "Identidad del jugador no válida" });
     }
@@ -101,40 +97,35 @@ router.post("/verify-pack", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Producto no válido" });
     }
 
-    const serviceAccountJson = process.env.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON;
-    if (!serviceAccountJson) {
-      console.error("❌ GOOGLE_PLAY_SERVICE_ACCOUNT_JSON no configurado");
-      return res.status(500).json({ error: "Servicio no configurado" });
+    const verified = await verifyProductPurchase(String(productId), String(purchaseToken));
+    if ("error" in verified) {
+      return res.status(verified.status).json({ error: verified.error });
     }
-
-    const packageName = process.env.ANDROID_PACKAGE_NAME || "app.replit.stop_el_juego.twa";
-    const auth = new google.auth.GoogleAuth({
-      credentials: JSON.parse(serviceAccountJson),
-      scopes: ["https://www.googleapis.com/auth/androidpublisher"],
-    });
-    const androidPublisher = google.androidpublisher({ version: "v3", auth });
-
-    const result = await androidPublisher.purchases.products.get({
-      packageName,
-      productId,
-      token: purchaseToken,
-    });
-
-    const purchase = result.data;
-    if (!purchase || purchase.purchaseState !== 0) {
+    if (!verified.isPurchased) {
       return res.status(400).json({ error: "Compra no válida" });
     }
 
-    const grantResult = await grantWorldCupPack(playerId);
+    const ownership = await recordProductPurchase(String(playerId), verified);
+    if (ownership.ownershipMismatch) {
+      return res.status(409).json({ error: "Esta compra pertenece a otra cuenta" });
+    }
+
+    const grantResult = await grantWorldCupPack(String(playerId));
     if (!grantResult.ok) {
       console.error("❌ Error al conceder el pack:", grantResult.error);
       return res.status(500).json({ error: "Error al conceder los cosméticos" });
     }
 
+    await acknowledgeProduct(
+      verified.productId,
+      verified.purchaseToken,
+      verified.acknowledgementState === 1,
+    );
+
     console.log(`✅ Pack Mundial concedido a ${playerId}`);
     return res.json({ granted: true, items: grantResult.granted, total: grantResult.total });
   } catch (error: any) {
-    console.error("❌ Error en /verify-pack:", error.message);
+    console.error("❌ Error en /verify-pack:", error?.message || error);
     return res.status(500).json({ error: "Error al verificar el Pack Mundial" });
   }
 });
