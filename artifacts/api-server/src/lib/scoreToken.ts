@@ -50,6 +50,10 @@ export function issueScoreToken(base: number): string | null {
  * PostgreSQL is authoritative for voucher replay prevention. A database
  * failure does not throw from this helper: vouchers are ignored and callers
  * retain their existing absolute ceiling, keeping normal gameplay available.
+ *
+ * All voucher burns happen in one transaction. If the database fails after
+ * burning one or more vouchers, the transaction rolls them all back so a
+ * legitimate submission can never lose vouchers without receiving credit.
  */
 export async function sumVerifiedBase(
   tokens: unknown,
@@ -89,36 +93,39 @@ export async function sumVerifiedBase(
 
   if (candidates.length === 0) return { base: 0, verified: 0 };
 
-  const accepted: number[] = [];
   try {
-    // Best-effort cleanup; replay protection itself is never best-effort.
-    try {
-      await db.delete(scoreVoucherUsesTable).where(lt(scoreVoucherUsesTable.expiresAt, new Date(now)));
-    } catch {
-      // Do not fail the score submission just because cleanup failed.
-    }
+    const accepted = await db.transaction(async (tx) => {
+      // Cleanup is deliberately inside the same transaction as the burns.
+      // If anything fails, the whole transaction rolls back.
+      await tx
+        .delete(scoreVoucherUsesTable)
+        .where(lt(scoreVoucherUsesTable.expiresAt, new Date(now)));
 
-    for (const candidate of candidates) {
-      const inserted = await db
-        .insert(scoreVoucherUsesTable)
-        .values({ jti: candidate.jti, expiresAt: new Date(candidate.exp) })
-        .onConflictDoNothing({ target: scoreVoucherUsesTable.jti })
-        .returning({ id: scoreVoucherUsesTable.id });
+      const newlyAccepted: Array<{ base: number; jti: string; exp: number }> = [];
+      for (const candidate of candidates) {
+        const inserted = await tx
+          .insert(scoreVoucherUsesTable)
+          .values({ jti: candidate.jti, expiresAt: new Date(candidate.exp) })
+          .onConflictDoNothing({ target: scoreVoucherUsesTable.jti })
+          .returning({ id: scoreVoucherUsesTable.id });
 
-      if (inserted.length > 0) {
-        accepted.push(candidate.base);
-        usedJti.set(candidate.jti, candidate.exp);
+        if (inserted.length > 0) newlyAccepted.push(candidate);
       }
+      return newlyAccepted;
+    });
+
+    for (const candidate of accepted) {
+      usedJti.set(candidate.jti, candidate.exp);
     }
+
+    accepted.sort((a, b) => b.base - a.base);
+    const cap = Number.isFinite(maxTokens) ? Math.max(0, Math.floor(maxTokens)) : accepted.length;
+    const counted = accepted.slice(0, cap);
+    return { base: counted.reduce((sum, value) => sum + value.base, 0), verified: counted.length };
   } catch (err) {
     console.error("[scoreToken] persistent voucher ledger unavailable; vouchers ignored for this submission:", err instanceof Error ? err.message : err);
     return { base: 0, verified: 0 };
   }
-
-  accepted.sort((a, b) => b - a);
-  const cap = Number.isFinite(maxTokens) ? Math.max(0, Math.floor(maxTokens)) : accepted.length;
-  const counted = accepted.slice(0, cap);
-  return { base: counted.reduce((sum, value) => sum + value, 0), verified: counted.length };
 }
 
 export function ceilingFromBase(base: number): number {
