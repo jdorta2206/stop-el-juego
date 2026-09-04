@@ -7,7 +7,7 @@ import router from "./routes";
 import adminPanel from "./routes/admin";
 import adminAnalytics from "./routes/adminAnalytics";
 import { WebhookHandlers } from "./webhookHandlers";
-import { generalLimiter } from "./middlewares/rateLimit";
+import { generalLimiter, authLimiter } from "./middlewares/rateLimit";
 
 // Production trigger: frontend/runtime stability fixes are deployed together with the API.
 const app: Express = express();
@@ -60,6 +60,12 @@ app.use(cookieParser());
 app.use(express.json({ limit: "256kb" }));
 app.use(express.urlencoded({ extended: true, limit: "64kb" }));
 app.use("/api", generalLimiter);
+// Authentication gets a tighter per-IP budget than the generic API limiter.
+// The limiter itself skips /health only; OAuth callbacks remain subject to this
+// protection intentionally so an attacker cannot hammer provider callbacks.
+// 20 attempts / 5 min is comfortably above normal login retries and below a
+// credential-stuffing/spam rate.
+app.use("/api/auth", authLimiter);
 app.use("/api", router);
 app.use("/test/analytics", adminAnalytics);
 
