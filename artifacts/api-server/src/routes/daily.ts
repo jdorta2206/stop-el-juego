@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, dailyResultsTable } from "@workspace/db";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 import { verifyClaimedIdentity } from "../lib/playerAuth";
 import { sumVerifiedBase, ceilingFromBase, absoluteCeiling } from "../lib/scoreToken";
 
@@ -54,45 +54,54 @@ router.post("/submit", async (req, res) => {
     return;
   }
 
-  // Persistent voucher verification is async because PostgreSQL is now the
-  // authoritative replay ledger. A DB outage does not block the daily route:
-  // the verifier returns zero and the existing absolute ceiling is used.
   const { base: verifiedBase, verified } = await sumVerifiedBase(scoreTokens, 1);
   const dailyCeiling = verified > 0 ? ceilingFromBase(verifiedBase) : absoluteCeiling("daily");
   const safeScore = Math.max(0, Math.min(Number(score) || 0, dailyCeiling));
   const today = getTodayUTC();
 
-  const existing = await db.select().from(dailyResultsTable).where(and(
-    eq(dailyResultsTable.playerId, playerId),
-    eq(dailyResultsTable.challengeDate, today)
-  )).limit(1);
+  try {
+    const result = await db.transaction(async (tx) => {
+      // Serialize this player's daily submission so two concurrent requests
+      // cannot both pass the read-before-insert check and create duplicates.
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`${playerId}:${today}`}))`);
 
-  if (existing.length > 0) {
-    if (safeScore > existing[0].score) {
-      await db.update(dailyResultsTable).set({
-        score: safeScore,
-        playerName,
-        avatarColor: avatarColor || existing[0].avatarColor,
-      }).where(and(
+      const existing = await tx.select().from(dailyResultsTable).where(and(
         eq(dailyResultsTable.playerId, playerId),
         eq(dailyResultsTable.challengeDate, today)
-      ));
-    }
-    res.json({ updated: true, alreadyPlayed: true });
-    return;
+      )).limit(1);
+
+      if (existing.length > 0) {
+        if (safeScore > existing[0].score) {
+          await tx.update(dailyResultsTable).set({
+            score: safeScore,
+            playerName,
+            avatarColor: avatarColor || existing[0].avatarColor,
+          }).where(and(
+            eq(dailyResultsTable.playerId, playerId),
+            eq(dailyResultsTable.challengeDate, today)
+          ));
+        }
+        return { status: 200 as const, body: { updated: true, alreadyPlayed: true } };
+      }
+
+      await tx.insert(dailyResultsTable).values({
+        playerId,
+        playerName,
+        avatarColor: avatarColor || "#e53e3e",
+        challengeDate: today,
+        score: safeScore,
+        letter,
+        language: language || "es",
+      });
+
+      return { status: 201 as const, body: { submitted: true } };
+    });
+
+    res.status(result.status).json(result.body);
+  } catch (e: unknown) {
+    console.error("[daily/submit] error:", e instanceof Error ? e.message : String(e));
+    res.status(500).json({ error: "Failed to submit daily challenge" });
   }
-
-  await db.insert(dailyResultsTable).values({
-    playerId,
-    playerName,
-    avatarColor: avatarColor || "#e53e3e",
-    challengeDate: today,
-    score: safeScore,
-    letter,
-    language: language || "es",
-  });
-
-  res.status(201).json({ submitted: true });
 });
 
 router.get("/rankings", async (req, res) => {
