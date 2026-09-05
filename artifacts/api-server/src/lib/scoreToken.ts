@@ -93,6 +93,16 @@ export async function sumVerifiedBase(
 
   if (candidates.length === 0) return { base: 0, verified: 0 };
 
+  // Only burn vouchers that can actually contribute to this submission.
+  // Keeping the highest-value candidates means a maxTokens cap never causes
+  // extra valid vouchers to be consumed and then discarded.
+  candidates.sort((a, b) => b.base - a.base);
+  const cap = Number.isFinite(maxTokens)
+    ? Math.max(0, Math.floor(maxTokens))
+    : candidates.length;
+  const toBurn = candidates.slice(0, cap);
+  if (toBurn.length === 0) return { base: 0, verified: 0 };
+
   try {
     const accepted = await db.transaction(async (tx) => {
       // Cleanup is deliberately inside the same transaction as the burns.
@@ -102,7 +112,7 @@ export async function sumVerifiedBase(
         .where(lt(scoreVoucherUsesTable.expiresAt, new Date(now)));
 
       const newlyAccepted: Array<{ base: number; jti: string; exp: number }> = [];
-      for (const candidate of candidates) {
+      for (const candidate of toBurn) {
         const inserted = await tx
           .insert(scoreVoucherUsesTable)
           .values({ jti: candidate.jti, expiresAt: new Date(candidate.exp) })
@@ -118,10 +128,10 @@ export async function sumVerifiedBase(
       usedJti.set(candidate.jti, candidate.exp);
     }
 
-    accepted.sort((a, b) => b.base - a.base);
-    const cap = Number.isFinite(maxTokens) ? Math.max(0, Math.floor(maxTokens)) : accepted.length;
-    const counted = accepted.slice(0, cap);
-    return { base: counted.reduce((sum, value) => sum + value.base, 0), verified: counted.length };
+    return {
+      base: accepted.reduce((sum, value) => sum + value.base, 0),
+      verified: accepted.length,
+    };
   } catch (err) {
     console.error("[scoreToken] persistent voucher ledger unavailable; vouchers ignored for this submission:", err instanceof Error ? err.message : err);
     return { base: 0, verified: 0 };
