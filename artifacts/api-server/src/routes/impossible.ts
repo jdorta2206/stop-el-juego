@@ -3,6 +3,7 @@ import { db, impossibleResultsTable } from "@workspace/db";
 import { eq, and, count, sql } from "drizzle-orm";
 import { getImpossibleCombo } from "../lib/impossibleCombos";
 import { validateWordWithAi } from "../lib/aiWordValidator";
+import { verifyClaimedIdentity } from "../lib/playerAuth";
 
 const router: IRouter = Router();
 
@@ -17,7 +18,6 @@ router.get("/", async (req, res) => {
   const today = getTodayUTC();
   const combo = getImpossibleCombo(today, language);
 
-  // Global stats — cheap aggregate; one row per attempt today.
   const rows = await db
     .select({
       attempts: count(),
@@ -48,6 +48,10 @@ router.get("/me/:playerId", async (req, res) => {
   const language = (req.query.language as string) || "es";
   const today = getTodayUTC();
 
+  if (!verifyClaimedIdentity(req, playerId)) {
+    return res.status(403).json({ error: "Identity verification failed" });
+  }
+
   const rows = await db
     .select()
     .from(impossibleResultsTable)
@@ -72,10 +76,12 @@ router.post("/submit", async (req, res) => {
   if (!playerId || !playerName) {
     res.status(400).json({ error: "Missing playerId or playerName" }); return;
   }
+  if (!verifyClaimedIdentity(req, playerId)) {
+    return res.status(403).json({ error: "Identity verification failed" });
+  }
 
   const today = getTodayUTC();
 
-  // Idempotency: if they already submitted today, return the prior result.
   const existing = await db
     .select()
     .from(impossibleResultsTable)
@@ -95,7 +101,6 @@ router.post("/submit", async (req, res) => {
   let won = false;
 
   if (!surrendered && trimmed.length >= 2) {
-    // Must start with the combo letter (case- and accent-insensitive).
     const normalize = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
     const startsRight = normalize(trimmed).startsWith(normalize(combo.letter));
     if (startsRight) {
@@ -108,16 +113,13 @@ router.post("/submit", async (req, res) => {
         });
         won = r.isValid === true;
       } catch {
-        // If AI is unavailable we give the benefit of the doubt rather than
-        // punishing the player for our infra.
-        won = true;
+        // AI failure must not turn an invalid/unverified answer into a win.
+        // The safe result is a loss; the player can retry on a future day.
+        won = false;
       }
     }
   }
 
-  // Race-safe insert: unique index on (player_id, challenge_date, language)
-  // means two concurrent submits can't both insert. The loser of the race
-  // returns 0 rows and we fall back to the existing row.
   const inserted = await db.insert(impossibleResultsTable).values({
     playerId,
     playerName,
@@ -127,7 +129,7 @@ router.post("/submit", async (req, res) => {
     category: combo.category,
     attemptedWord: surrendered ? "" : trimmed,
     won,
-    timeMs: Math.max(0, Math.min(60000, Math.floor(timeMs))),
+    timeMs: Math.max(0, Math.min(60000, Math.floor(Number(timeMs) || 60000))),
   }).onConflictDoNothing().returning();
 
   if (inserted.length === 0) {
@@ -140,7 +142,6 @@ router.post("/submit", async (req, res) => {
     return;
   }
 
-  // Updated global stats.
   const rows = await db
     .select({
       attempts: count(),
