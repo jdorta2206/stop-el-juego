@@ -26,6 +26,44 @@ export function hasAndroidAppReferrer(): boolean {
 }
 
 /**
+ * Restores an existing Google Play subscription in the server after a TWA
+ * launch. The Digital Goods API is only available in the Android TWA, so
+ * this is a no-op elsewhere. Restoration is best-effort and never blocks
+ * the normal premium status request.
+ */
+export async function restorePlayPurchases(playerId: string): Promise<void> {
+  if (typeof window === "undefined" || typeof window.getDigitalGoodsService !== "function") {
+    return;
+  }
+  if (!playerId) return;
+
+  const service = await window.getDigitalGoodsService("https://play.google.com/billing");
+  if (typeof service.listPurchases !== "function") return;
+
+  const result = await service.listPurchases();
+  const purchases = Array.isArray(result) ? result : result?.purchases;
+  if (!Array.isArray(purchases)) return;
+
+  for (const purchase of purchases) {
+    const productId = purchase?.itemId ?? purchase?.productId;
+    const purchaseToken = purchase?.purchaseToken;
+    if (productId !== PREMIUM_SKU || typeof purchaseToken !== "string" || !purchaseToken) {
+      continue;
+    }
+
+    const response = await fetch("/api/billing/play/verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      credentials: "include",
+      body: JSON.stringify({ playerId, productId, purchaseToken }),
+    });
+
+    // Continue through other purchases if one verification fails.
+    if (!response.ok) continue;
+  }
+}
+
+/**
  * Compra el Pack Mundial (pago único) con Google Play Billing.
  * Recibe playerId para conceder los cosméticos.
  */
