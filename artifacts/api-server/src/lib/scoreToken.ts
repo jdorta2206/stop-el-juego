@@ -1,4 +1,6 @@
 import crypto from "crypto";
+import { db, scoreVoucherUsesTable } from "@workspace/db";
+import { lt } from "drizzle-orm";
 
 const TTL_MS = 30 * 60 * 1000;
 const KIND_ROUND = "r";
@@ -27,6 +29,9 @@ export function isScoreTokenConfigured(): boolean {
   return getSigningSecret() !== null;
 }
 
+// Kept for backwards-compatible local/unit-test callers. Production score
+// submission uses the durable DB ledger below, so a process restart cannot
+// make a previously consumed voucher valid again.
 const usedJti = new Map<string, number>();
 function pruneUsed(now: number): void {
   if (usedJti.size < 1024) return;
@@ -47,6 +52,36 @@ export function issueScoreToken(base: number): string | null {
   return `${payload}.${sign(secret, payload)}`;
 }
 
+type VerifiedVoucher = { base: number; exp: number; jti: string };
+
+function parseVerifiedVoucher(token: unknown, secret: string, now: number): VerifiedVoucher | null {
+  if (typeof token !== "string" || token.length > 512) return null;
+  const parts = token.split(".");
+  if (parts.length !== 5) return null;
+  const [baseStr, kind, expStr, jti, sig] = parts;
+  if (kind !== KIND_ROUND || !jti || !sig) return null;
+
+  const expected = sign(secret, `${baseStr}.${kind}.${expStr}.${jti}`);
+  try {
+    const a = Buffer.from(sig);
+    const b = Buffer.from(expected);
+    if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
+  } catch (error) {
+    console.warn("[scoreToken] malformed voucher signature", error);
+    return null;
+  }
+
+  const exp = Number(expStr);
+  const b = Number(baseStr);
+  if (!Number.isSafeInteger(exp) || exp <= now) return null;
+  if (!Number.isFinite(b) || !Number.isSafeInteger(b) || b < 0 || b > 100_000) return null;
+  return { base: b, exp, jti };
+}
+
+/**
+ * Legacy in-process verification helper. It remains available for tests and
+ * non-economic callers; ranking score submission uses sumVerifiedBasePersistent.
+ */
 export function sumVerifiedBase(
   tokens: unknown,
   maxTokens = Number.POSITIVE_INFINITY,
@@ -60,37 +95,51 @@ export function sumVerifiedBase(
   const cap = Number.isFinite(maxTokens) ? Math.max(0, Math.floor(maxTokens)) : tokens.length;
   if (cap === 0) return { base: 0, verified: 0 };
 
-  // Never process an attacker-controlled unbounded token array. Only the
-  // number of vouchers that the selected game mode can legitimately produce
-  // can contribute to a score.
   const candidates = tokens.slice(0, cap);
   for (const token of candidates) {
-    if (typeof token !== "string" || token.length > 512) continue;
-    const parts = token.split(".");
-    if (parts.length !== 5) continue;
-    const [baseStr, kind, expStr, jti, sig] = parts;
-    if (kind !== KIND_ROUND || !jti || !sig) continue;
+    const voucher = parseVerifiedVoucher(token, secret, now);
+    if (!voucher || usedJti.has(voucher.jti)) continue;
+    usedJti.set(voucher.jti, voucher.exp);
+    validBases.push(voucher.base);
+  }
 
-    const expected = sign(secret, `${baseStr}.${kind}.${expStr}.${jti}`);
-    let ok = false;
-    try {
-      const a = Buffer.from(sig);
-      const b = Buffer.from(expected);
-      ok = a.length === b.length && crypto.timingSafeEqual(a, b);
-    } catch (error) {
-      console.warn("[scoreToken] malformed voucher signature", error);
-      ok = false;
-    }
-    if (!ok) continue;
+  validBases.sort((a, b) => b - a);
+  const counted = validBases.slice(0, cap);
+  return { base: counted.reduce((sum, n) => sum + n, 0), verified: counted.length };
+}
 
-    const exp = Number(expStr);
-    const b = Number(baseStr);
-    if (!Number.isSafeInteger(exp) || exp <= now) continue;
-    if (!Number.isFinite(b) || !Number.isSafeInteger(b) || b < 0 || b > 100_000) continue;
-    if (usedJti.has(jti)) continue;
+/**
+ * Production verifier. Every accepted JTI is atomically inserted into the
+ * persistent ledger. A unique constraint makes concurrent requests and
+ * post-restart replays fail closed.
+ */
+export async function sumVerifiedBasePersistent(
+  tokens: unknown,
+  maxTokens = Number.POSITIVE_INFINITY,
+): Promise<{ base: number; verified: number }> {
+  if (!Array.isArray(tokens) || tokens.length === 0) return { base: 0, verified: 0 };
+  const secret = getSigningSecret();
+  if (!secret) return { base: 0, verified: 0 };
+  const now = Date.now();
+  const cap = Number.isFinite(maxTokens) ? Math.max(0, Math.floor(maxTokens)) : tokens.length;
+  if (cap === 0) return { base: 0, verified: 0 };
 
-    usedJti.set(jti, exp);
-    validBases.push(b);
+  // Keep the small ledger bounded. This only removes already-expired entries.
+  await db.delete(scoreVoucherUsesTable).where(lt(scoreVoucherUsesTable.expiresAt, new Date(now)));
+
+  const validBases: number[] = [];
+  const candidates = tokens.slice(0, cap);
+  for (const token of candidates) {
+    const voucher = parseVerifiedVoucher(token, secret, now);
+    if (!voucher) continue;
+
+    const claimed = await db.insert(scoreVoucherUsesTable).values({
+      jti: voucher.jti,
+      expiresAt: new Date(voucher.exp),
+    }).onConflictDoNothing().returning({ jti: scoreVoucherUsesTable.jti });
+
+    if (claimed.length === 0) continue;
+    validBases.push(voucher.base);
   }
 
   validBases.sort((a, b) => b - a);
