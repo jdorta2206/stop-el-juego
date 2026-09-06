@@ -32,7 +32,7 @@ router.get("/", async (req, res) => {
   const attempts = Number(rows[0]?.attempts ?? 0);
   const wins = Number(rows[0]?.wins ?? 0);
 
-  res.json({
+  return res.json({
     date: today,
     language,
     letter: combo.letter,
@@ -63,7 +63,7 @@ router.get("/me/:playerId", async (req, res) => {
     .limit(1);
 
   if (!rows.length) { res.json({ played: false }); return; }
-  res.json({ played: true, result: rows[0] });
+  return res.json({ played: true, result: rows[0] });
 });
 
 // ── POST /api/impossible/submit ─────────────────────────────────────────────
@@ -153,7 +153,7 @@ router.post("/submit", async (req, res) => {
       eq(impossibleResultsTable.language, language),
     ));
 
-  res.status(201).json({
+  return res.status(201).json({
     submitted: true,
     won,
     word: trimmed,
