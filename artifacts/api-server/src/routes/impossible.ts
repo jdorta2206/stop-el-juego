@@ -3,6 +3,7 @@ import { db, impossibleResultsTable } from "@workspace/db";
 import { eq, and, count, sql } from "drizzle-orm";
 import { getImpossibleCombo } from "../lib/impossibleCombos";
 import { validateWordWithAi } from "../lib/aiWordValidator";
+import { verifyClaimedIdentity } from "../lib/playerAuth";
 
 const router: IRouter = Router();
 
@@ -45,6 +46,11 @@ router.get("/", async (req, res) => {
 // Has this player already attempted today? Returns their attempt if so.
 router.get("/me/:playerId", async (req, res) => {
   const playerId = req.params.playerId;
+  if (!verifyClaimedIdentity(req, playerId)) {
+    res.status(403).json({ error: "PLAYER_ID_MISMATCH" });
+    return;
+  }
+
   const language = (req.query.language as string) || "es";
   const today = getTodayUTC();
 
@@ -71,6 +77,10 @@ router.post("/submit", async (req, res) => {
   const { playerId, playerName, language = "es", word = "", timeMs = 60000, surrendered = false } = req.body ?? {};
   if (!playerId || !playerName) {
     res.status(400).json({ error: "Missing playerId or playerName" }); return;
+  }
+  if (!verifyClaimedIdentity(req, String(playerId))) {
+    res.status(403).json({ error: "PLAYER_ID_MISMATCH" });
+    return;
   }
 
   const today = getTodayUTC();
