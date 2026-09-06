@@ -27,6 +27,8 @@ import crypto from "crypto";
 
 const TTL_MS = 30 * 60 * 1000; // a game is short — vouchers expire quickly.
 const KIND_ROUND = "r";
+const MAX_TOKEN_BATCH = 64;
+const MAX_TOKEN_LENGTH = 512;
 
 // Max scoring rounds a legit game of each mode can produce. Used to cap how many
 // vouchers count toward a single submission's ceiling (see sumVerifiedBase).
@@ -98,6 +100,10 @@ export function sumVerifiedBase(
   maxTokens = Number.POSITIVE_INFINITY,
 ): { base: number; verified: number } {
   if (!Array.isArray(tokens) || tokens.length === 0) return { base: 0, verified: 0 };
+  // Hard upper bounds prevent an attacker from turning this verification loop
+  // into an avoidable CPU/memory-amplification primitive with huge arrays or
+  // oversized strings. Legit games need at most 12 vouchers.
+  if (tokens.length > MAX_TOKEN_BATCH) return { base: 0, verified: 0 };
   const secret = getSigningSecret();
   if (!secret) return { base: 0, verified: 0 };
   const now = Date.now();
@@ -105,7 +111,7 @@ export function sumVerifiedBase(
 
   const validBases: number[] = [];
   for (const token of tokens) {
-    if (typeof token !== "string") continue;
+    if (typeof token !== "string" || token.length > MAX_TOKEN_LENGTH) continue;
     const parts = token.split(".");
     if (parts.length !== 5) continue;
     const [baseStr, kind, expStr, jti, sig] = parts;
