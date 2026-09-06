@@ -26,6 +26,7 @@ export const playerScoresTable = pgTable("player_scores", {
   inventoryJson: text("inventory_json").notNull().default("{\"avatars\":[],\"frames\":[]}"),
   equippedAvatar: text("equipped_avatar"),
   equippedFrame: text("equipped_frame"),
+  equippedBackground: text("equipped_background"),
   equippedTitle: text("equipped_title"),
   prestigeClaimsJson: text("prestige_claims_json").notNull().default("[]"),
   collectionClaimsJson: text("collection_claims_json").notNull().default("[]"),
