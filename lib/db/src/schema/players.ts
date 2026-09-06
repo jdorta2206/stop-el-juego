@@ -67,7 +67,6 @@ export const roomsTable = pgTable("rooms", {
   playersJson: text("players_json").notNull().default("[]"),
   stopperJson: text("stopper_json"),
   isPublic: boolean("is_public").notNull().default(false),
-  maxPlayers: integer("max_players").notNull().default(8),
   hostName: text("host_name").notNull().default(""),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -84,7 +83,6 @@ export const followsTable = pgTable("follows", {
   followedName: text("followed_name").notNull(),
   followedPicture: text("followed_picture"),
   followedAvatarColor: text("followed_avatar_color").notNull().default("#e53e3e"),
-  followedProvider: text("followed_provider"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
