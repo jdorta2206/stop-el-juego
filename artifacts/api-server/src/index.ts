@@ -165,3 +165,5 @@ main().catch((err) => {
   console.error("Fatal startup error:", err);
   process.exit(1);
 });
+
+// No-op change solely to force Railway to rebuild the API service after the startup schema fix.
