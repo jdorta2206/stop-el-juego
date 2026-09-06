@@ -118,9 +118,9 @@ router.post("/submit", async (req, res) => {
         });
         won = r.isValid === true;
       } catch {
-        // If AI is unavailable we give the benefit of the doubt rather than
-        // punishing the player for our infra.
-        won = true;
+        // Fail closed: an unavailable validator must never turn an unverified
+        // answer into a recorded win.
+        won = false;
       }
     }
   }
