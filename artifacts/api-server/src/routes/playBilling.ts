@@ -1,8 +1,9 @@
 import { Router, Request, Response } from "express";
-import { db, playerScoresTable } from "@workspace/db";
+import { db, playerScoresTable, playPurchaseLedgerTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { google } from "googleapis";
-import { grantWorldCupPack } from "../lib/worldCupPack";
+import { grantWorldCupPack, WORLD_CUP_PACK_SKU, worldCupPackItemIds } from "../lib/worldCupPack";
+import { verifyClaimedIdentity } from "../lib/playerAuth";
 
 const router = Router();
 
@@ -11,6 +12,9 @@ router.post("/verify", async (req: Request, res: Response) => {
     const { playerId, productId, purchaseToken } = req.body;
     if (!playerId || !productId || !purchaseToken) {
       return res.status(400).json({ error: "Faltan campos obligatorios" });
+    }
+    if (!verifyClaimedIdentity(req, playerId)) {
+      return res.status(403).json({ error: "Identity verification failed" });
     }
 
     const serviceAccountJson = process.env.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON;
@@ -55,6 +59,15 @@ router.post("/verify-pack", async (req: Request, res: Response) => {
     if (!playerId || !productId || !purchaseToken) {
       return res.status(400).json({ error: "Faltan campos obligatorios" });
     }
+    if (productId !== WORLD_CUP_PACK_SKU) {
+      return res.status(400).json({ error: "Producto no válido" });
+    }
+    if (typeof purchaseToken !== "string" || purchaseToken.length < 8 || purchaseToken.length > 4096) {
+      return res.status(400).json({ error: "Token de compra no válido" });
+    }
+    if (!verifyClaimedIdentity(req, playerId)) {
+      return res.status(403).json({ error: "Identity verification failed" });
+    }
 
     const serviceAccountJson = process.env.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON;
     if (!serviceAccountJson) {
@@ -80,8 +93,29 @@ router.post("/verify-pack", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Compra no válida" });
     }
 
+    // Claim the purchase token atomically before granting the pack. This makes
+    // the grant durable across restarts and prevents two concurrent requests
+    // from both receiving the same Google Play purchase.
+    const claimed = await db.insert(playPurchaseLedgerTable).values({
+      purchaseToken,
+      playerId,
+      productId,
+    }).onConflictDoNothing().returning({ id: playPurchaseLedgerTable.id });
+
+    if (claimed.length === 0) {
+      return res.json({
+        granted: true,
+        alreadyProcessed: true,
+        items: 0,
+        total: worldCupPackItemIds().length,
+      });
+    }
+
     const grantResult = await grantWorldCupPack(playerId);
     if (!grantResult.ok) {
+      // Release the claim only when the actual grant failed, allowing the
+      // verified Google purchase to be retried safely.
+      await db.delete(playPurchaseLedgerTable).where(eq(playPurchaseLedgerTable.id, claimed[0].id));
       console.error("Error al conceder el pack:", grantResult.error);
       return res.status(500).json({ error: "Error al conceder los cosméticos" });
     }
