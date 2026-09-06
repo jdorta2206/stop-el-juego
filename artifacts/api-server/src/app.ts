@@ -53,21 +53,14 @@ const CORS_ALLOWLIST = new Set<string>([
   "https://stop-el-juego.replit.app",
   "https://stopjuegodepalabras.com",
   "https://www.stopjuegodepalabras.com",
-  // Dev domain (Replit preview). Pulled from env so it can be rotated without
-  // a code change. APP_ORIGIN also covers the canonical prod domain above.
   process.env["APP_ORIGIN"] || "",
 ].filter(Boolean));
 
 app.use(
   cors({
     origin: (origin, cb) => {
-      // Same-origin requests (server-to-server, curl) have no Origin header —
-      // allow them since CORS isn't being enforced anyway.
       if (!origin) return cb(null, true);
       if (CORS_ALLOWLIST.has(origin)) return cb(null, true);
-      // Allow any *.replit.dev preview URL — but ONLY outside production, so the
-      // live deploy trusts the explicit allowlist alone and a *.replit.dev
-      // origin can't ride the user's cookies against prod.
       if (process.env.NODE_ENV !== "production") {
         try {
           const host = new URL(origin).hostname;
@@ -76,35 +69,23 @@ app.use(
           }
         } catch { /* malformed origin */ }
       }
-      // Unknown origin → reject by passing false. The browser will then
-      // refuse to expose any response body to the calling script.
       return cb(null, false);
     },
     credentials: true,
   }),
 );
 app.use(cookieParser());
-app.use(express.json({ limit: "256kb" })); // small body cap protects against memory abuse
+app.use(express.json({ limit: "256kb" }));
 app.use(express.urlencoded({ extended: true, limit: "64kb" }));
 
-// 🛡️ Global per-key rate limit covering ALL /api/* requests.
-// Per-route stricter limits are layered inside individual routers.
 app.use("/api", generalLimiter);
-
 app.use("/api", router);
 
-// 🔒 Private owner-only analytics panel (HTTP Basic Auth). Mounted at /test
-// BEFORE the SPA fallback so it isn't swallowed by the client router. Not under
-// /api so it's a plain browser URL: https://<domain>/test
 app.use("/test", adminPanel);
 
-// ========== 🎯 CHEQUEO DE VERSIÓN MÍNIMA (añadido) ==========
 const MIN_APP_VERSION = "1.3.4.0";
 const PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=app.replit.stop_el_juego.twa";
 
-// Compare dotted numeric versions segment-by-segment so "1.10.0" > "1.3.4.0".
-// A plain string compare broke on multi-digit segments and would wrongly block
-// newer builds. Returns negative / 0 / positive like the usual comparator.
 function compareVersions(a: string, b: string): number {
   const pa = a.split(".").map((n) => parseInt(n, 10) || 0);
   const pb = b.split(".").map((n) => parseInt(n, 10) || 0);
@@ -132,12 +113,7 @@ app.get('/api/check-version', (req, res) => {
       : "Tu versión de STOP es muy antigua. Actualiza desde Google Play para seguir jugando."
   });
 });
-// ========== FIN DEL CHEQUEO DE VERSIÓN ==========
 
-// 🚂 Single-service mode (e.g. Railway): serve the built game client from the
-// same origin as the API so the whole app runs as ONE deployable. Gated behind
-// SERVE_CLIENT so Replit (which serves the client from a separate Vite service)
-// is completely unaffected — this block never runs unless SERVE_CLIENT=1.
 if (process.env["SERVE_CLIENT"] === "1") {
   const clientDist =
     process.env["CLIENT_DIST_PATH"] ||
@@ -147,10 +123,6 @@ if (process.env["SERVE_CLIENT"] === "1") {
       `[SERVE_CLIENT] index.html not found at ${clientDist} — the client build is missing or mislocated. Run "pnpm run build:railway" before starting.`,
     );
   }
-  // Digital Asset Links: Android needs /.well-known/assetlinks.json to verify the
-  // TWA and run it full-screen (without the browser toolbar). express.static
-  // ignores dotfile dirs (.well-known) by default and the SPA fallback below would
-  // otherwise return index.html for it, breaking verification. Serve it explicitly.
   app.get("/.well-known/assetlinks.json", (_req, res) => {
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.sendFile(
@@ -162,29 +134,19 @@ if (process.env["SERVE_CLIENT"] === "1") {
       },
     );
   });
-  // Allow other dotfiles under .well-known to be served as real files too.
   app.use(express.static(clientDist, { dotfiles: "allow" }));
-  // SPA fallback: any GET that isn't an /api route returns index.html so
-  // client-side routing (wouter) works on hard refresh / deep links. The regex
-  // treats both `/api` and `/api/...` as API paths so they never fall through
-  // to the HTML shell.
   app.get(/^\/(?!api(?:\/|$)).*/, (_req, res) => {
     res.sendFile(path.join(clientDist, "index.html"));
   });
 }
 
-// 🛡️ Global JSON error handler — prevents the server from sending HTML 500s
-// (which break the client because it expects JSON). Express 5 auto-forwards
-// async errors here, so unhandled exceptions in any route now return a clean
-// 500 with JSON body and stay logged on the server side.
+// Global JSON error handler. Keep detailed diagnostics in server logs only;
+// clients receive a stable generic response that cannot disclose internals.
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error("[API ERROR]", err?.message ?? err, err?.stack);
   if (res.headersSent) return;
-  res.status(500).json({
-    error: "Internal server error",
-    message: err?.message ?? "Unknown error",
-  });
+  res.status(500).json({ error: "Internal server error" });
 });
 
 export default app;
