@@ -6,7 +6,7 @@ import { sendPushToPlayer } from "../lib/pushHelper";
 import { SubmitScoreBody, GetLeaderboardQueryParams } from "@workspace/api-zod";
 import { scoreLimiter } from "../middlewares/rateLimit";
 import { verifyClaimedIdentity } from "../lib/playerAuth";
-import { sumVerifiedBase, ceilingFromBase, maxRoundsForMode, isScoreTokenConfigured } from "../lib/scoreToken";
+import { sumVerifiedBasePersistent, ceilingFromBase, maxRoundsForMode, isScoreTokenConfigured } from "../lib/scoreToken";
 import { isHappyHourActiveForTzOffset, HAPPY_HOUR_MULTIPLIER } from "../lib/happyHour";
 
 function calcCoinGain(score: number, won: boolean, mode: string, isBonus: boolean): number {
@@ -50,14 +50,18 @@ router.post("/scores",scoreLimiter,async(req,res)=>{const body=SubmitScoreBody.s
   // for signed vouchers, every non-zero score must prove that it came from validated
   // gameplay. This also closes the replay path where burned vouchers were followed
   // by a tokenless resubmission and the legacy absolute ceiling was awarded.
-  const tokenResult=sumVerifiedBase(scoreTokens,maxRoundsForMode(mode));
+  const tokenResult=await sumVerifiedBasePersistent(scoreTokens,maxRoundsForMode(mode));
   if(!isBonus && rawScore>0 && isScoreTokenConfigured() && tokenResult.verified===0){
     res.status(409).json({error:"Score verification required",code:"SCORE_VERIFICATION_REQUIRED"});
     return;
   }
   const ceiling=tokenResult.verified>0?ceilingFromBase(tokenResult.base):0;
   const cappedRaw=Math.max(0,Math.min(rawScore,ceiling));
-  const score=mode==="multiplayer"?Math.round(cappedRaw*1.5):cappedRaw;
+  // The multiplier is earned only when the server sees a complete, verified
+  // multiplayer round set. Merely changing the client-supplied mode to
+  // "multiplayer" can no longer manufacture the 1.5x bonus.
+  const hasFullMultiplayerProof=mode==="multiplayer"&&tokenResult.verified>=maxRoundsForMode(mode);
+  const score=hasFullMultiplayerProof?Math.round(cappedRaw*1.5):cappedRaw;
   const existing=await db.select().from(playerScoresTable).where(eq(playerScoresTable.playerId,playerId)).limit(1);
   const oldTotal=existing.length>0?existing[0].totalScore:0;const newTotal=oldTotal+score;const today=new Date().toISOString().split("T")[0];const lastPlayedDate=existing[0]?.lastPlayedDate??null;const{newStreak,updatedToday}=calculateStreak(lastPlayedDate,existing[0]?.currentStreak??0);const newLongest=Math.max(existing[0]?.longestStreak??0,newStreak);
   const overtaken=score>0&&newTotal>oldTotal?await db.select({playerId:playerScoresTable.playerId,playerName:playerScoresTable.playerName}).from(playerScoresTable).where(sql`${playerScoresTable.totalScore}>${oldTotal} AND ${playerScoresTable.totalScore}<=${newTotal} AND ${playerScoresTable.playerId}!=${playerId}`):[];
