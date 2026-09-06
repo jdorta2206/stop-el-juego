@@ -7,10 +7,7 @@ import { SubmitScoreBody, GetLeaderboardQueryParams } from "@workspace/api-zod";
 import { scoreLimiter } from "../middlewares/rateLimit";
 import { verifyClaimedIdentity } from "../lib/playerAuth";
 import { sumVerifiedBase, ceilingFromBase, absoluteCeiling, maxRoundsForMode } from "../lib/scoreToken";
-import {
-  isHappyHourActiveForTzOffset,
-  HAPPY_HOUR_MULTIPLIER,
-} from "../lib/happyHour";
+import { isHappyHourActiveForTzOffset, HAPPY_HOUR_MULTIPLIER } from "../lib/happyHour";
 
 function calcCoinGain(score: number, won: boolean, mode: string, isBonus: boolean): number {
   if (isBonus) return 0;
@@ -56,7 +53,9 @@ router.get("/monthly", async (_req, res) => {
 });
 
 router.get("/profile/:playerId", async (req, res) => {
-  const { playerId } = req.params; const scoreRows = await db.select().from(playerScoresTable).where(eq(playerScoresTable.playerId, playerId)).limit(1); if (scoreRows.length === 0) { res.status(404).json({ error: "Player not found" }); return; } const ps = scoreRows[0];
+  const { playerId } = req.params;
+  if (!verifyClaimedIdentity(req, playerId)) { res.status(403).json({ error: "Identity verification failed" }); return; }
+  const scoreRows = await db.select().from(playerScoresTable).where(eq(playerScoresTable.playerId, playerId)).limit(1); if (scoreRows.length === 0) { res.status(404).json({ error: "Player not found" }); return; } const ps = scoreRows[0];
   const [rankRow, monthlyRow, modeRows, recentRows] = await Promise.all([db.execute(sql`SELECT COUNT(*) AS cnt FROM player_scores WHERE total_score > ${ps.totalScore}`), db.execute(sql`SELECT COALESCE(SUM(score), 0) AS monthly_score FROM game_history WHERE player_id = ${playerId} AND created_at >= date_trunc('month', NOW() AT TIME ZONE 'UTC')`), db.execute(sql`SELECT mode, COUNT(*) AS games, COALESCE(SUM(score), 0) AS total_score, COALESCE(MAX(score), 0) AS best_score, SUM(CASE WHEN won THEN 1 ELSE 0 END) AS wins FROM game_history WHERE player_id = ${playerId} GROUP BY mode`), db.execute(sql`SELECT id, score, letter, mode, won, created_at FROM game_history WHERE player_id = ${playerId} ORDER BY created_at DESC LIMIT 20`)]);
   const globalRank = Number((rankRow.rows[0] as any)?.cnt ?? 0) + 1; const monthlyScore = Number((monthlyRow.rows[0] as any)?.monthly_score ?? 0); const modeStats: Record<string, any> = {}; for (const row of modeRows.rows as any[]) modeStats[row.mode] = { games: Number(row.games), totalScore: Number(row.total_score), bestScore: Number(row.best_score), wins: Number(row.wins) }; const recentGames = (recentRows.rows as any[]).map(r => ({ id: r.id, score: Number(r.score), letter: r.letter, mode: r.mode, won: r.won, createdAt: r.created_at }));
   res.json({ playerId: ps.playerId, playerName: ps.playerName, avatarColor: ps.avatarColor, totalScore: ps.totalScore, gamesPlayed: ps.gamesPlayed, wins: ps.wins, currentStreak: ps.currentStreak ?? 0, longestStreak: ps.longestStreak ?? 0, isPremium: ps.isPremium ?? false, xp: ps.xp ?? 0, level: ps.level ?? 1, coins: ps.coins ?? 0, globalRank, monthlyScore, modeStats, recentGames });
@@ -87,7 +86,9 @@ router.post("/scores", scoreLimiter, async (req, res) => {
 });
 
 router.get("/scores/:playerId", async (req, res) => {
-  const { playerId } = req.params; const scores = await db.select().from(playerScoresTable).where(eq(playerScoresTable.playerId, playerId)).limit(1); if (scores.length === 0) { res.status(404).json({ error: "Player not found" }); return; } const ps = scores[0]; const [rankRow, bestRow, recentGames] = await Promise.all([db.execute(sql`SELECT COUNT(*) AS cnt FROM player_scores WHERE total_score > ${ps.totalScore}`), db.execute(sql`SELECT COALESCE(MAX(score), 0) AS best FROM game_history WHERE player_id = ${playerId}`), db.select().from(gameHistoryTable).where(eq(gameHistoryTable.playerId, playerId)).orderBy(desc(gameHistoryTable.createdAt)).limit(10)]); const globalRank = Number((rankRow.rows[0] as any)?.cnt ?? 0) + 1; const bestScore = Number((bestRow.rows[0] as any)?.best ?? 0); res.json({ score: { ...ps, rank: globalRank, globalRank, bestScore }, recentGames });
+  const { playerId } = req.params;
+  if (!verifyClaimedIdentity(req, playerId)) { res.status(403).json({ error: "Identity verification failed" }); return; }
+  const scores = await db.select().from(playerScoresTable).where(eq(playerScoresTable.playerId, playerId)).limit(1); if (scores.length === 0) { res.status(404).json({ error: "Player not found" }); return; } const ps = scores[0]; const [rankRow, bestRow, recentGames] = await Promise.all([db.execute(sql`SELECT COUNT(*) AS cnt FROM player_scores WHERE total_score > ${ps.totalScore}`), db.execute(sql`SELECT COALESCE(MAX(score), 0) AS best FROM game_history WHERE player_id = ${playerId}`), db.select().from(gameHistoryTable).where(eq(gameHistoryTable.playerId, playerId)).orderBy(desc(gameHistoryTable.createdAt)).limit(10)]); const globalRank = Number((rankRow.rows[0] as any)?.cnt ?? 0) + 1; const bestScore = Number((bestRow.rows[0] as any)?.best ?? 0); res.json({ score: { ...ps, rank: globalRank, globalRank, bestScore }, recentGames });
 });
 
 export default router;
