@@ -39,6 +39,11 @@ function mergeCollectedWords(local: JsonRecord, remote: JsonRecord): JsonRecord 
 // personal-best UIs. All four are persisted on player_scores.
 router.get("/progress/:playerId", async (req, res) => {
   const { playerId } = req.params;
+  if (!verifyClaimedIdentity(req, playerId)) {
+    res.status(403).json({ error: "Identity verification failed" });
+    return;
+  }
+
   const rows = await db
     .select()
     .from(playerScoresTable)
@@ -64,6 +69,11 @@ router.get("/progress/:playerId", async (req, res) => {
 
 router.get("/streak/calendar/:playerId", async (req, res) => {
   const { playerId } = req.params;
+  if (!verifyClaimedIdentity(req, playerId)) {
+    res.status(403).json({ error: "Identity verification failed" });
+    return;
+  }
+
   const rows = await db
     .select({
       currentStreak: playerScoresTable.currentStreak,
