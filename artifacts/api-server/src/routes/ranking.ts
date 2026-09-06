@@ -342,6 +342,10 @@ router.post("/scores", scoreLimiter, async (req, res) => {
   const isBonus = bonus === true;
 
   const { base: verifiedBase, verified } = sumVerifiedBase(scoreTokens, maxRoundsForMode(mode));
+  if (rawScore > 0 && verified === 0) {
+    res.status(422).json({ error: "SCORE_VERIFICATION_REQUIRED" });
+    return;
+  }
   const ceiling = verified > 0 ? ceilingFromBase(verifiedBase) : absoluteCeiling(mode);
   const cappedRaw = Math.max(0, Math.min(rawScore, ceiling));
   const score = mode === "multiplayer" ? Math.round(cappedRaw * 1.5) : cappedRaw;
