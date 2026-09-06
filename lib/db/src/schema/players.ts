@@ -174,7 +174,7 @@ export const seasonsTable = pgTable("seasons", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-export const insertSeasonSchema = createInsertSchema(seasonsTable).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertSeasonSchema = createInsertSchema(seasonsTable).omit({ id: true, createdAt: true });
 export type InsertSeason = z.infer<typeof insertSeasonSchema>;
 export type Season = typeof seasonsTable.$inferSelect;
 
