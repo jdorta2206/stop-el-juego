@@ -64,6 +64,23 @@ router.post("/submit", async (req, res) => {
     return;
   }
 
+  // 🔒 Bind the submission to the server-generated challenge. A client must not
+  // be able to submit a score under a different letter/language for today's
+  // ranking. Unsupported languages fall back to Spanish for GET, but submissions
+  // must explicitly use one of the supported challenge languages.
+  const normalizedLanguage = typeof language === "string" ? language.trim().toLowerCase() : "";
+  const supportedLanguages = new Set(["es", "en", "pt", "fr"]);
+  if (!supportedLanguages.has(normalizedLanguage)) {
+    res.status(400).json({ error: "Unsupported daily challenge language" });
+    return;
+  }
+  const today = getTodayUTC();
+  const expectedChallenge = getDailyChallenge(today, normalizedLanguage);
+  if (typeof letter !== "string" || letter.trim().toUpperCase() !== expectedChallenge.letter) {
+    res.status(422).json({ error: "Invalid daily challenge letter" });
+    return;
+  }
+
   // 🔒 Anti-cheat clamp — same scheme as the global leaderboard: clamp the
   // posted score to a ceiling derived from the verified round voucher(s), or a
   // flat absolute ceiling when none are present (offline play). Never reject,
@@ -71,8 +88,6 @@ router.post("/submit", async (req, res) => {
   const { base: verifiedBase, verified } = sumVerifiedBase(scoreTokens, 1);
   const dailyCeiling = verified > 0 ? ceilingFromBase(verifiedBase) : absoluteCeiling("daily");
   const safeScore = Math.max(0, Math.min(Number(score) || 0, dailyCeiling));
-
-  const today = getTodayUTC();
 
   // Only allow one submission per player per day
   const existing = await db
@@ -110,7 +125,7 @@ router.post("/submit", async (req, res) => {
     challengeDate: today,
     score: safeScore,
     letter,
-    language: language || "es",
+    language: normalizedLanguage,
   });
 
   res.status(201).json({ submitted: true });
