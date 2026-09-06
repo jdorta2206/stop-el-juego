@@ -13,8 +13,6 @@ router.get("/list/:followerId", async (req, res) => {
     return res.status(403).json({ error: "Identity verification failed" });
   }
 
-  // Keep the follows list outside the inner try so the error fallback can
-  // safely use the already-fetched source-of-truth records.
   let follows: Array<typeof followsTable.$inferSelect> = [];
 
   try {
@@ -23,9 +21,7 @@ router.get("/list/:followerId", async (req, res) => {
       .from(followsTable)
       .where(eq(followsTable.followerId, followerId));
 
-    if (follows.length === 0) {
-      return res.json({ friends: [] });
-    }
+    if (follows.length === 0) return res.json({ friends: [] });
 
     const followedIds = follows.map((f) => f.followedId);
 
@@ -35,6 +31,7 @@ router.get("/list/:followerId", async (req, res) => {
       avatarColor: string;
       equippedAvatar: string | null;
       equippedFrame: string | null;
+      equippedBackground: string | null;
       isPremium: boolean;
     }> = [];
 
@@ -46,6 +43,7 @@ router.get("/list/:followerId", async (req, res) => {
           avatarColor: playerScoresTable.avatarColor,
           equippedAvatar: playerScoresTable.equippedAvatar,
           equippedFrame: playerScoresTable.equippedFrame,
+          equippedBackground: playerScoresTable.equippedBackground,
           isPremium: playerScoresTable.isPremium,
         })
         .from(playerScoresTable)
@@ -65,11 +63,11 @@ router.get("/list/:followerId", async (req, res) => {
           ...p,
           equippedAvatar: null,
           equippedFrame: null,
+          equippedBackground: null,
         })));
     }
 
     const playerMap = new Map(playersData.map((p) => [p.playerId, p]));
-
     const result = follows.map((f) => {
       const p = playerMap.get(f.followedId);
       return {
@@ -81,6 +79,7 @@ router.get("/list/:followerId", async (req, res) => {
         followedProvider: f.followedProvider,
         equippedAvatar: p?.equippedAvatar ?? null,
         equippedFrame: p?.equippedFrame ?? null,
+        equippedBackground: p?.equippedBackground ?? null,
         isPremium: p?.isPremium ?? false,
       };
     });
@@ -97,6 +96,7 @@ router.get("/list/:followerId", async (req, res) => {
       followedProvider: f.followedProvider,
       equippedAvatar: null,
       equippedFrame: null,
+      equippedBackground: null,
       isPremium: false,
     }));
     return res.json({ friends: fallback });
@@ -129,9 +129,7 @@ router.post("/follow", async (req, res) => {
     .from(followsTable)
     .where(and(eq(followsTable.followerId, followerId), eq(followsTable.followedId, followedId)));
 
-  if (existing.length > 0) {
-    return res.json({ ok: true, alreadyFollowing: true });
-  }
+  if (existing.length > 0) return res.json({ ok: true, alreadyFollowing: true });
 
   await db.insert(followsTable).values({
     followerId,
