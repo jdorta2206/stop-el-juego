@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, dailyResultsTable } from "@workspace/db";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 import { verifyClaimedIdentity } from "../lib/playerAuth";
 import { sumVerifiedBase, ceilingFromBase, absoluteCeiling } from "../lib/scoreToken";
 
@@ -89,7 +89,9 @@ router.post("/submit", async (req, res) => {
   const dailyCeiling = verified > 0 ? ceilingFromBase(verifiedBase) : absoluteCeiling("daily");
   const safeScore = Math.max(0, Math.min(Number(score) || 0, dailyCeiling));
 
-  // Only allow one submission per player per day
+  // Only allow one submission per player per day. The unique DB constraint is
+  // the final arbiter; the upsert below makes two simultaneous first submits
+  // deterministic instead of racing SELECT → INSERT and returning a 500.
   const existing = await db
     .select()
     .from(dailyResultsTable)
@@ -126,6 +128,13 @@ router.post("/submit", async (req, res) => {
     score: safeScore,
     letter,
     language: normalizedLanguage,
+  }).onConflictDoUpdate({
+    target: [dailyResultsTable.playerId, dailyResultsTable.challengeDate],
+    set: {
+      score: sql`GREATEST(${dailyResultsTable.score}, EXCLUDED.score)`,
+      playerName: sql`CASE WHEN EXCLUDED.score > ${dailyResultsTable.score} THEN EXCLUDED.player_name ELSE ${dailyResultsTable.playerName} END`,
+      avatarColor: sql`CASE WHEN EXCLUDED.score > ${dailyResultsTable.score} THEN EXCLUDED.avatar_color ELSE ${dailyResultsTable.avatarColor} END`,
+    },
   });
 
   res.status(201).json({ submitted: true });
