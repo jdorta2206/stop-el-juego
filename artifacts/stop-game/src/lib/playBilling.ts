@@ -2,7 +2,6 @@
 // playBilling.ts - Google Play Billing wrapper (frontend)
 // ============================================================
 
-// 🔧 Declaración de tipo para window.getDigitalGoodsService
 declare global {
   interface Window {
     getDigitalGoodsService: (url: string) => Promise<any>;
@@ -11,13 +10,25 @@ declare global {
 
 const PREMIUM_SKU = "premium_monthly";
 const WORLD_CUP_SKU = "pack_mundial";
+const PLAY_BILLING_METHOD = "https://play.google.com/billing";
 
-// Funciones auxiliares para otros componentes
+function isPlayBillingAvailable(): boolean {
+  return typeof window !== "undefined" && typeof window.getDigitalGoodsService === "function";
+}
+
+function authHeaders(): Record<string, string> {
+  try {
+    const token = localStorage.getItem("stop_session_token") || sessionStorage.getItem("stop_session_token");
+    return token ? { "x-stop-token": token } : {};
+  } catch {
+    return {};
+  }
+}
+
 export function detectPaymentChannel(): "play" | "stripe" {
   if (typeof window === "undefined") return "stripe";
   const isTwa = document.referrer?.startsWith("android-app://") ?? false;
-  const hasApi = typeof window.getDigitalGoodsService === "function";
-  return isTwa && hasApi ? "play" : "stripe";
+  return isTwa && isPlayBillingAvailable() ? "play" : "stripe";
 }
 
 export function hasAndroidAppReferrer(): boolean {
@@ -26,82 +37,146 @@ export function hasAndroidAppReferrer(): boolean {
 }
 
 /**
- * Restores an existing Google Play subscription in the server after a TWA
- * launch. The Digital Goods API is only available in the Android TWA, so
- * this is a no-op elsewhere. Restoration is best-effort and never blocks
- * the normal premium status request.
+ * Starts the Google Play subscription checkout in a Trusted Web Activity.
+ * DigitalGoodsService exposes product/purchase state, while PaymentRequest
+ * is the checkout mechanism used by the TWA Play Billing bridge.
  */
-export async function restorePlayPurchases(playerId: string): Promise<void> {
-  if (typeof window === "undefined" || typeof window.getDigitalGoodsService !== "function") {
-    return;
+export async function purchasePremiumOnPlay(playerId: string): Promise<{ isPremium: boolean }> {
+  if (!playerId) throw new Error("Debes iniciar sesión antes de comprar Premium");
+  if (!isPlayBillingAvailable()) {
+    throw new Error("Google Play Billing no está disponible en este entorno");
   }
-  if (!playerId) return;
+  if (typeof PaymentRequest === "undefined") {
+    throw new Error("El pago de Google Play no está disponible en este dispositivo");
+  }
 
-  const service = await window.getDigitalGoodsService("https://play.google.com/billing");
-  if (typeof service.listPurchases !== "function") return;
+  const request = new PaymentRequest(
+    [{ supportedMethods: PLAY_BILLING_METHOD, data: { sku: PREMIUM_SKU } }],
+    {
+      total: {
+        label: "STOP - El Juego",
+        amount: { currency: "EUR", value: "0" },
+      },
+    },
+  );
 
-  const result = await service.listPurchases();
-  const purchases = Array.isArray(result) ? result : result?.purchases;
-  if (!Array.isArray(purchases)) return;
+  const response = await request.show();
+  const purchaseToken = response?.details?.purchaseToken ?? response?.details?.token;
 
-  for (const purchase of purchases) {
-    const productId = purchase?.itemId ?? purchase?.productId;
-    const purchaseToken = purchase?.purchaseToken;
-    if (productId !== PREMIUM_SKU || typeof purchaseToken !== "string" || !purchaseToken) {
-      continue;
+  if (!purchaseToken || typeof purchaseToken !== "string") {
+    try { await response.complete("fail"); } catch { /* best effort */ }
+    throw new Error("Google Play no devolvió el token de compra");
+  }
+
+  try {
+    const res = await fetch("/api/billing/play/verify", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      body: JSON.stringify({ playerId, productId: PREMIUM_SKU, purchaseToken }),
+    });
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok || data.isPremium !== true) {
+      throw new Error(data.error || "Error al verificar la suscripción");
     }
 
-    const response = await fetch("/api/billing/play/verify", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...authHeaders() },
-      credentials: "include",
-      body: JSON.stringify({ playerId, productId, purchaseToken }),
-    });
+    try { await response.complete("success"); } catch { /* best effort */ }
+    return { isPremium: true };
+  } catch (error) {
+    try { await response.complete("fail"); } catch { /* best effort */ }
+    throw error;
+  }
+}
 
-    // Continue through other purchases if one verification fails.
-    if (!response.ok) continue;
+/**
+ * Restores an existing Google Play subscription after a TWA launch.
+ * This is best-effort and is a no-op outside the Android TWA.
+ */
+export async function restorePlayPurchases(playerId: string): Promise<void> {
+  if (!isPlayBillingAvailable() || !playerId) return;
+
+  try {
+    const service = await window.getDigitalGoodsService(PLAY_BILLING_METHOD);
+    if (typeof service.listPurchases !== "function") return;
+
+    const result = await service.listPurchases();
+    const purchases = Array.isArray(result) ? result : result?.purchases;
+    if (!Array.isArray(purchases)) return;
+
+    for (const purchase of purchases) {
+      const productId = purchase?.itemId ?? purchase?.productId;
+      const purchaseToken = purchase?.purchaseToken;
+      if (productId !== PREMIUM_SKU || typeof purchaseToken !== "string" || !purchaseToken) continue;
+
+      try {
+        await fetch("/api/billing/play/verify", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json", ...authHeaders() },
+          body: JSON.stringify({ playerId, productId, purchaseToken }),
+        });
+      } catch {
+        // Restore is deliberately best-effort; status remains the source of truth.
+      }
+    }
+  } catch {
+    // Billing API may be unavailable during normal web use or TWA startup.
   }
 }
 
 /**
  * Compra el Pack Mundial (pago único) con Google Play Billing.
- * Recibe playerId para conceder los cosméticos.
  */
 export async function purchaseWorldCupPackOnPlay(playerId: string): Promise<{ granted: boolean }> {
-  if (typeof window === "undefined" || !window.getDigitalGoodsService) {
+  if (!isPlayBillingAvailable()) {
     throw new Error("Google Play Billing no está disponible en este entorno");
   }
+  if (typeof PaymentRequest === "undefined") {
+    throw new Error("El pago de Google Play no está disponible en este dispositivo");
+  }
+  if (!playerId) throw new Error("Debes iniciar sesión antes de comprar el Pack Mundial");
 
-  const service = await window.getDigitalGoodsService("https://play.google.com/billing");
-  const { responseCode, purchaseData } = await service.purchase(WORLD_CUP_SKU);
+  const request = new PaymentRequest(
+    [{ supportedMethods: PLAY_BILLING_METHOD, data: { sku: WORLD_CUP_SKU } }],
+    {
+      total: {
+        label: "STOP - El Juego",
+        amount: { currency: "EUR", value: "0" },
+      },
+    },
+  );
 
-  if (responseCode !== 0) {
-    if (responseCode === 5) throw { code: "PURCHASE_CANCELLED" };
-    throw new Error(`Error en la compra: código ${responseCode}`);
+  const response = await request.show();
+  const purchaseToken = response?.details?.purchaseToken ?? response?.details?.token;
+  if (!purchaseToken || typeof purchaseToken !== "string") {
+    try { await response.complete("fail"); } catch { /* best effort */ }
+    throw new Error("Google Play no devolvió el token de compra");
   }
 
-  const res = await fetch("/api/billing/play/verify-pack", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      playerId,
-      purchaseToken: purchaseData.purchaseToken,
-      productId: WORLD_CUP_SKU,
-    }),
-  });
-
-  const data = await res.json();
-  if (!res.ok || !data.granted) {
-    throw new Error(data.error || "Error al verificar el Pack Mundial");
+  try {
+    const res = await fetch("/api/billing/play/verify-pack", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      body: JSON.stringify({ playerId, purchaseToken, productId: WORLD_CUP_SKU }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data.granted !== true) {
+      throw new Error(data.error || "Error al verificar el Pack Mundial");
+    }
+    try { await response.complete("success"); } catch { /* best effort */ }
+    return { granted: true };
+  } catch (error) {
+    try { await response.complete("fail"); } catch { /* best effort */ }
+    throw error;
   }
-
-  return { granted: true };
 }
 
 export function isPlayPurchaseCancelled(error: any): boolean {
-  return error?.code === "PURCHASE_CANCELLED" || error?.message?.includes("cancel");
+  return error?.code === "PURCHASE_CANCELLED" || error?.name === "AbortError" || String(error?.message || "").toLowerCase().includes("cancel");
 }
 
 export function isPlayBillingUnavailable(error: any): boolean {
-  return error?.message?.includes("Google Play Billing no está disponible");
+  return String(error?.message || "").includes("Google Play Billing no está disponible");
 }
