@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db, followsTable, playerScoresTable } from "@workspace/db";
 import { and, eq, inArray } from "drizzle-orm";
+import { verifyClaimedIdentity } from "../lib/playerAuth";
 
 const router: IRouter = Router();
 
@@ -8,6 +9,9 @@ const router: IRouter = Router();
 router.get("/list/:followerId", async (req, res) => {
   const { followerId } = req.params;
   if (!followerId) return res.status(400).json({ error: "followerId required" });
+  if (!verifyClaimedIdentity(req, followerId)) {
+    return res.status(403).json({ error: "Invalid player identity" });
+  }
 
   try {
     // 1. Obtener la lista de seguidos
@@ -110,6 +114,9 @@ router.post("/follow", async (req, res) => {
   if (!followerId || !followedId || !followedName) {
     return res.status(400).json({ error: "followerId, followedId and followedName required" });
   }
+  if (!verifyClaimedIdentity(req, followerId)) {
+    return res.status(403).json({ error: "Invalid player identity" });
+  }
   if (followerId === followedId) {
     return res.status(400).json({ error: "Cannot follow yourself" });
   }
@@ -141,6 +148,9 @@ router.delete("/unfollow", async (req, res) => {
 
   if (!followerId || !followedId) {
     return res.status(400).json({ error: "followerId and followedId required" });
+  }
+  if (!verifyClaimedIdentity(req, followerId)) {
+    return res.status(403).json({ error: "Invalid player identity" });
   }
 
   await db
