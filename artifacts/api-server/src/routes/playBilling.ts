@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { google } from "googleapis";
 import { grantWorldCupPack, WORLD_CUP_PACK_SKU, worldCupPackItemIds } from "../lib/worldCupPack";
 import { verifyClaimedIdentity } from "../lib/playerAuth";
+import { recordProductPurchase } from "../lib/playBillingService";
 
 const router = Router();
 
@@ -93,6 +94,21 @@ router.post("/verify-pack", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Compra no válida" });
     }
 
+    // Wire the existing Play Billing ownership ledger into the real route so
+    // a valid token cannot be moved to a different player after first use.
+    const ownership = await recordProductPurchase(playerId, {
+      productId,
+      purchaseToken,
+      orderId: purchase.orderId ?? null,
+      purchaseState: Number(purchase.purchaseState ?? 1),
+      acknowledgementState: Number(purchase.acknowledgementState ?? 0),
+      isPurchased: true,
+      raw: purchase as unknown as Record<string, unknown>,
+    });
+    if (ownership.ownershipMismatch) {
+      return res.status(403).json({ error: "Purchase token belongs to another player" });
+    }
+
     // Claim the purchase token atomically before granting the pack. This makes
     // the grant durable across restarts and prevents two concurrent requests
     // from both receiving the same Google Play purchase.
@@ -113,8 +129,6 @@ router.post("/verify-pack", async (req: Request, res: Response) => {
 
     const grantResult = await grantWorldCupPack(playerId);
     if (!grantResult.ok) {
-      // Release the claim only when the actual grant failed, allowing the
-      // verified Google purchase to be retried safely.
       await db.delete(playPurchaseLedgerTable).where(eq(playPurchaseLedgerTable.id, claimed[0].id));
       console.error("Error al conceder el pack:", grantResult.error);
       return res.status(500).json({ error: "Error al conceder los cosméticos" });
