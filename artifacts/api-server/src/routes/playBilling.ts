@@ -1,5 +1,5 @@
 import { Router, Request, Response } from "express";
-import { db, playerScoresTable } from "@workspace/db";
+import { db, playerScoresTable, playProductPurchasesTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { google } from "googleapis";
 import { grantWorldCupPack, WORLD_CUP_PACK_SKU } from "../lib/worldCupPack";
@@ -7,10 +7,6 @@ import { verifyClaimedIdentity } from "../lib/playerAuth";
 
 const router = Router();
 
-// GET /api/billing/play/status?playerId=xxx
-// Compatibility/read endpoint used by the web client. The authoritative
-// Premium flag is stored on the player's server-side record after a verified
-// Google Play purchase; no client-supplied Premium flag is trusted here.
 router.get("/status", async (req: Request, res: Response) => {
   try {
     const playerId = String(req.query.playerId || "").trim();
@@ -29,9 +25,6 @@ router.get("/status", async (req: Request, res: Response) => {
   }
 });
 
-// ============================================================
-// VERIFICAR SUSCRIPCIÓN PREMIUM
-// ============================================================
 router.post("/verify", async (req: Request, res: Response) => {
   try {
     const { playerId, productId, purchaseToken } = req.body;
@@ -39,8 +32,6 @@ router.post("/verify", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Faltan campos obligatorios" });
     }
 
-    // Bind logged-in account IDs to the signed player session. Guests remain
-    // compatible with the existing guest-first flow.
     if (!verifyClaimedIdentity(req, String(playerId))) {
       return res.status(403).json({ error: "Identidad del jugador no válida" });
     }
@@ -81,9 +72,6 @@ router.post("/verify", async (req: Request, res: Response) => {
   }
 });
 
-// ============================================================
-// VERIFICAR PACK MUNDIAL (pago único) – CON GRANT
-// ============================================================
 router.post("/verify-pack", async (req: Request, res: Response) => {
   try {
     const { playerId, productId, purchaseToken } = req.body;
@@ -91,8 +79,6 @@ router.post("/verify-pack", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Faltan campos obligatorios" });
     }
 
-    // Bind logged-in account IDs to the signed player session. Guests remain
-    // compatible with the existing guest-first flow.
     if (!verifyClaimedIdentity(req, String(playerId))) {
       return res.status(403).json({ error: "Identidad del jugador no válida" });
     }
@@ -123,6 +109,40 @@ router.post("/verify-pack", async (req: Request, res: Response) => {
     const purchase = result.data;
     if (!purchase || purchase.purchaseState !== 0) {
       return res.status(400).json({ error: "Compra no válida" });
+    }
+
+    // Persist the first player that successfully verifies this Google Play
+    // token. A token can never be reassigned to a different player. The
+    // insert is idempotent so retries from the same player remain supported.
+    const [owned] = await db
+      .select({ playerId: playProductPurchasesTable.playerId })
+      .from(playProductPurchasesTable)
+      .where(eq(playProductPurchasesTable.purchaseToken, purchaseToken))
+      .limit(1);
+
+    if (owned && owned.playerId !== playerId) {
+      return res.status(403).json({ error: "Compra ya vinculada a otro jugador" });
+    }
+
+    if (!owned) {
+      await db.insert(playProductPurchasesTable).values({
+        playerId,
+        productId,
+        purchaseToken,
+        orderId: purchase.orderId ?? null,
+        purchaseState: purchase.purchaseState ?? 0,
+        rawJson: JSON.stringify(purchase),
+      }).onConflictDoNothing({ target: playProductPurchasesTable.purchaseToken });
+
+      const [afterInsert] = await db
+        .select({ playerId: playProductPurchasesTable.playerId })
+        .from(playProductPurchasesTable)
+        .where(eq(playProductPurchasesTable.purchaseToken, purchaseToken))
+        .limit(1);
+
+      if (!afterInsert || afterInsert.playerId !== playerId) {
+        return res.status(403).json({ error: "Compra ya vinculada a otro jugador" });
+      }
     }
 
     const grantResult = await grantWorldCupPack(playerId);
