@@ -6,11 +6,13 @@
     "orientation": "portrait",
     "scheme": "stopjuego",
     "userInterfaceStyle": "automatic",
+    "icon": "./assets/icon.svg",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.stopjuegodepalabras.app",
       "usesAppleSignIn": true,
-      "googleServicesFile": "./GoogleService-Info.plist"
+      "googleServicesFile": "./GoogleService-Info.plist",
+      "icon": "./assets/icon.svg"
     },
     "plugins": [
       "expo-apple-authentication",
