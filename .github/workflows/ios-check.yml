@@ -37,6 +37,10 @@ jobs:
         id: doctor
         continue-on-error: true
         run: npx expo-doctor 2>&1 | tee /tmp/expo-doctor.log
+      - name: iOS native prebuild validation
+        id: prebuild
+        continue-on-error: true
+        run: npx expo prebuild --platform ios --no-install --non-interactive 2>&1 | tee /tmp/prebuild.log
       - name: Upload diagnostics
         if: always()
         uses: actions/upload-artifact@v4
@@ -45,7 +49,8 @@ jobs:
           path: |
             /tmp/typecheck.log
             /tmp/expo-doctor.log
+            /tmp/prebuild.log
           if-no-files-found: warn
       - name: Fail if validation failed
-        if: steps.typecheck.outcome == 'failure' || steps.doctor.outcome == 'failure'
+        if: steps.typecheck.outcome == 'failure' || steps.doctor.outcome == 'failure' || steps.prebuild.outcome == 'failure'
         run: exit 1
