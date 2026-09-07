@@ -6,7 +6,7 @@ import { sendPushToPlayer } from "../lib/pushHelper";
 import { SubmitScoreBody, GetLeaderboardQueryParams } from "@workspace/api-zod";
 import { scoreLimiter } from "../middlewares/rateLimit";
 import { verifyClaimedIdentity } from "../lib/playerAuth";
-import { sumVerifiedBase, ceilingFromBase, absoluteCeiling, maxRoundsForMode } from "../lib/scoreToken";
+import { sumVerifiedBasePersistent, ceilingFromBase, absoluteCeiling, maxRoundsForMode } from "../lib/scoreToken";
 import {
   isHappyHourActiveForTzOffset,
   HAPPY_HOUR_MULTIPLIER,
@@ -341,7 +341,7 @@ router.post("/scores", scoreLimiter, async (req, res) => {
 
   const isBonus = bonus === true;
 
-  const { base: verifiedBase, verified } = sumVerifiedBase(scoreTokens, maxRoundsForMode(mode));
+  const { base: verifiedBase, verified } = await sumVerifiedBasePersistent(scoreTokens, maxRoundsForMode(mode));
   if (rawScore > 0 && verified === 0) {
     res.status(422).json({ error: "SCORE_VERIFICATION_REQUIRED" });
     return;
@@ -404,9 +404,6 @@ router.post("/scores", scoreLimiter, async (req, res) => {
           wins: sql`${playerScoresTable.wins} + ${won ? 1 : 0}`,
         }),
         xp: sql`${playerScoresTable.xp} + ${xpGain}`,
-        // Concurrency hardening: another simultaneous score submission may have
-        // advanced XP/level after the snapshot above. Never allow this request
-        // to overwrite a newer, higher level with a stale lower one.
         level: sql`GREATEST(${playerScoresTable.level}, ${newLevel})`,
         ...(coinGain > 0 ? { coins: sql`${playerScoresTable.coins} + ${coinGain}` } : {}),
         ...(!isBonus && updatedToday ? {
