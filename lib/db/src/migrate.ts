@@ -64,6 +64,8 @@ export async function ensureIndexes(): Promise<void> {
     `CREATE TABLE IF NOT EXISTS play_subscriptions (id serial PRIMARY KEY, player_id text NOT NULL, product_id text NOT NULL, purchase_token text NOT NULL UNIQUE, order_id text, state text NOT NULL DEFAULT 'ACTIVE', expiry_time_ms bigint NOT NULL DEFAULT 0, start_time_ms bigint NOT NULL DEFAULT 0, raw_json text NOT NULL DEFAULT '{}', created_at timestamp NOT NULL DEFAULT NOW(), updated_at timestamp NOT NULL DEFAULT NOW())`,
     `CREATE INDEX IF NOT EXISTS play_subscriptions_player_id_idx ON play_subscriptions (player_id)`,
     `CREATE INDEX IF NOT EXISTS play_subscriptions_player_state_expiry_idx ON play_subscriptions (player_id, state, expiry_time_ms)`,
+    `CREATE TABLE IF NOT EXISTS score_voucher_uses (jti text PRIMARY KEY, expires_at timestamp NOT NULL, used_at timestamp NOT NULL DEFAULT NOW())`,
+    `CREATE INDEX IF NOT EXISTS score_voucher_uses_expires_at_idx ON score_voucher_uses (expires_at)`,
     `CREATE TABLE IF NOT EXISTS impossible_results (id serial PRIMARY KEY, player_id text NOT NULL, player_name text NOT NULL, challenge_date text NOT NULL, language text NOT NULL DEFAULT 'es', letter text NOT NULL, category text NOT NULL, attempted_word text NOT NULL DEFAULT '', won boolean NOT NULL DEFAULT false, time_ms integer NOT NULL DEFAULT 60000, created_at timestamp NOT NULL DEFAULT NOW())`,
     `CREATE UNIQUE INDEX IF NOT EXISTS impossible_results_player_date_lang_uniq ON impossible_results (player_id, challenge_date, language)`,
     `CREATE INDEX IF NOT EXISTS impossible_results_date_lang_idx ON impossible_results (challenge_date, language)`,
