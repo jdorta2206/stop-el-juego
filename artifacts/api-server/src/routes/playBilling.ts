@@ -11,6 +11,9 @@ router.get("/status", async (req: Request, res: Response) => {
   try {
     const playerId = String(req.query.playerId || "").trim();
     if (!playerId) return res.status(400).json({ error: "playerId required" });
+    if (!verifyClaimedIdentity(req, playerId)) {
+      return res.status(403).json({ error: "Identidad del jugador no válida" });
+    }
 
     const [player] = await db
       .select({ isPremium: playerScoresTable.isPremium })
@@ -111,9 +114,6 @@ router.post("/verify-pack", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Compra no válida" });
     }
 
-    // Persist the first player that successfully verifies this Google Play
-    // token. A token can never be reassigned to a different player. The
-    // insert is idempotent so retries from the same player remain supported.
     const [owned] = await db
       .select({ playerId: playProductPurchasesTable.playerId })
       .from(playProductPurchasesTable)
