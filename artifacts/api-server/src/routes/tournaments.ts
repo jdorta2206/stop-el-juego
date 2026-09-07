@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { tournamentsTable } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
-import { requirePlayerIdentity, type AuthedRequest } from "../lib/playerAuth.js";
+import { requirePlayerIdentity, verifyClaimedIdentity, type AuthedRequest } from "../lib/playerAuth.js";
 
 const router: IRouter = Router();
 
@@ -36,10 +36,9 @@ function formatTournament(t: any) {
 }
 
 function buildBracket(players: any[]): any {
-  // Shuffle players randomly
   const shuffled = [...players].sort(() => Math.random() - 0.5);
-  const numPlayers = shuffled.length; // 4 or 8
-  const numRounds = Math.log2(numPlayers); // 2 rounds for 4, 3 rounds for 8
+  const numPlayers = shuffled.length;
+  const numRounds = Math.log2(numPlayers);
 
   const rounds: any[][] = [];
   const firstRound: any[] = [];
@@ -53,12 +52,11 @@ function buildBracket(players: any[]): any {
       winnerId: null,
       winnerName: null,
       roomCode: null,
-      status: "pending", // pending | playing | done
+      status: "pending",
     });
   }
   rounds.push(firstRound);
 
-  // Build empty subsequent rounds
   for (let r = 1; r < numRounds; r++) {
     const matchCount = Math.pow(2, numRounds - r - 1);
     const emptyRound: any[] = [];
@@ -78,7 +76,6 @@ function buildBracket(players: any[]): any {
   return { rounds, currentRound: 0, champion: null };
 }
 
-// Advance winners to next round
 function advanceBracket(bracket: any): any {
   const { rounds, currentRound } = bracket;
   const round = rounds[currentRound];
@@ -87,12 +84,10 @@ function advanceBracket(bracket: any): any {
 
   const nextRoundIdx = currentRound + 1;
   if (nextRoundIdx >= rounds.length) {
-    // Final match done → champion
     const finalMatch = round[0];
     return { ...bracket, champion: { id: finalMatch.winnerId, name: finalMatch.winnerName } };
   }
 
-  // Advance winners to next round
   const nextRound = [...rounds[nextRoundIdx]];
   const winners = round.map((m: any) => ({ id: m.winnerId, name: m.winnerName }));
   for (let i = 0; i < winners.length; i += 2) {
@@ -109,15 +104,16 @@ function advanceBracket(bracket: any): any {
   return { ...bracket, rounds: updatedRounds, currentRound: nextRoundIdx };
 }
 
-// POST /api/tournaments — create
 router.post("/", async (req, res) => {
   const { hostId, hostName, name, size, isPublic } = req.body as {
     hostId: string; hostName: string; name: string; size: number; isPublic?: boolean;
   };
   if (!hostId || !name) { res.status(400).json({ error: "Missing fields" }); return; }
+  if (!verifyClaimedIdentity(req, hostId)) {
+    res.status(403).json({ error: "Identity verification failed" }); return;
+  }
   const safeSize = [4, 8].includes(size) ? size : 4;
   const code = randomCode();
-
   const players = [{ playerId: hostId, playerName: hostName ?? "Host" }];
 
   const [t] = await db.insert(tournamentsTable).values({
@@ -135,7 +131,6 @@ router.post("/", async (req, res) => {
   res.json(formatTournament(t));
 });
 
-// GET /api/tournaments/public — list open public tournaments waiting for players
 router.get("/public", async (_req, res) => {
   const rows = await db.select().from(tournamentsTable)
     .where(and(eq(tournamentsTable.isPublic, true), eq(tournamentsTable.status, "waiting")))
@@ -144,7 +139,6 @@ router.get("/public", async (_req, res) => {
   res.json(rows.map(formatTournament).filter(t => t.players.length < t.size));
 });
 
-// GET /api/tournaments/:code — poll
 router.get("/:code", async (req, res) => {
   const code = req.params.code.toUpperCase();
   const rows = await db.select().from(tournamentsTable).where(eq(tournamentsTable.code, code)).limit(1);
@@ -152,10 +146,12 @@ router.get("/:code", async (req, res) => {
   res.json(formatTournament(rows[0]));
 });
 
-// POST /api/tournaments/:code/join
 router.post("/:code/join", async (req, res) => {
   const code = req.params.code.toUpperCase();
   const { playerId, playerName } = req.body as { playerId: string; playerName: string };
+  if (!playerId || !verifyClaimedIdentity(req, playerId)) {
+    res.status(403).json({ error: "Identity verification failed" }); return;
+  }
   const rows = await db.select().from(tournamentsTable).where(eq(tournamentsTable.code, code)).limit(1);
   if (!rows.length) { res.status(404).json({ error: "Not found" }); return; }
 
@@ -164,7 +160,7 @@ router.post("/:code/join", async (req, res) => {
 
   const players = parsePlayers(t.playersJson);
   if (players.some(p => p.playerId === playerId)) {
-    res.json(formatTournament(t)); return; // already joined
+    res.json(formatTournament(t)); return;
   }
   if (players.length >= t.size) { res.status(400).json({ error: "Tournament full" }); return; }
 
@@ -177,10 +173,12 @@ router.post("/:code/join", async (req, res) => {
   res.json(formatTournament(updated));
 });
 
-// POST /api/tournaments/:code/start — host starts bracket
 router.post("/:code/start", async (req, res) => {
   const code = req.params.code.toUpperCase();
   const { hostId } = req.body as { hostId: string };
+  if (!hostId || !verifyClaimedIdentity(req, hostId)) {
+    res.status(403).json({ error: "Identity verification failed" }); return;
+  }
   const rows = await db.select().from(tournamentsTable).where(eq(tournamentsTable.code, code)).limit(1);
   if (!rows.length) { res.status(404).json({ error: "Not found" }); return; }
 
@@ -194,7 +192,6 @@ router.post("/:code/start", async (req, res) => {
   }
 
   const bracket = buildBracket(players);
-
   const [updated] = await db.update(tournamentsTable)
     .set({ status: "active", bracketJson: JSON.stringify(bracket), updatedAt: new Date() })
     .where(eq(tournamentsTable.code, code))
@@ -203,7 +200,6 @@ router.post("/:code/start", async (req, res) => {
   res.json(formatTournament(updated));
 });
 
-// POST /api/tournaments/:code/start-match — assign a room to a match
 router.post("/:code/start-match", async (req, res) => {
   const code = req.params.code.toUpperCase();
   const { matchId, roomCode } = req.body as { matchId: string; roomCode: string };
@@ -229,11 +225,6 @@ router.post("/:code/start-match", async (req, res) => {
   res.json(formatTournament(updated));
 });
 
-// POST /api/tournaments/:code/match-result — record winner, advance bracket.
-// 🔐 Authenticated: only signed-in players can write. Caller must be a
-// participant of the match (p1 or p2) or the tournament host. winnerId is
-// validated against the actual match participants so the body field can't
-// be forged to inject an arbitrary winner.
 router.post("/:code/match-result", requirePlayerIdentity, async (req: AuthedRequest, res) => {
   const code = req.params.code.toUpperCase();
   const { matchId, winnerId, winnerName } = req.body as {
@@ -252,9 +243,6 @@ router.post("/:code/match-result", requirePlayerIdentity, async (req: AuthedRequ
   if (matchIdx === -1) { res.status(404).json({ error: "Match not found" }); return; }
 
   const match = currentRound[matchIdx];
-
-  // 🔐 Authorization: caller must be one of the two match participants OR
-  // the tournament host. Anyone else trying to write the result is blocked.
   const isParticipant = callerId === match.p1Id || callerId === match.p2Id;
   const isHost = callerId === t.hostId;
   if (!isParticipant && !isHost) {
@@ -262,19 +250,11 @@ router.post("/:code/match-result", requirePlayerIdentity, async (req: AuthedRequ
     return;
   }
 
-  // 🔐 Winner must be one of the actual participants. Without this, a
-  // legitimate participant could submit `winnerId = "attacker"` and win.
   if (winnerId !== match.p1Id && winnerId !== match.p2Id) {
     res.status(400).json({ error: "Winner is not a match participant" });
     return;
   }
 
-  // 🛡️ Idempotency guard. Multiple clients (host + winner + losers as fallback)
-  // may report the same match-result to survive a host disconnect. If the
-  // match is already "done", just return the current bracket — never re-apply
-  // advanceBracket() because that could double-advance winners into the next
-  // round and corrupt the tree. First write wins; later (legitimate) reports
-  // are no-ops.
   if (match.status === "done") {
     res.json(formatTournament(t));
     return;
@@ -282,23 +262,15 @@ router.post("/:code/match-result", requirePlayerIdentity, async (req: AuthedRequ
 
   currentRound[matchIdx] = { ...match, winnerId, winnerName, status: "done" };
   bracket.rounds[bracket.currentRound] = currentRound;
-
-  // Try to advance bracket
   bracket = advanceBracket(bracket);
-
   const newStatus = bracket.champion ? "completed" : "active";
 
-  // 🔒 Optimistic concurrency: only advance the bracket if the row hasn't
-  // changed since we read it. Two concurrent reporters could both pass the
-  // status check above before either had written; with this guard the loser
-  // gets 0 rows back and we re-fetch and bail (idempotent no-op).
   const updatedRows = await db.update(tournamentsTable)
     .set({ bracketJson: JSON.stringify(bracket), status: newStatus, updatedAt: new Date() })
     .where(and(eq(tournamentsTable.code, code), eq(tournamentsTable.updatedAt, t.updatedAt)))
     .returning();
 
   if (updatedRows.length === 0) {
-    // Someone else won the race — return their state.
     const fresh = await db.select().from(tournamentsTable).where(eq(tournamentsTable.code, code)).limit(1);
     res.json(formatTournament(fresh[0] ?? t));
     return;
