@@ -404,6 +404,9 @@ router.post("/scores", scoreLimiter, async (req, res) => {
           wins: sql`${playerScoresTable.wins} + ${won ? 1 : 0}`,
         }),
         xp: sql`${playerScoresTable.xp} + ${xpGain}`,
+        // Concurrency hardening: another simultaneous score submission may have
+        // advanced XP/level after the snapshot above. Never allow this request
+        // to overwrite a newer, higher level with a stale lower one.
         level: sql`GREATEST(${playerScoresTable.level}, ${newLevel})`,
         ...(coinGain > 0 ? { coins: sql`${playerScoresTable.coins} + ${coinGain}` } : {}),
         ...(!isBonus && updatedToday ? {
