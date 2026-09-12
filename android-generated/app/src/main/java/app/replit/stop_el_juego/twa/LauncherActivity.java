@@ -65,7 +65,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             @Override
             public void onNavigationEvent(int navigationEvent, @Nullable Bundle extras) {
                 if (navigationEvent != NAVIGATION_FINISHED || !relationshipValidated) return;
-                CustomTabsSession session = getTwaSession();
+                CustomTabsSession session = getCustomTabsSession();
                 if (session == null) return;
                 boolean requested = session.requestPostMessageChannel(ORIGIN, ORIGIN, new Bundle());
                 Log.d(TAG, "requestPostMessageChannel=" + requested);
@@ -85,22 +85,21 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     }
 
     /**
-     * Browser Helper 2.7.3 does not yet expose LauncherActivity#getCustomTabsSession().
+     * Browser Helper 2.7.3 does not expose LauncherActivity#getCustomTabsSession().
      * Bubblewrap keeps the live session inside LauncherActivity.mTwaLauncher.mSession.
-     * This is isolated to one helper so a future Browser Helper upgrade can replace it
-     * with the public getter without touching the AdMob bridge.
+     * This compatibility shim is isolated here so a future Browser Helper upgrade can
+     * replace only this method with the public getter.
      */
     @Nullable
-    private CustomTabsSession getTwaSession() {
+    private CustomTabsSession getCustomTabsSession() {
         try {
-            Object launcher = this;
-            Field twaLauncherField = findField(launcher.getClass(), "mTwaLauncher");
+            Field twaLauncherField = findField(getClass(), "mTwaLauncher");
             if (twaLauncherField == null) {
                 Log.w(TAG, "Bubblewrap mTwaLauncher field not found");
                 return null;
             }
             twaLauncherField.setAccessible(true);
-            Object twaLauncher = twaLauncherField.get(launcher);
+            Object twaLauncher = twaLauncherField.get(this);
             if (twaLauncher == null) return null;
 
             Field sessionField = findField(twaLauncher.getClass(), "mSession");
@@ -231,7 +230,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     }
 
     private void sendMessage(JSONObject message) {
-        CustomTabsSession session = getTwaSession();
+        CustomTabsSession session = getCustomTabsSession();
         if (session == null || !messageChannelReady) return;
         session.postMessage(message.toString(), null);
     }
