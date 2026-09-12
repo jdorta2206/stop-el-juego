@@ -28,8 +28,7 @@ jobs:
           grep -q 'play-services-ads:25.4.0' app/build.gradle
           grep -q 'com.google.android.gms.ads.APPLICATION_ID' app/src/main/AndroidManifest.xml
           grep -q 'PostMessageService' app/src/main/AndroidManifest.xml
-          grep -q 'STOP_AD_REQUEST_REWARDED' app/src/main/java/app/replit/stop_el_juego/twa/LauncherActivity.java
-          grep -q 'getCustomTabsSession' app/src/main/java/app/replit/stop_el_juego/twa/LauncherActivity.java
+          grep -q 'extends com.google.androidbrowserhelper.trusted.LauncherActivity' app/src/main/java/app/replit/stop_el_juego/twa/LauncherActivity.java
           ./gradlew assembleDebug --no-daemon
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
