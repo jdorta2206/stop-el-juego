@@ -38,3 +38,5 @@ jobs:
           path: android-generated/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 7
+
+# Forced validation trigger after correcting the startup-isolation assertion.
