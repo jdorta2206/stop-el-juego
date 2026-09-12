@@ -1,21 +1,25 @@
 package app.replit.stop_el_juego.twa;
 
-import android.content.pm.ActivityInfo;
-import android.os.Build;
+import android.app.Activity;
+import android.content.Intent;
+import android.net.Uri;
 import android.os.Bundle;
 
 /**
- * Minimal TWA launcher used to isolate native startup crashes.
- * No AdMob or PostMessage code runs during launcher startup.
+ * Native startup isolation test: bypasses Browser Helper/TWA completely
+ * and opens the production web app directly in the user's browser.
  */
-public class LauncherActivity extends com.google.androidbrowserhelper.trusted.LauncherActivity {
+public class LauncherActivity extends Activity {
+    private static final String START_URL = "https://www.stopjuegodepalabras.com/?source=googleplay-twa";
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        if (Build.VERSION.SDK_INT > Build.VERSION_CODES.O) {
-            setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT);
-        } else {
-            setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+        try {
+            Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(START_URL));
+            startActivity(intent);
+        } finally {
+            finish();
         }
     }
 }
