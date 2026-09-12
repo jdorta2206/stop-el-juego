@@ -36,7 +36,7 @@ jobs:
           ! grep -q 'requestPostMessageChannel' app/src/main/java/app/replit/stop_el_juego/twa/LauncherActivity.java
           chmod +x ./gradlew
           bash ./gradlew assembleDebug --no-daemon --stacktrace
-      - name: Verify debug APK
+      - name: Verify debug APK and signing certificate
         working-directory: android-generated
         shell: bash
         run: |
@@ -45,6 +45,8 @@ jobs:
           test -s "$APK"
           sha256sum "$APK"
           ls -lh "$APK"
+          echo '--- APK signing certificate ---'
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs "$APK"
       - name: Upload minimal TWA debug APK
         uses: actions/upload-artifact@v4
         with:
