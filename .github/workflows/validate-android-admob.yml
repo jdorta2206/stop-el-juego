@@ -1,4 +1,4 @@
-name: Validate Android pure TWA
+name: Validate Android native startup
 
 on:
   push:
@@ -29,12 +29,12 @@ jobs:
           ! grep -q 'com.google.android.gms.ads.APPLICATION_ID' app/src/main/AndroidManifest.xml
           ! grep -q 'PaymentActivity' app/src/main/AndroidManifest.xml
           ! grep -q 'PaymentService' app/src/main/AndroidManifest.xml
-          grep -q 'extends com.google.androidbrowserhelper.trusted.LauncherActivity' app/src/main/java/app/replit/stop_el_juego/twa/LauncherActivity.java
+          grep -q 'class LauncherActivity extends android.app.Activity' app/src/main/java/app/replit/stop_el_juego/twa/LauncherActivity.java
           ./gradlew assembleDebug --no-daemon
-      - name: Upload pure TWA debug APK
+      - name: Upload native startup debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: stop-android-pure-twa-debug
+          name: stop-android-native-startup-debug
           path: android-generated/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 7
