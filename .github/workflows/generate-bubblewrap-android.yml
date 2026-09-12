@@ -45,24 +45,46 @@ jobs:
             const source = path.resolve('android/twa-manifest.json');
             const generationManifest = path.join(out, 'twa-manifest-generation.json');
             const raw = JSON.parse(fs.readFileSync(source, 'utf8'));
-
-            // The live site currently exposes icon-512.png, but the optional
-            // maskable/monochrome URLs return 404. Keep the source manifest
-            // unchanged and use the known-good primary icon only for the
-            // Bubblewrap generation pass.
+            if (raw.startUrl?.startsWith('https://')) {
+              const u = new URL(raw.startUrl);
+              raw.launchUrl = u.pathname + u.search;
+            } else if (!raw.launchUrl) {
+              raw.launchUrl = '/';
+            }
             raw.maskableIconUrl = raw.iconUrl;
             raw.monochromeIconUrl = raw.iconUrl;
             fs.writeFileSync(generationManifest, JSON.stringify(raw, null, 2));
-
             const manifest = await TwaManifest.fromFile(generationManifest);
             await manifest.saveToFile(path.join(out, 'twa-manifest.json'));
             const generator = new TwaGenerator();
             await generator.createTwaProject(out, manifest);
+            const gradle = path.join(out, 'app', 'build.gradle');
+            let text = fs.readFileSync(gradle, 'utf8');
+            text = text.replace('splashScreenFadeOutDuration: ,', 'splashScreenFadeOutDuration: 0,');
+            text = text.replace('versionName ""', 'versionName "1.3.6.3"');
+            fs.writeFileSync(gradle, text);
             const data = fs.readFileSync(path.join(out, 'twa-manifest.json'));
             fs.writeFileSync(path.join(out, 'manifest-checksum.txt'), crypto.createHash('sha1').update(data).digest('hex'));
             fs.rmSync(generationManifest, { force: true });
           })().catch(err => { console.error(err); process.exit(1); });
           NODE
+      - name: Verify generated project structure
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f android-generated/gradlew
+          test -f android-generated/settings.gradle
+          test -f android-generated/app/build.gradle
+          test -f android-generated/app/src/main/AndroidManifest.xml
+          test -f android-generated/app/src/main/java/app/replit/stop_el_juego/twa/LauncherActivity.java
+          grep -q 'versionName "1.3.6.3"' android-generated/app/build.gradle
+          grep -q 'splashScreenFadeOutDuration: 0' android-generated/app/build.gradle
+          ! grep -q 'splashScreenFadeOutDuration: ,' android-generated/app/build.gradle
+          ! grep -q 'versionName ""' android-generated/app/build.gradle
+          ! grep -q 'https://www.stopjuegodepalabras.comhttps://' android-generated/app/build.gradle
+      - name: Build unsigned debug APK
+        working-directory: android-generated
+        run: ./gradlew assembleDebug --no-daemon
       - name: Remove generated build/cache files
         run: rm -rf android-generated/.gradle android-generated/app/build android-generated/build && rm -f android-generated/android-keystore
       - name: Commit generated Android project
@@ -73,5 +95,5 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add android-generated .github/workflows/generate-bubblewrap-android.yml
           if git diff --cached --quiet; then exit 0; fi
-          git commit -m 'build(android): add generated Bubblewrap project [skip android-generation]'
+          git commit -m 'build(android): add validated Bubblewrap project [skip android-generation]'
           git push origin HEAD:android/bubblewrap-admob
