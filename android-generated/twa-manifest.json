@@ -1,0 +1,42 @@
+{
+  "packageId": "app.replit.stop_el_juego.twa",
+  "host": "www.stopjuegodepalabras.com",
+  "name": "STOP - El Juego",
+  "launcherName": "STOP",
+  "display": "standalone",
+  "themeColor": "#0D1757",
+  "themeColorDark": "#000000",
+  "navigationColor": "#0D1757",
+  "navigationColorDark": "#0D1757",
+  "navigationDividerColor": "#0D1757",
+  "navigationDividerColorDark": "#0D1757",
+  "backgroundColor": "#0D1757",
+  "enableNotifications": true,
+  "startUrl": "https://www.stopjuegodepalabras.com/?source=googleplay-twa",
+  "iconUrl": "https://www.stopjuegodepalabras.com/images/icon-512.png",
+  "maskableIconUrl": "https://www.stopjuegodepalabras.com/images/icon-512.png",
+  "monochromeIconUrl": "https://www.stopjuegodepalabras.com/images/icon-512.png",
+  "appVersionCode": 17,
+  "shortcuts": [],
+  "generatorApp": "bubblewrap-cli",
+  "webManifestUrl": "https://www.stopjuegodepalabras.com/manifest.json",
+  "fallbackType": "customtabs",
+  "features": {
+    "playBilling": {
+      "enabled": true
+    }
+  },
+  "alphaDependencies": {
+    "enabled": true
+  },
+  "enableSiteSettingsShortcut": false,
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "fullScopeUrl": "https://www.stopjuegodepalabras.com/",
+  "minSdkVersion": 21,
+  "orientation": "portrait",
+  "fingerprints": [],
+  "additionalTrustedOrigins": [],
+  "retainedBundles": [],
+  "displayOverride": []
+}
