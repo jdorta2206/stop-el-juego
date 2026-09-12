@@ -1,4 +1,4 @@
-name: Validate Android AdMob bridge
+name: Validate Android pure TWA
 
 on:
   push:
@@ -25,15 +25,16 @@ jobs:
           grep -q 'versionCode 17' app/build.gradle
           grep -q 'versionName "1.3.6.3"' app/build.gradle
           grep -q 'androidbrowserhelper:2.7.3' app/build.gradle
-          grep -q 'play-services-ads:25.4.0' app/build.gradle
-          grep -q 'com.google.android.gms.ads.APPLICATION_ID' app/src/main/AndroidManifest.xml
-          grep -q 'PostMessageService' app/src/main/AndroidManifest.xml
+          ! grep -q 'play-services-ads' app/build.gradle
+          ! grep -q 'com.google.android.gms.ads.APPLICATION_ID' app/src/main/AndroidManifest.xml
+          ! grep -q 'PaymentActivity' app/src/main/AndroidManifest.xml
+          ! grep -q 'PaymentService' app/src/main/AndroidManifest.xml
           grep -q 'extends com.google.androidbrowserhelper.trusted.LauncherActivity' app/src/main/java/app/replit/stop_el_juego/twa/LauncherActivity.java
           ./gradlew assembleDebug --no-daemon
-      - name: Upload minimal TWA debug APK
+      - name: Upload pure TWA debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: stop-android-minimal-twa-debug
+          name: stop-android-pure-twa-debug
           path: android-generated/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 7
