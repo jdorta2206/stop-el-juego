@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Gift, Star, X, Zap } from "lucide-react";
 import { getT } from "@/i18n/index";
 import { detectPaymentChannel, hasAndroidAppReferrer } from "@/lib/playBilling";
+import { initTwaAdBridge, isTwaAdBridgeAvailable, requestRewardedAd } from "@/lib/twaAdBridge";
 
 const ADS_DISABLED = import.meta.env.VITE_ADS_DISABLED === "1";
 const ADSTERRA_BANNER_KEY = ADS_DISABLED ? undefined : ((import.meta.env.VITE_ADSTERRA_BANNER_KEY as string | undefined) ?? "1212cb86d493b763d38d4523eec88cac");
@@ -102,32 +103,40 @@ export function BannerAd({ className = "" }: { className?: string }) {
 }
 
 export function RewardedAd({ onComplete, onSkip, rewardType = "points", rewardAmount = 20 }: { onComplete: (reward: number) => void; onSkip: () => void; rewardType?: "points" | "hint" | "extraTime"; rewardAmount?: number }) {
-  const insRef = useRef<HTMLModElement>(null);
-  const [countdown, setCountdown] = useState(15);
   const [phase, setPhase] = useState<"pre" | "watching" | "done">("pre");
-  const [progress, setProgress] = useState(0);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [error, setError] = useState(false);
+  const [bridgeReady, setBridgeReady] = useState(false);
   const t = getT();
   const labels = { points: `+${rewardAmount} pts`, hint: t.ads.reward, extraTime: "+30s" };
   const icons = { points: <Star className="w-8 h-8 text-[#f9a825]" />, hint: <Zap className="w-8 h-8 text-[#f9a825]" />, extraTime: <Gift className="w-8 h-8 text-[#f9a825]" /> };
+  const placement = rewardType === "extraTime" ? "extra_time" : rewardType === "hint" ? "hint" : "double_points";
 
-  const startWatching = () => {
+  useEffect(() => {
+    initTwaAdBridge();
+    setBridgeReady(isTwaAdBridgeAvailable());
+    const timer = window.setInterval(() => setBridgeReady(isTwaAdBridgeAvailable()), 500);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const startWatching = async () => {
+    if (!isTwaAdBridgeAvailable()) {
+      setError(true);
+      return;
+    }
+
+    setError(false);
     setPhase("watching");
-    if (ADSENSE_CLIENT && VIDEO_SLOT && insRef.current) pushAd();
-    let elapsed = 0;
-    intervalRef.current = setInterval(() => {
-      elapsed += 1;
-      setProgress((elapsed / 15) * 100);
-      setCountdown(15 - elapsed);
-      if (elapsed >= 15) {
-        if (intervalRef.current) clearInterval(intervalRef.current);
-        setPhase("done");
-        window.setTimeout(() => onComplete(rewardAmount), 500);
-      }
-    }, 1000);
+    const result = await requestRewardedAd(placement);
+
+    if (result.rewarded) {
+      setPhase("done");
+      window.setTimeout(() => onComplete(rewardAmount), 350);
+      return;
+    }
+
+    setPhase("pre");
+    setError(true);
   };
 
-  useEffect(() => () => { if (intervalRef.current) clearInterval(intervalRef.current); }, []);
-
-  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"><div className="w-full max-w-sm rounded-3xl overflow-hidden bg-white shadow-2xl"><div className="p-6 text-center"><h3 className="text-xl font-black">{phase === "done" ? "¡Recompensa!" : "Mira el anuncio"}</h3>{phase === "pre" && <><div className="my-5 flex justify-center">{icons[rewardType]}</div><p className="text-gray-600 text-sm mb-5">{labels[rewardType]}</p><button onClick={startWatching} className="w-full py-3 rounded-xl font-bold bg-[#f9a825] text-[#0d1757]">Ver anuncio</button><button onClick={onSkip} className="w-full py-2 mt-2 text-gray-500">Ahora no</button></>}{phase === "watching" && <><div className="my-5" style={{ width: "100%", height: 250 }}><ins ref={insRef} className="adsbygoogle" style={{ display: "block", width: "100%", height: 250 }} data-ad-client={ADSENSE_CLIENT} data-ad-slot={VIDEO_SLOT} /></div><div className="h-2 bg-gray-200 rounded-full overflow-hidden"><div className="h-full bg-[#f9a825] transition-all" style={{ width: `${progress}%` }} /></div><p className="text-sm text-gray-500 mt-2">{countdown}s</p></>}{phase === "done" && <div className="py-8"><div className="text-5xl mb-3">🎉</div><p className="text-gray-700">{labels[rewardType]}</p></div>}</div></div></div>;
+  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"><div className="w-full max-w-sm rounded-3xl overflow-hidden bg-white shadow-2xl"><div className="p-6 text-center"><h3 className="text-xl font-black">{phase === "done" ? "¡Recompensa!" : "Mira el anuncio"}</h3>{phase === "pre" && <><div className="my-5 flex justify-center">{icons[rewardType]}</div><p className="text-gray-600 text-sm mb-5">{labels[rewardType]}</p>{error && <p className="text-red-500 text-xs mb-3">{bridgeReady ? "No se pudo completar el anuncio. Inténtalo de nuevo." : "Los anuncios bonificados no están disponibles en esta versión."}</p>}<button disabled={!bridgeReady} onClick={startWatching} className="w-full py-3 rounded-xl font-bold bg-[#f9a825] text-[#0d1757] disabled:opacity-50 disabled:cursor-not-allowed">{bridgeReady ? "Ver anuncio" : "Anuncio no disponible"}</button><button onClick={onSkip} className="w-full py-2 mt-2 text-gray-500">Ahora no</button></>}{phase === "watching" && <div className="py-12"><div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-4 border-gray-200 border-t-[#f9a825]" /><p className="text-sm text-gray-600">Cargando anuncio...</p><p className="text-xs text-gray-400 mt-2">La recompensa se entrega solo cuando AdMob confirma que el anuncio se ha completado.</p></div>}{phase === "done" && <div className="py-8"><div className="text-5xl mb-3">🎉</div><p className="text-gray-700">{labels[rewardType]}</p></div>}</div></div></div>;
 }
