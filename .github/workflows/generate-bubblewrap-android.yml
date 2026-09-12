@@ -27,8 +27,8 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - name: Install Bubblewrap
-        run: npm install -g @bubblewrap/cli@1.25.0
+      - name: Install Bubblewrap core
+        run: npm install --no-save @bubblewrap/core@1.25.0
       - name: Generate TWA project without interactive prompts
         shell: bash
         run: |
