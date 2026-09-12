@@ -1,8 +1,8 @@
 name: Generate Bubblewrap Android project
 
+# Manual only on the Android isolation branch. Automatic regeneration was
+# overwriting the native test project during crash isolation.
 on:
-  push:
-    branches: [android/bubblewrap-admob]
   workflow_dispatch:
 
 permissions:
@@ -17,25 +17,18 @@ jobs:
         with:
           ref: android/bubblewrap-admob
           fetch-depth: 0
-      - name: Skip generated commits
-        if: ${{ contains(github.event.head_commit.message, '[skip android-generation]') }}
-        run: echo "Generated Android project commit; nothing to regenerate."
       - name: Setup Node
-        if: ${{ !contains(github.event.head_commit.message, '[skip android-generation]') }}
         uses: actions/setup-node@v4
         with:
           node-version: 20
       - name: Setup JDK 17
-        if: ${{ !contains(github.event.head_commit.message, '[skip android-generation]') }}
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
       - name: Install Bubblewrap core
-        if: ${{ !contains(github.event.head_commit.message, '[skip android-generation]') }}
         run: npm install --no-save @bubblewrap/core@1.25.0
-      - name: Generate and validate Android project
-        if: ${{ !contains(github.event.head_commit.message, '[skip android-generation]') }}
+      - name: Generate project
         shell: bash
         run: |
           set -euo pipefail
@@ -44,7 +37,6 @@ jobs:
           node <<'NODE'
           const fs = require('fs');
           const path = require('path');
-          const crypto = require('crypto');
           const { TwaManifest, TwaGenerator } = require('@bubblewrap/core');
           (async () => {
             const out = path.resolve('android-generated');
@@ -61,7 +53,6 @@ jobs:
             const manifest = await TwaManifest.fromFile(generationManifest);
             await manifest.saveToFile(path.join(out, 'twa-manifest.json'));
             await new TwaGenerator().createTwaProject(out, manifest);
-
             const gradle = path.join(out, 'app', 'build.gradle');
             let text = fs.readFileSync(gradle, 'utf8');
             text = text.replace('splashScreenFadeOutDuration: ,', 'splashScreenFadeOutDuration: 0,');
@@ -69,165 +60,17 @@ jobs:
             text = text.replace(/minSdkVersion\s+21/, 'minSdkVersion 23');
             text = text.replace(/launchUrl:\s*'https:\/\/www\.stopjuegodepalabras\.com\/?\?source=googleplay-twa'/, "launchUrl: '/?source=googleplay-twa'");
             text = text.replace("implementation 'com.google.androidbrowserhelper:androidbrowserhelper:2.7.0-alpha02'", "implementation 'com.google.androidbrowserhelper:androidbrowserhelper:2.7.3'");
-            if (!text.includes("play-services-ads:25.4.0")) text = text.replace("implementation 'com.google.androidbrowserhelper:androidbrowserhelper:2.7.3'", "implementation 'com.google.androidbrowserhelper:androidbrowserhelper:2.7.3'\n        implementation 'com.google.android.gms:play-services-ads:25.4.0'");
             text = text.replace("enableSiteSettingsShortcut: 'false'", "enableSiteSettingsShortcut: false");
             fs.writeFileSync(gradle, text);
-
-            const launcher = path.join(out, 'app/src/main/java/app/replit/stop_el_juego/twa/LauncherActivity.java');
-            fs.writeFileSync(launcher, `package app.replit.stop_el_juego.twa;
-
-import android.content.pm.ActivityInfo;
-import android.net.Uri;
-import android.os.Build;
-import android.os.Bundle;
-import android.util.Log;
-import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
-import androidx.browser.customtabs.CustomTabsCallback;
-import androidx.browser.customtabs.CustomTabsSession;
-import com.google.android.gms.ads.AdError;
-import com.google.android.gms.ads.AdRequest;
-import com.google.android.gms.ads.FullScreenContentCallback;
-import com.google.android.gms.ads.LoadAdError;
-import com.google.android.gms.ads.MobileAds;
-import com.google.android.gms.ads.rewarded.RewardedAd;
-import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback;
-import org.json.JSONException;
-import org.json.JSONObject;
-
-public class LauncherActivity extends com.google.androidbrowserhelper.trusted.LauncherActivity {
-    private static final String TAG = "STOP_AD_BRIDGE";
-    private static final Uri ORIGIN = Uri.parse("https://www.stopjuegodepalabras.com");
-    private static final String REWARDED_TEST_ID = "ca-app-pub-3940256099942544/5224354917";
-    private static final String REWARDED_REAL_ID = "ca-app-pub-4807272408824742/3559554716";
-    private boolean relationshipValidated;
-    private boolean messageChannelReady;
-    private RewardedAd rewardedAd;
-    private boolean rewardedAdLoading;
-    private boolean rewardGrantedForCurrentAd;
-    private String activeRequestId;
-    private String activePlacement;
-
-    @Override protected void onCreate(Bundle savedInstanceState) {
-        MobileAds.initialize(this, status -> {});
-        preloadRewardedAd();
-        super.onCreate(savedInstanceState);
-        if (Build.VERSION.SDK_INT > Build.VERSION_CODES.O) setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT);
-        else setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
-    }
-
-    @Override protected CustomTabsCallback getCustomTabsCallback() {
-        return new CustomTabsCallback() {
-            @Override public void onRelationshipValidationResult(int relation, @NonNull Uri requestedOrigin, boolean result, @Nullable Bundle extras) {
-                relationshipValidated = result && ORIGIN.equals(requestedOrigin);
-                Log.d(TAG, "use_as_origin validation=" + result + " origin=" + requestedOrigin);
-            }
-            @Override public void onNavigationEvent(int navigationEvent, @Nullable Bundle extras) {
-                if (navigationEvent != NAVIGATION_FINISHED || !relationshipValidated) return;
-                CustomTabsSession session = getCustomTabsSession();
-                if (session == null) return;
-                boolean requested = session.requestPostMessageChannel(ORIGIN, ORIGIN, new Bundle());
-                Log.d(TAG, "requestPostMessageChannel=" + requested);
-            }
-            @Override public void onMessageChannelReady(@Nullable Bundle extras) {
-                messageChannelReady = true;
-                sendMessage(newMessage("STOP_AD_BRIDGE_READY"));
-            }
-            @Override public void onPostMessage(@NonNull String message, @Nullable Bundle extras) { handleWebMessage(message); }
-        };
-    }
-
-    private void handleWebMessage(String raw) {
-        try {
-            JSONObject message = new JSONObject(raw);
-            if (!"STOP_AD_REQUEST_REWARDED".equals(message.optString("type"))) return;
-            String requestId = message.optString("requestId", "");
-            String placement = message.optString("placement", "extra_time");
-            if (requestId.isEmpty() || !messageChannelReady || activeRequestId != null || !isAllowedPlacement(placement)) return;
-            activeRequestId = requestId;
-            activePlacement = placement;
-            rewardGrantedForCurrentAd = false;
-            showRewardedAd();
-        } catch (JSONException ignored) { Log.w(TAG, "Ignoring malformed web message"); }
-    }
-
-    private boolean isAllowedPlacement(String placement) {
-        return "extra_time".equals(placement) || "hint".equals(placement) || "double_points".equals(placement) || "skip_round".equals(placement) || "extra_pack".equals(placement);
-    }
-
-    private void preloadRewardedAd() {
-        if (rewardedAd != null || rewardedAdLoading) return;
-        rewardedAdLoading = true;
-        String adUnitId = BuildConfig.DEBUG ? REWARDED_TEST_ID : REWARDED_REAL_ID;
-        RewardedAd.load(this, adUnitId, new AdRequest.Builder().build(), new RewardedAdLoadCallback() {
-            @Override public void onAdLoaded(@NonNull RewardedAd ad) { rewardedAdLoading = false; rewardedAd = ad; }
-            @Override public void onAdFailedToLoad(@NonNull LoadAdError error) { rewardedAdLoading = false; rewardedAd = null; Log.w(TAG, "Rewarded load failed: " + error.getCode()); }
-        });
-    }
-
-    private void showRewardedAd() {
-        if (rewardedAd == null) { sendResult(false, "error"); preloadRewardedAd(); return; }
-        RewardedAd ad = rewardedAd; rewardedAd = null;
-        ad.setFullScreenContentCallback(new FullScreenContentCallback() {
-            @Override public void onAdDismissedFullScreenContent() { if (!rewardGrantedForCurrentAd) sendResult(false, "skipped"); preloadRewardedAd(); }
-            @Override public void onAdFailedToShowFullScreenContent(@NonNull AdError error) { sendResult(false, "error"); preloadRewardedAd(); }
-        });
-        ad.show(this, rewardItem -> { rewardGrantedForCurrentAd = true; sendResult(true, "admob"); });
-    }
-
-    private void sendResult(boolean rewarded, String source) {
-        if (activeRequestId == null) return;
-        JSONObject result = new JSONObject();
-        try { result.put("type", "STOP_AD_REWARDED_RESULT"); result.put("requestId", activeRequestId); result.put("placement", activePlacement); result.put("rewarded", rewarded); result.put("source", source); }
-        catch (JSONException ignored) { return; }
-        sendMessage(result);
-        activeRequestId = null; activePlacement = null; rewardGrantedForCurrentAd = false;
-    }
-
-    private JSONObject newMessage(String type) { JSONObject m = new JSONObject(); try { m.put("type", type); } catch (JSONException ignored) {} return m; }
-    private void sendMessage(JSONObject message) { CustomTabsSession session = getCustomTabsSession(); if (session != null && messageChannelReady) session.postMessage(message.toString(), null); }
-}
-`);
-
-            const manifestPath = path.join(out, 'app/src/main/AndroidManifest.xml');
-            let manifestXml = fs.readFileSync(manifestPath, 'utf8');
-            const appMeta = `        <meta-data\n            android:name="com.google.android.gms.ads.APPLICATION_ID"\n            android:value="ca-app-pub-4807272408824742~9880632781" />\n\n`;
-            if (!manifestXml.includes('com.google.android.gms.ads.APPLICATION_ID')) manifestXml = manifestXml.replace('        <meta-data\n            android:name="asset_statements"', appMeta + '        <meta-data\n            android:name="asset_statements"');
-            const service = `        <service\n            android:name="androidx.browser.customtabs.PostMessageService"\n            android:exported="true" />\n\n`;
-            if (!manifestXml.includes('androidx.browser.customtabs.PostMessageService')) manifestXml = manifestXml.replace('        <activity android:name="com.google.androidbrowserhelper.trusted.FocusActivity" />', service + '        <activity android:name="com.google.androidbrowserhelper.trusted.FocusActivity" />');
-            fs.writeFileSync(manifestPath, manifestXml);
-            const data = fs.readFileSync(path.join(out, 'twa-manifest.json'));
-            fs.writeFileSync(path.join(out, 'manifest-checksum.txt'), crypto.createHash('sha1').update(data).digest('hex'));
             fs.rmSync(generationManifest, { force: true });
           })().catch(err => { console.error(err); process.exit(1); });
           NODE
-      - name: Verify generated project
-        if: ${{ !contains(github.event.head_commit.message, '[skip android-generation]') }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -f android-generated/gradlew
-          test -f android-generated/app/build.gradle
-          test -f android-generated/app/src/main/AndroidManifest.xml
-          test -f android-generated/app/src/main/java/app/replit/stop_el_juego/twa/LauncherActivity.java
-          grep -q 'minSdkVersion 23' android-generated/app/build.gradle
-          grep -q 'play-services-ads:25.4.0' android-generated/app/build.gradle
-          grep -q 'androidbrowserhelper:2.7.3' android-generated/app/build.gradle
-          grep -q 'com.google.android.gms.ads.APPLICATION_ID' android-generated/app/src/main/AndroidManifest.xml
-          grep -q 'PostMessageService' android-generated/app/src/main/AndroidManifest.xml
-          grep -q 'STOP_AD_REQUEST_REWARDED' android-generated/app/src/main/java/app/replit/stop_el_juego/twa/LauncherActivity.java
-          grep -q "launchUrl: '/?source=googleplay-twa'" android-generated/app/build.gradle
-          ! grep -q 'splashScreenFadeOutDuration: ,' android-generated/app/build.gradle
-          ! grep -q 'https://www.stopjuegodepalabras.comhttps://' android-generated/app/build.gradle
       - name: Build unsigned debug APK
-        if: ${{ !contains(github.event.head_commit.message, '[skip android-generation]') }}
         working-directory: android-generated
         run: ./gradlew assembleDebug --no-daemon
       - name: Remove generated build/cache files
-        if: ${{ !contains(github.event.head_commit.message, '[skip android-generation]') }}
         run: rm -rf android-generated/.gradle android-generated/app/build android-generated/build && rm -f android-generated/android-keystore
       - name: Commit generated Android project
-        if: ${{ !contains(github.event.head_commit.message, '[skip android-generation]') }}
         shell: bash
         run: |
           set -euo pipefail
