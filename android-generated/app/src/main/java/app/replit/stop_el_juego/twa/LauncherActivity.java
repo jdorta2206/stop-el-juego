@@ -4,6 +4,8 @@ import android.content.pm.ActivityInfo;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
@@ -29,7 +31,10 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     private static final Uri ORIGIN = Uri.parse("https://www.stopjuegodepalabras.com");
     private static final String REWARDED_TEST_ID = "ca-app-pub-3940256099942544/5224354917";
     private static final String REWARDED_REAL_ID = "ca-app-pub-4807272408824742/3559554716";
+    private static final int CHANNEL_RETRY_COUNT = 3;
+    private static final long CHANNEL_RETRY_DELAY_MS = 250L;
 
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private boolean relationshipValidated;
     private boolean messageChannelReady;
     private RewardedAd rewardedAd;
@@ -65,10 +70,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             @Override
             public void onNavigationEvent(int navigationEvent, @Nullable Bundle extras) {
                 if (navigationEvent != NAVIGATION_FINISHED || !relationshipValidated) return;
-                CustomTabsSession session = getCustomTabsSession();
-                if (session == null) return;
-                boolean requested = session.requestPostMessageChannel(ORIGIN, ORIGIN, new Bundle());
-                Log.d(TAG, "requestPostMessageChannel=" + requested);
+                requestMessageChannelWithRetry(0);
             }
 
             @Override
@@ -82,6 +84,23 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                 handleWebMessage(message);
             }
         };
+    }
+
+    private void requestMessageChannelWithRetry(int attempt) {
+        if (messageChannelReady || !relationshipValidated) return;
+        CustomTabsSession session = getCustomTabsSession();
+        if (session == null) {
+            if (attempt + 1 < CHANNEL_RETRY_COUNT) {
+                mainHandler.postDelayed(() -> requestMessageChannelWithRetry(attempt + 1), CHANNEL_RETRY_DELAY_MS);
+            }
+            return;
+        }
+
+        boolean requested = session.requestPostMessageChannel(ORIGIN, ORIGIN, new Bundle());
+        Log.d(TAG, "requestPostMessageChannel attempt=" + (attempt + 1) + " result=" + requested);
+        if (!requested && attempt + 1 < CHANNEL_RETRY_COUNT) {
+            mainHandler.postDelayed(() -> requestMessageChannelWithRetry(attempt + 1), CHANNEL_RETRY_DELAY_MS);
+        }
     }
 
     /**
