@@ -1,7 +1,7 @@
 import { hasAndroidAppReferrer } from "@/lib/playBilling";
 
 const TARGET_ORIGIN = "https://www.stopjuegodepalabras.com";
-const ANDROID_APP_ORIGIN_PREFIX = "android-app://";
+const ANDROID_APP_ORIGIN = "android-app://app.replit.stop_el_juego.twa";
 const REQUEST_TYPE = "STOP_AD_REQUEST_REWARDED";
 const RESULT_TYPE = "STOP_AD_REWARDED_RESULT";
 const HANDSHAKE_TYPE = "STOP_AD_BRIDGE_READY";
@@ -50,20 +50,28 @@ function normalizeMessage(data: unknown): Record<string, unknown> | null {
   return data && typeof data === "object" ? (data as Record<string, unknown>) : null;
 }
 
+function resetPort(): void {
+  const port = state.port;
+  state.port = null;
+  state.ready = false;
+  try { port?.close(); } catch {}
+}
+
 function installListener(): void {
   if (listenerInstalled || typeof window === "undefined") return;
   listenerInstalled = true;
 
   window.addEventListener("message", (event) => {
-    const isTrustedTwaOrigin = event.origin.startsWith(ANDROID_APP_ORIGIN_PREFIX);
+    const isTrustedTwaOrigin = event.origin === ANDROID_APP_ORIGIN;
     if (event.origin !== TARGET_ORIGIN && event.origin !== window.location.origin && !isTrustedTwaOrigin) return;
 
     const data = event.data;
     const port = event.ports?.[0];
 
-    // Chrome delivers the MessagePort with the initial channel event. Do not require
-    // the application handshake payload to be present in that same event.
+    // Chrome delivers the MessagePort with the initial channel event. Capture it
+    // regardless of the application payload carried by that event.
     if (port) {
+      if (state.port && state.port !== port) resetPort();
       state.port = port;
       state.ready = true;
       port.start();
@@ -91,7 +99,7 @@ function handleMessage(data: unknown): void {
   pending.delete(message.requestId);
   resolve({
     rewarded: message.rewarded === true,
-    source: message.rewarded === true ? "admob" : "skipped",
+    source: message.rewarded === true ? "admob" : message.source === "error" ? "error" : "skipped",
   });
 }
 
@@ -116,6 +124,7 @@ export function requestRewardedAd(placement: RewardedPlacement): Promise<RewardR
   return new Promise<RewardResult>((resolve) => {
     const timeout = window.setTimeout(() => {
       pending.delete(requestId);
+      resetPort();
       resolve({ rewarded: false, source: "error" });
     }, REQUEST_TIMEOUT_MS);
 
@@ -133,6 +142,7 @@ export function requestRewardedAd(placement: RewardedPlacement): Promise<RewardR
     } catch {
       window.clearTimeout(timeout);
       pending.delete(requestId);
+      resetPort();
       resolve({ rewarded: false, source: "error" });
     }
   });
