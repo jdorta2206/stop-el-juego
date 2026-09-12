@@ -95,5 +95,4 @@ preBuild.dependsOn(generateShorcutsFile)
 dependencies {
     implementation fileTree(include: ['*.jar'], dir: 'libs')
     implementation 'com.google.androidbrowserhelper:androidbrowserhelper:2.7.3'
-    implementation 'com.google.android.gms:play-services-ads:25.4.0'
 }
