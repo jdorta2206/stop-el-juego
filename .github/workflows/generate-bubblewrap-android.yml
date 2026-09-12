@@ -29,29 +29,31 @@ jobs:
           java-version: '17'
       - name: Install Bubblewrap
         run: npm install -g @bubblewrap/cli@1.25.0
-      - name: Generate TWA project
+      - name: Generate TWA project without interactive prompts
         shell: bash
         run: |
           set -euo pipefail
           rm -rf android-generated
           mkdir -p android-generated
-          printf '%s\n' \
-            'n' "$JAVA_HOME" \
-            'n' "$ANDROID_HOME" \
-            'www.stopjuegodepalabras.com' \
-            'https://www.stopjuegodepalabras.com/?source=googleplay-twa' \
-            'STOP - El Juego' 'STOP' 'app.replit.stop_el_juego.twa' '17' \
-            'standalone' 'portrait' '#0d1757' '#0d1757' \
-            'https://www.stopjuegodepalabras.com/images/icon-512.png' \
-            'https://www.stopjuegodepalabras.com/images/icon-maskable-512.png' \
-            'y' \
-            'https://www.stopjuegodepalabras.com/images/icon-mono-512.png' \
-            'y' 'n' './android-keystore' 'android' \
-            | bubblewrap init --manifest=https://www.stopjuegodepalabras.com/manifest.json --directory=android-generated
-      - name: Apply STOP manifest
-        run: cp android/twa-manifest.json android-generated/twa-manifest.json
+          node <<'NODE'
+          const fs = require('fs');
+          const path = require('path');
+          const { TwaManifest, TwaGenerator } = require('@bubblewrap/core');
+          (async () => {
+            const out = path.resolve('android-generated');
+            const manifest = await TwaManifest.fromFile(path.resolve('android/twa-manifest.json'));
+            manifest.generatorApp = 'bubblewrap-cli';
+            manifest.signingKey.path = path.join(out, 'android.keystore');
+            await manifest.saveToFile(path.join(out, 'twa-manifest.json'));
+            const generator = new TwaGenerator();
+            await generator.createTwaProject(out, manifest);
+            const data = fs.readFileSync(path.join(out, 'twa-manifest.json'));
+            const crypto = require('crypto');
+            fs.writeFileSync(path.join(out, 'manifest-checksum.txt'), crypto.createHash('sha1').update(data).digest('hex'));
+          })().catch(err => { console.error(err); process.exit(1); });
+          NODE
       - name: Remove generated build/cache files
-        run: rm -rf android-generated/.gradle android-generated/app/build android-generated/build && rm -f android-generated/android-keystore
+        run: rm -rf android-generated/.gradle android-generated/app/build android-generated/build && rm -f android-generated/android.keystore
       - name: Commit generated Android project
         shell: bash
         run: |
