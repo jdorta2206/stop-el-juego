@@ -23,6 +23,12 @@ jobs:
         with:
           node-version: 24
 
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
       - name: Install Bubblewrap
         run: npm install -g @bubblewrap/cli@1.25.0
 
@@ -32,12 +38,15 @@ jobs:
           set -euo pipefail
           rm -rf android-generated
           mkdir -p android-generated
-          # Bubblewrap init is interactive. The answers below reproduce the
-          # existing published STOP TWA configuration without touching master.
-          # A placeholder keystore prevents init from generating a new key;
-          # the real Play signing keystore is intentionally never committed.
-          touch android-generated/android-keystore
-          cat > /tmp/bubblewrap-answers <<'EOF'
+          # Bubblewrap 1.25.0 asks about JDK/Android SDK before consuming the
+          # manifest answers. Both are already available on the GitHub runner,
+          # so explicitly answer those prompts first and then provide the
+          # existing STOP TWA configuration.
+          cat > /tmp/bubblewrap-answers <<EOF
+          n
+          ${JAVA_HOME}
+          n
+          ${ANDROID_HOME}
           www.stopjuegodepalabras.com
           https://www.stopjuegodepalabras.com/?source=googleplay-twa
           STOP - El Juego
