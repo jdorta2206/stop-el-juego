@@ -1,4 +1,4 @@
-name: Validate Android native startup
+name: Validate Android minimal TWA
 
 on:
   push:
@@ -16,61 +16,26 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - name: Validate native project
+      - name: Validate minimal TWA project
         working-directory: android-generated
         shell: bash
         run: |
-          set -uo pipefail
-          echo '=== Android native startup isolation ==='
-          echo "PWD=$(pwd)"
-          echo '--- project files ---'
-          ls -la
-          echo '--- gradle wrapper ---'
-          ls -la gradlew gradle/wrapper/gradle-wrapper.jar
-
-          check_grep() {
-            local label="$1"
-            local pattern="$2"
-            local file="$3"
-            if grep -q "$pattern" "$file"; then
-              echo "PASS: $label"
-            else
-              echo "FAIL: $label"
-              echo "Pattern: $pattern"
-              echo "File: $file"
-              exit 1
-            fi
-          }
-
-          check_absent() {
-            local label="$1"
-            local pattern="$2"
-            local file="$3"
-            if grep -q "$pattern" "$file"; then
-              echo "FAIL: $label (forbidden pattern found)"
-              echo "Pattern: $pattern"
-              echo "File: $file"
-              exit 1
-            else
-              echo "PASS: $label"
-            fi
-          }
-
-          check_grep 'minSdkVersion 23' 'minSdkVersion 23' app/build.gradle
-          check_grep 'targetSdkVersion 36' 'targetSdkVersion 36' app/build.gradle
-          check_grep 'versionCode 17' 'versionCode 17' app/build.gradle
-          check_grep 'versionName 1.3.6.3' 'versionName "1.3.6.3"' app/build.gradle
-          check_grep 'Browser Helper 2.7.3' 'androidbrowserhelper:2.7.3' app/build.gradle
-          check_absent 'AdMob dependency removed' 'play-services-ads' app/build.gradle
-          check_absent 'AdMob manifest ID removed' 'com.google.android.gms.ads.APPLICATION_ID' app/src/main/AndroidManifest.xml
-          check_absent 'PaymentActivity removed' 'PaymentActivity' app/src/main/AndroidManifest.xml
-          check_absent 'PaymentService removed' 'PaymentService' app/src/main/AndroidManifest.xml
-          check_grep 'LauncherActivity is plain Activity' 'public class LauncherActivity extends Activity' app/src/main/java/app/replit/stop_el_juego/twa/LauncherActivity.java
-
-          echo '--- Gradle wrapper execution ---'
+          set -euo pipefail
+          grep -q 'minSdkVersion 23' app/build.gradle
+          grep -q 'targetSdkVersion 36' app/build.gradle
+          grep -q 'versionCode 17' app/build.gradle
+          grep -q 'versionName "1.3.6.3"' app/build.gradle
+          grep -q 'androidbrowserhelper:2.7.3' app/build.gradle
+          ! grep -q 'play-services-ads' app/build.gradle
+          ! grep -q 'com.google.android.gms.ads.APPLICATION_ID' app/src/main/AndroidManifest.xml
+          ! grep -q 'PaymentActivity' app/src/main/AndroidManifest.xml
+          ! grep -q 'PaymentService' app/src/main/AndroidManifest.xml
+          grep -q 'public class LauncherActivity extends com.google.androidbrowserhelper.trusted.LauncherActivity' app/src/main/java/app/replit/stop_el_juego/twa/LauncherActivity.java
+          ! grep -q 'MobileAds' app/src/main/java/app/replit/stop_el_juego/twa/LauncherActivity.java
+          ! grep -q 'CustomTabsSession' app/src/main/java/app/replit/stop_el_juego/twa/LauncherActivity.java
+          ! grep -q 'requestPostMessageChannel' app/src/main/java/app/replit/stop_el_juego/twa/LauncherActivity.java
           chmod +x ./gradlew
           bash ./gradlew assembleDebug --no-daemon --stacktrace
-
       - name: Verify debug APK
         working-directory: android-generated
         shell: bash
@@ -78,16 +43,14 @@ jobs:
           set -euo pipefail
           APK='app/build/outputs/apk/debug/app-debug.apk'
           test -s "$APK"
-          echo "APK generated: $APK"
           sha256sum "$APK"
           ls -lh "$APK"
-
-      - name: Upload native startup debug APK
+      - name: Upload minimal TWA debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: stop-android-native-startup-debug
+          name: stop-android-minimal-twa-debug
           path: android-generated/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 7
 
-# Native startup isolation: bypasses Browser Helper/TWA and opens the production URL in the browser.
+# Minimal TWA isolation: no AdMob, Billing, PostMessage bridge, reflection, or custom callbacks.
