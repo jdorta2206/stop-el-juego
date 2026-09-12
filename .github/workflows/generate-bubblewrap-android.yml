@@ -1,8 +1,6 @@
 name: Generate Bubblewrap Android project
 
 on:
-  push:
-    branches: [android/bubblewrap-admob]
   workflow_dispatch:
 
 permissions:
@@ -10,88 +8,54 @@ permissions:
 
 jobs:
   generate:
-    if: ${{ !contains(github.event.head_commit.message, '[skip android-generation]') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          ref: android/bubblewrap-admob
           fetch-depth: 0
-
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          # Bubblewrap 1.25.0 uses an older Inquirer/readline stack that is
-          # incompatible with Node 24's readline lifecycle.
           node-version: 20
-
       - name: Setup JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-
       - name: Install Bubblewrap
         run: npm install -g @bubblewrap/cli@1.25.0
-
       - name: Generate TWA project
         shell: bash
         run: |
           set -euo pipefail
           rm -rf android-generated
           mkdir -p android-generated
-          cat > /tmp/bubblewrap-answers <<EOF
-          n
-          ${JAVA_HOME}
-          n
-          ${ANDROID_HOME}
-          www.stopjuegodepalabras.com
-          https://www.stopjuegodepalabras.com/?source=googleplay-twa
-          STOP - El Juego
-          STOP
-          app.replit.stop_el_juego.twa
-          17
-          standalone
-          portrait
-          #0d1757
-          #0d1757
-          https://www.stopjuegodepalabras.com/images/icon-512.png
-          https://www.stopjuegodepalabras.com/images/icon-maskable-512.png
-          y
-          https://www.stopjuegodepalabras.com/images/icon-mono-512.png
-          y
-          n
-          ./android-keystore
-          android
-          EOF
-          sed -i 's/^          //' /tmp/bubblewrap-answers
-          bubblewrap init \
-            --manifest=https://www.stopjuegodepalabras.com/manifest.json \
-            --directory=android-generated < /tmp/bubblewrap-answers
-
-      - name: Apply STOP manifest and regenerate project
-        shell: bash
-        run: |
-          set -euo pipefail
-          cp android/twa-manifest.json android-generated/twa-manifest.json
-          rm -f android-generated/android-keystore
-          printf 'y\n' | bubblewrap update --directory=android-generated || true
-
+          printf '%s\n' \
+            'n' "$JAVA_HOME" \
+            'n' "$ANDROID_HOME" \
+            'www.stopjuegodepalabras.com' \
+            'https://www.stopjuegodepalabras.com/?source=googleplay-twa' \
+            'STOP - El Juego' 'STOP' 'app.replit.stop_el_juego.twa' '17' \
+            'standalone' 'portrait' '#0d1757' '#0d1757' \
+            'https://www.stopjuegodepalabras.com/images/icon-512.png' \
+            'https://www.stopjuegodepalabras.com/images/icon-maskable-512.png' \
+            'y' \
+            'https://www.stopjuegodepalabras.com/images/icon-mono-512.png' \
+            'y' 'n' './android-keystore' 'android' \
+            | bubblewrap init --manifest=https://www.stopjuegodepalabras.com/manifest.json --directory=android-generated
+      - name: Apply STOP manifest
+        run: cp android/twa-manifest.json android-generated/twa-manifest.json
       - name: Remove generated build/cache files
-        run: |
-          rm -rf android-generated/.gradle android-generated/app/build android-generated/build
-          rm -f android-generated/android-keystore
-
+        run: rm -rf android-generated/.gradle android-generated/app/build android-generated/build && rm -f android-generated/android-keystore
       - name: Commit generated Android project
         shell: bash
         run: |
           set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add android-generated .github/workflows/generate-bubblewrap-android.yml
-          if git diff --cached --quiet; then
-            echo "No generated changes to commit."
-            exit 0
-          fi
-          git commit -m "build(android): add generated Bubblewrap project [skip android-generation]"
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'build(android): add generated Bubblewrap project [skip android-generation]'
           git push origin HEAD:android/bubblewrap-admob
