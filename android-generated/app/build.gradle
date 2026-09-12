@@ -54,7 +54,7 @@ android {
         resValue "integer", "splashScreenFadeOutDuration", twaManifest.splashScreenFadeOutDuration.toString()
         resValue "string", "generatorApp", twaManifest.generatorApp
         resValue "string", "fallbackType", twaManifest.fallbackType
-        resValue "bool", "enableSiteSettingsShortcut", twaManifest.enableSiteSettingsShortcut
+        resValue "bool", "enableSiteSettingsShortcut", twaManifest.enableSiteSettingsShortcut.toString()
         resValue "string", "orientation", twaManifest.orientation
     }
     buildTypes {
