@@ -10,6 +10,10 @@
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
 
         <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="ca-app-pub-4807272408824742~9880632781" />
+
+        <meta-data
             android:name="asset_statements"
             android:resource="@string/assetStatements" />
 
