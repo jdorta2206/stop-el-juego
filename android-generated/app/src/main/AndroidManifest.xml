@@ -1,19 +1,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="app.replit.stop_el_juego.twa">
 
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
-
     <application
-        android:name="Application"
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/appName"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Translucent.NoTitleBar">
-
-        <meta-data
-            android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="ca-app-pub-4807272408824742~9880632781" />
 
         <meta-data
             android:name="asset_statements"
@@ -65,7 +58,7 @@
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW"/>
                 <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE"/>
+                <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="https" android:host="@string/hostName" />
             </intent-filter>
         </activity>
@@ -87,21 +80,6 @@
         <service
             android:name="androidx.browser.customtabs.PostMessageService"
             android:exported="true" />
-
-        <service
-            android:name=".DelegationService"
-            android:enabled="@bool/enableNotification"
-            android:exported="@bool/enableNotification">
-            <meta-data
-                android:name="android.support.customtabs.trusted.SMALL_ICON"
-                android:resource="@drawable/ic_notification_icon" />
-            <intent-filter>
-                <action android:name="android.support.customtabs.trusted.TRUSTED_WEB_ACTIVITY_SERVICE"/>
-                <category android:name="android.intent.category.DEFAULT"/>
-            </intent-filter>
-        </service>
-
-        <activity android:name="com.google.androidbrowserhelper.trusted.NotificationPermissionRequestActivity" />
 
     </application>
 </manifest>
