@@ -29,6 +29,9 @@ def twaManifest = [
 android {
     compileSdkVersion 36
     namespace "app.replit.stop_el_juego.twa"
+    buildFeatures {
+        buildConfig true
+    }
     defaultConfig {
         applicationId "app.replit.stop_el_juego.twa"
         minSdkVersion 23
