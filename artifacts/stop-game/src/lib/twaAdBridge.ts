@@ -37,6 +37,18 @@ function isAndroidTwa(): boolean {
   }
 }
 
+function normalizeMessage(data: unknown): Record<string, unknown> | null {
+  if (typeof data === "string") {
+    try {
+      const parsed = JSON.parse(data);
+      return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : null;
+    } catch {
+      return data === HANDSHAKE_TYPE ? { type: HANDSHAKE_TYPE } : null;
+    }
+  }
+  return data && typeof data === "object" ? (data as Record<string, unknown>) : null;
+}
+
 function installListener(): void {
   if (listenerInstalled || typeof window === "undefined") return;
   listenerInstalled = true;
@@ -46,8 +58,9 @@ function installListener(): void {
 
     const data = event.data;
     const port = event.ports?.[0];
+    const message = normalizeMessage(data);
 
-    if (port && (data === HANDSHAKE_TYPE || data?.type === HANDSHAKE_TYPE)) {
+    if (port && message?.type === HANDSHAKE_TYPE) {
       state.port = port;
       state.ready = true;
       port.start();
@@ -60,8 +73,8 @@ function installListener(): void {
 }
 
 function handleMessage(data: unknown): void {
-  if (!data || typeof data !== "object") return;
-  const message = data as Record<string, unknown>;
+  const message = normalizeMessage(data);
+  if (!message) return;
 
   if (message.type === HANDSHAKE_TYPE) {
     state.ready = true;
