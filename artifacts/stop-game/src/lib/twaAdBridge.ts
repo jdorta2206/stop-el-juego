@@ -1,6 +1,7 @@
 import { hasAndroidAppReferrer } from "@/lib/playBilling";
 
 const TARGET_ORIGIN = "https://www.stopjuegodepalabras.com";
+const ANDROID_APP_ORIGIN_PREFIX = "android-app://";
 const REQUEST_TYPE = "STOP_AD_REQUEST_REWARDED";
 const RESULT_TYPE = "STOP_AD_REWARDED_RESULT";
 const HANDSHAKE_TYPE = "STOP_AD_BRIDGE_READY";
@@ -54,18 +55,19 @@ function installListener(): void {
   listenerInstalled = true;
 
   window.addEventListener("message", (event) => {
-    if (event.origin !== TARGET_ORIGIN && event.origin !== window.location.origin) return;
+    const isTrustedTwaOrigin = event.origin.startsWith(ANDROID_APP_ORIGIN_PREFIX);
+    if (event.origin !== TARGET_ORIGIN && event.origin !== window.location.origin && !isTrustedTwaOrigin) return;
 
     const data = event.data;
     const port = event.ports?.[0];
-    const message = normalizeMessage(data);
 
-    if (port && message?.type === HANDSHAKE_TYPE) {
+    // Chrome delivers the MessagePort with the initial channel event. Do not require
+    // the application handshake payload to be present in that same event.
+    if (port) {
       state.port = port;
       state.ready = true;
       port.start();
       port.onmessage = (messageEvent) => handleMessage(messageEvent.data);
-      return;
     }
 
     handleMessage(data);
