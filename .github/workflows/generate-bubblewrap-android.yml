@@ -38,22 +38,20 @@ jobs:
           node <<'NODE'
           const fs = require('fs');
           const path = require('path');
+          const crypto = require('crypto');
           const { TwaManifest, TwaGenerator } = require('@bubblewrap/core');
           (async () => {
             const out = path.resolve('android-generated');
             const manifest = await TwaManifest.fromFile(path.resolve('android/twa-manifest.json'));
-            manifest.generatorApp = 'bubblewrap-cli';
-            manifest.signingKey.path = path.join(out, 'android.keystore');
             await manifest.saveToFile(path.join(out, 'twa-manifest.json'));
             const generator = new TwaGenerator();
             await generator.createTwaProject(out, manifest);
             const data = fs.readFileSync(path.join(out, 'twa-manifest.json'));
-            const crypto = require('crypto');
             fs.writeFileSync(path.join(out, 'manifest-checksum.txt'), crypto.createHash('sha1').update(data).digest('hex'));
           })().catch(err => { console.error(err); process.exit(1); });
           NODE
       - name: Remove generated build/cache files
-        run: rm -rf android-generated/.gradle android-generated/app/build android-generated/build && rm -f android-generated/android.keystore
+        run: rm -rf android-generated/.gradle android-generated/app/build android-generated/build && rm -f android-generated/android-keystore
       - name: Commit generated Android project
         shell: bash
         run: |
