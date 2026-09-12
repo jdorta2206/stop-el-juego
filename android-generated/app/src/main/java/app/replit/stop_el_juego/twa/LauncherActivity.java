@@ -33,10 +33,12 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     private static final String REWARDED_REAL_ID = "ca-app-pub-4807272408824742/3559554716";
     private static final int CHANNEL_RETRY_COUNT = 3;
     private static final long CHANNEL_RETRY_DELAY_MS = 250L;
+    private static final long ADS_START_DELAY_MS = 1000L;
 
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private boolean relationshipValidated;
     private boolean messageChannelReady;
+    private boolean adsInitialized;
     private RewardedAd rewardedAd;
     private boolean rewardedAdLoading;
     private boolean rewardGrantedForCurrentAd;
@@ -45,13 +47,27 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        MobileAds.initialize(this, status -> {});
-        preloadRewardedAd();
+        // Let Browser Helper/TWA complete its own startup first. AdMob is deliberately
+        // initialized afterwards so an ads SDK/provider problem can never block launch.
         super.onCreate(savedInstanceState);
         if (Build.VERSION.SDK_INT > Build.VERSION_CODES.O) {
             setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT);
         } else {
             setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+        }
+
+        mainHandler.postDelayed(this::initializeAdsSafely, ADS_START_DELAY_MS);
+    }
+
+    private void initializeAdsSafely() {
+        if (adsInitialized) return;
+        try {
+            MobileAds.initialize(this, status -> {
+                adsInitialized = true;
+                preloadRewardedAd();
+            });
+        } catch (RuntimeException e) {
+            Log.e(TAG, "AdMob initialization failed; TWA will continue without ads", e);
         }
     }
 
@@ -176,7 +192,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     }
 
     private void preloadRewardedAd() {
-        if (rewardedAd != null || rewardedAdLoading) return;
+        if (!adsInitialized || rewardedAd != null || rewardedAdLoading) return;
         rewardedAdLoading = true;
         String adUnitId = BuildConfig.DEBUG ? REWARDED_TEST_ID : REWARDED_REAL_ID;
         RewardedAd.load(this, adUnitId, new AdRequest.Builder().build(), new RewardedAdLoadCallback() {
