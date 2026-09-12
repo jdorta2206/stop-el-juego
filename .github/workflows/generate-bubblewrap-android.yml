@@ -1,6 +1,8 @@
 name: Generate Bubblewrap Android project
 
 on:
+  push:
+    branches: [android/bubblewrap-admob]
   workflow_dispatch:
 
 permissions:
@@ -8,6 +10,7 @@ permissions:
 
 jobs:
   generate:
+    if: ${{ !contains(github.event.head_commit.message, '[skip android-generation]') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
