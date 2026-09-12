@@ -42,12 +42,25 @@ jobs:
           const { TwaManifest, TwaGenerator } = require('@bubblewrap/core');
           (async () => {
             const out = path.resolve('android-generated');
-            const manifest = await TwaManifest.fromFile(path.resolve('android/twa-manifest.json'));
+            const source = path.resolve('android/twa-manifest.json');
+            const generationManifest = path.join(out, 'twa-manifest-generation.json');
+            const raw = JSON.parse(fs.readFileSync(source, 'utf8'));
+
+            // The live site currently exposes icon-512.png, but the optional
+            // maskable/monochrome URLs return 404. Keep the source manifest
+            // unchanged and use the known-good primary icon only for the
+            // Bubblewrap generation pass.
+            raw.maskableIconUrl = raw.iconUrl;
+            raw.monochromeIconUrl = raw.iconUrl;
+            fs.writeFileSync(generationManifest, JSON.stringify(raw, null, 2));
+
+            const manifest = await TwaManifest.fromFile(generationManifest);
             await manifest.saveToFile(path.join(out, 'twa-manifest.json'));
             const generator = new TwaGenerator();
             await generator.createTwaProject(out, manifest);
             const data = fs.readFileSync(path.join(out, 'twa-manifest.json'));
             fs.writeFileSync(path.join(out, 'manifest-checksum.txt'), crypto.createHash('sha1').update(data).digest('hex'));
+            fs.rmSync(generationManifest, { force: true });
           })().catch(err => { console.error(err); process.exit(1); });
           NODE
       - name: Remove generated build/cache files
