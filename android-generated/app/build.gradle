@@ -58,7 +58,11 @@ android {
         resValue "bool", "enableSiteSettingsShortcut", twaManifest.enableSiteSettingsShortcut.toString()
         resValue "string", "orientation", twaManifest.orientation
     }
-    buildTypes { release { minifyEnabled true } }
+    // Keep the first signed Release deliberately unminified: LauncherActivity uses
+    // reflection to access Browser Helper's internal TwaLauncher/CustomTabsSession.
+    // Once the signed Release is proven stable, R8 can be re-enabled with explicit
+    // keep rules for those reflective members.
+    buildTypes { release { minifyEnabled false } }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
