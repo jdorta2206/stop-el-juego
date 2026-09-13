@@ -48,9 +48,9 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
         MobileAds.initialize(this, status -> {});
         preloadRewardedAd();
-        super.onCreate(savedInstanceState);
         if (Build.VERSION.SDK_INT > Build.VERSION_CODES.O) {
             setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT);
         } else {
