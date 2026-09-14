@@ -3,8 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
-    <title>STOP - El Juego v2</title>
-    <!-- 🔥 VERSIÓN 2.0 - FORZANDO NUEVO FRONTEND PARA TWA -->
+    <title>STOP - El Juego de Palabras Online | Juega gratis</title>
     <link rel="canonical" href="https://www.stopjuegodepalabras.com/" />
     <link rel="icon" type="image/png" href="/images/stop-logo.png" />
     <link rel="apple-touch-icon" href="/images/icon-192.png" />
@@ -15,48 +14,47 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="STOP" />
 
-    <!-- Google Analytics 4 (gtag.js) — directo, sin necesidad de configurar GTM -->
+    <!-- Google Analytics 4 -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-735TVGF6F5"></script>
     <script>
       window.dataLayer = window.dataLayer || [];
       function gtag(){dataLayer.push(arguments);}
       gtag('js', new Date());
-      // send_page_view:false — lo gestionamos manualmente en cada cambio de ruta (SPA)
       gtag('config', 'G-735TVGF6F5', { send_page_view: false });
     </script>
 
-    <!-- Google Tag Manager — para añadir Meta Pixel, TikTok Pixel u otros tags sin tocar código -->
+    <!-- Google Tag Manager -->
     <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
     new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
     j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
     'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
     })(window,document,'script','dataLayer','GTM-KP7P4GBK');</script>
 
-    <!-- Google AdSense — verificación de propiedad + carga de anuncios -->
+    <!-- Google AdSense -->
     <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4807272408824742"
             crossorigin="anonymous"></script>
 
-    <!-- Open Graph — WhatsApp, Instagram, Facebook, Telegram -->
-    <meta property="og:type"        content="website" />
-    <meta property="og:site_name"   content="STOP - El Juego" />
-    <meta property="og:url"         content="https://www.stopjuegodepalabras.com/" />
-    <meta property="og:title"       content="STOP - El Juego de las Palabras" />
-    <meta property="og:description" content="¡El clásico juego de las categorías ahora online! Juega solo o con amigos y sube al ranking global. 🎯" />
-    <meta property="og:image"       content="https://www.stopjuegodepalabras.com/opengraph.jpg" />
-    <meta property="og:image:width"  content="1280" />
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="STOP - El Juego" />
+    <meta property="og:url" content="https://www.stopjuegodepalabras.com/" />
+    <meta property="og:title" content="STOP - El Juego de las Palabras" />
+    <meta property="og:description" content="Juega gratis al clásico juego de categorías online. Partidas contra la IA, multijugador en tiempo real, retos diarios, ranking y modos rápidos." />
+    <meta property="og:image" content="https://www.stopjuegodepalabras.com/opengraph.jpg" />
+    <meta property="og:image:width" content="1280" />
     <meta property="og:image:height" content="720" />
-    <meta property="og:image:alt"   content="STOP - El Juego de las Palabras" />
-    <meta property="og:locale"      content="es_ES" />
+    <meta property="og:image:alt" content="STOP - El Juego de las Palabras" />
+    <meta property="og:locale" content="es_ES" />
 
-    <!-- Twitter / X card -->
-    <meta name="twitter:card"        content="summary_large_image" />
-    <meta name="twitter:title"       content="STOP - El Juego de las Palabras" />
-    <meta name="twitter:description" content="¡El clásico juego de las categorías ahora online! Juega solo o con amigos y sube al ranking global. 🎯" />
-    <meta name="twitter:image"       content="https://www.stopjuegodepalabras.com/opengraph.jpg" />
+    <!-- Twitter / X -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="STOP - El Juego de las Palabras" />
+    <meta name="twitter:description" content="Juega gratis al clásico juego de categorías online: Solo contra IA, multijugador, retos y ranking." />
+    <meta name="twitter:image" content="https://www.stopjuegodepalabras.com/opengraph.jpg" />
 
     <!-- SEO general -->
-    <meta name="description" content="¡El clásico juego de las categorías ahora online! Juega solo o con amigos y sube al ranking global." />
-    <meta name="keywords"    content="STOP, juego de palabras, categorías, online, multijugador, ranking" />
+    <meta name="description" content="Juega gratis a STOP online: el juego de palabras y categorías para jugar solo contra la IA o con amigos. Reglas, estrategias, retos, ranking y modos rápidos." />
+    <meta name="keywords" content="STOP, juego de palabras, juego de categorías, STOP online, juego de palabras online, jugar STOP gratis, multijugador, categorías" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -71,10 +69,7 @@
         background: radial-gradient(ellipse at 50% 45%, #5a1208 0%, #1a063a 55%, #060318 100%);
         transition: opacity 0.35s ease;
       }
-      #html-splash.fade-out {
-        opacity: 0;
-        pointer-events: none;
-      }
+      #html-splash.fade-out { opacity: 0; pointer-events: none; }
       #html-splash img {
         width: 160px;
         height: 160px;
@@ -84,8 +79,22 @@
       }
       @keyframes splash-pulse {
         0%, 100% { transform: scale(1); filter: drop-shadow(0 0 28px rgba(181,48,26,0.95)) drop-shadow(0 4px 16px rgba(0,0,0,0.8)); }
-        50%       { transform: scale(1.06); filter: drop-shadow(0 0 42px rgba(181,48,26,1)) drop-shadow(0 4px 20px rgba(0,0,0,0.9)); }
+        50% { transform: scale(1.06); filter: drop-shadow(0 0 42px rgba(181,48,26,1)) drop-shadow(0 4px 20px rgba(0,0,0,0.9)); }
       }
+      #seo-home-guide {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 48px 22px 64px;
+        color: #d8def7;
+        font: 16px/1.75 Arial, sans-serif;
+      }
+      #seo-home-guide h1,#seo-home-guide h2 { color: #fff; line-height: 1.2; }
+      #seo-home-guide h2 { margin: 34px 0 12px; font-size: 28px; }
+      #seo-home-guide p { max-width: 820px; }
+      #seo-home-guide a { color: #ffd54a; font-weight: 700; }
+      #seo-home-guide .seo-card { background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12); border-radius: 16px; padding: 18px; margin: 14px 0; }
+      #seo-home-guide .seo-links { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 20px; }
+      #seo-home-guide .seo-links a { padding: 10px 14px; border-radius: 12px; background: rgba(249,168,37,.12); text-decoration: none; }
     </style>
   </head>
   <body>
@@ -94,9 +103,31 @@
     height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
     <div id="html-splash">
-      <img src="/images/stop-logo.png" alt="STOP" />
+      <img src="/images/stop-logo.png" alt="STOP - El Juego de las Palabras" />
     </div>
     <div id="root"></div>
+
+    <!-- Contenido editorial visible y accesible sin depender de JavaScript. Se muestra debajo de la aplicación. -->
+    <section id="seo-home-guide" aria-label="Guía de STOP">
+      <h1>STOP - El Juego de Palabras Online</h1>
+      <p>STOP es un juego de palabras basado en categorías y rapidez. En cada ronda recibes una letra y tienes que encontrar respuestas que empiecen por ella antes de que termine el tiempo. Puedes jugar solo contra la inteligencia artificial, competir con amigos en tiempo real y consultar tu progreso en el ranking.</p>
+      <h2>¿Cómo se juega a STOP?</h2>
+      <p>El objetivo es completar las categorías de la ronda con respuestas válidas. Una respuesta correcta y única puede darte más puntos que una respuesta repetida. Por eso la partida combina vocabulario, memoria, rapidez y capacidad para encontrar alternativas. Cuando terminas tus respuestas puedes pulsar STOP para finalizar la ronda.</p>
+      <div class="seo-card"><strong>Respuesta única:</strong> 10 puntos. <strong>Respuesta repetida:</strong> 5 puntos. <strong>Respuesta incorrecta o vacía:</strong> 0 puntos.</div>
+      <h2>Modos de juego</h2>
+      <p>STOP incluye partidas contra IA para practicar, multijugador para competir con otras personas, Quick Mode para partidas de 30 segundos y Chaos Mode para categorías más creativas e inesperadas. También hay retos diarios, progresión y ranking para que cada partida tenga un objetivo diferente.</p>
+      <h2>Aprende a jugar mejor</h2>
+      <p>La mejor estrategia consiste en combinar respuestas seguras con opciones menos obvias. Practicar letras difíciles por familias de categorías ayuda a recuperar palabras más rápido. En multijugador también conviene evitar, cuando sea posible, respuestas demasiado evidentes que probablemente coincidan con las de otros participantes.</p>
+      <div class="seo-links">
+        <a href="/guia-stop.html">Guía completa de STOP</a>
+        <a href="/estrategias-stop.html">Estrategias para ganar</a>
+        <a href="/palabras-stop.html">Palabras y vocabulario</a>
+        <a href="/como-jugar">Reglas del juego</a>
+        <a href="/faq">Preguntas frecuentes</a>
+        <a href="/blog">Blog de STOP</a>
+      </div>
+    </section>
+
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
