@@ -1,0 +1,57 @@
+name: AdSense Content Build Check
+
+on:
+  push:
+    branches:
+      - fix/adsense-low-value-content
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-validate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: artifacts/stop-game
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: .
+
+      - name: Build frontend
+        run: pnpm run build
+
+      - name: Validate AdSense editorial pages
+        shell: bash
+        run: |
+          set -euo pipefail
+          for file in guia-stop.html estrategias-stop.html palabras-stop.html sitemap.xml; do
+            test -f "public/$file"
+          done
+          test -s dist/index.html
+          grep -q "Guía completa de STOP" public/guia-stop.html
+          grep -q "Estrategias para ganar a STOP" public/estrategias-stop.html
+          grep -q "Palabras para jugar mejor a STOP" public/palabras-stop.html
+          grep -q "guia-stop.html" public/sitemap.xml
+          grep -q "estrategias-stop.html" public/sitemap.xml
+          grep -q "palabras-stop.html" public/sitemap.xml
+          grep -q "Juega gratis a STOP online" public/index.html
+          echo "OK: contenido editorial y sitemap validados"
