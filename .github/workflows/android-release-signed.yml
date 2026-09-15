@@ -87,4 +87,4 @@ jobs:
         shell: bash
         run: rm -f android-release.keystore
 
-# Retrigger signed release build for versionCode 18.
+# Retrigger signed release build for versionCode 19 with AdMob.
