@@ -86,3 +86,5 @@ jobs:
         if: always()
         shell: bash
         run: rm -f android-release.keystore
+
+# Retrigger signed release build for versionCode 18.
