@@ -78,25 +78,3 @@ android {
 }
 
 task generateShorcutsFile {
-    assert twaManifest.shortcuts.size() < 5, "You can have at most 4 shortcuts."
-    def shortcutsFile = new File("$projectDir/src/main/res/xml", "shortcuts.xml")
-    def xmlWriter = new StringWriter()
-    def xmlMarkup = new MarkupBuilder(new IndentPrinter(xmlWriter, "    ", true))
-    xmlMarkup.'shortcuts'('xmlns:android': 'http://schemas.android.com/apk/res/android') {
-        twaManifest.shortcuts.eachWithIndex { s, i ->
-            'shortcut'('android:shortcutId': 'shortcut' + i, 'android:enabled': 'true', 'android:icon': '@drawable/' + s.icon, 'android:shortcutShortLabel': '@string/shortcut_short_name_' + i, 'android:shortcutLongLabel': '@string/shortcut_name_' + i) {
-                'intent'('android:action': 'android.intent.action.MAIN', 'android:targetPackage': twaManifest.applicationId, 'android:targetClass': twaManifest.applicationId + '.LauncherActivity', 'android:data': s.url)
-                'categories'('android:name': 'android.intent.category.LAUNCHER')
-            }
-        }
-    }
-    shortcutsFile.text = xmlWriter.toString() + '\n'
-}
-
-preBuild.dependsOn(generateShorcutsFile)
-
-dependencies {
-    implementation fileTree(include: ['*.jar'], dir: 'libs')
-    implementation 'com.google.androidbrowserhelper:androidbrowserhelper:2.7.3'
-    implementation 'com.google.android.gms:play-services-ads:25.4.0'
-}
