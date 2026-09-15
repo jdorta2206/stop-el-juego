@@ -1,4 +1,4 @@
-name: Validate Android minimal TWA
+name: Validate Android AdMob TWA
 
 on:
   push:
@@ -16,24 +16,27 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - name: Validate minimal TWA project
+      - name: Validate Android AdMob project
         working-directory: android-generated
         shell: bash
         run: |
           set -euo pipefail
           grep -q 'minSdkVersion 23' app/build.gradle
           grep -q 'targetSdkVersion 36' app/build.gradle
-          grep -q 'versionCode 17' app/build.gradle
+          grep -q 'versionCode 19' app/build.gradle
           grep -q 'versionName "1.3.6.3"' app/build.gradle
           grep -q 'androidbrowserhelper:2.7.3' app/build.gradle
-          ! grep -q 'play-services-ads' app/build.gradle
-          ! grep -q 'com.google.android.gms.ads.APPLICATION_ID' app/src/main/AndroidManifest.xml
+          grep -q 'play-services-ads:25.4.0' app/build.gradle
+          grep -q 'com.google.android.gms.ads.APPLICATION_ID' app/src/main/AndroidManifest.xml
+          grep -q 'MobileAds' app/src/main/java/app/replit/stop_el_juego/twa/LauncherActivity.java
+          grep -q 'CustomTabsSession' app/src/main/java/app/replit/stop_el_juego/twa/LauncherActivity.java
+          grep -q 'requestPostMessageChannel' app/src/main/java/app/replit/stop_el_juego/twa/LauncherActivity.java
+          grep -q 'STOP_AD_REWARDED_RESULT' app/src/main/java/app/replit/stop_el_juego/twa/LauncherActivity.java
+          grep -q 'ca-app-pub-4807272408824742/3559554716' app/src/main/java/app/replit/stop_el_juego/twa/LauncherActivity.java
+          grep -q 'ca-app-pub-4807272408824742/7242069847' app/src/main/java/app/replit/stop_el_juego/twa/LauncherActivity.java
           ! grep -q 'PaymentActivity' app/src/main/AndroidManifest.xml
           ! grep -q 'PaymentService' app/src/main/AndroidManifest.xml
           grep -q 'public class LauncherActivity extends com.google.androidbrowserhelper.trusted.LauncherActivity' app/src/main/java/app/replit/stop_el_juego/twa/LauncherActivity.java
-          ! grep -q 'MobileAds' app/src/main/java/app/replit/stop_el_juego/twa/LauncherActivity.java
-          ! grep -q 'CustomTabsSession' app/src/main/java/app/replit/stop_el_juego/twa/LauncherActivity.java
-          ! grep -q 'requestPostMessageChannel' app/src/main/java/app/replit/stop_el_juego/twa/LauncherActivity.java
           chmod +x ./gradlew
           bash ./gradlew assembleDebug --no-daemon --stacktrace
       - name: Verify debug APK and signing certificate
@@ -47,12 +50,12 @@ jobs:
           ls -lh "$APK"
           echo '--- APK signing certificate ---'
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs "$APK"
-      - name: Upload minimal TWA debug APK
+      - name: Upload Android AdMob debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: stop-android-minimal-twa-debug
+          name: stop-android-admob-debug
           path: android-generated/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 7
 
-# Minimal TWA isolation: no AdMob, Billing, PostMessage bridge, reflection, or custom callbacks.
+# Validation for the Android TWA + AdMob + web MessagePort bridge. Billing remains outside this branch.
