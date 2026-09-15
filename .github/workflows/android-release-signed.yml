@@ -2,6 +2,9 @@ name: Build Android signed Release
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - android/bubblewrap-admob
 
 jobs:
   release:
