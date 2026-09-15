@@ -34,7 +34,7 @@ android {
         applicationId "app.replit.stop_el_juego.twa"
         minSdkVersion 23
         targetSdkVersion 36
-        versionCode 18
+        versionCode 19
         versionName "1.3.6.3"
         resValue "string", "appName", twaManifest.name
         resValue "string", "launcherName", twaManifest.launcherName
