@@ -63,6 +63,19 @@ android {
     // Once the signed Release is proven stable, R8 can be re-enabled with explicit
     // keep rules for those reflective members.
     buildTypes { release { minifyEnabled false } }
+    // CI signing is injected only when all four environment variables are present.
+    // Local/debug builds remain unsigned by this configuration.
+    if (System.getenv('KEYSTORE_PASSWORD') && System.getenv('KEY_ALIAS') && System.getenv('KEY_PASSWORD')) {
+        signingConfigs {
+            ciRelease {
+                storeFile file('../../android-release.keystore')
+                storePassword System.getenv('KEYSTORE_PASSWORD')
+                keyAlias System.getenv('KEY_ALIAS')
+                keyPassword System.getenv('KEY_PASSWORD')
+            }
+        }
+        buildTypes.release.signingConfig signingConfigs.ciRelease
+    }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
