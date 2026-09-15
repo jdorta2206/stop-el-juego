@@ -1,14 +1,22 @@
 name: Build Android signed Release
 
 on:
-  workflow_dispatch:
   push:
     branches:
       - android/bubblewrap-admob
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   release:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -23,9 +31,6 @@ jobs:
         shell: bash
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           set -euo pipefail
           test -n "$KEYSTORE_BASE64" || { echo 'Missing ANDROID_KEYSTORE_BASE64'; exit 1; }
@@ -41,41 +46,15 @@ jobs:
           set -euo pipefail
           printf '%s' "$KEYSTORE_BASE64" | base64 --decode > android-release.keystore
           test -s android-release.keystore
-
-      - name: Configure Release signing
-        working-directory: android-generated
-        shell: bash
-        env:
-          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        run: |
-          set -euo pipefail
-          cat >> app/build.gradle <<'EOF'
-
-android.signingConfigs {
-    ciRelease {
-        storeFile file("../../android-release.keystore")
-        storePassword System.getenv("KEYSTORE_PASSWORD")
-        keyAlias System.getenv("KEY_ALIAS")
-        keyPassword System.getenv("KEY_PASSWORD")
-    }
-}
-
-android.buildTypes.release.signingConfig android.signingConfigs.ciRelease
-EOF
+          keytool -list -keystore android-release.keystore -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" >/dev/null
 
       - name: Build signed Release APK and AAB
         working-directory: android-generated
         shell: bash
-        env:
-          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           set -euo pipefail
           chmod +x ./gradlew
-          ./gradlew assembleRelease bundleRelease --no-daemon --stacktrace
+          ./gradlew clean assembleRelease bundleRelease --no-daemon --stacktrace
 
       - name: Verify Release signing certificate
         working-directory: android-generated
@@ -93,11 +72,6 @@ EOF
           echo '--- AAB ---'
           ls -lh "$AAB"
 
-      - name: Remove signing material
-        if: always()
-        shell: bash
-        run: rm -f android-release.keystore
-
       - name: Upload signed Release artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -107,3 +81,8 @@ EOF
             android-generated/app/build/outputs/bundle/release/app-release.aab
           if-no-files-found: error
           retention-days: 7
+
+      - name: Remove signing material
+        if: always()
+        shell: bash
+        run: rm -f android-release.keystore
