@@ -36,7 +36,7 @@ android {
         applicationId "app.replit.stop_el_juego.twa"
         minSdkVersion 23
         targetSdkVersion 36
-        versionCode 19
+        versionCode 20
         versionName "1.3.6.3"
         resValue "string", "appName", twaManifest.name
         resValue "string", "launcherName", twaManifest.launcherName
@@ -106,5 +106,6 @@ preBuild.dependsOn(generateShorcutsFile)
 dependencies {
     implementation fileTree(include: ['*.jar'], dir: 'libs')
     implementation 'com.google.androidbrowserhelper:androidbrowserhelper:2.7.3'
+    implementation 'com.google.androidbrowserhelper:billing:1.2.0'
     implementation 'com.google.android.gms:play-services-ads:25.4.0'
 }
