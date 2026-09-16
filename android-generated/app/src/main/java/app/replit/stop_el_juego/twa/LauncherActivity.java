@@ -31,9 +31,6 @@ import java.lang.reflect.Field;
 public class LauncherActivity extends com.google.androidbrowserhelper.trusted.LauncherActivity {
     private static final String TAG = "STOP_AD_BRIDGE";
 
-    // For TWA postMessage, SOURCE_ORIGIN is the HTTPS origin declared by
-    // Digital Asset Links with delegate_permission/common.use_as_origin.
-    // android-app:// is NOT a valid postMessage source origin here.
     private static final Uri SOURCE_ORIGIN = Uri.parse("https://www.stopjuegodepalabras.com");
     private static final Uri TARGET_ORIGIN = Uri.parse("https://www.stopjuegodepalabras.com");
 
@@ -43,6 +40,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
 
     private boolean relationshipValidated;
     private boolean messageChannelReady;
+    private boolean mobileAdsReady;
     private RewardedAd rewardedAd;
     private boolean rewardedAdLoading;
     private boolean rewardGrantedForCurrentAd;
@@ -54,13 +52,16 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        MobileAds.initialize(this, status -> Log.d(TAG, "MobileAds initialized"));
+        MobileAds.initialize(this, status -> {
+            mobileAdsReady = true;
+            Log.d(TAG, "MobileAds initialized; starting rewarded preload");
+            preloadRewardedAd();
+        });
         if (Build.VERSION.SDK_INT > Build.VERSION_CODES.O) {
             setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT);
         } else {
             setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
         }
-        preloadRewardedAd();
     }
 
     @Override
@@ -73,9 +74,6 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                         && result && SOURCE_ORIGIN.equals(requestedOrigin);
                 Log.d(TAG, "use_as_origin validation=" + result
                         + " relation=" + relation + " origin=" + requestedOrigin);
-                // requestPostMessageChannel() itself triggers the asynchronous
-                // RELATION_USE_AS_ORIGIN validation. Do not wait for this callback
-                // before making the request, otherwise the channel can deadlock.
                 if (relationshipValidated) requestMessageChannelWithRetry(100L);
             }
 
@@ -204,14 +202,15 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     }
 
     private void preloadRewardedAd() {
-        if (rewardedAd != null || rewardedAdLoading) return;
+        if (!mobileAdsReady || rewardedAd != null || rewardedAdLoading) return;
         rewardedAdLoading = true;
+        Log.d(TAG, "Rewarded load requested; unit=" + rewardedUnitId());
         RewardedAd.load(this, rewardedUnitId(), new AdRequest.Builder().build(), new RewardedAdLoadCallback() {
             @Override
             public void onAdLoaded(@NonNull RewardedAd ad) {
                 rewardedAdLoading = false;
                 rewardedAd = ad;
-                Log.d(TAG, "Rewarded loaded");
+                Log.d(TAG, "Rewarded loaded successfully");
                 if (activeRequestId != null) showRewardedAd();
             }
 
@@ -219,8 +218,8 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             public void onAdFailedToLoad(@NonNull LoadAdError error) {
                 rewardedAdLoading = false;
                 rewardedAd = null;
-                Log.w(TAG, "Rewarded load failed: code=" + error.getCode() + " domain=" + error.getDomain()
-                        + " message=" + error.getMessage());
+                Log.e(TAG, "Rewarded load failed: code=" + error.getCode() + " domain=" + error.getDomain()
+                        + " message=" + error.getMessage() + " response=" + error.getResponseInfo());
                 if (activeRequestId != null) sendResult(false, "error");
             }
         });
@@ -229,6 +228,10 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     private void showRewardedAdWhenReady() {
         if (rewardedAd != null) {
             showRewardedAd();
+            return;
+        }
+        if (!mobileAdsReady) {
+            Log.w(TAG, "Rewarded requested before Mobile Ads initialization finished");
             return;
         }
         preloadRewardedAd();
@@ -241,25 +244,33 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
         ad.setFullScreenContentCallback(new FullScreenContentCallback() {
             @Override
             public void onAdDismissedFullScreenContent() {
+                Log.d(TAG, "Rewarded dismissed; earned=" + rewardGrantedForCurrentAd);
                 if (!rewardGrantedForCurrentAd) sendResult(false, "skipped");
                 preloadRewardedAd();
             }
 
             @Override
             public void onAdFailedToShowFullScreenContent(@NonNull AdError error) {
-                Log.w(TAG, "Rewarded show failed: code=" + error.getCode() + " domain=" + error.getDomain()
+                Log.e(TAG, "Rewarded show failed: code=" + error.getCode() + " domain=" + error.getDomain()
                         + " message=" + error.getMessage());
                 sendResult(false, "error");
                 preloadRewardedAd();
             }
+
+            @Override
+            public void onAdShowedFullScreenContent() {
+                Log.d(TAG, "Rewarded showed fullscreen content");
+            }
         });
         try {
+            Log.d(TAG, "Showing rewarded ad requestId=" + activeRequestId + " placement=" + activePlacement);
             ad.show(this, rewardItem -> {
                 rewardGrantedForCurrentAd = true;
+                Log.d(TAG, "Reward earned type=" + rewardItem.getType() + " amount=" + rewardItem.getAmount());
                 sendResult(true, "admob");
             });
         } catch (RuntimeException error) {
-            Log.w(TAG, "Rewarded show threw", error);
+            Log.e(TAG, "Rewarded show threw", error);
             sendResult(false, "error");
             preloadRewardedAd();
         }
