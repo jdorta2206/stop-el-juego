@@ -29,9 +29,9 @@ import java.lang.reflect.Field;
 /** STOP TWA native bridge for Google Mobile Ads rewarded video. */
 public class LauncherActivity extends com.google.androidbrowserhelper.trusted.LauncherActivity {
     private static final String TAG = "STOP_AD_BRIDGE";
-    private static final Uri ORIGIN = Uri.parse("https://www.stopjuegodepalabras.com");
+    private static final Uri SOURCE_ORIGIN = Uri.parse("android-app://app.replit.stop_el_juego.twa");
+    private static final Uri TARGET_ORIGIN = Uri.parse("https://www.stopjuegodepalabras.com");
 
-    // Keep Google's official rewarded test unit until the bridge is proven end-to-end.
     private static final boolean USE_TEST_REWARDED_ADS = true;
     private static final String REWARDED_TEST_ID = "ca-app-pub-3940256099942544/5224354917";
     private static final String REWARDED_REAL_ID = "ca-app-pub-4807272408824742/3559554716";
@@ -60,26 +60,19 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
 
     @Override
     protected CustomTabsCallback getCustomTabsCallback() {
-        // Keep Bubblewrap/Android Browser Helper's normal callback behaviour intact.
         return new QualityEnforcer() {
             @Override
             public void onRelationshipValidationResult(int relation, @NonNull Uri requestedOrigin,
                     boolean result, @Nullable Bundle extras) {
-                relationshipValidated = result && ORIGIN.equals(requestedOrigin);
+                relationshipValidated = result && TARGET_ORIGIN.equals(requestedOrigin);
                 Log.d(TAG, "use_as_origin validation=" + result + " origin=" + requestedOrigin);
-                if (relationshipValidated) {
-                    requestMessageChannelWithRetry(250L);
-                }
+                if (relationshipValidated) requestMessageChannelWithRetry(250L);
             }
 
             @Override
             public void onNavigationEvent(int navigationEvent, @Nullable Bundle extras) {
                 super.onNavigationEvent(navigationEvent, extras);
-                if (navigationEvent == NAVIGATION_FINISHED) {
-                    // Chromium can report NAVIGATION_FINISHED slightly before the page is
-                    // ready for requestPostMessageChannel. A delayed retry is intentional.
-                    requestMessageChannelWithRetry(250L);
-                }
+                if (navigationEvent == NAVIGATION_FINISHED) requestMessageChannelWithRetry(250L);
             }
 
             @Override
@@ -102,9 +95,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     private void sendReadyBurst(int attempt) {
         if (!messageChannelReady || isFinishing()) return;
         sendMessage(newMessage("STOP_AD_BRIDGE_READY"));
-        if (attempt < 12) {
-            getWindow().getDecorView().postDelayed(() -> sendReadyBurst(attempt + 1), 500L);
-        }
+        if (attempt < 12) getWindow().getDecorView().postDelayed(() -> sendReadyBurst(attempt + 1), 500L);
     }
 
     private void requestMessageChannelWithRetry(long initialDelayMs) {
@@ -119,19 +110,16 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             channelRequestInFlight = false;
             return;
         }
-
         CustomTabsSession session = getTwaSession();
         if (session == null) {
             Log.w(TAG, "TWA CustomTabsSession is not available yet");
             retryMessageChannel();
             return;
         }
-
         channelRequestAttempts++;
         try {
-            boolean requested = session.requestPostMessageChannel(ORIGIN, ORIGIN, new Bundle());
-            Log.d(TAG, "requestPostMessageChannel attempt=" + channelRequestAttempts
-                    + " accepted=" + requested);
+            boolean requested = session.requestPostMessageChannel(SOURCE_ORIGIN, TARGET_ORIGIN, new Bundle());
+            Log.d(TAG, "requestPostMessageChannel attempt=" + channelRequestAttempts + " accepted=" + requested);
             if (requested) {
                 channelRequestInFlight = false;
                 return;
@@ -145,20 +133,12 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     private void retryMessageChannel() {
         if (channelRequestAttempts >= 20 || messageChannelReady) {
             channelRequestInFlight = false;
-            Log.w(TAG, "TWA postMessage channel could not be established after "
-                    + channelRequestAttempts + " attempts");
+            Log.w(TAG, "TWA postMessage channel could not be established after " + channelRequestAttempts + " attempts");
             return;
         }
         getWindow().getDecorView().postDelayed(this::requestMessageChannelAttempt, 300L);
     }
 
-    /**
-     * android-browser-helper 2.7.3 is the dependency used by this generated app.
-     * The public getCustomTabsSession() accessor was added after the 2.7.3 release,
-     * so calling it directly would make the app uncompilable. Until the dependency is
-     * upgraded, obtain the exact session created by TwaLauncher, without creating a
-     * second CustomTabs session or launching a second TWA.
-     */
     @Nullable
     private CustomTabsSession getTwaSession() {
         try {
@@ -173,8 +153,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     }
 
     @Nullable
-    private static Object findFieldValue(Object target, String fieldName)
-            throws ReflectiveOperationException {
+    private static Object findFieldValue(Object target, String fieldName) throws ReflectiveOperationException {
         Class<?> type = target.getClass();
         while (type != null) {
             try {
@@ -206,11 +185,8 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     }
 
     private boolean isAllowedPlacement(String placement) {
-        return "extra_time".equals(placement)
-                || "hint".equals(placement)
-                || "double_points".equals(placement)
-                || "skip_round".equals(placement)
-                || "extra_pack".equals(placement);
+        return "extra_time".equals(placement) || "hint".equals(placement) || "double_points".equals(placement)
+                || "skip_round".equals(placement) || "extra_pack".equals(placement);
     }
 
     private String rewardedUnitId() {
@@ -220,25 +196,24 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     private void preloadRewardedAd() {
         if (rewardedAd != null || rewardedAdLoading) return;
         rewardedAdLoading = true;
-        RewardedAd.load(this, rewardedUnitId(), new AdRequest.Builder().build(),
-                new RewardedAdLoadCallback() {
-                    @Override
-                    public void onAdLoaded(@NonNull RewardedAd ad) {
-                        rewardedAdLoading = false;
-                        rewardedAd = ad;
-                        Log.d(TAG, "Rewarded loaded");
-                        if (activeRequestId != null) showRewardedAd();
-                    }
+        RewardedAd.load(this, rewardedUnitId(), new AdRequest.Builder().build(), new RewardedAdLoadCallback() {
+            @Override
+            public void onAdLoaded(@NonNull RewardedAd ad) {
+                rewardedAdLoading = false;
+                rewardedAd = ad;
+                Log.d(TAG, "Rewarded loaded");
+                if (activeRequestId != null) showRewardedAd();
+            }
 
-                    @Override
-                    public void onAdFailedToLoad(@NonNull LoadAdError error) {
-                        rewardedAdLoading = false;
-                        rewardedAd = null;
-                        Log.w(TAG, "Rewarded load failed: code=" + error.getCode()
-                                + " domain=" + error.getDomain() + " message=" + error.getMessage());
-                        if (activeRequestId != null) sendResult(false, "error");
-                    }
-                });
+            @Override
+            public void onAdFailedToLoad(@NonNull LoadAdError error) {
+                rewardedAdLoading = false;
+                rewardedAd = null;
+                Log.w(TAG, "Rewarded load failed: code=" + error.getCode() + " domain=" + error.getDomain()
+                        + " message=" + error.getMessage());
+                if (activeRequestId != null) sendResult(false, "error");
+            }
+        });
     }
 
     private void showRewardedAdWhenReady() {
@@ -262,8 +237,8 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
 
             @Override
             public void onAdFailedToShowFullScreenContent(@NonNull AdError error) {
-                Log.w(TAG, "Rewarded show failed: code=" + error.getCode()
-                        + " domain=" + error.getDomain() + " message=" + error.getMessage());
+                Log.w(TAG, "Rewarded show failed: code=" + error.getCode() + " domain=" + error.getDomain()
+                        + " message=" + error.getMessage());
                 sendResult(false, "error");
                 preloadRewardedAd();
             }
