@@ -22,7 +22,7 @@ jobs:
           test -f app/src/main/java/app/replit/stop_el_juego/twa/DelegationService.java
           grep -q 'minSdkVersion 23' app/build.gradle
           grep -q 'targetSdkVersion 36' app/build.gradle
-          grep -q 'versionCode 20' app/build.gradle
+          grep -q 'versionCode 21' app/build.gradle
           grep -q 'versionName "1.3.6.3"' app/build.gradle
           grep -q 'androidbrowserhelper:2.7.3' app/build.gradle
           grep -q 'com.google.androidbrowserhelper:billing:1.2.0' app/build.gradle
@@ -46,6 +46,5 @@ jobs:
           echo 'FINAL ANDROID MONETIZATION SOURCE VALIDATION: OK'
 
 # The real APK/AAB compilation is performed by the dedicated Android build workflows.
-# This workflow deliberately does not duplicate Gradle compilation; the previous
-# validation failure was a CI-only wrapper invocation issue, while the same project
+# This workflow deliberately does not duplicate Gradle compilation; the same project
 # already builds successfully in android-monetized-debug and android-release-signed.
