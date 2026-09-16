@@ -1,4 +1,4 @@
-name: Build Android v26 signed Release
+name: Build Android v27 signed Release
 
 on:
   push:
@@ -45,15 +45,16 @@ jobs:
           printf '%s' "$KEYSTORE_BASE64" | base64 --decode > android-release.keystore
           test -s android-release.keystore
           keytool -list -keystore android-release.keystore -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" >/dev/null
-      - name: Set v26 version code
+      - name: Set v27 version code
         working-directory: android-generated
         shell: bash
         run: |
           set -euo pipefail
-          sed -i 's/versionCode 22/versionCode 26/' app/build.gradle
-          sed -i 's/versionCode 24/versionCode 26/' app/build.gradle
-          sed -i 's/versionCode 25/versionCode 26/' app/build.gradle
-          grep -q 'versionCode 26' app/build.gradle
+          sed -i 's/versionCode 22/versionCode 27/' app/build.gradle
+          sed -i 's/versionCode 24/versionCode 27/' app/build.gradle
+          sed -i 's/versionCode 25/versionCode 27/' app/build.gradle
+          sed -i 's/versionCode 26/versionCode 27/' app/build.gradle
+          grep -q 'versionCode 27' app/build.gradle
       - name: Build signed Release APK and AAB
         working-directory: android-generated
         shell: bash
@@ -76,7 +77,7 @@ jobs:
       - name: Upload signed Release artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: stop-android-release-signed-v26-twa-fix
+          name: stop-android-release-signed-v27-admob-fix
           path: |
             android-generated/app/build/outputs/apk/release/app-release.apk
             android-generated/app/build/outputs/bundle/release/app-release.aab
@@ -87,4 +88,4 @@ jobs:
         shell: bash
         run: rm -f android-release.keystore
 
-# v26 CI trigger
+# v27 native rewarded result handshake
