@@ -1,6 +1,5 @@
 package app.replit.stop_el_juego.twa;
 
-import android.app.Activity;
 import android.content.pm.ActivityInfo;
 import android.net.Uri;
 import android.os.Build;
@@ -69,7 +68,9 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
 
             @Override
             public void onNavigationEvent(int navigationEvent, @Nullable Bundle extras) {
-                if (navigationEvent == NAVIGATION_FINISHED) requestMessageChannelWithRetry();
+                if (navigationEvent == NAVIGATION_FINISHED || navigationEvent == TAB_SHOWN) {
+                    requestMessageChannelWithRetry();
+                }
             }
 
             @Override
@@ -78,9 +79,6 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                 channelRequestInFlight = false;
                 channelRequestAttempts = 0;
                 Log.d(TAG, "TWA message channel ready");
-                // The first READY can race the first page's JavaScript listener.
-                // Repeat it for a short window so a cold TWA launch cannot miss
-                // the handshake before React/main.tsx installs its listener.
                 sendReadyBurst(0);
             }
 
@@ -118,7 +116,15 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
         }
         channelRequestAttempts++;
         try {
-            boolean requested = session.requestPostMessageChannel(ORIGIN, ORIGIN, new Bundle());
+            // Chrome/TWA has a simpler one-origin overload which is useful when
+            // SOURCE_ORIGIN and TARGET_ORIGIN are identical. Fall back to the
+            // explicit two-origin API if the provider rejects the first call.
+            boolean requested;
+            try {
+                requested = session.requestPostMessageChannel(ORIGIN);
+            } catch (NoSuchMethodError | AbstractMethodError ignored) {
+                requested = session.requestPostMessageChannel(ORIGIN, ORIGIN, new Bundle());
+            }
             Log.d(TAG, "requestPostMessageChannel attempt=" + channelRequestAttempts + " accepted=" + requested);
             if (requested) {
                 channelRequestInFlight = false;
