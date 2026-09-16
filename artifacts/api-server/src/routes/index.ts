@@ -19,6 +19,7 @@ import rewardsRouter from "./rewards";
 import playBillingRouter from "./playBilling";
 import customPacksRouter from "./customPacks";
 import guestStatsRouter from "./guestStats";
+import adRewardedRouter from "./adRewarded";
 
 const router: IRouter = Router();
 
@@ -42,5 +43,6 @@ router.use("/rewards", rewardsRouter);
 router.use("/billing/play", playBillingRouter);
 router.use("/custom-packs", customPacksRouter);
 router.use("/guest-stats", guestStatsRouter);
+router.use("/rewards", adRewardedRouter);
 
 export default router;

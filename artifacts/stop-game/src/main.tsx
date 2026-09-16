@@ -4,8 +4,13 @@ import App from "./App";
 import "./index.css";
 import { ensureOfflineBundle } from "./lib/offlineGame";
 import { consumeAuthHandoff } from "./lib/oauth";
+import { initTwaAdBridge } from "./lib/twaAdBridge";
 import { captureInstalledAppVersion, getInstalledAppVersion } from "./lib/appVersion";
 
+// Install the TWA AdMob message listener before React mounts. Native TWA can
+// complete the postMessage handshake very early during page startup; waiting
+// for RewardedAd to mount can otherwise miss STOP_AD_BRIDGE_READY entirely.
+initTwaAdBridge();
 captureInstalledAppVersion();
 
 async function startAnalyticsHeartbeat() {
@@ -17,9 +22,6 @@ async function startAnalyticsHeartbeat() {
     params.get("source") === "googleplay-twa" ||
     !!getInstalledAppVersion();
 
-  // A real Android TWA runs in standalone display mode. When available, the
-  // related-apps API confirms that the installed Play app is the one related
-  // to this web app. A normal Android browser is not standalone, so it stays Web.
   if (!isAndroidTwa && /Android/i.test(navigator.userAgent || "") && window.matchMedia?.("(display-mode: standalone)")?.matches) {
     try {
       const getInstalledRelatedApps = (navigator as Navigator & {

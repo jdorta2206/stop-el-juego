@@ -18,7 +18,7 @@ android {
         minSdkVersion 23
         targetSdkVersion 36
         versionCode 22
-        versionName "1.3.6.3"
+        versionName "1.3.6.5"
         resValue "string", "appName", twaManifest.name
         resValue "string", "launcherName", twaManifest.launcherName
         def launchUrl = "https://" + twaManifest.hostName + twaManifest.launchUrl

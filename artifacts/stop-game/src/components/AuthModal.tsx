@@ -9,6 +9,7 @@ import {
   signInWithTikTok,
   signInWithApple,
   checkOAuthReturn,
+  consumeFacebookAccessToken,
   isGoogleConfigured,
   isFacebookConfigured,
   isTikTokConfigured,
@@ -23,12 +24,6 @@ const LOGO_URL = `${import.meta.env.BASE_URL}images/stop-logo.png`;
 interface AuthModalProps {
   onSave: (profile: PlayerProfile) => void;
   initial?: PlayerProfile | null;
-  /**
-   * Optional: lets the user dismiss the modal and browse anonymously.
-   * When provided, an "✕" close button + "Explorar sin cuenta" link
-   * appear on the login step. Gated actions (multiplayer, save score)
-   * re-open the modal via usePlayer().showAuth().
-   */
   onDismiss?: () => void;
 }
 
@@ -48,12 +43,13 @@ export function AuthModal({ onSave, initial, onDismiss }: AuthModalProps) {
     try {
       const oauthUser = checkOAuthReturn();
       if (oauthUser) {
-        const storedFbToken = sessionStorage.getItem("fb_access_token");
-        if (storedFbToken) {
-          sessionStorage.removeItem("fb_access_token");
-          setFbToken(storedFbToken);
-        }
-        handleOAuthSuccess(oauthUser, storedFbToken || null);
+        // The handoff can persist the Facebook token in sessionStorage or
+        // localStorage depending on where the OAuth callback landed. Always
+        // consume it through the same helper so AuthModal and the early
+        // handoff bootstrap cannot race or use different storage rules.
+        const storedFbToken = consumeFacebookAccessToken();
+        if (storedFbToken) setFbToken(storedFbToken);
+        handleOAuthSuccess(oauthUser, storedFbToken);
       }
     } catch (e: any) {
       setError(e.message || "Error.");
@@ -68,7 +64,6 @@ export function AuthModal({ onSave, initial, onDismiss }: AuthModalProps) {
     setError(null);
     setStep("profile");
 
-    // Fetch existing profile from DB (returning user on new device)
     const apiBase = (import.meta as any).env?.VITE_API_URL ?? window.location.origin;
     fetch(`${apiBase}/api/ranking/scores/${encodeURIComponent(oauthUser.id)}`)
       .then(r => r.ok ? r.json() : null)
@@ -76,9 +71,7 @@ export function AuthModal({ onSave, initial, onDismiss }: AuthModalProps) {
         if (data?.score?.gamesPlayed > 0) {
           const stats = { totalScore: data.score.totalScore, gamesPlayed: data.score.gamesPlayed };
           setExistingStats(stats);
-          // Auto-login returning users — no need to confirm their profile again
           setStep("welcome_back");
-          // Pick a deterministic color based on the player ID so it's consistent across sessions
           const colorIdx = oauthUser.id.split("").reduce((acc, c) => acc + c.charCodeAt(0), 0) % AVATAR_COLORS.length;
           const profile = {
             id: oauthUser.id,
@@ -90,7 +83,6 @@ export function AuthModal({ onSave, initial, onDismiss }: AuthModalProps) {
           } as any;
           setTimeout(() => onSave(profile), 2000);
         }
-        // else: new user → stays on profile step to set up their name
       })
       .catch(() => {
         // On network error, stay on profile step (user confirms manually)
@@ -99,7 +91,6 @@ export function AuthModal({ onSave, initial, onDismiss }: AuthModalProps) {
 
   const handleSave = () => {
     if (!name.trim()) return;
-    // Use the OAuth provider ID so the same account is recognised on any device
     const persistentId = oauthId || initial?.id || crypto.randomUUID();
     onSave({
       id: persistentId,
@@ -123,53 +114,21 @@ export function AuthModal({ onSave, initial, onDismiss }: AuthModalProps) {
       >
         <div
           className="rounded-3xl overflow-hidden shadow-2xl"
-          style={{
-            background: "linear-gradient(145deg, #1a237e 0%, #0d1757 100%)",
-            border: "2px solid rgba(249,168,37,0.4)",
-          }}
+          style={{ background: "linear-gradient(145deg, #1a237e 0%, #0d1757 100%)", border: "2px solid rgba(249,168,37,0.4)" }}
         >
-          {/* Header */}
           <div className="text-center pt-8 pb-4 px-6 relative">
-            {/* Close button (only when dismissible AND on login step —
-                we don't want to lose half-filled profile data). */}
             {onDismiss && step === "login" && (
-              <button
-                onClick={onDismiss}
-                aria-label="Cerrar"
-                className="absolute top-3 left-3 w-8 h-8 rounded-full flex items-center justify-center text-white/50 hover:text-white hover:bg-white/10 transition-colors text-lg leading-none"
-              >
-                ✕
-              </button>
+              <button onClick={onDismiss} aria-label="Cerrar" className="absolute top-3 left-3 w-8 h-8 rounded-full flex items-center justify-center text-white/50 hover:text-white hover:bg-white/10 transition-colors text-lg leading-none">✕</button>
             )}
-            {/* Language selector top-right */}
-            <div className="absolute top-4 right-4">
-              <LanguageSelector />
-            </div>
-
-            <motion.img
-              src={LOGO_URL}
-              alt="STOP"
-              className="mx-auto mb-3 w-20 h-20 rounded-full shadow-xl"
-              animate={{ rotate: [0, 3, -3, 0] }}
-              transition={{ repeat: Infinity, duration: 5, ease: "easeInOut" }}
-              style={{ boxShadow: "0 6px 24px rgba(0,0,0,0.4)" }}
-            />
-            <h2 className="text-2xl font-black text-white">
-              {step === "login" ? t.auth.title : "👤"}
-            </h2>
-            <p className="text-white/60 text-sm mt-1">
-              {step === "login" ? t.auth.subtitle : t.multiplayer.enterName}
-            </p>
+            <div className="absolute top-4 right-4"><LanguageSelector /></div>
+            <motion.img src={LOGO_URL} alt="STOP" className="mx-auto mb-3 w-20 h-20 rounded-full shadow-xl" animate={{ rotate: [0, 3, -3, 0] }} transition={{ repeat: Infinity, duration: 5, ease: "easeInOut" }} style={{ boxShadow: "0 6px 24px rgba(0,0,0,0.4)" }} />
+            <h2 className="text-2xl font-black text-white">{step === "login" ? t.auth.title : "👤"}</h2>
+            <p className="text-white/60 text-sm mt-1">{step === "login" ? t.auth.subtitle : t.multiplayer.enterName}</p>
           </div>
 
           <AnimatePresence>
             {error && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                className="mx-6 mb-2 flex items-center gap-2 bg-red-500/20 border border-red-500/40 rounded-xl px-3 py-2 text-red-300 text-sm"
-              >
+              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="mx-6 mb-2 flex items-center gap-2 bg-red-500/20 border border-red-500/40 rounded-xl px-3 py-2 text-red-300 text-sm">
                 <AlertCircle className="w-4 h-4 flex-shrink-0" />
                 {error}
               </motion.div>
@@ -179,258 +138,31 @@ export function AuthModal({ onSave, initial, onDismiss }: AuthModalProps) {
           <div className="px-6 pb-8 space-y-4">
             <AnimatePresence mode="wait">
               {step === "welcome_back" ? (
-                <motion.div
-                  key="welcome_back"
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.9 }}
-                  className="flex flex-col items-center gap-4 py-4 text-center"
-                >
-                  {oauthPicture && (
-                    <img src={oauthPicture} alt="avatar"
-                      className="w-20 h-20 rounded-full border-4 border-[#f9a825] shadow-xl object-cover"
-                      onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
-                    />
-                  )}
-                  <div>
-                    <p className="text-white font-black text-xl">¡Bienvenido de vuelta, {name}!</p>
-                    <p className="text-white/50 text-sm mt-1">Restaurando tu cuenta…</p>
-                  </div>
-                  {existingStats && (
-                    <div className="flex items-center gap-3 px-5 py-3 rounded-2xl w-full"
-                      style={{ background: "rgba(249,168,37,0.15)", border: "1px solid rgba(249,168,37,0.4)" }}
-                    >
-                      <span className="text-2xl">🏆</span>
-                      <div className="text-left">
-                        <p className="text-[#f9a825] font-black text-sm">{existingStats.totalScore.toLocaleString()} pts</p>
-                        <p className="text-white/50 text-xs">{existingStats.gamesPlayed} partidas jugadas</p>
-                      </div>
-                    </div>
-                  )}
-                  <div className="flex gap-1.5 mt-2">
-                    {[0,1,2].map(i => (
-                      <motion.div key={i}
-                        animate={{ opacity: [0.3, 1, 0.3] }}
-                        transition={{ repeat: Infinity, duration: 1, delay: i * 0.25 }}
-                        className="w-2 h-2 rounded-full bg-[#f9a825]"
-                      />
-                    ))}
-                  </div>
+                <motion.div key="welcome_back" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className="flex flex-col items-center gap-4 py-4 text-center">
+                  {oauthPicture && <img src={oauthPicture} alt="avatar" className="w-20 h-20 rounded-full border-4 border-[#f9a825] shadow-xl object-cover" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />}
+                  <div><p className="text-white font-black text-xl">¡Bienvenido de vuelta, {name}!</p><p className="text-white/50 text-sm mt-1">Restaurando tu cuenta…</p></div>
+                  {existingStats && <div className="flex items-center gap-3 px-5 py-3 rounded-2xl w-full" style={{ background: "rgba(249,168,37,0.15)", border: "1px solid rgba(249,168,37,0.4)" }}><span className="text-2xl">🏆</span><div className="text-left"><p className="text-[#f9a825] font-black text-sm">{existingStats.totalScore.toLocaleString()} pts</p><p className="text-white/50 text-xs">{existingStats.gamesPlayed} partidas jugadas</p></div></div>}
+                  <div className="flex gap-1.5 mt-2">{[0,1,2].map(i => <motion.div key={i} animate={{ opacity: [0.3, 1, 0.3] }} transition={{ repeat: Infinity, duration: 1, delay: i * 0.25 }} className="w-2 h-2 rounded-full bg-[#f9a825]" />)}</div>
                 </motion.div>
               ) : step === "login" ? (
-                <motion.div
-                  key="login"
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -20 }}
-                  className="space-y-3"
-                >
-                  <SocialButton
-                    onClick={signInWithGoogle}
-                    configured={isGoogleConfigured}
-                    icon={
-                      <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none">
-                        <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-                        <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-                        <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
-                        <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
-                      </svg>
-                    }
-                    label={t.auth.google}
-                    bg="white"
-                    textColor="#333"
-                    soonLabel={t.auth.soon}
-                  />
-
-                  <SocialButton
-                    onClick={signInWithFacebook}
-                    configured={isFacebookConfigured}
-                    icon={
-                      <svg viewBox="0 0 24 24" className="w-5 h-5">
-                        <circle cx="12" cy="12" r="12" fill="white" />
-                        <path d="M13.397 20.997v-8.196h2.765l.411-3.209h-3.176V7.548c0-.926.258-1.56 1.587-1.56h1.684V3.127A22.336 22.336 0 0 0 14.201 3c-2.444 0-4.122 1.492-4.122 4.231v2.355H7.332v3.209h2.753v8.202h3.312z" fill="#1877F2" />
-                      </svg>
-                    }
-                    label={t.auth.facebook}
-                    bg="#1877F2"
-                    textColor="white"
-                    soonLabel={t.auth.soon}
-                  />
-
+                <motion.div key="login" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-3">
+                  <SocialButton onClick={signInWithGoogle} configured={isGoogleConfigured} icon={<svg viewBox="0 0 24 24" className="w-5 h-5" fill="none"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 1 12 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>} label={t.auth.google} bg="white" textColor="#333" soonLabel={t.auth.soon} />
+                  <SocialButton onClick={signInWithFacebook} configured={isFacebookConfigured} icon={<svg viewBox="0 0 24 24" className="w-5 h-5"><circle cx="12" cy="12" r="12" fill="white" /><path d="M13.397 20.997v-8.196h2.765l.411-3.209h-3.176V7.548c0-.926.258-1.56 1.587-1.56h1.684V3.127A22.336 22.336 0 0 0 14.201 3c-2.444 0-4.122 1.492-4.122 4.231v2.355H7.332v3.209h2.753v8.202h3.312z" fill="#1877F2" /></svg>} label={t.auth.facebook} bg="#1877F2" textColor="white" soonLabel={t.auth.soon} />
                   {isTikTokConfigured && (
-                    <SocialButton
-                      onClick={signInWithTikTok}
-                      configured={isTikTokConfigured}
-                      icon={
-                        <svg viewBox="0 0 24 24" className="w-5 h-5" fill="white">
-                          <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1-2.89-2.89 2.89 2.89 0 0 1 2.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 0 0-.79-.05 6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 6.34 6.34 6.34 6.34 0 0 0 6.33-6.34V8.69a8.2 8.2 0 0 0 4.79 1.52V6.76a4.85 4.85 0 0 1-1.02-.07z"/>
-                        </svg>
-                      }
-                      label={t.auth.tiktok}
-                      bg="#010101"
-                      textColor="white"
-                      soonLabel={t.auth.soon}
-                    />
+                    <SocialButton onClick={signInWithTikTok} configured={isTikTokConfigured} icon={<span className="text-lg">♪</span>} label="TikTok" bg="#000" textColor="white" soonLabel={t.auth.soon} />
                   )}
-
                   {isAppleConfigured && (
-                    <SocialButton
-                      onClick={signInWithApple}
-                      configured={isAppleConfigured}
-                      icon={
-                        <svg viewBox="0 0 24 24" className="w-5 h-5" fill="white">
-                          <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
-                        </svg>
-                      }
-                      label={t.auth.apple}
-                      bg="#000000"
-                      textColor="white"
-                      soonLabel={t.auth.soon}
-                    />
+                    <SocialButton onClick={signInWithApple} configured={isAppleConfigured} icon={<span className="text-lg"></span>} label="Apple" bg="#000" textColor="white" soonLabel={t.auth.soon} />
                   )}
-
-                  <div className="flex items-center gap-3 py-1">
-                    <div className="flex-1 h-px bg-white/15" />
-                    <span className="text-white/40 text-xs font-bold uppercase tracking-wider">o</span>
-                    <div className="flex-1 h-px bg-white/15" />
-                  </div>
-
-                  <button
-                    onClick={() => { setLoginMethod("guest"); setStep("profile"); }}
-                    className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl border-2 border-white/20 text-white/80 font-bold hover:bg-white/10 transition-all text-sm"
-                  >
-                    <Mail className="w-4 h-4" />
-                    {t.auth.guest}
-                  </button>
-
-                  {/* Anonymous browse: dismisses the modal without
-                      creating any profile. Re-opens on gated actions. */}
-                  {onDismiss && (
-                    <button
-                      onClick={onDismiss}
-                      className="w-full text-white/40 text-xs font-bold text-center py-2 hover:text-white/70 transition-colors"
-                    >
-                      Explorar sin cuenta →
-                    </button>
-                  )}
+                  <div className="relative my-2"><div className="absolute inset-0 flex items-center"><div className="w-full border-t border-white/10" /></div><div className="relative flex justify-center"><span className="bg-[#10195f] px-3 text-white/30 text-xs">{t.auth.or}</span></div></div>
+                  <div className="space-y-2"><label className="text-white/70 text-sm flex items-center gap-2"><User className="w-4 h-4" />{t.auth.name}</label><input value={name} onChange={e => setName(e.target.value)} placeholder={t.auth.namePlaceholder} maxLength={14} className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/10 text-white placeholder-white/30 outline-none focus:border-[#f9a825]" /><button onClick={handleSave} className="w-full py-3 rounded-xl bg-[#f9a825] text-[#111] font-black hover:brightness-110 transition">{t.auth.continue}</button></div>
                 </motion.div>
               ) : (
-                <motion.div
-                  key="profile"
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -20 }}
-                  className="space-y-4"
-                >
-                  {loginMethod && loginMethod !== "guest" && (
-                    <div className="flex items-center justify-center gap-2 py-2 px-4 rounded-full bg-white/10 w-fit mx-auto">
-                      <span className="text-[#f9a825] font-black text-xs uppercase tracking-wider">{loginMethod}</span>
-                      <span className="text-green-400 text-xs font-bold">✓</span>
-                    </div>
-                  )}
-
-                  {/* Welcome back banner for returning users */}
-                  {existingStats && (
-                    <motion.div
-                      initial={{ opacity: 0, scale: 0.9 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      className="flex items-center gap-3 px-4 py-3 rounded-2xl"
-                      style={{ background: "rgba(249,168,37,0.15)", border: "1px solid rgba(249,168,37,0.4)" }}
-                    >
-                      <span className="text-2xl">🏆</span>
-                      <div>
-                        <p className="text-[#f9a825] font-black text-sm">¡Bienvenido de vuelta!</p>
-                        <p className="text-white/70 text-xs">
-                          {existingStats.totalScore.toLocaleString()} pts · {existingStats.gamesPlayed} partidas
-                        </p>
-                      </div>
-                    </motion.div>
-                  )}
-
-                  <div className="flex justify-center">
-                    {oauthPicture ? (
-                      <img
-                        src={oauthPicture}
-                        alt="avatar"
-                        className="w-16 h-16 rounded-full border-4 border-[#f9a825] shadow-xl object-cover"
-                        onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
-                      />
-                    ) : (
-                      <div
-                        className="w-16 h-16 rounded-full border-4 border-white/30 flex items-center justify-center text-white font-black text-3xl shadow-lg"
-                        style={{ backgroundColor: avatarColor }}
-                      >
-                        {name.charAt(0).toUpperCase() || "?"}
-                      </div>
-                    )}
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-bold text-white/60 uppercase tracking-wider mb-1.5 block">
-                      {t.multiplayer.playerName}
-                    </label>
-                    <div className="relative">
-                      <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
-                      <input
-                        value={name}
-                        onChange={e => setName(e.target.value)}
-                        maxLength={14}
-                        placeholder={t.multiplayer.enterName}
-                        autoFocus
-                        onKeyDown={e => e.key === "Enter" && handleSave()}
-                        className="w-full pl-10 pr-4 py-3 rounded-xl bg-white/10 border-2 border-white/20 text-white placeholder:text-white/40 font-bold text-base focus:outline-none focus:border-[#f9a825] transition-colors"
-                      />
-                    </div>
-                    <p className="text-white/30 text-xs mt-1 text-right">{name.length}/14</p>
-                  </div>
-
-                  {!oauthPicture && (
-                    <div>
-                      <label className="flex items-center gap-1.5 text-white/60 text-xs font-bold uppercase tracking-wider mb-2">
-                        <Palette className="w-3.5 h-3.5" /> Avatar
-                      </label>
-                      <div className="flex flex-wrap gap-2">
-                        {AVATAR_COLORS.map(color => (
-                          <button
-                            key={color}
-                            onClick={() => setAvatarColor(color)}
-                            className="w-9 h-9 rounded-full border-4 transition-all hover:scale-110"
-                            style={{
-                              backgroundColor: color,
-                              borderColor: avatarColor === color ? "white" : "transparent",
-                              boxShadow: avatarColor === color ? "0 0 0 2px rgba(255,255,255,0.5)" : "none",
-                              transform: avatarColor === color ? "scale(1.15)" : undefined,
-                            }}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  <motion.button
-                    whileHover={{ scale: name.trim() ? 1.02 : 1 }}
-                    whileTap={{ scale: name.trim() ? 0.97 : 1 }}
-                    onClick={handleSave}
-                    disabled={!name.trim()}
-                    className="w-full py-4 rounded-xl font-black text-xl tracking-wider transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                    style={{
-                      background: name.trim() ? "#b5301a" : "#555",
-                      color: "white",
-                      fontFamily: "'Baloo 2', sans-serif",
-                      boxShadow: name.trim() ? "0 4px 20px rgba(181,48,26,0.4)" : "none",
-                    }}
-                  >
-                    {t.home.play}
-                  </motion.button>
-
-                  {!initial && (
-                    <button
-                      onClick={() => { setStep("login"); setLoginMethod(null); setOauthPicture(null); }}
-                      className="w-full text-white/40 text-sm text-center hover:text-white/60 transition-colors"
-                    >
-                      ← {t.auth.guest}
-                    </button>
-                  )}
+                <motion.div key="profile" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-4">
+                  <div className="flex items-center gap-3">{oauthPicture ? <img src={oauthPicture} alt="avatar" className="w-14 h-14 rounded-full object-cover" /> : <div className="w-14 h-14 rounded-full" style={{ background: avatarColor }} />}<div><p className="text-white font-bold">{name || "Tu nombre"}</p><p className="text-white/40 text-xs">{loginMethod || "Cuenta"}</p></div></div>
+                  <label className="text-white/70 text-sm flex items-center gap-2"><Palette className="w-4 h-4" />{t.auth.color}</label>
+                  <div className="grid grid-cols-6 gap-2">{AVATAR_COLORS.map(color => <button key={color} onClick={() => setAvatarColor(color)} className="w-8 h-8 rounded-full border-2" style={{ background: color, borderColor: avatarColor === color ? "white" : "transparent" }} />)}</div>
+                  <button onClick={handleSave} className="w-full py-3 rounded-xl bg-[#f9a825] text-[#111] font-black hover:brightness-110 transition">{t.auth.continue}</button>
                 </motion.div>
               )}
             </AnimatePresence>
@@ -441,43 +173,6 @@ export function AuthModal({ onSave, initial, onDismiss }: AuthModalProps) {
   );
 }
 
-function SocialButton({
-  onClick,
-  icon,
-  label,
-  bg,
-  textColor,
-  configured = true,
-  soonLabel = "Soon",
-}: {
-  onClick: () => void;
-  icon: React.ReactNode;
-  label: string;
-  bg: string;
-  textColor: string;
-  configured?: boolean;
-  soonLabel?: string;
-}) {
-  return (
-    <motion.button
-      whileHover={{ scale: configured ? 1.02 : 1, y: configured ? -1 : 0 }}
-      whileTap={{ scale: configured ? 0.98 : 1 }}
-      onClick={configured ? onClick : undefined}
-      className="w-full flex items-center gap-3 py-3.5 px-5 rounded-xl font-bold text-sm transition-all shadow-md relative"
-      style={{
-        background: bg,
-        color: textColor,
-        boxShadow: "0 2px 12px rgba(0,0,0,0.2)",
-        opacity: configured ? 1 : 0.45,
-        cursor: configured ? "pointer" : "not-allowed",
-      }}
-    >
-      <span className="w-5 h-5 flex-shrink-0">{icon}</span>
-      <span className="flex-1 text-left">{label}</span>
-      {configured
-        ? <span className="opacity-50">→</span>
-        : <span className="text-xs font-bold opacity-70 bg-black/20 px-2 py-0.5 rounded-full">{soonLabel}</span>
-      }
-    </motion.button>
-  );
+function SocialButton({ onClick, configured, icon, label, bg, textColor, soonLabel }: { onClick: () => void; configured: boolean; icon: React.ReactNode; label: string; bg: string; textColor: string; soonLabel: string }) {
+  return <button onClick={configured ? onClick : undefined} disabled={!configured} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition disabled:opacity-50" style={{ background: bg, color: textColor }}><span className="w-6 flex justify-center">{icon}</span><span className="flex-1">{label}</span>{!configured && <span className="text-xs opacity-60">{soonLabel}</span>}</button>;
 }
