@@ -16,7 +16,17 @@ export function initTwaAdBridge(): void {
 }
 
 export function isTwaAdBridgeAvailable(): boolean {
-  return typeof window !== "undefined" && /Android/i.test(navigator.userAgent || "");
+  if (typeof window === "undefined") return false;
+  try {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("source") === "googleplay-twa" || params.get("source") === "twa") return true;
+    return /Android/i.test(navigator.userAgent || "") && (
+      window.matchMedia?.("(display-mode: standalone)").matches === true ||
+      window.matchMedia?.("(display-mode: fullscreen)").matches === true
+    );
+  } catch {
+    return false;
+  }
 }
 
 function makeRequestId(): string {
@@ -56,15 +66,6 @@ export async function requestRewardedAd(placement: RewardedPlacement): Promise<R
     const startedAt = Date.now();
     let timer: number | null = null;
 
-    const finish = (result: RewardResult) => {
-      if (finished) return;
-      finished = true;
-      if (timer !== null) window.clearInterval(timer);
-      document.removeEventListener("visibilitychange", checkNow);
-      window.removeEventListener("focus", checkNow);
-      resolve(result);
-    };
-
     const checkNow = async () => {
       if (finished) return;
       const result = await readResult(requestId);
@@ -72,6 +73,15 @@ export async function requestRewardedAd(placement: RewardedPlacement): Promise<R
       else if (Date.now() - startedAt >= RESULT_TIMEOUT_MS) {
         finish({ rewarded: false, source: "error", errorMessage: "Native rewarded ad request timed out" });
       }
+    };
+
+    const finish = (result: RewardResult) => {
+      if (finished) return;
+      finished = true;
+      if (timer !== null) window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", checkNow);
+      window.removeEventListener("focus", checkNow);
+      resolve(result);
     };
 
     timer = window.setInterval(checkNow, 750);
