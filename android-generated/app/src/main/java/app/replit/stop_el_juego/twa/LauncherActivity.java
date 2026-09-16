@@ -1,5 +1,6 @@
 package app.replit.stop_el_juego.twa;
 
+import android.app.Activity;
 import android.content.pm.ActivityInfo;
 import android.net.Uri;
 import android.os.Build;
@@ -30,10 +31,8 @@ import java.lang.reflect.Field;
 /** STOP TWA native bridge for Google Mobile Ads rewarded video. */
 public class LauncherActivity extends com.google.androidbrowserhelper.trusted.LauncherActivity {
     private static final String TAG = "STOP_AD_BRIDGE";
-
     private static final Uri SOURCE_ORIGIN = Uri.parse("https://www.stopjuegodepalabras.com");
     private static final Uri TARGET_ORIGIN = Uri.parse("https://www.stopjuegodepalabras.com");
-
     private static final boolean USE_TEST_REWARDED_ADS = true;
     private static final String REWARDED_TEST_ID = "ca-app-pub-3940256099942544/5224354917";
     private static final String REWARDED_REAL_ID = "ca-app-pub-4807272408824742/3559554716";
@@ -72,8 +71,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                     boolean result, @Nullable Bundle extras) {
                 relationshipValidated = relation == CustomTabsService.RELATION_USE_AS_ORIGIN
                         && result && SOURCE_ORIGIN.equals(requestedOrigin);
-                Log.d(TAG, "use_as_origin validation=" + result
-                        + " relation=" + relation + " origin=" + requestedOrigin);
+                Log.d(TAG, "use_as_origin validation=" + result + " relation=" + relation + " origin=" + requestedOrigin);
                 if (relationshipValidated) requestMessageChannelWithRetry(100L);
             }
 
@@ -114,24 +112,14 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     }
 
     private void requestMessageChannelAttempt() {
-        if (messageChannelReady) {
-            channelRequestInFlight = false;
-            return;
-        }
+        if (messageChannelReady) { channelRequestInFlight = false; return; }
         CustomTabsSession session = getTwaSession();
-        if (session == null) {
-            Log.w(TAG, "TWA CustomTabsSession is not available yet");
-            retryMessageChannel();
-            return;
-        }
+        if (session == null) { retryMessageChannel(); return; }
         channelRequestAttempts++;
         try {
             boolean requested = session.requestPostMessageChannel(SOURCE_ORIGIN, TARGET_ORIGIN, new Bundle());
             Log.d(TAG, "requestPostMessageChannel attempt=" + channelRequestAttempts + " accepted=" + requested);
-            if (requested) {
-                channelRequestInFlight = false;
-                return;
-            }
+            if (requested) { channelRequestInFlight = false; return; }
         } catch (RuntimeException error) {
             Log.w(TAG, "requestPostMessageChannel failed", error);
         }
@@ -141,7 +129,6 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     private void retryMessageChannel() {
         if (channelRequestAttempts >= 20 || messageChannelReady) {
             channelRequestInFlight = false;
-            Log.w(TAG, "TWA postMessage channel could not be established after " + channelRequestAttempts + " attempts");
             return;
         }
         getWindow().getDecorView().postDelayed(this::requestMessageChannelAttempt, 300L);
@@ -168,9 +155,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                 Field field = type.getDeclaredField(fieldName);
                 field.setAccessible(true);
                 return field.get(target);
-            } catch (NoSuchFieldException ignored) {
-                type = type.getSuperclass();
-            }
+            } catch (NoSuchFieldException ignored) { type = type.getSuperclass(); }
         }
         return null;
     }
@@ -187,9 +172,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             activePlacement = placement;
             rewardGrantedForCurrentAd = false;
             showRewardedAdWhenReady();
-        } catch (JSONException ignored) {
-            Log.w(TAG, "Ignoring malformed web message");
-        }
+        } catch (JSONException ignored) { Log.w(TAG, "Ignoring malformed web message"); }
     }
 
     private boolean isAllowedPlacement(String placement) {
@@ -197,9 +180,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                 || "skip_round".equals(placement) || "extra_pack".equals(placement);
     }
 
-    private String rewardedUnitId() {
-        return USE_TEST_REWARDED_ADS ? REWARDED_TEST_ID : REWARDED_REAL_ID;
-    }
+    private String rewardedUnitId() { return USE_TEST_REWARDED_ADS ? REWARDED_TEST_ID : REWARDED_REAL_ID; }
 
     private void preloadRewardedAd() {
         if (!mobileAdsReady || rewardedAd != null || rewardedAdLoading) return;
@@ -213,7 +194,6 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                 Log.d(TAG, "Rewarded loaded successfully");
                 if (activeRequestId != null) showRewardedAd();
             }
-
             @Override
             public void onAdFailedToLoad(@NonNull LoadAdError error) {
                 rewardedAdLoading = false;
@@ -226,14 +206,8 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     }
 
     private void showRewardedAdWhenReady() {
-        if (rewardedAd != null) {
-            showRewardedAd();
-            return;
-        }
-        if (!mobileAdsReady) {
-            Log.w(TAG, "Rewarded requested before Mobile Ads initialization finished");
-            return;
-        }
+        if (rewardedAd != null) { showRewardedAd(); return; }
+        if (!mobileAdsReady) { Log.w(TAG, "Rewarded requested before Mobile Ads initialization finished"); return; }
         preloadRewardedAd();
     }
 
@@ -242,25 +216,17 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
         RewardedAd ad = rewardedAd;
         rewardedAd = null;
         ad.setFullScreenContentCallback(new FullScreenContentCallback() {
-            @Override
-            public void onAdDismissedFullScreenContent() {
+            @Override public void onAdDismissedFullScreenContent() {
                 Log.d(TAG, "Rewarded dismissed; earned=" + rewardGrantedForCurrentAd);
                 if (!rewardGrantedForCurrentAd) sendResult(false, "skipped");
                 preloadRewardedAd();
             }
-
-            @Override
-            public void onAdFailedToShowFullScreenContent(@NonNull AdError error) {
-                Log.e(TAG, "Rewarded show failed: code=" + error.getCode() + " domain=" + error.getDomain()
-                        + " message=" + error.getMessage());
+            @Override public void onAdFailedToShowFullScreenContent(@NonNull AdError error) {
+                Log.e(TAG, "Rewarded show failed: code=" + error.getCode() + " domain=" + error.getDomain() + " message=" + error.getMessage());
                 sendResult(false, "error");
                 preloadRewardedAd();
             }
-
-            @Override
-            public void onAdShowedFullScreenContent() {
-                Log.d(TAG, "Rewarded showed fullscreen content");
-            }
+            @Override public void onAdShowedFullScreenContent() { Log.d(TAG, "Rewarded showed fullscreen content"); }
         });
         try {
             Log.d(TAG, "Showing rewarded ad requestId=" + activeRequestId + " placement=" + activePlacement);
@@ -285,9 +251,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             result.put("placement", activePlacement);
             result.put("rewarded", rewarded);
             result.put("source", source);
-        } catch (JSONException ignored) {
-            return;
-        }
+        } catch (JSONException ignored) { return; }
         sendMessage(result);
         activeRequestId = null;
         activePlacement = null;
@@ -306,8 +270,6 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
         try {
             int result = session.postMessage(message.toString(), null);
             Log.d(TAG, "postMessage result=" + result + " message=" + message.optString("type"));
-        } catch (RuntimeException error) {
-            Log.w(TAG, "postMessage failed", error);
-        }
+        } catch (RuntimeException error) { Log.w(TAG, "postMessage failed", error); }
     }
 }
