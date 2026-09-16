@@ -9,6 +9,7 @@ import android.util.Log;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.browser.customtabs.CustomTabsCallback;
+import androidx.browser.customtabs.CustomTabsService;
 import androidx.browser.customtabs.CustomTabsSession;
 
 import com.google.android.gms.ads.AdError;
@@ -29,7 +30,11 @@ import java.lang.reflect.Field;
 /** STOP TWA native bridge for Google Mobile Ads rewarded video. */
 public class LauncherActivity extends com.google.androidbrowserhelper.trusted.LauncherActivity {
     private static final String TAG = "STOP_AD_BRIDGE";
-    private static final Uri SOURCE_ORIGIN = Uri.parse("android-app://app.replit.stop_el_juego.twa");
+
+    // For TWA postMessage, SOURCE_ORIGIN is the HTTPS origin declared by
+    // Digital Asset Links with delegate_permission/common.use_as_origin.
+    // android-app:// is NOT a valid postMessage source origin here.
+    private static final Uri SOURCE_ORIGIN = Uri.parse("https://www.stopjuegodepalabras.com");
     private static final Uri TARGET_ORIGIN = Uri.parse("https://www.stopjuegodepalabras.com");
 
     private static final boolean USE_TEST_REWARDED_ADS = true;
@@ -64,8 +69,10 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             @Override
             public void onRelationshipValidationResult(int relation, @NonNull Uri requestedOrigin,
                     boolean result, @Nullable Bundle extras) {
-                relationshipValidated = result && TARGET_ORIGIN.equals(requestedOrigin);
-                Log.d(TAG, "use_as_origin validation=" + result + " origin=" + requestedOrigin);
+                relationshipValidated = relation == CustomTabsService.RELATION_USE_AS_ORIGIN
+                        && result && SOURCE_ORIGIN.equals(requestedOrigin);
+                Log.d(TAG, "use_as_origin validation=" + result
+                        + " relation=" + relation + " origin=" + requestedOrigin);
                 if (relationshipValidated) requestMessageChannelWithRetry(250L);
             }
 
