@@ -22,13 +22,12 @@ import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.lang.reflect.Field;
-
 /** STOP TWA native bridge for Google Mobile Ads rewarded video. */
 public class LauncherActivity extends com.google.androidbrowserhelper.trusted.LauncherActivity {
     private static final String TAG = "STOP_AD_BRIDGE";
     private static final Uri ORIGIN = Uri.parse("https://www.stopjuegodepalabras.com");
 
+    // Keep Google's official rewarded test unit until the bridge is proven end-to-end.
     private static final boolean USE_TEST_REWARDED_ADS = true;
     private static final String REWARDED_TEST_ID = "ca-app-pub-3940256099942544/5224354917";
     private static final String REWARDED_REAL_ID = "ca-app-pub-4807272408824742/3559554716";
@@ -109,23 +108,22 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             channelRequestInFlight = false;
             return;
         }
-        CustomTabsSession session = getInternalCustomTabsSession();
+
+        CustomTabsSession session = getTwaSession();
         if (session == null) {
+            Log.w(TAG, "TWA CustomTabsSession is not available yet");
             retryMessageChannel();
             return;
         }
+
         channelRequestAttempts++;
         try {
-            // Chrome/TWA has a simpler one-origin overload which is useful when
-            // SOURCE_ORIGIN and TARGET_ORIGIN are identical. Fall back to the
-            // explicit two-origin API if the provider rejects the first call.
-            boolean requested;
-            try {
-                requested = session.requestPostMessageChannel(ORIGIN);
-            } catch (NoSuchMethodError | AbstractMethodError ignored) {
-                requested = session.requestPostMessageChannel(ORIGIN, ORIGIN, new Bundle());
-            }
-            Log.d(TAG, "requestPostMessageChannel attempt=" + channelRequestAttempts + " accepted=" + requested);
+            // android-browser-helper exposes the live TWA session in current 2.7.x.
+            // Use that session directly; reflection against mTwaLauncher/mSession was
+            // fragile and is the reason the previous APKs could never establish the bridge.
+            boolean requested = session.requestPostMessageChannel(ORIGIN, ORIGIN, new Bundle());
+            Log.d(TAG, "requestPostMessageChannel attempt=" + channelRequestAttempts
+                    + " accepted=" + requested);
             if (requested) {
                 channelRequestInFlight = false;
                 return;
@@ -137,44 +135,24 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     }
 
     private void retryMessageChannel() {
-        if (channelRequestAttempts >= 12 || messageChannelReady) {
+        if (channelRequestAttempts >= 20 || messageChannelReady) {
             channelRequestInFlight = false;
-            Log.w(TAG, "TWA postMessage channel could not be established after " + channelRequestAttempts + " attempts");
+            Log.w(TAG, "TWA postMessage channel could not be established after "
+                    + channelRequestAttempts + " attempts");
             return;
         }
         getWindow().getDecorView().postDelayed(this::requestMessageChannelAttempt, 300L);
     }
 
     @Nullable
-    private CustomTabsSession getInternalCustomTabsSession() {
+    private CustomTabsSession getTwaSession() {
         try {
-            Field launcherField = findField(com.google.androidbrowserhelper.trusted.LauncherActivity.class, "mTwaLauncher");
-            if (launcherField == null) return null;
-            launcherField.setAccessible(true);
-            Object launcher = launcherField.get(this);
-            if (launcher == null) return null;
-            Field sessionField = findField(launcher.getClass(), "mSession");
-            if (sessionField == null) return null;
-            sessionField.setAccessible(true);
-            Object session = sessionField.get(launcher);
-            return session instanceof CustomTabsSession ? (CustomTabsSession) session : null;
-        } catch (ReflectiveOperationException | SecurityException error) {
-            Log.w(TAG, "Unable to access TWA CustomTabsSession", error);
+            // android-browser-helper 2.7.x provides this accessor on LauncherActivity.
+            return getCustomTabsSession();
+        } catch (RuntimeException error) {
+            Log.w(TAG, "Unable to obtain TWA CustomTabsSession", error);
             return null;
         }
-    }
-
-    @Nullable
-    private static Field findField(Class<?> type, String name) {
-        Class<?> current = type;
-        while (current != null) {
-            try {
-                return current.getDeclaredField(name);
-            } catch (NoSuchFieldException ignored) {
-                current = current.getSuperclass();
-            }
-        }
-        return null;
     }
 
     private void handleWebMessage(String raw) {
@@ -294,7 +272,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     }
 
     private void sendMessage(JSONObject message) {
-        CustomTabsSession session = getInternalCustomTabsSession();
+        CustomTabsSession session = getTwaSession();
         if (session == null || !messageChannelReady) return;
         try {
             int result = session.postMessage(message.toString(), null);
