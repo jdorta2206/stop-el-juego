@@ -180,7 +180,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                 rewardedAd = null;
                 Log.e(TAG, "Rewarded load failed: code=" + error.getCode() + " domain=" + error.getDomain()
                         + " message=" + error.getMessage() + " response=" + error.getResponseInfo());
-                if (activeRequestId != null) sendResult(false, "error");
+                if (activeRequestId != null) sendResult(false, "error", error.getCode(), error.getDomain(), error.getMessage());
             }
         });
     }
@@ -201,7 +201,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             }
             @Override public void onAdFailedToShowFullScreenContent(@NonNull AdError error) {
                 Log.e(TAG, "Rewarded show failed: code=" + error.getCode() + " domain=" + error.getDomain() + " message=" + error.getMessage());
-                sendResult(false, "error");
+                sendResult(false, "error", error.getCode(), error.getDomain(), error.getMessage());
                 preloadRewardedAd();
             }
             @Override public void onAdShowedFullScreenContent() { Log.d(TAG, "Rewarded showed fullscreen content"); }
@@ -216,11 +216,14 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             });
         } catch (RuntimeException error) {
             Log.e(TAG, "Rewarded show threw", error);
-            sendResult(false, "error");
+            sendResult(false, "error", -1, "java", error.getClass().getSimpleName() + ": " + error.getMessage());
             preloadRewardedAd();
         }
     }
     private void sendResult(boolean rewarded, String source) {
+        sendResult(rewarded, source, 0, "", "");
+    }
+    private void sendResult(boolean rewarded, String source, int errorCode, String errorDomain, String errorMessage) {
         if (activeRequestId == null) return;
         JSONObject result = new JSONObject();
         try {
@@ -229,6 +232,11 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             result.put("placement", activePlacement);
             result.put("rewarded", rewarded);
             result.put("source", source);
+            if (!rewarded && "error".equals(source)) {
+                result.put("errorCode", errorCode);
+                result.put("errorDomain", errorDomain == null ? "" : errorDomain);
+                result.put("errorMessage", errorMessage == null ? "" : errorMessage);
+            }
         } catch (JSONException ignored) { return; }
         sendMessage(result);
         activeRequestId = null;
