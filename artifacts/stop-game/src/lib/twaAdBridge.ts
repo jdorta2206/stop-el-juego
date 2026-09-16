@@ -7,7 +7,7 @@ const REQUEST_TIMEOUT_MS = 90_000;
 const CHANNEL_READY_TIMEOUT_MS = 8_000;
 
 type RewardedPlacement = "extra_time" | "hint" | "double_points" | "skip_round" | "extra_pack";
-type RewardResult = { rewarded: boolean; source: "admob" | "skipped" | "error" };
+type RewardResult = { rewarded: boolean; source: "admob" | "skipped" | "error"; errorCode?: number; errorDomain?: string; errorMessage?: string };
 type MessagePortState = { port: MessagePort | null; ready: boolean };
 
 const state: MessagePortState = { port: null, ready: false };
@@ -42,6 +42,9 @@ function handleMessage(data: unknown): void {
   resolve({
     rewarded: message.rewarded === true,
     source: message.rewarded === true ? "admob" : message.source === "error" ? "error" : "skipped",
+    errorCode: typeof message.errorCode === "number" ? message.errorCode : undefined,
+    errorDomain: typeof message.errorDomain === "string" ? message.errorDomain : undefined,
+    errorMessage: typeof message.errorMessage === "string" ? message.errorMessage : undefined,
   });
 }
 
@@ -83,17 +86,13 @@ export function isTwaAdBridgeAvailable(): boolean {
 
 export async function requestRewardedAd(placement: RewardedPlacement): Promise<RewardResult> {
   installListener();
-  // Do not gate on URL/referrer heuristics. An established, authenticated
-  // MessagePort is the authoritative proof that this page is inside the native
-  // TWA bridge. This survives redirects/reloads where source=googleplay-twa
-  // or document.referrer may no longer be present.
-  if (!(await waitForReady(CHANNEL_READY_TIMEOUT_MS))) return { rewarded: false, source: "error" };
+  if (!(await waitForReady(CHANNEL_READY_TIMEOUT_MS))) return { rewarded: false, source: "error", errorMessage: "TWA message channel not ready" };
   const requestId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   return new Promise<RewardResult>((resolve) => {
     const timeout = window.setTimeout(() => {
       pending.delete(requestId);
       resetPort();
-      resolve({ rewarded: false, source: "error" });
+      resolve({ rewarded: false, source: "error", errorMessage: "Native rewarded ad request timed out" });
     }, REQUEST_TIMEOUT_MS);
     pending.set(requestId, (result) => { window.clearTimeout(timeout); resolve(result); });
     try { state.port!.postMessage({ type: REQUEST_TYPE, requestId, placement }); }
@@ -101,7 +100,7 @@ export async function requestRewardedAd(placement: RewardedPlacement): Promise<R
       window.clearTimeout(timeout);
       pending.delete(requestId);
       resetPort();
-      resolve({ rewarded: false, source: "error" });
+      resolve({ rewarded: false, source: "error", errorMessage: "Unable to post rewarded ad request" });
     }
   });
 }
