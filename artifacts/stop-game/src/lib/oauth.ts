@@ -36,27 +36,52 @@ export function signInWithInstagram() { startOAuth("instagram"); }
 export function signInWithTikTok() { startOAuth("tiktok"); }
 export function signInWithApple() { startOAuth("apple"); }
 
+function decodeHandoffPayload(encoded: string): [string, string][] | null {
+  // New bridge payload: base64url(JSON). This avoids URL parser edge cases
+  // with provider tokens and makes the handoff independent of percent-encoding.
+  try {
+    const normalized = encoded.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized + "=".repeat((4 - normalized.length % 4) % 4);
+    const binary = atob(padded);
+    const bytes = Uint8Array.from(binary, c => c.charCodeAt(0));
+    const json = new TextDecoder().decode(bytes);
+    const parsed = JSON.parse(json);
+    if (Array.isArray(parsed)) return parsed as [string, string][];
+  } catch {}
+
+  // Backward compatibility with the previous encodeURIComponent(JSON) bridge.
+  try {
+    const parsed = JSON.parse(decodeURIComponent(encoded));
+    if (Array.isArray(parsed)) return parsed as [string, string][];
+  } catch {}
+  return null;
+}
+
 /**
  * Imports OAuth material before React mounts.
  * The callback may land on the backend origin first, then hand the data to the
- * canonical web origin through the URL fragment. Persist BOTH the token and a
- * local player profile here so React cannot race /api/auth/me and hide a valid
- * OAuth login behind a transient 401.
+ * canonical web/TWA origin through the URL fragment. The fragment is imported
+ * into the DESTINATION origin before React starts, so the login never depends
+ * on cross-origin cookies or sessionStorage surviving the OAuth round-trip.
  */
 export function consumeAuthHandoff(): void {
   try {
     const params = new URLSearchParams(window.location.search);
     const queryHandoff = params.get("stopauth");
-    const hash = window.location.hash;
-    const match = hash.match(/(?:^#|&)stopauth=([^&]+)/);
-    const encoded = match?.[1] || queryHandoff;
+    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    const hashHandoff = hashParams.get("stopauth");
+    const encoded = hashHandoff || queryHandoff;
     if (!encoded) return;
 
-    const items = JSON.parse(decodeURIComponent(encoded)) as [string, string][];
+    const items = decodeHandoffPayload(encoded);
+    if (!items) return;
+
     const allowed = new Set(["oauth_user", "fb_access_token", "stop_session_token"]);
     const values: Record<string, string> = {};
 
-    for (const [key, value] of items) {
+    for (const item of items) {
+      if (!Array.isArray(item) || item.length !== 2) continue;
+      const [key, value] = item;
       if (!allowed.has(key) || typeof value !== "string" || !value) continue;
       values[key] = value;
       try {
@@ -68,9 +93,8 @@ export function consumeAuthHandoff(): void {
       } catch {}
     }
 
-    // Make the OAuth profile immediately available to usePlayer(). This is a
-    // local bootstrap only; the signed stop_session_token remains the source
-    // of truth for server requests and is restored/reissued by /api/auth/me.
+    // Bootstrap the visible player synchronously. usePlayer() reads this value
+    // during its first render, so the OAuth return cannot race the auth modal.
     if (values.oauth_user) {
       try {
         const user = JSON.parse(values.oauth_user) as OAuthUser;
@@ -91,10 +115,13 @@ export function consumeAuthHandoff(): void {
       } catch {}
     }
 
+    // Remove BOTH possible handoff locations so the session token does not
+    // remain in the address bar/history after it has been consumed.
     params.delete("stopauth");
-    const cleanedHash = hash.replace(/(^#|&)stopauth=[^&]*/, "").replace(/^#$/, "");
+    hashParams.delete("stopauth");
+    const hash = hashParams.toString();
     const query = params.toString();
-    window.history.replaceState({}, "", `${window.location.pathname}${query ? `?${query}` : ""}${cleanedHash}`);
+    window.history.replaceState({}, "", `${window.location.pathname}${query ? `?${query}` : ""}${hash ? `#${hash}` : ""}`);
   } catch {}
 }
 
