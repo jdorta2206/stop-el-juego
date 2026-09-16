@@ -26,7 +26,7 @@ import java.nio.charset.StandardCharsets;
 /** Native foreground host for rewarded ads launched by an explicit user gesture in the TWA. */
 public class RewardedAdActivity extends Activity {
     private static final String TAG = "STOP_REWARDED";
-    private static final String TEST_REWARDED_ID = "ca-app-pub-3940256099942544/5224354917";
+    private static final String REAL_REWARDED_ID = "ca-app-pub-4807272408824742/3559554716";
     private static final String RESULT_ENDPOINT = "https://www.stopjuegodepalabras.com/api/rewards/admob-result";
 
     private String requestId;
@@ -47,7 +47,7 @@ public class RewardedAdActivity extends Activity {
     }
 
     private void loadAndShow() {
-        RewardedAd.load(this, TEST_REWARDED_ID, new AdRequest.Builder().build(), new RewardedAdLoadCallback() {
+        RewardedAd.load(this, REAL_REWARDED_ID, new AdRequest.Builder().build(), new RewardedAdLoadCallback() {
             @Override
             public void onAdLoaded(@NonNull RewardedAd ad) {
                 ad.setFullScreenContentCallback(new FullScreenContentCallback() {
