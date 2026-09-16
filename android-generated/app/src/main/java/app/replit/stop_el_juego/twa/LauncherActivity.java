@@ -74,13 +74,11 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                 Log.d(TAG, "use_as_origin validation=" + result + " relation=" + relation + " origin=" + requestedOrigin);
                 if (relationshipValidated) requestMessageChannelWithRetry(100L);
             }
-
             @Override
             public void onNavigationEvent(int navigationEvent, @Nullable Bundle extras) {
                 super.onNavigationEvent(navigationEvent, extras);
                 if (navigationEvent == NAVIGATION_FINISHED) requestMessageChannelWithRetry(250L);
             }
-
             @Override
             public void onMessageChannelReady(@Nullable Bundle extras) {
                 messageChannelReady = true;
@@ -89,7 +87,6 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                 Log.d(TAG, "TWA message channel ready");
                 sendReadyBurst(0);
             }
-
             @Override
             public void onPostMessage(@NonNull String message, @Nullable Bundle extras) {
                 super.onPostMessage(message, extras);
@@ -103,14 +100,12 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
         sendMessage(newMessage("STOP_AD_BRIDGE_READY"));
         if (attempt < 12) getWindow().getDecorView().postDelayed(() -> sendReadyBurst(attempt + 1), 500L);
     }
-
     private void requestMessageChannelWithRetry(long initialDelayMs) {
         if (messageChannelReady || channelRequestInFlight) return;
         channelRequestInFlight = true;
         channelRequestAttempts = 0;
         getWindow().getDecorView().postDelayed(this::requestMessageChannelAttempt, initialDelayMs);
     }
-
     private void requestMessageChannelAttempt() {
         if (messageChannelReady) { channelRequestInFlight = false; return; }
         CustomTabsSession session = getTwaSession();
@@ -120,22 +115,14 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             boolean requested = session.requestPostMessageChannel(SOURCE_ORIGIN, TARGET_ORIGIN, new Bundle());
             Log.d(TAG, "requestPostMessageChannel attempt=" + channelRequestAttempts + " accepted=" + requested);
             if (requested) { channelRequestInFlight = false; return; }
-        } catch (RuntimeException error) {
-            Log.w(TAG, "requestPostMessageChannel failed", error);
-        }
+        } catch (RuntimeException error) { Log.w(TAG, "requestPostMessageChannel failed", error); }
         retryMessageChannel();
     }
-
     private void retryMessageChannel() {
-        if (channelRequestAttempts >= 20 || messageChannelReady) {
-            channelRequestInFlight = false;
-            return;
-        }
+        if (channelRequestAttempts >= 20 || messageChannelReady) { channelRequestInFlight = false; return; }
         getWindow().getDecorView().postDelayed(this::requestMessageChannelAttempt, 300L);
     }
-
-    @Nullable
-    private CustomTabsSession getTwaSession() {
+    @Nullable private CustomTabsSession getTwaSession() {
         try {
             Object launcher = findFieldValue(this, "mTwaLauncher");
             if (!(launcher instanceof TwaLauncher)) return null;
@@ -146,9 +133,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             return null;
         }
     }
-
-    @Nullable
-    private static Object findFieldValue(Object target, String fieldName) throws ReflectiveOperationException {
+    @Nullable private static Object findFieldValue(Object target, String fieldName) throws ReflectiveOperationException {
         Class<?> type = target.getClass();
         while (type != null) {
             try {
@@ -174,28 +159,23 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             showRewardedAdWhenReady();
         } catch (JSONException ignored) { Log.w(TAG, "Ignoring malformed web message"); }
     }
-
     private boolean isAllowedPlacement(String placement) {
         return "extra_time".equals(placement) || "hint".equals(placement) || "double_points".equals(placement)
                 || "skip_round".equals(placement) || "extra_pack".equals(placement);
     }
-
     private String rewardedUnitId() { return USE_TEST_REWARDED_ADS ? REWARDED_TEST_ID : REWARDED_REAL_ID; }
-
     private void preloadRewardedAd() {
         if (!mobileAdsReady || rewardedAd != null || rewardedAdLoading) return;
         rewardedAdLoading = true;
         Log.d(TAG, "Rewarded load requested; unit=" + rewardedUnitId());
         RewardedAd.load(this, rewardedUnitId(), new AdRequest.Builder().build(), new RewardedAdLoadCallback() {
-            @Override
-            public void onAdLoaded(@NonNull RewardedAd ad) {
+            @Override public void onAdLoaded(@NonNull RewardedAd ad) {
                 rewardedAdLoading = false;
                 rewardedAd = ad;
                 Log.d(TAG, "Rewarded loaded successfully");
                 if (activeRequestId != null) showRewardedAd();
             }
-            @Override
-            public void onAdFailedToLoad(@NonNull LoadAdError error) {
+            @Override public void onAdFailedToLoad(@NonNull LoadAdError error) {
                 rewardedAdLoading = false;
                 rewardedAd = null;
                 Log.e(TAG, "Rewarded load failed: code=" + error.getCode() + " domain=" + error.getDomain()
@@ -204,13 +184,11 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             }
         });
     }
-
     private void showRewardedAdWhenReady() {
         if (rewardedAd != null) { showRewardedAd(); return; }
         if (!mobileAdsReady) { Log.w(TAG, "Rewarded requested before Mobile Ads initialization finished"); return; }
         preloadRewardedAd();
     }
-
     private void showRewardedAd() {
         if (activeRequestId == null || rewardedAd == null) return;
         RewardedAd ad = rewardedAd;
@@ -229,8 +207,9 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             @Override public void onAdShowedFullScreenContent() { Log.d(TAG, "Rewarded showed fullscreen content"); }
         });
         try {
+            Activity hostActivity = this;
             Log.d(TAG, "Showing rewarded ad requestId=" + activeRequestId + " placement=" + activePlacement);
-            ad.show(this, rewardItem -> {
+            ad.show(hostActivity, rewardItem -> {
                 rewardGrantedForCurrentAd = true;
                 Log.d(TAG, "Reward earned type=" + rewardItem.getType() + " amount=" + rewardItem.getAmount());
                 sendResult(true, "admob");
@@ -241,7 +220,6 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             preloadRewardedAd();
         }
     }
-
     private void sendResult(boolean rewarded, String source) {
         if (activeRequestId == null) return;
         JSONObject result = new JSONObject();
@@ -257,13 +235,11 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
         activePlacement = null;
         rewardGrantedForCurrentAd = false;
     }
-
     private JSONObject newMessage(String type) {
         JSONObject message = new JSONObject();
         try { message.put("type", type); } catch (JSONException ignored) {}
         return message;
     }
-
     private void sendMessage(JSONObject message) {
         CustomTabsSession session = getTwaSession();
         if (session == null || !messageChannelReady) return;
