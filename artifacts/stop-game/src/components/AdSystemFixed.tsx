@@ -21,7 +21,7 @@ function inStandaloneOrTwaSync(): boolean {
     if (params.get("source") === "twa" || params.get("utm_source") === "twa") return true;
     const ua = navigator.userAgent || "";
     const standalone = window.matchMedia?.("(display-mode: standalone)").matches ?? false;
-    const fullscreen = window.matchMedia?.("(display-mode: fullscreen")).matches ?? false;
+    const fullscreen = window.matchMedia?.("(display-mode: fullscreen)").matches ?? false;
     return /Android/i.test(ua) && (standalone || fullscreen);
   } catch { return true; }
 }
