@@ -1,6 +1,7 @@
 package app.replit.stop_el_juego.twa;
 
 import android.app.Activity;
+import android.net.Uri;
 import android.os.Bundle;
 import android.util.Log;
 
@@ -35,8 +36,10 @@ public class RewardedAdActivity extends Activity {
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        requestId = getIntent().getStringExtra("requestId");
+        Uri data = getIntent().getData();
+        requestId = data == null ? null : data.getQueryParameter("requestId");
         if (requestId == null || requestId.isEmpty()) {
+            Log.e(TAG, "Missing requestId in rewarded deep link: " + data);
             finish();
             return;
         }
