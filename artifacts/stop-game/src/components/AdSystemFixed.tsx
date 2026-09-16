@@ -85,49 +85,38 @@ export function BannerAd({ className = "" }: { className?: string }) {
 }
 
 export function RewardedAd({ onComplete, onSkip, rewardType = "points", rewardAmount = 20 }: { onComplete: (reward: number) => void; onSkip: () => void; rewardType?: "points" | "hint" | "extraTime"; rewardAmount?: number }) {
-  const insRef = useRef<HTMLModElement>(null);
-  const [countdown, setCountdown] = useState(15);
-  const [phase, setPhase] = useState<"pre" | "watching" | "done">("pre");
-  const [progress, setProgress] = useState(0);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [phase, setPhase] = useState<"pre" | "loading" | "error" | "done">("pre");
   const t = getT();
   const labels = { points: `+${rewardAmount} pts`, hint: t.ads.reward, extraTime: "+30s" };
   const icons = { points: <Star className="w-8 h-8 text-[#f9a825]" />, hint: <Zap className="w-8 h-8 text-[#f9a825]" />, extraTime: <Gift className="w-8 h-8 text-[#f9a825]" /> };
 
-  useEffect(() => {
-    initTwaAdBridge();
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-  }, []);
+  useEffect(() => { initTwaAdBridge(); }, []);
 
   const startWatching = async () => {
-    setPhase("watching");
-    // Android TWA: ONLY native AdMob can grant the reward. No timer fallback.
-    if (hasAndroidAppReferrer() || new URLSearchParams(window.location.search).get("source") === "googleplay-twa") {
+    setPhase("loading");
+    const isTwa = hasAndroidAppReferrer() || new URLSearchParams(window.location.search).get("source") === "googleplay-twa" || new URLSearchParams(window.location.search).get("source") === "twa";
+    if (isTwa) {
       const placement = rewardType === "extraTime" ? "extra_time" : rewardType === "hint" ? "hint" : "double_points";
       const result = await requestRewardedAd(placement);
-      if (result.rewarded) {
+      if (result.rewarded === true && result.source === "admob") {
         setPhase("done");
         window.setTimeout(() => onComplete(rewardAmount), 500);
       } else {
-        setPhase("pre");
-        onSkip();
+        setPhase("error");
+        window.setTimeout(() => onSkip(), 900);
       }
       return;
     }
-    if (isTwaAdBridgeAvailable()) return;
-    if (ADSENSE_CLIENT && VIDEO_SLOT && insRef.current) pushAd();
-    let elapsed = 0;
-    intervalRef.current = setInterval(() => {
-      elapsed += 1;
-      setProgress((elapsed / 15) * 100);
-      setCountdown(15 - elapsed);
-      if (elapsed >= 15) {
-        if (intervalRef.current) clearInterval(intervalRef.current);
-        setPhase("done");
-        window.setTimeout(() => onComplete(rewardAmount), 500);
-      }
-    }, 1000);
+    if (isTwaAdBridgeAvailable()) {
+      setPhase("error");
+      window.setTimeout(() => onSkip(), 900);
+      return;
+    }
+    // Web reward UI is intentionally disabled here: AdSense is not a rewarded-ad API.
+    // A web user must use the normal non-rewarded ad surfaces instead.
+    setPhase("error");
+    window.setTimeout(() => onSkip(), 900);
   };
 
-  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"><div className="w-full max-w-sm rounded-3xl overflow-hidden bg-white shadow-2xl"><div className="p-6 text-center"><h3 className="text-xl font-black">{phase === "done" ? "¡Recompensa!" : "Mira el anuncio"}</h3>{phase === "pre" && <><div className="my-5 flex justify-center">{icons[rewardType]}</div><p className="text-gray-600 text-sm mb-5">{labels[rewardType]}</p><button onClick={startWatching} className="w-full py-3 rounded-xl font-bold bg-[#f9a825] text-[#0d1757]">Ver anuncio</button><button onClick={onSkip} className="w-full py-2 mt-2 text-gray-500">Ahora no</button></>}{phase === "watching" && <><div className="my-5" style={{ width: "100%", height: 250 }}><ins ref={insRef} className="adsbygoogle" style={{ display: "block", width: "100%", height: 250 }} data-ad-client={ADSENSE_CLIENT} data-ad-slot={VIDEO_SLOT} /></div><div className="h-2 bg-gray-200 rounded-full overflow-hidden"><div className="h-full bg-[#f9a825] transition-all" style={{ width: `${progress}%` }} /></div><p className="text-sm text-gray-500 mt-2">{countdown}s</p></>}{phase === "done" && <div className="py-8"><div className="text-5xl mb-3">🎉</div><p className="text-gray-700">{labels[rewardType]}</p></div>}</div></div></div>;
+  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"><div className="w-full max-w-sm rounded-3xl overflow-hidden bg-white shadow-2xl"><div className="p-6 text-center"><h3 className="text-xl font-black">{phase === "done" ? "¡Recompensa!" : phase === "error" ? "Anuncio no disponible" : "Mira el anuncio"}</h3>{phase === "pre" && <><div className="my-5 flex justify-center">{icons[rewardType]}</div><p className="text-gray-600 text-sm mb-5">{labels[rewardType]}</p><button onClick={startWatching} className="w-full py-3 rounded-xl font-bold bg-[#f9a825] text-[#0d1757]">Ver anuncio</button><button onClick={onSkip} className="w-full py-2 mt-2 text-gray-500">Ahora no</button></>}{phase === "loading" && <div className="py-10"><div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-4 border-gray-200 border-t-[#f9a825]"/><p className="text-sm text-gray-600">Cargando anuncio…</p></div>}{phase === "error" && <><div className="py-8 text-4xl">📺</div><p className="text-sm text-gray-600">No se ha podido mostrar un anuncio recompensado.</p><button onClick={onSkip} className="w-full py-2 mt-4 text-gray-500">Continuar</button></>}{phase === "done" && <div className="py-8"><div className="text-5xl mb-3">🎉</div><p className="text-gray-700">{labels[rewardType]}</p></div>}</div></div></div>;
 }
