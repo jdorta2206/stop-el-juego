@@ -1,0 +1,82 @@
+name: Generate Bubblewrap Android project
+
+# Manual only on the Android isolation branch. Automatic regeneration was
+# overwriting the native test project during crash isolation.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: android/bubblewrap-admob
+          fetch-depth: 0
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install Bubblewrap core
+        run: npm install --no-save @bubblewrap/core@1.25.0
+      - name: Generate project
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf android-generated
+          mkdir -p android-generated
+          node <<'NODE'
+          const fs = require('fs');
+          const path = require('path');
+          const { TwaManifest, TwaGenerator } = require('@bubblewrap/core');
+          (async () => {
+            const out = path.resolve('android-generated');
+            const source = path.resolve('android/twa-manifest.json');
+            const generationManifest = path.join(out, 'twa-manifest-generation.json');
+            const raw = JSON.parse(fs.readFileSync(source, 'utf8'));
+            if (raw.startUrl?.startsWith('https://')) {
+              const u = new URL(raw.startUrl);
+              raw.launchUrl = u.pathname + u.search;
+            } else if (!raw.launchUrl) raw.launchUrl = '/';
+            raw.maskableIconUrl = raw.iconUrl;
+            raw.monochromeIconUrl = raw.iconUrl;
+            fs.writeFileSync(generationManifest, JSON.stringify(raw, null, 2));
+            const manifest = await TwaManifest.fromFile(generationManifest);
+            await manifest.saveToFile(path.join(out, 'twa-manifest.json'));
+            await new TwaGenerator().createTwaProject(out, manifest);
+            const gradle = path.join(out, 'app', 'build.gradle');
+            let text = fs.readFileSync(gradle, 'utf8');
+            text = text.replace('splashScreenFadeOutDuration: ,', 'splashScreenFadeOutDuration: 0,');
+            text = text.replace('versionName ""', 'versionName "1.3.6.3"');
+            text = text.replace(/minSdkVersion\s+21/, 'minSdkVersion 23');
+            text = text.replace(/launchUrl:\s*'https:\/\/www\.stopjuegodepalabras\.com\/?\?source=googleplay-twa'/, "launchUrl: '/?source=googleplay-twa'");
+            text = text.replace("implementation 'com.google.androidbrowserhelper:androidbrowserhelper:2.7.0-alpha02'", "implementation 'com.google.androidbrowserhelper:androidbrowserhelper:2.7.3'");
+            text = text.replace("enableSiteSettingsShortcut: 'false'", "enableSiteSettingsShortcut: false");
+            fs.writeFileSync(gradle, text);
+            fs.rmSync(generationManifest, { force: true });
+          })().catch(err => { console.error(err); process.exit(1); });
+          NODE
+      - name: Build unsigned debug APK
+        working-directory: android-generated
+        run: ./gradlew assembleDebug --no-daemon
+      - name: Remove generated build/cache files
+        run: rm -rf android-generated/.gradle android-generated/app/build android-generated/build && rm -f android-generated/android-keystore
+      - name: Commit generated Android project
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add android-generated
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'build(android): add validated Bubblewrap project [skip android-generation]'
+          git push origin HEAD:android/bubblewrap-admob

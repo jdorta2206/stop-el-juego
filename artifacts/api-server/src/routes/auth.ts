@@ -297,7 +297,8 @@ router.get("/google/start", (req: Request, res: Response) => {
   }
   const redirectUri = `${APP_ORIGIN}/api/auth/google/callback`;
   const returnPath = (req.query["return"] as string) || "/";
-  const returnOrigin = pickReturnOrigin(req, null);
+  const requestedOrigin = typeof req.query["origin"] === "string" ? req.query["origin"] : null;
+  const returnOrigin = pickReturnOrigin(req, requestedOrigin);
   const state = beginAuthState(res, returnPath, returnOrigin);
   const params = new URLSearchParams({
     client_id: GOOGLE_CLIENT_ID,
@@ -399,7 +400,8 @@ router.get("/facebook/start", (req: Request, res: Response) => {
   }
   const redirectUri = `${APP_ORIGIN}/api/auth/facebook/callback`;
   const returnPath = (req.query["return"] as string) || "/";
-  const returnOrigin = pickReturnOrigin(req, null);
+  const requestedOrigin = typeof req.query["origin"] === "string" ? req.query["origin"] : null;
+  const returnOrigin = pickReturnOrigin(req, requestedOrigin);
   const state = beginAuthState(res, returnPath, returnOrigin);
   const params = new URLSearchParams({
     client_id: FACEBOOK_APP_ID,

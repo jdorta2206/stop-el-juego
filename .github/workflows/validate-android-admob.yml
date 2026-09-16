@@ -1,0 +1,50 @@
+name: Validate Android AdMob + Play Billing TWA
+
+on:
+  push:
+    branches: [android/bubblewrap-admob]
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Validate final Android monetization sources
+        working-directory: android-generated
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f app/build.gradle
+          test -f app/src/main/AndroidManifest.xml
+          test -f app/src/main/java/app/replit/stop_el_juego/twa/LauncherActivity.java
+          test -f app/src/main/java/app/replit/stop_el_juego/twa/DelegationService.java
+          grep -q 'minSdkVersion 23' app/build.gradle
+          grep -q 'targetSdkVersion 36' app/build.gradle
+          grep -q 'versionCode 22' app/build.gradle
+          grep -q 'versionName "1.3.6.3"' app/build.gradle
+          grep -q 'androidbrowserhelper:2.7.3' app/build.gradle
+          grep -q 'com.google.androidbrowserhelper:billing:1.2.0' app/build.gradle
+          grep -q 'play-services-ads:25.4.0' app/build.gradle
+          grep -q 'com.google.android.gms.ads.APPLICATION_ID' app/src/main/AndroidManifest.xml
+          grep -q 'ca-app-pub-4807272408824742~9880632781' app/src/main/AndroidManifest.xml
+          grep -q 'com.android.vending.BILLING' app/src/main/AndroidManifest.xml
+          grep -q 'MobileAds' app/src/main/java/app/replit/stop_el_juego/twa/LauncherActivity.java
+          grep -q 'RewardedAd' app/src/main/java/app/replit/stop_el_juego/twa/LauncherActivity.java
+          grep -q 'CustomTabsSession' app/src/main/java/app/replit/stop_el_juego/twa/LauncherActivity.java
+          grep -q 'requestPostMessageChannel' app/src/main/java/app/replit/stop_el_juego/twa/LauncherActivity.java
+          grep -q 'STOP_AD_REWARDED_RESULT' app/src/main/java/app/replit/stop_el_juego/twa/LauncherActivity.java
+          grep -q 'ca-app-pub-4807272408824742/3559554716' app/src/main/java/app/replit/stop_el_juego/twa/LauncherActivity.java
+          grep -q 'ca-app-pub-4807272408824742/7242069847' app/src/main/java/app/replit/stop_el_juego/twa/LauncherActivity.java
+          grep -q 'public class DelegationService extends com.google.androidbrowserhelper.trusted.DelegationService' app/src/main/java/app/replit/stop_el_juego/twa/DelegationService.java
+          grep -q 'DigitalGoodsRequestHandler' app/src/main/java/app/replit/stop_el_juego/twa/DelegationService.java
+          grep -q 'com.google.androidbrowserhelper.playbilling.provider.PaymentActivity' app/src/main/AndroidManifest.xml
+          grep -q 'com.google.androidbrowserhelper.playbilling.provider.PaymentService' app/src/main/AndroidManifest.xml
+          grep -q 'android.support.customtabs.trusted.TRUSTED_WEB_ACTIVITY_SERVICE' app/src/main/AndroidManifest.xml
+          grep -q 'public class LauncherActivity extends com.google.androidbrowserhelper.trusted.LauncherActivity' app/src/main/java/app/replit/stop_el_juego/twa/LauncherActivity.java
+          echo 'FINAL ANDROID MONETIZATION SOURCE VALIDATION: OK'
+
+# The real APK/AAB compilation is performed by the dedicated Android build workflows.
+# This workflow deliberately does not duplicate Gradle compilation; the same project
+# already builds successfully in android-monetized-debug and android-release-signed.

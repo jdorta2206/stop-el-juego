@@ -1,0 +1,72 @@
+import groovy.xml.MarkupBuilder
+
+plugins {
+    id 'com.android.application'
+}
+
+def twaManifest = [
+    applicationId: 'app.replit.stop_el_juego.twa', hostName: 'www.stopjuegodepalabras.com', launchUrl: '/?source=googleplay-twa', name: 'STOP - El Juego', launcherName: 'STOP',
+    themeColor: '#0D1757', themeColorDark: '#000000', navigationColor: '#0D1757', navigationColorDark: '#0D1757', navigationDividerColor: '#0D1757', navigationDividerColorDark: '#0D1757', backgroundColor: '#0D1757',
+    enableNotifications: true, shortcuts: [], splashScreenFadeOutDuration: 0, generatorApp: 'bubblewrap-cli', fallbackType: 'customtabs', enableSiteSettingsShortcut: false, orientation: 'portrait',
+]
+android {
+    compileSdkVersion 36
+    namespace "app.replit.stop_el_juego.twa"
+    buildFeatures { buildConfig true }
+    defaultConfig {
+        applicationId "app.replit.stop_el_juego.twa"
+        minSdkVersion 23
+        targetSdkVersion 36
+        versionCode 22
+        versionName "1.3.6.3"
+        resValue "string", "appName", twaManifest.name
+        resValue "string", "launcherName", twaManifest.launcherName
+        def launchUrl = "https://" + twaManifest.hostName + twaManifest.launchUrl
+        resValue "string", "launchUrl", launchUrl
+        resValue "string", "webManifestUrl", 'https://www.stopjuegodepalabras.com/manifest.json'
+        resValue "string", "fullScopeUrl", 'https://www.stopjuegodepalabras.com/'
+        resValue "string", "hostName", twaManifest.hostName
+        resValue "color", "colorPrimary", twaManifest.themeColor
+        resValue "color", "colorPrimaryDark", twaManifest.themeColorDark
+        resValue "color", "navigationColor", twaManifest.navigationColor
+        resValue "color", "navigationColorDark", twaManifest.navigationColorDark
+        resValue "color", "navigationDividerColor", twaManifest.navigationDividerColor
+        resValue "color", "navigationDividerColorDark", twaManifest.navigationDividerColorDark
+        resValue "color", "backgroundColor", twaManifest.backgroundColor
+        resValue "string", "providerAuthority", twaManifest.applicationId + '.fileprovider'
+        resValue "bool", "enableNotification", twaManifest.enableNotifications.toString()
+        resValue "integer", "splashScreenFadeOutDuration", twaManifest.splashScreenFadeOutDuration.toString()
+        resValue "string", "generatorApp", twaManifest.generatorApp
+        resValue "string", "fallbackType", twaManifest.fallbackType
+        resValue "bool", "enableSiteSettingsShortcut", twaManifest.enableSiteSettingsShortcut.toString()
+        resValue "string", "orientation", twaManifest.orientation
+    }
+    buildTypes { release { minifyEnabled false } }
+    if (System.getenv('KEYSTORE_PASSWORD') && System.getenv('KEY_ALIAS') && System.getenv('KEY_PASSWORD')) {
+        signingConfigs { ciRelease { storeFile file('../../android-release.keystore'); storePassword System.getenv('KEYSTORE_PASSWORD'); keyAlias System.getenv('KEY_ALIAS'); keyPassword System.getenv('KEY_PASSWORD') } }
+        buildTypes.release.signingConfig signingConfigs.ciRelease
+    }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_1_8; targetCompatibility JavaVersion.VERSION_1_8 }
+    lintOptions { checkReleaseBuilds false }
+}
+task generateShorcutsFile {
+    assert twaManifest.shortcuts.size() < 5, "You can have at most 4 shortcuts."
+    def shortcutsFile = new File("$projectDir/src/main/res/xml", "shortcuts.xml")
+    def xmlWriter = new StringWriter(); def xmlMarkup = new MarkupBuilder(new IndentPrinter(xmlWriter, "    ", true))
+    xmlMarkup.'shortcuts'('xmlns:android': 'http://schemas.android.com/apk/res/android') {
+        twaManifest.shortcuts.eachWithIndex { s, i ->
+            'shortcut'('android:shortcutId': 'shortcut' + i, 'android:enabled': 'true', 'android:icon': '@drawable/' + s.icon, 'android:shortcutShortLabel': '@string/shortcut_short_name_' + i, 'android:shortcutLongLabel': '@string/shortcut_name_' + i) {
+                'intent'('android:action': 'android.intent.action.MAIN', 'android:targetPackage': twaManifest.applicationId, 'android:targetClass': twaManifest.applicationId + '.LauncherActivity', 'android:data': s.url)
+                'categories'('android:name': 'android.intent.category.LAUNCHER')
+            }
+        }
+    }
+    shortcutsFile.text = xmlWriter.toString() + '\n'
+}
+preBuild.dependsOn(generateShorcutsFile)
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation 'com.google.androidbrowserhelper:androidbrowserhelper:2.7.3'
+    implementation 'com.google.androidbrowserhelper:billing:1.2.0'
+    implementation 'com.google.android.gms:play-services-ads:25.4.0'
+}
