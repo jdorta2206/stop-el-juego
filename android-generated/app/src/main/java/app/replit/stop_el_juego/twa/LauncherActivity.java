@@ -25,16 +25,15 @@ import org.json.JSONObject;
 
 import java.lang.reflect.Field;
 
-/**
- * STOP TWA native bridge for Google Mobile Ads rewarded video.
- *
- * The Browser Helper LauncherActivity owns the TwaLauncher/session internally, so this
- * integration obtains that session through reflection. This is isolated to the generated
- * Android wrapper and does not alter the web application or production backend.
- */
+/** STOP TWA native bridge for Google Mobile Ads rewarded video. */
 public class LauncherActivity extends com.google.androidbrowserhelper.trusted.LauncherActivity {
     private static final String TAG = "STOP_AD_BRIDGE";
     private static final Uri ORIGIN = Uri.parse("https://www.stopjuegodepalabras.com");
+
+    // v24 intentionally uses Google's official rewarded test unit so the
+    // internal test can prove the native video flow independently of ad
+    // inventory. Switch USE_TEST_REWARDED_ADS to false before production.
+    private static final boolean USE_TEST_REWARDED_ADS = true;
     private static final String REWARDED_TEST_ID = "ca-app-pub-3940256099942544/5224354917";
     private static final String REWARDED_REAL_ID = "ca-app-pub-4807272408824742/3559554716";
 
@@ -50,12 +49,12 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         MobileAds.initialize(this, status -> {});
-        preloadRewardedAd();
         if (Build.VERSION.SDK_INT > Build.VERSION_CODES.O) {
             setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT);
         } else {
             setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
         }
+        preloadRewardedAd();
     }
 
     @Override
@@ -125,7 +124,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             activeRequestId = requestId;
             activePlacement = placement;
             rewardGrantedForCurrentAd = false;
-            showRewardedAd();
+            showRewardedAdWhenReady();
         } catch (JSONException ignored) {
             Log.w(TAG, "Ignoring malformed web message");
         }
@@ -139,33 +138,46 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                 || "extra_pack".equals(placement);
     }
 
+    private String rewardedUnitId() {
+        return USE_TEST_REWARDED_ADS ? REWARDED_TEST_ID : REWARDED_REAL_ID;
+    }
+
     private void preloadRewardedAd() {
         if (rewardedAd != null || rewardedAdLoading) return;
         rewardedAdLoading = true;
-        String adUnitId = BuildConfig.DEBUG ? REWARDED_TEST_ID : REWARDED_REAL_ID;
-        RewardedAd.load(this, adUnitId, new AdRequest.Builder().build(),
+        RewardedAd.load(this, rewardedUnitId(), new AdRequest.Builder().build(),
                 new RewardedAdLoadCallback() {
                     @Override
                     public void onAdLoaded(@NonNull RewardedAd ad) {
                         rewardedAdLoading = false;
                         rewardedAd = ad;
+                        Log.d(TAG, "Rewarded loaded");
+                        if (activeRequestId != null) showRewardedAd();
                     }
 
                     @Override
                     public void onAdFailedToLoad(@NonNull LoadAdError error) {
                         rewardedAdLoading = false;
                         rewardedAd = null;
-                        Log.w(TAG, "Rewarded load failed: " + error.getCode());
+                        Log.w(TAG, "Rewarded load failed: code=" + error.getCode()
+                                + " domain=" + error.getDomain() + " message=" + error.getMessage());
+                        if (activeRequestId != null) sendResult(false, "error");
                     }
                 });
     }
 
-    private void showRewardedAd() {
-        if (rewardedAd == null) {
-            sendResult(false, "error");
-            preloadRewardedAd();
+    private void showRewardedAdWhenReady() {
+        if (rewardedAd != null) {
+            showRewardedAd();
             return;
         }
+        // Do not fail immediately. The previous implementation returned the
+        // white web error panel whenever preload had not finished yet.
+        preloadRewardedAd();
+    }
+
+    private void showRewardedAd() {
+        if (activeRequestId == null || rewardedAd == null) return;
 
         RewardedAd ad = rewardedAd;
         rewardedAd = null;
@@ -178,6 +190,8 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
 
             @Override
             public void onAdFailedToShowFullScreenContent(@NonNull AdError error) {
+                Log.w(TAG, "Rewarded show failed: code=" + error.getCode()
+                        + " domain=" + error.getDomain() + " message=" + error.getMessage());
                 sendResult(false, "error");
                 preloadRewardedAd();
             }
