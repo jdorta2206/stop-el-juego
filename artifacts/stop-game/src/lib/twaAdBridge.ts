@@ -1,4 +1,4 @@
-import { hasAndroidAppReferrer } from "@/lib/playBilling";
+import { isLikelyPlayTwa } from "@/lib/playBilling";
 
 const TARGET_ORIGIN = "https://www.stopjuegodepalabras.com";
 const ANDROID_APP_ORIGIN = "android-app://app.replit.stop_el_juego.twa";
@@ -17,12 +17,7 @@ let listenerInstalled = false;
 const pending = new Map<string, (result: RewardResult) => void>();
 
 function isAndroidTwa(): boolean {
-  if (typeof window === "undefined") return false;
-  try {
-    if (hasAndroidAppReferrer()) return true;
-    const params = new URLSearchParams(window.location.search);
-    return params.get("source") === "googleplay-twa" || params.get("source") === "twa";
-  } catch { return false; }
+  try { return isLikelyPlayTwa(); } catch { return false; }
 }
 
 function normalizeMessage(data: unknown): Record<string, unknown> | null {
