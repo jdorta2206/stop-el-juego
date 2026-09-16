@@ -1,5 +1,3 @@
-import { isLikelyPlayTwa } from "@/lib/playBilling";
-
 const TARGET_ORIGIN = "https://www.stopjuegodepalabras.com";
 const ANDROID_APP_ORIGIN = "android-app://app.replit.stop_el_juego.twa";
 const REQUEST_TYPE = "STOP_AD_REQUEST_REWARDED";
@@ -15,10 +13,6 @@ type MessagePortState = { port: MessagePort | null; ready: boolean };
 const state: MessagePortState = { port: null, ready: false };
 let listenerInstalled = false;
 const pending = new Map<string, (result: RewardResult) => void>();
-
-function isAndroidTwa(): boolean {
-  try { return isLikelyPlayTwa(); } catch { return false; }
-}
 
 function normalizeMessage(data: unknown): Record<string, unknown> | null {
   if (typeof data === "string") {
@@ -84,12 +78,15 @@ export function initTwaAdBridge(): void { installListener(); }
 
 export function isTwaAdBridgeAvailable(): boolean {
   installListener();
-  return isAndroidTwa() && state.ready && !!state.port;
+  return state.ready && !!state.port;
 }
 
 export async function requestRewardedAd(placement: RewardedPlacement): Promise<RewardResult> {
   installListener();
-  if (!isAndroidTwa()) return { rewarded: false, source: "error" };
+  // Do not gate on URL/referrer heuristics. An established, authenticated
+  // MessagePort is the authoritative proof that this page is inside the native
+  // TWA bridge. This survives redirects/reloads where source=googleplay-twa
+  // or document.referrer may no longer be present.
   if (!(await waitForReady(CHANNEL_READY_TIMEOUT_MS))) return { rewarded: false, source: "error" };
   const requestId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   return new Promise<RewardResult>((resolve) => {
