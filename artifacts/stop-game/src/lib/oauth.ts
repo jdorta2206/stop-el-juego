@@ -52,6 +52,12 @@ export function consumeAuthHandoff(): void {
       try {
         const store = k === "stop_session_token" ? window.localStorage : window.sessionStorage;
         store.setItem(k, v);
+        // OAuth user/token are also mirrored temporarily to localStorage. This
+        // covers Android TWA/custom-tab returns that create a fresh browsing
+        // context and therefore do not preserve sessionStorage.
+        if (k !== "stop_session_token") {
+          try { window.localStorage.setItem(k, v); } catch {}
+        }
       } catch { /* storage unavailable — ignore */ }
     }
     let cleaned = hash.replace(/(^#|&)stopauth=[^&]*/, "");
@@ -70,17 +76,37 @@ export function checkOAuthReturn(): OAuthUser | null {
     throw new Error(friendlyError(authError));
   }
 
-  const raw = sessionStorage.getItem("oauth_user");
+  let raw: string | null = null;
+  try { raw = sessionStorage.getItem("oauth_user"); } catch {}
+  if (!raw) {
+    try { raw = localStorage.getItem("oauth_user"); } catch {}
+  }
+
   if (raw) {
     try {
       const u = JSON.parse(raw) as OAuthUser;
-      sessionStorage.removeItem("oauth_user");
+      try { sessionStorage.removeItem("oauth_user"); } catch {}
+      try { localStorage.removeItem("oauth_user"); } catch {}
       return u;
     } catch {
-      sessionStorage.removeItem("oauth_user");
+      try { sessionStorage.removeItem("oauth_user"); } catch {}
+      try { localStorage.removeItem("oauth_user"); } catch {}
     }
   }
   return null;
+}
+
+export function consumeFacebookAccessToken(): string | null {
+  let token: string | null = null;
+  try { token = sessionStorage.getItem("fb_access_token"); } catch {}
+  if (!token) {
+    try { token = localStorage.getItem("fb_access_token"); } catch {}
+  }
+  if (token) {
+    try { sessionStorage.removeItem("fb_access_token"); } catch {}
+    try { localStorage.removeItem("fb_access_token"); } catch {}
+  }
+  return token;
 }
 
 function friendlyError(code: string): string {
