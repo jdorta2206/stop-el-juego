@@ -30,9 +30,8 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     private static final String TAG = "STOP_AD_BRIDGE";
     private static final Uri ORIGIN = Uri.parse("https://www.stopjuegodepalabras.com");
 
-    // v24 intentionally uses Google's official rewarded test unit so the
-    // internal test can prove the native video flow independently of ad
-    // inventory. Switch USE_TEST_REWARDED_ADS to false before production.
+    // Keep the official Google test unit until the native flow is proven on the
+    // test APK. This isolates TWA/bridge problems from production ad inventory.
     private static final boolean USE_TEST_REWARDED_ADS = true;
     private static final String REWARDED_TEST_ID = "ca-app-pub-3940256099942544/5224354917";
     private static final String REWARDED_REAL_ID = "ca-app-pub-4807272408824742/3559554716";
@@ -44,11 +43,15 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     private boolean rewardGrantedForCurrentAd;
     private String activeRequestId;
     private String activePlacement;
+    private boolean channelRequestInFlight;
+    private int channelRequestAttempts;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        MobileAds.initialize(this, status -> {});
+        MobileAds.initialize(this, status -> {
+            Log.d(TAG, "MobileAds initialized");
+        });
         if (Build.VERSION.SDK_INT > Build.VERSION_CODES.O) {
             setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT);
         } else {
@@ -65,17 +68,24 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                     boolean result, @Nullable Bundle extras) {
                 relationshipValidated = result && ORIGIN.equals(requestedOrigin);
                 Log.d(TAG, "use_as_origin validation=" + result + " origin=" + requestedOrigin);
-                requestMessageChannel();
+                requestMessageChannelWithRetry();
             }
 
             @Override
             public void onNavigationEvent(int navigationEvent, @Nullable Bundle extras) {
-                if (navigationEvent == NAVIGATION_FINISHED) requestMessageChannel();
+                if (navigationEvent == NAVIGATION_FINISHED) {
+                    // Chromium can deliver NAVIGATION_FINISHED before the web
+                    // document is ready for postMessage. Retry briefly instead
+                    // of making the first launch depend on timing.
+                    requestMessageChannelWithRetry();
+                }
             }
 
             @Override
             public void onMessageChannelReady(@Nullable Bundle extras) {
                 messageChannelReady = true;
+                channelRequestInFlight = false;
+                channelRequestAttempts = 0;
                 sendMessage(newMessage("STOP_AD_BRIDGE_READY"));
                 Log.d(TAG, "TWA message channel ready");
             }
@@ -87,30 +97,84 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
         };
     }
 
-    private void requestMessageChannel() {
-        if (!relationshipValidated) return;
+    private void requestMessageChannelWithRetry() {
+        if (messageChannelReady || !relationshipValidated || channelRequestInFlight) return;
+        channelRequestInFlight = true;
+        channelRequestAttempts = 0;
+        requestMessageChannelAttempt();
+    }
+
+    private void requestMessageChannelAttempt() {
+        if (messageChannelReady || !relationshipValidated) {
+            channelRequestInFlight = false;
+            return;
+        }
+
         CustomTabsSession session = getInternalCustomTabsSession();
-        if (session == null) return;
-        boolean requested = session.requestPostMessageChannel(ORIGIN, ORIGIN, new Bundle());
-        Log.d(TAG, "requestPostMessageChannel=" + requested);
+        if (session == null) {
+            retryMessageChannel();
+            return;
+        }
+
+        channelRequestAttempts++;
+        try {
+            boolean requested = session.requestPostMessageChannel(ORIGIN, ORIGIN, new Bundle());
+            Log.d(TAG, "requestPostMessageChannel attempt=" + channelRequestAttempts + " accepted=" + requested);
+            if (requested) {
+                channelRequestInFlight = false;
+                return;
+            }
+        } catch (RuntimeException error) {
+            Log.w(TAG, "requestPostMessageChannel failed", error);
+        }
+        retryMessageChannel();
+    }
+
+    private void retryMessageChannel() {
+        if (channelRequestAttempts >= 12 || messageChannelReady) {
+            channelRequestInFlight = false;
+            Log.w(TAG, "TWA postMessage channel could not be established after " + channelRequestAttempts + " attempts");
+            return;
+        }
+        getWindow().getDecorView().postDelayed(this::requestMessageChannelAttempt, 300L);
     }
 
     @Nullable
     private CustomTabsSession getInternalCustomTabsSession() {
         try {
-            Field launcherField = com.google.androidbrowserhelper.trusted.LauncherActivity.class
-                    .getDeclaredField("mTwaLauncher");
+            // android-browser-helper 2.7.3 keeps the session private. Do not
+            // assume the exact declaring class: generated/library versions can
+            // move these fields between LauncherActivity/TwaLauncher. Walk the
+            // hierarchy so a harmless library refactor does not silently break
+            // the rewarded bridge.
+            Field launcherField = findField(com.google.androidbrowserhelper.trusted.LauncherActivity.class, "mTwaLauncher");
+            if (launcherField == null) return null;
             launcherField.setAccessible(true);
             Object launcher = launcherField.get(this);
             if (launcher == null) return null;
-            Field sessionField = launcher.getClass().getDeclaredField("mSession");
+
+            Field sessionField = findField(launcher.getClass(), "mSession");
+            if (sessionField == null) return null;
             sessionField.setAccessible(true);
             Object session = sessionField.get(launcher);
             return session instanceof CustomTabsSession ? (CustomTabsSession) session : null;
-        } catch (ReflectiveOperationException error) {
+        } catch (ReflectiveOperationException | SecurityException error) {
             Log.w(TAG, "Unable to access TWA CustomTabsSession", error);
             return null;
         }
+    }
+
+    @Nullable
+    private static Field findField(Class<?> type, String name) {
+        Class<?> current = type;
+        while (current != null) {
+            try {
+                return current.getDeclaredField(name);
+            } catch (NoSuchFieldException ignored) {
+                current = current.getSuperclass();
+            }
+        }
+        return null;
     }
 
     private void handleWebMessage(String raw) {
@@ -171,8 +235,6 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             showRewardedAd();
             return;
         }
-        // Do not fail immediately. The previous implementation returned the
-        // white web error panel whenever preload had not finished yet.
         preloadRewardedAd();
     }
 
@@ -197,10 +259,18 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             }
         });
 
-        ad.show(this, rewardItem -> {
-            rewardGrantedForCurrentAd = true;
-            sendResult(true, "admob");
-        });
+        try {
+            ad.show(this, rewardItem -> {
+                // This is the ONLY successful reward path. No timer/web
+                // fallback is allowed to grant the game benefit.
+                rewardGrantedForCurrentAd = true;
+                sendResult(true, "admob");
+            });
+        } catch (RuntimeException error) {
+            Log.w(TAG, "Rewarded show threw", error);
+            sendResult(false, "error");
+            preloadRewardedAd();
+        }
     }
 
     private void sendResult(boolean rewarded, String source) {
@@ -230,6 +300,11 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     private void sendMessage(JSONObject message) {
         CustomTabsSession session = getInternalCustomTabsSession();
         if (session == null || !messageChannelReady) return;
-        session.postMessage(message.toString(), null);
+        try {
+            int result = session.postMessage(message.toString(), null);
+            Log.d(TAG, "postMessage result=" + result + " message=" + message.optString("type"));
+        } catch (RuntimeException error) {
+            Log.w(TAG, "postMessage failed", error);
+        }
     }
 }
