@@ -15,6 +15,10 @@ export const isInstagramConfigured = false;
 export const isTikTokConfigured = false;
 export const isAppleConfigured = !!import.meta.env.VITE_APPLE_CLIENT_ID;
 
+const PLAYER_STORAGE_KEY = "stop_player_v2";
+const SESSION_TOKEN_KEY = "stop_session_token";
+const AVATAR_COLORS = ["#f9a825", "#42a5f5", "#66bb6a", "#ab47bc", "#ef5350", "#26a69a"];
+
 function startOAuth(provider: "google" | "facebook" | "instagram" | "tiktok" | "apple") {
   const returnPath = window.location.pathname + window.location.search;
   try { sessionStorage.setItem("oauth_return", returnPath); } catch {}
@@ -32,7 +36,13 @@ export function signInWithInstagram() { startOAuth("instagram"); }
 export function signInWithTikTok() { startOAuth("tiktok"); }
 export function signInWithApple() { startOAuth("apple"); }
 
-/** Imports OAuth material before React mounts. Accepts both fragment and query handoffs. */
+/**
+ * Imports OAuth material before React mounts.
+ * The callback may land on the backend origin first, then hand the data to the
+ * canonical web origin through the URL fragment. Persist BOTH the token and a
+ * local player profile here so React cannot race /api/auth/me and hide a valid
+ * OAuth login behind a transient 401.
+ */
 export function consumeAuthHandoff(): void {
   try {
     const params = new URLSearchParams(window.location.search);
@@ -44,16 +54,43 @@ export function consumeAuthHandoff(): void {
 
     const items = JSON.parse(decodeURIComponent(encoded)) as [string, string][];
     const allowed = new Set(["oauth_user", "fb_access_token", "stop_session_token"]);
+    const values: Record<string, string> = {};
+
     for (const [key, value] of items) {
       if (!allowed.has(key) || typeof value !== "string" || !value) continue;
+      values[key] = value;
       try {
-        if (key === "stop_session_token") localStorage.setItem(key, value);
+        if (key === "stop_session_token") localStorage.setItem(SESSION_TOKEN_KEY, value);
         else {
           sessionStorage.setItem(key, value);
           localStorage.setItem(key, value);
         }
       } catch {}
     }
+
+    // Make the OAuth profile immediately available to usePlayer(). This is a
+    // local bootstrap only; the signed stop_session_token remains the source
+    // of truth for server requests and is restored/reissued by /api/auth/me.
+    if (values.oauth_user) {
+      try {
+        const user = JSON.parse(values.oauth_user) as OAuthUser;
+        if (user?.id && user?.name) {
+          const existingRaw = localStorage.getItem(PLAYER_STORAGE_KEY);
+          const existing = existingRaw ? JSON.parse(existingRaw) : null;
+          const avatarColor = existing?.avatarColor || AVATAR_COLORS[0];
+          const profile = {
+            id: String(user.id),
+            name: String(user.name).trim().slice(0, 14),
+            avatarColor,
+            loginMethod: user.provider || null,
+            picture: user.picture ?? null,
+            fbAccessToken: values.fb_access_token || null,
+          };
+          if (profile.name) localStorage.setItem(PLAYER_STORAGE_KEY, JSON.stringify(profile));
+        }
+      } catch {}
+    }
+
     params.delete("stopauth");
     const cleanedHash = hash.replace(/(^#|&)stopauth=[^&]*/, "").replace(/^#$/, "");
     const query = params.toString();
