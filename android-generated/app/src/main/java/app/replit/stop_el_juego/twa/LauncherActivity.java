@@ -30,8 +30,6 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     private static final String TAG = "STOP_AD_BRIDGE";
     private static final Uri ORIGIN = Uri.parse("https://www.stopjuegodepalabras.com");
 
-    // Keep the official Google test unit until the native flow is proven on the
-    // test APK. This isolates TWA/bridge problems from production ad inventory.
     private static final boolean USE_TEST_REWARDED_ADS = true;
     private static final String REWARDED_TEST_ID = "ca-app-pub-3940256099942544/5224354917";
     private static final String REWARDED_REAL_ID = "ca-app-pub-4807272408824742/3559554716";
@@ -49,9 +47,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        MobileAds.initialize(this, status -> {
-            Log.d(TAG, "MobileAds initialized");
-        });
+        MobileAds.initialize(this, status -> Log.d(TAG, "MobileAds initialized"));
         if (Build.VERSION.SDK_INT > Build.VERSION_CODES.O) {
             setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT);
         } else {
@@ -73,12 +69,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
 
             @Override
             public void onNavigationEvent(int navigationEvent, @Nullable Bundle extras) {
-                if (navigationEvent == NAVIGATION_FINISHED) {
-                    // Chromium can deliver NAVIGATION_FINISHED before the web
-                    // document is ready for postMessage. Retry briefly instead
-                    // of making the first launch depend on timing.
-                    requestMessageChannelWithRetry();
-                }
+                if (navigationEvent == NAVIGATION_FINISHED) requestMessageChannelWithRetry();
             }
 
             @Override
@@ -86,8 +77,11 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                 messageChannelReady = true;
                 channelRequestInFlight = false;
                 channelRequestAttempts = 0;
-                sendMessage(newMessage("STOP_AD_BRIDGE_READY"));
                 Log.d(TAG, "TWA message channel ready");
+                // The first READY can race the first page's JavaScript listener.
+                // Repeat it for a short window so a cold TWA launch cannot miss
+                // the handshake before React/main.tsx installs its listener.
+                sendReadyBurst(0);
             }
 
             @Override
@@ -95,6 +89,14 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                 handleWebMessage(message);
             }
         };
+    }
+
+    private void sendReadyBurst(int attempt) {
+        if (!messageChannelReady || isFinishing()) return;
+        sendMessage(newMessage("STOP_AD_BRIDGE_READY"));
+        if (attempt < 12) {
+            getWindow().getDecorView().postDelayed(() -> sendReadyBurst(attempt + 1), 500L);
+        }
     }
 
     private void requestMessageChannelWithRetry() {
@@ -109,13 +111,11 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             channelRequestInFlight = false;
             return;
         }
-
         CustomTabsSession session = getInternalCustomTabsSession();
         if (session == null) {
             retryMessageChannel();
             return;
         }
-
         channelRequestAttempts++;
         try {
             boolean requested = session.requestPostMessageChannel(ORIGIN, ORIGIN, new Bundle());
@@ -142,17 +142,11 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     @Nullable
     private CustomTabsSession getInternalCustomTabsSession() {
         try {
-            // android-browser-helper 2.7.3 keeps the session private. Do not
-            // assume the exact declaring class: generated/library versions can
-            // move these fields between LauncherActivity/TwaLauncher. Walk the
-            // hierarchy so a harmless library refactor does not silently break
-            // the rewarded bridge.
             Field launcherField = findField(com.google.androidbrowserhelper.trusted.LauncherActivity.class, "mTwaLauncher");
             if (launcherField == null) return null;
             launcherField.setAccessible(true);
             Object launcher = launcherField.get(this);
             if (launcher == null) return null;
-
             Field sessionField = findField(launcher.getClass(), "mSession");
             if (sessionField == null) return null;
             sessionField.setAccessible(true);
@@ -240,7 +234,6 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
 
     private void showRewardedAd() {
         if (activeRequestId == null || rewardedAd == null) return;
-
         RewardedAd ad = rewardedAd;
         rewardedAd = null;
         ad.setFullScreenContentCallback(new FullScreenContentCallback() {
@@ -258,11 +251,8 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                 preloadRewardedAd();
             }
         });
-
         try {
             ad.show(this, rewardItem -> {
-                // This is the ONLY successful reward path. No timer/web
-                // fallback is allowed to grant the game benefit.
                 rewardGrantedForCurrentAd = true;
                 sendResult(true, "admob");
             });
