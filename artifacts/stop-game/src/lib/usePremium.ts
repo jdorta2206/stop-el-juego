@@ -1,13 +1,23 @@
 import { useState, useEffect } from "react";
 import { getApiUrl, authHeaders } from "@/lib/utils";
-import { restorePlayPurchases, detectPaymentChannel } from "@/lib/playBilling";
 
 const API_BASE = getApiUrl();
+const OAUTH_ID_PREFIXES = ["google_", "fb_", "apple_", "tt_"];
 
 export interface PremiumStatus { isPremium: boolean; loading: boolean; error: string | null; }
 export const PREMIUM_REFRESH_EVENT = "stop:premium-refresh";
+
 export function notifyPremiumRefresh() {
   if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(PREMIUM_REFRESH_EVENT));
+}
+
+/**
+ * Premium is an account entitlement, never a browser/device entitlement.
+ * Guests and local-only profiles are therefore ineligible for Premium even
+ * if Google Play exposes a purchase on the same device.
+ */
+function isPremiumEligibleAccount(playerId: string): boolean {
+  return OAUTH_ID_PREFIXES.some((prefix) => playerId.startsWith(prefix));
 }
 
 export function usePremium(playerId: string | null | undefined): PremiumStatus {
@@ -23,47 +33,44 @@ export function usePremium(playerId: string | null | undefined): PremiumStatus {
   }, []);
 
   useEffect(() => {
-    if (!playerId) {
+    // Hard invariant: no player or guest/local profile can ever be Premium.
+    if (!playerId || !isPremiumEligibleAccount(playerId)) {
       setIsPremium(false);
       setLoading(false);
+      setError(null);
       return;
     }
+
     let cancelled = false;
     setLoading(true);
     setError(null);
+    // Never carry Premium across an account switch while the new entitlement
+    // is being resolved.
+    setIsPremium(false);
 
     void (async () => {
       try {
-        if (detectPaymentChannel() === "play") {
-          const restored = await restorePlayPurchases(playerId);
-          if (!cancelled && restored) {
-            setIsPremium(true);
-            notifyPremiumRefresh();
-          }
-        }
-      } catch {
-        // Play restore is best-effort; the authoritative status request below
-        // remains the source of truth.
-      }
-    })();
+        // This endpoint is the single authoritative entitlement check. It
+        // validates the authenticated player identity server-side and resolves
+        // Stripe OR an owned active Google Play subscription.
+        const r = await fetch(
+          `${API_BASE}/api/billing/play/status?playerId=${encodeURIComponent(playerId)}`,
+          { credentials: "include", headers: authHeaders(), cache: "no-store" },
+        );
 
-    void (async () => {
-      try {
-        const r = await fetch(`${API_BASE}/api/billing/play/status?playerId=${encodeURIComponent(playerId)}`, {
-          credentials: "include", headers: authHeaders(),
-        });
-        let data: any;
-        if (r.ok) {
-          data = await r.json();
-        } else {
-          const fallback = await fetch(`${API_BASE}/api/stripe/status?playerId=${encodeURIComponent(playerId)}`, {
-            credentials: "include", headers: authHeaders(),
-          });
-          data = await fallback.json();
+        if (!r.ok) {
+          throw new Error(`Premium status unavailable (${r.status})`);
         }
+
+        const data: any = await r.json();
         if (!cancelled) setIsPremium(data?.isPremium === true);
       } catch (err: any) {
-        if (!cancelled) setError(err?.message || "No se pudo comprobar Premium");
+        if (!cancelled) {
+          // Fail closed: an unavailable/unauthorized entitlement check must
+          // never turn a non-paying account into Premium.
+          setIsPremium(false);
+          setError(err?.message || "No se pudo comprobar Premium");
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
