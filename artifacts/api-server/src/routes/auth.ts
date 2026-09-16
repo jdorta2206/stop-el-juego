@@ -247,6 +247,13 @@ function bridgePageMulti(
   returnPath: string,
   returnOrigin: string = APP_ORIGIN,
 ) {
+  // Most items are session-scoped (OAuth profile handoff). The
+  // PLAYER_TOKEN_BRIDGE_KEY entry, however, must persist across tabs and
+  // browser restarts so daily Season Pass missions keep accumulating — write
+  // it to localStorage. NOTE: these writes only help when returnOrigin equals
+  // APP_ORIGIN (same-origin). For the cross-origin case the items are also
+  // carried in the URL hash below (see handoffDest) and imported by the
+  // destination origin; that is the path that actually fixes cross-domain login.
   const setItems = items
     .map(([k, v]) => {
       const store = k === PLAYER_TOKEN_BRIDGE_KEY ? "localStorage" : "sessionStorage";
@@ -254,6 +261,15 @@ function bridgePageMulti(
     })
     .join("\n    ");
 
+  // Cross-origin handoff. The storage writes above land on APP_ORIGIN (where
+  // this bridge is served), but the user is being redirected to returnOrigin
+  // (e.g. www.stopjuegodepalabras.com / the TWA), a DIFFERENT origin whose
+  // sessionStorage/localStorage are separate — so those writes are invisible
+  // there and the session wouldn't "stick" (user bounced back to login). To
+  // fix that we ALSO carry the items in the URL hash: the destination imports
+  // them into its OWN storage on load (consumeAuthHandoff). The hash fragment
+  // is never sent to servers / access logs and is stripped client-side on
+  // arrival so the token doesn't linger in the address bar.
   const baseDest = returnOrigin + returnPath;
   const handoffDest = baseDest + (baseDest.includes("#") ? "&" : "#") +
     "stopauth=" + encodeURIComponent(JSON.stringify(items));
@@ -340,10 +356,12 @@ router.get("/google/callback", async (req: Request, res: Response) => {
     let payload: OAuthProfile | null = null;
 
     if (tokenData.id_token) {
+      // Decode JWT payload
       payload = JSON.parse(
         Buffer.from(tokenData.id_token.split(".")[1], "base64url").toString()
       ) as OAuthProfile;
     } else if (tokenData.access_token) {
+      // Fallback: use userinfo endpoint
       const userinfoRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
         headers: { Authorization: `Bearer ${tokenData.access_token}` },
       });
@@ -577,6 +595,7 @@ router.get("/apple/start", (req: Request, res: Response) => {
   res.redirect(`https://appleid.apple.com/auth/authorize?${params}`);
 });
 
+// Apple sends a POST (form_post response_mode)
 router.post("/apple/callback", async (req: Request, res: Response) => {
   const code  = req.body?.["code"]  as string | undefined;
   const { returnPath, returnOrigin, csrfFail } = verifyAuthState(req, res);
@@ -599,6 +618,7 @@ router.post("/apple/callback", async (req: Request, res: Response) => {
     const redirectUri = `${APP_ORIGIN}/api/auth/apple/callback`;
     const clientSecret = makeAppleClientSecret();
 
+    // Exchange code → tokens
     const tokenRes = await fetch("https://appleid.apple.com/auth/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -614,10 +634,12 @@ router.post("/apple/callback", async (req: Request, res: Response) => {
     if (tokenData.error) throw new Error(`Apple error: ${tokenData.error}`);
     if (!tokenData.id_token) throw new Error("No id_token from Apple");
 
+    // Decode the id_token (Apple's JWT) — no need to verify signature here, we trust Apple
     const payload = JSON.parse(
       Buffer.from(tokenData.id_token.split(".")[1], "base64url").toString()
     );
 
+    // Apple only sends name on first login (via req.body.user JSON string)
     let displayName = "Apple User";
     try {
       const userJson = req.body?.["user"];
@@ -739,14 +761,25 @@ router.get("/tiktok/callback", async (req: Request, res: Response) => {
 });
 
 // ── /me — silent session restore ───────────────────────────────────────────────
+// Lets the client re-hydrate the player profile on cold start using the
+// long-lived signed cookie (or x-stop-token header in TWA/cross-origin
+// scenarios where cookies don't reach this origin). Returns 200 with the
+// profile if we recognize the session, 401 otherwise. Also re-issues the
+// cookie to slide the expiration window forward — every visit extends the
+// session by another year so casual players never get kicked out.
 router.get("/me", async (req: Request, res: Response) => {
   const playerId = readPlayerId(req);
   if (!playerId) {
     return res.status(401).json({ error: "Not authenticated" });
   }
+
+  // Derive loginMethod from the playerId prefix (google_, fb_, instagram_,
+  // apple_, tiktok_). This matches how OAuth callbacks construct the IDs.
   const prefixMap: Record<string, string> = {
     google_: "google",
     fb_: "facebook",
+    // OAuth callbacks mint Instagram ids as `ig_<id>` and TikTok as `tt_<id>`.
+    // The longer `instagram_`/`tiktok_` keys stay for any legacy-format ids.
     ig_: "instagram",
     instagram_: "instagram",
     apple_: "apple",
@@ -760,6 +793,7 @@ router.get("/me", async (req: Request, res: Response) => {
       break;
     }
   }
+
   try {
     const rows = await db
       .select({
@@ -770,18 +804,47 @@ router.get("/me", async (req: Request, res: Response) => {
       .from(playerScoresTable)
       .where(eq(playerScoresTable.playerId, playerId))
       .limit(1);
+
     const row = rows[0];
+
+    // Slide the cookie expiration forward on every successful restore so
+    // active players never expire.
     const refreshedToken = issuePlayerToken(res, playerId);
+
     if (!row) {
-      return res.json({ id: playerId, name: null, avatarColor: null, loginMethod, picture: null, token: refreshedToken });
+      // Cookie valid but no profile row yet (logged in, never played).
+      // Tell client we know who they are so they can keep the session, but
+      // they may want to log in again to capture their name/avatar.
+      return res.json({
+        id: playerId,
+        name: null,
+        avatarColor: null,
+        loginMethod,
+        picture: null,
+        token: refreshedToken,
+      });
     }
-    return res.json({ id: row.playerId, name: row.playerName, avatarColor: row.avatarColor, loginMethod, picture: null, token: refreshedToken });
+
+    return res.json({
+      id: row.playerId,
+      name: row.playerName,
+      avatarColor: row.avatarColor,
+      loginMethod,
+      picture: null,
+      token: refreshedToken,
+    });
   } catch (err) {
     console.error("[auth/me] error:", err);
     return res.status(500).json({ error: "Internal error" });
   }
 });
 
+// ── /logout — clear the session cookie ──────────────────────────────────────
+// The session cookie is httpOnly, so the client can't delete it itself. This
+// endpoint clears it (with attributes matching how it was set). Idempotent and
+// always 200 so the client can fire it best-effort during logout without
+// caring about the result. The client also wipes its localStorage profile and
+// bridge token; this handles the cross-origin httpOnly cookie.
 router.post("/logout", (_req: Request, res: Response) => {
   clearPlayerToken(res);
   res.json({ ok: true });
