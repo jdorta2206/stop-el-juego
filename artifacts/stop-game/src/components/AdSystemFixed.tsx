@@ -21,7 +21,7 @@ function inStandaloneOrTwaSync(): boolean {
     if (params.get("source") === "twa" || params.get("utm_source") === "twa") return true;
     const ua = navigator.userAgent || "";
     const standalone = window.matchMedia?.("(display-mode: standalone)").matches ?? false;
-    const fullscreen = window.matchMedia?.("(display-mode: fullscreen)").matches ?? false;
+    const fullscreen = window.matchMedia?.("(display-mode: fullscreen")).matches ?? false;
     return /Android/i.test(ua) && (standalone || fullscreen);
   } catch { return true; }
 }
@@ -94,8 +94,16 @@ export function RewardedAd({ onComplete, onSkip, rewardType = "points", rewardAm
 
   const startWatching = async () => {
     setPhase("loading");
-    const isTwa = hasAndroidAppReferrer() || new URLSearchParams(window.location.search).get("source") === "googleplay-twa" || new URLSearchParams(window.location.search).get("source") === "twa";
-    if (isTwa) {
+
+    // In the TWA, the native bridge is authoritative. The URL marker is only
+    // a fallback for the short period before the MessagePort becomes ready.
+    const bridgeReady = isTwaAdBridgeAvailable();
+    const knownTwa =
+      hasAndroidAppReferrer() ||
+      new URLSearchParams(window.location.search).get("source") === "googleplay-twa" ||
+      new URLSearchParams(window.location.search).get("source") === "twa";
+
+    if (bridgeReady || knownTwa) {
       const placement = rewardType === "extraTime" ? "extra_time" : rewardType === "hint" ? "hint" : "double_points";
       const result = await requestRewardedAd(placement);
       if (result.rewarded === true && result.source === "admob") {
@@ -107,11 +115,7 @@ export function RewardedAd({ onComplete, onSkip, rewardType = "points", rewardAm
       }
       return;
     }
-    if (isTwaAdBridgeAvailable()) {
-      setPhase("error");
-      window.setTimeout(() => onSkip(), 900);
-      return;
-    }
+
     // Web reward UI is intentionally disabled here: AdSense is not a rewarded-ad API.
     // A web user must use the normal non-rewarded ad surfaces instead.
     setPhase("error");
