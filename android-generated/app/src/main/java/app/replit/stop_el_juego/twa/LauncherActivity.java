@@ -73,7 +73,10 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                         && result && SOURCE_ORIGIN.equals(requestedOrigin);
                 Log.d(TAG, "use_as_origin validation=" + result
                         + " relation=" + relation + " origin=" + requestedOrigin);
-                if (relationshipValidated) requestMessageChannelWithRetry(250L);
+                // requestPostMessageChannel() itself triggers the asynchronous
+                // RELATION_USE_AS_ORIGIN validation. Do not wait for this callback
+                // before making the request, otherwise the channel can deadlock.
+                if (relationshipValidated) requestMessageChannelWithRetry(100L);
             }
 
             @Override
@@ -106,14 +109,14 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     }
 
     private void requestMessageChannelWithRetry(long initialDelayMs) {
-        if (messageChannelReady || !relationshipValidated || channelRequestInFlight) return;
+        if (messageChannelReady || channelRequestInFlight) return;
         channelRequestInFlight = true;
         channelRequestAttempts = 0;
         getWindow().getDecorView().postDelayed(this::requestMessageChannelAttempt, initialDelayMs);
     }
 
     private void requestMessageChannelAttempt() {
-        if (messageChannelReady || !relationshipValidated) {
+        if (messageChannelReady) {
             channelRequestInFlight = false;
             return;
         }
