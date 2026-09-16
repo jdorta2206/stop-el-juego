@@ -18,9 +18,13 @@ import com.google.android.gms.ads.LoadAdError;
 import com.google.android.gms.ads.MobileAds;
 import com.google.android.gms.ads.rewarded.RewardedAd;
 import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback;
+import com.google.androidbrowserhelper.trusted.QualityEnforcer;
+import com.google.androidbrowserhelper.trusted.TwaLauncher;
 
 import org.json.JSONException;
 import org.json.JSONObject;
+
+import java.lang.reflect.Field;
 
 /** STOP TWA native bridge for Google Mobile Ads rewarded video. */
 public class LauncherActivity extends com.google.androidbrowserhelper.trusted.LauncherActivity {
@@ -56,19 +60,25 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
 
     @Override
     protected CustomTabsCallback getCustomTabsCallback() {
-        return new CustomTabsCallback() {
+        // Keep Bubblewrap/Android Browser Helper's normal callback behaviour intact.
+        return new QualityEnforcer() {
             @Override
             public void onRelationshipValidationResult(int relation, @NonNull Uri requestedOrigin,
                     boolean result, @Nullable Bundle extras) {
                 relationshipValidated = result && ORIGIN.equals(requestedOrigin);
                 Log.d(TAG, "use_as_origin validation=" + result + " origin=" + requestedOrigin);
-                requestMessageChannelWithRetry();
+                if (relationshipValidated) {
+                    requestMessageChannelWithRetry(250L);
+                }
             }
 
             @Override
             public void onNavigationEvent(int navigationEvent, @Nullable Bundle extras) {
-                if (navigationEvent == NAVIGATION_FINISHED || navigationEvent == TAB_SHOWN) {
-                    requestMessageChannelWithRetry();
+                super.onNavigationEvent(navigationEvent, extras);
+                if (navigationEvent == NAVIGATION_FINISHED) {
+                    // Chromium can report NAVIGATION_FINISHED slightly before the page is
+                    // ready for requestPostMessageChannel. A delayed retry is intentional.
+                    requestMessageChannelWithRetry(250L);
                 }
             }
 
@@ -83,6 +93,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
 
             @Override
             public void onPostMessage(@NonNull String message, @Nullable Bundle extras) {
+                super.onPostMessage(message, extras);
                 handleWebMessage(message);
             }
         };
@@ -96,11 +107,11 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
         }
     }
 
-    private void requestMessageChannelWithRetry() {
+    private void requestMessageChannelWithRetry(long initialDelayMs) {
         if (messageChannelReady || !relationshipValidated || channelRequestInFlight) return;
         channelRequestInFlight = true;
         channelRequestAttempts = 0;
-        requestMessageChannelAttempt();
+        getWindow().getDecorView().postDelayed(this::requestMessageChannelAttempt, initialDelayMs);
     }
 
     private void requestMessageChannelAttempt() {
@@ -118,9 +129,6 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
 
         channelRequestAttempts++;
         try {
-            // android-browser-helper exposes the live TWA session in current 2.7.x.
-            // Use that session directly; reflection against mTwaLauncher/mSession was
-            // fragile and is the reason the previous APKs could never establish the bridge.
             boolean requested = session.requestPostMessageChannel(ORIGIN, ORIGIN, new Bundle());
             Log.d(TAG, "requestPostMessageChannel attempt=" + channelRequestAttempts
                     + " accepted=" + requested);
@@ -144,15 +152,40 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
         getWindow().getDecorView().postDelayed(this::requestMessageChannelAttempt, 300L);
     }
 
+    /**
+     * android-browser-helper 2.7.3 is the dependency used by this generated app.
+     * The public getCustomTabsSession() accessor was added after the 2.7.3 release,
+     * so calling it directly would make the app uncompilable. Until the dependency is
+     * upgraded, obtain the exact session created by TwaLauncher, without creating a
+     * second CustomTabs session or launching a second TWA.
+     */
     @Nullable
     private CustomTabsSession getTwaSession() {
         try {
-            // android-browser-helper 2.7.x provides this accessor on LauncherActivity.
-            return getCustomTabsSession();
-        } catch (RuntimeException error) {
+            Object launcher = findFieldValue(this, "mTwaLauncher");
+            if (!(launcher instanceof TwaLauncher)) return null;
+            Object session = findFieldValue(launcher, "mSession");
+            return session instanceof CustomTabsSession ? (CustomTabsSession) session : null;
+        } catch (ReflectiveOperationException | ClassCastException error) {
             Log.w(TAG, "Unable to obtain TWA CustomTabsSession", error);
             return null;
         }
+    }
+
+    @Nullable
+    private static Object findFieldValue(Object target, String fieldName)
+            throws ReflectiveOperationException {
+        Class<?> type = target.getClass();
+        while (type != null) {
+            try {
+                Field field = type.getDeclaredField(fieldName);
+                field.setAccessible(true);
+                return field.get(target);
+            } catch (NoSuchFieldException ignored) {
+                type = type.getSuperclass();
+            }
+        }
+        return null;
     }
 
     private void handleWebMessage(String raw) {
