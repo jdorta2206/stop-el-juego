@@ -5,27 +5,10 @@ plugins {
 }
 
 def twaManifest = [
-    applicationId: 'app.replit.stop_el_juego.twa',
-    hostName: 'www.stopjuegodepalabras.com',
-    launchUrl: '/?source=googleplay-twa',
-    name: 'STOP - El Juego',
-    launcherName: 'STOP',
-    themeColor: '#0D1757',
-    themeColorDark: '#000000',
-    navigationColor: '#0D1757',
-    navigationColorDark: '#0D1757',
-    navigationDividerColor: '#0D1757',
-    navigationDividerColorDark: '#0D1757',
-    backgroundColor: '#0D1757',
-    enableNotifications: true,
-    shortcuts: [],
-    splashScreenFadeOutDuration: 0,
-    generatorApp: 'bubblewrap-cli',
-    fallbackType: 'customtabs',
-    enableSiteSettingsShortcut: false,
-    orientation: 'portrait',
+    applicationId: 'app.replit.stop_el_juego.twa', hostName: 'www.stopjuegodepalabras.com', launchUrl: '/?source=googleplay-twa', name: 'STOP - El Juego', launcherName: 'STOP',
+    themeColor: '#0D1757', themeColorDark: '#000000', navigationColor: '#0D1757', navigationColorDark: '#0D1757', navigationDividerColor: '#0D1757', navigationDividerColorDark: '#0D1757', backgroundColor: '#0D1757',
+    enableNotifications: true, shortcuts: [], splashScreenFadeOutDuration: 0, generatorApp: 'bubblewrap-cli', fallbackType: 'customtabs', enableSiteSettingsShortcut: false, orientation: 'portrait',
 ]
-
 android {
     compileSdkVersion 36
     namespace "app.replit.stop_el_juego.twa"
@@ -60,28 +43,16 @@ android {
     }
     buildTypes { release { minifyEnabled false } }
     if (System.getenv('KEYSTORE_PASSWORD') && System.getenv('KEY_ALIAS') && System.getenv('KEY_PASSWORD')) {
-        signingConfigs {
-            ciRelease {
-                storeFile file('../../android-release.keystore')
-                storePassword System.getenv('KEYSTORE_PASSWORD')
-                keyAlias System.getenv('KEY_ALIAS')
-                keyPassword System.getenv('KEY_PASSWORD')
-            }
-        }
+        signingConfigs { ciRelease { storeFile file('../../android-release.keystore'); storePassword System.getenv('KEYSTORE_PASSWORD'); keyAlias System.getenv('KEY_ALIAS'); keyPassword System.getenv('KEY_PASSWORD') } }
         buildTypes.release.signingConfig signingConfigs.ciRelease
     }
-    compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
-    }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_1_8; targetCompatibility JavaVersion.VERSION_1_8 }
     lintOptions { checkReleaseBuilds false }
 }
-
 task generateShorcutsFile {
     assert twaManifest.shortcuts.size() < 5, "You can have at most 4 shortcuts."
     def shortcutsFile = new File("$projectDir/src/main/res/xml", "shortcuts.xml")
-    def xmlWriter = new StringWriter()
-    def xmlMarkup = new MarkupBuilder(new IndentPrinter(xmlWriter, "    ", true))
+    def xmlWriter = new StringWriter(); def xmlMarkup = new MarkupBuilder(new IndentPrinter(xmlWriter, "    ", true))
     xmlMarkup.'shortcuts'('xmlns:android': 'http://schemas.android.com/apk/res/android') {
         twaManifest.shortcuts.eachWithIndex { s, i ->
             'shortcut'('android:shortcutId': 'shortcut' + i, 'android:enabled': 'true', 'android:icon': '@drawable/' + s.icon, 'android:shortcutShortLabel': '@string/shortcut_short_name_' + i, 'android:shortcutLongLabel': '@string/shortcut_name_' + i) {
@@ -92,9 +63,7 @@ task generateShorcutsFile {
     }
     shortcutsFile.text = xmlWriter.toString() + '\n'
 }
-
 preBuild.dependsOn(generateShorcutsFile)
-
 dependencies {
     implementation fileTree(include: ['*.jar'], dir: 'libs')
     implementation 'com.google.androidbrowserhelper:androidbrowserhelper:2.7.3'
