@@ -32,7 +32,7 @@ public class RewardedAdActivity extends Activity {
     private static final String TAG = "STOP_REWARDED";
     private static final String REAL_REWARDED_ID = "ca-app-pub-4807272408824742/3559554716";
     private static final String RESULT_ENDPOINT = "https://www.stopjuegodepalabras.com/api/rewards/admob-result";
-    private static final long LOAD_TIMEOUT_MS = 5000L;
+    private static final long LOAD_TIMEOUT_MS = 3500L;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private String requestId;
@@ -58,7 +58,7 @@ public class RewardedAdActivity extends Activity {
         }
 
         // Prefer the preloaded production ad. If it is not ready yet, load it
-        // on demand, but never wait longer than the hard timeout.
+        // on demand so the feature still works on a cold start.
         RewardedAd preloaded = Application.takePreloadedRewardedAd();
         if (preloaded != null) {
             Log.d(TAG, "Using preloaded rewarded ad requestId=" + requestId);
