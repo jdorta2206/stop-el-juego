@@ -1,11 +1,14 @@
 package app.replit.stop_el_juego.twa;
 
 import android.app.Activity;
+import android.graphics.Color;
+import android.graphics.drawable.ColorDrawable;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
+import android.view.Window;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -41,6 +44,15 @@ public class RewardedAdActivity extends Activity {
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        // Never show a white/blank native Activity while AdMob is loading.
+        // The STOP game remains visible underneath. If no ad is available,
+        // the Activity sends a failed result and finishes without consuming time.
+        Window window = getWindow();
+        window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+        window.setDimAmount(0f);
+        window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+
         Uri data = getIntent().getData();
         requestId = data == null ? null : data.getQueryParameter("requestId");
         if (requestId == null || requestId.isEmpty()) {
