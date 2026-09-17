@@ -85,7 +85,7 @@ jobs:
           "$ANDROID_HOME/build-tools/35.0.0/aapt2" dump permissions "$APK" | tee /tmp/apk-permissions.txt
           grep -q 'com.google.android.gms.permission.AD_ID' /tmp/apk-permissions.txt || { echo 'ERROR: final APK does not contain AD_ID'; exit 1; }
           python3 - <<'PY'
-          import zipfile, subprocess, os
+          import zipfile
           from pathlib import Path
           aab = Path('app/build/outputs/bundle/release/app-release.aab')
           with zipfile.ZipFile(aab) as z:
@@ -93,15 +93,8 @@ jobs:
               if name not in z.namelist():
                   raise SystemExit('ERROR: base manifest missing from AAB')
               data = z.read(name)
-          out = Path('/tmp/base-AndroidManifest.xml')
-          out.write_bytes(data)
-          aapt2 = Path(os.environ['ANDROID_HOME']) / 'build-tools/35.0.0/aapt2'
-          result = subprocess.run([str(aapt2), 'dump', 'xmltree', '--file', str(out)], capture_output=True, text=True)
-          text = result.stdout + '\n' + result.stderr
-          print(text)
-          if result.returncode != 0:
-              raise SystemExit('ERROR: could not inspect AAB base manifest')
-          if 'com.google.android.gms.permission.AD_ID' not in text:
+          marker = b'com.google.android.gms.permission.AD_ID'
+          if marker not in data:
               raise SystemExit('ERROR: AAB base manifest does not contain AD_ID')
           print('OK: AAB base manifest contains AD_ID')
           PY
