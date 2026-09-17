@@ -13,11 +13,6 @@ const BANNER_SLOT = import.meta.env.VITE_ADSENSE_BANNER_SLOT as string | undefin
 const VIDEO_SLOT = import.meta.env.VITE_ADSENSE_VIDEO_SLOT as string | undefined;
 const ADSENSE_READY = !!ADSENSE_CLIENT;
 
-// Rewarded ads open a native Activity from the TWA. During that Activity the
-// React game must not consume round time. SoloGame's countdown uses a 1s
-// setInterval, so we wrap the browser-global timer API itself. We patch both
-// window.setInterval and globalThis.setInterval because bundled WebView code
-// can resolve the timer through either global binding.
 const REWARDED_PAUSE_KEY = "__stopGameRewardedAdActive";
 
 function installRewardedTimerGuard() {
@@ -33,8 +28,6 @@ function installRewardedTimerGuard() {
   const guardedSetInterval = ((handler: TimerHandler, timeout?: number, ...args: any[]) => {
     if (timeout === 1000) {
       const guardedHandler = (...handlerArgs: any[]) => {
-        // The flag is deliberately checked at execution time, not when the
-        // interval is created. This covers the entire native ad lifecycle.
         if (win[REWARDED_PAUSE_KEY] === true) return;
         if (typeof handler === "function") return handler(...handlerArgs);
         return undefined;
@@ -44,8 +37,6 @@ function installRewardedTimerGuard() {
     return originalSetInterval(handler, timeout, ...args);
   }) as typeof window.setInterval;
 
-  // Patch both aliases. In a normal browser these point to the same function,
-  // but keeping both assignments makes the guard deterministic in TWA/WebView.
   window.setInterval = guardedSetInterval;
   globalObj.setInterval = guardedSetInterval;
 }
@@ -65,7 +56,7 @@ function inStandaloneOrTwaSync(): boolean {
     if (params.get("source") === "twa" || params.get("utm_source") === "twa") return true;
     const ua = navigator.userAgent || "";
     const standalone = window.matchMedia?.("(display-mode: standalone)").matches ?? false;
-    const fullscreen = window.matchMedia?.("(display-mode: fullscreen").matches ?? false;
+    const fullscreen = window.matchMedia?.("(display-mode: fullscreen)").matches ?? false;
     return /Android/i.test(ua) && (standalone || fullscreen);
   } catch { return true; }
 }
@@ -141,9 +132,6 @@ export function RewardedAd({ onComplete, onSkip, rewardType = "points", rewardAm
   }, []);
 
   const startWatching = async () => {
-    // Set this BEFORE the native Activity is launched. This guarantees the
-    // next 1s game tick cannot consume time while the ad is opening, loading,
-    // playing, dismissing, or waiting for the reward result.
     setRewardedPause(true);
     setPhase("loading");
     setErrorDetail("");
