@@ -45,13 +45,13 @@ jobs:
           printf '%s' "$KEYSTORE_BASE64" | base64 --decode > android-release.keystore
           test -s android-release.keystore
           keytool -list -keystore android-release.keystore -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" >/dev/null
-      - name: Set v33 version code
+      - name: Set v34 version code
         working-directory: android-generated
         shell: bash
         run: |
           set -euo pipefail
-          sed -i 's/versionCode [0-9][0-9]*/versionCode 33/' app/build.gradle
-          grep -q 'versionCode 33' app/build.gradle
+          sed -i 's/versionCode [0-9][0-9]*/versionCode 34/' app/build.gradle
+          grep -q 'versionCode 34' app/build.gradle
       - name: Build signed Release APK and AAB
         working-directory: android-generated
         shell: bash
@@ -59,7 +59,7 @@ jobs:
           set -euo pipefail
           chmod +x ./gradlew
           ./gradlew clean assembleRelease bundleRelease --no-daemon --stacktrace
-      - name: Verify Release signing certificate
+      - name: Verify AD_ID permission and Release signing certificate
         working-directory: android-generated
         shell: bash
         run: |
@@ -69,12 +69,14 @@ jobs:
           test -s "$APK"
           test -s "$AAB"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt2" dump permissions "$APK" | grep -q 'com.google.android.gms.permission.AD_ID'
+          echo 'AD_ID permission present in signed APK'
           sha256sum "$APK"
           ls -lh "$AAB"
       - name: Upload signed Release artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: stop-android-release-signed-v33-admob-pause-timer
+          name: stop-android-release-signed-v34-admob-ad-id
           path: |
             android-generated/app/build/outputs/apk/release/app-release.apk
             android-generated/app/build/outputs/bundle/release/app-release.aab
