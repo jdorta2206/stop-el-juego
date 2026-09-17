@@ -3,6 +3,7 @@ import { Gift, Star, X, Zap } from "lucide-react";
 import { getT } from "@/i18n/index";
 import { detectPaymentChannel, hasAndroidAppReferrer } from "@/lib/playBilling";
 import { initTwaAdBridge, isTwaAdBridgeAvailable, requestRewardedAd, setRewardedAdPlayerId } from "@/lib/twaAdBridge";
+import { pauseGameTimer, resumeGameTimer } from "@/lib/timerPauseGuard";
 
 const ADS_DISABLED = import.meta.env.VITE_ADS_DISABLED === "1";
 const ADSTERRA_BANNER_KEY = ADS_DISABLED ? undefined : ((import.meta.env.VITE_ADSTERRA_BANNER_KEY as string | undefined) ?? "1212cb86d493b763d38d4523eec88cac");
@@ -95,6 +96,7 @@ export function RewardedAd({ onComplete, onSkip, playerId, rewardType = "points"
 
   const startWatching = async () => {
     setRewardedAdPlayerId(playerId);
+    pauseGameTimer();
     setPhase("loading");
     setErrorDetail("");
     try {
@@ -126,6 +128,9 @@ export function RewardedAd({ onComplete, onSkip, playerId, rewardType = "points"
     setErrorDetail("El puente nativo de anuncios no está disponible.");
     setPhase("error");
     window.setTimeout(() => onSkip(), 5000);
+    }
+    } finally {
+      resumeGameTimer();
     }
   };
 
