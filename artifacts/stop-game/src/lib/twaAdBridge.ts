@@ -1,5 +1,5 @@
 const RESULT_BASE = "/api/rewards/admob-result";
-const RESULT_TIMEOUT_MS = 90_000;
+const RESULT_TIMEOUT_MS = 15_000;
 
 type RewardedPlacement = "extra_time" | "hint" | "double_points" | "skip_round" | "extra_pack";
 type RewardResult = { rewarded: boolean; source: "admob" | "skipped" | "error"; errorCode?: number; errorDomain?: string; errorMessage?: string };
@@ -66,15 +66,6 @@ export async function requestRewardedAd(placement: RewardedPlacement): Promise<R
     const startedAt = Date.now();
     let timer: number | null = null;
 
-    const checkNow = async () => {
-      if (finished) return;
-      const result = await readResult(requestId);
-      if (result) finish(result);
-      else if (Date.now() - startedAt >= RESULT_TIMEOUT_MS) {
-        finish({ rewarded: false, source: "error", errorMessage: "Native rewarded ad request timed out" });
-      }
-    };
-
     const finish = (result: RewardResult) => {
       if (finished) return;
       finished = true;
@@ -82,6 +73,15 @@ export async function requestRewardedAd(placement: RewardedPlacement): Promise<R
       document.removeEventListener("visibilitychange", checkNow);
       window.removeEventListener("focus", checkNow);
       resolve(result);
+    };
+
+    const checkNow = async () => {
+      if (finished) return;
+      const result = await readResult(requestId);
+      if (result) finish(result);
+      else if (Date.now() - startedAt >= RESULT_TIMEOUT_MS) {
+        finish({ rewarded: false, source: "error", errorMessage: "El anuncio no está disponible ahora mismo" });
+      }
     };
 
     timer = window.setInterval(checkNow, 750);
@@ -94,7 +94,7 @@ export async function requestRewardedAd(placement: RewardedPlacement): Promise<R
       // foreground Activity and therefore a valid host for RewardedAd.show().
       window.location.href = deepLink;
     } catch {
-      finish({ rewarded: false, source: "error", errorMessage: "Unable to launch native rewarded activity" });
+      finish({ rewarded: false, source: "error", errorMessage: "No se ha podido abrir el anuncio" });
     }
   });
 }
