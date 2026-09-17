@@ -14,12 +14,9 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import com.google.android.gms.ads.AdError;
-import com.google.android.gms.ads.AdRequest;
 import com.google.android.gms.ads.FullScreenContentCallback;
-import com.google.android.gms.ads.LoadAdError;
 import com.google.android.gms.ads.MobileAds;
 import com.google.android.gms.ads.rewarded.RewardedAd;
-import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback;
 
 import org.json.JSONObject;
 
@@ -30,24 +27,20 @@ import java.nio.charset.StandardCharsets;
 
 public class RewardedAdActivity extends Activity {
     private static final String TAG = "STOP_REWARDED";
-    private static final String REAL_REWARDED_ID = "ca-app-pub-4807272408824742/3559554716";
     private static final String RESULT_ENDPOINT = "https://www.stopjuegodepalabras.com/api/rewards/admob-result";
-    // A no-fill must not make the player stare at a loading state.
-    private static final long LOAD_TIMEOUT_MS = 4_000L;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private String requestId;
     private boolean resultSent;
     private boolean rewardEarned;
-    private boolean showing;
-    private boolean loadFinished;
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // Transparent native host: the STOP game stays visible underneath while
-        // AdMob decides whether a rewarded ad can actually be shown.
+        // Transparent host: the STOP game remains visible. We ONLY use an ad
+        // that was already prepared by Application. Never start a network ad
+        // load after the player has tapped the reward button.
         Window window = getWindow();
         window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
         window.setDimAmount(0f);
@@ -60,51 +53,32 @@ public class RewardedAdActivity extends Activity {
             finish();
             return;
         }
+
         MobileAds.initialize(this, status -> {
             RewardedAd preloaded = Application.takePreloadedRewardedAd();
             if (preloaded != null) {
                 Log.d(TAG, "Using preloaded rewarded ad requestId=" + requestId);
                 showRewarded(preloaded);
             } else {
-                Log.d(TAG, "No preloaded rewarded ad; loading on demand requestId=" + requestId);
-                loadAndShow();
-            }
-        });
-    }
-
-    private void loadAndShow() {
-        loadFinished = false;
-        RewardedAd.load(this, REAL_REWARDED_ID, new AdRequest.Builder().build(), new RewardedAdLoadCallback() {
-            @Override
-            public void onAdLoaded(@NonNull RewardedAd ad) {
-                if (loadFinished || isFinishing()) return;
-                loadFinished = true;
-                handler.removeCallbacksAndMessages(null);
-                showRewarded(ad);
-            }
-
-            @Override
-            public void onAdFailedToLoad(@NonNull LoadAdError error) {
-                if (loadFinished) return;
-                loadFinished = true;
-                handler.removeCallbacksAndMessages(null);
-                Log.e(TAG, "Rewarded load failed: code=" + error.getCode() + " domain="
-                        + error.getDomain() + " message=" + error.getMessage());
+                // No ad ready means no reward. Return immediately instead of
+                // making the player wait for a network load.
+                Log.d(TAG, "No preloaded rewarded ad; returning unavailable requestId=" + requestId);
                 sendResult(false);
                 finish();
             }
         });
+
+        // Initialization itself must not leave the player stuck indefinitely.
         handler.postDelayed(() -> {
-            if (loadFinished || showing || resultSent) return;
-            loadFinished = true;
-            Log.e(TAG, "Rewarded load timeout after " + LOAD_TIMEOUT_MS + "ms");
-            sendResult(false);
-            finish();
-        }, LOAD_TIMEOUT_MS);
+            if (!resultSent && !rewardEarned) {
+                Log.e(TAG, "AdMob initialization/preload unavailable in time");
+                sendResult(false);
+                finish();
+            }
+        }, 2500L);
     }
 
     private void showRewarded(@NonNull RewardedAd ad) {
-        showing = true;
         ad.setFullScreenContentCallback(new FullScreenContentCallback() {
             @Override
             public void onAdShowedFullScreenContent() {
@@ -156,8 +130,8 @@ public class RewardedAdActivity extends Activity {
                 URL url = new URL(RESULT_ENDPOINT);
                 connection = (HttpURLConnection) url.openConnection();
                 connection.setRequestMethod("POST");
-                connection.setConnectTimeout(5000);
-                connection.setReadTimeout(5000);
+                connection.setConnectTimeout(3000);
+                connection.setReadTimeout(3000);
                 connection.setDoOutput(true);
                 connection.setRequestProperty("Content-Type", "application/json");
                 JSONObject body = new JSONObject();
