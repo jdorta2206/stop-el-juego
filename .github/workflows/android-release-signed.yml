@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - android/bubblewrap-admob
+      - fix/admob-pause-timer
   workflow_dispatch:
 
 permissions:
@@ -73,7 +74,7 @@ jobs:
       - name: Upload signed Release artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: stop-android-release-signed-v30-admob-facebook-guest
+          name: stop-android-release-signed-v30-admob-pause-timer
           path: |
             android-generated/app/build/outputs/apk/release/app-release.apk
             android-generated/app/build/outputs/bundle/release/app-release.aab
