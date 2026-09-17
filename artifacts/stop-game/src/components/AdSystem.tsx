@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useLayoutEffect } from "react";
 import { BannerAd as FixedBannerAd, RewardedAd as FixedRewardedAd } from "./AdSystemFixed";
 import { installTimerPauseGuard, pauseGameTimer, resumeGameTimer } from "@/lib/timerPauseGuard";
 
@@ -11,7 +11,10 @@ export function BannerAd(props: { className?: string }) {
 }
 
 export function RewardedAd(props: React.ComponentProps<typeof FixedRewardedAd>) {
-  useEffect(() => {
+  // Layout effect pauses synchronously during React commit, before the browser
+  // paints the overlay. This prevents an interval tick between opening the ad
+  // flow and the pause guard's first effect.
+  useLayoutEffect(() => {
     pauseGameTimer();
     return () => resumeGameTimer();
   }, []);
