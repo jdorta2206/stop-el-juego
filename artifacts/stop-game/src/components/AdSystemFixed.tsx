@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { Gift, Star, X, Zap } from "lucide-react";
 import { getT } from "@/i18n/index";
 import { detectPaymentChannel, hasAndroidAppReferrer } from "@/lib/playBilling";
-import { initTwaAdBridge, isTwaAdBridgeAvailable, requestRewardedAd } from "@/lib/twaAdBridge";
+import { initTwaAdBridge, isTwaAdBridgeAvailable, requestRewardedAd, setRewardedAdPlayerId } from "@/lib/twaAdBridge";
+import { pauseGameTimer, resumeGameTimer } from "@/lib/timerPauseGuard";
 
 const ADS_DISABLED = import.meta.env.VITE_ADS_DISABLED === "1";
 const ADSTERRA_BANNER_KEY = ADS_DISABLED ? undefined : ((import.meta.env.VITE_ADSTERRA_BANNER_KEY as string | undefined) ?? "1212cb86d493b763d38d4523eec88cac");
@@ -84,7 +85,7 @@ export function BannerAd({ className = "" }: { className?: string }) {
   return null;
 }
 
-export function RewardedAd({ onComplete, onSkip, rewardType = "points", rewardAmount = 20 }: { onComplete: (reward: number) => void; onSkip: () => void; rewardType?: "points" | "hint" | "extraTime"; rewardAmount?: number }) {
+export function RewardedAd({ onComplete, onSkip, playerId, rewardType = "points", rewardAmount = 20 }: { onComplete: (reward: number) => void; onSkip: () => void; playerId?: string; rewardType?: "points" | "hint" | "extraTime"; rewardAmount?: number }) {
   const [phase, setPhase] = useState<"pre" | "loading" | "error" | "done">("pre");
   const [errorDetail, setErrorDetail] = useState<string>("");
   const t = getT();
@@ -94,9 +95,12 @@ export function RewardedAd({ onComplete, onSkip, rewardType = "points", rewardAm
   useEffect(() => { initTwaAdBridge(); }, []);
 
   const startWatching = async () => {
+    setRewardedAdPlayerId(playerId);
+    pauseGameTimer();
     setPhase("loading");
     setErrorDetail("");
-    const bridgeReady = isTwaAdBridgeAvailable();
+    try {
+      const bridgeReady = isTwaAdBridgeAvailable();
     const knownTwa =
       hasAndroidAppReferrer() ||
       new URLSearchParams(window.location.search).get("source") === "googleplay-twa" ||
@@ -124,6 +128,9 @@ export function RewardedAd({ onComplete, onSkip, rewardType = "points", rewardAm
     setErrorDetail("El puente nativo de anuncios no está disponible.");
     setPhase("error");
     window.setTimeout(() => onSkip(), 5000);
+    } finally {
+      resumeGameTimer();
+    }
   };
 
   return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"><div className="w-full max-w-sm rounded-3xl overflow-hidden bg-white shadow-2xl"><div className="p-6 text-center"><h3 className="text-xl font-black">{phase === "done" ? "¡Recompensa!" : phase === "error" ? "Anuncio no disponible" : "Mira el anuncio"}</h3>{phase === "pre" && <><div className="my-5 flex justify-center">{icons[rewardType]}</div><p className="text-gray-600 text-sm mb-5">{labels[rewardType]}</p><button onClick={startWatching} className="w-full py-3 rounded-xl font-bold bg-[#f9a825] text-[#0d1757]">Ver anuncio</button><button onClick={onSkip} className="w-full py-2 mt-2 text-gray-500">Ahora no</button></>}{phase === "loading" && <div className="py-10"><div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-4 border-gray-200 border-t-[#f9a825]"/><p className="text-sm text-gray-600">Cargando anuncio…</p></div>}{phase === "error" && <><div className="py-8 text-4xl">📺</div><p className="text-sm text-gray-600">No se ha podido mostrar un anuncio recompensado.</p>{errorDetail && <p className="mt-2 rounded-lg bg-gray-100 px-3 py-2 text-left text-[11px] leading-4 text-gray-600 break-words">Diagnóstico: {errorDetail}</p>}<button onClick={onSkip} className="w-full py-2 mt-4 text-gray-500">Continuar</button></>}{phase === "done" && <div className="py-8"><div className="text-5xl mb-3">🎉</div><p className="text-gray-700">{labels[rewardType]}</p></div>}</div></div></div>;

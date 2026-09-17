@@ -17,6 +17,7 @@ import com.google.android.gms.ads.LoadAdError;
 import com.google.android.gms.ads.MobileAds;
 import com.google.android.gms.ads.rewarded.RewardedAd;
 import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback;
+import com.google.android.gms.ads.rewarded.ServerSideVerificationOptions;
 
 import org.json.JSONObject;
 
@@ -28,26 +29,56 @@ import java.nio.charset.StandardCharsets;
 public class RewardedAdActivity extends Activity {
     private static final String TAG = "STOP_REWARDED";
     private static final String REAL_REWARDED_ID = "ca-app-pub-4807272408824742/3559554716";
-    private static final String RESULT_ENDPOINT = "https://www.stopjuegodepalabras.com/api/rewards/admob-result";
     private static final long LOAD_TIMEOUT_MS = 10_000L;
+    private static final long GLOBAL_WATCHDOG_MS = 20_000L;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private String requestId;
+    private String playerId;
+    private String origin;
+    private String placement;
     private boolean resultSent;
     private boolean rewardEarned;
     private boolean showing;
     private boolean loadFinished;
+    private Runnable loadTimeout;
+
+    private final Runnable globalWatchdog = () -> {
+        if (!showing && !resultSent) {
+            Log.e(TAG, "Global watchdog fired");
+            sendClientResult("dismissed");
+            finish();
+        }
+    };
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
         Uri data = getIntent().getData();
         requestId = data == null ? null : data.getQueryParameter("requestId");
+        playerId = data == null ? null : data.getQueryParameter("playerId");
+        origin = data == null ? null : data.getQueryParameter("origin");
+        placement = data == null ? null : data.getQueryParameter("placement");
+
         if (requestId == null || requestId.isEmpty()) {
             Log.e(TAG, "Missing requestId in rewarded deep link: " + data);
             finish();
             return;
         }
+
+        if (playerId == null || playerId.isEmpty()) playerId = "guest";
+        if (origin == null || origin.isEmpty()) origin = "https://www.stopjuegodepalabras.com";
+
+        if (!isAllowedOrigin(origin)) {
+            Log.e(TAG, "Rejected invalid rewarded origin: " + origin);
+            sendClientResult("dismissed");
+            finish();
+            return;
+        }
+
+        handler.postDelayed(globalWatchdog, GLOBAL_WATCHDOG_MS);
+
         MobileAds.initialize(this, status -> {
             RewardedAd preloaded = Application.takePreloadedRewardedAd();
             if (preloaded != null) {
@@ -67,7 +98,7 @@ public class RewardedAdActivity extends Activity {
             public void onAdLoaded(@NonNull RewardedAd ad) {
                 if (loadFinished || isFinishing()) return;
                 loadFinished = true;
-                handler.removeCallbacksAndMessages(null);
+                if (loadTimeout != null) handler.removeCallbacks(loadTimeout);
                 showRewarded(ad);
             }
 
@@ -75,24 +106,48 @@ public class RewardedAdActivity extends Activity {
             public void onAdFailedToLoad(@NonNull LoadAdError error) {
                 if (loadFinished) return;
                 loadFinished = true;
-                handler.removeCallbacksAndMessages(null);
-                Log.e(TAG, "Rewarded load failed: code=" + error.getCode() + " domain="
-                        + error.getDomain() + " message=" + error.getMessage());
-                sendResult(false);
+                if (loadTimeout != null) handler.removeCallbacks(loadTimeout);
+                Log.e(TAG, "Rewarded load failed: code=" + error.getCode()
+                        + " domain=" + error.getDomain()
+                        + " message=" + error.getMessage());
+                sendClientResult("dismissed");
                 finish();
             }
         });
-        handler.postDelayed(() -> {
+
+        loadTimeout = () -> {
             if (loadFinished || showing || resultSent) return;
             loadFinished = true;
             Log.e(TAG, "Rewarded load timeout after " + LOAD_TIMEOUT_MS + "ms");
-            sendResult(false);
+            sendClientResult("dismissed");
             finish();
-        }, LOAD_TIMEOUT_MS);
+        };
+        handler.postDelayed(loadTimeout, LOAD_TIMEOUT_MS);
     }
 
     private void showRewarded(@NonNull RewardedAd ad) {
         showing = true;
+        handler.removeCallbacks(globalWatchdog);
+
+        try {
+            JSONObject customData = new JSONObject();
+            customData.put("requestId", requestId);
+            customData.put("playerId", playerId);
+            if (placement != null) customData.put("placement", placement);
+
+            ServerSideVerificationOptions options =
+                    new ServerSideVerificationOptions.Builder()
+                            .setCustomData(customData.toString())
+                            .build();
+            ad.setServerSideVerificationOptions(options);
+        } catch (Exception error) {
+            Log.e(TAG, "Unable to configure SSV custom data", error);
+            sendClientResult("dismissed");
+            Application.preloadRewardedAd();
+            finish();
+            return;
+        }
+
         ad.setFullScreenContentCallback(new FullScreenContentCallback() {
             @Override
             public void onAdShowedFullScreenContent() {
@@ -101,7 +156,7 @@ public class RewardedAdActivity extends Activity {
 
             @Override
             public void onAdDismissedFullScreenContent() {
-                if (!rewardEarned) sendResult(false);
+                if (!rewardEarned) sendClientResult("dismissed");
                 Application.preloadRewardedAd();
                 finish();
             }
@@ -109,20 +164,22 @@ public class RewardedAdActivity extends Activity {
             @Override
             public void onAdFailedToShowFullScreenContent(@NonNull AdError error) {
                 Log.e(TAG, "Rewarded show failed: " + error.getCode() + " " + error.getMessage());
-                sendResult(false);
+                sendClientResult("dismissed");
                 Application.preloadRewardedAd();
                 finish();
             }
         });
+
         try {
             ad.show(this, rewardItem -> {
                 rewardEarned = true;
                 Log.d(TAG, "Reward earned amount=" + rewardItem.getAmount());
-                sendResult(true);
+                // Client callbacks never grant the reward. AdMob SSV is the trusted source.
+                sendClientResult("earned");
             });
         } catch (RuntimeException error) {
             Log.e(TAG, "Rewarded show exception", error);
-            sendResult(false);
+            sendClientResult("dismissed");
             Application.preloadRewardedAd();
             finish();
         }
@@ -130,35 +187,55 @@ public class RewardedAdActivity extends Activity {
 
     @Override
     protected void onDestroy() {
-        handler.removeCallbacksAndMessages(null);
+        handler.removeCallbacks(globalWatchdog);
+        if (loadTimeout != null) handler.removeCallbacks(loadTimeout);
         super.onDestroy();
     }
 
-    private void sendResult(boolean rewarded) {
+    private void sendClientResult(String clientState) {
         if (resultSent) return;
         resultSent = true;
+
         final String id = requestId;
+        final String currentPlayerId = playerId == null ? "guest" : playerId;
+        final String currentOrigin = origin;
+        final String currentPlacement = placement == null ? "" : placement;
         new Thread(() -> {
             HttpURLConnection connection = null;
             try {
-                URL url = new URL(RESULT_ENDPOINT);
+                URL url = new URL(currentOrigin + "/api/rewards/admob-result");
                 connection = (HttpURLConnection) url.openConnection();
                 connection.setRequestMethod("POST");
                 connection.setConnectTimeout(5000);
                 connection.setReadTimeout(5000);
                 connection.setDoOutput(true);
                 connection.setRequestProperty("Content-Type", "application/json");
+
                 JSONObject body = new JSONObject();
                 body.put("requestId", id);
-                body.put("rewarded", rewarded);
+                body.put("rewarded", false);
+                body.put("clientState", clientState);
+                body.put("playerId", currentPlayerId);
+                body.put("origin", currentOrigin);
+                body.put("placement", currentPlacement);
+
                 byte[] bytes = body.toString().getBytes(StandardCharsets.UTF_8);
-                try (OutputStream output = connection.getOutputStream()) { output.write(bytes); }
-                Log.d(TAG, "Result sent http=" + connection.getResponseCode() + " rewarded=" + rewarded);
+                try (OutputStream output = connection.getOutputStream()) {
+                    output.write(bytes);
+                }
+                Log.d(TAG, "Client rewarded result sent http=" + connection.getResponseCode()
+                        + " state=" + clientState);
             } catch (Exception error) {
                 Log.e(TAG, "Unable to send rewarded result", error);
             } finally {
                 if (connection != null) connection.disconnect();
             }
         }).start();
+    }
+
+    private static boolean isAllowedOrigin(@Nullable String value) {
+        if (value == null) return false;
+        return "https://stopjuegodepalabras.com".equals(value)
+                || "https://www.stopjuegodepalabras.com".equals(value);
     }
 }

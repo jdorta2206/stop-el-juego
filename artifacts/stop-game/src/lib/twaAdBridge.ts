@@ -1,10 +1,15 @@
 const RESULT_BASE = "/api/rewards/admob-result";
-const RESULT_TIMEOUT_MS = 90_000;
+const RESULT_TIMEOUT_MS = 45_000;
 
 type RewardedPlacement = "extra_time" | "hint" | "double_points" | "skip_round" | "extra_pack";
 type RewardResult = { rewarded: boolean; source: "admob" | "skipped" | "error"; errorCode?: number; errorDomain?: string; errorMessage?: string };
 
 let initialized = false;
+let pendingPlayerId = "guest";
+
+export function setRewardedAdPlayerId(playerId: string | undefined): void {
+  pendingPlayerId = playerId || "guest";
+}
 
 function installResumeListener(): void {
   if (typeof window === "undefined" || initialized) return;
@@ -59,12 +64,15 @@ export async function requestRewardedAd(placement: RewardedPlacement): Promise<R
   if (typeof window === "undefined") return { rewarded: false, source: "error", errorMessage: "Window unavailable" };
 
   const requestId = makeRequestId();
-  const deepLink = `stopad://rewarded?requestId=${encodeURIComponent(requestId)}&placement=${encodeURIComponent(placement)}`;
+  const playerId = pendingPlayerId || "guest";
+  const origin = window.location.origin;
+  const deepLink = `stopad://rewarded?requestId=${encodeURIComponent(requestId)}&placement=${encodeURIComponent(placement)}&playerId=${encodeURIComponent(playerId)}&origin=${encodeURIComponent(origin)}`;
 
   return new Promise<RewardResult>((resolve) => {
     let finished = false;
     const startedAt = Date.now();
     let timer: number | null = null;
+    let deadlineTimer: number | null = null;
 
     const checkNow = async () => {
       if (finished) return;
@@ -79,12 +87,16 @@ export async function requestRewardedAd(placement: RewardedPlacement): Promise<R
       if (finished) return;
       finished = true;
       if (timer !== null) window.clearInterval(timer);
+      if (deadlineTimer !== null) window.clearTimeout(deadlineTimer);
       document.removeEventListener("visibilitychange", checkNow);
       window.removeEventListener("focus", checkNow);
       resolve(result);
     };
 
-    timer = window.setInterval(checkNow, 750);
+    timer = window.setInterval(checkNow, 1500);
+    deadlineTimer = window.setTimeout(() => {
+      finish({ rewarded: false, source: "error", errorMessage: "Native rewarded ad request timed out" });
+    }, RESULT_TIMEOUT_MS);
     document.addEventListener("visibilitychange", checkNow);
     window.addEventListener("focus", checkNow);
 

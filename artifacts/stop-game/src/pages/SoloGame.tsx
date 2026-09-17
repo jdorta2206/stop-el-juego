@@ -13,6 +13,7 @@ import { useValidateRound, useSubmitScore, type CategoryResult, type ValidateRou
 import { usePlayer } from "@/hooks/use-player";
 import { motion, AnimatePresence } from "framer-motion";
 import { RewardedAd, BannerAd } from "@/components/AdSystem";
+import { isGameTimerPaused } from "@/lib/timerPauseGuard";
 import { ContextualPremiumPrompt } from "@/components/ContextualPremiumPrompt";
 import { PremiumModal } from "@/components/PremiumModal";
 import { ShareResultsModal } from "@/components/ShareResultsModal";
@@ -510,6 +511,7 @@ export default function SoloGame() {
     if (randomEvent === "hidden_category") setTimeout(() => sound.playHiddenReveal(), 400);
 
     timerRef.current = setInterval(() => {
+      if (isGameTimerPaused()) return;
       setTimeLeft(prev => {
         if (prev <= 1) {
           // Clear the interval immediately (synchronously) so this branch never fires twice
@@ -1327,6 +1329,7 @@ export default function SoloGame() {
               rewardedAdType === "double" ? totalScore : 0
             }
             onComplete={handleRewardedComplete}
+            playerId={player?.id}
             onSkip={() => setRewardedAdType(null)}
           />
         )}
