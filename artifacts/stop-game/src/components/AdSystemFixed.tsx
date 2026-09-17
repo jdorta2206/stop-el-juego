@@ -86,6 +86,7 @@ export function BannerAd({ className = "" }: { className?: string }) {
 
 export function RewardedAd({ onComplete, onSkip, rewardType = "points", rewardAmount = 20 }: { onComplete: (reward: number) => void; onSkip: () => void; rewardType?: "points" | "hint" | "extraTime"; rewardAmount?: number }) {
   const [phase, setPhase] = useState<"pre" | "loading" | "error" | "done">("pre");
+  const [errorDetail, setErrorDetail] = useState<string>("");
   const t = getT();
   const labels = { points: `+${rewardAmount} pts`, hint: t.ads.reward, extraTime: "+30s" };
   const icons = { points: <Star className="w-8 h-8 text-[#f9a825]" />, hint: <Zap className="w-8 h-8 text-[#f9a825]" />, extraTime: <Gift className="w-8 h-8 text-[#f9a825]" /> };
@@ -94,6 +95,7 @@ export function RewardedAd({ onComplete, onSkip, rewardType = "points", rewardAm
 
   const startWatching = async () => {
     setPhase("loading");
+    setErrorDetail("");
     const bridgeReady = isTwaAdBridgeAvailable();
     const knownTwa =
       hasAndroidAppReferrer() ||
@@ -102,37 +104,27 @@ export function RewardedAd({ onComplete, onSkip, rewardType = "points", rewardAm
 
     if (bridgeReady || knownTwa) {
       const placement = rewardType === "extraTime" ? "extra_time" : rewardType === "hint" ? "hint" : "double_points";
-      try {
-        const result = await requestRewardedAd(placement);
-        if (result.rewarded === true && result.source === "admob") {
-          setPhase("done");
-          window.setTimeout(() => onComplete(rewardAmount), 350);
-        } else {
-          onSkip();
-        }
-      } catch {
-        onSkip();
+      const result = await requestRewardedAd(placement);
+      if (result.rewarded === true && result.source === "admob") {
+        setPhase("done");
+        window.setTimeout(() => onComplete(rewardAmount), 500);
+      } else {
+        const detail = [
+          result.errorCode != null ? `código ${result.errorCode}` : "",
+          result.errorDomain || "",
+          result.errorMessage || "",
+        ].filter(Boolean).join(" · ");
+        setErrorDetail(detail);
+        setPhase("error");
+        window.setTimeout(() => onSkip(), detail ? 5000 : 900);
       }
       return;
     }
 
-    onSkip();
+    setErrorDetail("El puente nativo de anuncios no está disponible.");
+    setPhase("error");
+    window.setTimeout(() => onSkip(), 5000);
   };
 
-  // Keep a transparent full-screen interaction lock while the native Android
-  // Activity checks AdMob. There is deliberately no blocking white card: the
-  // player sees the game frozen, but cannot type/click and the timer guard
-  // remains active. Failure returns through onSkip() and resumes immediately.
-  if (phase === "loading") {
-    return (
-      <div
-        className="fixed inset-0 z-[9998]"
-        aria-hidden="true"
-        onContextMenu={(event) => event.preventDefault()}
-        style={{ background: "rgba(0,0,0,0.08)", cursor: "wait", touchAction: "none" }}
-      />
-    );
-  }
-
-  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"><div className="w-full max-w-sm rounded-3xl overflow-hidden bg-white shadow-2xl"><div className="p-6 text-center"><h3 className="text-xl font-black">{phase === "done" ? "¡Recompensa!" : "Mira el anuncio"}</h3>{phase === "pre" && <><div className="my-5 flex justify-center">{icons[rewardType]}</div><p className="text-gray-600 text-sm mb-5">{labels[rewardType]}</p><button onClick={startWatching} className="w-full py-3 rounded-xl font-bold bg-[#f9a825] text-[#0d1757]">Ver anuncio</button><button onClick={onSkip} className="w-full py-2 mt-2 text-gray-500">Ahora no</button></>}{phase === "done" && <div className="py-8"><div className="text-5xl mb-3">🎉</div><p className="text-gray-700">{labels[rewardType]}</p></div>}</div></div></div>;
+  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"><div className="w-full max-w-sm rounded-3xl overflow-hidden bg-white shadow-2xl"><div className="p-6 text-center"><h3 className="text-xl font-black">{phase === "done" ? "¡Recompensa!" : phase === "error" ? "Anuncio no disponible" : "Mira el anuncio"}</h3>{phase === "pre" && <><div className="my-5 flex justify-center">{icons[rewardType]}</div><p className="text-gray-600 text-sm mb-5">{labels[rewardType]}</p><button onClick={startWatching} className="w-full py-3 rounded-xl font-bold bg-[#f9a825] text-[#0d1757]">Ver anuncio</button><button onClick={onSkip} className="w-full py-2 mt-2 text-gray-500">Ahora no</button></>}{phase === "loading" && <div className="py-10"><div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-4 border-gray-200 border-t-[#f9a825]"/><p className="text-sm text-gray-600">Cargando anuncio…</p></div>}{phase === "error" && <><div className="py-8 text-4xl">📺</div><p className="text-sm text-gray-600">No se ha podido mostrar un anuncio recompensado.</p>{errorDetail && <p className="mt-2 rounded-lg bg-gray-100 px-3 py-2 text-left text-[11px] leading-4 text-gray-600 break-words">Diagnóstico: {errorDetail}</p>}<button onClick={onSkip} className="w-full py-2 mt-4 text-gray-500">Continuar</button></>}{phase === "done" && <div className="py-8"><div className="text-5xl mb-3">🎉</div><p className="text-gray-700">{labels[rewardType]}</p></div>}</div></div></div>;
 }
