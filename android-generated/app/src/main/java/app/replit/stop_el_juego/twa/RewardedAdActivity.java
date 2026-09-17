@@ -1,14 +1,11 @@
 package app.replit.stop_el_juego.twa;
 
 import android.app.Activity;
-import android.graphics.Color;
-import android.graphics.drawable.ColorDrawable;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
-import android.view.Window;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -32,23 +29,18 @@ public class RewardedAdActivity extends Activity {
     private static final String TAG = "STOP_REWARDED";
     private static final String REAL_REWARDED_ID = "ca-app-pub-4807272408824742/3559554716";
     private static final String RESULT_ENDPOINT = "https://www.stopjuegodepalabras.com/api/rewards/admob-result";
-    private static final long LOAD_TIMEOUT_MS = 3500L;
+    private static final long LOAD_TIMEOUT_MS = 10_000L;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private String requestId;
     private boolean resultSent;
     private boolean rewardEarned;
-    private boolean loadFinished;
     private boolean showing;
+    private boolean loadFinished;
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        Window window = getWindow();
-        window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
-        window.setDimAmount(0f);
-        window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND);
-
         Uri data = getIntent().getData();
         requestId = data == null ? null : data.getQueryParameter("requestId");
         if (requestId == null || requestId.isEmpty()) {
@@ -56,51 +48,47 @@ public class RewardedAdActivity extends Activity {
             finish();
             return;
         }
-
-        // Prefer the preloaded production ad. If it is not ready yet, load it
-        // on demand so the feature still works on a cold start.
-        RewardedAd preloaded = Application.takePreloadedRewardedAd();
-        if (preloaded != null) {
-            Log.d(TAG, "Using preloaded rewarded ad requestId=" + requestId);
-            showRewarded(preloaded);
-            return;
-        }
-
-        Log.d(TAG, "No preloaded rewarded ad; loading on demand requestId=" + requestId);
-        MobileAds.initialize(this, status -> loadAndShow());
-        handler.postDelayed(() -> {
-            if (!loadFinished && !showing && !resultSent) {
-                loadFinished = true;
-                Log.e(TAG, "Rewarded load timeout after " + LOAD_TIMEOUT_MS + "ms");
-                sendResult(false);
-                finish();
+        MobileAds.initialize(this, status -> {
+            RewardedAd preloaded = Application.takePreloadedRewardedAd();
+            if (preloaded != null) {
+                Log.d(TAG, "Using preloaded rewarded ad requestId=" + requestId);
+                showRewarded(preloaded);
+            } else {
+                Log.d(TAG, "No preloaded rewarded ad; loading on demand requestId=" + requestId);
+                loadAndShow();
             }
-        }, LOAD_TIMEOUT_MS);
+        });
     }
 
     private void loadAndShow() {
-        if (isFinishing() || resultSent) return;
+        loadFinished = false;
         RewardedAd.load(this, REAL_REWARDED_ID, new AdRequest.Builder().build(), new RewardedAdLoadCallback() {
             @Override
             public void onAdLoaded(@NonNull RewardedAd ad) {
-                if (loadFinished || isFinishing() || resultSent) return;
+                if (loadFinished || isFinishing()) return;
                 loadFinished = true;
                 handler.removeCallbacksAndMessages(null);
-                Log.d(TAG, "Rewarded ad loaded on demand requestId=" + requestId);
                 showRewarded(ad);
             }
 
             @Override
             public void onAdFailedToLoad(@NonNull LoadAdError error) {
-                if (loadFinished || resultSent) return;
+                if (loadFinished) return;
                 loadFinished = true;
                 handler.removeCallbacksAndMessages(null);
-                Log.e(TAG, "Rewarded load failed: code=" + error.getCode() + " domain=" + error.getDomain() + " message=" + error.getMessage());
+                Log.e(TAG, "Rewarded load failed: code=" + error.getCode() + " domain="
+                        + error.getDomain() + " message=" + error.getMessage());
                 sendResult(false);
-                Application.preloadRewardedAd();
                 finish();
             }
         });
+        handler.postDelayed(() -> {
+            if (loadFinished || showing || resultSent) return;
+            loadFinished = true;
+            Log.e(TAG, "Rewarded load timeout after " + LOAD_TIMEOUT_MS + "ms");
+            sendResult(false);
+            finish();
+        }, LOAD_TIMEOUT_MS);
     }
 
     private void showRewarded(@NonNull RewardedAd ad) {
@@ -140,6 +128,12 @@ public class RewardedAdActivity extends Activity {
         }
     }
 
+    @Override
+    protected void onDestroy() {
+        handler.removeCallbacksAndMessages(null);
+        super.onDestroy();
+    }
+
     private void sendResult(boolean rewarded) {
         if (resultSent) return;
         resultSent = true;
@@ -150,8 +144,8 @@ public class RewardedAdActivity extends Activity {
                 URL url = new URL(RESULT_ENDPOINT);
                 connection = (HttpURLConnection) url.openConnection();
                 connection.setRequestMethod("POST");
-                connection.setConnectTimeout(3000);
-                connection.setReadTimeout(3000);
+                connection.setConnectTimeout(5000);
+                connection.setReadTimeout(5000);
                 connection.setDoOutput(true);
                 connection.setRequestProperty("Content-Type", "application/json");
                 JSONObject body = new JSONObject();
@@ -166,11 +160,5 @@ public class RewardedAdActivity extends Activity {
                 if (connection != null) connection.disconnect();
             }
         }).start();
-    }
-
-    @Override
-    protected void onDestroy() {
-        handler.removeCallbacksAndMessages(null);
-        super.onDestroy();
     }
 }
