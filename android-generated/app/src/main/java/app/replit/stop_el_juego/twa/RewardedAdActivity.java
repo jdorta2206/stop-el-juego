@@ -25,7 +25,6 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 
-/** Native foreground host for rewarded ads launched by an explicit user gesture in the TWA. */
 public class RewardedAdActivity extends Activity {
     private static final String TAG = "STOP_REWARDED";
     private static final String REAL_REWARDED_ID = "ca-app-pub-4807272408824742/3559554716";
@@ -49,19 +48,20 @@ public class RewardedAdActivity extends Activity {
             finish();
             return;
         }
-
-        RewardedAd preloaded = Application.takePreloadedRewardedAd();
-        if (preloaded != null) {
-            Log.d(TAG, "Using preloaded rewarded ad requestId=" + requestId);
-            showRewarded(preloaded);
-            return;
-        }
-
-        Log.d(TAG, "No preloaded rewarded ad; loading on demand requestId=" + requestId);
-        MobileAds.initialize(this, status -> loadAndShow());
+        MobileAds.initialize(this, status -> {
+            RewardedAd preloaded = Application.takePreloadedRewardedAd();
+            if (preloaded != null) {
+                Log.d(TAG, "Using preloaded rewarded ad requestId=" + requestId);
+                showRewarded(preloaded);
+            } else {
+                Log.d(TAG, "No preloaded rewarded ad; loading on demand requestId=" + requestId);
+                loadAndShow();
+            }
+        });
     }
 
     private void loadAndShow() {
+        loadFinished = false;
         RewardedAd.load(this, REAL_REWARDED_ID, new AdRequest.Builder().build(), new RewardedAdLoadCallback() {
             @Override
             public void onAdLoaded(@NonNull RewardedAd ad) {
@@ -82,7 +82,6 @@ public class RewardedAdActivity extends Activity {
                 finish();
             }
         });
-
         handler.postDelayed(() -> {
             if (loadFinished || showing || resultSent) return;
             loadFinished = true;
@@ -153,9 +152,7 @@ public class RewardedAdActivity extends Activity {
                 body.put("requestId", id);
                 body.put("rewarded", rewarded);
                 byte[] bytes = body.toString().getBytes(StandardCharsets.UTF_8);
-                try (OutputStream output = connection.getOutputStream()) {
-                    output.write(bytes);
-                }
+                try (OutputStream output = connection.getOutputStream()) { output.write(bytes); }
                 Log.d(TAG, "Result sent http=" + connection.getResponseCode() + " rewarded=" + rewarded);
             } catch (Exception error) {
                 Log.e(TAG, "Unable to send rewarded result", error);
