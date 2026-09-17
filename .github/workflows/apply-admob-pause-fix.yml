@@ -1,0 +1,33 @@
+name: Apply rewarded timer fix
+
+on:
+  push:
+    branches:
+      - fix/admob-pause-timer
+    paths:
+      - scripts/apply-admob-pause-fix.js
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/admob-pause-timer
+          fetch-depth: 0
+
+      - name: Apply fix
+        run: node scripts/apply-admob-pause-fix.js
+
+      - name: Commit generated changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add artifacts/stop-game/src/pages/SoloGame.tsx artifacts/stop-game/src/components/AdSystemFixed.tsx .github/workflows/android-release-signed.yml
+          git diff --cached --quiet && exit 0
+          git commit -m "fix(android): pause SoloGame timer during rewarded ad"
+          git push origin HEAD:fix/admob-pause-timer
