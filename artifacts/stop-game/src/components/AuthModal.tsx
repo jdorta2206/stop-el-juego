@@ -43,10 +43,6 @@ export function AuthModal({ onSave, initial, onDismiss }: AuthModalProps) {
     try {
       const oauthUser = checkOAuthReturn();
       if (oauthUser) {
-        // The handoff can persist the Facebook token in sessionStorage or
-        // localStorage depending on where the OAuth callback landed. Always
-        // consume it through the same helper so AuthModal and the early
-        // handoff bootstrap cannot race or use different storage rules.
         const storedFbToken = consumeFacebookAccessToken();
         if (storedFbToken) setFbToken(storedFbToken);
         handleOAuthSuccess(oauthUser, storedFbToken);
@@ -84,9 +80,7 @@ export function AuthModal({ onSave, initial, onDismiss }: AuthModalProps) {
           setTimeout(() => onSave(profile), 2000);
         }
       })
-      .catch(() => {
-        // On network error, stay on profile step (user confirms manually)
-      });
+      .catch(() => {});
   };
 
   const handleSave = () => {
@@ -99,6 +93,21 @@ export function AuthModal({ onSave, initial, onDismiss }: AuthModalProps) {
       loginMethod,
       picture: oauthPicture,
       fbAccessToken: fbToken || initial?.fbAccessToken || null,
+    } as any);
+  };
+
+  const handleGuest = () => {
+    const guestId = `guest_${crypto.randomUUID()}`;
+    const guestNames = ["Invitado", "Jugador", "Stopero", "Palabrero"];
+    const guestName = guestNames[Math.floor(Math.random() * guestNames.length)];
+    const color = AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)];
+    onSave({
+      id: guestId,
+      name: guestName,
+      avatarColor: color,
+      loginMethod: null,
+      picture: null,
+      fbAccessToken: null,
     } as any);
   };
 
@@ -146,7 +155,7 @@ export function AuthModal({ onSave, initial, onDismiss }: AuthModalProps) {
                 </motion.div>
               ) : step === "login" ? (
                 <motion.div key="login" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-3">
-                  <SocialButton onClick={signInWithGoogle} configured={isGoogleConfigured} icon={<svg viewBox="0 0 24 24" className="w-5 h-5" fill="none"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 1 12 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>} label={t.auth.google} bg="white" textColor="#333" soonLabel={t.auth.soon} />
+                  <SocialButton onClick={signInWithGoogle} configured={isGoogleConfigured} icon={<svg viewBox="0 0 24 24" className="w-5 h-5" fill="none"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.66-2.84l-3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>} label={t.auth.google} bg="white" textColor="#333" soonLabel={t.auth.soon} />
                   <SocialButton onClick={signInWithFacebook} configured={isFacebookConfigured} icon={<svg viewBox="0 0 24 24" className="w-5 h-5"><circle cx="12" cy="12" r="12" fill="white" /><path d="M13.397 20.997v-8.196h2.765l.411-3.209h-3.176V7.548c0-.926.258-1.56 1.587-1.56h1.684V3.127A22.336 22.336 0 0 0 14.201 3c-2.444 0-4.122 1.492-4.122 4.231v2.355H7.332v3.209h2.753v8.202h3.312z" fill="#1877F2" /></svg>} label={t.auth.facebook} bg="#1877F2" textColor="white" soonLabel={t.auth.soon} />
                   {isTikTokConfigured && (
                     <SocialButton onClick={signInWithTikTok} configured={isTikTokConfigured} icon={<span className="text-lg">♪</span>} label="TikTok" bg="#000" textColor="white" soonLabel={t.auth.soon} />
@@ -155,6 +164,7 @@ export function AuthModal({ onSave, initial, onDismiss }: AuthModalProps) {
                     <SocialButton onClick={signInWithApple} configured={isAppleConfigured} icon={<span className="text-lg"></span>} label="Apple" bg="#000" textColor="white" soonLabel={t.auth.soon} />
                   )}
                   <div className="relative my-2"><div className="absolute inset-0 flex items-center"><div className="w-full border-t border-white/10" /></div><div className="relative flex justify-center"><span className="bg-[#10195f] px-3 text-white/30 text-xs">{t.auth.or}</span></div></div>
+                  <button onClick={handleGuest} className="w-full py-3 rounded-xl border border-white/20 bg-white/10 text-white font-black hover:bg-white/15 transition flex items-center justify-center gap-2">👤 {t.auth.guest || "Entrar como invitado"}</button>
                   <div className="space-y-2"><label className="text-white/70 text-sm flex items-center gap-2"><User className="w-4 h-4" />{t.auth.name}</label><input value={name} onChange={e => setName(e.target.value)} placeholder={t.auth.namePlaceholder} maxLength={14} className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/10 text-white placeholder-white/30 outline-none focus:border-[#f9a825]" /><button onClick={handleSave} className="w-full py-3 rounded-xl bg-[#f9a825] text-[#111] font-black hover:brightness-110 transition">{t.auth.continue}</button></div>
                 </motion.div>
               ) : (
