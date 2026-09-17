@@ -3,7 +3,7 @@ name: Build Android signed Release
 on:
   push:
     branches:
-      - fix/android-ads-v40-recovery
+      - master
   workflow_dispatch:
 
 permissions:
