@@ -3,6 +3,8 @@ package app.replit.stop_el_juego.twa;
 import android.app.Activity;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
@@ -23,15 +25,17 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 
-/** Native foreground host for rewarded ads launched by an explicit user gesture in the TWA. */
 public class RewardedAdActivity extends Activity {
     private static final String TAG = "STOP_REWARDED";
-    private static final String TEST_REWARDED_ID = "ca-app-pub-3940256099942544/5224354917";
+    private static final String REAL_REWARDED_ID = "ca-app-pub-4807272408824742/3559554716";
     private static final String RESULT_ENDPOINT = "https://www.stopjuegodepalabras.com/api/rewards/admob-result";
-
+    private static final long LOAD_TIMEOUT_MS = 10_000L;
+    private final Handler handler = new Handler(Looper.getMainLooper());
     private String requestId;
     private boolean resultSent;
     private boolean rewardEarned;
+    private boolean showing;
+    private boolean loadFinished;
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -43,54 +47,78 @@ public class RewardedAdActivity extends Activity {
             finish();
             return;
         }
-        MobileAds.initialize(this, status -> loadAndShow());
+        MobileAds.initialize(this, status -> {
+            RewardedAd preloaded = Application.takePreloadedRewardedAd();
+            if (preloaded != null) {
+                Log.d(TAG, "Using preloaded rewarded ad requestId=" + requestId);
+                showRewarded(preloaded);
+            } else {
+                Log.d(TAG, "No preloaded rewarded ad; loading on demand requestId=" + requestId);
+                loadAndShow();
+            }
+        });
     }
 
     private void loadAndShow() {
-        RewardedAd.load(this, TEST_REWARDED_ID, new AdRequest.Builder().build(), new RewardedAdLoadCallback() {
+        loadFinished = false;
+        RewardedAd.load(this, REAL_REWARDED_ID, new AdRequest.Builder().build(), new RewardedAdLoadCallback() {
             @Override
             public void onAdLoaded(@NonNull RewardedAd ad) {
-                ad.setFullScreenContentCallback(new FullScreenContentCallback() {
-                    @Override
-                    public void onAdShowedFullScreenContent() {
-                        Log.d(TAG, "Rewarded ad shown requestId=" + requestId);
-                    }
-
-                    @Override
-                    public void onAdDismissedFullScreenContent() {
-                        if (!rewardEarned) sendResult(false);
-                        finish();
-                    }
-
-                    @Override
-                    public void onAdFailedToShowFullScreenContent(@NonNull AdError error) {
-                        Log.e(TAG, "Rewarded show failed: " + error.getCode() + " " + error.getMessage());
-                        sendResult(false);
-                        finish();
-                    }
-                });
-                try {
-                    ad.show(RewardedAdActivity.this, rewardItem -> {
-                        rewardEarned = true;
-                        Log.d(TAG, "Reward earned amount=" + rewardItem.getAmount());
-                        sendResult(true);
-                    });
-                } catch (RuntimeException error) {
-                    Log.e(TAG, "Rewarded show exception", error);
-                    sendResult(false);
-                    finish();
-                }
+                if (loadFinished || isFinishing()) return;
+                loadFinished = true;
+                handler.removeCallbacksAndMessages(null);
+                showRewarded(ad);
             }
-
             @Override
             public void onAdFailedToLoad(@NonNull LoadAdError error) {
-                Log.e(TAG, "Rewarded load failed: code=" + error.getCode() + " domain="
-                        + error.getDomain() + " message=" + error.getMessage());
+                if (loadFinished) return;
+                loadFinished = true;
+                handler.removeCallbacksAndMessages(null);
+                Log.e(TAG, "Rewarded load failed: code=" + error.getCode() + " domain=" + error.getDomain() + " message=" + error.getMessage());
                 sendResult(false);
                 finish();
             }
         });
+        handler.postDelayed(() -> {
+            if (loadFinished || showing || resultSent) return;
+            loadFinished = true;
+            Log.e(TAG, "Rewarded load timeout after " + LOAD_TIMEOUT_MS + "ms");
+            sendResult(false);
+            finish();
+        }, LOAD_TIMEOUT_MS);
     }
+
+    private void showRewarded(@NonNull RewardedAd ad) {
+        showing = true;
+        ad.setFullScreenContentCallback(new FullScreenContentCallback() {
+            @Override public void onAdShowedFullScreenContent() { Log.d(TAG, "Rewarded ad shown requestId=" + requestId); }
+            @Override public void onAdDismissedFullScreenContent() {
+                if (!rewardEarned) sendResult(false);
+                Application.preloadRewardedAd();
+                finish();
+            }
+            @Override public void onAdFailedToShowFullScreenContent(@NonNull AdError error) {
+                Log.e(TAG, "Rewarded show failed: " + error.getCode() + " " + error.getMessage());
+                sendResult(false);
+                Application.preloadRewardedAd();
+                finish();
+            }
+        });
+        try {
+            ad.show(this, rewardItem -> {
+                rewardEarned = true;
+                Log.d(TAG, "Reward earned amount=" + rewardItem.getAmount());
+                sendResult(true);
+            });
+        } catch (RuntimeException error) {
+            Log.e(TAG, "Rewarded show exception", error);
+            sendResult(false);
+            Application.preloadRewardedAd();
+            finish();
+        }
+    }
+
+    @Override protected void onDestroy() { handler.removeCallbacksAndMessages(null); super.onDestroy(); }
 
     private void sendResult(boolean rewarded) {
         if (resultSent) return;
@@ -110,15 +138,10 @@ public class RewardedAdActivity extends Activity {
                 body.put("requestId", id);
                 body.put("rewarded", rewarded);
                 byte[] bytes = body.toString().getBytes(StandardCharsets.UTF_8);
-                try (OutputStream output = connection.getOutputStream()) {
-                    output.write(bytes);
-                }
+                try (OutputStream output = connection.getOutputStream()) { output.write(bytes); }
                 Log.d(TAG, "Result sent http=" + connection.getResponseCode() + " rewarded=" + rewarded);
-            } catch (Exception error) {
-                Log.e(TAG, "Unable to send rewarded result", error);
-            } finally {
-                if (connection != null) connection.disconnect();
-            }
+            } catch (Exception error) { Log.e(TAG, "Unable to send rewarded result", error); }
+            finally { if (connection != null) connection.disconnect(); }
         }).start();
     }
 }
