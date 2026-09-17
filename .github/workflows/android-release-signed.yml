@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - master
-      - fix/android-ads-v40-recovery
   workflow_dispatch:
 
 permissions:
