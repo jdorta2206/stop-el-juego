@@ -5,8 +5,6 @@ import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
 import android.net.Uri;
 import android.os.Bundle;
-import android.os.Handler;
-import android.os.Looper;
 import android.util.Log;
 import android.view.Window;
 
@@ -15,7 +13,6 @@ import androidx.annotation.Nullable;
 
 import com.google.android.gms.ads.AdError;
 import com.google.android.gms.ads.FullScreenContentCallback;
-import com.google.android.gms.ads.MobileAds;
 import com.google.android.gms.ads.rewarded.RewardedAd;
 
 import org.json.JSONObject;
@@ -29,7 +26,6 @@ public class RewardedAdActivity extends Activity {
     private static final String TAG = "STOP_REWARDED";
     private static final String RESULT_ENDPOINT = "https://www.stopjuegodepalabras.com/api/rewards/admob-result";
 
-    private final Handler handler = new Handler(Looper.getMainLooper());
     private String requestId;
     private boolean resultSent;
     private boolean rewardEarned;
@@ -38,9 +34,8 @@ public class RewardedAdActivity extends Activity {
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // Transparent host: the STOP game remains visible. We ONLY use an ad
-        // that was already prepared by Application. Never start a network ad
-        // load after the player has tapped the reward button.
+        // Transparent host: the STOP game remains visible underneath. The
+        // player must never wait here for a network ad load.
         Window window = getWindow();
         window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
         window.setDimAmount(0f);
@@ -54,28 +49,18 @@ public class RewardedAdActivity extends Activity {
             return;
         }
 
-        MobileAds.initialize(this, status -> {
-            RewardedAd preloaded = Application.takePreloadedRewardedAd();
-            if (preloaded != null) {
-                Log.d(TAG, "Using preloaded rewarded ad requestId=" + requestId);
-                showRewarded(preloaded);
-            } else {
-                // No ad ready means no reward. Return immediately instead of
-                // making the player wait for a network load.
-                Log.d(TAG, "No preloaded rewarded ad; returning unavailable requestId=" + requestId);
-                sendResult(false);
-                finish();
-            }
-        });
+        // Application owns the preload lifecycle. Never call MobileAds.initialize
+        // or RewardedAd.load here: both can introduce a visible delay after a tap.
+        RewardedAd preloaded = Application.takePreloadedRewardedAd();
+        if (preloaded == null) {
+            Log.d(TAG, "No rewarded ad preloaded; fail immediately requestId=" + requestId);
+            sendResult(false);
+            finish();
+            return;
+        }
 
-        // Initialization itself must not leave the player stuck indefinitely.
-        handler.postDelayed(() -> {
-            if (!resultSent && !rewardEarned) {
-                Log.e(TAG, "AdMob initialization/preload unavailable in time");
-                sendResult(false);
-                finish();
-            }
-        }, 2500L);
+        Log.d(TAG, "Using preloaded rewarded ad requestId=" + requestId);
+        showRewarded(preloaded);
     }
 
     private void showRewarded(@NonNull RewardedAd ad) {
@@ -112,12 +97,6 @@ public class RewardedAdActivity extends Activity {
             Application.preloadRewardedAd();
             finish();
         }
-    }
-
-    @Override
-    protected void onDestroy() {
-        handler.removeCallbacksAndMessages(null);
-        super.onDestroy();
     }
 
     private void sendResult(boolean rewarded) {
