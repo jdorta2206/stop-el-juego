@@ -1,6 +1,6 @@
 import fs from "fs";
 
-// One-time CI migration: applies the direct game-level rewarded-ad pause and bumps Android to v33.
+// One-time CI migration: applies the direct game-level rewarded-ad pause.
 
 const soloPath = "artifacts/stop-game/src/pages/SoloGame.tsx";
 let s = fs.readFileSync(soloPath, "utf8");
@@ -46,10 +46,4 @@ a = a.replace(`    setRewardedPause(true);\n    setPhase("loading");`, `    wind
 a = a.replace('    return () => setRewardedPause(false);', '    return () => {};');
 fs.writeFileSync(adPath, a);
 
-const wf = ".github/workflows/android-release-signed.yml";
-let w = fs.readFileSync(wf, "utf8");
-w = w.replace(/versionCode:\s*32/g, "versionCode: 33");
-w = w.replace(/stop-android-release-signed-v32-admob-pause-timer/g, "stop-android-release-signed-v33-admob-pause-timer");
-fs.writeFileSync(wf, w);
-
-console.log("Applied direct game-level rewarded-ad timer pause fix and bumped Android versionCode to 33.");
+console.log("Applied direct game-level rewarded-ad timer pause fix.");
