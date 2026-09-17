@@ -62,7 +62,8 @@ router.post("/admob-result", async (req, res) => {
   const playerId = readString(req.body?.playerId);
   const origin = readString(req.body?.origin);
   const placement = readString(req.body?.placement);
-  const clientState = req.body?.clientState === "earned" ? "earned" : "dismissed";
+  const rawClientState = readString(req.body?.clientState);
+  const clientState = rawClientState === "earned" || rawClientState === "dismissed" ? rawClientState : "pending";
 
   if (!ADMOB_REQUEST_ID_RE.test(requestId) || !playerId || playerId.length > 256) {
     res.status(400).json({ error: "Invalid rewarded request" });
