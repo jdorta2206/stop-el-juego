@@ -255,7 +255,19 @@ router.get("/admob-ssv", async (req, res) => {
       return;
     }
 
-    if (!transactionId || transactionId.length > 256 || !customDataRaw) {
+    // AdMob's "Verify URL" test may omit custom_data because Google
+    // documents custom_data as optional. A verification request must still
+    // return HTTP 200, but it must never grant a reward.
+    if (!customDataRaw) {
+      if (!transactionId || transactionId.length > 256) {
+        res.status(400).send("missing_ssv_data");
+        return;
+      }
+      res.status(200).send("ok");
+      return;
+    }
+
+    if (!transactionId || transactionId.length > 256) {
       res.status(400).send("missing_ssv_data");
       return;
     }
