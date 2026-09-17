@@ -45,13 +45,13 @@ jobs:
           printf '%s' "$KEYSTORE_BASE64" | base64 --decode > android-release.keystore
           test -s android-release.keystore
           keytool -list -keystore android-release.keystore -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" >/dev/null
-      - name: Set v30 version code
+      - name: Set v31 version code
         working-directory: android-generated
         shell: bash
         run: |
           set -euo pipefail
-          sed -i 's/versionCode [0-9][0-9]*/versionCode 30/' app/build.gradle
-          grep -q 'versionCode 30' app/build.gradle
+          sed -i 's/versionCode [0-9][0-9]*/versionCode 31/' app/build.gradle
+          grep -q 'versionCode 31' app/build.gradle
       - name: Build signed Release APK and AAB
         working-directory: android-generated
         shell: bash
@@ -74,7 +74,7 @@ jobs:
       - name: Upload signed Release artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: stop-android-release-signed-v30-admob-pause-timer
+          name: stop-android-release-signed-v31-admob-pause-timer
           path: |
             android-generated/app/build/outputs/apk/release/app-release.apk
             android-generated/app/build/outputs/bundle/release/app-release.aab
