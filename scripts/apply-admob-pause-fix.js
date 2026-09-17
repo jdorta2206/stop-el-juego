@@ -1,5 +1,7 @@
 const fs = require("fs");
 
+// One-time CI migration: applies the direct game-level rewarded-ad pause and bumps Android to v33.
+
 const soloPath = "artifacts/stop-game/src/pages/SoloGame.tsx";
 let s = fs.readFileSync(soloPath, "utf8");
 
