@@ -32,7 +32,8 @@ public class RewardedAdActivity extends Activity {
     private static final String TAG = "STOP_REWARDED";
     private static final String REAL_REWARDED_ID = "ca-app-pub-4807272408824742/3559554716";
     private static final String RESULT_ENDPOINT = "https://www.stopjuegodepalabras.com/api/rewards/admob-result";
-    private static final long LOAD_TIMEOUT_MS = 10_000L;
+    // A no-fill must not make the player stare at a loading state.
+    private static final long LOAD_TIMEOUT_MS = 4_000L;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private String requestId;
@@ -45,9 +46,8 @@ public class RewardedAdActivity extends Activity {
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // Never show a white/blank native Activity while AdMob is loading.
-        // The STOP game remains visible underneath. If no ad is available,
-        // the Activity sends a failed result and finishes without consuming time.
+        // Transparent native host: the STOP game stays visible underneath while
+        // AdMob decides whether a rewarded ad can actually be shown.
         Window window = getWindow();
         window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
         window.setDimAmount(0f);
