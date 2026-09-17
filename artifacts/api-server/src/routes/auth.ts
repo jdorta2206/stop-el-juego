@@ -406,11 +406,11 @@ router.get("/facebook/start", (req: Request, res: Response) => {
   const params = new URLSearchParams({
     client_id: FACEBOOK_APP_ID,
     redirect_uri: redirectUri,
-    scope: "email,public_profile,user_friends",
+    scope: "email,public_profile",
     response_type: "code",
     state,
   });
-  res.redirect(`https://www.facebook.com/v19.0/dialog/oauth?${params}`);
+  res.redirect(`https://www.facebook.com/v26.0/dialog/oauth?${params}`);
 });
 
 router.get("/facebook/callback", async (req: Request, res: Response) => {
@@ -437,7 +437,7 @@ router.get("/facebook/callback", async (req: Request, res: Response) => {
 
     // Exchange code → access token
     const tokenRes = await fetch(
-      `https://graph.facebook.com/v19.0/oauth/access_token?` +
+      `https://graph.facebook.com/v26.0/oauth/access_token?` +
       new URLSearchParams({ client_id: FACEBOOK_APP_ID, redirect_uri: redirectUri, client_secret: FACEBOOK_APP_SECRET, code })
     );
     const tokenData = (await tokenRes.json()) as OAuthTokenResponse;
@@ -445,7 +445,7 @@ router.get("/facebook/callback", async (req: Request, res: Response) => {
 
     // Fetch profile
     const meRes = await fetch(
-      `https://graph.facebook.com/me?fields=id,name,email,picture.type(large)&access_token=${tokenData.access_token}`
+      `https://graph.facebook.com/v26.0/me?fields=id,name,email,picture.type(large)&access_token=${tokenData.access_token}`
     );
     const me = (await meRes.json()) as OAuthProfile;
 
