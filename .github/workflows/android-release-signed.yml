@@ -44,13 +44,13 @@ jobs:
           printf '%s' "$KEYSTORE_BASE64" | base64 --decode > android-release.keystore
           test -s android-release.keystore
           keytool -list -keystore android-release.keystore -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" >/dev/null
-      - name: Set v36 version code and force AD_ID
+      - name: Set v37 version code and force AD_ID
         working-directory: android-generated
         shell: bash
         run: |
           set -euo pipefail
-          sed -i -E 's/versionCode [0-9]+/versionCode 36/' app/build.gradle
-          grep -q 'versionCode 36' app/build.gradle
+          sed -i -E 's/versionCode [0-9]+/versionCode 37/' app/build.gradle
+          grep -q 'versionCode 37' app/build.gradle
           python3 - <<'PY'
           from pathlib import Path
           p = Path('app/src/main/AndroidManifest.xml')
@@ -72,7 +72,7 @@ jobs:
           set -euo pipefail
           chmod +x ./gradlew
           ./gradlew clean assembleRelease bundleRelease --no-daemon --stacktrace
-      - name: Verify final APK actually contains AD_ID
+      - name: Verify final APK and AAB actually contain AD_ID
         working-directory: android-generated
         shell: bash
         run: |
@@ -84,15 +84,37 @@ jobs:
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs "$APK"
           "$ANDROID_HOME/build-tools/35.0.0/aapt2" dump permissions "$APK" | tee /tmp/apk-permissions.txt
           grep -q 'com.google.android.gms.permission.AD_ID' /tmp/apk-permissions.txt || { echo 'ERROR: final APK does not contain AD_ID'; exit 1; }
-          unzip -p "$AAB" base/manifest/AndroidManifest.xml > /tmp/base-AndroidManifest.xml
-          "$ANDROID_HOME/build-tools/35.0.0/aapt2" dump xmltree /tmp/base-AndroidManifest.xml | grep -q 'com.google.android.gms.permission.AD_ID' || { echo 'ERROR: AAB base manifest does not contain AD_ID'; exit 1; }
+          python3 - <<'PY'
+          import zipfile, subprocess
+          from pathlib import Path
+          aab = Path('app/build/outputs/bundle/release/app-release.aab')
+          with zipfile.ZipFile(aab) as z:
+              manifests = [n for n in z.namelist() if n.endswith('/manifest/AndroidManifest.xml')]
+              if 'base/manifest/AndroidManifest.xml' not in manifests:
+                  raise SystemExit('ERROR: base manifest missing from AAB')
+              data = z.read('base/manifest/AndroidManifest.xml')
+          Path('/tmp/base-AndroidManifest.xml').write_bytes(data)
+          aapt2 = Path('/opt/android-sdk/build-tools/35.0.0/aapt2')
+          if not aapt2.exists():
+              import os
+              aapt2 = Path(os.environ['ANDROID_HOME']) / 'build-tools/35.0.0/aapt2'
+          result = subprocess.run([str(aapt2), 'dump', 'xmltree', '--file', '/tmp/base-AndroidManifest.xml'], capture_output=True, text=True)
+          if result.returncode != 0:
+              print(result.stdout)
+              print(result.stderr)
+              raise SystemExit('ERROR: could not inspect AAB base manifest')
+          if 'com.google.android.gms.permission.AD_ID' not in result.stdout:
+              print(result.stdout)
+              raise SystemExit('ERROR: AAB base manifest does not contain AD_ID')
+          print('OK: AAB base manifest contains AD_ID')
+          PY
           sha256sum "$APK"
           sha256sum "$AAB"
           ls -lh "$APK" "$AAB"
       - name: Upload signed Release artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: stop-android-release-signed-v36-ad-id-verified
+          name: stop-android-release-signed-v37-ad-id-verified
           path: |
             android-generated/app/build/outputs/apk/release/app-release.apk
             android-generated/app/build/outputs/bundle/release/app-release.aab
