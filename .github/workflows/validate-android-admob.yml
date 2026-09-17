@@ -19,6 +19,8 @@ jobs:
           test -f app/build.gradle
           test -f app/src/main/AndroidManifest.xml
           test -f app/src/main/java/app/replit/stop_el_juego/twa/LauncherActivity.java
+          test -f app/src/main/java/app/replit/stop_el_juego/twa/RewardedAdActivity.java
+          test -f app/src/main/java/app/replit/stop_el_juego/twa/Application.java
           test -f app/src/main/java/app/replit/stop_el_juego/twa/DelegationService.java
           grep -q 'minSdkVersion 23' app/build.gradle
           grep -q 'targetSdkVersion 36' app/build.gradle
@@ -30,13 +32,11 @@ jobs:
           grep -q 'com.google.android.gms.ads.APPLICATION_ID' app/src/main/AndroidManifest.xml
           grep -q 'ca-app-pub-4807272408824742~9880632781' app/src/main/AndroidManifest.xml
           grep -q 'com.android.vending.BILLING' app/src/main/AndroidManifest.xml
-          grep -q 'MobileAds' app/src/main/java/app/replit/stop_el_juego/twa/LauncherActivity.java
-          grep -q 'RewardedAd' app/src/main/java/app/replit/stop_el_juego/twa/LauncherActivity.java
-          grep -q 'CustomTabsSession' app/src/main/java/app/replit/stop_el_juego/twa/LauncherActivity.java
-          grep -q 'requestPostMessageChannel' app/src/main/java/app/replit/stop_el_juego/twa/LauncherActivity.java
-          grep -q 'STOP_AD_REWARDED_RESULT' app/src/main/java/app/replit/stop_el_juego/twa/LauncherActivity.java
-          grep -q 'ca-app-pub-4807272408824742/3559554716' app/src/main/java/app/replit/stop_el_juego/twa/LauncherActivity.java
-          grep -q 'ca-app-pub-4807272408824742/7242069847' app/src/main/java/app/replit/stop_el_juego/twa/LauncherActivity.java
+          grep -q 'RewardedAd' app/src/main/java/app/replit/stop_el_juego/twa/RewardedAdActivity.java
+          grep -q 'MobileAds.initialize' app/src/main/java/app/replit/stop_el_juego/twa/RewardedAdActivity.java
+          grep -q 'ca-app-pub-4807272408824742/3559554716' app/src/main/java/app/replit/stop_el_juego/twa/RewardedAdActivity.java
+          grep -q 'preloadRewardedAd' app/src/main/java/app/replit/stop_el_juego/twa/Application.java
+          grep -q 'takePreloadedRewardedAd' app/src/main/java/app/replit/stop_el_juego/twa/Application.java
           grep -q 'public class DelegationService extends com.google.androidbrowserhelper.trusted.DelegationService' app/src/main/java/app/replit/stop_el_juego/twa/DelegationService.java
           grep -q 'DigitalGoodsRequestHandler' app/src/main/java/app/replit/stop_el_juego/twa/DelegationService.java
           grep -q 'com.google.androidbrowserhelper.playbilling.provider.PaymentActivity' app/src/main/AndroidManifest.xml
@@ -46,5 +46,3 @@ jobs:
           echo 'FINAL ANDROID MONETIZATION SOURCE VALIDATION: OK'
 
 # The real APK/AAB compilation is performed by the dedicated Android build workflows.
-# This workflow deliberately does not duplicate Gradle compilation; the same project
-# already builds successfully in android-monetized-debug and android-release-signed.
