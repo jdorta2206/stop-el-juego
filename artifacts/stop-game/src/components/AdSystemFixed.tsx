@@ -15,22 +15,26 @@ const ADSENSE_READY = !!ADSENSE_CLIENT;
 
 // Rewarded ads open a native Activity from the TWA. During that Activity the
 // React game must not consume round time. SoloGame's countdown uses a 1s
-// setInterval, so we wrap only 1s intervals and make them no-op while the
-// rewarded session is active. Other intervals (notably the 750ms reward
-// polling bridge) continue to run normally.
+// setInterval, so we wrap the browser-global timer API itself. We patch both
+// window.setInterval and globalThis.setInterval because bundled WebView code
+// can resolve the timer through either global binding.
 const REWARDED_PAUSE_KEY = "__stopGameRewardedAdActive";
 
 function installRewardedTimerGuard() {
   if (typeof window === "undefined") return;
   const win = window as any;
+  const globalObj = globalThis as any;
   if (win.__stopRewardedTimerGuardInstalled) return;
 
-  const originalSetInterval = window.setInterval.bind(window);
+  const originalSetInterval = globalObj.setInterval.bind(globalObj);
   win.__stopRewardedTimerGuardInstalled = true;
   win.__stopRewardedOriginalSetInterval = originalSetInterval;
-  window.setInterval = ((handler: TimerHandler, timeout?: number, ...args: any[]) => {
+
+  const guardedSetInterval = ((handler: TimerHandler, timeout?: number, ...args: any[]) => {
     if (timeout === 1000) {
       const guardedHandler = (...handlerArgs: any[]) => {
+        // The flag is deliberately checked at execution time, not when the
+        // interval is created. This covers the entire native ad lifecycle.
         if (win[REWARDED_PAUSE_KEY] === true) return;
         if (typeof handler === "function") return handler(...handlerArgs);
         return undefined;
@@ -39,6 +43,11 @@ function installRewardedTimerGuard() {
     }
     return originalSetInterval(handler, timeout, ...args);
   }) as typeof window.setInterval;
+
+  // Patch both aliases. In a normal browser these point to the same function,
+  // but keeping both assignments makes the guard deterministic in TWA/WebView.
+  window.setInterval = guardedSetInterval;
+  globalObj.setInterval = guardedSetInterval;
 }
 
 installRewardedTimerGuard();
@@ -56,7 +65,7 @@ function inStandaloneOrTwaSync(): boolean {
     if (params.get("source") === "twa" || params.get("utm_source") === "twa") return true;
     const ua = navigator.userAgent || "";
     const standalone = window.matchMedia?.("(display-mode: standalone)").matches ?? false;
-    const fullscreen = window.matchMedia?.("(display-mode: fullscreen)").matches ?? false;
+    const fullscreen = window.matchMedia?.("(display-mode: fullscreen").matches ?? false;
     return /Android/i.test(ua) && (standalone || fullscreen);
   } catch { return true; }
 }
