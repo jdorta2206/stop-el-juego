@@ -102,13 +102,15 @@ export function RewardedAd({ onComplete, onSkip, rewardType = "points", rewardAm
 
     if (bridgeReady || knownTwa) {
       const placement = rewardType === "extraTime" ? "extra_time" : rewardType === "hint" ? "hint" : "double_points";
-      const result = await requestRewardedAd(placement);
-      if (result.rewarded === true && result.source === "admob") {
-        setPhase("done");
-        window.setTimeout(() => onComplete(rewardAmount), 350);
-      } else {
-        // A no-fill/failure is not a game event. Close immediately: no white
-        // error card, no artificial 5-second wait and no time consumed.
+      try {
+        const result = await requestRewardedAd(placement);
+        if (result.rewarded === true && result.source === "admob") {
+          setPhase("done");
+          window.setTimeout(() => onComplete(rewardAmount), 350);
+        } else {
+          onSkip();
+        }
+      } catch {
         onSkip();
       }
       return;
@@ -117,11 +119,20 @@ export function RewardedAd({ onComplete, onSkip, rewardType = "points", rewardAm
     onSkip();
   };
 
-  // On Android/TWA we intentionally keep the game visible while the native
-  // rewarded Activity checks AdMob. Showing a web "Cargando anuncio" modal
-  // here makes a no-fill look like the game is frozen. The native Activity is
-  // transparent and returns immediately on failure.
-  if (phase === "loading") return null;
+  // Keep a transparent full-screen interaction lock while the native Android
+  // Activity checks AdMob. There is deliberately no blocking white card: the
+  // player sees the game frozen, but cannot type/click and the timer guard
+  // remains active. Failure returns through onSkip() and resumes immediately.
+  if (phase === "loading") {
+    return (
+      <div
+        className="fixed inset-0 z-[9998]"
+        aria-hidden="true"
+        onContextMenu={(event) => event.preventDefault()}
+        style={{ background: "rgba(0,0,0,0.08)", cursor: "wait", touchAction: "none" }}
+      />
+    );
+  }
 
   return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"><div className="w-full max-w-sm rounded-3xl overflow-hidden bg-white shadow-2xl"><div className="p-6 text-center"><h3 className="text-xl font-black">{phase === "done" ? "¡Recompensa!" : "Mira el anuncio"}</h3>{phase === "pre" && <><div className="my-5 flex justify-center">{icons[rewardType]}</div><p className="text-gray-600 text-sm mb-5">{labels[rewardType]}</p><button onClick={startWatching} className="w-full py-3 rounded-xl font-bold bg-[#f9a825] text-[#0d1757]">Ver anuncio</button><button onClick={onSkip} className="w-full py-2 mt-2 text-gray-500">Ahora no</button></>}{phase === "done" && <div className="py-8"><div className="text-5xl mb-3">🎉</div><p className="text-gray-700">{labels[rewardType]}</p></div>}</div></div></div>;
 }
