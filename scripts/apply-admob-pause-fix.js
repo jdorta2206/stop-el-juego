@@ -1,4 +1,4 @@
-const fs = require("fs");
+import fs from "fs";
 
 // One-time CI migration: applies the direct game-level rewarded-ad pause and bumps Android to v33.
 
