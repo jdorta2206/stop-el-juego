@@ -1946,7 +1946,7 @@ export default function SoloGame() {
                     </button>
                   ) : (
                     <button
-                      onClick={() => setRewardedAdType("extraTime")}
+                      onClick={() => { pauseGameTimer(); setRewardedAdType("extraTime"); }}
                       className="flex items-center justify-center gap-2 py-2 px-3 rounded-xl border border-yellow-500/30 bg-yellow-500/10 text-yellow-300 text-xs font-bold hover:bg-yellow-500/20 transition-all"
                     >
                       <Tv2 className="w-3.5 h-3.5" /> +30s
@@ -1955,7 +1955,7 @@ export default function SoloGame() {
                 )}
                 {!hintUsed && !isPremium && (
                   <button
-                    onClick={() => setRewardedAdType("hint")}
+                    onClick={() => { pauseGameTimer(); setRewardedAdType("hint"); }}
                     className="flex items-center justify-center gap-2 py-2 px-3 rounded-xl border border-cyan-500/30 bg-cyan-500/10 text-cyan-300 text-xs font-bold hover:bg-cyan-500/20 transition-all"
                   >
                     💡 {lang === "en" ? "Hint" : lang === "pt" ? "Dica" : lang === "fr" ? "Indice" : "Pista"}
