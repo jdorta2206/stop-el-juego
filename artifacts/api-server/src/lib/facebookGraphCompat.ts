@@ -1,4 +1,4 @@
-import type { response as ExpressResponse } from "express";
+import { response as expressResponse } from "express";
 
 // Facebook Graph API v19.0 expired on 2026-05-21. Keep Facebook OAuth
 // compatible with the currently supported Graph API without globally
@@ -27,11 +27,11 @@ globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit) =>
 
 // The Facebook /start route uses res.redirect() directly, so fetch interception
 // cannot change that first hop. Patch ONLY redirects originating from that route.
-const originalRedirect = (ExpressResponse as any).redirect;
-(ExpressResponse as any).redirect = function (...args: any[]) {
+const originalRedirect = expressResponse.redirect;
+expressResponse.redirect = function (...args: any[]) {
   const requestUrl = String((this as any)?.req?.originalUrl || (this as any)?.req?.url || "");
   if (requestUrl.includes("/api/auth/facebook/start") && typeof args[0] === "string") {
     args[0] = args[0].replace(/facebook\.com\/v19\.0\//g, `facebook.com/${FACEBOOK_GRAPH_VERSION}/`);
   }
-  return originalRedirect.apply(this, args);
+  return originalRedirect.apply(this, args as any);
 };
