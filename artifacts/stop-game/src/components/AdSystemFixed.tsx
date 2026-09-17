@@ -13,6 +13,41 @@ const BANNER_SLOT = import.meta.env.VITE_ADSENSE_BANNER_SLOT as string | undefin
 const VIDEO_SLOT = import.meta.env.VITE_ADSENSE_VIDEO_SLOT as string | undefined;
 const ADSENSE_READY = !!ADSENSE_CLIENT;
 
+// Rewarded ads open a native Activity from the TWA. During that Activity the
+// React game must not consume round time. SoloGame's countdown uses a 1s
+// setInterval, so we wrap only 1s intervals and make them no-op while the
+// rewarded session is active. Other intervals (notably the 750ms reward
+// polling bridge) continue to run normally.
+const REWARDED_PAUSE_KEY = "__stopGameRewardedAdActive";
+
+function installRewardedTimerGuard() {
+  if (typeof window === "undefined") return;
+  const win = window as any;
+  if (win.__stopRewardedTimerGuardInstalled) return;
+
+  const originalSetInterval = window.setInterval.bind(window);
+  win.__stopRewardedTimerGuardInstalled = true;
+  win.__stopRewardedOriginalSetInterval = originalSetInterval;
+  window.setInterval = ((handler: TimerHandler, timeout?: number, ...args: any[]) => {
+    if (timeout === 1000) {
+      const guardedHandler = (...handlerArgs: any[]) => {
+        if (win[REWARDED_PAUSE_KEY] === true) return;
+        if (typeof handler === "function") return handler(...handlerArgs);
+        return undefined;
+      };
+      return originalSetInterval(guardedHandler, timeout, ...args);
+    }
+    return originalSetInterval(handler, timeout, ...args);
+  }) as typeof window.setInterval;
+}
+
+installRewardedTimerGuard();
+
+function setRewardedPause(active: boolean) {
+  if (typeof window === "undefined") return;
+  (window as any)[REWARDED_PAUSE_KEY] = active;
+}
+
 function inStandaloneOrTwaSync(): boolean {
   if (typeof window === "undefined") return true;
   try {
@@ -91,9 +126,16 @@ export function RewardedAd({ onComplete, onSkip, rewardType = "points", rewardAm
   const labels = { points: `+${rewardAmount} pts`, hint: t.ads.reward, extraTime: "+30s" };
   const icons = { points: <Star className="w-8 h-8 text-[#f9a825]" />, hint: <Zap className="w-8 h-8 text-[#f9a825]" />, extraTime: <Gift className="w-8 h-8 text-[#f9a825]" /> };
 
-  useEffect(() => { initTwaAdBridge(); }, []);
+  useEffect(() => {
+    initTwaAdBridge();
+    return () => setRewardedPause(false);
+  }, []);
 
   const startWatching = async () => {
+    // Set this BEFORE the native Activity is launched. This guarantees the
+    // next 1s game tick cannot consume time while the ad is opening, loading,
+    // playing, dismissing, or waiting for the reward result.
+    setRewardedPause(true);
     setPhase("loading");
     setErrorDetail("");
     const bridgeReady = isTwaAdBridgeAvailable();
