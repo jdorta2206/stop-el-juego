@@ -13,7 +13,7 @@ import { useValidateRound, useSubmitScore, type CategoryResult, type ValidateRou
 import { usePlayer } from "@/hooks/use-player";
 import { motion, AnimatePresence } from "framer-motion";
 import { RewardedAd, BannerAd } from "@/components/AdSystem";
-import { isGameTimerPaused } from "@/lib/timerPauseGuard";
+import { isGameTimerPaused, pauseGameTimer, resumeGameTimer } from "@/lib/timerPauseGuard";
 import { ContextualPremiumPrompt } from "@/components/ContextualPremiumPrompt";
 import { PremiumModal } from "@/components/PremiumModal";
 import { ShareResultsModal } from "@/components/ShareResultsModal";
@@ -96,6 +96,17 @@ export default function SoloGame() {
   const [aiTotalScore, setAiTotalScore] = useState(0);
   // null = closed, otherwise the type of reward being shown
   const [rewardedAdType, setRewardedAdType] = useState<null | "extraTime" | "hint" | "double">(null);
+
+  // The game page owns the round timer. Opening a rewarded-ad modal freezes the
+  // active round immediately; closing it resumes from the current time/score.
+  useEffect(() => {
+    if (gameState === "PLAYING" && rewardedAdType !== null) {
+      pauseGameTimer();
+    } else {
+      resumeGameTimer();
+    }
+    return () => resumeGameTimer();
+  }, [gameState, rewardedAdType]);
   const [rewardedUsed, setRewardedUsed] = useState(false);
   const [hintUsed, setHintUsed] = useState(false);
   const [doubleUsed, setDoubleUsed] = useState(false);
@@ -572,6 +583,10 @@ export default function SoloGame() {
   }, []);
 
   const handleStop = async () => {
+    // A stop callback can already be queued when an ad opens. Never finish the
+    // round while the rewarded-ad modal owns the screen.
+    if (isGameTimerPaused()) return;
+
     // Guard: never run more than once per round
     if (stoppedRef.current) return;
     stoppedRef.current = true;
