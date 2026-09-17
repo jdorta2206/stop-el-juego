@@ -13,41 +13,6 @@ const BANNER_SLOT = import.meta.env.VITE_ADSENSE_BANNER_SLOT as string | undefin
 const VIDEO_SLOT = import.meta.env.VITE_ADSENSE_VIDEO_SLOT as string | undefined;
 const ADSENSE_READY = !!ADSENSE_CLIENT;
 
-const REWARDED_PAUSE_KEY = "__stopGameRewardedAdActive";
-
-function installRewardedTimerGuard() {
-  if (typeof window === "undefined") return;
-  const win = window as any;
-  const globalObj = globalThis as any;
-  if (win.__stopRewardedTimerGuardInstalled) return;
-
-  const originalSetInterval = globalObj.setInterval.bind(globalObj);
-  win.__stopRewardedTimerGuardInstalled = true;
-  win.__stopRewardedOriginalSetInterval = originalSetInterval;
-
-  const guardedSetInterval = ((handler: TimerHandler, timeout?: number, ...args: any[]) => {
-    if (timeout === 1000) {
-      const guardedHandler = (...handlerArgs: any[]) => {
-        if (win[REWARDED_PAUSE_KEY] === true) return;
-        if (typeof handler === "function") return handler(...handlerArgs);
-        return undefined;
-      };
-      return originalSetInterval(guardedHandler, timeout, ...args);
-    }
-    return originalSetInterval(handler, timeout, ...args);
-  }) as typeof window.setInterval;
-
-  window.setInterval = guardedSetInterval;
-  globalObj.setInterval = guardedSetInterval;
-}
-
-installRewardedTimerGuard();
-
-function setRewardedPause(active: boolean) {
-  if (typeof window === "undefined") return;
-  (window as any)[REWARDED_PAUSE_KEY] = active;
-}
-
 function inStandaloneOrTwaSync(): boolean {
   if (typeof window === "undefined") return true;
   try {
@@ -128,11 +93,11 @@ export function RewardedAd({ onComplete, onSkip, rewardType = "points", rewardAm
 
   useEffect(() => {
     initTwaAdBridge();
-    return () => setRewardedPause(false);
+    return () => {};
   }, []);
 
   const startWatching = async () => {
-    setRewardedPause(true);
+    window.dispatchEvent(new Event("stop:rewarded-ad-start"));
     setPhase("loading");
     setErrorDetail("");
     const bridgeReady = isTwaAdBridgeAvailable();

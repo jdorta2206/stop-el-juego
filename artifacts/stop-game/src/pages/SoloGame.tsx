@@ -400,11 +400,65 @@ export default function SoloGame() {
   const submitScoreMutation = useSubmitScore();
   const queryClient = useQueryClient();
   const timerRef = useRef<NodeJS.Timeout>(null);
+  // Rewarded-ad pause is controlled by the game itself. The timer is stopped
+  // before the native ad opens and resumed only after the ad result is known.
+  const rewardedAdPausedRef = useRef(false);
+  const rewardedAdRemainingRef = useRef<number | null>(null);
+  const timeLeftRef = useRef(timeLeft);
   // Guards to prevent handleStop / results-accumulation from firing more than once per round
   const stoppedRef = useRef(false);
   const resultsAppliedRef = useRef(false);
 
   // Always-current refs so handleStop never reads stale closure values
+  useEffect(() => { timeLeftRef.current = timeLeft; }, [timeLeft]);
+
+  const pauseForRewardedAd = () => {
+    if (rewardedAdPausedRef.current) return;
+    if (gameState !== "PLAYING") return;
+    rewardedAdPausedRef.current = true;
+    rewardedAdRemainingRef.current = timeLeftRef.current;
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+  };
+
+  const resumeAfterRewardedAd = (rewardSeconds = 0) => {
+    if (!rewardedAdPausedRef.current) return;
+    const saved = rewardedAdRemainingRef.current;
+    rewardedAdPausedRef.current = false;
+    rewardedAdRemainingRef.current = null;
+    if (saved == null || saved <= 0 || stoppedRef.current) return;
+
+    const restored = saved + Math.max(0, rewardSeconds);
+    timeLeftRef.current = restored;
+    setTimeLeft(restored);
+    if (gameState !== "PLAYING") return;
+
+    timerRef.current = setInterval(() => {
+      setTimeLeft(prev => {
+        if (prev <= 1) {
+          if (timerRef.current) {
+            clearInterval(timerRef.current);
+            timerRef.current = null;
+          }
+          timeLeftRef.current = 0;
+          setTimeout(handleStop, 0);
+          return 0;
+        }
+        const next = prev - 1;
+        timeLeftRef.current = next;
+        return next;
+      });
+    }, 1000);
+  };
+
+  useEffect(() => {
+    const onRewardedAdStart = () => pauseForRewardedAd();
+    window.addEventListener("stop:rewarded-ad-start", onRewardedAdStart);
+    return () => window.removeEventListener("stop:rewarded-ad-start", onRewardedAdStart);
+  }, [gameState]);
+
   const responsesRef = useRef<Record<string, string>>({});
   const categoriesRef = useRef<string[]>([]);
   const bluffedCategoriesRef = useRef<Set<string>>(new Set());
@@ -509,19 +563,23 @@ export default function SoloGame() {
     sound.playRoundStart();
     if (randomEvent === "hidden_category") setTimeout(() => sound.playHiddenReveal(), 400);
 
+    timeLeftRef.current = roundTime;
     timerRef.current = setInterval(() => {
+      // Never consume game time while a rewarded ad is pending.
+      if (rewardedAdPausedRef.current) return;
       setTimeLeft(prev => {
         if (prev <= 1) {
-          // Clear the interval immediately (synchronously) so this branch never fires twice
           if (timerRef.current) {
             clearInterval(timerRef.current);
             timerRef.current = null;
           }
-          // Schedule handleStop outside the state-setter (safe async trigger)
+          timeLeftRef.current = 0;
           setTimeout(handleStop, 0);
           return 0;
         }
-        return prev - 1;
+        const next = prev - 1;
+        timeLeftRef.current = next;
+        return next;
       });
     }, 1000);
   };
@@ -570,6 +628,9 @@ export default function SoloGame() {
   }, []);
 
   const handleStop = async () => {
+    // A rewarded ad owns the round while it is open. Never end the round
+    // underneath the ad, even if a stale timer callback is queued.
+    if (rewardedAdPausedRef.current) return;
     // Guard: never run more than once per round
     if (stoppedRef.current) return;
     stoppedRef.current = true;
@@ -1199,7 +1260,9 @@ export default function SoloGame() {
 
   const handleRewardedComplete = (reward: number) => {
     if (rewardedAdType === "extraTime") {
-      setTimeLeft(prev => prev + reward);
+      // The timer was frozen before the native ad opened. Restore the exact
+      // saved value and only then add the rewarded seconds.
+      resumeAfterRewardedAd(reward);
       setRewardedUsed(true);
     } else if (rewardedAdType === "hint") {
       // Pick first empty category and reveal a starter
@@ -1327,7 +1390,12 @@ export default function SoloGame() {
               rewardedAdType === "double" ? totalScore : 0
             }
             onComplete={handleRewardedComplete}
-            onSkip={() => setRewardedAdType(null)}
+            onSkip={() => {
+              // Ad failed, was closed, or was unavailable: restore the exact
+              // pre-ad time with no reward and continue the same round.
+              resumeAfterRewardedAd(0);
+              setRewardedAdType(null);
+            }}
           />
         )}
 
