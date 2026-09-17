@@ -1,3 +1,4 @@
+import "./lib/facebookGraphCompat";
 import { runMigrations } from "stripe-replit-sync";
 import { getStripeSync } from "./stripeClient";
 import app from "./app";
