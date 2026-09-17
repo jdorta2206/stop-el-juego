@@ -1,3 +1,5 @@
+import { response as expressResponse } from "express";
+
 // Facebook Graph API v19.0 expired on 2026-05-21. Keep the existing OAuth
 // implementation working without changing its public routes while migrating
 // its outbound Facebook URLs to a currently supported Graph API version.
@@ -10,6 +12,7 @@ function rewriteFacebookUrl(input: RequestInfo | URL): RequestInfo | URL {
   if (!raw.includes("facebook.com/")) return input;
 
   let rewritten = raw.replace(/facebook\.com\/v19\.0\//g, `facebook.com/${FACEBOOK_GRAPH_VERSION}/`);
+  rewritten = rewritten.replace(/graph\.facebook\.com\/me\?/g, `graph.facebook.com/${FACEBOOK_GRAPH_VERSION}/me?`);
 
   // Login itself only needs these basic permissions. Requesting user_friends
   // during the initial OAuth flow can make login fail when that permission is
@@ -26,3 +29,15 @@ function rewriteFacebookUrl(input: RequestInfo | URL): RequestInfo | URL {
 globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit) =>
   originalFetch(rewriteFacebookUrl(input), init)
 ) as typeof globalThis.fetch;
+
+// The existing OAuth route builds its Facebook dialog URL directly with
+// res.redirect(), so fetch interception cannot affect that first hop. Rewrite
+// only the Facebook OAuth redirect while leaving every other Express redirect
+// untouched.
+const originalRedirect = expressResponse.redirect;
+expressResponse.redirect = function (...args: any[]) {
+  if (typeof args[0] === "string") {
+    args[0] = rewriteFacebookUrl(args[0]) as string;
+  }
+  return originalRedirect.apply(this, args as any);
+};
