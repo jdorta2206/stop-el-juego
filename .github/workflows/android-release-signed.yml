@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - master
+      - fix/ads-timer-pause-v48-clean
   workflow_dispatch:
 
 permissions:
@@ -44,13 +45,13 @@ jobs:
           printf '%s' "$KEYSTORE_BASE64" | base64 --decode > android-release.keystore
           test -s android-release.keystore
           keytool -list -keystore android-release.keystore -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" >/dev/null
-      - name: Set v47 version code and force AD_ID
+      - name: Set v48 version code and force AD_ID
         working-directory: android-generated
         shell: bash
         run: |
           set -euo pipefail
-          sed -i -E 's/versionCode [0-9]+/versionCode 47/' app/build.gradle
-          grep -q 'versionCode 47' app/build.gradle
+          sed -i -E 's/versionCode [0-9]+/versionCode 48/' app/build.gradle
+          grep -q 'versionCode 48' app/build.gradle
           python3 - <<'PY'
           from pathlib import Path
           p = Path('app/src/main/AndroidManifest.xml')
@@ -104,7 +105,7 @@ jobs:
       - name: Upload signed Release artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: stop-android-release-signed-v47-ad-id-verified
+          name: stop-android-release-signed-v48-ad-id-verified
           path: |
             android-generated/app/build/outputs/apk/release/app-release.apk
             android-generated/app/build/outputs/bundle/release/app-release.aab
