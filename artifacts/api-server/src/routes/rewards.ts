@@ -238,6 +238,15 @@ router.get("/admob-ssv", async (req, res) => {
       return;
     }
 
+    // AdMob's dashboard "Verify URL" probe may intentionally omit custom_data.
+    // This probe only validates reachability/configuration and MUST NEVER grant
+    // a reward, so it is safe to acknowledge it before normal SSV processing.
+    const hasCustomData = typeof req.query.custom_data === "string" && req.query.custom_data.length > 0;
+    if (!hasCustomData) {
+      res.status(200).send("ok");
+      return;
+    }
+
     const verification = await verifyAdMobSsv(req.originalUrl);
 
     if (!verification.valid) {
