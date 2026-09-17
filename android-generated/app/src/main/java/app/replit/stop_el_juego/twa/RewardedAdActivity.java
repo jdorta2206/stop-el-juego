@@ -68,6 +68,7 @@ public class RewardedAdActivity extends Activity {
         }
 
         if (playerId == null || playerId.isEmpty()) playerId = "guest";
+        if (origin == null || origin.isEmpty()) origin = "https://www.stopjuegodepalabras.com";
 
         if (!isAllowedOrigin(origin)) {
             Log.e(TAG, "Rejected invalid rewarded origin: " + origin);
