@@ -341,12 +341,27 @@ router.post("/scores", scoreLimiter, async (req, res) => {
 
   const isBonus = bonus === true;
 
-  const { base: verifiedBase, verified } = await sumVerifiedBasePersistent(scoreTokens, maxRoundsForMode(mode));
-  if (rawScore > 0 && verified === 0) {
+  // Bonus submissions reuse the score already saved by the completed game.
+  // Round vouchers are single-use, so requiring them again would reject every
+  // legitimate double-score reward with SCORE_VERIFICATION_REQUIRED.
+  const existingForBonus = isBonus
+    ? await db.select().from(playerScoresTable).where(eq(playerScoresTable.playerId, playerId)).limit(1)
+    : [];
+  if (isBonus) {
+    if (existingForBonus.length === 0 || rawScore <= 0 || rawScore > existingForBonus[0].totalScore) {
+      res.status(422).json({ error: "INVALID_BONUS_SCORE" });
+      return;
+    }
+  }
+
+  const { base: verifiedBase, verified } = isBonus
+    ? { base: 0, verified: 0 }
+    : await sumVerifiedBasePersistent(scoreTokens, maxRoundsForMode(mode));
+  if (!isBonus && rawScore > 0 && verified === 0) {
     res.status(422).json({ error: "SCORE_VERIFICATION_REQUIRED" });
     return;
   }
-  const ceiling = verified > 0 ? ceilingFromBase(verifiedBase) : absoluteCeiling(mode);
+  const ceiling = isBonus ? existingForBonus[0].totalScore : (verified > 0 ? ceilingFromBase(verifiedBase) : absoluteCeiling(mode));
   const cappedRaw = Math.max(0, Math.min(rawScore, ceiling));
   const score = mode === "multiplayer" ? Math.round(cappedRaw * 1.5) : cappedRaw;
 
