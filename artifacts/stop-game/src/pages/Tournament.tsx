@@ -38,6 +38,7 @@ type Tournament = {
 };
 
 
+const API = getApiUrl();
 
 async function apiFetch(path: string, opts?: RequestInit) {
   const r = await fetch(`${API}/api/tournaments${path}`, {
