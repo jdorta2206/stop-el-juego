@@ -81,7 +81,7 @@ Añade dos secrets nuevos:
 |---|---|
 | `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` | El contenido **completo** del archivo `.json` del paso 3.1.5 (pégalo entero, una sola línea o multilínea, ambos funcionan). |
 | `ANDROID_PACKAGE_NAME` | `app.replit.stop_el_juego.twa` (debe coincidir EXACTAMENTE con el package_name del AAB en Play Console). |
-| `PUBSUB_PUSH_AUDIENCE` | La URL exacta del webhook que pondrás en Pub/Sub (paso 5.3): `https://stop-el-juego.replit.app/api/billing/play/webhook`. |
+| `PUBSUB_PUSH_AUDIENCE` | La URL exacta del webhook que pondrás en Pub/Sub (paso 5.3): `https://www.stopjuegodepalabras.com/api/billing/play/webhook`. |
 | `PUBSUB_PUSH_SA_EMAIL` | El email de la Service Account que firmará los pushes de Pub/Sub. Si reusas la del paso 3, es del estilo `stop-play-billing@<project-id>.iam.gserviceaccount.com`. |
 
 Una vez añadidos, **reinicia el workflow** `artifacts/api-server: API Server` (en el panel de workflows pulsa Stop y Run, o usa el botón de restart).
@@ -115,7 +115,7 @@ Esto permite que Google nos avise en tiempo real cuando un usuario cancela, renu
 1. En el mismo topic → **Create Subscription**.
 2. ID: `stop-play-rtdn-push`.
 3. Delivery type: **Push**.
-4. Endpoint URL: `https://stop-el-juego.replit.app/api/billing/play/webhook` (debe coincidir EXACTAMENTE con `PUBSUB_PUSH_AUDIENCE`).
+4. Endpoint URL: `https://www.stopjuegodepalabras.com/api/billing/play/webhook` (debe coincidir EXACTAMENTE con `PUBSUB_PUSH_AUDIENCE`).
 5. **Enable authentication** → marca la casilla y elige la Service Account del paso 3.1 (la misma que usaste para `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON`). Audience: deja en blanco para que use la URL del endpoint.
 6. Resto de opciones por defecto (Acknowledgement deadline: 10s; Message retention: 7d).
 
