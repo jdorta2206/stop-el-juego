@@ -1636,6 +1636,7 @@ router.get("/:roomCode/draft", async (req, res) => {
   const code = paramStr(req.params.roomCode).toUpperCase();
   const playerId = (req.query["playerId"] as string) || "";
   if (!playerId) { res.status(400).json({ error: "playerId required" }); return; }
+  if (!verifyClaimedIdentity(req, playerId)) { res.status(403).json({ error: "Identity verification failed" }); return; }
 
   // Auth: caller must actually be in the room (private rooms expose nothing).
   const [roomRow] = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, code)).limit(1);
@@ -1664,6 +1665,7 @@ router.post("/:roomCode/spy", writeLimiter, async (req, res) => {
   const code = paramStr(req.params.roomCode).toUpperCase();
   const { playerId } = req.body as { playerId: string };
   if (!playerId) { res.status(400).json({ error: "Missing playerId" }); return; }
+  if (!verifyClaimedIdentity(req, playerId)) { res.status(403).json({ error: "Identity verification failed" }); return; }
 
   // Auth: caller must actually be in the room AND the round must be live
   const rooms = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, code)).limit(1);
@@ -1738,6 +1740,7 @@ router.post("/:roomCode/funvote", writeLimiter, async (req, res) => {
   if (!playerId || !votedPlayerId || !category || typeof round !== "number") {
     res.status(400).json({ error: "Missing fields" }); return;
   }
+  if (!verifyClaimedIdentity(req, playerId)) { res.status(403).json({ error: "Identity verification failed" }); return; }
   if (playerId === votedPlayerId) {
     res.status(400).json({ error: "No puedes votarte a ti mismo" }); return;
   }
