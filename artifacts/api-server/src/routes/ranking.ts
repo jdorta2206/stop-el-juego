@@ -354,8 +354,8 @@ router.post("/scores", scoreLimiter, async (req, res) => {
     }
   }
 
-  const { base: verifiedBase, verified } = isBonus
-    ? { base: 0, verified: 0 }
+  const { base: verifiedBase, verified, collectionWords } = isBonus
+    ? { base: 0, verified: 0, collectionWords: [] as Array<{ word: string; category: string }> }
     : await sumVerifiedBasePersistent(scoreTokens, maxRoundsForMode(mode));
   if (!isBonus && rawScore > 0 && verified === 0) {
     res.status(422).json({ error: "SCORE_VERIFICATION_REQUIRED" });
