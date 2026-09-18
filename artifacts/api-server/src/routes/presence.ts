@@ -273,6 +273,9 @@ router.post("/room-invite", (req, res) => {
 // GET /api/presence/challenges/:playerId — get incoming pending challenges + room invites
 router.get("/challenges/:playerId", (req, res) => {
   const { playerId } = req.params;
+  if (!verifyClaimedIdentity(req, playerId)) {
+    return res.status(403).json({ error: "Invalid player identity" });
+  }
   const cutoff = Date.now() - 60 * 1000;
 
   const incoming = Array.from(challengeMap.values())
@@ -292,6 +295,11 @@ router.post("/challenge/:challengeId/respond", (req, res) => {
     return res.status(404).json({ error: "Challenge not found or expired" });
   }
 
+  // Only the challenged player may accept/decline this challenge.
+  if (!verifyClaimedIdentity(req, challenge.toPlayerId)) {
+    return res.status(403).json({ error: "Invalid player identity" });
+  }
+
   challenge.status = accepted ? "accepted" : "declined";
   return res.json({ ok: true, roomCode: accepted ? challenge.roomCode : null });
 });
@@ -303,6 +311,12 @@ router.get("/challenge/:challengeId/status", (req, res) => {
   if (!challenge) {
     return res.json({ status: "expired" });
   }
+
+  // Only the sender may poll the status of a challenge they created.
+  if (!verifyClaimedIdentity(req, challenge.fromPlayerId)) {
+    return res.status(403).json({ error: "Invalid player identity" });
+  }
+
   return res.json({ status: challenge.status, roomCode: challenge.roomCode });
 });
 
