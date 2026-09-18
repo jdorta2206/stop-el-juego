@@ -1218,32 +1218,64 @@ export default function SoloGame() {
     R: ["RAM", "RIO"], S: ["SAL", "SAN"], T: ["TAR", "TOR"], V: ["VAL", "VER"],
   };
 
-  const handleRewardedComplete = (reward: number) => {
-    // Resume first, then add the reward to the exact time captured while paused.
+  /** Pick a real valid word from the cached dictionary for the current letter/category. */
+  const getHintWord = async (category: string): Promise<string> => {
+    const normalizedLetter = currentLetter.trim().toUpperCase();
+    let bundle = getCachedOfflineBundle();
+    if (!bundle) bundle = await ensureOfflineBundle();
+    if (!bundle) return "";
+
+    const normalize = (value: string) => value.toLowerCase().trim()
+      .replace(/ñ/g, "~")
+      .normalize("NFD")
+      .replace(/[\\u0300-\\u036f]/g, "")
+      .replace(/~/g, "ñ");
+    const langDict = bundle.dictionary[getCurrentLang()] || bundle.dictionary.es || {};
+    const requestedCategory = normalize(category);
+    const findWords = (dict: Record<string, string[]>, categoryName: string): string[] => {
+      const exact = Object.entries(dict).find(([key]) => normalize(key) === categoryName);
+      if (exact) return exact[1];
+      const fuzzy = Object.entries(dict).filter(([key]) => {
+        const k = normalize(key);
+        return categoryName.startsWith(k) || k.startsWith(categoryName);
+      }).sort((a, b) => normalize(b[0]).length - normalize(a[0]).length)[0];
+      return fuzzy?.[1] || [];
+    };
+    const pick = (dict: Record<string, string[]>) => findWords(dict, requestedCategory)
+      .filter(Boolean).filter(word => normalize(word).startsWith(normalize(normalizedLetter)))
+      .filter(word => normalize(word).length >= 2);
+    const valid = pick(langDict);
+    if (valid.length > 0) return valid[Math.floor(Math.random() * valid.length)];
+    if (bundle.dictionary.es && langDict !== bundle.dictionary.es) {
+      const esWords = pick(bundle.dictionary.es);
+      if (esWords.length > 0) return esWords[Math.floor(Math.random() * esWords.length)];
+    }
+    return "";
+  };
+
+  const handleRewardedComplete = async (reward: number) => {
     resumeGameTimer();
     if (rewardedAdType === "extraTime") {
       setTimeLeft(prev => prev + reward);
       setRewardedUsed(true);
     } else if (rewardedAdType === "hint") {
-      // Pick first empty category and reveal a starter
       const empty = categories.find(c => !(responses[c] && responses[c].trim().length > 0));
       if (empty) {
-        const pool = HINT_STARTERS[currentLetter] ?? [currentLetter];
-        const word = pool[Math.floor(Math.random() * pool.length)];
-        setResponses(prev => ({ ...prev, [empty]: word }));
-        setHintReveal({ category: empty, word });
-        setTimeout(() => setHintReveal(null), 3500);
+        const word = await getHintWord(empty);
+        if (word) {
+          setResponses(prev => ({ ...prev, [empty]: word }));
+          setHintReveal({ category: empty, word });
+          setTimeout(() => setHintReveal(null), 3500);
+          setHintUsed(true);
+        } else {
+          toast({ title: lang === "en" ? "No valid hint available for this category" : lang === "pt" ? "Não há pista válida disponível para esta categoria" : lang === "fr" ? "Aucun indice valide disponible pour cette catégorie" : "No hay una pista válida disponible para esta categoría" });
+        }
       }
-      setHintUsed(true);
     } else if (rewardedAdType === "double") {
-      // 🎁 Doubling: the original `totalScore` was already submitted (auto on
-      // entering RESULTS-final). The bonus delta = the original score, sent
-      // as a separate `bonus: true` submission so the server adds the points
-      // and XP without counting an extra game/win/streak day.
       setTotalScore(prev => {
         const bonus = prev;
         if (bonus > 0) submitToLeaderboard(bonus, aiTotalScore, { bonus: true });
-        return prev * 2;
+        return prev + bonus;
       });
       setDoubleUsed(true);
     }
