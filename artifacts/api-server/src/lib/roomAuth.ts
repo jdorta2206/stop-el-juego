@@ -16,7 +16,9 @@ export function hashRoomMemberCredential(credential: string): string {
 
 function credentialFromRequest(req: Request): string | null {
   const raw = req.headers["x-room-credential"];
-  return typeof raw === "string" && raw.length >= 32 ? raw : null;
+  if (typeof raw === "string" && raw.length >= 32) return raw;
+  const query = req.query?.["roomCredential"];
+  return typeof query === "string" && query.length >= 32 ? query : null;
 }
 
 export async function requireRoomMember(
