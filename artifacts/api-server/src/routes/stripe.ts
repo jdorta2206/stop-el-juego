@@ -3,6 +3,7 @@ import { stripeStorage } from "../stripeStorage";
 import { stripeService } from "../stripeService";
 import { getUncachableStripeClient } from "../stripeClient";
 import { verifyClaimedIdentity } from "../lib/playerAuth";
+import { isUserPremium } from "../lib/premiumStatus";
 import {
   WORLD_CUP_PACK_SKU,
   WORLD_CUP_PACK_PRICE_CENTS,
@@ -33,16 +34,9 @@ router.get("/status", async (req, res) => {
     const player = await stripeStorage.getPlayer(playerId);
     if (!player) return res.json({ isPremium: false });
 
-    // Premium is granted EXCLUSIVELY by an active Stripe subscription.
-    // No Stripe customer → cannot be premium, regardless of any stale DB flag.
-    let premium = false;
-    if (player.stripeCustomerId) {
-      const activeSub = await stripeStorage.getActiveSubscriptionByCustomerId(
-        player.stripeCustomerId
-      );
-      premium = !!activeSub;
-    }
-    // Self-heal: if the DB row disagrees with the Stripe truth, fix it.
+    // Premium is the unified entitlement: Stripe OR Google Play.
+    const premium = await isUserPremium(playerId);
+    // Self-heal the cached mirror without letting it override live billing state.
     if (premium !== player.isPremium) {
       await stripeStorage.updatePlayerStripeInfo(playerId, { isPremium: premium });
     }
