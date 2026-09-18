@@ -1053,7 +1053,7 @@ router.post("/:roomCode/join", roomJoinLimiter, async (req, res) => {
     if (existing) {
       // Legacy-room compatibility: memberships created before room_members
       // existed are upgraded on the first authorized reconnect.
-      const memberRows = await tx.select({ id: roomMembersTable.id })
+      const memberRows = await tx.select({ credentialHash: roomMembersTable.credentialHash })
         .from(roomMembersTable)
         .where(and(eq(roomMembersTable.roomId, raw.id), eq(roomMembersTable.playerId, playerId)))
         .limit(1);
@@ -1072,10 +1072,7 @@ router.post("/:roomCode/join", roomJoinLimiter, async (req, res) => {
           playerId,
           credentialHash: hashRoomMemberCredential(memberCredential),
         });
-      } else if (readPlayerId(req) !== playerId && !verifyRoomMemberCredential(req, (await tx.select({ credentialHash: roomMembersTable.credentialHash })
-        .from(roomMembersTable)
-        .where(and(eq(roomMembersTable.roomId, raw.id), eq(roomMembersTable.playerId, playerId)))
-        .limit(1))[0]?.credentialHash ?? "")) {
+      } else if (readPlayerId(req) !== playerId && !verifyRoomMemberCredential(req, memberRows[0].credentialHash)) {
         // Existing guest memberships require possession of their room secret.
         // A public/self-asserted guest UUID is not sufficient to reconnect.
         return { kind: "unauthorized" } as const;
