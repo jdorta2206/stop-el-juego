@@ -325,7 +325,8 @@ function formatRoom(room: any, cosmeticsMap?: Record<string, any>) {
     reactions: getReactions(code),
     phrases: getPhrases(code),
     typing: getTyping(code),
-    rematchCode: roomRematch.get(code) ?? null,
+    // Persisted rematch survives process restarts; memory map is only a fast-path.
+    rematchCode: roomRematch.get(code) ?? meta?.rematchCode ?? null,
     funVotes: getFunVotes(code),
     createdAt: room.createdAt,
   };
@@ -1801,73 +1802,134 @@ router.post("/:roomCode/funvote", writeLimiter, async (req, res) => {
 
 // POST /rooms/:roomCode/rematch — first caller creates a new room with same settings,
 // the new code is broadcast to everyone in the original room so they can jump in with one tap.
-router.post("/:roomCode/rematch", async (req, res) => {
+router.post("/:roomCode/rematch", writeLimiter, async (req, res) => {
   const oldCode = paramStr(req.params.roomCode).toUpperCase();
-  const { playerId, playerName, avatarColor } = req.body as { playerId: string; playerName: string; avatarColor?: string };
+  const { playerId } = req.body as { playerId: string };
   // 🔒 A logged-in account can only request a rematch AS ITSELF (guests pass).
   if (!verifyClaimedIdentity(req, playerId)) {
     res.status(403).json({ error: "Identity verification failed" }); return;
   }
 
-  // Already created by another player → just return it
-  const existingNew = roomRematch.get(oldCode);
-  if (existingNew) { res.json({ rematchCode: existingNew }); return; }
+  // Serialize rematches on the finished room row. The old implementation only
+  // used roomRematch (process memory), so two simultaneous requests — or two
+  // Railway replicas — could create two different rematch rooms.
+  try {
+    const outcome = await db.transaction(async (tx) => {
+      const lockedRows = await tx.select().from(roomsTable)
+        .where(eq(roomsTable.roomCode, oldCode))
+        .for("update");
+      if (lockedRows.length === 0) return { kind: "not_found" as const };
 
-  const oldRooms = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, oldCode)).limit(1);
-  if (oldRooms.length === 0) { res.status(404).json({ error: "Room not found" }); return; }
-  const oldRoom = oldRooms[0];
-  // A rematch is only valid after the previous match has actually finished.
-  // Prevent stale/replayed requests from creating a new lobby from an active room.
-  if (oldRoom.status !== "finished") {
-    res.status(409).json({ error: "Rematch is only available after the match has finished" }); return;
+      const oldRoom = lockedRows[0];
+      if (oldRoom.status !== "finished") {
+        return { kind: "not_finished" as const };
+      }
+
+      const oldPlayers = parsePlayers(oldRoom.playersJson);
+      const oldPlayer = oldPlayers.find((p: any) => p.playerId === playerId);
+      if (!oldPlayer) {
+        return { kind: "not_member" as const };
+      }
+
+      const oldMeta = parseBluffMeta(oldRoom.stopperJson) ?? {};
+      const persistedRematch = typeof oldMeta.rematchCode === "string"
+        ? oldMeta.rematchCode.toUpperCase()
+        : null;
+
+      // Idempotency is persisted in the finished room, not just in memory.
+      // If the target room was deleted, discard the stale pointer and recreate it.
+      if (persistedRematch) {
+        const target = await tx.select({ roomCode: roomsTable.roomCode })
+          .from(roomsTable)
+          .where(eq(roomsTable.roomCode, persistedRematch))
+          .limit(1);
+        if (target.length > 0) {
+          return { kind: "existing" as const, rematchCode: persistedRematch, oldRoom };
+        }
+      }
+
+      // The caller's identity/name/cosmetics come from the authoritative old
+      // room snapshot. Client-supplied playerName/avatarColor are deliberately ignored.
+      const authoritativeName = String(oldPlayer.playerName ?? oldRoom.hostName ?? "?").trim().slice(0, 30) || "?";
+      const authoritativeAvatarColor = typeof oldPlayer.avatarColor === "string" && oldPlayer.avatarColor.trim()
+        ? oldPlayer.avatarColor.trim().slice(0, 32)
+        : "#e53e3e";
+
+      const players = [{
+        playerId,
+        playerName: authoritativeName,
+        avatarColor: authoritativeAvatarColor,
+        score: 0,
+        roundScore: 0,
+        isHost: true,
+        isReady: false,
+      }];
+
+      // The room-code UNIQUE constraint is the final authority. INSERT ...
+      // ON CONFLICT DO NOTHING makes collision retries safe even under concurrency.
+      let newCode: string | null = null;
+      for (let attempt = 0; attempt < 10 && !newCode; attempt++) {
+        const candidate = generateRoomCode();
+        const inserted = await tx.insert(roomsTable).values({
+          roomCode: candidate,
+          hostId: playerId,
+          hostName: authoritativeName,
+          status: "waiting",
+          currentRound: 0,
+          maxRounds: oldRoom.maxRounds,
+          maxPlayers: oldRoom.maxPlayers ?? 8,
+          gameMode: oldRoom.gameMode ?? "classic",
+          language: oldRoom.language,
+          playersJson: JSON.stringify(players),
+          stopperJson: null,
+          isPublic: false,
+        }).onConflictDoNothing({ target: roomsTable.roomCode }).returning({ roomCode: roomsTable.roomCode });
+        if (inserted.length > 0) newCode = inserted[0].roomCode;
+      }
+
+      if (!newCode) {
+        throw new Error("Could not allocate a unique rematch room code");
+      }
+
+      // Persist the link in the old finished room so it remains idempotent after
+      // a process restart and consistent across Railway replicas.
+      const newMeta = { ...oldMeta, rematchCode: newCode };
+      const updatedOldRows = await tx.update(roomsTable)
+        .set({ stopperJson: JSON.stringify(newMeta), updatedAt: new Date() })
+        .where(eq(roomsTable.id, oldRoom.id))
+        .returning();
+
+      return {
+        kind: "created" as const,
+        rematchCode: newCode,
+        oldRoom: updatedOldRows[0] ?? { ...oldRoom, stopperJson: JSON.stringify(newMeta) },
+      };
+    });
+
+    if (outcome.kind === "not_found") {
+      res.status(404).json({ error: "Room not found" }); return;
+    }
+    if (outcome.kind === "not_finished") {
+      res.status(409).json({ error: "Rematch is only available after the match has finished" }); return;
+    }
+    if (outcome.kind === "not_member") {
+      res.status(403).json({ error: "Only players in the room can request a rematch" }); return;
+    }
+
+    roomRematch.set(oldCode, outcome.rematchCode);
+    // Auto-clear only the in-memory fast-path after 5 minutes. The authoritative
+    // link remains persisted in stopperJson and is still returned after restart.
+    setTimeout(() => {
+      if (roomRematch.get(oldCode) === outcome.rematchCode) roomRematch.delete(oldCode);
+    }, 5 * 60 * 1000);
+
+    // Broadcast the persisted rematchCode to everyone still subscribed to the old room.
+    broadcastAndFormat(outcome.oldRoom);
+    res.json({ rematchCode: outcome.rematchCode });
+  } catch (error) {
+    console.error("[rooms/rematch] failed:", error);
+    res.status(503).json({ error: "Could not create rematch" });
   }
-  const oldPlayers = parsePlayers(oldRoom.playersJson);
-  if (!oldPlayers.some((p: any) => p.playerId === playerId)) {
-    res.status(403).json({ error: "Only players in the room can request a rematch" });
-    return;
-  }
-
-  // New room = same settings, this player as host
-  let newCode = generateRoomCode();
-  for (let i = 0; i < 5; i++) {
-    const exists = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, newCode)).limit(1);
-    if (exists.length === 0) break;
-    newCode = generateRoomCode();
-  }
-
-  const players = [{
-    playerId,
-    playerName: playerName ?? "?",
-    avatarColor: avatarColor ?? "#e53e3e",
-    score: 0,
-    roundScore: 0,
-    isHost: true,
-    isReady: false,
-  }];
-
-  await db.insert(roomsTable).values({
-    roomCode: newCode,
-    hostId: playerId,
-    hostName: playerName ?? "",
-    status: "waiting",
-    currentRound: 0,
-    maxRounds: oldRoom.maxRounds,
-    maxPlayers: oldRoom.maxPlayers ?? 8,
-    gameMode: oldRoom.gameMode ?? "classic",
-    language: oldRoom.language,
-    playersJson: JSON.stringify(players),
-    stopperJson: null,
-    isPublic: false,
-  });
-
-  roomRematch.set(oldCode, newCode);
-  // Auto-clear after 5 minutes so the link doesn't linger forever
-  setTimeout(() => roomRematch.delete(oldCode), 5 * 60 * 1000);
-
-  // Broadcast the rematchCode to everyone still subscribed to the old room
-  broadcastAndFormat(oldRoom);
-
-  res.json({ rematchCode: newCode });
 });
 
 router.post("/:roomCode/phrase", writeLimiter, async (req, res) => {
