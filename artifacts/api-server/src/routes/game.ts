@@ -1358,7 +1358,7 @@ function findCategoryWords(langDict: Record<string, string[]>, category: string)
 // Open categories (nombre/lugar/objeto/marca) and basic sanity checks
 // (safety, first-letter, min-length) are handled fully by `isWordValid` so
 // we never burn an AI call on them.
-async function isWordValidAsync(
+export async function isWordValidAsync(
   word: string,
   letter: string,
   category: string,
