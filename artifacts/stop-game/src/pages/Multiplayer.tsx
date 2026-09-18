@@ -9,7 +9,7 @@ import { InviteFriends } from "@/components/InviteFriends";
 import { Users, Plus, LogIn, UserPlus, Globe, Lock, RefreshCw, Flag } from "lucide-react";
 import { useT } from "@/i18n/useT";
 import { getCurrentLang, getApiUrl } from "@/lib/utils";
-import { loadActiveRoom, clearActiveRoom } from "@/lib/activeRoom";
+import { loadActiveRoom, clearActiveRoom, saveActiveRoom } from "@/lib/activeRoom";
 import { AnimatePresence, motion } from "framer-motion";
 
 interface PublicRoom {
@@ -59,7 +59,7 @@ export default function Multiplayer() {
     let cancelled = false;
     (async () => {
       try {
-        const r = await fetch(`${getApiUrl()}/api/rooms/${saved.code}?viewerId=${encodeURIComponent(player.id)}`);
+        const r = await fetch(`${getApiUrl()}/api/rooms/${saved.code}?viewerId=${encodeURIComponent(player.id)}`, { headers: { "X-Room-Credential": saved.roomCredential } });
         if (!r.ok) { clearActiveRoom(); return; }
         const room = await r.json() as { status?: string; players?: Array<{ playerId: string }> };
         if (cancelled) return;
@@ -133,6 +133,7 @@ export default function Multiplayer() {
           maxPlayers,
         } as any,
       });
+      if ((room as any).roomCredential) saveActiveRoom(room.roomCode, player.id, (room as any).roomCredential);
       setLocation(`/room/${room.roomCode}`);
     } catch {
       setError(t.multiplayer.waitingForHost);
@@ -171,6 +172,8 @@ export default function Multiplayer() {
           avatarColor: player.avatarColor,
         } as import("@workspace/api-client-react").JoinRoomRequest & { loginMethod?: string | null },
       });
+      if ((room as any).roomCredential) saveActiveRoom(room.roomCode, player.id, (room as any).roomCredential);
+      if ((room as any).roomCredential) saveActiveRoom(room.roomCode, player.id, (room as any).roomCredential);
       setLocation(`/room/${room.roomCode}`);
     } catch (err) {
       setError(describeJoinError(err));
