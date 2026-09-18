@@ -1219,8 +1219,10 @@ export default function SoloGame() {
   };
 
   /** Pick a real valid word from the cached dictionary for the current letter/category. */
-  const getHintWord = async (category: string): Promise<string> => {
-    const normalizedLetter = currentLetter.trim().toUpperCase();
+  /** Pick a real valid word for the exact round letter/category. */
+  const getHintWord = async (letter: string, category: string): Promise<string> => {
+    const normalizedLetter = letter.trim().toUpperCase();
+    if (!normalizedLetter) return "";
     let bundle = getCachedOfflineBundle();
     if (!bundle) bundle = await ensureOfflineBundle();
     if (!bundle) return "";
@@ -1230,6 +1232,7 @@ export default function SoloGame() {
       .normalize("NFD")
       .replace(/[\\u0300-\\u036f]/g, "")
       .replace(/~/g, "ñ");
+    const expectedLetter = normalize(normalizedLetter);
     const langDict = bundle.dictionary[getCurrentLang()] || bundle.dictionary.es || {};
     const requestedCategory = normalize(category);
     const findWords = (dict: Record<string, string[]>, categoryName: string): string[] => {
@@ -1242,8 +1245,12 @@ export default function SoloGame() {
       return fuzzy?.[1] || [];
     };
     const pick = (dict: Record<string, string[]>) => findWords(dict, requestedCategory)
-      .filter(Boolean).filter(word => normalize(word).startsWith(normalize(normalizedLetter)))
-      .filter(word => normalize(word).length >= 2);
+      .filter(Boolean)
+      .map(word => word.trim())
+      .filter(word => word.length >= 2)
+      // Strict compatibility: the hint MUST start with the round letter.
+      .filter(word => normalize(word).startsWith(expectedLetter));
+
     const valid = pick(langDict);
     if (valid.length > 0) return valid[Math.floor(Math.random() * valid.length)];
     if (bundle.dictionary.es && langDict !== bundle.dictionary.es) {
@@ -1261,14 +1268,29 @@ export default function SoloGame() {
     } else if (rewardedAdType === "hint") {
       const empty = categories.find(c => !(responses[c] && responses[c].trim().length > 0));
       if (empty) {
-        const word = await getHintWord(empty);
-        if (word) {
+        // Capture the letter NOW so an async bundle load can never use a stale
+        // letter from a later render/round.
+        const hintLetter = currentLetter.trim().toUpperCase();
+        const word = await getHintWord(hintLetter, empty);
+        // Final safety check: never inject a hint whose first letter does not
+        // match the letter of the round in which the reward was earned.
+        const normalizedWord = word.trim().toLowerCase()
+          .replace(/ñ/g, "~")
+          .normalize("NFD")
+          .replace(/[\\u0300-\\u036f]/g, "")
+          .replace(/~/g, "ñ");
+        const normalizedHintLetter = hintLetter.toLowerCase()
+          .replace(/ñ/g, "~")
+          .normalize("NFD")
+          .replace(/[\\u0300-\\u036f]/g, "")
+          .replace(/~/g, "ñ");
+        if (word && normalizedWord.startsWith(normalizedHintLetter)) {
           setResponses(prev => ({ ...prev, [empty]: word }));
           setHintReveal({ category: empty, word });
           setTimeout(() => setHintReveal(null), 3500);
           setHintUsed(true);
         } else {
-          toast({ title: lang === "en" ? "No valid hint available for this category" : lang === "pt" ? "Não há pista válida disponível para esta categoria" : lang === "fr" ? "Aucun indice valide disponible pour cette catégorie" : "No hay una pista válida disponible para esta categoría" });
+          toast({ title: lang === "en" ? "No valid hint available for this letter" : lang === "pt" ? "Não há pista válida disponível para esta letra" : lang === "fr" ? "Aucun indice valide disponible pour cette lettre" : "No hay una pista válida disponible para esta letra" });
         }
       }
     } else if (rewardedAdType === "double") {
