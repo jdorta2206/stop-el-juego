@@ -2,6 +2,7 @@ import { Router, Request, Response } from "express";
 import { grantWorldCupPack, WORLD_CUP_PACK_SKU } from "../lib/worldCupPack";
 import { verifyClaimedIdentity } from "../lib/playerAuth";
 import { isUserPremium } from "../lib/premiumStatus";
+import { verifyPubSubJwt } from "../lib/pubsubAuth";
 import {
   acknowledgeProduct,
   acknowledgeSubscription,
@@ -9,9 +10,97 @@ import {
   upsertPlaySubscription,
   verifyProductPurchase,
   verifyPurchase,
+  verifyPurchaseByToken,
+  getPackageName,
+  updatePlaySubscriptionByToken,
 } from "../lib/playBillingService";
 
 const router = Router();
+
+router.post("/webhook", async (req: Request, res: Response) => {
+  // Google Cloud Pub/Sub sends an authenticated OIDC bearer token with push
+  // deliveries. Reject unauthenticated requests before touching billing data.
+  const auth = await verifyPubSubJwt(req.headers.authorization);
+  if (!auth.ok) {
+    console.warn("[playBilling] RTDN rejected:", auth.reason);
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  try {
+    const envelope = req.body;
+    const encoded = envelope?.message?.data;
+    if (!encoded || typeof encoded !== "string") {
+      // Pub/Sub test/empty messages are still acknowledged so they are not
+      // retried forever. Real RTDN messages always contain message.data.
+      console.log("[playBilling] RTDN message without data acknowledged");
+      return res.status(200).json({ received: true });
+    }
+
+    let notification: any;
+    try {
+      const decoded = Buffer.from(encoded, "base64").toString("utf8");
+      notification = JSON.parse(decoded);
+    } catch (err) {
+      console.error("[playBilling] Invalid RTDN base64/JSON:", err);
+      return res.status(400).json({ error: "Invalid Pub/Sub message" });
+    }
+
+    const packageName = getPackageName();
+    if (!packageName || notification?.packageName !== packageName) {
+      console.warn(
+        "[playBilling] RTDN package mismatch:",
+        notification?.packageName,
+        "expected:",
+        packageName,
+      );
+      return res.status(400).json({ error: "Package mismatch" });
+    }
+
+    // Test notifications contain no purchase token and need no DB update.
+    if (notification?.testNotification) {
+      console.log("[playBilling] RTDN test notification received");
+      return res.status(200).json({ received: true, test: true });
+    }
+
+    const subNotification = notification?.subscriptionNotification;
+    if (!subNotification?.purchaseToken) {
+      // We currently use RTDN for subscriptions. One-time product events are
+      // handled by the purchase verification flow and are intentionally not
+      // interpreted here.
+      return res.status(200).json({ received: true, ignored: true });
+    }
+
+    const purchaseToken = String(subNotification.purchaseToken);
+    const verified = await verifyPurchaseByToken(purchaseToken);
+    if ("error" in verified) {
+      // 502 tells Pub/Sub to retry transient Google API failures. Permanent
+      // malformed/unknown tokens are also safe to retry because the next
+      // delivery may arrive after Play has finalized the purchase.
+      console.error("[playBilling] RTDN verification failed:", verified.error);
+      return res.status(502).json({ error: verified.error });
+    }
+
+    const updated = await updatePlaySubscriptionByToken(verified);
+    console.log(
+      "[playBilling] RTDN processed",
+      JSON.stringify({
+        notificationType: subNotification.notificationType,
+        productId: verified.productId,
+        state: verified.state,
+        expiryTimeMs: verified.expiryTimeMs,
+        playerId: updated.playerId,
+      }),
+    );
+
+    return res.status(200).json({
+      received: true,
+      updated: updated.playerId !== null,
+    });
+  } catch (error: any) {
+    console.error("[playBilling] RTDN webhook error:", error?.message ?? error);
+    return res.status(500).json({ error: "Webhook processing error" });
+  }
+});
 
 router.get("/status", async (req: Request, res: Response) => {
   try {
