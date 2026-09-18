@@ -121,7 +121,7 @@ if (process.env["SERVE_CLIENT"] === "1") {
   if (!existsSync(path.join(clientDist, "index.html"))) {
     console.warn(`[SERVE_CLIENT] index.html not found at ${clientDist} — the client build is missing or mislocated.`);
   }
-  app.get("/.well-known/assetlinks.json", (_req, res) => {
+  // AdMob app-ads.txt must be reachable directly from the site root.\n  // Serve it explicitly so the crawler never falls through to the SPA.\n  app.get("/app-ads.txt", (_req, res) => {\n    const filePath = path.join(clientDist, "app-ads.txt");\n    res.type("text/plain");\n    res.setHeader("Cache-Control", "public, max-age=3600");\n    res.sendFile(filePath, { dotfiles: "allow" }, (err) => {\n      if (err && !res.headersSent) res.status(404).send("app-ads.txt not found");\n    });\n  });\n\n  app.get("/.well-known/assetlinks.json", (_req, res) => {
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.sendFile(path.join(clientDist, ".well-known", "assetlinks.json"), { dotfiles: "allow" }, (err) => {
       if (err && !res.headersSent) res.status(404).json({ error: "assetlinks.json not found" });
