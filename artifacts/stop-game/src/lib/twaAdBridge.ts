@@ -1,5 +1,7 @@
 const RESULT_BASE = "/api/rewards/admob-result";
-// SSV callbacks can arrive after the ad has already been dismissed.\n// Keep the web-side request alive long enough to reconcile a delayed callback.\nconst RESULT_TIMEOUT_MS = 120_000;
+// SSV callbacks can arrive after the ad has already been dismissed.
+// Keep the web-side request alive long enough to reconcile a delayed callback.
+const RESULT_TIMEOUT_MS = 120_000;
 
 type RewardedPlacement = "extra_time" | "hint" | "double_points" | "skip_round" | "extra_pack";
 type RewardResult = { rewarded: boolean; source: "admob" | "skipped" | "error"; errorCode?: number; errorDomain?: string; errorMessage?: string };
