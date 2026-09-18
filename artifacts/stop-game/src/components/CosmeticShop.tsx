@@ -3,8 +3,8 @@ import { usePlayer } from "@/hooks/use-player";
 import { useInventory, type ShopItem as InventoryShopItem } from "@/hooks/useInventory";
 import { Button } from "@/components/ui";
 import { toast } from "sonner";
-import { Check, Crown, Sparkles, Gift, Coins, ShoppingBag, Tag } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { Check, Sparkles, Coins, ShoppingBag, Tag } from "lucide-react";
+import { motion } from "framer-motion";
 import { purchaseWorldCupPackOnPlay, detectPaymentChannel } from "@/lib/playBilling";
 import { startPackCheckout, WORLD_CUP_PACK_PRICE_LABEL } from "@/lib/worldCupPack";
 import { celebrateReward } from "@/lib/celebrate";
@@ -35,7 +35,6 @@ export function CosmeticShop(_props: CosmeticShopProps) {
   const [selectedCategory, setSelectedCategory] = useState<Category>("all");
   const [purchasing, setPurchasing] = useState<string | null>(null);
   const [equipping, setEquipping] = useState<string | null>(null);
-  const [showPackModal, setShowPackModal] = useState(false);
 
   const coinItems = ((inventory?.shop ?? []) as InventoryShopItem[]).filter(
     (item) => item.price > 0 && !item.id.includes(WC_MARKER),
@@ -50,8 +49,11 @@ export function CosmeticShop(_props: CosmeticShopProps) {
   );
 
   const isOwned = (itemId: string) =>
-    [...(inventory?.owned?.avatars ?? []), ...(inventory?.owned?.frames ?? []), ...(inventory?.owned?.backgrounds ?? [])]
-      .some((item: { id: string }) => item.id === itemId);
+    [
+      ...(inventory?.owned?.avatars ?? []),
+      ...(inventory?.owned?.frames ?? []),
+      ...(inventory?.owned?.backgrounds ?? []),
+    ].some((item: { id: string }) => item.id === itemId);
 
   const isEquipped = (itemId: string) =>
     Object.values(inventory?.equipped ?? {}).includes(itemId);
@@ -64,7 +66,6 @@ export function CosmeticShop(_props: CosmeticShopProps) {
       toast.error("Debes iniciar sesión");
       return;
     }
-    if (item.price <= 0) return;
 
     setPurchasing(item.id);
     try {
@@ -101,7 +102,8 @@ export function CosmeticShop(_props: CosmeticShopProps) {
     }
   }, [equip, refreshInventory]);
 
-  const hasWorldCupPack = worldCupItems.length > 0 && worldCupItems.every((item) => isOwned(item.id));
+  const hasWorldCupPack =
+    worldCupItems.length > 0 && worldCupItems.every((item) => isOwned(item.id));
   const isInApp = detectPaymentChannel() === "play";
 
   const handleBuyPack = useCallback(async () => {
@@ -170,18 +172,17 @@ export function CosmeticShop(_props: CosmeticShopProps) {
           <div className="flex items-center gap-2 mb-3">
             <Tag className="w-5 h-5 text-yellow-400" />
             <h3 className="text-lg font-black text-white">🔥 Ofertas de hoy</h3>
-            <span className="text-xs text-white/40">Precios válidos hasta el próximo cambio diario</span>
+            <span className="text-xs text-white/40">Precios válidos durante la oferta</span>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {dailyDeals.map((deal: { id: string; originalPrice: number; price: number; discountPct: number }) => {
               const item = coinItems.find((candidate) => candidate.id === deal.id);
               if (!item) return null;
-              const owned = isOwned(item.id);
               return (
                 <ShopCard
                   key={item.id}
                   item={item}
-                  owned={owned}
+                  owned={isOwned(item.id)}
                   equipped={isEquipped(item.id)}
                   purchasing={purchasing === item.id}
                   equipping={equipping === `${item.kind}:${item.id}`}
@@ -203,22 +204,19 @@ export function CosmeticShop(_props: CosmeticShopProps) {
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-            {filteredItems.map((item) => {
-              const deal = dealFor(item.id);
-              return (
-                <ShopCard
-                  key={item.id}
-                  item={item}
-                  owned={isOwned(item.id)}
-                  equipped={isEquipped(item.id)}
-                  purchasing={purchasing === item.id}
-                  equipping={equipping === `${item.kind}:${item.id}`}
-                  deal={deal}
-                  onBuy={() => handleBuy(item)}
-                  onEquip={() => handleEquip(item.kind, item.id)}
-                />
-              );
-            })}
+            {filteredItems.map((item) => (
+              <ShopCard
+                key={item.id}
+                item={item}
+                owned={isOwned(item.id)}
+                equipped={isEquipped(item.id)}
+                purchasing={purchasing === item.id}
+                equipping={equipping === `${item.kind}:${item.id}`}
+                deal={dealFor(item.id)}
+                onBuy={() => handleBuy(item)}
+                onEquip={() => handleEquip(item.kind, item.id)}
+              />
+            ))}
           </div>
         )}
       </section>
@@ -245,8 +243,6 @@ export function CosmeticShop(_props: CosmeticShopProps) {
           )}
         </div>
       </section>
-
-      <AnimatePresence />
     </div>
   );
 }
