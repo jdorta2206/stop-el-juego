@@ -1837,8 +1837,8 @@ router.post("/:roomCode/rematch", async (req, res) => {
 
   const players = [{
     playerId,
-    playerName: playerName ?? "?",
-    avatarColor: avatarColor ?? "#e53e3e",
+    playerName: requester.playerName ?? playerName ?? "?",
+    avatarColor: requester.avatarColor ?? avatarColor ?? "#e53e3e",
     score: 0,
     roundScore: 0,
     isHost: true,
@@ -1848,7 +1848,7 @@ router.post("/:roomCode/rematch", async (req, res) => {
   await db.insert(roomsTable).values({
     roomCode: newCode,
     hostId: playerId,
-    hostName: playerName ?? "",
+    hostName: requester.playerName ?? playerName ?? "",
     status: "waiting",
     currentRound: 0,
     maxRounds: oldRoom.maxRounds,
