@@ -215,6 +215,18 @@ router.post("/:code/start-match", requirePlayerIdentity, async (req: AuthedReque
   const matchIdx = currentRound.findIndex((m: any) => m.id === matchId);
   if (matchIdx === -1) { res.status(404).json({ error: "Match not found" }); return; }
 
+  const match = currentRound[matchIdx];
+  const isParticipant = callerId === match.p1Id || callerId === match.p2Id;
+  const isHost = callerId === t.hostId;
+  if (!isParticipant && !isHost) {
+    res.status(403).json({ error: "Not authorized for this match" });
+    return;
+  }
+  if (typeof roomCode !== "string" || !/^[A-Z0-9]{4,12}$/i.test(roomCode)) {
+    res.status(400).json({ error: "Invalid room code" });
+    return;
+  }
+
   currentRound[matchIdx] = { ...currentRound[matchIdx], roomCode, status: "playing" };
   bracket.rounds[bracket.currentRound] = currentRound;
 
@@ -250,17 +262,6 @@ router.post("/:code/match-result", requirePlayerIdentity, async (req: AuthedRequ
     res.status(403).json({ error: "Not authorized for this match" });
     return;
   }
-  if (typeof roomCode !== "string" || !/^[A-Z0-9]{4,12}$/i.test(roomCode)) {
-    res.status(400).json({ error: "Invalid room code" });
-    return;
-  }
-  const isParticipant = callerId === match.p1Id || callerId === match.p2Id;
-  const isHost = callerId === t.hostId;
-  if (!isParticipant && !isHost) {
-    res.status(403).json({ error: "Not authorized for this match" });
-    return;
-  }
-
   if (winnerId !== match.p1Id && winnerId !== match.p2Id) {
     res.status(400).json({ error: "Winner is not a match participant" });
     return;
