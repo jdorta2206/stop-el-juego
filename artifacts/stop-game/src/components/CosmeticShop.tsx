@@ -42,9 +42,11 @@ export function CosmeticShop(_props: CosmeticShopProps) {
   const worldCupItems = ((inventory?.shop ?? []) as InventoryShopItem[]).filter(
     (item) => item.id.includes(WC_MARKER),
   );
-  const dailyDeals = inventory?.dailyDeals ?? [];
+  const weeklyShop = ((inventory?.weeklyShop ?? []) as InventoryShopItem[]).filter((item) => item.price > 0 && !item.id.includes(WC_MARKER));
+  const weeklyDeals = inventory?.weeklyDeals ?? [];
+  const shopResetAt = inventory?.shopResetAt ?? null;
 
-  const filteredItems = coinItems.filter((item) =>
+  const filteredItems = weeklyShop.filter((item) =>
     selectedCategory === "all" ? true : item.kind === selectedCategory,
   );
 
@@ -59,7 +61,7 @@ export function CosmeticShop(_props: CosmeticShopProps) {
     Object.values(inventory?.equipped ?? {}).includes(itemId);
 
   const dealFor = (itemId: string) =>
-    dailyDeals.find((deal: { id: string }) => deal.id === itemId);
+    weeklyDeals.find((deal: { id: string }) => deal.id === itemId);
 
   const handleBuy = useCallback(async (item: InventoryShopItem) => {
     if (!player?.id) {
@@ -167,7 +169,7 @@ export function CosmeticShop(_props: CosmeticShopProps) {
         ))}
       </div>
 
-      {dailyDeals.length > 0 && (
+      {weeklyShop.length > 0 && (
         <section>
           <div className="flex items-center gap-2 mb-3">
             <Tag className="w-5 h-5 text-yellow-400" />
@@ -175,8 +177,8 @@ export function CosmeticShop(_props: CosmeticShopProps) {
             <span className="text-xs text-white/40">Precios válidos durante la oferta</span>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {dailyDeals.map((deal: { id: string; originalPrice: number; price: number; discountPct: number }) => {
-              const item = coinItems.find((candidate) => candidate.id === deal.id);
+            {weeklyDeals.map((deal: { id: string; originalPrice: number; price: number; discountPct: number }) => {
+              const item = weeklyShop.find((candidate) => candidate.id === deal.id);
               if (!item) return null;
               return (
                 <ShopCard
@@ -197,7 +199,7 @@ export function CosmeticShop(_props: CosmeticShopProps) {
       )}
 
       <section>
-        <h3 className="text-lg font-black text-white mb-3">🪙 Desbloquea con tus monedas</h3>
+        <h3 className="text-lg font-black text-white mb-3">🪙 Productos disponibles esta semana</h3>
         {filteredItems.length === 0 ? (
           <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-center text-white/50">
             No hay cosméticos disponibles ahora mismo.
