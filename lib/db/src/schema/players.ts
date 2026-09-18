@@ -75,6 +75,22 @@ export const roomsTable = pgTable("rooms", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+export const roomMembersTable = pgTable("room_members", {
+  id: serial("id").primaryKey(),
+  roomId: integer("room_id").notNull(),
+  playerId: text("player_id").notNull(),
+  credentialHash: text("credential_hash").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  lastSeenAt: timestamp("last_seen_at").defaultNow().notNull(),
+}, (t) => ({
+  roomPlayerUnique: uniqueIndex("room_members_room_player_uidx").on(t.roomId, t.playerId),
+  roomCredentialHashUnique: uniqueIndex("room_members_credential_hash_uidx").on(t.credentialHash),
+}));
+
+export const insertRoomMemberSchema = createInsertSchema(roomMembersTable).omit({ id: true, createdAt: true, lastSeenAt: true });
+export type InsertRoomMember = z.infer<typeof insertRoomMemberSchema>;
+export type RoomMember = typeof roomMembersTable.$inferSelect;
+
 export const insertRoomSchema = createInsertSchema(roomsTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertRoom = z.infer<typeof insertRoomSchema>;
 export type Room = typeof roomsTable.$inferSelect;
