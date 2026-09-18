@@ -304,7 +304,7 @@ export default function Room() {
     let cancelled = false;
     (async () => {
       try {
-        const url = `${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/draft?playerId=${encodeURIComponent(player.id)}`;
+        const url = `${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/draft?playerId=${encodeURIComponent(player.id)}${(() => { try { const c = loadActiveRoom()?.roomCredential; return c ? `&roomCredential=${encodeURIComponent(c)}` : ""; } catch { return ""; } })()}`;
         const r = await fetch(url);
         if (!r.ok) return;
         const data = await r.json() as { responses?: Record<string, string>; round?: number; letter?: string };
@@ -479,7 +479,7 @@ export default function Room() {
     lastTypingPing.current = now;
     fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/typing`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify({
         playerId: player.id,
         playerName: player.name ?? "?",
@@ -576,7 +576,7 @@ export default function Room() {
     try {
       await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/react`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ emoji, playerId: player.id, playerName: player.name }),
       });
     } catch {}
@@ -602,7 +602,7 @@ export default function Room() {
     try {
       await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/phrase`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ playerId: player.id, playerName: player.name, phraseIndex }),
       });
     } catch {}
@@ -793,7 +793,7 @@ export default function Room() {
     try {
       await fetch(`${apiBase}/api/rooms/${roomCode.toUpperCase()}/resolve-bluffs`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
       });
     } catch { /* silent */ }
   }, [roomCode, apiBase]);
@@ -915,7 +915,7 @@ export default function Room() {
         const reportMatch = () => {
           fetch(`${getApiUrl()}/api/tournaments/${tournamentCtx.code}/match-result`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json", ...authHeaders() },
             body: JSON.stringify({ matchId: tournamentCtx.matchId, winnerId: winner.playerId, winnerName: winner.playerName }),
             credentials: "include",
           }).catch(() => {});
@@ -1751,7 +1751,7 @@ export default function Room() {
                     try {
                       const r = await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/spy`, {
                         method: "POST",
-                        headers: { "Content-Type": "application/json" },
+                        headers: { "Content-Type": "application/json", ...authHeaders() },
                         body: JSON.stringify({ playerId: player.id }),
                       });
                       if (!r.ok) {
@@ -2152,7 +2152,7 @@ export default function Room() {
                                           try {
                                             await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/funvote`, {
                                               method: "POST",
-                                              headers: { "Content-Type": "application/json" },
+                                              headers: { "Content-Type": "application/json", ...authHeaders() },
                                               body: JSON.stringify({
                                                 playerId: player.id,
                                                 votedPlayerId: p.playerId,
