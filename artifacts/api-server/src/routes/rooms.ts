@@ -1816,6 +1816,11 @@ router.post("/:roomCode/rematch", async (req, res) => {
   const oldRooms = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, oldCode)).limit(1);
   if (oldRooms.length === 0) { res.status(404).json({ error: "Room not found" }); return; }
   const oldRoom = oldRooms[0];
+  // A rematch is only valid after the previous match has actually finished.
+  // Prevent stale/replayed requests from creating a new lobby from an active room.
+  if (oldRoom.status !== "finished") {
+    res.status(409).json({ error: "Rematch is only available after the match has finished" }); return;
+  }
   const oldPlayers = parsePlayers(oldRoom.playersJson);
   if (!oldPlayers.some((p: any) => p.playerId === playerId)) {
     res.status(403).json({ error: "Only players in the room can request a rematch" });
