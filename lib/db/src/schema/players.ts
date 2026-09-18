@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, timestamp, boolean, bigint, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, timestamp, boolean, bigint, uniqueIndex, foreignKey } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -85,6 +85,7 @@ export const roomMembersTable = pgTable("room_members", {
 }, (t) => ({
   roomPlayerUnique: uniqueIndex("room_members_room_player_uidx").on(t.roomId, t.playerId),
   roomCredentialHashUnique: uniqueIndex("room_members_credential_hash_uidx").on(t.credentialHash),
+  roomIdForeignKey: foreignKey({ columns: [t.roomId], foreignColumns: [roomsTable.id], name: "room_members_room_id_fk" }).onDelete("cascade"),
 }));
 
 export const insertRoomMemberSchema = createInsertSchema(roomMembersTable).omit({ id: true, createdAt: true, lastSeenAt: true });
