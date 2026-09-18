@@ -93,6 +93,7 @@ export default function SoloGame() {
   const [gameState, setGameState] = useState<GameState>("LOBBY");
   const [currentLetter, setCurrentLetter] = useState<string>("");
   const [timeLeft, setTimeLeft] = useState(ROUND_TIME);
+  const gameTimerPausedRef = useRef(false);
   const [responses, setResponses] = useState<Record<string, string>>({});
   const [round, setRound] = useState(1);
   const [totalScore, setTotalScore] = useState(0);
@@ -514,7 +515,7 @@ export default function SoloGame() {
     if (randomEvent === "hidden_category") setTimeout(() => sound.playHiddenReveal(), 400);
 
     timerRef.current = setInterval(() => {
-      if (isGameTimerPaused()) return;
+      if (gameTimerPausedRef.current || isGameTimerPaused()) return;
       setTimeLeft(prev => {
         if (prev <= 1) {
           // Clear the interval immediately (synchronously) so this branch never fires twice
@@ -557,6 +558,21 @@ export default function SoloGame() {
     if (cardRevealTimer.current) clearTimeout(cardRevealTimer.current);
     startRound();
   };
+
+  // Rewarded ads can run in a native Android activity while the WebView keeps
+  // executing JavaScript. Keep a page-owned pause ref as a second guard so the
+  // countdown cannot continue even if the shared module is duplicated by the
+  // bundler or the ad component lives in another chunk.
+  useEffect(() => {
+    const pause = () => { gameTimerPausedRef.current = true; };
+    const resume = () => { gameTimerPausedRef.current = false; };
+    window.addEventListener("stop:rewarded-ad-pause", pause);
+    window.addEventListener("stop:rewarded-ad-resume", resume);
+    return () => {
+      window.removeEventListener("stop:rewarded-ad-pause", pause);
+      window.removeEventListener("stop:rewarded-ad-resume", resume);
+    };
+  }, []);
 
   const handleSpinComplete = () => {
     if (activeCard) {
