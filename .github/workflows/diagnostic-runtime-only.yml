@@ -1,0 +1,49 @@
+name: Diagnostic production runtime only
+
+on:
+  push:
+    branches:
+      - diagnostic/prod-runtime-only
+
+permissions:
+  contents: read
+
+jobs:
+  diagnostic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Curl production bundle and SSV endpoints
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -sSL --max-time 30 https://www.stopjuegodepalabras.com/ -o /tmp/index.html
+          ASSET="$(grep -oE 'src="/assets/index[^"]+\.js"' /tmp/index.html | sed -E 's/src="//;s/"$//' | head -1)"
+          echo "ASSET=$ASSET"
+          curl -sSL --max-time 30 "https://www.stopjuegodepalabras.com${ASSET}" -o /tmp/prod.js
+          sha256sum /tmp/prod.js
+          wc -c /tmp/prod.js
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('/tmp/prod.js').read_text(errors='ignore')
+          for kw in ['stopad://rewarded','Native rewarded ad request timed out','+30s','Mira el anuncio','Cargando anuncio']:
+              print('===',kw,'===')
+              i=s.find(kw)
+              print('FOUND' if i>=0 else 'NOT_FOUND')
+              if i>=0: print(s[max(0,i-1200):i+2500])
+          print('SETINTERVAL_COUNT', s.count('setInterval'))
+          pos=0
+          for n in range(min(20,s.count('setInterval'))):
+              i=s.find('setInterval',pos)
+              print('---SETINTERVAL',n,'AT',i,'---')
+              print(s[max(0,i-700):i+1800])
+              pos=i+10
+          PY
+
+          echo '=== SSV URL PROBE ==='
+          curl -sS -o /tmp/ssv-body -w 'HTTP %{http_code}\n' --max-time 30 https://www.stopjuegodepalabras.com/api/rewards/admob-ssv
+          cat /tmp/ssv-body
+
+          echo '=== RESULT SAMPLE ==='
+          curl -sS -o /tmp/result-body -w 'HTTP %{http_code}\n' --max-time 30 https://www.stopjuegodepalabras.com/api/rewards/admob-result/diagnostic-request-id-123456
+          cat /tmp/result-body
