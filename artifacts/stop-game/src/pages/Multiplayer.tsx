@@ -9,7 +9,7 @@ import { InviteFriends } from "@/components/InviteFriends";
 import { Users, Plus, LogIn, UserPlus, Globe, Lock, RefreshCw, Flag } from "lucide-react";
 import { useT } from "@/i18n/useT";
 import { getCurrentLang, getApiUrl } from "@/lib/utils";
-import { loadActiveRoom, clearActiveRoom } from "@/lib/activeRoom";
+import { loadActiveRoom, clearActiveRoom, saveActiveRoom } from "@/lib/activeRoom";
 import { AnimatePresence, motion } from "framer-motion";
 
 interface PublicRoom {
@@ -133,6 +133,9 @@ export default function Multiplayer() {
           maxPlayers,
         } as any,
       });
+      saveActiveRoom(room.roomCode, player.id, (room as any).roomCredential);
+      saveActiveRoom(room.roomCode, player.id, (room as any).roomCredential);
+      saveActiveRoom(room.roomCode, player.id, (room as any).roomCredential);
       setLocation(`/room/${room.roomCode}`);
     } catch {
       setError(t.multiplayer.waitingForHost);
