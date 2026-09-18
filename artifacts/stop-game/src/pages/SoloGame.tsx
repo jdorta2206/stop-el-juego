@@ -13,7 +13,7 @@ import { useValidateRound, useSubmitScore, type CategoryResult, type ValidateRou
 import { usePlayer } from "@/hooks/use-player";
 import { motion, AnimatePresence } from "framer-motion";
 import { RewardedAd, BannerAd } from "@/components/AdSystem";
-import { isGameTimerPaused } from "@/lib/timerPauseGuard";
+import { isGameTimerPaused, resumeGameTimer } from "@/lib/timerPauseGuard";
 import { ContextualPremiumPrompt } from "@/components/ContextualPremiumPrompt";
 import { PremiumModal } from "@/components/PremiumModal";
 import { ShareResultsModal } from "@/components/ShareResultsModal";
@@ -1200,6 +1200,8 @@ export default function SoloGame() {
   };
 
   const handleRewardedComplete = (reward: number) => {
+    // Resume first, then add the reward to the exact time captured while paused.
+    resumeGameTimer();
     if (rewardedAdType === "extraTime") {
       setTimeLeft(prev => prev + reward);
       setRewardedUsed(true);
