@@ -60,6 +60,7 @@ const SPEED_ROUND_TIME = 20;
 const CHAOS_ROUND_TIME = 45;
 const MAX_ROUNDS = 3;
 const EASY_LETTERS = ["A", "C", "E", "I", "L", "M", "P", "R", "S", "T"];
+const REWARDED_ADS_DISABLED = import.meta.env.VITE_REWARDED_ADS_DISABLED === "1";
 
 function getCrazyCategory(t: any): string | null {
   if (!t.crazyCategories || t.crazyCategories.length === 0) return null;
@@ -1923,24 +1924,23 @@ export default function SoloGame() {
               })()}
 
               <div className="grid grid-cols-2 gap-2 mb-3">
-                {!rewardedUsed && (
-                  isPremium ? (
-                    <button
-                      onClick={() => { setTimeLeft(prev => prev + 20); setRewardedUsed(true); }}
-                      className="flex items-center justify-center gap-2 py-2 px-3 rounded-xl border border-yellow-400/50 bg-yellow-400/15 text-yellow-300 text-xs font-bold hover:bg-yellow-400/25 transition-all"
-                    >
-                      ⭐ +20s
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => setRewardedAdType("extraTime")}
-                      className="flex items-center justify-center gap-2 py-2 px-3 rounded-xl border border-yellow-500/30 bg-yellow-500/10 text-yellow-300 text-xs font-bold hover:bg-yellow-500/20 transition-all"
-                    >
-                      <Tv2 className="w-3.5 h-3.5" /> +30s
-                    </button>
-                  )
+                {!rewardedUsed && isPremium && (
+                  <button
+                    onClick={() => { setTimeLeft(prev => prev + 20); setRewardedUsed(true); }}
+                    className="flex items-center justify-center gap-2 py-2 px-3 rounded-xl border border-yellow-400/50 bg-yellow-400/15 text-yellow-300 text-xs font-bold hover:bg-yellow-400/25 transition-all"
+                  >
+                    ⭐ +20s
+                  </button>
                 )}
-                {!hintUsed && !isPremium && (
+                {!rewardedUsed && !isPremium && !REWARDED_ADS_DISABLED && (
+                  <button
+                    onClick={() => setRewardedAdType("extraTime")}
+                    className="flex items-center justify-center gap-2 py-2 px-3 rounded-xl border border-yellow-500/30 bg-yellow-500/10 text-yellow-300 text-xs font-bold hover:bg-yellow-500/20 transition-all"
+                  >
+                    <Tv2 className="w-3.5 h-3.5" /> +30s
+                  </button>
+                )}
+                {!hintUsed && !isPremium && !REWARDED_ADS_DISABLED && (
                   <button
                     onClick={() => setRewardedAdType("hint")}
                     className="flex items-center justify-center gap-2 py-2 px-3 rounded-xl border border-cyan-500/30 bg-cyan-500/10 text-cyan-300 text-xs font-bold hover:bg-cyan-500/20 transition-all"
@@ -2806,7 +2806,7 @@ export default function SoloGame() {
                 </motion.div>
               )}
 
-              {round >= maxRounds && !doubleUsed && totalScore > 0 && !isDailyMode && (
+              {round >= maxRounds && !doubleUsed && totalScore > 0 && !isDailyMode && !isPremium && !REWARDED_ADS_DISABLED && (
                 <motion.button
                   initial={{ opacity: 0, scale: 0.9 }}
                   animate={{ opacity: 1, scale: 1 }}
