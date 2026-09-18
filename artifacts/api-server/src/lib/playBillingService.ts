@@ -394,3 +394,96 @@ export async function getActivePlaySubscriptionForPlayer(
   if (!row) return null;
   return { productId: row.product_id, expiryTimeMs: Number(row.expiry_time_ms) };
 }
+
+// ── RTDN verification via subscriptionsv2 ───────────────────────────────
+// RTDN only carries the purchaseToken. The current Google API replacement for
+// purchases.subscriptions.get is purchases.subscriptionsv2.get, which lets us
+// resolve the product and current entitlement state from the token itself.
+export async function verifyPurchaseByToken(
+  purchaseToken: string,
+): Promise<VerifiedPurchase | { error: string; status: number }> {
+  const packageName = getPackageName();
+  if (!packageName) {
+    return { error: "ANDROID_PACKAGE_NAME not configured", status: 503 };
+  }
+  const client = await getClient();
+  if (!client) {
+    return { error: "Play Billing not configured", status: 503 };
+  }
+
+  try {
+    const response = await client.purchases.subscriptionsv2.get({
+      packageName,
+      token: purchaseToken,
+    });
+
+    const sub = response.data as any;
+    const lineItems = Array.isArray(sub.lineItems) ? sub.lineItems : [];
+    const currentItem = lineItems
+      .filter((item: any) => Number.isFinite(Date.parse(String(item?.expiryTime ?? ""))))
+      .sort((a: any, b: any) => Date.parse(String(b.expiryTime)) - Date.parse(String(a.expiryTime)))[0]
+      ?? lineItems[0];
+
+    const productId = String(currentItem?.productId ?? "").trim();
+    if (!productId) {
+      return { error: "Google Play subscription has no productId", status: 422 };
+    }
+
+    const expiryTimeMs = Date.parse(String(currentItem?.expiryTime ?? ""));
+    const startTimeMs = sub.startTime ? Date.parse(String(sub.startTime)) : 0;
+    const stateName = String(sub.subscriptionState ?? "");
+
+    let state: string;
+    switch (stateName) {
+      case "SUBSCRIPTION_STATE_ACTIVE":
+        state = "ACTIVE";
+        break;
+      case "SUBSCRIPTION_STATE_IN_GRACE_PERIOD":
+        state = "IN_GRACE_PERIOD";
+        break;
+      case "SUBSCRIPTION_STATE_ON_HOLD":
+        state = "ON_HOLD";
+        break;
+      case "SUBSCRIPTION_STATE_CANCELED":
+        state = expiryTimeMs > Date.now() ? "ACTIVE" : "CANCELED";
+        break;
+      case "SUBSCRIPTION_STATE_EXPIRED":
+        state = "EXPIRED";
+        break;
+      case "SUBSCRIPTION_STATE_PENDING":
+        state = "PENDING";
+        break;
+      default:
+        state = expiryTimeMs > Date.now() ? "ACTIVE" : "EXPIRED";
+        break;
+    }
+
+    const orderId =
+      currentItem?.latestSuccessfulOrderId ??
+      sub.latestOrderId ??
+      null;
+
+    const acknowledgementState =
+      String(sub.acknowledgementState ?? "") === "ACKNOWLEDGEMENT_STATE_ACKNOWLEDGED"
+        ? 1
+        : 0;
+
+    return {
+      productId,
+      purchaseToken,
+      orderId: orderId ? String(orderId) : null,
+      state,
+      expiryTimeMs: Number.isFinite(expiryTimeMs) ? expiryTimeMs : 0,
+      startTimeMs: Number.isFinite(startTimeMs) ? startTimeMs : 0,
+      isEntitled: Number.isFinite(expiryTimeMs)
+        ? isPlayStateEntitled(state, expiryTimeMs)
+        : false,
+      acknowledgementState,
+      raw: sub as Record<string, unknown>,
+    };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[playBilling] verifyPurchaseByToken failed:", msg);
+    return { error: `Google Play API error: ${msg}`, status: 502 };
+  }
+}
