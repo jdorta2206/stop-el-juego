@@ -4,6 +4,7 @@ import { roomsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { sendPushToPlayer, notifyFollowersPlayerOnline } from "../lib/pushHelper";
 import { presenceLimiter } from "../middlewares/rateLimit";
+import { verifyClaimedIdentity } from "../lib/playerAuth";
 
 const router: IRouter = Router();
 
@@ -72,6 +73,9 @@ router.post("/ping", presenceLimiter, (req, res) => {
   if (!playerId || !name) {
     return res.status(400).json({ error: "playerId and name required" });
   }
+  if (!verifyClaimedIdentity(req, playerId)) {
+    return res.status(403).json({ error: "Invalid player identity" });
+  }
 
   // Check if this is a fresh connection (player was offline for > 3 min)
   const existing = presenceMap.get(playerId);
@@ -129,6 +133,9 @@ router.post("/challenge", async (req, res) => {
 
   if (!fromPlayerId || !toPlayerId || !fromName) {
     return res.status(400).json({ error: "fromPlayerId, fromName and toPlayerId required" });
+  }
+  if (!verifyClaimedIdentity(req, fromPlayerId)) {
+    return res.status(403).json({ error: "Invalid player identity" });
   }
 
   // Check target player is online
@@ -215,6 +222,9 @@ router.post("/room-invite", (req, res) => {
 
   if (!fromPlayerId || !toPlayerId || !fromName || !roomCode) {
     return res.status(400).json({ error: "fromPlayerId, fromName, toPlayerId and roomCode required" });
+  }
+  if (!verifyClaimedIdentity(req, fromPlayerId)) {
+    return res.status(403).json({ error: "Invalid player identity" });
   }
 
   // Remove any existing pending room-invite from this sender to this target
