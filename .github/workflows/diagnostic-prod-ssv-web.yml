@@ -54,33 +54,19 @@ jobs:
           echo "LOCAL timeout string occurrences:"
           grep -oF 'Native rewarded ad request timed out' "$LOCAL_ASSET" | wc -l
 
-      - name: Compare production bundle with current master build
+      - name: Inspect production versus master bundle behavior
         shell: bash
         run: |
           set -euo pipefail
           LOCAL_ASSET="$(find artifacts/stop-game/dist/assets -maxdepth 1 -type f -name 'index.*.js' | head -1)"
           PROD_TS="$(sed -nE 's/.*index\.[A-Za-z0-9_-]+\.([0-9]+)\.js.*/\1/p' /tmp/index.html | head -1)"
           LOCAL_TS="$(basename "$LOCAL_ASSET" | sed -nE 's/.*\.([0-9]+)\.js/\1/p')"
-          echo "PROD_TS=$PROD_TS"
-          echo "LOCAL_TS=$LOCAL_TS"
           sed "s/$PROD_TS/BUILD_TIMESTAMP/g" /tmp/prod.js > /tmp/prod-normalized.js
           sed "s/$LOCAL_TS/BUILD_TIMESTAMP/g" "$LOCAL_ASSET" > /tmp/local-normalized.js
-          PROD_SHA="$(sha256sum /tmp/prod-normalized.js | awk '{print $1}')"
-          LOCAL_SHA="$(sha256sum /tmp/local-normalized.js | awk '{print $1}')"
-          echo "PROD_NORMALIZED_SHA=$PROD_SHA"
-          echo "LOCAL_NORMALIZED_SHA=$LOCAL_SHA"
-          if [ "$PROD_SHA" = "$LOCAL_SHA" ]; then
-            echo "NORMALIZED_BUNDLE_MATCH=YES"
-          else
-            echo "NORMALIZED_BUNDLE_MATCH=NO"
-          fi
+          echo "PROD_NORMALIZED_SHA=$(sha256sum /tmp/prod-normalized.js | awk '{print $1}')"
+          echo "LOCAL_NORMALIZED_SHA=$(sha256sum /tmp/local-normalized.js | awk '{print $1}')"
           python3 - <<'PY'
           from pathlib import Path
-          import difflib
-
-          prod = Path('/tmp/prod-normalized.js').read_text(errors='ignore')
-          local = Path('/tmp/local-normalized.js').read_text(errors='ignore')
-
           keywords = [
               'stopad://rewarded',
               'Native rewarded ad request timed out',
@@ -88,37 +74,28 @@ jobs:
               '+30s',
               'Cargando anuncio',
           ]
-
-          print('=== KEYWORD CONTEXTS ===')
           for kw in keywords:
-              print('KEYWORD', kw)
-              for label, data in [('PROD', prod), ('LOCAL', local)]:
-                  idx = data.find(kw)
-                  print(label, 'FOUND' if idx >= 0 else 'NOT_FOUND')
-                  if idx >= 0:
-                      print(data[max(0, idx-900):idx+1600])
-
-          sm = difflib.SequenceMatcher(None, prod, local, autojunk=False)
-          blocks = [b for b in sm.get_matching_blocks() if b.size >= 100]
-          print('MATCHING_BLOCKS_GE_100', len(blocks))
-          print('MATCHING_CHARS_GE_100', sum(b.size for b in blocks))
-          print('TOTAL_PROD', len(prod), 'TOTAL_LOCAL', len(local))
-          ratio = sm.ratio()
-          print('SEQUENCE_RATIO', ratio)
-
-          print('=== FIRST DIFFERENCES ===')
-          shown = 0
-          for tag, i1, i2, j1, j2 in sm.get_opcodes():
-              if tag == 'equal':
-                  continue
-              print('DIFF', tag, 'PROD', i1, i2, 'LOCAL', j1, j2)
-              print('PROD_CONTEXT', prod[max(0,i1-500):min(len(prod),i2+1000)])
-              print('LOCAL_CONTEXT', local[max(0,j1-500):min(len(local),j2+1000)])
-              shown += 1
-              if shown >= 8:
-                  break
+              print("=== KEYWORD", kw, "===")
+              for label, path in [("PROD","/tmp/prod-normalized.js"),("LOCAL","/tmp/local-normalized.js")]:
+                  data = Path(path).read_text(errors='ignore')
+                  i=data.find(kw)
+                  print(label, "FOUND" if i>=0 else "NOT_FOUND")
+                  if i>=0:
+                      print(data[max(0,i-500):i+1200])
           PY
 
+      - name: Check production SSV endpoints
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "=== SSV URL probe ==="
+          curl -sS -o /tmp/ssv-body -w 'HTTP %{http_code}\n' --max-time 30 https://www.stopjuegodepalabras.com/api/rewards/admob-ssv
+          cat /tmp/ssv-body
+          echo
+          echo "=== RESULT STATUS SAMPLE ==="
+          curl -sS -o /tmp/result-body -w 'HTTP %{http_code}\n' --max-time 30 https://www.stopjuegodepalabras.com/api/rewards/admob-result/diagnostic-request-id-123456
+          cat /tmp/result-body
+          echo
       - name: Check production SSV endpoints
         shell: bash
         run: |
