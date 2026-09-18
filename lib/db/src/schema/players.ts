@@ -69,6 +69,8 @@ export const roomsTable = pgTable("rooms", {
   stopperJson: text("stopper_json"),
   isPublic: boolean("is_public").notNull().default(false),
   hostName: text("host_name").notNull().default(""),
+  tournamentId: integer("tournament_id"),
+  tournamentMatchId: text("tournament_match_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

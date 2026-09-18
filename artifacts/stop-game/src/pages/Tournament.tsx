@@ -4,7 +4,7 @@ import { useLocation, useRoute } from "wouter";
 import { usePlayer } from "@/hooks/use-player";
 import { usePresence, sendChallenge, type OnlinePlayer } from "@/lib/usePresence";
 import { useFollows } from "@/lib/useFollows";
-import { getApiUrl, publicLink, authHeaders } from "@/lib/utils";
+import { getApiUrl, publicLink } from "@/lib/utils";
 import {
   Trophy, Users, Play, Copy, Check, ChevronRight,
   Swords, Crown, ArrowLeft, Loader2, Plus, LogIn, Share2, MessageCircle, Send
@@ -36,6 +36,7 @@ type Tournament = {
   players: { playerId: string; playerName: string }[];
   bracket: Bracket | null;
 };
+
 
 const API = getApiUrl();
 
@@ -188,27 +189,14 @@ export default function Tournament() {
 
   const startMatch = async (match: Match) => {
     if (!tournament || !player) return;
-    // Create a room for the two players, then link it to the match
+    // The server creates the authoritative room and links it to this match.
     try {
-      const roomRes = await fetch(`${API}/api/rooms`, {
+      const response = await apiFetch(`/${tournament.code}/start-match`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify({
-          hostId: player.id,
-          hostName: player.name,
-          maxRounds: 3,
-        }),
+        body: JSON.stringify({ matchId: match.id }),
       });
-      const roomData = await roomRes.json();
-      const roomCode: string = roomData.roomCode;
-
-      // Link room to match
-      await apiFetch(`/${tournament.code}/start-match`, {
-        method: "POST",
-        body: JSON.stringify({ matchId: match.id, roomCode }),
-      });
-
-      // Navigate player to the room with tournament context
+      const roomCode: string | undefined = response?.roomCode;
+      if (!roomCode) return;
       navigate(`/room/${roomCode}?torneo=${tournament.code}&match=${match.id}`);
     } catch {}
   };
