@@ -152,25 +152,34 @@ router.post("/:code/join", async (req, res) => {
   if (!playerId || !verifyClaimedIdentity(req, playerId)) {
     res.status(403).json({ error: "Identity verification failed" }); return;
   }
-  const rows = await db.select().from(tournamentsTable).where(eq(tournamentsTable.code, code)).limit(1);
-  if (!rows.length) { res.status(404).json({ error: "Not found" }); return; }
+  const joined = await db.transaction(async (tx) => {
+    const rows = await tx.select().from(tournamentsTable)
+      .where(eq(tournamentsTable.code, code))
+      .for("update");
+    if (!rows.length) return { error: "NOT_FOUND" as const };
+    const t = rows[0];
+    if (t.status !== "waiting") return { error: "STARTED" as const };
 
-  const t = rows[0];
-  if (t.status !== "waiting") { res.status(400).json({ error: "Tournament already started" }); return; }
+    const players = parsePlayers(t.playersJson);
+    if (players.some(p => p.playerId === playerId)) return { tournament: t };
 
-  const players = parsePlayers(t.playersJson);
-  if (players.some(p => p.playerId === playerId)) {
-    res.json(formatTournament(t)); return;
+    if (players.length >= t.size) return { error: "FULL" as const };
+
+    players.push({ playerId, playerName });
+    const [updated] = await tx.update(tournamentsTable)
+      .set({ playersJson: JSON.stringify(players), updatedAt: new Date() })
+      .where(eq(tournamentsTable.id, t.id))
+      .returning();
+    return { tournament: updated };
+  });
+
+  if ("error" in joined) {
+    if (joined.error === "NOT_FOUND") { res.status(404).json({ error: "Not found" }); return; }
+    if (joined.error === "STARTED") { res.status(400).json({ error: "Tournament already started" }); return; }
+    res.status(400).json({ error: "Tournament full" }); return;
   }
-  if (players.length >= t.size) { res.status(400).json({ error: "Tournament full" }); return; }
 
-  players.push({ playerId, playerName });
-  const [updated] = await db.update(tournamentsTable)
-    .set({ playersJson: JSON.stringify(players), updatedAt: new Date() })
-    .where(eq(tournamentsTable.code, code))
-    .returning();
-
-  res.json(formatTournament(updated));
+  res.json(formatTournament(joined.tournament));
 });
 
 router.post("/:code/start", async (req, res) => {
