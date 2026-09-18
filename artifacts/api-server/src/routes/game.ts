@@ -1498,7 +1498,7 @@ router.post("/validate", async (req, res) => {
     ai: { response: string; isValid: boolean; score: number };
   }> = {};
   let playerTotalScore = 0;
-  let aiTotalScore = 0;
+  let aiTotalScore = 0;\n  const validatedCollectionWords: Array<{ word: string; category: string }> = [];
 
   for (const pr of playerResponses) {
     const playerWord = pr.word?.trim() || "";
@@ -1516,7 +1516,7 @@ router.post("/validate", async (req, res) => {
     let playerScore = 0;
     let aiScore = 0;
 
-    if (isPlayerWordValid && isAiWordValid) {
+    if (isPlayerWordValid) {\n      validatedCollectionWords.push({ word: playerWord, category: pr.category });\n    }\n\n    if (isPlayerWordValid && isAiWordValid) {
       const normAi = normalizeWord(aiWord);
       if (normPlayerWord === normAi) {
         playerScore = 5;
@@ -1546,7 +1546,7 @@ router.post("/validate", async (req, res) => {
   // 🔒 Anti-cheat: hand back a signed, single-use voucher attesting the
   // server-computed base score for this round. The client returns it when
   // submitting the final game score so the leaderboard can't be fabricated.
-  const scoreToken = issueScoreToken(playerTotalScore);
+  const scoreToken = issueScoreToken(playerTotalScore, validatedCollectionWords);
 
   const response = ValidateRoundResponse.parse({
     results,
