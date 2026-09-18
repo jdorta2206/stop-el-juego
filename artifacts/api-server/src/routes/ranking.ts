@@ -436,6 +436,11 @@ router.post("/scores", scoreLimiter, async (req, res) => {
       .returning();
     player = updated;
   } else {
+    // First-time players can receive two legitimate score submissions at nearly
+    // the same instant (for example, two tabs or a reconnect retry). The old
+    // plain INSERT could lose that race with a unique-key error and turn a
+    // successful game into a 500. Keep the first row and atomically add the
+    // concurrent submission instead.
     const [created] = await db
       .insert(playerScoresTable)
       .values({
@@ -452,6 +457,20 @@ router.post("/scores", scoreLimiter, async (req, res) => {
         xp: xpGain,
         level: calcLevel(xpGain),
         coins: coinGain,
+      })
+      .onConflictDoUpdate({
+        target: playerScoresTable.playerId,
+        set: {
+          playerName,
+          avatarColor: avatarColor ?? "#e53e3e",
+          totalScore: sql`${playerScoresTable.totalScore} + ${score}`,
+          gamesPlayed: sql`${playerScoresTable.gamesPlayed} + ${isBonus ? 0 : 1}`,
+          wins: sql`${playerScoresTable.wins} + ${isBonus || !won ? 0 : 1}`,
+          xp: sql`${playerScoresTable.xp} + ${xpGain}`,
+          level: sql`GREATEST(${playerScoresTable.level}, ${calcLevel(xpGain)})`,
+          coins: sql`${playerScoresTable.coins} + ${coinGain}`,
+          updatedAt: new Date(),
+        },
       })
       .returning();
     player = created;
