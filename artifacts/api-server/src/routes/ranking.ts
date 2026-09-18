@@ -541,37 +541,6 @@ router.post("/scores", scoreLimiter, async (req, res) => {
     });
   }
 
-  if (!isBonus && collectionWords.length > 0) {
-    await db.transaction(async (tx) => {
-      const locked = await tx.execute(sql`
-        SELECT id, collected_words_json
-        FROM player_scores
-        WHERE player_id = ${playerId}
-        FOR UPDATE
-      `) as unknown as { rows?: Array<{ id: number; collected_words_json: string }> };
-      const row = locked.rows?.[0];
-      if (!row) return;
-
-      let current: Record<string, unknown> = {};
-      try {
-        const parsed = JSON.parse(row.collected_words_json ?? "{}");
-        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-          current = parsed as Record<string, unknown>;
-        }
-      } catch {}
-
-      for (const entry of collectionWords) {
-        const word = entry.word.trim().slice(0, 80);
-        const category = entry.category.trim().slice(0, 80);
-        if (!word || !category || Object.keys(current).length >= 500) break;
-        if (!Object.prototype.hasOwnProperty.call(current, word)) current[word] = category;
-      }
-
-      await tx.update(playerScoresTable)
-        .set({ collectedWordsJson: JSON.stringify(current), updatedAt: new Date() })
-        .where(eq(playerScoresTable.id, row.id));
-    });
-  }
 
   if (overtaken.length > 0) {
     await Promise.allSettled(
