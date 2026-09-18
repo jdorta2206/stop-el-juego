@@ -105,7 +105,7 @@ export function AuthModal({ onSave, initial, onDismiss }: AuthModalProps) {
       id: guestId,
       name: guestName,
       avatarColor: color,
-      loginMethod: null,
+      loginMethod: "guest",
       picture: null,
       fbAccessToken: null,
     } as any);
