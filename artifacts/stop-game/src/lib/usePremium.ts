@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { getApiUrl, authHeaders } from "@/lib/utils";
+import { restorePlayPurchases } from "@/lib/playBilling";
 
 const API_BASE = getApiUrl();
 const OAUTH_ID_PREFIXES = ["google_", "fb_", "apple_", "tt_"];
@@ -11,11 +12,6 @@ export function notifyPremiumRefresh() {
   if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(PREMIUM_REFRESH_EVENT));
 }
 
-/**
- * Premium is an account entitlement, never a browser/device entitlement.
- * Guests and local-only profiles are therefore ineligible for Premium even
- * if Google Play exposes a purchase on the same device.
- */
 function isPremiumEligibleAccount(playerId: string): boolean {
   return OAUTH_ID_PREFIXES.some((prefix) => playerId.startsWith(prefix));
 }
@@ -33,7 +29,6 @@ export function usePremium(playerId: string | null | undefined): PremiumStatus {
   }, []);
 
   useEffect(() => {
-    // Hard invariant: no player or guest/local profile can ever be Premium.
     if (!playerId || !isPremiumEligibleAccount(playerId)) {
       setIsPremium(false);
       setLoading(false);
@@ -44,15 +39,19 @@ export function usePremium(playerId: string | null | undefined): PremiumStatus {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    // Never carry Premium across an account switch while the new entitlement
-    // is being resolved.
     setIsPremium(false);
 
     void (async () => {
       try {
-        // This endpoint is the single authoritative entitlement check. It
-        // validates the authenticated player identity server-side and resolves
-        // Stripe OR an owned active Google Play subscription.
+        // In a Play TWA, Play can already own an active subscription even when
+        // this STOP account has not yet been linked to the purchase token in
+        // our backend (for example after reinstall, login restore, or an
+        // out-of-app subscription renewal). Restore first, then ask the
+        // backend for the authoritative entitlement.
+        await restorePlayPurchases(playerId);
+
+        if (cancelled) return;
+
         const r = await fetch(
           `${API_BASE}/api/billing/play/status?playerId=${encodeURIComponent(playerId)}`,
           { credentials: "include", headers: authHeaders(), cache: "no-store" },
@@ -66,8 +65,6 @@ export function usePremium(playerId: string | null | undefined): PremiumStatus {
         if (!cancelled) setIsPremium(data?.isPremium === true);
       } catch (err: any) {
         if (!cancelled) {
-          // Fail closed: an unavailable/unauthorized entitlement check must
-          // never turn a non-paying account into Premium.
           setIsPremium(false);
           setError(err?.message || "No se pudo comprobar Premium");
         }
