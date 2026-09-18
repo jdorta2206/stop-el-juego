@@ -73,8 +73,51 @@ jobs:
             echo "NORMALIZED_BUNDLE_MATCH=YES"
           else
             echo "NORMALIZED_BUNDLE_MATCH=NO"
-            exit 3
           fi
+          python3 - <<'PY'
+          from pathlib import Path
+          import difflib
+
+          prod = Path('/tmp/prod-normalized.js').read_text(errors='ignore')
+          local = Path('/tmp/local-normalized.js').read_text(errors='ignore')
+
+          keywords = [
+              'stopad://rewarded',
+              'Native rewarded ad request timed out',
+              'Mira el anuncio',
+              '+30s',
+              'Cargando anuncio',
+          ]
+
+          print('=== KEYWORD CONTEXTS ===')
+          for kw in keywords:
+              print('KEYWORD', kw)
+              for label, data in [('PROD', prod), ('LOCAL', local)]:
+                  idx = data.find(kw)
+                  print(label, 'FOUND' if idx >= 0 else 'NOT_FOUND')
+                  if idx >= 0:
+                      print(data[max(0, idx-900):idx+1600])
+
+          sm = difflib.SequenceMatcher(None, prod, local, autojunk=False)
+          blocks = [b for b in sm.get_matching_blocks() if b.size >= 100]
+          print('MATCHING_BLOCKS_GE_100', len(blocks))
+          print('MATCHING_CHARS_GE_100', sum(b.size for b in blocks))
+          print('TOTAL_PROD', len(prod), 'TOTAL_LOCAL', len(local))
+          ratio = sm.ratio()
+          print('SEQUENCE_RATIO', ratio)
+
+          print('=== FIRST DIFFERENCES ===')
+          shown = 0
+          for tag, i1, i2, j1, j2 in sm.get_opcodes():
+              if tag == 'equal':
+                  continue
+              print('DIFF', tag, 'PROD', i1, i2, 'LOCAL', j1, j2)
+              print('PROD_CONTEXT', prod[max(0,i1-500):min(len(prod),i2+1000)])
+              print('LOCAL_CONTEXT', local[max(0,j1-500):min(len(local),j2+1000)])
+              shown += 1
+              if shown >= 8:
+                  break
+          PY
 
       - name: Check production SSV endpoints
         shell: bash
