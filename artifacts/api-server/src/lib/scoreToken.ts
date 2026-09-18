@@ -51,7 +51,10 @@ function sign(secret: string, payload: string): string {
   return crypto.createHmac("sha256", secret).update(payload).digest("base64url");
 }
 
-export function issueScoreToken(base: number, collectionWords: Array<{ word: string; category: string }> = []): string | null {
+export function issueScoreToken(
+  base: number,
+  collectionWords: Array<{ word: string; category: string }> = [],
+): string | null {
   const secret = getSigningSecret();
   if (!secret) return null;
   const safeBase = Math.max(0, Math.min(100_000, Math.floor(base)));
@@ -60,14 +63,22 @@ export function issueScoreToken(base: number, collectionWords: Array<{ word: str
   const safeCollectionWords = collectionWords
     .filter((entry) => typeof entry?.word === "string" && typeof entry?.category === "string")
     .slice(0, 16)
-    .map((entry) => ({ word: entry.word.trim().slice(0, 80), category: entry.category.trim().slice(0, 80) }))
+    .map((entry) => ({
+      word: entry.word.trim().slice(0, 80),
+      category: entry.category.trim().slice(0, 80),
+    }))
     .filter((entry) => entry.word.length > 0 && entry.category.length > 0);
   const collectionData = Buffer.from(JSON.stringify(safeCollectionWords), "utf8").toString("base64url");
   const payload = `${safeBase}.${KIND_ROUND}.${exp}.${jti}.${collectionData}`;
   return `${payload}.${sign(secret, payload)}`;
 }
 
-type VerifiedVoucher = { base: number; exp: number; jti: string; collectionWords: Array<{ word: string; category: string }> };
+type VerifiedVoucher = {
+  base: number;
+  exp: number;
+  jti: string;
+  collectionWords: Array<{ word: string; category: string }>;
+};
 
 function parseVerifiedVoucher(
   token: unknown,
@@ -76,11 +87,18 @@ function parseVerifiedVoucher(
 ): VerifiedVoucher | null {
   if (typeof token !== "string" || token.length > MAX_TOKEN_LENGTH) return null;
   const parts = token.split(".");
-  if (parts.length !== 6) return null;
-  const [baseStr, kind, expStr, jti, collectionData, sig] = parts;
-  if (kind !== KIND_ROUND || !jti || !collectionData || !sig) return null;
+  if (parts.length !== 5 && parts.length !== 6) return null;
 
-  const expected = sign(secret, `${baseStr}.${kind}.${expStr}.${jti}.${collectionData}`);
+  const [baseStr, kind, expStr, jti] = parts;
+  const collectionData = parts.length === 6 ? parts[4] : "";
+  const sig = parts.length === 6 ? parts[5] : parts[4];
+  if (kind !== KIND_ROUND || !jti || !sig) return null;
+
+  const payload = parts.length === 6
+    ? `${baseStr}.${kind}.${expStr}.${jti}.${collectionData}`
+    : `${baseStr}.${kind}.${expStr}.${jti}`;
+  const expected = sign(secret, payload);
+
   try {
     const a = Buffer.from(sig);
     const b = Buffer.from(expected);
@@ -95,18 +113,24 @@ function parseVerifiedVoucher(
   if (!Number.isFinite(b) || !Number.isSafeInteger(b) || b < 0 || b > 100_000) return null;
 
   let collectionWords: Array<{ word: string; category: string }> = [];
-  try {
-    const parsed = JSON.parse(Buffer.from(collectionData, "base64url").toString("utf8"));
-    if (Array.isArray(parsed)) {
-      collectionWords = parsed
-        .filter((entry) => entry && typeof entry.word === "string" && typeof entry.category === "string")
-        .slice(0, 16)
-        .map((entry) => ({ word: entry.word.trim().slice(0, 80), category: entry.category.trim().slice(0, 80) }))
-        .filter((entry) => entry.word.length > 0 && entry.category.length > 0);
+  if (collectionData) {
+    try {
+      const parsed = JSON.parse(Buffer.from(collectionData, "base64url").toString("utf8"));
+      if (Array.isArray(parsed)) {
+        collectionWords = parsed
+          .filter((entry) => entry && typeof entry.word === "string" && typeof entry.category === "string")
+          .slice(0, 16)
+          .map((entry) => ({
+            word: entry.word.trim().slice(0, 80),
+            category: entry.category.trim().slice(0, 80),
+          }))
+          .filter((entry) => entry.word.length > 0 && entry.category.length > 0);
+      }
+    } catch {
+      return null;
     }
-  } catch {
-    return null;
   }
+
   return { base: b, exp, jti, collectionWords };
 }
 
@@ -125,18 +149,18 @@ export function sumVerifiedBase(
   const cap = Number.isFinite(maxTokens) ? Math.max(0, Math.floor(maxTokens)) : tokens.length;
   if (cap === 0) return { base: 0, verified: 0 };
 
-  const validBases: Array<{ base: number; collectionWords: Array<{ word: string; category: string }> }> = [];
+  const validBases: number[] = [];
   for (const token of tokens) {
     const voucher = parseVerifiedVoucher(token, secret, now);
     if (!voucher || usedJti.has(voucher.jti)) continue;
     usedJti.set(voucher.jti, voucher.exp);
-    validBases.push({ base: voucher.base, collectionWords: voucher.collectionWords });
+    validBases.push(voucher.base);
   }
 
-  validBases.sort((a, b) => b.base - a.base);
+  validBases.sort((a, b) => b - a);
   const counted = validBases.slice(0, cap);
   return {
-    base: counted.reduce((sum, entry) => sum + entry.base, 0),
+    base: counted.reduce((sum, n) => sum + n, 0),
     verified: counted.length,
   };
 }
@@ -150,23 +174,30 @@ export function sumVerifiedBase(
 export async function sumVerifiedBasePersistent(
   tokens: unknown,
   maxTokens = Number.POSITIVE_INFINITY,
-): Promise<{ base: number; verified: number; collectionWords: Array<{ word: string; category: string }> }> {
+): Promise<{
+  base: number;
+  verified: number;
+  collectionWords: Array<{ word: string; category: string }>;
+}> {
   if (!Array.isArray(tokens) || tokens.length === 0 || tokens.length > MAX_TOKEN_BATCH) {
-    return { base: 0, verified: 0 };
+    return { base: 0, verified: 0, collectionWords: [] };
   }
   const secret = getSigningSecret();
-  if (!secret) return { base: 0, verified: 0 };
+  if (!secret) return { base: 0, verified: 0, collectionWords: [] };
 
   const now = Date.now();
   const cap = Number.isFinite(maxTokens) ? Math.max(0, Math.floor(maxTokens)) : tokens.length;
-  if (cap === 0) return { base: 0, verified: 0 };
+  if (cap === 0) return { base: 0, verified: 0, collectionWords: [] };
 
-  // Remove only expired ledger rows; active JTIs remain permanently protected.
   await db
     .delete(scoreVoucherUsesTable)
     .where(lt(scoreVoucherUsesTable.expiresAt, new Date(now)));
 
-  const validBases: number[] = [];
+  const validBases: Array<{
+    base: number;
+    collectionWords: Array<{ word: string; category: string }>;
+  }> = [];
+
   for (const token of tokens) {
     const voucher = parseVerifiedVoucher(token, secret, now);
     if (!voucher) continue;
@@ -177,14 +208,21 @@ export async function sumVerifiedBasePersistent(
       .onConflictDoNothing()
       .returning({ jti: scoreVoucherUsesTable.jti });
 
-    if (claimed.length > 0) validBases.push({ base: voucher.base, collectionWords: voucher.collectionWords });
+    if (claimed.length > 0) {
+      validBases.push({
+        base: voucher.base,
+        collectionWords: voucher.collectionWords,
+      });
+    }
   }
 
-  validBases.sort((a, b) => b - a);
+  validBases.sort((a, b) => b.base - a.base);
   const counted = validBases.slice(0, cap);
+
   return {
-    base: counted.reduce((sum, n) => sum + n, 0),
+    base: counted.reduce((sum, entry) => sum + entry.base, 0),
     verified: counted.length,
+    collectionWords: counted.flatMap((entry) => entry.collectionWords),
   };
 }
 
