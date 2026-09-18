@@ -223,6 +223,44 @@ export function CosmeticShop(_props: CosmeticShopProps) {
         )}
       </section>
 
+      {/* Colección del jugador: los cosméticos comprados siguen siendo equipables aunque salgan de la rotación semanal. */}
+      <section>
+        <div className="flex items-center gap-2 mb-3">
+          <Sparkles className="w-5 h-5 text-secondary" />
+          <h3 className="text-lg font-black text-white">✨ Mi colección</h3>
+          <span className="text-xs text-white/40">Cambia lo que llevas en tu perfil</span>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          {[
+            ...(inventory?.owned?.avatars ?? []).map((item: InventoryShopItem) => ({ ...item, kind: "avatar" as const })),
+            ...(inventory?.owned?.frames ?? []).map((item: InventoryShopItem) => ({ ...item, kind: "frame" as const })),
+            ...(inventory?.owned?.backgrounds ?? []).map((item: InventoryShopItem) => ({ ...item, kind: "background" as const })),
+          ].map((item) => (
+            <ShopCard key={`owned-${item.id}`} item={item} owned={true}
+              equipped={isEquipped(item.id)} purchasing={false}
+              equipping={equipping === `${item.kind}:${item.id}`}
+              onBuy={() => {}} onEquip={() => handleEquip(item.kind, item.id)} />
+          ))}
+        </div>
+        {(inventory?.titles ?? []).some((title: TitleView) => title.unlocked) && (
+          <div className="mt-4">
+            <h4 className="text-sm font-black text-white/80 mb-2">🏷️ Títulos desbloqueados</h4>
+            <div className="flex flex-wrap gap-2">
+              {(inventory?.titles ?? []).filter((title: TitleView) => title.unlocked).map((title: TitleView) => {
+                const equipped = inventory?.equipped?.title === title.id;
+                return (
+                  <Button key={`title-${title.id}`} onClick={() => handleEquip("title", title.id)}
+                    disabled={equipping === `title:${title.id}`} variant={equipped ? "default" : "outline"}
+                    className={equipped ? "text-black font-bold" : "border-white/20 text-white/80"}>
+                    {title.icon} {title.label}{equipped ? " ✓" : ""}
+                  </Button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </section>
+
       <section className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-yellow-600 via-orange-600 to-red-600 p-5 shadow-2xl">
         <div className="absolute inset-0 bg-black/20" />
         <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-4">
