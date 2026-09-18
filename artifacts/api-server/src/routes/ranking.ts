@@ -4,6 +4,7 @@ import { db } from "@workspace/db";
 import { playerScoresTable, gameHistoryTable, pushSubscriptionsTable, scoreBonusClaimsTable } from "@workspace/db";
 import { eq, desc, sql } from "drizzle-orm";
 import { sendPushToPlayer } from "../lib/pushHelper";
+import { resolveCosmetic } from "../lib/inventoryCatalog";
 import { SubmitScoreBody, GetLeaderboardQueryParams } from "@workspace/api-zod";
 import { scoreLimiter } from "../middlewares/rateLimit";
 import { verifyClaimedIdentity } from "../lib/playerAuth";
@@ -100,6 +101,12 @@ export function calculateStreak(
   return { newStreak, updatedToday: true };
 }
 
+function equippedAvatarGlyph(id: unknown): string | null {
+  if (typeof id !== "string" || !id) return null;
+  const cosmetic = resolveCosmetic(id);
+  return cosmetic?.kind === "avatar" ? cosmetic.glyph : null;
+}
+
 function parseAchievementCount(json: unknown): number {
   try {
     const parsed = JSON.parse((json as string) ?? "[]");
@@ -136,6 +143,7 @@ router.get("/scores", async (req, res) => {
       playerId: p.player_id,
       playerName: p.player_name,
       avatarColor: p.avatar_color,
+      avatarGlyph: equippedAvatarGlyph(p.equipped_avatar),
       totalScore: p.total_score,
       gamesPlayed: p.games_played,
       wins: p.wins,
@@ -161,6 +169,7 @@ router.get("/weekly", async (req, res) => {
       gh.player_id        AS "playerId",
       ps.player_name      AS "playerName",
       ps.avatar_color     AS "avatarColor",
+      ps.equipped_avatar AS "equippedAvatar",
       ps.current_streak   AS "currentStreak",
       ps.is_premium       AS "isPremium",
       ps.achievements_json AS "achievementsJson",
@@ -317,6 +326,7 @@ router.get("/profile/:playerId", async (req, res) => {
     playerId: ps.playerId,
     playerName: ps.playerName,
     avatarColor: ps.avatarColor,
+    avatarGlyph: equippedAvatarGlyph(ps.equippedAvatar),
     totalScore: ps.totalScore,
     gamesPlayed: ps.gamesPlayed,
     wins: ps.wins,
@@ -598,54 +608,3 @@ router.post("/scores", scoreLimiter, async (req, res) => {
     rank: 0,
     rewards: {
       xpAwarded: xpGain,
-      coinsAwarded: coinGain,
-      happyHourActive,
-      multiplier: happyHourActive ? HAPPY_HOUR_MULTIPLIER : 1,
-    },
-  });
-});
-
-// ============================================================
-// GET /scores/:playerId
-// ============================================================
-router.get("/scores/:playerId", async (req, res) => {
-  const { playerId } = req.params;
-
-  const scores = await db
-    .select()
-    .from(playerScoresTable)
-    .where(eq(playerScoresTable.playerId, playerId))
-    .limit(1);
-
-  if (scores.length === 0) {
-    res.status(404).json({ error: "Player not found" });
-    return;
-  }
-
-  const ps = scores[0];
-
-  const [rankRow, bestRow, recentGames] = await Promise.all([
-    db.execute(sql`
-      SELECT COUNT(*) AS cnt FROM player_scores WHERE total_score > ${ps.totalScore}
-    `),
-    db.execute(sql`
-      SELECT COALESCE(MAX(score), 0) AS best FROM game_history WHERE player_id = ${playerId}
-    `),
-    db
-      .select()
-      .from(gameHistoryTable)
-      .where(eq(gameHistoryTable.playerId, playerId))
-      .orderBy(desc(gameHistoryTable.createdAt))
-      .limit(10),
-  ]);
-
-  const globalRank = Number((rankRow.rows[0] as any)?.cnt ?? 0) + 1;
-  const bestScore = Number((bestRow.rows[0] as any)?.best ?? 0);
-
-  res.json({
-    score: { ...ps, rank: globalRank, globalRank, bestScore },
-    recentGames,
-  });
-});
-
-export default router;
