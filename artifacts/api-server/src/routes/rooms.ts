@@ -7,6 +7,7 @@ import { calculateStreak, appendStreakDay } from "./ranking";
 import { isWordValidAsync } from "./game";
 import { writeLimiter, roomJoinLimiter } from "../middlewares/rateLimit";
 import { verifyClaimedIdentity, verifyPlayerToken, readPlayerId, isLoggedInId, isAuthConfigured } from "../lib/playerAuth";
+import { requireRoomMember, requireRoomHost } from "../lib/roomAuth";
 import { generateRoomMemberCredential, hashRoomMemberCredential } from "../lib/roomAuth";
 import {
   pickBotIdentity,
@@ -1109,6 +1110,9 @@ router.post("/:roomCode/join", roomJoinLimiter, async (req, res) => {
 
 // POST /rooms/:roomCode/start — host starts / continues the game
 router.post("/:roomCode/start", async (req, res) => {
+  if (!hostId || !(await requireRoomHost(req, roomCode, hostId))) {
+    res.status(403).json({ error: "Only the authenticated room host can start the game" }); return;
+  }
   const roomCode = paramStr(req.params.roomCode);
   const { hostId } = (req.body ?? {}) as { hostId?: string };
   const rooms = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, roomCode.toUpperCase())).limit(1);
@@ -1283,6 +1287,9 @@ router.post("/:roomCode/add-bot", async (req, res) => {
 // delete the row + drop in-memory ephemeral state. This is what users expect
 // when someone closes a tab by accident — the party doesn't die.
 router.post("/:roomCode/leave", async (req, res) => {
+  if (!playerId || !(await requireRoomMember(req, code, playerId))) {
+    res.status(403).json({ error: "Only an authenticated room member can leave" }); return;
+  }
   const code = paramStr(req.params.roomCode).toUpperCase();
   const { playerId } = req.body as { playerId: string };
 
@@ -1821,6 +1828,9 @@ router.post("/:roomCode/funvote", writeLimiter, async (req, res) => {
 // POST /rooms/:roomCode/rematch — first caller creates a new room with same settings,
 // the new code is broadcast to everyone in the original room so they can jump in with one tap.
 router.post("/:roomCode/rematch", writeLimiter, async (req, res) => {
+  if (!playerId || !(await requireRoomMember(req, oldCode, playerId))) {
+    res.status(403).json({ error: "Only an authenticated room member can request a rematch" }); return;
+  }
   const oldCode = paramStr(req.params.roomCode).toUpperCase();
   const { playerId } = req.body as { playerId: string };
   // 🔒 A logged-in account can only request a rematch AS ITSELF (guests pass).
@@ -1983,6 +1993,9 @@ router.post("/:roomCode/phrase", writeLimiter, async (req, res) => {
 
 // POST /rooms/:roomCode/stop — ANY player IN THE ROOM can stop the round globally
 router.post("/:roomCode/stop", async (req, res) => {
+  if (!playerId || !(await requireRoomMember(req, roomCode, playerId))) {
+    res.status(403).json({ error: "Only an authenticated room member can call STOP" }); return;
+  }
   const roomCode = paramStr(req.params.roomCode);
   const { playerId, playerName } = req.body;
 
@@ -2054,6 +2067,9 @@ router.post("/:roomCode/stop", async (req, res) => {
 const MAX_CATEGORIES_PER_ROUND = 15;
 
 router.post("/:roomCode/results", writeLimiter, async (req, res) => {
+  if (!body.success || !(await requireRoomMember(req, roomCode, body.data.playerId))) {
+    res.status(403).json({ error: "Only an authenticated room member can submit results" }); return;
+  }
   const roomCode = paramStr(req.params.roomCode);
   const body = SubmitRoomResultsBody.safeParse(req.body);
   if (!body.success) { res.status(400).json({ error: "Invalid request body" }); return; }
@@ -2233,6 +2249,9 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
 
 // POST /rooms/:roomCode/bluff-vote — opponent casts "lie" or "real" for a bluffed category
 router.post("/:roomCode/bluff-vote", writeLimiter, async (req, res) => {
+  if (!voterId || !(await requireRoomMember(req, roomCode, voterId))) {
+    res.status(403).json({ error: "Only an authenticated room member can vote" }); return;
+  }
   const roomCode = paramStr(req.params.roomCode);
   const { voterId, accusedPlayerId, category, vote } = req.body as {
     voterId: string;
