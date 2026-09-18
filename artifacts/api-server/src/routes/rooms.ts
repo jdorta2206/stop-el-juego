@@ -1402,7 +1402,16 @@ router.post("/:roomCode/leave", async (req, res) => {
 // POST /rooms/:roomCode/react — player sends an emoji reaction (in-memory, ephemeral)
 router.post("/:roomCode/react", writeLimiter, async (req, res) => {
   const code = paramStr(req.params.roomCode).toUpperCase();
-  const { emoji, playerName } = req.body as { emoji: string; playerName: string };
+  const { emoji, playerId, playerName } = req.body as { emoji: string; playerId?: string; playerName: string };
+  if (!playerId || !verifyClaimedIdentity(req, playerId)) {
+    res.status(403).json({ error: "Identity verification failed" }); return;
+  }
+  const [room] = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, code)).limit(1);
+  if (!room) { res.status(404).json({ error: "Room not found" }); return; }
+  const roomPlayers = parsePlayers(room.playersJson);
+  if (!roomPlayers.some((p: any) => p.playerId === playerId)) {
+    res.status(403).json({ error: "Only players in the room can react" }); return;
+  }
   if (!VALID_REACTIONS.includes(emoji)) { res.status(400).json({ error: "Invalid emoji" }); return; }
   const list = roomReactions.get(code) ?? [];
   list.push({ id: Math.random().toString(36).slice(2), emoji, playerName: playerName ?? "?", ts: Date.now() });
@@ -1790,6 +1799,11 @@ router.post("/:roomCode/rematch", async (req, res) => {
   const oldRooms = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, oldCode)).limit(1);
   if (oldRooms.length === 0) { res.status(404).json({ error: "Room not found" }); return; }
   const oldRoom = oldRooms[0];
+  const oldPlayers = parsePlayers(oldRoom.playersJson);
+  if (!oldPlayers.some((p: any) => p.playerId === playerId)) {
+    res.status(403).json({ error: "Only players in the room can request a rematch" });
+    return;
+  }
 
   // New room = same settings, this player as host
   let newCode = generateRoomCode();
@@ -1836,7 +1850,16 @@ router.post("/:roomCode/rematch", async (req, res) => {
 
 router.post("/:roomCode/phrase", writeLimiter, async (req, res) => {
   const code = paramStr(req.params.roomCode).toUpperCase();
-  const { playerName, phraseIndex } = req.body as { playerName: string; phraseIndex: number };
+  const { playerId, playerName, phraseIndex } = req.body as { playerId?: string; playerName: string; phraseIndex: number };
+  if (!playerId || !verifyClaimedIdentity(req, playerId)) {
+    res.status(403).json({ error: "Identity verification failed" }); return;
+  }
+  const [room] = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, code)).limit(1);
+  if (!room) { res.status(404).json({ error: "Room not found" }); return; }
+  const roomPlayers = parsePlayers(room.playersJson);
+  if (!roomPlayers.some((p: any) => p.playerId === playerId)) {
+    res.status(403).json({ error: "Only players in the room can send phrases" }); return;
+  }
   if (phraseIndex < 0 || phraseIndex >= QUICK_PHRASES.length) {
     res.status(400).json({ error: "Invalid phrase" }); return;
   }
