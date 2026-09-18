@@ -1498,7 +1498,8 @@ router.post("/validate", async (req, res) => {
     ai: { response: string; isValid: boolean; score: number };
   }> = {};
   let playerTotalScore = 0;
-  let aiTotalScore = 0;\n  const validatedCollectionWords: Array<{ word: string; category: string }> = [];
+  let aiTotalScore = 0;
+  const validatedCollectionWords: Array<{ word: string; category: string }> = [];
 
   for (const pr of playerResponses) {
     const playerWord = pr.word?.trim() || "";
@@ -1516,7 +1517,11 @@ router.post("/validate", async (req, res) => {
     let playerScore = 0;
     let aiScore = 0;
 
-    if (isPlayerWordValid) {\n      validatedCollectionWords.push({ word: playerWord, category: pr.category });\n    }\n\n    if (isPlayerWordValid && isAiWordValid) {
+    if (isPlayerWordValid) {
+      validatedCollectionWords.push({ word: playerWord, category: pr.category });
+    }
+
+    if (isPlayerWordValid && isAiWordValid) {
       const normAi = normalizeWord(aiWord);
       if (normPlayerWord === normAi) {
         playerScore = 5;
