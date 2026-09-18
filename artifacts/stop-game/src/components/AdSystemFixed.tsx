@@ -27,6 +27,9 @@ function inStandaloneOrTwaSync(): boolean {
   } catch { return true; }
 }
 
+const GAME_TIMER_PAUSE_EVENT = "stop:rewarded-ad-pause";
+const GAME_TIMER_RESUME_EVENT = "stop:rewarded-ad-resume";
+
 function pushAd() {
   try {
     const win = window as any;
@@ -97,6 +100,7 @@ export function RewardedAd({ onComplete, onSkip, playerId, rewardType = "points"
   const startWatching = async () => {
     setRewardedAdPlayerId(playerId);
     pauseGameTimer();
+    window.dispatchEvent(new Event(GAME_TIMER_PAUSE_EVENT));
     setPhase("loading");
     setErrorDetail("");
     try {
@@ -130,6 +134,7 @@ export function RewardedAd({ onComplete, onSkip, playerId, rewardType = "points"
     window.setTimeout(() => onSkip(), 5000);
     } finally {
       resumeGameTimer();
+      window.dispatchEvent(new Event(GAME_TIMER_RESUME_EVENT));
     }
   };
 
