@@ -1835,12 +1835,12 @@ router.post("/:roomCode/funvote", writeLimiter, async (req, res) => {
 // POST /rooms/:roomCode/rematch — first caller creates a new room with same settings,
 // the new code is broadcast to everyone in the original room so they can jump in with one tap.
 router.post("/:roomCode/rematch", writeLimiter, async (req, res) => {
+  const oldCode = paramStr(req.params.roomCode).toUpperCase();
+  const { playerId } = req.body as { playerId: string };
   if (!playerId || !(await requireRoomMember(req, oldCode, playerId))) {
     res.status(403).json({ error: "Only an authenticated room member can request a rematch" }); return;
   }
-  const oldCode = paramStr(req.params.roomCode).toUpperCase();
-  const { playerId } = req.body as { playerId: string };
-  // 🔒 A logged-in account can only request a rematch AS ITSELF (guests pass).
+// 🔒 A logged-in account can only request a rematch AS ITSELF (guests pass).
   if (!verifyClaimedIdentity(req, playerId)) {
     res.status(403).json({ error: "Identity verification failed" }); return;
   }
@@ -2000,14 +2000,12 @@ router.post("/:roomCode/phrase", writeLimiter, async (req, res) => {
 
 // POST /rooms/:roomCode/stop — ANY player IN THE ROOM can stop the round globally
 router.post("/:roomCode/stop", async (req, res) => {
+  const roomCode = paramStr(req.params.roomCode);
+  const { playerId, playerName } = req.body;
   if (!playerId || !(await requireRoomMember(req, roomCode, playerId))) {
     res.status(403).json({ error: "Only an authenticated room member can call STOP" }); return;
   }
-  const roomCode = paramStr(req.params.roomCode);
-  const { playerId, playerName } = req.body;
-
-  if (!playerId) { res.status(400).json({ error: "playerId required" }); return; }
-  // 🔒 A logged-in account can only call STOP AS ITSELF (guests pass through).
+// 🔒 A logged-in account can only call STOP AS ITSELF (guests pass through).
   if (!verifyClaimedIdentity(req, playerId)) {
     res.status(403).json({ error: "Identity verification failed" }); return;
   }
@@ -2256,9 +2254,6 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
 
 // POST /rooms/:roomCode/bluff-vote — opponent casts "lie" or "real" for a bluffed category
 router.post("/:roomCode/bluff-vote", writeLimiter, async (req, res) => {
-  if (!voterId || !(await requireRoomMember(req, roomCode, voterId))) {
-    res.status(403).json({ error: "Only an authenticated room member can vote" }); return;
-  }
   const roomCode = paramStr(req.params.roomCode);
   const { voterId, accusedPlayerId, category, vote } = req.body as {
     voterId: string;
@@ -2266,12 +2261,10 @@ router.post("/:roomCode/bluff-vote", writeLimiter, async (req, res) => {
     category: string;
     vote: "lie" | "real";
   };
-
-  if (!voterId || !accusedPlayerId || !category || !["lie","real"].includes(vote)) {
-    res.status(400).json({ error: "Invalid vote data" });
-    return;
+  if (!voterId || !(await requireRoomMember(req, roomCode, voterId))) {
+    res.status(403).json({ error: "Only an authenticated room member can vote" }); return;
   }
-  // 🔒 A logged-in account can only vote AS ITSELF (guests pass through).
+// 🔒 A logged-in account can only vote AS ITSELF (guests pass through).
   if (!verifyClaimedIdentity(req, voterId)) {
     res.status(403).json({ error: "Identity verification failed" }); return;
   }
