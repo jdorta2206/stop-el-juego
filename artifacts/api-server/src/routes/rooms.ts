@@ -830,6 +830,9 @@ router.get("/:roomCode/spectate", async (req, res) => {
 
 // PATCH /rooms/:code/visibility — host toggles streamer mode (isPublic)
 router.patch("/:roomCode/visibility", async (req, res) => {
+  if (!hostId || !(await requireRoomHost(req, roomCode, hostId))) {
+    res.status(403).json({ error: "Only the authenticated room host can change visibility" }); return;
+  }
   const roomCode = paramStr(req.params.roomCode).toUpperCase();
   const { hostId, isPublic } = req.body ?? {};
   if (typeof isPublic !== "boolean" || !hostId) {
@@ -1236,6 +1239,9 @@ router.post("/:roomCode/start", async (req, res) => {
 
 // POST /rooms/:roomCode/add-bot — host-only, adds a CPU player to the lobby
 router.post("/:roomCode/add-bot", async (req, res) => {
+  if (!hostId || !(await requireRoomHost(req, roomCode, hostId))) {
+    res.status(403).json({ error: "Only the authenticated room host can add bots" }); return;
+  }
   const roomCode = paramStr(req.params.roomCode);
   const { hostId } = (req.body ?? {}) as { hostId?: string };
   const code = roomCode.toUpperCase();
@@ -1442,6 +1448,9 @@ router.post("/:roomCode/leave", async (req, res) => {
 
 // POST /rooms/:roomCode/react — player sends an emoji reaction (in-memory, ephemeral)
 router.post("/:roomCode/react", writeLimiter, async (req, res) => {
+  if (!playerId || !(await requireRoomMember(req, code, playerId))) {
+    res.status(403).json({ error: "Only an authenticated room member can react" }); return;
+  }
   const code = paramStr(req.params.roomCode).toUpperCase();
   const { emoji, playerId, playerName } = req.body as { emoji: string; playerId?: string; playerName: string };
   if (!playerId || !verifyClaimedIdentity(req, playerId)) {
@@ -1468,6 +1477,9 @@ router.post("/:roomCode/react", writeLimiter, async (req, res) => {
 // POST /rooms/:roomCode/category-pack — host sets category pack
 // (standard/crazy/mix, or "custom" with categories+label for premium hosts)
 router.post("/:roomCode/category-pack", async (req, res) => {
+  if (!hostId || !(await requireRoomHost(req, code, hostId))) {
+    res.status(403).json({ error: "Only the authenticated room host can change category packs" }); return;
+  }
   const code = paramStr(req.params.roomCode).toUpperCase();
   const body = req.body as {
     hostId: string;
@@ -1514,6 +1526,9 @@ router.post("/:roomCode/category-pack", async (req, res) => {
 
 // POST /rooms/:roomCode/use-card — player activates their power card
 router.post("/:roomCode/use-card", async (req, res) => {
+  if (!playerId || !(await requireRoomMember(req, code, playerId))) {
+    res.status(403).json({ error: "Only an authenticated room member can use a card" }); return;
+  }
   const code = paramStr(req.params.roomCode).toUpperCase();
   const { playerId } = req.body as { playerId: string };
 
@@ -1654,6 +1669,9 @@ router.get("/:roomCode/events", async (req, res) => {
 // POST /rooms/:roomCode/typing — heartbeat: this player is currently typing.
 // Throttled by the client to once every ~1.5s. Stale entries auto-expire after 3s.
 router.post("/:roomCode/typing", writeLimiter, async (req, res) => {
+  if (!playerId || !(await requireRoomMember(req, code, playerId))) {
+    res.status(403).json({ error: "Only an authenticated room member can type" }); return;
+  }
   const code = paramStr(req.params.roomCode).toUpperCase();
   const { playerId, playerName, responses } = req.body as {
     playerId: string;
@@ -1693,6 +1711,9 @@ router.post("/:roomCode/typing", writeLimiter, async (req, res) => {
 // Returns whatever the server last received for this player in the current
 // round; client can decide whether to apply it based on round/letter match.
 router.get("/:roomCode/draft", async (req, res) => {
+  if (!playerId || !(await requireRoomMember(req, code, playerId))) {
+    res.status(403).json({ error: "Only an authenticated room member can read a draft" }); return;
+  }
   const code = paramStr(req.params.roomCode).toUpperCase();
   const playerId = (req.query["playerId"] as string) || "";
   if (!playerId) { res.status(400).json({ error: "playerId required" }); return; }
@@ -1722,6 +1743,9 @@ router.get("/:roomCode/draft", async (req, res) => {
 // 🕵️ POST /rooms/:roomCode/spy — peek at one rival's in-progress answer.
 // 1 use per round per player. Client should apply -10 pts at submission time.
 router.post("/:roomCode/spy", writeLimiter, async (req, res) => {
+  if (!playerId || !(await requireRoomMember(req, code, playerId))) {
+    res.status(403).json({ error: "Only an authenticated room member can spy" }); return;
+  }
   const code = paramStr(req.params.roomCode).toUpperCase();
   const { playerId } = req.body as { playerId: string };
   if (!playerId) { res.status(400).json({ error: "Missing playerId" }); return; }
@@ -1789,6 +1813,9 @@ router.post("/:roomCode/spy", writeLimiter, async (req, res) => {
 // 👏 POST /rooms/:roomCode/funvote — vote for the funniest answer of the round.
 // 1 vote per round per voter. Voting again replaces the previous vote.
 router.post("/:roomCode/funvote", writeLimiter, async (req, res) => {
+  if (!playerId || !(await requireRoomMember(req, code, playerId))) {
+    res.status(403).json({ error: "Only an authenticated room member can vote" }); return;
+  }
   const code = paramStr(req.params.roomCode).toUpperCase();
   const { playerId, votedPlayerId, category, round, answer } = req.body as {
     playerId?: string;
@@ -1968,6 +1995,9 @@ router.post("/:roomCode/rematch", writeLimiter, async (req, res) => {
 });
 
 router.post("/:roomCode/phrase", writeLimiter, async (req, res) => {
+  if (!playerId || !(await requireRoomMember(req, code, playerId))) {
+    res.status(403).json({ error: "Only an authenticated room member can send phrases" }); return;
+  }
   const code = paramStr(req.params.roomCode).toUpperCase();
   const { playerId, playerName, phraseIndex } = req.body as { playerId?: string; playerName: string; phraseIndex: number };
   if (!playerId || !verifyClaimedIdentity(req, playerId)) {
