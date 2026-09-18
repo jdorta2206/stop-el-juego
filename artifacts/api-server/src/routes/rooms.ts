@@ -2398,6 +2398,10 @@ router.post("/:roomCode/bluff-vote", writeLimiter, async (req, res) => {
 // POST /rooms/:roomCode/resolve-bluffs — force-resolve after deadline (called by any client polling)
 router.post("/:roomCode/resolve-bluffs", async (req, res) => {
   const roomCode = paramStr(req.params.roomCode);
+  const playerId = paramStr(req.body?.playerId);
+  if (!playerId || !(await requireRoomMember(req, roomCode, playerId))) {
+    res.status(403).json({ error: "Only an authenticated room member can resolve bluffs" }); return;
+  }
 
   const rooms = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, roomCode.toUpperCase())).limit(1);
   if (rooms.length === 0) { res.status(404).json({ error: "Room not found" }); return; }
