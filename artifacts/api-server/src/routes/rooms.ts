@@ -1602,6 +1602,7 @@ router.post("/:roomCode/typing", writeLimiter, async (req, res) => {
     responses?: Record<string, string>;
   };
   if (!playerId) { res.status(400).json({ error: "Missing playerId" }); return; }
+  if (!verifyClaimedIdentity(req, playerId)) { res.status(403).json({ error: "Identity verification failed" }); return; }
 
   let m = roomTyping.get(code);
   if (!m) { m = new Map(); roomTyping.set(code, m); }
