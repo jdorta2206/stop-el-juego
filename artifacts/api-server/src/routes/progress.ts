@@ -10,7 +10,6 @@ type JsonRecord = Record<string, unknown>;
 const MAX_ACHIEVEMENTS = 200;
 const MAX_STATS = 200;
 const MAX_PERSONAL_BESTS = 20;
-const MAX_COLLECTED_WORDS = 500;
 const MAX_KEY_LENGTH = 80;
 const MAX_WORD_LENGTH = 80;
 const MAX_JSON_VALUE_LENGTH = 200;
@@ -37,19 +36,6 @@ function mergeStats(local: JsonRecord, remote: JsonRecord): JsonRecord {
       accepted++;
     } else if (typeof value === "string" && value.length <= MAX_JSON_VALUE_LENGTH) {
       out[key] = value;
-      accepted++;
-    }
-  }
-  return out;
-}
-
-function mergeCollectedWords(local: JsonRecord, remote: JsonRecord): JsonRecord {
-  const out: JsonRecord = { ...local };
-  let accepted = 0;
-  for (const [word, value] of Object.entries(remote)) {
-    if (accepted >= MAX_COLLECTED_WORDS || word.length === 0 || word.length > MAX_WORD_LENGTH) break;
-    if (!out[word] && (value === true || typeof value === "string" && value.length <= MAX_JSON_VALUE_LENGTH)) {
-      out[word] = value;
       accepted++;
     }
   }
