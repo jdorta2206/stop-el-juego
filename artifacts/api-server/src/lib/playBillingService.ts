@@ -100,45 +100,79 @@ export async function verifyPurchase(
     return { error: "Play Billing not configured", status: 503 };
   }
   try {
-    const response = await client.purchases.subscriptions.get({
+    // Google has replaced purchases.subscriptions.get with subscriptionsv2.get.
+    // Use the v2 resource here as the source of truth, just like RTDN.
+    const response = await client.purchases.subscriptionsv2.get({
       packageName,
-      subscriptionId: productId,
       token: purchaseToken,
     });
-    const sub = response.data;
-    const expiryTimeMs = Number(sub.expiryTimeMillis ?? 0);
-    const startTimeMs = Number(sub.startTimeMillis ?? 0);
-    // Map Google's subscription resource fields to our normalized state set.
-    // paymentState: 0=pending, 1=received, 2=free trial, 3=pending deferred upgrade
-    // cancelReason: 0=user, 1=system (payment fail), 2=replaced, 3=developer
-    // Distinguishing IN_GRACE_PERIOD vs ON_HOLD:
-    //   - paymentState=0 AND expiry still in future → IN_GRACE_PERIOD
-    //     (Google charges failed but the user keeps access for ~3 days)
-    //   - paymentState=0 AND expiry in past → ON_HOLD
-    //     (grace period elapsed, subscription paused server-side)
-    let state: string;
-    const now = Date.now();
-    if (sub.paymentState === 0) {
-      state = expiryTimeMs > now ? "IN_GRACE_PERIOD" : "ON_HOLD";
-    } else if (sub.cancelReason !== undefined && sub.cancelReason !== null) {
-      // Cancelled (by user, system, or developer) — still entitled until
-      // expiry, then transitions to CANCELED. cancelReason 1 (system) means
-      // payment failed and Google gave up; treat same as expired afterwards.
-      state = expiryTimeMs > now ? "ACTIVE" : "CANCELED";
-    } else if (expiryTimeMs > 0 && expiryTimeMs <= now) {
-      state = "EXPIRED";
-    } else {
-      state = "ACTIVE";
+    const sub = response.data as any;
+    const lineItems = Array.isArray(sub.lineItems) ? sub.lineItems : [];
+    const currentItem =
+      lineItems
+        .filter((item: any) => Number.isFinite(Date.parse(String(item?.expiryTime ?? ""))))
+        .sort(
+          (a: any, b: any) =>
+            Date.parse(String(b.expiryTime)) - Date.parse(String(a.expiryTime)),
+        )[0] ?? lineItems[0];
+
+    const actualProductId = String(currentItem?.productId ?? "").trim();
+    if (!actualProductId || actualProductId !== productId) {
+      return {
+        error: actualProductId
+          ? "Google Play product does not match requested product"
+          : "Google Play subscription has no productId",
+        status: 422,
+      };
     }
+
+    const expiryTimeMs = Date.parse(String(currentItem?.expiryTime ?? ""));
+    const startTimeMs = sub.startTime ? Date.parse(String(sub.startTime)) : 0;
+    const stateName = String(sub.subscriptionState ?? "");
+    let state: string;
+    switch (stateName) {
+      case "SUBSCRIPTION_STATE_ACTIVE":
+        state = "ACTIVE";
+        break;
+      case "SUBSCRIPTION_STATE_IN_GRACE_PERIOD":
+        state = "IN_GRACE_PERIOD";
+        break;
+      case "SUBSCRIPTION_STATE_ON_HOLD":
+        state = "ON_HOLD";
+        break;
+      case "SUBSCRIPTION_STATE_CANCELED":
+        state = expiryTimeMs > Date.now() ? "ACTIVE" : "CANCELED";
+        break;
+      case "SUBSCRIPTION_STATE_EXPIRED":
+        state = "EXPIRED";
+        break;
+      case "SUBSCRIPTION_STATE_PENDING":
+        state = "PENDING";
+        break;
+      default:
+        state = expiryTimeMs > Date.now() ? "ACTIVE" : "EXPIRED";
+        break;
+    }
+
+    const orderId =
+      currentItem?.latestSuccessfulOrderId ??
+      sub.latestOrderId ??
+      null;
+    const acknowledgementState =
+      String(sub.acknowledgementState ?? "") === "ACKNOWLEDGEMENT_STATE_ACKNOWLEDGED"
+        ? 1
+        : 0;
     return {
       productId,
       purchaseToken,
-      orderId: sub.orderId ?? null,
+      orderId: orderId ? String(orderId) : null,
       state,
-      expiryTimeMs,
-      startTimeMs,
-      isEntitled: isPlayStateEntitled(state, expiryTimeMs),
-      acknowledgementState: Number(sub.acknowledgementState ?? 0),
+      expiryTimeMs: Number.isFinite(expiryTimeMs) ? expiryTimeMs : 0,
+      startTimeMs: Number.isFinite(startTimeMs) ? startTimeMs : 0,
+      isEntitled: Number.isFinite(expiryTimeMs)
+        ? isPlayStateEntitled(state, expiryTimeMs)
+        : false,
+      acknowledgementState,
       raw: sub as Record<string, unknown>,
     };
   } catch (err: unknown) {
@@ -251,6 +285,9 @@ export async function recordProductPurchase(
     return { ownershipMismatch: true };
   }
 
+  // Insert-if-absent, then read the owner. This closes the TOCTOU race where
+  // two different players could both pass the pre-check before the unique-token
+  // conflict and the losing request could otherwise appear successful.
   await db
     .insert(playProductPurchasesTable)
     .values({
@@ -261,17 +298,27 @@ export async function recordProductPurchase(
       purchaseState: v.purchaseState,
       rawJson: JSON.stringify(v.raw),
     })
-    .onConflictDoUpdate({
-      target: playProductPurchasesTable.purchaseToken,
-      set: {
-        // playerId intentionally NOT updated — never transfer ownership.
-        productId: v.productId,
-        orderId: v.orderId ?? null,
-        purchaseState: v.purchaseState,
-        rawJson: JSON.stringify(v.raw),
-        updatedAt: new Date(),
-      },
-    });
+    .onConflictDoNothing({ target: playProductPurchasesTable.purchaseToken });
+
+  const owner = await db
+    .select({ playerId: playProductPurchasesTable.playerId })
+    .from(playProductPurchasesTable)
+    .where(eq(playProductPurchasesTable.purchaseToken, v.purchaseToken))
+    .limit(1);
+  if (!owner[0] || owner[0].playerId !== playerId) {
+    return { ownershipMismatch: true };
+  }
+
+  await db
+    .update(playProductPurchasesTable)
+    .set({
+      productId: v.productId,
+      orderId: v.orderId ?? null,
+      purchaseState: v.purchaseState,
+      rawJson: JSON.stringify(v.raw),
+      updatedAt: new Date(),
+    })
+    .where(eq(playProductPurchasesTable.purchaseToken, v.purchaseToken));
   return { ownershipMismatch: false };
 }
 
@@ -325,6 +372,9 @@ export async function upsertPlaySubscription(
     return { ownershipMismatch: true };
   }
 
+  // Same insert-if-absent/read-owner pattern as one-time products. It makes
+  // token ownership atomic from the caller's perspective under concurrent
+  // verification by different player identities.
   await db
     .insert(playSubscriptionsTable)
     .values({
@@ -337,21 +387,29 @@ export async function upsertPlaySubscription(
       startTimeMs: v.startTimeMs,
       rawJson: JSON.stringify(v.raw),
     })
-    .onConflictDoUpdate({
-      target: playSubscriptionsTable.purchaseToken,
-      set: {
-        // playerId NOT updated here on purpose — we already proved above
-        // that any existing row belongs to this same player, and we never
-        // want a UPSERT path that silently transfers ownership.
-        productId: v.productId,
-        orderId: v.orderId ?? null,
-        state: v.state,
-        expiryTimeMs: v.expiryTimeMs,
-        startTimeMs: v.startTimeMs,
-        rawJson: JSON.stringify(v.raw),
-        updatedAt: new Date(),
-      },
-    });
+    .onConflictDoNothing({ target: playSubscriptionsTable.purchaseToken });
+
+  const owner = await db
+    .select({ playerId: playSubscriptionsTable.playerId })
+    .from(playSubscriptionsTable)
+    .where(eq(playSubscriptionsTable.purchaseToken, v.purchaseToken))
+    .limit(1);
+  if (!owner[0] || owner[0].playerId !== playerId) {
+    return { ownershipMismatch: true };
+  }
+
+  await db
+    .update(playSubscriptionsTable)
+    .set({
+      productId: v.productId,
+      orderId: v.orderId ?? null,
+      state: v.state,
+      expiryTimeMs: v.expiryTimeMs,
+      startTimeMs: v.startTimeMs,
+      rawJson: JSON.stringify(v.raw),
+      updatedAt: new Date(),
+    })
+    .where(eq(playSubscriptionsTable.purchaseToken, v.purchaseToken));
   return { ownershipMismatch: false };
 }
 
