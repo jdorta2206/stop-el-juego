@@ -1,12 +1,13 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { roomsTable, playerScoresTable, gameHistoryTable } from "@workspace/db";
+import { roomsTable, roomMembersTable, playerScoresTable, gameHistoryTable } from "@workspace/db";
 import { eq, and, or, lt, inArray, sql } from "drizzle-orm";
 import { CreateRoomBody, JoinRoomBody, SubmitRoomResultsBody } from "@workspace/api-zod";
 import { calculateStreak, appendStreakDay } from "./ranking";
 import { isWordValidAsync } from "./game";
 import { writeLimiter, roomJoinLimiter } from "../middlewares/rateLimit";
 import { verifyClaimedIdentity, verifyPlayerToken, readPlayerId, isLoggedInId, isAuthConfigured } from "../lib/playerAuth";
+import { generateRoomMemberCredential, hashRoomMemberCredential } from "../lib/roomAuth";
 import {
   pickBotIdentity,
   makeBotPlayer,
@@ -895,6 +896,7 @@ router.post("/", async (req, res) => {
 
   // Look up premium status from DB (server-validated, can't be faked by client)
   const hostPremium = await isPlayerPremium(hostId);
+  const roomCredential = generateRoomMemberCredential();
 
   const players = [{
     playerId: hostId,
@@ -932,7 +934,13 @@ router.post("/", async (req, res) => {
     isPublic: isPublic ?? false,
   }).returning();
 
-  res.status(201).json(formatRoom(room));
+  await db.insert(roomMembersTable).values({
+    roomId: room.id,
+    playerId: hostId,
+    credentialHash: hashRoomMemberCredential(roomCredential),
+  });
+
+  res.status(201).json({ ...formatRoom(room), roomCredential });
 });
 
 // GET /rooms/:roomCode
@@ -1015,6 +1023,7 @@ router.post("/:roomCode/join", roomJoinLimiter, async (req, res) => {
     | { kind: "full" };
 
   const outcome: JoinOutcome = await db.transaction(async (tx) => {
+    let memberCredential: string | undefined;
     const rows = await tx.execute(
       sql`SELECT * FROM rooms WHERE room_code = ${code} FOR UPDATE`,
     );
@@ -1040,6 +1049,7 @@ router.post("/:roomCode/join", roomJoinLimiter, async (req, res) => {
       if (status && status !== "waiting") return { kind: "started" } as const;
       const maxPlayers = raw.max_players ?? raw.maxPlayers ?? 8;
       if (players.length >= maxPlayers) return { kind: "full" } as const;
+      memberCredential = generateRoomMemberCredential();
       players.push({
         playerId,
         playerName,
@@ -1059,7 +1069,15 @@ router.post("/:roomCode/join", roomJoinLimiter, async (req, res) => {
       .where(eq(roomsTable.roomCode, code))
       .returning();
 
-    return { kind: "ok", row: updated[0] } as const;
+    if (memberCredential) {
+      await tx.insert(roomMembersTable).values({
+        roomId: updated[0].id,
+        playerId,
+        credentialHash: hashRoomMemberCredential(memberCredential),
+      });
+    }
+
+    return { kind: "ok", row: updated[0], memberCredential } as const;
   });
 
   if (outcome.kind === "notFound") { res.status(404).json({ error: "Room not found" }); return; }
@@ -1086,7 +1104,7 @@ router.post("/:roomCode/join", roomJoinLimiter, async (req, res) => {
   }
 
   // 🚀 Notifica a todos en la sala que entró un nuevo jugador
-  res.json(broadcastAndFormat(outcome.row));
+  res.json({ ...broadcastAndFormat(outcome.row), ...(outcome.memberCredential ? { roomCredential: outcome.memberCredential } : {}) });
 });
 
 // POST /rooms/:roomCode/start — host starts / continues the game
