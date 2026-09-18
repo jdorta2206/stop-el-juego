@@ -922,25 +922,30 @@ router.post("/", async (req, res) => {
   roomPhrases.delete(roomCode);
   roomTyping.delete(roomCode);
 
-  const [room] = await db.insert(roomsTable).values({
-    roomCode,
-    hostId,
-    hostName: hostName ?? "",
-    status: "waiting",
-    currentRound: 0,
-    maxRounds: maxRounds ?? 3,
-    maxPlayers,
-    gameMode,
-    language: language ?? "es",
-    playersJson: JSON.stringify(players),
-    stopperJson: null,
-    isPublic: isPublic ?? false,
-  }).returning();
+  // Room and its member credential must be created atomically. Otherwise a
+  // transient DB failure could leave a usable room without an authorization record.
+  const room = await db.transaction(async (tx) => {
+    const [created] = await tx.insert(roomsTable).values({
+      roomCode,
+      hostId,
+      hostName: hostName ?? "",
+      status: "waiting",
+      currentRound: 0,
+      maxRounds: maxRounds ?? 3,
+      maxPlayers,
+      gameMode,
+      language: language ?? "es",
+      playersJson: JSON.stringify(players),
+      stopperJson: null,
+      isPublic: isPublic ?? false,
+    }).returning();
 
-  await db.insert(roomMembersTable).values({
-    roomId: room.id,
-    playerId: hostId,
-    credentialHash: hashRoomMemberCredential(roomCredential),
+    await tx.insert(roomMembersTable).values({
+      roomId: created.id,
+      playerId: hostId,
+      credentialHash: hashRoomMemberCredential(roomCredential),
+    });
+    return created;
   });
 
   res.status(201).json({ ...formatRoom(room), roomCredential });
