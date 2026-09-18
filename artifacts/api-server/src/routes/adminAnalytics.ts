@@ -57,6 +57,28 @@ router.get("/", basicAuth, async (_req, res) => {
       ORDER BY platform
     `);
 
+    const loginMethods = await db.execute(sql`
+      SELECT method,
+             COUNT(*) FILTER (WHERE last_seen >= NOW() - INTERVAL '90 seconds')::int AS active,
+             COUNT(*)::int AS sessions
+      FROM (
+        SELECT s.session_id, s.last_seen,
+          CASE
+            WHEN s.player_id LIKE 'google_%' THEN 'google'
+            WHEN s.player_id LIKE 'fb_%' THEN 'facebook'
+            WHEN s.player_id LIKE 'apple_%' THEN 'apple'
+            WHEN s.player_id LIKE 'ig_%' THEN 'instagram'
+            WHEN s.player_id LIKE 'tt_%' THEN 'tiktok'
+            WHEN s.player_id IS NOT NULL THEN 'guest'
+            ELSE 'unknown'
+          END AS method
+        FROM analytics_sessions s
+        WHERE s.started_at >= date_trunc('day', NOW() AT TIME ZONE 'Europe/Madrid') AT TIME ZONE 'Europe/Madrid'
+      ) x
+      GROUP BY method
+      ORDER BY sessions DESC, method
+    `);
+
     const events = await db.execute(sql`
       SELECT event_name, COUNT(*)::int AS total
       FROM analytics_events
@@ -80,6 +102,11 @@ router.get("/", basicAuth, async (_req, res) => {
       return `<tr><td>${platform === "ios" ? "🍎 iOS" : platform === "android" ? "🤖 Android" : "🌐 Web"}</td><td>${p.active}</td><td>${p.sessions}</td><td>${p.started}</td><td>${p.completed}</td><td>${p.ads}</td></tr>`;
     }).join("");
 
+    const loginRows = (loginMethods.rows as any[]).map((row) => {
+      const labels: Record<string, string> = { google: "🔵 Google / Gmail", facebook: "🔵 Facebook", apple: "🍎 Apple", guest: "👤 Invitado", instagram: "📸 Instagram", tiktok: "🎵 TikTok", unknown: "❓ Sin identificar" };
+      return `<tr><td>${labels[String(row.method)] ?? esc(row.method)}</td><td>${n(row.active)}</td><td>${n(row.sessions)}</td></tr>`;
+    }).join("");
+
     const eventRows = (events.rows as any[]).map((row) => `<tr><td>${esc(row.event_name)}</td><td>${n(row.total)}</td></tr>`).join("");
 
     const html = `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>STOP · Analytics</title><style>
@@ -88,6 +115,7 @@ a{color:#4ade80;text-decoration:none}
     </style></head><body><h1>📊 Analytics de STOP</h1><p class="sub">Panel privado · plataforma y comportamiento · últimos 7 días</p>
     <div class="grid"><div class="card"><div class="label">🍎 iOS conectados</div><div class="kpi">${platformMap.get("ios")?.active ?? 0}</div></div><div class="card"><div class="label">🤖 Android conectados</div><div class="kpi">${platformMap.get("android")?.active ?? 0}</div></div><div class="card"><div class="label">🌐 Web conectados</div><div class="kpi">${platformMap.get("web")?.active ?? 0}</div></div></div>
     <div class="card"><h2>Plataformas · hoy</h2><table><thead><tr><th>Plataforma</th><th>Ahora</th><th>Sesiones</th><th>Partidas iniciadas</th><th>Partidas terminadas</th><th>Impresiones publicidad</th></tr></thead><tbody>${platformRows}</tbody></table></div>
+    <div class="card"><h2>Conexiones por método · hoy</h2><table><thead><tr><th>Método</th><th>Ahora</th><th>Sesiones</th></tr></thead><tbody>${loginRows || '<tr><td colspan="3">Todavía no hay conexiones identificadas.</td></tr>'}</tbody></table></div>
     <div class="card"><h2>Eventos · últimos 7 días</h2><table><thead><tr><th>Evento</th><th>Total</th></tr></thead><tbody>${eventRows || '<tr><td colspan="2">Todavía no hay eventos.</td></tr>'}</tbody></table></div>
     <p><a href="/test">← Volver al panel principal</a></p></body></html>`;
     return res.type("html").send(html);
