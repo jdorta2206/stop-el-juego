@@ -4,7 +4,7 @@ import { eq, sql } from "drizzle-orm";
 import { requirePlayerIdentity, type AuthedRequest } from "../lib/playerAuth";
 import { resolveCosmetic, shopItem, SHOP_ITEMS } from "../lib/inventoryCatalog";
 import { computeTitleStats, evaluateTitles, isTitleUnlocked } from "../lib/titleCatalog";
-import { getDailyDeals, dealPriceFor } from "../lib/dailyShop";
+import { getWeeklyShop, dealPriceFor, isWeeklyShopItem } from "../lib/dailyShop";
 
 interface SqlResult<T> {
   rows?: T[];
@@ -94,8 +94,8 @@ router.get("/", requirePlayerIdentity, async (req: AuthedRequest, res) => {
       // Titles are earned by playing — full catalog annotated with unlocked state.
       titles: evaluateTitles(titleStats),
       shop: SHOP_ITEMS,
-      // Tienda rotatoria: today's discounted deals + when they refresh (epoch ms).
-      ...(() => { const d = getDailyDeals(); return { dailyDeals: d.deals, dealsResetAt: d.resetAt }; })(),
+      // Tienda rotatoria: escaparate semanal + ofertas y fecha de renovación.
+      ...(() => { const w = getWeeklyShop(); return { weeklyShop: w.items, weeklyDeals: w.deals, shopResetAt: w.resetAt, shopWeekKey: w.weekKey }; })(),
     });
   } catch (e: unknown) {
     console.error("[inventory/get] error:", e instanceof Error ? e.message : String(e));
@@ -188,6 +188,10 @@ router.post("/buy", requirePlayerIdentity, async (req: AuthedRequest, res) => {
 
   const item = shopItem(itemId);
   if (!item) { res.status(400).json({ error: "Unknown shop item" }); return; }
+  if (!isWeeklyShopItem(itemId)) {
+    res.status(400).json({ error: "Item not available this week" });
+    return;
+  }
 
   try {
     const result = await db.transaction(async (tx) => {
