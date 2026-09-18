@@ -81,12 +81,29 @@ router.post("/ping", presenceLimiter, (req, res) => {
   const existing = presenceMap.get(playerId);
   const wasOffline = !existing || existing.lastSeen < Date.now() - 3 * 60 * 1000;
 
+  // Never trust a client-supplied room code. Only publish a room association
+  // after confirming the player is actually a member of that room.
+  let verifiedRoomCode: string | null = null;
+  if (roomCode) {
+    try {
+      const [room] = await db.select().from(roomsTable)
+        .where(eq(roomsTable.roomCode, String(roomCode).toUpperCase()))
+        .limit(1);
+      if (room) {
+        const members = JSON.parse(room.playersJson || "[]") as Array<{ playerId?: string }>;
+        if (members.some((p) => p.playerId === playerId)) {
+          verifiedRoomCode = room.roomCode;
+        }
+      }
+    } catch {}
+  }
+
   presenceMap.set(playerId, {
     name,
     picture: picture || null,
     avatarColor: avatarColor || "#e53e3e",
     provider: provider || null,
-    roomCode: roomCode || null,
+    roomCode: verifiedRoomCode,
     lastSeen: Date.now(),
   });
 
@@ -113,7 +130,19 @@ router.get("/online", (_req, res) => {
 
   for (const [playerId, data] of presenceMap) {
     if (data.lastSeen >= cutoff) {
-      online.push({ playerId, ...data });
+      // Private room codes are never exposed through the public online list.
+      // Public/streamer rooms may expose their code by design.
+      let publicRoomCode: string | null = null;
+      if (data.roomCode) {
+        try {
+          const [room] = await db.select({ roomCode: roomsTable.roomCode, isPublic: roomsTable.isPublic })
+            .from(roomsTable)
+            .where(eq(roomsTable.roomCode, data.roomCode))
+            .limit(1);
+          if (room?.isPublic === true) publicRoomCode = room.roomCode;
+        } catch {}
+      }
+      online.push({ playerId, ...data, roomCode: publicRoomCode });
     }
   }
 
