@@ -1491,9 +1491,19 @@ router.post("/:roomCode/use-card", async (req, res) => {
     if (!room) { res.status(404).json({ error: "Room not found" }); return; }
 
     const players: any[] = parsePlayers(room.playersJson);
+    // 🔒 Power cards are round actions. They must be used by a current room
+    // member while the round is actually playing; otherwise a client could
+    // pre-apply score/effect changes in the lobby or after STOP.
+    if (room.status !== "playing") {
+      res.status(409).json({ error: "Cards can only be used during a round" }); return;
+    }
     const me = players.find(p => p.playerId === playerId);
     if (!me || me.powerCardUsed || !me.powerCard) {
       res.status(400).json({ error: "Card not available" }); return;
+    }
+    const VALID_POWER_CARDS = ["lightning", "shield", "sabotage", "steal", "double_or_nothing"];
+    if (!VALID_POWER_CARDS.includes(String(me.powerCard))) {
+      res.status(400).json({ error: "Invalid power card" }); return;
     }
 
     let updatedPlayers = players.map(p =>
