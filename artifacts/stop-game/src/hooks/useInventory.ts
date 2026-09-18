@@ -38,9 +38,9 @@ export interface TitleView {
   unlocked: boolean;
 }
 
-// Daily rotating deal — a shop item discounted today only. The server picks
-// these deterministically from the UTC date and recomputes the price on buy.
-export interface DailyDeal {
+// Weekly rotating storefront. The server selects the current catalogue slice
+// deterministically and recomputes deal prices on every purchase.
+export interface WeeklyDeal {
   id: string;
   originalPrice: number;
   price: number;
@@ -53,8 +53,10 @@ export interface InventorySnapshot {
   owned: { avatars: CosmeticMeta[]; frames: CosmeticMeta[]; backgrounds: CosmeticMeta[] };
   titles: TitleView[];
   shop: ShopItem[];
-  dailyDeals?: DailyDeal[];
-  dealsResetAt?: number;
+  weeklyShop?: ShopItem[];
+  weeklyDeals?: WeeklyDeal[];
+  shopResetAt?: number;
+  shopWeekKey?: string;
 }
 
 export function useInventory(playerId?: string | null) {
