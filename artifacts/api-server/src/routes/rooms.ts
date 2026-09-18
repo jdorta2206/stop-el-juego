@@ -4,6 +4,7 @@ import { roomsTable, playerScoresTable, gameHistoryTable } from "@workspace/db";
 import { eq, and, or, lt, inArray, sql } from "drizzle-orm";
 import { CreateRoomBody, JoinRoomBody, SubmitRoomResultsBody } from "@workspace/api-zod";
 import { calculateStreak, appendStreakDay } from "./ranking";
+import { isWordValidAsync } from "./game";
 import { writeLimiter } from "../middlewares/rateLimit";
 import { verifyClaimedIdentity, verifyPlayerToken, readPlayerId, isLoggedInId, isAuthConfigured } from "../lib/playerAuth";
 import {
@@ -58,23 +59,6 @@ function normalizeWord(word: string): string {
  * scores can never be tampered with: 10 pts per unique valid answer that
  * starts with the round letter. Returns score and the count of valid answers.
  */
-function calcServerScore(answers: Record<string, string>, letter: string): { score: number; validCount: number } {
-  const usedNorm = new Set<string>();
-  const normLetter = normalizeWord(letter);
-  let score = 0;
-  let validCount = 0;
-  for (const val of Object.values(answers)) {
-    if (typeof val !== "string") continue;
-    const norm = normalizeWord(val);
-    if (norm.length >= 2 && norm.startsWith(normLetter) && !usedNorm.has(norm)) {
-      score += 10;
-      usedNorm.add(norm);
-      validCount++;
-    }
-  }
-  return { score, validCount };
-}
-
 const ALPHABET_ES = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").filter(l => !["Q","X"].includes(l));
 
 // 🪪 Shared name-normalization helper. Lower-cased + trimmed so that
@@ -2019,7 +2003,22 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
   // injects fake category keys, only this many can score (defends against
   // category-key injection padding the score with extra +10s).
   const AUTHORITATIVE_CATEGORY_CAP = 8; // largest pack across ES/EN/PT/FR
-  const { score: baseScoreRaw, validCount: validAnswerCountRaw } = calcServerScore(safeAnswers, letter);
+  const scoredEntries = await Promise.all(
+    Object.entries(safeAnswers).map(async ([category, word]) => ({
+      word,
+      valid: await isWordValidAsync(word, letter, category, room.language ?? "es", playerId),
+    })),
+  );
+  const validNorms = new Set<string>();
+  let validAnswerCountRaw = 0;
+  for (const entry of scoredEntries) {
+    const norm = normalizeWord(entry.word);
+    if (entry.valid && !validNorms.has(norm)) {
+      validNorms.add(norm);
+      validAnswerCountRaw++;
+    }
+  }
+  const baseScoreRaw = validAnswerCountRaw * 10;
   const validAnswerCount = Math.min(validAnswerCountRaw, AUTHORITATIVE_CATEGORY_CAP);
   const baseScore = Math.min(baseScoreRaw, validAnswerCount * 10);
 
