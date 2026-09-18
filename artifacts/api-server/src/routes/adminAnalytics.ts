@@ -64,6 +64,11 @@ router.get("/", basicAuth, async (_req, res) => {
       FROM (
         SELECT s.session_id, s.last_seen,
           CASE
+            WHEN s.login_method IN ('google','gmail') THEN 'google'
+            WHEN s.login_method = 'facebook' THEN 'facebook'
+            WHEN s.login_method = 'apple' THEN 'apple'
+            WHEN s.login_method = 'instagram' THEN 'instagram'
+            WHEN s.login_method = 'tiktok' THEN 'tiktok'
             WHEN s.player_id LIKE 'google_%' THEN 'google'
             WHEN s.player_id LIKE 'fb_%' THEN 'facebook'
             WHEN s.player_id LIKE 'apple_%' THEN 'apple'
