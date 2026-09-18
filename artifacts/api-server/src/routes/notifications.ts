@@ -164,12 +164,13 @@ router.post("/subscribe", async (req, res) => {
 // Settings UI to render the current toggle / time / mute state.
 router.get("/preferences", async (req, res) => {
   const endpoint = String(req.query.endpoint || "").trim();
-  if (!endpoint) { res.status(400).json({ error: "Missing endpoint" }); return; }
+  const playerId = String(req.query.playerId || "").trim();
+  if (!endpoint || !playerId) { res.status(400).json({ error: "Missing endpoint" }); return; }
   try {
     const rows = await db.select().from(pushSubscriptionsTable)
       .where(eq(pushSubscriptionsTable.endpoint, endpoint)).limit(1);
     const row = rows[0];
-    if (!row) { res.status(404).json({ error: "Not found" }); return; }
+    if (!row || row.playerId !== playerId) { res.status(404).json({ error: "Not found" }); return; }
     res.json({
       enabled: row.enabled,
       hourLocal: row.hourLocal,
@@ -187,8 +188,8 @@ router.get("/preferences", async (req, res) => {
 // Partial update — only the fields present in the body are touched. Used
 // for the toggle, the hour picker, and the "snooze 7 days" button.
 router.patch("/preferences", async (req, res) => {
-  const { endpoint, enabled, hourLocal, muteDays } = req.body || {};
-  if (!endpoint) { res.status(400).json({ error: "Missing endpoint" }); return; }
+  const { endpoint, playerId, enabled, hourLocal, muteDays } = req.body || {};
+  if (!endpoint || !playerId) { res.status(400).json({ error: "Missing endpoint or playerId" }); return; }
 
   const sets: string[] = [];
   const vals: unknown[] = [];
@@ -206,13 +207,17 @@ router.patch("/preferences", async (req, res) => {
   }
   if (sets.length === 0) { res.status(400).json({ error: "Nothing to update" }); return; }
 
-  vals.push(endpoint);
+  if (playerId !== "anonymous" && !verifyClaimedIdentity(req, String(playerId))) {
+    res.status(403).json({ error: "Identity verification failed" });
+    return;
+  }
+  vals.push(endpoint, playerId);
   try {
     // Raw query — drizzle's dynamic update builder is awkward for partials
     // and the values are already type-checked above.
     const { pool } = await import("@workspace/db");
     const result = await pool.query(
-      `UPDATE push_subscriptions SET ${sets.join(", ")} WHERE endpoint = $${i} RETURNING enabled, hour_local, muted_until`,
+      `UPDATE push_subscriptions SET ${sets.join(", ")} WHERE endpoint = ${i} AND player_id = ${i + 1} RETURNING enabled, hour_local, muted_until`,
       vals,
     );
     if (result.rowCount === 0) { res.status(404).json({ error: "Not found" }); return; }
@@ -225,10 +230,14 @@ router.patch("/preferences", async (req, res) => {
 
 // DELETE /api/notifications/unsubscribe
 router.delete("/unsubscribe", async (req, res) => {
-  const { endpoint } = req.body;
-  if (!endpoint) { res.status(400).json({ error: "Missing endpoint" }); return; }
+  const { endpoint, playerId } = req.body || {};
+  if (!endpoint || !playerId) { res.status(400).json({ error: "Missing endpoint or playerId" }); return; }
   try {
-    await db.delete(pushSubscriptionsTable).where(eq(pushSubscriptionsTable.endpoint, endpoint));
+    if (playerId !== "anonymous" && !verifyClaimedIdentity(req, String(playerId))) {
+      res.status(403).json({ error: "Identity verification failed" });
+      return;
+    }
+    await db.delete(pushSubscriptionsTable).where(and(eq(pushSubscriptionsTable.endpoint, endpoint), eq(pushSubscriptionsTable.playerId, playerId)));
     res.json({ ok: true });
   } catch {
     res.status(500).json({ error: "Failed" });
