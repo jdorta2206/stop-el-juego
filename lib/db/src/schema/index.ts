@@ -23,4 +23,5 @@ export * from "./wordValidationCache";
 export * from "./customPacks";
 export * from "./guestStats";
 export * from "./scoreVoucherUses";
+export * from "./scoreBonusClaims";
 export * from "./admobRewards";
