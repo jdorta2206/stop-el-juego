@@ -7,8 +7,7 @@ import { calculateStreak, appendStreakDay } from "./ranking";
 import { isWordValidAsync } from "./game";
 import { writeLimiter, roomJoinLimiter } from "../middlewares/rateLimit";
 import { verifyClaimedIdentity, verifyPlayerToken, readPlayerId, isLoggedInId, isAuthConfigured } from "../lib/playerAuth";
-import { requireRoomMember, requireRoomHost } from "../lib/roomAuth";
-import { generateRoomMemberCredential, hashRoomMemberCredential } from "../lib/roomAuth";
+import { requireRoomMember, requireRoomHost, generateRoomMemberCredential, hashRoomMemberCredential } from "../lib/roomAuth";
 import {
   pickBotIdentity,
   makeBotPlayer,
