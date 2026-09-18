@@ -794,9 +794,10 @@ export default function Room() {
       await fetch(`${apiBase}/api/rooms/${roomCode.toUpperCase()}/resolve-bluffs`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ playerId: player.id }),
       });
     } catch { /* silent */ }
-  }, [roomCode, apiBase]);
+  }, [player, roomCode, apiBase]);
 
   // React to room status changes from polling
   useEffect(() => {
