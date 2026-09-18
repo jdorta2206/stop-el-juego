@@ -30,7 +30,7 @@ import { recordExternalStat } from "@/hooks/useAchievements";
 import { CountUp } from "@/components/CountUp";
 import { getApiUrl, publicLink, authHeaders, getSessionToken } from "@/lib/utils";
 import { reportSeasonEvent } from "@/hooks/useSeason";
-import { saveActiveRoom, clearActiveRoom, touchActiveRoom } from "@/lib/activeRoom";
+import { saveActiveRoom, clearActiveRoom, touchActiveRoom, loadActiveRoom } from "@/lib/activeRoom";
 import { useT } from "@/i18n/useT";
 import { useToast } from "@/hooks/use-toast";
 import { useReviewPrompt, recordGamePlayed } from "@/hooks/useReviewPrompt";
@@ -268,7 +268,10 @@ export default function Room() {
   // lobby exits — see leaveRoom below).
   useEffect(() => {
     if (!roomCode || !player?.id) return;
-    saveActiveRoom(roomCode.toUpperCase(), player.id);
+    const active = loadActiveRoom();
+    if (active?.code === roomCode.toUpperCase() && active.playerId === player.id) {
+      saveActiveRoom(roomCode.toUpperCase(), player.id, active.roomCredential);
+    }
   }, [roomCode, player?.id]);
   useEffect(() => {
     if (!roomCode) return;
@@ -474,7 +477,7 @@ export default function Room() {
     lastTypingPing.current = now;
     fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/typing`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders(), ...(loadActiveRoom()?.code === roomCode.toUpperCase() ? { "X-Room-Credential": loadActiveRoom()?.roomCredential ?? "" } : {}) },
       body: JSON.stringify({
         playerId: player.id,
         playerName: player.name ?? "?",
