@@ -1641,6 +1641,12 @@ router.get("/:roomCode/events", async (req, res) => {
   if (!roomRow) { res.status(404).json({ error: "Room not found" }); return; }
 
   // 2. Private rooms require the caller to be a real member of the room.
+  let sseIsMember = false;
+  if (playerId) {
+    sseIsMember = await requireRoomMember(req, code, playerId);
+    if (!sseIsMember) { res.status(403).json({ error: "Room membership credential required" }); return; }
+  }
+
   if ((roomRow as any).isPublic === false) {
     const members = parsePlayers(roomRow.playersJson);
     const isMember = !!playerId && members.some((p: any) => p.playerId === playerId);
