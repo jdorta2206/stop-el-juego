@@ -572,7 +572,7 @@ export default function Room() {
       await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/react`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ emoji, playerName: player.name }),
+        body: JSON.stringify({ emoji, playerId: player.id, playerName: player.name }),
       });
     } catch {}
   }, [player, roomCode]);
@@ -598,7 +598,7 @@ export default function Room() {
       await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/phrase`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ playerName: player.name, phraseIndex }),
+        body: JSON.stringify({ playerId: player.id, playerName: player.name, phraseIndex }),
       });
     } catch {}
   }, [player, roomCode]);
