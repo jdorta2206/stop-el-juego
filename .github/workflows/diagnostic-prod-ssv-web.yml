@@ -11,68 +11,74 @@ permissions:
 jobs:
   diagnostic:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
-      - name: Curl production HTML and find JS bundles
+      - name: Checkout current master source
+        uses: actions/checkout@v4
+        with:
+          ref: master
+
+      - name: Curl production HTML and bundle
         shell: bash
         run: |
           set -euo pipefail
-          echo "=== PROD HEADERS ==="
           curl -sSIL --max-time 30 https://www.stopjuegodepalabras.com/ | sed -n '1,40p'
-
-          echo "=== PROD HTML ==="
           curl -sSL --max-time 30 https://www.stopjuegodepalabras.com/ -o /tmp/index.html
-          wc -c /tmp/index.html
-          grep -oE '<script[^>]+src="[^"]+\.js[^"]*"' /tmp/index.html | head -50 || true
+          PROD_ASSET="$(grep -oE 'src="/assets/index[^"]+\.js"' /tmp/index.html | sed -E 's/src="//;s/"$//' | head -1)"
+          test -n "$PROD_ASSET"
+          PROD_URL="https://www.stopjuegodepalabras.com${PROD_ASSET}"
+          echo "PROD_ASSET=$PROD_ASSET"
+          echo "PROD_URL=$PROD_URL"
+          curl -sSL --max-time 30 "$PROD_URL" -o /tmp/prod.js
+          sha256sum /tmp/prod.js
+          wc -c /tmp/prod.js
+          echo "PROD stopad occurrences:"
+          grep -oF 'stopad://rewarded' /tmp/prod.js | wc -l
+          echo "PROD timeout string occurrences:"
+          grep -oF 'Native rewarded ad request timed out' /tmp/prod.js | wc -l
 
-          echo "=== JS ASSETS ==="
-          grep -oE '/[^"]+\.js[^"]*' /tmp/index.html | sort -u | head -100 || true
+      - name: Build current master web
+        shell: bash
+        run: |
+          set -euo pipefail
+          corepack enable
+          pnpm install --frozen-lockfile
+          pnpm --filter @workspace/stop-game build
+          LOCAL_ASSET="$(find artifacts/stop-game/dist/assets -maxdepth 1 -type f -name 'index.*.js' | head -1)"
+          test -n "$LOCAL_ASSET"
+          echo "LOCAL_ASSET=$LOCAL_ASSET"
+          sha256sum "$LOCAL_ASSET"
+          wc -c "$LOCAL_ASSET"
+          echo "LOCAL stopad occurrences:"
+          grep -oF 'stopad://rewarded' "$LOCAL_ASSET" | wc -l
+          echo "LOCAL timeout string occurrences:"
+          grep -oF 'Native rewarded ad request timed out' "$LOCAL_ASSET" | wc -l
 
-          echo "=== isGameTimerPaused IN SERVED HTML ==="
-          if grep -Fq 'isGameTimerPaused' /tmp/index.html; then
-            echo "FOUND in HTML"
+      - name: Compare production bundle with current master build
+        shell: bash
+        run: |
+          set -euo pipefail
+          LOCAL_ASSET="$(find artifacts/stop-game/dist/assets -maxdepth 1 -type f -name 'index.*.js' | head -1)"
+          PROD_SHA="$(sha256sum /tmp/prod.js | awk '{print $1}')"
+          LOCAL_SHA="$(sha256sum "$LOCAL_ASSET" | awk '{print $1}')"
+          echo "PROD_SHA=$PROD_SHA"
+          echo "LOCAL_SHA=$LOCAL_SHA"
+          if [ "$PROD_SHA" = "$LOCAL_SHA" ]; then
+            echo "EXACT_BUNDLE_MATCH=YES"
           else
-            echo "NOT in HTML"
+            echo "EXACT_BUNDLE_MATCH=NO"
+            exit 3
           fi
-
-          echo "=== DOWNLOAD REFERENCED JS AND SEARCH ==="
-          python3 - <<'PY'
-          import re
-          from pathlib import Path
-          html = Path('/tmp/index.html').read_text(errors='ignore')
-          assets = sorted(set(re.findall(r'''(?:src|href)="([^"]+\.js[^"]*)"''', html)))
-          print("ASSETS", assets)
-          base = "https://www.stopjuegodepalabras.com"
-          import urllib.request
-          found = False
-          for asset in assets:
-              url = asset if asset.startswith("http") else base + asset
-              try:
-                  data = urllib.request.urlopen(url, timeout=30).read().decode("utf-8", "ignore")
-              except Exception as e:
-                  print("ERROR", url, e)
-                  continue
-              print("BUNDLE", url, "BYTES", len(data))
-              if "isGameTimerPaused" in data:
-                  found = True
-                  print("FOUND isGameTimerPaused IN", url)
-                  idx = data.find("isGameTimerPaused")
-                  print(data[max(0,idx-300):idx+700])
-          if not found:
-              print("NOT FOUND isGameTimerPaused IN ANY REFERENCED JS")
-              raise SystemExit(2)
-          PY
 
       - name: Check production SSV endpoints
         shell: bash
         run: |
-          set -u
-          echo "=== SSV NO-CUSTOM-DATA ==="
-          curl -sS -o /tmp/ssv-body -w 'HTTP %{http_code}\n' --max-time 30             'https://www.stopjuegodepalabras.com/api/rewards/admob-ssv'
+          set -euo pipefail
+          echo "=== SSV URL probe ==="
+          curl -sS -o /tmp/ssv-body -w 'HTTP %{http_code}\n' --max-time 30 https://www.stopjuegodepalabras.com/api/rewards/admob-ssv
           cat /tmp/ssv-body
           echo
-
           echo "=== RESULT STATUS SAMPLE ==="
-          curl -sS -o /tmp/result-body -w 'HTTP %{http_code}\n' --max-time 30             'https://www.stopjuegodepalabras.com/api/rewards/admob-result/diagnostic-request-id-123456'
+          curl -sS -o /tmp/result-body -w 'HTTP %{http_code}\n' --max-time 30 https://www.stopjuegodepalabras.com/api/rewards/admob-result/diagnostic-request-id-123456
           cat /tmp/result-body
           echo
