@@ -179,7 +179,7 @@ router.get("/weekly", async (req, res) => {
     FROM game_history gh
     LEFT JOIN player_scores ps ON gh.player_id = ps.player_id
     WHERE gh.created_at >= date_trunc('week', NOW() AT TIME ZONE 'UTC')
-    GROUP BY gh.player_id, ps.player_name, ps.avatar_color, ps.current_streak, ps.is_premium, ps.achievements_json
+    GROUP BY gh.player_id, ps.player_name, ps.avatar_color, ps.equipped_avatar, ps.current_streak, ps.is_premium, ps.achievements_json
     ORDER BY SUM(gh.score) DESC
     LIMIT 100
   `);
@@ -188,6 +188,7 @@ router.get("/weekly", async (req, res) => {
     playerId:      p.playerId,
     playerName:    p.playerName ?? "—",
     avatarColor:   p.avatarColor ?? "#e53e3e",
+    avatarGlyph:  equippedAvatarGlyph(p.equippedAvatar),
     totalScore:    Number(p.totalScore ?? 0),
     gamesPlayed:   Number(p.gamesPlayed ?? 0),
     wins:          Number(p.wins ?? 0),
