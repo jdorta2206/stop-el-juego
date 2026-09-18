@@ -7,7 +7,7 @@ import { calculateStreak, appendStreakDay } from "./ranking";
 import { isWordValidAsync } from "./game";
 import { writeLimiter, roomJoinLimiter } from "../middlewares/rateLimit";
 import { verifyClaimedIdentity, verifyPlayerToken, readPlayerId, isLoggedInId, isAuthConfigured } from "../lib/playerAuth";
-import { requireRoomMember, requireRoomHost, generateRoomMemberCredential, hashRoomMemberCredential } from "../lib/roomAuth";
+import { requireRoomMember, requireRoomHost, generateRoomMemberCredential, hashRoomMemberCredential, verifyRoomMemberCredential } from "../lib/roomAuth";
 import {
   pickBotIdentity,
   makeBotPlayer,
@@ -1028,7 +1028,8 @@ router.post("/:roomCode/join", roomJoinLimiter, async (req, res) => {
     | { kind: "notFound" }
     | { kind: "nameTaken" }
     | { kind: "started" }
-    | { kind: "full" };
+    | { kind: "full" }
+    | { kind: "unauthorized" };
 
   const outcome: JoinOutcome = await db.transaction(async (tx) => {
     let memberCredential: string | undefined;
@@ -1063,7 +1064,7 @@ router.post("/:roomCode/join", roomJoinLimiter, async (req, res) => {
         // Signed accounts can safely upgrade their legacy membership.
         const signedPlayerId = readPlayerId(req);
         if (signedPlayerId !== playerId) {
-          return { kind: "started" } as const;
+          return { kind: "unauthorized" } as const;
         }
         memberCredential = generateRoomMemberCredential();
         await tx.insert(roomMembersTable).values({
@@ -1071,6 +1072,13 @@ router.post("/:roomCode/join", roomJoinLimiter, async (req, res) => {
           playerId,
           credentialHash: hashRoomMemberCredential(memberCredential),
         });
+      } else if (readPlayerId(req) !== playerId && !verifyRoomMemberCredential(req, (await tx.select({ credentialHash: roomMembersTable.credentialHash })
+        .from(roomMembersTable)
+        .where(and(eq(roomMembersTable.roomId, raw.id), eq(roomMembersTable.playerId, playerId)))
+        .limit(1))[0]?.credentialHash ?? "")) {
+        // Existing guest memberships require possession of their room secret.
+        // A public/self-asserted guest UUID is not sufficient to reconnect.
+        return { kind: "unauthorized" } as const;
       }
     }
     if (!existing) {
@@ -1124,6 +1132,13 @@ router.post("/:roomCode/join", roomJoinLimiter, async (req, res) => {
     res.status(409).json({
       error: "in_progress",
       message: "La partida ya ha empezado. No puedes unirte hasta que termine.",
+    });
+    return;
+  }
+  if (outcome.kind === "unauthorized") {
+    res.status(403).json({
+      error: "room_membership_required",
+      message: "Necesitas la credencial de esta sala para recuperar tu plaza.",
     });
     return;
   }
