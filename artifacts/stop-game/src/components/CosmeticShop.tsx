@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { usePlayer } from "@/hooks/use-player";
 import { useInventory, type ShopItem as InventoryShopItem } from "@/hooks/useInventory";
 import { Button } from "@/components/ui";
