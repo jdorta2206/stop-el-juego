@@ -56,11 +56,13 @@ async function startAnalyticsHeartbeat() {
     try {
       const version = getInstalledAppVersion();
       let playerId: string | null = null;
+      let loginMethod: string | null = null;
       try {
         const raw = localStorage.getItem("stop_player_v2");
         if (raw) {
           const parsed = JSON.parse(raw);
           if (typeof parsed?.id === "string") playerId = parsed.id;
+          if (typeof parsed?.loginMethod === "string") loginMethod = parsed.loginMethod;
         }
       } catch {
         // Analytics identity is optional and must never affect gameplay.
@@ -72,7 +74,7 @@ async function startAnalyticsHeartbeat() {
           "X-Client-Platform": platform,
           ...(version ? { "X-Client-Version": version } : {}),
         },
-        body: JSON.stringify({ sessionId, playerId }),
+        body: JSON.stringify({ sessionId, playerId, loginMethod, language: document.documentElement.lang || null }),
         keepalive: true,
       }).catch(() => {});
     } catch {

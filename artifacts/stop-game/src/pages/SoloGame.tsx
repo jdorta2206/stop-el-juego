@@ -1,3 +1,4 @@
+import { trackAnalyticsEvent } from "@/lib/analyticsClient";
 import { useState, useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
@@ -421,6 +422,7 @@ export default function SoloGame() {
   const scoreTokensRef = useRef<string[]>([]);
 
   const startGame = () => {
+    void trackAnalyticsEvent("game_start", { metadata: { mode: isDailyMode ? "daily" : "solo" } });
     // Snapshot the tutorial state at the moment the player presses Play so
     // the rules of the round are stable until it ends.
     const tutorialNow = ftue.isInTutorial && !isDailyMode;
@@ -1164,6 +1166,7 @@ export default function SoloGame() {
 
   const nextRound = () => {
     if (round >= maxRounds) {
+      void trackAnalyticsEvent("game_complete", { metadata: { mode: isDailyMode ? "daily" : "solo", rounds: maxRounds } });
       recordPlay();
       // Calculate XP with multipliers
       const validCount = results
