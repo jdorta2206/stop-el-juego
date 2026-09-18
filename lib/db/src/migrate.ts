@@ -25,7 +25,34 @@ export async function ensureIndexes(): Promise<void> {
     `CREATE UNIQUE INDEX IF NOT EXISTS room_members_credential_hash_uidx ON room_members (credential_hash)`,
     `CREATE INDEX IF NOT EXISTS room_members_player_id_idx ON room_members (player_id)`,
     `DELETE FROM room_members rm WHERE NOT EXISTS (SELECT 1 FROM rooms r WHERE r.id = rm.room_id)`,
-    `DO $ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'room_members_room_id_fk') THEN ALTER TABLE room_members ADD CONSTRAINT room_members_room_id_fk FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE; END IF; END $`,
+    `DO $roomauth$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'room_members_room_id_fk') THEN ALTER TABLE room_members ADD CONSTRAINT room_members_room_id_fk FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE; END IF; END $roomauthimport { sql } from "drizzle-orm";
+import { db } from "./index";
+
+/**
+ * Creates all critical indexes idempotently. Safe to call on every boot.
+ * These indexes are required for the app to handle thousands of concurrent
+ * players without timing out on ranking, leaderboard and room queries.
+ */
+let _indexesReady = false;
+export function indexesReady(): boolean {
+  return _indexesReady;
+}
+
+export async function ensureIndexes(): Promise<void> {
+  const stmts = [
+    `CREATE INDEX IF NOT EXISTS player_scores_total_score_desc_idx ON player_scores (total_score DESC)`,
+    `CREATE INDEX IF NOT EXISTS player_scores_xp_desc_idx ON player_scores (xp DESC)`,
+    `CREATE INDEX IF NOT EXISTS game_history_created_at_idx ON game_history (created_at)`,
+    `CREATE INDEX IF NOT EXISTS game_history_player_id_created_at_desc_idx ON game_history (player_id, created_at DESC)`,
+    `CREATE INDEX IF NOT EXISTS game_history_player_id_score_desc_idx ON game_history (player_id, score DESC)`,
+    `CREATE INDEX IF NOT EXISTS rooms_is_public_status_created_at_idx ON rooms (is_public, status, created_at)`,
+    `CREATE INDEX IF NOT EXISTS rooms_status_updated_at_idx ON rooms (status, updated_at)`,
+    `CREATE TABLE IF NOT EXISTS room_members (id serial PRIMARY KEY, room_id integer NOT NULL, player_id text NOT NULL, credential_hash text NOT NULL, created_at timestamp NOT NULL DEFAULT NOW(), last_seen_at timestamp NOT NULL DEFAULT NOW())`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS room_members_room_player_uidx ON room_members (room_id, player_id)`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS room_members_credential_hash_uidx ON room_members (credential_hash)`,
+    `CREATE INDEX IF NOT EXISTS room_members_player_id_idx ON room_members (player_id)`,
+    `DELETE FROM room_members rm WHERE NOT EXISTS (SELECT 1 FROM rooms r WHERE r.id = rm.room_id)`,
+    ,
 
     `ALTER TABLE rooms ADD COLUMN IF NOT EXISTS tournament_id integer`,
     `ALTER TABLE rooms ADD COLUMN IF NOT EXISTS tournament_match_id text`,
