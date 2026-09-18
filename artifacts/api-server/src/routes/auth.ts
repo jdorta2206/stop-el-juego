@@ -456,16 +456,38 @@ router.get("/facebook/callback", async (req: Request, res: Response) => {
     const me = (await meRes.json()) as OAuthProfile;
 
     const playerId = `fb_${me.id}`;
+    const facebookName = String(me.name || "Facebook User").trim().slice(0, 14) || "Facebook User";
+    const facebookPicture =
+      (typeof me.picture === "object" ? me.picture.data?.url : undefined) || null;
+
+    // Persist the OAuth profile on the server as well as in the client handoff.
+    // This is important for Android/TWA: if the browser drops the handoff URL
+    // during the provider return, /api/auth/me must still be able to hydrate
+    // the logged-in player instead of returning name=null and reopening AuthModal.
+    await db
+      .insert(playerScoresTable)
+      .values({
+        playerId,
+        playerName: facebookName,
+        avatarColor: "#f9a825",
+      })
+      .onConflictDoUpdate({
+        target: playerScoresTable.playerId,
+        set: {
+          playerName: facebookName,
+          updatedAt: new Date(),
+        },
+      });
+
     const user = JSON.stringify({
       id:       playerId,
-      name:     me.name,
+      name:     facebookName,
       email:    me.email,
-      picture:  (typeof me.picture === "object" ? me.picture.data?.url : undefined) || null,
+      picture:  facebookPicture,
       provider: "facebook",
     });
 
     const sessionToken = issuePlayerToken(res, playerId);
-    // Pass both user profile AND access token so frontend can call Graph API for friends
     res.send(bridgePageMulti([
       ["oauth_user", user],
       ["fb_access_token", tokenData.access_token],
