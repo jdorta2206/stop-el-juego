@@ -105,7 +105,7 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
       await db.execute(sql`
         SELECT
           (SELECT COUNT(*) FROM player_scores WHERE ${NOT_BOT}) AS users,
-          (SELECT COUNT(*) FROM player_scores WHERE ${NOT_BOT} AND is_premium = true) AS premium,
+          (SELECT COUNT(*) FROM player_scores ps WHERE ${NOT_BOT} AND EXISTS (\n             SELECT 1 FROM play_subscriptions sub\n             WHERE sub.player_id = ps.player_id\n               AND sub.product_id = 'premium_monthly'\n               AND sub.state IN ('ACTIVE', 'IN_GRACE_PERIOD')\n               AND sub.expiry_time_ms > (EXTRACT(EPOCH FROM NOW()) * 1000)\n           )) AS premium,
           (SELECT COUNT(*) FROM game_history WHERE ${NOT_BOT}) AS games
       `)
     ).rows[0] as Record<string, unknown>;
