@@ -162,13 +162,6 @@ router.post("/progress/:playerId", async (req, res) => {
     updates.personalBestsJson = JSON.stringify(merged);
   }
 
-  if (body.collectedWords && typeof body.collectedWords === "object" && !Array.isArray(body.collectedWords)) {
-    const current = parseJson<JsonRecord>(player.collectedWordsJson, {});
-    updates.collectedWordsJson = JSON.stringify(
-      mergeCollectedWords(current, body.collectedWords as JsonRecord),
-    );
-  }
-
   if (Object.keys(updates).length > 0) {
     await db
       .update(playerScoresTable)
