@@ -5,7 +5,7 @@ import { eq, and, or, lt, inArray, sql } from "drizzle-orm";
 import { CreateRoomBody, JoinRoomBody, SubmitRoomResultsBody } from "@workspace/api-zod";
 import { calculateStreak, appendStreakDay } from "./ranking";
 import { isWordValidAsync } from "./game";
-import { writeLimiter } from "../middlewares/rateLimit";
+import { writeLimiter, roomJoinLimiter } from "../middlewares/rateLimit";
 import { verifyClaimedIdentity, verifyPlayerToken, readPlayerId, isLoggedInId, isAuthConfigured } from "../lib/playerAuth";
 import {
   pickBotIdentity,
@@ -983,7 +983,7 @@ router.get("/:roomCode", async (req, res) => {
 });
 
 // POST /rooms/:roomCode/join
-router.post("/:roomCode/join", async (req, res) => {
+router.post("/:roomCode/join", roomJoinLimiter, async (req, res) => {
   const roomCode = paramStr(req.params.roomCode);
   const body = JoinRoomBody.safeParse(req.body);
   if (!body.success) { res.status(400).json({ error: "Invalid request body" }); return; }
