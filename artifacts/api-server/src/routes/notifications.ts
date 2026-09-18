@@ -5,6 +5,7 @@ import { pushSubscriptionsTable } from "@workspace/db";
 import { and, eq, isNull, like, not, or, sql } from "drizzle-orm";
 import { sendPushToAllSubscribers } from "../lib/pushHelper";
 import { inviteLimiter } from "../middlewares/rateLimit";
+import { verifyClaimedIdentity } from "../lib/playerAuth";
 
 const router: IRouter = Router();
 
@@ -45,6 +46,7 @@ router.post("/subscribe", async (req, res) => {
     return;
   }
 
+  // A push endpoint is bearer-like: whoever can register it will receive future\n  // notifications for the stored playerId. Therefore a logged-in playerId must\n  // be bound to the authenticated session; only the anonymous guest bucket may\n  // be claimed without account authentication.\n  if (playerId !== "anonymous" && !verifyClaimedIdentity(req, String(playerId))) {\n    res.status(403).json({ error: "Identity verification failed" });\n    return;\n  }\n
   const { endpoint, keys } = subscription;
   const { p256dh, auth } = keys || {};
 
