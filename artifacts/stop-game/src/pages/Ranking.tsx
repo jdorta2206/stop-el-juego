@@ -507,7 +507,7 @@ export default function Ranking() {
                         className={`${m.size} rounded-full flex items-center justify-center font-black text-white shadow-xl border-4 relative`}
                         style={{ background: p.avatarColor || "#555", borderColor: m.border }}
                       >
-                        {p.playerName.charAt(0).toUpperCase()}
+                        {(p as any).avatarGlyph || p.playerName.charAt(0).toUpperCase()}
                         {isMe && (
                           <span className="absolute -top-2 -right-2 bg-secondary text-black text-[9px] font-black px-1.5 py-0.5 rounded-full">{t.game.you.toUpperCase()}</span>
                         )}
@@ -579,7 +579,7 @@ export default function Ranking() {
                   <div className="flex items-center gap-3">
                     <div className="w-14 h-14 rounded-full flex items-center justify-center text-white font-black text-xl"
                       style={{ backgroundColor: previewPlayer.avatarColor || "#555" }}>
-                      {previewPlayer.playerName.charAt(0).toUpperCase()}
+                      {previewPlayer.avatarGlyph || previewPlayer.playerName.charAt(0).toUpperCase()}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
@@ -679,7 +679,7 @@ export default function Ranking() {
                               className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs shadow"
                               style={{ backgroundColor: p.avatarColor || "#555" }}
                             >
-                              {p.playerName.charAt(0).toUpperCase()}
+                              {(p as any).avatarGlyph || p.playerName.charAt(0).toUpperCase()}
                             </div>
                             {isOnline && (
                               <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-green-400 border-2 border-[hsl(222_47%_11%)] shadow-[0_0_4px_#4ade80]" />
