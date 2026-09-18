@@ -59,14 +59,20 @@ jobs:
         run: |
           set -euo pipefail
           LOCAL_ASSET="$(find artifacts/stop-game/dist/assets -maxdepth 1 -type f -name 'index.*.js' | head -1)"
-          PROD_SHA="$(sha256sum /tmp/prod.js | awk '{print $1}')"
-          LOCAL_SHA="$(sha256sum "$LOCAL_ASSET" | awk '{print $1}')"
-          echo "PROD_SHA=$PROD_SHA"
-          echo "LOCAL_SHA=$LOCAL_SHA"
+          PROD_TS="$(sed -nE 's/.*index\.[A-Za-z0-9_-]+\.([0-9]+)\.js.*/\1/p' /tmp/index.html | head -1)"
+          LOCAL_TS="$(basename "$LOCAL_ASSET" | sed -nE 's/.*\.([0-9]+)\.js/\1/p')"
+          echo "PROD_TS=$PROD_TS"
+          echo "LOCAL_TS=$LOCAL_TS"
+          sed "s/$PROD_TS/BUILD_TIMESTAMP/g" /tmp/prod.js > /tmp/prod-normalized.js
+          sed "s/$LOCAL_TS/BUILD_TIMESTAMP/g" "$LOCAL_ASSET" > /tmp/local-normalized.js
+          PROD_SHA="$(sha256sum /tmp/prod-normalized.js | awk '{print $1}')"
+          LOCAL_SHA="$(sha256sum /tmp/local-normalized.js | awk '{print $1}')"
+          echo "PROD_NORMALIZED_SHA=$PROD_SHA"
+          echo "LOCAL_NORMALIZED_SHA=$LOCAL_SHA"
           if [ "$PROD_SHA" = "$LOCAL_SHA" ]; then
-            echo "EXACT_BUNDLE_MATCH=YES"
+            echo "NORMALIZED_BUNDLE_MATCH=YES"
           else
-            echo "EXACT_BUNDLE_MATCH=NO"
+            echo "NORMALIZED_BUNDLE_MATCH=NO"
             exit 3
           fi
 
