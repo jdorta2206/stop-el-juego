@@ -1294,12 +1294,14 @@ export default function SoloGame() {
         }
       }
     } else if (rewardedAdType === "double") {
-      setTotalScore(prev => {
-        const bonus = prev;
-        if (bonus > 0) submitToLeaderboard(bonus, aiTotalScore, { bonus: true });
-        return prev + bonus;
-      });
-      setDoubleUsed(true);
+      // Capture the current score once. The bonus is a second leaderboard write;
+      // the server must not consume the round vouchers a second time.
+      const bonus = Math.max(0, totalScore);
+      if (bonus > 0) {
+        submitToLeaderboard(bonus, aiTotalScore, { bonus: true });
+        setTotalScore(prev => prev + bonus);
+        setDoubleUsed(true);
+      }
     }
     setRewardedAdType(null);
   };
