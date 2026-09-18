@@ -28,6 +28,7 @@ async function ensureAnalyticsTables(): Promise<void> {
       last_seen timestamp NOT NULL DEFAULT NOW(),
       started_at timestamp NOT NULL DEFAULT NOW()
     );
+    ALTER TABLE analytics_sessions ADD COLUMN IF NOT EXISTS login_method text;
     CREATE INDEX IF NOT EXISTS analytics_sessions_last_seen_idx ON analytics_sessions (last_seen);
     CREATE INDEX IF NOT EXISTS analytics_sessions_platform_last_seen_idx ON analytics_sessions (platform, last_seen);
     CREATE TABLE IF NOT EXISTS analytics_events (
@@ -89,13 +90,14 @@ router.post("/heartbeat", presenceLimiter, async (req, res) => {
     const sessionId = typeof body.sessionId === "string" ? body.sessionId.trim() : "";
     if (!sessionId || sessionId.length > 128) return res.status(400).json({ error: "sessionId required" });
     const playerId = typeof body.playerId === "string" ? body.playerId.trim() : null;
+    const loginMethod = typeof body.loginMethod === "string" ? body.loginMethod.trim().slice(0, 32) : null;
     const language = typeof body.language === "string" ? body.language.slice(0, 16) : null;
     const appVersion = String(req.headers["x-client-version"] ?? "").slice(0, 32) || null;
     const platform = platformFromRequest(req);
     await db.execute(sql`
-      INSERT INTO analytics_sessions (session_id, player_id, platform, app_version, language, last_seen, started_at)
-      VALUES (${sessionId}, ${playerId}, ${platform}, ${appVersion}, ${language}, NOW(), NOW())
-      ON CONFLICT (session_id) DO UPDATE SET player_id = EXCLUDED.player_id, platform = EXCLUDED.platform, app_version = EXCLUDED.app_version, language = EXCLUDED.language, last_seen = NOW()
+      INSERT INTO analytics_sessions (session_id, player_id, login_method, platform, app_version, language, last_seen, started_at)
+      VALUES (${sessionId}, ${playerId}, ${loginMethod}, ${platform}, ${appVersion}, ${language}, NOW(), NOW())
+      ON CONFLICT (session_id) DO UPDATE SET player_id = EXCLUDED.player_id, login_method = EXCLUDED.login_method, platform = EXCLUDED.platform, app_version = EXCLUDED.app_version, language = EXCLUDED.language, last_seen = NOW()
     `);
     await db.execute(sql`
       INSERT INTO analytics_events (event_name, session_id, platform, app_version, language, metadata_json)
