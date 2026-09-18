@@ -1018,7 +1018,7 @@ router.post("/:roomCode/join", roomJoinLimiter, async (req, res) => {
   // matched, every join failed with 503. Row-level locking removes both the
   // precision pitfall and the "two players joining at once" race.
   type JoinOutcome =
-    | { kind: "ok"; row: any }
+    | { kind: "ok"; row: any; memberCredential?: string | null }
     | { kind: "notFound" }
     | { kind: "nameTaken" }
     | { kind: "started" }
@@ -1071,7 +1071,15 @@ router.post("/:roomCode/join", roomJoinLimiter, async (req, res) => {
       .where(eq(roomsTable.roomCode, code))
       .returning();
 
-    return { kind: "ok", row: updated[0] } as const;
+    if (memberCredential) {
+      await tx.insert(roomMembersTable).values({
+        roomId: updated[0].id,
+        playerId,
+        credentialHash: hashRoomMemberCredential(memberCredential),
+      });
+    }
+
+    return { kind: "ok", row: updated[0], memberCredential } as const;
   });
 
   if (outcome.kind === "notFound") { res.status(404).json({ error: "Room not found" }); return; }
