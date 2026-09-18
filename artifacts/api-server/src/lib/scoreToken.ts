@@ -57,7 +57,13 @@ export function issueScoreToken(base: number, collectionWords: Array<{ word: str
   const safeBase = Math.max(0, Math.min(100_000, Math.floor(base)));
   const exp = Date.now() + TTL_MS;
   const jti = crypto.randomBytes(9).toString("base64url");
-  const safeCollectionWords = collectionWords.filter((entry) => typeof entry?.word === "string" && typeof entry?.category === "string").slice(0, 16).map((entry) => ({ word: entry.word.trim().slice(0, 80), category: entry.category.trim().slice(0, 80) })).filter((entry) => entry.word.length > 0 && entry.category.length > 0);\n  const collectionData = Buffer.from(JSON.stringify(safeCollectionWords), "utf8").toString("base64url");\n  const payload = `${safeBase}.${KIND_ROUND}.${exp}.${jti}.${collectionData}`;
+  const safeCollectionWords = collectionWords
+    .filter((entry) => typeof entry?.word === "string" && typeof entry?.category === "string")
+    .slice(0, 16)
+    .map((entry) => ({ word: entry.word.trim().slice(0, 80), category: entry.category.trim().slice(0, 80) }))
+    .filter((entry) => entry.word.length > 0 && entry.category.length > 0);
+  const collectionData = Buffer.from(JSON.stringify(safeCollectionWords), "utf8").toString("base64url");
+  const payload = `${safeBase}.${KIND_ROUND}.${exp}.${jti}.${collectionData}`;
   return `${payload}.${sign(secret, payload)}`;
 }
 
@@ -70,8 +76,8 @@ function parseVerifiedVoucher(
 ): VerifiedVoucher | null {
   if (typeof token !== "string" || token.length > MAX_TOKEN_LENGTH) return null;
   const parts = token.split(".");
-  if (parts.length !== 5) return null;
-  const [baseStr, kind, expStr, jti, sig] = parts;
+  if (parts.length !== 6) return null;
+  const [baseStr, kind, expStr, jti, collectionData, sig] = parts;
   if (kind !== KIND_ROUND || !jti || !collectionData || !sig) return null;
 
   const expected = sign(secret, `${baseStr}.${kind}.${expStr}.${jti}.${collectionData}`);
@@ -87,7 +93,21 @@ function parseVerifiedVoucher(
   const b = Number(baseStr);
   if (!Number.isSafeInteger(exp) || exp <= now) return null;
   if (!Number.isFinite(b) || !Number.isSafeInteger(b) || b < 0 || b > 100_000) return null;
-  let collectionWords: Array<{ word: string; category: string }> = [];\n  try {\n    const parsed = JSON.parse(Buffer.from(collectionData, "base64url").toString("utf8"));\n    if (Array.isArray(parsed)) collectionWords = parsed.filter((entry) => entry && typeof entry.word === "string" && typeof entry.category === "string").slice(0, 16).map((entry) => ({ word: entry.word.trim().slice(0, 80), category: entry.category.trim().slice(0, 80) })).filter((entry) => entry.word.length > 0 && entry.category.length > 0);\n  } catch { return null; }\n  return { base: b, exp, jti, collectionWords };
+
+  let collectionWords: Array<{ word: string; category: string }> = [];
+  try {
+    const parsed = JSON.parse(Buffer.from(collectionData, "base64url").toString("utf8"));
+    if (Array.isArray(parsed)) {
+      collectionWords = parsed
+        .filter((entry) => entry && typeof entry.word === "string" && typeof entry.category === "string")
+        .slice(0, 16)
+        .map((entry) => ({ word: entry.word.trim().slice(0, 80), category: entry.category.trim().slice(0, 80) }))
+        .filter((entry) => entry.word.length > 0 && entry.category.length > 0);
+    }
+  } catch {
+    return null;
+  }
+  return { base: b, exp, jti, collectionWords };
 }
 
 /** Legacy in-process helper retained for tests. */
@@ -110,13 +130,13 @@ export function sumVerifiedBase(
     const voucher = parseVerifiedVoucher(token, secret, now);
     if (!voucher || usedJti.has(voucher.jti)) continue;
     usedJti.set(voucher.jti, voucher.exp);
-    validBases.push(voucher.base);
+    validBases.push({ base: voucher.base, collectionWords: voucher.collectionWords });
   }
 
-  validBases.sort((a, b) => b - a);
+  validBases.sort((a, b) => b.base - a.base);
   const counted = validBases.slice(0, cap);
   return {
-    base: counted.reduce((sum, n) => sum + n, 0),
+    base: counted.reduce((sum, entry) => sum + entry.base, 0),
     verified: counted.length,
   };
 }
@@ -130,7 +150,7 @@ export function sumVerifiedBase(
 export async function sumVerifiedBasePersistent(
   tokens: unknown,
   maxTokens = Number.POSITIVE_INFINITY,
-): Promise<{ base: number; verified: number }> {
+): Promise<{ base: number; verified: number; collectionWords: Array<{ word: string; category: string }> }> {
   if (!Array.isArray(tokens) || tokens.length === 0 || tokens.length > MAX_TOKEN_BATCH) {
     return { base: 0, verified: 0 };
   }
