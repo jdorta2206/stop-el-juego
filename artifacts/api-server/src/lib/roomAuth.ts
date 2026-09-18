@@ -32,6 +32,16 @@ export async function requireRoomMember(
     .limit(1);
   if (!roomRows.length) return false;
 
+  // Logged-in accounts already carry a cryptographically signed identity token;
+  // the room credential is required for guest identities.
+  const signedPlayerId = readPlayerId(req);
+  if (signedPlayerId === playerId) {
+    await db.update(roomMembersTable)
+      .set({ lastSeenAt: new Date() })
+      .where(and(eq(roomMembersTable.roomId, roomRows[0].id), eq(roomMembersTable.playerId, playerId)));
+    return true;
+  }
+
   const memberRows = await db.select({ credentialHash: roomMembersTable.credentialHash })
     .from(roomMembersTable)
     .where(and(
