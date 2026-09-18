@@ -2154,6 +2154,24 @@ router.post("/:roomCode/bluff-vote", writeLimiter, async (req, res) => {
   const room = rooms[0];
   if (room.status !== "bluffvoting") { res.json(formatRoom(room)); return; }
 
+  // 🔒 Only an actual room member may vote, and bluffers cannot vote.
+  // The target and category must also match a real bluff registered in this room.
+  const players = parsePlayers(room.playersJson);
+  const voter = players.find((p: any) => p.playerId === voterId);
+  if (!voter) {
+    res.status(403).json({ error: "Only players in the room can vote" });
+    return;
+  }
+  if (voter.bluffedCategories?.length) {
+    res.status(403).json({ error: "Bluffers cannot vote" });
+    return;
+  }
+  const accused = players.find((p: any) => p.playerId === accusedPlayerId);
+  if (!accused || !Array.isArray(accused.bluffedCategories) || !accused.bluffedCategories.includes(category)) {
+    res.status(400).json({ error: "Invalid bluff target" });
+    return;
+  }
+
   const meta = parseBluffMeta(room.stopperJson) ?? {};
   const bluffVotes = meta.bluffVotes ?? {};
   const bluffDeadline = meta.bluffDeadline ?? new Date().toISOString();
@@ -2163,7 +2181,6 @@ router.post("/:roomCode/bluff-vote", writeLimiter, async (req, res) => {
     bluffVotes[accusedPlayerId][category][voterId] = vote;
   }
 
-  const players = parsePlayers(room.playersJson);
   const nonBlufferIds = players.filter((p: any) => !p.bluffedCategories?.length).map((p: any) => p.playerId);
 
   // Check if all non-bluffers have voted on all categories
