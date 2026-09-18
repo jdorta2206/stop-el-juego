@@ -1442,6 +1442,13 @@ router.post("/:roomCode/category-pack", async (req, res) => {
   const rooms = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, code)).limit(1);
   if (rooms.length === 0) { res.status(404).json({ error: "Room not found" }); return; }
   if (rooms[0].hostId !== hostId) { res.status(403).json({ error: "Not host" }); return; }
+  // 🔒 Category packs are part of the round configuration. Changing them after
+  // the game starts would make clients validate/score against different decks.
+  // Keep the configuration immutable once the lobby leaves "waiting".
+  if (rooms[0].status !== "waiting") {
+    res.status(409).json({ error: "Category pack can only be changed while waiting" });
+    return;
+  }
   if (!["standard", "crazy", "mix", "custom"].includes(pack)) { res.status(400).json({ error: "Invalid pack" }); return; }
 
   if (pack === "custom") {
