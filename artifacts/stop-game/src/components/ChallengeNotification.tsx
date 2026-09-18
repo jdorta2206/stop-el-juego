@@ -4,6 +4,7 @@ import { Swords, X, Check, DoorOpen } from "lucide-react";
 import { respondToChallenge, type IncomingChallenge } from "@/lib/usePresence";
 import { useLocation } from "wouter";
 import { authHeaders } from "@/lib/utils";
+import { saveActiveRoom } from "@/lib/activeRoom";
 
 interface ChallengeNotificationProps {
   challenge: IncomingChallenge;
@@ -49,7 +50,7 @@ export function ChallengeNotification({ challenge, onDismiss }: ChallengeNotific
     if (playerData?.id) {
       try {
         const apiBase = (import.meta as any).env?.VITE_API_URL ?? window.location.origin;
-        await fetch(`${apiBase}/api/rooms/${challenge.roomCode.toUpperCase()}/join`, {
+        const joinResponse = await fetch(`${apiBase}/api/rooms/${challenge.roomCode.toUpperCase()}/join`, {
           method: "POST",
           headers: { "Content-Type": "application/json", ...authHeaders() },
           credentials: "include",
@@ -60,6 +61,9 @@ export function ChallengeNotification({ challenge, onDismiss }: ChallengeNotific
             loginMethod: playerData.loginMethod ?? null,
           }),
         });
+        if (!joinResponse.ok) throw new Error(`join failed: ${joinResponse.status}`);
+        const joined = await joinResponse.json() as { roomCode: string; roomCredential?: string };
+        saveActiveRoom(joined.roomCode, playerData.id, joined.roomCredential);
       } catch { /* silently proceed even if join fails */ }
     }
 
