@@ -36,8 +36,31 @@ export function getSessionToken(): string | null {
 }
 
 export function authHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {};
   const tok = getSessionToken();
-  return tok ? { "x-stop-token": tok } : {};
+  if (tok) headers["x-stop-token"] = tok;
+
+  // Room credentials are scoped to the active room and are never sent to
+  // unrelated APIs. They are used only by room requests made from /room/:code.
+  try {
+    const match = window.location.pathname.match(/^\\/room\\/([^/]+)/i);
+    if (match) {
+      const raw = localStorage.getItem("stop:activeRoom");
+      if (raw) {
+        const saved = JSON.parse(raw) as { code?: string; roomCredential?: string };
+        if (
+          saved?.code &&
+          saved.code.toUpperCase() === decodeURIComponent(match[1]).toUpperCase() &&
+          typeof saved.roomCredential === "string" &&
+          saved.roomCredential.length >= 32
+        ) {
+          headers["x-room-credential"] = saved.roomCredential;
+        }
+      }
+    }
+  } catch {}
+
+  return headers;
 }
 
 export const PUBLIC_SITE_URL = "https://www.stopjuegodepalabras.com";
