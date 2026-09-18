@@ -642,8 +642,30 @@ router.get("/scores/:playerId", async (req, res) => {
   const globalRank = Number((rankRow.rows[0] as any)?.cnt ?? 0) + 1;
   const bestScore = Number((bestRow.rows[0] as any)?.best ?? 0);
 
+  // Public endpoint: never expose billing identifiers, inventory, collection,
+  // streak internals, or other private persistence fields from player_scores.
   res.json({
-    score: { ...ps, rank: globalRank, globalRank, bestScore },
+    score: {
+      playerId: ps.playerId,
+      playerName: ps.playerName,
+      avatarColor: ps.avatarColor,
+      totalScore: ps.totalScore,
+      gamesPlayed: ps.gamesPlayed,
+      wins: ps.wins,
+      isPremium: ps.isPremium,
+      currentStreak: ps.currentStreak,
+      longestStreak: ps.longestStreak,
+      xp: ps.xp,
+      level: ps.level,
+      coins: ps.coins,
+      equippedAvatar: ps.equippedAvatar,
+      equippedFrame: ps.equippedFrame,
+      equippedBackground: ps.equippedBackground,
+      equippedTitle: ps.equippedTitle,
+      rank: globalRank,
+      globalRank,
+      bestScore,
+    },
     recentGames,
   });
 });
