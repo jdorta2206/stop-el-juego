@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
+import crypto from "crypto";
 import { db } from "@workspace/db";
-import { playerScoresTable, gameHistoryTable, pushSubscriptionsTable } from "@workspace/db";
+import { playerScoresTable, gameHistoryTable, pushSubscriptionsTable, scoreBonusClaimsTable } from "@workspace/db";
 import { eq, desc, sql } from "drizzle-orm";
 import { sendPushToPlayer } from "../lib/pushHelper";
 import { SubmitScoreBody, GetLeaderboardQueryParams } from "@workspace/api-zod";
@@ -11,6 +12,16 @@ import {
   isHappyHourActiveForTzOffset,
   HAPPY_HOUR_MULTIPLIER,
 } from "../lib/happyHour";
+
+
+function bonusTokenSetHash(playerId: string, tokens: unknown): string | null {
+  if (!Array.isArray(tokens) || tokens.length === 0) return null;
+  const normalized = tokens
+    .filter((token): token is string => typeof token === "string" && token.length > 0)
+    .sort();
+  if (normalized.length !== tokens.length) return null;
+  return crypto.createHash("sha256").update(playerId + "\n" + normalized.join("\n")).digest("hex");
+}
 
 function calcCoinGain(score: number, won: boolean, mode: string, isBonus: boolean): number {
   if (isBonus) return 0;
@@ -341,18 +352,35 @@ router.post("/scores", scoreLimiter, async (req, res) => {
 
   const isBonus = bonus === true;
 
-  // Bonus submissions reuse the score already saved by the completed game.
-  // Round vouchers are single-use, so requiring them again would reject every
-  // legitimate double-score reward with SCORE_VERIFICATION_REQUIRED.
-  const existingForBonus = isBonus
-    ? await db.select().from(playerScoresTable).where(eq(playerScoresTable.playerId, playerId)).limit(1)
-    : [];
+  // A rewarded-video bonus must consume a server-issued, single-use claim
+  // created from the exact voucher set that funded the original score.
   if (isBonus) {
-    if (existingForBonus.length === 0 || rawScore <= 0 || rawScore > existingForBonus[0].totalScore) {
+    if (mode !== "solo") {
+      res.status(422).json({ error: "INVALID_BONUS_MODE" });
+      return;
+    }
+    const tokenSetHash = bonusTokenSetHash(playerId, scoreTokens);
+    if (!tokenSetHash) {
+      res.status(422).json({ error: "BONUS_PROOF_REQUIRED" });
+      return;
+    }
+    await db.delete(scoreBonusClaimsTable).where(sql`${scoreBonusClaimsTable.expiresAt} < NOW()`);
+    const [claimed] = await db
+      .delete(scoreBonusClaimsTable)
+      .where(sql`${scoreBonusClaimsTable.tokenSetHash} = ${tokenSetHash} AND ${scoreBonusClaimsTable.playerId} = ${playerId}`)
+      .returning({
+        tokenSetHash: scoreBonusClaimsTable.tokenSetHash,
+        maxScore: scoreBonusClaimsTable.maxScore,
+      });
+    if (!claimed || rawScore <= 0 || rawScore > claimed.maxScore) {
       res.status(422).json({ error: "INVALID_BONUS_SCORE" });
       return;
     }
   }
+
+  const existingForBonus = isBonus
+    ? await db.select().from(playerScoresTable).where(eq(playerScoresTable.playerId, playerId)).limit(1)
+    : [];
 
   const { base: verifiedBase, verified, collectionWords } = isBonus
     ? { base: 0, verified: 0, collectionWords: [] as Array<{ word: string; category: string }> }
@@ -474,6 +502,18 @@ router.post("/scores", scoreLimiter, async (req, res) => {
       })
       .returning();
     player = created;
+  }
+
+  if (!isBonus && verified > 0 && scoreTokens) {
+    const tokenSetHash = bonusTokenSetHash(playerId, scoreTokens);
+    if (tokenSetHash) {
+      await db.insert(scoreBonusClaimsTable).values({
+        tokenSetHash,
+        playerId,
+        maxScore: score,
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      }).onConflictDoNothing();
+    }
   }
 
   if (!isBonus && collectionWords.length > 0) {
