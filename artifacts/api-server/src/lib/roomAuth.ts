@@ -21,6 +21,14 @@ function credentialFromRequest(req: Request): string | null {
   return typeof query === "string" && query.length >= 32 ? query : null;
 }
 
+export function verifyRoomMemberCredential(req: Request, storedHash: string): boolean {
+  const credential = credentialFromRequest(req);
+  if (!credential) return false;
+  const supplied = Buffer.from(hashRoomMemberCredential(credential), "hex");
+  const stored = Buffer.from(storedHash, "hex");
+  return supplied.length === stored.length && crypto.timingSafeEqual(supplied, stored);
+}
+
 export async function requireRoomMember(
   req: Request,
   roomCode: string,
