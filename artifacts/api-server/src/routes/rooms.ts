@@ -115,12 +115,21 @@ function isPlayerOnline(code: string, playerId: string): boolean {
 const SUBMIT_GRACE_MS = 15_000;
 const PRESENCE_GRACE_MS = 4_000;
 
-function broadcastRoom(code: string, roomPayload: object) {
+function broadcastRoom(code: string, roomPayload: any) {
   const clients = sseClients.get(code);
   if (!clients || clients.size === 0) return;
-  const data = `data: ${JSON.stringify(roomPayload)}\n\n`;
   for (const client of [...clients]) {
-    try { client.res.write(data); } catch { clients.delete(client); }
+    try {
+      // Public rooms can be watched anonymously, but anonymous spectators must
+      // never receive the same payload as authenticated room members.
+      const isMember = !!client.playerId &&
+        Array.isArray(roomPayload?.players) &&
+        roomPayload.players.some((p: any) => p?.playerId === client.playerId);
+      const payload = roomPayload?.isPublic === true && !isMember
+        ? sanitizeRoomForSpectator(roomPayload)
+        : roomPayload;
+      client.res.write(`data: ${JSON.stringify(payload)}\n\n`);
+    } catch { clients.delete(client); }
   }
 }
 
@@ -972,27 +981,17 @@ router.get("/:roomCode", async (req, res) => {
   // people who are actually in it; a stranger who merely knows the code gets a
   // minimal preview. This closes the info leak AND removes the main way an
   // attacker learned a guest's id (from this very response) to impersonate them.
-  if (full.isPublic !== true) {
-    // Identity resolution. A cryptographically verified token (logged-in users
-    // send x-stop-token / cookie globally) is always trusted. A *self-asserted*
-    // id (?viewerId= or x-viewer-id header) is only trusted when it is a GUEST
-    // id: guest ids aren't discoverable once this gate hides the roster, so they
-    // act as a weak bearer secret. A LOGGED-IN id must NOT be self-assertable —
-    // those ids are public (e.g. the leaderboard), so trusting an unverified
-    // logged-in assertion would let a stranger read any private room that
-    // contains a known account. Logged-in membership therefore requires a real
-    // token match (mirrors verifyClaimedIdentity); no downgrade to assertion.
-    const verified = readPlayerId(req);
-    const asserted =
-      paramStr(req.query["viewerId"]) || paramStr(req.headers["x-viewer-id"]);
-    const viewerId = verified || asserted || "";
-    const isMember =
-      !!viewerId &&
-      (full.hostId === viewerId || players.some((p) => p?.playerId === viewerId));
-    if (!isMember || !(await requireRoomMember(req, roomCode, viewerId))) {
-      res.json(sanitizedRoomPreview(full));
-      return;
-    }
+  // Full room state is reserved for authenticated members. Public rooms
+  // still support anonymous spectating, but those clients receive sanitized
+  // state without answers or private in-round data.
+  const verified = readPlayerId(req);
+  const asserted =
+    paramStr(req.query["viewerId"]) || paramStr(req.headers["x-viewer-id"]);
+  const viewerId = verified || asserted || "";
+  const isMember = !!viewerId && players.some((p: any) => p?.playerId === viewerId);
+  if (!isMember || !(await requireRoomMember(req, roomCode, viewerId))) {
+    res.json(full.isPublic === true ? sanitizeRoomForSpectator(full) : sanitizedRoomPreview(full));
+    return;
   }
 
   res.json(full);
