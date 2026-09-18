@@ -476,7 +476,7 @@ router.post("/scores", scoreLimiter, async (req, res) => {
     player = created;
   }
 
-  if (overtaken.length > 0) {
+  // Collection is server-authoritative: only words embedded in a freshly\n  // validated, single-use score voucher can enter the persistent collection.\n  // Client-supplied collectedWords are intentionally ignored by progress.ts.\n  if (!isBonus && collectionWords.length > 0) {\n    await db.transaction(async (tx) => {\n      const locked = await tx.select({\n        id: playerScoresTable.id,\n        collectedWordsJson: playerScoresTable.collectedWordsJson,\n      }).from(playerScoresTable).where(eq(playerScoresTable.playerId, playerId)).for("update").limit(1);\n      const row = locked[0];\n      if (!row) return;\n      let current: Record<string, unknown> = {};\n      try {\n        const parsed = JSON.parse(row.collectedWordsJson ?? "{}");\n        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) current = parsed as Record<string, unknown>;\n      } catch {}\n      for (const entry of collectionWords) {\n        const word = entry.word.trim().slice(0, 80);\n        const category = entry.category.trim().slice(0, 80);\n        if (!word || !category || Object.keys(current).length >= 500) break;\n        if (!Object.prototype.hasOwnProperty.call(current, word)) current[word] = category;\n      }\n      await tx.update(playerScoresTable).set({ collectedWordsJson: JSON.stringify(current), updatedAt: new Date() }).where(eq(playerScoresTable.id, row.id));\n    });\n  }\n\n  if (overtaken.length > 0) {
     await Promise.allSettled(
       overtaken.map(op =>
         sendPushToPlayer(op.playerId, {
