@@ -327,7 +327,6 @@ router.get("/profile/:playerId", async (req, res) => {
     playerId: ps.playerId,
     playerName: ps.playerName,
     avatarColor: ps.avatarColor,
-    avatarGlyph: equippedAvatarGlyph(ps.equippedAvatar),
     totalScore: ps.totalScore,
     gamesPlayed: ps.gamesPlayed,
     wins: ps.wins,
@@ -609,3 +608,54 @@ router.post("/scores", scoreLimiter, async (req, res) => {
     rank: 0,
     rewards: {
       xpAwarded: xpGain,
+      coinsAwarded: coinGain,
+      happyHourActive,
+      multiplier: happyHourActive ? HAPPY_HOUR_MULTIPLIER : 1,
+    },
+  });
+});
+
+// ============================================================
+// GET /scores/:playerId
+// ============================================================
+router.get("/scores/:playerId", async (req, res) => {
+  const { playerId } = req.params;
+
+  const scores = await db
+    .select()
+    .from(playerScoresTable)
+    .where(eq(playerScoresTable.playerId, playerId))
+    .limit(1);
+
+  if (scores.length === 0) {
+    res.status(404).json({ error: "Player not found" });
+    return;
+  }
+
+  const ps = scores[0];
+
+  const [rankRow, bestRow, recentGames] = await Promise.all([
+    db.execute(sql`
+      SELECT COUNT(*) AS cnt FROM player_scores WHERE total_score > ${ps.totalScore}
+    `),
+    db.execute(sql`
+      SELECT COALESCE(MAX(score), 0) AS best FROM game_history WHERE player_id = ${playerId}
+    `),
+    db
+      .select()
+      .from(gameHistoryTable)
+      .where(eq(gameHistoryTable.playerId, playerId))
+      .orderBy(desc(gameHistoryTable.createdAt))
+      .limit(10),
+  ]);
+
+  const globalRank = Number((rankRow.rows[0] as any)?.cnt ?? 0) + 1;
+  const bestScore = Number((bestRow.rows[0] as any)?.best ?? 0);
+
+  res.json({
+    score: { ...ps, rank: globalRank, globalRank, bestScore },
+    recentGames,
+  });
+});
+
+export default router;
