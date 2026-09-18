@@ -42,7 +42,7 @@ jobs:
         run: |
           set -euo pipefail
           corepack enable
-          pnpm install --frozen-lockfile
+          pnpm install --no-frozen-lockfile
           pnpm --filter @workspace/stop-game build
           LOCAL_ASSET="$(find artifacts/stop-game/dist/assets -maxdepth 1 -type f -name 'index.*.js' | head -1)"
           test -n "$LOCAL_ASSET"
