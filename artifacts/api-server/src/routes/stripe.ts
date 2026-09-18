@@ -23,6 +23,12 @@ router.get("/status", async (req, res) => {
   try {
     const { playerId } = req.query as { playerId?: string };
     if (!playerId) return res.status(400).json({ error: "playerId required" });
+    // 🔒 Never allow the public playerId to be used to inspect or mutate
+    // another player's premium state. The endpoint self-heals isPremium below,
+    // so identity verification is required before reading that account.
+    if (!verifyClaimedIdentity(req, playerId)) {
+      return res.status(403).json({ error: "Identity verification failed" });
+    }
 
     const player = await stripeStorage.getPlayer(playerId);
     if (!player) return res.json({ isPremium: false });
