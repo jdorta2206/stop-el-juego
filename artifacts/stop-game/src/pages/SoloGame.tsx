@@ -60,7 +60,9 @@ const SPEED_ROUND_TIME = 20;
 const CHAOS_ROUND_TIME = 45;
 const MAX_ROUNDS = 3;
 const EASY_LETTERS = ["A", "C", "E", "I", "L", "M", "P", "R", "S", "T"];
-const REWARDED_ADS_DISABLED = import.meta.env.VITE_REWARDED_ADS_DISABLED === "1";
+const REWARDED_ADS_DISABLED =
+  import.meta.env.VITE_REWARDED_ADS_DISABLED === "1" &&
+  new URLSearchParams(window.location.search).get("rewardedAds") !== "1";
 
 function getCrazyCategory(t: any): string | null {
   if (!t.crazyCategories || t.crazyCategories.length === 0) return null;
