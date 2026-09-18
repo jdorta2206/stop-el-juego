@@ -203,10 +203,20 @@ router.post("/:code/start", async (req, res) => {
   const bracket = buildBracket(players);
   const [updated] = await db.update(tournamentsTable)
     .set({ status: "active", bracketJson: JSON.stringify(bracket), updatedAt: new Date() })
-    .where(eq(tournamentsTable.code, code))
+    .where(and(
+      eq(tournamentsTable.code, code),
+      eq(tournamentsTable.updatedAt, t.updatedAt),
+      eq(tournamentsTable.status, "waiting"),
+    ))
     .returning();
 
-  res.json(formatTournament(updated));
+  if (updated) {
+    res.json(formatTournament(updated));
+    return;
+  }
+  const fresh = await db.select().from(tournamentsTable).where(eq(tournamentsTable.code, code)).limit(1);
+  res.status(400).json({ error: fresh[0]?.status === "active" ? "Already started" : "Tournament changed" });
+  return;
 });
 
 router.post("/:code/start-match", requirePlayerIdentity, async (req: AuthedRequest, res) => {
@@ -235,15 +245,35 @@ router.post("/:code/start-match", requirePlayerIdentity, async (req: AuthedReque
     res.status(400).json({ error: "Invalid room code" });
     return;
   }
+  if (match.status === "done") {
+    res.status(400).json({ error: "Match already completed" });
+    return;
+  }
+  if (match.status === "playing" && match.roomCode === roomCode) {
+    res.json(formatTournament(t));
+    return;
+  }
+  if (match.status !== "pending") {
+    res.status(400).json({ error: "Match is not pending" });
+    return;
+  }
 
-  currentRound[matchIdx] = { ...currentRound[matchIdx], roomCode, status: "playing" };
+  currentRound[matchIdx] = { ...match, roomCode, status: "playing" };
   bracket.rounds[bracket.currentRound] = currentRound;
 
   const [updated] = await db.update(tournamentsTable)
     .set({ bracketJson: JSON.stringify(bracket), updatedAt: new Date() })
-    .where(eq(tournamentsTable.code, code))
+    .where(and(
+      eq(tournamentsTable.code, code),
+      eq(tournamentsTable.updatedAt, t.updatedAt),
+      eq(tournamentsTable.status, "active"),
+    ))
     .returning();
 
+  if (!updated) {
+    res.status(409).json({ error: "Tournament changed; retry" });
+    return;
+  }
   res.json(formatTournament(updated));
 });
 
