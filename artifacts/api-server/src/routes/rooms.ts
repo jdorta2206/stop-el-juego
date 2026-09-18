@@ -977,11 +977,11 @@ router.get("/:roomCode", async (req, res) => {
     const verified = readPlayerId(req);
     const asserted =
       paramStr(req.query["viewerId"]) || paramStr(req.headers["x-viewer-id"]);
-    const viewerId = verified || (asserted && !isLoggedInId(asserted) ? asserted : "");
+    const viewerId = verified || asserted || "";
     const isMember =
       !!viewerId &&
       (full.hostId === viewerId || players.some((p) => p?.playerId === viewerId));
-    if (!isMember) {
+    if (!isMember || !(await requireRoomMember(req, roomCode, viewerId))) {
       res.json(sanitizedRoomPreview(full));
       return;
     }
@@ -1606,16 +1606,8 @@ router.get("/:roomCode/events", async (req, res) => {
     const members = parsePlayers(roomRow.playersJson);
     const isMember = !!playerId && members.some((p: any) => p.playerId === playerId);
     if (!isMember) { res.status(403).json({ error: "Not a member of this room" }); return; }
-    // 🔒 If the claimed member is a logged-in account, prove ownership. EventSource
-    // cannot send custom headers, so accept the signed token via the `token` query
-    // param (falls back to the auth cookie). Guests (UUID ids) carry no token and
-    // are gated only by knowing their own random id. Fails open when auth is unset.
-    if (isLoggedInId(playerId) && isAuthConfigured()) {
-      const queryToken = typeof req.query["token"] === "string" ? (req.query["token"] as string) : undefined;
-      const verified = verifyPlayerToken(queryToken) ?? readPlayerId(req);
-      if (verified !== playerId) {
-        res.status(403).json({ error: "Identity verification failed" }); return;
-      }
+    if (!(await requireRoomMember(req, code, playerId))) {
+      res.status(403).json({ error: "Room authentication failed" }); return;
     }
   }
 
