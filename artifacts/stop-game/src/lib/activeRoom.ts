@@ -1,11 +1,11 @@
 const KEY = "stop:activeRoom";
 const TTL_MS = 30 * 60 * 1000;
 
-export type ActiveRoom = { code: string; playerId: string; ts: number };
+export type ActiveRoom = { code: string; playerId: string; roomCredential: string; ts: number };
 
-export function saveActiveRoom(code: string, playerId: string) {
+export function saveActiveRoom(code: string, playerId: string, roomCredential: string) {
   try {
-    const payload: ActiveRoom = { code, playerId, ts: Date.now() };
+    const payload: ActiveRoom = { code, playerId, roomCredential, ts: Date.now() };
     localStorage.setItem(KEY, JSON.stringify(payload));
   } catch {}
 }
@@ -25,7 +25,7 @@ export function loadActiveRoom(): ActiveRoom | null {
     const raw = localStorage.getItem(KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as ActiveRoom;
-    if (!parsed?.code || !parsed?.playerId) return null;
+    if (!parsed?.code || !parsed?.playerId || !parsed?.roomCredential) return null;
     if (Date.now() - (parsed.ts ?? 0) > TTL_MS) {
       localStorage.removeItem(KEY);
       return null;
