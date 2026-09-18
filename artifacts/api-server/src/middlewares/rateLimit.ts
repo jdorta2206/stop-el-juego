@@ -71,3 +71,12 @@ export const inviteLimiter = rateLimit({
   limit: 20,
   keyGenerator: (req) => ipKeyGenerator(req.ip ?? ""),
 });
+
+// Room-join limiter — keyed by IP, not playerId. Guests can choose arbitrary
+// UUIDs, so a playerId-based key could be rotated to bypass room-code enumeration.
+export const roomJoinLimiter = rateLimit({
+  ...baseOpts,
+  windowMs: 60_000,
+  limit: 60,
+  keyGenerator: (req) => ipKeyGenerator(req.ip ?? ""),
+});
