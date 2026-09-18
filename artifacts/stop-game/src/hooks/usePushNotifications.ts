@@ -130,7 +130,7 @@ export function usePushNotifications(playerId: string | undefined, language: str
       const sub = await reg.pushManager.getSubscription();
       if (!sub) return null;
       const res = await fetch(
-        `${API_BASE}/api/notifications/preferences?endpoint=${encodeURIComponent(sub.endpoint)}`,
+        `${API_BASE}/api/notifications/preferences?endpoint=${encodeURIComponent(sub.endpoint)}&playerId=${encodeURIComponent(playerId || "anonymous")}`,
       );
       if (!res.ok) return null;
       return await res.json();
@@ -148,7 +148,7 @@ export function usePushNotifications(playerId: string | undefined, language: str
       const res = await fetch(`${API_BASE}/api/notifications/preferences`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ endpoint: sub.endpoint, ...patch }),
+        body: JSON.stringify({ endpoint: sub.endpoint, playerId: playerId || "anonymous", ...patch }),
       });
       return res.ok;
     } catch { return false; }
@@ -167,7 +167,7 @@ export function usePushNotifications(playerId: string | undefined, language: str
           await fetch(`${API_BASE}/api/notifications/unsubscribe`, {
             method: "DELETE",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ endpoint: sub.endpoint }),
+            body: JSON.stringify({ endpoint: sub.endpoint, playerId: playerId || "anonymous" }),
           });
         } catch (e) {
           console.warn("[push] unsubscribe server request failed", e);
