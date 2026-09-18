@@ -223,7 +223,11 @@ export default function Room() {
     const code = roomCode.toUpperCase();
     const API = getApiUrl();
     const tok = getSessionToken();
-    const url = `${API}/api/rooms/${code}/events?playerId=${player.id}${tok ? `&token=${encodeURIComponent(tok)}` : ""}`;
+    const roomCredential = (() => {
+      try { return JSON.parse(localStorage.getItem("stop:activeRoom") || "{}")?.roomCredential as string | undefined; }
+      catch { return undefined; }
+    })();
+    const url = `${API}/api/rooms/${code}/events?playerId=${encodeURIComponent(player.id)}${tok ? `&token=${encodeURIComponent(tok)}` : ""}${roomCredential ? `&roomCredential=${encodeURIComponent(roomCredential)}` : ""}`;
     let es: EventSource;
     let retryTimeout: ReturnType<typeof setTimeout>;
     let closed = false;
@@ -341,6 +345,7 @@ export default function Room() {
     if (!playerId) return;
 
     hasLeftRef.current = true;
+    const leaveHeaders = { "Content-Type": "application/json", ...authHeaders() };
     clearActiveRoom();
     const url = `${getApiUrl()}/api/rooms/${code.toUpperCase()}/leave`;
     const body = JSON.stringify({ playerId });
@@ -350,7 +355,7 @@ export default function Room() {
     try {
       fetch(url, {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...authHeaders() },
+        headers: leaveHeaders,
         credentials: "include",
         body,
         keepalive: true,
