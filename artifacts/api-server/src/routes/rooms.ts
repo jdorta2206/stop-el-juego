@@ -1057,6 +1057,14 @@ router.post("/:roomCode/join", roomJoinLimiter, async (req, res) => {
         .where(and(eq(roomMembersTable.roomId, raw.id), eq(roomMembersTable.playerId, playerId)))
         .limit(1);
       if (memberRows.length === 0) {
+        // A legacy guest has no cryptographic proof of ownership of its
+        // self-asserted UUID. Do not mint a new credential for it, or an
+        // attacker who knows an old guest id could take over that membership.
+        // Signed accounts can safely upgrade their legacy membership.
+        const signedPlayerId = readPlayerId(req);
+        if (signedPlayerId !== playerId) {
+          return { kind: "started" } as const;
+        }
         memberCredential = generateRoomMemberCredential();
         await tx.insert(roomMembersTable).values({
           roomId: raw.id,
