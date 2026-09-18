@@ -24,6 +24,8 @@ export async function ensureIndexes(): Promise<void> {
     `CREATE UNIQUE INDEX IF NOT EXISTS room_members_room_player_uidx ON room_members (room_id, player_id)`,
     `CREATE UNIQUE INDEX IF NOT EXISTS room_members_credential_hash_uidx ON room_members (credential_hash)`,
     `CREATE INDEX IF NOT EXISTS room_members_player_id_idx ON room_members (player_id)`,
+    `DELETE FROM room_members rm WHERE NOT EXISTS (SELECT 1 FROM rooms r WHERE r.id = rm.room_id)`,
+    `DO $ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'room_members_room_id_fk') THEN ALTER TABLE room_members ADD CONSTRAINT room_members_room_id_fk FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE; END IF; END $`,
 
     `ALTER TABLE rooms ADD COLUMN IF NOT EXISTS tournament_id integer`,
     `ALTER TABLE rooms ADD COLUMN IF NOT EXISTS tournament_match_id text`,
