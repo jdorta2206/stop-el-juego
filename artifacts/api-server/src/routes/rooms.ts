@@ -1041,6 +1041,22 @@ router.post("/:roomCode/join", roomJoinLimiter, async (req, res) => {
     if (collision) return { kind: "nameTaken" } as const;
 
     const existing = players.find((p: any) => p.playerId === playerId);
+    if (existing) {
+      // Legacy-room compatibility: memberships created before room_members
+      // existed are upgraded on the first authorized reconnect.
+      const memberRows = await tx.select({ id: roomMembersTable.id })
+        .from(roomMembersTable)
+        .where(and(eq(roomMembersTable.roomId, raw.id), eq(roomMembersTable.playerId, playerId)))
+        .limit(1);
+      if (memberRows.length === 0) {
+        memberCredential = generateRoomMemberCredential();
+        await tx.insert(roomMembersTable).values({
+          roomId: raw.id,
+          playerId,
+          credentialHash: hashRoomMemberCredential(memberCredential),
+        });
+      }
+    }
     if (!existing) {
       // 🔒 New joiners only (existing players always reconnect): the lobby must
       // still be open ("waiting") and not full. Without this, a stranger could
