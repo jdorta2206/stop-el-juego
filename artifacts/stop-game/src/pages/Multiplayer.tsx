@@ -12,6 +12,10 @@ import { getCurrentLang, getApiUrl } from "@/lib/utils";
 import { loadActiveRoom, clearActiveRoom, saveActiveRoom } from "@/lib/activeRoom";
 import { AnimatePresence, motion } from "framer-motion";
 
+function savedCredentialFromActiveRoom(): string | null {
+  return loadActiveRoom()?.roomCredential ?? null;
+}
+
 interface PublicRoom {
   roomCode: string;
   hostId: string;
@@ -84,6 +88,7 @@ export default function Multiplayer() {
           avatarColor: player.avatarColor,
         } as import("@workspace/api-client-react").JoinRoomRequest & { loginMethod?: string | null },
       });
+      saveActiveRoom(resumeCode, player.id, savedCredentialFromActiveRoom());
       setLocation(`/room/${resumeCode}`);
     } catch {
       clearActiveRoom();
@@ -134,8 +139,6 @@ export default function Multiplayer() {
         } as any,
       });
       saveActiveRoom(room.roomCode, player.id, (room as any).roomCredential);
-      saveActiveRoom(room.roomCode, player.id, (room as any).roomCredential);
-      saveActiveRoom(room.roomCode, player.id, (room as any).roomCredential);
       setLocation(`/room/${room.roomCode}`);
     } catch {
       setError(t.multiplayer.waitingForHost);
@@ -174,6 +177,7 @@ export default function Multiplayer() {
           avatarColor: player.avatarColor,
         } as import("@workspace/api-client-react").JoinRoomRequest & { loginMethod?: string | null },
       });
+      saveActiveRoom(room.roomCode, player.id, (room as any).roomCredential);
       setLocation(`/room/${room.roomCode}`);
     } catch (err) {
       setError(describeJoinError(err));
@@ -192,6 +196,7 @@ export default function Multiplayer() {
           avatarColor: player.avatarColor,
         } as import("@workspace/api-client-react").JoinRoomRequest & { loginMethod?: string | null },
       });
+      saveActiveRoom(room.roomCode, player.id, (room as any).roomCredential);
       setLocation(`/room/${room.roomCode}`);
     } catch (err) {
       setError(describeJoinError(err));
