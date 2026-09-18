@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
 import { usePlayer } from "@/hooks/use-player";
-import { useInventory, type ShopItem as InventoryShopItem } from "@/hooks/useInventory";
+import { useInventory, type ShopItem as InventoryShopItem, type TitleView } from "@/hooks/useInventory";
 import { Button } from "@/components/ui";
 import { toast } from "sonner";
 import { Check, Sparkles, Coins, ShoppingBag, Tag } from "lucide-react";
