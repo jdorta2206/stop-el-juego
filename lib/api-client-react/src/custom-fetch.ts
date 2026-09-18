@@ -324,6 +324,33 @@ export async function customFetch<T = unknown>(
   // 🔐 Attach the player session token (cross-origin fallback for blocked
   // third-party cookies) so authenticated endpoints can bind the request to the
   // caller's account. No-op outside the browser or when not logged in.
+  // 🔑 Attach the active room's member credential only to requests for
+  // that exact room. This keeps guest membership proof working for generated
+  // room hooks (/join, /room GET, /results) without leaking the credential to
+  // unrelated APIs.
+  if (!headers.has("x-room-credential") && typeof window !== "undefined") {
+    try {
+      const rawUrl = resolveUrl(resolvedInput);
+      const match = rawUrl.match(/(?:^|\\/)api\\/rooms\\/([^/?#]+)(?:[/?#]|$)/i);
+      if (match) {
+        const savedRaw = window.localStorage?.getItem("stop:activeRoom");
+        if (savedRaw) {
+          const saved = JSON.parse(savedRaw) as { code?: string; roomCredential?: string };
+          const roomCode = decodeURIComponent(match[1]).toUpperCase();
+          if (
+            saved?.code?.toUpperCase() === roomCode &&
+            typeof saved.roomCredential === "string" &&
+            saved.roomCredential.length >= 32
+          ) {
+            headers.set("x-room-credential", saved.roomCredential);
+          }
+        }
+      }
+    } catch {
+      // Ignore malformed/missing storage.
+    }
+  }
+
   if (!headers.has("x-stop-token") && typeof window !== "undefined") {
     try {
       const w = window as unknown as {
