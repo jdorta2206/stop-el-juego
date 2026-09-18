@@ -1673,7 +1673,10 @@ router.get("/:roomCode/events", async (req, res) => {
   const players = parsePlayers(roomRow.playersJson);
   const playerIds = players.map((p: any) => p.playerId).filter(Boolean);
   const cosmeticsMap = await fetchCosmeticsForPlayers(playerIds);
-  const initialPayload = formatRoom(roomRow, cosmeticsMap);
+  const initialFull = formatRoom(roomRow, cosmeticsMap);
+  const initialPayload = (roomRow as any).isPublic === true && !sseIsMember
+    ? sanitizeRoomForSpectator(initialFull)
+    : initialFull;
   res.write(`data: ${JSON.stringify(initialPayload)}\n\n`);
 
   const client: SseClient = { res, playerId };
