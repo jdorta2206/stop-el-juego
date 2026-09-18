@@ -143,3 +143,53 @@ export function dealPriceFor(itemId: string, now: Date = new Date()): number | n
 export function isWeeklyShopItem(itemId: string, now: Date = new Date()): boolean {
   return getWeeklyShop(now).items.some((item) => item.id === itemId);
 }
+
+
+// ── Escaparate semanal ──────────────────────────────────────────────────────
+export interface WeeklyShop { items: ShopItem[]; deals: DailyDeal[]; resetAt: number; weekKey: string; }
+const WEEKLY_ITEM_COUNT = 12;
+const WC_MARKER = "_wc_";
+
+function mondayStart(now: Date): Date {
+  const d = new Date(now); d.setUTCHours(0, 0, 0, 0);
+  const day = d.getUTCDay(); const daysSinceMonday = (day + 6) % 7;
+  d.setUTCDate(d.getUTCDate() - daysSinceMonday); return d;
+}
+function weeklyKey(now: Date): string { return mondayStart(now).toISOString().slice(0, 10); }
+export function shopResetAt(now: Date = new Date()): number {
+  const next = mondayStart(now); next.setUTCDate(next.getUTCDate() + 7); return next.getTime();
+}
+function shuffled(items: ShopItem[], seed: string): ShopItem[] {
+  const rand = mulberry32(xfnv1a(seed)); const result = [...items];
+  for (let i = result.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [result[i], result[j]] = [result[j], result[i]]; }
+  return result;
+}
+function selectWithoutPrevious(key: string): ShopItem[] {
+  const available = SHOP_ITEMS.filter((item) => !item.id.includes(WC_MARKER));
+  const a = shuffled(available.filter((i) => i.kind === "avatar"), "stop-weekly:" + key + ":a").slice(0, 5);
+  const f = shuffled(available.filter((i) => i.kind === "frame"), "stop-weekly:" + key + ":f").slice(0, 4);
+  const b = shuffled(available.filter((i) => i.kind === "background"), "stop-weekly:" + key + ":b").slice(0, 3);
+  return shuffled([...a, ...f, ...b].slice(0, WEEKLY_ITEM_COUNT), "stop-weekly:" + key + ":display");
+}
+function selectWeeklyItems(key: string): ShopItem[] {
+  const available = SHOP_ITEMS.filter((item) => !item.id.includes(WC_MARKER));
+  const prevDate = new Date(key + "T00:00:00.000Z"); prevDate.setUTCDate(prevDate.getUTCDate() - 7);
+  const previous = new Set(selectWithoutPrevious(prevDate.toISOString().slice(0, 10)).map((i) => i.id));
+  const fresh = available.filter((i) => !previous.has(i.id));
+  const pool = fresh.length >= WEEKLY_ITEM_COUNT ? fresh : available;
+  const a = shuffled(pool.filter((i) => i.kind === "avatar"), "stop-weekly:" + key + ":a").slice(0, 5);
+  const f = shuffled(pool.filter((i) => i.kind === "frame"), "stop-weekly:" + key + ":f").slice(0, 4);
+  const b = shuffled(pool.filter((i) => i.kind === "background"), "stop-weekly:" + key + ":b").slice(0, 3);
+  const picked = [...a, ...f, ...b]; const selected = new Set(picked.map((i) => i.id));
+  if (picked.length < WEEKLY_ITEM_COUNT) for (const i of shuffled(pool, "stop-weekly:" + key + ":fill")) { if (!selected.has(i.id)) { picked.push(i); selected.add(i.id); } if (picked.length >= WEEKLY_ITEM_COUNT) break; }
+  return shuffled(picked.slice(0, WEEKLY_ITEM_COUNT), "stop-weekly:" + key + ":display");
+}
+export function getWeeklyShop(now: Date = new Date()): WeeklyShop {
+  const key = weeklyKey(now); const items = selectWeeklyItems(key);
+  const deals = shuffled(items, "stop-weekly-deals:" + key).slice(0, Math.min(DEAL_COUNT, items.length)).map((item, n) => {
+    const discountPct = DISCOUNTS[(xfnv1a(key + ":deal:" + n) % DISCOUNTS.length)];
+    return { id: item.id, originalPrice: item.price, price: Math.max(1, Math.round(item.price * (100 - discountPct) / 100)), discountPct };
+  });
+  return { items, deals, resetAt: shopResetAt(now), weekKey: key };
+}
+export function isWeeklyShopItem(itemId: string, now: Date = new Date()): boolean { return getWeeklyShop(now).items.some((i) => i.id === itemId); }
