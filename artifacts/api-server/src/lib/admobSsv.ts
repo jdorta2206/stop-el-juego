@@ -45,16 +45,28 @@ export async function verifyAdMobSsv(originalUrl: string): Promise<
   const queryStart = originalUrl.indexOf("?");
   if (queryStart < 0) return { valid: false, error: "Missing query string" };
 
+  // Google signs the exact raw query string, preserving parameter order and
+  // percent-encoding. The final two parameters are always signature and key_id.
+  // Do not parse/re-serialize the query before verification.
   const rawQuery = originalUrl.slice(queryStart + 1);
-  const signatureIndex = rawQuery.lastIndexOf("&signature=");
-  if (signatureIndex < 0) return { valid: false, error: "Missing signature" };
+  const signatureMarker = rawQuery.lastIndexOf("&signature=");
+  const signatureStart = signatureMarker >= 0
+    ? signatureMarker + 1
+    : rawQuery.startsWith("signature=") ? 0 : -1;
+  if (signatureStart < 0) return { valid: false, error: "Missing signature" };
 
-  const signedContent = rawQuery.slice(0, signatureIndex);
-  const signedTail = rawQuery.slice(signatureIndex + 1);
+  const signedContent = rawQuery.slice(0, signatureStart - (signatureMarker >= 0 ? 1 : 0));
+  const signedTail = rawQuery.slice(signatureStart);
   const sigMatch = signedTail.match(/^signature=([^&]+)&key_id=([^&]+)$/);
   if (!sigMatch) return { valid: false, error: "Invalid signature/key_id ordering" };
 
-  const signature = decodeBase64Url(decodeURIComponent(sigMatch[1]));
+  let signature: Buffer;
+  try {
+    signature = decodeBase64Url(decodeURIComponent(sigMatch[1]));
+  } catch {
+    return { valid: false, error: "Invalid signature encoding" };
+  }
+
   const keyId = Number(decodeURIComponent(sigMatch[2]));
   if (!Number.isSafeInteger(keyId)) return { valid: false, error: "Invalid key_id" };
 

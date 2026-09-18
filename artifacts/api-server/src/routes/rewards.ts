@@ -182,7 +182,30 @@ router.get("/admob-result/:requestId", async (req, res) => {
       `) as unknown as SqlResult<{ rewarded: boolean }>;
 
       if (updated.rows?.[0]?.rewarded) {
-        res.json({ ready: true, rewarded: true });
+        res.json({ ready: true, rewarded: true, source: "admob" });
+        return;
+      }
+    }
+
+    // Google recommends using the client-side earned callback for immediate UX,
+    // while validating the same reward asynchronously with SSV. The Android
+    // activity only writes this state after AdMob invokes onUserEarnedReward;
+    // it never writes rewarded=true. This keeps SSV as the trusted audit path
+    // without leaving the player stuck on "Cargando anuncio..." while Google
+    // delivers a delayed callback.
+    if (row.client_state === "earned" && !row.rewarded) {
+      const updated = await db.execute(sql`
+        UPDATE admob_reward_requests
+        SET consumed_at = NOW()
+        WHERE request_id = ${requestId}
+          AND consumed_at IS NULL
+          AND rewarded = false
+          AND client_state = 'earned'
+        RETURNING request_id
+      `) as unknown as SqlResult<{ request_id: string }>;
+
+      if (updated.rows?.[0]?.request_id) {
+        res.json({ ready: true, rewarded: true, source: "client" });
         return;
       }
     }

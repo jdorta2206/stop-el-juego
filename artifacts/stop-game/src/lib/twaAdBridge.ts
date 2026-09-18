@@ -1,8 +1,10 @@
 const RESULT_BASE = "/api/rewards/admob-result";
-const RESULT_TIMEOUT_MS = 45_000;
+// SSV callbacks can arrive after the ad has already been dismissed.
+// Keep the web-side request alive long enough to reconcile a delayed callback.
+const RESULT_TIMEOUT_MS = 120_000;
 
 type RewardedPlacement = "extra_time" | "hint" | "double_points" | "skip_round" | "extra_pack";
-type RewardResult = { rewarded: boolean; source: "admob" | "skipped" | "error"; errorCode?: number; errorDomain?: string; errorMessage?: string };
+type RewardResult = { rewarded: boolean; source: "admob" | "client" | "skipped" | "error"; errorCode?: number; errorDomain?: string; errorMessage?: string };
 
 let initialized = false;
 let pendingPlayerId = "guest";
@@ -52,7 +54,7 @@ async function readResult(requestId: string): Promise<RewardResult | null> {
     const data = await response.json();
     if (data?.ready !== true) return null;
     return data.rewarded === true
-      ? { rewarded: true, source: "admob" }
+      ? { rewarded: true, source: data.source === "client" ? "client" : "admob" }
       : { rewarded: false, source: "skipped" };
   } catch {
     return null;
