@@ -40,6 +40,23 @@ jobs:
               pos=i+10
           PY
 
+          echo "=== PAUSE FLAG USAGES ==="
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('/tmp/prod.js').read_text(errors='ignore')
+          for kw in ['lM()', 'iM()', '$S()', 'setTimeLeft']:
+              print('KW', kw, 'COUNT', s.count(kw))
+              pos=0
+              shown=0
+              while shown < 6:
+                  i=s.find(kw,pos)
+                  if i < 0: break
+                  print('---',kw,'AT',i,'---')
+                  print(s[max(0,i-800):i+1800])
+                  pos=i+len(kw)
+                  shown += 1
+          PY
+
           echo '=== SSV URL PROBE ==='
           curl -sS -o /tmp/ssv-body -w 'HTTP %{http_code}\n' --max-time 30 https://www.stopjuegodepalabras.com/api/rewards/admob-ssv
           cat /tmp/ssv-body
