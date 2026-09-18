@@ -1,6 +1,7 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { getLang, getT } from "@/i18n/index";
+import { loadActiveRoom } from "@/lib/activeRoom";
 
 /**
  * Returns the API base URL. Production is same-origin. An old VITE_API_URL
@@ -37,7 +38,11 @@ export function getSessionToken(): string | null {
 
 export function authHeaders(): Record<string, string> {
   const tok = getSessionToken();
-  return tok ? { "x-stop-token": tok } : {};
+  const room = loadActiveRoom();
+  return {
+    ...(tok ? { "x-stop-token": tok } : {}),
+    ...(room?.roomCredential ? { "X-Room-Credential": room.roomCredential } : {}),
+  };
 }
 
 export const PUBLIC_SITE_URL = "https://www.stopjuegodepalabras.com";
