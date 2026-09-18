@@ -4,6 +4,7 @@ import { getT } from "@/i18n/index";
 import { detectPaymentChannel, hasAndroidAppReferrer } from "@/lib/playBilling";
 import { initTwaAdBridge, isTwaAdBridgeAvailable, requestRewardedAd, setRewardedAdPlayerId } from "@/lib/twaAdBridge";
 import { pauseGameTimer, resumeGameTimer } from "@/lib/timerPauseGuard";
+import { trackAnalyticsEvent } from "@/lib/analyticsClient";
 
 const ADS_DISABLED = import.meta.env.VITE_ADS_DISABLED === "1";
 const ADSTERRA_BANNER_KEY = ADS_DISABLED ? undefined : ((import.meta.env.VITE_ADSTERRA_BANNER_KEY as string | undefined) ?? "1212cb86d493b763d38d4523eec88cac");
@@ -99,6 +100,8 @@ export function RewardedAd({ onComplete, onSkip, playerId, rewardType = "points"
 
   const startWatching = async () => {
     setRewardedAdPlayerId(playerId);
+    const placement = rewardType === "extraTime" ? "extra_time" : rewardType === "hint" ? "hint" : "double_points";
+    void trackAnalyticsEvent("rewarded_ad_requested", { metadata: { placement } });
     pauseGameTimer();
     window.dispatchEvent(new Event(GAME_TIMER_PAUSE_EVENT));
     setPhase("loading");
@@ -111,10 +114,11 @@ export function RewardedAd({ onComplete, onSkip, playerId, rewardType = "points"
       new URLSearchParams(window.location.search).get("source") === "twa";
 
     if (bridgeReady || knownTwa) {
-      const placement = rewardType === "extraTime" ? "extra_time" : rewardType === "hint" ? "hint" : "double_points";
       const result = await requestRewardedAd(placement);
       if (result.rewarded === true && (result.source === "admob" || result.source === "client")) {
         setPhase("done");
+        void trackAnalyticsEvent("rewarded_ad_completed", { metadata: { placement, source: result.source } });
+        void trackAnalyticsEvent("powerup_used", { metadata: { powerup: placement } });
         window.setTimeout(() => onComplete(rewardAmount), 500);
       } else {
         const detail = [
@@ -123,6 +127,7 @@ export function RewardedAd({ onComplete, onSkip, playerId, rewardType = "points"
           result.errorMessage || "",
         ].filter(Boolean).join(" · ");
         setErrorDetail(detail);
+        void trackAnalyticsEvent("rewarded_ad_failed", { metadata: { placement, error: detail.slice(0, 300) } });
         setPhase("error");
         window.setTimeout(() => onSkip(), detail ? 5000 : 900);
       }
