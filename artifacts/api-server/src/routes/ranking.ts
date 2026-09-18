@@ -4,6 +4,7 @@ import { db } from "@workspace/db";
 import { playerScoresTable, gameHistoryTable, pushSubscriptionsTable, scoreBonusClaimsTable } from "@workspace/db";
 import { eq, desc, sql } from "drizzle-orm";
 import { sendPushToPlayer } from "../lib/pushHelper";
+import { resolveCosmetic } from "../lib/inventoryCatalog";
 import { SubmitScoreBody, GetLeaderboardQueryParams } from "@workspace/api-zod";
 import { scoreLimiter } from "../middlewares/rateLimit";
 import { verifyClaimedIdentity } from "../lib/playerAuth";
@@ -100,6 +101,12 @@ export function calculateStreak(
   return { newStreak, updatedToday: true };
 }
 
+function equippedAvatarGlyph(id: unknown): string | null {
+  if (typeof id !== "string" || !id) return null;
+  const cosmetic = resolveCosmetic(id);
+  return cosmetic?.kind === "avatar" ? cosmetic.glyph : null;
+}
+
 function parseAchievementCount(json: unknown): number {
   try {
     const parsed = JSON.parse((json as string) ?? "[]");
@@ -136,6 +143,7 @@ router.get("/scores", async (req, res) => {
       playerId: p.player_id,
       playerName: p.player_name,
       avatarColor: p.avatar_color,
+      avatarGlyph: equippedAvatarGlyph(p.equipped_avatar),
       totalScore: p.total_score,
       gamesPlayed: p.games_played,
       wins: p.wins,
@@ -161,6 +169,7 @@ router.get("/weekly", async (req, res) => {
       gh.player_id        AS "playerId",
       ps.player_name      AS "playerName",
       ps.avatar_color     AS "avatarColor",
+      ps.equipped_avatar AS "equippedAvatar",
       ps.current_streak   AS "currentStreak",
       ps.is_premium       AS "isPremium",
       ps.achievements_json AS "achievementsJson",
@@ -170,7 +179,7 @@ router.get("/weekly", async (req, res) => {
     FROM game_history gh
     LEFT JOIN player_scores ps ON gh.player_id = ps.player_id
     WHERE gh.created_at >= date_trunc('week', NOW() AT TIME ZONE 'UTC')
-    GROUP BY gh.player_id, ps.player_name, ps.avatar_color, ps.current_streak, ps.is_premium, ps.achievements_json
+    GROUP BY gh.player_id, ps.player_name, ps.avatar_color, ps.equipped_avatar, ps.current_streak, ps.is_premium, ps.achievements_json
     ORDER BY SUM(gh.score) DESC
     LIMIT 100
   `);
@@ -179,6 +188,7 @@ router.get("/weekly", async (req, res) => {
     playerId:      p.playerId,
     playerName:    p.playerName ?? "—",
     avatarColor:   p.avatarColor ?? "#e53e3e",
+    avatarGlyph:  equippedAvatarGlyph(p.equippedAvatar),
     totalScore:    Number(p.totalScore ?? 0),
     gamesPlayed:   Number(p.gamesPlayed ?? 0),
     wins:          Number(p.wins ?? 0),
