@@ -126,7 +126,7 @@ export default function Room() {
     return t && m ? { code: t, matchId: m } : null;
   })();
   const { player } = usePlayer();
-  const { isPremium: meIsPremium } = usePremium(player?.id);
+  const { isPremium: meIsPremium, loading: mePremiumLoading } = usePremium(player?.id);
   const { followedIds, follow, unfollow } = useFollows(player?.id);
   // The host's own custom packs (premium feature). Non-premium players see
   // an empty list and the custom-pack section in the lobby is hidden for them.
@@ -542,7 +542,7 @@ export default function Room() {
   const handleRematch = useCallback(async () => {
     if (rematchLoading) return;
     if (rematchCode) {
-      await maybeShowInterstitial(meIsPremium);
+      await maybeShowInterstitial(meIsPremium || mePremiumLoading);
       setLocation(`/sala/${rematchCode}`);
       return;
     }
@@ -557,7 +557,7 @@ export default function Room() {
       const j = await r.json();
       if (j.rematchCode) {
         setRematchCode(j.rematchCode);
-        await maybeShowInterstitial(meIsPremium);
+        await maybeShowInterstitial(meIsPremium || mePremiumLoading);
         setLocation(`/sala/${j.rematchCode}`);
       }
     } catch {} finally { setRematchLoading(false); }
