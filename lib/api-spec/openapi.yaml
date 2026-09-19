@@ -422,6 +422,9 @@ components:
           type: string
         avatarColor:
           type: string
+        picture:
+          type: string
+          nullable: true
         score:
           type: integer
         letter:
@@ -518,6 +521,18 @@ components:
           type: string
         avatarColor:
           type: string
+        picture:
+          type: string
+          nullable: true
+        equippedAvatar:
+          type: string
+          nullable: true
+        equippedFrame:
+          type: string
+          nullable: true
+        equippedTitle:
+          type: string
+          nullable: true
         score:
           type: integer
         isHost:
@@ -603,6 +618,9 @@ components:
           type: string
         avatarColor:
           type: string
+        picture:
+          type: string
+          nullable: true
         loginMethod:
           type: string
           nullable: true
