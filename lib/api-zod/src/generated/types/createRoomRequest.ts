@@ -10,6 +10,7 @@ export interface CreateRoomRequest {
   hostId: string;
   hostName: string;
   avatarColor?: string;
+  picture?: string | null;
   maxRounds?: number;
   language?: string;
   loginMethod?: string | null;
