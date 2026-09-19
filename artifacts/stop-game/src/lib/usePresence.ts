@@ -10,6 +10,9 @@ export interface OnlinePlayer {
   playerId: string;
   name: string;
   picture: string | null;
+  equippedAvatar?: string | null;
+  equippedFrame?: string | null;
+  equippedTitle?: string | null;
   avatarColor: string;
   provider: string | null;
   roomCode: string | null;

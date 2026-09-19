@@ -1,5 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
+import { playerScoresTable } from "@workspace/db";
+import { inArray } from "drizzle-orm";
 import { roomsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { sendPushToPlayer, notifyFollowersPlayerOnline } from "../lib/pushHelper";
@@ -99,7 +101,7 @@ router.post("/ping", presenceLimiter, (req, res) => {
 });
 
 // GET /api/presence/online
-router.get("/online", (_req, res) => {
+router.get("/online", async (_req, res) => {
   const cutoff = Date.now() - 90 * 1000;
   const online: Array<{
     playerId: string;
@@ -117,6 +119,28 @@ router.get("/online", (_req, res) => {
     }
   }
 
+  const ids = online.map(p => p.playerId);
+  if (ids.length > 0) {
+    try {
+      const cosmetics = await db.select({
+        playerId: playerScoresTable.playerId,
+        profilePicture: playerScoresTable.profilePicture,
+        equippedAvatar: playerScoresTable.equippedAvatar,
+        equippedFrame: playerScoresTable.equippedFrame,
+        equippedTitle: playerScoresTable.equippedTitle,
+      }).from(playerScoresTable).where(inArray(playerScoresTable.playerId, ids));
+      const byId = new Map(cosmetics.map(c => [c.playerId, c]));
+      for (const p of online) {
+        const c = byId.get(p.playerId);
+        if (c) {
+          (p as any).picture = c.profilePicture ?? p.picture ?? null;
+          (p as any).equippedAvatar = c.equippedAvatar ?? null;
+          (p as any).equippedFrame = c.equippedFrame ?? null;
+          (p as any).equippedTitle = c.equippedTitle ?? null;
+        }
+      }
+    } catch {}
+  }
   online.sort((a, b) => b.lastSeen - a.lastSeen);
   return res.json({ online });
 });

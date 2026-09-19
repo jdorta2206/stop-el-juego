@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { Layout } from "@/components/Layout";
+import { Layout, ProfilePhotoAvatar } from "@/components/Layout";
 import { usePlayer } from "@/hooks/use-player";
 import { useFollows, type FollowedFriend } from "@/lib/useFollows";
 import { usePresence, sendChallenge, pollChallengeStatus, type OnlinePlayer } from "@/lib/usePresence";
@@ -34,25 +34,10 @@ function ProviderDot({ provider }: { provider: string | null }) {
   );
 }
 
-function Avatar({ picture, name, avatarColor, size = 44 }: {
-  picture?: string | null; name: string; avatarColor?: string; size?: number;
+function Avatar({ picture, name, avatarColor, frame, title, glyph, size = 44 }: {
+  picture?: string | null; name: string; avatarColor?: string; frame?: string | null; title?: string | null; glyph?: string | null; size?: number;
 }) {
-  const [err, setErr] = useState(false);
-  if (picture && !err) {
-    return (
-      <img src={picture} alt={name} onError={() => setErr(true)}
-        className="rounded-full object-cover flex-shrink-0"
-        style={{ width: size, height: size }}
-      />
-    );
-  }
-  return (
-    <div className="rounded-full flex items-center justify-center font-black text-white flex-shrink-0"
-      style={{ width: size, height: size, background: avatarColor || "#e53e3e", fontSize: size * 0.4 }}
-    >
-      {name[0]?.toUpperCase() || "?"}
-    </div>
-  );
+  return <ProfilePhotoAvatar picture={picture} glyph={glyph} name={name} color={avatarColor} frame={frame} title={title} size={`w-${Math.max(6, Math.round(size/4))} h-${Math.max(6, Math.round(size/4))}`} />;
 }
 
 type ChallengeState = "idle" | "sending" | "waiting";
@@ -135,7 +120,7 @@ function FriendCard({
       style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}
     >
       <div className="relative flex-shrink-0">
-        <Avatar picture={friend.followedPicture} name={friend.followedName} avatarColor={friend.followedAvatarColor} size={44} />
+        <Avatar picture={friend.followedPicture} name={friend.followedName} avatarColor={friend.followedAvatarColor} frame={(friend as any).equippedFrame} title={(friend as any).equippedTitle} glyph={(friend as any).equippedAvatar} size={44} />
         <span className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-[#0d1757] ${
           friend.isOnline ? "bg-green-400 shadow-[0_0_6px_#4ade80]" : "bg-gray-600"
         }`} />
@@ -270,7 +255,7 @@ function OnlinePlayerCard({
       style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}
     >
       <div className="relative flex-shrink-0">
-        <Avatar picture={player.picture} name={player.name} avatarColor={player.avatarColor} size={44} />
+        <Avatar picture={player.picture} name={player.name} avatarColor={player.avatarColor} frame={(player as any).equippedFrame} title={(player as any).equippedTitle} glyph={(player as any).equippedAvatar} size={44} />
         <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-[#0d1757] bg-green-400 shadow-[0_0_6px_#4ade80]" />
       </div>
       <div className="flex-1 min-w-0">

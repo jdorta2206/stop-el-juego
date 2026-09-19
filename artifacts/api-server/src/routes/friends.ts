@@ -39,6 +39,8 @@ router.get("/list/:followerId", async (req, res) => {
           equippedAvatar: playerScoresTable.equippedAvatar,
           equippedFrame: playerScoresTable.equippedFrame,
           equippedBackground: playerScoresTable.equippedBackground,
+          equippedTitle: playerScoresTable.equippedTitle,
+          profilePicture: playerScoresTable.profilePicture,
           isPremium: playerScoresTable.isPremium,
         })
         .from(playerScoresTable)
@@ -69,12 +71,13 @@ router.get("/list/:followerId", async (req, res) => {
         followerId: f.followerId,
         followedId: f.followedId,
         followedName: p?.playerName ?? f.followedName,
-        followedPicture: f.followedPicture,
+        followedPicture: p?.profilePicture ?? f.followedPicture,
         followedAvatarColor: p?.avatarColor ?? f.followedAvatarColor,
         followedProvider: f.followedProvider,
         equippedAvatar: p?.equippedAvatar ?? null,
         equippedFrame: p?.equippedFrame ?? null,
         equippedBackground: p?.equippedBackground ?? null,
+        equippedTitle: p?.equippedTitle ?? null,
         isPremium: p?.isPremium ?? false,
       };
     });
@@ -93,6 +96,7 @@ router.get("/list/:followerId", async (req, res) => {
       equippedAvatar: null,
       equippedFrame: null,
       equippedBackground: null,
+      equippedTitle: null,
       isPremium: false,
     }));
     return res.json({ friends: fallback });

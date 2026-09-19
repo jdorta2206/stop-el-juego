@@ -13,6 +13,10 @@ export interface FollowedFriendBase {
   followedPicture: string | null;
   followedAvatarColor: string;
   followedProvider: string | null;
+  equippedAvatar?: string | null;
+  equippedFrame?: string | null;
+  equippedTitle?: string | null;
+  equippedBackground?: string | null;
   createdAt: string;
 }
 

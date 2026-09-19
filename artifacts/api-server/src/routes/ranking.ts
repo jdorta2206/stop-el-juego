@@ -172,8 +172,10 @@ router.get("/weekly", async (req, res) => {
       ps.player_name      AS "playerName",
       ps.avatar_color     AS "avatarColor",
       ps.equipped_avatar AS "equippedAvatar",
+      ps.equipped_title AS "equippedTitle",
       ps.current_streak   AS "currentStreak",
-      ps.profile_picture AS "picture",\n      ps.equipped_frame AS "equippedFrame",
+      ps.profile_picture AS "picture",
+      ps.equipped_frame AS "equippedFrame",
       ps.is_premium       AS "isPremium",
       ps.achievements_json AS "achievementsJson",
       SUM(gh.score)       AS "totalScore",
@@ -182,7 +184,7 @@ router.get("/weekly", async (req, res) => {
     FROM game_history gh
     LEFT JOIN player_scores ps ON gh.player_id = ps.player_id
     WHERE gh.created_at >= date_trunc('week', NOW() AT TIME ZONE 'UTC')
-    GROUP BY gh.player_id, ps.player_name, ps.avatar_color, ps.profile_picture, ps.equipped_avatar, ps.equipped_frame, ps.current_streak, ps.is_premium, ps.achievements_json
+    GROUP BY gh.player_id, ps.player_name, ps.avatar_color, ps.profile_picture, ps.equipped_avatar, ps.equipped_frame, ps.equipped_title, ps.current_streak, ps.is_premium, ps.achievements_json
     ORDER BY SUM(gh.score) DESC
     LIMIT 100
   `);
@@ -195,10 +197,7 @@ router.get("/weekly", async (req, res) => {
     totalScore:    Number(p.totalScore ?? 0),
     gamesPlayed:   Number(p.gamesPlayed ?? 0),
     wins:          Number(p.wins ?? 0),
-    picture:         p.picture ?? null,
-    avatarFrame:     p.equippedFrame ?? null,
-    picture:         p.picture ?? null,
-    avatarFrame:     p.equippedFrame ?? null,
+    picture: p.picture ?? null,\n    avatarFrame: p.equippedFrame ?? null,\n    equippedTitle: p.equippedTitle ?? null,
     picture:         p.picture ?? null,
     avatarFrame:     p.equippedFrame ?? null,
     currentStreak: Number(p.currentStreak ?? 0),
@@ -232,7 +231,7 @@ router.get("/weekly/me", requirePlayerIdentity, async (req: AuthedRequest, res) 
       GROUP BY player_id
     )
     SELECT ps.player_id AS "playerId", p.player_name AS "playerName",
-           p.avatar_color AS "avatarColor", p.profile_picture AS "picture", p.equipped_frame AS "equippedFrame", ps.total_score AS "totalScore",
+           p.avatar_color AS "avatarColor", p.profile_picture AS "picture", p.equipped_frame AS "equippedFrame", p.equipped_avatar AS "equippedAvatar", p.equipped_title AS "equippedTitle", ps.total_score AS "totalScore",
            ps.games_played AS "gamesPlayed", ps.wins AS wins,
            1 + (SELECT COUNT(*) FROM period_scores higher WHERE higher.total_score > ps.total_score) AS rank
     FROM period_scores ps
@@ -248,7 +247,7 @@ router.get("/weekly/me", requirePlayerIdentity, async (req: AuthedRequest, res) 
   }
   res.json({
     playerId: row.playerId, playerName: row.playerName ?? "—",
-    avatarColor: row.avatarColor ?? "#e53e3e", picture: row.picture ?? null, avatarFrame: row.equippedFrame ?? null, totalScore: Number(row.totalScore ?? 0),
+    avatarColor: row.avatarColor ?? "#e53e3e", picture: row.picture ?? null, avatarFrame: row.equippedFrame ?? null, avatarGlyph: equippedAvatarGlyph(row.equippedAvatar), equippedTitle: row.equippedTitle ?? null, totalScore: Number(row.totalScore ?? 0),
     gamesPlayed: Number(row.gamesPlayed ?? 0), wins: Number(row.wins ?? 0),
     rank: Number(row.rank ?? 0),
   });
@@ -273,7 +272,7 @@ router.get("/monthly", async (_req, res) => {
     FROM game_history gh
     LEFT JOIN player_scores ps ON gh.player_id = ps.player_id
     WHERE gh.created_at >= date_trunc('month', NOW() AT TIME ZONE 'UTC')
-    GROUP BY gh.player_id, ps.player_name, ps.avatar_color, ps.profile_picture, ps.equipped_frame, ps.current_streak, ps.is_premium, ps.achievements_json
+    GROUP BY gh.player_id, ps.player_name, ps.avatar_color, ps.profile_picture, ps.equipped_frame, ps.equipped_avatar, ps.equipped_title, ps.current_streak, ps.is_premium, ps.achievements_json
     ORDER BY SUM(gh.score) DESC
     LIMIT 100
   `);
@@ -312,7 +311,7 @@ router.get("/monthly/me", requirePlayerIdentity, async (req: AuthedRequest, res)
       GROUP BY player_id
     )
     SELECT ps.player_id AS "playerId", p.player_name AS "playerName",
-           p.avatar_color AS "avatarColor", p.profile_picture AS "picture", p.equipped_frame AS "equippedFrame", ps.total_score AS "totalScore",
+           p.avatar_color AS "avatarColor", p.profile_picture AS "picture", p.equipped_frame AS "equippedFrame", p.equipped_avatar AS "equippedAvatar", p.equipped_title AS "equippedTitle", ps.total_score AS "totalScore",
            ps.games_played AS "gamesPlayed", ps.wins AS wins,
            1 + (SELECT COUNT(*) FROM period_scores higher WHERE higher.total_score > ps.total_score) AS rank
     FROM period_scores ps
@@ -328,7 +327,7 @@ router.get("/monthly/me", requirePlayerIdentity, async (req: AuthedRequest, res)
   }
   res.json({
     playerId: row.playerId, playerName: row.playerName ?? "—",
-    avatarColor: row.avatarColor ?? "#e53e3e", totalScore: Number(row.totalScore ?? 0),
+    avatarColor: row.avatarColor ?? "#e53e3e", picture: row.picture ?? null, avatarFrame: row.equippedFrame ?? null, avatarGlyph: equippedAvatarGlyph(row.equippedAvatar), equippedTitle: row.equippedTitle ?? null, totalScore: Number(row.totalScore ?? 0),
     gamesPlayed: Number(row.gamesPlayed ?? 0), wins: Number(row.wins ?? 0),
     rank: Number(row.rank ?? 0),
   });
@@ -409,6 +408,9 @@ router.get("/profile/:playerId", async (req, res) => {
     playerName: ps.playerName,
     avatarColor: ps.avatarColor,
     picture: ps.profilePicture ?? null,
+    avatarFrame: ps.equippedFrame ?? null,
+    avatarGlyph: equippedAvatarGlyph(ps.equippedAvatar),
+    equippedTitle: ps.equippedTitle ?? null,
     totalScore: ps.totalScore,
     gamesPlayed: ps.gamesPlayed,
     wins: ps.wins,
