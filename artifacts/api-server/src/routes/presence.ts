@@ -119,6 +119,28 @@ router.get("/online", async (_req, res) => {
     }
   }
 
+  const ids = online.map(p => p.playerId);
+  if (ids.length > 0) {
+    try {
+      const cosmetics = await db.select({
+        playerId: playerScoresTable.playerId,
+        profilePicture: playerScoresTable.profilePicture,
+        equippedAvatar: playerScoresTable.equippedAvatar,
+        equippedFrame: playerScoresTable.equippedFrame,
+        equippedTitle: playerScoresTable.equippedTitle,
+      }).from(playerScoresTable).where(inArray(playerScoresTable.playerId, ids));
+      const byId = new Map(cosmetics.map(c => [c.playerId, c]));
+      for (const p of online) {
+        const c = byId.get(p.playerId);
+        if (c) {
+          (p as any).picture = c.profilePicture ?? p.picture ?? null;
+          (p as any).equippedAvatar = c.equippedAvatar ?? null;
+          (p as any).equippedFrame = c.equippedFrame ?? null;
+          (p as any).equippedTitle = c.equippedTitle ?? null;
+        }
+      }
+    } catch {}
+  }
   online.sort((a, b) => b.lastSeen - a.lastSeen);
   return res.json({ online });
 });
