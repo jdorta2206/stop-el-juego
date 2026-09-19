@@ -561,7 +561,7 @@ export default function Room() {
         setLocation(`/sala/${j.rematchCode}`);
       }
     } catch {} finally { setRematchLoading(false); }
-  }, [rematchCode, rematchLoading, player, roomCode, setLocation, meIsPremium]);
+  }, [rematchCode, rematchLoading, player, roomCode, setLocation, meIsPremium, mePremiumLoading]);
 
   // Recompute categories when round starts. Custom packs use the categories
   // broadcast through room state so every client (host or not) renders the
