@@ -386,7 +386,7 @@ export default function PlayerProfile() {
                     boxShadow: fxClass ? undefined : (frameColor ? `0 0 18px ${frameColor}66` : undefined),
                   }}
                 >
-                  {data.picture && /^https?:\\/\\//i.test(data.picture)
+                  {data.picture && /^https?:\/\//i.test(data.picture)
                     ? <img src={data.picture} alt="" referrerPolicy="no-referrer" className="w-full h-full object-cover rounded-full" />
                     : equippedAvatar && AVATAR_GLYPH_BY_ID[equippedAvatar]
                       ? AVATAR_GLYPH_BY_ID[equippedAvatar]
