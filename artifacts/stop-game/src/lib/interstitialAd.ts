@@ -1,6 +1,6 @@
 import { isTwaInterstitialAvailable, requestInterstitialAd } from "@/lib/twaInterstitialBridge";
 
-const GAMES_KEY = "stop_games_played_v1";
+const GAMES_KEY = "stop_interstitial_games_v1";
 const CONSUMED_KEY = "stop_interstitial_consumed_games_v1";
 const EVERY_N_GAMES = 3;
 
@@ -11,6 +11,17 @@ function readNumber(key: string): number {
   } catch {
     return 0;
   }
+}
+
+/**
+ * Counts exactly one completed match for the interstitial cadence.
+ * Kept independent from the review-prompt counter so review history,
+ * old sessions, or future changes to reviews cannot affect ad timing.
+ */
+export function recordInterstitialGameCompleted(): number {
+  const next = readNumber(GAMES_KEY) + 1;
+  try { localStorage.setItem(GAMES_KEY, String(next)); } catch {}
+  return next;
 }
 
 export function interstitialEligible(): boolean {
