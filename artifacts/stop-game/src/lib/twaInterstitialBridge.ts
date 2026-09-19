@@ -21,10 +21,10 @@ export function isTwaInterstitialAvailable(): boolean {
     const params = new URLSearchParams(window.location.search);
     if (params.get("source") === "googleplay-twa" || params.get("source") === "twa") return true;
     if (hasAndroidAppReferrer()) return true;
-    return /Android/i.test(navigator.userAgent || "") && (
-      window.matchMedia?.("(display-mode: standalone)").matches === true ||
-      window.matchMedia?.("(display-mode: fullscreen)").matches === true
-    );
+    // The TWA can run inside a Custom Tab without exposing standalone/fullscreen
+    // display-mode. For this bridge the Android package is the native transport
+    // for the interstitial, so any Android WebView/Custom Tab session is eligible.
+    return /Android/i.test(navigator.userAgent || "");
   } catch { return false; }
 }
 
