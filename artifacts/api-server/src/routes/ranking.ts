@@ -8,7 +8,7 @@ import { resolveCosmetic } from "../lib/inventoryCatalog";
 import { SubmitScoreBody, GetLeaderboardQueryParams } from "@workspace/api-zod";
 import { scoreLimiter } from "../middlewares/rateLimit";
 import { verifyClaimedIdentity } from "../lib/playerAuth";
-import { sumVerifiedBasePersistent, ceilingFromBase, absoluteCeiling, maxRoundsForMode } from "../lib/scoreToken";
+import { sumVerifiedBasePersistent, ceilingFromBase, absoluteCeiling } from "../lib/scoreToken";
 import {
   isHappyHourActiveForTzOffset,
   HAPPY_HOUR_MULTIPLIER,
@@ -392,16 +392,22 @@ router.post("/scores", scoreLimiter, async (req, res) => {
     ? await db.select().from(playerScoresTable).where(eq(playerScoresTable.playerId, playerId)).limit(1)
     : [];
 
-  const { base: verifiedBase, verified, collectionWords } = isBonus
-    ? { base: 0, verified: 0, collectionWords: [] as Array<{ word: string; category: string }> }
-    : await sumVerifiedBasePersistent(scoreTokens, maxRoundsForMode(mode));
+  const { base: verifiedBase, verified, collectionWords, mode: certifiedMode } = isBonus
+    ? { base: 0, verified: 0, collectionWords: [] as Array<{ word: string; category: string }>, mode: null }
+    // /ranking/scores is the client solo leaderboard path. Keep its voucher
+    // count cap independent of the client-supplied `mode`; otherwise a caller
+    // could request `multiplayer` and raise the cap from 3 rounds to 12.
+    : await sumVerifiedBasePersistent(scoreTokens, 3);
   if (!isBonus && rawScore > 0 && verified === 0) {
     res.status(422).json({ error: "SCORE_VERIFICATION_REQUIRED" });
     return;
   }
   const ceiling = isBonus ? existingForBonus[0].totalScore : (verified > 0 ? ceilingFromBase(verifiedBase) : absoluteCeiling(mode));
   const cappedRaw = Math.max(0, Math.min(rawScore, ceiling));
-  const score = mode === "multiplayer" ? Math.round(cappedRaw * 1.5) : cappedRaw;
+  // 🔒 Never trust the request body for the multiplayer multiplier. It is
+  // derived only from the HMAC-signed voucher metadata. Legacy vouchers have
+  // no certified mode and therefore can never receive the x1.5 multiplier.
+  const score = certifiedMode === "multiplayer" ? Math.round(cappedRaw * 1.5) : cappedRaw;
 
   const existing = await db
     .select()
