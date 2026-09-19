@@ -6,11 +6,21 @@ export function initTwaInterstitialBridge(): void {
   initialized = true;
 }
 
+function hasAndroidAppReferrer(): boolean {
+  if (typeof document === "undefined") return false;
+  try {
+    return document.referrer.startsWith("android-app://app.replit.stop_el_juego.twa");
+  } catch {
+    return false;
+  }
+}
+
 export function isTwaInterstitialAvailable(): boolean {
   if (typeof window === "undefined") return false;
   try {
     const params = new URLSearchParams(window.location.search);
     if (params.get("source") === "googleplay-twa" || params.get("source") === "twa") return true;
+    if (hasAndroidAppReferrer()) return true;
     return /Android/i.test(navigator.userAgent || "") && (
       window.matchMedia?.("(display-mode: standalone)").matches === true ||
       window.matchMedia?.("(display-mode: fullscreen)").matches === true
