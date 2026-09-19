@@ -169,7 +169,7 @@ export default function Ranking() {
   const { player } = usePlayer();
   const { t, lang } = useT();
   const [, setLocation] = useLocation();
-  const isLoggedInPlayer = !!(player && player.loginMethod !== "guest");
+  const isLoggedInPlayer = !!(player && (player.loginMethod !== "guest" || /^(google_|fb_|ig_|apple_|tt_)/.test(player.id)));
   // Always fetch the current player's own stats (works even if outside top 100)
   const { data: myStats } = useGetPlayerStats(
     player?.id ?? "",
