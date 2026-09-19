@@ -246,7 +246,7 @@ router.get("/weekly/me", requirePlayerIdentity, async (req: AuthedRequest, res) 
   }
   res.json({
     playerId: row.playerId, playerName: row.playerName ?? "—",
-    avatarColor: row.avatarColor ?? "#e53e3e", picture: row.picture ?? null, avatarFrame: row.equippedFrame ?? null, totalScore: Number(row.totalScore ?? 0),
+    avatarColor: row.avatarColor ?? "#e53e3e", picture: row.picture ?? null, avatarFrame: row.equippedFrame ?? null, avatarGlyph: equippedAvatarGlyph(row.equippedAvatar), equippedTitle: row.equippedTitle ?? null, totalScore: Number(row.totalScore ?? 0),
     gamesPlayed: Number(row.gamesPlayed ?? 0), wins: Number(row.wins ?? 0),
     rank: Number(row.rank ?? 0),
   });
@@ -271,7 +271,7 @@ router.get("/monthly", async (_req, res) => {
     FROM game_history gh
     LEFT JOIN player_scores ps ON gh.player_id = ps.player_id
     WHERE gh.created_at >= date_trunc('month', NOW() AT TIME ZONE 'UTC')
-    GROUP BY gh.player_id, ps.player_name, ps.avatar_color, ps.profile_picture, ps.equipped_frame, ps.current_streak, ps.is_premium, ps.achievements_json
+    GROUP BY gh.player_id, ps.player_name, ps.avatar_color, ps.profile_picture, ps.equipped_frame, ps.equipped_avatar, ps.equipped_title, ps.current_streak, ps.is_premium, ps.achievements_json
     ORDER BY SUM(gh.score) DESC
     LIMIT 100
   `);
