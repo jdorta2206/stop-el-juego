@@ -36,7 +36,32 @@ import { useToast } from "@/hooks/use-toast";
 import { useReviewPrompt, recordGamePlayed } from "@/hooks/useReviewPrompt";
 import { ReviewPromptCard } from "@/components/ReviewPromptCard";
 
-const ROUND_TIME = 60;
+const ROUND_TIME = 60;\n\nconst ROOM_FRAME_COLORS: Record<string, string> = {
+  frame_free_5:"#cd7f32", frame_free_10:"#c0c0c0", frame_free_15:"#f9a825", frame_free_20:"#67e8f9", frame_free_25:"#a78bfa", frame_free_30:"#f472b6",
+  frame_shop_neon:"#22d3ee", frame_shop_plata:"#94a3b8", frame_shop_esmeralda:"#10b981", frame_shop_menta:"#34d399", frame_shop_coral:"#fb7185", frame_shop_rosa:"#ec4899", frame_shop_rubi:"#e11d48", frame_shop_zafiro:"#2563eb", frame_shop_indigo:"#6366f1", frame_shop_amatista:"#9333ea", frame_shop_dorado:"#f59e0b", frame_shop_fuego:"#fb923c", frame_shop_rayo:"#38bdf8", frame_shop_lava:"#ef4444", frame_shop_galaxia:"#a855f7",
+  frame_collection_hunter:"#38bdf8", frame_collection_legend:"#f472b6", frame_collection_master:"#06b6d4", frame_collection_explorer:"#22c55e", frame_collection_mythic:"#a855f7",
+  frame_prestige_bronze:"#cd7f32", frame_prestige_silver:"#cbd5e1", frame_prestige_gold:"#fbbf24", frame_prestige_diamond:"#67e8f9",
+};
+const ROOM_AVATARS: Record<string,string> = {\n  avatar_premium_5:"🎯",avatar_premium_10:"🔥",avatar_premium_15:"⚡",avatar_premium_20:"🌟",avatar_premium_25:"👑",avatar_premium_30:"💎",\n  avatar_wc_ball:"⚽",avatar_wc_jersey:"👕",avatar_wc_goal:"🥅",avatar_wc_gloves:"🧤",avatar_wc_boots:"👟",avatar_wc_medal:"🥇",avatar_wc_trophy:"🏆",avatar_wc_flag_es:"🇪🇸",avatar_wc_flag_br:"🇧🇷",avatar_wc_flag_ar:"🇦🇷",avatar_wc_flag_fr:"🇫🇷",avatar_wc_flag_de:"🇩🇪",avatar_wc_flag_pt:"🇵🇹",avatar_wc_flag_it:"🇮🇹",avatar_wc_flag_nl:"🇳🇱",avatar_wc_flag_mx:"🇲🇽",avatar_wc_flag_us:"🇺🇸",avatar_wc_flag_uy:"🇺🇾",avatar_wc_flag_co:"🇨🇴",avatar_wc_flag_jp:"🇯🇵",
+  avatar_shop_rocket:"🚀",avatar_shop_pizza:"🍕",avatar_shop_burger:"🍔",avatar_shop_cat:"🐱",avatar_shop_dog:"🐶",avatar_shop_alien:"👽",avatar_shop_unicorn:"🦄",avatar_shop_ghost:"👻",avatar_shop_ninja:"🥷",avatar_shop_robot:"🤖",avatar_shop_flower:"🌸",avatar_shop_fox:"🦊",avatar_shop_clown:"🤡",avatar_shop_gamepad:"🎮",avatar_shop_butterfly:"🦋",avatar_shop_owl:"🦉",avatar_shop_panda:"🐼",avatar_shop_star:"✨",avatar_shop_octopus:"🐙",avatar_shop_skull:"💀",avatar_shop_lion:"🦁",avatar_shop_tiger:"🐯",avatar_shop_devil:"😈",avatar_shop_angel:"😇",avatar_shop_pirate:"🏴‍☠️",avatar_shop_dragon:"🐉",avatar_shop_rainbow:"🌈",avatar_shop_wizard:"🧙",avatar_shop_crystal:"🔮",avatar_shop_phoenix:"🦅",avatar_shop_money:"🤑",
+};
+const ROOM_TITLES: Record<string,string> = {
+  novato:"🌱 Novato", jugador:"🎮 Jugador", veterano:"🛡️ Veterano", en_racha:"🔥 En Racha", imparable:"⚡ El Imparable", ganador:"🏅 Ganador", invencible:"⚔️ Invencible", erudito:"📚 Erudito", sabio:"🧠 Sabio", millonario:"💰 Millonario", coleccionista:"🏆 Coleccionista", leyenda_viva:"👑 Leyenda Viva", gran_leyenda:"🌟 Gran Leyenda", leyenda_eterna:"💫 Leyenda Eterna", semidios:"🔱 Semidiós",
+};
+function RoomCosmeticAvatar({ p, size = "sm" }: { p: any; size?: "xs"|"sm"|"md" }) {
+  const px = size === "xs" ? 20 : size === "md" ? 40 : 32;
+  const glyph = ROOM_AVATARS[p.equippedAvatar] || (p.isBot ? "🤖" : p.playerName?.charAt(0).toUpperCase() || "?");
+  const frame = ROOM_FRAME_COLORS[p.equippedFrame];
+  const shadow = frame ? "0 0 0 2px " + frame + ", 0 0 9px " + frame + "99" : (p.isPremium ? "0 0 0 2px #fde047, 0 0 8px rgba(250,204,21,.55)" : undefined);
+  return <div className="relative flex-shrink-0" style={{ width:px, height:px }}>
+    <div className="rounded-full flex items-center justify-center font-bold text-white" style={{ width:px, height:px, fontSize:size==="xs"?10:size==="md"?18:14, backgroundColor:p.avatarColor||"#555", boxShadow:shadow }}>{glyph}</div>
+  </div>;
+}
+function RoomCosmeticLabel({ p }: { p:any }) {
+  const title = ROOM_TITLES[p.equippedTitle];
+  return title ? <span className="text-[10px] font-black truncate" style={{ color: ROOM_FRAME_COLORS[p.equippedFrame] || "rgba(255,255,255,.45)" }}>{title}</span> : null;
+}
+
 
 // 🎲 Modo Misterio (STOP Random multijugador): duración secreta determinista
 // derivada de roomCode + ronda + letra. Todos los clientes calculan lo mismo
@@ -2030,13 +2055,7 @@ export default function Room() {
               {players.map((p: any) => (
                 <div key={p.playerId}
                   className={`flex items-center gap-3 p-3 rounded-xl border ${p.isReady ? "bg-green-500/10 border-green-500/30" : "bg-white/5 border-white/10"}`}>
-                  <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold"
-                    style={{
-                      backgroundColor: p.avatarColor,
-                      boxShadow: p.isPremium ? "0 0 0 2px #fde047, 0 0 10px rgba(250,204,21,0.65)" : undefined,
-                    }}>
-                    {p.playerName.charAt(0).toUpperCase()}
-                  </div>
+                  <RoomCosmeticAvatar p={p} size="sm" />
                   <span className="flex-1 font-bold text-sm flex items-center gap-1">
                     {p.playerName}
                     {p.isPremium && <PremiumBadge size="xs" />}
@@ -2106,13 +2125,7 @@ export default function Room() {
                                 <div key={p.playerId}
                                   className={`flex items-center gap-2 px-3 py-1.5 transition-all duration-300 ${revealed ? "opacity-100" : "opacity-0 pointer-events-none"}`}
                                 >
-                                  <div className="w-5 h-5 rounded-full flex-shrink-0 flex items-center justify-center text-white text-[10px] font-bold"
-                                    style={{
-                                      backgroundColor: p.avatarColor,
-                                      boxShadow: p.isPremium ? "0 0 0 1.5px #fde047, 0 0 6px rgba(250,204,21,0.6)" : undefined,
-                                    }}>
-                                    {p.playerName.charAt(0).toUpperCase()}
-                                  </div>
+                                  <RoomCosmeticAvatar p={p} size="xs" />
                                   <p className={`text-xs font-bold flex-1 truncate flex items-center gap-1 ${isMe ? "text-secondary" : "text-white/80"}`}>
                                     <span className="truncate">{p.playerName}</span>
                                     {p.isPremium && <PremiumBadge size="xs" />}
@@ -2196,13 +2209,7 @@ export default function Room() {
                           transition={{ delay: i * 0.08 }}
                           className={`flex items-center gap-3 p-3 rounded-xl ${isMe ? "bg-secondary/20 border border-secondary/30" : "bg-black/20 border border-white/10"}`}>
                           <span className="text-xl">{medals[i] || `#${i + 1}`}</span>
-                          <div className="w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-white font-bold"
-                            style={{
-                              backgroundColor: p.avatarColor,
-                              boxShadow: p.isPremium ? "0 0 0 2px #fde047, 0 0 10px rgba(250,204,21,0.65)" : undefined,
-                            }}>
-                            {p.playerName.charAt(0).toUpperCase()}
-                          </div>
+                          <RoomCosmeticAvatar p={p} size="sm" />
                           <div className="flex-1 min-w-0">
                             <p className="font-black text-sm truncate flex items-center gap-1">
                               <span className="truncate">{p.playerName}</span>
@@ -2297,13 +2304,7 @@ export default function Room() {
                     transition={{ delay: i * 0.1 }}
                     className={`flex items-center gap-4 p-4 rounded-2xl border ${isMe ? "bg-secondary/20 border-secondary/40 scale-[1.02]" : "bg-black/20 border-white/10"}`}>
                     <span className="text-2xl">{medals[i] || `#${i + 1}`}</span>
-                    <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold shadow"
-                      style={{
-                        backgroundColor: p.avatarColor,
-                        boxShadow: p.isPremium ? "0 0 0 2.5px #fde047, 0 0 14px rgba(250,204,21,0.7)" : undefined,
-                      }}>
-                      {p.playerName.charAt(0).toUpperCase()}
-                    </div>
+                    <RoomCosmeticAvatar p={p} size="md" />
                     <div className="flex-1">
                       <p className="font-black flex items-center gap-1">
                         {p.playerName}
