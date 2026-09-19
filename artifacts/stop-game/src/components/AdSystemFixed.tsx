@@ -137,9 +137,6 @@ export function RewardedAd({ onComplete, onSkip, playerId, rewardType = "points"
     setErrorDetail("El puente nativo de anuncios no está disponible.");
     setPhase("error");
     window.setTimeout(() => onSkip(), 5000);
-    } finally {
-      resumeGameTimer();
-      window.dispatchEvent(new Event(GAME_TIMER_RESUME_EVENT));
     }
   };
 
