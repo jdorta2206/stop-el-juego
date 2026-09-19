@@ -1,4 +1,4 @@
-import { trackAnalyticsEvent } from "@/lib/analyticsClient";
+import { trackAnalyticsEvent } from "@/lib/analyticsClient";\nimport { hasAndroidAppReferrer } from "@/lib/playBilling";
 import { useState, useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
@@ -61,9 +61,23 @@ const SPEED_ROUND_TIME = 20;
 const CHAOS_ROUND_TIME = 45;
 const MAX_ROUNDS = 3;
 const EASY_LETTERS = ["A", "C", "E", "I", "L", "M", "P", "R", "S", "T"];
-const REWARDED_ADS_DISABLED =
-  import.meta.env.VITE_REWARDED_ADS_DISABLED === "1" &&
-  new URLSearchParams(window.location.search).get("rewardedAds") !== "1";
+const REWARDED_ADS_DISABLED = (() => {
+  if (new URLSearchParams(window.location.search).get("rewardedAds") === "1") return false;
+  if (import.meta.env.VITE_REWARDED_ADS_DISABLED !== "1") return false;
+  // Keep rewarded ads disabled on normal web browsers, but allow the native
+  // Google Play TWA to use the real AdMob RewardedAdActivity.
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const twaByReferrer = document.referrer.startsWith("android-app://app.replit.stop_el_juego.twa");
+    const twaBySource = params.get("source") === "googleplay-twa" || params.get("source") === "twa";
+    const androidStandalone = /Android/i.test(navigator.userAgent || "") &&
+      (window.matchMedia?.("(display-mode: standalone)").matches === true ||
+       window.matchMedia?.("(display-mode: fullscreen)").matches === true);
+    return !(twaByReferrer || twaBySource || androidStandalone || hasAndroidAppReferrer());
+  } catch {
+    return true;
+  }
+})();
 
 function getCrazyCategory(t: any): string | null {
   if (!t.crazyCategories || t.crazyCategories.length === 0) return null;
