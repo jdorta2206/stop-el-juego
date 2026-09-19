@@ -605,13 +605,15 @@ export default function Ranking() {
 
             {/* ── MY POSITION CARD ── */}
             {(() => {
-              // On weekly: only show if the user is IN the weekly list (no global-stats fallback)
-              // On global: show from list or fallback from personal stats
+              // On weekly/monthly: show only the user's position when it is in that period's top 100.
+              // On global: if outside the visible top 100, show the private personal position from /scores/:playerId.
               const displayEntry =
                 filter === "weekly"
                   ? (myEntry && myRank && myRank > 3 ? myEntry : null)
                   : (myEntry && myRank && myRank > 3 ? myEntry : myFallbackEntry);
-              const displayRank = myRank && myRank > 3 ? myRank : null;
+              const displayRank = myRank && myRank > 3
+                ? myRank
+                : (filter === "global" ? myFallbackEntry?.globalRank ?? null : null);
               if (!displayEntry || filter === "friends") return null;
               return (
                 <Card className="p-3 bg-secondary/10 border border-secondary/30">
