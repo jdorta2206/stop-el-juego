@@ -30,7 +30,7 @@ export function Layout({ children }: { children: ReactNode }) {
   const { isPremium } = usePremium(player?.id);
   const { inventory } = useInventory(player?.id || null);
   const { t, lang } = useT();
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
   const [showProfile, setShowProfile] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [editName, setEditName] = useState("");
