@@ -20,6 +20,8 @@ import com.google.android.gms.ads.LoadAdError;
 import com.google.android.gms.ads.MobileAds;
 import com.google.android.gms.ads.rewarded.RewardedAd;
 import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback;
+import com.google.android.gms.ads.interstitial.InterstitialAd;
+import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback;
 import com.google.androidbrowserhelper.trusted.QualityEnforcer;
 import com.google.androidbrowserhelper.trusted.TwaLauncher;
 
@@ -46,6 +48,11 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     private String activeRequestId;
     private String activePlacement;
     private boolean channelRequestInFlight;
+    private static final boolean USE_TEST_INTERSTITIAL_ADS = true;
+    private static final String INTERSTITIAL_TEST_ID = "ca-app-pub-3940256099942544/1033173712";
+    private static final String INTERSTITIAL_REAL_ID = "ca-app-pub-4807272408824742/5841246893";
+    private String activeInterstitialRequestId;
+    private boolean interstitialAdLoading;
     private int channelRequestAttempts;
 
     @Override
@@ -148,7 +155,12 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     private void handleWebMessage(String raw) {
         try {
             JSONObject message = new JSONObject(raw);
-            if (!"STOP_AD_REQUEST_REWARDED".equals(message.optString("type"))) return;
+            String type = message.optString("type");
+            if ("STOP_AD_REQUEST_INTERSTITIAL".equals(type)) {
+                handleInterstitialRequest(message);
+                return;
+            }
+            if (!"STOP_AD_REQUEST_REWARDED".equals(type)) return;
             String requestId = message.optString("requestId", "");
             String placement = message.optString("placement", "extra_time");
             if (requestId.isEmpty() || !messageChannelReady || activeRequestId != null) return;
