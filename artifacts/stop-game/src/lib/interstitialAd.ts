@@ -1,3 +1,5 @@
+import { isTwaInterstitialAvailable, requestInterstitialAd } from "@/lib/twaInterstitialBridge";
+
 const GAMES_KEY = "stop_games_played_v1";
 const CONSUMED_KEY = "stop_interstitial_consumed_games_v1";
 const EVERY_N_GAMES = 3;
@@ -21,6 +23,14 @@ export function consumeInterstitialSlot(): void {
   const games = readNumber(GAMES_KEY);
   if (games < EVERY_N_GAMES) return;
   try { localStorage.setItem(CONSUMED_KEY, String(games)); } catch {}
+}
+
+export async function maybeShowInterstitial(isPremium: boolean): Promise<boolean> {
+  if (isPremium || !interstitialEligible() || !isTwaInterstitialAvailable()) return false;
+  // Consume before launching so repeated taps/re-renders cannot trigger two ads.
+  consumeInterstitialSlot();
+  await requestInterstitialAd();
+  return true;
 }
 
 export function getInterstitialInterval(): number {
