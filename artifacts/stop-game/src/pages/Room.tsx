@@ -35,6 +35,7 @@ import { useT } from "@/i18n/useT";
 import { useToast } from "@/hooks/use-toast";
 import { useReviewPrompt, recordGamePlayed } from "@/hooks/useReviewPrompt";
 import { ReviewPromptCard } from "@/components/ReviewPromptCard";
+import { maybeShowInterstitial } from "@/lib/interstitialAd";
 
 const ROUND_TIME = 60;
 
@@ -540,7 +541,11 @@ export default function Room() {
   // Trigger Revancha — first caller creates the new room, others piggyback on the broadcast
   const handleRematch = useCallback(async () => {
     if (rematchLoading) return;
-    if (rematchCode) { setLocation(`/sala/${rematchCode}`); return; }
+    if (rematchCode) {
+      await maybeShowInterstitial(meIsPremium);
+      setLocation(`/sala/${rematchCode}`);
+      return;
+    }
     if (!player?.id || !roomCode) return;
     setRematchLoading(true);
     try {
@@ -550,9 +555,13 @@ export default function Room() {
         body: JSON.stringify({ playerId: player.id, playerName: player.name ?? "?", avatarColor: (player as any).avatarColor }),
       });
       const j = await r.json();
-      if (j.rematchCode) { setRematchCode(j.rematchCode); setLocation(`/sala/${j.rematchCode}`); }
+      if (j.rematchCode) {
+        setRematchCode(j.rematchCode);
+        await maybeShowInterstitial(meIsPremium);
+        setLocation(`/sala/${j.rematchCode}`);
+      }
     } catch {} finally { setRematchLoading(false); }
-  }, [rematchCode, rematchLoading, player, roomCode, setLocation]);
+  }, [rematchCode, rematchLoading, player, roomCode, setLocation, meIsPremium]);
 
   // Recompute categories when round starts. Custom packs use the categories
   // broadcast through room state so every client (host or not) renders the
