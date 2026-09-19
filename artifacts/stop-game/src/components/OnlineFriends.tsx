@@ -189,7 +189,7 @@ function PlayerRow({
       className="flex items-center gap-2 py-2.5 px-1"
     >
       <div className="relative flex-shrink-0">
-        <Avatar picture={player.picture} name={player.name} avatarColor={player.avatarColor} size={36} />
+        <Avatar picture={player.picture} name={player.name} avatarColor={player.avatarColor} frame={(player as any).equippedFrame} title={(player as any).equippedTitle} glyph={(player as any).equippedAvatar} size={36} />
         <span className="absolute -bottom-0.5 -right-0.5">
           <OnlineDot isOnline={true} />
         </span>
@@ -298,7 +298,7 @@ function InstagramPlayerRow({
       className="flex items-center gap-3 py-2.5 px-1"
     >
       <div className="relative flex-shrink-0">
-        <Avatar picture={p.picture} name={p.name} avatarColor={p.avatarColor} size={36} />
+        <Avatar picture={p.picture} name={p.name} avatarColor={p.avatarColor} frame={(p as any).equippedFrame} title={(p as any).equippedTitle} glyph={(p as any).equippedAvatar} size={36} />
         <span className="absolute -bottom-0.5 -right-0.5">
           <OnlineDot isOnline={true} />
         </span>
@@ -664,6 +664,9 @@ export function OnlineFriends({ player }: OnlineFriendsProps) {
                           picture={f.followedPicture}
                           name={f.followedName}
                           avatarColor={f.followedAvatarColor}
+                          frame={(f as any).equippedFrame}
+                          title={(f as any).equippedTitle}
+                          glyph={(f as any).equippedAvatar}
                           size={32}
                         />
                         <span className="absolute -bottom-0.5 -right-0.5">
