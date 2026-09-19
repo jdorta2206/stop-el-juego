@@ -236,6 +236,7 @@ export const JoinRoomBody = zod.object({
   playerId: zod.string(),
   playerName: zod.string(),
   avatarColor: zod.string().optional(),
+  picture: zod.string().nullable().optional(),
   loginMethod: zod.string().nullish(),
 });
 
