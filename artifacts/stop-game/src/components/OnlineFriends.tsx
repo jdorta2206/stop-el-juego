@@ -47,46 +47,9 @@ function OnlineDot({ isOnline }: { isOnline: boolean }) {
 }
 
 // Avatar component
-function Avatar({
-  picture,
-  name,
-  avatarColor,
-  size = 36,
-}: {
-  picture?: string | null;
-  name: string;
-  avatarColor?: string;
-  size?: number;
-}) {
-  const [imgError, setImgError] = useState(false);
-
-  if (picture && !imgError) {
-    return (
-      <img
-        src={picture}
-        alt={name}
-        className="rounded-full object-cover flex-shrink-0"
-        style={{ width: size, height: size }}
-        onError={() => setImgError(true)}
-      />
-    );
-  }
-
-  return (
-    <div
-      className="rounded-full flex items-center justify-center font-black text-white flex-shrink-0"
-      style={{
-        width: size,
-        height: size,
-        background: avatarColor || "#e53e3e",
-        fontSize: size * 0.4,
-      }}
-    >
-      {name[0]?.toUpperCase() || "?"}
-    </div>
-  );
+function Avatar({ picture, name, avatarColor, frame, title, glyph, size = 36 }: { picture?: string | null; name: string; avatarColor?: string; frame?: string | null; title?: string | null; glyph?: string | null; size?: number }) {
+  return <ProfilePhotoAvatar picture={picture} glyph={glyph} name={name} color={avatarColor} frame={frame} title={title} size={size >= 44 ? "w-11 h-11" : "w-9 h-9"} />;
 }
-
 type ChallengeState = "idle" | "sending" | "waiting" | "accepted" | "declined" | "expired";
 
 // Challenge button with state feedback
