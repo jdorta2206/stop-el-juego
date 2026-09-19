@@ -44,7 +44,7 @@ jobs:
           keytool -list -keystore android-release.keystore -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" >/dev/null
       - name: Set test version code
         working-directory: android-generated
-        run: sed -i -E 's/versionCode [0-9]+/versionCode 50/' app/build.gradle
+        run: sed -i -E 's/versionCode [0-9]+/versionCode 51/' app/build.gradle
       - name: Build signed test APK
         working-directory: android-generated
         run: |
@@ -62,7 +62,7 @@ jobs:
       - name: Upload signed test APK
         uses: actions/upload-artifact@v4
         with:
-          name: stop-android-interstitial-signed-test-v50
+          name: stop-android-interstitial-signed-test-v51
           path: android-generated/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 7
