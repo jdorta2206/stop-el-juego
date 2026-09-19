@@ -17,6 +17,16 @@ import { useInventory } from "@/hooks/useInventory";
 
 const LOGO_URL = `${import.meta.env.BASE_URL}images/stop-logo.png`;
 
+function ProfilePhotoAvatar({ picture, glyph, name, color, size="w-9 h-9", className="" }: { picture?: string | null; glyph?: string | null; name: string; color?: string | null; size?: string; className?: string }) {
+  const validPicture = typeof picture === "string" && /^https?:\/\//i.test(picture);
+  return (
+    <div className={`${size} rounded-full flex-shrink-0 flex items-center justify-center overflow-hidden text-white font-black shadow ${className}`} style={{ backgroundColor: color || "#555" }}>
+      {validPicture ? <img src={picture!} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : (glyph || name.charAt(0).toUpperCase())}
+    </div>
+  );
+}
+
+
 const NAV_ITEMS = [
   { href: "/", icon: Home, label: "Inicio" },
   { href: "/ranking", icon: Trophy, label: "Ranking" },
@@ -181,7 +191,7 @@ export function Layout({ children }: { children: ReactNode }) {
                   {(() => {
                     const avatar = inventory?.equipped?.avatar;
                     const glyph = avatar ? (inventory?.owned?.avatars || []).find((a:any) => a.id === avatar)?.glyph : null;
-                    return glyph || player.name.charAt(0).toUpperCase();
+                    return <ProfilePhotoAvatar picture={(player as any).picture} glyph={glyph} name={player.name} color={player.avatarColor} size="w-full h-full" />;
                   })()}
                 </div>
                 <span className="font-bold text-white text-sm truncate max-w-[90px] hidden sm:block">{player.name}</span>
@@ -195,7 +205,7 @@ export function Layout({ children }: { children: ReactNode }) {
                     <div className="px-3 py-2 border-b border-white/10 mb-1">
                       <div className="flex items-center gap-2">
                         <div className="w-10 h-10 rounded-full flex items-center justify-center text-xl border-2 border-secondary/60" style={{backgroundColor: player.avatarColor || "#555"}}>
-                          {(() => { const a=inventory?.equipped?.avatar; return (a ? (inventory?.owned?.avatars || []).find((x:any)=>x.id===a)?.glyph : null) || player.name.charAt(0).toUpperCase(); })()}
+                          {(() => { const a=inventory?.equipped?.avatar; const glyph=(a ? (inventory?.owned?.avatars || []).find((x:any)=>x.id===a)?.glyph : null); return <ProfilePhotoAvatar picture={(player as any).picture} glyph={glyph} name={player.name} color={player.avatarColor} size="w-full h-full" />; })()}
                         </div>
                         <div className="min-w-0 flex-1">
                           <p className="text-white font-black truncate">{player.name}</p>
