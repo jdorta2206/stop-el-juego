@@ -195,11 +195,11 @@ export async function sumVerifiedBasePersistent(
     return { base: 0, verified: 0, collectionWords: [], mode: null };
   }
   const secret = getSigningSecret();
-  if (!secret) return { base: 0, verified: 0, collectionWords: [] };
+  if (!secret) return { base: 0, verified: 0, collectionWords: [], mode: null };
 
   const now = Date.now();
   const cap = Number.isFinite(maxTokens) ? Math.max(0, Math.floor(maxTokens)) : tokens.length;
-  if (cap === 0) return { base: 0, verified: 0, collectionWords: [] };
+  if (cap === 0) return { base: 0, verified: 0, collectionWords: [], mode: null };
 
   await db
     .delete(scoreVoucherUsesTable)
