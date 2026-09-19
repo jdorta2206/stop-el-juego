@@ -35,7 +35,7 @@ import { useT } from "@/i18n/useT";
 import { useToast } from "@/hooks/use-toast";
 import { useReviewPrompt, recordGamePlayed } from "@/hooks/useReviewPrompt";
 import { ReviewPromptCard } from "@/components/ReviewPromptCard";
-import { maybeShowInterstitial } from "@/lib/interstitialAd";
+import { maybeShowInterstitial, recordInterstitialGameCompleted } from "@/lib/interstitialAd";
 
 const ROUND_TIME = 60;
 
@@ -891,6 +891,7 @@ export default function Room() {
       if (!reviewCountedRef.current) {
         reviewCountedRef.current = true;
         recordGamePlayed();
+        recordInterstitialGameCompleted();
         if (reviewTimerRef.current) clearTimeout(reviewTimerRef.current);
         reviewTimerRef.current = setTimeout(() => {
           reviewPrompt.maybeShow({ won: iWon });
