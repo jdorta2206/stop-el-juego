@@ -126,6 +126,7 @@ export default function Multiplayer() {
           hostId: player.id,
           hostName: player.name,
           avatarColor: player.avatarColor,
+          picture: player.picture || null,
           maxRounds: 3,
           language: getCurrentLang(),
           loginMethod: player.loginMethod ?? null,
