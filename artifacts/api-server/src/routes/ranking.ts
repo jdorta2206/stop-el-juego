@@ -172,6 +172,7 @@ router.get("/weekly", async (req, res) => {
       ps.player_name      AS "playerName",
       ps.avatar_color     AS "avatarColor",
       ps.equipped_avatar AS "equippedAvatar",
+      ps.equipped_title AS "equippedTitle",
       ps.current_streak   AS "currentStreak",
       ps.profile_picture AS "picture",
       ps.equipped_frame AS "equippedFrame",
@@ -310,7 +311,7 @@ router.get("/monthly/me", requirePlayerIdentity, async (req: AuthedRequest, res)
       GROUP BY player_id
     )
     SELECT ps.player_id AS "playerId", p.player_name AS "playerName",
-           p.avatar_color AS "avatarColor", p.profile_picture AS "picture", p.equipped_frame AS "equippedFrame", ps.total_score AS "totalScore",
+           p.avatar_color AS "avatarColor", p.profile_picture AS "picture", p.equipped_frame AS "equippedFrame", p.equipped_avatar AS "equippedAvatar", p.equipped_title AS "equippedTitle", ps.total_score AS "totalScore",
            ps.games_played AS "gamesPlayed", ps.wins AS wins,
            1 + (SELECT COUNT(*) FROM period_scores higher WHERE higher.total_score > ps.total_score) AS rank
     FROM period_scores ps
