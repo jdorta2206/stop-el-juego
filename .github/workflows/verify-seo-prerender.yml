@@ -3,6 +3,8 @@ name: Verify SEO homepage prerender
 permissions:
   contents: write
 
+# Bootstrap puntual del lockfile: se elimina tras el primer lockfile válido.
+
 on:
   push:
     branches:
