@@ -36,7 +36,32 @@ import { useToast } from "@/hooks/use-toast";
 import { useReviewPrompt, recordGamePlayed } from "@/hooks/useReviewPrompt";
 import { ReviewPromptCard } from "@/components/ReviewPromptCard";
 
-const ROUND_TIME = 60;
+const ROUND_TIME = 60;\n\nconst ROOM_FRAME_COLORS: Record<string, string> = {
+  frame_free_5:"#cd7f32", frame_free_10:"#c0c0c0", frame_free_15:"#f9a825", frame_free_20:"#67e8f9", frame_free_25:"#a78bfa", frame_free_30:"#f472b6",
+  frame_shop_neon:"#22d3ee", frame_shop_plata:"#94a3b8", frame_shop_esmeralda:"#10b981", frame_shop_menta:"#34d399", frame_shop_coral:"#fb7185", frame_shop_rosa:"#ec4899", frame_shop_rubi:"#e11d48", frame_shop_zafiro:"#2563eb", frame_shop_indigo:"#6366f1", frame_shop_amatista:"#9333ea", frame_shop_dorado:"#f59e0b", frame_shop_fuego:"#fb923c", frame_shop_rayo:"#38bdf8", frame_shop_lava:"#ef4444", frame_shop_galaxia:"#a855f7",
+  frame_collection_hunter:"#38bdf8", frame_collection_legend:"#f472b6", frame_collection_master:"#06b6d4", frame_collection_explorer:"#22c55e", frame_collection_mythic:"#a855f7",
+  frame_prestige_bronze:"#cd7f32", frame_prestige_silver:"#cbd5e1", frame_prestige_gold:"#fbbf24", frame_prestige_diamond:"#67e8f9",
+};
+const ROOM_AVATARS: Record<string,string> = {
+  avatar_shop_rocket:"🚀",avatar_shop_pizza:"🍕",avatar_shop_burger:"🍔",avatar_shop_cat:"🐱",avatar_shop_dog:"🐶",avatar_shop_alien:"👽",avatar_shop_unicorn:"🦄",avatar_shop_ghost:"👻",avatar_shop_ninja:"🥷",avatar_shop_robot:"🤖",avatar_shop_flower:"🌸",avatar_shop_fox:"🦊",avatar_shop_clown:"🤡",avatar_shop_gamepad:"🎮",avatar_shop_butterfly:"🦋",avatar_shop_owl:"🦉",avatar_shop_panda:"🐼",avatar_shop_star:"✨",avatar_shop_octopus:"🐙",avatar_shop_skull:"💀",avatar_shop_lion:"🦁",avatar_shop_tiger:"🐯",avatar_shop_devil:"😈",avatar_shop_angel:"😇",avatar_shop_pirate:"🏴‍☠️",avatar_shop_dragon:"🐉",avatar_shop_rainbow:"🌈",avatar_shop_wizard:"🧙",avatar_shop_crystal:"🔮",avatar_shop_phoenix:"🦅",avatar_shop_money:"🤑",
+};
+const ROOM_TITLES: Record<string,string> = {
+  novato:"🌱 Novato", jugador:"🎮 Jugador", veterano:"🛡️ Veterano", en_racha:"🔥 En Racha", imparable:"⚡ El Imparable", ganador:"🏅 Ganador", invencible:"⚔️ Invencible", erudito:"📚 Erudito", sabio:"🧠 Sabio", millonario:"💰 Millonario", coleccionista:"🏆 Coleccionista", leyenda_viva:"👑 Leyenda Viva", gran_leyenda:"🌟 Gran Leyenda", leyenda_eterna:"💫 Leyenda Eterna", semidios:"🔱 Semidiós",
+};
+function RoomCosmeticAvatar({ p, size = "sm" }: { p: any; size?: "xs"|"sm"|"md" }) {
+  const px = size === "xs" ? 20 : size === "md" ? 40 : 32;
+  const glyph = ROOM_AVATARS[p.equippedAvatar] || (p.isBot ? "🤖" : p.playerName?.charAt(0).toUpperCase() || "?");
+  const frame = ROOM_FRAME_COLORS[p.equippedFrame];
+  const shadow = frame ? "0 0 0 2px " + frame + ", 0 0 9px " + frame + "99" : (p.isPremium ? "0 0 0 2px #fde047, 0 0 8px rgba(250,204,21,.55)" : undefined);
+  return <div className="relative flex-shrink-0" style={{ width:px, height:px }}>
+    <div className="rounded-full flex items-center justify-center font-bold text-white" style={{ width:px, height:px, fontSize:size==="xs"?10:size==="md"?18:14, backgroundColor:p.avatarColor||"#555", boxShadow:shadow }}>{glyph}</div>
+  </div>;
+}
+function RoomCosmeticLabel({ p }: { p:any }) {
+  const title = ROOM_TITLES[p.equippedTitle];
+  return title ? <span className="text-[10px] font-black truncate" style={{ color: ROOM_FRAME_COLORS[p.equippedFrame] || "rgba(255,255,255,.45)" }}>{title}</span> : null;
+}
+
 
 // 🎲 Modo Misterio (STOP Random multijugador): duración secreta determinista
 // derivada de roomCode + ronda + letra. Todos los clientes calculan lo mismo
