@@ -7,7 +7,7 @@ import { sendPushToPlayer } from "../lib/pushHelper";
 import { resolveCosmetic } from "../lib/inventoryCatalog";
 import { SubmitScoreBody, GetLeaderboardQueryParams } from "@workspace/api-zod";
 import { scoreLimiter } from "../middlewares/rateLimit";
-import { verifyClaimedIdentity } from "../lib/playerAuth";
+import { verifyClaimedIdentity, requirePlayerIdentity, type AuthedRequest } from "../lib/playerAuth";
 import { sumVerifiedBasePersistent, ceilingFromBase, absoluteCeiling } from "../lib/scoreToken";
 import {
   isHappyHourActiveForTzOffset,
@@ -210,6 +210,41 @@ router.get("/weekly", async (req, res) => {
 });
 
 // ============================================================
+// POSICIÓN PERSONAL SEMANAL (PRIVADA)
+// ============================================================
+router.get("/weekly/me", requirePlayerIdentity, async (req: AuthedRequest, res) => {
+  const playerId = req.playerId!;
+  const rows = await db.execute(sql`
+    WITH period_scores AS (
+      SELECT player_id, SUM(score) AS total_score, COUNT(*) AS games_played,
+             SUM(CASE WHEN won THEN 1 ELSE 0 END) AS wins
+      FROM game_history
+      WHERE created_at >= date_trunc('week', NOW() AT TIME ZONE 'UTC')
+      GROUP BY player_id
+    )
+    SELECT ps.player_id AS "playerId", p.player_name AS "playerName",
+           p.avatar_color AS "avatarColor", ps.total_score AS "totalScore",
+           ps.games_played AS "gamesPlayed", ps.wins AS wins,
+           1 + (SELECT COUNT(*) FROM period_scores higher WHERE higher.total_score > ps.total_score) AS rank
+    FROM period_scores ps
+    LEFT JOIN player_scores p ON p.player_id = ps.player_id
+    WHERE ps.player_id = ${playerId}
+    LIMIT 1
+  `);
+
+  const row = rows.rows[0] as Record<string, unknown> | undefined;
+  if (!row) {
+    res.json({ playerId, rank: null, totalScore: 0, gamesPlayed: 0, wins: 0 });
+    return;
+  }
+  res.json({
+    playerId: row.playerId, playerName: row.playerName ?? "—",
+    avatarColor: row.avatarColor ?? "#e53e3e", totalScore: Number(row.totalScore ?? 0),
+    gamesPlayed: Number(row.gamesPlayed ?? 0), wins: Number(row.wins ?? 0),
+    rank: Number(row.rank ?? 0),
+  });
+});
+// ============================================================
 // RANKING MENSUAL
 // ============================================================
 router.get("/monthly", async (_req, res) => {
@@ -252,6 +287,41 @@ router.get("/monthly", async (_req, res) => {
   res.json({ players, nextReset: nextReset.toISOString() });
 });
 
+// ============================================================
+// POSICIÓN PERSONAL MENSUAL (PRIVADA)
+// ============================================================
+router.get("/monthly/me", requirePlayerIdentity, async (req: AuthedRequest, res) => {
+  const playerId = req.playerId!;
+  const rows = await db.execute(sql`
+    WITH period_scores AS (
+      SELECT player_id, SUM(score) AS total_score, COUNT(*) AS games_played,
+             SUM(CASE WHEN won THEN 1 ELSE 0 END) AS wins
+      FROM game_history
+      WHERE created_at >= date_trunc('month', NOW() AT TIME ZONE 'UTC')
+      GROUP BY player_id
+    )
+    SELECT ps.player_id AS "playerId", p.player_name AS "playerName",
+           p.avatar_color AS "avatarColor", ps.total_score AS "totalScore",
+           ps.games_played AS "gamesPlayed", ps.wins AS wins,
+           1 + (SELECT COUNT(*) FROM period_scores higher WHERE higher.total_score > ps.total_score) AS rank
+    FROM period_scores ps
+    LEFT JOIN player_scores p ON p.player_id = ps.player_id
+    WHERE ps.player_id = ${playerId}
+    LIMIT 1
+  `);
+
+  const row = rows.rows[0] as Record<string, unknown> | undefined;
+  if (!row) {
+    res.json({ playerId, rank: null, totalScore: 0, gamesPlayed: 0, wins: 0 });
+    return;
+  }
+  res.json({
+    playerId: row.playerId, playerName: row.playerName ?? "—",
+    avatarColor: row.avatarColor ?? "#e53e3e", totalScore: Number(row.totalScore ?? 0),
+    gamesPlayed: Number(row.gamesPlayed ?? 0), wins: Number(row.wins ?? 0),
+    rank: Number(row.rank ?? 0),
+  });
+});
 // ============================================================
 // PERFIL DE JUGADOR
 // ============================================================

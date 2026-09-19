@@ -7,7 +7,7 @@ import { Trophy, Users, UserPlus, UserCheck, Swords, Clock, Copy, Check, Calenda
 import { usePlayer } from "@/hooks/use-player";
 import { motion } from "framer-motion";
 import { useT } from "@/i18n/useT";
-import { getApiUrl } from "@/lib/utils";
+import { authHeaders, getApiUrl } from "@/lib/utils";
 import { usePresence, sendChallenge, pollChallengeStatus, type OnlinePlayer } from "@/lib/usePresence";
 import { useFollows } from "@/lib/useFollows";
 import { ChallengeNotification } from "@/components/ChallengeNotification";
@@ -184,6 +184,20 @@ export default function Ranking() {
   });
   const weeklyPlayers: any[] = weeklyData?.players ?? [];
   const weekCountdown = useWeekCountdown(weeklyData?.nextReset);
+  const { data: weeklyMe } = useQuery({
+    queryKey: ["/api/ranking/weekly/me", player?.id],
+    queryFn: async () => {
+      const response = await fetch(getApiUrl() + "/api/ranking/weekly/me", {
+        credentials: "include",
+        headers: authHeaders(),
+      });
+      if (!response.ok) return null;
+      return response.json();
+    },
+    enabled: isLoggedInPlayer,
+    refetchOnMount: "always",
+    staleTime: 0,
+  });
 
   // Monthly ranking
   const { data: monthlyData, isLoading: monthlyLoading } = useQuery({
@@ -194,6 +208,20 @@ export default function Ranking() {
   });
   const monthlyPlayers: any[] = monthlyData?.players ?? [];
   const monthCountdown = useWeekCountdown(monthlyData?.nextReset);
+  const { data: monthlyMe } = useQuery({
+    queryKey: ["/api/ranking/monthly/me", player?.id],
+    queryFn: async () => {
+      const response = await fetch(getApiUrl() + "/api/ranking/monthly/me", {
+        credentials: "include",
+        headers: authHeaders(),
+      });
+      if (!response.ok) return null;
+      return response.json();
+    },
+    enabled: isLoggedInPlayer,
+    refetchOnMount: "always",
+    staleTime: 0,
+  });
 
   const [filter, setFilter] = useState<"global" | "weekly" | "monthly" | "friends">("weekly");
 
@@ -605,15 +633,27 @@ export default function Ranking() {
 
             {/* ── MY POSITION CARD ── */}
             {(() => {
-              // On weekly/monthly: show only the user's position when it is in that period's top 100.
-              // On global: if outside the visible top 100, show the private personal position from /scores/:playerId.
+              // Public lists remain capped at 100. The authenticated player gets
+              // a separate private period position when outside that visible list.
+              const periodEntry =
+                filter === "weekly" ? weeklyMe :
+                filter === "monthly" ? monthlyMe : null;
               const displayEntry =
-                filter === "weekly"
-                  ? (myEntry && myRank && myRank > 3 ? myEntry : null)
-                  : (myEntry && myRank && myRank > 3 ? myEntry : myFallbackEntry);
-              const displayRank = myRank && myRank > 3
-                ? myRank
-                : (filter === "global" ? myFallbackEntry?.globalRank ?? null : null);
+                filter === "weekly" && periodEntry?.gamesPlayed > 0
+                  ? periodEntry
+                  : filter === "monthly" && periodEntry?.gamesPlayed > 0
+                    ? periodEntry
+                    : myEntry && myRank && myRank > 3
+                      ? myEntry
+                      : filter === "global"
+                        ? myFallbackEntry
+                        : null;
+              const displayRank =
+                filter === "weekly" || filter === "monthly"
+                  ? periodEntry?.rank ?? (myRank && myRank > 3 ? myRank : null)
+                  : myRank && myRank > 3
+                    ? myRank
+                    : myFallbackEntry?.globalRank ?? null;
               if (!displayEntry || filter === "friends") return null;
               return (
                 <Card className="p-3 bg-secondary/10 border border-secondary/30">
