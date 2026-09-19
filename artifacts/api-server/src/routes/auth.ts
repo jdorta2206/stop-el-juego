@@ -378,13 +378,18 @@ router.get("/google/callback", async (req: Request, res: Response) => {
     }
 
     const playerId = `google_${payload.sub}`;
+    const googlePicture = typeof payload.picture === "string" ? payload.picture : null;
+    await db.insert(playerScoresTable).values({ playerId, playerName: String(payload.name || "Usuario").trim().slice(0, 14) || "Usuario", avatarColor: "#f9a825", profilePicture: googlePicture }).onConflictDoUpdate({ target: playerScoresTable.playerId, set: { playerName: String(payload.name || "Usuario").trim().slice(0, 14) || "Usuario", profilePicture: googlePicture, updatedAt: new Date() } });
+
     const user = JSON.stringify({
       id:       playerId,
       name:     payload.name,
       email:    payload.email,
-      picture:  payload.picture,
+      picture:  googlePicture,
       provider: "google",
     });
+
+    await db.insert(playerScoresTable).values({ playerId, playerName: String(me.username || me.name || "Usuario").trim().slice(0, 14) || "Usuario", avatarColor: "#f9a825", profilePicture: me.profile_picture_url || null }).onConflictDoUpdate({ target: playerScoresTable.playerId, set: { profilePicture: me.profile_picture_url || null, updatedAt: new Date() } });
 
     const sessionToken = issuePlayerToken(res, playerId);
     res.send(bridgePageMulti([
@@ -470,11 +475,13 @@ router.get("/facebook/callback", async (req: Request, res: Response) => {
         playerId,
         playerName: facebookName,
         avatarColor: "#f9a825",
+        profilePicture: facebookPicture,
       })
       .onConflictDoUpdate({
         target: playerScoresTable.playerId,
         set: {
           playerName: facebookName,
+          profilePicture: facebookPicture,
           updatedAt: new Date(),
         },
       });
@@ -828,6 +835,7 @@ router.get("/me", async (req: Request, res: Response) => {
         playerId: playerScoresTable.playerId,
         playerName: playerScoresTable.playerName,
         avatarColor: playerScoresTable.avatarColor,
+        profilePicture: playerScoresTable.profilePicture,
       })
       .from(playerScoresTable)
       .where(eq(playerScoresTable.playerId, playerId))
@@ -858,7 +866,7 @@ router.get("/me", async (req: Request, res: Response) => {
       name: row.playerName,
       avatarColor: row.avatarColor,
       loginMethod,
-      picture: null,
+      picture: row.profilePicture ?? null,
       token: refreshedToken,
     });
   } catch (err) {
