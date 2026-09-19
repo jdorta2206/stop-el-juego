@@ -33,11 +33,11 @@ jobs:
           cache: pnpm
 
       - name: Regenerate lockfile reproducibly
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' && github.actor != 'github-actions[bot]'
         run: pnpm install --lockfile-only --no-frozen-lockfile
 
       - name: Commit regenerated lockfile
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' && github.actor != 'github-actions[bot]'
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
