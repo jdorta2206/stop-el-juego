@@ -190,6 +190,7 @@ export const CreateRoomBody = zod.object({
   hostId: zod.string(),
   hostName: zod.string(),
   avatarColor: zod.string().optional(),
+  picture: zod.string().nullable().optional(),
   maxRounds: zod.number().default(createRoomBodyMaxRoundsDefault),
   language: zod.string().default(createRoomBodyLanguageDefault),
   loginMethod: zod.string().nullish(),
