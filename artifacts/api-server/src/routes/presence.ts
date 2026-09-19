@@ -1,5 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
+import { playerScoresTable } from "@workspace/db";
+import { inArray } from "drizzle-orm";
 import { roomsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { sendPushToPlayer, notifyFollowersPlayerOnline } from "../lib/pushHelper";
@@ -99,7 +101,7 @@ router.post("/ping", presenceLimiter, (req, res) => {
 });
 
 // GET /api/presence/online
-router.get("/online", (_req, res) => {
+router.get("/online", async (_req, res) => {
   const cutoff = Date.now() - 90 * 1000;
   const online: Array<{
     playerId: string;
