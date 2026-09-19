@@ -250,7 +250,7 @@ function parseBluffMeta(json: string | null): any | null {
 // ============================================================
 // 🆕 OBTENER COSMÉTICOS DE PLAYER_SCORES PARA UNA LISTA DE PLAYERS
 // ============================================================
-async function fetchCosmeticsForPlayers(playerIds: string[]): Promise<Record<string, { equippedAvatar: string | null, equippedFrame: string | null, equippedBackground: string | null }>> {
+async function fetchCosmeticsForPlayers(playerIds: string[]): Promise<Record<string, { equippedAvatar: string | null, equippedFrame: string | null, equippedBackground: string | null, equippedTitle: string | null }>> {
   if (playerIds.length === 0) return {};
   try {
     const rows = await db
@@ -259,6 +259,7 @@ async function fetchCosmeticsForPlayers(playerIds: string[]): Promise<Record<str
         equippedAvatar: playerScoresTable.equippedAvatar,
         equippedFrame: playerScoresTable.equippedFrame,
         equippedBackground: playerScoresTable.equippedBackground,
+        equippedTitle: playerScoresTable.equippedTitle,
       })
       .from(playerScoresTable)
       .where(inArray(playerScoresTable.playerId, playerIds));
@@ -268,6 +269,7 @@ async function fetchCosmeticsForPlayers(playerIds: string[]): Promise<Record<str
         equippedAvatar: row.equippedAvatar ?? null,
         equippedFrame: row.equippedFrame ?? null,
         equippedBackground: row.equippedBackground ?? null,
+        equippedTitle: row.equippedTitle ?? null,
       };
     }
     return map;
@@ -295,6 +297,7 @@ function formatRoom(room: any, cosmeticsMap?: Record<string, any>) {
       equippedAvatar: cosmeticsMap[p.playerId]?.equippedAvatar ?? null,
       equippedFrame: cosmeticsMap[p.playerId]?.equippedFrame ?? null,
       equippedBackground: cosmeticsMap[p.playerId]?.equippedBackground ?? null,
+      equippedTitle: cosmeticsMap[p.playerId]?.equippedTitle ?? null,
     }));
   }
 
