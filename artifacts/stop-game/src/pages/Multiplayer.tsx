@@ -82,6 +82,7 @@ export default function Multiplayer() {
           playerId: player.id,
           playerName: player.name,
           avatarColor: player.avatarColor,
+          picture: player.picture || null,
         } as import("@workspace/api-client-react").JoinRoomRequest & { loginMethod?: string | null },
       });
       setLocation(`/room/${resumeCode}`);
