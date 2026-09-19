@@ -55,7 +55,7 @@ const ROOM_TITLES: Record<string,string> = {
 function RoomCosmeticAvatar({ p, size = "sm" }: { p: any; size?: "xs"|"sm"|"md" }) {
   const px = size === "xs" ? 20 : size === "md" ? 40 : 32;
   const glyph = ROOM_AVATARS[p.equippedAvatar] || (p.isBot ? "🤖" : p.playerName?.charAt(0).toUpperCase() || "?");
-  const picture = typeof p.picture === "string" && /^https?:\\/\\//i.test(p.picture) ? p.picture : null;
+  const picture = typeof p.picture === "string" && /^https?:\/\//i.test(p.picture) ? p.picture : null;
   const frame = ROOM_FRAME_COLORS[p.equippedFrame];
   const shadow = frame ? "0 0 0 2px " + frame + ", 0 0 9px " + frame + "99" : (p.isPremium ? "0 0 0 2px #fde047, 0 0 8px rgba(250,204,21,.55)" : undefined);
   return <div className="relative flex-shrink-0" style={{ width:px, height:px }}>
