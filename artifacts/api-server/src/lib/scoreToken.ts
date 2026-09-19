@@ -51,9 +51,12 @@ function sign(secret: string, payload: string): string {
   return crypto.createHmac("sha256", secret).update(payload).digest("base64url");
 }
 
+export type ScoreVoucherMode = "solo" | "daily" | "multiplayer";
+
 export function issueScoreToken(
   base: number,
   collectionWords: Array<{ word: string; category: string }> = [],
+  mode: ScoreVoucherMode = "solo",
 ): string | null {
   const secret = getSigningSecret();
   if (!secret) return null;
@@ -68,8 +71,10 @@ export function issueScoreToken(
       category: entry.category.trim().slice(0, 80),
     }))
     .filter((entry) => entry.word.length > 0 && entry.category.length > 0);
+  const safeMode: ScoreVoucherMode =
+    mode === "daily" || mode === "multiplayer" ? mode : "solo";
   const collectionData = Buffer.from(JSON.stringify(safeCollectionWords), "utf8").toString("base64url");
-  const payload = `${safeBase}.${KIND_ROUND}.${exp}.${jti}.${collectionData}`;
+  const payload = `${safeBase}.${KIND_ROUND}.${exp}.${jti}.${safeMode}.${collectionData}`;
   return `${payload}.${sign(secret, payload)}`;
 }
 
@@ -77,6 +82,7 @@ type VerifiedVoucher = {
   base: number;
   exp: number;
   jti: string;
+  mode: ScoreVoucherMode | null;
   collectionWords: Array<{ word: string; category: string }>;
 };
 
@@ -87,16 +93,21 @@ function parseVerifiedVoucher(
 ): VerifiedVoucher | null {
   if (typeof token !== "string" || token.length > MAX_TOKEN_LENGTH) return null;
   const parts = token.split(".");
-  if (parts.length !== 5 && parts.length !== 6) return null;
+  if (parts.length !== 5 && parts.length !== 6 && parts.length !== 7) return null;
 
   const [baseStr, kind, expStr, jti] = parts;
-  const collectionData = parts.length === 6 ? parts[4] : "";
-  const sig = parts.length === 6 ? parts[5] : parts[4];
+  const mode = parts.length === 7
+    ? (parts[4] === "daily" || parts[4] === "multiplayer" || parts[4] === "solo" ? parts[4] : null)
+    : null;
+  const collectionData = parts.length === 7 ? parts[5] : parts.length === 6 ? parts[4] : "";
+  const sig = parts.length === 7 ? parts[6] : parts.length === 6 ? parts[5] : parts[4];
   if (kind !== KIND_ROUND || !jti || !sig) return null;
 
-  const payload = parts.length === 6
-    ? `${baseStr}.${kind}.${expStr}.${jti}.${collectionData}`
-    : `${baseStr}.${kind}.${expStr}.${jti}`;
+  const payload = parts.length === 7
+    ? `${baseStr}.${kind}.${expStr}.${jti}.${parts[4]}.${collectionData}`
+    : parts.length === 6
+      ? `${baseStr}.${kind}.${expStr}.${jti}.${collectionData}`
+      : `${baseStr}.${kind}.${expStr}.${jti}`;
   const expected = sign(secret, payload);
 
   try {
@@ -131,7 +142,7 @@ function parseVerifiedVoucher(
     }
   }
 
-  return { base: b, exp, jti, collectionWords };
+  return { base: b, exp, jti, mode, collectionWords };
 }
 
 /** Legacy in-process helper retained for tests. */
@@ -178,16 +189,17 @@ export async function sumVerifiedBasePersistent(
   base: number;
   verified: number;
   collectionWords: Array<{ word: string; category: string }>;
+  mode: ScoreVoucherMode | null;
 }> {
   if (!Array.isArray(tokens) || tokens.length === 0 || tokens.length > MAX_TOKEN_BATCH) {
-    return { base: 0, verified: 0, collectionWords: [] };
+    return { base: 0, verified: 0, collectionWords: [], mode: null };
   }
   const secret = getSigningSecret();
-  if (!secret) return { base: 0, verified: 0, collectionWords: [] };
+  if (!secret) return { base: 0, verified: 0, collectionWords: [], mode: null };
 
   const now = Date.now();
   const cap = Number.isFinite(maxTokens) ? Math.max(0, Math.floor(maxTokens)) : tokens.length;
-  if (cap === 0) return { base: 0, verified: 0, collectionWords: [] };
+  if (cap === 0) return { base: 0, verified: 0, collectionWords: [], mode: null };
 
   await db
     .delete(scoreVoucherUsesTable)
@@ -195,6 +207,7 @@ export async function sumVerifiedBasePersistent(
 
   const validBases: Array<{
     base: number;
+    mode: ScoreVoucherMode | null;
     collectionWords: Array<{ word: string; category: string }>;
   }> = [];
 
@@ -211,6 +224,7 @@ export async function sumVerifiedBasePersistent(
     if (claimed.length > 0) {
       validBases.push({
         base: voucher.base,
+        mode: voucher.mode,
         collectionWords: voucher.collectionWords,
       });
     }
@@ -219,10 +233,13 @@ export async function sumVerifiedBasePersistent(
   validBases.sort((a, b) => b.base - a.base);
   const counted = validBases.slice(0, cap);
 
+  const certifiedModes = new Set(counted.map((entry) => entry.mode).filter(Boolean));
+  const mode = certifiedModes.size === 1 ? (Array.from(certifiedModes)[0] as ScoreVoucherMode) : null;
   return {
     base: counted.reduce((sum, entry) => sum + entry.base, 0),
     verified: counted.length,
     collectionWords: counted.flatMap((entry) => entry.collectionWords),
+    mode,
   };
 }
 
