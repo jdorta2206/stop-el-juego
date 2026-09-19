@@ -1433,7 +1433,6 @@ export default function SoloGame() {
               setRewardedAdType(null);
             }}
             playerId={player?.id}
-            onSkip={() => setRewardedAdType(null)}
           />
         )}
 
