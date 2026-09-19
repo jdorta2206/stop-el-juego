@@ -17,7 +17,7 @@ import { useInventory } from "@/hooks/useInventory";
 
 const LOGO_URL = `${import.meta.env.BASE_URL}images/stop-logo.png`;
 
-export export function ProfilePhotoAvatar({ picture, glyph, name, color, frame, title, size="w-9 h-9", className="" }: { picture?: string | null; glyph?: string | null; name: string; color?: string | null; frame?: string | null; title?: string | null; size?: string; className?: string }) {
+export function ProfilePhotoAvatar({ picture, glyph, name, color, frame, title, size="w-9 h-9", className="" }: { picture?: string | null; glyph?: string | null; name: string; color?: string | null; frame?: string | null; title?: string | null; size?: string; className?: string }) {
   const validPicture = typeof picture === "string" && /^https?:\/\//i.test(picture);
   const frameColor = frame ? "#f9a825" : "rgba(255,255,255,.12)";
   return (
@@ -29,14 +29,6 @@ export export function ProfilePhotoAvatar({ picture, glyph, name, color, frame, 
     </div>
   );
 }
-  const validPicture = typeof picture === "string" && /^https?:\/\//i.test(picture);
-  return (
-    <div className={`${size} rounded-full flex-shrink-0 flex items-center justify-center overflow-hidden text-white font-black shadow ${className}`} style={{ backgroundColor: color || "#555" }}>
-      {validPicture ? <img src={picture!} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : (glyph || name.charAt(0).toUpperCase())}
-    </div>
-  );
-}
-
 
 const NAV_ITEMS = [
   { href: "/", icon: Home, label: "Inicio" },
