@@ -20,7 +20,9 @@ import com.google.android.gms.ads.MobileAds;
 
 public class InterstitialAdActivity extends Activity {
     private static final String TAG = "STOP_INTERSTITIAL";
-    private static final String INTERSTITIAL_ID = "ca-app-pub-4807272408824742/5841246893";
+    private static final boolean USE_TEST_INTERSTITIAL_AD = true;
+    private static final String INTERSTITIAL_TEST_ID = "ca-app-pub-3940256099942544/1033173712";
+    private static final String INTERSTITIAL_REAL_ID = "ca-app-pub-4807272408824742/5841246893";
     private static final long LOAD_TIMEOUT_MS = 10_000L;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
@@ -40,7 +42,7 @@ public class InterstitialAdActivity extends Activity {
     }
 
     private void loadAndShow() {
-        InterstitialAd.load(this, INTERSTITIAL_ID, new AdRequest.Builder().build(),
+        InterstitialAd.load(this, USE_TEST_INTERSTITIAL_AD ? INTERSTITIAL_TEST_ID : INTERSTITIAL_REAL_ID, new AdRequest.Builder().build(),
                 new InterstitialAdLoadCallback() {
                     @Override
                     public void onAdLoaded(@NonNull InterstitialAd ad) {
