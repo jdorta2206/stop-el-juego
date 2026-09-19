@@ -13,6 +13,7 @@ import { AVATAR_COLORS } from "@/lib/utils";
 import { useT } from "@/i18n/useT";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { usePWAInstall } from "@/hooks/usePWAInstall";
+import { useInventory } from "@/hooks/useInventory";
 
 const LOGO_URL = `${import.meta.env.BASE_URL}images/stop-logo.png`;
 
@@ -27,9 +28,11 @@ const NAV_ITEMS = [
 export function Layout({ children }: { children: ReactNode }) {
   const { player, isLoaded, needsAuth, savePlayer, updateProfile, logout, dismissAuth } = usePlayer();
   const { isPremium } = usePremium(player?.id);
+  const { inventory } = useInventory(player?.id || null);
   const { t, lang } = useT();
   const [location] = useLocation();
   const [showProfile, setShowProfile] = useState(false);
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [editName, setEditName] = useState("");
   const [editColor, setEditColor] = useState("");
   const { isSupported, isSubscribed, permission, loading: notifLoading, subscribe, unsubscribe } =
@@ -93,6 +96,7 @@ export function Layout({ children }: { children: ReactNode }) {
   }
 
   const openProfile = () => {
+    setShowProfileMenu(false);
     setEditName(player?.name || "");
     setEditColor(player?.avatarColor || AVATAR_COLORS[0]);
     setShowProfile(true);
@@ -168,22 +172,58 @@ export function Layout({ children }: { children: ReactNode }) {
             </motion.button>
           )}
 
-          {/* Player chip */}
+          {/* Player identity + profile hub */}
           {player && (
-            <button
-              onClick={openProfile}
-              className="flex items-center gap-2 rounded-full px-2 py-1.5 transition-colors hover:bg-black/20"
-            >
-              <div
-                className="w-8 h-8 rounded-full border-2 border-white/60 flex items-center justify-center text-white font-black text-sm shadow"
-                style={{ backgroundColor: player.avatarColor }}
-              >
-                {player.name.charAt(0).toUpperCase()}
-              </div>
-              <span className="font-bold text-white text-sm truncate max-w-[90px] hidden sm:block">
-                {player.name}
-              </span>
-            </button>
+            <div className="relative">
+              <button onClick={() => setShowProfileMenu(v => !v)} className="flex items-center gap-2 rounded-full px-2 py-1.5 transition-all hover:bg-white/10" aria-haspopup="menu" aria-expanded={showProfileMenu}>
+                <div className="relative w-9 h-9 rounded-full border-2 flex items-center justify-center text-white font-black text-sm shadow-lg"
+                  style={{ backgroundColor: player.avatarColor || "#555", borderColor: inventory?.equipped?.frame ? "#f9a825" : "rgba(255,255,255,0.6)" }}>
+                  {(() => {
+                    const avatar = inventory?.equipped?.avatar;
+                    const glyph = avatar ? (inventory?.owned?.avatars || []).find((a:any) => a.id === avatar)?.glyph : null;
+                    return glyph || player.name.charAt(0).toUpperCase();
+                  })()}
+                </div>
+                <span className="font-bold text-white text-sm truncate max-w-[90px] hidden sm:block">{player.name}</span>
+                <span className="text-white/40 text-xs">⌄</span>
+              </button>
+              <AnimatePresence>
+                {showProfileMenu && (
+                  <motion.div initial={{ opacity: 0, y: -6, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -6, scale: 0.97 }}
+                    className="absolute right-0 top-12 z-50 w-64 rounded-2xl p-2 shadow-2xl"
+                    style={{ background: "rgba(10,18,60,0.98)", border: "1px solid rgba(249,168,37,0.25)", backdropFilter: "blur(18px)" }} role="menu">
+                    <div className="px-3 py-2 border-b border-white/10 mb-1">
+                      <div className="flex items-center gap-2">
+                        <div className="w-10 h-10 rounded-full flex items-center justify-center text-xl border-2 border-secondary/60" style={{backgroundColor: player.avatarColor || "#555"}}>
+                          {(() => { const a=inventory?.equipped?.avatar; return (a ? (inventory?.owned?.avatars || []).find((x:any)=>x.id===a)?.glyph : null) || player.name.charAt(0).toUpperCase(); })()}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-white font-black truncate">{player.name}</p>
+                          <p className="text-amber-300 text-xs font-bold">🪙 {inventory?.coins ?? 0} monedas</p>
+                        </div>
+                      </div>
+                    </div>
+                    {[
+                      { icon:"👤", label:"Mi perfil", action:()=>setLocation("/player/"+encodeURIComponent(player.id)) },
+                      { icon:"✏️", label:"Editar perfil", action:openProfile },
+                      { icon:"🎨", label:"Personalizar", action:()=>setLocation("/player/"+encodeURIComponent(player.id)+"#tienda") },
+                      { icon:"🛍️", label:"Tienda", action:()=>setLocation("/tienda") },
+                      { icon:"✨", label:"Mi colección", action:()=>setLocation("/player/"+encodeURIComponent(player.id)+"#tienda") },
+                      { icon:"🏆", label:"Ranking", action:()=>setLocation("/ranking") },
+                    ].map(item => (
+                      <button key={item.label} onClick={()=>{item.action();setShowProfileMenu(false);}} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left text-sm font-bold text-white/80 hover:bg-white/10 hover:text-white transition-colors" role="menuitem">
+                        <span className="w-6 text-center">{item.icon}</span>{item.label}
+                      </button>
+                    ))}
+                    <div className="border-t border-white/10 mt-1 pt-1">
+                      <button onClick={()=>{setShowProfileMenu(false);logout();}} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left text-sm font-bold text-red-400 hover:bg-red-500/10" role="menuitem">
+                        <LogOut className="w-4 h-4 ml-1 mr-1" />Cerrar sesión
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           )}
         </div>
       </header>
