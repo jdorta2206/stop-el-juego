@@ -389,8 +389,6 @@ router.get("/google/callback", async (req: Request, res: Response) => {
       provider: "google",
     });
 
-    await db.insert(playerScoresTable).values({ playerId, playerName: String(me.username || me.name || "Usuario").trim().slice(0, 14) || "Usuario", avatarColor: "#f9a825", profilePicture: me.profile_picture_url || null }).onConflictDoUpdate({ target: playerScoresTable.playerId, set: { profilePicture: me.profile_picture_url || null, updatedAt: new Date() } });
-
     const sessionToken = issuePlayerToken(res, playerId);
     res.send(bridgePageMulti([
       ["oauth_user", user],
@@ -579,6 +577,8 @@ router.get("/instagram/callback", async (req: Request, res: Response) => {
       picture:  me.profile_picture_url || null,
       provider: "instagram",
     });
+
+    await db.insert(playerScoresTable).values({ playerId, playerName: String(me.username || me.name || "Usuario").trim().slice(0, 14) || "Usuario", avatarColor: "#f9a825", profilePicture: me.profile_picture_url || null }).onConflictDoUpdate({ target: playerScoresTable.playerId, set: { playerName: String(me.username || me.name || "Usuario").trim().slice(0, 14) || "Usuario", profilePicture: me.profile_picture_url || null, updatedAt: new Date() } });
 
     const sessionToken = issuePlayerToken(res, playerId);
     res.send(bridgePageMulti([
