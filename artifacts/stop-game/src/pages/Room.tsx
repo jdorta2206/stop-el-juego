@@ -36,13 +36,17 @@ import { useToast } from "@/hooks/use-toast";
 import { useReviewPrompt, recordGamePlayed } from "@/hooks/useReviewPrompt";
 import { ReviewPromptCard } from "@/components/ReviewPromptCard";
 
-const ROUND_TIME = 60;\n\nconst ROOM_FRAME_COLORS: Record<string, string> = {
+const ROUND_TIME = 60;
+
+const ROOM_FRAME_COLORS: Record<string, string> = {
   frame_free_5:"#cd7f32", frame_free_10:"#c0c0c0", frame_free_15:"#f9a825", frame_free_20:"#67e8f9", frame_free_25:"#a78bfa", frame_free_30:"#f472b6",
   frame_shop_neon:"#22d3ee", frame_shop_plata:"#94a3b8", frame_shop_esmeralda:"#10b981", frame_shop_menta:"#34d399", frame_shop_coral:"#fb7185", frame_shop_rosa:"#ec4899", frame_shop_rubi:"#e11d48", frame_shop_zafiro:"#2563eb", frame_shop_indigo:"#6366f1", frame_shop_amatista:"#9333ea", frame_shop_dorado:"#f59e0b", frame_shop_fuego:"#fb923c", frame_shop_rayo:"#38bdf8", frame_shop_lava:"#ef4444", frame_shop_galaxia:"#a855f7",
   frame_collection_hunter:"#38bdf8", frame_collection_legend:"#f472b6", frame_collection_master:"#06b6d4", frame_collection_explorer:"#22c55e", frame_collection_mythic:"#a855f7",
   frame_prestige_bronze:"#cd7f32", frame_prestige_silver:"#cbd5e1", frame_prestige_gold:"#fbbf24", frame_prestige_diamond:"#67e8f9",
 };
-const ROOM_AVATARS: Record<string,string> = {\n  avatar_premium_5:"🎯",avatar_premium_10:"🔥",avatar_premium_15:"⚡",avatar_premium_20:"🌟",avatar_premium_25:"👑",avatar_premium_30:"💎",\n  avatar_wc_ball:"⚽",avatar_wc_jersey:"👕",avatar_wc_goal:"🥅",avatar_wc_gloves:"🧤",avatar_wc_boots:"👟",avatar_wc_medal:"🥇",avatar_wc_trophy:"🏆",avatar_wc_flag_es:"🇪🇸",avatar_wc_flag_br:"🇧🇷",avatar_wc_flag_ar:"🇦🇷",avatar_wc_flag_fr:"🇫🇷",avatar_wc_flag_de:"🇩🇪",avatar_wc_flag_pt:"🇵🇹",avatar_wc_flag_it:"🇮🇹",avatar_wc_flag_nl:"🇳🇱",avatar_wc_flag_mx:"🇲🇽",avatar_wc_flag_us:"🇺🇸",avatar_wc_flag_uy:"🇺🇾",avatar_wc_flag_co:"🇨🇴",avatar_wc_flag_jp:"🇯🇵",
+const ROOM_AVATARS: Record<string,string> = {
+  avatar_premium_5:"🎯",avatar_premium_10:"🔥",avatar_premium_15:"⚡",avatar_premium_20:"🌟",avatar_premium_25:"👑",avatar_premium_30:"💎",
+  avatar_wc_ball:"⚽",avatar_wc_jersey:"👕",avatar_wc_goal:"🥅",avatar_wc_gloves:"🧤",avatar_wc_boots:"👟",avatar_wc_medal:"🥇",avatar_wc_trophy:"🏆",avatar_wc_flag_es:"🇪🇸",avatar_wc_flag_br:"🇧🇷",avatar_wc_flag_ar:"🇦🇷",avatar_wc_flag_fr:"🇫🇷",avatar_wc_flag_de:"🇩🇪",avatar_wc_flag_pt:"🇵🇹",avatar_wc_flag_it:"🇮🇹",avatar_wc_flag_nl:"🇳🇱",avatar_wc_flag_mx:"🇲🇽",avatar_wc_flag_us:"🇺🇸",avatar_wc_flag_uy:"🇺🇾",avatar_wc_flag_co:"🇨🇴",avatar_wc_flag_jp:"🇯🇵",
   avatar_shop_rocket:"🚀",avatar_shop_pizza:"🍕",avatar_shop_burger:"🍔",avatar_shop_cat:"🐱",avatar_shop_dog:"🐶",avatar_shop_alien:"👽",avatar_shop_unicorn:"🦄",avatar_shop_ghost:"👻",avatar_shop_ninja:"🥷",avatar_shop_robot:"🤖",avatar_shop_flower:"🌸",avatar_shop_fox:"🦊",avatar_shop_clown:"🤡",avatar_shop_gamepad:"🎮",avatar_shop_butterfly:"🦋",avatar_shop_owl:"🦉",avatar_shop_panda:"🐼",avatar_shop_star:"✨",avatar_shop_octopus:"🐙",avatar_shop_skull:"💀",avatar_shop_lion:"🦁",avatar_shop_tiger:"🐯",avatar_shop_devil:"😈",avatar_shop_angel:"😇",avatar_shop_pirate:"🏴‍☠️",avatar_shop_dragon:"🐉",avatar_shop_rainbow:"🌈",avatar_shop_wizard:"🧙",avatar_shop_crystal:"🔮",avatar_shop_phoenix:"🦅",avatar_shop_money:"🤑",
 };
 const ROOM_TITLES: Record<string,string> = {
