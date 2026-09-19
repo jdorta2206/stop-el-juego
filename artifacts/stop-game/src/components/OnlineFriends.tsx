@@ -7,6 +7,7 @@ import { useFollows, type FollowedFriend } from "@/lib/useFollows";
 import type { PlayerProfile } from "@/hooks/use-player";
 import { useLocation } from "wouter";
 import { ChallengeNotification } from "@/components/ChallengeNotification";
+import { ProfilePhotoAvatar } from "@/components/Layout";
 
 interface OnlineFriendsProps {
   player: PlayerProfile;
