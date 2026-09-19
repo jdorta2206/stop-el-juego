@@ -1279,7 +1279,10 @@ export default function SoloGame() {
   };
 
   const handleRewardedComplete = async (reward: number) => {
+    // The rewarded component keeps the game paused while the native ad is
+    // actually on screen. Only resume after the reward result is confirmed.
     resumeGameTimer();
+    window.dispatchEvent(new Event("stop:rewarded-ad-resume"));
     if (rewardedAdType === "extraTime") {
       setTimeLeft(prev => prev + reward);
       setRewardedUsed(true);
@@ -1424,6 +1427,11 @@ export default function SoloGame() {
               rewardedAdType === "double" ? totalScore : 0
             }
             onComplete={handleRewardedComplete}
+            onSkip={() => {
+              resumeGameTimer();
+              window.dispatchEvent(new Event("stop:rewarded-ad-resume"));
+              setRewardedAdType(null);
+            }}
             playerId={player?.id}
             onSkip={() => setRewardedAdType(null)}
           />
