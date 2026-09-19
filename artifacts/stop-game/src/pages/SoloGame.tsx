@@ -41,6 +41,7 @@ import { CollectionToast } from "@/components/CollectionToast";
 import { drawPowerCard, POWER_CARDS, type PowerCardId } from "@/data/powerCards";
 import { usePersonalBest } from "@/hooks/usePersonalBest";
 import { useReviewPrompt, recordGamePlayed, recordScoreAndPercentile } from "@/hooks/useReviewPrompt";
+import { maybeShowInterstitial } from "@/lib/interstitialAd";
 import { ReviewPromptCard } from "@/components/ReviewPromptCard";
 
 function vibrate(pattern: number | number[]) {
@@ -101,7 +102,7 @@ function getTodayStr(): string {
 
 export default function SoloGame() {
   const { player, showAuth } = usePlayer();
-  const { isPremium } = usePremium(player?.id);
+  const { isPremium, loading: premiumLoading } = usePremium(player?.id);
   const { streak: soloStreak, recordPlay } = useStreak();
   const { t, lang } = useT();
   const { addXp, levelUpInfo, clearLevelUp } = useProgression(player?.id);
@@ -1207,7 +1208,10 @@ export default function SoloGame() {
         return;
       }
       submittedRef.current = false;
-      setGameState("LOBBY");
+      void maybeShowInterstitial(isPremium || premiumLoading).then(() => {
+        setGameState("LOBBY");
+      });
+
       setRound(1);
       setTotalScore(0);
       scoreTokensRef.current = [];
