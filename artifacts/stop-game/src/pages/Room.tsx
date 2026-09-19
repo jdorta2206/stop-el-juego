@@ -2055,13 +2055,7 @@ export default function Room() {
               {players.map((p: any) => (
                 <div key={p.playerId}
                   className={`flex items-center gap-3 p-3 rounded-xl border ${p.isReady ? "bg-green-500/10 border-green-500/30" : "bg-white/5 border-white/10"}`}>
-                  <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold"
-                    style={{
-                      backgroundColor: p.avatarColor,
-                      boxShadow: p.isPremium ? "0 0 0 2px #fde047, 0 0 10px rgba(250,204,21,0.65)" : undefined,
-                    }}>
-                    {p.playerName.charAt(0).toUpperCase()}
-                  </div>
+                  <RoomCosmeticAvatar p={p} size="sm" />
                   <span className="flex-1 font-bold text-sm flex items-center gap-1">
                     {p.playerName}
                     {p.isPremium && <PremiumBadge size="xs" />}
@@ -2131,13 +2125,7 @@ export default function Room() {
                                 <div key={p.playerId}
                                   className={`flex items-center gap-2 px-3 py-1.5 transition-all duration-300 ${revealed ? "opacity-100" : "opacity-0 pointer-events-none"}`}
                                 >
-                                  <div className="w-5 h-5 rounded-full flex-shrink-0 flex items-center justify-center text-white text-[10px] font-bold"
-                                    style={{
-                                      backgroundColor: p.avatarColor,
-                                      boxShadow: p.isPremium ? "0 0 0 1.5px #fde047, 0 0 6px rgba(250,204,21,0.6)" : undefined,
-                                    }}>
-                                    {p.playerName.charAt(0).toUpperCase()}
-                                  </div>
+                                  <RoomCosmeticAvatar p={p} size="xs" />
                                   <p className={`text-xs font-bold flex-1 truncate flex items-center gap-1 ${isMe ? "text-secondary" : "text-white/80"}`}>
                                     <span className="truncate">{p.playerName}</span>
                                     {p.isPremium && <PremiumBadge size="xs" />}
@@ -2221,13 +2209,7 @@ export default function Room() {
                           transition={{ delay: i * 0.08 }}
                           className={`flex items-center gap-3 p-3 rounded-xl ${isMe ? "bg-secondary/20 border border-secondary/30" : "bg-black/20 border border-white/10"}`}>
                           <span className="text-xl">{medals[i] || `#${i + 1}`}</span>
-                          <div className="w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-white font-bold"
-                            style={{
-                              backgroundColor: p.avatarColor,
-                              boxShadow: p.isPremium ? "0 0 0 2px #fde047, 0 0 10px rgba(250,204,21,0.65)" : undefined,
-                            }}>
-                            {p.playerName.charAt(0).toUpperCase()}
-                          </div>
+                          <RoomCosmeticAvatar p={p} size="sm" />
                           <div className="flex-1 min-w-0">
                             <p className="font-black text-sm truncate flex items-center gap-1">
                               <span className="truncate">{p.playerName}</span>
@@ -2322,13 +2304,7 @@ export default function Room() {
                     transition={{ delay: i * 0.1 }}
                     className={`flex items-center gap-4 p-4 rounded-2xl border ${isMe ? "bg-secondary/20 border-secondary/40 scale-[1.02]" : "bg-black/20 border-white/10"}`}>
                     <span className="text-2xl">{medals[i] || `#${i + 1}`}</span>
-                    <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold shadow"
-                      style={{
-                        backgroundColor: p.avatarColor,
-                        boxShadow: p.isPremium ? "0 0 0 2.5px #fde047, 0 0 14px rgba(250,204,21,0.7)" : undefined,
-                      }}>
-                      {p.playerName.charAt(0).toUpperCase()}
-                    </div>
+                    <RoomCosmeticAvatar p={p} size="md" />
                     <div className="flex-1">
                       <p className="font-black flex items-center gap-1">
                         {p.playerName}
