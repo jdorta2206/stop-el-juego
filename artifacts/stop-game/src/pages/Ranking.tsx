@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Layout } from "@/components/Layout";
+import { Layout, ProfilePhotoAvatar } from "@/components/Layout";
 import { Card } from "@/components/ui";
 import { useGetLeaderboard, useGetPlayerStats } from "@workspace/api-client-react";
 import { Trophy, Users, UserPlus, UserCheck, Swords, Clock, Copy, Check, CalendarClock, Star, Flame, Crown } from "lucide-react";
@@ -327,11 +327,8 @@ export default function Ranking() {
   const myDisplayStats = (myFallbackEntry ?? myStats?.score ?? null) as any;
 
   function RankingAvatar({ p, size="w-9 h-9", className="" }: { p: any; size?: string; className?: string }) {
-  const validPicture = typeof p.picture === "string" && /^https?:\/\//i.test(p.picture);
-  return <div className={`${size} rounded-full flex-shrink-0 flex items-center justify-center overflow-hidden text-white font-black shadow ${className}`} style={{ backgroundColor: p.avatarColor || "#555", border: p.avatarFrame ? "2px solid #f9a825" : undefined }}>
-    {validPicture ? <img src={p.picture} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : (p.avatarGlyph || p.playerName?.charAt(0).toUpperCase())}
-  </div>;
-}
+    return <ProfilePhotoAvatar picture={p.picture} glyph={p.avatarGlyph} name={p.playerName || ""} color={p.avatarColor} frame={p.avatarFrame} title={p.equippedTitle} size={size} className={className} />;
+  }
 
 const PODIUM_ORDER = [1, 0, 2];
   const medalColors: Record<number, { bg: string; border: string; size: string; label: string }> = {
