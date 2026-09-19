@@ -170,7 +170,8 @@ router.get("/weekly", async (req, res) => {
       ps.player_name      AS "playerName",
       ps.avatar_color     AS "avatarColor",
       ps.equipped_avatar AS "equippedAvatar",
-      ps.current_streak   AS "currentStreak",\n      ps.profile_picture AS "picture",\n      ps.equipped_frame AS "equippedFrame",
+      ps.current_streak   AS "currentStreak",
+      ps.profile_picture AS "picture",\n      ps.equipped_frame AS "equippedFrame",
       ps.is_premium       AS "isPremium",
       ps.achievements_json AS "achievementsJson",
       SUM(gh.score)       AS "totalScore",
@@ -192,6 +193,10 @@ router.get("/weekly", async (req, res) => {
     totalScore:    Number(p.totalScore ?? 0),
     gamesPlayed:   Number(p.gamesPlayed ?? 0),
     wins:          Number(p.wins ?? 0),
+    picture:         p.picture ?? null,
+    avatarFrame:     p.equippedFrame ?? null,
+    picture:         p.picture ?? null,
+    avatarFrame:     p.equippedFrame ?? null,
     currentStreak: Number(p.currentStreak ?? 0),
     isPremium:     p.isPremium ?? false,
     achievementCount: parseAchievementCount(p.achievementsJson),
@@ -239,7 +244,7 @@ router.get("/weekly/me", requirePlayerIdentity, async (req: AuthedRequest, res) 
   }
   res.json({
     playerId: row.playerId, playerName: row.playerName ?? "—",
-    avatarColor: row.avatarColor ?? "#e53e3e", totalScore: Number(row.totalScore ?? 0),
+    avatarColor: row.avatarColor ?? "#e53e3e", picture: row.picture ?? null, avatarFrame: row.equippedFrame ?? null, totalScore: Number(row.totalScore ?? 0),
     gamesPlayed: Number(row.gamesPlayed ?? 0), wins: Number(row.wins ?? 0),
     rank: Number(row.rank ?? 0),
   });
@@ -253,6 +258,8 @@ router.get("/monthly", async (_req, res) => {
       gh.player_id        AS "playerId",
       ps.player_name      AS "playerName",
       ps.avatar_color     AS "avatarColor",
+      ps.profile_picture  AS "picture",
+      ps.equipped_frame   AS "equippedFrame",
       ps.current_streak   AS "currentStreak",
       ps.is_premium       AS "isPremium",
       ps.achievements_json AS "achievementsJson",
