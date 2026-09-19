@@ -84,7 +84,7 @@ export function MultiplayerScreen({ session, onExit }: Props) {
     if (!roomCode) return;
     setBusy(true); setError(null);
     try {
-      const joined = await apiFetch<Room>(`/api/rooms/${encodeURIComponent(roomCode)}/join`, { method: "POST", body: JSON.stringify({ playerId, playerName, avatarColor: null, loginMethod: session.user.loginMethod ?? null }) });
+      const joined = await apiFetch<Room>(`/api/rooms/${encodeURIComponent(roomCode)}/join`, { method: "POST", body: JSON.stringify({ playerId, playerName, avatarColor: null, picture: (session.user as any).picture ?? null, loginMethod: session.user.loginMethod ?? null }) });
       setRoom(joined); setCode(joined.roomCode);
     } catch (e) { setError(e instanceof Error ? e.message : "No se pudo entrar en la sala."); }
     finally { setBusy(false); }

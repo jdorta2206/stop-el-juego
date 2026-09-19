@@ -250,12 +250,13 @@ function parseBluffMeta(json: string | null): any | null {
 // ============================================================
 // 🆕 OBTENER COSMÉTICOS DE PLAYER_SCORES PARA UNA LISTA DE PLAYERS
 // ============================================================
-async function fetchCosmeticsForPlayers(playerIds: string[]): Promise<Record<string, { equippedAvatar: string | null, equippedFrame: string | null, equippedBackground: string | null, equippedTitle: string | null }>> {
+async function fetchCosmeticsForPlayers(playerIds: string[]): Promise<Record<string, { profilePicture: string | null, equippedAvatar: string | null, equippedFrame: string | null, equippedBackground: string | null, equippedTitle: string | null }>> {
   if (playerIds.length === 0) return {};
   try {
     const rows = await db
       .select({
         playerId: playerScoresTable.playerId,
+        profilePicture: playerScoresTable.profilePicture,
         equippedAvatar: playerScoresTable.equippedAvatar,
         equippedFrame: playerScoresTable.equippedFrame,
         equippedBackground: playerScoresTable.equippedBackground,
@@ -266,6 +267,7 @@ async function fetchCosmeticsForPlayers(playerIds: string[]): Promise<Record<str
     const map: Record<string, any> = {};
     for (const row of rows) {
       map[row.playerId] = {
+        profilePicture: row.profilePicture ?? null,
         equippedAvatar: row.equippedAvatar ?? null,
         equippedFrame: row.equippedFrame ?? null,
         equippedBackground: row.equippedBackground ?? null,
@@ -294,6 +296,7 @@ function formatRoom(room: any, cosmeticsMap?: Record<string, any>) {
   if (cosmeticsMap) {
     players = players.map((p: any) => ({
       ...p,
+      picture: cosmeticsMap[p.playerId]?.profilePicture ?? p.picture ?? null,
       equippedAvatar: cosmeticsMap[p.playerId]?.equippedAvatar ?? null,
       equippedFrame: cosmeticsMap[p.playerId]?.equippedFrame ?? null,
       equippedBackground: cosmeticsMap[p.playerId]?.equippedBackground ?? null,
@@ -903,6 +906,7 @@ router.post("/", async (req, res) => {
     playerId: hostId,
     playerName: hostName,
     avatarColor: avatarColor ?? "#e53e3e",
+    picture: typeof picture === "string" ? picture.slice(0, 1000) : null,
     loginMethod: loginMethod ?? null,
     isPremium: hostPremium,
     score: 0,
@@ -992,7 +996,7 @@ router.post("/:roomCode/join", roomJoinLimiter, async (req, res) => {
   if (!body.success) { res.status(400).json({ error: "Invalid request body" }); return; }
 
   const code = roomCode.toUpperCase();
-  const { playerId, playerName, avatarColor, loginMethod } = body.data;
+  const { playerId, playerName, avatarColor, picture, loginMethod } = body.data;
   // 🔒 A logged-in account can only join AS ITSELF. Guests (UUID ids) pass.
   if (!verifyClaimedIdentity(req, playerId)) {
     res.status(403).json({ error: "Identity verification failed" }); return;
@@ -1047,6 +1051,7 @@ router.post("/:roomCode/join", roomJoinLimiter, async (req, res) => {
         playerId,
         playerName,
         avatarColor: avatarColor ?? "#3182ce",
+        picture: typeof picture === "string" ? picture.slice(0, 1000) : null,
         loginMethod: loginMethod ?? null,
         isPremium: joinerPremium,
         score: 0,

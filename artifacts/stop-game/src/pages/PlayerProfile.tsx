@@ -304,7 +304,7 @@ export default function PlayerProfile() {
     const asOnlinePlayer: OnlinePlayer = {
       playerId: data.playerId,
       name: data.playerName,
-      picture: null,
+      picture: data.picture || null,
       avatarColor: data.avatarColor || "#e53e3e",
       provider: null,
       roomCode: null,
@@ -386,9 +386,11 @@ export default function PlayerProfile() {
                     boxShadow: fxClass ? undefined : (frameColor ? `0 0 18px ${frameColor}66` : undefined),
                   }}
                 >
-                  {equippedAvatar && AVATAR_GLYPH_BY_ID[equippedAvatar]
-                    ? AVATAR_GLYPH_BY_ID[equippedAvatar]
-                    : data.playerName?.charAt(0).toUpperCase()}
+                  {data.picture && /^https?:\\/\\//i.test(data.picture)
+                    ? <img src={data.picture} alt="" referrerPolicy="no-referrer" className="w-full h-full object-cover rounded-full" />
+                    : equippedAvatar && AVATAR_GLYPH_BY_ID[equippedAvatar]
+                      ? AVATAR_GLYPH_BY_ID[equippedAvatar]
+                      : data.playerName?.charAt(0).toUpperCase()}
                 </div>
               );
             })()}

@@ -397,6 +397,7 @@ router.get("/profile/:playerId", async (req, res) => {
     playerId: ps.playerId,
     playerName: ps.playerName,
     avatarColor: ps.avatarColor,
+    picture: ps.profilePicture ?? null,
     totalScore: ps.totalScore,
     gamesPlayed: ps.gamesPlayed,
     wins: ps.wins,

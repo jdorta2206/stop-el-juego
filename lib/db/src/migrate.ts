@@ -35,6 +35,7 @@ export async function ensureIndexes(): Promise<void> {
     `ALTER TABLE player_scores ADD COLUMN IF NOT EXISTS streak_days_json text NOT NULL DEFAULT '[]'`,
     `ALTER TABLE player_scores ADD COLUMN IF NOT EXISTS coins integer NOT NULL DEFAULT 0`,
     `ALTER TABLE player_scores ADD COLUMN IF NOT EXISTS inventory_json text NOT NULL DEFAULT '{"avatars":[],"frames":[]}'`,
+    `ALTER TABLE player_scores ADD COLUMN IF NOT EXISTS profile_picture text`,
     `ALTER TABLE player_scores ADD COLUMN IF NOT EXISTS equipped_avatar text`,
     `ALTER TABLE player_scores ADD COLUMN IF NOT EXISTS equipped_frame text`,
     `ALTER TABLE player_scores ADD COLUMN IF NOT EXISTS equipped_background text`,

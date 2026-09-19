@@ -176,6 +176,7 @@ export interface CreateRoomRequest {
   hostId: string;
   hostName: string;
   avatarColor?: string;
+  picture?: string | null;
   maxRounds?: number;
   language?: string;
   loginMethod?: string | null;
@@ -186,6 +187,7 @@ export interface JoinRoomRequest {
   playerId: string;
   playerName: string;
   avatarColor?: string;
+  picture?: string | null;
   loginMethod?: string | null;
 }
 
