@@ -906,6 +906,7 @@ router.post("/", async (req, res) => {
     playerId: hostId,
     playerName: hostName,
     avatarColor: avatarColor ?? "#e53e3e",
+    picture: typeof picture === "string" ? picture.slice(0, 1000) : null,
     loginMethod: loginMethod ?? null,
     isPremium: hostPremium,
     score: 0,
@@ -995,7 +996,7 @@ router.post("/:roomCode/join", roomJoinLimiter, async (req, res) => {
   if (!body.success) { res.status(400).json({ error: "Invalid request body" }); return; }
 
   const code = roomCode.toUpperCase();
-  const { playerId, playerName, avatarColor, loginMethod } = body.data;
+  const { playerId, playerName, avatarColor, picture, loginMethod } = body.data;
   // 🔒 A logged-in account can only join AS ITSELF. Guests (UUID ids) pass.
   if (!verifyClaimedIdentity(req, playerId)) {
     res.status(403).json({ error: "Identity verification failed" }); return;
@@ -1050,6 +1051,7 @@ router.post("/:roomCode/join", roomJoinLimiter, async (req, res) => {
         playerId,
         playerName,
         avatarColor: avatarColor ?? "#3182ce",
+        picture: typeof picture === "string" ? picture.slice(0, 1000) : null,
         loginMethod: loginMethod ?? null,
         isPremium: joinerPremium,
         score: 0,
