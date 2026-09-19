@@ -156,7 +156,9 @@ public class RewardedAdActivity extends Activity {
 
             @Override
             public void onAdDismissedFullScreenContent() {
-                if (!rewardEarned) sendClientResult("dismissed");
+                // Do not release the web game while the fullscreen ad is still visible.
+                // The web timer/reward must be reconciled only after AdMob closes the ad.
+                sendClientResult(rewardEarned ? "earned" : "dismissed");
                 Application.preloadRewardedAd();
                 finish();
             }
@@ -174,8 +176,8 @@ public class RewardedAdActivity extends Activity {
             ad.show(this, rewardItem -> {
                 rewardEarned = true;
                 Log.d(TAG, "Reward earned amount=" + rewardItem.getAmount());
-                // Client callbacks never grant the reward. AdMob SSV is the trusted source.
-                sendClientResult("earned");
+                // Wait for onAdDismissedFullScreenContent before notifying the web app.
+                // This keeps the timer paused and applies the reward only after the ad closes.
             });
         } catch (RuntimeException error) {
             Log.e(TAG, "Rewarded show exception", error);
