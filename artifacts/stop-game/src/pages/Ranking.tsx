@@ -315,6 +315,8 @@ export default function Ranking() {
         playerId: player?.id,
         playerName: myStats.score.playerName,
         avatarColor: myStats.score.avatarColor || player?.avatarColor,
+        picture: (myStats.score as any).picture || (player as any)?.picture || null,
+        avatarFrame: (myStats.score as any).avatarFrame || null,
         totalScore: myStats.score.totalScore,
         gamesPlayed: myStats.score.gamesPlayed,
         wins: myStats.score.wins,
@@ -659,7 +661,7 @@ const PODIUM_ORDER = [1, 0, 2];
                   <div className="flex items-center gap-3">
                     <div className="w-14 h-14 rounded-full flex items-center justify-center text-white font-black text-xl"
                       style={{ backgroundColor: previewPlayer.avatarColor || "#555" }}>
-                      {previewPlayer.avatarGlyph || previewPlayer.playerName.charAt(0).toUpperCase()}
+                      <RankingAvatar p={previewPlayer} size="w-14 h-14" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
