@@ -506,6 +506,53 @@ export default function Ranking() {
               </div>
             )}
 
+            {/* ── MY POSITION CARD ── */}
+            {(() => {
+              // Public lists remain capped at 100. The authenticated player gets
+              // a separate private period position when outside that visible list.
+              const periodEntry =
+                filter === "weekly" ? weeklyMe :
+                filter === "monthly" ? monthlyMe : null;
+              const displayEntry =
+                filter === "weekly" && periodEntry?.gamesPlayed > 0
+                  ? periodEntry
+                  : filter === "monthly" && periodEntry?.gamesPlayed > 0
+                    ? periodEntry
+                    : myEntry && myRank && myRank > 3
+                      ? myEntry
+                      : filter === "global"
+                        ? myFallbackEntry
+                        : null;
+              const displayRank =
+                filter === "weekly" || filter === "monthly"
+                  ? periodEntry?.rank ?? (myRank && myRank > 3 ? myRank : null)
+                  : myRank && myRank > 3
+                    ? myRank
+                    : myFallbackEntry?.globalRank ?? null;
+              if (!displayEntry || filter === "friends") return null;
+              return (
+                <Card className="p-3 bg-secondary/10 border border-secondary/30">
+                  <div className="flex items-center gap-3">
+                    <span className="text-secondary font-black text-lg w-10 text-center">
+                      {displayRank ? `#${displayRank}` : "—"}
+                    </span>
+                    <div className="w-9 h-9 rounded-full flex items-center justify-center text-white font-bold shadow" style={{ backgroundColor: (displayEntry as any).avatarColor || "#555" }}>
+                      {(displayEntry as any).playerName?.charAt(0).toUpperCase()}
+                    </div>
+                    <span className="flex-1 font-black">{(displayEntry as any).playerName} <span className="text-secondary text-xs">({t.game.you})</span></span>
+                    <span className="text-white/60 text-sm">{(displayEntry as any).gamesPlayed}</span>
+                    <span className="text-secondary font-black text-lg">{(displayEntry as any).totalScore} {t.game.points}</span>
+                  </div>
+                  {(displayEntry as any).globalRank != null && (
+                    <p className="mt-2 text-[11px] text-white/45 font-bold">
+                      Récord global: #{(displayEntry as any).globalRank} · Mejor partida: {(displayEntry as any).bestScore ?? 0}
+                    </p>
+                  )}
+                </Card>
+              );
+            })()}
+
+
             {/* ── PODIUM ── */}
             {top3.length > 0 && (
               <div className="flex items-end justify-center gap-4 py-4">
@@ -630,52 +677,6 @@ export default function Ranking() {
                 </div>
               </div>
             )}
-
-            {/* ── MY POSITION CARD ── */}
-            {(() => {
-              // Public lists remain capped at 100. The authenticated player gets
-              // a separate private period position when outside that visible list.
-              const periodEntry =
-                filter === "weekly" ? weeklyMe :
-                filter === "monthly" ? monthlyMe : null;
-              const displayEntry =
-                filter === "weekly" && periodEntry?.gamesPlayed > 0
-                  ? periodEntry
-                  : filter === "monthly" && periodEntry?.gamesPlayed > 0
-                    ? periodEntry
-                    : myEntry && myRank && myRank > 3
-                      ? myEntry
-                      : filter === "global"
-                        ? myFallbackEntry
-                        : null;
-              const displayRank =
-                filter === "weekly" || filter === "monthly"
-                  ? periodEntry?.rank ?? (myRank && myRank > 3 ? myRank : null)
-                  : myRank && myRank > 3
-                    ? myRank
-                    : myFallbackEntry?.globalRank ?? null;
-              if (!displayEntry || filter === "friends") return null;
-              return (
-                <Card className="p-3 bg-secondary/10 border border-secondary/30">
-                  <div className="flex items-center gap-3">
-                    <span className="text-secondary font-black text-lg w-10 text-center">
-                      {displayRank ? `#${displayRank}` : "—"}
-                    </span>
-                    <div className="w-9 h-9 rounded-full flex items-center justify-center text-white font-bold shadow" style={{ backgroundColor: (displayEntry as any).avatarColor || "#555" }}>
-                      {(displayEntry as any).playerName?.charAt(0).toUpperCase()}
-                    </div>
-                    <span className="flex-1 font-black">{(displayEntry as any).playerName} <span className="text-secondary text-xs">({t.game.you})</span></span>
-                    <span className="text-white/60 text-sm">{(displayEntry as any).gamesPlayed}</span>
-                    <span className="text-secondary font-black text-lg">{(displayEntry as any).totalScore} {t.game.points}</span>
-                  </div>
-                  {(displayEntry as any).globalRank != null && (
-                    <p className="mt-2 text-[11px] text-white/45 font-bold">
-                      Récord global: #{(displayEntry as any).globalRank} · Mejor partida: {(displayEntry as any).bestScore ?? 0}
-                    </p>
-                  )}
-                </Card>
-              );
-            })()}
 
             {/* ── REST OF LIST ── */}
             {rest.length > 0 && (
