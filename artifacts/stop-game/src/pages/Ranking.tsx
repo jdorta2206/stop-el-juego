@@ -324,7 +324,14 @@ export default function Ranking() {
     : null;
   const myDisplayStats = (myFallbackEntry ?? myStats?.score ?? null) as any;
 
-  const PODIUM_ORDER = [1, 0, 2];
+  function RankingAvatar({ p, size="w-9 h-9", className="" }: { p: any; size?: string; className?: string }) {
+  const validPicture = typeof p.picture === "string" && /^https?:\/\//i.test(p.picture);
+  return <div className={`${size} rounded-full flex-shrink-0 flex items-center justify-center overflow-hidden text-white font-black shadow ${className}`} style={{ backgroundColor: p.avatarColor || "#555", border: p.avatarFrame ? "2px solid #f9a825" : undefined }}>
+    {validPicture ? <img src={p.picture} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : (p.avatarGlyph || p.playerName?.charAt(0).toUpperCase())}
+  </div>;
+}
+
+const PODIUM_ORDER = [1, 0, 2];
   const medalColors: Record<number, { bg: string; border: string; size: string; label: string }> = {
     0: { bg: "linear-gradient(135deg, #f9a825, #f57f17)", border: "#f9a825", size: "w-20 h-20 text-3xl", label: "🥇" },
     1: { bg: "linear-gradient(135deg, #9e9e9e, #757575)", border: "#9e9e9e",  size: "w-16 h-16 text-2xl", label: "🥈" },
@@ -536,9 +543,7 @@ export default function Ranking() {
                     <span className="text-secondary font-black text-lg w-10 text-center">
                       {displayRank ? `#${displayRank}` : "—"}
                     </span>
-                    <div className="w-9 h-9 rounded-full flex items-center justify-center text-white font-bold shadow" style={{ backgroundColor: (displayEntry as any).avatarColor || "#555" }}>
-                      {(displayEntry as any).playerName?.charAt(0).toUpperCase()}
-                    </div>
+                    <RankingAvatar p={displayEntry} />
                     <span className="flex-1 font-black">{(displayEntry as any).playerName} <span className="text-secondary text-xs">({t.game.you})</span></span>
                     <span className="text-white/60 text-sm">{(displayEntry as any).gamesPlayed}</span>
                     <span className="text-secondary font-black text-lg">{(displayEntry as any).totalScore} {t.game.points}</span>
@@ -579,10 +584,10 @@ export default function Ranking() {
                       <motion.div
                         animate={visualIdx === 0 ? { y: [0, -4, 0] } : {}}
                         transition={{ repeat: Infinity, duration: 2 }}
-                        className={`${m.size} rounded-full flex items-center justify-center font-black text-white shadow-xl border-4 relative`}
+                        className={`${m.size} rounded-full flex items-center justify-center font-black text-white shadow-xl border-4 relative overflow-hidden`}
                         style={{ background: p.avatarColor || "#555", borderColor: m.border }}
                       >
-                        {(p as any).avatarGlyph || p.playerName.charAt(0).toUpperCase()}
+                        <RankingAvatar p={p} size="w-full h-full" />
                         {isMe && (
                           <span className="absolute -top-2 -right-2 bg-secondary text-black text-[9px] font-black px-1.5 py-0.5 rounded-full">{t.game.you.toUpperCase()}</span>
                         )}
@@ -718,12 +723,7 @@ export default function Ranking() {
                         {/* Player name + online dot + streak + title */}
                         <div className="flex items-center gap-2 overflow-hidden">
                           <div className="relative flex-shrink-0">
-                            <div
-                              className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs shadow"
-                              style={{ backgroundColor: p.avatarColor || "#555" }}
-                            >
-                              {(p as any).avatarGlyph || p.playerName.charAt(0).toUpperCase()}
-                            </div>
+                            <RankingAvatar p={p} size="w-7 h-7" />
                             {isOnline && (
                               <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-green-400 border-2 border-[hsl(222_47%_11%)] shadow-[0_0_4px_#4ade80]" />
                             )}
