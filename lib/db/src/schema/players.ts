@@ -7,6 +7,7 @@ export const playerScoresTable = pgTable("player_scores", {
   playerId: text("player_id").notNull().unique(),
   playerName: text("player_name").notNull(),
   avatarColor: text("avatar_color").notNull().default("#e53e3e"),
+  profilePicture: text("profile_picture"),
   totalScore: integer("total_score").notNull().default(0),
   gamesPlayed: integer("games_played").notNull().default(0),
   wins: integer("wins").notNull().default(0),
