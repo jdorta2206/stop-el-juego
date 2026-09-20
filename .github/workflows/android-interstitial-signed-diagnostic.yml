@@ -97,3 +97,5 @@ jobs:
         if: always()
         shell: bash
         run: rm -f android-release.keystore
+
+# diagnostic workflow trigger
