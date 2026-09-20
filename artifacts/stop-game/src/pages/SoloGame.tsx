@@ -1180,7 +1180,7 @@ export default function SoloGame() {
     }).catch(() => {});
   };
 
-  const nextRound = () => {
+  const nextRound = async () => {
     if (round >= maxRounds) {
       void trackAnalyticsEvent("game_complete", { metadata: { mode: isDailyMode ? "daily" : "solo", rounds: maxRounds } });
       recordPlay();
