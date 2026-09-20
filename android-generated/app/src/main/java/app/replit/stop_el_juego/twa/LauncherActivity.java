@@ -1,6 +1,7 @@
 package app.replit.stop_el_juego.twa;
 
 import android.app.Activity;
+import android.content.Intent;
 import android.content.pm.ActivityInfo;
 import android.net.Uri;
 import android.os.Build;
@@ -20,8 +21,6 @@ import com.google.android.gms.ads.LoadAdError;
 import com.google.android.gms.ads.MobileAds;
 import com.google.android.gms.ads.rewarded.RewardedAd;
 import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback;
-import com.google.android.gms.ads.interstitial.InterstitialAd;
-import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback;
 import com.google.androidbrowserhelper.trusted.QualityEnforcer;
 import com.google.androidbrowserhelper.trusted.TwaLauncher;
 
@@ -38,7 +37,6 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     private static final boolean USE_TEST_REWARDED_ADS = true;
     private static final String REWARDED_TEST_ID = "ca-app-pub-3940256099942544/5224354917";
     private static final String REWARDED_REAL_ID = "ca-app-pub-4807272408824742/3559554716";
-    private static final String INTERSTITIAL_TEST_ID = "ca-app-pub-3940256099942544/1033173712";
 
     private boolean relationshipValidated;
     private boolean messageChannelReady;
@@ -46,8 +44,6 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     private RewardedAd rewardedAd;
     private boolean rewardedAdLoading;
     private boolean rewardGrantedForCurrentAd;
-    private InterstitialAd interstitialAd;
-    private boolean interstitialAdLoading;
     private String activeInterstitialRequestId;
     private String activeRequestId;
     private String activePlacement;
@@ -61,7 +57,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             mobileAdsReady = true;
             Log.d(TAG, "MobileAds initialized; starting rewarded + interstitial preload");
             preloadRewardedAd();
-            preloadInterstitialAd();
+            InterstitialAdStore.initialize(this);
         });
         if (Build.VERSION.SDK_INT > Build.VERSION_CODES.O) {
             setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT);
@@ -182,75 +178,28 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
         } catch (JSONException ignored) { Log.w(TAG, "Ignoring malformed web message"); }
     }
 
+    private void showInterstitialWhenReady() {
+        if (!mobileAdsReady) {
+            Log.w(TAG, "INTERSTITIAL requested before Mobile Ads initialization finished");
+            activeInterstitialRequestId = null;
+            return;
+        }
+        String requestId = activeInterstitialRequestId;
+        if (requestId == null || requestId.isEmpty()) return;
+        Uri uri = Uri.parse("stopad://interstitial?requestId=" + Uri.encode(requestId)
+                + "&origin=" + Uri.encode("https://www.stopjuegodepalabras.com"));
+        try {
+            Log.d(TAG, "Launching native interstitial activity requestId=" + requestId);
+            startActivity(new Intent(Intent.ACTION_VIEW, uri));
+        } catch (RuntimeException error) {
+            Log.e(TAG, "INTERSTITIAL launch failed", error);
+            activeInterstitialRequestId = null;
+        }
+    }
+
     private boolean isAllowedOrigin(String origin) {
         return "https://stopjuegodepalabras.com".equals(origin)
                 || "https://www.stopjuegodepalabras.com".equals(origin);
-    }
-
-    private void preloadInterstitialAd() {
-        if (!mobileAdsReady || interstitialAd != null || interstitialAdLoading) return;
-        interstitialAdLoading = true;
-        Log.d(TAG, "INTERSTITIAL LOAD_REQUEST unit=" + INTERSTITIAL_TEST_ID);
-        InterstitialAd.load(this, INTERSTITIAL_TEST_ID, new AdRequest.Builder().build(),
-                new InterstitialAdLoadCallback() {
-                    @Override public void onAdLoaded(@NonNull InterstitialAd ad) {
-                        interstitialAdLoading = false;
-                        interstitialAd = ad;
-                        Log.d(TAG, "INTERSTITIAL LOAD_SUCCESS");
-                        if (activeInterstitialRequestId != null) showInterstitialAd();
-                    }
-                    @Override public void onAdFailedToLoad(@NonNull LoadAdError error) {
-                        interstitialAdLoading = false;
-                        interstitialAd = null;
-                        Log.e(TAG, "INTERSTITIAL LOAD_FAILED code=" + error.getCode()
-                                + " domain=" + error.getDomain() + " message=" + error.getMessage());
-                        if (activeInterstitialRequestId != null) {
-                            sendInterstitialResult(activeInterstitialRequestId, false, "load_failed");
-                        }
-                    }
-                });
-    }
-
-    private void showInterstitialWhenReady() {
-        if (interstitialAd != null) {
-            showInterstitialAd();
-            return;
-        }
-        if (!mobileAdsReady) {
-            Log.w(TAG, "INTERSTITIAL requested before Mobile Ads initialization finished");
-            return;
-        }
-        preloadInterstitialAd();
-    }
-
-    private void showInterstitialAd() {
-        if (activeInterstitialRequestId == null || interstitialAd == null) return;
-        InterstitialAd ad = interstitialAd;
-        interstitialAd = null;
-        ad.setFullScreenContentCallback(new FullScreenContentCallback() {
-            @Override public void onAdShowedFullScreenContent() {
-                Log.d(TAG, "INTERSTITIAL SHOWN");
-            }
-            @Override public void onAdDismissedFullScreenContent() {
-                Log.d(TAG, "INTERSTITIAL DISMISSED");
-                sendInterstitialResult(activeInterstitialRequestId, true, "dismissed");
-                preloadInterstitialAd();
-            }
-            @Override public void onAdFailedToShowFullScreenContent(@NonNull AdError error) {
-                Log.e(TAG, "INTERSTITIAL SHOW_FAILED code=" + error.getCode()
-                        + " domain=" + error.getDomain() + " message=" + error.getMessage());
-                sendInterstitialResult(activeInterstitialRequestId, false, "show_failed");
-                preloadInterstitialAd();
-            }
-        });
-        try {
-            Log.d(TAG, "INTERSTITIAL SHOW requestId=" + activeInterstitialRequestId);
-            ad.show(this);
-        } catch (RuntimeException error) {
-            Log.e(TAG, "INTERSTITIAL SHOW_THROW", error);
-            sendInterstitialResult(activeInterstitialRequestId, false, "show_threw");
-            preloadInterstitialAd();
-        }
     }
 
     private void sendInterstitialResult(String requestId, boolean shown, String source) {
