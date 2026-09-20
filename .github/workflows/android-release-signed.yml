@@ -51,7 +51,7 @@ jobs:
         run: |
           set -euo pipefail
           sed -i -E 's/versionCode [0-9]+/versionCode 52/' app/build.gradle
-          grep -q 'versionCode 49' app/build.gradle
+          grep -q 'versionCode 52' app/build.gradle
           python3 - <<'PY'
           from pathlib import Path
           p = Path('app/src/main/AndroidManifest.xml')
