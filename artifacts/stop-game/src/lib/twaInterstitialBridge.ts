@@ -23,10 +23,14 @@ export function isTwaInterstitialAvailable(): boolean {
       if (localStorage.getItem("stop_installed_app_version")) return true;
     } catch {}
 
+    // In a production TWA none of the browser-side TWA markers is guaranteed
+    // to be present. The native deep-link is the actual capability check: the
+    // installed STOP Android app owns stopad://interstitial. On Android, allow
+    // the request instead of silently dropping it because a browser signal is
+    // missing. On desktop/web this remains disabled.
     return /Android/i.test(navigator.userAgent || "") && (
-      typeof window.getDigitalGoodsService === "function" ||
-      window.matchMedia?.("(display-mode: standalone)").matches === true ||
-      window.matchMedia?.("(display-mode: fullscreen)").matches === true
+      window.location.hostname === "stopjuegodepalabras.com" ||
+      window.location.hostname === "www.stopjuegodepalabras.com"
     );
   } catch { return false; }
 }
