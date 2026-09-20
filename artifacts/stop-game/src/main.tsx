@@ -37,6 +37,9 @@ async function startAnalyticsHeartbeat() {
   }
 
   const platform = isAndroidTwa ? "android" : "web";
+  if (isAndroidTwa) {
+    try { localStorage.setItem("stop_analytics_twa_v1", "1"); } catch {}
+  }
   const sessionKey = `stop_analytics_session_id_${platform}`;
   let sessionId: string;
 
@@ -72,6 +75,7 @@ async function startAnalyticsHeartbeat() {
         headers: {
           "Content-Type": "application/json",
           "X-Client-Platform": platform,
+          ...(isAndroidTwa ? { "X-Client-TWA": "1" } : {}),
           ...(version ? { "X-Client-Version": version } : {}),
         },
         body: JSON.stringify({ sessionId, playerId, loginMethod, language: document.documentElement.lang || null }),

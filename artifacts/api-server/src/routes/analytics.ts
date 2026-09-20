@@ -10,6 +10,8 @@ const SERVER_SESSION_COOKIE = "stop_analytics_session";
 
 function platformFromRequest(req: Request): "web" | "android" | "ios" {
   const explicit = String(req.headers["x-client-platform"] ?? "").toLowerCase();
+  const twa = String(req.headers["x-client-twa"] ?? "") === "1";
+  if (twa) return "android";
   if (PLATFORMS.has(explicit)) return explicit as "web" | "android" | "ios";
   const ua = String(req.headers["user-agent"] ?? "").toLowerCase();
   if (/iphone|ipad|ipod/.test(ua)) return "ios";
