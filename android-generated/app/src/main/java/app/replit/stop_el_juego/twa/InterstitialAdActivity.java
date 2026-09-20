@@ -20,7 +20,6 @@ import com.google.android.gms.ads.MobileAds;
 
 public class InterstitialAdActivity extends Activity {
     private static final String TAG = "STOP_INTERSTITIAL";
-    private static final String INTERSTITIAL_ID = "ca-app-pub-3940256099942544/1033173712";
     private static final long LOAD_TIMEOUT_MS = 10_000L;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
@@ -39,8 +38,20 @@ public class InterstitialAdActivity extends Activity {
         MobileAds.initialize(this, status -> showPreloadedOrLoad());
     }
 
-    private void showPreloadedOrLoad() {\n        InterstitialAd preloaded = InterstitialAdStore.take();\n        if (preloaded != null) {\n            Log.d(TAG, "Using preloaded production interstitial");\n            showInterstitial(preloaded);\n            return;\n        }\n        Log.d(TAG, "No preloaded interstitial; loading on demand");\n        loadAndShow();\n    }\n\n    private void loadAndShow() {
-        InterstitialAd.load(this, INTERSTITIAL_ID, new AdRequest.Builder().build(),
+    private void showPreloadedOrLoad() {
+        InterstitialAd preloaded = InterstitialAdStore.take();
+        if (preloaded != null) {
+            Log.d(TAG, "Using preloaded production interstitial");
+            showInterstitial(preloaded);
+            return;
+        }
+        Log.d(TAG, "No preloaded interstitial; loading on demand");
+        loadAndShow();
+    }
+
+    private void loadAndShow() {
+        InterstitialAd.load(this, "ca-app-pub-4807272408824742/5841246893",
+                new AdRequest.Builder().build(),
                 new InterstitialAdLoadCallback() {
                     @Override
                     public void onAdLoaded(@NonNull InterstitialAd ad) {
@@ -53,7 +64,10 @@ public class InterstitialAdActivity extends Activity {
                     public void onAdFailedToLoad(@NonNull LoadAdError error) {
                         if (loadFinished) return;
                         loadFinished = true;
-                        Log.e(TAG, "Interstitial load failed: code=" + error.getCode() + " domain=" + error.getDomain() + " message=" + error.getMessage() + " response=" + error.getResponseInfo());
+                        Log.e(TAG, "Interstitial load failed: code=" + error.getCode()
+                                + " domain=" + error.getDomain()
+                                + " message=" + error.getMessage()
+                                + " response=" + error.getResponseInfo());
                         finishSafely();
                     }
                 });
