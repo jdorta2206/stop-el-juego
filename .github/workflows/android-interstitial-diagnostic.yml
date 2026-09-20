@@ -7,7 +7,7 @@ on:
       - master
   push:
     branches:
-      - fix/interstitial-twa-detection-v2
+      - fix/interstitial-twa-detection-final
 
 permissions:
   contents: read
@@ -15,6 +15,10 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -23,24 +27,55 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - name: Build debug APK
+      - name: Validate signing secrets
+        shell: bash
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          test -n "$KEYSTORE_BASE64"
+          test -n "$KEYSTORE_PASSWORD"
+          test -n "$KEY_ALIAS"
+          test -n "$KEY_PASSWORD"
+      - name: Decode signing keystore
+        shell: bash
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > android-release.keystore
+          keytool -list -keystore android-release.keystore -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" >/dev/null
+      - name: Set diagnostic version code
         working-directory: android-generated
+        shell: bash
+        run: |
+          set -euo pipefail
+          sed -i -E 's/versionCode [0-9]+/versionCode 51/' app/build.gradle
+          grep -q 'versionCode 51' app/build.gradle
+      - name: Build signed diagnostic APK
+        working-directory: android-generated
+        shell: bash
         run: |
           set -euo pipefail
           chmod +x ./gradlew
-          ./gradlew assembleDebug --no-daemon --stacktrace
-      - name: Verify APK
+          ./gradlew clean assembleRelease --no-daemon --stacktrace
+      - name: Verify signed APK
         working-directory: android-generated
+        shell: bash
         run: |
           set -euo pipefail
-          APK='app/build/outputs/apk/debug/app-debug.apk'
+          APK='app/build/outputs/apk/release/app-release.apk'
           test -s "$APK"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs "$APK"
           sha256sum "$APK"
-      - name: Upload APK
+      - name: Upload signed APK
         uses: actions/upload-artifact@v4
         with:
-          name: stop-android-interstitial-diagnostic-v1
-          path: android-generated/app/build/outputs/apk/debug/app-debug.apk
+          name: stop-android-interstitial-signed-v51
+          path: android-generated/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 7
+      - name: Remove signing material
+        if: always()
+        shell: bash
+        run: rm -f android-release.keystore
