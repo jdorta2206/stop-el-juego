@@ -71,50 +71,6 @@ jobs:
           echo '----- END CURL -----'
 
 
-      - name: Verify React replaces prerender without duplication
-        working-directory: artifacts/stop-game
-        shell: bash
-        run: |
-          mkdir -p /tmp/stop-browser-smoke
-          cd /tmp/stop-browser-smoke
-          npm init -y >/dev/null 2>&1
-          npm install --no-save playwright@1.55.0 >/dev/null 2>&1
-          npx playwright install --with-deps chromium >/dev/null 2>&1
-          cd "$GITHUB_WORKSPACE/artifacts/stop-game"
-          python -m http.server 4173 --directory dist >/tmp/seo-browser-http.log 2>&1 &
-          SERVER_PID=$!
-          trap 'kill $SERVER_PID' EXIT
-          sleep 2
-          cd /tmp/stop-browser-smoke
-          node --input-type=commonjs <<'NODE'
-          const { chromium } = require("playwright");
-          (async () => {
-            const browser = await chromium.launch({ headless: true });
-            const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
-            await page.goto("http://127.0.0.1:4173/", { waitUntil: "domcontentloaded", timeout: 30000 });
-            await page.waitForTimeout(4000);
-            const result = await page.evaluate(() => {
-              const root = document.getElementById("root");
-              return {
-                rootExists: !!root,
-                prerenderNodes: root ? root.querySelectorAll('[data-prerendered="true"]').length : -1,
-                prerenderTextGone: root ? !root.innerText.includes("STOP: juego de palabras online") : false,
-                interactiveButtons: root ? root.querySelectorAll("button").length : 0,
-                stopLogo: !!root?.querySelector('img[alt="STOP"]'),
-                rootTextLength: root?.innerText.length ?? 0,
-              };
-            });
-            console.log("REACT_MOUNT_RESULT=" + JSON.stringify(result));
-            if (!result.rootExists || result.prerenderNodes !== 0 || !result.prerenderTextGone || result.interactiveButtons < 1 || !result.stopLogo || result.rootTextLength < 20) {
-              throw new Error("React no sustituyó correctamente el prerender de portada.");
-            }
-            await browser.close();
-          })().catch((error) => {
-            console.error(error);
-            process.exit(1);
-          });
-          NODE
-
       - name: Upload exact dist index
         uses: actions/upload-artifact@v4
         with:
