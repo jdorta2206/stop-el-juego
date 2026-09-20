@@ -121,15 +121,13 @@ if (process.env["SERVE_CLIENT"] === "1") {
   if (!existsSync(path.join(clientDist, "index.html"))) {
     console.warn(`[SERVE_CLIENT] index.html not found at ${clientDist} — the client build is missing or mislocated.`);
   }
-  // AdMob app-ads.txt must be reachable directly from the site root.\n  // Serve it explicitly so the crawler never falls through to the SPA.\n  app.get("/app-ads.txt", (_req, res) => {\n    const filePath = path.join(clientDist, "app-ads.txt");\n    res.type("text/plain");\n    res.setHeader("Cache-Control", "public, max-age=3600");\n    res.sendFile(filePath, { dotfiles: "allow" }, (err) => {\n      if (err && !res.headersSent) res.status(404).send("app-ads.txt not found");\n    });\n  });\n\n  // AdMob app-ads.txt must be reachable directly from the site root.
-  // Serve it explicitly so the crawler never falls through to the SPA.
+  // AdMob requires app-ads.txt at the developer domain root.
+  // Serve the publisher authorization directly so it does not depend on
+  // the frontend build artifact being present in the Railway image.
   app.get("/app-ads.txt", (_req, res) => {
-    const filePath = path.join(clientDist, "app-ads.txt");
     res.type("text/plain");
     res.setHeader("Cache-Control", "public, max-age=3600");
-    res.sendFile(filePath, { dotfiles: "allow" }, (err) => {
-      if (err && !res.headersSent) res.status(404).send("app-ads.txt not found");
-    });
+    res.status(200).send("google.com, pub-4807272408824742, DIRECT, f08c47fec0942fa0\\n");
   });
 
   app.get("/.well-known/assetlinks.json", (_req, res) => {
