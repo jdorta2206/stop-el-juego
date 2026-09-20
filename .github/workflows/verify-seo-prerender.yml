@@ -42,7 +42,7 @@ jobs:
           grep -q 'STOP: juego de palabras online' dist/index.html
           grep -q 'href="/como-jugar"' dist/index.html
           grep -q 'href="/blog"' dist/index.html
-          grep -q 'href="/guias"' dist/index.html
+          grep -q 'href="/estrategias"' dist/index.html
           WORDS=$(python - <<'PY'
           import re
           from pathlib import Path
