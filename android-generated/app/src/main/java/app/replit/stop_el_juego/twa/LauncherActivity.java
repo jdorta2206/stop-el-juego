@@ -1,6 +1,7 @@
 package app.replit.stop_el_juego.twa;
 
 import android.app.Activity;
+import android.content.Intent;
 import android.content.pm.ActivityInfo;
 import android.net.Uri;
 import android.os.Build;
@@ -175,6 +176,25 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             rewardGrantedForCurrentAd = false;
             showRewardedAdWhenReady();
         } catch (JSONException ignored) { Log.w(TAG, "Ignoring malformed web message"); }
+    }
+
+    private void showInterstitialWhenReady() {
+        if (!mobileAdsReady) {
+            Log.w(TAG, "INTERSTITIAL requested before Mobile Ads initialization finished");
+            activeInterstitialRequestId = null;
+            return;
+        }
+        String requestId = activeInterstitialRequestId;
+        if (requestId == null || requestId.isEmpty()) return;
+        Uri uri = Uri.parse("stopad://interstitial?requestId=" + Uri.encode(requestId)
+                + "&origin=" + Uri.encode("https://www.stopjuegodepalabras.com"));
+        try {
+            Log.d(TAG, "Launching native interstitial activity requestId=" + requestId);
+            startActivity(new Intent(Intent.ACTION_VIEW, uri));
+        } catch (RuntimeException error) {
+            Log.e(TAG, "INTERSTITIAL launch failed", error);
+            activeInterstitialRequestId = null;
+        }
     }
 
     private boolean isAllowedOrigin(String origin) {
