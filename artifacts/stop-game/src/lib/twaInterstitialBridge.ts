@@ -9,12 +9,22 @@ export function initTwaInterstitialBridge(): void {
 export function isTwaInterstitialAvailable(): boolean {
   if (typeof window === "undefined") return false;
   try {
+    // Use the same TWA detection signals already used by Google Play Billing.
+    // The production TWA can legitimately have no URL marker and no standalone
+    // display-mode, while document.referrer still exposes android-app://.
+    const referrer = typeof document !== "undefined" ? (document.referrer || "") : "";
+    if (referrer.startsWith("android-app://")) return true;
+
     const params = new URLSearchParams(window.location.search);
     if (params.get("source") === "googleplay-twa" || params.get("source") === "twa") return true;
+    if (params.has("appVersion") || /STOPApp\/[0-9][0-9.]*/i.test(navigator.userAgent || "")) return true;
+
     try {
       if (localStorage.getItem("stop_installed_app_version")) return true;
     } catch {}
+
     return /Android/i.test(navigator.userAgent || "") && (
+      typeof window.getDigitalGoodsService === "function" ||
       window.matchMedia?.("(display-mode: standalone)").matches === true ||
       window.matchMedia?.("(display-mode: fullscreen)").matches === true
     );
