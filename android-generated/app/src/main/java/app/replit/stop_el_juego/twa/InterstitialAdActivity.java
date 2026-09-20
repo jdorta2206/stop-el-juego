@@ -36,10 +36,10 @@ public class InterstitialAdActivity extends Activity {
         String origin = data == null ? null : data.getQueryParameter("origin");
         if (!isAllowedOrigin(origin)) { finish(); return; }
 
-        MobileAds.initialize(this, status -> loadAndShow());
+        MobileAds.initialize(this, status -> showPreloadedOrLoad());
     }
 
-    private void loadAndShow() {
+    private void showPreloadedOrLoad() {\n        InterstitialAd preloaded = InterstitialAdStore.take();\n        if (preloaded != null) {\n            Log.d(TAG, "Using preloaded production interstitial");\n            showInterstitial(preloaded);\n            return;\n        }\n        Log.d(TAG, "No preloaded interstitial; loading on demand");\n        loadAndShow();\n    }\n\n    private void loadAndShow() {
         InterstitialAd.load(this, INTERSTITIAL_ID, new AdRequest.Builder().build(),
                 new InterstitialAdLoadCallback() {
                     @Override
@@ -53,7 +53,7 @@ public class InterstitialAdActivity extends Activity {
                     public void onAdFailedToLoad(@NonNull LoadAdError error) {
                         if (loadFinished) return;
                         loadFinished = true;
-                        Log.e(TAG, "Interstitial load failed: " + error.getCode() + " " + error.getMessage());
+                        Log.e(TAG, "Interstitial load failed: code=" + error.getCode() + " domain=" + error.getDomain() + " message=" + error.getMessage() + " response=" + error.getResponseInfo());
                         finishSafely();
                     }
                 });
