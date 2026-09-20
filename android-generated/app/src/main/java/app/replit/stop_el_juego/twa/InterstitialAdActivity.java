@@ -20,7 +20,7 @@ import com.google.android.gms.ads.MobileAds;
 
 public class InterstitialAdActivity extends Activity {
     private static final String TAG = "STOP_INTERSTITIAL";
-    private static final String INTERSTITIAL_ID = "ca-app-pub-3940256099942544/1033173712";
+    private static final String INTERSTITIAL_ID = "ca-app-pub-4807272408824742/5841246893";
     private static final long LOAD_TIMEOUT_MS = 10_000L;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
