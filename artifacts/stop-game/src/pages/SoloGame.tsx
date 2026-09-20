@@ -41,6 +41,7 @@ import { CollectionToast } from "@/components/CollectionToast";
 import { drawPowerCard, POWER_CARDS, type PowerCardId } from "@/data/powerCards";
 import { usePersonalBest } from "@/hooks/usePersonalBest";
 import { useReviewPrompt, recordGamePlayed, recordScoreAndPercentile } from "@/hooks/useReviewPrompt";
+import { maybeShowInterstitial } from "@/lib/interstitialAd";
 import { ReviewPromptCard } from "@/components/ReviewPromptCard";
 
 function vibrate(pattern: number | number[]) {
@@ -1207,6 +1208,7 @@ export default function SoloGame() {
         return;
       }
       submittedRef.current = false;
+      await maybeShowInterstitial(isPremium || premiumLoading);
       setGameState("LOBBY");
       setRound(1);
       setTotalScore(0);
