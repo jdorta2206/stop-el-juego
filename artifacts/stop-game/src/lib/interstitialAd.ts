@@ -13,6 +13,11 @@ function readNumber(key: string): number {
   }
 }
 
+export function recordInterstitialGameCompleted(): void {
+  const games = readNumber(GAMES_KEY);
+  try { localStorage.setItem(GAMES_KEY, String(games + 1)); } catch {}
+}
+
 export function interstitialEligible(): boolean {
   const games = readNumber(GAMES_KEY);
   if (games < EVERY_N_GAMES || games % EVERY_N_GAMES !== 0) return false;
