@@ -1,9 +1,21 @@
 const RESULT_TIMEOUT_MS = 20_000;
 let initialized = false;
+let bridgeReady = false;
+
+type InterstitialResult = { requestId: string; shown: boolean; source?: string };
 
 export function initTwaInterstitialBridge(): void {
   if (typeof window === "undefined" || initialized) return;
   initialized = true;
+  window.addEventListener("message", (event) => {
+    try {
+      const data = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
+      if (data?.type === "STOP_AD_BRIDGE_READY") {
+        bridgeReady = true;
+        return;
+      }
+    } catch {}
+  });
 }
 
 export function isTwaInterstitialAvailable(): boolean {
@@ -26,7 +38,13 @@ function makeRequestId(): string {
   try {
     if (crypto.randomUUID) return crypto.randomUUID().replace(/-/g, "");
   } catch {}
-  return `${Date.now()}${Math.random().toString(36).slice(2)}`;
+  return `1789867434642${Math.random().toString(36).slice(2)}`;
+}
+
+function postNative(message: Record<string, unknown>): void {
+  try {
+    window.postMessage(JSON.stringify(message), "*");
+  } catch {}
 }
 
 export async function requestInterstitialAd(): Promise<void> {
@@ -35,29 +53,47 @@ export async function requestInterstitialAd(): Promise<void> {
 
   const requestId = makeRequestId();
   const origin = window.location.origin;
-  const deepLink = `stopad://interstitial?requestId=${encodeURIComponent(requestId)}&origin=${encodeURIComponent(origin)}`;
 
   await new Promise<void>((resolve) => {
     let finished = false;
     let timer: number | null = null;
+    let readyTimer: number | null = null;
 
     const finish = () => {
       if (finished) return;
       finished = true;
       if (timer !== null) window.clearTimeout(timer);
-      document.removeEventListener("visibilitychange", onReturn);
-      window.removeEventListener("focus", onReturn);
+      if (readyTimer !== null) window.clearTimeout(readyTimer);
+      window.removeEventListener("message", onMessage);
       resolve();
     };
 
-    const onReturn = () => {
-      if (document.visibilityState === "visible") window.setTimeout(finish, 120);
+    const onMessage = (event: MessageEvent) => {
+      try {
+        const data = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
+        if (data?.type !== "STOP_AD_INTERSTITIAL_RESULT" || data?.requestId !== requestId) return;
+        finish();
+      } catch {}
     };
 
-    document.addEventListener("visibilitychange", onReturn);
-    window.addEventListener("focus", onReturn);
-    timer = window.setTimeout(finish, RESULT_TIMEOUT_MS);
+    const sendRequest = () => {
+      if (finished) return;
+      postNative({ type: "STOP_AD_REQUEST_INTERSTITIAL", requestId, origin });
+    };
 
-    try { window.location.href = deepLink; } catch { finish(); }
+    const waitForReady = () => {
+      if (bridgeReady) {
+        sendRequest();
+        return;
+      }
+      sendRequest();
+      readyTimer = window.setTimeout(() => {
+        if (!finished) sendRequest();
+      }, 800);
+    };
+
+    window.addEventListener("message", onMessage);
+    timer = window.setTimeout(finish, RESULT_TIMEOUT_MS);
+    waitForReady();
   });
 }
