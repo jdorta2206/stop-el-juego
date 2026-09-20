@@ -60,7 +60,7 @@ jobs:
               marker = '    <uses-permission android:name="com.android.vending.BILLING" />'
               if marker not in s:
                   raise SystemExit('BILLING permission marker not found')
-              s = s.replace(marker, marker + '\\n' + perm, 1)
+              s = s.replace(marker, marker + '\n' + perm, 1)
               p.write_text(s)
           if 'com.google.android.gms.permission.AD_ID' not in p.read_text():
               raise SystemExit('AD_ID permission missing before build')
@@ -81,7 +81,7 @@ jobs:
           test -s "$APK"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK"
           "$ANDROID_HOME/build-tools/35.0.0/aapt2" dump badging "$APK" | tee /tmp/apk-badging.txt
-          grep -q "versionCode '50'" /tmp/apk-badging.txt
+          grep -q "versionCode='50'" /tmp/apk-badging.txt
           "$ANDROID_HOME/build-tools/35.0.0/aapt2" dump permissions "$APK" | tee /tmp/apk-permissions.txt
           grep -q 'com.google.android.gms.permission.AD_ID' /tmp/apk-permissions.txt
           sha256sum "$APK"
