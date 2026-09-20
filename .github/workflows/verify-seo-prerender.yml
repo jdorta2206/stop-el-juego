@@ -85,27 +85,27 @@ jobs:
           SERVER_PID=$!
           trap 'kill $SERVER_PID' EXIT
           sleep 2
-          node /tmp/stop-browser-smoke/node_modules/playwright/cli.js eval "http://127.0.0.1:4173/" >/dev/null 2>&1 || true
           cd /tmp/stop-browser-smoke
           node --input-type=commonjs <<'NODE'
           const { chromium } = require("playwright");
           (async () => {
             const browser = await chromium.launch({ headless: true });
             const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
-            await page.goto("http://127.0.0.1:4173/", { waitUntil: "networkidle", timeout: 30000 });
+            await page.goto("http://127.0.0.1:4173/", { waitUntil: "domcontentloaded", timeout: 30000 });
             await page.waitForTimeout(4000);
             const result = await page.evaluate(() => {
               const root = document.getElementById("root");
               return {
                 rootExists: !!root,
                 prerenderNodes: root ? root.querySelectorAll('[data-prerendered="true"]').length : -1,
-                homeTagline: document.body.innerText.includes("El juego que nadie supera"),
-                playButton: document.body.innerText.includes("¡Jugar!"),
+                prerenderTextGone: root ? !root.innerText.includes("STOP: juego de palabras online") : false,
+                interactiveButtons: root ? root.querySelectorAll("button").length : 0,
+                stopLogo: !!root?.querySelector('img[alt="STOP"]'),
                 rootTextLength: root?.innerText.length ?? 0,
               };
             });
             console.log("REACT_MOUNT_RESULT=" + JSON.stringify(result));
-            if (!result.rootExists || result.prerenderNodes !== 0 || !result.homeTagline || !result.playButton || result.rootTextLength < 20) {
+            if (!result.rootExists || result.prerenderNodes !== 0 || !result.prerenderTextGone || result.interactiveButtons < 1 || !result.stopLogo || result.rootTextLength < 20) {
               throw new Error("React no sustituyó correctamente el prerender de portada.");
             }
             await browser.close();
