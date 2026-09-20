@@ -1,21 +1,9 @@
-const RESULT_TIMEOUT_MS = 20_000;
+const RESULT_TIMEOUT_MS = 15_000;
 let initialized = false;
-let bridgeReady = false;
-
-type InterstitialResult = { requestId: string; shown: boolean; source?: string };
 
 export function initTwaInterstitialBridge(): void {
   if (typeof window === "undefined" || initialized) return;
   initialized = true;
-  window.addEventListener("message", (event) => {
-    try {
-      const data = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
-      if (data?.type === "STOP_AD_BRIDGE_READY") {
-        bridgeReady = true;
-        return;
-      }
-    } catch {}
-  });
 }
 
 export function isTwaInterstitialAvailable(): boolean {
@@ -23,7 +11,6 @@ export function isTwaInterstitialAvailable(): boolean {
   try {
     const params = new URLSearchParams(window.location.search);
     if (params.get("source") === "googleplay-twa" || params.get("source") === "twa") return true;
-    if (document.referrer.startsWith("android-app://app.replit.stop_el_juego.twa")) return true;
     try {
       if (localStorage.getItem("stop_installed_app_version")) return true;
     } catch {}
@@ -38,13 +25,7 @@ function makeRequestId(): string {
   try {
     if (crypto.randomUUID) return crypto.randomUUID().replace(/-/g, "");
   } catch {}
-  return `1789867434642${Math.random().toString(36).slice(2)}`;
-}
-
-function postNative(message: Record<string, unknown>): void {
-  try {
-    window.postMessage(JSON.stringify(message), "*");
-  } catch {}
+  return String(Date.now()) + Math.random().toString(36).slice(2);
 }
 
 export async function requestInterstitialAd(): Promise<void> {
@@ -57,43 +38,37 @@ export async function requestInterstitialAd(): Promise<void> {
   await new Promise<void>((resolve) => {
     let finished = false;
     let timer: number | null = null;
-    let readyTimer: number | null = null;
+    let focusTimer: number | null = null;
 
     const finish = () => {
       if (finished) return;
       finished = true;
       if (timer !== null) window.clearTimeout(timer);
-      if (readyTimer !== null) window.clearTimeout(readyTimer);
-      window.removeEventListener("message", onMessage);
+      if (focusTimer !== null) window.clearTimeout(focusTimer);
+      document.removeEventListener("visibilitychange", checkResume);
+      window.removeEventListener("focus", checkResume);
       resolve();
     };
 
-    const onMessage = (event: MessageEvent) => {
-      try {
-        const data = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
-        if (data?.type !== "STOP_AD_INTERSTITIAL_RESULT" || data?.requestId !== requestId) return;
-        finish();
-      } catch {}
+    const checkResume = () => {
+      if (!finished && document.visibilityState === "visible") finish();
     };
 
-    const sendRequest = () => {
-      if (finished) return;
-      postNative({ type: "STOP_AD_REQUEST_INTERSTITIAL", requestId, origin });
-    };
-
-    const waitForReady = () => {
-      if (bridgeReady) {
-        sendRequest();
-        return;
-      }
-      sendRequest();
-      readyTimer = window.setTimeout(() => {
-        if (!finished) sendRequest();
-      }, 800);
-    };
-
-    window.addEventListener("message", onMessage);
+    document.addEventListener("visibilitychange", checkResume);
+    window.addEventListener("focus", checkResume);
     timer = window.setTimeout(finish, RESULT_TIMEOUT_MS);
-    waitForReady();
+
+    try {
+      const deepLink =
+        "stopad://interstitial?requestId=" +
+        encodeURIComponent(requestId) +
+        "&origin=" +
+        encodeURIComponent(origin);
+      // Same native Activity launch mechanism as the already-working Rewarded ads.
+      window.location.href = deepLink;
+      focusTimer = window.setTimeout(checkResume, 1200);
+    } catch {
+      finish();
+    }
   });
 }
