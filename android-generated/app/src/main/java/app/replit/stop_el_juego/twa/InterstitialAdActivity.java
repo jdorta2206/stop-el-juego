@@ -1,11 +1,14 @@
 package app.replit.stop_el_juego.twa;
 
 import android.app.Activity;
+import android.graphics.Color;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
+import android.view.Gravity;
+import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -20,7 +23,8 @@ import com.google.android.gms.ads.MobileAds;
 
 public class InterstitialAdActivity extends Activity {
     private static final String TAG = "STOP_INTERSTITIAL";
-    private static final long LOAD_TIMEOUT_MS = 10_000L;
+    private static final long LOAD_TIMEOUT_MS = 30_000L;
+    private static final long DIAGNOSTIC_SCREEN_MS = 15_000L;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private boolean finished;
@@ -57,6 +61,7 @@ public class InterstitialAdActivity extends Activity {
                     public void onAdLoaded(@NonNull InterstitialAd ad) {
                         if (loadFinished || isFinishing()) return;
                         loadFinished = true;
+                        Log.d(TAG, "Production interstitial loaded. response=" + ad.getResponseInfo());
                         showInterstitial(ad);
                     }
 
@@ -64,16 +69,21 @@ public class InterstitialAdActivity extends Activity {
                     public void onAdFailedToLoad(@NonNull LoadAdError error) {
                         if (loadFinished) return;
                         loadFinished = true;
-                        Log.e(TAG, "Interstitial load failed: code=" + error.getCode()
-                                + " domain=" + error.getDomain()
-                                + " message=" + error.getMessage()
-                                + " response=" + error.getResponseInfo());
-                        finishSafely();
+                        String diagnostic = "code=" + error.getCode()
+                                + "\ndomain=" + error.getDomain()
+                                + "\nmessage=" + error.getMessage()
+                                + "\nresponse=" + error.getResponseInfo();
+                        Log.e(TAG, "Interstitial load failed: " + diagnostic);
+                        showDiagnostic("NO SE HA PODIDO CARGAR EL ANUNCIO REAL", diagnostic);
                     }
                 });
 
         handler.postDelayed(() -> {
-            if (!loadFinished && !showing && !finished) finishSafely();
+            if (!loadFinished && !showing && !finished) {
+                Log.e(TAG, "Interstitial load timed out after " + LOAD_TIMEOUT_MS + " ms");
+                loadFinished = true;
+                showDiagnostic("TIMEOUT CARGANDO EL ANUNCIO", "AdMob no respondió en 30 segundos.");
+            }
         }, LOAD_TIMEOUT_MS);
     }
 
@@ -90,15 +100,37 @@ public class InterstitialAdActivity extends Activity {
             }
 
             @Override public void onAdFailedToShowFullScreenContent(@NonNull AdError error) {
-                Log.e(TAG, "Interstitial show failed: " + error.getCode() + " " + error.getMessage());
-                finishSafely();
+                String diagnostic = "code=" + error.getCode()
+                        + "\ndomain=" + error.getDomain()
+                        + "\nmessage=" + error.getMessage();
+                Log.e(TAG, "Interstitial show failed: " + diagnostic);
+                showDiagnostic("EL ANUNCIO CARGÓ PERO NO SE PUDO MOSTRAR", diagnostic);
             }
         });
-        try { ad.show(this); }
-        catch (RuntimeException error) {
+        try {
+            ad.show(this);
+        } catch (RuntimeException error) {
             Log.e(TAG, "Interstitial show exception", error);
-            finishSafely();
+            showDiagnostic("ERROR MOSTRANDO EL ANUNCIO", String.valueOf(error.getMessage()));
         }
+    }
+
+    private void showDiagnostic(String title, String details) {
+        if (finished) return;
+        showing = false;
+
+        TextView view = new TextView(this);
+        view.setText("STOP — DIAGNÓSTICO DE INTERSTITIAL\n\n"
+                + title + "\n\n" + details
+                + "\n\nEsta pantalla es temporal. Se cerrará automáticamente.");
+        view.setTextSize(16);
+        view.setTextColor(Color.WHITE);
+        view.setGravity(Gravity.CENTER);
+        view.setPadding(32, 32, 32, 32);
+        view.setBackgroundColor(Color.BLACK);
+        setContentView(view);
+
+        handler.postDelayed(this::finishSafely, DIAGNOSTIC_SCREEN_MS);
     }
 
     private void finishSafely() {
@@ -107,7 +139,8 @@ public class InterstitialAdActivity extends Activity {
         handler.post(() -> finish());
     }
 
-    @Override protected void onDestroy() {
+    @Override
+    protected void onDestroy() {
         handler.removeCallbacksAndMessages(null);
         super.onDestroy();
     }
