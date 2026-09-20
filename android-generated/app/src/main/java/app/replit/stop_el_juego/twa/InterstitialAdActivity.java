@@ -54,7 +54,7 @@ public class InterstitialAdActivity extends Activity {
     }
 
     private void loadAndShow() {
-        InterstitialAd.load(this, "ca-app-pub-4807272408824742/5841246893",
+        InterstitialAd.load(this, "ca-app-pub-4807272408824742/7242069847",
                 new AdRequest.Builder().build(),
                 new InterstitialAdLoadCallback() {
                     @Override
