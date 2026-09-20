@@ -36,10 +36,10 @@ const pages = [
         <p>También es un juego fácil de explicar. No necesitas aprender un sistema complicado antes de empezar: basta con entender las categorías y la regla de la letra inicial. Después, la práctica hace que cada vez encuentres respuestas con mayor rapidez.</p>
         <h2>Consejos para mejorar en STOP</h2>
         <p>Una buena estrategia es familiarizarte con las categorías antes de que empiece el contador. También ayuda a practicar con letras menos habituales y a ampliar el vocabulario por temas. No te quedes demasiado tiempo bloqueado en una sola categoría: una respuesta sencilla en varias categorías puede ser más útil que intentar encontrar una palabra perfecta y dejar otras casillas vacías.</p>
-        <p>Con la práctica aprenderás a reconocer rápidamente familias de palabras, nombres, lugares y conceptos que pueden encajar en distintas categorías. Si quieres más ideas, puedes visitar nuestras <a href="/guias">guías y recursos</a> y consultar el <a href="/blog">blog de STOP</a>, donde publicamos contenidos sobre estrategias, vocabulario y novedades del juego.</p>
+        <p>Con la práctica aprenderás a reconocer rápidamente familias de palabras, nombres, lugares y conceptos que pueden encajar en distintas categorías. Si quieres más ideas, puedes visitar nuestras <a href="/estrategias">guías y recursos</a> y consultar el <a href="/blog">blog de STOP</a>, donde publicamos contenidos sobre estrategias, vocabulario y novedades del juego.</p>
         <h2>Empieza una partida</h2>
         <p>Si te gustan los juegos de palabras, STOP está pensado para que puedas empezar una partida sin complicaciones. Elige cómo quieres jugar, prepara tus categorías y demuestra cuántas respuestas puedes encontrar antes de que termine el tiempo. Puedes volver a jugar para intentar mejorar tu puntuación, practicar una letra difícil o simplemente pasar un rato entretenido.</p>
-        <p><a href="/como-jugar">Aprende las reglas de STOP</a>, descubre nuestras <a href="/blog">publicaciones del blog</a> y explora las <a href="/guias">guías del juego</a> antes de empezar. Cuando estés listo, vuelve a esta página y juega a STOP online.</p>
+        <p><a href="/como-jugar">Aprende las reglas de STOP</a>, descubre nuestras <a href="/blog">publicaciones del blog</a> y explora las <a href="/estrategias">guías del juego</a> antes de empezar. Cuando estés listo, vuelve a esta página y juega a STOP online.</p>
       </main>
     `,
   },
@@ -81,7 +81,7 @@ const finalHtml = fs.readFileSync(indexPath, "utf8");
 const rootMatch = finalHtml.match(/<div\s+id=["']root["']>([\s\S]*?)<\/div>/i);
 const root = rootMatch?.[1] ?? "";
 const wordCount = root.replace(/<[^>]+>/g, " ").replace(/&[^;]+;/g, " ").trim().split(/\s+/).filter(Boolean).length;
-const requiredLinks = ["/como-jugar", "/blog", "/guias"];
+const requiredLinks = ["/como-jugar", "/blog", "/estrategias"];
 
 if (wordCount < 300) {
   throw new Error(`El contenido prerenderizado de la portada tiene solo ${wordCount} palabras; se requieren al menos 300.`);
