@@ -35,6 +35,7 @@ import { useT } from "@/i18n/useT";
 import { useToast } from "@/hooks/use-toast";
 import { useReviewPrompt, recordGamePlayed } from "@/hooks/useReviewPrompt";
 import { ReviewPromptCard } from "@/components/ReviewPromptCard";
+import { maybeShowInterstitial } from "@/lib/interstitialAd";
 
 const ROUND_TIME = 60;
 
