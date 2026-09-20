@@ -14,7 +14,7 @@ import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback;
 
 public final class InterstitialAdStore {
     private static final String TAG = "STOP_INTERSTITIAL";
-    private static final String INTERSTITIAL_ID = "ca-app-pub-4807272408824742/5841246893";
+    private static final String INTERSTITIAL_ID = "ca-app-pub-4807272408824742/7242069847";
 
     private static Context appContext;
     private static InterstitialAd preloadedAd;
