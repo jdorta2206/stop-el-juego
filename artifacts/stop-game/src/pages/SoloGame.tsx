@@ -1209,7 +1209,9 @@ export default function SoloGame() {
       }
       submittedRef.current = false;
       if (!isDailyMode) recordInterstitialGameCompleted();
-      await maybeShowInterstitial(isPremium || premiumLoading);
+
+      // Never block the replay transition on an ad. The player must always
+      // return to the lobby even if the native TWA bridge/ad fails or times out.
       setGameState("LOBBY");
       setRound(1);
       setTotalScore(0);
@@ -1223,6 +1225,10 @@ export default function SoloGame() {
       setRandomEvent(null);
       setRoundWon(null);
       setBestResult(null);
+
+      // Launch the interstitial after the game has already transitioned.
+      // Fire-and-forget: an ad can never make "Volver a jugar" unresponsive.
+      void maybeShowInterstitial(isPremium || premiumLoading);
     } else {
       setRound(r => r + 1);
       startGame();
