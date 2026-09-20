@@ -1,11 +1,18 @@
 const STORAGE_KEY = "stop_player_v2";
+const ANALYTICS_TWA_KEY = "stop_analytics_twa_v1";
+function isTwa(): boolean {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("source") === "googleplay-twa" || params.get("source") === "twa") return true;
+    if (localStorage.getItem(ANALYTICS_TWA_KEY) === "1") return true;
+    return document.referrer.startsWith("android-app://app.replit.stop_el_juego.twa");
+  } catch { return false; }
+}
 function platform(): "web" | "android" | "ios" {
   if (typeof window === "undefined") return "web";
   try {
     if (/iphone|ipad|ipod/i.test(navigator.userAgent)) return "ios";
-    if (document.referrer.startsWith("android-app://app.replit.stop_el_juego.twa") ||
-        new URLSearchParams(window.location.search).get("source") === "googleplay-twa" ||
-        !!localStorage.getItem("stop_installed_app_version")) return "android";
+    if (isTwa() || !!localStorage.getItem("stop_installed_app_version")) return "android";
   } catch {}
   return "web";
 }
@@ -24,7 +31,7 @@ export function trackAnalyticsEvent(eventName: string, options?: { mode?: string
       if (typeof player?.loginMethod === "string") loginMethod = player.loginMethod;
     }
     void fetch(`${window.location.origin}/api/analytics/event`, {
-      method: "POST", headers: { "Content-Type": "application/json", "X-Client-Platform": platform() },
+      method: "POST", headers: { "Content-Type": "application/json", "X-Client-Platform": platform(), ...(isTwa() ? { "X-Client-TWA": "1" } : {}) },
       body: JSON.stringify({ eventName, playerId, sessionId: sessionId(), language: document.documentElement.lang || null,
         mode: options?.mode ?? null, aiDifficulty: options?.aiDifficulty ?? null,
         metadata: { ...(options?.metadata ?? {}), loginMethod } }), keepalive: true
