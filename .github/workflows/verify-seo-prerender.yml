@@ -1,0 +1,79 @@
+name: Verify SEO homepage prerender
+
+on:
+  push:
+    branches:
+      - seo/prerender-homepage
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies from lockfile
+        run: pnpm install --frozen-lockfile
+
+      - name: Build web
+        run: pnpm --filter @workspace/stop-game build
+
+      - name: Verify real Vite output
+        working-directory: artifacts/stop-game
+        shell: bash
+        run: |
+          test -f dist/index.html
+          grep -q '<div id="root">' dist/index.html
+          grep -q 'STOP: juego de palabras online' dist/index.html
+          grep -q 'href="/como-jugar"' dist/index.html
+          grep -q 'href="/blog"' dist/index.html
+          grep -q 'href="/guias"' dist/index.html
+          WORDS=$(python - <<'PY'
+          import re
+          from pathlib import Path
+          html = Path("dist/index.html").read_text()
+          root = re.search(r'<div id="root">(.*?)</div>', html, re.S | re.I).group(1)
+          text = re.sub(r'<[^>]+>', ' ', root)
+          text = re.sub(r'&[^;]+;', ' ', text)
+          print(len([w for w in text.split() if w]))
+          PY
+          )
+          test "$WORDS" -ge 300
+          echo "PRERENDER_WORDS=$WORDS"
+          echo "DIST_INDEX_BYTES=$(wc -c < dist/index.html)"
+
+      - name: Serve exact dist and curl homepage
+        working-directory: artifacts/stop-game
+        shell: bash
+        run: |
+          python -m http.server 4173 --directory dist >/tmp/seo-http.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill $SERVER_PID' EXIT
+          sleep 2
+          echo '----- CURL http://127.0.0.1:4173/ -----'
+          curl --fail --silent --show-error http://127.0.0.1:4173/
+          echo
+          echo '----- END CURL -----'
+
+
+      - name: Upload exact dist index
+        uses: actions/upload-artifact@v4
+        with:
+          name: seo-homepage-dist-index
+          path: artifacts/stop-game/dist/index.html
+          retention-days: 7
