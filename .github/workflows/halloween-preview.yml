@@ -12,7 +12,7 @@ permissions:
 jobs:
   preview:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 60
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -151,7 +151,7 @@ jobs:
       - name: Keep preview available for manual testing
         run: |
           echo 'The temporary preview remains available while this job runs.'
-          sleep 1500
+          sleep 3300
       - name: Stop preview processes
         if: always()
         run: |
