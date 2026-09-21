@@ -34,7 +34,7 @@ jobs:
         run: test -s artifacts/stop-game/dist/index.html
       - name: Start preview server
         run: |
-          nohup python3 -m http.server 4173 --bind 127.0.0.1 --directory artifacts/stop-game/dist > /tmp/preview-http.log 2>&1 &
+          nohup pnpm --filter @workspace/stop-game preview --host 127.0.0.1 --port 4173 > /tmp/preview-http.log 2>&1 &
           sleep 2
           curl -fsS http://127.0.0.1:4173/ >/dev/null
       - name: Start temporary public preview tunnel
@@ -70,4 +70,4 @@ jobs:
         if: always()
         run: |
           pkill -f cloudflared || true
-          pkill -f 'python3 -m http.server 4173' || true
+          pkill -f 'vite preview' || true
