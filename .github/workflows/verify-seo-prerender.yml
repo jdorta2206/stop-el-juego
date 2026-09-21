@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - seo/prerender-homepage
+      - feature/halloween-2026
   workflow_dispatch:
   pull_request:
     branches:
@@ -69,7 +70,6 @@ jobs:
           curl --fail --silent --show-error http://127.0.0.1:4173/
           echo
           echo '----- END CURL -----'
-
 
       - name: Upload exact dist index
         uses: actions/upload-artifact@v4
