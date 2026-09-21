@@ -196,6 +196,7 @@ type FunVote = {
 };
 type HalloweenRoomScare = {
   id: string;
+  playerId: string;
   scareId: "ghost" | "spider" | "skull" | "pumpkin" | "vampire";
   playerName: string;
   round: number;
@@ -2041,6 +2042,7 @@ router.post("/:roomCode/halloween-scare", writeLimiter, async (req, res) => {
 
   const event: HalloweenRoomScare = {
     id: `${now}-${Math.random().toString(36).slice(2)}`,
+    playerId,
     scareId: safeScareId as HalloweenRoomScare["scareId"],
     playerName: String(playerName ?? me.playerName ?? "?").slice(0, 30),
     round: room.currentRound ?? 0,
