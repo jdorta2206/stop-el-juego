@@ -49,6 +49,11 @@ export const HALLOWEEN_SCARES: Record<string, HalloweenScare[]> = {
 };
 
 export function isHalloweenPreview(): boolean {
+  if (typeof window !== "undefined") {
+    try {
+      if (new URLSearchParams(window.location.search).get("halloweenPreview") === "1") return true;
+    } catch {}
+  }
   return typeof import.meta !== "undefined" && import.meta.env?.VITE_HALLOWEEN_PREVIEW === "true";
 }
 
