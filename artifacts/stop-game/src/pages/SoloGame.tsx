@@ -43,7 +43,8 @@ import { usePersonalBest } from "@/hooks/usePersonalBest";
 import { useReviewPrompt, recordGamePlayed, recordScoreAndPercentile } from "@/hooks/useReviewPrompt";
 import { maybeShowInterstitial, recordInterstitialGameCompleted } from "@/lib/interstitialAd";
 import { ReviewPromptCard } from "@/components/ReviewPromptCard";
-import { applyHalloweenCategory } from "@/lib/halloweenEvent";
+import { applyHalloweenCategory, isHalloweenActive } from "@/lib/halloweenEvent";
+import { HalloweenScareOverlay, getHalloweenScare, type HalloweenScare } from "@/components/HalloweenScare";
 
 function vibrate(pattern: number | number[]) {
   try { if (navigator.vibrate) navigator.vibrate(pattern); } catch {}
@@ -154,6 +155,8 @@ export default function SoloGame() {
   const [showImpossibleBanner, setShowImpossibleBanner] = useState(false);
   // Random event for current round
   const [randomEvent, setRandomEvent] = useState<RandomEvent>(null);
+  const [halloweenScare, setHalloweenScare] = useState<HalloweenScare | null>(null);
+  const halloweenScareTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Round result announcement
   const [roundWon, setRoundWon] = useState<boolean | null>(null);
 
@@ -441,6 +444,8 @@ export default function SoloGame() {
   const scoreTokensRef = useRef<string[]>([]);
 
   const startGame = () => {
+    if (halloweenScareTimerRef.current) clearTimeout(halloweenScareTimerRef.current);
+    setHalloweenScare(null);
     void trackAnalyticsEvent("game_start", { metadata: { mode: isDailyMode ? "daily" : "solo" } });
     // Snapshot the tutorial state at the moment the player presses Play so
     // the rules of the round are stable until it ends.
@@ -469,6 +474,18 @@ export default function SoloGame() {
     if (isChaosMode) event = "double_xp";
     setRandomEvent(event);
     setRoundWon(null);
+
+    // Halloween scare: visual-only, rare, normal games only. It never
+    // changes score, timer, categories or gameplay rules.
+    if (isHalloweenActive() && !isDailyMode && !isQuickMode && !isChaosMode && !isRandomMode) {
+      if (Math.random() < 0.38) {
+        const delay = 9000 + Math.floor(Math.random() * 16000);
+        halloweenScareTimerRef.current = setTimeout(() => {
+          setHalloweenScare(getHalloweenScare(lang));
+          window.setTimeout(() => setHalloweenScare(null), 2600);
+        }, delay);
+      }
+    }
 
     if (isDailyMode) {
       setCurrentLetter(dailyLetter);
@@ -1515,6 +1532,8 @@ export default function SoloGame() {
             .slice(0, 4)}
           onShared={() => recordExternalStat(player?.id, { timesShared: 1 })}
         />
+
+        <AnimatePresence>{halloweenScare && <HalloweenScareOverlay scare={halloweenScare} onDone={() => setHalloweenScare(null)} />}</AnimatePresence>
 
         {/* Achievement toast notification */}
         <AchievementToast
