@@ -52,3 +52,10 @@ export function getHalloweenSubtitle(lang: string): string {
   if (lang === "fr") return "Une catégorie terrifiante apparaît dans chaque partie normale.";
   return "Una categoría terrorífica aparece en cada partida normal.";
 }
+
+
+export function getHalloweenScare(lang: string, seed = Math.random()): HalloweenScare {
+  const key = lang === "en" || lang === "pt" || lang === "fr" ? lang : "es";
+  const list = SCARES[key];
+  return list[Math.floor(Math.max(0, Math.min(0.999999, seed)) * list.length)];
+}
