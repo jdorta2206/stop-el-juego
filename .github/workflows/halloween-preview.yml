@@ -1,0 +1,65 @@
+name: Halloween preview
+
+on:
+  push:
+    branches:
+      - feature/halloween-2026
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build Halloween preview
+        env:
+          VITE_HALLOWEEN_PREVIEW: 'true'
+        run: pnpm --filter @workspace/stop-game build
+      - name: Verify preview build
+        run: test -s artifacts/stop-game/dist/index.html
+      - name: Start preview server
+        run: |
+          nohup python3 -m http.server 4173 --bind 127.0.0.1 --directory artifacts/stop-game/dist > /tmp/preview-http.log 2>&1 &
+          sleep 2
+          curl -fsS http://127.0.0.1:4173/ >/dev/null
+      - name: Start temporary public preview tunnel
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o /tmp/cloudflared
+          chmod +x /tmp/cloudflared
+          nohup /tmp/cloudflared tunnel --no-autoupdate --url http://127.0.0.1:4173 > /tmp/cloudflared.log 2>&1 &
+          for i in $(seq 1 30); do
+            URL=$(grep -oE 'https://[-a-z0-9]+\\.trycloudflare\\.com' /tmp/cloudflared.log | head -1 || true)
+            if [ -n "$URL" ]; then
+              echo "HALLOWEEN_PREVIEW_URL=$URL"
+              break
+            fi
+            sleep 2
+          done
+          test -n "${URL:-}" || { cat /tmp/cloudflared.log; exit 1; }
+          curl -fsS "$URL/" >/dev/null
+      - name: Keep preview available for manual testing
+        run: |
+          echo 'The temporary preview remains available while this job runs.'
+          sleep 1500
+      - name: Stop preview processes
+        if: always()
+        run: |
+          pkill -f cloudflared || true
+          pkill -f 'python3 -m http.server 4173' || true
