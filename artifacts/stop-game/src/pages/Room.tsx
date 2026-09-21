@@ -690,10 +690,11 @@ export default function Room() {
     const scareReactions = newOnes.filter(r => r.playerName.startsWith("__HALLOWEEN_SCARE__"));
     if (scareReactions.length > 0 && isHalloweenActive() && phase === "playing") {
       const remoteScare = scareReactions.some(r => !r.playerName.startsWith(`__HALLOWEEN_SCARE__${player?.id}__`));
-      if (!remoteScare) return;
-      setHalloweenScare(getHalloweenScare(getCurrentLang(), Math.random()));
-      if (halloweenScareHideTimerRef.current) clearTimeout(halloweenScareHideTimerRef.current);
-      halloweenScareHideTimerRef.current = setTimeout(() => setHalloweenScare(null), 1550);
+      if (remoteScare) {
+        setHalloweenScare(getHalloweenScare(getCurrentLang(), Math.random()));
+        if (halloweenScareHideTimerRef.current) clearTimeout(halloweenScareHideTimerRef.current);
+        halloweenScareHideTimerRef.current = setTimeout(() => setHalloweenScare(null), 1550);
+      }
     }
 
     const normalReactions = newOnes.filter(r => !r.playerName.startsWith("__HALLOWEEN_SCARE__"));
@@ -704,7 +705,7 @@ export default function Room() {
         setFloatingReactions(prev => prev.filter(x => x.id !== r.id));
       }, 3200);
     });
-  }, [(room as any)?.reactions]);
+  }, [(room as any)?.reactions, player?.id]);
 
   const sendReaction = useCallback(async (emoji: string) => {
     if (!player || !roomCode) return;
