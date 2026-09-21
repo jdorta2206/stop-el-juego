@@ -54,6 +54,14 @@ jobs:
           done
           test -n "${URL:-}" || { cat /tmp/cloudflared.log; exit 1; }
           curl -fsS "$URL/" >/dev/null
+          printf '%s\\n' "$URL" > /tmp/halloween-preview-url.txt
+          echo "Preview URL: $URL"
+      - name: Publish preview URL
+        uses: actions/upload-artifact@v4
+        with:
+          name: halloween-preview-url
+          path: /tmp/halloween-preview-url.txt
+          retention-days: 1
       - name: Keep preview available for manual testing
         run: |
           echo 'The temporary preview remains available while this job runs.'
