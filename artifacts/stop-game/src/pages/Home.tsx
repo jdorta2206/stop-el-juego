@@ -15,7 +15,6 @@ import { useAchievements } from "@/hooks/useAchievements";
 import { StreakCalendarModal } from "@/components/StreakCalendar";
 import { FTUEWelcomeModal } from "@/components/FTUEWelcomeModal";
 import { FTUEUnlockModal } from "@/components/FTUEUnlockModal";
-import { FTUECompletionModal } from "@/components/FTUECompletionModal";
 import { useFTUE } from "@/hooks/useFTUE";
 import { AchievementToast } from "@/components/AchievementToast";
 import { useProgression, getLeague } from "@/hooks/useProgression";
@@ -53,7 +52,6 @@ export default function Home() {
   const ftue = useFTUE();
   const [showFTUEWelcome, setShowFTUEWelcome] = useState(false);
   const [showFTUEUnlock, setShowFTUEUnlock] = useState(false);
-  const [showFTUECompletion, setShowFTUECompletion] = useState(false);
 
   // Open the FTUE welcome modal once on first ever visit (after a tiny delay
   // so the home page can render its hero animation first).
@@ -63,17 +61,12 @@ export default function Home() {
     return () => clearTimeout(t);
   }, [ftue.isFirstVisit]);
 
+  // After the third completed tutorial game, reveal the full home screen once.
   useEffect(() => {
-    if (!ftue.done || ftue.gamesPlayed < ftue.tutorialGamesTotal) return;
-    try {
-      if (localStorage.getItem("stop_ftue_unlock_seen") === "1") return;
-      localStorage.setItem("stop_ftue_unlock_seen", "1");
-      const id = window.setTimeout(() => setShowFTUECompletion(true), 450);
-      return () => window.clearTimeout(id);
-    } catch {
-      setShowFTUECompletion(true);
-    }
-  }, [ftue.done, ftue.gamesPlayed, ftue.tutorialGamesTotal]);
+    if (!ftue.isNewlyUnlocked) return;
+    const t = setTimeout(() => setShowFTUEUnlock(true), 450);
+    return () => clearTimeout(t);
+  }, [ftue.isNewlyUnlocked]);
 
   // Deterministically evaluate streak milestones from local streak data on
   // every Home mount / streak change — independent of whether the player
@@ -137,10 +130,6 @@ export default function Home() {
           setShowFTUEUnlock(false);
           ftue.markUnlockSeen();
         }}
-      />
-      <FTUECompletionModal
-        open={showFTUECompletion}
-        onClose={() => setShowFTUECompletion(false)}
       />
 
       {showPremiumModal && (
@@ -549,24 +538,24 @@ export default function Home() {
                     </motion.div>
                   )}
           
+                  {/* Category Pack Selector */}
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.2 }}
+                    className="w-full"
+                  >
+                    <PackSelector
+                      isPremium={isPremium}
+                      onPremiumClick={() => setShowPremiumModal(true)}
+                      customPacks={customPacks}
+                      onManageCustomClick={() => setShowPacksManager(true)}
+                    />
+                  </motion.div>
+          
           
           </>
         )}
-
-        {/* Category Pack Selector */}
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="w-full"
-        >
-          <PackSelector
-            isPremium={isPremium}
-            onPremiumClick={() => setShowPremiumModal(true)}
-            customPacks={customPacks}
-            onManageCustomClick={() => setShowPacksManager(true)}
-          />
-        </motion.div>
 
         {/* Main buttons */}
         <motion.div
@@ -576,7 +565,7 @@ export default function Home() {
           className="w-full space-y-3"
         >
           {/* ⚡ HERO: JUGAR YA — auto-starts a quick match in 1 tap */}
-          <Link href="/solo?auto=1&ftue=1">
+          <Link href="/solo?mode=quick&auto=1">
             <motion.div
               whileHover={{ scale: 1.02, y: -2 }}
               whileTap={{ scale: 0.97 }}
@@ -601,7 +590,7 @@ export default function Home() {
               />
               <Zap className="w-7 h-7 fill-white relative z-10" />
               <span className="text-3xl relative z-10" style={{ textShadow: "0 2px 8px rgba(0,0,0,0.4)" }}>
-                {ftue.isInTutorial ? "¡JUGAR AHORA!" : "¡JUGAR YA!"}
+                ¡JUGAR YA!
               </span>
             </motion.div>
           </Link>
@@ -665,37 +654,6 @@ export default function Home() {
                         </Link>
                       )}
             
-                      {ftue.isInTutorial ? (
-                        <motion.div
-                          initial={{ opacity: 0, y: 8 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          className="w-full rounded-2xl p-4 text-center"
-                          style={{
-                            background: "linear-gradient(135deg, rgba(26,35,126,0.45), rgba(181,48,26,0.22))",
-                            border: "1.5px solid rgba(249,168,37,0.35)",
-                          }}
-                        >
-                          <p className="text-[#f9a825] text-xs font-black uppercase tracking-widest mb-1">
-                            {t.ftue?.tutorialBadge ?? "Tutorial"}
-                          </p>
-                          <p className="text-white font-black text-lg">
-                            {ftue.gamesPlayed === 0
-                              ? (t.ftue?.tutorialProgressFirst ?? "Tu primera partida empieza ahora")
-                              : (t.ftue?.tutorialProgressCount ?? "¡Muy bien! Ya llevas {n} de 3 partidas").replace("{n}", String(ftue.gamesPlayed))}
-                          </p>
-                          <p className="text-white/55 text-xs mt-1">
-                            {t.ftue?.tutorialProgressSubtitle ?? "Completa 3 partidas para descubrir todo lo que ofrece STOP."}
-                          </p>
-                          <div className="flex justify-center gap-2 mt-4" aria-label={`Progreso ${ftue.gamesPlayed} de 3`}>
-                            {[0,1,2].map((i) => (
-                              <span key={i} className="h-2.5 w-12 rounded-full" style={{
-                                background: i < ftue.gamesPlayed ? "linear-gradient(90deg, #f9a825, #dc2626)" : "rgba(255,255,255,0.12)",
-                              }} />
-                            ))}
-                          </div>
-                        </motion.div>
-                      ) : (
-                      <>
                       {/* Secondary: classic solo (with start screen, settings) */}
                       <Link href="/solo">
                         <motion.div
@@ -899,8 +857,6 @@ export default function Home() {
                         ))}
                       </div>
             
-                      </>
-                      )}
             </>
           )}
         </motion.div>
@@ -946,3 +902,172 @@ export default function Home() {
                         </span>
                         <span className="text-xs font-black text-white/60">{p.totalScore?.toLocaleString()} pts</span>
                       </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </Link>
+          </motion.div>
+        )}
+
+        {/* Banner solo en navegador web (BannerAd se auto-oculta dentro del TWA). */}
+        {!isPremium && <BannerAd className="my-4" />}
+
+        {/* Share row */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.5 }}
+          className="flex items-center gap-3"
+        >
+          <span className="text-white/50 text-sm font-bold">{t.friends.challenge}:</span>
+
+          <a href={share.whatsapp} target="_blank" rel="noopener noreferrer">
+            <motion.div
+              whileHover={{ scale: 1.15, y: -2 }}
+              whileTap={{ scale: 0.92 }}
+              className="w-10 h-10 rounded-full flex items-center justify-center shadow-md"
+              style={{ background: "#25D366" }}
+            >
+              <svg viewBox="0 0 24 24" className="w-5 h-5 fill-white">
+                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+              </svg>
+            </motion.div>
+          </a>
+
+          <a href={share.facebook} target="_blank" rel="noopener noreferrer">
+            <motion.div
+              whileHover={{ scale: 1.15, y: -2 }}
+              whileTap={{ scale: 0.92 }}
+              className="w-10 h-10 rounded-full flex items-center justify-center shadow-md"
+              style={{ background: "#1877F2" }}
+            >
+              <Facebook className="w-5 h-5 text-white fill-white" />
+            </motion.div>
+          </a>
+
+          <a href={share.instagram} target="_blank" rel="noopener noreferrer">
+            <motion.div
+              whileHover={{ scale: 1.15, y: -2 }}
+              whileTap={{ scale: 0.92 }}
+              className="w-10 h-10 rounded-full flex items-center justify-center shadow-md"
+              style={{ background: "linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888)" }}
+            >
+              <Instagram className="w-5 h-5 text-white" />
+            </motion.div>
+          </a>
+
+          <motion.button
+            whileHover={{ scale: 1.15, y: -2 }}
+            whileTap={{ scale: 0.92 }}
+            onClick={() => share.native()}
+            className="w-10 h-10 rounded-full flex items-center justify-center shadow-md"
+            style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.2)" }}
+          >
+            <Share2 className="w-5 h-5 text-white" />
+          </motion.button>
+        </motion.div>
+
+        {/* Footer con enlaces — necesario para que el crawler de AdSense
+            descubra las páginas legales y de contenido (About, HowToPlay,
+            Strategies, Privacy, Terms). */}
+        <footer className="mt-10 pt-6 border-t border-white/10 text-center">
+          {/* Botón Google Play — solo se muestra si NO está ya en la app instalada */}
+          {typeof window !== "undefined" &&
+            !window.matchMedia?.("(display-mode: standalone)").matches &&
+            !window.matchMedia?.("(display-mode: fullscreen)").matches && (
+              <div className="mb-6 flex justify-center">
+                <a
+                  href={PLAY_STORE_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-3 bg-black hover:bg-gray-900 text-white px-5 py-3 rounded-xl shadow-lg transition-all hover:scale-105"
+                >
+                  <svg viewBox="0 0 24 24" className="w-7 h-7" fill="currentColor">
+                    <path d="M3.609 1.814L13.792 12 3.61 22.186a.996.996 0 01-.61-.92V2.734a1 1 0 01.609-.92zm10.89 10.893l2.302 2.302-10.937 6.333 8.635-8.635zm3.199-3.198l2.807 1.626a1 1 0 010 1.73l-2.808 1.626-2.491-2.491 2.492-2.491zM5.864 2.658L16.802 8.99l-2.302 2.302-8.636-8.634z"/>
+                  </svg>
+                  <div className="text-left leading-tight">
+                    <div className="text-[10px] uppercase opacity-80">Disponible en</div>
+                    <div className="text-base font-semibold">Google Play</div>
+                  </div>
+                </a>
+              </div>
+            )}
+          <nav className="flex flex-wrap justify-center gap-x-5 gap-y-2 text-sm text-white/60">
+            <Link href="/como-jugar" className="hover:text-[#f9a825] transition-colors">Cómo jugar</Link>
+            <Link href="/estrategias" className="hover:text-[#f9a825] transition-colors">Estrategias</Link>
+            <Link href="/acerca" className="hover:text-[#f9a825] transition-colors">Acerca de</Link>
+            <Link href="/privacidad" className="hover:text-[#f9a825] transition-colors">Privacidad</Link>
+            <Link href="/terminos" className="hover:text-[#f9a825] transition-colors">Términos</Link>
+            <Link href="/faq" className="hover:text-[#f9a825] transition-colors">FAQ</Link>
+            <a href="mailto:dorynex@stopjuegodepalabras.com" className="hover:text-[#f9a825] transition-colors">Contacto</a>
+          </nav>
+          {/* Pequeña línea de contenido de valor para AdSense (no intrusiva) */}
+          <p className="mt-3 text-xs text-white/30">
+            Descubre más artículos y guías en nuestro <Link href="/blog" className="text-secondary hover:underline">blog</Link>.
+          </p>
+          <p className="mt-1 text-xs text-white/30">
+            STOP — El Juego de Palabras · © 2026 Dorynex Studio
+          </p>
+        </footer>
+      </div>
+    </Layout>
+  );
+}
+
+// 🔴 LiveRoomsSection — public spectator-friendly rooms currently in play
+function LiveRoomsSection() {
+  const [rooms, setRooms] = useState<any[]>([]);
+  useEffect(() => {
+    let stop = false;
+    const fetchRooms = async () => {
+      try {
+        const apiBase = (import.meta.env.VITE_API_BASE_URL || "") as string;
+        const r = await fetch(`${apiBase}/api/rooms/live`);
+        if (!r.ok) return;
+        const data = await r.json();
+        if (!stop) setRooms(data.rooms ?? []);
+      } catch { /* ignore */ }
+    };
+    fetchRooms();
+    const id = setInterval(fetchRooms, 30000);
+    return () => { stop = true; clearInterval(id); };
+  }, []);
+
+  if (rooms.length === 0) return null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="w-full px-3 py-2.5 rounded-xl"
+      style={{ background: "rgba(239,68,68,0.08)", border: "1.5px solid rgba(239,68,68,0.45)" }}
+    >
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-xs font-black text-red-300 flex items-center gap-1.5">
+          <span className="relative flex h-2 w-2">
+            <span className="absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75 animate-ping"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+          </span>
+          EN VIVO ahora · {rooms.length}
+        </span>
+      </div>
+      <div className="flex gap-2 overflow-x-auto pb-1">
+        {rooms.slice(0, 8).map((r) => (
+          <Link key={r.roomCode} href={`/live/${r.roomCode}`}>
+            <div className="min-w-[140px] px-3 py-2 rounded-lg bg-black/30 border border-white/10 hover:border-red-400/60 cursor-pointer transition">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[9px] uppercase tracking-wider text-red-300/80 font-black">{r.gameMode}</span>
+                <span className="text-[10px] text-amber-300 font-black">{r.currentLetter ?? "—"}</span>
+              </div>
+              <p className="text-white text-xs font-black truncate">{r.hostName}</p>
+              <p className="text-white/50 text-[10px]">
+                {r.playerCount} jug · R{r.currentRound}/{r.maxRounds}
+              </p>
+            </div>
+          </Link>
+        ))}
+      </div>
+    </motion.div>
+  );
+}
