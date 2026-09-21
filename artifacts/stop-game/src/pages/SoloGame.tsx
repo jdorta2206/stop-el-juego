@@ -521,13 +521,6 @@ export default function SoloGame() {
     setGameState("SPINNING");
   };
 
-  // Halloween preview diagnostic: show the overlay as soon as SoloGame mounts.
-  // This intentionally bypasses game-state/timer logic so we can isolate rendering.
-  useEffect(() => {
-    if (!isHalloweenPreview()) return;
-    setHalloweenScare(getHalloweenScare(lang));
-  }, [lang]);
-
   const startRound = () => {
     // Reset per-round guards
     stoppedRef.current = false;
