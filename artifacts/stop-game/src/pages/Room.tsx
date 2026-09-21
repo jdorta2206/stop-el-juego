@@ -562,7 +562,15 @@ export default function Room() {
   // exact same set the bot/scoring backend resolves on the server.
   useEffect(() => {
     if (phase === "playing" && currentLetter && currentRound) {
-      const base = computeCategories(categoryPack, currentLetter, currentRound, activeCustomCategories);\n      let seed = 0;\n      const key = `${roomCode || ""}|${currentRound}|${currentLetter}`;\n      for (let i = 0; i < key.length; i++) seed = (Math.imul(seed, 31) + key.charCodeAt(i)) >>> 0;\n      const halloweenSeed = (seed % 100000) / 100000;\n      setRoundCategories(applyHalloweenCategory(base, getCurrentLang(), {\n        enabled: categoryPack !== "custom",\n        seed: halloweenSeed,\n      }));
+      const base = computeCategories(categoryPack, currentLetter, currentRound, activeCustomCategories);
+      let seed = 0;
+      const key = `${roomCode || ""}|${currentRound}|${currentLetter}`;
+      for (let i = 0; i < key.length; i++) seed = (Math.imul(seed, 31) + key.charCodeAt(i)) >>> 0;
+      const halloweenSeed = (seed % 100000) / 100000;
+      setRoundCategories(applyHalloweenCategory(base, getCurrentLang(), {
+        enabled: categoryPack === "standard",
+        seed: halloweenSeed,
+      }));
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, currentLetter, currentRound, categoryPack, activeCustomCategories]);
