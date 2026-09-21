@@ -1,4 +1,4 @@
-name: New-player onboarding preview
+name: New-player onboarding + Halloween preview
 
 on:
   push:
