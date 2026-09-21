@@ -12,7 +12,7 @@ permissions:
 jobs:
   preview:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 210
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -95,7 +95,7 @@ jobs:
           nohup python3 /tmp/halloween-preview-server.py >/tmp/preview-http.log 2>&1 &
           sleep 2
           curl -fsS http://127.0.0.1:4173/ >/dev/null
-      - name: Start temporary public preview tunnel
+      - name: Start public preview tunnel
         shell: bash
         run: |
           set -euo pipefail
@@ -114,6 +114,13 @@ jobs:
           test -n "${URL:-}" || { cat /tmp/cloudflared.log; exit 1; }
           printf '%s\n' "$URL" > /tmp/halloween-preview-url.txt
           echo "Preview URL: $URL"
+          {
+            echo "## Halloween preview"
+            echo
+            echo "**Preview URL:** $URL"
+            echo
+            echo "This preview stays online while this workflow job is running."
+          } >> "$GITHUB_STEP_SUMMARY"
       - name: Publish preview URL
         uses: actions/upload-artifact@v4
         with:
@@ -121,11 +128,9 @@ jobs:
           path: /tmp/halloween-preview-url.txt
           retention-days: 1
       - name: Keep preview available for manual testing
-        run: sleep 3300
+        run: sleep 10800
       - name: Stop preview processes
         if: always()
         run: |
           pkill -f cloudflared || true
           pkill -f halloween-preview-server.py || true
-
-# Refresh tunnel for the next manual test.
