@@ -683,8 +683,19 @@ export default function Room() {
     const newOnes = reactions.filter(r => !seenReactionIds.current.has(r.id));
     if (newOnes.length === 0) return;
     newOnes.forEach(r => seenReactionIds.current.add(r.id));
-    setFloatingReactions(prev => [...prev, ...newOnes]);
-    newOnes.forEach(r => {
+
+    const scareReactions = newOnes.filter(r => r.playerName.startsWith("__HALLOWEEN_SCARE__"));
+    if (scareReactions.length > 0 && isHalloweenActive() && phase === "playing") {
+      const first = scareReactions[scareReactions.length - 1];
+      setHalloweenScare(getHalloweenScare(getCurrentLang(), Math.random()));
+      if (halloweenScareHideTimerRef.current) clearTimeout(halloweenScareHideTimerRef.current);
+      halloweenScareHideTimerRef.current = setTimeout(() => setHalloweenScare(null), 1550);
+    }
+
+    const normalReactions = newOnes.filter(r => !r.playerName.startsWith("__HALLOWEEN_SCARE__"));
+    if (normalReactions.length === 0) return;
+    setFloatingReactions(prev => [...prev, ...normalReactions]);
+    normalReactions.forEach(r => {
       setTimeout(() => {
         setFloatingReactions(prev => prev.filter(x => x.id !== r.id));
       }, 3200);
@@ -718,6 +729,22 @@ export default function Room() {
         window.setTimeout(() => setHalloweenScareCooldownUntil(0), ms + 50);
       } else if (response.status === 429) {
         const ms = Number(data.retryAfterMs ?? 5000);
+        setHalloweenScareCooldownUntil(Date.now() + ms);
+        window.setTimeout(() => setHalloweenScareCooldownUntil(0), ms + 50);
+      } else {
+        // Preview/prod compatibility: older API servers do not have the new
+        // dedicated route yet. The reserved marker travels through the
+        // existing real-time reaction channel and is invisible as a reaction.
+        await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/react`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: {
+            emoji: "🤯",
+            playerId: player.id,
+            playerName: `__HALLOWEEN_SCARE__${player.name ?? ""}`,
+          } as any,
+        });
+        const ms = 18000;
         setHalloweenScareCooldownUntil(Date.now() + ms);
         window.setTimeout(() => setHalloweenScareCooldownUntil(0), ms + 50);
       }
