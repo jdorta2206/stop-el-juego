@@ -473,7 +473,9 @@ export default function SoloGame() {
 
     if (isDailyMode) {
       setCurrentLetter(dailyLetter);
-      const cats = dailyCategories.length > 0 ? dailyCategories : packCats();
+      const cats = dailyCategories.length > 0
+        ? dailyCategories
+        : applyHalloweenCategory(packCats(), lang, { enabled: !packId.startsWith("custom:") });
       setCategories(cats);
     } else {
       const alphabet = event === "easy_letter" ? EASY_LETTERS : getAlphabet();
