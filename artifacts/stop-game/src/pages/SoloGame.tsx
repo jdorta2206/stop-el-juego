@@ -22,7 +22,7 @@ import { ShareResultsModal } from "@/components/ShareResultsModal";
 import { ClipGenerator } from "@/components/ClipGenerator";
 import { recordExternalStat } from "@/hooks/useAchievements";
 import { usePremium } from "@/lib/usePremium";
-import { Tv2, Crown, Volume2, VolumeX, Zap, Star, Flame, Trophy } from "lucide-react";
+import { Tv2, Crown, Volume2, VolumeX, Zap, Star, Flame, Trophy, EyeOff } from "lucide-react";
 import { useT } from "@/i18n/useT";
 import { useTicker } from "@/hooks/useTicker";
 import { useStreak } from "@/hooks/useStreak";
@@ -47,6 +47,7 @@ import { applyHalloweenCategory, isHalloweenActive, isHalloweenPreview, getHallo
 import { HalloweenBanner } from "@/components/HalloweenBanner";
 import { HalloweenScareOverlay } from "@/components/HalloweenScare";
 import type { HalloweenScare } from "@/lib/halloweenEvent";
+import { getHalloweenReducedEffects, setHalloweenReducedEffects } from "@/lib/halloweenAccessibility";
 
 function vibrate(pattern: number | number[]) {
   try { if (navigator.vibrate) navigator.vibrate(pattern); } catch {}
@@ -1616,7 +1617,7 @@ export default function SoloGame() {
           onShared={() => recordExternalStat(player?.id, { timesShared: 1 })}
         />
 
-        <AnimatePresence>{halloweenScare && <HalloweenScareOverlay scare={halloweenScare} onDone={() => setHalloweenScare(null)} />}</AnimatePresence>
+        <AnimatePresence>{halloweenScare && <HalloweenScareOverlay scare={halloweenScare} muted={muted} reducedEffects={reducedHalloweenEffects} onDone={() => setHalloweenScare(null)} />}</AnimatePresence>
 
         {/* Achievement toast notification */}
         <AchievementToast
