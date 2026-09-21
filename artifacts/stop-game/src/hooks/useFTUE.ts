@@ -4,6 +4,7 @@ const KEY_DONE = "stop_ftue_done";
 const KEY_GAMES = "stop_ftue_games_played";
 const KEY_FIRST_WIN = "stop_ftue_first_win_celebrated";
 const KEY_WELCOME_SEEN = "stop_ftue_welcome_seen";
+const KEY_UNLOCK_SEEN = "stop_ftue_unlock_seen";
 const TUTORIAL_GAMES = 3;
 
 function readBool(k: string): boolean {
@@ -24,12 +25,12 @@ export function useFTUE() {
   const [gamesPlayed, setGamesPlayed] = useState<number>(() => readInt(KEY_GAMES));
   const [firstWinCelebrated, setFirstWinCelebrated] = useState<boolean>(() => readBool(KEY_FIRST_WIN));
   const [welcomeSeen, setWelcomeSeen] = useState<boolean>(() => readBool(KEY_WELCOME_SEEN));
+  const [unlockSeen, setUnlockSeen] = useState<boolean>(() => readBool(KEY_UNLOCK_SEEN));
 
-  // The welcome modal must show exactly once. We use a dedicated persisted
-  // flag (not derived from `gamesPlayed`) so closing/skipping the modal
-  // before finishing a tutorial game still suppresses it on later visits.
+  // The welcome modal must show exactly once.
   const isFirstVisit = !done && !welcomeSeen;
   const isInTutorial = !done && gamesPlayed < TUTORIAL_GAMES;
+  const isNewlyUnlocked = done && gamesPlayed >= TUTORIAL_GAMES && !unlockSeen;
 
   const dismissWelcome = useCallback(() => {
     writeBool(KEY_WELCOME_SEEN, true);
@@ -48,6 +49,11 @@ export function useFTUE() {
     });
   }, []);
 
+  const markUnlockSeen = useCallback(() => {
+    writeBool(KEY_UNLOCK_SEEN, true);
+    setUnlockSeen(true);
+  }, []);
+
   const markFirstWinCelebrated = useCallback(() => {
     writeBool(KEY_FIRST_WIN, true);
     setFirstWinCelebrated(true);
@@ -58,13 +64,13 @@ export function useFTUE() {
     setDone(true);
   }, []);
 
-  // Sync across tabs
   useEffect(() => {
     const onStorage = (e: StorageEvent) => {
       if (e.key === KEY_DONE) setDone(readBool(KEY_DONE));
       if (e.key === KEY_GAMES) setGamesPlayed(readInt(KEY_GAMES));
       if (e.key === KEY_FIRST_WIN) setFirstWinCelebrated(readBool(KEY_FIRST_WIN));
       if (e.key === KEY_WELCOME_SEEN) setWelcomeSeen(readBool(KEY_WELCOME_SEEN));
+      if (e.key === KEY_UNLOCK_SEEN) setUnlockSeen(readBool(KEY_UNLOCK_SEEN));
     };
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
@@ -73,12 +79,14 @@ export function useFTUE() {
   return {
     isFirstVisit,
     isInTutorial,
+    isNewlyUnlocked,
     done,
     gamesPlayed,
     firstWinCelebrated,
     tutorialGamesTotal: TUTORIAL_GAMES,
     dismissWelcome,
     recordTutorialGame,
+    markUnlockSeen,
     markFirstWinCelebrated,
     finishFTUE,
   };
