@@ -48,7 +48,12 @@ export const HALLOWEEN_SCARES: Record<string, HalloweenScare[]> = {
   ],
 };
 
+export function isHalloweenPreview(): boolean {
+  return typeof import.meta !== "undefined" && import.meta.env?.VITE_HALLOWEEN_PREVIEW === "true";
+}
+
 export function isHalloweenActive(now = new Date()): boolean {
+  if (isHalloweenPreview()) return true;
   const start = new Date(HALLOWEEN_START);
   const end = new Date(HALLOWEEN_END);
   return now >= start && now < end;
