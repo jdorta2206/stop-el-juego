@@ -686,7 +686,6 @@ export default function Room() {
 
     const scareReactions = newOnes.filter(r => r.playerName.startsWith("__HALLOWEEN_SCARE__"));
     if (scareReactions.length > 0 && isHalloweenActive() && phase === "playing") {
-      const first = scareReactions[scareReactions.length - 1];
       setHalloweenScare(getHalloweenScare(getCurrentLang(), Math.random()));
       if (halloweenScareHideTimerRef.current) clearTimeout(halloweenScareHideTimerRef.current);
       halloweenScareHideTimerRef.current = setTimeout(() => setHalloweenScare(null), 1550);
@@ -738,11 +737,11 @@ export default function Room() {
         await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/react`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: {
+          body: JSON.stringify({
             emoji: "🤯",
             playerId: player.id,
             playerName: `__HALLOWEEN_SCARE__${player.name ?? ""}`,
-          } as any,
+          }),
         });
         const ms = 18000;
         setHalloweenScareCooldownUntil(Date.now() + ms);
