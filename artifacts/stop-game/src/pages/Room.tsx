@@ -713,9 +713,13 @@ export default function Room() {
       });
       const data = await response.json().catch(() => ({}));
       if (response.ok) {
-        setHalloweenScareCooldownUntil(Date.now() + Number(data.cooldownMs ?? 18000));
+        const ms = Number(data.cooldownMs ?? 18000);
+        setHalloweenScareCooldownUntil(Date.now() + ms);
+        window.setTimeout(() => setHalloweenScareCooldownUntil(0), ms + 50);
       } else if (response.status === 429) {
-        setHalloweenScareCooldownUntil(Date.now() + Number(data.retryAfterMs ?? 5000));
+        const ms = Number(data.retryAfterMs ?? 5000);
+        setHalloweenScareCooldownUntil(Date.now() + ms);
+        window.setTimeout(() => setHalloweenScareCooldownUntil(0), ms + 50);
       }
     } catch {} finally {
       manualScareBusyRef.current = false;
