@@ -398,8 +398,8 @@ const pt = {
 
   ftue: {
     welcomeTitle: "Bem-vindo ao STOP!",
-    welcomeBody: "Sai uma letra ao acaso. Escreve uma palavra em cada categoria que comece por essa letra — mais rápido e original que a IA!",
-    welcomeCta: "Jogar a minha primeira partida!",
+    welcomeBody: "Vê a letra, escreve uma palavra por categoria e prime STOP. As tuas primeiras 3 partidas são um guia rápido para aprenderes a jogar.",
+    welcomeCta: "JOGAR AGORA!",
     skip: "Saltar",
     tipFast: "60 segundos",
     tipOriginal: "Originalidade +pts",
@@ -410,6 +410,13 @@ const pt = {
     firstWinCta: "Continuar a jogar!",
     enableNotifications: "Avisa-me para não perder a minha sequência",
     tutorialBadge: "Tutorial",
+    tutorialGuestTitle: "Podes começar como convidado",
+    tutorialGuestBody: "Sem registo obrigatório. Joga primeiro; decides depois se queres guardar o teu progresso.",
+    tutorialProgressFirst: "A tua primeira partida começa agora",
+    tutorialProgressCount: "Muito bem! Já completaste {n} de 3 partidas",
+    tutorialProgressSubtitle: "Completa 3 partidas para descobrires tudo o que o STOP tem para oferecer.",
+    unlockTitle: "Desbloqueaste o STOP completo!",
+    unlockBody: "Já conheces o básico. Agora tens todo o jogo à tua disposição: joga com amigos, compete e descobre todos os modos.",
   },
 } as const;
 
