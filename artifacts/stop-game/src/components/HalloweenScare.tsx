@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import type { HalloweenScare } from "@/lib/halloweenEvent";
 
@@ -133,7 +133,7 @@ export function HalloweenScareOverlay({ scare, onDone }: { scare: HalloweenScare
       exit={{ opacity: 0 }}
       transition={{ duration: 1.55, times: [0, 0.05, 0.72, 1], ease: "easeOut" }}
       className="fixed inset-0 z-[120] pointer-events-none overflow-hidden select-none"
-      style={{ background: "radial-gradient(circle at center, rgba(160,0,0,.28), rgba(0,0,0,.94) 56%, #000)" }}
+      style={{ background: reduced\n        ? "radial-gradient(circle at center, rgba(120,0,0,.16), rgba(0,0,0,.92) 56%, #000)"\n        : "radial-gradient(circle at center, rgba(160,0,0,.28), rgba(0,0,0,.94) 56%, #000)" }}
       role="alert"
       aria-live="assertive"
     >
