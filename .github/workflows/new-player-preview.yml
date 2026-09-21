@@ -32,6 +32,7 @@ jobs:
       - name: Build onboarding preview
         env:
           VITE_API_URL: ''
+          VITE_HALLOWEEN_PREVIEW: 'true'
         run: pnpm --filter @workspace/stop-game build
       - name: Verify preview build
         run: test -s artifacts/stop-game/dist/index.html
