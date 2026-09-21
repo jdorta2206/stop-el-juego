@@ -483,9 +483,9 @@ export default function SoloGame() {
     setSpyReveal(null);
     // 🎲 Random mode — reroll the secret round time so each round feels different (15–55s)
     if (isRandomMode) setRandomRoundTime(15 + Math.floor(Math.random() * 41));
-    // Pick random event (only in normal solo mode)
-    let event: RandomEvent = null;
-    if (!isDailyMode && !isQuickMode && !isChaosMode) {
+    // New-player FTUE: keep the first 3 games calm and predictable.
+    let event: RandomEvent = tutorialNow ? "easy_letter" : null;
+    if (!tutorialNow && !isDailyMode && !isQuickMode && !isChaosMode) {
       const roll = Math.random();
       if (roll < 0.22) event = "double_xp";
       else if (roll < 0.40) event = "easy_letter";
@@ -505,7 +505,9 @@ export default function SoloGame() {
       const alphabet = event === "easy_letter" ? EASY_LETTERS : getAlphabet();
       const randomLetter = alphabet[Math.floor(Math.random() * alphabet.length)];
       setCurrentLetter(randomLetter);
-      if (isChaosMode) {
+      if (tutorialNow) {
+        setCategories((t.categories ?? packCats()).slice(0, 5));
+      } else if (isChaosMode) {
         const crazyCats = t.crazyCategories && t.crazyCategories.length >= 6
           ? [...t.crazyCategories].sort(() => Math.random() - 0.5).slice(0, 6)
           : packCats().map(() => {
@@ -520,7 +522,7 @@ export default function SoloGame() {
     setResponses({});
 
     // Draw a power card for this round
-    const card = drawPowerCard(isQuickMode, isChaosMode);
+    const card = tutorialNow ? null : drawPowerCard(isQuickMode, isChaosMode);
     setActiveCard(card);
     setCardUsed(false);
     setSabotageCategory(null);
