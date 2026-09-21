@@ -6,6 +6,19 @@ import { resolveCosmetic, shopItem, SHOP_ITEMS } from "../lib/inventoryCatalog";
 import { computeTitleStats, evaluateTitles, isTitleUnlocked } from "../lib/titleCatalog";
 import { getWeeklyShop, dealPriceFor, isWeeklyShopItem } from "../lib/dailyShop";
 
+const HALLOWEEN_SHOP_MARKER = "_halloween_";
+const HALLOWEEN_START_MS = Date.parse("2026-10-15T00:00:00Z");
+const HALLOWEEN_END_MS = Date.parse("2026-11-03T00:00:00Z");
+
+function isHalloweenActive(now: Date = new Date()): boolean {
+  const ms = now.getTime();
+  return ms >= HALLOWEEN_START_MS && ms < HALLOWEEN_END_MS;
+}
+
+function isHalloweenShopItem(itemId: string): boolean {
+  return itemId.includes(HALLOWEEN_SHOP_MARKER);
+}
+
 interface SqlResult<T> {
   rows?: T[];
 }
@@ -188,7 +201,13 @@ router.post("/buy", requirePlayerIdentity, async (req: AuthedRequest, res) => {
 
   const item = shopItem(itemId);
   if (!item) { res.status(400).json({ error: "Unknown shop item" }); return; }
-  if (!isWeeklyShopItem(itemId)) {
+  const halloweenItem = isHalloweenShopItem(itemId);
+  if (halloweenItem) {
+    if (!isHalloweenActive()) {
+      res.status(400).json({ error: "Halloween event is not active" });
+      return;
+    }
+  } else if (!isWeeklyShopItem(itemId)) {
     res.status(400).json({ error: "Item not available this week" });
     return;
   }
@@ -209,7 +228,7 @@ router.post("/buy", requirePlayerIdentity, async (req: AuthedRequest, res) => {
       }
       // Honor today's daily deal price, recomputed server-side (never trust
       // a price from the client). Falls back to the full catalog price.
-      const price = dealPriceFor(item.id) ?? item.price;
+      const price = halloweenItem ? item.price : (dealPriceFor(item.id) ?? item.price);
       if (row.coins < price) {
         return { ok: false as const, status: 400, error: "Insufficient coins" };
       }

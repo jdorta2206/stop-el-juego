@@ -24,6 +24,7 @@ import { CustomPacksManager } from "@/components/CustomPacksManager";
 import { useCustomPacks } from "@/lib/useCustomPacks";
 import { BannerAd } from "@/components/AdSystem";
 import { PLAY_STORE_URL } from "@/lib/playReview";
+import { HalloweenBanner } from "@/components/HalloweenBanner";
 
 const LOGO_URL = `${import.meta.env.BASE_URL}images/stop-logo.png`;
 
@@ -126,6 +127,7 @@ export default function Home() {
       )}
 
       <div className="flex-1 flex flex-col items-center justify-center max-w-md mx-auto w-full space-y-7 py-6">
+        <HalloweenBanner />
 
         {/* Invite welcome banner */}
         <AnimatePresence>

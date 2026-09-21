@@ -14,7 +14,7 @@ import { useGetRoom, useSubmitRoomResults, getGetRoomQueryKey } from "@workspace
 import { usePlayer } from "@/hooks/use-player";
 import { Share2, Play, ArrowLeft, Trophy, CheckCircle2, Circle, Volume2, VolumeX, Layers } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { CATEGORIES_ES } from "@/lib/utils";
+import { CATEGORIES_ES, getCurrentLang } from "@/lib/utils";
 import { useCustomPacks } from "@/lib/useCustomPacks";
 import confetti from "canvas-confetti";
 import { RoomInvitePanel } from "@/components/RoomInvitePanel";
@@ -36,6 +36,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useReviewPrompt, recordGamePlayed } from "@/hooks/useReviewPrompt";
 import { ReviewPromptCard } from "@/components/ReviewPromptCard";
 import { maybeShowInterstitial } from "@/lib/interstitialAd";
+import { applyHalloweenCategory, getHalloweenScare, isHalloweenActive } from "@/lib/halloweenEvent";
 
 const ROUND_TIME = 60;
 
@@ -182,6 +183,9 @@ export default function Room() {
   const [activeCustomCategories, setActiveCustomCategories] = useState<string[] | null>(null);
   const [activeCustomLabel, setActiveCustomLabel] = useState<string | null>(null);
   const [roundCategories, setRoundCategories] = useState<string[]>(CATEGORIES_ES);
+  const [halloweenScare, setHalloweenScare] = useState<ReturnType<typeof getHalloweenScare> | null>(null);
+  const halloweenScareTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const halloweenScareHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const CRAZY_CATEGORIES_ES = [
     "Excusa para llegar tarde", "Película que finges haber visto", "Animal que querrías de mascota",
     "Cosa que no debes decir en una cita", "Superhéroe inventado", "Profesión del futuro",
@@ -560,10 +564,49 @@ export default function Room() {
   // exact same set the bot/scoring backend resolves on the server.
   useEffect(() => {
     if (phase === "playing" && currentLetter && currentRound) {
-      setRoundCategories(computeCategories(categoryPack, currentLetter, currentRound, activeCustomCategories));
+      const base = computeCategories(categoryPack, currentLetter, currentRound, activeCustomCategories);
+      let seed = 0;
+      const key = `${roomCode || ""}|${currentRound}|${currentLetter}`;
+      for (let i = 0; i < key.length; i++) seed = (Math.imul(seed, 31) + key.charCodeAt(i)) >>> 0;
+      const halloweenSeed = (seed % 100000) / 100000;
+      setRoundCategories(applyHalloweenCategory(base, getCurrentLang(), {
+        enabled: categoryPack === "standard",
+        seed: halloweenSeed,
+      }));
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, currentLetter, currentRound, categoryPack, activeCustomCategories]);
+
+  // 🎃 Halloween multiplayer scare: deterministic per room/round so every
+  // player gets the same scare at roughly the same moment. It is cosmetic only
+  // and never runs for custom/crazy/mix packs or non-Halloween dates.
+  useEffect(() => {
+    if (halloweenScareTimerRef.current) clearTimeout(halloweenScareTimerRef.current);
+    if (halloweenScareHideTimerRef.current) clearTimeout(halloweenScareHideTimerRef.current);
+    setHalloweenScare(null);
+
+    if (!isHalloweenActive() || phase !== "playing" || categoryPack !== "standard" || !roomCode || !currentLetter || !currentRound) return;
+
+    const key = `halloween-scare|${roomCode.toUpperCase()}|${currentRound}|${currentLetter}`;
+    let hash = 2166136261 >>> 0;
+    for (let i = 0; i < key.length; i++) {
+      hash ^= key.charCodeAt(i);
+      hash = Math.imul(hash, 16777619);
+    }
+    const seed = (hash >>> 0) / 4294967296;
+    const scare = getHalloweenScare(getCurrentLang(), seed);
+    const delay = 12000 + ((hash >>> 8) % 11000);
+
+    halloweenScareTimerRef.current = setTimeout(() => {
+      setHalloweenScare(scare);
+      halloweenScareHideTimerRef.current = setTimeout(() => setHalloweenScare(null), 2600);
+    }, delay);
+
+    return () => {
+      if (halloweenScareTimerRef.current) clearTimeout(halloweenScareTimerRef.current);
+      if (halloweenScareHideTimerRef.current) clearTimeout(halloweenScareHideTimerRef.current);
+    };
+  }, [phase, categoryPack, roomCode, currentLetter, currentRound]);
 
   // Track the `creator` achievement: any multiplayer round actually played
   // with a custom pack unlocks it. We fire once per `roomCode` to avoid
@@ -2580,6 +2623,30 @@ export default function Room() {
           );
         })()}
 
+      </AnimatePresence>
+      <AnimatePresence>
+        {halloweenScare && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.72, rotate: -4 }}
+            animate={{ opacity: 1, scale: [1, 1.04, 1], rotate: [0, 2, -1, 0] }}
+            exit={{ opacity: 0, scale: 1.12 }}
+            transition={{ duration: 0.45 }}
+            onClick={() => setHalloweenScare(null)}
+            className="fixed inset-0 z-[120] flex items-center justify-center p-6 cursor-pointer"
+            style={{ background: "rgba(0,0,0,0.76)", backdropFilter: "blur(3px)" }}
+            role="alert"
+            aria-live="assertive"
+          >
+            <div className="text-center select-none">
+              <motion.div animate={{ scale: [1, 1.18, 1] }} transition={{ duration: 0.7, repeat: 2 }} className="text-[7rem] sm:text-[10rem] leading-none drop-shadow-[0_0_35px_rgba(168,85,247,0.7)]">
+                {halloweenScare.emoji}
+              </motion.div>
+              <p className="mt-5 text-3xl sm:text-5xl font-black text-white tracking-tight">{halloweenScare.title}</p>
+              <p className="mt-2 text-sm sm:text-lg font-bold text-white/70">{halloweenScare.text}</p>
+              <p className="mt-6 text-[10px] uppercase tracking-[0.25em] text-white/35">Halloween 2026</p>
+            </div>
+          </motion.div>
+        )}
       </AnimatePresence>
       <ReviewPromptCard
         open={reviewPrompt.open}

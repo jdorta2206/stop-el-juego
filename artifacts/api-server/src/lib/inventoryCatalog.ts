@@ -189,6 +189,16 @@ export const SHOP_ITEMS: ShopItem[] = [
   { id: "bg_shop_fuego",     kind: "background", label: "Fondo Fuego",     glyph: "🔥", color: "#ef4444", price: 3000 },
   { id: "bg_shop_oro",       kind: "background", label: "Fondo Oro",       glyph: "👑", color: "#fbbf24", price: 5000 },
 
+  // ── 🎃 ESPECIAL HALLOWEEN 2026 ──────────────────────────────────────────
+  // Exclusivos del evento: comprables únicamente con monedas durante
+  // 15/10/2026–02/11/2026. Se conservan para siempre una vez comprados.
+  { id: "avatar_halloween_ghost",    kind: "avatar", label: "Fantasmita",          glyph: "👻", price: 1500 },
+  { id: "avatar_halloween_pumpkin",  kind: "avatar", label: "Calabaza Maldita",    glyph: "🎃", price: 2000 },
+  { id: "avatar_halloween_vampire",  kind: "avatar", label: "Vampiro",             glyph: "🧛", price: 2500 },
+  { id: "avatar_halloween_witch",    kind: "avatar", label: "Brujita",             glyph: "🧙‍♀️", price: 3000 },
+  { id: "frame_halloween_web",       kind: "frame",  label: "Marco Telaraña",      glyph: "🕸️", color: "#7c3aed", price: 2500 },
+  { id: "bg_halloween_cemetery",    kind: "background", label: "Fondo Cementerio", glyph: "🪦", color: "#111827", price: 4000 },
+
   // ── ⚽ ESPECIAL MUNDIAL ───────────────────────────────────────────────────
   // Evento del Mundial de fútbol. IDs con `_wc_` para que el cliente los
   // agrupe en su propia sección. Avatares de fútbol + banderas de selecciones,

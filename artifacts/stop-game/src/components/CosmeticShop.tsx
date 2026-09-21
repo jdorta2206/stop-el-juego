@@ -8,6 +8,7 @@ import { motion } from "framer-motion";
 import { purchaseWorldCupPackOnPlay, detectPaymentChannel } from "@/lib/playBilling";
 import { startPackCheckout, WORLD_CUP_PACK_PRICE_LABEL } from "@/lib/worldCupPack";
 import { celebrateReward } from "@/lib/celebrate";
+import { isHalloweenActive } from "@/lib/halloweenEvent";
 
 type Category = "all" | "avatar" | "frame" | "background";
 
@@ -19,6 +20,7 @@ const RARITY_BG: Record<string, string> = {
 };
 
 const WC_MARKER = "_wc_";
+const HALLOWEEN_MARKER = "_halloween_";
 
 interface CosmeticShopProps {
   playerId?: string;
@@ -37,11 +39,14 @@ export function CosmeticShop(_props: CosmeticShopProps) {
   const [equipping, setEquipping] = useState<string | null>(null);
 
   const coinItems = ((inventory?.shop ?? []) as InventoryShopItem[]).filter(
-    (item) => item.price > 0 && !item.id.includes(WC_MARKER),
+    (item) => item.price > 0 && !item.id.includes(WC_MARKER) && !item.id.includes(HALLOWEEN_MARKER),
   );
   const worldCupItems = ((inventory?.shop ?? []) as InventoryShopItem[]).filter(
     (item) => item.id.includes(WC_MARKER),
   );
+  const halloweenItems = isHalloweenActive()
+    ? ((inventory?.shop ?? []) as InventoryShopItem[]).filter((item) => item.id.includes(HALLOWEEN_MARKER))
+    : [];
   const weeklyShop = ((inventory?.weeklyShop ?? []) as InventoryShopItem[]).filter((item) => item.price > 0 && !item.id.includes(WC_MARKER));
   const weeklyDeals = inventory?.weeklyDeals ?? [];
   const shopResetAt = inventory?.shopResetAt ?? null;
@@ -168,6 +173,32 @@ export function CosmeticShop(_props: CosmeticShopProps) {
           </button>
         ))}
       </div>
+
+      {halloweenItems.length > 0 && (
+        <section className="rounded-2xl border border-purple-400/30 bg-gradient-to-r from-purple-900/20 to-orange-600/10 p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-2xl">🎃</span>
+            <div>
+              <h3 className="text-lg font-black text-white">🎃 Halloween 2026</h3>
+              <p className="text-xs text-white/50">Exclusivos del evento · solo con monedas</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {halloweenItems.map((item) => (
+              <ShopCard
+                key={item.id}
+                item={item}
+                owned={isOwned(item.id)}
+                equipped={isEquipped(item.id)}
+                purchasing={purchasing === item.id}
+                equipping={equipping === `${item.kind}:${item.id}`}
+                onBuy={() => handleBuy(item)}
+                onEquip={() => handleEquip(item.kind, item.id)}
+              />
+            ))}
+          </div>
+        </section>
+      )}
 
       {weeklyShop.length > 0 && (
         <section>

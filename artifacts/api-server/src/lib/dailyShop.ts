@@ -24,6 +24,7 @@ const DEAL_COUNT = 3;
 const WEEKLY_ITEM_COUNT = 12;
 const DISCOUNTS = [15, 20, 25, 30];
 const WC_MARKER = "_wc_";
+const HALLOWEEN_MARKER = "_halloween_";
 
 function xfnv1a(str: string): number {
   let h = 2166136261 >>> 0;
@@ -102,7 +103,7 @@ export function shopResetAt(now: Date = new Date()): number {
 }
 
 function availableWeeklyItems(): ShopItem[] {
-  return SHOP_ITEMS.filter((item) => !item.id.includes(WC_MARKER));
+  return SHOP_ITEMS.filter((item) => !item.id.includes(WC_MARKER) && !item.id.includes(HALLOWEEN_MARKER));
 }
 
 function selectWithoutPrevious(key: string): ShopItem[] {

@@ -43,6 +43,8 @@ import { usePersonalBest } from "@/hooks/usePersonalBest";
 import { useReviewPrompt, recordGamePlayed, recordScoreAndPercentile } from "@/hooks/useReviewPrompt";
 import { maybeShowInterstitial, recordInterstitialGameCompleted } from "@/lib/interstitialAd";
 import { ReviewPromptCard } from "@/components/ReviewPromptCard";
+import { applyHalloweenCategory, isHalloweenActive } from "@/lib/halloweenEvent";
+import { HalloweenScareOverlay, getHalloweenScare, type HalloweenScare } from "@/components/HalloweenScare";
 
 function vibrate(pattern: number | number[]) {
   try { if (navigator.vibrate) navigator.vibrate(pattern); } catch {}
@@ -133,7 +135,7 @@ export default function SoloGame() {
   const packId = getSafePackId(getSelectedPackId(), isPremium, customPacks);
   const activePack = getPackById(packId, customPacks);
   const packCats = () => packId === "classic" ? getCategories() : getPackCategories(packId, getCurrentLang(), customPacks);
-  const [categories, setCategories] = useState<string[]>(packCats());
+  const [categories, setCategories] = useState<string[]>(() => applyHalloweenCategory(packCats(), lang, { enabled: !packId.startsWith("custom:") }));
   const [muted, setMuted] = useState(false);
   const [stopFlash, setStopFlash] = useState(false);
   // 🕵️ Espía / Robar respuesta — free: 1 uso/partida, premium: 2 usos/partida. -10 pts cada uso.
@@ -153,6 +155,8 @@ export default function SoloGame() {
   const [showImpossibleBanner, setShowImpossibleBanner] = useState(false);
   // Random event for current round
   const [randomEvent, setRandomEvent] = useState<RandomEvent>(null);
+  const [halloweenScare, setHalloweenScare] = useState<HalloweenScare | null>(null);
+  const halloweenScareTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Round result announcement
   const [roundWon, setRoundWon] = useState<boolean | null>(null);
 
@@ -337,8 +341,10 @@ export default function SoloGame() {
 
   // Re-read categories when language changes (only if not daily mode)
   useEffect(() => {
-    if (!isDailyMode) setCategories(packCats());
-  }, [lang, isDailyMode]);
+    if (!isDailyMode) {
+      setCategories(applyHalloweenCategory(packCats(), lang, { enabled: !packId.startsWith("custom:") }));
+    }
+  }, [lang, isDailyMode, packId, customPacksLoading]);
 
   // Countdown tick sound (last 5 seconds — urgency escalates)
   useEffect(() => {
@@ -438,6 +444,8 @@ export default function SoloGame() {
   const scoreTokensRef = useRef<string[]>([]);
 
   const startGame = () => {
+    if (halloweenScareTimerRef.current) clearTimeout(halloweenScareTimerRef.current);
+    setHalloweenScare(null);
     void trackAnalyticsEvent("game_start", { metadata: { mode: isDailyMode ? "daily" : "solo" } });
     // Snapshot the tutorial state at the moment the player presses Play so
     // the rules of the round are stable until it ends.
@@ -466,6 +474,18 @@ export default function SoloGame() {
     if (isChaosMode) event = "double_xp";
     setRandomEvent(event);
     setRoundWon(null);
+
+    // Halloween scare: visual-only, rare, normal games only. It never
+    // changes score, timer, categories or gameplay rules.
+    if (isHalloweenActive() && !isDailyMode && !isQuickMode && !isChaosMode && !isRandomMode) {
+      if (Math.random() < 0.38) {
+        const delay = 9000 + Math.floor(Math.random() * 16000);
+        halloweenScareTimerRef.current = setTimeout(() => {
+          setHalloweenScare(getHalloweenScare(lang));
+          window.setTimeout(() => setHalloweenScare(null), 2600);
+        }, delay);
+      }
+    }
 
     if (isDailyMode) {
       setCurrentLetter(dailyLetter);
@@ -1513,6 +1533,8 @@ export default function SoloGame() {
           onShared={() => recordExternalStat(player?.id, { timesShared: 1 })}
         />
 
+        <AnimatePresence>{halloweenScare && <HalloweenScareOverlay scare={halloweenScare} onDone={() => setHalloweenScare(null)} />}</AnimatePresence>
+
         {/* Achievement toast notification */}
         <AchievementToast
           achievement={newlyUnlocked}
@@ -1726,6 +1748,7 @@ export default function SoloGame() {
               initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}
               className="flex-1 flex flex-col items-center justify-center text-center space-y-8"
             >
+              <HalloweenBanner className="mb-3" />
               <div>
                 <h2 className="text-4xl font-display font-bold mb-2">{t.home.soloVsAI}</h2>
                 {packId !== "classic" && (
