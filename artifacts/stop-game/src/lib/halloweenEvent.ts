@@ -8,6 +8,46 @@ export const HALLOWEEN_CATEGORIES = {
   fr: ["Déguisement effrayant", "Monstre", "Film d'horreur", "Objet d'une maison hantée", "Créature surnaturelle"],
 } as const;
 
+export type HalloweenScareId = "ghost" | "spider" | "skull" | "pumpkin" | "vampire";
+
+export interface HalloweenScare {
+  id: HalloweenScareId;
+  emoji: string;
+  title: string;
+  text: string;
+}
+
+export const HALLOWEEN_SCARES: Record<string, HalloweenScare[]> = {
+  es: [
+    { id: "ghost", emoji: "👻", title: "¡BU!", text: "Algo te está mirando..." },
+    { id: "spider", emoji: "🕷️", title: "¡CUIDADO!", text: "Hay algo en la pantalla..." },
+    { id: "skull", emoji: "💀", title: "¡TE HE VISTO!", text: "No todas las palabras dan miedo." },
+    { id: "pumpkin", emoji: "🎃", title: "LA CALABAZA TE OBSERVA", text: "Sigue jugando si te atreves." },
+    { id: "vampire", emoji: "🧛", title: "¡EL VAMPIRO HA LLEGADO!", text: "Esta partida acaba de ponerse rara..." },
+  ],
+  en: [
+    { id: "ghost", emoji: "👻", title: "BOO!", text: "Something is watching you..." },
+    { id: "spider", emoji: "🕷️", title: "WATCH OUT!", text: "Something is on the screen..." },
+    { id: "skull", emoji: "💀", title: "I SAW YOU!", text: "Not every word is scary." },
+    { id: "pumpkin", emoji: "🎃", title: "THE PUMPKIN IS WATCHING", text: "Keep playing if you dare." },
+    { id: "vampire", emoji: "🧛", title: "THE VAMPIRE ARRIVED!", text: "This game just got weird..." },
+  ],
+  pt: [
+    { id: "ghost", emoji: "👻", title: "BUU!", text: "Alguém está a observar-te..." },
+    { id: "spider", emoji: "🕷️", title: "CUIDADO!", text: "Há algo no ecrã..." },
+    { id: "skull", emoji: "💀", title: "EU VI-TE!", text: "Nem todas as palavras assustam." },
+    { id: "pumpkin", emoji: "🎃", title: "A ABÓBORA OBSERVA-TE", text: "Continua se tiveres coragem." },
+    { id: "vampire", emoji: "🧛", title: "O VAMPIRO CHEGOU!", text: "Esta partida ficou estranha..." },
+  ],
+  fr: [
+    { id: "ghost", emoji: "👻", title: "BOUH !", text: "Quelqu'un te regarde..." },
+    { id: "spider", emoji: "🕷️", title: "ATTENTION !", text: "Il y a quelque chose à l'écran..." },
+    { id: "skull", emoji: "💀", title: "JE T'AI VU !", text: "Tous les mots ne font pas peur." },
+    { id: "pumpkin", emoji: "🎃", title: "LA CITROUILLE TE REGARDE", text: "Continue si tu l'oses." },
+    { id: "vampire", emoji: "🧛", title: "LE VAMPIRE EST ARRIVÉ !", text: "Cette partie devient étrange..." },
+  ],
+};
+
 export function isHalloweenActive(now = new Date()): boolean {
   const start = new Date(HALLOWEEN_START);
   const end = new Date(HALLOWEEN_END);
@@ -20,11 +60,6 @@ export function getHalloweenCategory(lang: string, seed = Math.random()): string
   return list[Math.floor(Math.max(0, Math.min(0.999999, seed)) * list.length)];
 }
 
-/**
- * Adds exactly one Halloween category during the event.
- * Custom packs are deliberately left untouched so user-created packs keep
- * their exact contents. Daily mode can also opt out explicitly.
- */
 export function applyHalloweenCategory(
   categories: string[],
   lang: string,
@@ -53,9 +88,8 @@ export function getHalloweenSubtitle(lang: string): string {
   return "Una categoría terrorífica aparece en cada partida normal.";
 }
 
-
 export function getHalloweenScare(lang: string, seed = Math.random()): HalloweenScare {
   const key = lang === "en" || lang === "pt" || lang === "fr" ? lang : "es";
-  const list = SCARES[key];
+  const list = HALLOWEEN_SCARES[key];
   return list[Math.floor(Math.max(0, Math.min(0.999999, seed)) * list.length)];
 }
