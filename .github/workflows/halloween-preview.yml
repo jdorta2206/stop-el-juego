@@ -5,6 +5,7 @@ on:
     branches:
       - feature/halloween-2026
       - fix/halloween-scare-not-showing
+      - fix/halloween-preview-global-trigger
   workflow_dispatch:
 
 permissions:
