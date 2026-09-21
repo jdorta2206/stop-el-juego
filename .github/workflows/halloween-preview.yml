@@ -46,7 +46,7 @@ jobs:
           nohup /tmp/cloudflared tunnel --no-autoupdate --logfile /tmp/cloudflared.log --url http://127.0.0.1:4173 >/tmp/cloudflared-stdout.log 2>&1 &
           sleep 8
           for i in $(seq 1 45); do
-            URL=$(grep -oE 'https://[^[:space:]]+\\.trycloudflare\\.com' /tmp/cloudflared.log | head -1 || true)
+            URL=$(grep -oE 'https://[^[:space:]]+trycloudflare[.]com' /tmp/cloudflared.log | head -1 || true)
             if [ -n "$URL" ]; then
               echo "HALLOWEEN_PREVIEW_URL=$URL"
               break
