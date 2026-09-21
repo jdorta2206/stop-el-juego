@@ -43,7 +43,7 @@ jobs:
           set -euo pipefail
           curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o /tmp/cloudflared
           chmod +x /tmp/cloudflared
-          nohup /tmp/cloudflared tunnel --no-autoupdate --url http://127.0.0.1:4173 > /tmp/cloudflared.log 2>&1 &
+          nohup /tmp/cloudflared tunnel --no-autoupdate --logfile /tmp/cloudflared.log --url http://127.0.0.1:4173 >/tmp/cloudflared-stdout.log 2>&1 &
           sleep 8
           for i in $(seq 1 45); do
             URL=$(grep -oE 'https://[^[:space:]]+\\.trycloudflare\\.com' /tmp/cloudflared.log | head -1 || true)
