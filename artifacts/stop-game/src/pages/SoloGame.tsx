@@ -44,6 +44,7 @@ import { useReviewPrompt, recordGamePlayed, recordScoreAndPercentile } from "@/h
 import { maybeShowInterstitial, recordInterstitialGameCompleted } from "@/lib/interstitialAd";
 import { ReviewPromptCard } from "@/components/ReviewPromptCard";
 import { applyHalloweenCategory, isHalloweenActive } from "@/lib/halloweenEvent";
+import { HalloweenBanner } from "@/components/HalloweenBanner";
 import { HalloweenScareOverlay } from "@/components/HalloweenScare";
 import { getHalloweenScare, type HalloweenScare } from "@/lib/halloweenEvent";
 
