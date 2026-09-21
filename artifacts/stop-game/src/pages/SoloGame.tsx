@@ -43,10 +43,10 @@ import { usePersonalBest } from "@/hooks/usePersonalBest";
 import { useReviewPrompt, recordGamePlayed, recordScoreAndPercentile } from "@/hooks/useReviewPrompt";
 import { maybeShowInterstitial, recordInterstitialGameCompleted } from "@/lib/interstitialAd";
 import { ReviewPromptCard } from "@/components/ReviewPromptCard";
-import { applyHalloweenCategory, isHalloweenActive, isHalloweenPreview } from "@/lib/halloweenEvent";
+import { applyHalloweenCategory, isHalloweenActive, isHalloweenPreview, getHalloweenScare } from "@/lib/halloweenEvent";
 import { HalloweenBanner } from "@/components/HalloweenBanner";
 import { HalloweenScareOverlay } from "@/components/HalloweenScare";
-import { getHalloweenScare, type HalloweenScare } from "@/lib/halloweenEvent";
+import type { HalloweenScare } from "@/lib/halloweenEvent";
 
 function vibrate(pattern: number | number[]) {
   try { if (navigator.vibrate) navigator.vibrate(pattern); } catch {}
@@ -341,13 +341,25 @@ export default function SoloGame() {
   useEffect(() => { bluffedCategoriesRef.current = bluffedCategories; }, [bluffedCategories]);
   useEffect(() => { currentLetterRef.current = currentLetter; }, [currentLetter]);
 
-  // Halloween preview diagnostic: show the scare as soon as SoloGame mounts.
-  // This bypasses round/timer logic so the preview proves the overlay itself works.
+  // Halloween scares happen only while the player is actually answering.
   useEffect(() => {
-    if (!isHalloweenPreview()) return;
-    const timer = window.setTimeout(() => setHalloweenScare(getHalloweenScare(lang)), 250);
-    return () => window.clearTimeout(timer);
-  }, [lang]);
+    if (gameState !== "PLAYING" || !isHalloweenActive()) {
+      if (halloweenScareTimerRef.current) { clearTimeout(halloweenScareTimerRef.current); halloweenScareTimerRef.current = null; }
+      return;
+    }
+    if (halloweenScare) return;
+    const preview = isHalloweenPreview();
+    const min = preview ? 4000 : 10000;
+    const max = preview ? 7500 : 50000;
+    const delay = min + Math.floor(Math.random() * (max - min));
+    halloweenScareTimerRef.current = setTimeout(() => {
+      setHalloweenScare(getHalloweenScare(lang));
+      halloweenScareTimerRef.current = null;
+    }, delay);
+    return () => {
+      if (halloweenScareTimerRef.current) { clearTimeout(halloweenScareTimerRef.current); halloweenScareTimerRef.current = null; }
+    };
+  }, [gameState, round, lang, halloweenScare]);
 
   // Re-read categories when language changes (only if not daily mode)
   useEffect(() => {
