@@ -126,6 +126,7 @@ const FRAME_COLORS_BY_ID: Record<string, string> = {
   frame_wc_cesped: "#16a34a",
   frame_wc_espana: "#dc2626",
   frame_wc_copa:   "#f59e0b",
+  frame_halloween_web: "#7c3aed",
   frame_collection_hunter:   "#38bdf8",
   frame_collection_legend:   "#f472b6",
   frame_collection_master:   "#06b6d4",
@@ -193,6 +194,10 @@ const AVATAR_GLYPH_BY_ID: Record<string, string> = {
   avatar_shop_crystal:   "🔮",
   avatar_shop_phoenix:   "🦅",
   avatar_shop_money:     "🤑",
+  avatar_halloween_ghost:   "👻",
+  avatar_halloween_pumpkin: "🎃",
+  avatar_halloween_vampire: "🧛",
+  avatar_halloween_witch:   "🧙‍♀️",
   avatar_wc_ball:    "⚽",
   avatar_wc_jersey:  "👕",
   avatar_wc_goal:    "🥅",
@@ -230,6 +235,7 @@ const BACKGROUND_CSS_BY_ID: Record<string, string> = {
   bg_wc_noche:  "linear-gradient(135deg, #1e3a8a, #0f172a)",
   bg_wc_espana: "linear-gradient(135deg, #dc2626, #fbbf24)",
   bg_wc_copa:   "linear-gradient(135deg, #fbbf24, #b45309)",
+  bg_halloween_cemetery: "linear-gradient(135deg, #111827, #312e81)",
 };
 
 function StatCard({ label, value }: { label: string; value: string | number }) {
