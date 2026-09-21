@@ -36,7 +36,6 @@ import { useToast } from "@/hooks/use-toast";
 import { useReviewPrompt, recordGamePlayed } from "@/hooks/useReviewPrompt";
 import { ReviewPromptCard } from "@/components/ReviewPromptCard";
 import { maybeShowInterstitial } from "@/lib/interstitialAd";
-import { HalloweenBanner } from "@/components/HalloweenBanner";
 import { applyHalloweenCategory } from "@/lib/halloweenEvent";
 
 const ROUND_TIME = 60;
