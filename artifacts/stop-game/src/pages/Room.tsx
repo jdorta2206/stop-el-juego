@@ -148,6 +148,7 @@ export default function Room() {
   const [copied, setCopied] = useState(false);
   const [isStopping, setIsStopping] = useState(false);
   const [muted, setMuted] = useState(false);
+  const [reducedHalloweenEffects, setReducedHalloweenEffects] = useState(() => getHalloweenReducedEffects());
   const [revealedCount, setRevealedCount] = useState(0);
   const [showShareModal, setShowShareModal] = useState(false);
   const [showClipModal, setShowClipModal] = useState(false);
@@ -1734,6 +1735,20 @@ export default function Room() {
               >
                 {muted ? <VolumeX className="w-5 h-5 text-white/40" /> : <Volume2 className="w-5 h-5 text-white/70" />}
               </button>
+              {isHalloweenActive() && (
+                <button
+                  onClick={() => {
+                    const next = !reducedHalloweenEffects;
+                    setReducedHalloweenEffects(next);
+                    setHalloweenReducedEffects(next);
+                  }}
+                  className="p-2 rounded-full hover:bg-white/10 transition-colors flex-shrink-0"
+                  title={reducedHalloweenEffects ? "Activar efectos de Halloween" : "Reducir sustos y efectos intensos"}
+                  aria-label={reducedHalloweenEffects ? "Activar efectos de Halloween" : "Reducir sustos y efectos intensos"}
+                >
+                  <EyeOff className="w-5 h-5 text-white/60" />
+                </button>
+              )}
             </div>
 
             {/* Who's submitted */}
