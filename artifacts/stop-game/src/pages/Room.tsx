@@ -631,6 +631,7 @@ export default function Room() {
     const wasPlaying = previousRoomStatusRef.current === "playing";
     previousRoomStatusRef.current = status;
     if (!isHalloweenActive() || !wasPlaying || status !== "stopped" || !stopper?.stopTimestamp) return;
+    if (stopper?.id && stopper.id === player?.id) return;
 
     const stopKey = `${currentRound}:${stopper.stopTimestamp}`;
     if (seenHalloweenEventRef.current === stopKey) return;
@@ -647,10 +648,12 @@ export default function Room() {
   useEffect(() => {
     const event = (room as any)?.halloweenScare as {
       id?: string;
+      playerId?: string;
       scareId?: "ghost" | "spider" | "skull" | "pumpkin" | "vampire";
       round?: number;
     } | null;
     if (!event?.id || event.round !== currentRound || !isHalloweenActive()) return;
+    if (event.playerId && event.playerId === player?.id) return;
     if (seenHalloweenEventRef.current === event.id) return;
     seenHalloweenEventRef.current = event.id;
     if (halloweenScareTimerRef.current) clearTimeout(halloweenScareTimerRef.current);
@@ -686,6 +689,8 @@ export default function Room() {
 
     const scareReactions = newOnes.filter(r => r.playerName.startsWith("__HALLOWEEN_SCARE__"));
     if (scareReactions.length > 0 && isHalloweenActive() && phase === "playing") {
+      const remoteScare = scareReactions.some(r => !r.playerName.startsWith(`__HALLOWEEN_SCARE__${player?.id}__`));
+      if (!remoteScare) return;
       setHalloweenScare(getHalloweenScare(getCurrentLang(), Math.random()));
       if (halloweenScareHideTimerRef.current) clearTimeout(halloweenScareHideTimerRef.current);
       halloweenScareHideTimerRef.current = setTimeout(() => setHalloweenScare(null), 1550);
@@ -740,7 +745,7 @@ export default function Room() {
           body: JSON.stringify({
             emoji: "🤯",
             playerId: player.id,
-            playerName: `__HALLOWEEN_SCARE__${player.name ?? ""}`,
+            playerName: `__HALLOWEEN_SCARE__${player.id}__${player.name ?? ""}`,
           }),
         });
         const ms = 18000;
