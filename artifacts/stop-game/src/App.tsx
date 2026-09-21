@@ -1,7 +1,7 @@
 import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState, useEffect, lazy, Suspense } from "react";
-import { MotionConfig } from "framer-motion";
+import { MotionConfig, AnimatePresence } from "framer-motion";
 import { Toaster } from "@/components/ui/toaster";
 import { SplashScreen } from "@/components/SplashScreen";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -143,6 +143,7 @@ function PackClaimHandler() {
 
 function App() {
   const [splashDone, setSplashDone] = useState(false);
+  const [previewScare, setPreviewScare] = useState<HalloweenScare | null>(null);
   const lang = (localStorage.getItem("stop_lang") ?? "es") as string;
 
   useEffect(() => {
@@ -198,6 +199,7 @@ function App() {
               </Suspense>
             </WouterRouter>
           )}
+          <AnimatePresence>{previewScare && <HalloweenScareOverlay scare={previewScare} onDone={() => setPreviewScare(null)} />}</AnimatePresence>
           <Toaster />
         </ErrorBoundary>
       </MotionConfig>
