@@ -44,8 +44,9 @@ jobs:
           curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o /tmp/cloudflared
           chmod +x /tmp/cloudflared
           nohup /tmp/cloudflared tunnel --no-autoupdate --url http://127.0.0.1:4173 > /tmp/cloudflared.log 2>&1 &
-          for i in $(seq 1 30); do
-            URL=$(grep -oE 'https://[-a-z0-9]+\\.trycloudflare\\.com' /tmp/cloudflared.log | head -1 || true)
+          sleep 8
+          for i in $(seq 1 45); do
+            URL=$(grep -oE 'https://[^[:space:]]+\\.trycloudflare\\.com' /tmp/cloudflared.log | head -1 || true)
             if [ -n "$URL" ]; then
               echo "HALLOWEEN_PREVIEW_URL=$URL"
               break
