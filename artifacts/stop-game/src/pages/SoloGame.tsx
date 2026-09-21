@@ -43,6 +43,8 @@ import { usePersonalBest } from "@/hooks/usePersonalBest";
 import { useReviewPrompt, recordGamePlayed, recordScoreAndPercentile } from "@/hooks/useReviewPrompt";
 import { maybeShowInterstitial, recordInterstitialGameCompleted } from "@/lib/interstitialAd";
 import { ReviewPromptCard } from "@/components/ReviewPromptCard";
+import { HalloweenBanner } from "@/components/HalloweenBanner";
+import { applyHalloweenCategory } from "@/lib/halloweenEvent";
 
 function vibrate(pattern: number | number[]) {
   try { if (navigator.vibrate) navigator.vibrate(pattern); } catch {}
@@ -133,7 +135,7 @@ export default function SoloGame() {
   const packId = getSafePackId(getSelectedPackId(), isPremium, customPacks);
   const activePack = getPackById(packId, customPacks);
   const packCats = () => packId === "classic" ? getCategories() : getPackCategories(packId, getCurrentLang(), customPacks);
-  const [categories, setCategories] = useState<string[]>(packCats());
+  const [categories, setCategories] = useState<string[]>(() => applyHalloweenCategory(packCats(), lang, { enabled: !packId.startsWith("custom:") && !isDailyMode }));
   const [muted, setMuted] = useState(false);
   const [stopFlash, setStopFlash] = useState(false);
   // 🕵️ Espía / Robar respuesta — free: 1 uso/partida, premium: 2 usos/partida. -10 pts cada uso.
@@ -1720,7 +1722,7 @@ export default function SoloGame() {
         <AnimatePresence mode="wait">
 
           {/* LOBBY */}
-          {gameState === "LOBBY" && (
+          {gameState === "LOBBY" && (\n            <HalloweenBanner className="mb-3" />
             <motion.div
               key="lobby"
               initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}
