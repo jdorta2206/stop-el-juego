@@ -1,0 +1,125 @@
+name: New-player onboarding preview
+
+on:
+  push:
+    branches:
+      - feature/new-player-onboarding
+  pull_request:
+    branches:
+      - feature/halloween-2026
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 210
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build onboarding preview
+        env:
+          VITE_API_URL: ''
+        run: pnpm --filter @workspace/stop-game build
+      - name: Verify preview build
+        run: test -s artifacts/stop-game/dist/index.html
+      - name: Start preview server with production API proxy
+        run: |
+          cat > /tmp/new-player-preview-server.py <<'PY'
+          import http.client, os
+          from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
+          from urllib.parse import urlsplit
+          DIST=os.path.abspath("artifacts/stop-game/dist")
+          UPSTREAM="www.stopjuegodepalabras.com"
+          class Handler(SimpleHTTPRequestHandler):
+              def __init__(self,*args,**kwargs): super().__init__(*args,directory=DIST,**kwargs)
+              def _proxy(self):
+                  target=urlsplit(self.path)
+                  conn=http.client.HTTPSConnection(UPSTREAM,timeout=60)
+                  headers={k:v for k,v in self.headers.items() if k.lower() not in {"host","content-length","origin","referer"}}
+                  length=int(self.headers.get("Content-Length","0") or "0")
+                  body=self.rfile.read(length) if length else None
+                  headers["Host"]=UPSTREAM
+                  try:
+                      conn.request(self.command,target.path+(("?" + target.query) if target.query else ""),body=body,headers=headers)
+                      resp=conn.getresponse()
+                      self.send_response(resp.status,resp.reason)
+                      for k,v in resp.getheaders():
+                          if k.lower() not in {"transfer-encoding","connection","content-encoding"}: self.send_header(k,v)
+                      self.end_headers()
+                      while True:
+                          chunk=resp.read(65536)
+                          if not chunk: break
+                          self.wfile.write(chunk); self.wfile.flush()
+                  finally: conn.close()
+              def do_GET(self):
+                  if self.path.startswith("/api/"): return self._proxy()
+                  return super().do_GET()
+              def do_POST(self):
+                  if self.path.startswith("/api/"): return self._proxy()
+                  self.send_error(405)
+              def do_PUT(self):
+                  if self.path.startswith("/api/"): return self._proxy()
+                  self.send_error(405)
+              def do_PATCH(self):
+                  if self.path.startswith("/api/"): return self._proxy()
+                  self.send_error(405)
+              def do_DELETE(self):
+                  if self.path.startswith("/api/"): return self._proxy()
+                  self.send_error(405)
+              def do_OPTIONS(self):
+                  if self.path.startswith("/api/"): return self._proxy()
+                  self.send_response(204); self.end_headers()
+              def send_error(self,code,message=None,explain=None):
+                  if code==404 and not self.path.startswith("/api/"):
+                      self.path="/index.html"; return super().do_GET()
+                  return super().send_error(code,message,explain)
+          os.chdir(DIST)
+          ThreadingHTTPServer(("127.0.0.1",4173),Handler).serve_forever()
+          PY
+          nohup python3 /tmp/new-player-preview-server.py >/tmp/preview-http.log 2>&1 &
+          sleep 2
+          curl -fsS http://127.0.0.1:4173/ >/dev/null
+      - name: Start public preview tunnel
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o /tmp/cloudflared
+          chmod +x /tmp/cloudflared
+          nohup /tmp/cloudflared tunnel --no-autoupdate --logfile /tmp/cloudflared.log --url http://127.0.0.1:4173 >/tmp/cloudflared-stdout.log 2>&1 &
+          sleep 8
+          URL=""
+          for i in $(seq 1 45); do
+            URL=$(grep -oE 'https://[^[:space:]]+trycloudflare[.]com' /tmp/cloudflared.log | head -1 || true)
+            if [ -n "$URL" ]; then break; fi
+            sleep 2
+          done
+          test -n "$URL"
+          printf '%s\n' "$URL" > /tmp/new-player-preview-url.txt
+          echo "Preview URL: $URL"
+          { echo "## New-player onboarding preview"; echo; echo "**Preview URL:** $URL"; echo; echo "This preview remains online while this workflow job is running."; } >> "$GITHUB_STEP_SUMMARY"
+      - name: Publish preview URL
+        uses: actions/upload-artifact@v4
+        with:
+          name: new-player-preview-url
+          path: /tmp/new-player-preview-url.txt
+          retention-days: 1
+      - name: Keep preview available for manual testing
+        run: sleep 10800
+      - name: Stop preview processes
+        if: always()
+        run: |
+          pkill -f cloudflared || true
+          pkill -f new-player-preview-server.py || true
