@@ -14,7 +14,7 @@ import { useGetRoom, useSubmitRoomResults, getGetRoomQueryKey } from "@workspace
 import { usePlayer } from "@/hooks/use-player";
 import { Share2, Play, ArrowLeft, Trophy, CheckCircle2, Circle, Volume2, VolumeX, Layers } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { CATEGORIES_ES } from "@/lib/utils";
+import { CATEGORIES_ES, getCurrentLang } from "@/lib/utils";
 import { useCustomPacks } from "@/lib/useCustomPacks";
 import confetti from "canvas-confetti";
 import { RoomInvitePanel } from "@/components/RoomInvitePanel";
@@ -36,6 +36,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useReviewPrompt, recordGamePlayed } from "@/hooks/useReviewPrompt";
 import { ReviewPromptCard } from "@/components/ReviewPromptCard";
 import { maybeShowInterstitial } from "@/lib/interstitialAd";
+import { HalloweenBanner } from "@/components/HalloweenBanner";
+import { applyHalloweenCategory } from "@/lib/halloweenEvent";
 
 const ROUND_TIME = 60;
 
@@ -560,7 +562,7 @@ export default function Room() {
   // exact same set the bot/scoring backend resolves on the server.
   useEffect(() => {
     if (phase === "playing" && currentLetter && currentRound) {
-      setRoundCategories(computeCategories(categoryPack, currentLetter, currentRound, activeCustomCategories));
+      const base = computeCategories(categoryPack, currentLetter, currentRound, activeCustomCategories);\n      let seed = 0;\n      const key = `${roomCode || ""}|${currentRound}|${currentLetter}`;\n      for (let i = 0; i < key.length; i++) seed = (Math.imul(seed, 31) + key.charCodeAt(i)) >>> 0;\n      const halloweenSeed = (seed % 100000) / 100000;\n      setRoundCategories(applyHalloweenCategory(base, getCurrentLang(), {\n        enabled: categoryPack !== "custom",\n        seed: halloweenSeed,\n      }));
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, currentLetter, currentRound, categoryPack, activeCustomCategories]);
