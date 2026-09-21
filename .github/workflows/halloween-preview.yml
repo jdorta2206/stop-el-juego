@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - feature/new-player-onboarding
+  pull_request:
+    branches:
+      - master
   workflow_dispatch:
 
 permissions:
