@@ -43,7 +43,6 @@ import { usePersonalBest } from "@/hooks/usePersonalBest";
 import { useReviewPrompt, recordGamePlayed, recordScoreAndPercentile } from "@/hooks/useReviewPrompt";
 import { maybeShowInterstitial, recordInterstitialGameCompleted } from "@/lib/interstitialAd";
 import { ReviewPromptCard } from "@/components/ReviewPromptCard";
-import { HalloweenBanner } from "@/components/HalloweenBanner";
 import { applyHalloweenCategory } from "@/lib/halloweenEvent";
 
 function vibrate(pattern: number | number[]) {
