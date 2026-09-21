@@ -532,10 +532,14 @@ export default function SoloGame() {
     const preview = import.meta.env.VITE_HALLOWEEN_PREVIEW === "true";
     if (!preview && Math.random() >= 0.38) return;
 
-    const delay = preview ? 3000 : 9000 + Math.floor(Math.random() * 16000);
+    // Preview is intentionally unmistakable: show after 1s and keep it
+    // visible until the player taps it. Production keeps the original timing.
+    const delay = preview ? 1000 : 9000 + Math.floor(Math.random() * 16000);
     halloweenScareTimerRef.current = setTimeout(() => {
       setHalloweenScare(getHalloweenScare(lang));
-      window.setTimeout(() => setHalloweenScare(null), 2600);
+      if (!preview) {
+        window.setTimeout(() => setHalloweenScare(null), 2600);
+      }
     }, delay);
 
     return () => {
