@@ -135,7 +135,7 @@ export default function SoloGame() {
   const packId = getSafePackId(getSelectedPackId(), isPremium, customPacks);
   const activePack = getPackById(packId, customPacks);
   const packCats = () => packId === "classic" ? getCategories() : getPackCategories(packId, getCurrentLang(), customPacks);
-  const [categories, setCategories] = useState<string[]>(() => applyHalloweenCategory(packCats(), lang, { enabled: !packId.startsWith("custom:") && !isDailyMode }));
+  const [categories, setCategories] = useState<string[]>(() => applyHalloweenCategory(packCats(), lang, { enabled: !packId.startsWith("custom:") }));
   const [muted, setMuted] = useState(false);
   const [stopFlash, setStopFlash] = useState(false);
   // 🕵️ Espía / Robar respuesta — free: 1 uso/partida, premium: 2 usos/partida. -10 pts cada uso.
