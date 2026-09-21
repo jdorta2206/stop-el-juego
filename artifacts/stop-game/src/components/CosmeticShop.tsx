@@ -39,7 +39,7 @@ export function CosmeticShop(_props: CosmeticShopProps) {
   const [equipping, setEquipping] = useState<string | null>(null);
 
   const coinItems = ((inventory?.shop ?? []) as InventoryShopItem[]).filter(
-    (item) => item.price > 0 && !item.id.includes(WC_MARKER),
+    (item) => item.price > 0 && !item.id.includes(WC_MARKER) && !item.id.includes(HALLOWEEN_MARKER),
   );
   const worldCupItems = ((inventory?.shop ?? []) as InventoryShopItem[]).filter(
     (item) => item.id.includes(WC_MARKER),
