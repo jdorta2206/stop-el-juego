@@ -157,3 +157,5 @@ jobs:
         run: |
           pkill -f cloudflared || true
           pkill -f halloween-preview-server.py || true
+
+# Trigger a fresh preview run for manual testing.
