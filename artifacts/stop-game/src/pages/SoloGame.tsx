@@ -159,6 +159,8 @@ export default function SoloGame() {
   const [randomEvent, setRandomEvent] = useState<RandomEvent>(null);
   const [halloweenScare, setHalloweenScare] = useState<HalloweenScare | null>(null);
   const halloweenScareTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const halloweenAnswerScareTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const halloweenAnswerScareRoundRef = useRef<number | null>(null);
   // Round result announcement
   const [roundWon, setRoundWon] = useState<boolean | null>(null);
 
@@ -342,24 +344,88 @@ export default function SoloGame() {
   useEffect(() => { currentLetterRef.current = currentLetter; }, [currentLetter]);
 
   // Halloween scares happen only while the player is actually answering.
+  // There are two different surprise channels:
+  // 1) a rare ambient scare during the round;
+  // 2) a "false calm" scare shortly after the player has actually typed a word.
+  // The second one is deliberately not tied to a fixed timestamp, so the
+  // player cannot learn a pattern from repeated games.
   useEffect(() => {
     if (gameState !== "PLAYING" || !isHalloweenActive()) {
-      if (halloweenScareTimerRef.current) { clearTimeout(halloweenScareTimerRef.current); halloweenScareTimerRef.current = null; }
+      if (halloweenScareTimerRef.current) {
+        clearTimeout(halloweenScareTimerRef.current);
+        halloweenScareTimerRef.current = null;
+      }
+      if (halloweenAnswerScareTimerRef.current) {
+        clearTimeout(halloweenAnswerScareTimerRef.current);
+        halloweenAnswerScareTimerRef.current = null;
+      }
       return;
     }
     if (halloweenScare) return;
+
     const preview = isHalloweenPreview();
     const min = preview ? 4000 : 10000;
     const max = preview ? 7500 : 50000;
     const delay = min + Math.floor(Math.random() * (max - min));
+
     halloweenScareTimerRef.current = setTimeout(() => {
       setHalloweenScare(getHalloweenScare(lang));
       halloweenScareTimerRef.current = null;
     }, delay);
+
     return () => {
-      if (halloweenScareTimerRef.current) { clearTimeout(halloweenScareTimerRef.current); halloweenScareTimerRef.current = null; }
+      if (halloweenScareTimerRef.current) {
+        clearTimeout(halloweenScareTimerRef.current);
+        halloweenScareTimerRef.current = null;
+      }
     };
   }, [gameState, round, lang, halloweenScare]);
+
+  // 🎃 "You were just typing..." surprise:
+  // once per round, after a player types a real answer (3+ characters),
+  // there is a chance that the game waits a little and then jumpscares them.
+  // This is intentionally independent from the clock and from STOP.
+  useEffect(() => {
+    if (
+      gameState !== "PLAYING" ||
+      !isHalloweenActive() ||
+      isDailyMode ||
+      halloweenScare ||
+      halloweenAnswerScareRoundRef.current === round
+    ) return;
+
+    const hasRealWord = Object.values(responses).some(
+      value => typeof value === "string" && value.trim().length >= 3
+    );
+    if (!hasRealWord) return;
+
+    // Roughly one in three eligible rounds. Preview is more frequent so it
+    // is easy to test; production remains genuinely occasional.
+    const chance = isHalloweenPreview() ? 0.72 : 0.32;
+    if (Math.random() > chance) {
+      halloweenAnswerScareRoundRef.current = round;
+      return;
+    }
+
+    halloweenAnswerScareRoundRef.current = round;
+    const minDelay = isHalloweenPreview() ? 900 : 1600;
+    const maxDelay = isHalloweenPreview() ? 2600 : 5200;
+    const delay = minDelay + Math.floor(Math.random() * (maxDelay - minDelay));
+
+    halloweenAnswerScareTimerRef.current = setTimeout(() => {
+      if (gameState === "PLAYING") {
+        setHalloweenScare(getHalloweenScare(lang));
+      }
+      halloweenAnswerScareTimerRef.current = null;
+    }, delay);
+
+    return () => {
+      if (halloweenAnswerScareTimerRef.current) {
+        clearTimeout(halloweenAnswerScareTimerRef.current);
+        halloweenAnswerScareTimerRef.current = null;
+      }
+    };
+  }, [responses, gameState, round, lang, halloweenScare, isDailyMode]);
 
   // Re-read categories when language changes (only if not daily mode)
   useEffect(() => {
@@ -467,6 +533,8 @@ export default function SoloGame() {
 
   const startGame = () => {
     if (halloweenScareTimerRef.current) clearTimeout(halloweenScareTimerRef.current);
+    if (halloweenAnswerScareTimerRef.current) clearTimeout(halloweenAnswerScareTimerRef.current);
+    halloweenAnswerScareRoundRef.current = null;
     setHalloweenScare(null);
     void trackAnalyticsEvent("game_start", { metadata: { mode: isDailyMode ? "daily" : "solo" } });
     // Snapshot the tutorial state at the moment the player presses Play so
@@ -544,6 +612,11 @@ export default function SoloGame() {
   const startRound = () => {
     // Reset per-round guards
     stoppedRef.current = false;
+    if (halloweenAnswerScareTimerRef.current) {
+      clearTimeout(halloweenAnswerScareTimerRef.current);
+      halloweenAnswerScareTimerRef.current = null;
+    }
+    halloweenAnswerScareRoundRef.current = null;
     resultsAppliedRef.current = false;
     // Clear previous round's payload so the RESULTS effect can never
     // accidentally re-apply stale scores from the prior round.
