@@ -341,6 +341,14 @@ export default function SoloGame() {
   useEffect(() => { bluffedCategoriesRef.current = bluffedCategories; }, [bluffedCategories]);
   useEffect(() => { currentLetterRef.current = currentLetter; }, [currentLetter]);
 
+  // Halloween preview diagnostic: show the scare as soon as SoloGame mounts.
+  // This bypasses round/timer logic so the preview proves the overlay itself works.
+  useEffect(() => {
+    if (!isHalloweenPreview()) return;
+    const timer = window.setTimeout(() => setHalloweenScare(getHalloweenScare(lang)), 250);
+    return () => window.clearTimeout(timer);
+  }, [lang]);
+
   // Re-read categories when language changes (only if not daily mode)
   useEffect(() => {
     if (!isDailyMode) {
