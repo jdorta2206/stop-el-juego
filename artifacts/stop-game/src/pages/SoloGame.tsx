@@ -1725,12 +1725,13 @@ export default function SoloGame() {
         <AnimatePresence mode="wait">
 
           {/* LOBBY */}
-          {gameState === "LOBBY" && (\n            <HalloweenBanner className="mb-3" />
+          {gameState === "LOBBY" && (
             <motion.div
               key="lobby"
               initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}
               className="flex-1 flex flex-col items-center justify-center text-center space-y-8"
             >
+              <HalloweenBanner className="mb-3" />
               <div>
                 <h2 className="text-4xl font-display font-bold mb-2">{t.home.soloVsAI}</h2>
                 {packId !== "classic" && (
