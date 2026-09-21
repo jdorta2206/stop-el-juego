@@ -43,7 +43,7 @@ import { usePersonalBest } from "@/hooks/usePersonalBest";
 import { useReviewPrompt, recordGamePlayed, recordScoreAndPercentile } from "@/hooks/useReviewPrompt";
 import { maybeShowInterstitial, recordInterstitialGameCompleted } from "@/lib/interstitialAd";
 import { ReviewPromptCard } from "@/components/ReviewPromptCard";
-import { applyHalloweenCategory, isHalloweenActive } from "@/lib/halloweenEvent";
+import { applyHalloweenCategory, isHalloweenActive, isHalloweenPreview } from "@/lib/halloweenEvent";
 import { HalloweenBanner } from "@/components/HalloweenBanner";
 import { HalloweenScareOverlay } from "@/components/HalloweenScare";
 import { getHalloweenScare, type HalloweenScare } from "@/lib/halloweenEvent";
@@ -529,17 +529,19 @@ export default function SoloGame() {
     if (gameState !== "PLAYING") return;
     if (!isHalloweenActive() || isDailyMode || isQuickMode || isChaosMode || isRandomMode) return;
 
-    const preview = import.meta.env.VITE_HALLOWEEN_PREVIEW === "true";
-    if (!preview && Math.random() >= 0.38) return;
+    const preview = isHalloweenPreview();
+    if (preview) {
+      // Preview must prove the overlay itself works, independently of timers
+      // or build-time environment variables.
+      setHalloweenScare(getHalloweenScare(lang));
+      return;
+    }
+    if (Math.random() >= 0.38) return;
 
-    // Preview is intentionally unmistakable: show after 1s and keep it
-    // visible until the player taps it. Production keeps the original timing.
-    const delay = preview ? 1000 : 9000 + Math.floor(Math.random() * 16000);
+    const delay = 9000 + Math.floor(Math.random() * 16000);
     halloweenScareTimerRef.current = setTimeout(() => {
       setHalloweenScare(getHalloweenScare(lang));
-      if (!preview) {
-        window.setTimeout(() => setHalloweenScare(null), 2600);
-      }
+      window.setTimeout(() => setHalloweenScare(null), 2600);
     }, delay);
 
     return () => {
