@@ -521,36 +521,12 @@ export default function SoloGame() {
     setGameState("SPINNING");
   };
 
-  // Halloween scare is scheduled when the actual round enters PLAYING.
-  // This avoids the previous timing race where the timer started during the
-  // lobby/card reveal and could be cleared before the player was playing.
+  // Halloween preview diagnostic: show the overlay as soon as SoloGame mounts.
+  // This intentionally bypasses game-state/timer logic so we can isolate rendering.
   useEffect(() => {
-    if (halloweenScareTimerRef.current) clearTimeout(halloweenScareTimerRef.current);
-    if (gameState !== "PLAYING") return;
-    if (!isHalloweenActive() || isDailyMode || isQuickMode || isChaosMode || isRandomMode) return;
-
-    const preview = isHalloweenPreview();
-    if (preview) {
-      // Preview must prove the overlay itself works, independently of timers
-      // or build-time environment variables.
-      setHalloweenScare(getHalloweenScare(lang));
-      return;
-    }
-    if (Math.random() >= 0.38) return;
-
-    const delay = 9000 + Math.floor(Math.random() * 16000);
-    halloweenScareTimerRef.current = setTimeout(() => {
-      setHalloweenScare(getHalloweenScare(lang));
-      window.setTimeout(() => setHalloweenScare(null), 2600);
-    }, delay);
-
-    return () => {
-      if (halloweenScareTimerRef.current) {
-        clearTimeout(halloweenScareTimerRef.current);
-        halloweenScareTimerRef.current = null;
-      }
-    };
-  }, [gameState, lang, isDailyMode, isQuickMode, isChaosMode, isRandomMode]);
+    if (!isHalloweenPreview()) return;
+    setHalloweenScare(getHalloweenScare(lang));
+  }, [lang]);
 
   const startRound = () => {
     // Reset per-round guards
