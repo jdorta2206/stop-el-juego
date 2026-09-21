@@ -12,7 +12,7 @@ import { FollowButton } from "@/components/FollowButton";
 import { Button, Card, Input, Progress } from "@/components/ui";
 import { useGetRoom, useSubmitRoomResults, getGetRoomQueryKey } from "@workspace/api-client-react";
 import { usePlayer } from "@/hooks/use-player";
-import { Share2, Play, ArrowLeft, Trophy, CheckCircle2, Circle, Volume2, VolumeX, Layers } from "lucide-react";
+import { Share2, Play, ArrowLeft, Trophy, CheckCircle2, Circle, Volume2, VolumeX, Layers, EyeOff } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { CATEGORIES_ES, getCurrentLang } from "@/lib/utils";
 import { useCustomPacks } from "@/lib/useCustomPacks";
