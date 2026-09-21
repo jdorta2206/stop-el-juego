@@ -14,6 +14,7 @@ import { useDisplayStreak } from "@/hooks/useDisplayStreak";
 import { useAchievements } from "@/hooks/useAchievements";
 import { StreakCalendarModal } from "@/components/StreakCalendar";
 import { FTUEWelcomeModal } from "@/components/FTUEWelcomeModal";
+import { FTUECompletionModal } from "@/components/FTUECompletionModal";
 import { useFTUE } from "@/hooks/useFTUE";
 import { AchievementToast } from "@/components/AchievementToast";
 import { useProgression, getLeague } from "@/hooks/useProgression";
@@ -50,6 +51,7 @@ export default function Home() {
   });
   const ftue = useFTUE();
   const [showFTUEWelcome, setShowFTUEWelcome] = useState(false);
+  const [showFTUECompletion, setShowFTUECompletion] = useState(false);
 
   // Open the FTUE welcome modal once on first ever visit (after a tiny delay
   // so the home page can render its hero animation first).
@@ -58,6 +60,18 @@ export default function Home() {
     const t = setTimeout(() => setShowFTUEWelcome(true), 600);
     return () => clearTimeout(t);
   }, [ftue.isFirstVisit]);
+
+  useEffect(() => {
+    if (!ftue.done || ftue.gamesPlayed < ftue.tutorialGamesTotal) return;
+    try {
+      if (localStorage.getItem("stop_ftue_unlock_seen") === "1") return;
+      localStorage.setItem("stop_ftue_unlock_seen", "1");
+      const id = window.setTimeout(() => setShowFTUECompletion(true), 450);
+      return () => window.clearTimeout(id);
+    } catch {
+      setShowFTUECompletion(true);
+    }
+  }, [ftue.done, ftue.gamesPlayed, ftue.tutorialGamesTotal]);
 
   // Deterministically evaluate streak milestones from local streak data on
   // every Home mount / streak change — independent of whether the player
@@ -114,6 +128,10 @@ export default function Home() {
           setShowFTUEWelcome(false);
           ftue.dismissWelcome();
         }}
+      />
+      <FTUECompletionModal
+        open={showFTUECompletion}
+        onClose={() => setShowFTUECompletion(false)}
       />
 
       {showPremiumModal && (
@@ -543,7 +561,7 @@ export default function Home() {
           className="w-full space-y-3"
         >
           {/* ⚡ HERO: JUGAR YA — auto-starts a quick match in 1 tap */}
-          <Link href="/solo?mode=quick&auto=1">
+          <Link href="/solo?auto=1&ftue=1">
             <motion.div
               whileHover={{ scale: 1.02, y: -2 }}
               whileTap={{ scale: 0.97 }}
@@ -568,7 +586,7 @@ export default function Home() {
               />
               <Zap className="w-7 h-7 fill-white relative z-10" />
               <span className="text-3xl relative z-10" style={{ textShadow: "0 2px 8px rgba(0,0,0,0.4)" }}>
-                ¡JUGAR YA!
+                {ftue.isInTutorial ? "¡JUGAR AHORA!" : "¡JUGAR YA!"}
               </span>
             </motion.div>
           </Link>
@@ -602,6 +620,37 @@ export default function Home() {
             </Link>
           )}
 
+          {ftue.isInTutorial ? (
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="w-full rounded-2xl p-4 text-center"
+              style={{
+                background: "linear-gradient(135deg, rgba(26,35,126,0.45), rgba(181,48,26,0.22))",
+                border: "1.5px solid rgba(249,168,37,0.35)",
+              }}
+            >
+              <p className="text-[#f9a825] text-xs font-black uppercase tracking-widest mb-1">
+                {t.ftue?.tutorialBadge ?? "Tutorial"}
+              </p>
+              <p className="text-white font-black text-lg">
+                {ftue.gamesPlayed === 0
+                  ? (t.ftue?.tutorialProgressFirst ?? "Tu primera partida empieza ahora")
+                  : (t.ftue?.tutorialProgressCount ?? "¡Muy bien! Ya llevas {n} de 3 partidas").replace("{n}", String(ftue.gamesPlayed))}
+              </p>
+              <p className="text-white/55 text-xs mt-1">
+                {t.ftue?.tutorialProgressSubtitle ?? "Completa 3 partidas para descubrir todo lo que ofrece STOP."}
+              </p>
+              <div className="flex justify-center gap-2 mt-4" aria-label={`Progreso ${ftue.gamesPlayed} de 3`}>
+                {[0,1,2].map((i) => (
+                  <span key={i} className="h-2.5 w-12 rounded-full" style={{
+                    background: i < ftue.gamesPlayed ? "linear-gradient(90deg, #f9a825, #dc2626)" : "rgba(255,255,255,0.12)",
+                  }} />
+                ))}
+              </div>
+            </motion.div>
+          ) : (
+          <>
           {/* Secondary: classic solo (with start screen, settings) */}
           <Link href="/solo">
             <motion.div
@@ -804,7 +853,9 @@ export default function Home() {
               </Link>
             ))}
           </div>
-        </motion.div>
+
+          </>
+          )}        </motion.div>
 
         {/* Mini Leaderboard */}
         {top3.length > 0 && (
