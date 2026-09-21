@@ -1,8 +1,18 @@
 import { useCallback, useEffect, useState } from "react";
 import { getApiUrl } from "@/lib/utils";
+import { isHalloweenPreview } from "@/lib/halloweenEvent";
 
 const API = getApiUrl();
 const TOKEN_KEY = "stop_session_token";
+
+const HALLOWEEN_PREVIEW_ITEMS: ShopItem[] = [
+  { id: "avatar_halloween_ghost", kind: "avatar", label: "Fantasmita", glyph: "👻", price: 1500 },
+  { id: "avatar_halloween_pumpkin", kind: "avatar", label: "Calabaza Maldita", glyph: "🎃", price: 2000 },
+  { id: "avatar_halloween_vampire", kind: "avatar", label: "Vampiro", glyph: "🧛", price: 2500 },
+  { id: "avatar_halloween_witch", kind: "avatar", label: "Brujita", glyph: "🧙‍♀️", price: 3000 },
+  { id: "frame_halloween_web", kind: "frame", label: "Marco Telaraña", glyph: "🕸️", price: 2500 },
+  { id: "bg_halloween_cemetery", kind: "background", label: "Fondo Cementerio", glyph: "🪦", price: 4000 },
+];
 
 function authHeaders(): Record<string, string> {
   if (typeof window === "undefined") return {};
@@ -64,6 +74,18 @@ export function useInventory(playerId?: string | null) {
   const [loading, setLoading] = useState(false);
 
   const refresh = useCallback(async () => {
+    if (isHalloweenPreview()) {
+      setData((current) => current ?? {
+        coins: 10000,
+        equipped: { avatar: null, frame: null, title: null, background: null },
+        owned: { avatars: [], frames: [], backgrounds: [] },
+        titles: [],
+        shop: HALLOWEEN_PREVIEW_ITEMS,
+        weeklyShop: [],
+        weeklyDeals: [],
+      });
+      return;
+    }
     if (!playerId) { setData(null); return; }
     setLoading(true);
     try {
@@ -79,6 +101,10 @@ export function useInventory(playerId?: string | null) {
   useEffect(() => { refresh(); }, [refresh]);
 
   const equip = useCallback(async (kind: EquipKind, value: string | null) => {
+    if (isHalloweenPreview()) {
+      setData((current) => current ? { ...current, equipped: { ...current.equipped, [kind]: value } } : current);
+      return { ok: true, preview: true };
+    }
     if (!playerId) return null;
     const res = await fetch(`${API}/api/inventory/equip`, {
       method: "POST",
@@ -95,6 +121,21 @@ export function useInventory(playerId?: string | null) {
   }, [playerId, refresh]);
 
   const buy = useCallback(async (itemId: string) => {
+    if (isHalloweenPreview() && itemId.includes("_halloween_")) {
+      setData((current) => {
+        if (!current) return current;
+        const item = current.shop.find((entry) => entry.id === itemId);
+        if (!item || current.coins < item.price) return current;
+        const ownedKey = item.kind === "avatar" ? "avatars" : item.kind === "frame" ? "frames" : "backgrounds";
+        if (current.owned[ownedKey].some((entry) => entry.id === itemId)) return current;
+        return {
+          ...current,
+          coins: current.coins - item.price,
+          owned: { ...current.owned, [ownedKey]: [...current.owned[ownedKey], item] },
+        };
+      });
+      return { ok: true, preview: true };
+    }
     if (!playerId) return null;
     const res = await fetch(`${API}/api/inventory/buy`, {
       method: "POST",
