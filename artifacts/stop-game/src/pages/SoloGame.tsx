@@ -44,7 +44,8 @@ import { useReviewPrompt, recordGamePlayed, recordScoreAndPercentile } from "@/h
 import { maybeShowInterstitial, recordInterstitialGameCompleted } from "@/lib/interstitialAd";
 import { ReviewPromptCard } from "@/components/ReviewPromptCard";
 import { applyHalloweenCategory, isHalloweenActive } from "@/lib/halloweenEvent";
-import { HalloweenScareOverlay, getHalloweenScare, type HalloweenScare } from "@/components/HalloweenScare";
+import { HalloweenScareOverlay } from "@/components/HalloweenScare";
+import { getHalloweenScare, type HalloweenScare } from "@/lib/halloweenEvent";
 
 function vibrate(pattern: number | number[]) {
   try { if (navigator.vibrate) navigator.vibrate(pattern); } catch {}
