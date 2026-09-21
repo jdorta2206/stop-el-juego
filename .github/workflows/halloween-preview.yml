@@ -1,9 +1,9 @@
-name: Halloween preview
+name: STOP onboarding preview
 
 on:
   push:
     branches:
-      - feature/halloween-2026
+      - feature/new-player-onboarding
   workflow_dispatch:
 
 permissions:
@@ -26,7 +26,7 @@ jobs:
           version: 10.26.1
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-      - name: Build Halloween preview
+      - name: Build onboarding preview
         env:
           VITE_HALLOWEEN_PREVIEW: 'true'
           VITE_API_URL: ''
@@ -35,7 +35,7 @@ jobs:
         run: test -s artifacts/stop-game/dist/index.html
       - name: Start preview server with production API proxy
         run: |
-          cat > /tmp/halloween-preview-server.py <<'PY'
+          cat > /tmp/stop-preview-server.py <<'PY'
           import http.client
           import os
           from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
@@ -92,7 +92,7 @@ jobs:
           os.chdir(DIST)
           ThreadingHTTPServer(("127.0.0.1",4173), Handler).serve_forever()
           PY
-          nohup python3 /tmp/halloween-preview-server.py >/tmp/preview-http.log 2>&1 &
+          nohup python3 /tmp/stop-preview-server.py >/tmp/preview-http.log 2>&1 &
           sleep 2
           curl -fsS http://127.0.0.1:4173/ >/dev/null
       - name: Start public preview tunnel
@@ -103,29 +103,27 @@ jobs:
           chmod +x /tmp/cloudflared
           nohup /tmp/cloudflared tunnel --no-autoupdate --logfile /tmp/cloudflared.log --url http://127.0.0.1:4173 >/tmp/cloudflared-stdout.log 2>&1 &
           sleep 8
+          URL=""
           for i in $(seq 1 45); do
             URL=$(grep -oE 'https://[^[:space:]]+trycloudflare[.]com' /tmp/cloudflared.log | head -1 || true)
-            if [ -n "$URL" ]; then
-              echo "HALLOWEEN_PREVIEW_URL=$URL"
-              break
-            fi
+            if [ -n "$URL" ]; then break; fi
             sleep 2
           done
-          test -n "${URL:-}" || { cat /tmp/cloudflared.log; exit 1; }
-          printf '%s\n' "$URL" > /tmp/halloween-preview-url.txt
+          test -n "$URL" || { cat /tmp/cloudflared.log; exit 1; }
+          printf '%s\n' "$URL" > /tmp/stop-onboarding-preview-url.txt
           echo "Preview URL: $URL"
           {
-            echo "## Halloween preview"
+            echo "## STOP onboarding preview"
             echo
             echo "**Preview URL:** $URL"
             echo
-            echo "This preview stays online while this workflow job is running."
-          } >> "$GITHUB_STEP_SUMMARY"
+            echo "Preview stays online while this workflow job is running."
+          } >> $GITHUB_STEP_SUMMARY
       - name: Publish preview URL
         uses: actions/upload-artifact@v4
         with:
-          name: halloween-preview-url
-          path: /tmp/halloween-preview-url.txt
+          name: stop-onboarding-preview-url
+          path: /tmp/stop-onboarding-preview-url.txt
           retention-days: 1
       - name: Keep preview available for manual testing
         run: sleep 10800
@@ -133,4 +131,4 @@ jobs:
         if: always()
         run: |
           pkill -f cloudflared || true
-          pkill -f halloween-preview-server.py || true
+          pkill -f stop-preview-server.py || true
