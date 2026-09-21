@@ -477,21 +477,6 @@ export default function SoloGame() {
     setRandomEvent(event);
     setRoundWon(null);
 
-    // Halloween scare: visual-only, rare, normal games only. It never
-    // changes score, timer, categories or gameplay rules.
-    if (isHalloweenActive() && !isDailyMode && !isQuickMode && !isChaosMode && !isRandomMode) {
-      // Preview mode is deterministic so Halloween can be tested before the real event.
-      // Production keeps the original 38% chance and 9–25s delay.
-      const preview = import.meta.env.VITE_HALLOWEEN_PREVIEW === "true";
-      if (preview || Math.random() < 0.38) {
-        const delay = preview ? 5000 : 9000 + Math.floor(Math.random() * 16000);
-        halloweenScareTimerRef.current = setTimeout(() => {
-          setHalloweenScare(getHalloweenScare(lang));
-          window.setTimeout(() => setHalloweenScare(null), 2600);
-        }, delay);
-      }
-    }
-
     if (isDailyMode) {
       setCurrentLetter(dailyLetter);
       const cats = dailyCategories.length > 0 ? dailyCategories : packCats();
@@ -535,6 +520,31 @@ export default function SoloGame() {
 
     setGameState("SPINNING");
   };
+
+  // Halloween scare is scheduled when the actual round enters PLAYING.
+  // This avoids the previous timing race where the timer started during the
+  // lobby/card reveal and could be cleared before the player was playing.
+  useEffect(() => {
+    if (halloweenScareTimerRef.current) clearTimeout(halloweenScareTimerRef.current);
+    if (gameState !== "PLAYING") return;
+    if (!isHalloweenActive() || isDailyMode || isQuickMode || isChaosMode || isRandomMode) return;
+
+    const preview = import.meta.env.VITE_HALLOWEEN_PREVIEW === "true";
+    if (!preview && Math.random() >= 0.38) return;
+
+    const delay = preview ? 3000 : 9000 + Math.floor(Math.random() * 16000);
+    halloweenScareTimerRef.current = setTimeout(() => {
+      setHalloweenScare(getHalloweenScare(lang));
+      window.setTimeout(() => setHalloweenScare(null), 2600);
+    }, delay);
+
+    return () => {
+      if (halloweenScareTimerRef.current) {
+        clearTimeout(halloweenScareTimerRef.current);
+        halloweenScareTimerRef.current = null;
+      }
+    };
+  }, [gameState, lang, isDailyMode, isQuickMode, isChaosMode, isRandomMode]);
 
   const startRound = () => {
     // Reset per-round guards
