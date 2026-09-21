@@ -480,8 +480,11 @@ export default function SoloGame() {
     // Halloween scare: visual-only, rare, normal games only. It never
     // changes score, timer, categories or gameplay rules.
     if (isHalloweenActive() && !isDailyMode && !isQuickMode && !isChaosMode && !isRandomMode) {
-      if (Math.random() < 0.38) {
-        const delay = 9000 + Math.floor(Math.random() * 16000);
+      // Preview mode is deterministic so Halloween can be tested before the real event.
+      // Production keeps the original 38% chance and 9–25s delay.
+      const preview = import.meta.env.VITE_HALLOWEEN_PREVIEW === "true";
+      if (preview || Math.random() < 0.38) {
+        const delay = preview ? 5000 : 9000 + Math.floor(Math.random() * 16000);
         halloweenScareTimerRef.current = setTimeout(() => {
           setHalloweenScare(getHalloweenScare(lang));
           window.setTimeout(() => setHalloweenScare(null), 2600);
