@@ -2066,6 +2066,20 @@ export default function SoloGame() {
                       >
                         {muted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
                       </button>
+                      {isHalloweenActive() && (
+                        <button
+                          onClick={() => {
+                            const next = !reducedHalloweenEffects;
+                            setReducedHalloweenEffects(next);
+                            setHalloweenReducedEffects(next);
+                          }}
+                          className="ml-1 text-white/40 hover:text-white/80 transition-colors"
+                          title={reducedHalloweenEffects ? "Activar efectos de Halloween" : "Reducir sustos y efectos intensos"}
+                          aria-label={reducedHalloweenEffects ? "Activar efectos de Halloween" : "Reducir sustos y efectos intensos"}
+                        >
+                          <EyeOff className="w-4 h-4" />
+                        </button>
+                      )}
                     </div>
                   </div>
                   {isRandomMode ? (
