@@ -29,6 +29,7 @@ jobs:
       - name: Build Halloween preview
         env:
           VITE_HALLOWEEN_PREVIEW: 'true'
+          VITE_API_URL: 'https://www.stopjuegodepalabras.com'
         run: pnpm --filter @workspace/stop-game build
       - name: Verify preview build
         run: test -s artifacts/stop-game/dist/index.html
