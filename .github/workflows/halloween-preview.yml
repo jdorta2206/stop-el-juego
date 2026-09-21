@@ -4,6 +4,10 @@ on:
   push:
     branches:
       - feature/halloween-2026
+      - feature/halloween-jumpscares-v2
+  pull_request:
+    branches:
+      - feature/halloween-2026
   workflow_dispatch:
 
 permissions:
