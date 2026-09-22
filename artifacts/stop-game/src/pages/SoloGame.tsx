@@ -385,9 +385,10 @@ export default function SoloGame() {
   }, [gameState, round, lang, halloweenScare]);
 
   // 🎃 "You were just typing..." surprise:
-  // once per round, after a player types a real answer (3+ characters),
-  // there is a chance that the game waits a little and then jumpscares them.
-  // This is intentionally independent from the clock and from STOP.
+  // once per round, after the player has paused typing a real answer,
+  // the game may wait a second random interval before the jumpscare.
+  // The short debounce is important on mobile: typing more characters must
+  // not cancel the scare that was armed for this round.
   useEffect(() => {
     if (
       gameState !== "PLAYING" ||
@@ -402,25 +403,39 @@ export default function SoloGame() {
     );
     if (!hasRealWord) return;
 
-    // Roughly one in three eligible rounds. Preview is more frequent so it
-    // is easy to test; production remains genuinely occasional.
-    const chance = isHalloweenPreview() ? 0.72 : 0.32;
-    if (Math.random() > chance) {
-      halloweenAnswerScareRoundRef.current = round;
-      return;
+    if (halloweenAnswerScareTimerRef.current) {
+      clearTimeout(halloweenAnswerScareTimerRef.current);
+      halloweenAnswerScareTimerRef.current = null;
     }
 
-    halloweenAnswerScareRoundRef.current = round;
-    const minDelay = isHalloweenPreview() ? 900 : 1600;
-    const maxDelay = isHalloweenPreview() ? 2600 : 5200;
-    const delay = minDelay + Math.floor(Math.random() * (maxDelay - minDelay));
-
+    // Wait until the player pauses typing. Preview is intentionally easier
+    // to trigger; production stays occasional.
+    const pauseMs = isHalloweenPreview() ? 650 : 900;
     halloweenAnswerScareTimerRef.current = setTimeout(() => {
-      if (gameState === "PLAYING") {
-        setHalloweenScare(getHalloweenScare(lang));
-      }
       halloweenAnswerScareTimerRef.current = null;
-    }, delay);
+
+      if (halloweenScare || gameState !== "PLAYING" || halloweenAnswerScareRoundRef.current === round) {
+        return;
+      }
+
+      const chance = isHalloweenPreview() ? 0.72 : 0.32;
+      if (Math.random() > chance) {
+        halloweenAnswerScareRoundRef.current = round;
+        return;
+      }
+
+      halloweenAnswerScareRoundRef.current = round;
+      const minDelay = isHalloweenPreview() ? 900 : 1600;
+      const maxDelay = isHalloweenPreview() ? 2600 : 5200;
+      const delay = minDelay + Math.floor(Math.random() * (maxDelay - minDelay));
+
+      halloweenAnswerScareTimerRef.current = setTimeout(() => {
+        if (gameState === "PLAYING") {
+          setHalloweenScare(getHalloweenScare(lang));
+        }
+        halloweenAnswerScareTimerRef.current = null;
+      }, delay);
+    }, pauseMs);
 
     return () => {
       if (halloweenAnswerScareTimerRef.current) {
