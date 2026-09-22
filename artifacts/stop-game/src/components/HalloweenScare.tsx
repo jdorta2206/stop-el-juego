@@ -141,97 +141,113 @@ function playScream() {
 
     const master = ctx.createGain();
     master.gain.setValueAtTime(0.0001, now);
-    master.gain.exponentialRampToValueAtTime(0.72, now + 0.018);
-    master.gain.exponentialRampToValueAtTime(0.0001, now + 1.45);
-    master.connect(ctx.destination);
+    master.gain.exponentialRampToValueAtTime(0.95, now + 0.025);
+    master.gain.exponentialRampToValueAtTime(0.0001, now + 1.75);
 
-    // Deep impact: short, non-rhythmic body under the scream.
-    const sub = ctx.createOscillator();
-    const subGain = ctx.createGain();
-    sub.type = "sine";
-    sub.frequency.setValueAtTime(78, now);
-    sub.frequency.exponentialRampToValueAtTime(31, now + 0.34);
-    subGain.gain.setValueAtTime(0.62, now);
-    subGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.42);
-    sub.connect(subGain).connect(master);
-    sub.start(now);
-    sub.stop(now + 0.45);
-
-    // Voiced scream: several harmonics make it sound like a human voice
-    // instead of broadband noise, while the pitch bends violently.
-    const screamBus = ctx.createGain();
-    screamBus.gain.setValueAtTime(0.0001, now);
-    screamBus.gain.exponentialRampToValueAtTime(0.82, now + 0.045);
-    screamBus.gain.setValueAtTime(0.68, now + 0.34);
-    screamBus.gain.exponentialRampToValueAtTime(0.0001, now + 1.34);
-    screamBus.connect(master);
-
-    const fundamental = ctx.createOscillator();
-    fundamental.type = "sawtooth";
-    fundamental.frequency.setValueAtTime(185, now + 0.02);
-    fundamental.frequency.exponentialRampToValueAtTime(365, now + 0.22);
-    fundamental.frequency.exponentialRampToValueAtTime(235, now + 0.62);
-    fundamental.frequency.exponentialRampToValueAtTime(155, now + 1.28);
-    fundamental.connect(screamBus);
-    fundamental.start(now);
-    fundamental.stop(now + 1.36);
-
-    const harmonic2 = ctx.createOscillator();
-    harmonic2.type = "sawtooth";
-    harmonic2.frequency.setValueAtTime(370, now + 0.02);
-    harmonic2.frequency.exponentialRampToValueAtTime(730, now + 0.22);
-    harmonic2.frequency.exponentialRampToValueAtTime(310, now + 1.28);
-    const h2Gain = ctx.createGain();
-    h2Gain.gain.value = 0.24;
-    harmonic2.connect(h2Gain).connect(screamBus);
-    harmonic2.start(now);
-    harmonic2.stop(now + 1.36);
-
-    // Moving vocal formants create the harsh "A/I" character of a scream.
-    const formantLow = ctx.createBiquadFilter();
-    formantLow.type = "bandpass";
-    formantLow.Q.value = 5.5;
-    formantLow.frequency.setValueAtTime(620, now);
-    formantLow.frequency.exponentialRampToValueAtTime(1050, now + 0.24);
-    formantLow.frequency.exponentialRampToValueAtTime(420, now + 1.22);
-
-    const formantHigh = ctx.createBiquadFilter();
-    formantHigh.type = "bandpass";
-    formantHigh.Q.value = 6;
-    formantHigh.frequency.setValueAtTime(1500, now);
-    formantHigh.frequency.exponentialRampToValueAtTime(2800, now + 0.20);
-    formantHigh.frequency.exponentialRampToValueAtTime(1100, now + 1.22);
-
-    // Feed the voiced source through both formants and blend them.
-    const voiceMix = ctx.createGain();
-    voiceMix.gain.value = 0.9;
-    screamBus.disconnect();
-    fundamental.connect(formantLow).connect(voiceMix);
-    fundamental.connect(formantHigh).connect(voiceMix);
-    harmonic2.connect(formantHigh);
-    voiceMix.connect(master);
-
-    // A tiny burst of breath/noise at the attack sells the sudden scream.
-    const breath = ctx.createBufferSource();
-    const breathBuffer = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.16), ctx.sampleRate);
-    const breathData = breathBuffer.getChannelData(0);
-    for (let i = 0; i < breathData.length; i++) {
-      const t = i / breathData.length;
-      breathData[i] = (Math.random() * 2 - 1) * Math.pow(1 - t, 2.8);
+    // Short room impulse: makes the scream feel like it is happening in a space,
+    // instead of sounding like a synthetic beep.
+    const convolver = ctx.createConvolver();
+    const impulse = ctx.createBuffer(2, Math.floor(ctx.sampleRate * 0.65), ctx.sampleRate);
+    for (let ch = 0; ch < impulse.numberOfChannels; ch++) {
+      const data = impulse.getChannelData(ch);
+      for (let i = 0; i < data.length; i++) {
+        data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / data.length, 3.8);
+      }
     }
-    breath.buffer = breathBuffer;
-    const breathFilter = ctx.createBiquadFilter();
-    breathFilter.type = "bandpass";
-    breathFilter.frequency.value = 2400;
-    breathFilter.Q.value = 1.2;
-    const breathGain = ctx.createGain();
-    breathGain.gain.setValueAtTime(0.32, now);
-    breathGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.15);
-    breath.connect(breathFilter).connect(breathGain).connect(master);
-    breath.start(now);
-    breath.stop(now + 0.17);
+    convolver.buffer = impulse;
+    const dry = ctx.createGain();
+    const wet = ctx.createGain();
+    dry.gain.value = 0.78;
+    wet.gain.value = 0.34;
+    master.connect(dry).connect(ctx.destination);
+    master.connect(convolver).connect(wet).connect(ctx.destination);
 
-    window.setTimeout(() => { try { void ctx.close(); } catch {} }, 1700);
+    // Human-like scream bed: shaped noise carries the breath/voice texture.
+    const noiseBuffer = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 1.55), ctx.sampleRate);
+    const noiseData = noiseBuffer.getChannelData(0);
+    for (let i = 0; i < noiseData.length; i++) {
+      const t = i / noiseData.length;
+      const attack = Math.min(1, t * 34);
+      const release = Math.pow(1 - t, 1.8);
+      noiseData[i] = (Math.random() * 2 - 1) * attack * release;
+    }
+    const noise = ctx.createBufferSource();
+    noise.buffer = noiseBuffer;
+
+    const screamFilter = ctx.createBiquadFilter();
+    screamFilter.type = "bandpass";
+    screamFilter.Q.value = 2.2;
+    screamFilter.frequency.setValueAtTime(1250, now);
+    screamFilter.frequency.exponentialRampToValueAtTime(2450, now + 0.24);
+    screamFilter.frequency.exponentialRampToValueAtTime(1550, now + 0.72);
+    screamFilter.frequency.exponentialRampToValueAtTime(900, now + 1.42);
+
+    const noiseGain = ctx.createGain();
+    noiseGain.gain.setValueAtTime(0.0001, now);
+    noiseGain.gain.exponentialRampToValueAtTime(0.72, now + 0.035);
+    noiseGain.gain.exponentialRampToValueAtTime(0.34, now + 0.82);
+    noiseGain.gain.exponentialRampToValueAtTime(0.0001, now + 1.5);
+    noise.connect(screamFilter).connect(noiseGain).connect(master);
+    noise.start(now);
+    noise.stop(now + 1.58);
+
+    // Vocal resonance: restrained sine components so the result is voiced,
+    // not a buzzy sawtooth or a rhythmic "spring" sound.
+    const voice = ctx.createOscillator();
+    voice.type = "sine";
+    voice.frequency.setValueAtTime(205, now);
+    voice.frequency.exponentialRampToValueAtTime(390, now + 0.22);
+    voice.frequency.exponentialRampToValueAtTime(275, now + 0.72);
+    voice.frequency.exponentialRampToValueAtTime(170, now + 1.38);
+    const voiceGain = ctx.createGain();
+    voiceGain.gain.setValueAtTime(0.0001, now);
+    voiceGain.gain.exponentialRampToValueAtTime(0.32, now + 0.04);
+    voiceGain.gain.exponentialRampToValueAtTime(0.0001, now + 1.45);
+    voice.connect(voiceGain).connect(master);
+    voice.start(now);
+    voice.stop(now + 1.5);
+
+    const formant1 = ctx.createBiquadFilter();
+    formant1.type = "bandpass";
+    formant1.Q.value = 7;
+    formant1.frequency.setValueAtTime(520, now);
+    formant1.frequency.exponentialRampToValueAtTime(1180, now + 0.24);
+    formant1.frequency.exponentialRampToValueAtTime(430, now + 1.35);
+
+    const formant2 = ctx.createBiquadFilter();
+    formant2.type = "bandpass";
+    formant2.Q.value = 8;
+    formant2.frequency.setValueAtTime(1450, now);
+    formant2.frequency.exponentialRampToValueAtTime(3050, now + 0.22);
+    formant2.frequency.exponentialRampToValueAtTime(1150, now + 1.3);
+
+    const voiced = ctx.createGain();
+    voiced.gain.value = 0.8;
+    voice.connect(formant1).connect(voiced);
+    voice.connect(formant2).connect(voiced);
+    voiced.connect(master);
+
+    // Very short breath/impact at the exact reveal frame.
+    const attackBuffer = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.11), ctx.sampleRate);
+    const attackData = attackBuffer.getChannelData(0);
+    for (let i = 0; i < attackData.length; i++) {
+      const t = i / attackData.length;
+      attackData[i] = (Math.random() * 2 - 1) * Math.pow(1 - t, 3.2);
+    }
+    const attack = ctx.createBufferSource();
+    attack.buffer = attackBuffer;
+    const attackFilter = ctx.createBiquadFilter();
+    attackFilter.type = "bandpass";
+    attackFilter.frequency.value = 1800;
+    attackFilter.Q.value = 1.4;
+    const attackGain = ctx.createGain();
+    attackGain.gain.setValueAtTime(0.65, now);
+    attackGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.11);
+    attack.connect(attackFilter).connect(attackGain).connect(master);
+    attack.start(now);
+    attack.stop(now + 0.12);
+
+    window.setTimeout(() => { try { void ctx.close(); } catch {} }, 2200);
   } catch {}
 }
 
