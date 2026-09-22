@@ -1,4 +1,5 @@
 name: Halloween preview
+# Preview retrigger: procedural horror canvas validation
 
 on:
   push:
