@@ -1,112 +1,29 @@
 import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import type { HalloweenScare } from "@/lib/halloweenEvent";
-
-function PhotographicHorror({ reduced, variant }: { reduced: boolean; variant: string }) {
-  // Original realistic horror-clown portrait: pallid skin, cracked makeup,
-  // predatory eyes and an unnaturally wide grin. It is not a copy of any
-  // existing film character.
-  const seed = variant === "clown" ? 71 : variant === "nightmare" ? 83 : variant === "specter" ? 97 : 109;
-
-  return (
-    <motion.svg
-      viewBox="0 0 900 1200"
-      preserveAspectRatio="xMidYMid slice"
-      className="h-full w-full"
-      aria-hidden="true"
-      animate={reduced ? { scale: 1 } : { scale: [1.18, 1.01, 1.09, 1.16] }}
-      transition={reduced ? { duration: 1.2 } : { duration: 1.62, times: [0, .12, .7, 1], ease: "easeOut" }}
-    >
-      <defs>
-        <radialGradient id="clownNight"><stop offset="0%" stopColor="#171112"/><stop offset="58%" stopColor="#030203"/><stop offset="100%" stopColor="#000"/></radialGradient>
-        <radialGradient id="clownSkin" cx="45%" cy="35%">
-          <stop offset="0%" stopColor="#eee8df"/><stop offset="32%" stopColor="#c9c0b7"/><stop offset="63%" stopColor="#756761"/><stop offset="100%" stopColor="#171014"/>
-        </radialGradient>
-        <radialGradient id="clownSocket"><stop offset="0%" stopColor="#000"/><stop offset="78%" stopColor="#090305"/><stop offset="100%" stopColor="#381016"/></radialGradient>
-        <radialGradient id="clownIris"><stop offset="0%" stopColor="#fff"/><stop offset="18%" stopColor="#e7d5c7"/><stop offset="43%" stopColor="#9b171c"/><stop offset="100%" stopColor="#120001"/></radialGradient>
-        <linearGradient id="clownBlood" x1="0" y1="0" x2="0" y2="1"><stop stopColor="#d00f19"/><stop offset="1" stopColor="#260004"/></linearGradient>
-        <filter id="clownGrain"><feTurbulence type="fractalNoise" baseFrequency=".085" numOctaves="5" seed={seed}/><feColorMatrix values="1 0 0 0 0  0 .72 0 0 0  0 0 .72 0 0  0 0 0 .36 0"/><feBlend in="SourceGraphic" mode="multiply"/></filter>
-        <filter id="clownWarp"><feTurbulence type="fractalNoise" baseFrequency=".014" numOctaves="2" seed={seed+3} result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale={reduced ? 2 : 6}/></filter>
-        <filter id="clownBlur"><feGaussianBlur stdDeviation="14"/></filter>
-        <filter id="clownGlow"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-      </defs>
-
-      <rect width="900" height="1200" fill="url(#clownNight)"/>
-      <ellipse cx="450" cy="640" rx="430" ry="660" fill="#000" opacity=".92" filter="url(#clownBlur)"/>
-
-      <g filter="url(#clownWarp)">
-        <ellipse cx="450" cy="640" rx="405" ry="625" fill="url(#clownSkin)"/>
-
-        <g filter="url(#clownGrain)">
-          {/* Receding dark hair / clown silhouette */}
-          <path d="M35 520 C20 250 130 35 310 115 C365 20 535 20 590 115 C780 40 900 255 865 520 L790 430 C755 300 690 245 600 250 C540 175 360 175 300 250 C205 250 135 330 110 465Z" fill="#090609"/>
-          <path d="M70 300 C95 105 250 45 355 125 C300 160 265 245 235 335Z" fill="#17070b"/>
-          <path d="M830 300 C805 105 650 45 545 125 C600 160 635 245 665 335Z" fill="#17070b"/>
-
-          {/* cracked white makeup */}
-          <path d="M165 395 C255 285 350 270 450 315 C550 270 650 285 735 395 L770 700 C690 770 600 790 450 770 C300 790 210 770 130 700Z" fill="#ddd7d0" opacity=".92"/>
-          <path d="M200 365 C275 315 350 315 410 345 M490 345 C560 310 650 320 705 375" fill="none" stroke="#5b151b" strokeWidth="16" strokeLinecap="round"/>
-
-          {/* black/red eye makeup, asymmetric */}
-          <path d="M125 450 C180 365 305 355 405 445 C365 585 245 640 155 565 C120 535 110 490 125 450Z" fill="url(#clownSocket)"/>
-          <path d="M495 440 C610 350 755 370 790 470 C800 555 720 625 610 600 C540 585 505 520 495 440Z" fill="url(#clownSocket)"/>
-          <path d="M175 420 C230 345 320 345 390 405 L365 440 C295 405 235 405 185 460Z" fill="#120207"/>
-          <path d="M520 405 C600 335 705 350 760 425 L730 465 C665 405 600 405 535 445Z" fill="#120207"/>
-
-          {/* eyes: human-looking, fixed, wet */}
-          <ellipse cx="285" cy="495" rx="58" ry="50" fill="url(#clownIris)" filter="url(#clownGlow)"/>
-          <ellipse cx="650" cy="490" rx="50" ry="44" fill="url(#clownIris)" filter="url(#clownGlow)"/>
-          <ellipse cx="292" cy="500" rx="12" ry="31" fill="#000"/>
-          <ellipse cx="657" cy="494" rx="11" ry="28" fill="#000"/>
-          <circle cx="268" cy="478" r="8" fill="#fff"/>
-          <circle cx="640" cy="477" r="7" fill="#fff"/>
-
-          {/* classic red vertical makeup marks */}
-          {variant === "clown" && <path d="M208 395 C220 455 218 545 185 625" fill="none" stroke="#9e1017" strokeWidth="24" strokeLinecap="round"/>}
-          {variant === "clown" && <path d="M690 392 C678 455 681 550 718 632" fill="none" stroke="#9e1017" strokeWidth="24" strokeLinecap="round"/>}
-
-          {/* long red clown nose, wet and disturbing */}
-          <ellipse cx="455" cy="625" rx={variant === "clown" ? 58 : 38} ry={variant === "clown" ? 52 : 28} fill={variant === "clown" ? "#8f1018" : "#26161a"} stroke="#3b0408" strokeWidth="13"/>
-          <ellipse cx="438" cy="610" rx="14" ry="9" fill="#f08b86" opacity=".75"/>
-
-          {/* smile makeup stretching past the real mouth */}
-          <path d="M185 735 C280 655 365 690 450 735 C535 690 625 655 720 735" fill="none" stroke="#8f0d15" strokeWidth="31" strokeLinecap="round"/>
-          <path d="M190 748 C275 690 355 715 450 760 C545 715 625 690 710 748" fill="none" stroke="#350206" strokeWidth="20" strokeLinecap="round"/>
-
-          {/* huge black mouth with irregular human teeth */}
-          <path d="M190 755 C275 690 365 715 450 765 C535 715 625 690 710 755 C690 940 590 1020 450 1015 C310 1020 210 940 190 755Z" fill="#020102" stroke="#5c080e" strokeWidth="18"/>
-          <path d="M220 765 C305 735 365 760 450 800 C535 760 595 735 680 765" fill="none" stroke="#b4141c" strokeWidth="19"/>
-          <g fill="#e2ddd0">
-            <path d="M235 770 l28 94 30-90 25 102 30-100 28 110 30-112 30 118 30-120 30 110 30-108 29 98 30-92 29 82 26-75"/>
-          </g>
-          <path d="M280 930 C350 895 550 900 620 932" fill="none" stroke="#721018" strokeWidth="16"/>
-
-          {/* cracked makeup, veins and blood */}
-          <g fill="none" stroke="#3a1518" strokeLinecap="round">
-            <path d="M155 270 L205 350 L175 420 L225 470" strokeWidth="9"/>
-            <path d="M745 270 L695 350 L725 420 L675 470" strokeWidth="9"/>
-            <path d="M360 205 L395 285 L365 345" strokeWidth="7"/>
-            <path d="M540 205 L505 285 L535 345" strokeWidth="7"/>
-            <path d="M115 650 C175 690 135 735 180 780" strokeWidth="8"/>
-            <path d="M785 650 C725 690 765 735 720 780" strokeWidth="8"/>
-          </g>
-          <path d="M180 580 C165 680 220 715 205 850" fill="none" stroke="url(#clownBlood)" strokeWidth="12"/>
-          <path d="M720 580 C735 680 680 715 695 850" fill="none" stroke="url(#clownBlood)" strokeWidth="12"/>
-
-          {/* saliva */}<path d="M300 895 C300 945 292 975 305 1010 M600 895 C600 945 608 975 595 1010" stroke="#c9c2ba" strokeWidth="5" opacity=".5"/>
-        </g>
-      </g>
-
-      <rect width="900" height="1200" fill="none" stroke="#000" strokeWidth="180" opacity=".86"/>
-      {!reduced && <motion.g animate={{ opacity:[0,.28,0], x:[0,-7,5,0] }} transition={{ duration:.36, repeat:2 }}>
-        <path d="M0 290H900 M0 294H900 M0 700H900 M0 704H900 M0 930H900 M0 934H900" stroke="#fff" strokeWidth="2" opacity=".13"/>
-      </motion.g>}
-    </motion.svg>
-  );
-}
+import { HALLOWEEN_SCARE_IMAGE } from "@/lib/halloweenScareImage";
 
 function HorrorFace({ reduced, variant }: { reduced: boolean; variant: string }) {
-  return <PhotographicHorror reduced={reduced} variant={variant} />;
+  return (
+    <motion.div
+      className="absolute inset-0 overflow-hidden bg-black"
+      animate={reduced ? { scale: 1 } : { scale: [1.08, 1, 1.04, 1.08] }}
+      transition={reduced ? { duration: 1.2 } : { duration: 1.7, times: [0, .12, .72, 1], ease: "easeOut" }}
+    >
+      <motion.img
+        src={HALLOWEEN_SCARE_IMAGE}
+        alt=""
+        aria-hidden="true"
+        draggable={false}
+        className="absolute inset-0 h-full w-full object-cover select-none pointer-events-none"
+        style={{ filter: reduced ? "brightness(.55) contrast(1.05) saturate(.75)" : "brightness(.7) contrast(1.25) saturate(1.2)" }}
+        animate={reduced ? { scale: 1 } : { scale: [1.12, 1, 1.08], x: [0, -10, 7, 0], y: [0, 4, -3, 0] }}
+        transition={reduced ? { duration: 1.2 } : { duration: 1.7, times: [0, .15, .72], ease: "easeOut" }}
+      />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_22%,rgba(0,0,0,.78)_78%,#000_100%)] pointer-events-none" />
+      {!reduced && <motion.div className="absolute inset-0 bg-red-950/30 pointer-events-none" animate={{ opacity: [0, .7, .18, 0] }} transition={{ duration: .62, times: [0, .12, .42, 1] }} />}
+    </motion.div>
+  );
 }
 
 function playScream() {
@@ -288,7 +205,7 @@ export function HalloweenScareOverlay({
         style={{ background: "repeating-linear-gradient(0deg, rgba(255,255,255,.08) 0 1px, transparent 1px 6px)" }}
       />
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-        <div className="relative h-[76vh] w-[92vw] max-w-[560px]">
+        <div className="relative h-full w-full max-w-none">
           <HorrorFace reduced={reduced} variant={scare.variant} />
         </div>
       </div>
