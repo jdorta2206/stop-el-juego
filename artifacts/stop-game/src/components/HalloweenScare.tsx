@@ -2,78 +2,217 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import type { HalloweenScare } from "@/lib/halloweenEvent";
 
-function Ghost({ reduced }: { reduced: boolean }) {
-  return (
-    <div className="relative h-full w-full">
-      <motion.div
-        className="absolute left-[10%] right-[10%] top-[8%] bottom-[0] rounded-[48%_52%_22%_22%] bg-gradient-to-b from-slate-200 via-slate-500 to-slate-950 shadow-[0_0_90px_rgba(220,230,255,.42)]"
-        animate={reduced ? { y: 0 } : { y: [18, -4, 6, 0], x: [0, -8, 8, 0] }}
-        transition={{ duration: .72, ease: "easeOut" }}
-      >
-        <div className="absolute left-[14%] top-[62%] h-[28%] w-[22%] rounded-full bg-black/80" />
-        <div className="absolute right-[14%] top-[62%] h-[28%] w-[22%] rounded-full bg-black/80" />
-        <div className="absolute left-[29%] top-[30%] h-[17%] w-[19%] rounded-full bg-black shadow-[0_0_26px_#f8fafc]" />
-        <div className="absolute right-[29%] top-[30%] h-[17%] w-[19%] rounded-full bg-black shadow-[0_0_26px_#f8fafc]" />
-        <motion.div
-          className="absolute left-[38%] top-[51%] h-[24%] w-[24%] rounded-[50%] bg-black"
-          animate={reduced ? { scale: 1 } : { scale: [1, 1.18, .96, 1.08, 1] }}
-          transition={{ duration: .55 }}
-        />
-        <div className="absolute bottom-[-3%] left-[5%] right-[5%] h-[18%] bg-slate-950 [clip-path:polygon(0_0,8%_55%,18%_20%,29%_70%,40%_18%,51%_68%,62%_20%,74%_66%,86%_18%,100%_55%,100%_100%,0_100%)]" />
-      </motion.div>
-    </div>
-  );
+function PhotographicHorror({ reduced }: { reduced: boolean }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    let frame = 0;
+    let raf = 0;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+    const resize = () => {
+      const w = Math.max(1, canvas.clientWidth);
+      const h = Math.max(1, canvas.clientHeight);
+      canvas.width = Math.floor(w * dpr);
+      canvas.height = Math.floor(h * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    };
+
+    resize();
+    window.addEventListener("resize", resize);
+
+    const noise = document.createElement("canvas");
+    noise.width = 180;
+    noise.height = 180;
+    const nctx = noise.getContext("2d");
+    if (nctx) {
+      const img = nctx.createImageData(noise.width, noise.height);
+      for (let i = 0; i < img.data.length; i += 4) {
+        const v = 70 + Math.random() * 95;
+        img.data[i] = v;
+        img.data[i + 1] = v * 0.96;
+        img.data[i + 2] = v * 0.9;
+        img.data[i + 3] = 18 + Math.random() * 25;
+      }
+      nctx.putImageData(img, 0, 0);
+    }
+
+    const draw = () => {
+      frame += 1;
+      const w = canvas.clientWidth;
+      const h = canvas.clientHeight;
+      const t = Math.min(frame / (reduced ? 80 : 48), 1);
+      const pulse = reduced ? 0 : Math.sin(frame * 0.55) * (1 - t) * 0.018;
+      const zoom = reduced ? 1 : 1.03 + t * 0.15 + pulse;
+
+      ctx.save();
+      ctx.clearRect(0, 0, w, h);
+      ctx.translate(w / 2, h / 2);
+      ctx.scale(zoom, zoom);
+      ctx.translate(-w / 2, -h / 2);
+
+      const bg = ctx.createRadialGradient(w * .5, h * .46, h * .05, w * .5, h * .5, h * .72);
+      bg.addColorStop(0, "#160909");
+      bg.addColorStop(.45, "#050303");
+      bg.addColorStop(1, "#000");
+      ctx.fillStyle = bg;
+      ctx.fillRect(0, 0, w, h);
+
+      const cx = w * .5;
+      const cy = h * .5;
+      const rx = w * .47;
+      const ry = h * .60;
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+      ctx.clip();
+
+      const skin = ctx.createRadialGradient(cx - rx * .18, cy - ry * .34, ry * .05, cx, cy, ry * 1.05);
+      skin.addColorStop(0, "#d7c8bc");
+      skin.addColorStop(.28, "#8f817b");
+      skin.addColorStop(.58, "#403936");
+      skin.addColorStop(.82, "#161313");
+      skin.addColorStop(1, "#030303");
+      ctx.fillStyle = skin;
+      ctx.fillRect(cx - rx, cy - ry, rx * 2, ry * 2);
+
+      if (nctx) {
+        ctx.globalAlpha = .42;
+        ctx.globalCompositeOperation = "multiply";
+        ctx.fillStyle = ctx.createPattern(noise, "repeat") || "#777";
+        ctx.fillRect(cx - rx, cy - ry, rx * 2, ry * 2);
+        ctx.globalCompositeOperation = "source-over";
+        ctx.globalAlpha = 1;
+      }
+
+      const socket = (x: number, y: number, rw: number, rh: number, tilt: number) => {
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(tilt);
+        const g = ctx.createRadialGradient(0, 0, rh * .08, 0, 0, rh);
+        g.addColorStop(0, "#000");
+        g.addColorStop(.58, "#020202");
+        g.addColorStop(.82, "#180404");
+        g.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, rw, rh, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      };
+
+      socket(cx - rx * .36, cy - ry * .18, rx * .28, ry * .20, -.10);
+      socket(cx + rx * .36, cy - ry * .20, rx * .30, ry * .22, .12);
+
+      const eye = (x: number, y: number, r: number, side: number) => {
+        const g = ctx.createRadialGradient(x - r * .2, y - r * .2, r * .05, x, y, r);
+        g.addColorStop(0, "#fff");
+        g.addColorStop(.24, "#e8e0d5");
+        g.addColorStop(.5, "#5e0505");
+        g.addColorStop(.78, "#120000");
+        g.addColorStop(1, "#000");
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.ellipse(x, y, r * (side > 0 ? .95 : 1.08), r, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "#000";
+        ctx.beginPath();
+        ctx.ellipse(x + side * r * .16, y + r * .05, r * .25, r * .58, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "rgba(255,255,255,.8)";
+        ctx.beginPath();
+        ctx.arc(x - side * r * .08, y - r * .25, r * .07, 0, Math.PI * 2);
+        ctx.fill();
+      };
+
+      eye(cx - rx * .35, cy - ry * .18, rx * .09, -1);
+      eye(cx + rx * .36, cy - ry * .20, rx * .085, 1);
+
+      const nose = ctx.createLinearGradient(cx - rx * .08, cy - ry * .05, cx + rx * .08, cy + ry * .18);
+      nose.addColorStop(0, "rgba(20,10,10,.2)");
+      nose.addColorStop(.5, "rgba(0,0,0,.8)");
+      nose.addColorStop(1, "rgba(80,20,20,.25)");
+      ctx.fillStyle = nose;
+      ctx.beginPath();
+      ctx.moveTo(cx - rx * .09, cy - ry * .03);
+      ctx.lineTo(cx + rx * .09, cy - ry * .02);
+      ctx.lineTo(cx + rx * .12, cy + ry * .22);
+      ctx.lineTo(cx - rx * .13, cy + ry * .22);
+      ctx.closePath();
+      ctx.fill();
+
+      const mouthY = cy + ry * .30;
+      const mouth = ctx.createRadialGradient(cx, mouthY - ry * .02, 1, cx, mouthY, rx * .40);
+      mouth.addColorStop(0, "#120000");
+      mouth.addColorStop(.55, "#030000");
+      mouth.addColorStop(1, "#000");
+      ctx.fillStyle = mouth;
+      ctx.beginPath();
+      ctx.ellipse(cx, mouthY, rx * .42, ry * .25, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = "rgba(170,20,20,.65)";
+      ctx.lineWidth = Math.max(2, rx * .012);
+      ctx.beginPath();
+      ctx.moveTo(cx - rx * .38, mouthY - ry * .02);
+      ctx.quadraticCurveTo(cx, mouthY + ry * .10, cx + rx * .40, mouthY - ry * .04);
+      ctx.stroke();
+
+      for (let i = 0; i < 13; i++) {
+        const tx = cx - rx * .34 + i * rx * .056;
+        const ty = mouthY - ry * .13 + (i % 2) * ry * .018;
+        ctx.fillStyle = i % 3 === 0 ? "#c8c0b8" : "#e5ded6";
+        ctx.beginPath();
+        ctx.moveTo(tx, ty);
+        ctx.lineTo(tx + rx * .025, ty + ry * .13);
+        ctx.lineTo(tx + rx * .05, ty);
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      ctx.strokeStyle = "rgba(45,0,0,.8)";
+      ctx.lineWidth = Math.max(1, rx * .008);
+      for (let i = 0; i < 9; i++) {
+        const x = cx - rx * .40 + i * rx * .10;
+        ctx.beginPath();
+        ctx.moveTo(x, cy - ry * .54);
+        ctx.bezierCurveTo(x - 8, cy - ry * .35, x + 7, cy - ry * .22, x - 3, cy - ry * .06);
+        ctx.stroke();
+      }
+
+      ctx.restore();
+
+      const vignette = ctx.createRadialGradient(cx, cy, h * .10, cx, cy, h * .70);
+      vignette.addColorStop(0, "rgba(0,0,0,0)");
+      vignette.addColorStop(.65, "rgba(0,0,0,.18)");
+      vignette.addColorStop(1, "rgba(0,0,0,.95)");
+      ctx.fillStyle = vignette;
+      ctx.fillRect(0, 0, w, h);
+
+      ctx.restore();
+
+      if (frame < (reduced ? 82 : 105)) raf = requestAnimationFrame(draw);
+    };
+
+    raf = requestAnimationFrame(draw);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("resize", resize);
+    };
+  }, [reduced]);
+
+  return <canvas ref={canvasRef} className="h-full w-full" aria-hidden="true" />;
 }
 
-function Clown({ reduced }: { reduced: boolean }) {
-  return (
-    <div className="relative h-full w-full">
-      <motion.div
-        className="absolute left-[4%] right-[4%] top-[3%] bottom-[-2%] overflow-hidden rounded-[46%_54%_49%_51%] border border-white/10"
-        style={{
-          background: "radial-gradient(ellipse at 48% 24%,rgba(255,255,255,.55),transparent 12%),radial-gradient(ellipse at 28% 52%,rgba(70,0,0,.45),transparent 23%),radial-gradient(ellipse at 72% 54%,rgba(90,0,0,.4),transparent 25%),radial-gradient(ellipse at 50% 72%,rgba(0,0,0,.72),transparent 34%),linear-gradient(105deg,#d4d4d4,#f1f1f1 25%,#9b9b9b 52%,#e7e7e7 72%,#666)",
-          boxShadow: "0 0 90px rgba(0,0,0,.95),0 0 150px rgba(120,0,0,.38)",
-        }}
-        animate={reduced ? { scale: 1 } : { scale: [1.12,1,1.035,1.015], x: [14,0,-5,0], rotate: [1.5,0,-.7,0] }}
-        transition={{ duration: .72, ease: "easeOut" }}
-      >
-        <div className="absolute left-[8%] top-[20%] h-[32%] w-[36%] rounded-[50%] bg-[radial-gradient(ellipse,#020202_0%,#090909_42%,#420000_65%,transparent_76%)] rotate-[-8deg]" />
-        <div className="absolute right-[8%] top-[19%] h-[33%] w-[36%] rounded-[50%] bg-[radial-gradient(ellipse,#020202_0%,#090909_42%,#420000_65%,transparent_76%)] rotate-[8deg]" />
-        <motion.div className="absolute left-[25%] top-[34%] h-[7%] w-[8%] rounded-full bg-white shadow-[0_0_18px_6px_rgba(255,255,255,.7)]" animate={reduced ? {} : { scale: [1,.35,1] }} transition={{ duration: .38, repeat: 1 }} />
-        <motion.div className="absolute right-[25%] top-[32%] h-[7%] w-[8%] rounded-full bg-white shadow-[0_0_18px_6px_rgba(255,255,255,.7)]" animate={reduced ? {} : { scale: [1,.35,1] }} transition={{ duration: .38, repeat: 1 }} />
-        <div className="absolute left-[17%] top-[7%] h-[35%] w-[20%] bg-[radial-gradient(ellipse,#650000,#180000_55%,transparent_72%)] rotate-[-22deg]" />
-        <div className="absolute right-[17%] top-[7%] h-[35%] w-[20%] bg-[radial-gradient(ellipse,#650000,#180000_55%,transparent_72%)] rotate-[22deg]" />
-        <div className="absolute left-[43%] top-[39%] h-[12%] w-[15%] rounded-[48%] bg-[radial-gradient(circle_at_40%_35%,#551010,#210000_58%,#030303)] shadow-[0_0_28px_rgba(150,0,0,.4)]" />
-        <motion.div className="absolute left-[11%] right-[11%] top-[51%] h-[40%] overflow-hidden rounded-[48%_52%_55%_45%] border-[5px] border-black bg-[radial-gradient(ellipse_at_50%_15%,#3a0000,#050000_48%,#000)]" animate={reduced ? { scale: 1 } : { scale: [1,1.08,.99,1.04,1] }} transition={{ duration: .58 }}>
-          <div className="absolute left-[7%] right-[7%] top-[8%] h-[17%] rounded-full bg-[#e9e9e4]" />
-          <div className="absolute left-[10%] right-[10%] top-[33%] h-[15%] rounded-full bg-[#cfcfca]" />
-          <div className="absolute left-[12%] right-[12%] bottom-[8%] h-[28%] bg-gradient-to-b from-red-950 to-black" />
-          {Array.from({ length: 9 }).map((_,i)=><span key={i} className="absolute top-[10%] h-[17%] w-[7%] bg-[#eee] shadow-[0_2px_4px_rgba(0,0,0,.7)]" style={{ left: (11+i*9.5)+"%", transform: "rotate("+(i%2?5:-4)+"deg)" }} />)}
-        </motion.div>
-        <div className="absolute left-[8%] top-[52%] h-[30%] w-[3px] rotate-[28deg] bg-red-950/80" />
-        <div className="absolute right-[8%] top-[49%] h-[31%] w-[3px] rotate-[-25deg] bg-red-950/80" />
-      </motion.div>
-    </div>
-  );
-}
-
-function HorrorFace({ id, reduced }: { id: HalloweenScare["id"]; reduced: boolean }) {
-  if (id === "ghost") return <Ghost reduced={reduced} />;
-  if (id === "clown") return <Clown reduced={reduced} />;
-
-  return (
-    <div className="relative h-full w-full">
-      <motion.div
-        className="absolute inset-[7%] rounded-[46%] bg-black shadow-[0_0_120px_rgba(255,0,0,.55)]"
-        animate={reduced ? { scale: 1 } : { scale: [1, 1.14, .98, 1.05, 1], x: [0, -10, 9, -4, 0] }}
-        transition={{ duration: .7 }}
-      >
-        <div className="absolute left-[17%] top-[28%] h-[16%] w-[26%] rounded-full bg-red-100 shadow-[0_0_35px_#f00]" />
-        <div className="absolute right-[17%] top-[28%] h-[16%] w-[26%] rounded-full bg-red-100 shadow-[0_0_35px_#f00]" />
-        <div className="absolute left-[25%] right-[25%] top-[50%] h-[34%] rounded-[0_0_50%_50%] bg-black border-4 border-red-900" />
-      </motion.div>
-    </div>
-  );
+function HorrorFace({ reduced }: { id: HalloweenScare["id"]; reduced: boolean }) {
+  return <PhotographicHorror reduced={reduced} />;
 }
 
 function playScream() {
