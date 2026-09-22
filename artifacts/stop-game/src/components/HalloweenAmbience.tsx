@@ -135,7 +135,6 @@ export function HalloweenAmbience({ active, muted }: HalloweenAmbienceProps) {
 
           timersRef.current.push(window.setTimeout(scheduleWhisper, 6500 + Math.random() * 8500));
         };
-        };
         scheduleWhisper();
       } catch {
         // Audio is an enhancement; never block the game.
