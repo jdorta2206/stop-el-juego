@@ -3,62 +3,127 @@ import { motion } from "framer-motion";
 import type { HalloweenScare } from "@/lib/halloweenEvent";
 
 function PhotographicHorror({ reduced, variant }: { reduced: boolean; variant: string }) {
-  const seed = variant === "ghost" ? 1 : variant === "spider" ? 2 : variant === "skull" ? 3 : variant === "pumpkin" ? 4 : 5;
-  const face = [
-    { skin: "#b8aaa2", shadow: "#241919", eye: "#d7f1ee", mouth: "#050000", crack: "#24100f" },
-    { skin: "#8e8581", shadow: "#12090b", eye: "#f7f0df", mouth: "#010101", crack: "#160b0b" },
-    { skin: "#c8b7ae", shadow: "#351313", eye: "#ffdfdf", mouth: "#020000", crack: "#3a1717" },
-    { skin: "#66504a", shadow: "#170607", eye: "#ffb9a6", mouth: "#000", crack: "#28100e" },
-    { skin: "#aaa09a", shadow: "#090607", eye: "#f4f7ff", mouth: "#020101", crack: "#201010" },
-  ][(seed - 1) % 5];
+  const seed = variant === "ghost" ? 11 : variant === "spider" ? 22 : variant === "skull" ? 33 : variant === "pumpkin" ? 44 : 55;
 
   return (
-    <motion.svg viewBox="0 0 900 1200" preserveAspectRatio="xMidYMid slice" className="h-full w-full" aria-hidden="true"
-      animate={reduced ? { scale: 1 } : { scale: [1.08, 1, 1.035, 1.08] }}
-      transition={reduced ? { duration: 1.2 } : { duration: 1.7, times: [0, .12, .7, 1], ease: "easeOut" }}>
+    <motion.svg
+      viewBox="0 0 900 1200"
+      preserveAspectRatio="xMidYMid slice"
+      className="h-full w-full"
+      aria-hidden="true"
+      animate={reduced ? { scale: 1 } : { scale: [1.14, 1.01, 1.08, 1.14] }}
+      transition={reduced ? { duration: 1.2 } : { duration: 1.62, times: [0, .16, .72, 1], ease: "easeOut" }}
+    >
       <defs>
-        <radialGradient id="bg" cx="50%" cy="42%"><stop offset="0%" stopColor="#241010"/><stop offset="45%" stopColor="#080304"/><stop offset="100%" stopColor="#000"/></radialGradient>
-        <radialGradient id="skin" cx="38%" cy="28%"><stop offset="0%" stopColor={face.skin}/><stop offset="38%" stopColor="#786c68"/><stop offset="72%" stopColor="#302728"/><stop offset="100%" stopColor="#070506"/></radialGradient>
-        <radialGradient id="eye" cx="45%" cy="40%"><stop offset="0%" stopColor="#fff"/><stop offset="20%" stopColor={face.eye}/><stop offset="42%" stopColor="#8c1717"/><stop offset="100%" stopColor="#090000"/></radialGradient>
-        <radialGradient id="mouth" cx="50%" cy="35%"><stop offset="0%" stopColor="#300707"/><stop offset="45%" stopColor={face.mouth}/><stop offset="100%" stopColor="#000"/></radialGradient>
-        <filter id="rough"><feTurbulence type="fractalNoise" baseFrequency=".028" numOctaves="4" seed={seed}/><feDisplacementMap in="SourceGraphic" scale={reduced ? 3 : 9}/></filter>
-        <filter id="blur"><feGaussianBlur stdDeviation="7"/></filter>
-        <filter id="glow"><feGaussianBlur stdDeviation="9" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-        <clipPath id="faceClip"><ellipse cx="450" cy="570" rx="350" ry="515"/></clipPath>
+        <radialGradient id="night" cx="50%" cy="45%">
+          <stop offset="0%" stopColor="#211719" />
+          <stop offset="48%" stopColor="#050304" />
+          <stop offset="100%" stopColor="#000" />
+        </radialGradient>
+        <radialGradient id="skinReal" cx="36%" cy="24%">
+          <stop offset="0%" stopColor="#d5c7bf" />
+          <stop offset="23%" stopColor="#9b8881" />
+          <stop offset="52%" stopColor="#4a3938" />
+          <stop offset="78%" stopColor="#1a1012" />
+          <stop offset="100%" stopColor="#020202" />
+        </radialGradient>
+        <radialGradient id="socket" cx="50%" cy="50%">
+          <stop offset="0%" stopColor="#000" />
+          <stop offset="72%" stopColor="#090305" />
+          <stop offset="100%" stopColor="#3c1718" />
+        </radialGradient>
+        <radialGradient id="iris" cx="42%" cy="35%">
+          <stop offset="0%" stopColor="#fffdf2" />
+          <stop offset="16%" stopColor="#fff" />
+          <stop offset="31%" stopColor="#e7b6a9" />
+          <stop offset="46%" stopColor="#721316" />
+          <stop offset="100%" stopColor="#070000" />
+        </radialGradient>
+        <radialGradient id="mouthReal" cx="50%" cy="30%">
+          <stop offset="0%" stopColor="#260406" />
+          <stop offset="36%" stopColor="#070001" />
+          <stop offset="100%" stopColor="#000" />
+        </radialGradient>
+        <linearGradient id="blood" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#a20d13" />
+          <stop offset="100%" stopColor="#160001" />
+        </linearGradient>
+        <filter id="grain">
+          <feTurbulence type="fractalNoise" baseFrequency=".075" numOctaves="5" seed={seed} />
+          <feColorMatrix values="1 0 0 0 0  0 .72 0 0 0  0 0 .72 0 0  0 0 0 .34 0" />
+          <feBlend in="SourceGraphic" mode="multiply" />
+        </filter>
+        <filter id="softBlur"><feGaussianBlur stdDeviation="12" /></filter>
+        <filter id="eyeGlow"><feGaussianBlur stdDeviation="5" result="b" /><feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
+        <filter id="faceWarp">
+          <feTurbulence type="fractalNoise" baseFrequency=".012" numOctaves="2" seed={seed + 7} result="n" />
+          <feDisplacementMap in="SourceGraphic" in2="n" scale={reduced ? 2 : 5} />
+        </filter>
+        <clipPath id="portraitClip"><ellipse cx="450" cy="635" rx="430" ry="650" /></clipPath>
       </defs>
-      <rect width="900" height="1200" fill="url(#bg)"/>
-      <ellipse cx="450" cy="600" rx="365" ry="535" fill="#000" opacity=".9" filter="url(#blur)"/>
-      <g filter="url(#rough)">
-        <ellipse cx="450" cy="570" rx="350" ry="515" fill="url(#skin)"/>
-        <g clipPath="url(#faceClip)">
-          <path d="M120 430 Q240 270 370 330 Q450 360 530 320 Q690 270 785 450 L760 1030 Q600 1130 450 1080 Q270 1130 120 1010Z" fill="#000" opacity=".3"/>
-          <ellipse cx="292" cy="485" rx="132" ry="118" fill={face.shadow}/>
-          <ellipse cx="610" cy="485" rx="138" ry="123" fill={face.shadow}/>
-          <ellipse cx="295" cy="492" rx="45" ry="39" fill="url(#eye)" filter="url(#glow)"/>
-          <ellipse cx="605" cy="490" rx="46" ry="40" fill="url(#eye)" filter="url(#glow)"/>
-          <ellipse cx="302" cy="499" rx="13" ry="22" fill="#000"/>
-          <ellipse cx="598" cy="497" rx="13" ry="22" fill="#000"/>
-          <circle cx="286" cy="480" r="6" fill="#fff"/><circle cx="589" cy="478" r="6" fill="#fff"/>
-          <path d="M405 500 C380 590 365 640 395 682 C420 704 480 704 507 676 C535 640 520 585 496 500 C475 470 425 470 405 500Z" fill="#171012" opacity=".9"/>
-          <path d="M410 650 Q450 625 490 650 L505 705 Q450 735 395 705Z" fill="#050303"/>
-          <ellipse cx="450" cy="820" rx="205" ry="158" fill="url(#mouth)" stroke="#5c1010" strokeWidth="12"/>
-          <path d="M265 795 Q450 850 635 790" fill="none" stroke="#a51b1b" strokeWidth="18" opacity=".75"/>
-          <path d="M285 855 Q450 910 615 850" fill="none" stroke="#5b0b0b" strokeWidth="10" opacity=".8"/>
-          <path d="M300 790 l12 65 l13 -64 M345 798 l12 73 l13 -72 M390 803 l12 70 l13 -69 M435 805 l12 76 l13 -75 M480 803 l12 70 l13 -69 M525 798 l12 73 l13 -72 M570 792 l12 67 l13 -66" fill="#e6ded4" opacity=".96" stroke="#cfc6bc" strokeWidth="2"/>
-          <g fill="none" stroke={face.crack} strokeWidth="8" strokeLinecap="round" opacity=".9">
-            <path d="M190 270 L235 355 L205 420 L250 485 L220 560"/><path d="M700 300 L650 370 L690 445 L640 520 L675 600"/>
-            <path d="M360 190 L395 260 L370 330"/><path d="M535 190 L505 265 L535 335"/>
+
+      <rect width="900" height="1200" fill="url(#night)" />
+
+      {/* Extreme close-up: almost photographic rather than a cartoon face. */}
+      <ellipse cx="450" cy="650" rx="445" ry="665" fill="#000" opacity=".95" filter="url(#softBlur)" />
+      <g filter="url(#faceWarp)">
+        <ellipse cx="450" cy="635" rx="430" ry="650" fill="url(#skinReal)" />
+        <g clipPath="url(#portraitClip)" filter="url(#grain)">
+          {/* asymmetrical brow/forehead */}
+          <path d="M30 390 C120 210 255 125 425 190 C520 226 595 145 760 235 C875 298 915 430 910 535 L900 0 L0 0Z" fill="#080607" opacity=".76" />
+          <path d="M85 438 C185 330 292 302 380 354 C305 430 245 468 115 492Z" fill="#070305" opacity=".96" />
+          <path d="M520 356 C625 298 748 330 825 440 L792 498 C695 462 612 438 535 427Z" fill="#060204" opacity=".98" />
+
+          {/* deep eye sockets */}
+          <path d="M85 470 C150 390 295 380 382 457 C349 570 270 622 155 592 C94 572 65 524 85 470Z" fill="url(#socket)" />
+          <path d="M515 455 C605 365 770 390 838 490 C846 558 805 610 720 620 C620 630 548 565 515 455Z" fill="url(#socket)" />
+
+          {/* eyes: tiny pupils, wet and fixed */}
+          <ellipse cx="270" cy="505" rx="72" ry="64" fill="url(#iris)" filter="url(#eyeGlow)" />
+          <ellipse cx="675" cy="500" rx="52" ry="48" fill="url(#iris)" filter="url(#eyeGlow)" />
+          <ellipse cx="276" cy="509" rx="16" ry="35" fill="#000" />
+          <ellipse cx="679" cy="505" rx="12" ry="27" fill="#000" />
+          <circle cx="250" cy="482" r="10" fill="#fff" opacity=".95" />
+          <circle cx="661" cy="486" r="7" fill="#fff" opacity=".9" />
+          <path d="M165 435 C225 398 310 402 370 448" fill="none" stroke="#140a0c" strokeWidth="28" strokeLinecap="round" />
+          <path d="M575 430 C650 392 760 414 810 466" fill="none" stroke="#12090b" strokeWidth="30" strokeLinecap="round" />
+
+          {/* collapsed nose / human silhouette */}
+          <path d="M410 470 C390 560 365 660 388 720 C405 762 463 775 503 739 C531 713 525 664 502 620 L486 486 C466 452 432 448 410 470Z" fill="#1a1113" opacity=".88" />
+          <path d="M388 717 C420 696 478 694 510 720 C490 770 410 778 388 717Z" fill="#050304" />
+
+          {/* unnatural open mouth */}
+          <path d="M185 790 C250 705 365 692 462 730 C560 692 690 720 760 815 C735 1010 620 1074 465 1035 C305 1072 185 995 185 790Z" fill="url(#mouthReal)" stroke="#4b080c" strokeWidth="20" />
+          <path d="M205 806 C300 758 378 775 455 798 C540 760 650 770 740 825" fill="none" stroke="#b21920" strokeWidth="24" opacity=".75" />
+
+          {/* irregular teeth, not a cartoon grid */}
+          <path d="M238 802 L265 875 L292 805 L321 887 L348 804 L378 892 L408 804 L440 900 L468 805 L500 889 L530 800 L563 882 L592 798 L625 864 L653 804 L683 858" fill="none" stroke="#ded8ca" strokeWidth="24" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M275 980 C350 946 575 950 665 975" fill="none" stroke="#5f1114" strokeWidth="15" opacity=".75" />
+
+          {/* cracks, veins and wet blood trails */}
+          <g fill="none" stroke="#251011" strokeLinecap="round">
+            <path d="M145 250 L190 330 L162 405 L215 456" strokeWidth="10" />
+            <path d="M760 250 L705 340 L748 420 L695 478" strokeWidth="9" />
+            <path d="M352 170 L390 252 L360 330" strokeWidth="8" />
+            <path d="M560 180 L525 265 L555 340" strokeWidth="8" />
+            <path d="M118 590 C165 655 140 715 170 760" strokeWidth="7" />
+            <path d="M785 600 C735 675 770 735 735 790" strokeWidth="8" />
           </g>
-          <g stroke="#500d0d" strokeWidth="9" opacity=".8">
-            <path d="M250 590 C230 690 260 735 245 790"/><path d="M655 575 C675 680 650 730 670 800"/>
-            <path d="M330 920 C320 975 345 1005 330 1045"/><path d="M570 920 C585 975 560 1010 575 1050"/>
-          </g>
+          <path d="M225 610 C208 700 250 742 222 835 C214 865 224 887 239 904" fill="none" stroke="url(#blood)" strokeWidth="13" opacity=".9" />
+          <path d="M690 605 C708 690 670 748 700 842 C708 870 696 900 681 922" fill="none" stroke="url(#blood)" strokeWidth="11" opacity=".82" />
+
+          {/* saliva threads */}
+          <path d="M300 910 C304 946 297 965 304 992 M594 912 C590 946 598 968 590 1000" stroke="#b8b0a8" strokeWidth="5" opacity=".48" />
         </g>
       </g>
-      <rect width="900" height="1200" fill="none" stroke="#000" strokeWidth="130" opacity=".78"/>
-      {!reduced && <motion.g animate={{ x: [0, -8, 6, 0] }} transition={{ duration: .55, repeat: 2 }}>
-        <path d="M0 330 H900 M0 335 H900 M0 760 H900 M0 765 H900" stroke="#fff" strokeWidth="2" opacity=".08"/>
-      </motion.g>}
+
+      {/* hard vignette + film grain lines: no emojis, no cartoon symbols */}
+      <rect width="900" height="1200" fill="none" stroke="#000" strokeWidth="190" opacity=".82" />
+      {!reduced && (
+        <motion.g animate={{ opacity: [0, .2, 0], x: [0, -5, 4, 0] }} transition={{ duration: .42, repeat: 2 }}>
+          <path d="M0 285 H900 M0 289 H900 M0 672 H900 M0 676 H900 M0 930 H900 M0 934 H900" stroke="#fff" strokeWidth="2" opacity=".12" />
+        </motion.g>
+      )}
     </motion.svg>
   );
 }
