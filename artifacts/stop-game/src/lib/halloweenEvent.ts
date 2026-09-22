@@ -61,15 +61,43 @@ export function getHalloweenSubtitle(lang: string): string {
   return subtitles[lang] ?? subtitles.es;
 }
 
-export function applyHalloweenCategory(category: string, lang: string): string {
-  if (!isHalloweenActive()) return category;
-  const categories = HALLOWEEN_CATEGORIES[lang as keyof typeof HALLOWEEN_CATEGORIES] ?? HALLOWEEN_CATEGORIES.es;
-  return categories.includes(category as never) ? category : categories[Math.floor(Math.random() * categories.length)] ?? category;
+export function getHalloweenCategory(lang: string, seed = Math.random()): string {
+  const key = lang === "en" || lang === "pt" || lang === "fr" ? lang : "es";
+  const list = HALLOWEEN_CATEGORIES[key];
+  const safeSeed = Math.max(0, Math.min(0.999999, seed));
+  return list[Math.floor(safeSeed * list.length)];
 }
 
-export function getHalloweenScare(lang: string): HalloweenScare {
-  const scares = HALLOWEEN_SCARES[lang] ?? HALLOWEEN_SCARES.es;
-  return scares[Math.floor(Math.random() * scares.length)] ?? HALLOWEEN_SCARES.es[0];
+export function applyHalloweenCategory(
+  categories: string[],
+  lang: string,
+  options: { enabled?: boolean; seed?: number } = {},
+): string[] {
+  if (!isHalloweenActive() || options.enabled === false || categories.length === 0) {
+    return categories;
+  }
+  const result = [...categories];
+  const seed = options.seed ?? Math.random();
+  const idx = Math.floor(Math.max(0, Math.min(0.999999, seed)) * result.length);
+  result[idx] = getHalloweenCategory(lang, seed);
+  return result;
+}
+
+export function getHalloweenLabel(lang: string): string {
+  const labels: Record<string, string> = { es: "HALLOWEEN", en: "HALLOWEEN", pt: "HALLOWEEN", fr: "HALLOWEEN" };
+  return labels[lang] ?? labels.es;
+}
+
+export function getHalloweenSubtitle(lang: string): string {
+  const subtitles: Record<string, string> = { es: "El terror ha comenzado", en: "The terror has begun", pt: "O terror começou", fr: "La terreur a commencé" };
+  return subtitles[lang] ?? subtitles.es;
+}
+
+export function getHalloweenScare(lang: string, seed = Math.random()): HalloweenScare {
+  const key = lang === "en" || lang === "pt" || lang === "fr" ? lang : "es";
+  const list = HALLOWEEN_SCARES[key];
+  const safeSeed = Math.max(0, Math.min(0.999999, seed));
+  return list[Math.floor(safeSeed * list.length)];
 }
 
 export function getHalloweenScareById(lang: string, id: HalloweenScareId): HalloweenScare {
