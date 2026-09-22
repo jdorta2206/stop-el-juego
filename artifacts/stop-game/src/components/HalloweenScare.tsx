@@ -16,8 +16,12 @@ function HorrorFace({ id, reduced }: { id: HalloweenScare["id"]; reduced: boolea
     <motion.div
       className="relative w-[92vw] max-w-[560px] aspect-[0.82]"
       initial={{ scale: 0.15, opacity: 0, rotate: -5 }}
-      animate={reduced\n        ? { scale: [0.82, 1, 1.02], opacity: [0, 1, 1], rotate: [0, 0, 0] }\n        : { scale: [0.15, 1.22, 1.03, 1.08], opacity: [0, 1, 1, 1], rotate: [-5, 2, -1, 0] }}
-      transition={reduced\n        ? { duration: 0.55, times: [0, 0.5, 1], ease: "easeOut" }\n        : { duration: 0.48, times: [0, 0.22, 0.55, 1], ease: "easeOut" }}
+      animate={reduced
+        ? { scale: [0.82, 1, 1.02], opacity: [0, 1, 1], rotate: [0, 0, 0] }
+        : { scale: [0.15, 1.22, 1.03, 1.08], opacity: [0, 1, 1, 1], rotate: [-5, 2, -1, 0] }}
+      transition={reduced
+        ? { duration: 0.55, times: [0, 0.5, 1], ease: "easeOut" }
+        : { duration: 0.48, times: [0, 0.22, 0.55, 1], ease: "easeOut" }}
     >
       <motion.div
         aria-hidden
