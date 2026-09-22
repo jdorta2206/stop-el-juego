@@ -8,6 +8,8 @@ export const HALLOWEEN_CATEGORIES = {
   fr: ["Déguisement effrayant", "Monstre", "Film d'horreur", "Objet d'une maison hantée", "Créature surnaturelle"],
 } as const;
 
+export const isHalloweenPreview = (): boolean => import.meta.env.VITE_HALLOWEEN_PREVIEW === "true";
+
 export type HalloweenScareId = "clown" | "nightmare" | "specter" | "stranger";
 
 export interface HalloweenScare {
