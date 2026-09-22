@@ -1,6 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { useEffect, useRef } from "react";
 import type { HalloweenScare } from "@/lib/halloweenEvent";
 
 function PhotographicHorror({ reduced }: { reduced: boolean }) {
@@ -324,16 +323,9 @@ export function HalloweenScareOverlay({
       />
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
         <div className="relative h-[76vh] w-[92vw] max-w-[560px]">
-          <HorrorFace id={scare.id} reduced={reduced} />
+          <HorrorFace reduced={reduced} />
         </div>
       </div>
-      <motion.div
-        className="absolute inset-x-0 bottom-[9%] text-center font-black uppercase tracking-[0.3em] text-white text-xs pointer-events-none"
-        animate={{ opacity: [0, 1, 0] }}
-        transition={{ duration: .95, delay: .08 }}
-      >
-        {scare.title}
-      </motion.div>
     </motion.div>
   );
 }
