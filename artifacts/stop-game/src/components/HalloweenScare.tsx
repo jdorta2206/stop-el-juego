@@ -6,7 +6,7 @@ function PhotographicHorror({ reduced, variant }: { reduced: boolean; variant: s
   // Original realistic horror-clown portrait: pallid skin, cracked makeup,
   // predatory eyes and an unnaturally wide grin. It is not a copy of any
   // existing film character.
-  const seed = variant === "clown" ? 71 : 79;
+  const seed = variant === "clown" ? 71 : variant === "nightmare" ? 83 : variant === "specter" ? 97 : 109;
 
   return (
     <motion.svg
@@ -62,11 +62,11 @@ function PhotographicHorror({ reduced, variant }: { reduced: boolean; variant: s
           <circle cx="640" cy="477" r="7" fill="#fff"/>
 
           {/* classic red vertical makeup marks */}
-          <path d="M208 395 C220 455 218 545 185 625" fill="none" stroke="#9e1017" strokeWidth="24" strokeLinecap="round"/>
-          <path d="M690 392 C678 455 681 550 718 632" fill="none" stroke="#9e1017" strokeWidth="24" strokeLinecap="round"/>
+          {variant === "clown" && <path d="M208 395 C220 455 218 545 185 625" fill="none" stroke="#9e1017" strokeWidth="24" strokeLinecap="round"/>}
+          {variant === "clown" && <path d="M690 392 C678 455 681 550 718 632" fill="none" stroke="#9e1017" strokeWidth="24" strokeLinecap="round"/>}
 
           {/* long red clown nose, wet and disturbing */}
-          <ellipse cx="455" cy="625" rx="58" ry="52" fill="#8f1018" stroke="#3b0408" strokeWidth="13"/>
+          <ellipse cx="455" cy="625" rx={variant === "clown" ? 58 : 38} ry={variant === "clown" ? 52 : 28} fill={variant === "clown" ? "#8f1018" : "#26161a"} stroke="#3b0408" strokeWidth="13"/>
           <ellipse cx="438" cy="610" rx="14" ry="9" fill="#f08b86" opacity=".75"/>
 
           {/* smile makeup stretching past the real mouth */}
