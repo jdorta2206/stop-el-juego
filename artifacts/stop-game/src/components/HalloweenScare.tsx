@@ -172,6 +172,8 @@ export function HalloweenScareOverlay({
 
   useEffect(() => {
     if (!reduced) {
+      try { (document.activeElement as HTMLElement | null)?.blur(); } catch {}
+      try { window.scrollTo(0, 0); } catch {}
       try { navigator.vibrate?.([30, 45, 85]); } catch {}
       if (!muted) playScream();
     }
