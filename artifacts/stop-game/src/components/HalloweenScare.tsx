@@ -222,44 +222,81 @@ function playScream() {
     const ctx = new AudioCtx();
     const now = ctx.currentTime;
     const master = ctx.createGain();
-    master.gain.setValueAtTime(0.0001,now);
-    master.gain.exponentialRampToValueAtTime(.72,now+.008);
-    master.gain.exponentialRampToValueAtTime(.0001,now+1.35);
+    master.gain.setValueAtTime(0.0001, now);
+    master.gain.exponentialRampToValueAtTime(0.9, now + 0.012);
+    master.gain.exponentialRampToValueAtTime(0.0001, now + 1.15);
     master.connect(ctx.destination);
 
-    const formant=ctx.createBiquadFilter();
-    formant.type="bandpass"; formant.Q.value=5.5;
-    formant.frequency.setValueAtTime(900,now);
-    formant.frequency.exponentialRampToValueAtTime(1850,now+.16);
-    formant.frequency.exponentialRampToValueAtTime(520,now+1.05);
-    formant.connect(master);
+    const impact = ctx.createOscillator();
+    const impactGain = ctx.createGain();
+    impact.type = "sine";
+    impact.frequency.setValueAtTime(96, now);
+    impact.frequency.exponentialRampToValueAtTime(34, now + 0.24);
+    impactGain.gain.setValueAtTime(0.75, now);
+    impactGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.32);
+    impact.connect(impactGain).connect(master);
+    impact.start(now);
+    impact.stop(now + 0.34);
 
-    for(const [base,level] of [[185,.38],[370,.26],[555,.2],[740,.13]] as const){
-      const osc=ctx.createOscillator(), g=ctx.createGain();
-      osc.type="sawtooth";
-      osc.frequency.setValueAtTime(base,now);
-      osc.frequency.exponentialRampToValueAtTime(base*1.85,now+.16);
-      osc.frequency.exponentialRampToValueAtTime(base*.62,now+1.12);
-      g.gain.setValueAtTime(level,now);
-      g.gain.exponentialRampToValueAtTime(.0001,now+1.25);
-      osc.connect(g).connect(formant); osc.start(now); osc.stop(now+1.3);
+    const attack = ctx.createBufferSource();
+    const attackBuffer = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.22), ctx.sampleRate);
+    const attackData = attackBuffer.getChannelData(0);
+    for (let i = 0; i < attackData.length; i++) {
+      const t = i / attackData.length;
+      attackData[i] = (Math.random() * 2 - 1) * Math.pow(1 - t, 2.2);
     }
+    attack.buffer = attackBuffer;
+    const attackFilter = ctx.createBiquadFilter();
+    attackFilter.type = "bandpass";
+    attackFilter.frequency.setValueAtTime(1800, now);
+    attackFilter.Q.value = 0.75;
+    const attackGain = ctx.createGain();
+    attackGain.gain.setValueAtTime(0.55, now);
+    attackGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.2);
+    attack.connect(attackFilter).connect(attackGain).connect(master);
+    attack.start(now);
+    attack.stop(now + 0.22);
 
-    const noise=ctx.createBufferSource();
-    const buffer=ctx.createBuffer(1,Math.floor(ctx.sampleRate*1.25),ctx.sampleRate);
-    const data=buffer.getChannelData(0);
-    for(let i=0;i<data.length;i++){const env=Math.min(1,i/(ctx.sampleRate*.018))*Math.max(0,1-i/data.length);data[i]=(Math.random()*2-1)*env;}
-    noise.buffer=buffer;
-    const nf=ctx.createBiquadFilter(); nf.type="bandpass"; nf.frequency.setValueAtTime(1450,now); nf.frequency.exponentialRampToValueAtTime(700,now+1.05); nf.Q.value=2.2;
-    const ng=ctx.createGain(); ng.gain.setValueAtTime(.34,now); ng.gain.exponentialRampToValueAtTime(.0001,now+1.18);
-    noise.connect(nf).connect(ng).connect(master); noise.start(now); noise.stop(now+1.22);
+    const scream = ctx.createBufferSource();
+    const duration = 1.12;
+    const buffer = ctx.createBuffer(1, Math.floor(ctx.sampleRate * duration), ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    let low = 0;
+    for (let i = 0; i < data.length; i++) {
+      const t = i / data.length;
+      const env = Math.pow(Math.sin(Math.PI * Math.min(1, t)), 0.55);
+      const white = Math.random() * 2 - 1;
+      low = low * 0.965 + white * 0.035;
+      data[i] = (low * 0.75 + (white - low) * 0.25) * env;
+    }
+    scream.buffer = buffer;
 
-    const impact=ctx.createOscillator(), ig=ctx.createGain();
-    impact.type="sine"; impact.frequency.setValueAtTime(72,now); impact.frequency.exponentialRampToValueAtTime(28,now+.28);
-    ig.gain.setValueAtTime(.85,now); ig.gain.exponentialRampToValueAtTime(.0001,now+.36);
-    impact.connect(ig).connect(master); impact.start(now); impact.stop(now+.4);
-    window.setTimeout(()=>{try{void ctx.close();}catch{}},1600);
-  }catch{}
+    const formant1 = ctx.createBiquadFilter();
+    formant1.type = "bandpass";
+    formant1.Q.value = 7;
+    formant1.frequency.setValueAtTime(520, now + 0.015);
+    formant1.frequency.exponentialRampToValueAtTime(1050, now + 0.22);
+    formant1.frequency.exponentialRampToValueAtTime(360, now + 0.98);
+
+    const formant2 = ctx.createBiquadFilter();
+    formant2.type = "bandpass";
+    formant2.Q.value = 5;
+    formant2.frequency.setValueAtTime(1250, now + 0.015);
+    formant2.frequency.exponentialRampToValueAtTime(2450, now + 0.20);
+    formant2.frequency.exponentialRampToValueAtTime(780, now + 0.98);
+
+    const screamGain = ctx.createGain();
+    screamGain.gain.setValueAtTime(0.0001, now);
+    screamGain.gain.exponentialRampToValueAtTime(0.58, now + 0.035);
+    screamGain.gain.exponentialRampToValueAtTime(0.0001, now + 1.08);
+    scream.connect(formant1).connect(screamGain);
+    scream.connect(formant2).connect(screamGain);
+    screamGain.connect(master);
+    scream.start(now + 0.01);
+    scream.stop(now + duration);
+
+    window.setTimeout(() => { try { void ctx.close(); } catch {} }, 1400);
+  } catch {}
 }
 
 export function HalloweenScareOverlay({
