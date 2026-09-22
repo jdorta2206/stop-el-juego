@@ -143,6 +143,7 @@ export default function SoloGame() {
   const [muted, setMuted] = useState(false);
   // Halloween accessibility preference: persists across games and sessions.
   const [reducedHalloweenEffects, setReducedHalloweenEffects] = useState(() => getHalloweenReducedEffects());
+  const [halloweenScareAfterglow, setHalloweenScareAfterglow] = useState(false);
   const [stopFlash, setStopFlash] = useState(false);
   // 🕵️ Espía / Robar respuesta — free: 1 uso/partida, premium: 2 usos/partida. -10 pts cada uso.
   // `spyUsesLeft` persists across rounds (per-game allowance).
@@ -1489,7 +1490,7 @@ export default function SoloGame() {
 
   return (
     <Layout>
-      <HalloweenAmbience active={isHalloweenActive() && !isDailyMode && gameState === "PLAYING"} muted={muted} />
+      <HalloweenAmbience active={isHalloweenActive() && !isDailyMode && gameState === "PLAYING"} muted={muted} heavy={halloweenScareAfterglow || !!halloweenScare} />
       {/* 📡 Discreet offline banner — shown while playing without internet using cached dictionary */}
       <AnimatePresence>
         {isOffline && (
@@ -1636,7 +1637,7 @@ export default function SoloGame() {
           onShared={() => recordExternalStat(player?.id, { timesShared: 1 })}
         />
 
-        <AnimatePresence>{halloweenScare && <HalloweenScareOverlay scare={halloweenScare} muted={muted} reducedEffects={reducedHalloweenEffects} onDone={() => setHalloweenScare(null)} />}</AnimatePresence>
+        <AnimatePresence>{halloweenScare && <HalloweenScareOverlay scare={halloweenScare} muted={muted} reducedEffects={reducedHalloweenEffects} onDone={() => { setHalloweenScare(null); setHalloweenScareAfterglow(true); window.setTimeout(() => setHalloweenScareAfterglow(false), 10000); }} />}</AnimatePresence>
 
         {/* Achievement toast notification */}
         <AchievementToast
