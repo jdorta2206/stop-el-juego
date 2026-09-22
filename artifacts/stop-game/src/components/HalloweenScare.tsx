@@ -2,75 +2,79 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import type { HalloweenScare } from "@/lib/halloweenEvent";
 
-function HorrorFace({ id, reduced }: { id: HalloweenScare["id"]; reduced: boolean }) {
-  const palette: Record<HalloweenScare["id"], { accent: string; eye: string; mouth: string }> = {
-    ghost: { accent: "#e5e7eb", eye: "#ffffff", mouth: "#020617" },
-    spider: { accent: "#22c55e", eye: "#d9f99d", mouth: "#020617" },
-    skull: { accent: "#f8fafc", eye: "#ef4444", mouth: "#000000" },
-    pumpkin: { accent: "#f97316", eye: "#fde047", mouth: "#080400" },
-    vampire: { accent: "#dc2626", eye: "#ff1f1f", mouth: "#050505" },
-  };
-  const p = palette[id];
-
+function Ghost({ reduced }: { reduced: boolean }) {
   return (
-    <motion.div
-      className="relative w-[92vw] max-w-[560px] aspect-[0.82]"
-      initial={{ scale: 0.15, opacity: 0, rotate: -5 }}
-      animate={reduced
-        ? { scale: [0.82, 1, 1.02], opacity: [0, 1, 1], rotate: [0, 0, 0] }
-        : { scale: [0.15, 1.22, 1.03, 1.08], opacity: [0, 1, 1, 1], rotate: [-5, 2, -1, 0] }}
-      transition={reduced
-        ? { duration: 0.55, times: [0, 0.5, 1], ease: "easeOut" }
-        : { duration: 0.48, times: [0, 0.22, 0.55, 1], ease: "easeOut" }}
-    >
+    <div className="relative h-full w-full">
       <motion.div
-        aria-hidden
-        className="absolute inset-0 rounded-[46%_54%_42%_58%] overflow-hidden"
-        style={{
-          background: "radial-gradient(circle at 50% 38%, #353535 0%, #090909 38%, #000 72%)",
-          boxShadow: "0 0 120px rgba(255,0,0,.45), inset 0 0 70px rgba(255,255,255,.08)",
-          filter: "contrast(1.6) brightness(0.92)",
-        }}
-        animate={reduced ? { x: 0, scale: 1 } : { x: [0, -12, 14, -7, 4, 0], scale: [1, 1.08, 0.98, 1.04, 1] }}
-        transition={reduced ? { duration: 0.01 } : { duration: 0.7, times: [0, .16, .32, .52, .7, 1] }}
+        className="absolute left-[10%] right-[10%] top-[8%] bottom-[0] rounded-[48%_52%_22%_22%] bg-gradient-to-b from-slate-200 via-slate-500 to-slate-950 shadow-[0_0_90px_rgba(220,230,255,.42)]"
+        animate={reduced ? { y: 0 } : { y: [18, -4, 6, 0], x: [0, -8, 8, 0] }}
+        transition={{ duration: .72, ease: "easeOut" }}
       >
-        <div className="absolute left-[16%] top-[27%] w-[27%] h-[16%] rounded-[50%] rotate-[12deg]"
-          style={{ background: p.eye, boxShadow: "0 0 34px " + p.accent }} />
-        <div className="absolute right-[16%] top-[27%] w-[27%] h-[16%] rounded-[50%] rotate-[-12deg]"
-          style={{ background: p.eye, boxShadow: "0 0 34px " + p.accent }} />
-        <div className="absolute left-[25%] top-[49%] w-[50%] h-[34%] rounded-[0_0_50%_50%]"
-          style={{ background: p.mouth, border: "4px solid rgba(255,255,255,.18)", boxShadow: "inset 0 -24px 0 #000, 0 0 25px rgba(0,0,0,.9)" }} />
-        {[34, 46, 58].map((left, i) => (
-          <div key={i} className="absolute top-[53%] w-[7%] h-[22%] bg-white/90"
-            style={{ left: left + "%", transform: `rotate(${i % 2 ? -4 : 7}deg)`, clipPath: "polygon(0 0,100% 0,82% 100%,18% 100%)" }} />
-        ))}
-        <div className="absolute inset-x-[6%] bottom-[5%] h-[22%] opacity-75"
-          style={{ background: "repeating-linear-gradient(170deg, transparent 0 7px, rgba(185,28,28,.9) 8px 11px, transparent 12px 18px)" }} />
-        {id === "spider" && (
-          <>
-            <div className="absolute -left-[5%] top-[5%] w-[32%] h-[1px] bg-green-200/70 rotate-[28deg]" />
-            <div className="absolute -right-[5%] top-[8%] w-[34%] h-[1px] bg-green-200/70 rotate-[-28deg]" />
-          </>
-        )}
+        <div className="absolute left-[14%] top-[62%] h-[28%] w-[22%] rounded-full bg-black/80" />
+        <div className="absolute right-[14%] top-[62%] h-[28%] w-[22%] rounded-full bg-black/80" />
+        <div className="absolute left-[29%] top-[30%] h-[17%] w-[19%] rounded-full bg-black shadow-[0_0_26px_#f8fafc]" />
+        <div className="absolute right-[29%] top-[30%] h-[17%] w-[19%] rounded-full bg-black shadow-[0_0_26px_#f8fafc]" />
+        <motion.div
+          className="absolute left-[38%] top-[51%] h-[24%] w-[24%] rounded-[50%] bg-black"
+          animate={reduced ? { scale: 1 } : { scale: [1, 1.18, .96, 1.08, 1] }}
+          transition={{ duration: .55 }}
+        />
+        <div className="absolute bottom-[-3%] left-[5%] right-[5%] h-[18%] bg-slate-950 [clip-path:polygon(0_0,8%_55%,18%_20%,29%_70%,40%_18%,51%_68%,62%_20%,74%_66%,86%_18%,100%_55%,100%_100%,0_100%)]" />
       </motion.div>
-
-      <motion.div
-        className="absolute inset-[-8%] pointer-events-none"
-        animate={{ scale: [0.7, 1.12, 0.95], opacity: [0, .75, 0] }}
-        transition={{ duration: 0.5 }}
-        style={{ borderRadius: "50%", boxShadow: "0 0 80px rgba(255,0,0,.6)" }}
-      />
-      <motion.div
-        className="absolute inset-0 pointer-events-none mix-blend-screen"
-        style={{ background: "repeating-linear-gradient(0deg, transparent 0 4px, rgba(255,255,255,.10) 5px 6px)" }}
-        animate={{ x: [-18, 18, -8, 0], opacity: [0, 1, .35, 0] }}
-        transition={{ duration: 0.42, times: [0, .18, .55, 1] }}
-      />
-    </motion.div>
+    </div>
   );
 }
 
-function playRoar() {
+function Clown({ reduced }: { reduced: boolean }) {
+  return (
+    <div className="relative h-full w-full">
+      <motion.div
+        className="absolute left-[7%] right-[7%] top-[7%] bottom-[2%] rounded-[48%_52%_45%_55%] bg-gradient-to-b from-zinc-100 via-zinc-300 to-zinc-800 shadow-[0_0_110px_rgba(255,20,20,.5)]"
+        animate={reduced ? { y: 0 } : { y: [16, -3, 5, 0], rotate: [0, -2, 2, 0], scale: [1, 1.05, .99, 1.03] }}
+        transition={{ duration: .7, ease: "easeOut" }}
+      >
+        <div className="absolute -left-[7%] top-[10%] h-[28%] w-[23%] rounded-full bg-black shadow-[0_0_30px_#111]" />
+        <div className="absolute -right-[7%] top-[10%] h-[28%] w-[23%] rounded-full bg-black shadow-[0_0_30px_#111]" />
+        <div className="absolute left-[10%] top-[19%] h-[28%] w-[30%] bg-black [clip-path:polygon(50%_0,100%_100%,0_100%)] shadow-[0_0_18px_rgba(255,0,0,.8)]" />
+        <div className="absolute right-[10%] top-[19%] h-[28%] w-[30%] bg-black [clip-path:polygon(50%_0,100%_100%,0_100%)] shadow-[0_0_18px_rgba(255,0,0,.8)]" />
+        <div className="absolute left-[21%] top-[30%] h-[11%] w-[18%] rounded-full bg-red-500 shadow-[0_0_26px_#f00]" />
+        <div className="absolute right-[21%] top-[30%] h-[11%] w-[18%] rounded-full bg-red-500 shadow-[0_0_26px_#f00]" />
+        <div className="absolute left-[43%] top-[34%] h-[15%] w-[14%] rounded-full bg-red-700 shadow-[0_0_25px_#f00]" />
+        <motion.div
+          className="absolute left-[16%] right-[16%] top-[49%] h-[34%] rounded-[45%_45%_55%_55%] bg-black border-4 border-red-900 overflow-hidden"
+          animate={reduced ? { scale: 1 } : { scale: [1, 1.12, .98, 1.06, 1] }}
+          transition={{ duration: .6 }}
+        >
+          <div className="absolute left-[8%] right-[8%] top-[15%] h-[11%] bg-white" />
+          <div className="absolute left-[13%] right-[13%] top-[36%] h-[10%] bg-white" />
+          <div className="absolute inset-x-[12%] bottom-[8%] h-[30%] bg-red-950 [clip-path:polygon(0_0,10%_100%,20%_0,30%_100%,40%_0,50%_100%,60%_0,70%_100%,80%_0,90%_100%,100%_0,100%_100%,0_100%)]" />
+        </motion.div>
+        <div className="absolute left-[34%] right-[34%] top-[-7%] h-[17%] rounded-t-full bg-red-900 shadow-[0_0_35px_rgba(255,0,0,.45)]" />
+      </motion.div>
+    </div>
+  );
+}
+
+function HorrorFace({ id, reduced }: { id: HalloweenScare["id"]; reduced: boolean }) {
+  if (id === "ghost") return <Ghost reduced={reduced} />;
+  if (id === "clown") return <Clown reduced={reduced} />;
+
+  return (
+    <div className="relative h-full w-full">
+      <motion.div
+        className="absolute inset-[7%] rounded-[46%] bg-black shadow-[0_0_120px_rgba(255,0,0,.55)]"
+        animate={reduced ? { scale: 1 } : { scale: [1, 1.14, .98, 1.05, 1], x: [0, -10, 9, -4, 0] }}
+        transition={{ duration: .7 }}
+      >
+        <div className="absolute left-[17%] top-[28%] h-[16%] w-[26%] rounded-full bg-red-100 shadow-[0_0_35px_#f00]" />
+        <div className="absolute right-[17%] top-[28%] h-[16%] w-[26%] rounded-full bg-red-100 shadow-[0_0_35px_#f00]" />
+        <div className="absolute left-[25%] right-[25%] top-[50%] h-[34%] rounded-[0_0_50%_50%] bg-black border-4 border-red-900" />
+      </motion.div>
+    </div>
+  );
+}
+
+function playScream() {
   try {
     const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
     if (!AudioCtx) return;
@@ -79,46 +83,50 @@ function playRoar() {
     if (ctx.state === "suspended") void ctx.resume();
 
     const master = ctx.createGain();
-    master.gain.setValueAtTime(0.0001, now);
-    master.gain.exponentialRampToValueAtTime(0.62, now + 0.025);
-    master.gain.exponentialRampToValueAtTime(0.0001, now + 1.15);
+    master.gain.setValueAtTime(.0001, now);
+    master.gain.exponentialRampToValueAtTime(.72, now + .018);
+    master.gain.exponentialRampToValueAtTime(.0001, now + 1.05);
     master.connect(ctx.destination);
 
-    const roar = ctx.createOscillator();
-    roar.type = "sawtooth";
-    roar.frequency.setValueAtTime(185, now);
-    roar.frequency.exponentialRampToValueAtTime(42, now + 1.0);
-    roar.connect(master);
-    roar.start(now);
-    roar.stop(now + 1.2);
+    const scream = ctx.createOscillator();
+    scream.type = "sawtooth";
+    scream.frequency.setValueAtTime(420, now);
+    scream.frequency.exponentialRampToValueAtTime(1180, now + .16);
+    scream.frequency.exponentialRampToValueAtTime(280, now + .82);
+    scream.frequency.exponentialRampToValueAtTime(120, now + 1.0);
+    scream.connect(master);
+    scream.start(now);
+    scream.stop(now + 1.08);
 
-    const sub = ctx.createOscillator();
-    sub.type = "sine";
-    sub.frequency.setValueAtTime(92, now);
-    sub.frequency.exponentialRampToValueAtTime(28, now + 1.1);
-    const subGain = ctx.createGain();
-    subGain.gain.value = 0.75;
-    sub.connect(subGain).connect(master);
-    sub.start(now);
-    sub.stop(now + 1.2);
+    const shriek = ctx.createOscillator();
+    shriek.type = "triangle";
+    shriek.frequency.setValueAtTime(720, now + .03);
+    shriek.frequency.exponentialRampToValueAtTime(1450, now + .2);
+    shriek.frequency.exponentialRampToValueAtTime(360, now + .7);
+    const shriekGain = ctx.createGain();
+    shriekGain.gain.value = .34;
+    shriek.connect(shriekGain).connect(master);
+    shriek.start(now);
+    shriek.stop(now + .82);
 
     const noise = ctx.createBufferSource();
-    const buffer = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.8), ctx.sampleRate);
+    const buffer = ctx.createBuffer(1, Math.floor(ctx.sampleRate * .75), ctx.sampleRate);
     const data = buffer.getChannelData(0);
     for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
     noise.buffer = buffer;
     const filter = ctx.createBiquadFilter();
     filter.type = "bandpass";
-    filter.frequency.value = 850;
-    filter.Q.value = 0.7;
-    const noiseGain = ctx.createGain();
-    noiseGain.gain.setValueAtTime(0.45, now);
-    noiseGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.8);
-    noise.connect(filter).connect(noiseGain).connect(master);
+    filter.frequency.setValueAtTime(1500, now);
+    filter.frequency.exponentialRampToValueAtTime(520, now + .7);
+    filter.Q.value = 1.2;
+    const ng = ctx.createGain();
+    ng.gain.setValueAtTime(.24, now);
+    ng.gain.exponentialRampToValueAtTime(.0001, now + .72);
+    noise.connect(filter).connect(ng).connect(master);
     noise.start(now);
-    noise.stop(now + 0.82);
+    noise.stop(now + .76);
 
-    window.setTimeout(() => { try { void ctx.close(); } catch {} }, 1500);
+    window.setTimeout(() => { try { void ctx.close(); } catch {} }, 1400);
   } catch {}
 }
 
@@ -149,10 +157,10 @@ export function HalloweenScareOverlay({
 
   useEffect(() => {
     if (!reduced) {
-      try { navigator.vibrate?.([35, 45, 90]); } catch {}
-      if (!muted) playRoar();
+      try { navigator.vibrate?.([30, 45, 85]); } catch {}
+      if (!muted) playScream();
     }
-    const done = window.setTimeout(() => onDone?.(), reduced ? 1350 : 1550);
+    const done = window.setTimeout(() => onDone?.(), reduced ? 1350 : 1700);
     return () => window.clearTimeout(done);
   }, [onDone, muted, reduced]);
 
@@ -160,52 +168,39 @@ export function HalloweenScareOverlay({
     <motion.div
       initial={{ opacity: 0 }}
       animate={reduced
-        ? { opacity: [0, 0.96, 0], scale: [1.02, 1, 1.04] }
-        : { opacity: [0, 1, 1, 0], scale: [1.12, 1, 1.02, 1.08] }}
+        ? { opacity: [0, .96, 0] }
+        : { opacity: [0, 1, 1, 0], scale: [1.16, 1, 1.02, 1.08] }}
       exit={{ opacity: 0 }}
       transition={reduced
-        ? { duration: 1.35, times: [0, 0.22, 1], ease: "easeOut" }
-        : { duration: 1.55, times: [0, 0.08, 0.74, 1], ease: "easeOut" }}
+        ? { duration: 1.35, times: [0, .22, 1], ease: "easeOut" }
+        : { duration: 1.7, times: [0, .06, .72, 1], ease: "easeOut" }}
       className="fixed inset-0 z-[120] pointer-events-none overflow-hidden select-none"
       style={{
         background: reduced
-          ? "radial-gradient(circle at center, rgba(120,0,0,.16), rgba(0,0,0,.92) 56%, #000)"
-          : "radial-gradient(circle at center, rgba(160,0,0,.28), rgba(0,0,0,.94) 56%, #000)",
+          ? "radial-gradient(circle, rgba(80,0,0,.12), rgba(0,0,0,.94) 58%, #000)"
+          : "radial-gradient(circle, rgba(150,0,0,.34), rgba(0,0,0,.96) 58%, #000)",
       }}
       role="alert"
       aria-live="assertive"
     >
       <motion.div
         className="absolute inset-0 pointer-events-none"
-        animate={reduced
-          ? { opacity: 0 }
-          : { opacity: [0, .72, 0], x: [0, -8, 0] }}
-        transition={reduced
-          ? { duration: 0.01 }
-          : { duration: 0.72, times: [0, .28, 1] }}
-        style={{
-          background: reduced
-            ? "none"
-            : "repeating-linear-gradient(0deg, rgba(255,255,255,.07) 0 1px, transparent 1px 5px), linear-gradient(90deg, transparent 0 45%, rgba(255,0,0,.28) 46% 54%, transparent 55%)",
-        }}
+        animate={reduced ? { opacity: 0 } : { opacity: [0, .72, 0] }}
+        transition={{ duration: .72, times: [0, .25, 1] }}
+        style={{ background: "repeating-linear-gradient(0deg, rgba(255,255,255,.08) 0 1px, transparent 1px 6px)" }}
       />
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-        <HorrorFace id={scare.id} reduced={reduced} />
+        <div className="relative h-[76vh] w-[92vw] max-w-[560px]">
+          <HorrorFace id={scare.id} reduced={reduced} />
+        </div>
       </div>
       <motion.div
-        className="absolute inset-x-0 bottom-[10%] text-center font-black uppercase tracking-[0.3em] text-white text-xs pointer-events-none"
+        className="absolute inset-x-0 bottom-[9%] text-center font-black uppercase tracking-[0.3em] text-white text-xs pointer-events-none"
         animate={{ opacity: [0, 1, 0] }}
-        transition={{ duration: 0.9, delay: 0.08 }}
+        transition={{ duration: .95, delay: .08 }}
       >
         {scare.title}
       </motion.div>
-      <motion.div
-        className="absolute inset-0 bg-red-900/20 mix-blend-multiply pointer-events-none"
-        animate={reduced ? { opacity: 0 } : { opacity: [0, .42, 0] }}
-        transition={reduced
-          ? { duration: 0.01 }
-          : { duration: 0.72, times: [0, .32, 1] }}
-      />
     </motion.div>
   );
 }
