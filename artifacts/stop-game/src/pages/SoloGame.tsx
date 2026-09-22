@@ -49,6 +49,8 @@ import { HalloweenBanner } from "@/components/HalloweenBanner";
 import { HalloweenScareOverlay } from "@/components/HalloweenScare";
 import type { HalloweenScare } from "@/lib/halloweenEvent";
 import { getHalloweenReducedEffects, setHalloweenReducedEffects } from "@/lib/halloweenAccessibility";
+import { preloadHalloweenScareImage } from "@/lib/halloweenScareImage";
+import { preloadHalloweenScareAudio } from "@/lib/halloweenScareAudio";
 
 function vibrate(pattern: number | number[]) {
   try { if (navigator.vibrate) navigator.vibrate(pattern); } catch {}
@@ -175,6 +177,15 @@ export default function SoloGame() {
   const isQuickMode = urlParams.get("mode") === "quick";
   const isChaosMode = urlParams.get("mode") === "chaos";
   const isRandomMode = urlParams.get("mode") === "random";
+
+  // Preload Halloween scare assets while the player is still in the lobby.
+  // The image is bundled locally and the scream is a bundled CC0 MP3, so the
+  // actual scare never waits for a network request or first-time media decode.
+  useEffect(() => {
+    if (!isHalloweenActive() || isDailyMode) return;
+    void preloadHalloweenScareImage();
+    preloadHalloweenScareAudio();
+  }, [isDailyMode]);
 
   // First-Time User Experience: handicap the AI for the first 3 games to
   // guarantee an early win and a smoother onboarding. Read once on mount —
