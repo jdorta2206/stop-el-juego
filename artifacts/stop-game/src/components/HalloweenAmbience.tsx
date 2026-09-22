@@ -3,6 +3,7 @@ import { useEffect, useRef } from "react";
 interface HalloweenAmbienceProps {
   active: boolean;
   muted: boolean;
+  heavy?: boolean;
 }
 
 /**
@@ -10,7 +11,7 @@ interface HalloweenAmbienceProps {
  * low drone + dissonant harmonics + slow pulse + occasional distant texture.
  * No external media is downloaded.
  */
-export function HalloweenAmbience({ active, muted }: HalloweenAmbienceProps) {
+export function HalloweenAmbience({ active, muted, heavy = false }: HalloweenAmbienceProps) {
   const ctxRef = useRef<AudioContext | null>(null);
   const nodesRef = useRef<AudioNode[]>([]);
   const timersRef = useRef<number[]>([]);
@@ -47,7 +48,7 @@ export function HalloweenAmbience({ active, muted }: HalloweenAmbienceProps) {
         if (cancelled) return;
 
         const master = ctx.createGain();
-        master.gain.value = 0.075;
+        master.gain.value = heavy ? 0.095 : 0.075;
         master.connect(ctx.destination);
         nodesRef.current.push(master);
 
@@ -64,7 +65,7 @@ export function HalloweenAmbience({ active, muted }: HalloweenAmbienceProps) {
         const droneGain = ctx.createGain();
         drone.type = "sawtooth";
         drone.frequency.value = 67.2;
-        droneGain.gain.value = 0.065;
+        droneGain.gain.value = heavy ? 0.09 : 0.065;
         drone.connect(droneGain).connect(master);
         drone.start();
         nodesRef.current.push(drone);
@@ -73,7 +74,7 @@ export function HalloweenAmbience({ active, muted }: HalloweenAmbienceProps) {
         const tensionGain = ctx.createGain();
         tension.type = "triangle";
         tension.frequency.value = 71.5;
-        tensionGain.gain.value = 0.075;
+        tensionGain.gain.value = heavy ? 0.105 : 0.075;
         tension.connect(tensionGain).connect(master);
         tension.start();
         nodesRef.current.push(tension);
@@ -95,7 +96,7 @@ export function HalloweenAmbience({ active, muted }: HalloweenAmbienceProps) {
           pulse.frequency.setValueAtTime(62, now);
           pulse.frequency.exponentialRampToValueAtTime(48, now + 0.42);
           gain.gain.setValueAtTime(0.0001, now);
-          gain.gain.exponentialRampToValueAtTime(0.14, now + 0.08);
+          gain.gain.exponentialRampToValueAtTime(heavy ? 0.19 : 0.14, now + 0.08);
           gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.62);
           pulse.connect(gain).connect(master);
           pulse.start(now);
