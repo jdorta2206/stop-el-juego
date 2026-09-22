@@ -41,6 +41,12 @@ jobs:
         run: pnpm --filter @workspace/stop-game build
       - name: Verify preview build
         run: test -s artifacts/stop-game/dist/index.html
+      - name: Verify no emoji scare fallback
+        run: |
+          if grep -RInE 'emoji[[:space:]]*:' artifacts/stop-game/src/lib artifacts/stop-game/src/components/HalloweenScare.tsx artifacts/stop-game/src/pages/SoloGame.tsx artifacts/stop-game/src/pages/Room.tsx; then
+            echo 'ERROR: legacy emoji scare metadata found'
+            exit 1
+          fi
       - name: Start preview server with production API proxy
         run: |
           cat > /tmp/halloween-preview-server.py <<'PY'
