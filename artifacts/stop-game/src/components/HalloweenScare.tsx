@@ -212,7 +212,7 @@ export function HalloweenScareOverlay({
       />
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
         <div className="relative h-[76vh] w-[92vw] max-w-[560px]">
-          <HorrorFace reduced={reduced} />
+          <HorrorFace reduced={reduced} variant={scare.variant} />
         </div>
       </div>
     </motion.div>
