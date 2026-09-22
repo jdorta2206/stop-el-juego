@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
+import { useEffect, useRef } from "react";
 import type { HalloweenScare } from "@/lib/halloweenEvent";
 
 function PhotographicHorror({ reduced }: { reduced: boolean }) {
