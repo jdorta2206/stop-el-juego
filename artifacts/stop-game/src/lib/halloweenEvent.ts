@@ -60,3 +60,14 @@ export function getHalloweenSubtitle(lang: string): string {
   const subtitles: Record<string, string> = { es: "El terror ha comenzado", en: "The terror has begun", pt: "O terror começou", fr: "La terreur a commencé" };
   return subtitles[lang] ?? subtitles.es;
 }
+
+export function applyHalloweenCategory(category: string, lang: string): string {
+  if (!isHalloweenActive()) return category;
+  const categories = HALLOWEEN_CATEGORIES[lang as keyof typeof HALLOWEEN_CATEGORIES] ?? HALLOWEEN_CATEGORIES.es;
+  return categories.includes(category as never) ? category : categories[Math.floor(Math.random() * categories.length)] ?? category;
+}
+
+export function getHalloweenScare(lang: string): HalloweenScare {
+  const scares = HALLOWEEN_SCARES[lang] ?? HALLOWEEN_SCARES.es;
+  return scares[Math.floor(Math.random() * scares.length)] ?? HALLOWEEN_SCARES.es[0];
+}
