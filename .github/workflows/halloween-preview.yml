@@ -1,5 +1,5 @@
 name: Halloween preview
-# Preview retrigger: procedural horror canvas validation
+# Preview retrigger: verify emoji-free procedural horror scare after 14db2a7
 
 on:
   push:
