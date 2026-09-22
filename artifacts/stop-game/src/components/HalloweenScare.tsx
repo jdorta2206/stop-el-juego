@@ -29,27 +29,29 @@ function Clown({ reduced }: { reduced: boolean }) {
   return (
     <div className="relative h-full w-full">
       <motion.div
-        className="absolute left-[7%] right-[7%] top-[7%] bottom-[2%] rounded-[48%_52%_45%_55%] bg-gradient-to-b from-zinc-100 via-zinc-300 to-zinc-800 shadow-[0_0_110px_rgba(255,20,20,.5)]"
-        animate={reduced ? { y: 0 } : { y: [16, -3, 5, 0], rotate: [0, -2, 2, 0], scale: [1, 1.05, .99, 1.03] }}
-        transition={{ duration: .7, ease: "easeOut" }}
+        className="absolute left-[4%] right-[4%] top-[3%] bottom-[-2%] overflow-hidden rounded-[46%_54%_49%_51%] border border-white/10"
+        style={{
+          background: "radial-gradient(ellipse at 48% 24%,rgba(255,255,255,.55),transparent 12%),radial-gradient(ellipse at 28% 52%,rgba(70,0,0,.45),transparent 23%),radial-gradient(ellipse at 72% 54%,rgba(90,0,0,.4),transparent 25%),radial-gradient(ellipse at 50% 72%,rgba(0,0,0,.72),transparent 34%),linear-gradient(105deg,#d4d4d4,#f1f1f1 25%,#9b9b9b 52%,#e7e7e7 72%,#666)",
+          boxShadow: "0 0 90px rgba(0,0,0,.95),0 0 150px rgba(120,0,0,.38)",
+        }}
+        animate={reduced ? { scale: 1 } : { scale: [1.12,1,1.035,1.015], x: [14,0,-5,0], rotate: [1.5,0,-.7,0] }}
+        transition={{ duration: .72, ease: "easeOut" }}
       >
-        <div className="absolute -left-[7%] top-[10%] h-[28%] w-[23%] rounded-full bg-black shadow-[0_0_30px_#111]" />
-        <div className="absolute -right-[7%] top-[10%] h-[28%] w-[23%] rounded-full bg-black shadow-[0_0_30px_#111]" />
-        <div className="absolute left-[10%] top-[19%] h-[28%] w-[30%] bg-black [clip-path:polygon(50%_0,100%_100%,0_100%)] shadow-[0_0_18px_rgba(255,0,0,.8)]" />
-        <div className="absolute right-[10%] top-[19%] h-[28%] w-[30%] bg-black [clip-path:polygon(50%_0,100%_100%,0_100%)] shadow-[0_0_18px_rgba(255,0,0,.8)]" />
-        <div className="absolute left-[21%] top-[30%] h-[11%] w-[18%] rounded-full bg-red-500 shadow-[0_0_26px_#f00]" />
-        <div className="absolute right-[21%] top-[30%] h-[11%] w-[18%] rounded-full bg-red-500 shadow-[0_0_26px_#f00]" />
-        <div className="absolute left-[43%] top-[34%] h-[15%] w-[14%] rounded-full bg-red-700 shadow-[0_0_25px_#f00]" />
-        <motion.div
-          className="absolute left-[16%] right-[16%] top-[49%] h-[34%] rounded-[45%_45%_55%_55%] bg-black border-4 border-red-900 overflow-hidden"
-          animate={reduced ? { scale: 1 } : { scale: [1, 1.12, .98, 1.06, 1] }}
-          transition={{ duration: .6 }}
-        >
-          <div className="absolute left-[8%] right-[8%] top-[15%] h-[11%] bg-white" />
-          <div className="absolute left-[13%] right-[13%] top-[36%] h-[10%] bg-white" />
-          <div className="absolute inset-x-[12%] bottom-[8%] h-[30%] bg-red-950 [clip-path:polygon(0_0,10%_100%,20%_0,30%_100%,40%_0,50%_100%,60%_0,70%_100%,80%_0,90%_100%,100%_0,100%_100%,0_100%)]" />
+        <div className="absolute left-[8%] top-[20%] h-[32%] w-[36%] rounded-[50%] bg-[radial-gradient(ellipse,#020202_0%,#090909_42%,#420000_65%,transparent_76%)] rotate-[-8deg]" />
+        <div className="absolute right-[8%] top-[19%] h-[33%] w-[36%] rounded-[50%] bg-[radial-gradient(ellipse,#020202_0%,#090909_42%,#420000_65%,transparent_76%)] rotate-[8deg]" />
+        <motion.div className="absolute left-[25%] top-[34%] h-[7%] w-[8%] rounded-full bg-white shadow-[0_0_18px_6px_rgba(255,255,255,.7)]" animate={reduced ? {} : { scale: [1,.35,1] }} transition={{ duration: .38, repeat: 1 }} />
+        <motion.div className="absolute right-[25%] top-[32%] h-[7%] w-[8%] rounded-full bg-white shadow-[0_0_18px_6px_rgba(255,255,255,.7)]" animate={reduced ? {} : { scale: [1,.35,1] }} transition={{ duration: .38, repeat: 1 }} />
+        <div className="absolute left-[17%] top-[7%] h-[35%] w-[20%] bg-[radial-gradient(ellipse,#650000,#180000_55%,transparent_72%)] rotate-[-22deg]" />
+        <div className="absolute right-[17%] top-[7%] h-[35%] w-[20%] bg-[radial-gradient(ellipse,#650000,#180000_55%,transparent_72%)] rotate-[22deg]" />
+        <div className="absolute left-[43%] top-[39%] h-[12%] w-[15%] rounded-[48%] bg-[radial-gradient(circle_at_40%_35%,#551010,#210000_58%,#030303)] shadow-[0_0_28px_rgba(150,0,0,.4)]" />
+        <motion.div className="absolute left-[11%] right-[11%] top-[51%] h-[40%] overflow-hidden rounded-[48%_52%_55%_45%] border-[5px] border-black bg-[radial-gradient(ellipse_at_50%_15%,#3a0000,#050000_48%,#000)]" animate={reduced ? { scale: 1 } : { scale: [1,1.08,.99,1.04,1] }} transition={{ duration: .58 }}>
+          <div className="absolute left-[7%] right-[7%] top-[8%] h-[17%] rounded-full bg-[#e9e9e4]" />
+          <div className="absolute left-[10%] right-[10%] top-[33%] h-[15%] rounded-full bg-[#cfcfca]" />
+          <div className="absolute left-[12%] right-[12%] bottom-[8%] h-[28%] bg-gradient-to-b from-red-950 to-black" />
+          {Array.from({ length: 9 }).map((_,i)=><span key={i} className="absolute top-[10%] h-[17%] w-[7%] bg-[#eee] shadow-[0_2px_4px_rgba(0,0,0,.7)]" style={{ left: (11+i*9.5)+"%", transform: "rotate("+(i%2?5:-4)+"deg)" }} />)}
         </motion.div>
-        <div className="absolute left-[34%] right-[34%] top-[-7%] h-[17%] rounded-t-full bg-red-900 shadow-[0_0_35px_rgba(255,0,0,.45)]" />
+        <div className="absolute left-[8%] top-[52%] h-[30%] w-[3px] rotate-[28deg] bg-red-950/80" />
+        <div className="absolute right-[8%] top-[49%] h-[31%] w-[3px] rotate-[-25deg] bg-red-950/80" />
       </motion.div>
     </div>
   );
@@ -80,59 +82,45 @@ function playScream() {
     if (!AudioCtx) return;
     const ctx = new AudioCtx();
     const now = ctx.currentTime;
-
     const master = ctx.createGain();
-    master.gain.setValueAtTime(0.0001, now);
-    master.gain.exponentialRampToValueAtTime(0.9, now + 0.012);
-    master.gain.exponentialRampToValueAtTime(0.0001, now + 1.15);
+    master.gain.setValueAtTime(0.0001,now);
+    master.gain.exponentialRampToValueAtTime(.72,now+.008);
+    master.gain.exponentialRampToValueAtTime(.0001,now+1.35);
     master.connect(ctx.destination);
 
-    // A short human-like shriek: two detuned formant bands with a fast pitch rise/fall.
-    for (const [freq, gainValue] of [[530, 0.32], [760, 0.22], [1040, 0.13]] as const) {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = "sawtooth";
-      osc.frequency.setValueAtTime(freq, now);
-      osc.frequency.exponentialRampToValueAtTime(freq * 1.9, now + 0.13);
-      osc.frequency.exponentialRampToValueAtTime(freq * 0.48, now + 0.92);
-      gain.gain.setValueAtTime(gainValue, now);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + 1.08);
-      osc.connect(gain).connect(master);
-      osc.start(now);
-      osc.stop(now + 1.12);
+    const formant=ctx.createBiquadFilter();
+    formant.type="bandpass"; formant.Q.value=5.5;
+    formant.frequency.setValueAtTime(900,now);
+    formant.frequency.exponentialRampToValueAtTime(1850,now+.16);
+    formant.frequency.exponentialRampToValueAtTime(520,now+1.05);
+    formant.connect(master);
+
+    for(const [base,level] of [[185,.38],[370,.26],[555,.2],[740,.13]] as const){
+      const osc=ctx.createOscillator(), g=ctx.createGain();
+      osc.type="sawtooth";
+      osc.frequency.setValueAtTime(base,now);
+      osc.frequency.exponentialRampToValueAtTime(base*1.85,now+.16);
+      osc.frequency.exponentialRampToValueAtTime(base*.62,now+1.12);
+      g.gain.setValueAtTime(level,now);
+      g.gain.exponentialRampToValueAtTime(.0001,now+1.25);
+      osc.connect(g).connect(formant); osc.start(now); osc.stop(now+1.3);
     }
 
-    // The attack is a sharp impact, not a spring/bounce sound.
-    const impact = ctx.createOscillator();
-    const impactGain = ctx.createGain();
-    impact.type = "sine";
-    impact.frequency.setValueAtTime(115, now);
-    impact.frequency.exponentialRampToValueAtTime(38, now + 0.38);
-    impactGain.gain.setValueAtTime(0.75, now);
-    impactGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.42);
-    impact.connect(impactGain).connect(master);
-    impact.start(now);
-    impact.stop(now + 0.45);
+    const noise=ctx.createBufferSource();
+    const buffer=ctx.createBuffer(1,Math.floor(ctx.sampleRate*1.25),ctx.sampleRate);
+    const data=buffer.getChannelData(0);
+    for(let i=0;i<data.length;i++){const env=Math.min(1,i/(ctx.sampleRate*.018))*Math.max(0,1-i/data.length);data[i]=(Math.random()*2-1)*env;}
+    noise.buffer=buffer;
+    const nf=ctx.createBiquadFilter(); nf.type="bandpass"; nf.frequency.setValueAtTime(1450,now); nf.frequency.exponentialRampToValueAtTime(700,now+1.05); nf.Q.value=2.2;
+    const ng=ctx.createGain(); ng.gain.setValueAtTime(.34,now); ng.gain.exponentialRampToValueAtTime(.0001,now+1.18);
+    noise.connect(nf).connect(ng).connect(master); noise.start(now); noise.stop(now+1.22);
 
-    const noise = ctx.createBufferSource();
-    const buffer = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.9), ctx.sampleRate);
-    const data = buffer.getChannelData(0);
-    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
-    noise.buffer = buffer;
-    const filter = ctx.createBiquadFilter();
-    filter.type = "bandpass";
-    filter.frequency.setValueAtTime(2100, now);
-    filter.frequency.exponentialRampToValueAtTime(650, now + 0.75);
-    filter.Q.value = 1.1;
-    const ng = ctx.createGain();
-    ng.gain.setValueAtTime(0.32, now);
-    ng.gain.exponentialRampToValueAtTime(0.0001, now + 0.82);
-    noise.connect(filter).connect(ng).connect(master);
-    noise.start(now);
-    noise.stop(now + 0.86);
-
-    window.setTimeout(() => { try { void ctx.close(); } catch {} }, 1500);
-  } catch {}
+    const impact=ctx.createOscillator(), ig=ctx.createGain();
+    impact.type="sine"; impact.frequency.setValueAtTime(72,now); impact.frequency.exponentialRampToValueAtTime(28,now+.28);
+    ig.gain.setValueAtTime(.85,now); ig.gain.exponentialRampToValueAtTime(.0001,now+.36);
+    impact.connect(ig).connect(master); impact.start(now); impact.stop(now+.4);
+    window.setTimeout(()=>{try{void ctx.close();}catch{}},1600);
+  }catch{}
 }
 
 export function HalloweenScareOverlay({
