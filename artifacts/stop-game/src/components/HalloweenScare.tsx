@@ -2,217 +2,69 @@ import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import type { HalloweenScare } from "@/lib/halloweenEvent";
 
-function PhotographicHorror({ reduced }: { reduced: boolean }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+function PhotographicHorror({ reduced, variant }: { reduced: boolean; variant: string }) {
+  const seed = variant === "ghost" ? 1 : variant === "spider" ? 2 : variant === "skull" ? 3 : variant === "pumpkin" ? 4 : 5;
+  const face = [
+    { skin: "#b8aaa2", shadow: "#241919", eye: "#d7f1ee", mouth: "#050000", crack: "#24100f" },
+    { skin: "#8e8581", shadow: "#12090b", eye: "#f7f0df", mouth: "#010101", crack: "#160b0b" },
+    { skin: "#c8b7ae", shadow: "#351313", eye: "#ffdfdf", mouth: "#020000", crack: "#3a1717" },
+    { skin: "#66504a", shadow: "#170607", eye: "#ffb9a6", mouth: "#000", crack: "#28100e" },
+    { skin: "#aaa09a", shadow: "#090607", eye: "#f4f7ff", mouth: "#020101", crack: "#201010" },
+  ][(seed - 1) % 5];
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    let frame = 0;
-    let raf = 0;
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-
-    const resize = () => {
-      const w = Math.max(1, canvas.clientWidth);
-      const h = Math.max(1, canvas.clientHeight);
-      canvas.width = Math.floor(w * dpr);
-      canvas.height = Math.floor(h * dpr);
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    };
-
-    resize();
-    window.addEventListener("resize", resize);
-
-    const noise = document.createElement("canvas");
-    noise.width = 180;
-    noise.height = 180;
-    const nctx = noise.getContext("2d");
-    if (nctx) {
-      const img = nctx.createImageData(noise.width, noise.height);
-      for (let i = 0; i < img.data.length; i += 4) {
-        const v = 70 + Math.random() * 95;
-        img.data[i] = v;
-        img.data[i + 1] = v * 0.96;
-        img.data[i + 2] = v * 0.9;
-        img.data[i + 3] = 18 + Math.random() * 25;
-      }
-      nctx.putImageData(img, 0, 0);
-    }
-
-    const draw = () => {
-      frame += 1;
-      const w = canvas.clientWidth;
-      const h = canvas.clientHeight;
-      const t = Math.min(frame / (reduced ? 80 : 48), 1);
-      const pulse = reduced ? 0 : Math.sin(frame * 0.55) * (1 - t) * 0.018;
-      const zoom = reduced ? 1 : 1.03 + t * 0.15 + pulse;
-
-      ctx.save();
-      ctx.clearRect(0, 0, w, h);
-      ctx.translate(w / 2, h / 2);
-      ctx.scale(zoom, zoom);
-      ctx.translate(-w / 2, -h / 2);
-
-      const bg = ctx.createRadialGradient(w * .5, h * .46, h * .05, w * .5, h * .5, h * .72);
-      bg.addColorStop(0, "#160909");
-      bg.addColorStop(.45, "#050303");
-      bg.addColorStop(1, "#000");
-      ctx.fillStyle = bg;
-      ctx.fillRect(0, 0, w, h);
-
-      const cx = w * .5;
-      const cy = h * .5;
-      const rx = w * .47;
-      const ry = h * .60;
-
-      ctx.save();
-      ctx.beginPath();
-      ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
-      ctx.clip();
-
-      const skin = ctx.createRadialGradient(cx - rx * .18, cy - ry * .34, ry * .05, cx, cy, ry * 1.05);
-      skin.addColorStop(0, "#d7c8bc");
-      skin.addColorStop(.28, "#8f817b");
-      skin.addColorStop(.58, "#403936");
-      skin.addColorStop(.82, "#161313");
-      skin.addColorStop(1, "#030303");
-      ctx.fillStyle = skin;
-      ctx.fillRect(cx - rx, cy - ry, rx * 2, ry * 2);
-
-      if (nctx) {
-        ctx.globalAlpha = .42;
-        ctx.globalCompositeOperation = "multiply";
-        ctx.fillStyle = ctx.createPattern(noise, "repeat") || "#777";
-        ctx.fillRect(cx - rx, cy - ry, rx * 2, ry * 2);
-        ctx.globalCompositeOperation = "source-over";
-        ctx.globalAlpha = 1;
-      }
-
-      const socket = (x: number, y: number, rw: number, rh: number, tilt: number) => {
-        ctx.save();
-        ctx.translate(x, y);
-        ctx.rotate(tilt);
-        const g = ctx.createRadialGradient(0, 0, rh * .08, 0, 0, rh);
-        g.addColorStop(0, "#000");
-        g.addColorStop(.58, "#020202");
-        g.addColorStop(.82, "#180404");
-        g.addColorStop(1, "rgba(0,0,0,0)");
-        ctx.fillStyle = g;
-        ctx.beginPath();
-        ctx.ellipse(0, 0, rw, rh, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-      };
-
-      socket(cx - rx * .36, cy - ry * .18, rx * .28, ry * .20, -.10);
-      socket(cx + rx * .36, cy - ry * .20, rx * .30, ry * .22, .12);
-
-      const eye = (x: number, y: number, r: number, side: number) => {
-        const g = ctx.createRadialGradient(x - r * .2, y - r * .2, r * .05, x, y, r);
-        g.addColorStop(0, "#fff");
-        g.addColorStop(.24, "#e8e0d5");
-        g.addColorStop(.5, "#5e0505");
-        g.addColorStop(.78, "#120000");
-        g.addColorStop(1, "#000");
-        ctx.fillStyle = g;
-        ctx.beginPath();
-        ctx.ellipse(x, y, r * (side > 0 ? .95 : 1.08), r, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = "#000";
-        ctx.beginPath();
-        ctx.ellipse(x + side * r * .16, y + r * .05, r * .25, r * .58, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = "rgba(255,255,255,.8)";
-        ctx.beginPath();
-        ctx.arc(x - side * r * .08, y - r * .25, r * .07, 0, Math.PI * 2);
-        ctx.fill();
-      };
-
-      eye(cx - rx * .35, cy - ry * .18, rx * .09, -1);
-      eye(cx + rx * .36, cy - ry * .20, rx * .085, 1);
-
-      const nose = ctx.createLinearGradient(cx - rx * .08, cy - ry * .05, cx + rx * .08, cy + ry * .18);
-      nose.addColorStop(0, "rgba(20,10,10,.2)");
-      nose.addColorStop(.5, "rgba(0,0,0,.8)");
-      nose.addColorStop(1, "rgba(80,20,20,.25)");
-      ctx.fillStyle = nose;
-      ctx.beginPath();
-      ctx.moveTo(cx - rx * .09, cy - ry * .03);
-      ctx.lineTo(cx + rx * .09, cy - ry * .02);
-      ctx.lineTo(cx + rx * .12, cy + ry * .22);
-      ctx.lineTo(cx - rx * .13, cy + ry * .22);
-      ctx.closePath();
-      ctx.fill();
-
-      const mouthY = cy + ry * .30;
-      const mouth = ctx.createRadialGradient(cx, mouthY - ry * .02, 1, cx, mouthY, rx * .40);
-      mouth.addColorStop(0, "#120000");
-      mouth.addColorStop(.55, "#030000");
-      mouth.addColorStop(1, "#000");
-      ctx.fillStyle = mouth;
-      ctx.beginPath();
-      ctx.ellipse(cx, mouthY, rx * .42, ry * .25, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.strokeStyle = "rgba(170,20,20,.65)";
-      ctx.lineWidth = Math.max(2, rx * .012);
-      ctx.beginPath();
-      ctx.moveTo(cx - rx * .38, mouthY - ry * .02);
-      ctx.quadraticCurveTo(cx, mouthY + ry * .10, cx + rx * .40, mouthY - ry * .04);
-      ctx.stroke();
-
-      for (let i = 0; i < 13; i++) {
-        const tx = cx - rx * .34 + i * rx * .056;
-        const ty = mouthY - ry * .13 + (i % 2) * ry * .018;
-        ctx.fillStyle = i % 3 === 0 ? "#c8c0b8" : "#e5ded6";
-        ctx.beginPath();
-        ctx.moveTo(tx, ty);
-        ctx.lineTo(tx + rx * .025, ty + ry * .13);
-        ctx.lineTo(tx + rx * .05, ty);
-        ctx.closePath();
-        ctx.fill();
-      }
-
-      ctx.strokeStyle = "rgba(45,0,0,.8)";
-      ctx.lineWidth = Math.max(1, rx * .008);
-      for (let i = 0; i < 9; i++) {
-        const x = cx - rx * .40 + i * rx * .10;
-        ctx.beginPath();
-        ctx.moveTo(x, cy - ry * .54);
-        ctx.bezierCurveTo(x - 8, cy - ry * .35, x + 7, cy - ry * .22, x - 3, cy - ry * .06);
-        ctx.stroke();
-      }
-
-      ctx.restore();
-
-      const vignette = ctx.createRadialGradient(cx, cy, h * .10, cx, cy, h * .70);
-      vignette.addColorStop(0, "rgba(0,0,0,0)");
-      vignette.addColorStop(.65, "rgba(0,0,0,.18)");
-      vignette.addColorStop(1, "rgba(0,0,0,.95)");
-      ctx.fillStyle = vignette;
-      ctx.fillRect(0, 0, w, h);
-
-      ctx.restore();
-
-      if (frame < (reduced ? 82 : 105)) raf = requestAnimationFrame(draw);
-    };
-
-    raf = requestAnimationFrame(draw);
-    return () => {
-      cancelAnimationFrame(raf);
-      window.removeEventListener("resize", resize);
-    };
-  }, [reduced]);
-
-  return <canvas ref={canvasRef} className="h-full w-full" aria-hidden="true" />;
+  return (
+    <motion.svg viewBox="0 0 900 1200" preserveAspectRatio="xMidYMid slice" className="h-full w-full" aria-hidden="true"
+      animate={reduced ? { scale: 1 } : { scale: [1.08, 1, 1.035, 1.08] }}
+      transition={reduced ? { duration: 1.2 } : { duration: 1.7, times: [0, .12, .7, 1], ease: "easeOut" }}>
+      <defs>
+        <radialGradient id="bg" cx="50%" cy="42%"><stop offset="0%" stopColor="#241010"/><stop offset="45%" stopColor="#080304"/><stop offset="100%" stopColor="#000"/></radialGradient>
+        <radialGradient id="skin" cx="38%" cy="28%"><stop offset="0%" stopColor={face.skin}/><stop offset="38%" stopColor="#786c68"/><stop offset="72%" stopColor="#302728"/><stop offset="100%" stopColor="#070506"/></radialGradient>
+        <radialGradient id="eye" cx="45%" cy="40%"><stop offset="0%" stopColor="#fff"/><stop offset="20%" stopColor={face.eye}/><stop offset="42%" stopColor="#8c1717"/><stop offset="100%" stopColor="#090000"/></radialGradient>
+        <radialGradient id="mouth" cx="50%" cy="35%"><stop offset="0%" stopColor="#300707"/><stop offset="45%" stopColor={face.mouth}/><stop offset="100%" stopColor="#000"/></radialGradient>
+        <filter id="rough"><feTurbulence type="fractalNoise" baseFrequency=".028" numOctaves="4" seed={seed}/><feDisplacementMap in="SourceGraphic" scale={reduced ? 3 : 9}/></filter>
+        <filter id="blur"><feGaussianBlur stdDeviation="7"/></filter>
+        <filter id="glow"><feGaussianBlur stdDeviation="9" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+        <clipPath id="faceClip"><ellipse cx="450" cy="570" rx="350" ry="515"/></clipPath>
+      </defs>
+      <rect width="900" height="1200" fill="url(#bg)"/>
+      <ellipse cx="450" cy="600" rx="365" ry="535" fill="#000" opacity=".9" filter="url(#blur)"/>
+      <g filter="url(#rough)">
+        <ellipse cx="450" cy="570" rx="350" ry="515" fill="url(#skin)"/>
+        <g clipPath="url(#faceClip)">
+          <path d="M120 430 Q240 270 370 330 Q450 360 530 320 Q690 270 785 450 L760 1030 Q600 1130 450 1080 Q270 1130 120 1010Z" fill="#000" opacity=".3"/>
+          <ellipse cx="292" cy="485" rx="132" ry="118" fill={face.shadow}/>
+          <ellipse cx="610" cy="485" rx="138" ry="123" fill={face.shadow}/>
+          <ellipse cx="295" cy="492" rx="45" ry="39" fill="url(#eye)" filter="url(#glow)"/>
+          <ellipse cx="605" cy="490" rx="46" ry="40" fill="url(#eye)" filter="url(#glow)"/>
+          <ellipse cx="302" cy="499" rx="13" ry="22" fill="#000"/>
+          <ellipse cx="598" cy="497" rx="13" ry="22" fill="#000"/>
+          <circle cx="286" cy="480" r="6" fill="#fff"/><circle cx="589" cy="478" r="6" fill="#fff"/>
+          <path d="M405 500 C380 590 365 640 395 682 C420 704 480 704 507 676 C535 640 520 585 496 500 C475 470 425 470 405 500Z" fill="#171012" opacity=".9"/>
+          <path d="M410 650 Q450 625 490 650 L505 705 Q450 735 395 705Z" fill="#050303"/>
+          <ellipse cx="450" cy="820" rx="205" ry="158" fill="url(#mouth)" stroke="#5c1010" strokeWidth="12"/>
+          <path d="M265 795 Q450 850 635 790" fill="none" stroke="#a51b1b" strokeWidth="18" opacity=".75"/>
+          <path d="M285 855 Q450 910 615 850" fill="none" stroke="#5b0b0b" strokeWidth="10" opacity=".8"/>
+          <path d="M300 790 l12 65 l13 -64 M345 798 l12 73 l13 -72 M390 803 l12 70 l13 -69 M435 805 l12 76 l13 -75 M480 803 l12 70 l13 -69 M525 798 l12 73 l13 -72 M570 792 l12 67 l13 -66" fill="#e6ded4" opacity=".96" stroke="#cfc6bc" strokeWidth="2"/>
+          <g fill="none" stroke={face.crack} strokeWidth="8" strokeLinecap="round" opacity=".9">
+            <path d="M190 270 L235 355 L205 420 L250 485 L220 560"/><path d="M700 300 L650 370 L690 445 L640 520 L675 600"/>
+            <path d="M360 190 L395 260 L370 330"/><path d="M535 190 L505 265 L535 335"/>
+          </g>
+          <g stroke="#500d0d" strokeWidth="9" opacity=".8">
+            <path d="M250 590 C230 690 260 735 245 790"/><path d="M655 575 C675 680 650 730 670 800"/>
+            <path d="M330 920 C320 975 345 1005 330 1045"/><path d="M570 920 C585 975 560 1010 575 1050"/>
+          </g>
+        </g>
+      </g>
+      <rect width="900" height="1200" fill="none" stroke="#000" strokeWidth="130" opacity=".78"/>
+      {!reduced && <motion.g animate={{ x: [0, -8, 6, 0] }} transition={{ duration: .55, repeat: 2 }}>
+        <path d="M0 330 H900 M0 335 H900 M0 760 H900 M0 765 H900" stroke="#fff" strokeWidth="2" opacity=".08"/>
+      </motion.g>}
+    </motion.svg>
+  );
 }
 
-function HorrorFace({ reduced }: { reduced: boolean }) {
-  return <PhotographicHorror reduced={reduced} />;
+function HorrorFace({ reduced, variant }: { reduced: boolean; variant: string }) {
+  return <PhotographicHorror reduced={reduced} variant={variant} />;
 }
 
 function playScream() {
