@@ -211,7 +211,7 @@ function PhotographicHorror({ reduced }: { reduced: boolean }) {
   return <canvas ref={canvasRef} className="h-full w-full" aria-hidden="true" />;
 }
 
-function HorrorFace({ reduced }: { id: HalloweenScare["id"]; reduced: boolean }) {
+function HorrorFace({ reduced }: { reduced: boolean }) {
   return <PhotographicHorror reduced={reduced} />;
 }
 
