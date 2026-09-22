@@ -17,6 +17,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: halloween-preview-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   preview:
     runs-on: ubuntu-latest
