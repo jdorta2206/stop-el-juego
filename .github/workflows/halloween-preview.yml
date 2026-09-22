@@ -10,6 +10,7 @@ on:
   pull_request:
     branches:
       - feature/halloween-2026
+      - feature/halloween-jumpscares-v2
       - feature/halloween-solo-surprise
   workflow_dispatch:
 
