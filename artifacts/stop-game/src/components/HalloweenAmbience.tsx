@@ -148,7 +148,7 @@ export function HalloweenAmbience({ active, muted, heavy = false }: HalloweenAmb
       cancelled = true;
       stop();
     };
-  }, [active, muted]);
+  }, [active, muted, heavy]);
 
   return null;
 }
