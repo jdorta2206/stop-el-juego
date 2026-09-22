@@ -5,6 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
 import confetti from "canvas-confetti";
 import { Layout } from "@/components/Layout";
+import { HalloweenAmbience } from "@/components/HalloweenAmbience";
 import { Button, Card, Input, Progress } from "@/components/ui";
 import { Roulette } from "@/components/Roulette";
 import { getCategories, getAlphabet, getCurrentLang, getApiUrl, authHeaders } from "@/lib/utils";
@@ -1488,6 +1489,7 @@ export default function SoloGame() {
 
   return (
     <Layout>
+      <HalloweenAmbience active={isHalloweenActive() && !isDailyMode && gameState === "PLAYING"} muted={muted} />
       {/* 📡 Discreet offline banner — shown while playing without internet using cached dictionary */}
       <AnimatePresence>
         {isOffline && (
