@@ -8,7 +8,7 @@ export const HALLOWEEN_CATEGORIES = {
   fr: ["Déguisement effrayant", "Monstre", "Film d'horreur", "Objet d'une maison hantée", "Créature surnaturelle"],
 } as const;
 
-export type HalloweenScareId = "ghost" | "spider" | "skull" | "pumpkin" | "vampire";
+export type HalloweenScareId = "ghost" | "clown" | "spider" | "skull" | "pumpkin" | "vampire";
 
 export interface HalloweenScare {
   id: HalloweenScareId;
@@ -19,28 +19,32 @@ export interface HalloweenScare {
 
 export const HALLOWEEN_SCARES: Record<string, HalloweenScare[]> = {
   es: [
-    { id: "ghost", emoji: "👻", title: "¡BU!", text: "Algo te está mirando..." },
+    { id: "ghost", emoji: "👻", title: "¡NO MIRES ATRÁS!", text: "Algo acaba de aparecer..." },
+    { id: "clown", emoji: "🤡", title: "¡TE ENCONTRÉ!", text: "El payaso estaba esperando..." },
     { id: "spider", emoji: "🕷️", title: "¡CUIDADO!", text: "Hay algo en la pantalla..." },
     { id: "skull", emoji: "💀", title: "¡TE HE VISTO!", text: "No todas las palabras dan miedo." },
     { id: "pumpkin", emoji: "🎃", title: "LA CALABAZA TE OBSERVA", text: "Sigue jugando si te atreves." },
     { id: "vampire", emoji: "🧛", title: "¡EL VAMPIRO HA LLEGADO!", text: "Esta partida acaba de ponerse rara..." },
   ],
   en: [
-    { id: "ghost", emoji: "👻", title: "BOO!", text: "Something is watching you..." },
+    { id: "ghost", emoji: "👻", title: "DON’T LOOK BACK!", text: "Something just appeared..." },
+    { id: "clown", emoji: "🤡", title: "I FOUND YOU!", text: "The clown was waiting..." },
     { id: "spider", emoji: "🕷️", title: "WATCH OUT!", text: "Something is on the screen..." },
     { id: "skull", emoji: "💀", title: "I SAW YOU!", text: "Not every word is scary." },
     { id: "pumpkin", emoji: "🎃", title: "THE PUMPKIN IS WATCHING", text: "Keep playing if you dare." },
     { id: "vampire", emoji: "🧛", title: "THE VAMPIRE ARRIVED!", text: "This game just got weird..." },
   ],
   pt: [
-    { id: "ghost", emoji: "👻", title: "BUU!", text: "Alguém está a observar-te..." },
+    { id: "ghost", emoji: "👻", title: "NÃO OLHES PARA TRÁS!", text: "Algo acabou de aparecer..." },
+    { id: "clown", emoji: "🤡", title: "ENCONTREI-TE!", text: "O palhaço estava à espera..." },
     { id: "spider", emoji: "🕷️", title: "CUIDADO!", text: "Há algo no ecrã..." },
     { id: "skull", emoji: "💀", title: "EU VI-TE!", text: "Nem todas as palavras assustam." },
     { id: "pumpkin", emoji: "🎃", title: "A ABÓBORA OBSERVA-TE", text: "Continua se tiveres coragem." },
     { id: "vampire", emoji: "🧛", title: "O VAMPIRO CHEGOU!", text: "Esta partida ficou estranha..." },
   ],
   fr: [
-    { id: "ghost", emoji: "👻", title: "BOUH !", text: "Quelqu'un te regarde..." },
+    { id: "ghost", emoji: "👻", title: "NE TE RETOURNE PAS !", text: "Quelque chose vient d’apparaître..." },
+    { id: "clown", emoji: "🤡", title: "JE T’AI TROUVÉ !", text: "Le clown attendait..." },
     { id: "spider", emoji: "🕷️", title: "ATTENTION !", text: "Il y a quelque chose à l'écran..." },
     { id: "skull", emoji: "💀", title: "JE T'AI VU !", text: "Tous les mots ne font pas peur." },
     { id: "pumpkin", emoji: "🎃", title: "LA CITROUILLE TE REGARDE", text: "Continue si tu l'oses." },
