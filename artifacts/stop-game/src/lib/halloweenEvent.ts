@@ -71,3 +71,8 @@ export function getHalloweenScare(lang: string): HalloweenScare {
   const scares = HALLOWEEN_SCARES[lang] ?? HALLOWEEN_SCARES.es;
   return scares[Math.floor(Math.random() * scares.length)] ?? HALLOWEEN_SCARES.es[0];
 }
+
+export function getHalloweenScareById(lang: string, id: HalloweenScareId): HalloweenScare {
+  const scares = HALLOWEEN_SCARES[lang] ?? HALLOWEEN_SCARES.es;
+  return scares.find((scare) => scare.id === id) ?? scares[0];
+}
