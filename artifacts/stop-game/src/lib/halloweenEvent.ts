@@ -44,3 +44,19 @@ export const HALLOWEEN_SCARES: Record<string, HalloweenScare[]> = {
     { id: "stranger", title: "IL TE REGARDE", text: "Ne détourne pas les yeux..." },
   ],
 };
+export function isHalloweenActive(now = new Date()): boolean {
+  if (isHalloweenPreview()) return true;
+  const start = new Date(HALLOWEEN_START);
+  const end = new Date(HALLOWEEN_END);
+  return now >= start && now < end;
+}
+
+export function getHalloweenLabel(lang: string): string {
+  const labels: Record<string, string> = { es: "HALLOWEEN", en: "HALLOWEEN", pt: "HALLOWEEN", fr: "HALLOWEEN" };
+  return labels[lang] ?? labels.es;
+}
+
+export function getHalloweenSubtitle(lang: string): string {
+  const subtitles: Record<string, string> = { es: "El terror ha comenzado", en: "The terror has begun", pt: "O terror começou", fr: "La terreur a commencé" };
+  return subtitles[lang] ?? subtitles.es;
+}
