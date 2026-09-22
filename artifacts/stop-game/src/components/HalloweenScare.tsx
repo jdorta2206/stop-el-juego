@@ -80,53 +80,58 @@ function playScream() {
     if (!AudioCtx) return;
     const ctx = new AudioCtx();
     const now = ctx.currentTime;
-    if (ctx.state === "suspended") void ctx.resume();
 
     const master = ctx.createGain();
-    master.gain.setValueAtTime(.0001, now);
-    master.gain.exponentialRampToValueAtTime(.72, now + .018);
-    master.gain.exponentialRampToValueAtTime(.0001, now + 1.05);
+    master.gain.setValueAtTime(0.0001, now);
+    master.gain.exponentialRampToValueAtTime(0.9, now + 0.012);
+    master.gain.exponentialRampToValueAtTime(0.0001, now + 1.15);
     master.connect(ctx.destination);
 
-    const scream = ctx.createOscillator();
-    scream.type = "sawtooth";
-    scream.frequency.setValueAtTime(420, now);
-    scream.frequency.exponentialRampToValueAtTime(1180, now + .16);
-    scream.frequency.exponentialRampToValueAtTime(280, now + .82);
-    scream.frequency.exponentialRampToValueAtTime(120, now + 1.0);
-    scream.connect(master);
-    scream.start(now);
-    scream.stop(now + 1.08);
+    // A short human-like shriek: two detuned formant bands with a fast pitch rise/fall.
+    for (const [freq, gainValue] of [[530, 0.32], [760, 0.22], [1040, 0.13]] as const) {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sawtooth";
+      osc.frequency.setValueAtTime(freq, now);
+      osc.frequency.exponentialRampToValueAtTime(freq * 1.9, now + 0.13);
+      osc.frequency.exponentialRampToValueAtTime(freq * 0.48, now + 0.92);
+      gain.gain.setValueAtTime(gainValue, now);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 1.08);
+      osc.connect(gain).connect(master);
+      osc.start(now);
+      osc.stop(now + 1.12);
+    }
 
-    const shriek = ctx.createOscillator();
-    shriek.type = "triangle";
-    shriek.frequency.setValueAtTime(720, now + .03);
-    shriek.frequency.exponentialRampToValueAtTime(1450, now + .2);
-    shriek.frequency.exponentialRampToValueAtTime(360, now + .7);
-    const shriekGain = ctx.createGain();
-    shriekGain.gain.value = .34;
-    shriek.connect(shriekGain).connect(master);
-    shriek.start(now);
-    shriek.stop(now + .82);
+    // The attack is a sharp impact, not a spring/bounce sound.
+    const impact = ctx.createOscillator();
+    const impactGain = ctx.createGain();
+    impact.type = "sine";
+    impact.frequency.setValueAtTime(115, now);
+    impact.frequency.exponentialRampToValueAtTime(38, now + 0.38);
+    impactGain.gain.setValueAtTime(0.75, now);
+    impactGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.42);
+    impact.connect(impactGain).connect(master);
+    impact.start(now);
+    impact.stop(now + 0.45);
 
     const noise = ctx.createBufferSource();
-    const buffer = ctx.createBuffer(1, Math.floor(ctx.sampleRate * .75), ctx.sampleRate);
+    const buffer = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.9), ctx.sampleRate);
     const data = buffer.getChannelData(0);
     for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
     noise.buffer = buffer;
     const filter = ctx.createBiquadFilter();
     filter.type = "bandpass";
-    filter.frequency.setValueAtTime(1500, now);
-    filter.frequency.exponentialRampToValueAtTime(520, now + .7);
-    filter.Q.value = 1.2;
+    filter.frequency.setValueAtTime(2100, now);
+    filter.frequency.exponentialRampToValueAtTime(650, now + 0.75);
+    filter.Q.value = 1.1;
     const ng = ctx.createGain();
-    ng.gain.setValueAtTime(.24, now);
-    ng.gain.exponentialRampToValueAtTime(.0001, now + .72);
+    ng.gain.setValueAtTime(0.32, now);
+    ng.gain.exponentialRampToValueAtTime(0.0001, now + 0.82);
     noise.connect(filter).connect(ng).connect(master);
     noise.start(now);
-    noise.stop(now + .76);
+    noise.stop(now + 0.86);
 
-    window.setTimeout(() => { try { void ctx.close(); } catch {} }, 1400);
+    window.setTimeout(() => { try { void ctx.close(); } catch {} }, 1500);
   } catch {}
 }
 
