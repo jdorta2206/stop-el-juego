@@ -47,7 +47,7 @@ export function HalloweenAmbience({ active, muted }: HalloweenAmbienceProps) {
         if (cancelled) return;
 
         const master = ctx.createGain();
-        master.gain.value = 0.045;
+        master.gain.value = 0.075;
         master.connect(ctx.destination);
         nodesRef.current.push(master);
 
@@ -64,7 +64,7 @@ export function HalloweenAmbience({ active, muted }: HalloweenAmbienceProps) {
         const droneGain = ctx.createGain();
         drone.type = "sawtooth";
         drone.frequency.value = 67.2;
-        droneGain.gain.value = 0.035;
+        droneGain.gain.value = 0.065;
         drone.connect(droneGain).connect(master);
         drone.start();
         nodesRef.current.push(drone);
@@ -73,15 +73,15 @@ export function HalloweenAmbience({ active, muted }: HalloweenAmbienceProps) {
         const tensionGain = ctx.createGain();
         tension.type = "triangle";
         tension.frequency.value = 71.5;
-        tensionGain.gain.value = 0.045;
+        tensionGain.gain.value = 0.075;
         tension.connect(tensionGain).connect(master);
         tension.start();
         nodesRef.current.push(tension);
 
         const lfo = ctx.createOscillator();
         const lfoGain = ctx.createGain();
-        lfo.frequency.value = 0.055;
-        lfoGain.gain.value = 12;
+        lfo.frequency.value = 0.035;
+        lfoGain.gain.value = 9;
         lfo.connect(lfoGain).connect(low.frequency);
         lfo.start();
         nodesRef.current.push(lfo);
@@ -95,30 +95,46 @@ export function HalloweenAmbience({ active, muted }: HalloweenAmbienceProps) {
           pulse.frequency.setValueAtTime(62, now);
           pulse.frequency.exponentialRampToValueAtTime(48, now + 0.42);
           gain.gain.setValueAtTime(0.0001, now);
-          gain.gain.exponentialRampToValueAtTime(0.08, now + 0.08);
+          gain.gain.exponentialRampToValueAtTime(0.14, now + 0.08);
           gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.62);
           pulse.connect(gain).connect(master);
           pulse.start(now);
           pulse.stop(now + 0.68);
-          timersRef.current.push(window.setTimeout(scheduleHeartbeat, 3300 + Math.random() * 2200));
+          timersRef.current.push(window.setTimeout(scheduleHeartbeat, 2600 + Math.random() * 2400));
         };
         scheduleHeartbeat();
 
         const scheduleWhisper = () => {
           if (cancelled || ctx.state === "closed") return;
           const now = ctx.currentTime;
-          const osc = ctx.createOscillator();
+
+          // A very soft, breath-like noise texture — not a melody or ringtone.
+          const buffer = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 1.9), ctx.sampleRate);
+          const data = buffer.getChannelData(0);
+          for (let i = 0; i < data.length; i++) {
+            const t = i / data.length;
+            data[i] = (Math.random() * 2 - 1) * Math.pow(Math.sin(Math.PI * t), 1.6);
+          }
+          const source = ctx.createBufferSource();
+          source.buffer = buffer;
+
+          const filter = ctx.createBiquadFilter();
+          filter.type = "bandpass";
+          filter.Q.value = 0.8;
+          filter.frequency.setValueAtTime(850 + Math.random() * 500, now);
+          filter.frequency.exponentialRampToValueAtTime(260 + Math.random() * 120, now + 1.7);
+
           const gain = ctx.createGain();
-          osc.type = "sine";
-          osc.frequency.setValueAtTime(320 + Math.random() * 180, now);
-          osc.frequency.exponentialRampToValueAtTime(95 + Math.random() * 70, now + 1.7);
           gain.gain.setValueAtTime(0.0001, now);
-          gain.gain.exponentialRampToValueAtTime(0.018, now + 0.25);
-          gain.gain.exponentialRampToValueAtTime(0.0001, now + 1.7);
-          osc.connect(gain).connect(master);
-          osc.start(now);
-          osc.stop(now + 1.8);
-          timersRef.current.push(window.setTimeout(scheduleWhisper, 8500 + Math.random() * 7000));
+          gain.gain.exponentialRampToValueAtTime(0.028, now + 0.35);
+          gain.gain.exponentialRampToValueAtTime(0.0001, now + 1.85);
+
+          source.connect(filter).connect(gain).connect(master);
+          source.start(now);
+          source.stop(now + 1.9);
+
+          timersRef.current.push(window.setTimeout(scheduleWhisper, 6500 + Math.random() * 8500));
+        };
         };
         scheduleWhisper();
       } catch {
