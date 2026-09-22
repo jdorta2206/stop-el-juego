@@ -40,6 +40,8 @@ import { applyHalloweenCategory, getHalloweenScare, getHalloweenScareById, isHal
 import { HalloweenAmbience } from "@/components/HalloweenAmbience";
 import { HalloweenScareOverlay } from "@/components/HalloweenScare";
 import { getHalloweenReducedEffects, setHalloweenReducedEffects } from "@/lib/halloweenAccessibility";
+import { preloadHalloweenScareImage } from "@/lib/halloweenScareImage";
+import { preloadHalloweenScareAudio } from "@/lib/halloweenScareAudio";
 
 const ROUND_TIME = 60;
 
@@ -119,6 +121,13 @@ function calcScore(responses: Record<string, string>, letter: string): number {
 type LocalPhase = "lobby" | "spinning" | "playing" | "freeze" | "submitted" | "bluffvoting" | "bluff_results" | "between_rounds" | "finished";
 
 export default function Room() {
+  useEffect(() => {
+    if (!isHalloweenActive()) return;
+    // Preload while the room is being opened/lobbied so a synchronized scare
+    // never waits for image decode or audio loading.
+    void preloadHalloweenScareImage();
+    preloadHalloweenScareAudio();
+  }, []);
   const { id: roomCode } = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
 
