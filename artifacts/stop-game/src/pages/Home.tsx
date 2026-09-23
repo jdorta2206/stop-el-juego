@@ -25,6 +25,7 @@ import { useCustomPacks } from "@/lib/useCustomPacks";
 import { BannerAd } from "@/components/AdSystem";
 import { PLAY_STORE_URL } from "@/lib/playReview";
 import { HalloweenBanner } from "@/components/HalloweenBanner";
+import { isHalloweenActive, isHalloweenModeEnabled, setHalloweenModeEnabled } from "@/lib/halloweenEvent";
 
 const LOGO_URL = `${import.meta.env.BASE_URL}images/stop-logo.png`;
 
@@ -49,7 +50,7 @@ export default function Home() {
     }
   });
   const ftue = useFTUE();
-  const [showFTUEWelcome, setShowFTUEWelcome] = useState(false);
+  const [showFTUEWelcome, setShowFTUEWelcome] = useState(false);\n  const [halloweenModeEnabled, setHalloweenModeEnabledState] = useState(() => isHalloweenModeEnabled());
 
   // Open the FTUE welcome modal once on first ever visit (after a tiny delay
   // so the home page can render its hero animation first).
@@ -128,6 +129,19 @@ export default function Home() {
 
       <div className="flex-1 flex flex-col items-center justify-center max-w-md mx-auto w-full space-y-7 py-6">
         <HalloweenBanner />
+
+        {isHalloweenActive() && (
+          <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="w-full rounded-2xl px-4 py-3"
+            style={{ background: halloweenModeEnabled ? "linear-gradient(135deg, rgba(127,29,29,.32), rgba(20,8,12,.72))" : "rgba(0,0,0,.24)", border: halloweenModeEnabled ? "2px solid rgba(220,38,38,.48)" : "1.5px solid rgba(255,255,255,.14)" }}>
+            <div className="flex items-center gap-3">
+              <div className="text-2xl flex-shrink-0">{halloweenModeEnabled ? "🎃" : "🕯️"}</div>
+              <div className="flex-1 min-w-0"><p className="text-white font-black text-sm">Modo Halloween</p><p className="text-white/55 text-[11px] leading-tight">{halloweenModeEnabled ? "Sustos, música y ambientación activados" : "STOP clásico: sin sustos ni música Halloween"}</p></div>
+              <button type="button" aria-pressed={halloweenModeEnabled} onClick={() => { const next=!halloweenModeEnabled; setHalloweenModeEnabled(next); setHalloweenModeEnabledState(next); }} className="relative w-14 h-8 rounded-full transition-colors flex-shrink-0" style={{ background: halloweenModeEnabled ? "#991b1b" : "rgba(255,255,255,.18)", border:"1px solid rgba(255,255,255,.2)" }}>
+                <span className="absolute top-1 w-6 h-6 rounded-full bg-white shadow-md transition-transform" style={{ transform: halloweenModeEnabled ? "translateX(27px)" : "translateX(3px)" }} />
+              </button>
+            </div>
+          </motion.div>
+        )}
 
         {/* Invite welcome banner */}
         <AnimatePresence>
