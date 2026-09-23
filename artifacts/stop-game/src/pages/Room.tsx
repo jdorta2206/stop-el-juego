@@ -38,6 +38,7 @@ import { ReviewPromptCard } from "@/components/ReviewPromptCard";
 import { maybeShowInterstitial } from "@/lib/interstitialAd";
 import { applyHalloweenCategory, getHalloweenScare, getHalloweenScareById, isHalloweenActive, isHalloweenPreview } from "@/lib/halloweenEvent";
 import { HalloweenAmbience } from "@/components/HalloweenAmbience";
+import { HalloweenGameTheme } from "@/components/HalloweenGameTheme";
 import { HalloweenScareOverlay } from "@/components/HalloweenScare";
 import { getHalloweenReducedEffects, setHalloweenReducedEffects } from "@/lib/halloweenAccessibility";
 import { preloadHalloweenScareImage } from "@/lib/halloweenScareImage";
@@ -1712,6 +1713,9 @@ export default function Room() {
             initial={{ opacity: 0, x: 50 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -50 }}
             className="flex-1 flex flex-col max-w-2xl mx-auto w-full"
           >
+            {/* 🎃 Halloween-only visual skin. It is pointer-events-none and does not alter gameplay. */}
+            <HalloweenGameTheme active={isHalloweenActive()} />
+
             {/* Header */}
             <div className="flex items-center gap-3 mb-4 bg-primary/70 p-3 rounded-2xl border border-white/10">
               <div className="w-14 h-14 bg-white rounded-full flex items-center justify-center text-primary font-display font-black text-3xl shadow-inner flex-shrink-0">
@@ -1915,6 +1919,8 @@ export default function Room() {
                       }}
                       placeholder={`${cat} con ${currentLetter}...`}
                       autoComplete="off" autoCorrect="off"
+                      className={isHalloweenActive() ? "border-red-800/70 bg-black/30 text-red-200 placeholder:text-red-200/35" : ""}
+                      style={isHalloweenActive() ? { textShadow: "0 0 10px rgba(153,27,27,.35)", caretColor: "#ef4444" } : undefined}
                     />
                   </motion.div>
                 );
