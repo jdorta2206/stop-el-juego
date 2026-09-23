@@ -447,7 +447,8 @@ export default function SoloGame() {
       const delay = minDelay + Math.floor(Math.random() * (maxDelay - minDelay));
 
       halloweenAnswerScareTimerRef.current = setTimeout(() => {
-        if (gameState === "PLAYING") {
+        if (gameState === "PLAYING" && halloweenScareRoundRef.current !== round) {
+          halloweenScareRoundRef.current = round;
           setHalloweenScare(getHalloweenScare(lang));
         }
         halloweenAnswerScareTimerRef.current = null;
