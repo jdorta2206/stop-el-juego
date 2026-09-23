@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { HALLOWEEN_SCARE_ASSETS } from "@/lib/halloweenScareAssets";
+import { HALLOWEEN_SCARE_ASSETS, preloadHalloweenScareAssets } from "@/lib/halloweenScareAssets";
 import { motion } from "framer-motion";
 import type { HalloweenScare } from "@/lib/halloweenEvent";
 import {
