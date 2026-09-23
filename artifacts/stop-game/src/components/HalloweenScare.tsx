@@ -13,10 +13,10 @@ import {
 } from "@/lib/halloweenScareAudio";
 
 /**
- * Real bundled scare visual.
+ * Real scare visual selected randomly from the Halloween asset set.
  *
  * This deliberately contains no CSS-drawn face/eyes/mouth. The visual is the
- * local real image asset from halloweenScareImage.ts, decoded before use.
+ * No CSS-drawn face, SVG face or emoji is used for the scare itself.
  */
 function RealScareVisual({ reduced, scareId }: { reduced: boolean; scareId: keyof typeof HALLOWEEN_SCARE_ASSETS }) {
   return (
