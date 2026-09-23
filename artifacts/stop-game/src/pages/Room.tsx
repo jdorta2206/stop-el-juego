@@ -30,6 +30,7 @@ import { recordExternalStat } from "@/hooks/useAchievements";
 import { CountUp } from "@/components/CountUp";
 import { getApiUrl, publicLink, authHeaders, getSessionToken } from "@/lib/utils";
 import { reportSeasonEvent } from "@/hooks/useSeason";
+import { reportHalloweenEvent } from "@/hooks/useHalloweenProgress";
 import { saveActiveRoom, clearActiveRoom, touchActiveRoom } from "@/lib/activeRoom";
 import { useT } from "@/i18n/useT";
 import { useToast } from "@/hooks/use-toast";
@@ -662,15 +663,18 @@ export default function Room() {
     const event = (room as any)?.halloweenScare as {
       id?: string;
       playerId?: string;
-      scareId?: "ghost" | "spider" | "skull" | "pumpkin" | "vampire";
+      scareId?: "clown" | "horrorMask" | "hauntedDoll" | "creepyDoll" | "demonMask";
       round?: number;
     } | null;
-    if (!event?.id || event.round !== currentRound || !isHalloweenActive() && isHalloweenModeEnabled()) return;
+    if (!event?.id || event.round !== currentRound || !isHalloweenActive() || !isHalloweenModeEnabled()) return;
     if (event.playerId && event.playerId === player?.id) return;
     if (seenHalloweenEventRef.current === event.id) return;
     seenHalloweenEventRef.current = event.id;
     if (halloweenScareTimerRef.current) clearTimeout(halloweenScareTimerRef.current);
-    setHalloweenScare(getHalloweenScareById(getCurrentLang(), event.scareId ?? "ghost"));
+    setHalloweenScare(getHalloweenScareById(getCurrentLang(), event.scareId ?? "clown"));
+    if (player?.id && isHalloweenActive() && isHalloweenModeEnabled()) {
+      void reportHalloweenEvent(player.id, "scare_received", `room-scare-${event.id}`);
+    }
     if (halloweenScareHideTimerRef.current) clearTimeout(halloweenScareHideTimerRef.current);
     halloweenScareHideTimerRef.current = setTimeout(() => setHalloweenScare(null), 1550);
   }, [(room as any)?.halloweenScare?.id, (room as any)?.halloweenScare?.round, currentRound]);
@@ -705,6 +709,9 @@ export default function Room() {
       const remoteScare = scareReactions.some(r => !r.playerName.startsWith(`__HALLOWEEN_SCARE__${player?.id}__`));
       if (remoteScare) {
         setHalloweenScare(getHalloweenScare(getCurrentLang()));
+        if (player?.id && isHalloweenActive() && isHalloweenModeEnabled()) {
+          void reportHalloweenEvent(player.id, "scare_received", `room-reaction-scare-${newOnes[0]?.id ?? Date.now()}`);
+        }
         if (halloweenScareHideTimerRef.current) clearTimeout(halloweenScareHideTimerRef.current);
         halloweenScareHideTimerRef.current = setTimeout(() => setHalloweenScare(null), 1550);
       }
@@ -731,7 +738,7 @@ export default function Room() {
     } catch {}
   }, [player, roomCode]);
   const sendHalloweenScare = useCallback(async () => {
-    if (!player || !roomCode || !isHalloweenActive() && isHalloweenModeEnabled() || manualScareBusyRef.current) return;
+    if (!player || !roomCode || !isHalloweenActive() || !isHalloweenModeEnabled() || manualScareBusyRef.current) return;
     if (Date.now() < halloweenScareCooldownUntil) return;
     manualScareBusyRef.current = true;
     try {
@@ -742,6 +749,9 @@ export default function Room() {
       });
       const data = await response.json().catch(() => ({}));
       if (response.ok) {
+        if (player?.id && isHalloweenActive() && isHalloweenModeEnabled()) {
+          void reportHalloweenEvent(player.id, "scare_provoked", `room-provoked-${roomCode}-${Date.now()}`);
+        }
         const ms = Number(data.cooldownMs ?? 18000);
         setHalloweenScareCooldownUntil(Date.now() + ms);
         window.setTimeout(() => setHalloweenScareCooldownUntil(0), ms + 50);
@@ -2789,7 +2799,12 @@ export default function Room() {
             scare={halloweenScare}
             muted={muted}
             reducedEffects={reducedHalloweenEffects}
-            onDone={() => setHalloweenScare(null)}
+            onDone={() => {
+            if (player?.id && isHalloweenActive() && isHalloweenModeEnabled()) {
+              void reportHalloweenEvent(player.id, "scare_received", `room-overlay-${Date.now()}`);
+            }
+            setHalloweenScare(null);
+          }}
           />
         )}
       </AnimatePresence>
