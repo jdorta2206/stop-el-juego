@@ -15,9 +15,6 @@ on:
       - feature/halloween-solo-surprise
   workflow_dispatch:
 
-permissions:
-  contents: read
-  pull-requests: write
 
 concurrency:
   group: halloween-preview-${{ github.ref }}
@@ -168,16 +165,6 @@ jobs:
           name: halloween-preview-url
           path: /tmp/halloween-preview-url.txt
           retention-days: 1
-      - name: Publish preview URL to PR
-        if: github.event_name == 'pull_request'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: |
-          URL="$(cat /tmp/halloween-preview-url.txt)"
-          gh pr comment "$PR_NUMBER" --repo "${{ github.repository }}" --body "🎃 **Halloween preview listo:** $URL
-
-Este enlace estará activo mientras siga ejecutándose el workflow."
       - name: Keep preview available for manual testing
         run: sleep 3600
       - name: Stop preview processes
