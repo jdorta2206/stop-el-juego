@@ -11,6 +11,7 @@ function getAudio(): HTMLAudioElement | null {
   if (!cachedAudio) {
     const item = new Audio(HALLOWEEN_SCARE_AUDIO);
     item.preload = "auto";
+    item.loop = false;
     item.volume = 0.95;
     cachedAudio = item;
   }
@@ -22,5 +23,18 @@ export function preloadHalloweenScareAudio(): void {
 export async function playHalloweenScareAudio(): Promise<void> {
   const item = getAudio();
   if (!item) return;
-  try { item.currentTime = 0; await item.play(); } catch {}
+  try {
+    item.pause();
+    item.currentTime = 0;
+    await item.play();
+  } catch {}
+}
+
+export function stopHalloweenScareAudio(): void {
+  const item = getAudio();
+  if (!item) return;
+  try {
+    item.pause();
+    item.currentTime = 0;
+  } catch {}
 }
