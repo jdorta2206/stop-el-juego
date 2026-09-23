@@ -10,38 +10,41 @@ export const HALLOWEEN_CATEGORIES = {
 
 export const isHalloweenPreview = (): boolean => import.meta.env.VITE_HALLOWEEN_PREVIEW === "true";
 
-export type HalloweenScareId = "clown" | "nightmare" | "specter" | "stranger";
+export type HalloweenScareId = "clown" | "horrorMask" | "hauntedDoll" | "creepyDoll" | "demonMask";
 
 export interface HalloweenScare {
   id: HalloweenScareId;
   title: string;
   text: string;
 }
-
 export const HALLOWEEN_SCARES: Record<string, HalloweenScare[]> = {
   es: [
     { id: "clown", title: "NO MIRES", text: "Algo está demasiado cerca..." },
-    { id: "nightmare", title: "DESPIERTA", text: "No estás solo..." },
-    { id: "specter", title: "¿LO HAS VISTO?", text: "Acaba de aparecer..." },
-    { id: "stranger", title: "TE ESTÁ MIRANDO", text: "No apartes la vista..." },
+    { id: "horrorMask", title: "NO ESTÁS SOLO", text: "No apartes la vista..." },
+    { id: "hauntedDoll", title: "TE ESTÁ MIRANDO", text: "¿Lo has visto?" },
+    { id: "creepyDoll", title: "DEMASIADO CERCA", text: "Acaba de aparecer..." },
+    { id: "demonMask", title: "NO TE GIRES", text: "Sigue jugando..." },
   ],
   en: [
     { id: "clown", title: "DON'T LOOK", text: "Something is too close..." },
-    { id: "nightmare", title: "WAKE UP", text: "You are not alone..." },
-    { id: "specter", title: "DID YOU SEE IT?", text: "Something appeared..." },
-    { id: "stranger", title: "IT'S WATCHING", text: "Don't look away..." },
+    { id: "horrorMask", title: "YOU ARE NOT ALONE", text: "Don't look away..." },
+    { id: "hauntedDoll", title: "IT'S WATCHING", text: "Did you see it?" },
+    { id: "creepyDoll", title: "TOO CLOSE", text: "Something appeared..." },
+    { id: "demonMask", title: "DON'T TURN AROUND", text: "Keep playing..." },
   ],
   pt: [
     { id: "clown", title: "NÃO OLHE", text: "Algo está perto demais..." },
-    { id: "nightmare", title: "ACORDE", text: "Você não está sozinho..." },
-    { id: "specter", title: "VOCÊ VIU?", text: "Algo apareceu..." },
-    { id: "stranger", title: "ESTÁ OLHANDO", text: "Não desvie o olhar..." },
+    { id: "horrorMask", title: "VOCÊ NÃO ESTÁ SOZINHO", text: "Não desvie o olhar..." },
+    { id: "hauntedDoll", title: "ESTÁ OLHANDO", text: "Você viu?" },
+    { id: "creepyDoll", title: "PERTO DEMAIS", text: "Algo apareceu..." },
+    { id: "demonMask", title: "NÃO SE VIRE", text: "Continue jogando..." },
   ],
   fr: [
     { id: "clown", title: "NE REGARDE PAS", text: "Quelque chose est trop près..." },
-    { id: "nightmare", title: "RÉVEILLE-TOI", text: "Tu n'es pas seul..." },
-    { id: "specter", title: "TU L'AS VU?", text: "Quelque chose est apparu..." },
-    { id: "stranger", title: "IL TE REGARDE", text: "Ne détourne pas les yeux..." },
+    { id: "horrorMask", title: "TU N'ES PAS SEUL", text: "Ne détourne pas les yeux..." },
+    { id: "hauntedDoll", title: "IL TE REGARDE", text: "Tu l'as vu ?" },
+    { id: "creepyDoll", title: "TROP PRÈS", text: "Quelque chose est apparu..." },
+    { id: "demonMask", title: "NE TE RETOURNE PAS", text: "Continue à jouer..." },
   ],
 };
 export function isHalloweenActive(now = new Date()): boolean {
