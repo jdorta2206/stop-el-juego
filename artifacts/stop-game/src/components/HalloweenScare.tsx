@@ -72,7 +72,11 @@ export function HalloweenScareOverlay({
   muted?: boolean;
   reducedEffects?: boolean;
 }) {
-  const [osReducedMotion, setOsReducedMotion] = useState(false);\n  const onDoneRef = useRef(onDone);\n  useEffect(() => { onDoneRef.current = onDone; }, [onDone]);
+  const [osReducedMotion, setOsReducedMotion] = useState(false);
+  const onDoneRef = useRef(onDone);
+  useEffect(() => {
+    onDoneRef.current = onDone;
+  }, [onDone]);
 
   // Preload BOTH real assets as soon as the overlay component is mounted.
   // The image decoder and audio element are therefore warm before playback.
