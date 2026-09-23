@@ -1,5 +1,6 @@
 name: Halloween preview
 # Preview retrigger: keep manual Halloween preview available
+# Auto-triggered validation after tunnel fallback update
 
 on:
   push:
