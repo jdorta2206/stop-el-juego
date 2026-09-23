@@ -50,7 +50,7 @@ import { HalloweenGameTheme } from "@/components/HalloweenGameTheme";
 import { HalloweenScareOverlay } from "@/components/HalloweenScare";
 import type { HalloweenScare } from "@/lib/halloweenEvent";
 import { getHalloweenReducedEffects, setHalloweenReducedEffects } from "@/lib/halloweenAccessibility";
-import { preloadHalloweenScareImage } from "@/lib/halloweenScareImage";
+import { preloadHalloweenScareAssets } from "@/lib/halloweenScareAssets";
 import { preloadHalloweenScareAudio } from "@/lib/halloweenScareAudio";
 
 function vibrate(pattern: number | number[]) {
@@ -184,8 +184,8 @@ export default function SoloGame() {
   // The image is bundled locally and the scream is a bundled CC0 MP3, so the
   // actual scare never waits for a network request or first-time media decode.
   useEffect(() => {
-    if (!isHalloweenActive() && isHalloweenModeEnabled() || isDailyMode) return;
-    void preloadHalloweenScareImage();
+    if (!isHalloweenActive() || !isHalloweenModeEnabled() || isDailyMode) return;
+    void preloadHalloweenScareAssets();
     preloadHalloweenScareAudio();
   }, [isDailyMode]);
 
@@ -368,7 +368,7 @@ export default function SoloGame() {
   // The second one is deliberately not tied to a fixed timestamp, so the
   // player cannot learn a pattern from repeated games.
   useEffect(() => {
-    if (gameState !== "PLAYING" || !isHalloweenActive() && isHalloweenModeEnabled()) {
+    if (gameState !== "PLAYING" || !isHalloweenActive() || !isHalloweenModeEnabled()) {
       if (halloweenScareTimerRef.current) {
         clearTimeout(halloweenScareTimerRef.current);
         halloweenScareTimerRef.current = null;
@@ -409,7 +409,7 @@ export default function SoloGame() {
   useEffect(() => {
     if (
       gameState !== "PLAYING" ||
-      !isHalloweenActive() && isHalloweenModeEnabled() ||
+      !isHalloweenActive() || !isHalloweenModeEnabled() ||
       isDailyMode ||
       halloweenScare ||
       halloweenAnswerScareRoundRef.current === round
