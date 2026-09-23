@@ -166,7 +166,7 @@ export default function SoloGame() {
   // Random event for current round
   const [randomEvent, setRandomEvent] = useState<RandomEvent>(null);
   const [halloweenScare, setHalloweenScare] = useState<HalloweenScare | null>(null);
-  const halloweenScareTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const halloweenScareTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);\n  const halloweenScareRoundRef = useRef<number | null>(null);
   const halloweenAnswerScareTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const halloweenAnswerScareRoundRef = useRef<number | null>(null);
   // Round result announcement
