@@ -627,6 +627,9 @@ export default function Room() {
     halloweenScareTimerRef.current = setTimeout(() => {
       const seed = ((hash >>> 16) % 100000) / 100000;
       setHalloweenScare(getHalloweenScare(getCurrentLang()));
+      if (player?.id && isHalloweenActive() && isHalloweenModeEnabled()) {
+        void reportHalloweenEvent(player.id, "scare_received", `room-ambient-${roomCode}-${currentRound}-${Date.now()}`);
+      }
       halloweenScareTimerRef.current = null;
       halloweenScareHideTimerRef.current = setTimeout(() => setHalloweenScare(null), 1550);
     }, delay);
@@ -653,6 +656,9 @@ export default function Room() {
 
     const seed = ((stopper.stopTimestamp % 100000) / 100000);
     setHalloweenScare(getHalloweenScare(getCurrentLang()));
+    if (player?.id && isHalloweenActive() && isHalloweenModeEnabled()) {
+      void reportHalloweenEvent(player.id, "scare_received", `room-stop-${roomCode}-${currentRound}-${stopper.stopTimestamp}`);
+    }
     if (halloweenScareHideTimerRef.current) clearTimeout(halloweenScareHideTimerRef.current);
     halloweenScareHideTimerRef.current = setTimeout(() => setHalloweenScare(null), 1550);
   }, [(room as any)?.status, (room as any)?.stopper?.stopTimestamp, currentRound]);
@@ -2799,12 +2805,7 @@ export default function Room() {
             scare={halloweenScare}
             muted={muted}
             reducedEffects={reducedHalloweenEffects}
-            onDone={() => {
-            if (player?.id && isHalloweenActive() && isHalloweenModeEnabled()) {
-              void reportHalloweenEvent(player.id, "scare_received", `room-overlay-${Date.now()}`);
-            }
-            setHalloweenScare(null);
-          }}
+            onDone={() => setHalloweenScare(null)}
           />
         )}
       </AnimatePresence>
