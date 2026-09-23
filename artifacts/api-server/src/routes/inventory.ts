@@ -8,7 +8,7 @@ import { getWeeklyShop, dealPriceFor, isWeeklyShopItem } from "../lib/dailyShop"
 
 const HALLOWEEN_SHOP_MARKER = "_halloween_";
 const HALLOWEEN_START_MS = Date.parse("2026-10-15T00:00:00Z");
-const HALLOWEEN_END_MS = Date.parse("2026-11-03T00:00:00Z");
+const HALLOWEEN_END_MS = Date.parse("2026-11-02T00:00:00Z");
 
 function isHalloweenActive(now: Date = new Date()): boolean {
   const ms = now.getTime();
