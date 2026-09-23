@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { HALLOWEEN_SCARE_ASSETS } from "@/lib/halloweenScareAssets";
 import { motion } from "framer-motion";
 import type { HalloweenScare } from "@/lib/halloweenEvent";
@@ -72,7 +72,7 @@ export function HalloweenScareOverlay({
   muted?: boolean;
   reducedEffects?: boolean;
 }) {
-  const [osReducedMotion, setOsReducedMotion] = useState(false);
+  const [osReducedMotion, setOsReducedMotion] = useState(false);\n  const onDoneRef = useRef(onDone);\n  useEffect(() => { onDoneRef.current = onDone; }, [onDone]);
 
   // Preload BOTH real assets as soon as the overlay component is mounted.
   // The image decoder and audio element are therefore warm before playback.
@@ -110,7 +110,7 @@ export function HalloweenScareOverlay({
     const duration = reduced ? 1350 : 1500;
     const done = window.setTimeout(() => {
       stopHalloweenScareAudio();
-      onDone?.();
+      onDoneRef.current?.();
     }, duration);
 
     return () => {
@@ -119,7 +119,7 @@ export function HalloweenScareOverlay({
       // unmounts early or a new scare replaces the current one.
       stopHalloweenScareAudio();
     };
-  }, [onDone, muted, reduced]);
+  }, [scare.id, muted, reduced]);
 
   return (
     <motion.div
