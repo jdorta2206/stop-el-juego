@@ -44,7 +44,7 @@ import { usePersonalBest } from "@/hooks/usePersonalBest";
 import { useReviewPrompt, recordGamePlayed, recordScoreAndPercentile } from "@/hooks/useReviewPrompt";
 import { maybeShowInterstitial, recordInterstitialGameCompleted } from "@/lib/interstitialAd";
 import { ReviewPromptCard } from "@/components/ReviewPromptCard";
-import { applyHalloweenCategory, isHalloweenActive, isHalloweenPreview, getHalloweenScare } from "@/lib/halloweenEvent";
+import { applyHalloweenCategory, isHalloweenActive, isHalloweenPreview, getHalloweenScare, isHalloweenModeEnabled } from "@/lib/halloweenEvent";
 import { HalloweenBanner } from "@/components/HalloweenBanner";
 import { HalloweenGameTheme } from "@/components/HalloweenGameTheme";
 import { HalloweenScareOverlay } from "@/components/HalloweenScare";
@@ -184,7 +184,7 @@ export default function SoloGame() {
   // The image is bundled locally and the scream is a bundled CC0 MP3, so the
   // actual scare never waits for a network request or first-time media decode.
   useEffect(() => {
-    if (!isHalloweenActive() || isDailyMode) return;
+    if (!isHalloweenActive() && isHalloweenModeEnabled() || isDailyMode) return;
     void preloadHalloweenScareImage();
     preloadHalloweenScareAudio();
   }, [isDailyMode]);
@@ -368,7 +368,7 @@ export default function SoloGame() {
   // The second one is deliberately not tied to a fixed timestamp, so the
   // player cannot learn a pattern from repeated games.
   useEffect(() => {
-    if (gameState !== "PLAYING" || !isHalloweenActive()) {
+    if (gameState !== "PLAYING" || !isHalloweenActive() && isHalloweenModeEnabled()) {
       if (halloweenScareTimerRef.current) {
         clearTimeout(halloweenScareTimerRef.current);
         halloweenScareTimerRef.current = null;
@@ -409,7 +409,7 @@ export default function SoloGame() {
   useEffect(() => {
     if (
       gameState !== "PLAYING" ||
-      !isHalloweenActive() ||
+      !isHalloweenActive() && isHalloweenModeEnabled() ||
       isDailyMode ||
       halloweenScare ||
       halloweenAnswerScareRoundRef.current === round
@@ -1507,7 +1507,7 @@ export default function SoloGame() {
 
   return (
     <Layout>
-      <HalloweenAmbience active={isHalloweenActive() && !isDailyMode && gameState === "PLAYING"} muted={muted} heavy={halloweenScareAfterglow || !!halloweenScare} />
+      <HalloweenAmbience active={isHalloweenActive() && isHalloweenModeEnabled() && !isDailyMode && gameState === "PLAYING"} muted={muted} heavy={halloweenScareAfterglow || !!halloweenScare} />
       {/* 📡 Discreet offline banner — shown while playing without internet using cached dictionary */}
       <AnimatePresence>
         {isOffline && (
@@ -2046,7 +2046,7 @@ export default function SoloGame() {
               className="flex-1 flex flex-col"
             >
               {/* 🎃 Halloween-only visual skin. Pointer-events are disabled so the game controls remain untouched. */}
-              <HalloweenGameTheme active={isHalloweenActive() && !isDailyMode} />
+              <HalloweenGameTheme active={isHalloweenActive() && isHalloweenModeEnabled() && !isDailyMode} />
 
               {/* Panic overlay — red pulse when < 10s */}
               <AnimatePresence>
@@ -2106,7 +2106,7 @@ export default function SoloGame() {
                       >
                         {muted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
                       </button>
-                      {isHalloweenActive() && (
+                      {isHalloweenActive() && isHalloweenModeEnabled() && (
                         <button
                           onClick={() => {
                             const next = !reducedHalloweenEffects;
@@ -2304,7 +2304,7 @@ export default function SoloGame() {
                           placeholder={isBluffed ? `${category}... 🎭` : `${category}...`}
                           autoComplete="off"
                           autoCorrect="off"
-                          className={isBluffed ? "border-purple-500/50 bg-purple-900/20" : isHalloweenActive() && !isDailyMode ? "border-red-800/70 bg-black/30 text-red-200 placeholder:text-red-200/35" : ""}
+                          className={isBluffed ? "border-purple-500/50 bg-purple-900/20" : isHalloweenActive() && isHalloweenModeEnabled() && !isDailyMode ? "border-red-800/70 bg-black/30 text-red-200 placeholder:text-red-200/35" : ""}
                         />
                       )}
                       {canSabotage && (
