@@ -50,7 +50,8 @@ export default function Home() {
     }
   });
   const ftue = useFTUE();
-  const [showFTUEWelcome, setShowFTUEWelcome] = useState(false);\n  const [halloweenModeEnabled, setHalloweenModeEnabledState] = useState(() => isHalloweenModeEnabled());
+  const [showFTUEWelcome, setShowFTUEWelcome] = useState(false);
+  const [halloweenModeEnabled, setHalloweenModeEnabledState] = useState(() => isHalloweenModeEnabled());
 
   // Open the FTUE welcome modal once on first ever visit (after a tiny delay
   // so the home page can render its hero animation first).
