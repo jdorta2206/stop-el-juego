@@ -7,12 +7,17 @@ import { computeTitleStats, evaluateTitles, isTitleUnlocked } from "../lib/title
 import { getWeeklyShop, dealPriceFor, isWeeklyShopItem } from "../lib/dailyShop";
 
 const HALLOWEEN_SHOP_MARKER = "_halloween_";
-const HALLOWEEN_START_MS = Date.parse("2026-10-15T00:00:00Z");
-const HALLOWEEN_END_MS = Date.parse("2026-11-02T00:00:00Z");
+const HALLOWEEN_START_MONTH = 9; // October (0-based)
+const HALLOWEEN_START_DAY = 15;
+const HALLOWEEN_END_MONTH = 10; // November (0-based)
+const HALLOWEEN_END_DAY = 2;
 
 function isHalloweenActive(now: Date = new Date()): boolean {
+  const year = now.getUTCFullYear();
+  const start = Date.UTC(year, HALLOWEEN_START_MONTH, HALLOWEEN_START_DAY);
+  const end = Date.UTC(year, HALLOWEEN_END_MONTH, HALLOWEEN_END_DAY);
   const ms = now.getTime();
-  return ms >= HALLOWEEN_START_MS && ms < HALLOWEEN_END_MS;
+  return ms >= start && ms < end;
 }
 
 function isHalloweenShopItem(itemId: string): boolean {
