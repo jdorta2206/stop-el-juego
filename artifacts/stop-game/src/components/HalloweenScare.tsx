@@ -3,10 +3,6 @@ import { HALLOWEEN_SCARE_ASSETS, preloadHalloweenScareAssets } from "@/lib/hallo
 import { motion } from "framer-motion";
 import type { HalloweenScare } from "@/lib/halloweenEvent";
 import {
-  HALLOWEEN_SCARE_IMAGE,
-  preloadHalloweenScareImage,
-} from "@/lib/halloweenScareImage";
-import {
   playHalloweenScareAudio,
   preloadHalloweenScareAudio,
   stopHalloweenScareAudio,
@@ -81,7 +77,7 @@ export function HalloweenScareOverlay({
   // Preload BOTH real assets as soon as the overlay component is mounted.
   // The image decoder and audio element are therefore warm before playback.
   useEffect(() => {
-    void preloadHalloweenScareImage();
+    void preloadHalloweenScareAssets();
     preloadHalloweenScareAudio();
 
     try {
@@ -96,12 +92,6 @@ export function HalloweenScareOverlay({
   const reduced = reducedEffects || osReducedMotion;
 
   useEffect(() => {
-    try {
-      (document.activeElement as HTMLElement | null)?.blur();
-    } catch {}
-    try {
-      window.scrollTo(0, 0);
-    } catch {}
     try {
       navigator.vibrate?.([30, 45, 85]);
     } catch {}
