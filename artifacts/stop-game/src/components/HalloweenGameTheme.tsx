@@ -1,4 +1,6 @@
+import { useEffect, useRef } from "react";
 import { motion } from "framer-motion";
+import { HALLOWEEN_GAME_MUSIC } from "@/lib/halloweenGameMusic";
 
 interface HalloweenGameThemeProps {
   active: boolean;
@@ -12,6 +14,40 @@ interface HalloweenGameThemeProps {
  * The underlying STOP controls remain untouched.
  */
 export function HalloweenGameTheme({ active }: HalloweenGameThemeProps) {
+  const musicRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    if (!active || typeof window === "undefined") return;
+
+    const music = new Audio(HALLOWEEN_GAME_MUSIC);
+    music.preload = "auto";
+    music.loop = true;
+    music.volume = 0.12;
+    musicRef.current = music;
+
+    const startMusic = () => {
+      void music.play().catch(() => {});
+    };
+
+    // Try immediately; if the browser blocks autoplay, the first gameplay
+    // interaction starts it without requiring a new button or layout change.
+    startMusic();
+    window.addEventListener("pointerdown", startMusic, { once: true });
+    window.addEventListener("keydown", startMusic, { once: true });
+    window.addEventListener("touchstart", startMusic, { once: true, passive: true });
+
+    return () => {
+      window.removeEventListener("pointerdown", startMusic);
+      window.removeEventListener("keydown", startMusic);
+      window.removeEventListener("touchstart", startMusic);
+      try {
+        music.pause();
+        music.currentTime = 0;
+      } catch {}
+      musicRef.current = null;
+    };
+  }, [active]);
+
   if (!active) return null;
 
   return (
@@ -48,7 +84,7 @@ export function HalloweenGameTheme({ active }: HalloweenGameThemeProps) {
         <path d="M0 30C40 42 42 42 30 0M0 62C72 78 78 78 62 0M0 96C104 112 112 104 96 0M0 132C138 144 144 138 132 0" stroke="rgba(230,230,230,.20)" strokeWidth="1" />
       </svg>
 
-      {/* Hanging spider: a real drawn SVG, slowly swaying on its web thread. */}
+      {/* Hanging spider: slowly swaying on its web thread. */}
       <motion.div
         className="absolute left-2 top-2 origin-top"
         initial={{ rotate: -3 }}
