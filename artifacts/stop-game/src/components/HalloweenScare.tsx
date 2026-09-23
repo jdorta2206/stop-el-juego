@@ -107,13 +107,13 @@ export function HalloweenScareOverlay({
     } catch {}
 
     if (!muted && !reduced) {
-      void playHalloweenScareAudio();
+      void playHalloweenScareAudio(scare.id as Parameters<typeof playHalloweenScareAudio>[0]);
     }
 
     // About 1.5s total; reduced-motion remains shorter and calmer.
     const duration = reduced ? 1350 : 1500;
     const done = window.setTimeout(() => {
-      stopHalloweenScareAudio();
+      stopHalloweenScareAudio(scare.id as Parameters<typeof playHalloweenScareAudio>[0]);
       onDoneRef.current?.();
     }, duration);
 
@@ -121,7 +121,7 @@ export function HalloweenScareOverlay({
       window.clearTimeout(done);
       // Never let the scream/audio bleed into normal gameplay if the overlay
       // unmounts early or a new scare replaces the current one.
-      stopHalloweenScareAudio();
+      stopHalloweenScareAudio(scare.id as Parameters<typeof playHalloweenScareAudio>[0]);
     };
   }, [scare.id, muted, reduced]);
 
