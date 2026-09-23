@@ -166,7 +166,8 @@ export default function SoloGame() {
   // Random event for current round
   const [randomEvent, setRandomEvent] = useState<RandomEvent>(null);
   const [halloweenScare, setHalloweenScare] = useState<HalloweenScare | null>(null);
-  const halloweenScareTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);\n  const halloweenScareRoundRef = useRef<number | null>(null);
+  const halloweenScareTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const halloweenScareRoundRef = useRef<number | null>(null);
   const halloweenAnswerScareTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const halloweenAnswerScareRoundRef = useRef<number | null>(null);
   // Round result announcement
@@ -378,7 +379,7 @@ export default function SoloGame() {
       }
       return;
     }
-    if (halloweenScare) return;
+    if (halloweenScare || halloweenScareRoundRef.current === round) return;
 
     const preview = isHalloweenPreview();
     const min = preview ? 4000 : 10000;
@@ -386,8 +387,10 @@ export default function SoloGame() {
     const delay = min + Math.floor(Math.random() * (max - min));
 
     halloweenScareTimerRef.current = setTimeout(() => {
-      setHalloweenScare(getHalloweenScare(lang));
       halloweenScareTimerRef.current = null;
+      if (gameState !== "PLAYING" || halloweenScareRoundRef.current === round) return;
+      halloweenScareRoundRef.current = round;
+      setHalloweenScare(getHalloweenScare(lang));
     }, delay);
 
     return () => {
@@ -567,6 +570,7 @@ export default function SoloGame() {
     if (halloweenScareTimerRef.current) clearTimeout(halloweenScareTimerRef.current);
     if (halloweenAnswerScareTimerRef.current) clearTimeout(halloweenAnswerScareTimerRef.current);
     halloweenAnswerScareRoundRef.current = null;
+    halloweenScareRoundRef.current = null;
     setHalloweenScare(null);
     void trackAnalyticsEvent("game_start", { metadata: { mode: isDailyMode ? "daily" : "solo" } });
     // Snapshot the tutorial state at the moment the player presses Play so
