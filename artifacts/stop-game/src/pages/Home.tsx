@@ -26,6 +26,7 @@ import { BannerAd } from "@/components/AdSystem";
 import { PLAY_STORE_URL } from "@/lib/playReview";
 import { HalloweenBanner } from "@/components/HalloweenBanner";
 import { isHalloweenActive, isHalloweenModeEnabled, setHalloweenModeEnabled } from "@/lib/halloweenEvent";
+import { useHalloweenProgress } from "@/hooks/useHalloweenProgress";
 
 const LOGO_URL = `${import.meta.env.BASE_URL}images/stop-logo.png`;
 
@@ -52,6 +53,7 @@ export default function Home() {
   const ftue = useFTUE();
   const [showFTUEWelcome, setShowFTUEWelcome] = useState(false);
   const [halloweenModeEnabled, setHalloweenModeEnabledState] = useState(() => isHalloweenModeEnabled());
+  const { data: halloweenProgressData } = useHalloweenProgress(player?.id);
 
   // Open the FTUE welcome modal once on first ever visit (after a tiny delay
   // so the home page can render its hero animation first).
@@ -140,6 +142,25 @@ export default function Home() {
               <button type="button" aria-pressed={halloweenModeEnabled} onClick={() => { const next=!halloweenModeEnabled; setHalloweenModeEnabled(next); setHalloweenModeEnabledState(next); }} className="relative w-14 h-8 rounded-full transition-colors flex-shrink-0" style={{ background: halloweenModeEnabled ? "#991b1b" : "rgba(255,255,255,.18)", border:"1px solid rgba(255,255,255,.2)" }}>
                 <span className="absolute top-1 w-6 h-6 rounded-full bg-white shadow-md transition-transform" style={{ transform: halloweenModeEnabled ? "translateX(27px)" : "translateX(3px)" }} />
               </button>
+            </div>
+          </motion.div>
+        )}
+
+        {isHalloweenActive() && halloweenProgressData?.progress && (
+          <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+            className="w-full rounded-2xl px-4 py-3"
+            style={{ background: "linear-gradient(135deg, rgba(20,8,12,.88), rgba(67,20,7,.62))", border: "1.5px solid rgba(248,113,113,.32)" }}>
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <p className="text-white font-black text-sm">🎃 Progreso Halloween</p>
+                <p className="text-white/50 text-[10px]">Edición {halloweenProgressData.year}</p>
+              </div>
+              <span className="text-amber-300 font-black text-xs">🪙 {halloweenProgressData.progress.coinsEarned}</span>
+            </div>
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div className="rounded-xl bg-white/5 py-2"><p className="text-white font-black">{halloweenProgressData.progress.gamesCompleted}</p><p className="text-white/45 text-[9px] uppercase">Partidas</p></div>
+              <div className="rounded-xl bg-white/5 py-2"><p className="text-white font-black">{halloweenProgressData.progress.scaresReceived}</p><p className="text-white/45 text-[9px] uppercase">Sustos</p></div>
+              <div className="rounded-xl bg-white/5 py-2"><p className="text-white font-black">{halloweenProgressData.progress.scaresProvoked}</p><p className="text-white/45 text-[9px] uppercase">Provocados</p></div>
             </div>
           </motion.div>
         )}
