@@ -1,7 +1,7 @@
 import { pickHalloweenScareVisual } from "@/lib/halloweenScareAssets";
 
-export const HALLOWEEN_START = "2026-10-15T00:00:00";
-export const HALLOWEEN_END = "2026-11-02T00:00:00";
+export const HALLOWEEN_START = "2026-10-15T00:00:00Z";
+export const HALLOWEEN_END = "2026-11-02T00:00:00Z";
 
 export const HALLOWEEN_CATEGORIES = {
   es: ["Disfraz de miedo", "Monstruo", "Película de terror", "Cosa de una casa encantada", "Criatura sobrenatural"],
