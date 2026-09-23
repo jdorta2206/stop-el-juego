@@ -41,7 +41,7 @@ import { HalloweenAmbience } from "@/components/HalloweenAmbience";
 import { HalloweenGameTheme } from "@/components/HalloweenGameTheme";
 import { HalloweenScareOverlay } from "@/components/HalloweenScare";
 import { getHalloweenReducedEffects, setHalloweenReducedEffects } from "@/lib/halloweenAccessibility";
-import { preloadHalloweenScareImage } from "@/lib/halloweenScareImage";
+import { preloadHalloweenScareAssets } from "@/lib/halloweenScareAssets";
 import { preloadHalloweenScareAudio } from "@/lib/halloweenScareAudio";
 
 const ROUND_TIME = 60;
@@ -123,10 +123,10 @@ type LocalPhase = "lobby" | "spinning" | "playing" | "freeze" | "submitted" | "b
 
 export default function Room() {
   useEffect(() => {
-    if (!isHalloweenActive() && isHalloweenModeEnabled()) return;
+    if (!isHalloweenActive() || !isHalloweenModeEnabled()) return;
     // Preload while the room is being opened/lobbied so a synchronized scare
     // never waits for image decode or audio loading.
-    void preloadHalloweenScareImage();
+    void preloadHalloweenScareAssets();
     preloadHalloweenScareAudio();
   }, []);
   const { id: roomCode } = useParams<{ id: string }>();
@@ -605,7 +605,7 @@ export default function Room() {
     if (halloweenScareHideTimerRef.current) clearTimeout(halloweenScareHideTimerRef.current);
     setHalloweenScare(null);
 
-    if (!isHalloweenActive() && isHalloweenModeEnabled() || phase !== "playing" || !roomCode || !currentLetter || !currentRound) return;
+    if (!isHalloweenActive() || !isHalloweenModeEnabled() || phase !== "playing" || !roomCode || !currentLetter || !currentRound) return;
 
     const key = `halloween-ambient|${roomCode.toUpperCase()}|${currentRound}|${currentLetter}`;
     let hash = 2166136261 >>> 0;
@@ -625,7 +625,7 @@ export default function Room() {
 
     halloweenScareTimerRef.current = setTimeout(() => {
       const seed = ((hash >>> 16) % 100000) / 100000;
-      setHalloweenScare(getHalloweenScare(getCurrentLang(), seed));
+      setHalloweenScare(getHalloweenScare(getCurrentLang()));
       halloweenScareTimerRef.current = null;
       halloweenScareHideTimerRef.current = setTimeout(() => setHalloweenScare(null), 1550);
     }, delay);
@@ -643,7 +643,7 @@ export default function Room() {
     const stopper = (room as any)?.stopper as { stopTimestamp?: number } | null;
     const wasPlaying = previousRoomStatusRef.current === "playing";
     previousRoomStatusRef.current = status;
-    if (!isHalloweenActive() && isHalloweenModeEnabled() || !wasPlaying || status !== "stopped" || !stopper?.stopTimestamp) return;
+    if (!isHalloweenActive() || !isHalloweenModeEnabled() || !wasPlaying || status !== "stopped" || !stopper?.stopTimestamp) return;
     if (stopper?.id && stopper.id === player?.id) return;
 
     const stopKey = `${currentRound}:${stopper.stopTimestamp}`;
@@ -651,7 +651,7 @@ export default function Room() {
     seenHalloweenEventRef.current = stopKey;
 
     const seed = ((stopper.stopTimestamp % 100000) / 100000);
-    setHalloweenScare(getHalloweenScare(getCurrentLang(), seed));
+    setHalloweenScare(getHalloweenScare(getCurrentLang()));
     if (halloweenScareHideTimerRef.current) clearTimeout(halloweenScareHideTimerRef.current);
     halloweenScareHideTimerRef.current = setTimeout(() => setHalloweenScare(null), 1550);
   }, [(room as any)?.status, (room as any)?.stopper?.stopTimestamp, currentRound]);
@@ -704,7 +704,7 @@ export default function Room() {
     if (scareReactions.length > 0 && isHalloweenActive() && isHalloweenModeEnabled() && phase === "playing") {
       const remoteScare = scareReactions.some(r => !r.playerName.startsWith(`__HALLOWEEN_SCARE__${player?.id}__`));
       if (remoteScare) {
-        setHalloweenScare(getHalloweenScare(getCurrentLang(), Math.random()));
+        setHalloweenScare(getHalloweenScare(getCurrentLang()));
         if (halloweenScareHideTimerRef.current) clearTimeout(halloweenScareHideTimerRef.current);
         halloweenScareHideTimerRef.current = setTimeout(() => setHalloweenScare(null), 1550);
       }
