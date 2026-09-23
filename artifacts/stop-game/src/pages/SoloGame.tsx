@@ -29,6 +29,7 @@ import { useTicker } from "@/hooks/useTicker";
 import { useStreak } from "@/hooks/useStreak";
 import { useProgression, calcXpFromResults } from "@/hooks/useProgression";
 import { reportSeasonEvent } from "@/hooks/useSeason";
+import { reportHalloweenEvent } from "@/hooks/useHalloweenProgress";
 import { trackGuestGame, trackGuestConversion } from "@/lib/guestStats";
 import { useSound } from "@/hooks/useSound";
 import { useToast } from "@/hooks/use-toast";
