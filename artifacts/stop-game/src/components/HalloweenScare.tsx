@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { HALLOWEEN_SCARE_ASSETS } from "@/lib/halloweenScareAssets";
 import { motion } from "framer-motion";
 import type { HalloweenScare } from "@/lib/halloweenEvent";
 import {
@@ -17,7 +18,7 @@ import {
  * This deliberately contains no CSS-drawn face/eyes/mouth. The visual is the
  * local real image asset from halloweenScareImage.ts, decoded before use.
  */
-function RealScareVisual({ reduced }: { reduced: boolean }) {
+function RealScareVisual({ reduced, scareId }: { reduced: boolean; scareId: keyof typeof HALLOWEEN_SCARE_ASSETS }) {
   return (
     <motion.div
       className="absolute inset-0 overflow-hidden bg-black pointer-events-none"
@@ -30,7 +31,7 @@ function RealScareVisual({ reduced }: { reduced: boolean }) {
       }
     >
       <motion.img
-        src={HALLOWEEN_SCARE_IMAGE}
+        src={HALLOWEEN_SCARE_ASSETS[scareId]}
         alt=""
         aria-hidden="true"
         draggable={false}
@@ -137,7 +138,7 @@ export function HalloweenScareOverlay({
     >
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
         <div className="relative h-full w-full max-w-none pointer-events-none">
-          <RealScareVisual reduced={reduced} />
+          <RealScareVisual reduced={reduced} scareId={scare.id as keyof typeof HALLOWEEN_SCARE_ASSETS} />
         </div>
       </div>
     </motion.div>
