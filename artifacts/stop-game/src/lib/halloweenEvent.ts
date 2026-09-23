@@ -78,7 +78,7 @@ export function applyHalloweenCategory(
   lang: string,
   options: { enabled?: boolean; seed?: number } = {},
 ): string[] {
-  if (!isHalloweenActive() || options.enabled === false || categories.length === 0) {
+  if (!isHalloweenActive() || !isHalloweenModeEnabled() || options.enabled === false || categories.length === 0) {
     return categories;
   }
   const result = [...categories];
