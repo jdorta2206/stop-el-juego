@@ -6,6 +6,7 @@ interface HalloweenGameThemeProps {
 
 /**
  * Decorative Halloween layer for the live game only.
+ * Preview trigger: visual theme validation.
  *
  * It never captures pointer events and never changes the game layout.
  * The underlying STOP controls remain untouched.
