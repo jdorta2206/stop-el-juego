@@ -130,6 +130,8 @@ jobs:
             sleep 2
           done
           test -n "${URL:-}" || { cat /tmp/cloudflared.log; exit 1; }
+          echo "Checking public preview before publishing..."
+          curl -fsSL --max-time 30 "$URL/" | grep -q "<!doctype html>"
           printf '%s\n' "$URL" > /tmp/halloween-preview-url.txt
           echo "Preview URL: $URL"
           {
@@ -146,7 +148,7 @@ jobs:
           path: /tmp/halloween-preview-url.txt
           retention-days: 1
       - name: Keep preview available for manual testing
-        run: sleep 10800
+        run: sleep 3600
       - name: Stop preview processes
         if: always()
         run: |
