@@ -1,6 +1,5 @@
 /**
- * Halloween scare visuals.\n * Preview trigger: distinct scare set ready for CI validation.
- *
+ * Halloween scare visuals.\n * Preview trigger: distinct scare set ready for CI validation.\n * Latest preview trigger: rebuild current four-scare version.\n *
  * The clown is the real licensed photo already bundled in halloweenScareImage.ts.
  * The additional scares are standalone image assets (SVG data URLs), not CSS-drawn
  * faces in the React component. Keeping them as image assets makes the visual
