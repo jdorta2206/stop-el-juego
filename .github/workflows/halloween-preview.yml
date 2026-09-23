@@ -17,6 +17,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write
 
 concurrency:
   group: halloween-preview-${{ github.ref }}
@@ -119,50 +120,37 @@ jobs:
         run: |
           set -u
           URL=""
-          TUNNEL_PID=""
           TUNNEL=""
-
           echo "Trying Cloudflare Quick Tunnel..."
           curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o /tmp/cloudflared || true
           if [ -x /tmp/cloudflared ]; then
             nohup /tmp/cloudflared tunnel --no-autoupdate --logfile /tmp/cloudflared.log --url http://127.0.0.1:4173 >/tmp/cloudflared-stdout.log 2>&1 &
-            TUNNEL_PID=$!
             for i in $(seq 1 30); do
               CANDIDATE=$(grep -oE 'https://[^[:space:]]+trycloudflare[.]com' /tmp/cloudflared.log | head -1 || true)
               if [ -n "$CANDIDATE" ] && curl -fsSL --max-time 10 "$CANDIDATE/" | grep -qi "<!doctype html>"; then
-                URL="$CANDIDATE"
-                TUNNEL="cloudflare"
-                break
+                URL="$CANDIDATE"; TUNNEL="cloudflare"; break
               fi
               sleep 2
             done
           fi
-
           if [ -z "$URL" ]; then
             echo "Cloudflare did not provide a valid public URL. Trying LocalTunnel fallback..."
             pkill -f cloudflared || true
             nohup npx --yes localtunnel@2.0.2 --port 4173 >/tmp/localtunnel.log 2>&1 &
-            TUNNEL_PID=$!
             for i in $(seq 1 30); do
               CANDIDATE=$(grep -oE 'https://[^[:space:]]+\.loca\.lt' /tmp/localtunnel.log | head -1 || true)
               if [ -n "$CANDIDATE" ] && curl -fsSL --max-time 15 -A "Mozilla/5.0" "$CANDIDATE/" | grep -qi "<!doctype html>"; then
-                URL="$CANDIDATE"
-                TUNNEL="localtunnel"
-                break
+                URL="$CANDIDATE"; TUNNEL="localtunnel"; break
               fi
               sleep 2
             done
           fi
-
           if [ -z "$URL" ]; then
             echo "ERROR: No public preview tunnel could be validated."
-            echo "--- Cloudflare log ---"
             cat /tmp/cloudflared.log 2>/dev/null || true
-            echo "--- LocalTunnel log ---"
             cat /tmp/localtunnel.log 2>/dev/null || true
             exit 1
           fi
-
           echo "Validated public preview: $URL ($TUNNEL)"
           printf '%s\n' "$URL" > /tmp/halloween-preview-url.txt
           {
@@ -180,6 +168,16 @@ jobs:
           name: halloween-preview-url
           path: /tmp/halloween-preview-url.txt
           retention-days: 1
+      - name: Publish preview URL to PR
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          URL="$(cat /tmp/halloween-preview-url.txt)"
+          gh pr comment "$PR_NUMBER" --repo "${{ github.repository }}" --body "🎃 **Halloween preview listo:** $URL
+
+Este enlace estará activo mientras siga ejecutándose el workflow."
       - name: Keep preview available for manual testing
         run: sleep 3600
       - name: Stop preview processes
