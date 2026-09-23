@@ -1092,6 +1092,9 @@ export default function Room() {
         try { if (seasonKey) localStorage.setItem(seasonKey, "1"); } catch { /* ignore */ }
         const me = (players as any[]).find(p => p.playerId === player.id);
         reportSeasonEvent(player.id, "play_game", 1);
+        if (isHalloweenActive() && isHalloweenModeEnabled()) {
+          void reportHalloweenEvent(player.id, "game_completed", `room-game-${roomCode}-${Date.now()}`);
+        }
         if (iWon) reportSeasonEvent(player.id, "win_game", 1);
         if (me) {
           // Total accumulated score this match — used as the "round_score"
