@@ -1,7 +1,17 @@
 import { pickHalloweenScareVisual } from "@/lib/halloweenScareAssets";
 
-export const HALLOWEEN_START = "2026-10-15T00:00:00Z";
-export const HALLOWEEN_END = "2026-11-02T00:00:00Z";
+export const HALLOWEEN_START_MONTH = 9; // October (0-based)
+export const HALLOWEEN_START_DAY = 15;
+export const HALLOWEEN_END_MONTH = 10; // November (0-based)
+export const HALLOWEEN_END_DAY = 2;
+
+/** Recurring annual Halloween window. The event runs Oct 15 through Nov 1. */
+export function getHalloweenWindow(year: number): { start: Date; end: Date } {
+  return {
+    start: new Date(Date.UTC(year, HALLOWEEN_START_MONTH, HALLOWEEN_START_DAY)),
+    end: new Date(Date.UTC(year, HALLOWEEN_END_MONTH, HALLOWEEN_END_DAY)),
+  };
+}
 
 export const HALLOWEEN_CATEGORIES = {
   es: ["Disfraz de miedo", "Monstruo", "Película de terror", "Cosa de una casa encantada", "Criatura sobrenatural"],
@@ -51,8 +61,7 @@ export const HALLOWEEN_SCARES: Record<string, HalloweenScare[]> = {
 };
 export function isHalloweenActive(now = new Date()): boolean {
   if (isHalloweenPreview()) return true;
-  const start = new Date(HALLOWEEN_START);
-  const end = new Date(HALLOWEEN_END);
+  const { start, end } = getHalloweenWindow(now.getUTCFullYear());
   return now >= start && now < end;
 }
 
