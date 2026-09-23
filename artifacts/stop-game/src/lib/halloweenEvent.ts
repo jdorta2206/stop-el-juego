@@ -1,3 +1,5 @@
+import { pickHalloweenScareVisual } from "@/lib/halloweenScareAssets";
+
 export const HALLOWEEN_START = "2026-10-15T00:00:00";
 export const HALLOWEEN_END = "2026-11-03T00:00:00";
 
@@ -86,11 +88,11 @@ export function applyHalloweenCategory(
   return result;
 }
 
-export function getHalloweenScare(lang: string, seed = Math.random()): HalloweenScare {
+export function getHalloweenScare(lang: string): HalloweenScare {
   const key = lang === "en" || lang === "pt" || lang === "fr" ? lang : "es";
   const list = HALLOWEEN_SCARES[key];
-  const safeSeed = Math.max(0, Math.min(0.999999, seed));
-  return list[Math.floor(safeSeed * list.length)];
+  const id = pickHalloweenScareVisual();
+  return list.find((scare) => scare.id === id) ?? list[0];
 }
 
 export function getHalloweenScareById(lang: string, id: HalloweenScareId): HalloweenScare {
