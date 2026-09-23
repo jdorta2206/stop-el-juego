@@ -90,13 +90,13 @@ export function HalloweenGameTheme({ active }: HalloweenGameThemeProps) {
         initial={{ rotate: -3 }}
         animate={{ rotate: [-7, 6, -5, 4, -7] }}
         transition={{ duration: 5.5, repeat: Infinity, ease: "easeInOut" }}
-        style={{ width: 82, height: 160 }}
+        style={{ width: 118, height: 220 }}
       >
         <div
           className="absolute left-1/2 top-0 -translate-x-1/2"
           style={{
             width: 1,
-            height: 66,
+            height: 92,
             background: "linear-gradient(to bottom, rgba(235,235,235,.5), rgba(235,235,235,.08))",
           }}
         />
@@ -104,7 +104,7 @@ export function HalloweenGameTheme({ active }: HalloweenGameThemeProps) {
           className="absolute left-1/2 top-[54px] -translate-x-1/2"
           width="74"
           height="82"
-          viewBox="0 0 74 82"
+          viewBox="0 0 108 118"
           fill="none"
         >
           <g stroke="#130b0b" strokeWidth="4" strokeLinecap="round">
@@ -122,7 +122,7 @@ export function HalloweenGameTheme({ active }: HalloweenGameThemeProps) {
         </svg>
       </motion.div>
 
-      {/* Occasional slow blood drops along the lower edge. */}
+      {/* Blood drips framing the play area without covering the controls. */}
       <div className="absolute inset-x-0 bottom-0 h-10">
         {[12, 29, 54, 76, 91].map((left, i) => (
           <motion.span
