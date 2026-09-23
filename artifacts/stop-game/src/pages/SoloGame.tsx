@@ -336,6 +336,9 @@ export default function SoloGame() {
         .then((res) => {
           if (cancelled || res.flushed <= 0) return;
           queryClient.invalidateQueries({ queryKey: ["/api/ranking/scores"] });
+        if (!isDailyMode && isHalloweenActive() && isHalloweenModeEnabled()) {
+          void reportHalloweenEvent(player.id, "game_completed", `solo-game-${currentLetter}-${Date.now()}`);
+        }
           const n = res.flushed;
           const msg =
             lang === "en" ? `${n} pending score${n > 1 ? "s" : ""} synced!` :
@@ -1654,7 +1657,11 @@ export default function SoloGame() {
           onShared={() => recordExternalStat(player?.id, { timesShared: 1 })}
         />
 
-        <AnimatePresence>{halloweenScare && <HalloweenScareOverlay scare={halloweenScare} muted={muted} reducedEffects={reducedHalloweenEffects} onDone={() => { setHalloweenScare(null); setHalloweenScareAfterglow(true); window.setTimeout(() => setHalloweenScareAfterglow(false), 10000); }} />}</AnimatePresence>
+        <AnimatePresence>{halloweenScare && <HalloweenScareOverlay scare={halloweenScare} muted={muted} reducedEffects={reducedHalloweenEffects} onDone={() => {
+            if (!isDailyMode && player?.id && isHalloweenActive() && isHalloweenModeEnabled()) {
+              void reportHalloweenEvent(player.id, "scare_received", `solo-scare-${currentLetter}-${Date.now()}`);
+            }
+            setHalloweenScare(null); setHalloweenScareAfterglow(true); window.setTimeout(() => setHalloweenScareAfterglow(false), 10000); }} />}</AnimatePresence>
 
         {/* Achievement toast notification */}
         <AchievementToast
