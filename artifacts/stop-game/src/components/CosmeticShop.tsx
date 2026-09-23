@@ -179,8 +179,8 @@ export function CosmeticShop(_props: CosmeticShopProps) {
           <div className="flex items-center gap-2 mb-3">
             <span className="text-2xl">🎃</span>
             <div>
-              <h3 className="text-lg font-black text-white">🎃 Halloween 2026</h3>
-              <p className="text-xs text-white/50">Exclusivos del evento · solo con monedas</p>
+              <h3 className="text-lg font-black text-white">🎃 Halloween</h3>
+              <p className="text-xs text-white/50">Exclusivos del evento anual · solo con monedas</p>
             </div>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
