@@ -46,6 +46,7 @@ import { maybeShowInterstitial, recordInterstitialGameCompleted } from "@/lib/in
 import { ReviewPromptCard } from "@/components/ReviewPromptCard";
 import { applyHalloweenCategory, isHalloweenActive, isHalloweenPreview, getHalloweenScare } from "@/lib/halloweenEvent";
 import { HalloweenBanner } from "@/components/HalloweenBanner";
+import { HalloweenGameTheme } from "@/components/HalloweenGameTheme";
 import { HalloweenScareOverlay } from "@/components/HalloweenScare";
 import type { HalloweenScare } from "@/lib/halloweenEvent";
 import { getHalloweenReducedEffects, setHalloweenReducedEffects } from "@/lib/halloweenAccessibility";
@@ -2039,6 +2040,9 @@ export default function SoloGame() {
               initial={{ opacity: 0, x: 50 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -50 }}
               className="flex-1 flex flex-col"
             >
+              {/* 🎃 Halloween-only visual skin. Pointer-events are disabled so the game controls remain untouched. */}
+              <HalloweenGameTheme active={isHalloweenActive() && !isDailyMode} />
+
               {/* Panic overlay — red pulse when < 10s */}
               <AnimatePresence>
                 {timeLeft <= 10 && timeLeft > 0 && (
@@ -2295,7 +2299,7 @@ export default function SoloGame() {
                           placeholder={isBluffed ? `${category}... 🎭` : `${category}...`}
                           autoComplete="off"
                           autoCorrect="off"
-                          className={isBluffed ? "border-purple-500/50 bg-purple-900/20" : ""}
+                          className={isBluffed ? "border-purple-500/50 bg-purple-900/20" : isHalloweenActive() && !isDailyMode ? "border-red-800/70 bg-black/30 text-red-200 placeholder:text-red-200/35" : ""}
                         />
                       )}
                       {canSabotage && (
