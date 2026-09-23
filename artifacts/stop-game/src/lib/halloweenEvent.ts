@@ -99,3 +99,27 @@ export function getHalloweenScareById(lang: string, id: HalloweenScareId): Hallo
   const scares = HALLOWEEN_SCARES[lang] ?? HALLOWEEN_SCARES.es;
   return scares.find((scare) => scare.id === id) ?? scares[0];
 }
+
+
+const HALLOWEEN_MODE_STORAGE_KEY = "stop_halloween_mode_enabled";
+
+/**
+ * Player-controlled Halloween switch.
+ * Defaults to enabled while the event/preview is active, but the player's
+ * choice persists and can always disable the scares/theme for classic STOP.
+ */
+export function isHalloweenModeEnabled(): boolean {
+  if (typeof window === "undefined") return true;
+  try {
+    const stored = window.localStorage.getItem(HALLOWEEN_MODE_STORAGE_KEY);
+    return stored === null ? true : stored === "1";
+  } catch {
+    return true;
+  }
+}
+
+export function setHalloweenModeEnabled(enabled: boolean): void {
+  try {
+    window.localStorage.setItem(HALLOWEEN_MODE_STORAGE_KEY, enabled ? "1" : "0");
+  } catch {}
+}
