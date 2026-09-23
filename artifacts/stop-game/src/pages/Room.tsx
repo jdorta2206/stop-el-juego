@@ -36,7 +36,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useReviewPrompt, recordGamePlayed } from "@/hooks/useReviewPrompt";
 import { ReviewPromptCard } from "@/components/ReviewPromptCard";
 import { maybeShowInterstitial } from "@/lib/interstitialAd";
-import { applyHalloweenCategory, getHalloweenScare, getHalloweenScareById, isHalloweenActive, isHalloweenPreview } from "@/lib/halloweenEvent";
+import { applyHalloweenCategory, getHalloweenScare, getHalloweenScareById, isHalloweenActive, isHalloweenPreview, isHalloweenModeEnabled } from "@/lib/halloweenEvent";
 import { HalloweenAmbience } from "@/components/HalloweenAmbience";
 import { HalloweenGameTheme } from "@/components/HalloweenGameTheme";
 import { HalloweenScareOverlay } from "@/components/HalloweenScare";
@@ -123,7 +123,7 @@ type LocalPhase = "lobby" | "spinning" | "playing" | "freeze" | "submitted" | "b
 
 export default function Room() {
   useEffect(() => {
-    if (!isHalloweenActive()) return;
+    if (!isHalloweenActive() && isHalloweenModeEnabled()) return;
     // Preload while the room is being opened/lobbied so a synchronized scare
     // never waits for image decode or audio loading.
     void preloadHalloweenScareImage();
@@ -605,7 +605,7 @@ export default function Room() {
     if (halloweenScareHideTimerRef.current) clearTimeout(halloweenScareHideTimerRef.current);
     setHalloweenScare(null);
 
-    if (!isHalloweenActive() || phase !== "playing" || !roomCode || !currentLetter || !currentRound) return;
+    if (!isHalloweenActive() && isHalloweenModeEnabled() || phase !== "playing" || !roomCode || !currentLetter || !currentRound) return;
 
     const key = `halloween-ambient|${roomCode.toUpperCase()}|${currentRound}|${currentLetter}`;
     let hash = 2166136261 >>> 0;
@@ -643,7 +643,7 @@ export default function Room() {
     const stopper = (room as any)?.stopper as { stopTimestamp?: number } | null;
     const wasPlaying = previousRoomStatusRef.current === "playing";
     previousRoomStatusRef.current = status;
-    if (!isHalloweenActive() || !wasPlaying || status !== "stopped" || !stopper?.stopTimestamp) return;
+    if (!isHalloweenActive() && isHalloweenModeEnabled() || !wasPlaying || status !== "stopped" || !stopper?.stopTimestamp) return;
     if (stopper?.id && stopper.id === player?.id) return;
 
     const stopKey = `${currentRound}:${stopper.stopTimestamp}`;
@@ -665,7 +665,7 @@ export default function Room() {
       scareId?: "ghost" | "spider" | "skull" | "pumpkin" | "vampire";
       round?: number;
     } | null;
-    if (!event?.id || event.round !== currentRound || !isHalloweenActive()) return;
+    if (!event?.id || event.round !== currentRound || !isHalloweenActive() && isHalloweenModeEnabled()) return;
     if (event.playerId && event.playerId === player?.id) return;
     if (seenHalloweenEventRef.current === event.id) return;
     seenHalloweenEventRef.current = event.id;
@@ -701,7 +701,7 @@ export default function Room() {
     newOnes.forEach(r => seenReactionIds.current.add(r.id));
 
     const scareReactions = newOnes.filter(r => r.playerName.startsWith("__HALLOWEEN_SCARE__"));
-    if (scareReactions.length > 0 && isHalloweenActive() && phase === "playing") {
+    if (scareReactions.length > 0 && isHalloweenActive() && isHalloweenModeEnabled() && phase === "playing") {
       const remoteScare = scareReactions.some(r => !r.playerName.startsWith(`__HALLOWEEN_SCARE__${player?.id}__`));
       if (remoteScare) {
         setHalloweenScare(getHalloweenScare(getCurrentLang(), Math.random()));
@@ -731,7 +731,7 @@ export default function Room() {
     } catch {}
   }, [player, roomCode]);
   const sendHalloweenScare = useCallback(async () => {
-    if (!player || !roomCode || !isHalloweenActive() || manualScareBusyRef.current) return;
+    if (!player || !roomCode || !isHalloweenActive() && isHalloweenModeEnabled() || manualScareBusyRef.current) return;
     if (Date.now() < halloweenScareCooldownUntil) return;
     manualScareBusyRef.current = true;
     try {
@@ -1285,7 +1285,7 @@ export default function Room() {
 
   return (
     <Layout>
-      <HalloweenAmbience active={phase === "playing" && isHalloweenActive()} muted={muted} />
+      <HalloweenAmbience active={phase === "playing" && isHalloweenActive() && isHalloweenModeEnabled()} muted={muted} />
       {/* ✨ Entrance animation when a new player joins (Premium = golden burst) */}
       <PlayerEntranceToast players={players} meId={player?.id} />
 
@@ -1714,7 +1714,7 @@ export default function Room() {
             className="flex-1 flex flex-col max-w-2xl mx-auto w-full"
           >
             {/* 🎃 Halloween-only visual skin. It is pointer-events-none and does not alter gameplay. */}
-            <HalloweenGameTheme active={isHalloweenActive()} />
+            <HalloweenGameTheme active={isHalloweenActive() && isHalloweenModeEnabled()} />
 
             {/* Header */}
             <div className="flex items-center gap-3 mb-4 bg-primary/70 p-3 rounded-2xl border border-white/10">
@@ -1750,7 +1750,7 @@ export default function Room() {
               >
                 {muted ? <VolumeX className="w-5 h-5 text-white/40" /> : <Volume2 className="w-5 h-5 text-white/70" />}
               </button>
-              {isHalloweenActive() && (
+              {isHalloweenActive() && isHalloweenModeEnabled() && (
                 <button
                   onClick={() => {
                     const next = !reducedHalloweenEffects;
@@ -1919,8 +1919,8 @@ export default function Room() {
                       }}
                       placeholder={`${cat} con ${currentLetter}...`}
                       autoComplete="off" autoCorrect="off"
-                      className={isHalloweenActive() ? "border-red-800/70 bg-black/30 text-red-200 placeholder:text-red-200/35" : ""}
-                      style={isHalloweenActive() ? { textShadow: "0 0 10px rgba(153,27,27,.35)", caretColor: "#ef4444" } : undefined}
+                      className={isHalloweenActive() && isHalloweenModeEnabled() ? "border-red-800/70 bg-black/30 text-red-200 placeholder:text-red-200/35" : ""}
+                      style={isHalloweenActive() && isHalloweenModeEnabled() ? { textShadow: "0 0 10px rgba(153,27,27,.35)", caretColor: "#ef4444" } : undefined}
                     />
                   </motion.div>
                 );
@@ -1949,7 +1949,7 @@ export default function Room() {
                 </motion.button>
               </div>
               <div className="max-w-2xl mx-auto w-full flex flex-col gap-2">
-                {isHalloweenActive() && (
+                {isHalloweenActive() && isHalloweenModeEnabled() && (
                   <motion.button
                     type="button"
                     whileTap={{ scale: 0.96 }}
