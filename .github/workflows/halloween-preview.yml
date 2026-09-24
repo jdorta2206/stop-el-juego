@@ -16,6 +16,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write
 
 concurrency:
   group: halloween-preview-${{ github.ref }}-${{ github.sha }}
@@ -135,6 +136,7 @@ jobs:
           done
           test -n "${URL:-}" || { cat /tmp/cloudflared.log; exit 1; }
           echo "HALLOWEEN_PREVIEW_URL=$URL"
+          echo "PREVIEW_URL=$URL" >> "$GITHUB_ENV"
           printf '%s\n' "$URL" > /tmp/halloween-preview-url.txt
           {
             echo "## Halloween preview"
@@ -147,6 +149,20 @@ jobs:
             echo
             echo "Preview stays online while this workflow job is running."
           } >> "$GITHUB_STEP_SUMMARY"
+      - name: Publish preview URL to PR
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PREVIEW_URL: ${{ env.PREVIEW_URL }}
+        run: |
+          set -euo pipefail
+          curl -fsS -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/${{ github.repository }}/issues/$PR_NUMBER/comments \
+            -d "$(python3 -c 'import json,os; print(json.dumps({"body":"🎃 **Halloween preview URL**\n\n"+os.environ["PREVIEW_URL"]+"\n\nEste enlace permanece activo mientras el workflow esté ejecutándose."}))')"
       - name: Publish preview URL
         uses: actions/upload-artifact@v4
         with:
