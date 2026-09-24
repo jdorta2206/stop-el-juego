@@ -2499,3 +2499,657 @@ export default function SoloGame() {
                         <motion.span
                           initial={{ scale: 0 }} animate={{ scale: 1 }}
                           transition={{ delay: i * 1.4 + 0.4, type: "spring" }}
+                          className="text-3xl"
+                        >
+                          {result.caught ? "🕵️" : "🎉"}
+                        </motion.span>
+                        <div className="flex-1">
+                          <p className="text-xs uppercase tracking-wider opacity-50">{result.category}</p>
+                          <p className="font-black text-lg" style={{ color: result.caught ? "#f87171" : "#4ade80" }}>
+                            {result.caught ? t.bluff.caught : t.bluff.perfect}
+                          </p>
+                        </div>
+                        <motion.span
+                          initial={{ scale: 0 }} animate={{ scale: 1 }}
+                          transition={{ delay: i * 1.4 + 0.7 }}
+                          className="text-xl font-black"
+                          style={{ color: result.caught ? "#f87171" : "#4ade80" }}
+                        >
+                          {result.scoreChange > 0 ? "+" : ""}{result.scoreChange}{t.bluff.pts}
+                        </motion.span>
+                      </motion.div>
+                    ))
+                  )}
+
+                  {/* Proceed to AI bluff phase */}
+                  <motion.button
+                    initial={{ opacity: 0, y: 16 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: Math.max(bluffResults.length * 1.4 + 0.6, 0.8) }}
+                    onClick={() => setJudgingPhase("ai_bluff")}
+                    className="w-full py-4 rounded-2xl font-black text-white text-lg shadow-lg"
+                    style={{ background: "hsl(222 47% 25%)", border: "2px solid rgba(255,255,255,0.12)" }}
+                  >
+                    {t.bluff.aiPhaseTitle} →
+                  </motion.button>
+                </div>
+              )}
+
+              {/* PHASE 2: AI bluff accusation */}
+              {judgingPhase === "ai_bluff" && aiBluffReveal && playerJudgedAi === null && (
+                <motion.div
+                  initial={{ opacity: 0, y: 24 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ type: "spring" }}
+                  className="w-full space-y-5"
+                >
+                  <p className="text-center text-white/60 text-sm">{t.bluff.aiSuspicious}</p>
+
+                  {/* AI's suspicious answer card */}
+                  <div
+                    className="p-6 rounded-3xl border-2 text-center shadow-2xl"
+                    style={{ background: "hsl(222 47% 20%)", borderColor: "rgba(255,255,255,0.12)" }}
+                  >
+                    <p className="text-xs uppercase tracking-widest opacity-50 mb-2">{aiBluffReveal.category}</p>
+                    <p className="text-4xl font-black mb-1">{aiBluffReveal.answer || "—"}</p>
+                    <div className="flex items-center justify-center gap-2 mt-2">
+                      <span className="text-2xl">{aiPersonality.emoji}</span>
+                      <p className="text-sm font-bold opacity-60">{aiPersonality.name}</p>
+                    </div>
+                  </div>
+
+                  <p className="text-center font-bold text-white">{t.bluff.aiQuestion}</p>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <motion.button
+                      whileTap={{ scale: 0.95 }}
+                      onClick={() => handleJudgeAi(false)}
+                      className="py-5 rounded-2xl font-black text-green-300 text-lg border-2"
+                      style={{ background: "rgba(34,197,94,0.12)", borderColor: "rgba(34,197,94,0.4)" }}
+                    >
+                      {t.bluff.btnReal}
+                    </motion.button>
+                    <motion.button
+                      whileTap={{ scale: 0.95 }}
+                      onClick={() => handleJudgeAi(true)}
+                      className="py-5 rounded-2xl font-black text-purple-300 text-lg border-2"
+                      style={{ background: "rgba(168,85,247,0.12)", borderColor: "rgba(168,85,247,0.4)" }}
+                    >
+                      {t.bluff.btnLie}
+                    </motion.button>
+                  </div>
+                </motion.div>
+              )}
+
+              {/* PHASE 2 reveal: after player judges AI */}
+              {judgingPhase === "ai_bluff" && playerJudgedAi !== null && aiBluffReveal && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.88 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ type: "spring", stiffness: 180, damping: 16 }}
+                  className="w-full space-y-4 text-center"
+                >
+                  {aiBluffReveal.wasActuallyBluffing === playerJudgedAi ? (
+                    <>
+                      <motion.p
+                        initial={{ scale: 0 }} animate={{ scale: 1 }}
+                        transition={{ type: "spring", stiffness: 200 }}
+                        className="text-6xl"
+                      >🕵️</motion.p>
+                      <p className="text-3xl font-black text-green-400">{t.bluff.detectPerfect}</p>
+                      <p className="text-green-300 font-bold text-xl">+15{t.bluff.pts}</p>
+                      <p className="text-sm text-white/50">
+                        {playerJudgedAi ? t.bluff.aiActuallyLied : t.bluff.aiWasReal}
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <motion.p
+                        initial={{ scale: 0 }} animate={{ scale: 1 }}
+                        transition={{ type: "spring", stiffness: 200 }}
+                        className="text-6xl"
+                      >{aiPersonality.emoji}</motion.p>
+                      <p className="text-3xl font-black text-red-400">{t.bluff.aiWon} 😈</p>
+                      <p className="text-sm text-white/50">
+                        {aiBluffReveal.wasActuallyBluffing ? t.bluff.aiActuallyLied : t.bluff.aiWasReal}
+                      </p>
+                    </>
+                  )}
+
+                  <motion.button
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.5 }}
+                    onClick={() => setGameState("RESULTS")}
+                    className="w-full py-4 rounded-2xl font-black text-white text-lg"
+                    style={{ background: "hsl(6 90% 55%)" }}
+                  >
+                    {t.bluff.seeResults}
+                  </motion.button>
+                </motion.div>
+              )}
+            </motion.div>
+          )}
+
+          {/* RESULTS */}
+          {gameState === "RESULTS" && (
+            <motion.div
+              key="results"
+              initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+              className="flex-1 flex flex-col pb-8"
+            >
+              {/* Round won/lost announcement */}
+              <AnimatePresence>
+                {roundWon !== null && (
+                  <motion.div
+                    key={roundWon ? "won" : "lost"}
+                    initial={{ scale: 0.7, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ type: "spring", bounce: 0.55 }}
+                    className="flex items-center justify-center gap-3 mb-4 py-3 px-4 rounded-2xl"
+                    style={{
+                      background: roundWon
+                        ? "linear-gradient(135deg, rgba(34,197,94,0.2), rgba(21,128,61,0.15))"
+                        : "linear-gradient(135deg, rgba(239,68,68,0.15), rgba(185,28,28,0.1))",
+                      border: roundWon
+                        ? "2px solid rgba(34,197,94,0.4)"
+                        : "2px solid rgba(239,68,68,0.3)",
+                    }}
+                  >
+                    {roundWon
+                      ? <Trophy className="w-6 h-6 text-green-400" fill="rgba(34,197,94,0.5)" />
+                      : <span className="text-2xl">💻</span>
+                    }
+                    <div>
+                      <p className={`font-black text-lg ${roundWon ? "text-green-300" : "text-red-300"}`}>
+                        {roundWon ? t.game.roundWon : t.game.roundLost}
+                      </p>
+                      {/* Close-loss frustration message */}
+                      {roundWon === false && results && (() => {
+                        const roundPs = results.playerTotalScore || 0;
+                        const roundAs = results.aiTotalScore || 0;
+                        const margin = roundAs - roundPs;
+                        if (margin > 0 && margin <= 15) {
+                          return (
+                            <p className="text-red-200/80 text-xs font-bold mt-0.5">
+                              {lang === "en" ? `Only ${margin} pts behind 😤` : lang === "pt" ? `Só ${margin} pts atrás 😤` : lang === "fr" ? `Juste ${margin} pts de retard 😤` : `Perdiste por solo ${margin} pts 😤`}
+                            </p>
+                          );
+                        }
+                        return null;
+                      })()}
+                    </div>
+                    {combo >= 2 && roundWon && (
+                      <div
+                        className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-black"
+                        style={{ background: "rgba(239,68,68,0.3)", color: "#fca5a5" }}
+                      >
+                        <Flame size={10} /> x{combo}
+                      </div>
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              <h2 className="text-xl font-display font-bold mb-3 text-center opacity-70">{t.game.results}</h2>
+
+              <div className="bg-primary/50 rounded-2xl p-4 flex justify-around mb-3 border border-white/10">
+                <div className="text-center">
+                  <p className="text-sm font-bold text-white/60">{t.game.you}</p>
+                  <motion.p
+                    key={results?.playerTotalScore}
+                    initial={{ scale: 1.4, color: "#fbbf24" }}
+                    animate={{ scale: 1, color: "hsl(48 96% 57%)" }}
+                    transition={{ duration: 0.4 }}
+                    className="text-4xl font-display font-black"
+                    style={{ color: "hsl(48 96% 57%)" }}
+                  >
+                    +{results?.playerTotalScore || 0}
+                  </motion.p>
+                </div>
+                <div className="text-center border-l border-white/20 pl-8">
+                  <p className="text-sm font-bold text-white/60">
+                    {aiPersonality.emoji} {aiPersonality.name}
+                  </p>
+                  <p className="text-4xl font-display font-black">+{results?.aiTotalScore || 0}</p>
+                </div>
+              </div>
+
+              {/* AI personality comment bubble */}
+              <AnimatePresence>
+                {aiComment && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10, scale: 0.92 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ type: "spring", bounce: 0.4 }}
+                    className="flex items-start gap-2 px-4 py-2.5 rounded-2xl mb-4"
+                    style={{
+                      background: `${aiPersonality.color}18`,
+                      border: `1.5px solid ${aiPersonality.color}44`,
+                    }}
+                  >
+                    <span className="text-2xl flex-shrink-0 mt-0.5">{aiPersonality.emoji}</span>
+                    <div>
+                      <p className="text-xs font-black mb-0.5" style={{ color: aiPersonality.color }}>
+                        {aiPersonality.name}
+                      </p>
+                      <p className="text-white/85 text-sm font-semibold italic">"{aiComment}"</p>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Special card reveal (Oracle / Steal / Sabotage) */}
+              <AnimatePresence>
+                {specialReveal && (() => {
+                  const isSabotageReveal = specialReveal.type === "sabotage";
+                  const isOracle = specialReveal.type === "oracle";
+                  const color = isSabotageReveal ? "#ef4444" : isOracle ? "#a855f7" : "#22d3ee";
+                  const emoji = isSabotageReveal ? "💣" : isOracle ? "🔮" : "🔄";
+                  const label = isSabotageReveal
+                    ? t.powerCards.sabotage_steal
+                    : isOracle ? t.powerCards.oracle_reveal : t.powerCards.steal_reveal;
+                  return (
+                    <motion.div
+                      key="special-reveal"
+                      initial={{ opacity: 0, scale: 0.88, y: 10 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ type: "spring", stiffness: 200, damping: 20 }}
+                      className="mb-4 px-4 py-3 rounded-2xl border-2 flex items-center gap-3"
+                      style={{ background: `${color}18`, borderColor: `${color}55` }}
+                    >
+                      <span className="text-3xl">{emoji}</span>
+                      <div>
+                        <p className="text-xs font-black uppercase" style={{ color }}>{label}</p>
+                        <p className="text-sm font-bold text-white">
+                          {specialReveal.category}: <span style={{ color }} className="font-black">{specialReveal.word || "—"}</span>
+                          {isSabotageReveal && specialReveal.pts
+                            ? <span className="ml-2 text-green-400 font-black">+{specialReveal.pts}pts</span>
+                            : null}
+                        </p>
+                      </div>
+                    </motion.div>
+                  );
+                })()}
+              </AnimatePresence>
+
+              <div className="space-y-3 mb-6 flex-1 overflow-y-auto">
+                {categories.map((category, idx) => {
+                  const res = results?.results?.[category];
+                  const playerRes = res?.player;
+                  const aiRes = res?.ai;
+                  const isSabotaged = sabotageCategory === category;
+                  const isDuplicate = (playerRes as (typeof playerRes & { isDuplicate?: boolean }) | undefined)?.isDuplicate === true;
+                  const isCaughtBluff = bluffResults.some(br => br.category === category && br.caught);
+                  const playerWon = !isDuplicate && !isCaughtBluff && (playerRes?.score ?? 0) > ((isSabotaged ? 0 : aiRes?.score) ?? 0);
+                  const tied = !isSabotaged && !isDuplicate && !isCaughtBluff && (playerRes?.score ?? 0) === (aiRes?.score ?? 0) && (playerRes?.score ?? 0) > 0;
+
+                  return (
+                    <motion.div
+                      key={category}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: idx * 0.07 }}
+                    >
+                      <Card className="p-4 bg-black/20 border-white/5">
+                        <div className="flex items-center gap-2 mb-2">
+                          <h4 className="font-bold text-secondary text-xs uppercase tracking-wider flex-1">{category}</h4>
+                          {isDuplicate && <span className="text-red-400 text-xs font-black">REPETIDA ❌</span>}
+                          {isCaughtBluff && <span className="text-red-400 text-xs font-black">PILLADO 🕵️ −10pts</span>}
+                          {!isDuplicate && !isCaughtBluff && playerWon && <span className="text-green-400 text-xs font-black">+{playerRes?.score}pts ✓</span>}
+                          {!isDuplicate && !isCaughtBluff && tied && <span className="text-yellow-400 text-xs font-black">={playerRes?.score}pts</span>}
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className={`bg-card p-3 rounded-lg border relative overflow-hidden ${isDuplicate || isCaughtBluff ? "border-red-500/40" : "border-white/10"}`}>
+                            <p className="text-xs text-white/50 font-bold mb-1">{t.game.you}</p>
+                            <p className={`font-semibold text-lg break-words ${isDuplicate || isCaughtBluff ? "line-through opacity-50" : ""}`}>{playerRes?.response || t.game.empty}</p>
+                            {isDuplicate && <p className="text-red-400 text-xs font-bold mt-1">0pts — respuesta repetida</p>}
+                            {isCaughtBluff && <p className="text-red-400 text-xs font-bold mt-1">0pts — pillado mintiendo</p>}
+                            <div className={`absolute top-0 right-0 h-full w-1.5 ${isDuplicate || isCaughtBluff ? "bg-red-500/60" : (playerRes?.score ?? 0) >= 10 ? "bg-green-500" : (playerRes?.score ?? 0) >= 5 ? "bg-yellow-400" : "bg-red-500/60"}`} />
+                            {!isDuplicate && !isCaughtBluff && <span className="absolute bottom-2 right-3 text-xs font-bold opacity-50">{playerRes?.score ?? 0}{t.game.points}</span>}
+                          </div>
+                          <div
+                            className="p-3 rounded-lg border relative overflow-hidden"
+                            style={{
+                              background: isSabotaged ? "rgba(239,68,68,0.12)" : "hsl(222 47% 25%)",
+                              borderColor: isSabotaged ? "#ef444455" : "rgba(255,255,255,0.1)",
+                            }}
+                          >
+                            <p className="text-xs text-white/50 font-bold mb-1">{t.game.ai}</p>
+                            {isSabotaged ? (
+                              <p className="font-bold text-red-400 text-sm">❌ SABOTAJE</p>
+                            ) : (
+                              <p className="font-semibold text-lg break-words">{aiRes?.response || t.game.empty}</p>
+                            )}
+                            <div className={`absolute top-0 right-0 h-full w-1.5 ${isSabotaged ? "bg-red-500" : (aiRes?.score ?? 0) >= 10 ? "bg-green-500" : (aiRes?.score ?? 0) >= 5 ? "bg-yellow-400" : "bg-red-500/60"}`} />
+                            <span className="absolute bottom-2 right-3 text-xs font-bold opacity-50">
+                              {isSabotaged ? "0" : (aiRes?.score ?? 0)}{t.game.points}
+                            </span>
+                          </div>
+                        </div>
+                      </Card>
+                    </motion.div>
+                  );
+                })}
+              </div>
+
+              {!isPremium && (
+                <ContextualPremiumPrompt
+                  className="mb-4"
+                  context={{
+                    isPremium,
+                    roundLost: (results?.playerTotalScore ?? 0) < (results?.aiTotalScore ?? 0),
+                    margin: Math.abs((results?.playerTotalScore ?? 0) - (results?.aiTotalScore ?? 0)),
+                    spyExhausted: spyUsesLeft <= 0,
+                    streakDays: soloStreak.current,
+                  }}
+                  onUpgrade={() => setShowPremiumModal(true)}
+                  fallback={null}
+                />
+              )}
+
+              {/* Double or Nothing result badge */}
+              {activeCard === "double_or_nothing" && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.85 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="flex items-center gap-3 justify-center mb-3 py-2 px-4 rounded-xl font-black"
+                  style={{
+                    background: roundWon ? "rgba(249,115,22,0.15)" : "rgba(100,100,100,0.12)",
+                    border: roundWon ? "1px solid rgba(249,115,22,0.4)" : "1px solid rgba(150,150,150,0.2)",
+                  }}
+                >
+                  <span className="text-xl">🎯</span>
+                  <span style={{ color: roundWon ? "#f97316" : "#888" }}>
+                    {roundWon ? "DOBLE O NADA: ×3 XP 🔥" : "DOBLE O NADA: ×0 XP 💀"}
+                  </span>
+                </motion.div>
+              )}
+
+              {/* Shield used badge */}
+              {activeCard === "shield" && roundWon === false && (
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="flex items-center gap-2 justify-center mb-3 py-2 px-4 rounded-xl text-sm font-bold"
+                  style={{ background: "rgba(74,222,128,0.12)", border: "1px solid rgba(74,222,128,0.3)", color: "#4ade80" }}
+                >
+                  🛡️ {t.powerCards.shield_desc}
+                </motion.div>
+              )}
+
+              {/* XP multiplier hint (mid-game) */}
+              {round < maxRounds && randomEvent && (
+                <div
+                  className="flex items-center gap-2 justify-center mb-3 py-1.5 px-3 rounded-xl text-xs font-bold"
+                  style={{ background: "rgba(249,168,37,0.1)", border: "1px solid rgba(249,168,37,0.2)" }}
+                >
+                  <Star size={12} className="text-[#f9a825]" />
+                  <span className="text-[#f9a825]">
+                    {randomEvent === "double_xp" && t.game.doubleXp}
+                    {randomEvent === "easy_letter" && t.game.easyLetter}
+                    {randomEvent === "speed" && t.game.speedBonus}
+                    {randomEvent === "hidden_category" && t.game.hiddenCategory}
+                    {randomEvent === "time_bomb" && t.game.timeBomb}
+                  </span>
+                </div>
+              )}
+
+              {/* XP earned notification (final) */}
+              {round >= maxRounds && lastXpGain > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="flex items-center justify-center gap-2 mb-3 py-2 px-4 rounded-xl"
+                  style={{ background: "rgba(249,168,37,0.15)", border: "1px solid rgba(249,168,37,0.3)" }}
+                >
+                  <Star className="w-4 h-4 text-[#f9a825]" fill="rgba(249,168,37,0.5)" />
+                  <span className="text-[#f9a825] font-black text-sm">+{lastXpGain} {t.game.xpEarned}</span>
+                  {(randomEvent === "double_xp" || (randomEvent === "speed" && roundWon) || combo >= 2) && (
+                    <span className="text-[#f9a825]/60 text-xs font-bold">
+                      {randomEvent === "double_xp" ? "×2" : randomEvent === "speed" && roundWon ? "×3" : combo >= 4 ? "×2" : "×1.5"}
+                    </span>
+                  )}
+                </motion.div>
+              )}
+
+              {/* Personal best result — shown on final round */}
+              {round >= maxRounds && bestResult && (
+                <motion.div
+                  key="personal-best"
+                  initial={{ scale: 0.8, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ type: "spring", bounce: 0.55, delay: 0.3 }}
+                  className="flex flex-col items-center justify-center mb-3 py-3 px-4 rounded-2xl gap-1"
+                  style={
+                    bestResult.isNew
+                      ? { background: "linear-gradient(135deg,rgba(249,168,37,0.25),rgba(181,48,26,0.2))", border: "2px solid rgba(249,168,37,0.6)" }
+                      : { background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)" }
+                  }
+                >
+                  {bestResult.isNew ? (
+                    <>
+                      <span className="text-2xl">🏆</span>
+                      <p className="text-yellow-300 font-black text-base text-center">
+                        {lang === "en" ? "NEW PERSONAL RECORD!" : lang === "pt" ? "NOVO RECORDE PESSOAL!" : lang === "fr" ? "NOUVEAU RECORD PERSO !" : "¡NUEVO RÉCORD PERSONAL!"}
+                      </p>
+                      <p className="text-yellow-200/70 text-xs font-bold text-center">
+                        {totalScore} {lang === "en" ? "pts — your best ever" : lang === "pt" ? "pts — o teu melhor" : lang === "fr" ? "pts — ton meilleur" : "pts — ¡tu mejor marca!"}
+                      </p>
+                    </>
+                  ) : personalBest > 0 ? (
+                    <>
+                      <p className="text-white/50 text-xs font-bold text-center">
+                        🏆 {lang === "en" ? "Record" : lang === "pt" ? "Recorde" : lang === "fr" ? "Record" : "Récord"}: {personalBest} pts
+                      </p>
+                      {bestResult.diff > -20 ? (
+                        <p className="text-white/80 font-black text-sm text-center">
+                          {lang === "en" ? `So close! ${Math.abs(bestResult.diff)} pts away 😤` : lang === "pt" ? `Tão perto! Faltaram ${Math.abs(bestResult.diff)} pts 😤` : lang === "fr" ? `Si proche ! ${Math.abs(bestResult.diff)} pts de plus 😤` : `¡Tan cerca! Te faltaron ${Math.abs(bestResult.diff)} pts 😤`}
+                        </p>
+                      ) : (
+                        <p className="text-white/60 text-xs text-center">
+                          {lang === "en" ? "Can you beat your record? 🎯" : lang === "pt" ? "Consegues bater o teu recorde? 🎯" : lang === "fr" ? "Peux-tu battre ton record ? 🎯" : "¿Puedes superar tu récord? 🎯"}
+                        </p>
+                      )}
+                    </>
+                  ) : null}
+                </motion.div>
+              )}
+
+              {/* Level up notification */}
+              <AnimatePresence>
+                {levelUpInfo && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10, scale: 0.9 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.9 }}
+                    className="flex items-center justify-center gap-2 mb-3 py-2 px-4 rounded-xl cursor-pointer"
+                    style={{ background: "linear-gradient(135deg, rgba(249,168,37,0.3), rgba(181,48,26,0.2))", border: "2px solid rgba(249,168,37,0.5)" }}
+                    onClick={clearLevelUp}
+                  >
+                    <span className="text-2xl">🎉</span>
+                    <span className="text-white font-black text-sm">{t.game.newLevel} {levelUpInfo.from} → {levelUpInfo.to}</span>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* RAGE message — final game loss (taunt = repeat) */}
+              {round >= maxRounds && totalScore < aiTotalScore && (() => {
+                const diff = aiTotalScore - totalScore;
+                const rageMsgs = {
+                  es: diff <= 15
+                    ? ["¿Lo ves? Estabas TAN cerca 💀", "Eso dolió, ¿verdad? 💀", "Una palabra más y ganabas 😤"]
+                    : diff <= 40
+                    ? ["¿En serio perdiste eso? 💀", "La IA te aplastó 😬", "¿Así nomas? ¿Sin luchar? 💀"]
+                    : ["Eso fue doloroso de ver 💀", "La IA lo da todo, tú no 😂", "¿Seguro que esto es lo tuyo? 💀"],
+                  en: diff <= 15
+                    ? ["You were SO close 💀", "That hurt, didn't it? 💀", "One more word and you had it 😤"]
+                    : diff <= 40
+                    ? ["Seriously? You lost that? 💀", "The AI destroyed you 😬", "You gave up that easily? 💀"]
+                    : ["That was painful to watch 💀", "The AI goes all in, you don't 😂", "Is this really your game? 💀"],
+                  pt: diff <= 15
+                    ? ["Estavas TÃO perto 💀", "Isso doeu, não? 💀", "Mais uma palavra e tinhas ganho 😤"]
+                    : diff <= 40
+                    ? ["A sério? Perdeste isso? 💀", "A IA destruiu-te 😬", "Desististe assim tão fácil? 💀"]
+                    : ["Foi doloroso de ver 💀", "A IA dá tudo, tu não 😂", "Tens a certeza que isto é o teu jogo? 💀"],
+                  fr: diff <= 15
+                    ? ["T'étais SI près 💀", "Ça fait mal, non ? 💀", "Un mot de plus et t'avais gagné 😤"]
+                    : diff <= 40
+                    ? ["Sérieusement ? T'as perdu ça ? 💀", "L'IA t'a écrasé 😬", "T'as abandonné aussi facilement ? 💀"]
+                    : ["C'était douloureux à regarder 💀", "L'IA met tout, pas toi 😂", "T'es sûr que c'est ton jeu ? 💀"],
+                };
+                const pool = (rageMsgs as any)[lang] ?? rageMsgs.es;
+                const msg = pool[Math.floor(totalScore * 7 % pool.length)];
+                return (
+                  <motion.div
+                    key="rage-msg"
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 1.2, type: "spring", bounce: 0.4 }}
+                    className="mb-3 px-4 py-2.5 rounded-xl text-center"
+                    style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.25)" }}
+                  >
+                    <p className="text-red-300 font-black text-sm">{msg}</p>
+                    <p className="text-white/40 text-xs mt-0.5 font-bold">
+                      {lang === "en" ? "— The game nobody beats" : lang === "pt" ? "— O jogo que ninguém vence" : lang === "fr" ? "— Le jeu que personne ne bat" : "— El juego que nadie supera"}
+                    </p>
+                  </motion.div>
+                );
+              })()}
+
+              {/* Guest prompt: score not saved → convert to a logged-in account
+                  so the player appears in the weekly/global ranking. Guests are
+                  never written to the leaderboard server-side, so this is the
+                  only path to get them counted. */}
+              {round >= maxRounds && (!player || player.loginMethod === "guest") && (
+                <motion.div
+                  initial={{ opacity: 0, y: 8, scale: 0.97 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  transition={{ delay: 0.6, type: "spring", bounce: 0.4 }}
+                  className="mb-3 rounded-2xl px-4 py-4"
+                  style={{
+                    background: "linear-gradient(135deg, rgba(249,168,37,0.22), rgba(181,48,26,0.18))",
+                    border: "2px solid rgba(249,168,37,0.6)",
+                    boxShadow: "0 4px 20px rgba(249,168,37,0.18)",
+                  }}
+                >
+                  <div className="flex items-start gap-3 mb-3">
+                    <span className="text-2xl mt-0.5">🏆</span>
+                    <div>
+                      <p className="text-yellow-300 font-black text-sm leading-tight">
+                        {lang === "pt"
+                          ? `Os teus ${totalScore} pontos não foram guardados`
+                          : lang === "en"
+                          ? `Your ${totalScore} points weren't saved`
+                          : lang === "fr"
+                          ? `Tes ${totalScore} points n'ont pas été enregistrés`
+                          : `Tus ${totalScore} puntos no se han guardado`}
+                      </p>
+                      <p className="text-yellow-200/80 text-xs mt-1 leading-snug">
+                        {lang === "pt"
+                          ? "Inicia sessão para guardar a pontuação e aparecer no ranking. É grátis!"
+                          : lang === "en"
+                          ? "Sign in to save your score and appear on the leaderboard. It's free!"
+                          : lang === "fr"
+                          ? "Connecte-toi pour sauvegarder ton score et apparaître au classement. C'est gratuit !"
+                          : "Inicia sesión para guardar tu puntuación y aparecer en el ranking. ¡Es gratis!"}
+                      </p>
+                    </div>
+                  </div>
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => {
+                      trackGuestConversion();
+                      showAuth();
+                    }}
+                    className="w-full py-3 rounded-xl font-black text-sm tracking-wide flex items-center justify-center gap-2"
+                    style={{
+                      background: "linear-gradient(135deg, #f9a825, #f57f17)",
+                      color: "#0d1757",
+                      boxShadow: "0 3px 14px rgba(249,168,37,0.4)",
+                    }}
+                  >
+                    <Star size={16} />
+                    {lang === "pt"
+                      ? "Iniciar sessão e guardar"
+                      : lang === "en"
+                      ? "Sign in & save my score"
+                      : lang === "fr"
+                      ? "Se connecter et sauvegarder"
+                      : "Iniciar sesión y guardar"}
+                  </motion.button>
+                </motion.div>
+              )}
+
+              {round >= maxRounds && !doubleUsed && totalScore > 0 && !isDailyMode && !isPremium && !REWARDED_ADS_DISABLED && (
+                <motion.button
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  whileHover={{ scale: 1.02 }}
+                  onClick={() => setRewardedAdType("double")}
+                  className="w-full mb-3 py-3 px-4 rounded-xl flex items-center justify-center gap-2 font-black text-sm"
+                  style={{
+                    background: "linear-gradient(135deg, rgba(249,168,37,0.25), rgba(181,48,26,0.2))",
+                    border: "2px solid rgba(249,168,37,0.6)",
+                    color: "#fde047",
+                  }}
+                >
+                  <Tv2 className="w-4 h-4" />
+                  {lang === "en" ? `Watch ad → DOUBLE your ${totalScore} pts!` :
+                   lang === "pt" ? `Vê anúncio → DUPLICA os teus ${totalScore} pts!` :
+                   lang === "fr" ? `Voir pub → DOUBLE tes ${totalScore} pts !` :
+                   `Ver anuncio → ¡DUPLICA tus ${totalScore} pts!`}
+                </motion.button>
+              )}
+              {round >= maxRounds && doubleUsed && (
+                <div className="w-full mb-3 py-2 px-4 rounded-xl text-center text-xs font-bold text-yellow-300 bg-yellow-500/10 border border-yellow-500/30">
+                  ✨ {lang === "en" ? "Score doubled!" : lang === "pt" ? "Pontuação duplicada!" : lang === "fr" ? "Score doublé !" : "¡Puntuación duplicada!"}
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-3">
+                {round >= maxRounds ? (
+                  isDailyMode ? (
+                    <Button size="lg" className="col-span-2" onClick={nextRound}>
+                      {t.daily.seeRanking ?? "Ver ranking del día"}
+                    </Button>
+                  ) : (
+                    <>
+                      <Button size="lg" onClick={nextRound}>
+                        {t.game.playAgain}
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        size="lg"
+                        onClick={() => setShowShareModal(true)}
+                        className="flex items-center justify-center gap-2"
+                      >
+                        <Star size={16} /> {t.game.shareResults}
+                      </Button>
+                      <Button
+                        size="lg"
+                        onClick={() => setShowClipModal(true)}
+                        className="col-span-2 flex items-center justify-center gap-2 font-black"
+                        style={{ background: "linear-gradient(135deg, #a855f7, #4f46e5)", color: "white" }}
+                      >
+                        🎬 {(t as any).game.shareClip ?? "Crear clip para TikTok"}
+                      </Button>
+                    </>
+                  )
+                ) : (
+                  <Button size="lg" className="col-span-2" onClick={nextRound}>
+                    {t.game.nextRound} ({round + 1}/{maxRounds})
+                  </Button>
+                )}
+              </div>
+            </motion.div>
+          )}
+
+        </AnimatePresence>
+      </div>
+    </Layout>
+  );
+}
