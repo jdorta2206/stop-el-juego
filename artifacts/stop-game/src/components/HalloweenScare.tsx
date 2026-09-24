@@ -17,7 +17,7 @@ import {
 function RealScareVisual({ reduced, scareId }: { reduced: boolean; scareId: keyof typeof HALLOWEEN_SCARE_ASSETS }) {
   return (
     <motion.div
-      className="absolute inset-0 overflow-hidden bg-black pointer-events-none"
+      className="absolute inset-0 overflow-hidden bg-black pointer-events-none touch-none"
       initial={{ scale: reduced ? 1 : 1.06 }}
       animate={reduced ? { scale: 1 } : { scale: [1.06, 1, 1.035] }}
       transition={
@@ -70,6 +70,7 @@ export function HalloweenScareOverlay({
 }) {
   const [osReducedMotion, setOsReducedMotion] = useState(false);
   const onDoneRef = useRef(onDone);
+  const restoreFocusRef = useRef<HTMLElement | null>(null);
   useEffect(() => {
     onDoneRef.current = onDone;
   }, [onDone]);
@@ -92,6 +93,25 @@ export function HalloweenScareOverlay({
   const reduced = reducedEffects || osReducedMotion;
 
   useEffect(() => {
+    // The Android keyboard belongs to the OS and cannot be painted over by a
+    // web/TWA layer. During the scare we intentionally dismiss it so the real
+    // scare can occupy the complete available viewport, then restore the exact
+    // input focus when the scare finishes.
+    const activeElement = document.activeElement;
+    if (activeElement instanceof HTMLElement) {
+      restoreFocusRef.current = activeElement;
+      activeElement.blur();
+    }
+    try {
+      const virtualKeyboard = (navigator as Navigator & {
+        virtualKeyboard?: { hide?: () => void };
+      }).virtualKeyboard;
+      virtualKeyboard?.hide?.();
+    } catch {}
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
     try {
       navigator.vibrate?.([30, 45, 85]);
     } catch {}
@@ -104,14 +124,38 @@ export function HalloweenScareOverlay({
     const duration = reduced ? 1350 : 1500;
     const done = window.setTimeout(() => {
       stopHalloweenScareAudio(scare.id as Parameters<typeof playHalloweenScareAudio>[0]);
+      document.body.style.overflow = previousOverflow;
+      const element = restoreFocusRef.current;
+      restoreFocusRef.current = null;
       onDoneRef.current?.();
+      // Return focus after the overlay is gone so the player can continue
+      // typing immediately without having to tap the answer field again.
+      requestAnimationFrame(() => {
+        try {
+          element?.focus({ preventScroll: true });
+        } catch {
+          element?.focus();
+        }
+      });
     }, duration);
 
     return () => {
       window.clearTimeout(done);
+      document.body.style.overflow = previousOverflow;
       // Never let the scream/audio bleed into normal gameplay if the overlay
       // unmounts early or a new scare replaces the current one.
       stopHalloweenScareAudio(scare.id as Parameters<typeof playHalloweenScareAudio>[0]);
+      const element = restoreFocusRef.current;
+      restoreFocusRef.current = null;
+      if (element) {
+        requestAnimationFrame(() => {
+          try {
+            element.focus({ preventScroll: true });
+          } catch {
+            element.focus();
+          }
+        });
+      }
     };
   }, [scare.id, muted, reduced]);
 
@@ -125,7 +169,7 @@ export function HalloweenScareOverlay({
           ? { duration: 1.35, times: [0, 0.22, 1], ease: "easeOut" }
           : { duration: 1.5, times: [0, 0.08, 0.82, 1], ease: "easeOut" }
       }
-      className="fixed inset-0 z-[120] pointer-events-none overflow-hidden select-none"
+      className="fixed inset-0 z-[2147483647] pointer-events-auto overflow-hidden select-none touch-none overscroll-none"
       style={{ background: reduced ? "rgba(0,0,0,.92)" : "rgba(0,0,0,.96)" }}
       role="alert"
       aria-live="assertive"
