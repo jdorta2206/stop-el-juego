@@ -74,9 +74,8 @@ const CHAOS_ROUND_TIME = 45;
 const MAX_ROUNDS = 3;
 const EASY_LETTERS = ["A", "C", "E", "I", "L", "M", "P", "R", "S", "T"];
 const REWARDED_ADS_DISABLED = (() => {
-  // The web preview must expose the same rewarded-power-up UI as the launched
-  // game. Native AdMob playback itself remains TWA-only; the preview bridge
-  // handles the test flow separately.
+  // The web preview exposes the same rewarded-power-up UI as the launched
+  // game; native AdMob playback remains TWA-only.
   if (import.meta.env.VITE_HALLOWEEN_PREVIEW === "true") return false;
   if (new URLSearchParams(window.location.search).get("rewardedAds") === "1") return false;
   if (import.meta.env.VITE_REWARDED_ADS_DISABLED !== "1") return false;
@@ -1602,3 +1601,403 @@ export default function SoloGame() {
             playerName={player?.name || ""}
             isPremium={isPremium}
           />
+        )}
+
+        <ReviewPromptCard
+          open={reviewPrompt.open}
+          onClose={reviewPrompt.close}
+          onRated={reviewPrompt.markRated}
+          onSnooze={reviewPrompt.snooze}
+          onDismissForever={reviewPrompt.dontAskAgain}
+        />
+
+        <FirstVictoryCelebration
+          open={showFirstWin}
+          xpGained={lastWinXp}
+          onClose={() => setShowFirstWin(false)}
+          onEnableNotifications={() => {
+            if (typeof Notification !== "undefined" && Notification.permission === "default") {
+              Notification.requestPermission().catch(() => {});
+            }
+          }}
+        />
+
+        <ShareResultsModal
+          open={showShareModal}
+          onClose={() => setShowShareModal(false)}
+          letter={currentLetter}
+          playerScore={totalScore}
+          aiScore={aiTotalScore}
+          categories={categories}
+          results={results?.results || {}}
+          t={t.game}
+          bluffResults={bluffResults.length > 0 ? bluffResults : undefined}
+          aiJudged={
+            playerJudgedAi !== null && aiBluffReveal
+              ? { wasCorrect: playerJudgedAi === aiBluffReveal.wasActuallyBluffing, category: aiBluffReveal.category }
+              : null
+          }
+          onShared={() => recordExternalStat(player?.id, { timesShared: 1 })}
+        />
+
+        <ClipGenerator
+          open={showClipModal}
+          onClose={() => setShowClipModal(false)}
+          playerName={player?.name ?? "Jugador"}
+          letter={currentLetter}
+          totalScore={totalScore}
+          language={getCurrentLang()}
+          context={{
+            mode: "solo",
+            opponentBestScore: aiTotalScore,
+          }}
+          entries={categories
+            .map((cat) => {
+              const r = (results?.results ?? {})[cat]?.player;
+              return { category: cat, word: r?.response ?? "—", score: r?.score ?? 0 };
+            })
+            .sort((a, b) => b.score - a.score)
+            .slice(0, 4)}
+          onShared={() => recordExternalStat(player?.id, { timesShared: 1 })}
+        />
+
+        <AnimatePresence>{halloweenScare && <HalloweenScareOverlay scare={halloweenScare} muted={muted} reducedEffects={reducedHalloweenEffects} onDone={() => {
+            if (!isDailyMode && player?.id && isHalloweenActive() && isHalloweenModeEnabled()) {
+              void reportHalloweenEvent(player.id, "scare_received", `solo-scare-${currentLetter}-${Date.now()}`);
+            }
+            setHalloweenScare(null); setHalloweenScareAfterglow(true); window.setTimeout(() => setHalloweenScareAfterglow(false), 10000); }} />}</AnimatePresence>
+
+        {/* Achievement toast notification */}
+        <AchievementToast
+          achievement={newlyUnlocked}
+          onDone={clearNewlyUnlocked}
+          tAchievements={t.achievements as unknown as { [key: string]: string; new: string; xpBonus: string }}
+        />
+
+        {/* Collection toast — surfaces rare/epic/legendary new words */}
+        <CollectionToast word={lastDiscovered} onDone={clearLastDiscovered} />
+
+        {/* Mode badges row */}
+        <div className="flex items-center justify-center gap-2 mb-3 flex-wrap">
+          {tutorialActive && (
+            <div
+              className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black"
+              style={{ background: "linear-gradient(135deg, #4ade80, #22c55e)", color: "#0d1757" }}
+              title={`${ftue.gamesPlayed + 1} / ${ftue.tutorialGamesTotal}`}
+            >
+              🎓 {(t as unknown as { ftue: { tutorialBadge: string } }).ftue.tutorialBadge} {ftue.gamesPlayed + 1}/{ftue.tutorialGamesTotal}
+            </div>
+          )}
+          {isQuickMode && (
+            <div
+              className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black"
+              style={{ background: "linear-gradient(135deg, hsl(48 96% 57%), hsl(6 90% 55%))", color: "#0d1757" }}
+            >
+              <Zap size={12} /> {t.game.quickMode}
+            </div>
+          )}
+          {isChaosMode && (
+            <motion.div
+              animate={{ scale: [1, 1.05, 1] }}
+              transition={{ repeat: Infinity, duration: 2 }}
+              className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black"
+              style={{ background: "linear-gradient(135deg, #7c3aed, #4c1d95)", color: "white" }}
+            >
+              🌀 {(t.game as Record<string,string>).chaosMode ?? "MODO CAOS"}
+            </motion.div>
+          )}
+          {/* Random event badge */}
+          <AnimatePresence>
+            {randomEvent && (
+              <motion.div
+                key={randomEvent}
+                initial={{ scale: 0, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0, opacity: 0 }}
+                transition={{ type: "spring", bounce: 0.5 }}
+                className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black"
+                style={{
+                  background:
+                    randomEvent === "double_xp" ? "linear-gradient(135deg, rgba(249,168,37,0.9), rgba(234,88,12,0.9))" :
+                    randomEvent === "easy_letter" ? "linear-gradient(135deg, rgba(34,197,94,0.9), rgba(21,128,61,0.9))" :
+                    randomEvent === "hidden_category" ? "linear-gradient(135deg, rgba(59,130,246,0.9), rgba(37,99,235,0.9))" :
+                    randomEvent === "time_bomb" ? "linear-gradient(135deg, rgba(239,68,68,0.9), rgba(185,28,28,0.9))" :
+                    "linear-gradient(135deg, rgba(139,92,246,0.9), rgba(109,40,217,0.9))",
+                  color: "white",
+                }}
+              >
+                {randomEvent === "double_xp" && <><Star size={11} fill="white" /> {t.game.doubleXp}</>}
+                {randomEvent === "easy_letter" && <>🍀 {t.game.easyLetter}</>}
+                {randomEvent === "speed" && <><Zap size={11} fill="white" /> {t.game.speedBonus}</>}
+                {randomEvent === "hidden_category" && <>🔍 {t.game.hiddenCategory}</>}
+                {randomEvent === "time_bomb" && <>💣 {t.game.timeBomb}</>}
+              </motion.div>
+            )}
+          </AnimatePresence>
+          {/* 🔥 Racha badge — bolder, with explicit point multiplier */}
+          <AnimatePresence>
+            {combo >= 2 && (() => {
+              const mult = combo >= 4 ? 2 : 1.5;
+              const isMax = combo >= 4;
+              return (
+                <motion.div
+                  key={`combo-${combo}`}
+                  initial={{ scale: 0, rotate: -20, y: -10 }}
+                  animate={{ scale: 1, rotate: 0, y: 0 }}
+                  exit={{ scale: 0 }}
+                  transition={{ type: "spring", bounce: 0.7 }}
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-sm font-black shadow-lg"
+                  style={{
+                    background: isMax
+                      ? "linear-gradient(135deg, #f59e0b, #dc2626, #f59e0b)"
+                      : "linear-gradient(135deg, rgba(239,68,68,0.95), rgba(220,38,38,0.95))",
+                    color: "white",
+                    backgroundSize: isMax ? "200% 100%" : undefined,
+                    boxShadow: isMax
+                      ? "0 0 18px rgba(245,158,11,0.6), 0 0 36px rgba(220,38,38,0.4)"
+                      : "0 4px 12px rgba(220,38,38,0.4)",
+                    animation: isMax ? "comboShine 1.4s linear infinite" : undefined,
+                  }}
+                >
+                  <Flame size={14} fill="white" />
+                  <span>RACHA x{combo}</span>
+                  <span className="bg-black/30 rounded-full px-1.5 py-0.5 text-xs ml-0.5">×{mult} pts</span>
+                </motion.div>
+              );
+            })()}
+          </AnimatePresence>
+        </div>
+
+        {/* IMPOSSIBLE clip-moment banner — fires on new personal best */}
+        <AnimatePresence>
+          {showImpossibleBanner && (
+            <motion.div
+              key="impossible-banner"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[60] flex flex-col items-center justify-center pointer-events-none overflow-hidden"
+              style={{ background: "rgba(0,0,0,0.88)" }}
+            >
+              <motion.div
+                initial={{ scale: 0.3, rotate: -8 }}
+                animate={{ scale: [0.3, 1.25, 1.0], rotate: [-8, 4, 0] }}
+                transition={{ duration: 0.55, ease: "backOut" }}
+                className="text-center px-8"
+              >
+                <motion.p
+                  animate={{ textShadow: ["0 0 0px #f9a825", "0 0 60px #f9a825", "0 0 20px #f9a825"] }}
+                  transition={{ repeat: Infinity, duration: 0.6, repeatType: "reverse" }}
+                  className="font-black uppercase leading-none"
+                  style={{ fontSize: "clamp(3.5rem,18vw,7rem)", color: "#f9a825", fontFamily: "'Baloo 2', sans-serif", letterSpacing: "-0.02em" }}
+                >
+                  {lang === "en" ? "IMPOSSIBLE" : lang === "pt" ? "IMPOSSÍVEL" : lang === "fr" ? "IMPOSSIBLE" : "IMPOSIBLE"}
+                </motion.p>
+                <p className="text-white/80 font-black text-base mt-3">
+                  {lang === "en" ? "New personal record 🏆" : lang === "pt" ? "Novo recorde pessoal 🏆" : lang === "fr" ? "Nouveau record personnel 🏆" : "Nuevo récord personal 🏆"}
+                </p>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Insane Mode activation banner — full-screen flash */}
+        <AnimatePresence>
+          {showInsaneBanner && (
+            <motion.div
+              key="insane-banner"
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 1.1 }}
+              transition={{ type: "spring", bounce: 0.4 }}
+              className="fixed inset-0 z-50 flex flex-col items-center justify-center pointer-events-none"
+              style={{ background: "rgba(185,28,28,0.82)", backdropFilter: "blur(4px)" }}
+            >
+              <motion.div
+                animate={{ scale: [1, 1.08, 1], rotate: [-1, 1, -1, 1, 0] }}
+                transition={{ repeat: 2, duration: 0.4 }}
+                className="text-center px-8"
+              >
+                <p className="text-7xl mb-3">🔥</p>
+                <p className="text-white font-black text-3xl tracking-wide uppercase" style={{ fontFamily: "'Baloo 2', sans-serif" }}>
+                  {lang === "en" ? "INSANE MODE!" : lang === "pt" ? "MODO INSANO!" : lang === "fr" ? "MODE INSANE !" : "¡MODO INSANO!"}
+                </p>
+                <p className="text-red-200 font-bold text-sm mt-2 opacity-80">
+                  {lang === "en" ? "30s rounds — no mercy" : lang === "pt" ? "Rondas de 30s — sem piedade" : lang === "fr" ? "Rondes de 30s — sans pitié" : "Rondas de 30s — sin piedad"}
+                </p>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Header Stats */}
+        <div
+          className="flex justify-between items-center rounded-2xl p-4 mb-5 backdrop-blur-md"
+          style={{
+            background: insaneMode ? "rgba(185,28,28,0.3)" : "rgba(0,0,0,0.2)",
+            border: insaneMode ? "1.5px solid rgba(239,68,68,0.5)" : undefined,
+            transition: "background 0.5s, border 0.5s",
+          }}
+        >
+          <div className="text-center">
+            {insaneMode ? (
+              <motion.p
+                animate={{ opacity: [1, 0.5, 1] }}
+                transition={{ repeat: Infinity, duration: 0.8 }}
+                className="text-xs font-black uppercase"
+                style={{ color: "#f87171" }}
+              >
+                🔥 INSANO
+              </motion.p>
+            ) : (
+              <p className="text-xs text-white/60 font-bold uppercase">{t.game.round}</p>
+            )}
+            <p className="text-2xl font-display font-bold">{round}/{maxRounds}</p>
+          </div>
+          <div className="text-center border-l border-r border-white/20 px-6">
+            <p className="text-xs text-white/60 font-bold uppercase">{t.game.you}</p>
+            <p className="text-2xl font-display font-black text-secondary">{totalScore}</p>
+            {personalBest > 0 && (
+              <p className="text-[10px] text-white/35 font-bold mt-0.5">
+                🏆 {personalBest}
+              </p>
+            )}
+          </div>
+          <div className="text-center">
+            <p className="text-xs text-white/60 font-bold uppercase">
+              {aiPersonality.emoji} {aiPersonality.name}
+            </p>
+            <p className="text-2xl font-display font-bold">{aiTotalScore}</p>
+          </div>
+        </div>
+
+        <AnimatePresence mode="wait">
+
+          {/* LOBBY */}
+          {gameState === "LOBBY" && (
+            <motion.div
+              key="lobby"
+              initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}
+              className="flex-1 flex flex-col items-center justify-center text-center space-y-8"
+            >
+              <HalloweenBanner className="mb-3" />
+              <div>
+                <h2 className="text-4xl font-display font-bold mb-2">{t.home.soloVsAI}</h2>
+                {packId !== "classic" && (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full mt-1"
+                    style={{ background: `${activePack.color}22`, border: `1.5px solid ${activePack.color}55` }}
+                  >
+                    <span className="text-sm">{activePack.icon}</span>
+                    <span className="text-xs font-black" style={{ color: activePack.color }}>
+                      {activePack.name[(lang as "es"|"en"|"pt"|"fr")] || activePack.name.es}
+                    </span>
+                  </motion.div>
+                )}
+              </div>
+              <Button size="xl" onClick={startGame}>{t.game.round} {round}</Button>
+
+              {isPremium ? (
+                <button
+                  onClick={() => setShowPremiumModal(true)}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all"
+                  style={{ background: "rgba(249,168,37,0.15)", border: "1px solid rgba(249,168,37,0.4)", color: "#f9a825" }}
+                >
+                  <Crown size={16} /> {t.premium.active}
+                </button>
+              ) : (
+                <>
+                  {/* Banner solo en navegador web (se auto-oculta dentro del TWA). */}
+                  <BannerAd />
+                </>
+              )}
+            </motion.div>
+          )}
+
+          {/* SPINNING */}
+          {gameState === "SPINNING" && (
+            <motion.div
+              key="spinning"
+              initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}
+              className="flex-1 flex flex-col items-center justify-center gap-6"
+            >
+              {/* Event announcement card */}
+              <AnimatePresence>
+                {randomEvent && (
+                  <motion.div
+                    initial={{ y: -30, opacity: 0, scale: 0.85 }}
+                    animate={{ y: 0, opacity: 1, scale: 1 }}
+                    transition={{ type: "spring", bounce: 0.55, delay: 0.15 }}
+                    className="w-full max-w-xs rounded-2xl p-4 text-center"
+                    style={{
+                      background:
+                        randomEvent === "double_xp" ? "linear-gradient(135deg, rgba(249,168,37,0.2), rgba(234,88,12,0.15))" :
+                        randomEvent === "easy_letter" ? "linear-gradient(135deg, rgba(34,197,94,0.2), rgba(21,128,61,0.15))" :
+                        randomEvent === "hidden_category" ? "linear-gradient(135deg, rgba(59,130,246,0.2), rgba(37,99,235,0.15))" :
+                        randomEvent === "time_bomb" ? "linear-gradient(135deg, rgba(239,68,68,0.2), rgba(185,28,28,0.15))" :
+                        "linear-gradient(135deg, rgba(139,92,246,0.2), rgba(109,40,217,0.15))",
+                      border:
+                        randomEvent === "double_xp" ? "2px solid rgba(249,168,37,0.5)" :
+                        randomEvent === "easy_letter" ? "2px solid rgba(34,197,94,0.5)" :
+                        randomEvent === "hidden_category" ? "2px solid rgba(59,130,246,0.5)" :
+                        randomEvent === "time_bomb" ? "2px solid rgba(239,68,68,0.5)" :
+                        "2px solid rgba(139,92,246,0.5)",
+                    }}
+                  >
+                    <p className="text-white/50 text-xs font-bold uppercase mb-1">{t.game.eventBanner}</p>
+                    <p className="text-white font-black text-xl mb-0.5">
+                      {randomEvent === "double_xp" && `⭐ ${t.game.doubleXp}`}
+                      {randomEvent === "easy_letter" && `🍀 ${t.game.easyLetter}`}
+                      {randomEvent === "speed" && `⚡ ${t.game.speedBonus}`}
+                      {randomEvent === "hidden_category" && `🔍 ${t.game.hiddenCategory}`}
+                      {randomEvent === "time_bomb" && `💣 ${t.game.timeBomb}`}
+                    </p>
+                    <p className="text-white/60 text-xs">
+                      {randomEvent === "double_xp" && t.game.doubleXpSubtitle}
+                      {randomEvent === "easy_letter" && t.game.easyLetterSubtitle}
+                      {randomEvent === "speed" && t.game.speedBonusSubtitle}
+                      {randomEvent === "hidden_category" && t.game.hiddenCategorySubtitle}
+                      {randomEvent === "time_bomb" && t.game.timeBombSubtitle}
+                    </p>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              <h3 className="text-2xl font-display font-bold animate-pulse">{t.game.spinningLetter}</h3>
+              <Roulette muted={muted} isSpinning={true} targetLetter={currentLetter} onSpinComplete={handleSpinComplete} />
+            </motion.div>
+          )}
+
+          {/* CARD REVEAL */}
+          {gameState === "CARD_REVEAL" && activeCard && (() => {
+            const card = POWER_CARDS[activeCard];
+            const nameKey = `${activeCard}_name` as keyof typeof t.powerCards;
+            const descKey = `${activeCard}_desc` as keyof typeof t.powerCards;
+            const isAuto = card.timing === "auto" || card.timing === "auto_results";
+            return (
+              <motion.div
+                key="card-reveal"
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.8 }}
+                className="flex-1 flex flex-col items-center justify-center gap-6 px-4"
+              >
+                <motion.p
+                  initial={{ opacity: 0, y: -20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="text-lg font-bold uppercase tracking-widest text-yellow-400"
+                >
+                  {t.powerCards.title}
+                </motion.p>
+
+                {/* Card flip */}
+                <motion.div
+                  initial={{ rotateY: 180, scale: 0.7 }}
+                  animate={{ rotateY: 0, scale: 1 }}
+                  transition={{ type: "spring", stiffness: 150, damping: 18, delay: 0.15 }}
+                  className="relative w-56 h-80 rounded-3xl flex flex-col items-center justify-center gap-4 shadow-2xl border-4"
+                  style={{
+                    background: `linear-gradient(145deg, ${card.color}33, ${card.color}11)`,
+                    borderColor: card.color,
