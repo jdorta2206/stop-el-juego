@@ -59,6 +59,7 @@ jobs:
           from urllib.parse import urlsplit
           DIST = os.path.abspath("artifacts/stop-game/dist")
           UPSTREAM = "www.stopjuegodepalabras.com"
+          MAX_REDIRECTS = 4
           class Handler(SimpleHTTPRequestHandler):
               def __init__(self, *args, **kwargs):
                   super().__init__(*args, directory=DIST, **kwargs)
@@ -70,11 +71,32 @@ jobs:
                   body = self.rfile.read(length) if length else None
                   headers["Host"] = UPSTREAM
                   try:
-                      conn.request(self.command, target.path + (("?" + target.query) if target.query else ""), body=body, headers=headers)
-                      resp = conn.getresponse()
+                      # Follow production redirects inside the preview proxy.
+                      # A browser-side 301 on POST can otherwise become GET and
+                      # trigger the game's zero-point fallback.
+                      current_host = UPSTREAM
+                      current_path = target.path + (("?" + target.query) if target.query else "")
+                      for _ in range(MAX_REDIRECTS + 1):
+                          conn = http.client.HTTPSConnection(current_host, timeout=60)
+                          headers["Host"] = current_host
+                          conn.request(self.command, current_path, body=body, headers=headers)
+                          resp = conn.getresponse()
+                          if resp.status not in {301, 302, 303, 307, 308}:
+                              break
+                          location = resp.getheader("Location")
+                          conn.close()
+                          if not location:
+                              break
+                          redirected = urlsplit(location)
+                          if redirected.scheme and redirected.scheme != "https":
+                              break
+                          current_host = redirected.netloc or current_host
+                          current_path = redirected.path or "/"
+                          if redirected.query:
+                              current_path += "?" + redirected.query
                       self.send_response(resp.status, resp.reason)
                       for k, v in resp.getheaders():
-                          if k.lower() not in {"transfer-encoding","connection","content-encoding"}:
+                          if k.lower() not in {"transfer-encoding","connection","content-encoding","location"}:
                               self.send_header(k, v)
                       self.end_headers()
                       while True:
@@ -82,7 +104,8 @@ jobs:
                           if not chunk: break
                           self.wfile.write(chunk); self.wfile.flush()
                   finally:
-                      conn.close()
+                      try: conn.close()
+                      except Exception: pass
               def do_GET(self):
                   if self.path.startswith("/api/"): return self._proxy()
                   return super().do_GET()
@@ -112,6 +135,14 @@ jobs:
           nohup python3 /tmp/halloween-preview-server.py >/tmp/preview-http.log 2>&1 &
           sleep 2
           curl -fsS http://127.0.0.1:4173/ >/dev/null
+          echo "Smoke-test API validation through preview proxy..."
+          curl -fsS --max-time 60 \
+            -H "Content-Type: application/json" \
+            -X POST http://127.0.0.1:4173/api/game/validate \
+            --data '{"letter":"B","language":"es","playerResponses":[{"category":"Nombre","word":"BARBI"},{"category":"Lugar","word":"BARCELONA"},{"category":"Animal","word":"BURRO"}]}' \
+            | grep -q '"playerTotalScore"'
+          echo "Smoke-test presence endpoint through preview proxy..."
+          curl -fsS --max-time 30 http://127.0.0.1:4173/api/presence/online | grep -q '"online"'
       - name: Start public preview tunnel
         shell: bash
         run: |
