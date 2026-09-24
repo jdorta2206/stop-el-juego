@@ -118,12 +118,9 @@ jobs:
                               return
                           if next_url.hostname:
                               headers["Host"] = host
-                          # Keep POST on 307/308. For 301/302/303, browsers commonly
-                          # switch POST to GET; API redirects here are only followed
-                          # when the upstream explicitly preserves the method.
-                          if resp.status in {301, 302, 303} and self.command != "GET":
-                              self.send_error(502, "Upstream redirected an API write")
-                              return
+                          # Follow the upstream redirect. Preserve the original API
+                          # method/body so POST validation and room creation continue
+                          # to work through the preview proxy.
                       finally:
                           conn.close()
 
