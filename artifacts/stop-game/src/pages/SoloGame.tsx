@@ -74,8 +74,6 @@ const CHAOS_ROUND_TIME = 45;
 const MAX_ROUNDS = 3;
 const EASY_LETTERS = ["A", "C", "E", "I", "L", "M", "P", "R", "S", "T"];
 const REWARDED_ADS_DISABLED = (() => {
-  // The web preview exposes the same rewarded-power-up UI as the launched
-  // game; native AdMob playback remains TWA-only.
   if (import.meta.env.VITE_HALLOWEEN_PREVIEW === "true") return false;
   if (new URLSearchParams(window.location.search).get("rewardedAds") === "1") return false;
   if (import.meta.env.VITE_REWARDED_ADS_DISABLED !== "1") return false;
@@ -2001,3 +1999,503 @@ export default function SoloGame() {
                   style={{
                     background: `linear-gradient(145deg, ${card.color}33, ${card.color}11)`,
                     borderColor: card.color,
+                    boxShadow: `0 0 40px ${card.color}55`,
+                  }}
+                >
+                  <motion.div
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ delay: 0.4, type: "spring", stiffness: 200 }}
+                    className="text-8xl"
+                  >
+                    {card.emoji}
+                  </motion.div>
+                  <div className="text-center px-4">
+                    <p className="font-display font-black text-xl text-white">
+                      {t.powerCards[nameKey] as string}
+                    </p>
+                    <p className="text-sm mt-1 opacity-80 text-white/80">
+                      {t.powerCards[descKey] as string}
+                    </p>
+                  </div>
+                  {isAuto && (
+                    <span
+                      className="text-xs font-bold px-3 py-1 rounded-full"
+                      style={{ background: `${card.color}44`, color: card.color }}
+                    >
+                      {t.powerCards.autoApply}
+                    </span>
+                  )}
+                </motion.div>
+
+                <motion.button
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.6 }}
+                  onClick={proceedFromCardReveal}
+                  className="px-10 py-3 rounded-2xl font-black text-lg text-white shadow-xl"
+                  style={{ background: card.color }}
+                >
+                  {t.powerCards.proceed}
+                </motion.button>
+
+                {/* Letter reminder */}
+                <p className="text-3xl font-black opacity-60">
+                  {t.game.letter}: <span className="text-yellow-400">{currentLetter}</span>
+                </p>
+              </motion.div>
+            );
+          })()}
+
+          {/* PLAYING */}
+          {gameState === "PLAYING" && (
+            <motion.div
+              key="playing"
+              initial={{ opacity: 0, x: 50 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -50 }}
+              className="flex-1 flex flex-col"
+            >
+              {/* 🎃 Halloween-only visual skin. Pointer-events are disabled so the game controls remain untouched. */}
+              <HalloweenGameTheme active={isHalloweenActive() && isHalloweenModeEnabled() && !isDailyMode} />
+
+              {/* Panic overlay — red pulse when < 10s */}
+              <AnimatePresence>
+                {timeLeft <= 10 && timeLeft > 0 && (
+                  <motion.div
+                    key="panic-overlay"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: [0, 0.18, 0] }}
+                    transition={{ duration: 0.4, repeat: Infinity, repeatType: "loop" }}
+                    className="fixed inset-0 z-10 pointer-events-none"
+                    style={{ background: "radial-gradient(ellipse at center, rgba(220,38,38,0.5) 0%, transparent 70%)" }}
+                  />
+                )}
+              </AnimatePresence>
+
+              <div
+                className="flex items-center gap-4 mb-5 p-4 rounded-2xl shadow-lg border-2 transition-colors duration-500"
+                style={{
+                  background: timeLeft <= 10 ? "rgba(185,28,28,0.5)" : "hsl(222 47% 20%)",
+                  borderColor: timeLeft <= 10 ? "rgba(239,68,68,0.6)" : "rgba(255,255,255,0.1)",
+                }}
+              >
+                {/* Letter */}
+                <motion.div
+                  animate={timeLeft <= 10 ? { scale: [1, 1.1, 1] } : {}}
+                  transition={{ duration: 0.4, repeat: Infinity }}
+                  className="w-16 h-16 bg-white rounded-full flex items-center justify-center text-primary font-display font-black text-4xl shadow-inner flex-shrink-0"
+                >
+                  {currentLetter}
+                </motion.div>
+
+                {/* Timer bar */}
+                <div className="flex-1">
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="font-bold text-sm text-white/70">{t.game.round}</span>
+                    <div className="flex items-center gap-2">
+                      <motion.span
+                        key={isRandomMode ? "rand" : randomEvent === "time_bomb" ? "bomb" : timeLeft}
+                        initial={{ scale: timeLeft <= 10 && randomEvent !== "time_bomb" && !isRandomMode ? 1.4 : 1 }}
+                        animate={isRandomMode ? { opacity: [0.6, 1, 0.6] } : { scale: 1 }}
+                        transition={isRandomMode ? { duration: 1.2, repeat: Infinity } : undefined}
+                        className={
+                          isRandomMode
+                            ? "text-purple-300 font-black text-lg"
+                            : randomEvent === "time_bomb"
+                              ? "text-red-400 font-black text-lg animate-pulse"
+                              : timeLeft <= 10 ? "text-red-300 font-black text-lg" : timeLeft <= 25 ? "text-yellow-300 font-black" : "font-bold"
+                        }
+                      >
+                        {isRandomMode ? "🎲 ¿?" : randomEvent === "time_bomb" ? "💣?" : `${timeLeft}s`}
+                      </motion.span>
+                      {/* Mute toggle */}
+                      <button
+                        onClick={handleToggleMute}
+                        className="ml-1 text-white/40 hover:text-white/80 transition-colors"
+                        title={muted ? "Activar sonido" : "Silenciar"}
+                      >
+                        {muted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+                      </button>
+                      {isHalloweenActive() && isHalloweenModeEnabled() && (
+                        <button
+                          onClick={() => {
+                            const next = !reducedHalloweenEffects;
+                            setReducedHalloweenEffects(next);
+                            setHalloweenReducedEffects(next);
+                          }}
+                          className="ml-1 text-white/40 hover:text-white/80 transition-colors"
+                          title={reducedHalloweenEffects ? "Activar efectos de Halloween" : "Reducir sustos y efectos intensos"}
+                          aria-label={reducedHalloweenEffects ? "Activar efectos de Halloween" : "Reducir sustos y efectos intensos"}
+                        >
+                          <EyeOff className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  {isRandomMode ? (
+                    /* Random mode — animated mystery bar, no real progress shown */
+                    <div className="h-2.5 w-full rounded-full overflow-hidden bg-purple-900/40">
+                      <motion.div
+                        className="h-full"
+                        style={{ background: "linear-gradient(90deg, #a855f7, #ec4899, #a855f7)", backgroundSize: "200% 100%" }}
+                        animate={{ backgroundPosition: ["0% 0%", "100% 0%"] }}
+                        transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
+                      />
+                    </div>
+                  ) : (
+                    <Progress
+                      value={(timeLeft / roundTime) * 100}
+                      indicatorClass={timeLeft <= 10 ? "bg-red-500" : timeLeft <= 25 ? "bg-yellow-400" : "bg-green-400"}
+                    />
+                  )}
+                </div>
+              </div>
+
+              {/* Power Card active badge */}
+              {activeCard && (() => {
+                const card = POWER_CARDS[activeCard];
+                const nameKey = `${activeCard}_name` as keyof typeof t.powerCards;
+                const isPlayingCard = card.timing === "playing";
+                const isUsed = cardUsed;
+                return (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="mb-3 flex items-center gap-3 px-3 py-2 rounded-2xl border"
+                    style={{
+                      background: `${card.color}18`,
+                      borderColor: `${card.color}55`,
+                    }}
+                  >
+                    <span className="text-2xl">{card.emoji}</span>
+                    <div className="flex-1">
+                      <p className="text-xs font-black" style={{ color: card.color }}>
+                        {t.powerCards[nameKey] as string}
+                      </p>
+                      {selectingSabotage && (
+                        <p className="text-xs text-white/60">{t.powerCards.sabotage_pick}</p>
+                      )}
+                      {sabotageCategory && (
+                        <p className="text-xs text-white/60">{t.powerCards.sabotage_active} — {sabotageCategory}</p>
+                      )}
+                    </div>
+                    {isPlayingCard && !isUsed && !selectingSabotage && !sabotageCategory && (
+                      <button
+                        onClick={() => {
+                          if (activeCard === "lightning") {
+                            setCardUsed(true);
+                            handleStop();
+                          } else if (activeCard === "sabotage") {
+                            setSelectingSabotage(true);
+                          }
+                        }}
+                        className="px-3 py-1 rounded-xl text-xs font-black text-white"
+                        style={{ background: card.color }}
+                      >
+                        {t.powerCards.use}
+                      </button>
+                    )}
+                    {isUsed && (
+                      <span className="text-xs font-bold opacity-40">{t.powerCards.passive}</span>
+                    )}
+                  </motion.div>
+                );
+              })()}
+
+              <div className="grid grid-cols-2 gap-2 mb-3">
+                {!rewardedUsed && isPremium && (
+                  <button
+                    onClick={() => { setTimeLeft(prev => prev + 20); setRewardedUsed(true); }}
+                    className="flex items-center justify-center gap-2 py-2 px-3 rounded-xl border border-yellow-400/50 bg-yellow-400/15 text-yellow-300 text-xs font-bold hover:bg-yellow-400/25 transition-all"
+                  >
+                    ⭐ +20s
+                  </button>
+                )}
+                {!rewardedUsed && !isPremium && !REWARDED_ADS_DISABLED && (
+                  <button
+                    onClick={() => setRewardedAdType("extraTime")}
+                    className="flex items-center justify-center gap-2 py-2 px-3 rounded-xl border border-yellow-500/30 bg-yellow-500/10 text-yellow-300 text-xs font-bold hover:bg-yellow-500/20 transition-all"
+                  >
+                    <Tv2 className="w-3.5 h-3.5" /> +30s
+                  </button>
+                )}
+                {!hintUsed && !isPremium && !REWARDED_ADS_DISABLED && (
+                  <button
+                    onClick={() => setRewardedAdType("hint")}
+                    className="flex items-center justify-center gap-2 py-2 px-3 rounded-xl border border-cyan-500/30 bg-cyan-500/10 text-cyan-300 text-xs font-bold hover:bg-cyan-500/20 transition-all"
+                  >
+                    💡 {lang === "en" ? "Hint" : lang === "pt" ? "Dica" : lang === "fr" ? "Indice" : "Pista"}
+                  </button>
+                )}
+                {!hintUsed && isPremium && (
+                  <button
+                    onClick={() => {
+                      const empty = categories.find(c => !(responses[c] && responses[c].trim().length > 0));
+                      if (empty) {
+                        const pool = HINT_STARTERS[currentLetter] ?? [currentLetter];
+                        const word = pool[Math.floor(Math.random() * pool.length)];
+                        setResponses(prev => ({ ...prev, [empty]: word }));
+                        setHintReveal({ category: empty, word });
+                        setTimeout(() => setHintReveal(null), 3500);
+                      }
+                      setHintUsed(true);
+                    }}
+                    className="flex items-center justify-center gap-2 py-2 px-3 rounded-xl border border-cyan-400/50 bg-cyan-400/15 text-cyan-300 text-xs font-bold hover:bg-cyan-400/25 transition-all"
+                  >
+                    ⭐ 💡 {lang === "en" ? "Hint" : lang === "pt" ? "Dica" : lang === "fr" ? "Indice" : "Pista"}
+                  </button>
+                )}
+              </div>
+
+              {hintReveal && (
+                <motion.div
+                  initial={{ opacity: 0, y: -8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                  className="mb-3 py-2 px-3 rounded-xl text-center text-xs font-bold"
+                  style={{ background: "rgba(34,211,238,0.15)", border: "1px solid rgba(34,211,238,0.4)", color: "#67e8f9" }}
+                >
+                  💡 {hintReveal.category}: <span className="text-white">{hintReveal.word}…</span>
+                </motion.div>
+              )}
+
+              {/* Bluff hint bar */}
+              <div className="flex items-center justify-between mb-2 px-1">
+                <p className="text-xs text-white/40">{t.bluff.bluffHint}</p>
+                <p className="text-xs font-bold" style={{ color: bluffedCategories.size > 0 ? "#a855f7" : "rgba(255,255,255,0.3)" }}>
+                  🎭 {bluffedCategories.size}/2
+                </p>
+              </div>
+
+              <div className="space-y-2 flex-1 overflow-y-auto pb-28">
+                {categories.map((category, catIdx) => {
+                  const isSabotaged = sabotageCategory === category;
+                  const canSabotage = selectingSabotage && !sabotageCategory;
+                  const isBluffed = bluffedCategories.has(category);
+                  const canBluff = !isBluffed && bluffedCategories.size >= 2;
+                  const isHidden = randomEvent === "hidden_category" && catIdx === hiddenCategoryIdx;
+                  return (
+                    <div
+                      key={category}
+                      className="relative bg-card p-3 rounded-xl border transition-all"
+                      style={{
+                        borderColor: isBluffed ? "#a855f7" : isHidden ? "rgba(59,130,246,0.5)" : isSabotaged ? "#ef4444" : canSabotage ? "#ef444466" : "rgba(255,255,255,0.05)",
+                        background: isBluffed ? "rgba(168,85,247,0.08)" : isHidden ? "rgba(59,130,246,0.06)" : undefined,
+                      }}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-xs font-black uppercase tracking-wider" style={{ color: isHidden ? "#60a5fa" : undefined }}>
+                          {isHidden ? "??? 🔍" : category}
+                        </label>
+                        {!isSabotaged && (
+                          <button
+                            onClick={() => toggleBluff(category)}
+                            disabled={canBluff}
+                            className={`text-xs px-2 py-0.5 rounded-lg font-bold transition-all ${
+                              isBluffed
+                                ? "bg-purple-500 text-white"
+                                : canBluff
+                                ? "bg-white/5 text-white/20 cursor-not-allowed"
+                                : "bg-white/10 text-white/50 hover:bg-purple-500/30 hover:text-purple-300"
+                            }`}
+                          >
+                            {isBluffed ? t.bluff.toggleOn : "🎭"}
+                          </button>
+                        )}
+                      </div>
+                      {isSabotaged ? (
+                        <div className="flex items-center gap-2 py-2 text-red-400 font-bold">
+                          <span>❌</span> <span className="text-sm opacity-70">Categoría anulada para la IA</span>
+                        </div>
+                      ) : (
+                        <Input
+                          value={responses[category] || ""}
+                          onChange={e => { sound.playKeyClick(); setResponses(prev => ({ ...prev, [category]: e.target.value.toUpperCase() })); }}
+                          placeholder={isBluffed ? `${category}... 🎭` : `${category}...`}
+                          autoComplete="off"
+                          autoCorrect="off"
+                          className={isBluffed ? "border-purple-500/50 bg-purple-900/20" : isHalloweenActive() && isHalloweenModeEnabled() && !isDailyMode ? "border-red-800/70 bg-black/30 text-red-200 placeholder:text-red-200/35" : ""}
+                        />
+                      )}
+                      {canSabotage && (
+                        <button
+                          onClick={() => {
+                            setSabotageCategory(category);
+                            setSelectingSabotage(false);
+                            setCardUsed(true);
+                          }}
+                          className="absolute inset-0 rounded-xl bg-red-500/20 flex items-center justify-center font-black text-red-300 text-sm border-2 border-red-500/50"
+                        >
+                          ❌ SABOTEAR
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="fixed bottom-4 left-0 w-full px-4 z-20">
+                <div className="max-w-2xl mx-auto space-y-2">
+                  {/* 🕵️ ESPÍA — Robar respuesta de la IA. Free: 1 uso, Premium: 2 usos. -10 pts cada uso. */}
+                  {spyUsesLeft > 0 && (
+                    <motion.button
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      whileTap={{ scale: 0.97 }}
+                      disabled={spyLoading}
+                      onClick={async () => {
+                        if (spyUsesLeft <= 0 || spyLoading) return;
+                        setSpyLoading(true);
+                        try {
+                          // Pick a random category not yet filled by the player (or any if all filled)
+                          const empty = categoriesRef.current.filter(c => !(responsesRef.current[c]?.trim()));
+                          const pool = empty.length > 0 ? empty : categoriesRef.current;
+                          const cat = pool[Math.floor(Math.random() * pool.length)];
+                          const url = `${getApiUrl()}/api/game/peek?letter=${encodeURIComponent(currentLetterRef.current)}&category=${encodeURIComponent(cat)}&language=${encodeURIComponent(getCurrentLang())}`;
+                          let word = "—";
+                          try {
+                            const r = await fetch(url);
+                            const data = await r.json().catch(() => ({}));
+                            word = (data?.word as string) || "—";
+                          } catch {
+                            // 📡 Offline fallback: usa el diccionario cacheado.
+                            if (getCachedOfflineBundle()) {
+                              const local = getAiWordOffline(currentLetterRef.current, cat, getCurrentLang());
+                              if (local) {
+                                word = local.charAt(0).toUpperCase() + local.slice(1);
+                                setIsOffline(true);
+                              }
+                            }
+                          }
+                          setSpyUsesLeft(prev => Math.max(0, prev - 1));
+                          setSpyUsesThisRound(prev => prev + 1);
+                          setSpyReveal({ category: cat, word });
+                          vibrate([30, 20, 30]);
+                          // Auto-dismiss after 5 seconds
+                          setTimeout(() => setSpyReveal(null), 5000);
+                        } catch {
+                          setSpyLoading(false);
+                          return;
+                        }
+                        setSpyLoading(false);
+                      }}
+                      className="w-full flex items-center justify-center gap-2 py-2.5 rounded-full font-black text-sm shadow-lg disabled:opacity-50"
+                      style={{
+                        background: "linear-gradient(135deg, rgba(124,58,237,0.85), rgba(67,20,157,0.95))",
+                        color: "white",
+                        border: "1.5px solid rgba(167,139,250,0.6)",
+                      }}
+                    >
+                      🕵️ {spyLoading ? "Espiando..." : "ESPIAR a la IA"}
+                      {isPremium && (
+                        <span className="text-xs bg-yellow-400/30 border border-yellow-300/50 rounded-full px-2 py-0.5 ml-1">⭐ {spyUsesLeft}/2</span>
+                      )}
+                      <span className="text-xs bg-black/30 rounded-full px-2 py-0.5 ml-1">-10 pts</span>
+                    </motion.button>
+                  )}
+                  <Button
+                    variant="destructive"
+                    size="xl"
+                    className="w-full py-6 rounded-full text-3xl shadow-2xl shadow-red-900/50 border-4 border-white/20"
+                    onClick={handleStop}
+                  >
+                    {t.game.stop}
+                  </Button>
+                </div>
+              </div>
+
+              {/* 🕵️ Spy reveal popup — shows the AI's possible word for one category */}
+              <AnimatePresence>
+                {spyReveal && (
+                  <motion.div
+                    key="spy-reveal"
+                    initial={{ opacity: 0, scale: 0.6, y: -20 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.6 }}
+                    transition={{ type: "spring", bounce: 0.5 }}
+                    className="fixed inset-x-0 top-24 z-50 px-4 flex justify-center pointer-events-none"
+                  >
+                    <div
+                      className="max-w-sm w-full rounded-2xl p-4 shadow-2xl pointer-events-auto"
+                      style={{
+                        background: "linear-gradient(135deg, rgba(67,20,157,0.96), rgba(30,7,79,0.98))",
+                        border: "2px solid rgba(167,139,250,0.7)",
+                      }}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <p className="text-xs font-black text-purple-300 uppercase tracking-wider">🕵️ Espía</p>
+                        <button
+                          onClick={() => setSpyReveal(null)}
+                          className="text-white/50 hover:text-white text-lg leading-none"
+                          aria-label="Cerrar"
+                        >×</button>
+                      </div>
+                      <p className="text-xs text-white/60 mb-1">La IA podría poner en <b className="text-purple-200">{spyReveal.category}</b>:</p>
+                      <p className="text-3xl font-display font-black text-white mb-1 break-words">
+                        {spyReveal.word || <span className="text-white/40 italic text-xl">(no encontró palabra)</span>}
+                      </p>
+                      <p className="text-[10px] text-white/40 italic">−10 pts al final · 5s para copiarla 😈</p>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </motion.div>
+          )}
+
+          {/* EVALUATING */}
+          {gameState === "EVALUATING" && (
+            <motion.div
+              key="evaluating"
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="flex-1 flex flex-col items-center justify-center"
+            >
+              <div className="w-16 h-16 border-4 border-white border-t-secondary rounded-full animate-spin mb-6" />
+              <h2 className="text-3xl font-display font-bold">{t.game.evaluating}</h2>
+            </motion.div>
+          )}
+
+          {/* JUDGING — Social deception reveal */}
+          {gameState === "JUDGING" && (
+            <motion.div
+              key="judging"
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+              className="flex-1 flex flex-col items-center px-4 py-6 gap-5"
+            >
+              {/* Dramatic header */}
+              <motion.div
+                initial={{ scale: 0.7, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ type: "spring", stiffness: 180, damping: 14 }}
+                className="text-center"
+              >
+                <h2 className="text-4xl font-display font-black text-yellow-400 drop-shadow-lg">
+                  {t.bluff.judging_title}
+                </h2>
+                <p className="text-sm text-white/50 mt-1">{t.bluff.judging_sub}</p>
+              </motion.div>
+
+              {/* PHASE 1: Player bluff results */}
+              {judgingPhase === "player_bluffs" && (
+                <div className="w-full space-y-3">
+                  {bluffResults.length === 0 ? (
+                    <motion.p
+                      initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }}
+                      className="text-center text-white/40 text-sm py-4"
+                    >
+                      {t.bluff.noBluffs}
+                    </motion.p>
+                  ) : (
+                    bluffResults.map((result, i) => (
+                      <motion.div
+                        key={result.category}
+                        initial={{ opacity: 0, x: -40 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: i * 1.4, type: "spring", stiffness: 150, damping: 18 }}
+                        className="p-4 rounded-2xl border-2 flex items-center gap-4"
+                        style={{
+                          borderColor: result.caught ? "#ef4444" : "#22c55e",
+                          background: result.caught ? "rgba(239,68,68,0.1)" : "rgba(34,197,94,0.1)",
+                        }}
+                      >
+                        <motion.span
+                          initial={{ scale: 0 }} animate={{ scale: 1 }}
+                          transition={{ delay: i * 1.4 + 0.4, type: "spring" }}
