@@ -1,6 +1,5 @@
 name: Halloween preview
-# Preview retrigger: keep manual Halloween preview available
-# Auto-triggered validation after tunnel fallback update
+# Preview validation + public tunnel for Halloween testing
 
 on:
   push:
@@ -15,6 +14,8 @@ on:
       - feature/halloween-solo-surprise
   workflow_dispatch:
 
+permissions:
+  contents: read
 
 concurrency:
   group: halloween-preview-${{ github.ref }}-${{ github.sha }}
@@ -27,4 +28,201 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
       - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Halloween preview
+        env:
+          VITE_HALLOWEEN_PREVIEW: 'true'
+          VITE_API_URL: ''
+        run: pnpm --filter @workspace/stop-game build
+
+      - name: Verify preview build
+        run: test -s artifacts/stop-game/dist/index.html
+
+      - name: Start preview server with production API proxy
+        run: |
+          cat > /tmp/halloween-preview-server.py <<'PY'
+          import http.client
+          import os
+          from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
+          from urllib.parse import urlsplit
+
+          DIST = os.path.abspath("artifacts/stop-game/dist")
+          UPSTREAM = "www.stopjuegodepalabras.com"
+          MAX_REDIRECTS = 4
+
+          class Handler(SimpleHTTPRequestHandler):
+              def __init__(self, *args, **kwargs):
+                  super().__init__(*args, directory=DIST, **kwargs)
+
+              def _proxy(self):
+                  target = urlsplit(self.path)
+                  path = target.path + (("?" + target.query) if target.query else "")
+                  length = int(self.headers.get("Content-Length", "0") or "0")
+                  body = self.rfile.read(length) if length else None
+                  headers = {
+                      k: v for k, v in self.headers.items()
+                      if k.lower() not in {"host", "content-length", "origin", "referer"}
+                  }
+                  headers["Host"] = UPSTREAM
+                  headers["X-Halloween-Preview"] = "1"
+
+                  host = UPSTREAM
+                  scheme = "https"
+
+                  for _ in range(MAX_REDIRECTS + 1):
+                      conn = http.client.HTTPSConnection(host, timeout=60)
+                      try:
+                          conn.request(self.command, path, body=body, headers=headers)
+                          resp = conn.getresponse()
+                          if resp.status not in {301, 302, 303, 307, 308}:
+                              self.send_response(resp.status, resp.reason)
+                              for k, v in resp.getheaders():
+                                  if k.lower() not in {
+                                      "transfer-encoding", "connection", "content-encoding",
+                                      "content-length"
+                                  }:
+                                      self.send_header(k, v)
+                              data = resp.read()
+                              self.send_header("Content-Length", str(len(data)))
+                              self.end_headers()
+                              if data:
+                                  self.wfile.write(data)
+                                  self.wfile.flush()
+                              return
+
+                          location = resp.getheader("Location")
+                          if not location:
+                              self.send_response(resp.status, resp.reason)
+                              self.end_headers()
+                              return
+
+                          next_url = urlsplit(location)
+                          host = next_url.hostname or host
+                          scheme = next_url.scheme or scheme
+                          path = next_url.path + (("?" + next_url.query) if next_url.query else "")
+                          if scheme != "https":
+                              self.send_error(502, "Unsupported upstream redirect")
+                              return
+                          if next_url.hostname:
+                              headers["Host"] = host
+                          # Keep POST on 307/308. For 301/302/303, browsers commonly
+                          # switch POST to GET; API redirects here are only followed
+                          # when the upstream explicitly preserves the method.
+                          if resp.status in {301, 302, 303} and self.command != "GET":
+                              self.send_error(502, "Upstream redirected an API write")
+                              return
+                      finally:
+                          conn.close()
+
+                  self.send_error(508, "Too many upstream redirects")
+
+              def do_GET(self):
+                  if self.path.startswith("/api/"): return self._proxy()
+                  return super().do_GET()
+
+              def do_POST(self):
+                  if self.path.startswith("/api/"): return self._proxy()
+                  self.send_error(405)
+
+              def do_PUT(self):
+                  if self.path.startswith("/api/"): return self._proxy()
+                  self.send_error(405)
+
+              def do_PATCH(self):
+                  if self.path.startswith("/api/"): return self._proxy()
+                  self.send_error(405)
+
+              def do_DELETE(self):
+                  if self.path.startswith("/api/"): return self._proxy()
+                  self.send_error(405)
+
+              def do_OPTIONS(self):
+                  if self.path.startswith("/api/"): return self._proxy()
+                  self.send_response(204)
+                  self.end_headers()
+
+              def send_error(self, code, message=None, explain=None):
+                  if code == 404 and not self.path.startswith("/api/"):
+                      self.path = "/index.html"
+                      return super().do_GET()
+                  return super().send_error(code, message, explain)
+
+          os.chdir(DIST)
+          ThreadingHTTPServer(("127.0.0.1", 4173), Handler).serve_forever()
+          PY
+          nohup python3 /tmp/halloween-preview-server.py >/tmp/preview-http.log 2>&1 &
+          sleep 2
+          curl -fsS http://127.0.0.1:4173/ >/dev/null
+
+      - name: Smoke test API validation through preview proxy
+        run: |
+          set -euo pipefail
+          RESPONSE=$(curl -fsS --max-time 60             -H "Content-Type: application/json"             -X POST http://127.0.0.1:4173/api/game/validate             --data '{"letter":"B","language":"es","playerResponses":[{"category":"Nombre","word":"BARBI"},{"category":"Lugar","word":"BARCELONA"},{"category":"Animal","word":"BURRO"}]}')
+          echo "$RESPONSE"
+          echo "$RESPONSE" | grep -q '"playerTotalScore"'
+          echo "$RESPONSE" | grep -q '"playerTotalScore":[1-9]'
+
+      - name: Smoke test presence through preview proxy
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 http://127.0.0.1:4173/api/presence/online | grep -q '"online"'
+
+      - name: Smoke test rooms listing through preview proxy
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 http://127.0.0.1:4173/api/rooms/public | grep -q '"rooms"'
+
+      - name: Start public preview tunnel
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o /tmp/cloudflared
+          chmod +x /tmp/cloudflared
+          nohup /tmp/cloudflared tunnel --no-autoupdate --logfile /tmp/cloudflared.log --url http://127.0.0.1:4173 >/tmp/cloudflared-stdout.log 2>&1 &
+          sleep 8
+          for i in $(seq 1 45); do
+            URL=$(grep -oE 'https://[^[:space:]]+trycloudflare[.]com' /tmp/cloudflared.log | head -1 || true)
+            if [ -n "$URL" ]; then
+              echo "HALLOWEEN_PREVIEW_URL=$URL"
+              break
+            fi
+            sleep 2
+          done
+          test -n "${URL:-}" || { cat /tmp/cloudflared.log; exit 1; }
+          printf '%s\n' "$URL" > /tmp/halloween-preview-url.txt
+          {
+            echo "## Halloween preview"
+            echo
+            echo "**Preview URL:** $URL"
+            echo
+            echo "This preview stays online while this workflow job is running."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish preview URL
+        uses: actions/upload-artifact@v4
+        with:
+          name: halloween-preview-url
+          path: /tmp/halloween-preview-url.txt
+          retention-days: 1
+
+      - name: Keep preview available for manual testing
+        run: sleep 10800
+
+      - name: Stop preview processes
+        if: always()
+        run: |
+          pkill -f cloudflared || true
+          pkill -f halloween-preview-server.py || true
