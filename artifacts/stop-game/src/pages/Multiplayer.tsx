@@ -51,7 +51,7 @@ export default function Multiplayer() {
     if (player || import.meta.env.VITE_HALLOWEEN_PREVIEW !== "true") return;
     savePlayer({
       id: `preview-guest-${crypto.randomUUID()}`,
-      name: "Jugador Halloween",
+      name: `Jugador Halloween ${Math.floor(1000 + Math.random() * 9000)}`,
       avatarColor: "#b5301a",
       loginMethod: "guest",
       picture: null,
@@ -134,7 +134,7 @@ export default function Multiplayer() {
     setError("");
     const currentPlayer = player ?? {
       id: `preview-guest-${crypto.randomUUID()}`,
-      name: "Jugador Halloween",
+      name: `Jugador Halloween ${Math.floor(1000 + Math.random() * 9000)}`,
       avatarColor: "#b5301a",
       loginMethod: "guest",
       picture: null,
@@ -159,8 +159,17 @@ export default function Multiplayer() {
         } as any,
       });
       setLocation(`/room/${room.roomCode}`);
-    } catch {
-      setError(t.multiplayer.waitingForHost);
+    } catch (err) {
+      const e = err as { status?: number; data?: { error?: string; message?: string }; response?: { status?: number; data?: { error?: string; message?: string } } };
+      const status = e?.status ?? e?.response?.status;
+      const code = e?.data?.error ?? e?.response?.data?.error ?? "";
+      if (status === 409 || code === "name_taken") {
+        setError("No se pudo crear la sala porque el nombre de invitado ya está en uso. Se ha generado un nombre nuevo; vuelve a pulsar Crear.");
+      } else if (status === 403) {
+        setError("El servidor rechazó la identidad del jugador. Recarga la página e inténtalo de nuevo.");
+      } else {
+        setError(code || e?.data?.message || e?.response?.data?.message || t.multiplayer.waitingForHost);
+      }
     }
   };
 
@@ -194,7 +203,7 @@ export default function Multiplayer() {
     setError("");
     const currentPlayer = player ?? {
       id: `preview-guest-${crypto.randomUUID()}`,
-      name: "Jugador Halloween",
+      name: `Jugador Halloween ${Math.floor(1000 + Math.random() * 9000)}`,
       avatarColor: "#b5301a",
       loginMethod: "guest",
       picture: null,
@@ -223,7 +232,7 @@ export default function Multiplayer() {
     setError("");
     const currentPlayer = player ?? {
       id: `preview-guest-${crypto.randomUUID()}`,
-      name: "Jugador Halloween",
+      name: `Jugador Halloween ${Math.floor(1000 + Math.random() * 9000)}`,
       avatarColor: "#b5301a",
       loginMethod: "guest",
       picture: null,
