@@ -8,6 +8,7 @@ type HalloweenAmbientController = {
 function createController(): HalloweenAmbientController {
   let ctx: AudioContext | null = null;
   let master: GainNode | null = null;
+  let stormMaster: GainNode | null = null;
   let musicTimer: number | null = null;
   let stormTimer: number | null = null;
   let started = false;
@@ -39,11 +40,11 @@ function createController(): HalloweenAmbientController {
   };
 
   const playThunder = () => {
-    if (!ctx || !master) return;
+    if (!ctx || !master || !stormMaster) return;
     const now = ctx.currentTime;
     const duration = 3.2;
 
-    // Instantaneous lightning crack.
+    // Loud, separate storm channel: the lightning crack and thunder are not attenuated by the background music volume.
     const crack = ctx.createOscillator();
     const crackGain = ctx.createGain();
     const crackFilter = ctx.createBiquadFilter();
@@ -58,7 +59,7 @@ function createController(): HalloweenAmbientController {
     crackGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.24);
     crack.connect(crackFilter);
     crackFilter.connect(crackGain);
-    crackGain.connect(master);
+    crackGain.connect(stormMaster);
     crack.start(now);
     crack.stop(now + 0.28);
 
@@ -77,7 +78,7 @@ function createController(): HalloweenAmbientController {
     rumbleGain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
     rumble.connect(rumbleFilter);
     rumbleFilter.connect(rumbleGain);
-    rumbleGain.connect(master);
+    rumbleGain.connect(stormMaster);
     rumble.start(now);
     rumble.stop(now + duration + 0.05);
 
@@ -103,13 +104,13 @@ function createController(): HalloweenAmbientController {
     noiseGain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
     noise.connect(noiseFilter);
     noiseFilter.connect(noiseGain);
-    noiseGain.connect(master);
+    noiseGain.connect(stormMaster);
     noise.start(now);
     noise.stop(now + duration);
 
     // A second delayed rumble makes the thunder feel distant and rolling.
     window.setTimeout(() => {
-      if (!ctx || !master) return;
+      if (!ctx || !master || !stormMaster) return;
       const late = ctx.currentTime;
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
@@ -120,7 +121,7 @@ function createController(): HalloweenAmbientController {
       gain.gain.exponentialRampToValueAtTime(0.13, late + 0.15);
       gain.gain.exponentialRampToValueAtTime(0.0001, late + 1.7);
       osc.connect(gain);
-      gain.connect(master);
+      gain.connect(stormMaster);
       osc.start(late);
       osc.stop(late + 1.75);
     }, 500);
@@ -163,6 +164,9 @@ function createController(): HalloweenAmbientController {
       master = ctx.createGain();
       master.gain.value = 0.0001;
       master.connect(ctx.destination);
+      stormMaster = ctx.createGain();
+      stormMaster.gain.value = 0.75;
+      stormMaster.connect(ctx.destination);
 
       void ctx.resume().then(() => {
         if (!ctx || !master) return;
@@ -221,6 +225,10 @@ function createController(): HalloweenAmbientController {
       const closingMaster = master;
       const now = closingCtx.currentTime;
       closingMaster?.gain.cancelScheduledValues(now);
+      if (stormMaster) {
+        stormMaster.gain.cancelScheduledValues(now);
+        stormMaster.gain.setTargetAtTime(0.0001, now, 0.08);
+      }
       closingMaster?.gain.setTargetAtTime(0.0001, now, 0.2);
       window.setTimeout(() => {
         try { void closingCtx.close(); } catch {}
@@ -229,6 +237,7 @@ function createController(): HalloweenAmbientController {
 
     ctx = null;
     master = null;
+    stormMaster = null;
     started = false;
     step = 0;
   };
