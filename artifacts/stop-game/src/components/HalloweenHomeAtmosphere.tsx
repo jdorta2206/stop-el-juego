@@ -91,7 +91,8 @@ export function HalloweenHomeAtmosphere({
   enabled: boolean;
   active: boolean;
 }) {
-  const controllerRef = useRef<HalloweenAmbientController | null>(null);\n  const [audioStarted, setAudioStarted] = useState(false);
+  const controllerRef = useRef<HalloweenAmbientController | null>(null);
+  const [audioStarted, setAudioStarted] = useState(false);
 
   useEffect(() => {
     if (!active || !enabled) {
@@ -146,7 +147,17 @@ export function HalloweenHomeAtmosphere({
         <div className="absolute inset-0" style={{ background: "linear-gradient(112deg, transparent 0%, transparent 43%, rgba(255,255,255,.38) 49%, transparent 55%, transparent 100%)", animation: "halloween-home-lightning 9s steps(1,end) infinite", opacity: 0 }} />
         <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse at 50% 18%, rgba(255,255,255,.34), transparent 24%)", animation: "halloween-home-flash 13s steps(1,end) infinite", opacity: 0 }} />
       </div>
-      {!audioStarted && (\n        <button\n          type="button"\n          onClick={() => { controllerRef.current?.start(); setAudioStarted(true); }}\n          className="pointer-events-auto fixed bottom-24 right-4 z-[60] rounded-full border border-red-400/60 bg-black/80 px-4 py-2 text-sm font-semibold text-white shadow-lg backdrop-blur"\n          aria-label="Activar música de Halloween"\n        >\n          🔊 Activar sonido Halloween\n        </button>\n      )}\n      <style>{`
+      {!audioStarted && (
+        <button
+          type="button"
+          onClick={() => { controllerRef.current?.start(); setAudioStarted(true); }}
+          className="pointer-events-auto fixed bottom-24 right-4 z-[60] rounded-full border border-red-400/60 bg-black/80 px-4 py-2 text-sm font-semibold text-white shadow-lg backdrop-blur"
+          aria-label="Activar música de Halloween"
+        >
+          🔊 Activar sonido Halloween
+        </button>
+      )}
+      <style>{`
         @keyframes halloween-home-pulse {
           0%, 100% { opacity: .12; transform: scale(.96); }
           46% { opacity: .16; transform: scale(1); }
