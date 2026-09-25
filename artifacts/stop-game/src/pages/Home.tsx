@@ -30,6 +30,7 @@ import { useHalloweenProgress } from "@/hooks/useHalloweenProgress";
 import { HalloweenHomeAtmosphere } from "@/components/HalloweenHomeAtmosphere";
 
 const LOGO_URL = `${import.meta.env.BASE_URL}images/stop-logo.png`;
+const HALLOWEEN_PREVIEW = import.meta.env.VITE_HALLOWEEN_PREVIEW === "true";
 
 export default function Home() {
   const { player } = usePlayer();
@@ -53,7 +54,7 @@ export default function Home() {
   });
   const ftue = useFTUE();
   const [showFTUEWelcome, setShowFTUEWelcome] = useState(false);
-  const [halloweenModeEnabled, setHalloweenModeEnabledState] = useState(() => isHalloweenModeEnabled());
+  const [halloweenModeEnabled, setHalloweenModeEnabledState] = useState(() => HALLOWEEN_PREVIEW ? true : isHalloweenModeEnabled());
   const { data: halloweenProgressData } = useHalloweenProgress(player?.id);
 
   // Open the FTUE welcome modal once on first ever visit (after a tiny delay
