@@ -27,6 +27,7 @@ import { PLAY_STORE_URL } from "@/lib/playReview";
 import { HalloweenBanner } from "@/components/HalloweenBanner";
 import { isHalloweenActive, isHalloweenModeEnabled, setHalloweenModeEnabled } from "@/lib/halloweenEvent";
 import { useHalloweenProgress } from "@/hooks/useHalloweenProgress";
+import { HalloweenHomeAtmosphere } from "@/components/HalloweenHomeAtmosphere";
 
 const LOGO_URL = `${import.meta.env.BASE_URL}images/stop-logo.png`;
 
@@ -112,6 +113,7 @@ export default function Home() {
 
   return (
     <Layout>
+      <HalloweenHomeAtmosphere active={isHalloweenActive()} enabled={halloweenModeEnabled} />
       <FTUEWelcomeModal
         open={showFTUEWelcome}
         onClose={() => {
