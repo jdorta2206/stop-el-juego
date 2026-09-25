@@ -192,6 +192,16 @@ export default function Multiplayer() {
     if (!player && import.meta.env.VITE_HALLOWEEN_PREVIEW !== "true") return;
     if (!roomCode.trim()) return;
     setError("");
+    const currentPlayer = player ?? {
+      id: `preview-guest-${crypto.randomUUID()}`,
+      name: "Jugador Halloween",
+      avatarColor: "#b5301a",
+      loginMethod: "guest",
+      picture: null,
+    };
+    if (!player && import.meta.env.VITE_HALLOWEEN_PREVIEW === "true") {
+      savePlayer(currentPlayer);
+    }
     try {
       const room = await joinMutation.mutateAsync({
         roomCode: roomCode.toUpperCase(),
