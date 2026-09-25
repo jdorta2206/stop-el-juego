@@ -1,5 +1,9 @@
 import { motion } from "framer-motion";
+import { getHalloweenScare } from "@/lib/halloweenEvent";
 import type { HalloweenScare } from "@/lib/halloweenEvent";
+
+export { getHalloweenScare };
+export type { HalloweenScare };
 
 export function HalloweenScareOverlay({ scare, onDone }: { scare: HalloweenScare; onDone?: () => void }) {
   return (
