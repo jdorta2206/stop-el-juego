@@ -69,6 +69,7 @@ export default function Multiplayer() {
   const [loadingPublic, setLoadingPublic] = useState(false);
   const [resumeCode, setResumeCode] = useState<string | null>(null);
   const [resuming, setResuming] = useState(false);
+  const [creatingRoom, setCreatingRoom] = useState(false);
 
   const createMutation = useCreateRoom();
   const joinMutation = useJoinRoom();
@@ -159,6 +160,8 @@ export default function Multiplayer() {
   }, []);
 
   const handleCreate = async () => {
+    if (creatingRoom) return;
+    setCreatingRoom(true);
     setError("");
     const currentPlayer = player ?? {
       id: `preview-guest-${crypto.randomUUID()}`,
@@ -196,6 +199,8 @@ export default function Multiplayer() {
       } else {
         setError(code || e?.data?.message || e?.response?.data?.message || t.multiplayer.waitingForHost);
       }
+    } finally {
+      setCreatingRoom(false);
     }
   };
 
@@ -435,8 +440,10 @@ export default function Multiplayer() {
             <Button
               size="lg"
               className="w-full"
+              type="button"
               onClick={handleCreate}
-              isLoading={createMutation.isPending}
+              isLoading={creatingRoom}
+              disabled={creatingRoom}
             >
               {isPublic ? <Globe size={16} className="mr-2" /> : <Lock size={16} className="mr-2" />}
               {t.multiplayer.create}
