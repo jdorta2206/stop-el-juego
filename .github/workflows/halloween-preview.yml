@@ -122,6 +122,13 @@ jobs:
         run: |
           set -euo pipefail
           curl -fsS --max-time 30 http://127.0.0.1:4173/api/rooms/public | grep -q '"rooms"'
+      - name: Smoke test room creation through preview proxy
+        run: |
+          set -euo pipefail
+          HOST_ID="halloween-smoke-$(date +%s)-$RANDOM"
+          RESPONSE=$(curl -fsS --max-time 30 -H "Content-Type: application/json" -X POST http://127.0.0.1:4173/api/rooms --data "{\"hostId\":\"$HOST_ID\",\"hostName\":\"Halloween Smoke\",\"maxRounds\":1,\"language\":\"es\",\"loginMethod\":\"guest\",\"isPublic\":false,\"gameMode\":\"classic\",\"maxPlayers\":2}")
+          echo "$RESPONSE"
+          echo "$RESPONSE" | grep -q '"roomCode"'
       - name: Start public preview tunnel
         shell: bash
         run: |
