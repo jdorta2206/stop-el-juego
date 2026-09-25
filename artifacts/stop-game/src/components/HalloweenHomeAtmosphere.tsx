@@ -48,7 +48,8 @@ function createController(): HalloweenAmbientController {
 
       const now = ctx.currentTime;
       master.gain.setValueAtTime(0.0001, now);
-      master.gain.exponentialRampToValueAtTime(0.085, now + 1.8);
+      master.gain.exponentialRampToValueAtTime(0.14, now + 1.8);
+      void ctx.resume();
       started = true;
     } catch {
       stop();
@@ -97,11 +98,14 @@ export function HalloweenHomeAtmosphere({
     controllerRef.current = controllerInstance;
 
     const startAudio = () => controllerInstance.start();
+    const resumeAudio = () => controllerInstance.start();
     const events = ["pointerdown", "touchstart", "keydown"] as const;
     events.forEach((event) => window.addEventListener(event, startAudio, { once: true, passive: true }));
+    window.addEventListener("visibilitychange", resumeAudio);
 
     return () => {
       events.forEach((event) => window.removeEventListener(event, startAudio));
+      window.removeEventListener("visibilitychange", resumeAudio);
       controllerInstance.stop();
       if (controllerRef.current === controllerInstance) controllerRef.current = null;
     };
