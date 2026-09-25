@@ -25,13 +25,14 @@ function createController(): HalloweenAmbientController {
       master.gain.value = 0.0001;
       master.connect(ctx.destination);
 
-      const frequencies = [55, 82.41, 110];
+      const frequencies = [73.42, 110, 146.83, 220];
       nodes = frequencies.map((frequency, index) => {
         const osc = ctx!.createOscillator();
         const gain = ctx!.createGain();
         osc.type = index === 0 ? "sine" : "triangle";
         osc.frequency.value = frequency;
-        gain.gain.value = index === 0 ? 0.24 : 0.075;
+        const levels = [0.16, 0.11, 0.075, 0.035];
+        gain.gain.value = levels[index];
         osc.connect(gain);
         gain.connect(master!);
         osc.start();
@@ -41,15 +42,20 @@ function createController(): HalloweenAmbientController {
       lfo = ctx.createOscillator();
       const lfoGain = ctx.createGain();
       lfo.frequency.value = 0.075;
-      lfoGain.gain.value = 0.028;
+      lfoGain.gain.value = 0.045;
       lfo.connect(lfoGain);
       lfoGain.connect(master.gain);
       lfo.start();
 
       const now = ctx.currentTime;
       master.gain.setValueAtTime(0.0001, now);
-      master.gain.exponentialRampToValueAtTime(0.14, now + 1.8);
-      void ctx.resume();
+      master.gain.exponentialRampToValueAtTime(0.22, now + 1.4);
+      void ctx.resume().then(() => {
+        if (!ctx || !master) return;
+        const resumedAt = ctx.currentTime;
+        master.gain.cancelScheduledValues(resumedAt);
+        master.gain.setTargetAtTime(0.22, resumedAt, 0.18);
+      });
       started = true;
     } catch {
       stop();
