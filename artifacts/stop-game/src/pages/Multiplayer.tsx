@@ -155,8 +155,12 @@ export default function Multiplayer() {
     const status = err?.status ?? err?.response?.status;
     const code = err?.data?.error ?? err?.response?.data?.error ?? "";
     if (status === 409 || code === "name_taken") {
+      if (code === "room_full") return "La sala está llena.";
+      if (code === "in_progress") return "La partida ya ha empezado.";
       return t.multiplayer.nameTaken ?? "Ese nombre ya está en uso en esta sala. Cambia tu nombre o añade un número.";
     }
+    if (status === 403) return "No se ha podido verificar tu identidad. Cierra y vuelve a entrar en la cuenta.";
+    if (status === 404) return "La sala no existe o ha caducado.";
     return t.multiplayer.waitingForHost;
   };
 
@@ -171,6 +175,7 @@ export default function Multiplayer() {
           playerId: player.id,
           playerName: player.name,
           avatarColor: player.avatarColor,
+          loginMethod: player.loginMethod ?? null,
         } as import("@workspace/api-client-react").JoinRoomRequest & { loginMethod?: string | null },
       });
       setLocation(`/room/${room.roomCode}`);
@@ -189,6 +194,7 @@ export default function Multiplayer() {
           playerId: player.id,
           playerName: player.name,
           avatarColor: player.avatarColor,
+          loginMethod: player.loginMethod ?? null,
         } as import("@workspace/api-client-react").JoinRoomRequest & { loginMethod?: string | null },
       });
       setLocation(`/room/${room.roomCode}`);
