@@ -316,21 +316,33 @@ export function HalloweenHomeAtmosphere({
     const controllerInstance = createController();
     controllerRef.current = controllerInstance;
 
+    const markAudioStarted = () => {
+      setAudioStarted(true);
+      window.dispatchEvent(new Event("halloween:audio-started"));
+    };
     const startAudio = () => {
       controllerInstance.start();
-      setAudioStarted(true);
+      markAudioStarted();
     };
     const resumeAudio = () => {
       controllerInstance.start();
-      setAudioStarted(true);
+      markAudioStarted();
+    };
+    const activateFromHome = () => {
+      controllerInstance.start();
+      markAudioStarted();
     };
     const events = ["pointerdown", "touchstart", "keydown"] as const;
     events.forEach((event) => window.addEventListener(event, startAudio, { once: true, passive: true }));
     window.addEventListener("visibilitychange", resumeAudio);
+    window.addEventListener("halloween:activate-audio", activateFromHome);
+    window.addEventListener("halloween:audio-started", markAudioStarted);
 
     return () => {
       events.forEach((event) => window.removeEventListener(event, startAudio));
       window.removeEventListener("visibilitychange", resumeAudio);
+      window.removeEventListener("halloween:activate-audio", activateFromHome);
+      window.removeEventListener("halloween:audio-started", markAudioStarted);
       controllerInstance.stop();
       if (controllerRef.current === controllerInstance) controllerRef.current = null;
     };
@@ -396,20 +408,6 @@ export function HalloweenHomeAtmosphere({
           }}
         />
       </div>
-
-      {!audioStarted && (
-        <button
-          type="button"
-          onClick={() => {
-            controllerRef.current?.start();
-            setAudioStarted(true);
-          }}
-          className="pointer-events-auto fixed bottom-24 right-4 z-[60] rounded-full border border-red-400/60 bg-black/80 px-4 py-2 text-sm font-semibold text-white shadow-lg backdrop-blur"
-          aria-label="Activar música de Halloween"
-        >
-          🔊 Activar música de terror
-        </button>
-      )}
 
       <style>{`
         @keyframes halloween-home-pulse {
