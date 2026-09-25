@@ -73,7 +73,7 @@ jobs:
               handler.wfile.write(raw)
 
           def fmt(room):
-              return {"id": room["id"], "roomCode": room["roomCode"], "hostId": room["hostId"], "hostName": room["hostName"], "status": room["status"], "currentRound": 0, "maxRounds": room["maxRounds"], "maxPlayers": room["maxPlayers"], "gameMode": room["gameMode"], "language": room["language"], "isPublic": room["isPublic"], "players": room["players"]}
+              return {"id": room["id"], "roomCode": room["roomCode"], "hostId": room["hostId"], "hostName": room["hostName"], "status": room["status"], "currentRound": room.get("currentRound", 0), "currentLetter": room.get("currentLetter", ""), "roundEndsAt": room.get("roundEndsAt"), "maxRounds": room["maxRounds"], "maxPlayers": room["maxPlayers"], "gameMode": room["gameMode"], "language": room["language"], "isPublic": room["isPublic"], "players": room["players"]}
 
           class RoomMock(BaseHTTPRequestHandler):
               def log_message(self, *args):
@@ -141,6 +141,19 @@ jobs:
                           host = {"playerId": body["hostId"], "playerName": body.get("hostName", ""), "avatarColor": body.get("avatarColor"), "picture": body.get("picture"), "loginMethod": body.get("loginMethod")}
                           ROOMS[code] = {"id": len(ROOMS) + 1, "roomCode": code, "hostId": body["hostId"], "hostName": body.get("hostName", ""), "status": "waiting", "maxRounds": body.get("maxRounds", 3), "maxPlayers": body.get("maxPlayers", 8), "gameMode": body.get("gameMode", "classic"), "language": body.get("language", "es"), "isPublic": bool(body.get("isPublic", False)), "players": [host], "createdAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
                           return send_json(self, 201, fmt(ROOMS[code]))
+                  if path.startswith("/api/rooms/") and path.endswith("/start"):
+                      code = path.split("/")[3].upper()
+                      with LOCK:
+                          room = ROOMS.get(code)
+                          if not room:
+                              return send_json(self, 404, {"error": "not_found"})
+                          if body.get("hostId") != room["hostId"]:
+                              return send_json(self, 403, {"error": "not_host"})
+                          room["status"] = "playing"
+                          room["currentRound"] = 1
+                          room["currentLetter"] = "A"
+                          room["roundEndsAt"] = int(time.time() * 1000) + 60000
+                          return send_json(self, 200, fmt(room))
                   if path.startswith("/api/rooms/") and path.endswith("/join"):
                       code = path.split("/")[3].upper()
                       with LOCK:
