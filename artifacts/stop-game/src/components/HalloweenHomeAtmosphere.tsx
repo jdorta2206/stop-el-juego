@@ -41,14 +41,14 @@ function createController(): HalloweenAmbientController {
       lfo = ctx.createOscillator();
       const lfoGain = ctx.createGain();
       lfo.frequency.value = 0.075;
-      lfoGain.gain.value = 0.018;
+      lfoGain.gain.value = 0.028;
       lfo.connect(lfoGain);
       lfoGain.connect(master.gain);
       lfo.start();
 
       const now = ctx.currentTime;
       master.gain.setValueAtTime(0.0001, now);
-      master.gain.exponentialRampToValueAtTime(0.045, now + 2.5);
+      master.gain.exponentialRampToValueAtTime(0.085, now + 1.8);
       started = true;
     } catch {
       stop();
@@ -113,26 +113,28 @@ export function HalloweenHomeAtmosphere({
     <>
       <div
         aria-hidden="true"
-        className="pointer-events-none fixed inset-0 z-0 overflow-hidden"
+        className="pointer-events-none fixed inset-0 z-[20] overflow-hidden"
         style={{
-          background: "radial-gradient(circle at 50% 38%, rgba(190,25,25,.11), transparent 48%)",
+          background: "radial-gradient(circle at 50% 38%, rgba(190,25,25,.20), transparent 48%)",
           mixBlendMode: "screen",
         }}
       >
         <div
           className="absolute inset-[-12%]"
           style={{
-            background: "radial-gradient(circle at 50% 40%, rgba(255,235,205,.16), transparent 34%)",
-            animation: "halloween-home-pulse 7.5s ease-in-out infinite",
+            background: "radial-gradient(circle at 50% 40%, rgba(255,235,205,.28), transparent 34%)",
+            animation: "halloween-home-pulse 5.5s ease-in-out infinite",
           }}
         />
         <div
           className="absolute inset-0"
           style={{
-            background: "radial-gradient(circle at 52% 45%, rgba(255,255,235,.12), transparent 30%)",
-            animation: "halloween-home-flicker 11s steps(1,end) infinite",
+            background: "radial-gradient(circle at 52% 45%, rgba(255,255,235,.24), transparent 30%)",
+            animation: "halloween-home-flicker 5.5s steps(1,end) infinite",
           }}
         />
+        <div className="absolute inset-0" style={{ background: "linear-gradient(112deg, transparent 0%, transparent 43%, rgba(255,255,255,.38) 49%, transparent 55%, transparent 100%)", animation: "halloween-home-lightning 9s steps(1,end) infinite", opacity: 0 }} />
+        <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse at 50% 18%, rgba(255,255,255,.34), transparent 24%)", animation: "halloween-home-flash 13s steps(1,end) infinite", opacity: 0 }} />
       </div>
       <style>{`
         @keyframes halloween-home-pulse {
@@ -147,6 +149,20 @@ export function HalloweenHomeAtmosphere({
           35% { opacity: .10; }
           36% { opacity: .24; }
           62% { opacity: .16; }
+        }
+        @keyframes halloween-home-lightning {
+          0%, 71%, 72%, 73%, 100% { opacity: 0; transform: translateX(-18%) skewX(-10deg); }
+          71.3% { opacity: .18; }
+          71.6% { opacity: .65; }
+          72.2% { opacity: .08; }
+          72.6% { opacity: .42; }
+        }
+        @keyframes halloween-home-flash {
+          0%, 39%, 40%, 41%, 100% { opacity: 0; }
+          39.2% { opacity: .12; }
+          39.35% { opacity: .55; }
+          39.55% { opacity: .04; }
+          40.4% { opacity: .28; }
         }
         @media (prefers-reduced-motion: reduce) {
           .halloween-home-atmosphere { animation: none !important; }
