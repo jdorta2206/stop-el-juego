@@ -129,6 +129,66 @@ jobs:
           RESPONSE=$(curl -fsS --max-time 30 -H "Content-Type: application/json" -X POST http://127.0.0.1:4173/api/rooms --data "{\"hostId\":\"$HOST_ID\",\"hostName\":\"Halloween Smoke\",\"maxRounds\":1,\"language\":\"es\",\"loginMethod\":\"guest\",\"isPublic\":false,\"gameMode\":\"classic\",\"maxPlayers\":2}")
           echo "$RESPONSE"
           echo "$RESPONSE" | grep -q '"roomCode"'
+      - name: Smoke test public and private room join through preview proxy
+        run: |
+          set -euo pipefail
+          BASE="http://127.0.0.1:4173/api"
+          HOST_ID="halloween-host-$(date +%s)-$RANDOM"
+          GUEST_ID="halloween-guest-$(date +%s)-$RANDOM"
+          OUTSIDER_ID="halloween-outsider-$(date +%s)-$RANDOM"
+
+          create_room() {
+            local public="$1"
+            curl -fsS --max-time 30 -H "Content-Type: application/json" -X POST "$BASE/rooms"               --data "{\"hostId\":\"$HOST_ID\",\"hostName\":\"Halloween Host\",\"maxRounds\":1,\"language\":\"es\",\"loginMethod\":\"guest\",\"isPublic\":$public,\"gameMode\":\"classic\",\"maxPlayers\":2}"
+          }
+
+          echo "== PUBLIC: create =="
+          PUBLIC_RESPONSE="$(create_room true)"
+          echo "$PUBLIC_RESPONSE"
+          PUBLIC_CODE="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["roomCode"])' <<< "$PUBLIC_RESPONSE")"
+          test -n "$PUBLIC_CODE"
+
+          echo "== PUBLIC: second player joins =="
+          PUBLIC_JOIN="$(curl -fsS --max-time 30 -H "Content-Type: application/json" -X POST "$BASE/rooms/$PUBLIC_CODE/join"             --data "{\"playerId\":\"$GUEST_ID\",\"playerName\":\"Halloween Guest\",\"avatarColor\":\"#3182ce\",\"picture\":null,\"loginMethod\":\"guest\"}")"
+          echo "$PUBLIC_JOIN"
+          echo "$PUBLIC_JOIN" | grep -q '"roomCode"'
+          echo "$PUBLIC_JOIN" | grep -q 'Halloween Guest'
+
+          echo "== PUBLIC: room contains both players =="
+          PUBLIC_ROOM="$(curl -fsS --max-time 30 "$BASE/rooms/$PUBLIC_CODE?viewerId=$HOST_ID")"
+          echo "$PUBLIC_ROOM"
+          echo "$PUBLIC_ROOM" | grep -q 'Halloween Host'
+          echo "$PUBLIC_ROOM" | grep -q 'Halloween Guest'
+
+          echo "== PRIVATE: create =="
+          PRIVATE_RESPONSE="$(create_room false)"
+          echo "$PRIVATE_RESPONSE"
+          PRIVATE_CODE="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["roomCode"])' <<< "$PRIVATE_RESPONSE")"
+          test -n "$PRIVATE_CODE"
+
+          echo "== PRIVATE: host can read full room =="
+          PRIVATE_HOST_ROOM="$(curl -fsS --max-time 30 -H "x-viewer-id: $HOST_ID" "$BASE/rooms/$PRIVATE_CODE")"
+          echo "$PRIVATE_HOST_ROOM"
+          echo "$PRIVATE_HOST_ROOM" | grep -q 'Halloween Host'
+
+          echo "== PRIVATE: second player joins =="
+          PRIVATE_JOIN="$(curl -fsS --max-time 30 -H "Content-Type: application/json" -X POST "$BASE/rooms/$PRIVATE_CODE/join"             --data "{\"playerId\":\"$GUEST_ID\",\"playerName\":\"Halloween Guest\",\"avatarColor\":\"#3182ce\",\"picture\":null,\"loginMethod\":\"guest\"}")"
+          echo "$PRIVATE_JOIN"
+          echo "$PRIVATE_JOIN" | grep -q '"roomCode"'
+          echo "$PRIVATE_JOIN" | grep -q 'Halloween Guest'
+
+          echo "== PRIVATE: second player can read room =="
+          PRIVATE_GUEST_ROOM="$(curl -fsS --max-time 30 -H "x-viewer-id: $GUEST_ID" "$BASE/rooms/$PRIVATE_CODE")"
+          echo "$PRIVATE_GUEST_ROOM"
+          echo "$PRIVATE_GUEST_ROOM" | grep -q 'Halloween Host'
+          echo "$PRIVATE_GUEST_ROOM" | grep -q 'Halloween Guest'
+
+          echo "== PRIVATE: outsider is not given full room =="
+          PRIVATE_OUTSIDER_STATUS="$(curl -sS --max-time 30 -o /tmp/private-outsider.json -w '%{http_code}' "$BASE/rooms/$PRIVATE_CODE?viewerId=$OUTSIDER_ID")"
+          cat /tmp/private-outsider.json
+          test "$PRIVATE_OUTSIDER_STATUS" = "200"
+          ! grep -q 'Halloween Guest' /tmp/private-outsider.json
+
       - name: Start public preview tunnel
         shell: bash
         run: |
