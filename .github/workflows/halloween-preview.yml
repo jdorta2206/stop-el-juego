@@ -1,6 +1,7 @@
 name: Halloween preview
 # Preview validation + public tunnel for Halloween testing
 # Manual-test refresh: keep a fresh tunnel available for the current Halloween build.
+# Fresh preview refresh 2026-09-25: always test the latest branch build URL.
 
 on:
   push:
