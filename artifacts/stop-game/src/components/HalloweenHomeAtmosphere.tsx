@@ -8,7 +8,8 @@ type HalloweenAmbientController = {
 function createController(): HalloweenAmbientController {
   let ctx: AudioContext | null = null;
   let master: GainNode | null = null;
-  let timer: number | null = null;
+  let musicTimer: number | null = null;
+  let stormTimer: number | null = null;
   let started = false;
   let step = 0;
 
@@ -36,10 +37,77 @@ function createController(): HalloweenAmbientController {
     osc.stop(now + duration + 0.03);
   };
 
+  const playThunder = () => {
+    if (!ctx || !master) return;
+    const now = ctx.currentTime;
+    const duration = 2.7;
+
+    // Low rumble + filtered noise create a rolling thunder effect.
+    const rumble = ctx.createOscillator();
+    const rumbleGain = ctx.createGain();
+    const rumbleFilter = ctx.createBiquadFilter();
+    rumble.type = "sawtooth";
+    rumble.frequency.setValueAtTime(48, now);
+    rumble.frequency.exponentialRampToValueAtTime(29, now + duration);
+    rumbleFilter.type = "lowpass";
+    rumbleFilter.frequency.value = 180;
+    rumbleGain.gain.setValueAtTime(0.0001, now);
+    rumbleGain.gain.exponentialRampToValueAtTime(0.12, now + 0.08);
+    rumbleGain.gain.exponentialRampToValueAtTime(0.055, now + 0.65);
+    rumbleGain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+    rumble.connect(rumbleFilter);
+    rumbleFilter.connect(rumbleGain);
+    rumbleGain.connect(master);
+    rumble.start(now);
+    rumble.stop(now + duration + 0.05);
+
+    const bufferSize = Math.floor(ctx.sampleRate * duration);
+    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    let last = 0;
+    for (let i = 0; i < bufferSize; i++) {
+      const white = Math.random() * 2 - 1;
+      last = last * 0.985 + white * 0.015;
+      data[i] = last;
+    }
+
+    const noise = ctx.createBufferSource();
+    const noiseFilter = ctx.createBiquadFilter();
+    const noiseGain = ctx.createGain();
+    noise.buffer = buffer;
+    noiseFilter.type = "lowpass";
+    noiseFilter.frequency.setValueAtTime(500, now);
+    noiseFilter.frequency.exponentialRampToValueAtTime(90, now + duration);
+    noiseGain.gain.setValueAtTime(0.0001, now);
+    noiseGain.gain.exponentialRampToValueAtTime(0.09, now + 0.18);
+    noiseGain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+    noise.connect(noiseFilter);
+    noiseFilter.connect(noiseGain);
+    noiseGain.connect(master);
+    noise.start(now);
+    noise.stop(now + duration);
+
+    // A second delayed rumble makes the thunder feel distant and rolling.
+    window.setTimeout(() => {
+      if (!ctx || !master) return;
+      const late = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(38, late);
+      osc.frequency.exponentialRampToValueAtTime(24, late + 1.7);
+      gain.gain.setValueAtTime(0.0001, late);
+      gain.gain.exponentialRampToValueAtTime(0.055, late + 0.15);
+      gain.gain.exponentialRampToValueAtTime(0.0001, late + 1.7);
+      osc.connect(gain);
+      gain.connect(master);
+      osc.start(late);
+      osc.stop(late + 1.75);
+    }, 500);
+  };
+
   const tick = () => {
     if (!ctx) return;
-
-    // A short minor-key horror motif: bass + dark chord + high bell-like answer.
     const bass = [55, 55, 65.41, 49, 55, 55, 73.42, 49];
     const melody = [220, 0, 196, 0, 174.61, 0, 164.81, 0];
 
@@ -76,8 +144,16 @@ function createController(): HalloweenAmbientController {
         const now = ctx.currentTime;
         master.gain.cancelScheduledValues(now);
         master.gain.setTargetAtTime(0.18, now, 0.8);
+
         tick();
-        timer = window.setInterval(tick, 620);
+        musicTimer = window.setInterval(tick, 620);
+
+        // Sync the first thunder with the first cinematic lightning flash (~71% of 9s).
+        const firstStormDelay = 6400;
+        stormTimer = window.setTimeout(() => {
+          playThunder();
+          stormTimer = window.setInterval(playThunder, 9000);
+        }, firstStormDelay);
       });
 
       started = true;
@@ -89,10 +165,16 @@ function createController(): HalloweenAmbientController {
   const stop = () => {
     if (!ctx) return;
     try {
-      if (timer !== null) {
-        window.clearInterval(timer);
-        timer = null;
+      if (musicTimer !== null) {
+        window.clearInterval(musicTimer);
+        musicTimer = null;
       }
+      if (stormTimer !== null) {
+        window.clearTimeout(stormTimer);
+        window.clearInterval(stormTimer);
+        stormTimer = null;
+      }
+
       const closingCtx = ctx;
       const closingMaster = master;
       const now = closingCtx.currentTime;
