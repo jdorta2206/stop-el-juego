@@ -1,5 +1,6 @@
 name: Halloween preview
 # Preview validation + public tunnel for Halloween testing
+# Manual-test refresh: keep a fresh tunnel available for the current Halloween build.
 
 on:
   push:
@@ -56,7 +57,7 @@ jobs:
           class Handler(SimpleHTTPRequestHandler):
               def __init__(self,*a,**kw): super().__init__(*a,directory=DIST,**kw)
               def _proxy(self):
-                  target=urlsplit(self.path); path=target.path+(("?" + target.query) if target.query else "")
+                  target=urlsplit(self.path); path=target.path+(( "?" + target.query) if target.query else "")
                   length=int(self.headers.get("Content-Length","0") or "0"); body=self.rfile.read(length) if length else None
                   headers={k:v for k,v in self.headers.items() if k.lower() not in {"host","content-length","origin","referer"}}
                   headers["Host"]=UPSTREAM; headers["X-Halloween-Preview"]="1"; host=UPSTREAM; scheme="https"
@@ -74,7 +75,7 @@ jobs:
                           location=resp.getheader("Location")
                           if not location: self.send_response(resp.status,resp.reason); self.end_headers(); return
                           next_url=urlsplit(location); host=next_url.hostname or host; scheme=next_url.scheme or scheme
-                          path=next_url.path+(("?" + next_url.query) if next_url.query else "")
+                          path=next_url.path+(( "?" + next_url.query) if next_url.query else "")
                           if scheme!="https": self.send_error(502,"Unsupported upstream redirect"); return
                           if next_url.hostname: headers["Host"]=host
                       finally: conn.close()
