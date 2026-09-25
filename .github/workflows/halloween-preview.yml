@@ -82,7 +82,9 @@ jobs:
                   size = int(self.headers.get("Content-Length", "0") or "0")
                   return json.loads(self.rfile.read(size) or b"{}")
               def do_GET(self):
-                  path = urlsplit(self.path).path
+                  parsed = urlsplit(self.path)
+                  path = parsed.path
+                  query = dict(part.split("=", 1) for part in parsed.query.split("&") if "=" in part)
                   if path == "/api/rooms/public":
                       with LOCK:
                           rooms = [fmt(r) for r in ROOMS.values() if r["isPublic"] and r["status"] == "waiting"]
@@ -109,6 +111,11 @@ jobs:
                           snapshot = fmt(room) if room else None
                       if not snapshot:
                           return send_json(self, 404, {"error": "not_found"})
+                      viewer = query.get("viewerId") or query.get("playerId")
+                      if viewer and viewer not in {room["hostId"], *[p["playerId"] for p in room["players"]]}:
+                          safe = dict(snapshot)
+                          safe["players"] = [{"playerId": room["hostId"], "playerName": room["hostName"]}]
+                          return send_json(self, 200, safe)
                       return send_json(self, 200, snapshot)
                   return send_json(self, 404, {"error": "not_found"})
               def do_POST(self):
