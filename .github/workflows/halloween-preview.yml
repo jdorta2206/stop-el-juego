@@ -185,9 +185,19 @@ jobs:
                           conn.request(self.command, path, body=body, headers=headers)
                           resp = conn.getresponse()
                           self.send_response(resp.status, resp.reason)
+                          content_type = (resp.getheader("Content-Type") or "").lower()
                           for key, value in resp.getheaders():
                               if key.lower() not in {"transfer-encoding", "connection", "content-encoding", "content-length"}:
                                   self.send_header(key, value)
+                          if "text/event-stream" in content_type:
+                              self.end_headers()
+                              while True:
+                                  chunk = resp.read1(4096) if hasattr(resp, "read1") else resp.readline()
+                                  if not chunk:
+                                      break
+                                  self.wfile.write(chunk)
+                                  self.wfile.flush()
+                              return
                           data = resp.read()
                           self.send_header("Content-Length", str(len(data)))
                           self.end_headers()
