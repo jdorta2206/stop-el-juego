@@ -12,6 +12,7 @@ function createController(): HalloweenAmbientController {
   let stormTimer: number | null = null;
   let started = false;
   let step = 0;
+  let musicAudio: HTMLAudioElement | null = null;
 
   const playNote = (frequency: number, duration = 0.55, volume = 0.08, type: OscillatorType = "sine") => {
     if (!ctx || !master) return;
@@ -40,7 +41,26 @@ function createController(): HalloweenAmbientController {
   const playThunder = () => {
     if (!ctx || !master) return;
     const now = ctx.currentTime;
-    const duration = 2.7;
+    const duration = 3.2;
+
+    // Instantaneous lightning crack.
+    const crack = ctx.createOscillator();
+    const crackGain = ctx.createGain();
+    const crackFilter = ctx.createBiquadFilter();
+    crack.type = "sawtooth";
+    crack.frequency.setValueAtTime(1800, now);
+    crack.frequency.exponentialRampToValueAtTime(120, now + 0.16);
+    crackFilter.type = "bandpass";
+    crackFilter.frequency.value = 900;
+    crackFilter.Q.value = 0.7;
+    crackGain.gain.setValueAtTime(0.0001, now);
+    crackGain.gain.exponentialRampToValueAtTime(0.42, now + 0.012);
+    crackGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.24);
+    crack.connect(crackFilter);
+    crackFilter.connect(crackGain);
+    crackGain.connect(master);
+    crack.start(now);
+    crack.stop(now + 0.28);
 
     // Low rumble + filtered noise create a rolling thunder effect.
     const rumble = ctx.createOscillator();
@@ -52,8 +72,8 @@ function createController(): HalloweenAmbientController {
     rumbleFilter.type = "lowpass";
     rumbleFilter.frequency.value = 180;
     rumbleGain.gain.setValueAtTime(0.0001, now);
-    rumbleGain.gain.exponentialRampToValueAtTime(0.12, now + 0.08);
-    rumbleGain.gain.exponentialRampToValueAtTime(0.055, now + 0.65);
+    rumbleGain.gain.exponentialRampToValueAtTime(0.28, now + 0.08);
+    rumbleGain.gain.exponentialRampToValueAtTime(0.11, now + 0.75);
     rumbleGain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
     rumble.connect(rumbleFilter);
     rumbleFilter.connect(rumbleGain);
@@ -79,7 +99,7 @@ function createController(): HalloweenAmbientController {
     noiseFilter.frequency.setValueAtTime(500, now);
     noiseFilter.frequency.exponentialRampToValueAtTime(90, now + duration);
     noiseGain.gain.setValueAtTime(0.0001, now);
-    noiseGain.gain.exponentialRampToValueAtTime(0.09, now + 0.18);
+    noiseGain.gain.exponentialRampToValueAtTime(0.20, now + 0.18);
     noiseGain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
     noise.connect(noiseFilter);
     noiseFilter.connect(noiseGain);
@@ -97,7 +117,7 @@ function createController(): HalloweenAmbientController {
       osc.frequency.setValueAtTime(38, late);
       osc.frequency.exponentialRampToValueAtTime(24, late + 1.7);
       gain.gain.setValueAtTime(0.0001, late);
-      gain.gain.exponentialRampToValueAtTime(0.055, late + 0.15);
+      gain.gain.exponentialRampToValueAtTime(0.13, late + 0.15);
       gain.gain.exponentialRampToValueAtTime(0.0001, late + 1.7);
       osc.connect(gain);
       gain.connect(master);
@@ -135,6 +155,11 @@ function createController(): HalloweenAmbientController {
 
     try {
       ctx = new AC();
+      musicAudio = new Audio("https://cdn.pixabay.com/download/audio/2022/10/11/audio_d28d2bedf8.mp3?filename=ghost-dark-beat-halloween-122461.mp3");
+      musicAudio.loop = true;
+      musicAudio.preload = "auto";
+      musicAudio.volume = 0.72;
+
       master = ctx.createGain();
       master.gain.value = 0.0001;
       master.connect(ctx.destination);
@@ -145,8 +170,18 @@ function createController(): HalloweenAmbientController {
         master.gain.cancelScheduledValues(now);
         master.gain.setTargetAtTime(0.18, now, 0.8);
 
-        tick();
-        musicTimer = window.setInterval(tick, 620);
+        // Real horror music from Pixabay. Start it from the same user gesture
+        // that unlocks Web Audio on mobile browsers.
+        if (musicAudio) {
+          void musicAudio.play().catch(() => {
+            // Keep the procedural fallback if the remote track is temporarily unavailable.
+            tick();
+            musicTimer = window.setInterval(tick, 620);
+          });
+        } else {
+          tick();
+          musicTimer = window.setInterval(tick, 620);
+        }
 
         // Sync the first thunder with the first cinematic lightning flash (~71% of 9s).
         const firstStormDelay = 6400;
@@ -168,6 +203,13 @@ function createController(): HalloweenAmbientController {
       if (musicTimer !== null) {
         window.clearInterval(musicTimer);
         musicTimer = null;
+      }
+      if (musicAudio) {
+        try {
+          musicAudio.pause();
+          musicAudio.currentTime = 0;
+        } catch {}
+        musicAudio = null;
       }
       if (stormTimer !== null) {
         window.clearTimeout(stormTimer);
@@ -261,14 +303,31 @@ export function HalloweenHomeAtmosphere({
             animation: "halloween-home-flicker 5.5s steps(1,end) infinite",
           }}
         />
-        <div
-          className="absolute inset-0"
-          style={{
-            background: "linear-gradient(112deg, transparent 0%, transparent 43%, rgba(255,255,255,.38) 49%, transparent 55%, transparent 100%)",
-            animation: "halloween-home-lightning 9s steps(1,end) infinite",
-            opacity: 0,
-          }}
-        />
+        <div className="absolute inset-0" style={{ animation: "halloween-home-storm 9s steps(1,end) infinite", opacity: 0 }}>
+          <div className="absolute left-[38%] top-0 h-[72vh] w-[24vw] min-w-[120px] max-w-[250px]">
+            <svg viewBox="0 0 220 700" className="h-full w-full overflow-visible" aria-hidden="true">
+              <path
+                d="M126 0 L102 155 L132 142 L82 330 L112 314 L55 520 L93 484 L71 700"
+                fill="none"
+                stroke="rgba(255,255,245,.96)"
+                strokeWidth="8"
+                strokeLinejoin="round"
+                strokeLinecap="round"
+                style={{ filter: "drop-shadow(0 0 14px rgba(255,255,255,.95)) drop-shadow(0 0 34px rgba(190,210,255,.75))" }}
+              />
+              <path
+                d="M126 0 L102 155 L132 142 L82 330 L112 314 L55 520 L93 484 L71 700"
+                fill="none"
+                stroke="rgba(170,200,255,.72)"
+                strokeWidth="22"
+                strokeLinejoin="round"
+                strokeLinecap="round"
+                style={{ filter: "blur(10px)" }}
+              />
+            </svg>
+          </div>
+          <div className="absolute inset-0 bg-white/45" />
+        </div>
         <div
           className="absolute inset-0"
           style={{
@@ -307,12 +366,14 @@ export function HalloweenHomeAtmosphere({
           36% { opacity: .24; }
           62% { opacity: .16; }
         }
-        @keyframes halloween-home-lightning {
-          0%, 71%, 72%, 73%, 100% { opacity: 0; transform: translateX(-18%) skewX(-10deg); }
-          71.3% { opacity: .18; }
-          71.6% { opacity: .65; }
-          72.2% { opacity: .08; }
-          72.6% { opacity: .42; }
+        @keyframes halloween-home-storm {
+          0%, 70%, 71%, 72%, 73%, 100% { opacity: 0; }
+          70.5% { opacity: .15; }
+          70.75% { opacity: .95; }
+          70.9% { opacity: .10; }
+          71.15% { opacity: .72; }
+          71.55% { opacity: .04; }
+          71.9% { opacity: .34; }
         }
         @keyframes halloween-home-flash {
           0%, 39%, 40%, 41%, 100% { opacity: 0; }
