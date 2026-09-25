@@ -5,14 +5,60 @@ type HalloweenAmbientController = {
   stop: () => void;
 };
 
-let controller: HalloweenAmbientController | null = null;
-
 function createController(): HalloweenAmbientController {
   let ctx: AudioContext | null = null;
   let master: GainNode | null = null;
-  let nodes: OscillatorNode[] = [];
-  let lfo: OscillatorNode | null = null;
+  let timer: number | null = null;
   let started = false;
+  let step = 0;
+
+  const playNote = (frequency: number, duration = 0.55, volume = 0.08, type: OscillatorType = "sine") => {
+    if (!ctx || !master) return;
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    const filter = ctx.createBiquadFilter();
+
+    osc.type = type;
+    osc.frequency.setValueAtTime(frequency, now);
+    filter.type = "lowpass";
+    filter.frequency.value = type === "sawtooth" ? 900 : 1800;
+    filter.Q.value = 1.2;
+
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(volume, now + 0.025);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(master);
+    osc.start(now);
+    osc.stop(now + duration + 0.03);
+  };
+
+  const tick = () => {
+    if (!ctx) return;
+
+    // A short minor-key horror motif: bass + dark chord + high bell-like answer.
+    const bass = [55, 55, 65.41, 49, 55, 55, 73.42, 49];
+    const melody = [220, 0, 196, 0, 174.61, 0, 164.81, 0];
+
+    playNote(bass[step], 0.75, 0.075, "sawtooth");
+
+    if (step % 2 === 0) {
+      const root = [110, 130.81, 98][Math.floor(step / 2) % 3];
+      playNote(root, 1.0, 0.035, "triangle");
+      playNote(root * 1.189, 0.9, 0.022, "triangle");
+      playNote(root * 1.498, 0.85, 0.018, "triangle");
+    }
+
+    if (melody[step] > 0) {
+      playNote(melody[step], 0.42, 0.045, "sine");
+      if (step === 6) playNote(melody[step] * 2, 0.28, 0.025, "sine");
+    }
+
+    step = (step + 1) % 8;
+  };
 
   const start = () => {
     if (started || typeof window === "undefined") return;
@@ -25,37 +71,15 @@ function createController(): HalloweenAmbientController {
       master.gain.value = 0.0001;
       master.connect(ctx.destination);
 
-      const frequencies = [73.42, 110, 146.83, 220];
-      nodes = frequencies.map((frequency, index) => {
-        const osc = ctx!.createOscillator();
-        const gain = ctx!.createGain();
-        osc.type = index === 0 ? "sine" : "triangle";
-        osc.frequency.value = frequency;
-        const levels = [0.16, 0.11, 0.075, 0.035];
-        gain.gain.value = levels[index];
-        osc.connect(gain);
-        gain.connect(master!);
-        osc.start();
-        return osc;
-      });
-
-      lfo = ctx.createOscillator();
-      const lfoGain = ctx.createGain();
-      lfo.frequency.value = 0.075;
-      lfoGain.gain.value = 0.045;
-      lfo.connect(lfoGain);
-      lfoGain.connect(master.gain);
-      lfo.start();
-
-      const now = ctx.currentTime;
-      master.gain.setValueAtTime(0.0001, now);
-      master.gain.exponentialRampToValueAtTime(0.22, now + 1.4);
       void ctx.resume().then(() => {
         if (!ctx || !master) return;
-        const resumedAt = ctx.currentTime;
-        master.gain.cancelScheduledValues(resumedAt);
-        master.gain.setTargetAtTime(0.22, resumedAt, 0.18);
+        const now = ctx.currentTime;
+        master.gain.cancelScheduledValues(now);
+        master.gain.setTargetAtTime(0.18, now, 0.8);
+        tick();
+        timer = window.setInterval(tick, 620);
       });
+
       started = true;
     } catch {
       stop();
@@ -65,20 +89,24 @@ function createController(): HalloweenAmbientController {
   const stop = () => {
     if (!ctx) return;
     try {
-      const now = ctx.currentTime;
-      master?.gain.cancelScheduledValues(now);
-      master?.gain.setTargetAtTime(0.0001, now, 0.18);
+      if (timer !== null) {
+        window.clearInterval(timer);
+        timer = null;
+      }
+      const closingCtx = ctx;
+      const closingMaster = master;
+      const now = closingCtx.currentTime;
+      closingMaster?.gain.cancelScheduledValues(now);
+      closingMaster?.gain.setTargetAtTime(0.0001, now, 0.2);
       window.setTimeout(() => {
-        nodes.forEach((node) => { try { node.stop(); } catch {} });
-        try { lfo?.stop(); } catch {}
-        void ctx?.close();
-        nodes = [];
-        lfo = null;
-        master = null;
-        ctx = null;
-        started = false;
+        try { void closingCtx.close(); } catch {}
       }, 700);
     } catch {}
+
+    ctx = null;
+    master = null;
+    started = false;
+    step = 0;
   };
 
   return { start, stop };
@@ -98,14 +126,21 @@ export function HalloweenHomeAtmosphere({
     if (!active || !enabled) {
       controllerRef.current?.stop();
       controllerRef.current = null;
+      setAudioStarted(false);
       return;
     }
 
     const controllerInstance = createController();
     controllerRef.current = controllerInstance;
 
-    const startAudio = () => { controllerInstance.start(); setAudioStarted(true); };
-    const resumeAudio = () => { controllerInstance.start(); setAudioStarted(true); };
+    const startAudio = () => {
+      controllerInstance.start();
+      setAudioStarted(true);
+    };
+    const resumeAudio = () => {
+      controllerInstance.start();
+      setAudioStarted(true);
+    };
     const events = ["pointerdown", "touchstart", "keydown"] as const;
     events.forEach((event) => window.addEventListener(event, startAudio, { once: true, passive: true }));
     window.addEventListener("visibilitychange", resumeAudio);
@@ -144,19 +179,38 @@ export function HalloweenHomeAtmosphere({
             animation: "halloween-home-flicker 5.5s steps(1,end) infinite",
           }}
         />
-        <div className="absolute inset-0" style={{ background: "linear-gradient(112deg, transparent 0%, transparent 43%, rgba(255,255,255,.38) 49%, transparent 55%, transparent 100%)", animation: "halloween-home-lightning 9s steps(1,end) infinite", opacity: 0 }} />
-        <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse at 50% 18%, rgba(255,255,255,.34), transparent 24%)", animation: "halloween-home-flash 13s steps(1,end) infinite", opacity: 0 }} />
+        <div
+          className="absolute inset-0"
+          style={{
+            background: "linear-gradient(112deg, transparent 0%, transparent 43%, rgba(255,255,255,.38) 49%, transparent 55%, transparent 100%)",
+            animation: "halloween-home-lightning 9s steps(1,end) infinite",
+            opacity: 0,
+          }}
+        />
+        <div
+          className="absolute inset-0"
+          style={{
+            background: "radial-gradient(ellipse at 50% 18%, rgba(255,255,255,.34), transparent 24%)",
+            animation: "halloween-home-flash 13s steps(1,end) infinite",
+            opacity: 0,
+          }}
+        />
       </div>
+
       {!audioStarted && (
         <button
           type="button"
-          onClick={() => { controllerRef.current?.start(); setAudioStarted(true); }}
+          onClick={() => {
+            controllerRef.current?.start();
+            setAudioStarted(true);
+          }}
           className="pointer-events-auto fixed bottom-24 right-4 z-[60] rounded-full border border-red-400/60 bg-black/80 px-4 py-2 text-sm font-semibold text-white shadow-lg backdrop-blur"
           aria-label="Activar música de Halloween"
         >
-          🔊 Activar sonido Halloween
+          🔊 Activar música de terror
         </button>
       )}
+
       <style>{`
         @keyframes halloween-home-pulse {
           0%, 100% { opacity: .12; transform: scale(.96); }
@@ -184,9 +238,6 @@ export function HalloweenHomeAtmosphere({
           39.35% { opacity: .55; }
           39.55% { opacity: .04; }
           40.4% { opacity: .28; }
-        }
-        @media (prefers-reduced-motion: reduce) {
-          .halloween-home-atmosphere { animation: none !important; }
         }
       `}</style>
     </>
