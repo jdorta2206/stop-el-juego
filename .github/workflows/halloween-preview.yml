@@ -73,7 +73,7 @@ jobs:
                               if "text/event-stream" in content_type:
                                   self.end_headers()
                                   while True:
-                                      chunk=resp.read(4096)
+                                      chunk=resp.read1(4096) if hasattr(resp, "read1") else resp.readline()
                                       if not chunk: break
                                       self.wfile.write(chunk); self.wfile.flush()
                                   return
