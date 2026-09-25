@@ -218,12 +218,7 @@ function createController(): HalloweenAmbientController {
 
         // Real horror music from Pixabay. Start it from the same user gesture
         // that unlocks Web Audio on mobile browsers.
-        if (stormAudio) {
-        try { stormAudio.pause(); stormAudio.currentTime = 0; } catch {}
-        stormAudio = null;
-      }
-      if (stormAudioUrl) { try { URL.revokeObjectURL(stormAudioUrl); } catch {} stormAudioUrl = null; }
-      if (musicAudio) {
+        if (musicAudio) {
           void musicAudio.play().catch(() => {
             // Keep the procedural fallback if the remote track is temporarily unavailable.
             tick();
@@ -261,6 +256,14 @@ function createController(): HalloweenAmbientController {
           musicAudio.currentTime = 0;
         } catch {}
         musicAudio = null;
+      }
+      if (stormAudio) {
+        try { stormAudio.pause(); stormAudio.currentTime = 0; } catch {}
+        stormAudio = null;
+      }
+      if (stormAudioUrl) {
+        try { URL.revokeObjectURL(stormAudioUrl); } catch {}
+        stormAudioUrl = null;
       }
       if (stormTimer !== null) {
         window.clearTimeout(stormTimer);
