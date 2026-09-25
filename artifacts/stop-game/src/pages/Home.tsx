@@ -161,7 +161,7 @@ export default function Home() {
                   </button>
                 )}
               </div>
-              <button type="button" aria-pressed={halloweenModeEnabled} onClick={() => { const next=!halloweenModeEnabled; setHalloweenModeEnabled(next); setHalloweenModeEnabledState(next); if (!next) setHalloweenAudioStarted(false); }} className="relative w-14 h-8 rounded-full transition-colors flex-shrink-0" style={{ background: halloweenModeEnabled ? "#991b1b" : "rgba(255,255,255,.18)", border:"1px solid rgba(255,255,255,.2)" }}>
+              <button type="button" aria-pressed={halloweenModeEnabled} onClick={() => { const next=!halloweenModeEnabled; setHalloweenModeEnabled(next); setHalloweenModeEnabledState(next); if (!next) setHalloweenAudioStarted(false); }} className="relative w-14 h-8 min-w-[3.5rem] rounded-full transition-colors flex-shrink-0 overflow-hidden" style={{ background: halloweenModeEnabled ? "#991b1b" : "rgba(255,255,255,.18)", border:"1px solid rgba(255,255,255,.2)" }}>
                 <span className="absolute top-1 w-6 h-6 rounded-full bg-white shadow-md transition-transform" style={{ transform: halloweenModeEnabled ? "translateX(27px)" : "translateX(3px)" }} />
               </button>
             </div>
