@@ -99,6 +99,7 @@ hosts so OAuth handoff tokens issued on one host verify on the other.
 
 OAuth runs on `APP_ORIGIN` and bounces the user back to whatever allow-listed
 origin they came from, carrying the session handoff in the URL hash (storage is
-per-origin). The `state` parameter is HMAC-signed (with `SESSION_SECRET`) and, on
-the same-origin path, bound to a single-use httpOnly nonce cookie for CSRF
+per-origin). The `state` parameter is HMAC-signed (with `SESSION_SECRET`) and, on the same-origin path, bound to a single-use httpOnly nonce cookie for CSRF
 protection.
+
+<!-- Halloween preview trigger 2026-09-25 -->
