@@ -2195,30 +2195,110 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
   const { sweptPlayers, newStatus, newLetter, newRound, newStopperJson } =
     finalizeRoundState(room, updatedPlayers);
 
-  // Optimistic concurrency: only update if the room hasn't changed since we read it.
-  // If a concurrent /results submission won the race, return the latest state instead.
-  const updateResult = await db.update(roomsTable)
-    .set({
-      playersJson: JSON.stringify(sweptPlayers),
-      currentRound: newRound,
-      currentLetter: newLetter,
-      status: newStatus,
-      stopperJson: newStopperJson,
-      updatedAt: new Date(),
-    })
-    .where(and(eq(roomsTable.roomCode, roomCode.toUpperCase()), eq(roomsTable.updatedAt, room.updatedAt)))
-    .returning();
+  // Optimistic concurrency with bounded retry.
+  // Two players can submit at virtually the same time. The old code returned
+  // the winner's state when the CAS was lost, silently dropping the loser's
+  // answers. That made the client show a successful response while the rival's
+  // answers were never persisted. On a CAS miss, re-read the authoritative room,
+  // merge THIS player's already-validated submission into that latest state,
+  // re-run the round finalizer, and retry. Never overwrite another player's
+  // newer submission.
+  let authoritativeRoom = room;
+  let authoritativePlayers = sweptPlayers;
+  let authoritativeStatus = newStatus;
+  let authoritativeRound = newRound;
+  let authoritativeLetter = newLetter;
+  let authoritativeStopperJson = newStopperJson;
+  let writeSucceeded = false;
 
-  if (updateResult.length === 0) {
-    // Lost the race — return latest authoritative state without re-applying score
-    const [refreshed] = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, roomCode.toUpperCase())).limit(1);
-    res.json(formatRoom(refreshed));
-    return;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const updateResult = await db.update(roomsTable)
+      .set({
+        playersJson: JSON.stringify(authoritativePlayers),
+        currentRound: authoritativeRound,
+        currentLetter: authoritativeLetter,
+        status: authoritativeStatus,
+        stopperJson: authoritativeStopperJson,
+        updatedAt: new Date(),
+      })
+      .where(and(
+        eq(roomsTable.roomCode, roomCode.toUpperCase()),
+        eq(roomsTable.updatedAt, authoritativeRoom.updatedAt),
+      ))
+      .returning();
+
+    if (updateResult.length > 0) {
+      // We won the write — run one-shot side effects (leaderboard + map cleanup).
+      applyRoundAdvanceSideEffects(authoritativeRoom, authoritativePlayers, authoritativeStatus);
+      res.json(broadcastAndFormat(updateResult[0]));
+      writeSucceeded = true;
+      break;
+    }
+
+    // Another submission won the race. Re-read the latest authoritative state.
+    const [refreshed] = await db.select().from(roomsTable)
+      .where(eq(roomsTable.roomCode, roomCode.toUpperCase()))
+      .limit(1);
+
+    if (!refreshed) {
+      res.status(404).json({ error: "Room not found" });
+      writeSucceeded = true;
+      break;
+    }
+
+    const refreshedPlayers = parsePlayers(refreshed.playersJson);
+    const refreshedMe = refreshedPlayers.find((p: any) => p.playerId === playerId);
+
+    // If the round already advanced, this submission belongs to the previous
+    // round and must not be injected into the new round's state.
+    if ((refreshed.currentRound ?? 1) !== (room.currentRound ?? 1)) {
+      res.json(formatRoom(refreshed));
+      writeSucceeded = true;
+      break;
+    }
+
+    // Idempotency: the concurrent writer may already have persisted our
+    // submission (for example through a retry from the client).
+    if (refreshedMe?.isReady === true) {
+      res.json(formatRoom(refreshed));
+      writeSucceeded = true;
+      break;
+    }
+
+    // Merge only our player into the latest state, preserving every other
+    // player's answers/score that won the race.
+    authoritativePlayers = refreshedPlayers.map((p: any) => {
+      if (p.playerId !== playerId) return p;
+      return {
+        ...p,
+        score: (p.score || 0) + cappedRoundScore,
+        roundScore: cappedRoundScore,
+        isReady: true,
+        answers: safeAnswers,
+        finishedAt,
+        wasStopper: isStopper,
+        bluffedCategories: bluffedCategories ?? [],
+        bluffedWords: bluffedWords ?? {},
+      };
+    });
+
+    const retryFinalized = finalizeRoundState(refreshed, authoritativePlayers);
+    authoritativeRoom = refreshed;
+    authoritativePlayers = retryFinalized.sweptPlayers;
+    authoritativeStatus = retryFinalized.newStatus;
+    authoritativeRound = retryFinalized.newRound;
+    authoritativeLetter = retryFinalized.newLetter;
+    authoritativeStopperJson = retryFinalized.newStopperJson;
   }
 
-  // We won the write — run one-shot side effects (leaderboard + map cleanup).
-  applyRoundAdvanceSideEffects(room, sweptPlayers, newStatus);
-  res.json(broadcastAndFormat(updateResult[0]));
+  if (!writeSucceeded) {
+    // Extremely unlikely after three bounded CAS retries. Return the latest
+    // state instead of looping indefinitely or reporting a false success.
+    const [refreshed] = await db.select().from(roomsTable)
+      .where(eq(roomsTable.roomCode, roomCode.toUpperCase()))
+      .limit(1);
+    res.json(formatRoom(refreshed));
+  }
 });
 
 // POST /rooms/:roomCode/bluff-vote — opponent casts "lie" or "real" for a bluffed category
