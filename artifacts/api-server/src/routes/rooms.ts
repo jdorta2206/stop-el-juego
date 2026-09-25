@@ -705,6 +705,14 @@ async function sweepStuckRooms() {
 //   so abandoned games don't accumulate as DB garbage and slow down public listings.
 async function purgeStaleRooms() {
   try {
+    // 🧪 Test-only Halloween rooms must never leak into the normal public
+    // multiplayer browser. They were created during event QA with the
+    // explicit "Halloween Host" test name; remove them at boot/cleanup and
+    // keep them out of public listings as a defensive second layer.
+    await db.delete(roomsTable).where(
+      eq(roomsTable.hostName, "Halloween Host")
+    );
+
     const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
     const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000);
     await db.delete(roomsTable).where(
@@ -795,6 +803,7 @@ router.get("/live", async (_req, res) => {
     .where(and(
       eq(roomsTable.isPublic, true),
       inArray(roomsTable.status, ["playing", "stopping", "revealing", "bluffvoting"]),
+      sql`LOWER(TRIM(${roomsTable.hostName})) <> 'halloween host'`,
     ))
     .orderBy(roomsTable.createdAt)
     .limit(12);
@@ -861,7 +870,11 @@ router.get("/public", async (_req, res) => {
   const rooms = await db
     .select()
     .from(roomsTable)
-    .where(and(eq(roomsTable.isPublic, true), eq(roomsTable.status, "waiting")))
+    .where(and(
+      eq(roomsTable.isPublic, true),
+      eq(roomsTable.status, "waiting"),
+      sql`LOWER(TRIM(${roomsTable.hostName})) <> 'halloween host'`,
+    ))
     .orderBy(roomsTable.createdAt)
     .limit(20);
 
@@ -891,6 +904,12 @@ router.post("/", async (req, res) => {
   }
   const gameMode = (body.data as any).gameMode ?? "classic";
   const maxPlayers = (body.data as any).maxPlayers ?? 8;
+
+  // 🧪 Halloween QA rooms are internal test rooms. Never publish one into
+  // the normal public-room browser, even if a test client accidentally sends
+  // isPublic=true.
+  const isHalloweenTestRoom = String(hostName ?? "").trim().toLowerCase() === "halloween host";
+  const safeIsPublic = isHalloweenTestRoom ? false : (isPublic ?? false);
 
   let roomCode = generateRoomCode();
   for (let i = 0; i < 5; i++) {
@@ -936,7 +955,7 @@ router.post("/", async (req, res) => {
     language: language ?? "es",
     playersJson: JSON.stringify(players),
     stopperJson: null,
-    isPublic: isPublic ?? false,
+    isPublic: safeIsPublic,
   }).returning();
 
   res.status(201).json(formatRoom(room));
