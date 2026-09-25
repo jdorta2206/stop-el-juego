@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 
 type HalloweenAmbientController = {
   start: () => void;
@@ -303,13 +303,11 @@ export function HalloweenHomeAtmosphere({
   active: boolean;
 }) {
   const controllerRef = useRef<HalloweenAmbientController | null>(null);
-  const [audioStarted, setAudioStarted] = useState(false);
 
   useEffect(() => {
     if (!active || !enabled) {
       controllerRef.current?.stop();
       controllerRef.current = null;
-      setAudioStarted(false);
       return;
     }
 
@@ -317,7 +315,6 @@ export function HalloweenHomeAtmosphere({
     controllerRef.current = controllerInstance;
 
     const markAudioStarted = () => {
-      setAudioStarted(true);
       window.dispatchEvent(new Event("halloween:audio-started"));
     };
     const startAudio = () => {
