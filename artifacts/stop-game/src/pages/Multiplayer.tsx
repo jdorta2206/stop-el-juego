@@ -26,7 +26,7 @@ const LANG_FLAGS: Record<string, string> = { es: "🇪🇸", en: "🇬🇧", pt:
 
 export default function Multiplayer() {
   const [, setLocation] = useLocation();
-  const { player } = usePlayer();
+  const { player, savePlayer } = usePlayer();
   const { t } = useT();
   const [roomCode, setRoomCode] = useState(() => {
     const params = new URLSearchParams(window.location.search);
@@ -118,18 +118,28 @@ export default function Multiplayer() {
   }, []);
 
   const handleCreate = async () => {
-    if (!player) return;
     setError("");
+    const currentPlayer = player ?? {
+      id: `preview-guest-${crypto.randomUUID()}`,
+      name: "Jugador Halloween",
+      avatarColor: "#b5301a",
+      loginMethod: "guest",
+      picture: null,
+    };
+    if (!player && import.meta.env.VITE_HALLOWEEN_PREVIEW === "true") {
+      savePlayer(currentPlayer);
+    }
+    if (!currentPlayer) return;
     try {
       const room = await createMutation.mutateAsync({
         data: {
-          hostId: player.id,
-          hostName: player.name,
-          avatarColor: player.avatarColor,
-          picture: player.picture || null,
+          hostId: currentPlayer.id,
+          hostName: currentPlayer.name,
+          avatarColor: currentPlayer.avatarColor,
+          picture: currentPlayer.picture || null,
           maxRounds: 3,
           language: getCurrentLang(),
-          loginMethod: player.loginMethod ?? null,
+          loginMethod: currentPlayer.loginMethod ?? null,
           isPublic,
           gameMode,
           maxPlayers,
