@@ -183,6 +183,15 @@ jobs:
           echo "$PRIVATE_GUEST_ROOM" | grep -q 'Halloween Host'
           echo "$PRIVATE_GUEST_ROOM" | grep -q 'Halloween Guest'
 
+          echo "== PRIVATE: SSE is authorized for second player =="
+          set +e
+          curl -sS --max-time 3 -H "Accept: text/event-stream" "$BASE/rooms/$PRIVATE_CODE/events?playerId=$GUEST_ID" > /tmp/private-sse.txt
+          SSE_STATUS=$?
+          set -e
+          cat /tmp/private-sse.txt
+          test "$SSE_STATUS" = "0" -o "$SSE_STATUS" = "28"
+          grep -q 'Halloween Guest' /tmp/private-sse.txt
+
           echo "== PRIVATE: outsider is not given full room =="
           PRIVATE_OUTSIDER_STATUS="$(curl -sS --max-time 30 -o /tmp/private-outsider.json -w '%{http_code}' "$BASE/rooms/$PRIVATE_CODE?viewerId=$OUTSIDER_ID")"
           cat /tmp/private-outsider.json
