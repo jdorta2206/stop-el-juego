@@ -113,6 +113,78 @@ jobs:
                   return super().send_error(code,message,explain)
           os.chdir(DIST); ThreadingHTTPServer(("127.0.0.1",4173),Handler).serve_forever()
           PY
+          cat > /tmp/halloween-room-mock.py <<'PY'
+          import json, random, string, threading, time
+          from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
+          from urllib.parse import urlsplit
+          ROOMS={}
+          LOCK=threading.Lock()
+          def code():
+              while True:
+                  x="".join(random.choice(string.ascii_uppercase+string.digits) for _ in range(6))
+                  if x not in ROOMS: return x
+          def send(h,status,obj):
+              raw=json.dumps(obj).encode()
+              h.send_response(status); h.send_header("Content-Type","application/json"); h.send_header("Content-Length",str(len(raw))); h.end_headers(); h.wfile.write(raw)
+          def fmt(r):
+              return {"id":r["id"],"roomCode":r["roomCode"],"hostId":r["hostId"],"hostName":r["hostName"],"status":r["status"],"currentRound":0,"maxRounds":r["maxRounds"],"maxPlayers":r["maxPlayers"],"gameMode":r["gameMode"],"language":r["language"],"isPublic":r["isPublic"],"players":r["players"]}
+          class RoomMock(BaseHTTPRequestHandler):
+              def log_message(self,*a): pass
+              def body(self):
+                  n=int(self.headers.get("Content-Length","0") or "0")
+                  return json.loads(self.rfile.read(n) or b"{}")
+              def do_GET(self):
+                  p=urlsplit(self.path).path
+                  if p=="/api/rooms/public":
+                      with LOCK: rooms=[fmt(r) for r in ROOMS.values() if r["isPublic"] and r["status"]=="waiting"]
+                      return send(self,200,{"rooms":[{"roomCode":r["roomCode"],"hostId":r["hostId"],"hostName":r["hostName"],"maxRounds":r["maxRounds"],"language":r["language"],"playerCount":len(r["players"]),"createdAt":r.get("createdAt","")} for r in rooms]})
+                  if p.startswith("/api/rooms/") and p.endswith("/events"):
+                      code0=p.split("/")[3].upper()
+                      with LOCK: r=ROOMS.get(code0)
+                      if not r: return send(self,404,{"error":"not_found"})
+                      raw=("data: "+json.dumps(fmt(r))+"\n\n").encode()
+                      self.send_response(200); self.send_header("Content-Type","text/event-stream"); self.send_header("Cache-Control","no-cache"); self.send_header("Content-Length",str(len(raw))); self.end_headers(); self.wfile.write(raw); return
+                  if p.startswith("/api/rooms/"):
+                      code0=p.split("/")[3].upper()
+                      with LOCK: r=ROOMS.get(code0)
+                      if not r: return send(self,404,{"error":"not_found"})
+                      return send(self,200,fmt(r))
+                  return send(self,404,{"error":"not_found"})
+              def do_POST(self):
+                  p=urlsplit(self.path).path
+                  try: b=self.body()
+                  except Exception: return send(self,400,{"error":"invalid_json"})
+                  if p=="/api/rooms":
+                      with LOCK:
+                          c=code()
+                          host={"playerId":b["hostId"],"playerName":b.get("hostName",""),"avatarColor":b.get("avatarColor"),"picture":b.get("picture"),"loginMethod":b.get("loginMethod")}
+                          ROOMS[c]={"id":len(ROOMS)+1,"roomCode":c,"hostId":b["hostId"],"hostName":b.get("hostName",""),"status":"waiting","maxRounds":b.get("maxRounds",3),"maxPlayers":b.get("maxPlayers",8),"gameMode":b.get("gameMode","classic"),"language":b.get("language","es"),"isPublic":bool(b.get("isPublic",False)),"players":[host],"createdAt":time.strftime("%Y-%m-%dT%H:%M:%SZ",time.gmtime())}
+                          return send(self,201,fmt(ROOMS[c]))
+                  if p.startswith("/api/rooms/") and p.endswith("/join"):
+                      code0=p.split("/")[3].upper()
+                      with LOCK: r=ROOMS.get(code0)
+                      if not r: return send(self,404,{"error":"not_found"})
+                      with LOCK:
+                          if len(r["players"])>=r["maxPlayers"]: return send(self,409,{"error":"room_full"})
+                          if any(x["playerId"]==b.get("playerId") for x in r["players"]): return send(self,200,fmt(r))
+                          r["players"].append({"playerId":b["playerId"],"playerName":b.get("playerName",""),"avatarColor":b.get("avatarColor"),"picture":b.get("picture"),"loginMethod":b.get("loginMethod")})
+                          return send(self,200,fmt(r))
+                  return send(self,404,{"error":"not_found"})
+          ThreadingHTTPServer(("127.0.0.1",4174),RoomMock).serve_forever()
+          PY
+          nohup python3 /tmp/halloween-room-mock.py >/tmp/halloween-room-mock.log 2>&1 &
+          sleep 1
+          python3 - <<'PY'
+          p="/tmp/halloween-preview-server.py"
+          s=open(p).read()
+          s=s.replace('target=urlsplit(self.path); path=target.path+(( "?" + target.query) if target.query else "")',
+                      'target=urlsplit(self.path); path=target.path+(( "?" + target.query) if target.query else "")\n                  local_rooms=target.path.startswith("/api/rooms")\n                  if local_rooms: host="127.0.0.1"; port=4174')
+          s=s.replace('conn=http.client.HTTPSConnection(host,timeout=600)',
+                      'conn=(http.client.HTTPConnection(host,port,timeout=600) if local_rooms else http.client.HTTPSConnection(host,timeout=600))')
+          s=s.replace('if scheme!="https": self.send_error(502,"Unsupported upstream redirect"); return',
+                      'if not local_rooms and scheme!="https": self.send_error(502,"Unsupported upstream redirect"); return')
+          open(p,"w").write(s)
+          PY
           nohup python3 /tmp/halloween-preview-server.py >/tmp/preview-http.log 2>&1 &
           sleep 2
           curl -fsS http://127.0.0.1:4173/ >/dev/null
@@ -262,3 +334,4 @@ jobs:
         run: |
           pkill -f cloudflared || true
           pkill -f halloween-preview-server.py || true
+          pkill -f halloween-room-mock.py || true
