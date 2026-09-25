@@ -20,6 +20,12 @@ export async function ensureIndexes(): Promise<void> {
     `CREATE INDEX IF NOT EXISTS game_history_player_id_score_desc_idx ON game_history (player_id, score DESC)`,
     `CREATE INDEX IF NOT EXISTS rooms_is_public_status_created_at_idx ON rooms (is_public, status, created_at)`,
     `CREATE INDEX IF NOT EXISTS rooms_status_updated_at_idx ON rooms (status, updated_at)`,
+    // Keep production schema compatible with the current multiplayer room model.
+    // These columns were added to the Drizzle schema but were missing from the
+    // idempotent boot migration, which makes POST /api/rooms fail on databases
+    // created before the fields existed.
+    `ALTER TABLE rooms ADD COLUMN IF NOT EXISTS max_players integer NOT NULL DEFAULT 8`,
+    `ALTER TABLE rooms ADD COLUMN IF NOT EXISTS game_mode text NOT NULL DEFAULT 'classic'`,
     `ALTER TABLE rooms ADD COLUMN IF NOT EXISTS tournament_id integer`,
     `ALTER TABLE rooms ADD COLUMN IF NOT EXISTS tournament_match_id text`,
     `CREATE UNIQUE INDEX IF NOT EXISTS rooms_tournament_match_uidx ON rooms (tournament_id, tournament_match_id) WHERE tournament_id IS NOT NULL AND tournament_match_id IS NOT NULL`,
