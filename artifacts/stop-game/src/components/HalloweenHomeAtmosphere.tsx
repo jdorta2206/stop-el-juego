@@ -14,6 +14,8 @@ function createController(): HalloweenAmbientController {
   let started = false;
   let step = 0;
   let musicAudio: HTMLAudioElement | null = null;
+  let stormAudio: HTMLAudioElement | null = null;
+  let stormAudioUrl: string | null = null;
 
   const playNote = (frequency: number, duration = 0.55, volume = 0.08, type: OscillatorType = "sine") => {
     if (!ctx || !master) return;
@@ -39,8 +41,46 @@ function createController(): HalloweenAmbientController {
     osc.stop(now + duration + 0.03);
   };
 
+  const createThunderAudio = (): HTMLAudioElement | null => {
+    if (typeof window === "undefined" || typeof Blob === "undefined" || typeof URL === "undefined") return null;
+    const sampleRate = 44100;
+    const duration = 2.8;
+    const length = Math.floor(sampleRate * duration);
+    const buffer = new ArrayBuffer(44 + length * 2);
+    const view = new DataView(buffer);
+    const write = (offset: number, value: number) => view.setUint32(offset, value, true);
+    const write16 = (offset: number, value: number) => view.setUint16(offset, value, true);
+    write(0, 0x46464952); write(4, 36 + length * 2); write(8, 0x45564157);
+    write(12, 0x20746d66); write(16, 16); write16(20, 1); write16(22, 1);
+    write(24, sampleRate); write(28, sampleRate * 2); write16(32, 2); write16(34, 16);
+    write(36, 0x61746164); write(40, length * 2);
+    let seed = 1234567;
+    const rand = () => {
+      seed = (seed * 16807) % 2147483647;
+      return (seed / 2147483647) * 2 - 1;
+    };
+    for (let i = 0; i < length; i++) {
+      const t = i / sampleRate;
+      const crack = t < 0.045 ? (1 - t / 0.045) * (0.75 * Math.sin(2 * Math.PI * (2200 - 1800 * t / 0.045) * t) + 0.35 * rand()) : 0;
+      const rumbleEnv = t < 0.18 ? t / 0.18 : Math.max(0, 1 - (t - 0.18) / 2.62);
+      const rumble = rumbleEnv * (0.62 * Math.sin(2 * Math.PI * (48 - 20 * t) * t) + 0.28 * Math.sin(2 * Math.PI * 73 * t) + 0.22 * rand());
+      const sample = Math.max(-1, Math.min(1, crack + rumble));
+      view.setInt16(44 + i * 2, Math.floor(sample * 30000), true);
+    }
+    const blob = new Blob([buffer], { type: "audio/wav" });
+    stormAudioUrl = URL.createObjectURL(blob);
+    const audio = new Audio(stormAudioUrl);
+    audio.preload = "auto";
+    audio.volume = 1;
+    return audio;
+  };
+
   const playThunder = () => {
     if (!ctx || !master || !stormMaster) return;
+    if (stormAudio) {
+      stormAudio.currentTime = 0;
+      void stormAudio.play().catch(() => {});
+    }
     const now = ctx.currentTime;
     const duration = 3.2;
 
@@ -157,6 +197,8 @@ function createController(): HalloweenAmbientController {
     try {
       ctx = new AC();
       musicAudio = new Audio("https://cdn.pixabay.com/download/audio/2022/10/11/audio_d28d2bedf8.mp3?filename=ghost-dark-beat-halloween-122461.mp3");
+      stormAudio = createThunderAudio();
+      if (stormAudio) { void stormAudio.play().then(() => { stormAudio?.pause(); stormAudio.currentTime = 0; }).catch(() => {}); }
       musicAudio.loop = true;
       musicAudio.preload = "auto";
       musicAudio.volume = 0.72;
@@ -176,7 +218,12 @@ function createController(): HalloweenAmbientController {
 
         // Real horror music from Pixabay. Start it from the same user gesture
         // that unlocks Web Audio on mobile browsers.
-        if (musicAudio) {
+        if (stormAudio) {
+        try { stormAudio.pause(); stormAudio.currentTime = 0; } catch {}
+        stormAudio = null;
+      }
+      if (stormAudioUrl) { try { URL.revokeObjectURL(stormAudioUrl); } catch {} stormAudioUrl = null; }
+      if (musicAudio) {
           void musicAudio.play().catch(() => {
             // Keep the procedural fallback if the remote track is temporarily unavailable.
             tick();
@@ -188,7 +235,7 @@ function createController(): HalloweenAmbientController {
         }
 
         // Sync the first thunder with the first cinematic lightning flash (~71% of 9s).
-        const firstStormDelay = 6400;
+        const firstStormDelay = 2500;
         stormTimer = window.setTimeout(() => {
           playThunder();
           stormTimer = window.setInterval(playThunder, 9000);
