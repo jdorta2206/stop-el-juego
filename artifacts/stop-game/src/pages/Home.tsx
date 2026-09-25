@@ -55,10 +55,17 @@ export default function Home() {
   const ftue = useFTUE();
   const [showFTUEWelcome, setShowFTUEWelcome] = useState(false);
   const [halloweenModeEnabled, setHalloweenModeEnabledState] = useState(() => HALLOWEEN_PREVIEW ? true : isHalloweenModeEnabled());
+  const [halloweenAudioStarted, setHalloweenAudioStarted] = useState(false);
   const { data: halloweenProgressData } = useHalloweenProgress(player?.id);
 
   // Open the FTUE welcome modal once on first ever visit (after a tiny delay
   // so the home page can render its hero animation first).
+  useEffect(() => {
+    const markHalloweenAudioStarted = () => setHalloweenAudioStarted(true);
+    window.addEventListener("halloween:audio-started", markHalloweenAudioStarted);
+    return () => window.removeEventListener("halloween:audio-started", markHalloweenAudioStarted);
+  }, []);
+
   useEffect(() => {
     if (!ftue.isFirstVisit) return;
     const t = setTimeout(() => setShowFTUEWelcome(true), 600);
@@ -141,7 +148,19 @@ export default function Home() {
             style={{ background: halloweenModeEnabled ? "linear-gradient(135deg, rgba(127,29,29,.32), rgba(20,8,12,.72))" : "rgba(0,0,0,.24)", border: halloweenModeEnabled ? "2px solid rgba(220,38,38,.48)" : "1.5px solid rgba(255,255,255,.14)" }}>
             <div className="flex items-center gap-3">
               <div className="text-2xl flex-shrink-0">{halloweenModeEnabled ? "🎃" : "🕯️"}</div>
-              <div className="flex-1 min-w-0"><p className="text-white font-black text-sm">Modo Halloween</p><p className="text-white/55 text-[11px] leading-tight">{halloweenModeEnabled ? "Sustos, música y ambientación activados" : "STOP clásico: sin sustos ni música Halloween"}</p></div>
+              <div className="flex-1 min-w-0">
+                <p className="text-white font-black text-sm">Modo Halloween</p>
+                <p className="text-white/55 text-[11px] leading-tight">{halloweenModeEnabled ? "Sustos, música y ambientación activados" : "STOP clásico: sin sustos ni música Halloween"}</p>
+                {halloweenModeEnabled && !halloweenAudioStarted && (
+                  <button
+                    type="button"
+                    onClick={() => window.dispatchEvent(new Event("halloween:activate-audio"))}
+                    className="mt-2 rounded-lg border border-red-300/40 bg-black/35 px-2.5 py-1 text-[10px] font-black text-white/90"
+                  >
+                    🔊 Activar música de terror
+                  </button>
+                )}
+              </div>
               <button type="button" aria-pressed={halloweenModeEnabled} onClick={() => { const next=!halloweenModeEnabled; setHalloweenModeEnabled(next); setHalloweenModeEnabledState(next); }} className="relative w-14 h-8 rounded-full transition-colors flex-shrink-0" style={{ background: halloweenModeEnabled ? "#991b1b" : "rgba(255,255,255,.18)", border:"1px solid rgba(255,255,255,.2)" }}>
                 <span className="absolute top-1 w-6 h-6 rounded-full bg-white shadow-md transition-transform" style={{ transform: halloweenModeEnabled ? "translateX(27px)" : "translateX(3px)" }} />
               </button>
