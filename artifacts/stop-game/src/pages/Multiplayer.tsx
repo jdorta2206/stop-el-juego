@@ -45,6 +45,19 @@ export default function Multiplayer() {
   const createMutation = useCreateRoom();
   const joinMutation = useJoinRoom();
 
+  // Halloween preview: give every fresh device a local guest identity immediately
+  // so the online-player panel and room join/create controls work before login.
+  useEffect(() => {
+    if (player || import.meta.env.VITE_HALLOWEEN_PREVIEW !== "true") return;
+    savePlayer({
+      id: `preview-guest-${crypto.randomUUID()}`,
+      name: "Jugador Halloween",
+      avatarColor: "#b5301a",
+      loginMethod: "guest",
+      picture: null,
+    });
+  }, [player, savePlayer]);
+
   // 🛟 Resume banner: if the player has a recent active room saved (closed app,
   // lost connection, switched device), offer one-tap rejoin. Validates against
   // the server first — if the room is gone or they're not a member, we clear
@@ -176,16 +189,17 @@ export default function Multiplayer() {
 
   const handleJoin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!player || !roomCode.trim()) return;
+    if (!player && import.meta.env.VITE_HALLOWEEN_PREVIEW !== "true") return;
+    if (!roomCode.trim()) return;
     setError("");
     try {
       const room = await joinMutation.mutateAsync({
         roomCode: roomCode.toUpperCase(),
         data: {
-          playerId: player.id,
-          playerName: player.name,
-          avatarColor: player.avatarColor,
-          loginMethod: player.loginMethod ?? null,
+          playerId: currentPlayer.id,
+          playerName: currentPlayer.name,
+          avatarColor: currentPlayer.avatarColor,
+          loginMethod: currentPlayer.loginMethod ?? null,
         } as import("@workspace/api-client-react").JoinRoomRequest & { loginMethod?: string | null },
       });
       setLocation(`/room/${room.roomCode}`);
@@ -195,16 +209,24 @@ export default function Multiplayer() {
   };
 
   const handleJoinPublic = async (code: string) => {
-    if (!player) return;
+    if (!player && import.meta.env.VITE_HALLOWEEN_PREVIEW !== "true") return;
     setError("");
+    const currentPlayer = player ?? {
+      id: `preview-guest-${crypto.randomUUID()}`,
+      name: "Jugador Halloween",
+      avatarColor: "#b5301a",
+      loginMethod: "guest",
+      picture: null,
+    };
+    if (!player) savePlayer(currentPlayer);
     try {
       const room = await joinMutation.mutateAsync({
         roomCode: code,
         data: {
-          playerId: player.id,
-          playerName: player.name,
-          avatarColor: player.avatarColor,
-          loginMethod: player.loginMethod ?? null,
+          playerId: currentPlayer.id,
+          playerName: currentPlayer.name,
+          avatarColor: currentPlayer.avatarColor,
+          loginMethod: currentPlayer.loginMethod ?? null,
         } as import("@workspace/api-client-react").JoinRoomRequest & { loginMethod?: string | null },
       });
       setLocation(`/room/${room.roomCode}`);
