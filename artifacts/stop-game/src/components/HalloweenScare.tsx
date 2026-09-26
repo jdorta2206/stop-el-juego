@@ -28,6 +28,13 @@ function RealScareVisual({ reduced, scareId }: { reduced: boolean; scareId: keyo
     >
       <motion.img
         src={HALLOWEEN_SCARE_ASSETS[scareId]}
+        onError={(event) => {
+          // Remote Wikimedia assets are optional; the bundled CC BY clown is
+          // the guaranteed offline/TWA fallback so the scare never renders blank.
+          if (event.currentTarget.src !== HALLOWEEN_SCARE_ASSETS.clown) {
+            event.currentTarget.src = HALLOWEEN_SCARE_ASSETS.clown;
+          }
+        }}
         alt=""
         aria-hidden="true"
         draggable={false}
