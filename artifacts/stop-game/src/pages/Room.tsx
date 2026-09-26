@@ -652,14 +652,47 @@ export default function Room() {
     try {
       const response = await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/halloween-scare`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...authHeaders(), ...(isHalloweenPreview() ? { "x-halloween-preview": "1" } : {}) },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ playerId: player.id, playerName: player.name }),
       });
       const data = await response.json().catch(() => ({}));
-      const ms = response.ok ? Number(data.cooldownMs ?? 18000) : response.status === 429 ? Number(data.retryAfterMs ?? 5000) : 0;
-      if (ms > 0) { setHalloweenScareCooldownUntil(Date.now() + ms); window.setTimeout(() => setHalloweenScareCooldownUntil(0), ms + 50); }
+      if (response.ok) {
+        const ms = Number(data.cooldownMs ?? 18000);
+        setHalloweenScareCooldownUntil(Date.now() + ms);
+        window.setTimeout(() => setHalloweenScareCooldownUntil(0), ms + 50);
+      } else if (response.status === 409 && isHalloweenPreview()) {
+        await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/react`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ emoji: "🤯", playerId: player.id, playerName: `__HALLOWEEN_SCARE__${player.id}__${player.name ?? ""}` }),
+        });
+        const ms = 18000;
+        setHalloweenScareCooldownUntil(Date.now() + ms);
+        window.setTimeout(() => setHalloweenScareCooldownUntil(0), ms + 50);
+      } else if (response.status === 429) {
+        const ms = Number(data.retryAfterMs ?? 5000);
+        setHalloweenScareCooldownUntil(Date.now() + ms);
+        window.setTimeout(() => setHalloweenScareCooldownUntil(0), ms + 50);
+      }
     } catch {} finally { manualScareBusyRef.current = false; }
   }, [player, roomCode, phase, halloweenScareCooldownUntil]);
+
+  // Preview fallback: when the production API correctly rejects the endpoint
+  // outside the real event window, reuse the existing room reaction stream. The
+  // marker is never rendered as an emoji; it is converted back into the real scare overlay.
+  useEffect(() => {
+    if (!isHalloweenPreview() || !isHalloweenModeEnabled() || phase !== "playing") return;
+    const reactions: Array<{ id: string; emoji: string; playerName: string }> = (room as any)?.reactions ?? [];
+    for (const reaction of reactions) {
+      if (!reaction.id || seenReactionIds.current.has(reaction.id)) continue;
+      if (!reaction.playerName?.startsWith("__HALLOWEEN_SCARE__")) continue;
+      seenReactionIds.current.add(reaction.id);
+      if (reaction.playerName.startsWith(`__HALLOWEEN_SCARE__${player?.id}__`)) continue;
+      setHalloweenScare(getHalloweenScare(getCurrentLang()));
+      if (halloweenScareHideTimerRef.current) clearTimeout(halloweenScareHideTimerRef.current);
+      halloweenScareHideTimerRef.current = window.setTimeout(() => setHalloweenScare(null), 1550);
+    }
+  }, [(room as any)?.reactions, phase, player?.id]);
 
   // Track the `creator` achievement: any multiplayer round actually played
   // with a custom pack unlocks it. We fire once per `roomCode` to avoid
