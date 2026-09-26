@@ -70,7 +70,7 @@ export function useInventory(playerId?: string | null) {
     try {
       const res = await fetch(`${API}/api/inventory`, {
         credentials: "include",
-        headers: { ...authHeaders(), ...PREVIEW_HEADERS },
+        headers: { ...authHeaders(), ...(import.meta.env.VITE_HALLOWEEN_PREVIEW === "true" ? { "x-halloween-player-id": playerId } : {}), ...PREVIEW_HEADERS },
       });
       if (res.ok) setData(await res.json());
     } catch { /* ignore */ }
@@ -84,7 +84,7 @@ export function useInventory(playerId?: string | null) {
     const res = await fetch(`${API}/api/inventory/equip`, {
       method: "POST",
       credentials: "include",
-      headers: { "Content-Type": "application/json", ...authHeaders(), ...PREVIEW_HEADERS },
+      headers: { "Content-Type": "application/json", ...authHeaders(), ...(import.meta.env.VITE_HALLOWEEN_PREVIEW === "true" ? { "x-halloween-player-id": playerId } : {}), ...PREVIEW_HEADERS },
       body: JSON.stringify({ kind, value }),
     });
     if (!res.ok) {
