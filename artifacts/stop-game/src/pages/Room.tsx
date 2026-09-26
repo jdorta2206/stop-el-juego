@@ -292,11 +292,11 @@ export default function Room() {
 
   // ── SSE: real-time push updates (replaces polling for critical game moments) ──
   useEffect(() => {
-    if (!roomCode || !player?.id) return;
+    if (!roomCode || !effectivePlayerId) return;
     const code = roomCode.toUpperCase();
     const API = getApiUrl();
     const tok = getSessionToken();
-    const url = `${API}/api/rooms/${code}/events?playerId=${player.id}${tok ? `&token=${encodeURIComponent(tok)}` : ""}`;
+    const url = `${API}/api/rooms/${code}/events?playerId=${effectivePlayerId}${tok ? `&token=${encodeURIComponent(tok)}` : ""}`;
     let es: EventSource;
     let retryTimeout: ReturnType<typeof setTimeout>;
     let closed = false;
@@ -578,7 +578,7 @@ export default function Room() {
     } finally {
       setAddBotLoading(false);
     }
-  }, [roomCode, player?.id, addBotLoading, toast]);
+  }, [roomCode, effectivePlayerId, addBotLoading, toast]);
 
   // Trigger Revancha — first caller creates the new room, others piggyback on the broadcast
   const handleRematch = useCallback(async () => {
@@ -1277,7 +1277,7 @@ export default function Room() {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
         // 🔐 Server now requires hostId to authorize round start.
-        body: JSON.stringify({ hostId: player.id }),
+        body: JSON.stringify({ hostId: effectivePlayerId }),
       });
       // 🚀 Adelantamos el estado en local sin esperar al SSE/polling — quien pulsa
       // "Empezar" ve la transición instantánea (los demás llegan vía broadcast).
