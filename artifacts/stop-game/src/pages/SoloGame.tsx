@@ -106,7 +106,7 @@ function getTodayStr(): string {
 export default function SoloGame() {
   const { player, showAuth } = usePlayer();
   const { isPremium, loading: premiumLoading } = usePremium(player?.id);
-  const { streak: soloStreak, recordPlay } = useStreak();
+  const { streak: soloStreak, recordPlay } = useStreak(player?.id);
   const { t, lang } = useT();
   const { addXp, levelUpInfo, clearLevelUp } = useProgression(player?.id);
   const [, setLocation] = useLocation();
