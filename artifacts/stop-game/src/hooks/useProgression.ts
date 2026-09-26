@@ -81,7 +81,7 @@ export function useProgression(playerId?: string) {
 
   // ── Sync from server on mount (server is source of truth) ──────────────
   useEffect(() => {
-    if (!playerId) return;
+    if (!playerId || playerId.startsWith("guest_")) return;
     const API = getApiUrl();
     fetch(`${API}/api/ranking/profile/${playerId}`)
       .then(r => r.ok ? r.json() : null)
