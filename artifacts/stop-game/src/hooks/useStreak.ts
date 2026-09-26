@@ -7,6 +7,9 @@ interface StreakData {
 }
 
 const STORAGE_KEY = "stop_streak_v1";
+function storageKey(playerId?: string) {
+  return playerId ? `${STORAGE_KEY}:${playerId}` : `${STORAGE_KEY}:guest`;
+}
 
 function getTodayStr(): string {
   return new Date().toISOString().slice(0, 10);
@@ -18,24 +21,24 @@ function getYesterdayStr(): string {
   return d.toISOString().slice(0, 10);
 }
 
-function loadStreak(): StreakData {
+function loadStreak(playerId?: string): StreakData {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(storageKey(playerId));
     if (raw) return JSON.parse(raw);
   } catch {}
   return { current: 0, longest: 0, lastPlayedDate: null };
 }
 
-function saveStreak(data: StreakData) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+function saveStreak(playerId: string | undefined, data: StreakData) {
+  localStorage.setItem(storageKey(playerId), JSON.stringify(data));
 }
 
-export function useStreak() {
-  const [streak, setStreak] = useState<StreakData>(loadStreak);
+export function useStreak(playerId?: string) {
+  const [streak, setStreak] = useState<StreakData>(() => loadStreak(playerId));
 
   // Recalculate on mount: if last play was not today or yesterday, reset streak
   useEffect(() => {
-    const data = loadStreak();
+    const data = loadStreak(playerId);
     const today = getTodayStr();
     const yesterday = getYesterdayStr();
 
@@ -45,12 +48,12 @@ export function useStreak() {
       data.lastPlayedDate !== yesterday
     ) {
       const reset = { ...data, current: 0 };
-      saveStreak(reset);
+      saveStreak(playerId, reset);
       setStreak(reset);
     } else {
       setStreak(data);
     }
-  }, []);
+  }, [playerId]);
 
   function recordPlay() {
     setStreak(prev => {
@@ -71,7 +74,7 @@ export function useStreak() {
         longest: Math.max(prev.longest, newCurrent),
         lastPlayedDate: today,
       };
-      saveStreak(updated);
+      saveStreak(playerId, updated);
       return updated;
     });
   }

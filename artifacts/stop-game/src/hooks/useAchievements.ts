@@ -3,6 +3,9 @@ import { getApiUrl, authHeaders } from "@/lib/utils";
 
 const STATS_KEY = "stop_achievement_stats_v1";
 const UNLOCKED_KEY = "stop_achievements_unlocked_v1";
+function playerStorageKey(base: string, playerId?: string) {
+  return playerId ? `${base}:${playerId}` : `${base}:guest`;
+}
 // Used by `recordExternalStat` to hand off unlocks to whichever screen mounts
 // `useAchievements` next (Home is the canonical toast surface, but Room/Solo
 // might not be mounted when the event fires). Cleared once the toast picks
@@ -141,26 +144,26 @@ function defaultStats(): AchievementStats {
   };
 }
 
-function loadStats(): AchievementStats {
+function loadStats(playerId?: string): AchievementStats {
   try {
-    const s = localStorage.getItem(STATS_KEY);
+    const s = localStorage.getItem(playerStorageKey(STATS_KEY, playerId));
     return s ? { ...defaultStats(), ...JSON.parse(s) } : defaultStats();
   } catch { return defaultStats(); }
 }
 
-function saveStatsLocal(stats: AchievementStats) {
-  try { localStorage.setItem(STATS_KEY, JSON.stringify(stats)); } catch {}
+function saveStatsLocal(playerId: string | undefined, stats: AchievementStats) {
+  try { localStorage.setItem(playerStorageKey(STATS_KEY, playerId), JSON.stringify(stats)); } catch {}
 }
 
-function loadUnlocked(): Set<string> {
+function loadUnlocked(playerId?: string): Set<string> {
   try {
-    const s = localStorage.getItem(UNLOCKED_KEY);
+    const s = localStorage.getItem(playerStorageKey(UNLOCKED_KEY, playerId));
     return s ? new Set(JSON.parse(s)) : new Set();
   } catch { return new Set(); }
 }
 
-function saveUnlocked(unlocked: Set<string>) {
-  try { localStorage.setItem(UNLOCKED_KEY, JSON.stringify([...unlocked])); } catch {}
+function saveUnlocked(playerId: string | undefined, unlocked: Set<string>) {
+  try { localStorage.setItem(playerStorageKey(UNLOCKED_KEY, playerId), JSON.stringify([...unlocked])); } catch {}
 }
 
 // Merge two stat objects: take max of numerics, OR of booleans
@@ -224,11 +227,17 @@ async function saveToServer(
 }
 
 export function useAchievements(playerId?: string) {
-  const [stats, setStats] = useState<AchievementStats>(loadStats);
-  const [unlocked, setUnlocked] = useState<Set<string>>(loadUnlocked);
+  const [stats, setStats] = useState<AchievementStats>(() => loadStats(playerId));
+  const [unlocked, setUnlocked] = useState<Set<string>>(() => loadUnlocked(playerId));
   const [newlyUnlocked, setNewlyUnlocked] = useState<AchievementDef | null>(null);
   const syncedRef = useRef(false);
   const checkStreakMilestoneRef = useRef<(longestStreak: number) => AchievementDef | null>(() => null);
+
+  useEffect(() => {
+    setStats(loadStats(playerId));
+    setUnlocked(loadUnlocked(playerId));
+    syncedRef.current = false;
+  }, [playerId]);
 
   // ── Sync from server on mount — server wins, then merge with local ────────
   useEffect(() => {
@@ -239,7 +248,7 @@ export function useAchievements(playerId?: string) {
       setUnlocked(prev => {
         const merged = new Set([...prev, ...serverIds]);
         if (merged.size !== prev.size) {
-          saveUnlocked(merged);
+          saveUnlocked(playerId, merged);
           return merged;
         }
         return prev;
@@ -251,7 +260,7 @@ export function useAchievements(playerId?: string) {
           const merged = mergeStats(prev, serverStats);
           // Only update localStorage if something changed
           if (JSON.stringify(merged) !== JSON.stringify(prev)) {
-            saveStatsLocal(merged);
+            saveStatsLocal(playerId, merged);
             return merged;
           }
           return prev;
@@ -270,7 +279,7 @@ export function useAchievements(playerId?: string) {
   }, [playerId]);
 
   const afterRound = useCallback((result: RoundResult) => {
-    const current = loadStats();
+    const current = loadStats(playerId);
     const next: AchievementStats = {
       totalWins: current.totalWins + (result.won ? 1 : 0),
       totalGames: current.totalGames + 1,
@@ -284,10 +293,10 @@ export function useAchievements(playerId?: string) {
       timesShared: current.timesShared,
       aiZeroWin: current.aiZeroWin || Boolean(result.aiZeroWin),
     };
-    saveStatsLocal(next);
+    saveStatsLocal(playerId, next);
     setStats(next);
 
-    const currentUnlocked = loadUnlocked();
+    const currentUnlocked = loadUnlocked(playerId);
     const newUnlocked = new Set(currentUnlocked);
     let justUnlocked: AchievementDef | null = null;
     for (const ach of ACHIEVEMENTS) {
@@ -297,7 +306,7 @@ export function useAchievements(playerId?: string) {
       }
     }
     if (justUnlocked) {
-      saveUnlocked(newUnlocked);
+      saveUnlocked(playerId, newUnlocked);
       setUnlocked(newUnlocked);
       setNewlyUnlocked(justUnlocked);
     }
@@ -310,8 +319,8 @@ export function useAchievements(playerId?: string) {
   // the AchievementToast via `newlyUnlocked`.
   const checkStreakMilestone = useCallback((longestStreak: number) => {
     if (!longestStreak || longestStreak < STREAK_MILESTONES[0]) return null;
-    const current = loadStats();
-    const currentUnlocked = loadUnlocked();
+    const current = loadStats(playerId);
+    const currentUnlocked = loadUnlocked(playerId);
     const newUnlocked = new Set(currentUnlocked);
 
     // Compute which milestone IDs are missing locally for this streak — this
@@ -338,12 +347,12 @@ export function useAchievements(playerId?: string) {
     const next: AchievementStats =
       nextLongest === current.longestStreak ? current : { ...current, longestStreak: nextLongest };
     if (next !== current) {
-      saveStatsLocal(next);
+      saveStatsLocal(playerId, next);
       setStats(next);
     }
 
     if (justUnlocked) {
-      saveUnlocked(newUnlocked);
+      saveUnlocked(playerId, newUnlocked);
       setUnlocked(newUnlocked);
       setNewlyUnlocked(justUnlocked);
     }
@@ -367,11 +376,11 @@ export function useAchievements(playerId?: string) {
       setUnlocked(prev => {
         if (prev.has(def.id)) return prev;
         const merged = new Set([...prev, def.id]);
-        saveUnlocked(merged);
+        saveUnlocked(playerId, merged);
         return merged;
       });
       // Refresh stats from storage since the external helper persisted them.
-      setStats(loadStats());
+      setStats(loadStats(playerId));
       setNewlyUnlocked(def);
     };
     const handler = (e: Event) => {
@@ -397,7 +406,7 @@ export function useAchievements(playerId?: string) {
     } catch {}
 
     return () => window.removeEventListener("stop:achievement-unlocked", handler);
-  }, []);
+  }, [playerId]);
 
   return { stats, unlocked, newlyUnlocked, afterRound, clearNewlyUnlocked, checkStreakMilestone };
 }
@@ -416,7 +425,7 @@ export function recordExternalStat(
   playerId: string | undefined,
   patch: { usedCustomPack?: boolean; timesShared?: number; aiZeroWin?: boolean },
 ) {
-  const current = loadStats();
+  const current = loadStats(playerId);
   const next: AchievementStats = {
     ...current,
     usedCustomPack: current.usedCustomPack || Boolean(patch.usedCustomPack),
@@ -424,9 +433,9 @@ export function recordExternalStat(
     aiZeroWin: current.aiZeroWin || Boolean(patch.aiZeroWin),
   };
   if (JSON.stringify(next) === JSON.stringify(current)) return;
-  saveStatsLocal(next);
+  saveStatsLocal(playerId, next);
 
-  const currentUnlocked = loadUnlocked();
+  const currentUnlocked = loadUnlocked(playerId);
   const newUnlocked = new Set(currentUnlocked);
   let justUnlocked: AchievementDef | null = null;
   for (const ach of ACHIEVEMENTS) {
@@ -436,7 +445,7 @@ export function recordExternalStat(
     }
   }
   if (justUnlocked) {
-    saveUnlocked(newUnlocked);
+    saveUnlocked(playerId, newUnlocked);
     // Persist for screens that don't mount this hook (Room.tsx). Storing the
     // id only — the consumer resolves the full def from ACHIEVEMENTS.
     try { sessionStorage.setItem(PENDING_UNLOCK_KEY, JSON.stringify(justUnlocked.id)); } catch {}

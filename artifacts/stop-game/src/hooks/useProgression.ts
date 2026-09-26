@@ -2,6 +2,9 @@ import { useState, useCallback, useEffect } from "react";
 import { getApiUrl } from "@/lib/utils";
 
 const XP_KEY = "stop_xp_v2";
+function xpStorageKey(playerId?: string) {
+  return playerId ? `${XP_KEY}:${playerId}` : `${XP_KEY}:guest`;
+}
 
 export interface League {
   key: string;
@@ -70,12 +73,21 @@ export function calcXpFromResults(
 export function useProgression(playerId?: string) {
   const [xp, setXp] = useState<number>(() => {
     try {
-      const stored = localStorage.getItem(XP_KEY);
+      const stored = localStorage.getItem(xpStorageKey(playerId));
       return stored ? parseInt(stored, 10) : 0;
     } catch {
       return 0;
     }
   });
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(xpStorageKey(playerId));
+      setXp(stored ? parseInt(stored, 10) || 0 : 0);
+    } catch {
+      setXp(0);
+    }
+  }, [playerId]);
 
   const [levelUpInfo, setLevelUpInfo] = useState<{ from: number; to: number } | null>(null);
 
@@ -94,7 +106,7 @@ export function useProgression(playerId?: string) {
         if (data?.xp != null && data.xp >= 0) {
           const serverXp = data.xp;
           setXp(serverXp);
-          try { localStorage.setItem(XP_KEY, String(serverXp)); } catch {}
+          try { localStorage.setItem(xpStorageKey(playerId), String(serverXp)); } catch {}
         }
       })
       .catch(() => {});
@@ -114,14 +126,14 @@ export function useProgression(playerId?: string) {
       const oldLevel = calcLevel(prev);
       const newLevel = calcLevel(newXp);
       try {
-        localStorage.setItem(XP_KEY, String(newXp));
+        localStorage.setItem(xpStorageKey(playerId), String(newXp));
       } catch {}
       if (newLevel > oldLevel) {
         setLevelUpInfo({ from: oldLevel, to: newLevel });
       }
       return newXp;
     });
-  }, []);
+  }, [playerId]);
 
   const clearLevelUp = useCallback(() => setLevelUpInfo(null), []);
 
