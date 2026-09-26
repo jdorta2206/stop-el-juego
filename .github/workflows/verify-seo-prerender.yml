@@ -27,6 +27,9 @@ jobs:
           cache: pnpm
       - name: Install dependencies from lockfile
         run: pnpm install --frozen-lockfile
+      - name: Build frontend and prerender
+        working-directory: artifacts/stop-game
+        run: pnpm run build
       - name: Verify real Vite output
         working-directory: artifacts/stop-game
         shell: bash
