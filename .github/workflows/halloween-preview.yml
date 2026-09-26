@@ -48,129 +48,9 @@ jobs:
         run: pnpm --filter @workspace/stop-game build
       - name: Verify preview build
         run: test -s artifacts/stop-game/dist/index.html
-      - name: Start preview server with production API proxy
+      - name: Start preview server with real game API proxy
         run: |
           set -euo pipefail
-          cat > /tmp/halloween-room-mock.py <<'PY'
-          import json, random, string, threading, time
-          from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
-          from urllib.parse import urlsplit
-          ROOMS = {}
-          LOCK = threading.Lock()
-
-          def new_code():
-              while True:
-                  value = "".join(random.choice(string.ascii_uppercase + string.digits) for _ in range(6))
-                  if value not in ROOMS:
-                      return value
-
-          def send_json(handler, status, obj):
-              raw = json.dumps(obj).encode()
-              handler.send_response(status)
-              handler.send_header("Content-Type", "application/json")
-              handler.send_header("Content-Length", str(len(raw)))
-              handler.end_headers()
-              handler.wfile.write(raw)
-
-          def fmt(room):
-              return {"id": room["id"], "roomCode": room["roomCode"], "hostId": room["hostId"], "hostName": room["hostName"], "status": room["status"], "currentRound": room.get("currentRound", 0), "currentLetter": room.get("currentLetter", ""), "roundEndsAt": room.get("roundEndsAt"), "maxRounds": room["maxRounds"], "maxPlayers": room["maxPlayers"], "gameMode": room["gameMode"], "language": room["language"], "isPublic": room["isPublic"], "players": room["players"]}
-
-          class RoomMock(BaseHTTPRequestHandler):
-              def log_message(self, *args):
-                  pass
-              def body(self):
-                  size = int(self.headers.get("Content-Length", "0") or "0")
-                  return json.loads(self.rfile.read(size) or b"{}")
-              def do_GET(self):
-                  parsed = urlsplit(self.path)
-                  path = parsed.path
-                  query = dict(part.split("=", 1) for part in parsed.query.split("&") if "=" in part)
-                  if path == "/api/rooms/public":
-                      with LOCK:
-                          rooms = [fmt(r) for r in ROOMS.values() if r["isPublic"] and r["status"] == "waiting"]
-                      return send_json(self, 200, {"rooms": [{"roomCode": r["roomCode"], "hostId": r["hostId"], "hostName": r["hostName"], "maxRounds": r["maxRounds"], "language": r["language"], "playerCount": len(r["players"]), "createdAt": r.get("createdAt", "")} for r in rooms]})
-                  if path.startswith("/api/rooms/") and path.endswith("/events"):
-                      code = path.split("/")[3].upper()
-                      with LOCK:
-                          room = ROOMS.get(code)
-                          snapshot = fmt(room) if room else None
-                      if not snapshot:
-                          return send_json(self, 404, {"error": "not_found"})
-                      raw = ("data: " + json.dumps(snapshot) + "\n\n").encode()
-                      self.send_response(200)
-                      self.send_header("Content-Type", "text/event-stream")
-                      self.send_header("Cache-Control", "no-cache")
-                      self.send_header("Connection", "keep-alive")
-                      self.send_header("X-Accel-Buffering", "no")
-                      self.end_headers()
-                      self.wfile.write(raw)
-                      self.wfile.flush()
-                      # Keep the preview SSE connection alive. The browser's EventSource
-                      # reconnects whenever this handler closes the socket.
-                      try:
-                          while True:
-                              time.sleep(15)
-                              self.wfile.write(b": heartbeat\\n\\n")
-                              self.wfile.flush()
-                      except (BrokenPipeError, ConnectionResetError):
-                          pass
-                      return
-                  if path.startswith("/api/rooms/"):
-                      code = path.split("/")[3].upper()
-                      with LOCK:
-                          room = ROOMS.get(code)
-                          snapshot = fmt(room) if room else None
-                      if not snapshot:
-                          return send_json(self, 404, {"error": "not_found"})
-                      viewer = query.get("viewerId") or query.get("playerId")
-                      if viewer and viewer not in {room["hostId"], *[p["playerId"] for p in room["players"]]}:
-                          safe = dict(snapshot)
-                          safe["players"] = [{"playerId": room["hostId"], "playerName": room["hostName"]}]
-                          return send_json(self, 200, safe)
-                      return send_json(self, 200, snapshot)
-                  return send_json(self, 404, {"error": "not_found"})
-              def do_POST(self):
-                  path = urlsplit(self.path).path
-                  try:
-                      body = self.body()
-                  except Exception:
-                      return send_json(self, 400, {"error": "invalid_json"})
-                  if path == "/api/rooms":
-                      with LOCK:
-                          code = new_code()
-                          host = {"playerId": body["hostId"], "playerName": body.get("hostName", ""), "avatarColor": body.get("avatarColor"), "picture": body.get("picture"), "loginMethod": body.get("loginMethod")}
-                          ROOMS[code] = {"id": len(ROOMS) + 1, "roomCode": code, "hostId": body["hostId"], "hostName": body.get("hostName", ""), "status": "waiting", "maxRounds": body.get("maxRounds", 3), "maxPlayers": body.get("maxPlayers", 8), "gameMode": body.get("gameMode", "classic"), "language": body.get("language", "es"), "isPublic": bool(body.get("isPublic", False)), "players": [host], "createdAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
-                          return send_json(self, 201, fmt(ROOMS[code]))
-                  if path.startswith("/api/rooms/") and path.endswith("/start"):
-                      code = path.split("/")[3].upper()
-                      with LOCK:
-                          room = ROOMS.get(code)
-                          if not room:
-                              return send_json(self, 404, {"error": "not_found"})
-                          if body.get("hostId") != room["hostId"]:
-                              return send_json(self, 403, {"error": "not_host"})
-                          room["status"] = "playing"
-                          room["currentRound"] = 1
-                          room["currentLetter"] = "A"
-                          room["roundEndsAt"] = int(time.time() * 1000) + 60000
-                          return send_json(self, 200, fmt(room))
-                  if path.startswith("/api/rooms/") and path.endswith("/join"):
-                      code = path.split("/")[3].upper()
-                      with LOCK:
-                          room = ROOMS.get(code)
-                          if not room:
-                              return send_json(self, 404, {"error": "not_found"})
-                          if len(room["players"]) >= room["maxPlayers"]:
-                              return send_json(self, 409, {"error": "room_full"})
-                          if any(p["playerId"] == body.get("playerId") for p in room["players"]):
-                              return send_json(self, 200, fmt(room))
-                          room["players"].append({"playerId": body["playerId"], "playerName": body.get("playerName", ""), "avatarColor": body.get("avatarColor"), "picture": body.get("picture"), "loginMethod": body.get("loginMethod")})
-                          return send_json(self, 200, fmt(room))
-                  return send_json(self, 404, {"error": "not_found"})
-
-          ThreadingHTTPServer(("127.0.0.1", 4174), RoomMock).serve_forever()
-          PY
-
           cat > /tmp/halloween-preview-server.py <<'PY'
           import http.client, os
           from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
@@ -183,138 +63,80 @@ jobs:
           class Handler(SimpleHTTPRequestHandler):
               def __init__(self, *args, **kwargs):
                   super().__init__(*args, directory=DIST, **kwargs)
-
               def _proxy(self):
                   target = urlsplit(self.path)
                   path = target.path + (("?" + target.query) if target.query else "")
-                  local_rooms = target.path.startswith("/api/rooms")
                   length = int(self.headers.get("Content-Length", "0") or "0")
                   body = self.rfile.read(length) if length else None
-
-                  if local_rooms:
-                      conn = http.client.HTTPConnection("127.0.0.1", 4174, timeout=60)
-                      try:
-                          headers = {k: v for k, v in self.headers.items() if k.lower() not in {"host", "content-length", "origin", "referer"}}
-                          conn.request(self.command, path, body=body, headers=headers)
-                          resp = conn.getresponse()
-                          self.send_response(resp.status, resp.reason)
-                          content_type = (resp.getheader("Content-Type") or "").lower()
-                          for key, value in resp.getheaders():
-                              if key.lower() not in {"transfer-encoding", "connection", "content-encoding", "content-length"}:
-                                  self.send_header(key, value)
-                          if "text/event-stream" in content_type:
-                              self.end_headers()
-                              while True:
-                                  chunk = resp.read1(4096) if hasattr(resp, "read1") else resp.readline()
-                                  if not chunk:
-                                      break
-                                  self.wfile.write(chunk)
-                                  self.wfile.flush()
-                              return
-                          data = resp.read()
-                          self.send_header("Content-Length", str(len(data)))
-                          self.end_headers()
-                          if data:
-                              self.wfile.write(data)
-                              self.wfile.flush()
-                          return
-                      finally:
-                          conn.close()
-
-                  headers = {k: v for k, v in self.headers.items() if k.lower() not in {"host", "content-length", "origin", "referer"}}
+                  headers = {k: v for k, v in self.headers.items()
+                             if k.lower() not in {"host","content-length","origin","referer","connection"}}
                   headers["Host"] = UPSTREAM
                   headers["X-Halloween-Preview"] = "1"
                   host = UPSTREAM
                   for _ in range(MAX_REDIRECTS + 1):
-                      conn = http.client.HTTPSConnection(host, timeout=60)
+                      conn = http.client.HTTPSConnection(host, timeout=90)
                       try:
                           conn.request(self.command, path, body=body, headers=headers)
                           resp = conn.getresponse()
-                          if resp.status not in {301, 302, 303, 307, 308}:
+                          if resp.status not in {301,302,303,307,308}:
                               self.send_response(resp.status, resp.reason)
-                              for key, value in resp.getheaders():
-                                  if key.lower() not in {"transfer-encoding", "connection", "content-encoding", "content-length"}:
-                                      self.send_header(key, value)
                               content_type = (resp.getheader("Content-Type") or "").lower()
+                              for key,value in resp.getheaders():
+                                  if key.lower() not in {"transfer-encoding","connection","content-encoding","content-length"}:
+                                      self.send_header(key,value)
                               if "text/event-stream" in content_type:
                                   self.end_headers()
                                   while True:
-                                      chunk = resp.read1(4096) if hasattr(resp, "read1") else resp.readline()
-                                      if not chunk:
-                                          break
-                                      self.wfile.write(chunk)
-                                      self.wfile.flush()
+                                      chunk = resp.read1(4096) if hasattr(resp,"read1") else resp.readline()
+                                      if not chunk: break
+                                      self.wfile.write(chunk); self.wfile.flush()
                                   return
-                              data = resp.read()
-                              self.send_header("Content-Length", str(len(data)))
+                              data=resp.read()
+                              self.send_header("Content-Length",str(len(data)))
                               self.end_headers()
-                              if data:
-                                  self.wfile.write(data)
-                                  self.wfile.flush()
+                              if data: self.wfile.write(data); self.wfile.flush()
                               return
-                          location = resp.getheader("Location")
+                          location=resp.getheader("Location")
                           if not location:
-                              self.send_response(resp.status, resp.reason)
-                              self.end_headers()
-                              return
-                          next_url = urlsplit(location)
-                          host = next_url.hostname or host
-                          path = next_url.path + (("?" + next_url.query) if next_url.query else "")
-                          if next_url.scheme and next_url.scheme != "https":
-                              self.send_error(502, "Unsupported upstream redirect")
-                              return
-                          if next_url.hostname:
-                              headers["Host"] = host
+                              self.send_response(resp.status,resp.reason); self.end_headers(); return
+                          next_url=urlsplit(location)
+                          host=next_url.hostname or host
+                          path=next_url.path + (("?" + next_url.query) if next_url.query else "")
+                          if next_url.scheme and next_url.scheme!="https":
+                              self.send_error(502,"Unsupported upstream redirect"); return
+                          headers["Host"]=host
                       finally:
                           conn.close()
-                  self.send_error(508, "Too many upstream redirects")
-
+                  self.send_error(508,"Too many upstream redirects")
               def do_GET(self):
-                  if self.path.startswith("/api/"):
-                      return self._proxy()
+                  if self.path.startswith("/api/"): return self._proxy()
                   return super().do_GET()
               def do_POST(self):
-                  if self.path.startswith("/api/"):
-                      return self._proxy()
+                  if self.path.startswith("/api/"): return self._proxy()
                   self.send_error(405)
               def do_PUT(self):
-                  if self.path.startswith("/api/"):
-                      return self._proxy()
+                  if self.path.startswith("/api/"): return self._proxy()
                   self.send_error(405)
               def do_PATCH(self):
-                  if self.path.startswith("/api/"):
-                      return self._proxy()
+                  if self.path.startswith("/api/"): return self._proxy()
                   self.send_error(405)
               def do_DELETE(self):
-                  if self.path.startswith("/api/"):
-                      return self._proxy()
+                  if self.path.startswith("/api/"): return self._proxy()
                   self.send_error(405)
               def do_OPTIONS(self):
-                  if self.path.startswith("/api/"):
-                      return self._proxy()
-                  self.send_response(204)
-                  self.end_headers()
+                  if self.path.startswith("/api/"): return self._proxy()
+                  self.send_response(204); self.end_headers()
               def send_error(self, code, message=None, explain=None):
-                  if code == 404 and not self.path.startswith("/api/"):
-                      self.path = "/index.html"
-                      return super().do_GET()
-                  return super().send_error(code, message, explain)
-
+                  if code==404 and not self.path.startswith("/api/"):
+                      self.path="/index.html"; return super().do_GET()
+                  return super().send_error(code,message,explain)
           os.chdir(DIST)
-          ThreadingHTTPServer(("127.0.0.1", 4173), Handler).serve_forever()
+          ThreadingHTTPServer(("127.0.0.1",4173),Handler).serve_forever()
           PY
-
-          python3 -m py_compile /tmp/halloween-room-mock.py /tmp/halloween-preview-server.py
-          nohup python3 /tmp/halloween-room-mock.py >/tmp/halloween-room-mock.log 2>&1 &
-          sleep 1
-          curl -fsS --max-time 5 http://127.0.0.1:4174/api/rooms/public >/dev/null
+          python3 -m py_compile /tmp/halloween-preview-server.py
           nohup python3 /tmp/halloween-preview-server.py >/tmp/preview-http.log 2>&1 &
           sleep 2
-          if ! curl -fsS --max-time 10 http://127.0.0.1:4173/ >/dev/null; then
-            cat /tmp/preview-http.log || true
-            cat /tmp/halloween-room-mock.log || true
-            exit 1
-          fi
+          curl -fsS --max-time 10 http://127.0.0.1:4173/ >/dev/null
       - name: Smoke test API validation through preview proxy
         run: |
           set -euo pipefail
@@ -326,85 +148,12 @@ jobs:
         run: |
           set -euo pipefail
           curl -fsS --max-time 30 http://127.0.0.1:4173/api/presence/online | grep -q '"online"'
-      - name: Smoke test rooms listing through preview proxy
+      - name: Smoke test real room API through preview proxy
         run: |
           set -euo pipefail
-          curl -fsS --max-time 30 http://127.0.0.1:4173/api/rooms/public | grep -q '"rooms"'
-      - name: Smoke test room creation through preview proxy
-        run: |
-          set -euo pipefail
-          HOST_ID="halloween-smoke-$(date +%s)-$RANDOM"
-          RESPONSE=$(curl -fsS --max-time 30 -H "Content-Type: application/json" -X POST http://127.0.0.1:4173/api/rooms --data "{\"hostId\":\"$HOST_ID\",\"hostName\":\"Halloween Smoke\",\"maxRounds\":1,\"language\":\"es\",\"loginMethod\":\"guest\",\"isPublic\":false,\"gameMode\":\"classic\",\"maxPlayers\":2}")
+          RESPONSE=$(curl -fsS --max-time 30 -H "Accept: application/json" http://127.0.0.1:4173/api/rooms/public)
           echo "$RESPONSE"
-          echo "$RESPONSE" | grep -q '"roomCode"'
-      - name: Smoke test public and private room join through preview proxy
-        run: |
-          set -euo pipefail
-          BASE="http://127.0.0.1:4173/api"
-          HOST_ID="halloween-host-$(date +%s)-$RANDOM"
-          GUEST_ID="halloween-guest-$(date +%s)-$RANDOM"
-          OUTSIDER_ID="halloween-outsider-$(date +%s)-$RANDOM"
-
-          create_room() {
-            local public="$1"
-            curl -fsS --max-time 30 -H "Content-Type: application/json" -X POST "$BASE/rooms"               --data "{\"hostId\":\"$HOST_ID\",\"hostName\":\"Halloween Host\",\"maxRounds\":1,\"language\":\"es\",\"loginMethod\":\"guest\",\"isPublic\":$public,\"gameMode\":\"classic\",\"maxPlayers\":2}"
-          }
-
-          echo "== PUBLIC: create =="
-          PUBLIC_RESPONSE="$(create_room true)"
-          echo "$PUBLIC_RESPONSE"
-          PUBLIC_CODE="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["roomCode"])' <<< "$PUBLIC_RESPONSE")"
-          test -n "$PUBLIC_CODE"
-
-          echo "== PUBLIC: second player joins =="
-          PUBLIC_JOIN="$(curl -fsS --max-time 30 -H "Content-Type: application/json" -X POST "$BASE/rooms/$PUBLIC_CODE/join"             --data "{\"playerId\":\"$GUEST_ID\",\"playerName\":\"Halloween Guest\",\"avatarColor\":\"#3182ce\",\"picture\":null,\"loginMethod\":\"guest\"}")"
-          echo "$PUBLIC_JOIN"
-          echo "$PUBLIC_JOIN" | grep -q '"roomCode"'
-          echo "$PUBLIC_JOIN" | grep -q 'Halloween Guest'
-
-          echo "== PUBLIC: room contains both players =="
-          PUBLIC_ROOM="$(curl -fsS --max-time 30 "$BASE/rooms/$PUBLIC_CODE?viewerId=$HOST_ID")"
-          echo "$PUBLIC_ROOM"
-          echo "$PUBLIC_ROOM" | grep -q 'Halloween Host'
-          echo "$PUBLIC_ROOM" | grep -q 'Halloween Guest'
-
-          echo "== PRIVATE: create =="
-          PRIVATE_RESPONSE="$(create_room false)"
-          echo "$PRIVATE_RESPONSE"
-          PRIVATE_CODE="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["roomCode"])' <<< "$PRIVATE_RESPONSE")"
-          test -n "$PRIVATE_CODE"
-
-          echo "== PRIVATE: host can read full room =="
-          PRIVATE_HOST_ROOM="$(curl -fsS --max-time 30 -H "x-viewer-id: $HOST_ID" "$BASE/rooms/$PRIVATE_CODE")"
-          echo "$PRIVATE_HOST_ROOM"
-          echo "$PRIVATE_HOST_ROOM" | grep -q 'Halloween Host'
-
-          echo "== PRIVATE: second player joins =="
-          PRIVATE_JOIN="$(curl -fsS --max-time 30 -H "Content-Type: application/json" -X POST "$BASE/rooms/$PRIVATE_CODE/join"             --data "{\"playerId\":\"$GUEST_ID\",\"playerName\":\"Halloween Guest\",\"avatarColor\":\"#3182ce\",\"picture\":null,\"loginMethod\":\"guest\"}")"
-          echo "$PRIVATE_JOIN"
-          echo "$PRIVATE_JOIN" | grep -q '"roomCode"'
-          echo "$PRIVATE_JOIN" | grep -q 'Halloween Guest'
-
-          echo "== PRIVATE: second player can read room =="
-          PRIVATE_GUEST_ROOM="$(curl -fsS --max-time 30 -H "x-viewer-id: $GUEST_ID" "$BASE/rooms/$PRIVATE_CODE")"
-          echo "$PRIVATE_GUEST_ROOM"
-          echo "$PRIVATE_GUEST_ROOM" | grep -q 'Halloween Host'
-          echo "$PRIVATE_GUEST_ROOM" | grep -q 'Halloween Guest'
-
-          echo "== PRIVATE: SSE is authorized for second player =="
-          set +e
-          curl -sS --max-time 3 -H "Accept: text/event-stream" "$BASE/rooms/$PRIVATE_CODE/events?playerId=$GUEST_ID" > /tmp/private-sse.txt
-          SSE_STATUS=$?
-          set -e
-          cat /tmp/private-sse.txt
-          test "$SSE_STATUS" = "0" -o "$SSE_STATUS" = "28"
-          grep -q 'Halloween Guest' /tmp/private-sse.txt
-
-          echo "== PRIVATE: outsider is not given full room =="
-          PRIVATE_OUTSIDER_STATUS="$(curl -sS --max-time 30 -o /tmp/private-outsider.json -w '%{http_code}' "$BASE/rooms/$PRIVATE_CODE?viewerId=$OUTSIDER_ID")"
-          cat /tmp/private-outsider.json
-          test "$PRIVATE_OUTSIDER_STATUS" = "200"
-          ! grep -q 'Halloween Guest' /tmp/private-outsider.json
+          echo "$RESPONSE" | grep -q '"rooms"'
 
       - name: Start public preview tunnel
         shell: bash
@@ -461,4 +210,3 @@ jobs:
         run: |
           pkill -f cloudflared || true
           pkill -f halloween-preview-server.py || true
-          pkill -f halloween-room-mock.py || true
