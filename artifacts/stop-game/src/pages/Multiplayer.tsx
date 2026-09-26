@@ -282,7 +282,7 @@ export default function Multiplayer() {
         avatarColor: currentPlayer.avatarColor,
         loginMethod: currentPlayer.loginMethod ?? null,
       });
-      setLocation(`/room/${room.roomCode}`);
+      setLocation(`/room/${room.roomCode}?previewPlayerId=${encodeURIComponent(currentPlayer.id)}`);
     } catch (err) {
       setError(describeJoinError(err));
       loadPublicRooms();
