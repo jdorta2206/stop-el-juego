@@ -2,6 +2,9 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { getApiUrl, authHeaders } from "@/lib/utils";
 
 const STORAGE_KEY = "stop_best_score_v2";
+function storageKey(playerId?: string) {
+  return playerId ? `${STORAGE_KEY}:${playerId}` : `${STORAGE_KEY}:guest`;
+}
 
 type GameMode = "normal" | "quick" | "chaos" | "daily" | "random";
 type BestScores = Partial<Record<GameMode, number>>;
@@ -29,10 +32,19 @@ async function saveBestsToServer(playerId: string, personalBests: BestScores) {
 
 export function usePersonalBest(mode: GameMode, playerId?: string) {
   const [bests, setBests] = useState<BestScores>(() => {
-    try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}"); }
+    try { return JSON.parse(localStorage.getItem(storageKey(playerId)) || "{}"); }
     catch { return {}; }
   });
   const syncedRef = useRef(false);
+
+  useEffect(() => {
+    try {
+      setBests(JSON.parse(localStorage.getItem(storageKey(playerId)) || "{}"));
+    } catch {
+      setBests({});
+    }
+    syncedRef.current = false;
+  }, [playerId]);
 
   // ── Sync from server on mount (server wins for each mode if higher) ──────
   useEffect(() => {
@@ -50,7 +62,7 @@ export function usePersonalBest(mode: GameMode, playerId?: string) {
           }
         }
         if (changed) {
-          try { localStorage.setItem(STORAGE_KEY, JSON.stringify(merged)); } catch {}
+          try { localStorage.setItem(storageKey(playerId), JSON.stringify(merged)); } catch {}
           return merged;
         }
         return prev;
@@ -65,7 +77,7 @@ export function usePersonalBest(mode: GameMode, playerId?: string) {
     const isNew = score > prev;
     if (isNew) {
       const updated: BestScores = { ...bests, [mode]: score };
-      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(updated)); } catch {}
+      try { localStorage.setItem(storageKey(playerId), JSON.stringify(updated)); } catch {}
       setBests(updated);
       if (playerId) saveBestsToServer(playerId, updated);
     }
