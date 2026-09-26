@@ -215,7 +215,7 @@ async function saveToServer(
 ) {
   if (playerId.startsWith("guest_")) return;
   try {
-    await fetch(`${getApiUrl()}/api/ranking/progress/${playerId}`,
+    await fetch(`${getApiUrl()}/api/ranking/progress/${playerId}`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify({ achievements, stats }),
