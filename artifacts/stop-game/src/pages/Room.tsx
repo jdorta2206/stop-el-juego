@@ -39,7 +39,7 @@ import { maybeShowInterstitial, recordInterstitialGameCompleted } from "@/lib/in
 import { applyHalloweenCategory, getHalloweenScare, getHalloweenScareById, isHalloweenActive, isHalloweenPreview, isHalloweenModeEnabled } from "@/lib/halloweenEvent";
 import { HalloweenAmbience } from "@/components/HalloweenAmbience";
 import { HalloweenScareOverlay } from "@/components/HalloweenScare";
-import { getHalloweenReducedEffects, setHalloweenReducedEffects } from "@/lib/halloweenAccessibility";
+import { getHalloweenReducedEffects } from "@/lib/halloweenAccessibility";
 import { preloadHalloweenScareAssets } from "@/lib/halloweenScareAssets";
 import { preloadHalloweenScareAudio } from "@/lib/halloweenScareAudio";
 
