@@ -13,8 +13,8 @@ import { useGetStreakCalendar } from "@workspace/api-client-react";
 // submit).
 export function useDisplayStreak() {
   const { player } = usePlayer();
-  const local = useStreak(playerId);
   const playerId = player?.id;
+  const local = useStreak(playerId);
   const isGuest = !playerId || playerId === "guest" || playerId.startsWith("guest_");
 
   const { data } = useGetStreakCalendar(playerId ?? "", {
