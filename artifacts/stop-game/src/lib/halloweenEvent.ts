@@ -36,7 +36,7 @@ export const HALLOWEEN_SCARES: Record<string, HalloweenScare[]> = {
     { id: "horrorMask", title: "NO ESTÁS SOLO", text: "No apartes la vista..." },
     { id: "hauntedDoll", title: "TE ESTÁ MIRANDO", text: "¿Lo has visto?" },
     { id: "creepyDoll", title: "DEMASIADO CERCA", text: "Acaba de aparecer..." },
-    { id: "demonMask", title: "NO TE Gires", text: "Sigue jugando..." },
+    { id: "demonMask", title: "NO TE GÍRES", text: "Sigue jugando..." },
   ],
   en: [
     { id: "clown", title: "DON'T LOOK", text: "Something is too close..." },
