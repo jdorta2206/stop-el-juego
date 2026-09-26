@@ -215,13 +215,9 @@ function getHalloweenScareEvent(code: string): HalloweenRoomScare | null {
   return event;
 }
 
-function halloweenEventAllowed(req: any): boolean {
-  try {
-    const date = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Madrid", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
-    return date >= "2026-10-15" && date < "2026-11-03";
-  } catch {
-    return false;
-  }
+function halloweenEventAllowed(_req: any): boolean {
+  const now = Date.now();
+  return now >= Date.parse("2026-10-15T00:00:00Z") && now < Date.parse("2026-11-03T00:00:00Z");
 }
 
 const roomFunVotes = new Map<string, Map<string, FunVote>>();
