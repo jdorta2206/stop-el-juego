@@ -3,9 +3,9 @@ import { pickHalloweenScareVisual } from "@/lib/halloweenScareAssets";
 export const HALLOWEEN_START_MONTH = 9; // October (0-based)
 export const HALLOWEEN_START_DAY = 15;
 export const HALLOWEEN_END_MONTH = 10; // November (0-based)
-export const HALLOWEEN_END_DAY = 2;
+export const HALLOWEEN_END_DAY = 3; // exclusive: event includes November 2
 
-/** Recurring annual Halloween window. The event runs Oct 15 through Nov 1. */
+/** Recurring annual Halloween window. The event runs Oct 15 through Nov 2 inclusive. */
 export function getHalloweenWindow(year: number): { start: Date; end: Date } {
   return {
     start: new Date(Date.UTC(year, HALLOWEEN_START_MONTH, HALLOWEEN_START_DAY)),
@@ -36,7 +36,7 @@ export const HALLOWEEN_SCARES: Record<string, HalloweenScare[]> = {
     { id: "horrorMask", title: "NO ESTÁS SOLO", text: "No apartes la vista..." },
     { id: "hauntedDoll", title: "TE ESTÁ MIRANDO", text: "¿Lo has visto?" },
     { id: "creepyDoll", title: "DEMASIADO CERCA", text: "Acaba de aparecer..." },
-    { id: "demonMask", title: "NO TE GIRES", text: "Sigue jugando..." },
+    { id: "demonMask", title: "NO TE GİRES", text: "Sigue jugando..." },
   ],
   en: [
     { id: "clown", title: "DON'T LOOK", text: "Something is too close..." },
