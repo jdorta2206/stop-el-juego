@@ -37,6 +37,11 @@ import { useReviewPrompt, recordGamePlayed } from "@/hooks/useReviewPrompt";
 import { ReviewPromptCard } from "@/components/ReviewPromptCard";
 import { maybeShowInterstitial, recordInterstitialGameCompleted } from "@/lib/interstitialAd";
 import { applyHalloweenCategory, getHalloweenScare, getHalloweenScareById, isHalloweenActive, isHalloweenPreview, isHalloweenModeEnabled } from "@/lib/halloweenEvent";
+import { HalloweenAmbience } from "@/components/HalloweenAmbience";
+import { HalloweenScareOverlay } from "@/components/HalloweenScare";
+import { getHalloweenReducedEffects, setHalloweenReducedEffects } from "@/lib/halloweenAccessibility";
+import { preloadHalloweenScareAssets } from "@/lib/halloweenScareAssets";
+import { preloadHalloweenScareAudio } from "@/lib/halloweenScareAudio";
 
 const ROUND_TIME = 60;
 
