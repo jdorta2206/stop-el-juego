@@ -124,6 +124,7 @@ export default function SoloGame() {
   const [hintUsed, setHintUsed] = useState(false);
   const [doubleUsed, setDoubleUsed] = useState(false);
   const [hintReveal, setHintReveal] = useState<{ category: string; word: string } | null>(null);
+  const pendingHintRef = useRef<{ category: string; word: string } | null>(null);
   const [showPremiumModal, setShowPremiumModal] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [showClipModal, setShowClipModal] = useState(false);
@@ -1317,32 +1318,15 @@ export default function SoloGame() {
       setTimeLeft(prev => prev + reward);
       setRewardedUsed(true);
     } else if (rewardedAdType === "hint") {
-      const empty = categories.find(c => !(responses[c] && responses[c].trim().length > 0));
-      if (empty) {
-        // Capture the letter NOW so an async bundle load can never use a stale
-        // letter from a later render/round.
-        const hintLetter = currentLetter.trim().toUpperCase();
-        const word = await getHintWord(hintLetter, empty);
-        // Final safety check: never inject a hint whose first letter does not
-        // match the letter of the round in which the reward was earned.
-        const normalizedWord = word.trim().toLowerCase()
-          .replace(/ñ/g, "~")
-          .normalize("NFD")
-          .replace(/[\\u0300-\\u036f]/g, "")
-          .replace(/~/g, "ñ");
-        const normalizedHintLetter = hintLetter.toLowerCase()
-          .replace(/ñ/g, "~")
-          .normalize("NFD")
-          .replace(/[\\u0300-\\u036f]/g, "")
-          .replace(/~/g, "ñ");
-        if (word && normalizedWord.startsWith(normalizedHintLetter)) {
-          setResponses(prev => ({ ...prev, [empty]: word }));
-          setHintReveal({ category: empty, word });
-          setTimeout(() => setHintReveal(null), 3500);
-          setHintUsed(true);
-        } else {
-          toast({ title: lang === "en" ? "No valid hint available for this letter" : lang === "pt" ? "Não há pista válida disponível para esta letra" : lang === "fr" ? "Aucun indice valide disponible pour cette lettre" : "No hay una pista válida disponible para esta letra" });
-        }
+      const pending = pendingHintRef.current;
+      pendingHintRef.current = null;
+      if (pending) {
+        setResponses(prev => ({ ...prev, [pending.category]: pending.word }));
+        setHintReveal({ category: pending.category, word: pending.word });
+        setTimeout(() => setHintReveal(null), 3500);
+        setHintUsed(true);
+      } else {
+        toast({ title: lang === "en" ? "Hint unavailable" : lang === "pt" ? "Pista indisponível" : lang === "fr" ? "Indice indisponible" : "Pista no disponible", variant: "destructive" });
       }
     } else if (rewardedAdType === "double") {
       // Capture the current score once. The bonus is a second leaderboard write;
@@ -1460,6 +1444,7 @@ export default function SoloGame() {
             onSkip={() => {
               resumeGameTimer();
               window.dispatchEvent(new Event("stop:rewarded-ad-resume"));
+              pendingHintRef.current = null;
               setRewardedAdType(null);
             }}
             playerId={player?.id}
@@ -2074,7 +2059,23 @@ export default function SoloGame() {
                 )}
                 {!hintUsed && !isPremium && !REWARDED_ADS_DISABLED && (
                   <button
-                    onClick={() => setRewardedAdType("hint")}
+                    onClick={async () => {
+                      const empty = categories.find(c => !(responses[c] && responses[c].trim().length > 0));
+                      if (!empty) {
+                        toast({ title: lang === "en" ? "Leave a category empty for the hint" : lang === "pt" ? "Deixa uma categoria vazia para receber a pista" : lang === "fr" ? "Laisse une catégorie vide pour recevoir l'indice" : "Deja una categoría vacía para recibir la pista" });
+                        return;
+                      }
+                      const hintLetter = currentLetter.trim().toUpperCase();
+                      const word = await getHintWord(hintLetter, empty);
+                      const normalizedWord = word.trim().toLowerCase().normalize("NFD").replace(/[\\u0300-\\u036f]/g, "");
+                      const normalizedLetter = hintLetter.toLowerCase().normalize("NFD").replace(/[\\u0300-\\u036f]/g, "");
+                      if (!word || !normalizedWord.startsWith(normalizedLetter)) {
+                        toast({ title: lang === "en" ? "No valid hint available right now" : lang === "pt" ? "No hay una pista válida disponible ahora" : "No hay una pista válida disponible ahora" });
+                        return;
+                      }
+                      pendingHintRef.current = { category: empty, word };
+                      setRewardedAdType("hint");
+                    }}
                     className="flex items-center justify-center gap-2 py-2 px-3 rounded-xl border border-cyan-500/30 bg-cyan-500/10 text-cyan-300 text-xs font-bold hover:bg-cyan-500/20 transition-all"
                   >
                     💡 {lang === "en" ? "Hint" : lang === "pt" ? "Dica" : lang === "fr" ? "Indice" : "Pista"}
