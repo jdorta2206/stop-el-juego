@@ -35,7 +35,7 @@ import { useT } from "@/i18n/useT";
 import { useToast } from "@/hooks/use-toast";
 import { useReviewPrompt, recordGamePlayed } from "@/hooks/useReviewPrompt";
 import { ReviewPromptCard } from "@/components/ReviewPromptCard";
-import { maybeShowInterstitial } from "@/lib/interstitialAd";
+import { maybeShowInterstitial, recordInterstitialGameCompleted } from "@/lib/interstitialAd";
 import { applyHalloweenCategory, getHalloweenScare, isHalloweenActive } from "@/lib/halloweenEvent";
 
 const ROUND_TIME = 60;
@@ -174,6 +174,7 @@ export default function Room() {
   const [typingPlayers, setTypingPlayers] = useState<Array<{ playerId: string; playerName: string }>>([]);
   const [rematchCode, setRematchCode] = useState<string | null>(null);
   const [rematchLoading, setRematchLoading] = useState(false);
+  const interstitialCountedRoomRef = useRef<string>("");
   const lastTypingPing = useRef(0);
   const [categoryPack, setCategoryPack] = useState<"standard" | "crazy" | "mix" | "custom">("standard");
   // When a Premium host picks one of their own custom packs, the categories
@@ -545,7 +546,7 @@ export default function Room() {
   // Trigger Revancha — first caller creates the new room, others piggyback on the broadcast
   const handleRematch = useCallback(async () => {
     if (rematchLoading) return;
-    if (rematchCode) { await maybeShowInterstitial(meIsPremium); setLocation(`/sala/${rematchCode}`); return; }
+    if (rematchCode) { setLocation(`/sala/${rematchCode}`); return; }
     if (!player?.id || !roomCode) return;
     setRematchLoading(true);
     try {
@@ -555,7 +556,7 @@ export default function Room() {
         body: JSON.stringify({ playerId: player.id, playerName: player.name ?? "?", avatarColor: (player as any).avatarColor }),
       });
       const j = await r.json();
-      if (j.rematchCode) { setRematchCode(j.rematchCode); await maybeShowInterstitial(meIsPremium); setLocation(`/sala/${j.rematchCode}`); }
+      if (j.rematchCode) { setRematchCode(j.rematchCode); setLocation(`/sala/${j.rematchCode}`); }
     } catch {} finally { setRematchLoading(false); }
   }, [rematchCode, rematchLoading, player, roomCode, setLocation, meIsPremium]);
 
@@ -920,6 +921,15 @@ export default function Room() {
         sound.playLose();
         haptic.lose();
       }
+      // 📺 Count each completed multiplayer match for the shared interstitial cadence.
+      // The room code is unique per match, so this ref prevents duplicate counting
+      // if the finished snapshot is delivered repeatedly by SSE/polling.
+      if (interstitialCountedRoomRef.current !== roomCode) {
+        interstitialCountedRoomRef.current = roomCode || "";
+        recordInterstitialGameCompleted();
+        void maybeShowInterstitial(meIsPremium);
+      }
+
       // Count this finished multiplayer game toward review-prompt
       // eligibility (idempotent per match via the ref). Show the prompt
       // only when the player is happy: ranked top of the room.
