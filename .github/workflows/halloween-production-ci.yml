@@ -1,0 +1,38 @@
+name: Halloween production CI
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - "artifacts/stop-game/**"
+      - "artifacts/api-server/**"
+      - "lib/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/halloween-production-ci.yml"
+  push:
+    branches: [fix/halloween-production-ready]
+  workflow_dispatch:
+
+concurrency:
+  group: halloween-production-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Build web
+        run: pnpm --filter @workspace/stop-game build
+      - name: Build API
+        run: pnpm --filter @workspace/api-server build
