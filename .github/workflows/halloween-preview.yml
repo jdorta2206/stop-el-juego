@@ -107,6 +107,18 @@ jobs:
                              if k.lower() not in {"host","content-length","origin","referer","connection"}}
                   headers["Host"] = UPSTREAM
                   headers["X-Halloween-Preview"] = "1"
+                  # Solo AI uses GET /game/peek. Translate the visible
+                  # Halloween category to a production-compatible category
+                  # only inside this preview proxy.
+                  if path.startswith("/api/game/peek"):
+                      from urllib.parse import parse_qsl, urlencode
+                      query_items = parse_qsl(target.query, keep_blank_values=True)
+                      mapped_items = []
+                      for key, value in query_items:
+                          if key == "category":
+                              value = halloween_category_map.get(value, value)
+                          mapped_items.append((key, value))
+                      path = target.path + ("?" + urlencode(mapped_items) if mapped_items else "")
                   host = UPSTREAM
                   for _ in range(MAX_REDIRECTS + 1):
                       conn = http.client.HTTPSConnection(host, timeout=90)
