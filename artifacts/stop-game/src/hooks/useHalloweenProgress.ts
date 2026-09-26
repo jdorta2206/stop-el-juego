@@ -27,7 +27,7 @@ export function useHalloweenProgress(playerId?: string | null) {
     let cancelled = false;
     fetch(`${getApiUrl()}/api/halloween/progress`, {
       credentials: "include",
-      headers: { ...authHeaders(), ...(import.meta.env.VITE_HALLOWEEN_PREVIEW === "true" ? { "x-halloween-preview": "1" } : {}) },
+      headers: { ...authHeaders(), "x-halloween-player-id": playerId, ...(import.meta.env.VITE_HALLOWEEN_PREVIEW === "true" ? { "x-halloween-preview": "1" } : {}) },
     })
       .then((r) => (r.ok ? r.json() : null))
       .then((next) => {
@@ -46,7 +46,7 @@ export function useHalloweenProgress(playerId?: string | null) {
       const r = await fetch(`${getApiUrl()}/api/halloween/event`, {
         method: "POST",
         credentials: "include",
-        headers: { "Content-Type": "application/json", ...authHeaders(), ...(import.meta.env.VITE_HALLOWEEN_PREVIEW === "true" ? { "x-halloween-preview": "1" } : {}) },
+        headers: { "Content-Type": "application/json", ...authHeaders(), "x-halloween-player-id": playerId, ...(import.meta.env.VITE_HALLOWEEN_PREVIEW === "true" ? { "x-halloween-preview": "1" } : {}) },
         body: JSON.stringify({ type, eventKey }),
       });
       if (!r.ok) return null;
@@ -77,7 +77,7 @@ export async function reportHalloweenEvent(
     const r = await fetch(`${getApiUrl()}/api/halloween/event`, {
       method: "POST",
       credentials: "include",
-      headers: { "Content-Type": "application/json", ...authHeaders() },
+      headers: { "Content-Type": "application/json", ...authHeaders(), "x-halloween-player-id": playerId, ...(import.meta.env.VITE_HALLOWEEN_PREVIEW === "true" ? { "x-halloween-preview": "1" } : {}) },
       body: JSON.stringify({ type, eventKey }),
     });
     return r.ok ? await r.json() : null;
