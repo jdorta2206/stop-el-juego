@@ -244,16 +244,13 @@ export default function Multiplayer() {
     if (!player && import.meta.env.VITE_HALLOWEEN_PREVIEW !== "true") return;
     if (!roomCode.trim()) return;
     setError("");
-    const currentPlayer = player ?? {
+    const currentPlayer = getPreviewPlayer() ?? {
       id: `preview-guest-${crypto.randomUUID()}`,
       name: `Jugador Halloween ${Math.floor(1000 + Math.random() * 9000)}`,
       avatarColor: "#b5301a",
       loginMethod: "guest",
       picture: null,
     };
-    if (!player && import.meta.env.VITE_HALLOWEEN_PREVIEW === "true") {
-      savePlayer(currentPlayer);
-    }
     try {
       const room = await requestRoomApi(`/api/rooms/${roomCode.toUpperCase()}/join`, {
         playerId: currentPlayer.id,
