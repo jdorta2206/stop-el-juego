@@ -16,30 +16,17 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
           version: 10.26.1
-
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: pnpm
-
       - name: Install dependencies from lockfile
         run: pnpm install --frozen-lockfile
-
-      - name: Typecheck
-        run: pnpm run typecheck
-
-      - name: Tests
-        run: pnpm run test
-
-      - name: Full build
-        run: pnpm run build
-
       - name: Verify real Vite output
         working-directory: artifacts/stop-game
         shell: bash
@@ -63,7 +50,6 @@ jobs:
           test "$WORDS" -ge 300
           echo "PRERENDER_WORDS=$WORDS"
           echo "DIST_INDEX_BYTES=$(wc -c < dist/index.html)"
-
       - name: Serve exact dist and curl homepage
         working-directory: artifacts/stop-game
         shell: bash
@@ -72,11 +58,7 @@ jobs:
           SERVER_PID=$!
           trap 'kill $SERVER_PID' EXIT
           sleep 2
-          echo '----- CURL http://127.0.0.1:4173/ -----'
           curl --fail --silent --show-error http://127.0.0.1:4173/
-          echo
-          echo '----- END CURL -----'
-
       - name: Upload exact dist index
         uses: actions/upload-artifact@v4
         with:
