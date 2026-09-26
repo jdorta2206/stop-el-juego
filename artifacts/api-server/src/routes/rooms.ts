@@ -216,7 +216,6 @@ function getHalloweenScareEvent(code: string): HalloweenRoomScare | null {
 }
 
 function halloweenEventAllowed(req: any): boolean {
-  if (String(req.headers?.["x-halloween-preview"] ?? "") === "1") return true;
   try {
     const date = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Madrid", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
     return date >= "2026-10-15" && date < "2026-11-03";
