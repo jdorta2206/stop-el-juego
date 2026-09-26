@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, indexesReady } from "@workspace/db";
-import { requirePlayerIdentity, type AuthedRequest } from "../lib/playerAuth";
+import { verifyClaimedIdentity, type AuthedRequest } from "../lib/playerAuth";
 import { sql } from "drizzle-orm";
 
 const router: IRouter = Router();
@@ -8,7 +8,7 @@ const router: IRouter = Router();
 const START_MONTH = 9; // October, UTC
 const START_DAY = 15;
 const END_MONTH = 10; // November, UTC
-const END_DAY = 2;
+const END_DAY = 3;
 
 function getEventYear(now = new Date(), preview = false): number | null {
   if (preview) return now.getUTCFullYear();
@@ -76,8 +76,12 @@ router.use((_req, res, next) => {
   next();
 });
 
-router.get("/progress", requirePlayerIdentity, async (req: AuthedRequest, res) => {
-  const playerId = req.playerId!;
+router.get("/progress", async (req: AuthedRequest, res) => {
+  const playerId = String(req.headers["x-halloween-player-id"] ?? "").trim();
+  if (!playerId || !verifyClaimedIdentity(req, playerId)) {
+    res.status(401).json({ error: "Authentication required" });
+    return;
+  }
   const preview = req.headers["x-halloween-preview"] === "1";
   const year = getEventYear(new Date(), preview);
   if (year === null) {
@@ -104,8 +108,12 @@ router.get("/progress", requirePlayerIdentity, async (req: AuthedRequest, res) =
   }
 });
 
-router.post("/event", requirePlayerIdentity, async (req: AuthedRequest, res) => {
-  const playerId = req.playerId!;
+router.post("/event", async (req: AuthedRequest, res) => {
+  const playerId = String(req.headers["x-halloween-player-id"] ?? "").trim();
+  if (!playerId || !verifyClaimedIdentity(req, playerId)) {
+    res.status(401).json({ error: "Authentication required" });
+    return;
+  }
   const preview = req.headers["x-halloween-preview"] === "1";
   const year = getEventYear(new Date(), preview);
   if (year === null) {
