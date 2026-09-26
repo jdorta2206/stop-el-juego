@@ -10,7 +10,8 @@ const HALLOWEEN_SHOP_MARKER = "_halloween_";
 const HALLOWEEN_START_MS = Date.parse("2026-10-15T00:00:00Z");
 const HALLOWEEN_END_MS = Date.parse("2026-11-03T00:00:00Z");
 
-function isHalloweenActive(now: Date = new Date()): boolean {
+function isHalloweenActive(now: Date = new Date(), preview = false): boolean {
+  if (preview) return true;
   const ms = now.getTime();
   return ms >= HALLOWEEN_START_MS && ms < HALLOWEEN_END_MS;
 }
@@ -202,8 +203,9 @@ router.post("/buy", requirePlayerIdentity, async (req: AuthedRequest, res) => {
   const item = shopItem(itemId);
   if (!item) { res.status(400).json({ error: "Unknown shop item" }); return; }
   const halloweenItem = isHalloweenShopItem(itemId);
+  const preview = req.headers["x-halloween-preview"] === "1";
   if (halloweenItem) {
-    if (!isHalloweenActive()) {
+    if (!isHalloweenActive(new Date(), preview)) {
       res.status(400).json({ error: "Halloween event is not active" });
       return;
     }
