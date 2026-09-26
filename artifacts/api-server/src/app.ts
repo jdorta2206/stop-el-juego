@@ -133,10 +133,7 @@ if (process.env["SERVE_CLIENT"] === "1") {
   app.get("/.well-known/assetlinks.json", (_req, res) => {
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.sendFile(path.join(clientDist, ".well-known", "assetlinks.json"), { dotfiles: "allow" }, (err) => {
-      if (!err) return;
-      if (!res.headersSent) {
-        res.status(404).json({ error: "assetlinks.json not found" });
-      }
+      if (err && !res.headersSent) res.status(404).json({ error: "assetlinks.json not found" });
     });
   });
   app.use(express.static(clientDist, {
