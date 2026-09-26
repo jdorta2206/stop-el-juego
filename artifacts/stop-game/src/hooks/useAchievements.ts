@@ -151,7 +151,7 @@ function loadStats(playerId?: string): AchievementStats {
   } catch { return defaultStats(); }
 }
 
-function saveStatsLocal(playerId, playerId: string | undefined, stats: AchievementStats) {
+function saveStatsLocal(playerId: string | undefined, stats: AchievementStats) {
   try { localStorage.setItem(playerStorageKey(STATS_KEY, playerId), JSON.stringify(stats)); } catch {}
 }
 
@@ -162,7 +162,7 @@ function loadUnlocked(playerId?: string): Set<string> {
   } catch { return new Set(); }
 }
 
-function saveUnlocked(playerId, playerId: string | undefined, unlocked: Set<string>) {
+function saveUnlocked(playerId: string | undefined, unlocked: Set<string>) {
   try { localStorage.setItem(playerStorageKey(UNLOCKED_KEY, playerId), JSON.stringify([...unlocked])); } catch {}
 }
 
@@ -406,7 +406,7 @@ export function useAchievements(playerId?: string) {
     } catch {}
 
     return () => window.removeEventListener("stop:achievement-unlocked", handler);
-  }, []);
+  }, [playerId]);
 
   return { stats, unlocked, newlyUnlocked, afterRound, clearNewlyUnlocked, checkStreakMilestone };
 }
