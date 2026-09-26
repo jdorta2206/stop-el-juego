@@ -159,20 +159,32 @@ export default function Multiplayer() {
     return () => clearInterval(interval);
   }, []);
 
-  const handleCreate = async () => {
-    if (creatingRoom) return;
-    setCreatingRoom(true);
-    setError("");
-    const currentPlayer = player ?? {
+  const getPreviewPlayer = () => {
+    if (import.meta.env.VITE_HALLOWEEN_PREVIEW !== "true") return player;
+    const existing = player?.id?.startsWith("preview-guest-") ? player : null;
+    if (existing) return existing;
+    const previewPlayer = {
       id: `preview-guest-${crypto.randomUUID()}`,
       name: `Jugador Halloween ${Math.floor(1000 + Math.random() * 9000)}`,
       avatarColor: "#b5301a",
       loginMethod: "guest",
       picture: null,
     };
-    if (!player && import.meta.env.VITE_HALLOWEEN_PREVIEW === "true") {
-      savePlayer(currentPlayer);
-    }
+    savePlayer(previewPlayer);
+    return previewPlayer;
+  };
+
+  const handleCreate = async () => {
+    if (creatingRoom) return;
+    setCreatingRoom(true);
+    setError("");
+    const currentPlayer = getPreviewPlayer() ?? {
+      id: `preview-guest-${crypto.randomUUID()}`,
+      name: `Jugador Halloween ${Math.floor(1000 + Math.random() * 9000)}`,
+      avatarColor: "#b5301a",
+      loginMethod: "guest",
+      picture: null,
+    };
     if (!currentPlayer) return;
     try {
       const room = await requestRoomApi("/api/rooms", {
