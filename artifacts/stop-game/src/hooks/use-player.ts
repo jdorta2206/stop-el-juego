@@ -96,7 +96,19 @@ export function usePlayer() {
         const restored = await tryRestoreSession();
         if (cancelled) return;
         if (restored) { writeStoredPlayer(restored); setPlayer(restored); setNeedsAuth(false); }
-        else { setPlayer(null); setNeedsAuth(true); }
+        else {
+          // A Halloween preview guest can be created by the page while the
+          // auth restore request is still in flight. Never overwrite that
+          // freshly-created guest with null when /api/auth/me returns 401.
+          const latestStored = readStoredPlayer();
+          if (latestStored) {
+            setPlayer(latestStored);
+            setNeedsAuth(false);
+          } else {
+            setPlayer(null);
+            setNeedsAuth(true);
+          }
+        }
         setIsLoaded(true);
       })();
     }

@@ -226,8 +226,9 @@ export default function Ranking() {
   const [filter, setFilter] = useState<"global" | "weekly" | "monthly" | "friends">("weekly");
 
   // Presence: online players + incoming challenge notifications
+  // Guests can also be online, create rooms and challenge other players.
   const { onlinePlayers, incomingChallenge, dismissChallenge } = usePresence(
-    player?.loginMethod !== "guest" ? player || null : null,
+    player || null,
     null,
     lang
   );
@@ -235,7 +236,7 @@ export default function Ranking() {
 
   // Follows: who we follow + follow/unfollow actions
   const { isFollowing, follow, unfollow } = useFollows(
-    player?.loginMethod !== "guest" ? player?.id || null : null,
+    player?.id || null,
     onlinePlayers
   );
 

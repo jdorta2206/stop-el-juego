@@ -1,17 +1,28 @@
 name: Halloween preview
+# Preview validation + public tunnel for Halloween testing
+# Manual-test refresh: keep a fresh tunnel available for the current Halloween build.
+# Fresh preview refresh 2026-09-25: always test the latest branch build URL.
 
 on:
   push:
     branches:
       - feature/halloween-2026
       - feature/halloween-jumpscares-v2
+      - feature/halloween-solo-surprise
   pull_request:
     branches:
       - feature/halloween-2026
+      - feature/halloween-jumpscares-v2
+      - feature/halloween-solo-surprise
   workflow_dispatch:
 
 permissions:
   contents: read
+  pull-requests: write
+
+concurrency:
+  group: halloween-preview-${{ github.ref }}-${{ github.sha }}
+  cancel-in-progress: true
 
 jobs:
   preview:
@@ -37,39 +48,124 @@ jobs:
         run: pnpm --filter @workspace/stop-game build
       - name: Verify preview build
         run: test -s artifacts/stop-game/dist/index.html
-      - name: Start preview server with production API proxy
+      - name: Start preview server with real game API proxy
         run: |
+          set -euo pipefail
           cat > /tmp/halloween-preview-server.py <<'PY'
-          import http.client
-          import os
+          import http.client, os, json
           from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
           from urllib.parse import urlsplit
+
           DIST = os.path.abspath("artifacts/stop-game/dist")
           UPSTREAM = "www.stopjuegodepalabras.com"
+          MAX_REDIRECTS = 4
+
           class Handler(SimpleHTTPRequestHandler):
               def __init__(self, *args, **kwargs):
                   super().__init__(*args, directory=DIST, **kwargs)
               def _proxy(self):
                   target = urlsplit(self.path)
-                  conn = http.client.HTTPSConnection(UPSTREAM, timeout=60)
-                  headers = {k: v for k, v in self.headers.items() if k.lower() not in {"host","content-length","origin","referer"}}
-                  length = int(self.headers.get("Content-Length","0") or "0")
+                  path = target.path + (("?" + target.query) if target.query else "")
+                  length = int(self.headers.get("Content-Length", "0") or "0")
                   body = self.rfile.read(length) if length else None
+                  halloween_category_map = {
+                      "Disfraz de miedo": "Objeto",
+                      "Monstruo": "Animal",
+                      "Película de terror": "Película",
+                      "Cosa de una casa encantada": "Objeto",
+                      "Criatura sobrenatural": "Animal",
+                      "Scary costume": "Object",
+                      "Monster": "Animal",
+                      "Horror movie": "Movie",
+                      "Haunted house item": "Object",
+                      "Supernatural creature": "Animal",
+                      "Fantasia assustadora": "Objeto",
+                      "Monstro": "Animal",
+                      "Filme de terror": "Filme",
+                      "Coisa de uma casa assombrada": "Objeto",
+                      "Déguisement effrayant": "Objet",
+                      "Monstre": "Animal",
+                      "Film d'horreur": "Film",
+                      "Objet d'une maison hantée": "Objet",
+                      "Créature surnaturelle": "Animal",
+                  }
+                  original_categories = {}
+                  if body and path.startswith("/api/game/validate"):
+                      try:
+                          payload = json.loads(body.decode("utf-8"))
+                          for item in payload.get("playerResponses", []):
+                              original = item.get("category")
+                              mapped = halloween_category_map.get(original)
+                              if mapped:
+                                  original_categories[mapped] = original
+                                  item["category"] = mapped
+                          body = json.dumps(payload).encode("utf-8")
+                          length = len(body)
+                      except Exception:
+                          pass
+                  headers = {k: v for k, v in self.headers.items()
+                             if k.lower() not in {"host","content-length","origin","referer","connection"}}
                   headers["Host"] = UPSTREAM
-                  try:
-                      conn.request(self.command, target.path + (("?" + target.query) if target.query else ""), body=body, headers=headers)
-                      resp = conn.getresponse()
-                      self.send_response(resp.status, resp.reason)
-                      for k, v in resp.getheaders():
-                          if k.lower() not in {"transfer-encoding","connection","content-encoding"}:
-                              self.send_header(k, v)
-                      self.end_headers()
-                      while True:
-                          chunk = resp.read(65536)
-                          if not chunk: break
-                          self.wfile.write(chunk); self.wfile.flush()
-                  finally:
-                      conn.close()
+                  headers["X-Halloween-Preview"] = "1"
+                  # Solo AI uses GET /game/peek. Translate the visible
+                  # Halloween category to a production-compatible category
+                  # only inside this preview proxy.
+                  if path.startswith("/api/game/peek"):
+                      from urllib.parse import parse_qsl, urlencode
+                      query_items = parse_qsl(target.query, keep_blank_values=True)
+                      mapped_items = []
+                      for key, value in query_items:
+                          if key == "category":
+                              value = halloween_category_map.get(value, value)
+                          mapped_items.append((key, value))
+                      path = target.path + ("?" + urlencode(mapped_items) if mapped_items else "")
+                  host = UPSTREAM
+                  for _ in range(MAX_REDIRECTS + 1):
+                      conn = http.client.HTTPSConnection(host, timeout=90)
+                      try:
+                          conn.request(self.command, path, body=body, headers=headers)
+                          resp = conn.getresponse()
+                          if resp.status not in {301,302,303,307,308}:
+                              self.send_response(resp.status, resp.reason)
+                              content_type = (resp.getheader("Content-Type") or "").lower()
+                              for key,value in resp.getheaders():
+                                  if key.lower() not in {"transfer-encoding","connection","content-encoding","content-length"}:
+                                      self.send_header(key,value)
+                              if "text/event-stream" in content_type:
+                                  self.end_headers()
+                                  while True:
+                                      chunk = resp.read1(4096) if hasattr(resp,"read1") else resp.readline()
+                                      if not chunk: break
+                                      self.wfile.write(chunk); self.wfile.flush()
+                                  return
+                              data=resp.read()
+                              if original_categories and content_type.startswith("application/json"):
+                                  try:
+                                      result = json.loads(data.decode("utf-8"))
+                                      if isinstance(result.get("results"), dict):
+                                          result["results"] = {
+                                              original_categories.get(key, key): value
+                                              for key, value in result["results"].items()
+                                          }
+                                      data = json.dumps(result).encode("utf-8")
+                                  except Exception:
+                                      pass
+                              self.send_header("Content-Length",str(len(data)))
+                              self.end_headers()
+                              if data: self.wfile.write(data); self.wfile.flush()
+                              return
+                          location=resp.getheader("Location")
+                          if not location:
+                              self.send_response(resp.status,resp.reason); self.end_headers(); return
+                          next_url=urlsplit(location)
+                          host=next_url.hostname or host
+                          path=next_url.path + (("?" + next_url.query) if next_url.query else "")
+                          if next_url.scheme and next_url.scheme!="https":
+                              self.send_error(502,"Unsupported upstream redirect"); return
+                          headers["Host"]=host
+                      finally:
+                          conn.close()
+                  self.send_error(508,"Too many upstream redirects")
               def do_GET(self):
                   if self.path.startswith("/api/"): return self._proxy()
                   return super().do_GET()
@@ -89,16 +185,34 @@ jobs:
                   if self.path.startswith("/api/"): return self._proxy()
                   self.send_response(204); self.end_headers()
               def send_error(self, code, message=None, explain=None):
-                  if code == 404 and not self.path.startswith("/api/"):
-                      self.path = "/index.html"
-                      return super().do_GET()
-                  return super().send_error(code, message, explain)
+                  if code==404 and not self.path.startswith("/api/"):
+                      self.path="/index.html"; return super().do_GET()
+                  return super().send_error(code,message,explain)
           os.chdir(DIST)
-          ThreadingHTTPServer(("127.0.0.1",4173), Handler).serve_forever()
+          ThreadingHTTPServer(("127.0.0.1",4173),Handler).serve_forever()
           PY
+          python3 -m py_compile /tmp/halloween-preview-server.py
           nohup python3 /tmp/halloween-preview-server.py >/tmp/preview-http.log 2>&1 &
           sleep 2
-          curl -fsS http://127.0.0.1:4173/ >/dev/null
+          curl -fsS --max-time 10 http://127.0.0.1:4173/ >/dev/null
+      - name: Smoke test API validation through preview proxy
+        run: |
+          set -euo pipefail
+          RESPONSE=$(curl -fsS --max-time 60 -H "Content-Type: application/json" -X POST http://127.0.0.1:4173/api/game/validate --data '{"letter":"B","language":"es","playerResponses":[{"category":"Nombre","word":"BARBI"},{"category":"Lugar","word":"BARCELONA"},{"category":"Animal","word":"BURRO"}]}')
+          echo "$RESPONSE"
+          echo "$RESPONSE" | grep -q '"playerTotalScore"'
+          echo "$RESPONSE" | grep -q '"playerTotalScore":[1-9]'
+      - name: Smoke test presence through preview proxy
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 http://127.0.0.1:4173/api/presence/online | grep -q '"online"'
+      - name: Smoke test real room API through preview proxy
+        run: |
+          set -euo pipefail
+          RESPONSE=$(curl -fsS --max-time 30 -H "Accept: application/json" http://127.0.0.1:4173/api/rooms/public)
+          echo "$RESPONSE"
+          echo "$RESPONSE" | grep -q '"rooms"'
+
       - name: Start public preview tunnel
         shell: bash
         run: |
@@ -109,22 +223,38 @@ jobs:
           sleep 8
           for i in $(seq 1 45); do
             URL=$(grep -oE 'https://[^[:space:]]+trycloudflare[.]com' /tmp/cloudflared.log | head -1 || true)
-            if [ -n "$URL" ]; then
-              echo "HALLOWEEN_PREVIEW_URL=$URL"
-              break
-            fi
+            if [ -n "$URL" ]; then break; fi
             sleep 2
           done
           test -n "${URL:-}" || { cat /tmp/cloudflared.log; exit 1; }
+          echo "HALLOWEEN_PREVIEW_URL=$URL"
+          echo "PREVIEW_URL=$URL" >> "$GITHUB_ENV"
           printf '%s\n' "$URL" > /tmp/halloween-preview-url.txt
-          echo "Preview URL: $URL"
           {
             echo "## Halloween preview"
             echo
-            echo "**Preview URL:** $URL"
+            echo "### 🔗 Preview URL"
             echo
-            echo "This preview stays online while this workflow job is running."
+            echo "$URL"
+            echo
+            echo "Open the URL above to test this preview."
+            echo
+            echo "Preview stays online while this workflow job is running."
           } >> "$GITHUB_STEP_SUMMARY"
+      - name: Publish preview URL to PR
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PREVIEW_URL: ${{ env.PREVIEW_URL }}
+        run: |
+          set -euo pipefail
+          curl -fsS -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/${{ github.repository }}/issues/$PR_NUMBER/comments \
+            -d "$(python3 -c 'import json,os; print(json.dumps({"body":"🎃 **Halloween preview URL**\n\n"+os.environ["PREVIEW_URL"]+"\n\nEste enlace permanece activo mientras el workflow esté ejecutándose."}))')"
       - name: Publish preview URL
         uses: actions/upload-artifact@v4
         with:

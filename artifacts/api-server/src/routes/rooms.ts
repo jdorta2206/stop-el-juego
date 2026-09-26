@@ -921,7 +921,7 @@ router.post("/", async (req, res) => {
   const body = CreateRoomBody.safeParse(req.body);
   if (!body.success) { res.status(400).json({ error: "Invalid request body" }); return; }
 
-  const { hostId, hostName, avatarColor, loginMethod, maxRounds, language, isPublic } = body.data;
+  const { hostId, hostName, avatarColor, picture, loginMethod, maxRounds, language, isPublic } = body.data;
   // 🔒 A logged-in account can only create a room AS ITSELF. Guests (UUID ids) pass.
   if (!verifyClaimedIdentity(req, hostId)) {
     res.status(403).json({ error: "Identity verification failed" }); return;

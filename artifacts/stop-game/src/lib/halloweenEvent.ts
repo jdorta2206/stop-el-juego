@@ -1,5 +1,17 @@
-export const HALLOWEEN_START = "2026-10-15T00:00:00";
-export const HALLOWEEN_END = "2026-11-03T00:00:00";
+import { pickHalloweenScareVisual } from "@/lib/halloweenScareAssets";
+
+export const HALLOWEEN_START_MONTH = 9;
+export const HALLOWEEN_START_DAY = 15;
+export const HALLOWEEN_END_MONTH = 10;
+export const HALLOWEEN_END_DAY = 3; // exclusive: event includes November 2
+
+/** Recurring annual Halloween window. The event runs Oct 15 through Nov 2 inclusive. */
+export function getHalloweenWindow(year: number): { start: Date; end: Date } {
+  return {
+    start: new Date(Date.UTC(year, HALLOWEEN_START_MONTH, HALLOWEEN_START_DAY)),
+    end: new Date(Date.UTC(year, HALLOWEEN_END_MONTH, HALLOWEEN_END_DAY)),
+  };
+}
 
 export const HALLOWEEN_CATEGORIES = {
   es: ["Disfraz de miedo", "Monstruo", "Película de terror", "Cosa de una casa encantada", "Criatura sobrenatural"],
@@ -8,104 +20,103 @@ export const HALLOWEEN_CATEGORIES = {
   fr: ["Déguisement effrayant", "Monstre", "Film d'horreur", "Objet d'une maison hantée", "Créature surnaturelle"],
 } as const;
 
-export type HalloweenScareId = "ghost" | "spider" | "skull" | "pumpkin" | "vampire";
+export const isHalloweenPreview = (): boolean => import.meta.env.VITE_HALLOWEEN_PREVIEW === "true";
+
+export type HalloweenScareId = "clown" | "horrorMask" | "hauntedDoll" | "creepyDoll" | "demonMask";
 
 export interface HalloweenScare {
   id: HalloweenScareId;
-  emoji: string;
   title: string;
   text: string;
 }
 
 export const HALLOWEEN_SCARES: Record<string, HalloweenScare[]> = {
   es: [
-    { id: "ghost", emoji: "👻", title: "¡BU!", text: "Algo te está mirando..." },
-    { id: "spider", emoji: "🕷️", title: "¡CUIDADO!", text: "Hay algo en la pantalla..." },
-    { id: "skull", emoji: "💀", title: "¡TE HE VISTO!", text: "No todas las palabras dan miedo." },
-    { id: "pumpkin", emoji: "🎃", title: "LA CALABAZA TE OBSERVA", text: "Sigue jugando si te atreves." },
-    { id: "vampire", emoji: "🧛", title: "¡EL VAMPIRO HA LLEGADO!", text: "Esta partida acaba de ponerse rara..." },
+    { id: "clown", title: "NO MIRES", text: "Algo está demasiado cerca..." },
+    { id: "horrorMask", title: "NO ESTÁS SOLO", text: "No apartes la vista..." },
+    { id: "hauntedDoll", title: "TE ESTÁ MIRANDO", text: "¿Lo has visto?" },
+    { id: "creepyDoll", title: "DEMASIADO CERCA", text: "Acaba de aparecer..." },
+    { id: "demonMask", title: "NO TE GÍRES", text: "Sigue jugando..." },
   ],
   en: [
-    { id: "ghost", emoji: "👻", title: "BOO!", text: "Something is watching you..." },
-    { id: "spider", emoji: "🕷️", title: "WATCH OUT!", text: "Something is on the screen..." },
-    { id: "skull", emoji: "💀", title: "I SAW YOU!", text: "Not every word is scary." },
-    { id: "pumpkin", emoji: "🎃", title: "THE PUMPKIN IS WATCHING", text: "Keep playing if you dare." },
-    { id: "vampire", emoji: "🧛", title: "THE VAMPIRE ARRIVED!", text: "This game just got weird..." },
+    { id: "clown", title: "DON'T LOOK", text: "Something is too close..." },
+    { id: "horrorMask", title: "YOU ARE NOT ALONE", text: "Don't look away..." },
+    { id: "hauntedDoll", title: "IT'S WATCHING", text: "Did you see it?" },
+    { id: "creepyDoll", title: "TOO CLOSE", text: "Something appeared..." },
+    { id: "demonMask", title: "DON'T TURN AROUND", text: "Keep playing..." },
   ],
   pt: [
-    { id: "ghost", emoji: "👻", title: "BUU!", text: "Alguém está a observar-te..." },
-    { id: "spider", emoji: "🕷️", title: "CUIDADO!", text: "Há algo no ecrã..." },
-    { id: "skull", emoji: "💀", title: "EU VI-TE!", text: "Nem todas as palavras assustam." },
-    { id: "pumpkin", emoji: "🎃", title: "A ABÓBORA OBSERVA-TE", text: "Continua se tiveres coragem." },
-    { id: "vampire", emoji: "🧛", title: "O VAMPIRO CHEGOU!", text: "Esta partida ficou estranha..." },
+    { id: "clown", title: "NÃO OLHE", text: "Algo está perto demais..." },
+    { id: "horrorMask", title: "VOCÊ NÃO ESTÁ SOZINHO", text: "Não desvie o olhar..." },
+    { id: "hauntedDoll", title: "ESTÁ OLHANDO", text: "Você viu?" },
+    { id: "creepyDoll", title: "PERTO DEMAIS", text: "Algo apareceu..." },
+    { id: "demonMask", title: "NÃO SE VIRE", text: "Continue jogando..." },
   ],
   fr: [
-    { id: "ghost", emoji: "👻", title: "BOUH !", text: "Quelqu'un te regarde..." },
-    { id: "spider", emoji: "🕷️", title: "ATTENTION !", text: "Il y a quelque chose à l'écran..." },
-    { id: "skull", emoji: "💀", title: "JE T'AI VU !", text: "Tous les mots ne font pas peur." },
-    { id: "pumpkin", emoji: "🎃", title: "LA CITROUILLE TE REGARDE", text: "Continue si tu l'oses." },
-    { id: "vampire", emoji: "🧛", title: "LE VAMPIRE EST ARRIVÉ !", text: "Cette partie devient étrange..." },
+    { id: "clown", title: "NE REGARDE PAS", text: "Quelque chose est trop près..." },
+    { id: "horrorMask", title: "TU N'ES PAS SEUL", text: "Ne détourne pas les yeux..." },
+    { id: "hauntedDoll", title: "IL TE REGARDE", text: "Tu l'as vu ?" },
+    { id: "creepyDoll", title: "TROP PRÈS", text: "Quelque chose est apparu..." },
+    { id: "demonMask", title: "NE TE RETOURNE PAS", text: "Continue à jouer..." },
   ],
 };
 
-export function isHalloweenPreview(): boolean {
-  if (typeof window !== "undefined") {
-    try {
-      if (new URLSearchParams(window.location.search).get("halloweenPreview") === "1") return true;
-    } catch {}
-  }
-  return typeof import.meta !== "undefined" && import.meta.env?.VITE_HALLOWEEN_PREVIEW === "true";
-}
-
 export function isHalloweenActive(now = new Date()): boolean {
   if (isHalloweenPreview()) return true;
-  const start = new Date(HALLOWEEN_START);
-  const end = new Date(HALLOWEEN_END);
+  const { start, end } = getHalloweenWindow(now.getUTCFullYear());
   return now >= start && now < end;
+}
+
+export function getHalloweenLabel(lang: string): string {
+  const labels: Record<string, string> = { es: "HALLOWEEN", en: "HALLOWEEN", pt: "HALLOWEEN", fr: "HALLOWEEN" };
+  return labels[lang] ?? labels.es;
+}
+
+export function getHalloweenSubtitle(lang: string): string {
+  const subtitles: Record<string, string> = { es: "El terror ha comenzado", en: "The terror has begun", pt: "O terror começou", fr: "La terreur a commencé" };
+  return subtitles[lang] ?? subtitles.es;
 }
 
 export function getHalloweenCategory(lang: string, seed = Math.random()): string {
   const key = lang === "en" || lang === "pt" || lang === "fr" ? lang : "es";
   const list = HALLOWEEN_CATEGORIES[key];
-  return list[Math.floor(Math.max(0, Math.min(0.999999, seed)) * list.length)];
+  const safeSeed = Math.max(0, Math.min(0.999999, seed));
+  return list[Math.floor(safeSeed * list.length)];
 }
 
-export function applyHalloweenCategory(
-  categories: string[],
-  lang: string,
-  options: { enabled?: boolean; seed?: number } = {},
-): string[] {
-  if (!isHalloweenActive() || options.enabled === false || categories.length === 0) {
-    return categories;
-  }
+export function applyHalloweenCategory(categories: string[], lang: string, options: { enabled?: boolean; seed?: number } = {}): string[] {
+  if (!isHalloweenActive() || !isHalloweenModeEnabled() || options.enabled === false || categories.length === 0) return categories;
   const result = [...categories];
-  const idx = Math.floor((options.seed ?? Math.random()) * result.length);
-  result[idx] = getHalloweenCategory(lang, options.seed == null ? Math.random() : options.seed);
+  const seed = options.seed ?? Math.random();
+  const idx = Math.floor(Math.max(0, Math.min(0.999999, seed)) * result.length);
+  result[idx] = getHalloweenCategory(lang, seed);
   return result;
 }
 
-export function getHalloweenLabel(lang: string): string {
-  if (lang === "en") return "🎃 HALLOWEEN EVENT";
-  if (lang === "pt") return "🎃 EVENTO DE HALLOWEEN";
-  if (lang === "fr") return "🎃 ÉVÉNEMENT HALLOWEEN";
-  return "🎃 EVENTO HALLOWEEN";
-}
-
-export function getHalloweenSubtitle(lang: string): string {
-  if (lang === "en") return "One spooky category appears in every normal game.";
-  if (lang === "pt") return "Uma categoria assustadora aparece em cada partida normal.";
-  if (lang === "fr") return "Une catégorie terrifiante apparaît dans chaque partie normale.";
-  return "Una categoría terrorífica aparece en cada partida normal.";
-}
-
-export function getHalloweenScare(lang: string, seed = Math.random()): HalloweenScare {
+export function getHalloweenScare(lang: string): HalloweenScare {
   const key = lang === "en" || lang === "pt" || lang === "fr" ? lang : "es";
   const list = HALLOWEEN_SCARES[key];
-  return list[Math.floor(Math.max(0, Math.min(0.999999, seed)) * list.length)];
+  const id = pickHalloweenScareVisual();
+  return list.find((scare) => scare.id === id) ?? list[0];
 }
 
 export function getHalloweenScareById(lang: string, id: HalloweenScareId): HalloweenScare {
-  const key = lang === "en" || lang === "pt" || lang === "fr" ? lang : "es";
-  const list = HALLOWEEN_SCARES[key];
-  return list.find(s => s.id === id) ?? list[0];
+  const scares = HALLOWEEN_SCARES[lang] ?? HALLOWEEN_SCARES.es;
+  return scares.find((scare) => scare.id === id) ?? scares[0];
+}
+
+const HALLOWEEN_MODE_STORAGE_KEY = "stop_halloween_mode_enabled";
+
+export function isHalloweenModeEnabled(): boolean {
+  if (typeof window === "undefined") return true;
+  try {
+    const stored = window.localStorage.getItem(HALLOWEEN_MODE_STORAGE_KEY);
+    return stored === null ? true : stored === "1";
+  } catch {
+    return true;
+  }
+}
+
+export function setHalloweenModeEnabled(enabled: boolean): void {
+  try { window.localStorage.setItem(HALLOWEEN_MODE_STORAGE_KEY, enabled ? "1" : "0"); } catch {}
 }

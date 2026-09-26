@@ -20,6 +20,12 @@ export async function ensureIndexes(): Promise<void> {
     `CREATE INDEX IF NOT EXISTS game_history_player_id_score_desc_idx ON game_history (player_id, score DESC)`,
     `CREATE INDEX IF NOT EXISTS rooms_is_public_status_created_at_idx ON rooms (is_public, status, created_at)`,
     `CREATE INDEX IF NOT EXISTS rooms_status_updated_at_idx ON rooms (status, updated_at)`,
+    // Keep production schema compatible with the current multiplayer room model.
+    // These columns were added to the Drizzle schema but were missing from the
+    // idempotent boot migration, which makes POST /api/rooms fail on databases
+    // created before the fields existed.
+    `ALTER TABLE rooms ADD COLUMN IF NOT EXISTS max_players integer NOT NULL DEFAULT 8`,
+    `ALTER TABLE rooms ADD COLUMN IF NOT EXISTS game_mode text NOT NULL DEFAULT 'classic'`,
     `ALTER TABLE rooms ADD COLUMN IF NOT EXISTS tournament_id integer`,
     `ALTER TABLE rooms ADD COLUMN IF NOT EXISTS tournament_match_id text`,
     `CREATE UNIQUE INDEX IF NOT EXISTS rooms_tournament_match_uidx ON rooms (tournament_id, tournament_match_id) WHERE tournament_id IS NOT NULL AND tournament_match_id IS NOT NULL`,
@@ -80,6 +86,9 @@ export async function ensureIndexes(): Promise<void> {
     `CREATE TABLE IF NOT EXISTS impossible_results (id serial PRIMARY KEY, player_id text NOT NULL, player_name text NOT NULL, challenge_date text NOT NULL, language text NOT NULL DEFAULT 'es', letter text NOT NULL, category text NOT NULL, attempted_word text NOT NULL DEFAULT '', won boolean NOT NULL DEFAULT false, time_ms integer NOT NULL DEFAULT 60000, created_at timestamp NOT NULL DEFAULT NOW())`,
     `CREATE UNIQUE INDEX IF NOT EXISTS impossible_results_player_date_lang_uniq ON impossible_results (player_id, challenge_date, language)`,
     `CREATE INDEX IF NOT EXISTS impossible_results_date_lang_idx ON impossible_results (challenge_date, language)`,
+    `CREATE TABLE IF NOT EXISTS halloween_progress (id serial PRIMARY KEY, player_id text NOT NULL, event_year integer NOT NULL, games_completed integer NOT NULL DEFAULT 0, scares_received integer NOT NULL DEFAULT 0, scares_provoked integer NOT NULL DEFAULT 0, coins_earned integer NOT NULL DEFAULT 0, rewards_json text NOT NULL DEFAULT '[]', event_keys_json text NOT NULL DEFAULT '[]', updated_at timestamp NOT NULL DEFAULT NOW())`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS halloween_progress_player_year_uidx ON halloween_progress (player_id, event_year)`,
+    `CREATE INDEX IF NOT EXISTS halloween_progress_year_games_idx ON halloween_progress (event_year, games_completed DESC)`,
   ];
 
   for (const stmt of stmts) {

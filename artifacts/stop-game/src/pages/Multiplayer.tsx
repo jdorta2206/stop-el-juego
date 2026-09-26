@@ -8,7 +8,7 @@ import { OnlineFriends } from "@/components/OnlineFriends";
 import { InviteFriends } from "@/components/InviteFriends";
 import { Users, Plus, LogIn, UserPlus, Globe, Lock, RefreshCw, Flag } from "lucide-react";
 import { useT } from "@/i18n/useT";
-import { getCurrentLang, getApiUrl } from "@/lib/utils";
+import { authHeaders, getCurrentLang, getApiUrl } from "@/lib/utils";
 import { loadActiveRoom, clearActiveRoom } from "@/lib/activeRoom";
 import { AnimatePresence, motion } from "framer-motion";
 
@@ -24,9 +24,37 @@ interface PublicRoom {
 
 const LANG_FLAGS: Record<string, string> = { es: "🇪🇸", en: "🇬🇧", pt: "🇧🇷", fr: "🇫🇷" };
 
+type RoomRequestError = Error & {
+  status?: number;
+  data?: { error?: string; message?: string };
+};
+
+async function requestRoomApi(path: string, body: unknown): Promise<any> {
+  const preview = import.meta.env.VITE_HALLOWEEN_PREVIEW === "true";
+  const response = await fetch(`${getApiUrl()}${path}`, {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+      ...(preview ? { "x-halloween-preview": "1" } : {}),
+      ...authHeaders(),
+    },
+    body: JSON.stringify(body),
+  });
+  let data: any = null;
+  try { data = await response.json(); } catch {}
+  if (!response.ok) {
+    const err = new Error(data?.message || data?.error || `HTTP ${response.status}`) as RoomRequestError;
+    err.status = response.status;
+    err.data = data;
+    throw err;
+  }
+  return data;
+}
+
 export default function Multiplayer() {
   const [, setLocation] = useLocation();
-  const { player } = usePlayer();
+  const { player, savePlayer } = usePlayer();
   const { t } = useT();
   const [roomCode, setRoomCode] = useState(() => {
     const params = new URLSearchParams(window.location.search);
@@ -41,9 +69,23 @@ export default function Multiplayer() {
   const [loadingPublic, setLoadingPublic] = useState(false);
   const [resumeCode, setResumeCode] = useState<string | null>(null);
   const [resuming, setResuming] = useState(false);
+  const [creatingRoom, setCreatingRoom] = useState(false);
 
   const createMutation = useCreateRoom();
   const joinMutation = useJoinRoom();
+
+  // Halloween preview: give every fresh device a local guest identity immediately
+  // so the online-player panel and room join/create controls work before login.
+  useEffect(() => {
+    if (player || import.meta.env.VITE_HALLOWEEN_PREVIEW !== "true") return;
+    savePlayer({
+      id: `preview-guest-${crypto.randomUUID()}`,
+      name: `Jugador Halloween ${Math.floor(1000 + Math.random() * 9000)}`,
+      avatarColor: "#b5301a",
+      loginMethod: "guest",
+      picture: null,
+    });
+  }, [player, savePlayer]);
 
   // 🛟 Resume banner: if the player has a recent active room saved (closed app,
   // lost connection, switched device), offer one-tap rejoin. Validates against
@@ -117,27 +159,60 @@ export default function Multiplayer() {
     return () => clearInterval(interval);
   }, []);
 
+  const getPreviewPlayer = () => {
+    if (import.meta.env.VITE_HALLOWEEN_PREVIEW !== "true") return player;
+    const existing = player?.id?.startsWith("preview-guest-") ? player : null;
+    if (existing) return existing;
+    const previewPlayer = {
+      id: `preview-guest-${crypto.randomUUID()}`,
+      name: `Jugador Halloween ${Math.floor(1000 + Math.random() * 9000)}`,
+      avatarColor: "#b5301a",
+      loginMethod: "guest",
+      picture: null,
+    };
+    savePlayer(previewPlayer);
+    return previewPlayer;
+  };
+
   const handleCreate = async () => {
-    if (!player) return;
+    if (creatingRoom) return;
+    setCreatingRoom(true);
     setError("");
+    const currentPlayer = getPreviewPlayer() ?? {
+      id: `preview-guest-${crypto.randomUUID()}`,
+      name: `Jugador Halloween ${Math.floor(1000 + Math.random() * 9000)}`,
+      avatarColor: "#b5301a",
+      loginMethod: "guest",
+      picture: null,
+    };
+    if (!currentPlayer) return;
     try {
-      const room = await createMutation.mutateAsync({
-        data: {
-          hostId: player.id,
-          hostName: player.name,
-          avatarColor: player.avatarColor,
-          picture: player.picture || null,
-          maxRounds: 3,
-          language: getCurrentLang(),
-          loginMethod: player.loginMethod ?? null,
-          isPublic,
-          gameMode,
-          maxPlayers,
-        } as any,
+      const room = await requestRoomApi("/api/rooms", {
+        hostId: currentPlayer.id,
+        hostName: currentPlayer.name,
+        avatarColor: currentPlayer.avatarColor,
+        picture: currentPlayer.picture || null,
+        maxRounds: 3,
+        language: getCurrentLang(),
+        loginMethod: currentPlayer.loginMethod ?? null,
+        isPublic,
+        gameMode,
+        maxPlayers,
       });
-      setLocation(`/room/${room.roomCode}`);
-    } catch {
-      setError(t.multiplayer.waitingForHost);
+      setLocation(`/room/${room.roomCode}?previewPlayerId=${encodeURIComponent(currentPlayer.id)}`);
+    } catch (err) {
+      const e = err as { status?: number; data?: { error?: string; message?: string }; response?: { status?: number; data?: { error?: string; message?: string } } };
+      const status = e?.status ?? e?.response?.status;
+      const code = e?.data?.error ?? e?.response?.data?.error ?? "";
+      if (status === 409 || code === "name_taken") {
+        setError("No se pudo crear la sala porque el nombre de invitado ya está en uso. Se ha generado un nombre nuevo; vuelve a pulsar Crear.");
+      } else if (status === 403) {
+        setError("El servidor rechazó la identidad del jugador. Recarga la página e inténtalo de nuevo.");
+      } else {
+        setError(code || e?.data?.message || e?.response?.data?.message || t.multiplayer.waitingForHost);
+      }
+    } finally {
+      setCreatingRoom(false);
     }
   };
 
@@ -155,43 +230,59 @@ export default function Multiplayer() {
     const status = err?.status ?? err?.response?.status;
     const code = err?.data?.error ?? err?.response?.data?.error ?? "";
     if (status === 409 || code === "name_taken") {
+      if (code === "room_full") return "La sala está llena.";
+      if (code === "in_progress") return "La partida ya ha empezado.";
       return t.multiplayer.nameTaken ?? "Ese nombre ya está en uso en esta sala. Cambia tu nombre o añade un número.";
     }
+    if (status === 403) return "No se ha podido verificar tu identidad. Cierra y vuelve a entrar en la cuenta.";
+    if (status === 404) return "La sala no existe o ha caducado.";
     return t.multiplayer.waitingForHost;
   };
 
   const handleJoin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!player || !roomCode.trim()) return;
+    if (!player && import.meta.env.VITE_HALLOWEEN_PREVIEW !== "true") return;
+    if (!roomCode.trim()) return;
     setError("");
+    const currentPlayer = getPreviewPlayer() ?? {
+      id: `preview-guest-${crypto.randomUUID()}`,
+      name: `Jugador Halloween ${Math.floor(1000 + Math.random() * 9000)}`,
+      avatarColor: "#b5301a",
+      loginMethod: "guest",
+      picture: null,
+    };
     try {
-      const room = await joinMutation.mutateAsync({
-        roomCode: roomCode.toUpperCase(),
-        data: {
-          playerId: player.id,
-          playerName: player.name,
-          avatarColor: player.avatarColor,
-        } as import("@workspace/api-client-react").JoinRoomRequest & { loginMethod?: string | null },
+      const room = await requestRoomApi(`/api/rooms/${roomCode.toUpperCase()}/join`, {
+        playerId: currentPlayer.id,
+        playerName: currentPlayer.name,
+        avatarColor: currentPlayer.avatarColor,
+        loginMethod: currentPlayer.loginMethod ?? null,
       });
-      setLocation(`/room/${room.roomCode}`);
+      setLocation(`/room/${room.roomCode}?previewPlayerId=${encodeURIComponent(currentPlayer.id)}`);
     } catch (err) {
       setError(describeJoinError(err));
     }
   };
 
   const handleJoinPublic = async (code: string) => {
-    if (!player) return;
+    if (!player && import.meta.env.VITE_HALLOWEEN_PREVIEW !== "true") return;
     setError("");
+    const currentPlayer = player ?? {
+      id: `preview-guest-${crypto.randomUUID()}`,
+      name: `Jugador Halloween ${Math.floor(1000 + Math.random() * 9000)}`,
+      avatarColor: "#b5301a",
+      loginMethod: "guest",
+      picture: null,
+    };
+    if (!player) savePlayer(currentPlayer);
     try {
-      const room = await joinMutation.mutateAsync({
-        roomCode: code,
-        data: {
-          playerId: player.id,
-          playerName: player.name,
-          avatarColor: player.avatarColor,
-        } as import("@workspace/api-client-react").JoinRoomRequest & { loginMethod?: string | null },
+      const room = await requestRoomApi(`/api/rooms/${code}/join`, {
+        playerId: currentPlayer.id,
+        playerName: currentPlayer.name,
+        avatarColor: currentPlayer.avatarColor,
+        loginMethod: currentPlayer.loginMethod ?? null,
       });
-      setLocation(`/room/${room.roomCode}`);
+      setLocation(`/room/${room.roomCode}?previewPlayerId=${encodeURIComponent(currentPlayer.id)}`);
     } catch (err) {
       setError(describeJoinError(err));
       loadPublicRooms();
@@ -358,8 +449,10 @@ export default function Multiplayer() {
             <Button
               size="lg"
               className="w-full"
+              type="button"
               onClick={handleCreate}
-              isLoading={createMutation.isPending}
+              isLoading={creatingRoom}
+              disabled={creatingRoom}
             >
               {isPublic ? <Globe size={16} className="mr-2" /> : <Lock size={16} className="mr-2" />}
               {t.multiplayer.create}
