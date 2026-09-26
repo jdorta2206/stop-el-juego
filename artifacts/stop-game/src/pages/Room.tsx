@@ -612,7 +612,7 @@ export default function Room() {
     halloweenScareTimerRef.current = window.setTimeout(() => {
       halloweenScareTimerRef.current = null;
       if (phase !== "playing") return;
-      setHalloweenScare(getHalloweenScare(getCurrentLang(), ((hash >>> 16) % 100000) / 100000));
+      setHalloweenScare(getHalloweenScare(getCurrentLang()));
       halloweenScareHideTimerRef.current = window.setTimeout(() => setHalloweenScare(null), 1550);
     }, delay);
     return () => {
@@ -652,7 +652,7 @@ export default function Room() {
     try {
       const response = await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/halloween-scare`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...authHeaders() },
+        headers: { "Content-Type": "application/json", ...authHeaders(), ...(isHalloweenPreview() ? { "x-halloween-preview": "1" } : {}) },
         body: JSON.stringify({ playerId: player.id, playerName: player.name }),
       });
       const data = await response.json().catch(() => ({}));
