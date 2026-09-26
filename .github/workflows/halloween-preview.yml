@@ -216,6 +216,26 @@ jobs:
           echo "$RESPONSE"
           echo "$RESPONSE" | grep -q '"rooms"'
 
+      - name: Smoke test create, join and scoreboard through preview proxy
+        run: |
+          set -euo pipefail
+          A="guest_preview_${GITHUB_RUN_ID}_a"
+          B="guest_preview_${GITHUB_RUN_ID}_b"
+          CREATE=$(curl -fsS --max-time 30 -H "Content-Type: application/json" -X POST http://127.0.0.1:4173/api/rooms \
+            --data "{\"hostId\":\"$A\",\"hostName\":\"Preview A\",\"avatarColor\":\"#f9a825\",\"maxRounds\":3,\"language\":\"es\",\"loginMethod\":\"guest\",\"isPublic\":true,\"gameMode\":\"classic\",\"maxPlayers\":4}")
+          echo "$CREATE"
+          CODE=$(python3 -c 'import json,sys; print(json.loads(sys.stdin.read())["roomCode"])' <<<"$CREATE")
+          test -n "$CODE"
+          JOIN=$(curl -fsS --max-time 30 -H "Content-Type: application/json" -X POST "http://127.0.0.1:4173/api/rooms/$CODE/join" \
+            --data "{\"playerId\":\"$B\",\"playerName\":\"Preview B\",\"avatarColor\":\"#42a5f5\",\"loginMethod\":\"guest\"}")
+          echo "$JOIN"
+          echo "$JOIN" | grep -q "\"roomCode\":\"$CODE\""
+          ROOM=$(curl -fsS --max-time 30 "http://127.0.0.1:4173/api/rooms/$CODE?viewerId=$A")
+          echo "$ROOM"
+          echo "$ROOM" | grep -q '"players"'
+          echo "$ROOM" | grep -q '"score"'
+          curl -fsS --max-time 30 -H "Content-Type: application/json" -X POST "http://127.0.0.1:4173/api/rooms/$CODE/leave" --data "{\"playerId\":\"$B\"}" >/dev/null
+          curl -fsS --max-time 30 -H "Content-Type: application/json" -X POST "http://127.0.0.1:4173/api/rooms/$CODE/leave" --data "{\"playerId\":\"$A\"}" >/dev/null
       - name: Start public preview tunnel
         shell: bash
         run: |
