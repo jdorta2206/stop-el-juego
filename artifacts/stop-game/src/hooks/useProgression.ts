@@ -133,7 +133,7 @@ export function useProgression(playerId?: string) {
       }
       return newXp;
     });
-  }, []);
+  }, [playerId]);
 
   const clearLevelUp = useCallback(() => setLevelUpInfo(null), []);
 
