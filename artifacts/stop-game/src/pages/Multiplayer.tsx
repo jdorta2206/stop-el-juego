@@ -187,7 +187,7 @@ export default function Multiplayer() {
         gameMode,
         maxPlayers,
       });
-      setLocation(`/room/${room.roomCode}`);
+      setLocation(`/room/${room.roomCode}?previewPlayerId=${encodeURIComponent(currentPlayer.id)}`);
     } catch (err) {
       const e = err as { status?: number; data?: { error?: string; message?: string }; response?: { status?: number; data?: { error?: string; message?: string } } };
       const status = e?.status ?? e?.response?.status;
