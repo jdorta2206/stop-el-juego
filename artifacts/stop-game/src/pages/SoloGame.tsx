@@ -44,8 +44,13 @@ import { useReviewPrompt, recordGamePlayed, recordScoreAndPercentile } from "@/h
 import { maybeShowInterstitial, recordInterstitialGameCompleted } from "@/lib/interstitialAd";
 import { ReviewPromptCard } from "@/components/ReviewPromptCard";
 import { HalloweenBanner } from "@/components/HalloweenBanner";
-import { applyHalloweenCategory, isHalloweenActive } from "@/lib/halloweenEvent";
-import { HalloweenScareOverlay, getHalloweenScare, type HalloweenScare } from "@/components/HalloweenScare";
+import { HalloweenAmbience } from "@/components/HalloweenAmbience";
+import { applyHalloweenCategory, isHalloweenActive, isHalloweenPreview, isHalloweenModeEnabled, getHalloweenScare } from "@/lib/halloweenEvent";
+import { HalloweenScareOverlay } from "@/components/HalloweenScare";
+import type { HalloweenScare } from "@/lib/halloweenEvent";
+import { preloadHalloweenScareAssets } from "@/lib/halloweenScareAssets";
+import { preloadHalloweenScareAudio } from "@/lib/halloweenScareAudio";
+import { getHalloweenReducedEffects, setHalloweenReducedEffects } from "@/lib/halloweenAccessibility";
 
 function vibrate(pattern: number | number[]) {
   try { if (navigator.vibrate) navigator.vibrate(pattern); } catch {}
@@ -138,6 +143,8 @@ export default function SoloGame() {
   const packCats = () => packId === "classic" ? getCategories() : getPackCategories(packId, getCurrentLang(), customPacks);
   const [categories, setCategories] = useState<string[]>(() => applyHalloweenCategory(packCats(), lang, { enabled: !packId.startsWith("custom:") }));
   const [muted, setMuted] = useState(false);
+  const [reducedHalloweenEffects, setReducedHalloweenEffects] = useState(() => getHalloweenReducedEffects());
+  const [halloweenScareAfterglow, setHalloweenScareAfterglow] = useState(false);
   const [stopFlash, setStopFlash] = useState(false);
   // 🕵️ Espía / Robar respuesta — free: 1 uso/partida, premium: 2 usos/partida. -10 pts cada uso.
   // `spyUsesLeft` persists across rounds (per-game allowance).
@@ -158,6 +165,9 @@ export default function SoloGame() {
   const [randomEvent, setRandomEvent] = useState<RandomEvent>(null);
   const [halloweenScare, setHalloweenScare] = useState<HalloweenScare | null>(null);
   const halloweenScareTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const halloweenScareRoundRef = useRef<number | null>(null);
+  const halloweenAnswerScareTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const halloweenAnswerScareRoundRef = useRef<number | null>(null);
   // Round result announcement
   const [roundWon, setRoundWon] = useState<boolean | null>(null);
 
@@ -167,6 +177,13 @@ export default function SoloGame() {
   const isQuickMode = urlParams.get("mode") === "quick";
   const isChaosMode = urlParams.get("mode") === "chaos";
   const isRandomMode = urlParams.get("mode") === "random";
+
+  // Preload Halloween assets while the lobby is visible so the scare never waits for network/decode.
+  useEffect(() => {
+    if (!isHalloweenActive() || !isHalloweenModeEnabled() || isDailyMode) return;
+    void preloadHalloweenScareAssets();
+    preloadHalloweenScareAudio();
+  }, [isDailyMode]);
 
   // First-Time User Experience: handicap the AI for the first 3 games to
   // guarantee an early win and a smoother onboarding. Read once on mount —
@@ -444,8 +461,68 @@ export default function SoloGame() {
   // total. Reset per new game (where totalScore resets to 0), not per round.
   const scoreTokensRef = useRef<string[]>([]);
 
+  // Halloween scares only run while actively answering. Daily/quick/chaos/random are excluded.
+  useEffect(() => {
+    if (gameState !== "PLAYING" || !isHalloweenActive() || !isHalloweenModeEnabled() || isDailyMode || isQuickMode || isChaosMode || isRandomMode) {
+      if (halloweenScareTimerRef.current) { clearTimeout(halloweenScareTimerRef.current); halloweenScareTimerRef.current = null; }
+      if (halloweenAnswerScareTimerRef.current) { clearTimeout(halloweenAnswerScareTimerRef.current); halloweenAnswerScareTimerRef.current = null; }
+      return;
+    }
+    if (halloweenScare || halloweenScareRoundRef.current === round) return;
+
+    const preview = isHalloweenPreview();
+    const min = preview ? 4000 : 10000;
+    const max = preview ? 7500 : 50000;
+    const delay = min + Math.floor(Math.random() * (max - min));
+    halloweenScareTimerRef.current = window.setTimeout(() => {
+      halloweenScareTimerRef.current = null;
+      if (gameState !== "PLAYING" || halloweenScareRoundRef.current === round) return;
+      halloweenScareRoundRef.current = round;
+      setHalloweenScare(getHalloweenScare(lang));
+    }, delay);
+    return () => {
+      if (halloweenScareTimerRef.current) { clearTimeout(halloweenScareTimerRef.current); halloweenScareTimerRef.current = null; }
+    };
+  }, [gameState, round, lang, halloweenScare, isDailyMode, isQuickMode, isChaosMode, isRandomMode]);
+
+  // Answer-triggered scare: after a real answer (>=3 chars), wait a random
+  // extra delay. Once armed it is not tied to further keystrokes, so it feels
+  // unpredictable instead of firing on a fixed input pattern.
+  useEffect(() => {
+    if (gameState !== "PLAYING" || !isHalloweenActive() || !isHalloweenModeEnabled() || isDailyMode || isQuickMode || isChaosMode || isRandomMode || halloweenScare || halloweenAnswerScareRoundRef.current === round) return;
+    const hasRealWord = Object.values(responses).some(v => typeof v === "string" && v.trim().length >= 3);
+    if (!hasRealWord || halloweenAnswerScareTimerRef.current) return;
+
+    const pauseMs = isHalloweenPreview() ? 650 : 900;
+    halloweenAnswerScareTimerRef.current = window.setTimeout(() => {
+      halloweenAnswerScareTimerRef.current = null;
+      if (halloweenScare || gameState !== "PLAYING" || halloweenAnswerScareRoundRef.current === round) return;
+      const chance = isHalloweenPreview() ? 0.72 : 0.32;
+      if (Math.random() > chance) { halloweenAnswerScareRoundRef.current = round; return; }
+      halloweenAnswerScareRoundRef.current = round;
+      const minDelay = isHalloweenPreview() ? 900 : 1600;
+      const maxDelay = isHalloweenPreview() ? 2600 : 5200;
+      halloweenAnswerScareTimerRef.current = window.setTimeout(() => {
+        halloweenAnswerScareTimerRef.current = null;
+        if (gameState === "PLAYING" && halloweenScareRoundRef.current !== round) {
+          halloweenScareRoundRef.current = round;
+          setHalloweenScare(getHalloweenScare(lang));
+        }
+      }, minDelay + Math.floor(Math.random() * (maxDelay - minDelay)));
+    }, pauseMs);
+    return () => {
+      if (halloweenAnswerScareTimerRef.current && halloweenAnswerScareRoundRef.current !== round) {
+        clearTimeout(halloweenAnswerScareTimerRef.current);
+        halloweenAnswerScareTimerRef.current = null;
+      }
+    };
+  }, [responses, gameState, round, lang, halloweenScare, isDailyMode, isQuickMode, isChaosMode, isRandomMode]);
+
   const startGame = () => {
     if (halloweenScareTimerRef.current) clearTimeout(halloweenScareTimerRef.current);
+    if (halloweenAnswerScareTimerRef.current) clearTimeout(halloweenAnswerScareTimerRef.current);
+    halloweenScareRoundRef.current = null;
+    halloweenAnswerScareRoundRef.current = null;
     setHalloweenScare(null);
     void trackAnalyticsEvent("game_start", { metadata: { mode: isDailyMode ? "daily" : "solo" } });
     // Snapshot the tutorial state at the moment the player presses Play so
@@ -476,17 +553,13 @@ export default function SoloGame() {
     setRandomEvent(event);
     setRoundWon(null);
 
-    // Halloween scare: visual-only, rare, normal games only. It never
-    // changes score, timer, categories or gameplay rules.
-    if (isHalloweenActive() && !isDailyMode && !isQuickMode && !isChaosMode && !isRandomMode) {
-      if (Math.random() < 0.38) {
-        const delay = 9000 + Math.floor(Math.random() * 16000);
-        halloweenScareTimerRef.current = setTimeout(() => {
-          setHalloweenScare(getHalloweenScare(lang));
-          window.setTimeout(() => setHalloweenScare(null), 2600);
-        }, delay);
-      }
-    }
+    // Halloween scare timers are owned by the round effects below.
+    // Never schedule a scare here: startGame can run before PLAYING and could
+    // otherwise fire over the lobby/results screens.
+    if (halloweenScareTimerRef.current) clearTimeout(halloweenScareTimerRef.current);
+    if (halloweenAnswerScareTimerRef.current) clearTimeout(halloweenAnswerScareTimerRef.current);
+    halloweenScareRoundRef.current = null;
+    halloweenAnswerScareRoundRef.current = null;
 
     if (isDailyMode) {
       setCurrentLetter(dailyLetter);
@@ -1534,7 +1607,8 @@ export default function SoloGame() {
           onShared={() => recordExternalStat(player?.id, { timesShared: 1 })}
         />
 
-        <AnimatePresence>{halloweenScare && <HalloweenScareOverlay scare={halloweenScare} onDone={() => setHalloweenScare(null)} />}</AnimatePresence>
+        <HalloweenAmbience active={isHalloweenActive() && isHalloweenModeEnabled() && !isDailyMode && !isQuickMode && !isChaosMode && !isRandomMode && gameState === "PLAYING"} muted={muted} heavy={halloweenScareAfterglow || !!halloweenScare} />
+        <AnimatePresence>{halloweenScare && <HalloweenScareOverlay scare={halloweenScare} muted={muted} reducedEffects={reducedHalloweenEffects} onDone={() => { setHalloweenScare(null); setHalloweenScareAfterglow(true); window.setTimeout(() => setHalloweenScareAfterglow(false), 3000); }} />}</AnimatePresence>
 
         {/* Achievement toast notification */}
         <AchievementToast
