@@ -12,6 +12,7 @@ on:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -30,8 +31,14 @@ jobs:
       - name: Install dependencies from lockfile
         run: pnpm install --frozen-lockfile
 
-      - name: Build web
-        run: pnpm --filter @workspace/stop-game build
+      - name: Typecheck
+        run: pnpm run typecheck
+
+      - name: Tests
+        run: pnpm run test
+
+      - name: Full build
+        run: pnpm run build
 
       - name: Verify real Vite output
         working-directory: artifacts/stop-game
@@ -69,7 +76,6 @@ jobs:
           curl --fail --silent --show-error http://127.0.0.1:4173/
           echo
           echo '----- END CURL -----'
-
 
       - name: Upload exact dist index
         uses: actions/upload-artifact@v4
