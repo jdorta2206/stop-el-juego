@@ -140,7 +140,19 @@ export default function Room() {
     const m = params.get("match");
     return t && m ? { code: t, matchId: m } : null;
   })();
-  const { player } = usePlayer();
+  // Halloween preview: carry the exact host/join identity through the
+  // navigation to /room so a fresh usePlayer instance cannot create a
+  // different guest before the room snapshot arrives.
+  useEffect(() => {
+    if (import.meta.env.VITE_HALLOWEEN_PREVIEW !== "true") return;
+    const previewId = new URLSearchParams(window.location.search).get("previewPlayerId");
+    if (!previewId) return;
+    const current = player;
+    if (!current || current.id === previewId) return;
+    savePlayer({ ...current, id: previewId });
+  }, [player, savePlayer]);
+
+  const { player, savePlayer } = usePlayer();
   const { isPremium: meIsPremium } = usePremium(player?.id);
   const { followedIds, follow, unfollow } = useFollows(player?.id);
   // The host's own custom packs (premium feature). Non-premium players see
