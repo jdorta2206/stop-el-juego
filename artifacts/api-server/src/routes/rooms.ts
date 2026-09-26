@@ -215,7 +215,8 @@ function getHalloweenScareEvent(code: string): HalloweenRoomScare | null {
   return event;
 }
 
-function halloweenEventAllowed(_req: any): boolean {
+function halloweenEventAllowed(req: any): boolean {
+  if (String(req.headers?.["x-halloween-preview"] ?? "") === "1") return true;
   const now = Date.now();
   return now >= Date.parse("2026-10-15T00:00:00Z") && now < Date.parse("2026-11-03T00:00:00Z");
 }
