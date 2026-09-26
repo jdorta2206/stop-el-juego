@@ -56,7 +56,20 @@ export default function Home() {
   const [showFTUEWelcome, setShowFTUEWelcome] = useState(false);
   const [halloweenModeEnabled, setHalloweenModeEnabledState] = useState(() => HALLOWEEN_PREVIEW ? true : isHalloweenModeEnabled());
   const [halloweenAudioStarted, setHalloweenAudioStarted] = useState(false);
+  const [showHalloweenAnnouncement, setShowHalloweenAnnouncement] = useState(false);
   const { data: halloweenProgressData } = useHalloweenProgress(player?.id);
+
+  // Show the Halloween event announcement once per event year.
+  useEffect(() => {
+    if (!isHalloweenActive()) return;
+    try {
+      const year = new Date().getUTCFullYear();
+      const key = "stop_halloween_announcement_" + year;
+      if (localStorage.getItem(key) !== "1") setShowHalloweenAnnouncement(true);
+    } catch {
+      setShowHalloweenAnnouncement(true);
+    }
+  }, []);
 
   // Open the FTUE welcome modal once on first ever visit (after a tiny delay
   // so the home page can render its hero animation first).
@@ -122,6 +135,33 @@ export default function Home() {
   return (
     <Layout>
       <HalloweenHomeAtmosphere active={isHalloweenActive()} enabled={halloweenModeEnabled} />
+      {showHalloweenAnnouncement && isHalloweenActive() && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 px-4 backdrop-blur-sm">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            className="w-full max-w-sm rounded-3xl p-6 text-center shadow-2xl"
+            style={{ background: "linear-gradient(145deg, #18070b, #3b1010 55%, #160817)", border: "2px solid rgba(248,113,113,.55)" }}
+          >
+            <div className="text-5xl mb-3">🎃</div>
+            <p className="text-orange-300 text-xs font-black uppercase tracking-[0.2em]">Nuevo evento</p>
+            <h2 className="text-white text-3xl font-black mt-1">HALLOWEEN</h2>
+            <p className="text-white/75 text-sm mt-3">Sustos, ambientación de terror y recompensas especiales.</p>
+            <p className="text-red-300 text-xs font-bold mt-2">15 de octubre → 2 de noviembre</p>
+            <button
+              type="button"
+              onClick={() => {
+                try { localStorage.setItem("stop_halloween_announcement_" + new Date().getUTCFullYear(), "1"); } catch {}
+                setShowHalloweenAnnouncement(false);
+              }}
+              className="mt-5 w-full rounded-2xl bg-red-700 px-5 py-3 text-sm font-black text-white shadow-lg active:scale-95"
+            >
+              ¡ENTRAR AL EVENTO! 🎃
+            </button>
+          </motion.div>
+        </div>
+      )}
+
       <FTUEWelcomeModal
         open={showFTUEWelcome}
         onClose={() => {
