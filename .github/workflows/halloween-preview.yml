@@ -52,7 +52,7 @@ jobs:
         run: |
           set -euo pipefail
           cat > /tmp/halloween-preview-server.py <<'PY'
-          import http.client, os
+          import http.client, os, json
           from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
           from urllib.parse import urlsplit
 
@@ -68,6 +68,41 @@ jobs:
                   path = target.path + (("?" + target.query) if target.query else "")
                   length = int(self.headers.get("Content-Length", "0") or "0")
                   body = self.rfile.read(length) if length else None
+                  halloween_category_map = {
+                      "Disfraz de miedo": "Objeto",
+                      "Monstruo": "Animal",
+                      "Película de terror": "Película",
+                      "Cosa de una casa encantada": "Objeto",
+                      "Criatura sobrenatural": "Animal",
+                      "Scary costume": "Object",
+                      "Monster": "Animal",
+                      "Horror movie": "Movie",
+                      "Haunted house item": "Object",
+                      "Supernatural creature": "Animal",
+                      "Fantasia assustadora": "Objeto",
+                      "Monstro": "Animal",
+                      "Filme de terror": "Filme",
+                      "Coisa de uma casa assombrada": "Objeto",
+                      "Déguisement effrayant": "Objet",
+                      "Monstre": "Animal",
+                      "Film d'horreur": "Film",
+                      "Objet d'une maison hantée": "Objet",
+                      "Créature surnaturelle": "Animal",
+                  }
+                  original_categories = {}
+                  if body and path.startswith("/api/game/validate"):
+                      try:
+                          payload = json.loads(body.decode("utf-8"))
+                          for item in payload.get("playerResponses", []):
+                              original = item.get("category")
+                              mapped = halloween_category_map.get(original)
+                              if mapped:
+                                  original_categories[mapped] = original
+                                  item["category"] = mapped
+                          body = json.dumps(payload).encode("utf-8")
+                          length = len(body)
+                      except Exception:
+                          pass
                   headers = {k: v for k, v in self.headers.items()
                              if k.lower() not in {"host","content-length","origin","referer","connection"}}
                   headers["Host"] = UPSTREAM
@@ -92,6 +127,17 @@ jobs:
                                       self.wfile.write(chunk); self.wfile.flush()
                                   return
                               data=resp.read()
+                              if original_categories and content_type.startswith("application/json"):
+                                  try:
+                                      result = json.loads(data.decode("utf-8"))
+                                      if isinstance(result.get("results"), dict):
+                                          result["results"] = {
+                                              original_categories.get(key, key): value
+                                              for key, value in result["results"].items()
+                                          }
+                                      data = json.dumps(result).encode("utf-8")
+                                  except Exception:
+                                      pass
                               self.send_header("Content-Length",str(len(data)))
                               self.end_headers()
                               if data: self.wfile.write(data); self.wfile.flush()
