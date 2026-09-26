@@ -153,6 +153,13 @@ export default function Room() {
   }, [player, savePlayer]);
 
   const { player, savePlayer } = usePlayer();
+  // In Halloween preview the URL carries the exact identity used to create/join
+  // the room. Prefer it until usePlayer has caught up, otherwise the first GET
+  // can be sanitized as a non-member and the host sees "Esperando al anfitrión".
+  const previewPlayerId = import.meta.env.VITE_HALLOWEEN_PREVIEW === "true"
+    ? new URLSearchParams(window.location.search).get("previewPlayerId")
+    : null;
+  const effectivePlayerId = previewPlayerId || player?.id || null;
   const { isPremium: meIsPremium } = usePremium(player?.id);
   const { followedIds, follow, unfollow } = useFollows(player?.id);
   // The host's own custom packs (premium feature). Non-premium players see
@@ -280,7 +287,7 @@ export default function Room() {
     // 🔑 Prove membership so private rooms return the full roster. Logged-in
     // users are identified by their global x-stop-token; guests have no token,
     // so we assert their own id via x-viewer-id (not a secret to them).
-    ...(player?.id ? { request: { headers: { "x-viewer-id": player.id } } } : {}),
+    ...(effectivePlayerId ? { request: { headers: { "x-viewer-id": effectivePlayerId } } } : {}),
   });
 
   // ── SSE: real-time push updates (replaces polling for critical game moments) ──
@@ -326,7 +333,7 @@ export default function Room() {
       es?.close();
       setSseActive(false);
     };
-  }, [roomCode, player?.id, queryClient]);
+  }, [roomCode, effectivePlayerId, queryClient]);
 
   // 🔁 Persist the active room so a closed app / dropped network can find
   // its way back. Saved on mount, refreshed on every round change, cleared
@@ -335,7 +342,7 @@ export default function Room() {
   useEffect(() => {
     if (!roomCode || !player?.id) return;
     saveActiveRoom(roomCode.toUpperCase(), player.id);
-  }, [roomCode, player?.id]);
+  }, [roomCode, effectivePlayerId]);
   useEffect(() => {
     if (!roomCode) return;
     touchActiveRoom();
@@ -458,7 +465,7 @@ export default function Room() {
     roomCode
   );
 
-  const isHost = room?.hostId === player?.id;
+  const isHost = room?.hostId === effectivePlayerId;
   const roomStatus = (room?.status as string) || "";
 
   // 👑 Host migration toast: when the room snapshot reports a different
@@ -560,7 +567,7 @@ export default function Room() {
       const res = await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/add-bot`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify({ hostId: player.id }),
+        body: JSON.stringify({ hostId: effectivePlayerId }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -1264,7 +1271,7 @@ export default function Room() {
   };
 
   const handleStart = async () => {
-    if (!roomCode || !player) return;
+    if (!roomCode || !effectivePlayerId) return;
     try {
       const r = await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/start`, {
         method: "POST",
