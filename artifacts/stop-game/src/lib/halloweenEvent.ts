@@ -1,8 +1,8 @@
 import { pickHalloweenScareVisual } from "@/lib/halloweenScareAssets";
 
-export const HALLOWEEN_START_MONTH = 9; // October (0-based)
+export const HALLOWEEN_START_MONTH = 9;
 export const HALLOWEEN_START_DAY = 15;
-export const HALLOWEEN_END_MONTH = 10; // November (0-based)
+export const HALLOWEEN_END_MONTH = 10;
 export const HALLOWEEN_END_DAY = 3; // exclusive: event includes November 2
 
 /** Recurring annual Halloween window. The event runs Oct 15 through Nov 2 inclusive. */
@@ -36,7 +36,7 @@ export const HALLOWEEN_SCARES: Record<string, HalloweenScare[]> = {
     { id: "horrorMask", title: "NO ESTÁS SOLO", text: "No apartes la vista..." },
     { id: "hauntedDoll", title: "TE ESTÁ MIRANDO", text: "¿Lo has visto?" },
     { id: "creepyDoll", title: "DEMASIADO CERCA", text: "Acaba de aparecer..." },
-    { id: "demonMask", title: "NO TE GİRES", text: "Sigue jugando..." },
+    { id: "demonMask", title: "NO TE Gires", text: "Sigue jugando..." },
   ],
   en: [
     { id: "clown", title: "DON'T LOOK", text: "Something is too close..." },
@@ -84,14 +84,8 @@ export function getHalloweenCategory(lang: string, seed = Math.random()): string
   return list[Math.floor(safeSeed * list.length)];
 }
 
-export function applyHalloweenCategory(
-  categories: string[],
-  lang: string,
-  options: { enabled?: boolean; seed?: number } = {},
-): string[] {
-  if (!isHalloweenActive() || !isHalloweenModeEnabled() || options.enabled === false || categories.length === 0) {
-    return categories;
-  }
+export function applyHalloweenCategory(categories: string[], lang: string, options: { enabled?: boolean; seed?: number } = {}): string[] {
+  if (!isHalloweenActive() || !isHalloweenModeEnabled() || options.enabled === false || categories.length === 0) return categories;
   const result = [...categories];
   const seed = options.seed ?? Math.random();
   const idx = Math.floor(Math.max(0, Math.min(0.999999, seed)) * result.length);
@@ -124,7 +118,5 @@ export function isHalloweenModeEnabled(): boolean {
 }
 
 export function setHalloweenModeEnabled(enabled: boolean): void {
-  try {
-    window.localStorage.setItem(HALLOWEEN_MODE_STORAGE_KEY, enabled ? "1" : "0");
-  } catch {}
+  try { window.localStorage.setItem(HALLOWEEN_MODE_STORAGE_KEY, enabled ? "1" : "0"); } catch {}
 }
