@@ -7,6 +7,7 @@ type GameMode = "normal" | "quick" | "chaos" | "daily" | "random";
 type BestScores = Partial<Record<GameMode, number>>;
 
 async function syncBestsFromServer(playerId: string): Promise<BestScores> {
+  if (playerId.startsWith("guest_")) return {};
   try {
     const r = await fetch(`${getApiUrl()}/api/ranking/progress/${playerId}`);
     if (!r.ok) return {};
@@ -16,6 +17,7 @@ async function syncBestsFromServer(playerId: string): Promise<BestScores> {
 }
 
 async function saveBestsToServer(playerId: string, personalBests: BestScores) {
+  if (playerId.startsWith("guest_")) return;
   try {
     await fetch(`${getApiUrl()}/api/ranking/progress/${playerId}`, {
       method: "POST",

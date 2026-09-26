@@ -196,6 +196,7 @@ async function syncFromServer(playerId: string): Promise<{
   achievements: string[];
   stats: Partial<AchievementStats>;
 }> {
+  if (playerId.startsWith("guest_")) return { achievements: [], stats: {} };
   try {
     const r = await fetch(`${getApiUrl()}/api/ranking/progress/${playerId}`);
     if (!r.ok) return { achievements: [], stats: {} };
@@ -212,6 +213,7 @@ async function saveToServer(
   achievements: string[],
   stats: AchievementStats,
 ) {
+  if (playerId.startsWith("guest_")) return;
   try {
     await fetch(`${getApiUrl()}/api/ranking/progress/${playerId}`, {
       method: "POST",

@@ -40,6 +40,7 @@ function migrateLegacy(playerId?: string) {
 }
 
 async function syncFromServer(playerId: string): Promise<CollectionMap> {
+  if (playerId.startsWith("guest_")) return {};
   try {
     const r = await fetch(`${getApiUrl()}/api/ranking/progress/${playerId}`);
     if (!r.ok) return {};
@@ -51,6 +52,7 @@ async function syncFromServer(playerId: string): Promise<CollectionMap> {
 }
 
 async function saveToServer(playerId: string, collected: CollectionMap) {
+  if (playerId.startsWith("guest_")) return;
   try {
     await fetch(`${getApiUrl()}/api/ranking/progress/${playerId}`, {
       method: "POST",
