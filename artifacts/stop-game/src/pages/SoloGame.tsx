@@ -50,7 +50,6 @@ import { HalloweenScareOverlay } from "@/components/HalloweenScare";
 import type { HalloweenScare } from "@/lib/halloweenEvent";
 import { preloadHalloweenScareAssets } from "@/lib/halloweenScareAssets";
 import { preloadHalloweenScareAudio } from "@/lib/halloweenScareAudio";
-import { getHalloweenReducedEffects, setHalloweenReducedEffects } from "@/lib/halloweenAccessibility";
 
 function vibrate(pattern: number | number[]) {
   try { if (navigator.vibrate) navigator.vibrate(pattern); } catch {}
@@ -143,7 +142,6 @@ export default function SoloGame() {
   const packCats = () => packId === "classic" ? getCategories() : getPackCategories(packId, getCurrentLang(), customPacks);
   const [categories, setCategories] = useState<string[]>(() => applyHalloweenCategory(packCats(), lang, { enabled: !packId.startsWith("custom:") }));
   const [muted, setMuted] = useState(false);
-  const [reducedHalloweenEffects, setReducedHalloweenEffects] = useState(() => getHalloweenReducedEffects());
   const [halloweenScareAfterglow, setHalloweenScareAfterglow] = useState(false);
   const [stopFlash, setStopFlash] = useState(false);
   // 🕵️ Espía / Robar respuesta — free: 1 uso/partida, premium: 2 usos/partida. -10 pts cada uso.
@@ -1608,7 +1606,7 @@ export default function SoloGame() {
         />
 
         <HalloweenAmbience active={isHalloweenActive() && isHalloweenModeEnabled() && !isDailyMode && !isQuickMode && !isChaosMode && !isRandomMode && gameState === "PLAYING"} muted={muted} heavy={halloweenScareAfterglow || !!halloweenScare} />
-        <AnimatePresence>{halloweenScare && <HalloweenScareOverlay scare={halloweenScare} muted={muted} reducedEffects={reducedHalloweenEffects} onDone={() => { setHalloweenScare(null); setHalloweenScareAfterglow(true); window.setTimeout(() => setHalloweenScareAfterglow(false), 3000); }} />}</AnimatePresence>
+        <AnimatePresence>{halloweenScare && <HalloweenScareOverlay scare={halloweenScare} muted={muted} reducedEffects={false} onDone={() => { setHalloweenScare(null); setHalloweenScareAfterglow(true); window.setTimeout(() => setHalloweenScareAfterglow(false), 3000); }} />}</AnimatePresence>
 
         {/* Achievement toast notification */}
         <AchievementToast
