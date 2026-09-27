@@ -1735,6 +1735,9 @@ router.post("/:roomCode/spy", writeLimiter, async (req, res) => {
     res.status(403).json({ error: "No estás en esta sala" });
     return;
   }
+  // Only current room members can ever be revealed as rivals. The live-response
+  // map is in-memory and must not be trusted as an authoritative membership list.
+  const memberIds = new Set(players.map((p: any) => p.playerId).filter(Boolean));
 
   // Enforce per-round usage limit (premium gets 2x)
   let used = roomSpyUsage.get(code);
@@ -1761,6 +1764,7 @@ router.post("/:roomCode/spy", writeLimiter, async (req, res) => {
   const candidates: Array<{ pid: string; name: string; cat: string; word: string }> = [];
   for (const [pid, info] of lr.entries()) {
     if (pid === playerId) continue;
+    if (!memberIds.has(pid)) continue;
     if (info.ts < cutoff) continue;
     for (const [cat, word] of Object.entries(info.responses)) {
       if (word && word.length > 0) candidates.push({ pid, name: info.name, cat, word });
