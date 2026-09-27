@@ -323,13 +323,21 @@ async function performBotSubmit(
     if (!me || !me.isBot) return;
     if (me.isReady) return; // already submitted
 
-    // Bot only triggers STOP if nobody has yet AND it's still "playing".
+    // A scheduled bot STOP is only valid while the authoritative round is
+    // still active. For short/blitz rounds the 25-50s bot timer can fire after
+    // the server deadline; let the normal sweep/results path close that round
+    // instead of creating a late STOP.
     let newStatus = room.status as string;
     let newStopperJson = room.stopperJson;
     if (options.triggerStop && room.status === "playing") {
       const stopTimestamp = Date.now();
       let prevMeta: any = {};
       try { prevMeta = room.stopperJson ? JSON.parse(room.stopperJson) : {}; } catch {}
+      const startedAt = prevMeta?.roundStartedAt;
+      if (typeof startedAt === "number") {
+        const deadline = startedAt + (room.gameMode === "blitz" ? 30 : 60) * 1000;
+        if (stopTimestamp >= deadline) return;
+      }
       newStopperJson = JSON.stringify({
         ...prevMeta,
         stopper: { id: botPlayerId, name: me.playerName, stopTimestamp },
@@ -385,33 +393,15 @@ async function performBotSubmit(
       };
     });
 
-    // Bot never bluffs, so if its submission completes the round and there
-    // are no human bluffers we can advance directly; otherwise just save and
-    // let the human /results handler decide the next status.
-    let nextStatus = newStatus;
-    let nextRound = room.currentRound;
-    let nextLetter = room.currentLetter;
-    let nextStopperJson: string | null = newStopperJson;
-
-    let didFinishGame = false;
-    const allReady = updatedPlayers.every(p => p.isReady);
-    if (allReady) {
-      const bluffers = updatedPlayers.filter(p => p.bluffedCategories?.length > 0);
-      if (bluffers.length === 0) {
-        // Advance — mirror the rooms.ts /results advancement.
-        nextRound = (room.currentRound ?? 0) + 1;
-        if (nextRound > (room.maxRounds ?? 3)) {
-          nextStatus = "finished";
-          nextRound = room.maxRounds ?? 3;
-          didFinishGame = true;
-        } else {
-          nextStatus = "waiting";
-          // Letter will be re-rolled when host starts next round; clear meta.
-        }
-        nextStopperJson = null;
-      }
-    }
-
+    // Do NOT finalize the room from the bot path. The authoritative
+    // finalizeRoundState() lives in rooms.ts and performs the deadline sweep,
+    // bluff detection, round transition and one-shot side effects. The bot
+    // only contributes its own player state here; /results or the background
+    // sweep will finalize the room exactly like a human submission.
+    const nextStatus = newStatus;
+    const nextRound = room.currentRound;
+    const nextLetter = room.currentLetter;
+    const nextStopperJson: string | null = newStopperJson;
     const updateResult = await db.update(roomsTable)
       .set({
         playersJson: JSON.stringify(updatedPlayers),
