@@ -1804,12 +1804,28 @@ router.post("/:roomCode/funvote", writeLimiter, async (req, res) => {
   const rooms = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, code)).limit(1);
   if (rooms.length === 0) { res.status(404).json({ error: "Room not found" }); return; }
   const room = rooms[0];
+  // Fun votes are only valid during reveal, or for the final round after finish.
+  const allowedStatuses = new Set(["stopped", "bluffvoting", "finished"]);
+  if (!allowedStatuses.has(room.status)) {
+    res.status(409).json({ error: "Fun voting is not available right now" }); return;
+  }
+  const expectedRound = room.status === "finished" ? room.maxRounds : room.currentRound;
+  if (round !== expectedRound) {
+    res.status(400).json({ error: "Invalid round" }); return;
+  }
   const players = parsePlayers(room.playersJson);
   if (!players.some((p: any) => p.playerId === playerId)) {
     res.status(403).json({ error: "No estás en esta sala" }); return;
   }
-  if (!players.some((p: any) => p.playerId === votedPlayerId)) {
+  const target = players.find((p: any) => p.playerId === votedPlayerId);
+  if (!target) {
     res.status(404).json({ error: "Ese jugador no está en la sala" }); return;
+  }
+  // The client cannot manufacture a funny answer/category; validate the
+  // submitted answer against the authoritative room snapshot.
+  const authoritativeAnswer = typeof target.answers?.[category] === "string" ? target.answers[category] : "";
+  if (!authoritativeAnswer || normalizeWord(authoritativeAnswer) !== normalizeWord(String(answer ?? ""))) {
+    res.status(400).json({ error: "La respuesta no coincide con la partida" }); return;
   }
 
   let votes = roomFunVotes.get(code);
