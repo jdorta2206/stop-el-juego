@@ -1369,8 +1369,15 @@ router.post("/:roomCode/leave", async (req, res) => {
     // even if a previous code path forgot to clear it.
     let newHostId: string | null = null;
     if (leaving.isHost) {
-      remaining.forEach((p: any, idx: number) => { p.isHost = idx === 0; });
-      newHostId = remaining[0].playerId;
+      // 🤖 Bots may fill the lobby but can never own the room.
+      const humanRemaining = remaining.filter((p: any) => !p.isBot);
+      if (humanRemaining.length === 0) {
+        await tx.delete(roomsTable).where(eq(roomsTable.roomCode, code));
+        return { kind: "deleted" } as const;
+      }
+      const promoted = humanRemaining[0];
+      remaining.forEach((p: any) => { p.isHost = p.playerId === promoted.playerId; });
+      newHostId = promoted.playerId;
     }
 
     const setPayload: Record<string, unknown> = {
