@@ -370,9 +370,10 @@ function resolveBluffs(players: any[], bluffVotes: Record<string, any>): any[] {
     for (const cat of p.bluffedCategories) {
       const votes = Object.values(voteMap[cat] ?? {}) as string[];
       const lieCnt = votes.filter(v => v === "lie").length;
-      const caught = votes.length > 0 && lieCnt > votes.length / 2; // strict majority
+      // Shield makes the player's bluff immune: votes cannot catch it.
+      const caught = !p.bluffImmune && votes.length > 0 && lieCnt > votes.length / 2;
       scoreAdjust += caught ? -10 : 20;
-      bluffResults.push({ cat, caught, votes: voteMap[cat] ?? {} });
+      bluffResults.push({ cat, caught, votes: voteMap[cat] ?? {}, shielded: !!p.bluffImmune });
     }
     return { ...p, score: (p.score || 0) + scoreAdjust, bluffResults };
   });
@@ -1535,29 +1536,48 @@ router.post("/:roomCode/use-card", async (req, res) => {
     }
 
     let updatedPlayers = players.map(p =>
-      p.playerId === playerId ? { ...p, powerCardUsed: true } : p
+      p.playerId === playerId
+        ? { ...p, powerCardUsed: true, powerCardUsedRound: room.currentRound }
+        : p
     );
 
-    // Apply server-side effects
+    // Apply authoritative server-side effects. Time and score cards must be
+    // persisted here so reconnects and other clients see the same result.
     const card = me.powerCard as string;
+    let nextStopperJson = room.stopperJson;
+
     if (card === "sabotage" || card === "steal") {
-      // Steal 10 pts from the current leader (not self)
-      const sorted = [...updatedPlayers].filter(p => p.playerId !== playerId).sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+      const sorted = [...updatedPlayers]
+        .filter(p => p.playerId !== playerId)
+        .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
       if (sorted.length > 0) {
         const leaderId = sorted[0].playerId;
         updatedPlayers = updatedPlayers.map(p =>
-          p.playerId === leaderId ? { ...p, score: Math.max(0, (p.score ?? 0) - 10) } : p
+          p.playerId === leaderId
+            ? { ...p, score: Math.max(0, (p.score ?? 0) - 10) }
+            : p
         );
       }
     } else if (card === "shield") {
       updatedPlayers = updatedPlayers.map(p =>
         p.playerId === playerId ? { ...p, bluffImmune: true } : p
       );
+    } else if (card === "lightning") {
+      // Extend the authoritative deadline by 15s by moving round start back.
+      const meta = parseBluffMeta(room.stopperJson) ?? {};
+      const startedAt = typeof meta.roundStartedAt === "number" ? meta.roundStartedAt : Date.now();
+      nextStopperJson = JSON.stringify({ ...meta, roundStartedAt: startedAt - 15_000 });
     }
-    // lightning and double_or_nothing are handled client-side (time bonus / score multiplier)
+    // double_or_nothing is applied authoritatively when this player's round
+    // result is scored below, using powerCardUsedRound to avoid carrying the
+    // effect into later rounds.
 
     const [updated] = await db.update(roomsTable)
-      .set({ playersJson: JSON.stringify(updatedPlayers), updatedAt: new Date() })
+      .set({
+        playersJson: JSON.stringify(updatedPlayers),
+        stopperJson: nextStopperJson,
+        updatedAt: new Date(),
+      })
       .where(and(eq(roomsTable.roomCode, code), eq(roomsTable.updatedAt, room.updatedAt)))
       .returning();
 
@@ -2179,6 +2199,18 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
   const spies = roomSpyUsage.get(roomCode.toUpperCase());
   if (spies?.has(playerId)) {
     cappedRoundScore = Math.max(0, cappedRoundScore - 10);
+  }
+
+  // 🎯 Double or Nothing: authoritative ×2 for the round in which the card
+  // was actually used. The round marker prevents the used card from leaking
+  // into later rounds.
+  const activePowerCard = me.powerCard;
+  if (
+    activePowerCard === "double_or_nothing" &&
+    me.powerCardUsed === true &&
+    me.powerCardUsedRound === room.currentRound
+  ) {
+    cappedRoundScore *= 2;
   }
 
   // 🛡️ Anti-cheat hard cutoff: submissions that arrive AFTER the grace window
