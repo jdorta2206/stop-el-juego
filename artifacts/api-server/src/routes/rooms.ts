@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db } from "@workspace/db";
+import { db, pool } from "@workspace/db";
 import { roomsTable, playerScoresTable, gameHistoryTable } from "@workspace/db";
 import { eq, and, or, lt, inArray, sql } from "drizzle-orm";
 import { CreateRoomBody, JoinRoomBody, SubmitRoomResultsBody } from "@workspace/api-zod";
@@ -114,14 +114,75 @@ function isPlayerOnline(code: string, playerId: string): boolean {
 const SUBMIT_GRACE_MS = 15_000;
 const PRESENCE_GRACE_MS = 4_000;
 
-function broadcastRoom(code: string, roomPayload: object) {
+function broadcastRoomLocal(code: string, roomPayload: object) {
   const clients = sseClients.get(code);
   if (!clients || clients.size === 0) return;
-  const data = `data: ${JSON.stringify(roomPayload)}\n\n`;
   for (const client of [...clients]) {
-    try { client.res.write(data); } catch { clients.delete(client); }
+    try {
+      const isMember = Array.isArray((roomPayload as any).players)
+        && (roomPayload as any).players.some((p: any) => p?.playerId === client.playerId);
+      const safePayload = (roomPayload as any).isPublic === true && !isMember
+        ? sanitizeRoomForSpectator(roomPayload)
+        : roomPayload;
+      client.res.write(`data: ${JSON.stringify(safePayload)}\n\n`);
+    } catch { clients.delete(client); }
   }
 }
+
+const SSE_CLUSTER_CHANNEL = "stop_room_sse_update";
+const SSE_INSTANCE_ID = Math.random().toString(36).slice(2);
+let sseListenerStarting = false;
+
+async function publishRoomSseUpdate(code: string) {
+  try {
+    await pool.query(
+      "SELECT pg_notify($1, $2)",
+      [SSE_CLUSTER_CHANNEL, JSON.stringify({ code, source: SSE_INSTANCE_ID })],
+    );
+  } catch (err) {
+    console.error("[rooms/sse] publish failed:", (err as Error).message);
+  }
+}
+
+async function startSseClusterListener() {
+  if (sseListenerStarting) return;
+  sseListenerStarting = true;
+  try {
+    const client = await pool.connect();
+    await client.query(`LISTEN ${SSE_CLUSTER_CHANNEL}`);
+    client.on("notification", async (message) => {
+      try {
+        const payload = JSON.parse(message.payload ?? "{}");
+        if (!payload.code || payload.source === SSE_INSTANCE_ID) return;
+        const code = String(payload.code).toUpperCase();
+        const [room] = await db.select().from(roomsTable)
+          .where(eq(roomsTable.roomCode, code)).limit(1);
+        if (room) broadcastRoomLocal(code, formatRoom(room));
+      } catch (err) {
+        console.error("[rooms/sse] relay failed:", (err as Error).message);
+      }
+    });
+    client.on("error", (err) => {
+      console.error("[rooms/sse] listener error:", err.message);
+      client.release();
+      sseListenerStarting = false;
+      setTimeout(() => { startSseClusterListener().catch(() => {}); }, 1000);
+    });
+  } catch (err) {
+    sseListenerStarting = false;
+    console.error("[rooms/sse] listener start failed:", (err as Error).message);
+    setTimeout(() => { startSseClusterListener().catch(() => {}); }, 3000);
+  }
+}
+
+async function broadcastRoom(code: string, roomPayload: object) {
+  broadcastRoomLocal(code, roomPayload);
+  await publishRoomSseUpdate(code);
+}
+
+startSseClusterListener().catch(() => {});
+
+
 
 // Format room AND broadcast to SSE clients at the same time
 function broadcastAndFormat(room: any) {
