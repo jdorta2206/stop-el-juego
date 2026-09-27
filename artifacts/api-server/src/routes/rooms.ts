@@ -2082,6 +2082,22 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
     return;
   }
 
+  // A results submission is only legal after STOP, or after the authoritative
+  // server-side round deadline has actually elapsed. Accepting /results during
+  // a live "playing" round would let a client mark itself ready early and,
+  // if enough players did the same, advance the round before the timer ended.
+  if (room.status === "playing") {
+    const meta = parseBluffMeta(room.stopperJson);
+    const startedAt = typeof meta?.roundStartedAt === "number" ? meta.roundStartedAt : 0;
+    const deadline = startedAt > 0
+      ? startedAt + roundDurationSecs(room) * 1000
+      : 0;
+    if (!deadline || Date.now() < deadline) {
+      res.status(409).json({ error: "The round is still active" });
+      return;
+    }
+  }
+
   // ── Idempotency guard ─────────────────────────────────────────────────────
   // If this player already submitted for the current round (isReady === true),
   // return the current room state without re-applying score — prevents double-submit cheats.
