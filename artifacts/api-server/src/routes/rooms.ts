@@ -14,6 +14,8 @@ import {
   resolveCategoriesForRound,
   rushBotSubmits,
   clearBotTimers,
+  cleanupBotRoom,
+  getBotRoomCodes,
 } from "../lib/multiplayerBot";
 
 const router: IRouter = Router();
@@ -737,6 +739,13 @@ async function purgeStaleRooms() {
     const dropOrphans = (m: Map<string, unknown>) => {
       for (const code of m.keys()) if (!liveCodesSet.has(code)) m.delete(code);
     };
+    // Bot timers/LLM answers can outlive a room that was purged without
+    // going through /leave. Clean every bot-owned room state that no longer
+    // exists in the authoritative DB.
+    for (const code of getBotRoomCodes()) {
+      if (!liveCodesSet.has(code)) cleanupBotRoom(code);
+    }
+
     // SSE: close leftover client connections before dropping the set.
     for (const code of sseClients.keys()) {
       if (liveCodesSet.has(code)) continue;

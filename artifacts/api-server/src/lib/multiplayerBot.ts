@@ -240,6 +240,15 @@ export function cleanupBotRoom(code: string) {
   clearPendingAnswers(code);
 }
 
+// Used by periodic room purging to clean bot state even when the room
+// disappeared without passing through the /leave handler.
+export function getBotRoomCodes(): string[] {
+  return Array.from(new Set([
+    ...roomBotTimers.keys(),
+    ...pendingAnswers.keys(),
+  ]));
+}
+
 // ── Category resolution (server mirror of the client packs) ───────────────
 // Kept in sync with artifacts/stop-game/src/pages/Room.tsx (CATEGORIES_ES +
 // CRAZY_CATEGORIES_ES + computeCategories). Small acceptable duplication so
