@@ -57,6 +57,8 @@ export async function ensureIndexes(): Promise<void> {
          AND (a.score < b.score OR (a.score = b.score AND a.id < b.id))`,
     `CREATE UNIQUE INDEX IF NOT EXISTS daily_results_player_date_uidx
        ON daily_results (player_id, challenge_date)`,
+    `CREATE TABLE IF NOT EXISTS multiplayer_score_claims (room_code text NOT NULL, player_id text NOT NULL, score integer NOT NULL DEFAULT 0, created_at timestamp NOT NULL DEFAULT NOW(), PRIMARY KEY (room_code, player_id))`,
+    `CREATE INDEX IF NOT EXISTS multiplayer_score_claims_player_id_idx ON multiplayer_score_claims (player_id)`,
     `CREATE TABLE IF NOT EXISTS cron_locks (lock_key text PRIMARY KEY, last_run_date text NOT NULL, updated_at timestamp NOT NULL DEFAULT NOW())`,
     `CREATE TABLE IF NOT EXISTS guest_stats (day text PRIMARY KEY, games integer NOT NULL DEFAULT 0, conversions integer NOT NULL DEFAULT 0)`,
     `CREATE TABLE IF NOT EXISTS seasons (id serial PRIMARY KEY, start_date text NOT NULL, end_date text NOT NULL, theme_json text NOT NULL DEFAULT '{}', created_at timestamp NOT NULL DEFAULT NOW())`,

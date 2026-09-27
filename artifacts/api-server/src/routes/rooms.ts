@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { roomsTable, playerScoresTable, gameHistoryTable } from "@workspace/db";
+import { roomsTable, playerScoresTable, gameHistoryTable, multiplayerScoreClaimsTable } from "@workspace/db";
 import { eq, and, or, lt, inArray, sql } from "drizzle-orm";
 import { CreateRoomBody, JoinRoomBody, SubmitRoomResultsBody } from "@workspace/api-zod";
 import { calculateStreak, appendStreakDay } from "./ranking";
@@ -138,8 +138,8 @@ const botDeps = {
   formatRoom: (room: any) => formatRoom(room),
   // Persists final scores to the global leaderboard when the bot's submission
   // happens to be the one that ends the match.
-  submitFinalScores: (players: any[], letter: string) =>
-    submitAllScoresToLeaderboard(players, letter).catch(() => {}),
+  submitFinalScores: (roomCode: string, players: any[], letter: string) =>
+    submitAllScoresToLeaderboard(roomCode, players, letter).catch(() => {}),
 };
 
 // ── In-memory stores (ephemeral, no DB needed) ─────────────────────────────
@@ -379,7 +379,7 @@ function resolveBluffs(players: any[], bluffVotes: Record<string, any>): any[] {
 }
 
 // Auto-submit all non-guest players' scores to the global leaderboard when the game ends
-async function submitAllScoresToLeaderboard(players: any[], letter: string) {
+async function submitAllScoresToLeaderboard(roomCode: string, players: any[], letter: string) {
   // ⚖️ Deterministic tie-breaker — must match the client's winner display:
   //   1) higher final score
   //   2) was the stopper in the LAST round (rewards the player who triggered STOP)
@@ -408,11 +408,22 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string) {
     const score = Math.round(rawScore * 1.5);
     const won = winner?.playerId === p.playerId;
 
+    // Persist a per-room/per-player claim together with the leaderboard update.
+    // The unique claim makes retries safe; the transaction means a transient
+    // failure rolls back the claim as well, so a later retry can finish it.
+    await db.transaction(async (tx) => {
+      const claimed = await tx.insert(multiplayerScoreClaimsTable).values({
+        roomCode: roomCode.toUpperCase(),
+        playerId: p.playerId,
+        score,
+      }).onConflictDoNothing().returning({ playerId: multiplayerScoreClaimsTable.playerId });
+      if (claimed.length === 0) return;
+
     // 🔒 Atomic upsert: avoids the read-modify-write race that lost
     // concurrent finishers' totals under heavy multiplayer load.
     // Streak still needs the prior `lastPlayedDate`, so we read it once,
     // but every counter increment is delegated to SQL in a single statement.
-    const existing = await db
+      const existing = await tx
       .select({
         lastPlayedDate: playerScoresTable.lastPlayedDate,
         currentStreak: playerScoresTable.currentStreak,
@@ -436,8 +447,8 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string) {
       ? appendStreakDay(existing[0]?.streakDaysJson, today)
       : undefined;
 
-    if (existing.length > 0) {
-      await db.update(playerScoresTable)
+      if (existing.length > 0) {
+        await tx.update(playerScoresTable)
         .set({
           playerName: p.playerName,
           avatarColor: p.avatarColor ?? existing[0].avatarColor,
@@ -453,9 +464,9 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string) {
           updatedAt: new Date(),
         })
         .where(eq(playerScoresTable.playerId, p.playerId));
-    } else {
-      // Use INSERT … ON CONFLICT to be safe under simultaneous first-time inserts.
-      await db.insert(playerScoresTable).values({
+      } else {
+        // Use INSERT … ON CONFLICT to be safe under simultaneous first-time inserts.
+        await tx.insert(playerScoresTable).values({
         playerId: p.playerId,
         playerName: p.playerName,
         avatarColor: p.avatarColor ?? "#e53e3e",
@@ -476,16 +487,17 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string) {
           updatedAt: new Date(),
         },
       });
-    }
+      }
 
-    await db.insert(gameHistoryTable).values({
+      await tx.insert(gameHistoryTable).values({
       playerId: p.playerId,
       score,
       letter,
       mode: "multiplayer",
       won,
     });
-  }));
+  }))
+;
 }
 
 // Run the stuck-player sweep and, if everyone is ready, compute the next
@@ -606,7 +618,7 @@ function applyRoundAdvanceSideEffects(room: any, sweptPlayers: any[], newStatus:
   }
   if (newStatus === "finished") {
     // 🏆 Persist final scores to the global leaderboard exactly once.
-    submitAllScoresToLeaderboard(sweptPlayers, room.currentLetter || "A").catch(() => {});
+    submitAllScoresToLeaderboard(room.roomCode, sweptPlayers, room.currentLetter || "A").catch(() => {});
   }
 }
 
@@ -658,6 +670,26 @@ async function sweepStuckRooms() {
       broadcastAndFormat(updateResult[0]);
     }
 
+    // 🔁 Retry final leaderboard persistence for finished rooms. The claim
+    // ledger makes this idempotent, while the finished-room scan survives a
+    // process restart that happened after the room became finished but before
+    // its background leaderboard write completed.
+    const recentlyFinished = await db.select().from(roomsTable)
+      .where(and(
+        eq(roomsTable.status, "finished"),
+        sql`${roomsTable.updatedAt} >= NOW() - INTERVAL '6 hours'`,
+      ));
+    for (const room of recentlyFinished) {
+      const players = parsePlayers(room.playersJson);
+      await submitAllScoresToLeaderboard(
+        room.roomCode,
+        players,
+        room.currentLetter || "A",
+      ).catch((err) => {
+        console.error("[sweepStuckRooms] finished-room leaderboard retry failed:", (err as Error).message);
+      });
+    }
+
     // 🃏 Also rescue rooms stuck in "bluffvoting": resolution only happens when
     // a client polls /vote or /resolve-bluffs. If everyone closes the tab the
     // round would hang until the 6h purge. Force-resolve once the bluff deadline
@@ -690,7 +722,7 @@ async function sweepStuckRooms() {
         .returning();
       if (!updated) continue;
       if (isGameOver) {
-        submitAllScoresToLeaderboard(resolved, room.currentLetter || "A").catch(() => {});
+        submitAllScoresToLeaderboard(room.roomCode, resolved, room.currentLetter || "A").catch(() => {});
       }
       broadcastAndFormat(updated);
     }
