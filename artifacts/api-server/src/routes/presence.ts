@@ -179,7 +179,8 @@ router.post("/challenge", async (req, res) => {
   const challengeId = `ch_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
   const roomCode = generateRoomCode();
 
-  // Create the room in the DB right now so /join works when the challenge is accepted
+  // Create the room in the DB right now so /join works when the challenge is accepted.
+  // Retry on the extremely rare code collision so the challenge never points at a wrong room.
   try {
     const players = [{
       playerId: fromPlayerId,
@@ -191,20 +192,32 @@ router.post("/challenge", async (req, res) => {
       isHost: true,
       isReady: false,
     }];
-    await db.insert(roomsTable).values({
-      roomCode,
-      hostId: fromPlayerId,
-      hostName: fromName,
-      status: "waiting",
-      currentRound: 0,
-      maxRounds: 3,
-      language: "es",
-      playersJson: JSON.stringify(players),
-      stopperJson: null,
-      isPublic: false,
-    });
+    let created = false;
+    for (let attempt = 0; attempt < 20 && !created; attempt++) {
+      const candidate = generateRoomCode();
+      try {
+        await db.insert(roomsTable).values({
+          roomCode: candidate,
+          hostId: fromPlayerId,
+          hostName: fromName,
+          status: "waiting",
+          currentRound: 0,
+          maxRounds: 3,
+          language: "es",
+          playersJson: JSON.stringify(players),
+          stopperJson: null,
+          isPublic: false,
+        });
+        roomCode = candidate;
+        created = true;
+      } catch (error: any) {
+        if (error?.code !== "23505") throw error;
+      }
+    }
+    if (!created) return res.status(503).json({ error: "Could not allocate challenge room" });
   } catch (e) {
     console.error("Challenge room creation failed:", e);
+    return res.status(500).json({ error: "Could not create challenge room" });
   }
 
   challengeMap.set(challengeId, {
@@ -317,6 +330,16 @@ router.post("/challenge/:challengeId/respond", (req, res) => {
   const challenge = challengeMap.get(challengeId);
   if (!challenge) {
     return res.status(404).json({ error: "Challenge not found or expired" });
+  }
+
+  // A challenge can only transition once. This prevents stale/double responses
+  // from flipping an already accepted/declined challenge.
+  if (challenge.status !== "pending") {
+    return res.status(409).json({ error: "Challenge is no longer pending" });
+  }
+  if (challenge.createdAt < Date.now() - 60 * 1000) {
+    challengeMap.delete(challengeId);
+    return res.status(410).json({ error: "Challenge expired" });
   }
 
   // Only the challenged player may accept/decline this challenge.
