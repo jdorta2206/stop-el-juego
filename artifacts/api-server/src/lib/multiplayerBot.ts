@@ -302,7 +302,7 @@ async function performBotSubmit(
   roomCode: string,
   botPlayerId: string,
   deps: BotActionDeps,
-  options: { triggerStop: boolean; attempt?: number },
+  options: { triggerStop: boolean; attempt?: number; expectedRound?: number; expectedLetter?: string },
 ): Promise<void> {
   const code = roomCode.toUpperCase();
   const attempt = options.attempt ?? 0;
@@ -311,6 +311,10 @@ async function performBotSubmit(
     if (rows.length === 0) return;
     const room = rows[0];
     if (room.status !== "playing" && room.status !== "stopped") return;
+    // A timeout can survive a round transition if its callback is already running.
+    // Never let a bot scheduled for round N mutate round N+1.
+    if (options.expectedRound != null && room.currentRound !== options.expectedRound) return;
+    if (options.expectedLetter && (room.currentLetter ?? "").toUpperCase() !== options.expectedLetter.toUpperCase()) return;
 
     let players: any[];
     try { players = JSON.parse(room.playersJson); } catch { return; }
@@ -491,7 +495,7 @@ export function scheduleBotsForRound(opts: {
   for (const b of opts.bots) {
     const delay = 25_000 + Math.random() * 25_000; // 25-50s
     const t = setTimeout(() => {
-      performBotSubmit(opts.roomCode, b.playerId, opts.deps, { triggerStop: true });
+      performBotSubmit(opts.roomCode, b.playerId, opts.deps, { triggerStop: true, expectedRound: round, expectedLetter: letter });
     }, delay);
     trackTimer(opts.roomCode, t);
   }
@@ -503,12 +507,14 @@ export function rushBotSubmits(opts: {
   roomCode: string;
   bots: { playerId: string }[];
   deps: BotActionDeps;
+  round: number;
+  letter: string;
 }) {
   clearBotTimers(opts.roomCode);
   for (const b of opts.bots) {
     const delay = 1_500 + Math.random() * 2_500; // 1.5-4s, mimics real player freeze
     const t = setTimeout(() => {
-      performBotSubmit(opts.roomCode, b.playerId, opts.deps, { triggerStop: false });
+      performBotSubmit(opts.roomCode, b.playerId, opts.deps, { triggerStop: false, expectedRound: opts.round, expectedLetter: opts.letter });
     }, delay);
     trackTimer(opts.roomCode, t);
   }
