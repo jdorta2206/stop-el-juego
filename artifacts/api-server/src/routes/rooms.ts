@@ -123,6 +123,17 @@ function broadcastRoom(code: string, roomPayload: object) {
   }
 }
 
+// Close all SSE subscribers immediately when a room is destroyed. This avoids
+// stale clients surviving a delete long enough to receive a reused room code.
+function closeRoomSse(code: string) {
+  const clients = sseClients.get(code);
+  if (!clients) return;
+  for (const client of [...clients]) {
+    try { client.res.end(); } catch {}
+  }
+  sseClients.delete(code);
+}
+
 // Format room AND broadcast to SSE clients at the same time
 function broadcastAndFormat(room: any) {
   const formatted = formatRoom(room);
@@ -1392,6 +1403,7 @@ router.post("/:roomCode/leave", async (req, res) => {
   });
 
   if (outcome.kind === "deleted") {
+    closeRoomSse(code);
     roomTyping.delete(code);
     roomLiveResponses.delete(code);
     roomSpyUsage.delete(code);
