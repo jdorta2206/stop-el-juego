@@ -2175,6 +2175,14 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
     cappedRoundScore += 5;
   }
 
+  // 🎯 Doble o Nada: the server applies the multiplier exactly once from the
+  // authoritative player state. The client-provided roundScore is ignored.
+  // powerCardUsed can only be set by /use-card, and the card remains attached
+  // to the player until the next match, so this is safe against client tampering.
+  if (me?.powerCard === "double_or_nothing" && me?.powerCardUsed === true) {
+    cappedRoundScore *= 2;
+  }
+
   // 🕵️ Authoritative spy penalty: -10 pts if the server registered a spy use this round
   const spies = roomSpyUsage.get(roomCode.toUpperCase());
   if (spies?.has(playerId)) {
