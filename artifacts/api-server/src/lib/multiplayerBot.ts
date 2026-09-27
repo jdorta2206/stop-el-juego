@@ -302,7 +302,7 @@ async function performBotSubmit(
   roomCode: string,
   botPlayerId: string,
   deps: BotActionDeps,
-  options: { triggerStop: boolean; attempt?: number; expectedRound?: number; expectedLetter?: string },
+  options: { triggerStop: boolean; attempt?: number; expectedRound?: number; expectedLetter?: string; expectedDurationSecs?: number },
 ): Promise<void> {
   const code = roomCode.toUpperCase();
   const attempt = options.attempt ?? 0;
@@ -335,7 +335,8 @@ async function performBotSubmit(
       try { prevMeta = room.stopperJson ? JSON.parse(room.stopperJson) : {}; } catch {}
       const startedAt = prevMeta?.roundStartedAt;
       if (typeof startedAt === "number") {
-        const deadline = startedAt + (room.gameMode === "blitz" ? 30 : 60) * 1000;
+        const durationSecs = options.expectedDurationSecs ?? (room.gameMode === "blitz" ? 30 : 60);
+        const deadline = startedAt + durationSecs * 1000;
         if (stopTimestamp >= deadline) return;
       }
       newStopperJson = JSON.stringify({
@@ -461,6 +462,7 @@ export function scheduleBotsForRound(opts: {
   categories: string[];
   deps: BotActionDeps;
   round: number;
+  roundDurationSecs?: number;
 }) {
   clearBotTimers(opts.roomCode);
   // Wipe any leftover LLM answers from a previous round so a late-resolving
@@ -485,7 +487,7 @@ export function scheduleBotsForRound(opts: {
   for (const b of opts.bots) {
     const delay = 25_000 + Math.random() * 25_000; // 25-50s
     const t = setTimeout(() => {
-      performBotSubmit(opts.roomCode, b.playerId, opts.deps, { triggerStop: true, expectedRound: round, expectedLetter: letter });
+      performBotSubmit(opts.roomCode, b.playerId, opts.deps, { triggerStop: true, expectedRound: round, expectedLetter: letter, expectedDurationSecs: opts.roundDurationSecs });
     }, delay);
     trackTimer(opts.roomCode, t);
   }
