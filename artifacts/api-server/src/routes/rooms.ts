@@ -942,6 +942,20 @@ router.post("/", async (req, res) => {
   roomReactions.delete(roomCode);
   roomPhrases.delete(roomCode);
   roomTyping.delete(roomCode);
+  roomLiveResponses.delete(roomCode);
+  roomSpyUsage.delete(roomCode);
+  roomRematch.delete(roomCode);
+  roomFunVotes.delete(roomCode);
+
+  // If a code was recycled after an out-of-band DB deletion, never let SSE
+  // clients from the previous room remain subscribed to the new room.
+  const staleSse = sseClients.get(roomCode);
+  if (staleSse) {
+    for (const client of staleSse) {
+      try { client.res.end(); } catch {}
+    }
+    sseClients.delete(roomCode);
+  }
 
   const [room] = await db.insert(roomsTable).values({
     roomCode,
