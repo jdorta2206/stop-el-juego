@@ -77,7 +77,7 @@ export function usePlayer() {
 
   useEffect(() => {
     let cancelled = false;
-    const refresh = () => { const stored = readStoredPlayer(); setPlayer(stored); setNeedsAuth(!stored); };
+    const refresh = () => { const stored = readStoredPlayer(); if (!stored) { try { localStorage.removeItem(SESSION_TOKEN_KEY); } catch {} } setPlayer(stored); setNeedsAuth(!stored); };
     try { localStorage.removeItem("stop_auth_dismissed_v1"); } catch {}
     const stored = readStoredPlayer();
 
