@@ -158,6 +158,9 @@ router.post("/challenge", async (req, res) => {
   if (!fromPlayerId || !toPlayerId || !fromName) {
     return res.status(400).json({ error: "fromPlayerId, fromName and toPlayerId required" });
   }
+  if (fromPlayerId === toPlayerId) {
+    return res.status(400).json({ error: "Cannot challenge yourself" });
+  }
   if (!verifyClaimedIdentity(req, fromPlayerId)) {
     return res.status(403).json({ error: "Invalid player identity" });
   }
@@ -179,12 +182,36 @@ router.post("/challenge", async (req, res) => {
   const challengeId = `ch_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
   const roomCode = generateRoomCode();
 
-  // Create the room in the DB right now so /join works when the challenge is accepted
+  // Resolve the sender's canonical profile from the server-side account row.
+  // Do not trust client-supplied name/avatar data for a persisted challenge room.
+  let canonicalName = String(fromName).trim().slice(0, 14);
+  let canonicalPicture: string | null = fromPicture || null;
+  let canonicalAvatarColor = fromAvatarColor || "#e53e3e";
+  try {
+    const profileRows = await db
+      .select({
+        playerName: playerScoresTable.playerName,
+        profilePicture: playerScoresTable.profilePicture,
+        avatarColor: playerScoresTable.avatarColor,
+      })
+      .from(playerScoresTable)
+      .where(eq(playerScoresTable.playerId, fromPlayerId))
+      .limit(1);
+    const profile = profileRows[0];
+    if (profile) {
+      canonicalName = profile.playerName || canonicalName;
+      canonicalPicture = profile.profilePicture ?? canonicalPicture;
+      canonicalAvatarColor = profile.avatarColor || canonicalAvatarColor;
+    }
+  } catch {}
+
+  // Create the room in the DB right now so /join works when the challenge is accepted.
+  // If creation fails, do not create a challenge pointing to a nonexistent room.
   try {
     const players = [{
       playerId: fromPlayerId,
-      playerName: fromName,
-      avatarColor: fromAvatarColor ?? "#e53e3e",
+      playerName: canonicalName,
+      avatarColor: canonicalAvatarColor,
       loginMethod: null as string | null,
       score: 0,
       roundScore: 0,
@@ -194,7 +221,7 @@ router.post("/challenge", async (req, res) => {
     await db.insert(roomsTable).values({
       roomCode,
       hostId: fromPlayerId,
-      hostName: fromName,
+      hostName: canonicalName,
       status: "waiting",
       currentRound: 0,
       maxRounds: 3,
@@ -205,14 +232,15 @@ router.post("/challenge", async (req, res) => {
     });
   } catch (e) {
     console.error("Challenge room creation failed:", e);
+    return res.status(503).json({ error: "Unable to create challenge room" });
   }
 
   challengeMap.set(challengeId, {
     challengeId,
     fromPlayerId,
-    fromName,
-    fromPicture: fromPicture || null,
-    fromAvatarColor: fromAvatarColor || "#e53e3e",
+    fromName: canonicalName,
+    fromPicture: canonicalPicture,
+    fromAvatarColor: canonicalAvatarColor,
     toPlayerId,
     roomCode,
     status: "pending",
@@ -222,10 +250,10 @@ router.post("/challenge", async (req, res) => {
   // Send push notification to target (works even if they have the app closed)
   const lang = (req.body as any).language || "es";
   const CHALLENGE_MSGS: Record<string, { title: string; body: string }> = {
-    es: { title: "⚔️ ¡Nuevo reto!", body: `${fromName} te desafía a una partida de STOP. ¡Acepta si te atreves!` },
-    en: { title: "⚔️ New challenge!", body: `${fromName} is challenging you to a STOP game. Do you dare accept?` },
-    pt: { title: "⚔️ Novo desafio!", body: `${fromName} desafia-te para uma partida de STOP. Aceitas?` },
-    fr: { title: "⚔️ Nouveau défi !", body: `${fromName} te défie à une partie de STOP. Tu oses accepter ?` },
+    es: { title: "⚔️ ¡Nuevo reto!", body: `${canonicalName} te desafía a una partida de STOP. ¡Acepta si te atreves!` },
+    en: { title: "⚔️ New challenge!", body: `${canonicalName} is challenging you to a STOP game. Do you dare accept?` },
+    pt: { title: "⚔️ Novo desafio!", body: `${canonicalName} desafia-te para uma partida de STOP. Aceitas?` },
+    fr: { title: "⚔️ Nouveau défi !", body: `${canonicalName} te défie à une partie de STOP. Tu oses accepter ?` },
   };
   const challengeMsg = CHALLENGE_MSGS[lang] || CHALLENGE_MSGS.es;
   sendPushToPlayer(toPlayerId, { ...challengeMsg, url: "/multiplayer" }).catch(() => {});
