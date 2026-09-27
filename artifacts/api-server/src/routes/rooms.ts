@@ -175,7 +175,7 @@ function getTyping(code: string, excludeId?: string): { playerId: string; player
 
 // 🕵️ Live in-progress responses (for spy/peek mechanic). Stale after 5s.
 // playerId → { name, responses: { category: word }, ts }
-const roomLiveResponses = new Map<string, Map<string, { name: string; responses: Record<string, string>; ts: number }>>();
+const roomLiveResponses = new Map<string, Map<string, { name: string; responses: Record<string, string>; ts: number; round: number; letter: string }>>();
 
 const EPHEMERAL_CLUSTER_CHANNEL = "stop_room_ephemeral";
 const EPHEMERAL_INSTANCE_ID = Math.random().toString(36).slice(2);
@@ -188,6 +188,8 @@ async function publishEphemeralUpdate(payload: {
   playerName: string;
   responses: Record<string, string>;
   ts: number;
+  round: number;
+  letter: string;
 }) {
   try {
     await pool.query("SELECT pg_notify($1, $2)", [
@@ -217,7 +219,7 @@ async function startEphemeralListener() {
         for (const [k, v] of Object.entries(p.responses ?? {})) {
           if (typeof v === "string" && v.trim()) safe[String(k).slice(0, 60)] = v.trim().slice(0, 80);
         }
-        lr.set(String(p.playerId), { name: String(p.playerName ?? "?").slice(0, 30), responses: safe, ts: Number(p.ts) || Date.now() });
+        lr.set(String(p.playerId), { name: String(p.playerName ?? "?").slice(0, 30), responses: safe, ts: Number(p.ts) || Date.now(), round: Number(p.round) || 0, letter: String(p.letter ?? "").toUpperCase() });
       } catch {}
     });
     client.on("error", (err) => {
@@ -1718,6 +1720,19 @@ router.post("/:roomCode/typing", writeLimiter, async (req, res) => {
   if (!playerId) { res.status(400).json({ error: "Missing playerId" }); return; }
   if (!verifyClaimedIdentity(req, playerId)) { res.status(403).json({ error: "Identity verification failed" }); return; }
 
+  // Typing is round-scoped and must only be accepted from a current room member.
+  const [typingRoom] = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, code)).limit(1);
+  if (!typingRoom) { res.status(404).json({ error: "Room not found" }); return; }
+  if (typingRoom.status !== "playing") {
+    res.status(409).json({ error: "Typing is only available during a live round" }); return;
+  }
+  const typingPlayers = parsePlayers(typingRoom.playersJson);
+  if (!typingPlayers.some((p: any) => p.playerId === playerId)) {
+    res.status(403).json({ error: "No estás en esta sala" }); return;
+  }
+  const typingRound = Number(typingRoom.currentRound ?? 0);
+  const typingLetter = String(typingRoom.currentLetter ?? "").toUpperCase();
+
   let m = roomTyping.get(code);
   if (!m) { m = new Map(); roomTyping.set(code, m); }
   m.set(playerId, { name: String(playerName ?? "?").slice(0, 30), ts: Date.now() });
@@ -1734,7 +1749,7 @@ router.post("/:roomCode/typing", writeLimiter, async (req, res) => {
       }
     }
     const typingTs = Date.now();
-    lr.set(playerId, { name: String(playerName ?? "?").slice(0, 30), responses: safe, ts: typingTs });
+    lr.set(playerId, { name: String(playerName ?? "?").slice(0, 30), responses: safe, ts: typingTs, round: typingRound, letter: typingLetter });
     publishEphemeralUpdate({
       code,
       type: "typing",
@@ -1742,6 +1757,8 @@ router.post("/:roomCode/typing", writeLimiter, async (req, res) => {
       playerName: String(playerName ?? "?").slice(0, 30),
       responses: safe,
       ts: typingTs,
+      round: typingRound,
+      letter: typingLetter,
     }).catch(() => {});
   }
 
