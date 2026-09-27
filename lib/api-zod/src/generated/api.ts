@@ -28,7 +28,7 @@ export const ValidateRoundBody = zod.object({
       category: zod.string(),
       word: zod.string(),
     }),
-  ),
+  ).max(12),
 });
 
 export const ValidateRoundResponse = zod.object({

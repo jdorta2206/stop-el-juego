@@ -308,6 +308,7 @@ components:
           type: string
         playerResponses:
           type: array
+          maxItems: 12
           items:
             $ref: "#/components/schemas/CategoryResponse"
       required:

@@ -1483,7 +1483,24 @@ router.post("/validate", async (req, res) => {
     return;
   }
 
-  const { letter, language, playerResponses } = body.data;
+  const { letter, language, playerResponses: rawPlayerResponses } = body.data;
+
+  // A round is bounded by the category pack (currently at most 12 categories).
+  // The client normally sends unique categories, but this endpoint is public and
+  // must not let a caller duplicate a category to multiply the server-computed
+  // score voucher or trigger unbounded AI validation work.
+  const MAX_ROUND_CATEGORIES = 12;
+  if (rawPlayerResponses.length > MAX_ROUND_CATEGORIES) {
+    res.status(400).json({ error: "Too many categories" });
+    return;
+  }
+  const seenCategories = new Set<string>();
+  const playerResponses = rawPlayerResponses.filter((pr) => {
+    const key = normalizeWord(pr.category);
+    if (!key || seenCategories.has(key)) return false;
+    seenCategories.add(key);
+    return true;
+  });
   // Best-effort player id from common header conventions used elsewhere in
   // the codebase. Used only to apply the per-player AI-call quota; absence
   // is fine, the global daily cap still protects against runaway cost.
