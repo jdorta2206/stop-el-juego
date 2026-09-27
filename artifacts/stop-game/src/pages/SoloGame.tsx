@@ -1203,6 +1203,7 @@ export default function SoloGame() {
       letter: dailyLetter || currentLetter,
       language: getCurrentLang(),
       scoreTokens: scoreTokensRef.current,
+      dailyScoreTokens: dailyScoreTokensRef.current,
     };
     const pendingKey = `stop_daily_pending_${today}`;
 
