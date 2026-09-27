@@ -594,6 +594,18 @@ components:
           type: string
         avatarColor:
           type: string
+        picture:
+          type: string
+          nullable: true
+        gameMode:
+          type: string
+          enum: [classic, blitz, challenge, random]
+          default: classic
+        maxPlayers:
+          type: integer
+          minimum: 2
+          maximum: 8
+          default: 8
         maxRounds:
           type: integer
           default: 3

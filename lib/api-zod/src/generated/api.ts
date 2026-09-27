@@ -191,6 +191,8 @@ export const CreateRoomBody = zod.object({
   hostName: zod.string(),
   avatarColor: zod.string().optional(),
   picture: zod.string().nullable().optional(),
+  gameMode: zod.enum(["classic", "blitz", "challenge", "random"]).optional().default("classic"),
+  maxPlayers: zod.number().int().min(2).max(8).optional().default(8),
   maxRounds: zod.number().default(createRoomBodyMaxRoundsDefault),
   language: zod.string().default(createRoomBodyLanguageDefault),
   loginMethod: zod.string().nullish(),
