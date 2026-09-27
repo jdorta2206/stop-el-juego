@@ -1159,6 +1159,14 @@ router.post("/:roomCode/start", async (req, res) => {
     isReady: false,
     roundScore: 0,
     finishedAt: undefined,
+    // Round-scoped submission/bluff state MUST never leak into the next round.
+    // Keeping bluffedCategories here would make finalizeRoundState enter
+    // bluffvoting again even when nobody bluffed in the new round.
+    answers: {},
+    bluffedCategories: [],
+    bluffedWords: {},
+    bluffResults: undefined,
+    wasStopper: false,
     // Assign 1 random card at game start (round 1); keep it for subsequent rounds until used
     powerCard: newRound === 1
       ? MP_CARDS[Math.floor(Math.random() * MP_CARDS.length)]
