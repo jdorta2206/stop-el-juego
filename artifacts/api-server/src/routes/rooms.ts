@@ -880,7 +880,6 @@ router.get("/public", async (_req, res) => {
 
   const formatted = rooms.map(r => ({
     roomCode: r.roomCode,
-    hostId: r.hostId,
     hostName: r.hostName || "Anfitrión",
     maxRounds: r.maxRounds,
     maxPlayers: r.maxPlayers ?? 8,
