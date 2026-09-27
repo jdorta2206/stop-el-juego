@@ -233,6 +233,10 @@ export default function Room() {
   // Keep latest phase and roomCode in refs so leaveRoom doesn't need state deps
   const phaseRef = useRef<string>("lobby");
   const roomCodeRef = useRef<string>(roomCode || "");
+  // A room is bound to the player identity that entered it. If the account
+  // changes while this component is still mounted, never let the previous
+  // account keep its answers/timers/SSE/query cache in the new session.
+  const previousPlayerIdRef = useRef<string | null>(player?.id ?? null);
 
   const submitMutation = useSubmitRoomResults();
   const queryClient = useQueryClient();
@@ -478,6 +482,25 @@ export default function Room() {
   // Keep phase and roomCode refs in sync so leaveRoom always has the latest values
   useEffect(() => { phaseRef.current = phase; }, [phase]);
   useEffect(() => { roomCodeRef.current = roomCode || ""; }, [roomCode]);
+
+  // A mounted Room must never survive an account switch. The React state,
+  // draft answers, timers and room query cache are all scoped to player.id;
+  // retaining them after identity changes could expose the previous account's
+  // answers or submit them under the newly selected account.
+  useEffect(() => {
+    const previousId = previousPlayerIdRef.current;
+    const nextId = player?.id ?? null;
+    if (previousId !== null && nextId !== previousId) {
+      const code = roomCodeRef.current || roomCode;
+      if (code) {
+        queryClient.removeQueries({ queryKey: getGetRoomQueryKey(code.toUpperCase()) });
+      }
+      clearActiveRoom();
+      setLocation("/multiplayer");
+      return;
+    }
+    previousPlayerIdRef.current = nextId;
+  }, [player?.id, roomCode, queryClient, setLocation]);
 
   // Sync categoryPack + custom categories from room data
   useEffect(() => {
