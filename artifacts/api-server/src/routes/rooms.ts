@@ -2082,6 +2082,17 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
     return;
   }
 
+  // 🔒 A results submission must come from an actual member of the room.
+  // Identity verification alone is not enough: an authenticated account that
+  // knows a room code must not be able to trigger round finalization or interact
+  // with another room's scoring flow.
+  const existingPlayers = parsePlayers(room.playersJson);
+  const me = existingPlayers.find((p: any) => p.playerId === body.data.playerId);
+  if (!me) {
+    res.status(403).json({ error: "Only players in the room can submit results" });
+    return;
+  }
+
   // ── Idempotency guard ─────────────────────────────────────────────────────
   // If this player already submitted for the current round (isReady === true),
   // return the current room state without re-applying score — prevents double-submit cheats.
