@@ -677,6 +677,9 @@ async function sweepStuckRooms() {
       const isGameOver = newRound > room.maxRounds;
       const newStatus = isGameOver ? "finished" : "waiting";
 
+      // Distributed-safe CAS: multiple Railway replicas can sweep the same
+      // bluffvoting room concurrently. updatedAt makes the first writer the
+      // only winner, so final leaderboard side effects cannot run twice.
       const [updated] = await db.update(roomsTable)
         .set({
           playersJson: JSON.stringify(resolved),
@@ -686,7 +689,11 @@ async function sweepStuckRooms() {
           stopperJson: JSON.stringify({ stopper: meta.stopper, bluffResults: bluffVotes }),
           updatedAt: new Date(),
         })
-        .where(and(eq(roomsTable.roomCode, room.roomCode), eq(roomsTable.status, "bluffvoting")))
+        .where(and(
+          eq(roomsTable.roomCode, room.roomCode),
+          eq(roomsTable.status, "bluffvoting"),
+          eq(roomsTable.updatedAt, room.updatedAt),
+        ))
         .returning();
       if (!updated) continue;
       if (isGameOver) {
