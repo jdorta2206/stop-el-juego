@@ -2115,6 +2115,16 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
   const players = existingPlayers;
   const { playerId, bluffedCategories, bluffedWords } = body.data;
 
+  // Server-authoritative bluff metadata: only categories actually submitted
+  // with a valid answer in this round may be marked as bluffs, and the
+  // multiplayer UI allows at most two.
+  const submittedBluffCategories = Array.isArray(bluffedCategories)
+    ? bluffedCategories
+      .filter((cat): cat is string => typeof cat === "string")
+      .filter(cat => Object.prototype.hasOwnProperty.call(safeAnswers, cat) && safeAnswers[cat].trim().length > 0)
+      .slice(0, 2)
+    : [];
+
   // Update this player's score and mark as ready; store bluff data
   const { answers } = body.data;
 
@@ -2201,8 +2211,8 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
         // ⏱️ Tie-breaker source-of-truth: who finished first wins ties
         finishedAt,
         wasStopper: isStopper,
-        bluffedCategories: bluffedCategories ?? [],
-        bluffedWords: bluffedWords ?? {},
+        bluffedCategories: submittedBluffCategories,
+        bluffedWords: Object.fromEntries(submittedBluffCategories.map(cat => [cat, safeAnswers[cat]])),
       };
     }
     return p;
