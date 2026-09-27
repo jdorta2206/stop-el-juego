@@ -133,11 +133,11 @@ const SSE_CLUSTER_CHANNEL = "stop_room_sse_update";
 const SSE_INSTANCE_ID = Math.random().toString(36).slice(2);
 let sseListenerStarting = false;
 
-async function publishRoomSseUpdate(code: string) {
+async function publishRoomSseUpdate(code: string, event?: { type: "reaction" | "phrase" | "funvote"; value: any }) {
   try {
     await pool.query(
       "SELECT pg_notify($1, $2)",
-      [SSE_CLUSTER_CHANNEL, JSON.stringify({ code, source: SSE_INSTANCE_ID })],
+      [SSE_CLUSTER_CHANNEL, JSON.stringify({ code, source: SSE_INSTANCE_ID, event })],
     );
   } catch (err) {
     console.error("[rooms/sse] publish failed:", (err as Error).message);
@@ -155,6 +155,40 @@ async function startSseClusterListener() {
         const payload = JSON.parse(message.payload ?? "{}");
         if (!payload.code || payload.source === SSE_INSTANCE_ID) return;
         const code = String(payload.code).toUpperCase();
+        if (payload.event?.type === "reaction") {
+          const r = payload.event.value;
+          if (r?.id && VALID_REACTIONS.includes(r.emoji)) {
+            const list = roomReactions.get(code) ?? [];
+            roomReactions.set(code, [...list, {
+              id: String(r.id).slice(0, 100), emoji: r.emoji,
+              playerName: String(r.playerName ?? "?").slice(0, 30),
+              ts: Number(r.ts) || Date.now(),
+            }].slice(-40));
+          }
+        } else if (payload.event?.type === "phrase") {
+          const p = payload.event.value;
+          if (p?.id && typeof p.text === "string") {
+            const list = getPhrases(code);
+            roomPhrases.set(code, [...list, {
+              id: String(p.id).slice(0, 100),
+              playerName: String(p.playerName ?? "?").slice(0, 30),
+              text: String(p.text).slice(0, 100),
+              ts: Number(p.ts) || Date.now(),
+            }].slice(-30));
+          }
+        } else if (payload.event?.type === "funvote") {
+          const v = payload.event.value;
+          if (v?.voterId && v?.votedPlayerId && typeof v.round === "number") {
+            let votes = roomFunVotes.get(code);
+            if (!votes) { votes = new Map(); roomFunVotes.set(code, votes); }
+            votes.set(`${v.round}:${v.voterId}`, {
+              round: v.round, voterId: String(v.voterId),
+              votedPlayerId: String(v.votedPlayerId),
+              category: String(v.category ?? "").slice(0, 60),
+              answer: String(v.answer ?? "").slice(0, 80),
+            });
+          }
+        }
         const [room] = await db.select().from(roomsTable)
           .where(eq(roomsTable.roomCode, code)).limit(1);
         if (room) broadcastRoomLocal(code, formatRoom(room));
@@ -1505,6 +1539,7 @@ router.post("/:roomCode/react", writeLimiter, async (req, res) => {
   const list = roomReactions.get(code) ?? [];
   list.push({ id: Math.random().toString(36).slice(2), emoji, playerName: playerName ?? "?", ts: Date.now() });
   roomReactions.set(code, list.slice(-40));
+  await publishRoomSseUpdate(code, { type: "reaction", value: list[list.length - 1] });
   // 🚀 Push reactions to all clients immediately (otherwise wait up to 1.5s)
   try {
     const rooms = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, code)).limit(1);
@@ -1881,13 +1916,15 @@ router.post("/:roomCode/funvote", writeLimiter, async (req, res) => {
   let votes = roomFunVotes.get(code);
   if (!votes) { votes = new Map(); roomFunVotes.set(code, votes); }
   const key = `${round}:${playerId}`;
-  votes.set(key, {
+  const vote = {
     round,
     voterId: playerId,
     votedPlayerId,
     category: String(category).slice(0, 60),
     answer: String(answer ?? "").slice(0, 80),
-  });
+  };
+  votes.set(key, vote);
+  await publishRoomSseUpdate(code, { type: "funvote", value: vote });
 
   broadcastAndFormat(room);
   res.json({ ok: true });
@@ -2048,6 +2085,7 @@ router.post("/:roomCode/phrase", writeLimiter, async (req, res) => {
   };
   const existing = getPhrases(code);
   roomPhrases.set(code, [...existing, phrase].slice(-30));
+  await publishRoomSseUpdate(code, { type: "phrase", value: phrase });
   // 🚀 Push phrases to all clients in real time
   try {
     const rooms = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, code)).limit(1);
