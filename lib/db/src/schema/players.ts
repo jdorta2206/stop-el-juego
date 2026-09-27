@@ -80,6 +80,21 @@ export const insertRoomSchema = createInsertSchema(roomsTable).omit({ id: true, 
 export type InsertRoom = z.infer<typeof insertRoomSchema>;
 export type Room = typeof roomsTable.$inferSelect;
 
+export const roomSpyUsageTable = pgTable("room_spy_usage", {
+  id: serial("id").primaryKey(),
+  roomCode: text("room_code").notNull(),
+  playerId: text("player_id").notNull(),
+  round: integer("round").notNull(),
+  uses: integer("uses").notNull().default(0),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (t) => ({
+  roomPlayerRoundUnique: uniqueIndex("room_spy_usage_room_player_round_uidx").on(t.roomCode, t.playerId, t.round),
+}));
+
+export const insertRoomSpyUsageSchema = createInsertSchema(roomSpyUsageTable).omit({ id: true, updatedAt: true });
+export type InsertRoomSpyUsage = z.infer<typeof insertRoomSpyUsageSchema>;
+export type RoomSpyUsage = typeof roomSpyUsageTable.$inferSelect;
+
 export const followsTable = pgTable("follows", {
   id: serial("id").primaryKey(),
   followerId: text("follower_id").notNull(),

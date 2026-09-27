@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db } from "@workspace/db";
+import { db, pool, roomSpyUsageTable } from "@workspace/db";
 import { roomsTable, playerScoresTable, gameHistoryTable } from "@workspace/db";
 import { eq, and, or, lt, inArray, sql } from "drizzle-orm";
 import { CreateRoomBody, JoinRoomBody, SubmitRoomResultsBody } from "@workspace/api-zod";
@@ -175,10 +175,69 @@ function getTyping(code: string, excludeId?: string): { playerId: string; player
 
 // 🕵️ Live in-progress responses (for spy/peek mechanic). Stale after 5s.
 // playerId → { name, responses: { category: word }, ts }
-const roomLiveResponses = new Map<string, Map<string, { name: string; responses: Record<string, string>; ts: number }>>();
-// roomCode → map of playerId → spy uses this round.
+const roomLiveResponses = new Map<string, Map<string, { name: string; responses: Record<string, string>; ts: number; round: number; letter: string }>>();
+
+const EPHEMERAL_CLUSTER_CHANNEL = "stop_room_ephemeral";
+const EPHEMERAL_INSTANCE_ID = Math.random().toString(36).slice(2);
+let ephemeralListenerStarting = false;
+
+async function publishEphemeralUpdate(payload: {
+  code: string;
+  type: "typing";
+  playerId: string;
+  playerName: string;
+  responses: Record<string, string>;
+  ts: number;
+  round: number;
+  letter: string;
+}) {
+  try {
+    await pool.query("SELECT pg_notify($1, $2)", [
+      EPHEMERAL_CLUSTER_CHANNEL,
+      JSON.stringify({ ...payload, source: EPHEMERAL_INSTANCE_ID }),
+    ]);
+  } catch {}
+}
+
+async function startEphemeralListener() {
+  if (ephemeralListenerStarting) return;
+  ephemeralListenerStarting = true;
+  try {
+    const client = await pool.connect();
+    await client.query(`LISTEN ${EPHEMERAL_CLUSTER_CHANNEL}`);
+    client.on("notification", (message) => {
+      try {
+        const p = JSON.parse(message.payload ?? "{}");
+        if (!p.code || p.source === EPHEMERAL_INSTANCE_ID || p.type !== "typing") return;
+        const code = String(p.code).toUpperCase();
+        let m = roomTyping.get(code);
+        if (!m) { m = new Map(); roomTyping.set(code, m); }
+        m.set(String(p.playerId), { name: String(p.playerName ?? "?").slice(0, 30), ts: Number(p.ts) || Date.now() });
+        let lr = roomLiveResponses.get(code);
+        if (!lr) { lr = new Map(); roomLiveResponses.set(code, lr); }
+        const safe: Record<string, string> = {};
+        for (const [k, v] of Object.entries(p.responses ?? {})) {
+          if (typeof v === "string" && v.trim()) safe[String(k).slice(0, 60)] = v.trim().slice(0, 80);
+        }
+        lr.set(String(p.playerId), { name: String(p.playerName ?? "?").slice(0, 30), responses: safe, ts: Number(p.ts) || Date.now(), round: Number(p.round) || 0, letter: String(p.letter ?? "").toUpperCase() });
+      } catch {}
+    });
+    client.on("error", (err) => {
+      console.error("[rooms/ephemeral] listener error:", err.message);
+      client.release();
+      ephemeralListenerStarting = false;
+      setTimeout(() => startEphemeralListener().catch(() => {}), 1000);
+    });
+  } catch {
+    ephemeralListenerStarting = false;
+    setTimeout(() => startEphemeralListener().catch(() => {}), 3000);
+  }
+}
+
+startEphemeralListener().catch(() => {});
+
 // Free players: 1 use/round. Premium players: 2 uses/round.
-const roomSpyUsage = new Map<string, Map<string, number>>();
+// Usage is persisted in PostgreSQL so all Railway replicas share the same limit.
 const SPY_LIMIT_FREE = 1;
 const SPY_LIMIT_PREMIUM = 2;
 
@@ -943,6 +1002,8 @@ router.post("/", async (req, res) => {
   roomPhrases.delete(roomCode);
   roomTyping.delete(roomCode);
 
+  await db.delete(roomSpyUsageTable).where(eq(roomSpyUsageTable.roomCode, roomCode));
+
   const [room] = await db.insert(roomsTable).values({
     roomCode,
     hostId,
@@ -1658,6 +1719,19 @@ router.post("/:roomCode/typing", writeLimiter, async (req, res) => {
   if (!playerId) { res.status(400).json({ error: "Missing playerId" }); return; }
   if (!verifyClaimedIdentity(req, playerId)) { res.status(403).json({ error: "Identity verification failed" }); return; }
 
+  // Typing is round-scoped and must only be accepted from a current room member.
+  const [typingRoom] = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, code)).limit(1);
+  if (!typingRoom) { res.status(404).json({ error: "Room not found" }); return; }
+  if (typingRoom.status !== "playing") {
+    res.status(409).json({ error: "Typing is only available during a live round" }); return;
+  }
+  const typingPlayers = parsePlayers(typingRoom.playersJson);
+  if (!typingPlayers.some((p: any) => p.playerId === playerId)) {
+    res.status(403).json({ error: "No estás en esta sala" }); return;
+  }
+  const typingRound = Number(typingRoom.currentRound ?? 0);
+  const typingLetter = String(typingRoom.currentLetter ?? "").toUpperCase();
+
   let m = roomTyping.get(code);
   if (!m) { m = new Map(); roomTyping.set(code, m); }
   m.set(playerId, { name: String(playerName ?? "?").slice(0, 30), ts: Date.now() });
@@ -1673,7 +1747,18 @@ router.post("/:roomCode/typing", writeLimiter, async (req, res) => {
         safe[String(k).slice(0, 60)] = v.trim().slice(0, 80);
       }
     }
-    lr.set(playerId, { name: String(playerName ?? "?").slice(0, 30), responses: safe, ts: Date.now() });
+    const typingTs = Date.now();
+    lr.set(playerId, { name: String(playerName ?? "?").slice(0, 30), responses: safe, ts: typingTs, round: typingRound, letter: typingLetter });
+    publishEphemeralUpdate({
+      code,
+      type: "typing",
+      playerId,
+      playerName: String(playerName ?? "?").slice(0, 30),
+      responses: safe,
+      ts: typingTs,
+      round: typingRound,
+      letter: typingLetter,
+    }).catch(() => {});
   }
 
   // Lightweight broadcast — re-fetch room and broadcast formatted state
@@ -1722,27 +1807,66 @@ router.post("/:roomCode/spy", writeLimiter, async (req, res) => {
   if (!playerId) { res.status(400).json({ error: "Missing playerId" }); return; }
   if (!verifyClaimedIdentity(req, playerId)) { res.status(403).json({ error: "Identity verification failed" }); return; }
 
-  // Auth: caller must actually be in the room AND the round must be live
-  const rooms = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, code)).limit(1);
-  if (rooms.length === 0) { res.status(404).json({ error: "Room not found" }); return; }
-  const room = rooms[0];
+  const [room] = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, code)).limit(1);
+  if (!room) { res.status(404).json({ error: "Room not found" }); return; }
   if (room.status !== "playing") {
     res.status(409).json({ error: "El espionaje sólo está activo durante la ronda" });
     return;
   }
+
   const players = parsePlayers(room.playersJson);
   if (!players.some((p: any) => p.playerId === playerId)) {
-    res.status(403).json({ error: "No estás en esta sala" });
+    res.status(403).json({ error: "No estás en esta sala" }); return;
+  }
+
+  const round = Number(room.currentRound ?? 0);
+  const letter = String(room.currentLetter ?? "").toUpperCase();
+  const cutoff = Date.now() - 5000;
+  const lr = roomLiveResponses.get(code);
+  const candidates: Array<{ pid: string; name: string; cat: string; word: string }> = [];
+
+  if (lr) {
+    for (const [pid, info] of lr.entries()) {
+      if (pid === playerId) continue;
+      if (info.ts < cutoff) continue;
+      if (info.round !== round || info.letter !== letter) continue;
+      for (const [cat, word] of Object.entries(info.responses)) {
+        if (word && word.length > 0) {
+          candidates.push({ pid, name: info.name, cat, word });
+        }
+      }
+    }
+  }
+
+  // Do not consume a spy use unless there is an actual current-round rival answer.
+  if (candidates.length === 0) {
+    res.status(404).json({ error: "Tus rivales aún no escribieron nada 🤷" });
     return;
   }
 
-  // Enforce per-round usage limit (premium gets 2x)
-  let used = roomSpyUsage.get(code);
-  if (!used) { used = new Map(); roomSpyUsage.set(code, used); }
   const callerPremium = await isPlayerPremium(playerId);
   const limit = callerPremium ? SPY_LIMIT_PREMIUM : SPY_LIMIT_FREE;
-  const current = used.get(playerId) ?? 0;
-  if (current >= limit) {
+
+  // Atomic per-round usage in PostgreSQL: safe across Railway replicas.
+  const usageRows = await db.insert(roomSpyUsageTable).values({
+    roomCode: code,
+    playerId,
+    round,
+    uses: 1,
+  }).onConflictDoUpdate({
+    target: [
+      roomSpyUsageTable.roomCode,
+      roomSpyUsageTable.playerId,
+      roomSpyUsageTable.round,
+    ],
+    set: {
+      uses: sql`CASE WHEN ${roomSpyUsageTable.uses} < ${limit} THEN ${roomSpyUsageTable.uses} + 1 ELSE ${roomSpyUsageTable.uses} END`,
+      updatedAt: new Date(),
+    },
+    where: lt(roomSpyUsageTable.uses, limit),
+  }).returning({ uses: roomSpyUsageTable.uses });
+
+  if (usageRows.length === 0) {
     res.status(429).json({
       error: callerPremium
         ? "Ya usaste tus 2 espías esta ronda"
@@ -1751,32 +1875,13 @@ router.post("/:roomCode/spy", writeLimiter, async (req, res) => {
     return;
   }
 
-  // Find rivals with at least one fresh non-empty response
-  const lr = roomLiveResponses.get(code);
-  if (!lr || lr.size === 0) {
-    res.status(404).json({ error: "Nadie ha empezado a escribir todavía" });
-    return;
-  }
-  const cutoff = Date.now() - 5000;
-  const candidates: Array<{ pid: string; name: string; cat: string; word: string }> = [];
-  for (const [pid, info] of lr.entries()) {
-    if (pid === playerId) continue;
-    if (info.ts < cutoff) continue;
-    for (const [cat, word] of Object.entries(info.responses)) {
-      if (word && word.length > 0) candidates.push({ pid, name: info.name, cat, word });
-    }
-  }
-  if (candidates.length === 0) {
-    res.status(404).json({ error: "Tus rivales aún no escribieron nada 🤷" });
-    return;
-  }
+  const uses = usageRows[0].uses;
   const pick = candidates[Math.floor(Math.random() * candidates.length)];
-  used.set(playerId, current + 1);
   res.json({
     rivalName: pick.name,
     category: pick.cat,
     word: pick.word,
-    usesLeft: limit - (current + 1),
+    usesLeft: Math.max(0, limit - uses),
     limit,
   });
 });
