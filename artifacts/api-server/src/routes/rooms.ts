@@ -911,11 +911,21 @@ router.post("/", async (req, res) => {
   const isHalloweenTestRoom = String(hostName ?? "").trim().toLowerCase() === "halloween host";
   const safeIsPublic = isHalloweenTestRoom ? false : (isPublic ?? false);
 
-  let roomCode = generateRoomCode();
-  for (let i = 0; i < 5; i++) {
-    const existing = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, roomCode)).limit(1);
-    if (existing.length === 0) break;
-    roomCode = generateRoomCode();
+  // Allocate a code with a DB-backed collision check. The UNIQUE constraint
+  // remains the final authority because another Railway replica can claim the
+  // same candidate between SELECT and INSERT.
+  let roomCode = "";
+  for (let attempt = 0; attempt < 20 && !roomCode; attempt++) {
+    const candidate = generateRoomCode();
+    const existing = await db.select({ roomCode: roomsTable.roomCode })
+      .from(roomsTable)
+      .where(eq(roomsTable.roomCode, candidate))
+      .limit(1);
+    if (existing.length === 0) roomCode = candidate;
+  }
+  if (!roomCode) {
+    res.status(503).json({ error: "Could not allocate a room code" });
+    return;
   }
 
   // Look up premium status from DB (server-validated, can't be faked by client)
@@ -943,20 +953,48 @@ router.post("/", async (req, res) => {
   roomPhrases.delete(roomCode);
   roomTyping.delete(roomCode);
 
-  const [room] = await db.insert(roomsTable).values({
-    roomCode,
-    hostId,
-    hostName: hostName ?? "",
-    status: "waiting",
-    currentRound: 0,
-    maxRounds: maxRounds ?? 3,
-    maxPlayers,
-    gameMode,
-    language: language ?? "es",
-    playersJson: JSON.stringify(players),
-    stopperJson: null,
-    isPublic: safeIsPublic,
-  }).returning();
+  // The pre-check above is only an optimization. The database UNIQUE
+  // constraint is authoritative, so a concurrent Railway replica may still
+  // collide after the SELECT. Retry the complete INSERT on that collision.
+  let room: any = null;
+  for (let attempt = 0; attempt < 20 && !room; attempt++) {
+    if (attempt > 0) {
+      roomCode = generateRoomCode();
+      const existing = await db.select({ roomCode: roomsTable.roomCode })
+        .from(roomsTable)
+        .where(eq(roomsTable.roomCode, roomCode))
+        .limit(1);
+      if (existing.length > 0) continue;
+    }
+
+    try {
+      const [created] = await db.insert(roomsTable).values({
+        roomCode,
+        hostId,
+        hostName: hostName ?? "",
+        status: "waiting",
+        currentRound: 0,
+        maxRounds: maxRounds ?? 3,
+        maxPlayers,
+        gameMode,
+        language: language ?? "es",
+        playersJson: JSON.stringify(players),
+        stopperJson: null,
+        isPublic: safeIsPublic,
+      }).returning();
+      room = created;
+    } catch (error: any) {
+      // PostgreSQL unique_violation: another replica claimed this code.
+      // Retry with a fresh candidate; all other DB errors must surface.
+      if (error?.code !== "23505" && error?.cause?.code !== "23505") throw error;
+      room = null;
+    }
+  }
+
+  if (!room) {
+    res.status(503).json({ error: "Could not allocate a unique room code" });
+    return;
+  }
 
   res.status(201).json(formatRoom(room));
 });
