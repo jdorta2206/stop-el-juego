@@ -36,7 +36,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useReviewPrompt, recordGamePlayed } from "@/hooks/useReviewPrompt";
 import { ReviewPromptCard } from "@/components/ReviewPromptCard";
 import { maybeShowInterstitial } from "@/lib/interstitialAd";
-import { applyHalloweenCategory, getHalloweenScare, isHalloweenActive } from "@/lib/halloweenEvent";
+import { applyHalloweenCategory, getHalloweenScare, getHalloweenScareById, isHalloweenActive, isHalloweenPreview } from "@/lib/halloweenEvent";
+import { HalloweenAmbience } from "@/components/HalloweenAmbience";
 
 const ROUND_TIME = 60;
 
@@ -184,8 +185,12 @@ export default function Room() {
   const [activeCustomLabel, setActiveCustomLabel] = useState<string | null>(null);
   const [roundCategories, setRoundCategories] = useState<string[]>(CATEGORIES_ES);
   const [halloweenScare, setHalloweenScare] = useState<ReturnType<typeof getHalloweenScare> | null>(null);
+  const [halloweenScareCooldownUntil, setHalloweenScareCooldownUntil] = useState(0);
   const halloweenScareTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const halloweenScareHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const seenHalloweenEventRef = useRef<string | null>(null);
+  const previousRoomStatusRef = useRef<string>("");
+  const manualScareBusyRef = useRef(false);
   const CRAZY_CATEGORIES_ES = [
     "Excusa para llegar tarde", "Película que finges haber visto", "Animal que querrías de mascota",
     "Cosa que no debes decir en una cita", "Superhéroe inventado", "Profesión del futuro",
@@ -577,36 +582,85 @@ export default function Room() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, currentLetter, currentRound, categoryPack, activeCustomCategories]);
 
-  // 🎃 Halloween multiplayer scare: deterministic per room/round so every
-  // player gets the same scare at roughly the same moment. It is cosmetic only
-  // and never runs for custom/crazy/mix packs or non-Halloween dates.
+  // 🎃 Halloween multiplayer scares:
+  // 1) first STOP of a round can scare everybody;
+  // 2) occasionally a spontaneous scare happens while people are answering;
+  // 3) the manual SUSTO button broadcasts a scare to the whole room.
+  // No GIF/video is used — the overlay is CSS/Framer Motion + procedural audio.
   useEffect(() => {
     if (halloweenScareTimerRef.current) clearTimeout(halloweenScareTimerRef.current);
     if (halloweenScareHideTimerRef.current) clearTimeout(halloweenScareHideTimerRef.current);
     setHalloweenScare(null);
 
-    if (!isHalloweenActive() || phase !== "playing" || categoryPack !== "standard" || !roomCode || !currentLetter || !currentRound) return;
+    if (!isHalloweenActive() || phase !== "playing" || !roomCode || !currentLetter || !currentRound) return;
 
-    const key = `halloween-scare|${roomCode.toUpperCase()}|${currentRound}|${currentLetter}`;
+    const key = `halloween-ambient|${roomCode.toUpperCase()}|${currentRound}|${currentLetter}`;
     let hash = 2166136261 >>> 0;
     for (let i = 0; i < key.length; i++) {
       hash ^= key.charCodeAt(i);
       hash = Math.imul(hash, 16777619);
     }
-    const seed = (hash >>> 0) / 4294967296;
-    const scare = getHalloweenScare(getCurrentLang(), seed);
-    const delay = 12000 + ((hash >>> 8) % 11000);
+    // Not every round gets an automatic scare: the STOP and manual button
+    // remain the main surprise moments.
+    const shouldScare = (hash % 100) < 48;
+    if (!shouldScare) return;
+
+    const preview = isHalloweenPreview();
+    const minDelay = preview ? 5000 : 9000;
+    const maxDelay = preview ? 12000 : 42000;
+    const delay = minDelay + ((hash >>> 8) % Math.max(1, maxDelay - minDelay));
 
     halloweenScareTimerRef.current = setTimeout(() => {
-      setHalloweenScare(scare);
-      halloweenScareHideTimerRef.current = setTimeout(() => setHalloweenScare(null), 2600);
+      const seed = ((hash >>> 16) % 100000) / 100000;
+      setHalloweenScare(getHalloweenScare(getCurrentLang(), seed));
+      halloweenScareTimerRef.current = null;
+      halloweenScareHideTimerRef.current = setTimeout(() => setHalloweenScare(null), 1550);
     }, delay);
 
     return () => {
       if (halloweenScareTimerRef.current) clearTimeout(halloweenScareTimerRef.current);
       if (halloweenScareHideTimerRef.current) clearTimeout(halloweenScareHideTimerRef.current);
     };
-  }, [phase, categoryPack, roomCode, currentLetter, currentRound]);
+  }, [phase, roomCode, currentLetter, currentRound]);
+
+  // First STOP: when the room changes playing → stopped, everyone in the room
+  // gets the same scare. Reconnects to an already-stopped round do not retrigger it.
+  useEffect(() => {
+    const status = String((room as any)?.status ?? "");
+    const stopper = (room as any)?.stopper as { stopTimestamp?: number } | null;
+    const wasPlaying = previousRoomStatusRef.current === "playing";
+    previousRoomStatusRef.current = status;
+    if (!isHalloweenActive() || !wasPlaying || status !== "stopped" || !stopper?.stopTimestamp) return;
+    if (stopper?.id && stopper.id === player?.id) return;
+
+    const stopKey = `${currentRound}:${stopper.stopTimestamp}`;
+    if (seenHalloweenEventRef.current === stopKey) return;
+    seenHalloweenEventRef.current = stopKey;
+
+    const seed = ((stopper.stopTimestamp % 100000) / 100000);
+    setHalloweenScare(getHalloweenScare(getCurrentLang(), seed));
+    if (halloweenScareHideTimerRef.current) clearTimeout(halloweenScareHideTimerRef.current);
+    halloweenScareHideTimerRef.current = setTimeout(() => setHalloweenScare(null), 1550);
+  }, [(room as any)?.status, (room as any)?.stopper?.stopTimestamp, currentRound]);
+
+  // Server-broadcast manual scares: every connected player receives the same
+  // event through the existing SSE room stream.
+  useEffect(() => {
+    const event = (room as any)?.halloweenScare as {
+      id?: string;
+      playerId?: string;
+      scareId?: "ghost" | "spider" | "skull" | "pumpkin" | "vampire";
+      round?: number;
+    } | null;
+    if (!event?.id || event.round !== currentRound || !isHalloweenActive()) return;
+    if (event.playerId && event.playerId === player?.id) return;
+    if (seenHalloweenEventRef.current === event.id) return;
+    seenHalloweenEventRef.current = event.id;
+    if (halloweenScareTimerRef.current) clearTimeout(halloweenScareTimerRef.current);
+    setHalloweenScare(getHalloweenScareById(getCurrentLang(), event.scareId ?? "ghost"));
+    if (halloweenScareHideTimerRef.current) clearTimeout(halloweenScareHideTimerRef.current);
+    halloweenScareHideTimerRef.current = setTimeout(() => setHalloweenScare(null), 1550);
+  }, [(room as any)?.halloweenScare?.id, (room as any)?.halloweenScare?.round, currentRound]);
 
   // Track the `creator` achievement: any multiplayer round actually played
   // with a custom pack unlocks it. We fire once per `roomCode` to avoid
@@ -632,13 +686,26 @@ export default function Room() {
     const newOnes = reactions.filter(r => !seenReactionIds.current.has(r.id));
     if (newOnes.length === 0) return;
     newOnes.forEach(r => seenReactionIds.current.add(r.id));
-    setFloatingReactions(prev => [...prev, ...newOnes]);
-    newOnes.forEach(r => {
+
+    const scareReactions = newOnes.filter(r => r.playerName.startsWith("__HALLOWEEN_SCARE__"));
+    if (scareReactions.length > 0 && isHalloweenActive() && phase === "playing") {
+      const remoteScare = scareReactions.some(r => !r.playerName.startsWith(`__HALLOWEEN_SCARE__${player?.id}__`));
+      if (remoteScare) {
+        setHalloweenScare(getHalloweenScare(getCurrentLang(), Math.random()));
+        if (halloweenScareHideTimerRef.current) clearTimeout(halloweenScareHideTimerRef.current);
+        halloweenScareHideTimerRef.current = setTimeout(() => setHalloweenScare(null), 1550);
+      }
+    }
+
+    const normalReactions = newOnes.filter(r => !r.playerName.startsWith("__HALLOWEEN_SCARE__"));
+    if (normalReactions.length === 0) return;
+    setFloatingReactions(prev => [...prev, ...normalReactions]);
+    normalReactions.forEach(r => {
       setTimeout(() => {
         setFloatingReactions(prev => prev.filter(x => x.id !== r.id));
       }, 3200);
     });
-  }, [(room as any)?.reactions]);
+  }, [(room as any)?.reactions, player?.id]);
 
   const sendReaction = useCallback(async (emoji: string) => {
     if (!player || !roomCode) return;
@@ -650,6 +717,46 @@ export default function Room() {
       });
     } catch {}
   }, [player, roomCode]);
+  const sendHalloweenScare = useCallback(async () => {
+    if (!player || !roomCode || !isHalloweenActive() || manualScareBusyRef.current) return;
+    if (Date.now() < halloweenScareCooldownUntil) return;
+    manualScareBusyRef.current = true;
+    try {
+      const response = await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/halloween-scare`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(isHalloweenPreview() ? { "x-halloween-preview": "1" } : {}), ...authHeaders() },
+        body: JSON.stringify({ playerId: player.id, playerName: player.name }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (response.ok) {
+        const ms = Number(data.cooldownMs ?? 18000);
+        setHalloweenScareCooldownUntil(Date.now() + ms);
+        window.setTimeout(() => setHalloweenScareCooldownUntil(0), ms + 50);
+      } else if (response.status === 429) {
+        const ms = Number(data.retryAfterMs ?? 5000);
+        setHalloweenScareCooldownUntil(Date.now() + ms);
+        window.setTimeout(() => setHalloweenScareCooldownUntil(0), ms + 50);
+      } else {
+        // Preview/prod compatibility: older API servers do not have the new
+        // dedicated route yet. The reserved marker travels through the
+        // existing real-time reaction channel and is invisible as a reaction.
+        await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/react`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            emoji: "🤯",
+            playerId: player.id,
+            playerName: `__HALLOWEEN_SCARE__${player.id}__${player.name ?? ""}`,
+          }),
+        });
+        const ms = 18000;
+        setHalloweenScareCooldownUntil(Date.now() + ms);
+        window.setTimeout(() => setHalloweenScareCooldownUntil(0), ms + 50);
+      }
+    } catch {} finally {
+      manualScareBusyRef.current = false;
+    }
+  }, [player, roomCode, halloweenScareCooldownUntil]);
 
   // Process incoming quick phrases from room polling
   useEffect(() => {
@@ -1165,6 +1272,7 @@ export default function Room() {
 
   return (
     <Layout>
+      <HalloweenAmbience active={phase === "playing" && isHalloweenActive()} muted={muted} />
       {/* ✨ Entrance animation when a new player joins (Premium = golden burst) */}
       <PlayerEntranceToast players={players} meId={player?.id} />
 
@@ -1809,6 +1917,25 @@ export default function Room() {
                 </motion.button>
               </div>
               <div className="max-w-2xl mx-auto w-full flex flex-col gap-2">
+                {isHalloweenActive() && (
+                  <motion.button
+                    type="button"
+                    whileTap={{ scale: 0.96 }}
+                    onClick={sendHalloweenScare}
+                    disabled={Date.now() < halloweenScareCooldownUntil}
+                    className="w-full py-2.5 rounded-full font-black text-base tracking-wide border-2 transition-all disabled:opacity-45"
+                    style={{
+                      background: "linear-gradient(135deg, rgba(127,29,29,.95), rgba(88,28,135,.95))",
+                      borderColor: "rgba(248,113,113,.7)",
+                      color: "white",
+                      boxShadow: "0 0 22px rgba(220,38,38,.28)",
+                    }}
+                  >
+                    {Date.now() < halloweenScareCooldownUntil
+                      ? "👻 SUSTO · espera..."
+                      : "👻 ¡DAR UN SUSTO!"}
+                  </motion.button>
+                )}
                 {/* 🕵️ ESPÍA — peek at a rival's in-progress answer */}
                 <button
                   type="button"
