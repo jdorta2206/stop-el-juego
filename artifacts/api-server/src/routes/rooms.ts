@@ -1680,11 +1680,16 @@ router.get("/:roomCode/events", async (req, res) => {
   res.setHeader("X-Accel-Buffering", "no");
   res.flushHeaders?.();
 
-  // Send current state immediately (con cosméticos)
+  // Send current state immediately. Public non-members receive only the
+  // spectator-safe projection; members receive the full room state.
   const players = parsePlayers(roomRow.playersJson);
   const playerIds = players.map((p: any) => p.playerId).filter(Boolean);
   const cosmeticsMap = await fetchCosmeticsForPlayers(playerIds);
-  const initialPayload = formatRoom(roomRow, cosmeticsMap);
+  const fullInitialPayload = formatRoom(roomRow, cosmeticsMap);
+  const isMember = !!playerId && players.some((p: any) => p.playerId === playerId);
+  const initialPayload = roomRow.isPublic === true && !isMember
+    ? sanitizeRoomForSpectator(fullInitialPayload)
+    : fullInitialPayload;
   res.write(`data: ${JSON.stringify(initialPayload)}\n\n`);
 
   const client: SseClient = { res, playerId };
