@@ -1529,6 +1529,13 @@ router.post("/:roomCode/use-card", async (req, res) => {
     if (!me || me.powerCardUsed || !me.powerCard) {
       res.status(400).json({ error: "Card not available" }); return;
     }
+    // A card belongs to the active turn and must be consumed before the
+    // player submits the round. Otherwise a player could submit a bluff and
+    // then activate Shield to retroactively make that bluff immune (or alter
+    // other round effects after their result is already locked).
+    if (me.isReady) {
+      res.status(409).json({ error: "Card must be used before submitting the round" }); return;
+    }
     const VALID_POWER_CARDS = ["lightning", "shield", "sabotage", "steal", "double_or_nothing"];
     if (!VALID_POWER_CARDS.includes(String(me.powerCard))) {
       res.status(400).json({ error: "Invalid power card" }); return;
