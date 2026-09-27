@@ -1658,6 +1658,18 @@ router.post("/:roomCode/typing", writeLimiter, async (req, res) => {
   if (!playerId) { res.status(400).json({ error: "Missing playerId" }); return; }
   if (!verifyClaimedIdentity(req, playerId)) { res.status(403).json({ error: "Identity verification failed" }); return; }
 
+  // Typing/live responses feed the spy mechanic. Only current room members
+  // may publish them, and only while the round is actively playing.
+  const [room] = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, code)).limit(1);
+  if (!room) { res.status(404).json({ error: "Room not found" }); return; }
+  if (room.status !== "playing") {
+    res.status(409).json({ error: "Typing is only available during a round" }); return;
+  }
+  const members = parsePlayers(room.playersJson);
+  if (!members.some((p: any) => p.playerId === playerId)) {
+    res.status(403).json({ error: "Only players in the room can type" }); return;
+  }
+
   let m = roomTyping.get(code);
   if (!m) { m = new Map(); roomTyping.set(code, m); }
   m.set(playerId, { name: String(playerName ?? "?").slice(0, 30), ts: Date.now() });
