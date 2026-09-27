@@ -1001,6 +1001,8 @@ router.post("/", async (req, res) => {
   roomPhrases.delete(roomCode);
   roomTyping.delete(roomCode);
 
+  await db.delete(roomSpyUsageTable).where(eq(roomSpyUsageTable.roomCode, roomCode));
+
   const [room] = await db.insert(roomsTable).values({
     roomCode,
     hostId,
