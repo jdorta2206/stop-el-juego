@@ -27,8 +27,8 @@ export default function Live() {
     const fetchOnce = async () => {
       try {
         const r = await fetch(`${API}/api/rooms/${encodeURIComponent(code)}/spectate`);
-        if (r.status === 404) { setError("Sala no encontrada"); return; }
-        if (r.status === 403) { setError("Esta sala no es pública"); return; }
+        if (r.status === 404) { setError("Sala no encontrada"); stop = true; return; }
+        if (r.status === 403) { setError("Esta sala no es pública"); stop = true; return; }
         if (!r.ok) return;
         const data = await r.json();
         if (!stop) { setRoom(data); setError(null); }
