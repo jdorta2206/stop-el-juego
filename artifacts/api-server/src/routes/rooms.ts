@@ -2033,14 +2033,29 @@ router.post("/:roomCode/stop", async (req, res) => {
     roundStartedAt: prevMeta.roundStartedAt ?? Date.now(),
   };
 
+  // Atomic STOP transition: only the first player who changes the room
+  // from "playing" to "stopped" becomes the authoritative stopper. Without
+  // the status predicate, two near-simultaneous STOP requests could both read
+  // "playing" and the second one would overwrite the first stopper/timestamp.
   const [updated] = await db.update(roomsTable)
     .set({
       status: "stopped",
       stopperJson: JSON.stringify(newMeta),
       updatedAt: new Date(),
     })
-    .where(eq(roomsTable.roomCode, roomCode.toUpperCase()))
+    .where(and(
+      eq(roomsTable.roomCode, roomCode.toUpperCase()),
+      eq(roomsTable.status, "playing"),
+    ))
     .returning();
+
+  if (!updated) {
+    const [latest] = await db.select().from(roomsTable)
+      .where(eq(roomsTable.roomCode, roomCode.toUpperCase()))
+      .limit(1);
+    res.json(broadcastAndFormat(latest ?? room));
+    return;
+  }
 
   res.json(broadcastAndFormat(updated));
 
