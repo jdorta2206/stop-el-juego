@@ -2133,12 +2133,32 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
     }
   }
 
-  // Server-authoritative bluff metadata: only categories actually submitted
-  // with a valid answer in this round may be marked as bluffs, and the
-  // multiplayer UI allows at most two.
+  // Server-authoritative bluff metadata: only categories belonging to the
+  // actual round pack, submitted with a non-empty answer, may be marked as
+  // bluffs. This prevents a client from inventing a category key solely to
+  // influence bluff resolution.
+  let customCategories: string[] | undefined;
+  if (room.customCategoriesJson) {
+    try {
+      const parsed = JSON.parse(room.customCategoriesJson);
+      if (Array.isArray(parsed)) {
+        customCategories = parsed.filter((c: unknown): c is string => typeof c === "string");
+      }
+    } catch {}
+  }
+  const authoritativeCategories = new Set(
+    resolveCategoriesForRound(
+      room.categoryPack ?? "standard",
+      letter,
+      room.currentRound ?? 1,
+      customCategories,
+    ).map((category) => normalizeWord(category)),
+  );
+
   const submittedBluffCategories = Array.isArray(bluffedCategories)
     ? bluffedCategories
       .filter((cat): cat is string => typeof cat === "string")
+      .filter(cat => authoritativeCategories.has(normalizeWord(cat)))
       .filter(cat => Object.prototype.hasOwnProperty.call(safeAnswers, cat) && safeAnswers[cat].trim().length > 0)
       .slice(0, 2)
     : [];
