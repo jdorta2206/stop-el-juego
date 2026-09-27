@@ -129,7 +129,7 @@ export function usePushNotifications(playerId: string | undefined, language: str
         }),
       });
 
-      if (!res.ok) throw new Error(`subscription HTTP ${res.status}`,
+      if (!res.ok) throw new Error(`subscription HTTP ${res.status}`);
       setIsSubscribed(true);
       return true;
     } catch (e) {
@@ -150,11 +150,12 @@ export function usePushNotifications(playerId: string | undefined, language: str
       if (!sub) return null;
       const res = await fetch(
         `${API_BASE}/api/notifications/preferences?endpoint=${encodeURIComponent(sub.endpoint)}&playerId=${encodeURIComponent(playerId || "anonymous")}`,
+        { headers: authHeaders() },
       );
       if (!res.ok) return null;
       return await res.json();
     } catch { return null; }
-  }, []);
+  }, [playerId]);
 
   const updatePreferences = useCallback(async (patch: {
     enabled?: boolean; hourLocal?: number; muteDays?: number;
@@ -166,12 +167,12 @@ export function usePushNotifications(playerId: string | undefined, language: str
       if (!sub) return false;
       const res = await fetch(`${API_BASE}/api/notifications/preferences`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ endpoint: sub.endpoint, playerId: playerId || "anonymous", ...patch }),
       });
       return res.ok;
     } catch { return false; }
-  }, []);
+  }, [playerId]);
 
   const unsubscribe = useCallback(async () => {
     if (!("serviceWorker" in navigator)) return;
@@ -185,7 +186,7 @@ export function usePushNotifications(playerId: string | undefined, language: str
         try {
           await fetch(`${API_BASE}/api/notifications/unsubscribe`, {
             method: "DELETE",
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json", ...authHeaders() },
             body: JSON.stringify({ endpoint: sub.endpoint, playerId: playerId || "anonymous" }),
           });
         } catch (e) {
@@ -199,7 +200,7 @@ export function usePushNotifications(playerId: string | undefined, language: str
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [playerId]);
 
   const isSupported = "Notification" in window && "serviceWorker" in navigator && !!VAPID_PUBLIC;
 
