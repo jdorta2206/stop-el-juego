@@ -546,7 +546,7 @@ export default function Room() {
   // Trigger Revancha — first caller creates the new room, others piggyback on the broadcast
   const handleRematch = useCallback(async () => {
     if (rematchLoading) return;
-    if (rematchCode) { setLocation(`/sala/${rematchCode}`); return; }
+    if (rematchCode) { setLocation(`/room/${rematchCode}`); return; }
     if (!player?.id || !roomCode) return;
     setRematchLoading(true);
     try {
