@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db } from "@workspace/db";
+import { db, pool } from "@workspace/db";
 import { roomsTable, playerScoresTable, gameHistoryTable } from "@workspace/db";
 import { eq, and, or, lt, inArray, sql } from "drizzle-orm";
 import { CreateRoomBody, JoinRoomBody, SubmitRoomResultsBody } from "@workspace/api-zod";
@@ -114,14 +114,109 @@ function isPlayerOnline(code: string, playerId: string): boolean {
 const SUBMIT_GRACE_MS = 15_000;
 const PRESENCE_GRACE_MS = 4_000;
 
-function broadcastRoom(code: string, roomPayload: object) {
+function broadcastRoomLocal(code: string, roomPayload: object) {
   const clients = sseClients.get(code);
   if (!clients || clients.size === 0) return;
-  const data = `data: ${JSON.stringify(roomPayload)}\n\n`;
   for (const client of [...clients]) {
-    try { client.res.write(data); } catch { clients.delete(client); }
+    try {
+      const isMember = Array.isArray((roomPayload as any).players)
+        && (roomPayload as any).players.some((p: any) => p?.playerId === client.playerId);
+      const safePayload = (roomPayload as any).isPublic === true && !isMember
+        ? sanitizeRoomForSpectator(roomPayload)
+        : roomPayload;
+      client.res.write(`data: ${JSON.stringify(safePayload)}\n\n`);
+    } catch { clients.delete(client); }
   }
 }
+
+const SSE_CLUSTER_CHANNEL = "stop_room_sse_update";
+const SSE_INSTANCE_ID = Math.random().toString(36).slice(2);
+let sseListenerStarting = false;
+
+async function publishRoomSseUpdate(code: string, event?: { type: "reaction" | "phrase" | "funvote"; value: any }) {
+  try {
+    await pool.query(
+      "SELECT pg_notify($1, $2)",
+      [SSE_CLUSTER_CHANNEL, JSON.stringify({ code, source: SSE_INSTANCE_ID, event })],
+    );
+  } catch (err) {
+    console.error("[rooms/sse] publish failed:", (err as Error).message);
+  }
+}
+
+async function startSseClusterListener() {
+  if (sseListenerStarting) return;
+  sseListenerStarting = true;
+  try {
+    const client = await pool.connect();
+    await client.query(`LISTEN ${SSE_CLUSTER_CHANNEL}`);
+    client.on("notification", async (message) => {
+      try {
+        const payload = JSON.parse(message.payload ?? "{}");
+        if (!payload.code || payload.source === SSE_INSTANCE_ID) return;
+        const code = String(payload.code).toUpperCase();
+        if (payload.event?.type === "reaction") {
+          const r = payload.event.value;
+          if (r?.id && VALID_REACTIONS.includes(r.emoji)) {
+            const list = roomReactions.get(code) ?? [];
+            roomReactions.set(code, [...list, {
+              id: String(r.id).slice(0, 100), emoji: r.emoji,
+              playerName: String(r.playerName ?? "?").slice(0, 30),
+              ts: Number(r.ts) || Date.now(),
+            }].slice(-40));
+          }
+        } else if (payload.event?.type === "phrase") {
+          const p = payload.event.value;
+          if (p?.id && typeof p.text === "string") {
+            const list = getPhrases(code);
+            roomPhrases.set(code, [...list, {
+              id: String(p.id).slice(0, 100),
+              playerName: String(p.playerName ?? "?").slice(0, 30),
+              text: String(p.text).slice(0, 100),
+              ts: Number(p.ts) || Date.now(),
+            }].slice(-30));
+          }
+        } else if (payload.event?.type === "funvote") {
+          const v = payload.event.value;
+          if (v?.voterId && v?.votedPlayerId && typeof v.round === "number") {
+            let votes = roomFunVotes.get(code);
+            if (!votes) { votes = new Map(); roomFunVotes.set(code, votes); }
+            votes.set(`${v.round}:${v.voterId}`, {
+              round: v.round, voterId: String(v.voterId),
+              votedPlayerId: String(v.votedPlayerId),
+              category: String(v.category ?? "").slice(0, 60),
+              answer: String(v.answer ?? "").slice(0, 80),
+            });
+          }
+        }
+        const [room] = await db.select().from(roomsTable)
+          .where(eq(roomsTable.roomCode, code)).limit(1);
+        if (room) broadcastRoomLocal(code, formatRoom(room));
+      } catch (err) {
+        console.error("[rooms/sse] relay failed:", (err as Error).message);
+      }
+    });
+    client.on("error", (err) => {
+      console.error("[rooms/sse] listener error:", err.message);
+      client.release();
+      sseListenerStarting = false;
+      setTimeout(() => { startSseClusterListener().catch(() => {}); }, 1000);
+    });
+  } catch (err) {
+    sseListenerStarting = false;
+    console.error("[rooms/sse] listener start failed:", (err as Error).message);
+    setTimeout(() => { startSseClusterListener().catch(() => {}); }, 3000);
+  }
+}
+
+async function broadcastRoom(code: string, roomPayload: object) {
+  broadcastRoomLocal(code, roomPayload);
+  await publishRoomSseUpdate(code);
+}
+
+startSseClusterListener().catch(() => {});
+
+
 
 // Format room AND broadcast to SSE clients at the same time
 function broadcastAndFormat(room: any) {
@@ -1444,6 +1539,7 @@ router.post("/:roomCode/react", writeLimiter, async (req, res) => {
   const list = roomReactions.get(code) ?? [];
   list.push({ id: Math.random().toString(36).slice(2), emoji, playerName: playerName ?? "?", ts: Date.now() });
   roomReactions.set(code, list.slice(-40));
+  await publishRoomSseUpdate(code, { type: "reaction", value: list[list.length - 1] });
   // 🚀 Push reactions to all clients immediately (otherwise wait up to 1.5s)
   try {
     const rooms = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, code)).limit(1);
@@ -1619,11 +1715,16 @@ router.get("/:roomCode/events", async (req, res) => {
   res.setHeader("X-Accel-Buffering", "no");
   res.flushHeaders?.();
 
-  // Send current state immediately (con cosméticos)
+  // Send current state immediately. Public non-members receive only the
+  // spectator-safe projection; members receive the full room state.
   const players = parsePlayers(roomRow.playersJson);
   const playerIds = players.map((p: any) => p.playerId).filter(Boolean);
   const cosmeticsMap = await fetchCosmeticsForPlayers(playerIds);
-  const initialPayload = formatRoom(roomRow, cosmeticsMap);
+  const fullInitialPayload = formatRoom(roomRow, cosmeticsMap);
+  const isMember = !!playerId && players.some((p: any) => p.playerId === playerId);
+  const initialPayload = roomRow.isPublic === true && !isMember
+    ? sanitizeRoomForSpectator(fullInitialPayload)
+    : fullInitialPayload;
   res.write(`data: ${JSON.stringify(initialPayload)}\n\n`);
 
   const client: SseClient = { res, playerId };
@@ -1815,13 +1916,15 @@ router.post("/:roomCode/funvote", writeLimiter, async (req, res) => {
   let votes = roomFunVotes.get(code);
   if (!votes) { votes = new Map(); roomFunVotes.set(code, votes); }
   const key = `${round}:${playerId}`;
-  votes.set(key, {
+  const vote = {
     round,
     voterId: playerId,
     votedPlayerId,
     category: String(category).slice(0, 60),
     answer: String(answer ?? "").slice(0, 80),
-  });
+  };
+  votes.set(key, vote);
+  await publishRoomSseUpdate(code, { type: "funvote", value: vote });
 
   broadcastAndFormat(room);
   res.json({ ok: true });
@@ -1982,6 +2085,7 @@ router.post("/:roomCode/phrase", writeLimiter, async (req, res) => {
   };
   const existing = getPhrases(code);
   roomPhrases.set(code, [...existing, phrase].slice(-30));
+  await publishRoomSseUpdate(code, { type: "phrase", value: phrase });
   // 🚀 Push phrases to all clients in real time
   try {
     const rooms = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, code)).limit(1);
