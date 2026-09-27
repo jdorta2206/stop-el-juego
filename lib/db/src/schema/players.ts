@@ -88,7 +88,9 @@ export const followsTable = pgTable("follows", {
   followedPicture: text("followed_picture"),
   followedAvatarColor: text("followed_avatar_color").notNull().default("#e53e3e"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (t) => ({
+  followerFollowedUnique: uniqueIndex("follows_pair_uidx").on(t.followerId, t.followedId),
+}));
 
 export const insertFollowSchema = createInsertSchema(followsTable).omit({ id: true, createdAt: true });
 export type InsertFollow = z.infer<typeof insertFollowSchema>;
