@@ -777,6 +777,14 @@ export default function Room() {
     hasSubmittedRef.current = false;
     isFreezingRef.current = false;
 
+    // Bind this timer to the exact room/round it was created for. SSE can
+    // deliver the next-round snapshot before React runs the effect that
+    // clears the previous round's responses. Never let this interval submit
+    // using a deadline belonging to a different round.
+    const timerRoomCode = (roomCode || "").toUpperCase();
+    const timerRound = currentRound;
+    const timerLetter = currentLetter;
+
     // 🛠️ Capture clock-skew ONCE at setup time. Recomputing it on every tick
     // (with both serverNow and Date.now() advancing together) makes Date.now()
     // cancel out of the math, freezing the countdown between polls. We
@@ -787,10 +795,16 @@ export default function Room() {
     const clockSkew = Date.now() - serverNow0; // local-clock - server-clock, snapshot
     const fallbackDuration = roundDurationFor(currentRound, currentLetter);
 
-    const computeRemaining = (): number => {
-      // We re-read roundEndsAt fresh each tick so when a new poll updates the
-      // deadline (e.g. the server extended the round) we pick it up promptly.
+    const computeRemaining = (): number | null => {
+      // We re-read room state each tick, but only accept a deadline belonging
+      // to the round that created this timer.
       const r = roomRef.current as any;
+      const liveCode = String(roomCodeRef.current || "").toUpperCase();
+      const liveRound = Number(r?.currentRound || 0);
+      const liveLetter = String(r?.currentLetter || "");
+      if (liveCode !== timerRoomCode || liveRound !== timerRound || liveLetter !== timerLetter) {
+        return null;
+      }
       const roundEndsAt: number | null = typeof r?.roundEndsAt === "number" ? r.roundEndsAt : null;
       if (!roundEndsAt) return fallbackDuration;
       const localDeadline = roundEndsAt + clockSkew;
@@ -798,6 +812,7 @@ export default function Room() {
     };
 
     const initial = computeRemaining();
+    if (initial === null) return;
     setTimeLeft(initial);
     if (initial <= 0) {
       autoSubmit(false);
@@ -809,6 +824,13 @@ export default function Room() {
     // we never drift, no matter how many ticks were skipped.
     timerRef.current = setInterval(() => {
       const remaining = computeRemaining();
+      if (remaining === null) {
+        // The room has advanced (or changed) before the React phase-reset
+        // effect ran. Stop this old interval and let the new round install
+        // its own timer.
+        stopAllTimers();
+        return;
+      }
       setTimeLeft(remaining);
       if (remaining <= 0) {
         stopAllTimers();
