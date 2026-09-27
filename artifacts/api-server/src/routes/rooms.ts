@@ -2334,156 +2334,226 @@ router.post("/:roomCode/bluff-vote", writeLimiter, async (req, res) => {
     res.status(400).json({ error: "Invalid vote data" });
     return;
   }
-  // 🔒 A logged-in account can only vote AS ITSELF (guests pass through).
   if (!verifyClaimedIdentity(req, voterId)) {
-    res.status(403).json({ error: "Identity verification failed" }); return;
-  }
-
-  const rooms = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, roomCode.toUpperCase())).limit(1);
-  if (rooms.length === 0) { res.status(404).json({ error: "Room not found" }); return; }
-
-  const room = rooms[0];
-  if (room.status !== "bluffvoting") { res.json(formatRoom(room)); return; }
-
-  // 🔒 Only an actual room member may vote, and bluffers cannot vote.
-  // The target and category must also match a real bluff registered in this room.
-  const players = parsePlayers(room.playersJson);
-  const voter = players.find((p: any) => p.playerId === voterId);
-  if (!voter) {
-    res.status(403).json({ error: "Only players in the room can vote" });
-    return;
-  }
-  if (voter.bluffedCategories?.length) {
-    res.status(403).json({ error: "Bluffers cannot vote" });
-    return;
-  }
-  const accused = players.find((p: any) => p.playerId === accusedPlayerId);
-  if (!accused || !Array.isArray(accused.bluffedCategories) || !accused.bluffedCategories.includes(category)) {
-    res.status(400).json({ error: "Invalid bluff target" });
+    res.status(403).json({ error: "Identity verification failed" });
     return;
   }
 
-  const meta = parseBluffMeta(room.stopperJson) ?? {};
-  const bluffVotes = meta.bluffVotes ?? {};
-  const bluffDeadline = meta.bluffDeadline ?? new Date().toISOString();
+  try {
+    // Lock the room row for the entire read-modify-write cycle. Without this,
+    // two simultaneous voters can both read the same bluffVotes object and the
+    // second UPDATE can erase the first vote.
+    const outcome = await db.transaction(async (tx) => {
+      const lockedRows = await tx
+        .select()
+        .from(roomsTable)
+        .where(eq(roomsTable.roomCode, roomCode.toUpperCase()))
+        .limit(1)
+        .for("update");
 
-  // Store this player's vote
-  if (bluffVotes[accusedPlayerId]?.[category] !== undefined) {
-    bluffVotes[accusedPlayerId][category][voterId] = vote;
-  }
+      if (lockedRows.length === 0) return { kind: "not_found" as const };
 
-  const nonBlufferIds = players.filter((p: any) => !p.bluffedCategories?.length).map((p: any) => p.playerId);
-
-  // Check if all non-bluffers have voted on all categories
-  let allVoted = true;
-  for (const [pid, cats] of Object.entries(bluffVotes)) {
-    for (const [, votes] of Object.entries(cats as Record<string, any>)) {
-      for (const nbId of nonBlufferIds) {
-        if (!(votes as any)[nbId]) { allVoted = false; break; }
+      const room = lockedRows[0];
+      if (room.status !== "bluffvoting") {
+        return { kind: "unchanged" as const, room };
       }
-      if (!allVoted) break;
+
+      const players = parsePlayers(room.playersJson);
+      const voter = players.find((p: any) => p.playerId === voterId);
+      if (!voter) return { kind: "forbidden" as const, error: "Only players in the room can vote" };
+      if (voter.bluffedCategories?.length) {
+        return { kind: "forbidden" as const, error: "Bluffers cannot vote" };
+      }
+
+      const accused = players.find((p: any) => p.playerId === accusedPlayerId);
+      if (!accused || !Array.isArray(accused.bluffedCategories) || !accused.bluffedCategories.includes(category)) {
+        return { kind: "invalid_target" as const };
+      }
+
+      const meta = parseBluffMeta(room.stopperJson) ?? {};
+      const bluffVotes = meta.bluffVotes ?? {};
+      const bluffDeadline = meta.bluffDeadline ?? new Date().toISOString();
+
+      // Each request now mutates the locked, latest snapshot, so concurrent
+      // votes from different players are merged instead of lost.
+      if (bluffVotes[accusedPlayerId]?.[category] !== undefined) {
+        bluffVotes[accusedPlayerId][category][voterId] = vote;
+      }
+
+      const nonBlufferIds = players
+        .filter((p: any) => !p.bluffedCategories?.length)
+        .map((p: any) => p.playerId);
+
+      let allVoted = true;
+      for (const [, cats] of Object.entries(bluffVotes)) {
+        for (const [, votes] of Object.entries(cats as Record<string, any>)) {
+          for (const nbId of nonBlufferIds) {
+            if (!(votes as any)[nbId]) {
+              allVoted = false;
+              break;
+            }
+          }
+          if (!allVoted) break;
+        }
+        if (!allVoted) break;
+      }
+
+      const deadlinePassed = Date.now() > new Date(bluffDeadline).getTime();
+
+      if (allVoted || deadlinePassed) {
+        const resolved = resolveBluffs(players, bluffVotes);
+        const newRound = room.currentRound + 1;
+        const isGameOver = newRound > room.maxRounds;
+        const newStatus = isGameOver ? "finished" : "waiting";
+
+        const [updated] = await tx.update(roomsTable)
+          .set({
+            playersJson: JSON.stringify(resolved),
+            currentRound: isGameOver ? room.maxRounds : newRound,
+            currentLetter: isGameOver ? room.currentLetter : randomLetter(),
+            status: newStatus,
+            stopperJson: JSON.stringify({ stopper: meta.stopper, bluffResults: bluffVotes }),
+            updatedAt: new Date(),
+          })
+          .where(and(eq(roomsTable.roomCode, roomCode.toUpperCase()), eq(roomsTable.status, "bluffvoting")))
+          .returning();
+
+        if (!updated) return { kind: "already_resolved" as const };
+        return { kind: "resolved" as const, room: updated, resolved, isGameOver, letter: room.currentLetter || "A" };
+      }
+
+      const newMeta = { ...meta, bluffVotes };
+      const [updated] = await tx.update(roomsTable)
+        .set({ stopperJson: JSON.stringify(newMeta), updatedAt: new Date() })
+        .where(and(eq(roomsTable.roomCode, roomCode.toUpperCase()), eq(roomsTable.status, "bluffvoting")))
+        .returning();
+
+      if (!updated) return { kind: "already_resolved" as const };
+      return { kind: "partial" as const, room: updated };
+    });
+
+    if (outcome.kind === "not_found") {
+      res.status(404).json({ error: "Room not found" });
+      return;
     }
-    if (!allVoted) break;
-  }
-
-  // Also auto-resolve if deadline has passed
-  const deadlinePassed = Date.now() > new Date(bluffDeadline).getTime();
-
-  if (allVoted || deadlinePassed) {
-    // Resolve bluffs
-    const resolved = resolveBluffs(players, bluffVotes);
-    const newRound = room.currentRound + 1;
-    const isGameOver = newRound > room.maxRounds;
-    const newStatus = isGameOver ? "finished" : "waiting";
-    // 🔒 CAS on status="bluffvoting": only the request that actually flips the
-    // room OUT of bluffvoting wins. Prevents this handler AND /resolve-bluffs
-    // (or two concurrent voters) from BOTH submitting final scores — the old
-    // code submitted to the leaderboard before the write, so a race double-paid.
-    const [updated] = await db.update(roomsTable)
-      .set({
-        playersJson: JSON.stringify(resolved),
-        currentRound: isGameOver ? room.maxRounds : newRound,
-        currentLetter: isGameOver ? room.currentLetter : randomLetter(),
-        status: newStatus,
-        stopperJson: JSON.stringify({ stopper: meta.stopper, bluffResults: bluffVotes }),
-        updatedAt: new Date(),
-      })
-      .where(and(eq(roomsTable.roomCode, roomCode.toUpperCase()), eq(roomsTable.status, "bluffvoting")))
-      .returning();
-    if (!updated) {
-      // Someone else already resolved this round — return current state, no submit.
+    if (outcome.kind === "forbidden") {
+      res.status(403).json({ error: outcome.error });
+      return;
+    }
+    if (outcome.kind === "invalid_target") {
+      res.status(400).json({ error: "Invalid bluff target" });
+      return;
+    }
+    if (outcome.kind === "unchanged") {
+      res.json(formatRoom(outcome.room));
+      return;
+    }
+    if (outcome.kind === "already_resolved") {
       const [cur] = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, roomCode.toUpperCase())).limit(1);
+      if (!cur) {
+        res.status(404).json({ error: "Room not found" });
+        return;
+      }
       res.json(formatRoom(cur));
       return;
     }
-    if (isGameOver) {
-      submitAllScoresToLeaderboard(resolved, room.currentLetter || "A").catch(() => {});
+
+    if (outcome.kind === "resolved") {
+      if (outcome.isGameOver) {
+        submitAllScoresToLeaderboard(outcome.resolved, outcome.letter).catch(() => {});
+      }
+      res.json(broadcastAndFormat(outcome.room));
+      return;
     }
-    // 🚀 Broadcast resolution to all players (was waiting for polling — main lag in bluff phase)
-    res.json(broadcastAndFormat(updated));
-    return;
+
+    res.json(broadcastAndFormat(outcome.room));
+  } catch (error) {
+    console.error("[rooms/bluff-vote] transaction failed", error);
+    res.status(500).json({ error: "Failed to record bluff vote" });
   }
-
-  // Save partial votes and return updated room
-  const newMeta = { ...meta, bluffVotes };
-  const [updated] = await db.update(roomsTable)
-    .set({ stopperJson: JSON.stringify(newMeta), updatedAt: new Date() })
-    .where(eq(roomsTable.roomCode, roomCode.toUpperCase()))
-    .returning();
-
-  // 🚀 Broadcast partial vote progress so everyone sees votes coming in live
-  res.json(broadcastAndFormat(updated));
 });
 
 // POST /rooms/:roomCode/resolve-bluffs — force-resolve after deadline (called by any client polling)
 router.post("/:roomCode/resolve-bluffs", async (req, res) => {
   const roomCode = paramStr(req.params.roomCode);
 
-  const rooms = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, roomCode.toUpperCase())).limit(1);
-  if (rooms.length === 0) { res.status(404).json({ error: "Room not found" }); return; }
+  try {
+    // Lock the row before reading votes so a deadline resolver cannot race a
+    // final vote and overwrite the latest bluffVotes snapshot.
+    const outcome = await db.transaction(async (tx) => {
+      const lockedRows = await tx
+        .select()
+        .from(roomsTable)
+        .where(eq(roomsTable.roomCode, roomCode.toUpperCase()))
+        .limit(1)
+        .for("update");
 
-  const room = rooms[0];
-  if (room.status !== "bluffvoting") { res.json(formatRoom(room)); return; }
+      if (lockedRows.length === 0) return { kind: "not_found" as const };
 
-  const meta = parseBluffMeta(room.stopperJson) ?? {};
-  const bluffDeadline = meta.bluffDeadline;
-  if (bluffDeadline && Date.now() < new Date(bluffDeadline).getTime()) {
-    // Deadline hasn't passed yet
-    res.json(formatRoom(room));
+      const room = lockedRows[0];
+      if (room.status !== "bluffvoting") {
+        return { kind: "unchanged" as const, room };
+      }
+
+      const meta = parseBluffMeta(room.stopperJson) ?? {};
+      const bluffDeadline = meta.bluffDeadline;
+      if (bluffDeadline && Date.now() < new Date(bluffDeadline).getTime()) {
+        return { kind: "unchanged" as const, room };
+      }
+
+      const players = parsePlayers(room.playersJson);
+      const bluffVotes = meta.bluffVotes ?? {};
+      const resolved = resolveBluffs(players, bluffVotes);
+      const newRound = room.currentRound + 1;
+      const isGameOver = newRound > room.maxRounds;
+      const newStatus = isGameOver ? "finished" : "waiting";
+
+      const [updated] = await tx.update(roomsTable)
+        .set({
+          playersJson: JSON.stringify(resolved),
+          currentRound: isGameOver ? room.maxRounds : newRound,
+          currentLetter: isGameOver ? room.currentLetter : randomLetter(),
+          status: newStatus,
+          stopperJson: JSON.stringify({ stopper: meta.stopper, bluffResults: bluffVotes }),
+          updatedAt: new Date(),
+        })
+        .where(and(eq(roomsTable.roomCode, roomCode.toUpperCase()), eq(roomsTable.status, "bluffvoting")))
+        .returning();
+
+      if (!updated) return { kind: "already_resolved" as const };
+      return { kind: "resolved" as const, room: updated, resolved, isGameOver, letter: room.currentLetter || "A" };
+    });
+
+    if (outcome.kind === "not_found") {
+      res.status(404).json({ error: "Room not found" });
+      return;
+    }
+    if (outcome.kind === "unchanged") {
+      res.json(formatRoom(outcome.room));
+      return;
+    }
+    if (outcome.kind === "already_resolved") {
+      const [cur] = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, roomCode.toUpperCase())).limit(1);
+      if (!cur) {
+        res.status(404).json({ error: "Room not found" });
+        return;
+      }
+      res.json(formatRoom(cur));
+      return;
+    }
+
+    if (outcome.kind === "resolved") {
+      if (outcome.isGameOver) {
+        submitAllScoresToLeaderboard(outcome.resolved, outcome.letter).catch(() => {});
+      }
+      res.json(broadcastAndFormat(outcome.room));
+      return;
+    }
+  } catch (error) {
+    console.error("[rooms/resolve-bluffs] transaction failed", error);
+    res.status(500).json({ error: "Failed to resolve bluffs" });
     return;
   }
-
-  const players = parsePlayers(room.playersJson);
-  const bluffVotes = meta.bluffVotes ?? {};
-  const resolved = resolveBluffs(players, bluffVotes);
-
-  const newRound = room.currentRound + 1;
-  const isGameOver = newRound > room.maxRounds;
-  const newStatus = isGameOver ? "finished" : "waiting";
-
-  // 🔒 Same CAS guard as the vote handler: only submit scores if THIS request
-  // is the one that transitions the room out of "bluffvoting".
-  const [updated] = await db.update(roomsTable)
-    .set({
-      playersJson: JSON.stringify(resolved),
-      currentRound: isGameOver ? room.maxRounds : newRound,
-      currentLetter: isGameOver ? room.currentLetter : randomLetter(),
-      status: newStatus,
-      stopperJson: JSON.stringify({ stopper: meta.stopper, bluffResults: bluffVotes }),
-      updatedAt: new Date(),
-    })
-    .where(and(eq(roomsTable.roomCode, roomCode.toUpperCase()), eq(roomsTable.status, "bluffvoting")))
-    .returning();
-  if (!updated) {
-    const [cur] = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, roomCode.toUpperCase())).limit(1);
-    res.json(formatRoom(cur));
-    return;
-  }
-  if (isGameOver) {
-    submitAllScoresToLeaderboard(resolved, room.currentLetter || "A").catch(() => {});
-  }
-
-  res.json(broadcastAndFormat(updated));
 });
 
 export default router;
