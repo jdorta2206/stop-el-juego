@@ -1016,6 +1016,13 @@ router.post("/:roomCode/join", roomJoinLimiter, async (req, res) => {
 
   const code = roomCode.toUpperCase();
   const { playerId, playerName, avatarColor, picture, loginMethod } = body.data;
+  // 🤖 Bot identities are server-controlled and can never enter a room through
+  // the public join endpoint. Otherwise a known bot_* id would be rehydrated
+  // as a normal human player because join constructs isBot=false.
+  if (playerId.startsWith("bot_")) {
+    res.status(403).json({ error: "Bot identities cannot join rooms directly" });
+    return;
+  }
   // 🔒 A logged-in account can only join AS ITSELF. Guests (UUID ids) pass.
   if (!verifyClaimedIdentity(req, playerId)) {
     res.status(403).json({ error: "Identity verification failed" }); return;
