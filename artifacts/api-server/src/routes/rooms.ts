@@ -1823,9 +1823,9 @@ router.post("/:roomCode/spy", writeLimiter, async (req, res) => {
       uses: sql`CASE WHEN ${roomSpyUsageTable.uses} < ${limit} THEN ${roomSpyUsageTable.uses} + 1 ELSE ${roomSpyUsageTable.uses} END`,
       updatedAt: new Date(),
     },
+    where: lt(roomSpyUsageTable.uses, limit),
   }).returning({ uses: roomSpyUsageTable.uses });
-  const grantedUses = usageRows[0]?.uses ?? 0;
-  if (grantedUses > limit) {
+  if (usageRows.length === 0) {
     res.status(429).json({
       error: callerPremium
         ? "Ya usaste tus 2 espías esta ronda"
