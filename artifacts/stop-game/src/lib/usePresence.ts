@@ -186,6 +186,9 @@ export function usePresence(
   }, []);
 
   useEffect(() => {
+    // A player switch must never carry the previous account's pending challenge UI/ref.
+    activeChallenge.current = null;
+    setIncomingChallenge(null);
     if (!player) return;
 
     ping(player, roomCode, language);
