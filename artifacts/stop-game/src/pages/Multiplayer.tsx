@@ -59,7 +59,10 @@ export default function Multiplayer() {
     let cancelled = false;
     (async () => {
       try {
-        const r = await fetch(`${getApiUrl()}/api/rooms/${saved.code}?viewerId=${encodeURIComponent(player.id)}`, {\n          credentials: "include",\n          headers: authHeaders(),\n        });
+        const r = await fetch(`${getApiUrl()}/api/rooms/${saved.code}?viewerId=${encodeURIComponent(player.id)}`, {
+          credentials: "include",
+          headers: authHeaders(),
+        });
         if (!r.ok) { clearActiveRoom(); return; }
         const room = await r.json() as { status?: string; players?: Array<{ playerId: string }> };
         if (cancelled) return;
