@@ -315,6 +315,7 @@ router.post("/send-invite", inviteLimiter, async (req, res) => {
     ));
 
   let sent = 0;
+  const toDelete: string[] = [];
   await Promise.allSettled(rows.map(async (row) => {
     try {
       await webpush.sendNotification(
@@ -322,8 +323,20 @@ router.post("/send-invite", inviteLimiter, async (req, res) => {
         JSON.stringify({ ...msg, icon: "/images/icon-192.png", badge: "/images/badge-96.png", url: `/multijugador?room=${safeRoomCode}` })
       );
       sent++;
-    } catch {}
+    } catch (e: any) {
+      if (e?.statusCode === 403 || e?.statusCode === 404 || e?.statusCode === 410) {
+        toDelete.push(row.endpoint);
+      } else {
+        console.error(`[push] invite failed status=${e?.statusCode ?? "unknown"} target=${targetPlayerId}`);
+      }
+    }
   }));
+
+  for (const endpoint of toDelete) {
+    await db.delete(pushSubscriptionsTable)
+      .where(eq(pushSubscriptionsTable.endpoint, endpoint))
+      .catch(() => {});
+  }
 
   res.json({ sent });
 });
