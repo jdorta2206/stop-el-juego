@@ -24,19 +24,24 @@ export default function Live() {
   useEffect(() => {
     if (!code) return;
     let stop = false;
+    let intervalId: ReturnType<typeof setInterval> | undefined;
+    const stopPolling = () => {
+      stop = true;
+      if (intervalId !== undefined) clearInterval(intervalId);
+    };
     const fetchOnce = async () => {
       try {
         const r = await fetch(`${API}/api/rooms/${encodeURIComponent(code)}/spectate`);
-        if (r.status === 404) { setError("Sala no encontrada"); stop = true; return; }
-        if (r.status === 403) { setError("Esta sala no es pública"); stop = true; return; }
+        if (r.status === 404) { setError("Sala no encontrada"); stopPolling(); return; }
+        if (r.status === 403) { setError("Esta sala no es pública"); stopPolling(); return; }
         if (!r.ok) return;
         const data = await r.json();
         if (!stop) { setRoom(data); setError(null); }
       } catch { /* ignore */ }
     };
     fetchOnce();
-    const id = setInterval(fetchOnce, 2000);
-    return () => { stop = true; clearInterval(id); };
+    intervalId = setInterval(fetchOnce, 2000);
+    return () => { stopPolling(); };
   }, [code]);
 
   if (error) {
