@@ -162,6 +162,10 @@ export default function Room() {
   const [visiblePhrases, setVisiblePhrases] = useState<Array<{ id: string; playerName: string; text: string }>>([]);
   const seenPhraseIds = useRef<Set<string>>(new Set());
   const [sseActive, setSseActive] = useState(false);
+  // A purged/deleted room is terminal for this mounted page. Without this
+  // guard, EventSource.onError keeps retrying a 404 forever and the stale
+  // active-room pointer can keep sending the player back to a dead room.
+  const [roomGone, setRoomGone] = useState(false);
   // Show the "Reconnecting…" pill only if SSE has been down for more than
   // ~2s — avoids a flicker during normal handshake. Cleared the moment
   // sseActive flips back to true. Kept as state so the pill animates in.
@@ -246,7 +250,7 @@ export default function Room() {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: room, error } = useGetRoom(roomCode || "", {
-    query: { refetchInterval: pollingInterval, enabled: !!roomCode } as any,
+    query: { refetchInterval: pollingInterval, enabled: !!roomCode && !roomGone } as any,
     // 🔑 Prove membership so private rooms return the full roster. Logged-in
     // users are identified by their global x-stop-token; guests have no token,
     // so we assert their own id via x-viewer-id (not a secret to them).
@@ -255,15 +259,62 @@ export default function Room() {
 
   // ── SSE: real-time push updates (replaces polling for critical game moments) ──
   useEffect(() => {
-    if (!roomCode || !player?.id) return;
+    if (!roomCode || !player?.id || roomGone) return;
     const code = roomCode.toUpperCase();
     const API = getApiUrl();
     const tok = getSessionToken();
-    const url = `${API}/api/rooms/${code}/events?playerId=${player.id}${tok ? `&token=${encodeURIComponent(tok)}` : ""}`;
+    const roomCreatedAt = typeof (room as any)?.createdAt === "string" ? (room as any).createdAt : "";
+    if (!roomCreatedAt) return;
+    const url = `${API}/api/rooms/${code}/events?playerId=${player.id}&roomCreatedAt=${encodeURIComponent(roomCreatedAt)}${tok ? `&token=${encodeURIComponent(tok)}` : ""}`;
     let es: EventSource;
     let retryTimeout: ReturnType<typeof setTimeout>;
     let closed = false;
     let attempts = 0;
+
+    async function roomStillExists(): Promise<boolean> {
+      try {
+        const r = await fetch(`${API}/api/rooms/${code}`, {
+          headers: { "x-viewer-id": player.id, ...authHeaders() },
+          credentials: "include",
+        });
+        if (r.status === 404 || r.status === 410) return false;
+        if (!r.ok) return true;
+        const current = await r.json().catch(() => null);
+        if (roomCreatedAt && current?.createdAt) {
+          return new Date(current.createdAt).getTime() === new Date(roomCreatedAt).getTime();
+        }
+        // 5xx/network failures are transient: keep SSE retrying rather than
+        // treating an infrastructure hiccup as a deleted room.
+        return true;
+      } catch {
+        return true;
+      }
+    }
+
+    async function handleSseError() {
+      setSseActive(false);
+      es?.close();
+      if (closed) return;
+
+      // A purge/delete closes the server response. The next EventSource gets a
+      // 404, but EventSource exposes only a generic error event. Probe the room
+      // endpoint so a permanently deleted room becomes a terminal navigation
+      // instead of an infinite reconnect loop.
+      const exists = await roomStillExists();
+      if (!exists) {
+        closed = true;
+        clearTimeout(retryTimeout);
+        clearActiveRoom();
+        setRoomGone(true);
+        setLocation("/multiplayer");
+        return;
+      }
+
+      // 📈 Exponential backoff capped at 15 s (avoids "thundering herd" on server hiccups)
+      attempts += 1;
+      const delay = Math.min(15_000, 1000 * Math.pow(1.6, attempts));
+      retryTimeout = setTimeout(connect, delay);
+    }
 
     function connect() {
       if (closed) return;
@@ -278,15 +329,7 @@ export default function Room() {
           queryClient.setQueryData(getGetRoomQueryKey(code), data);
         } catch {}
       };
-      es.onerror = () => {
-        setSseActive(false);
-        es.close();
-        if (closed) return;
-        // 📈 Exponential backoff capped at 15 s (avoids "thundering herd" on server hiccups)
-        attempts += 1;
-        const delay = Math.min(15_000, 1000 * Math.pow(1.6, attempts));
-        retryTimeout = setTimeout(connect, delay);
-      };
+      es.onerror = () => { void handleSseError(); };
     }
     connect();
 
@@ -296,7 +339,7 @@ export default function Room() {
       es?.close();
       setSseActive(false);
     };
-  }, [roomCode, player?.id, queryClient]);
+  }, [roomCode, player?.id, queryClient, roomGone, setLocation, (room as any)?.createdAt]);
 
   // 🔁 Persist the active room so a closed app / dropped network can find
   // its way back. Saved on mount, refreshed on every round change, cleared

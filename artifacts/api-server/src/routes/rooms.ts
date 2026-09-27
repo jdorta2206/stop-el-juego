@@ -1583,10 +1583,19 @@ const MAX_SSE_CLIENTS_PER_ROOM = 200;
 router.get("/:roomCode/events", async (req, res) => {
   const code = paramStr(req.params.roomCode).toUpperCase();
   const playerId = (req.query["playerId"] as string) || "";
+  // Bind the SSE stream to the concrete room incarnation. A room code can be
+  // reused after purge, so code alone is not sufficient to identify the room.
+  const requestedCreatedAt = typeof req.query["roomCreatedAt"] === "string"
+    ? req.query["roomCreatedAt"]
+    : "";
 
   // 1. Room must exist before we ever touch the in-memory map.
   const [roomRow] = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, code)).limit(1);
   if (!roomRow) { res.status(404).json({ error: "Room not found" }); return; }
+  // 410 means this SSE belongs to a previous incarnation of a reused code.
+  if (requestedCreatedAt && new Date(requestedCreatedAt).getTime() !== new Date(roomRow.createdAt).getTime()) {
+    res.status(410).json({ error: "Room code now belongs to another room" }); return;
+  }
 
   // 2. Private rooms require the caller to be a real member of the room.
   if ((roomRow as any).isPublic === false) {
