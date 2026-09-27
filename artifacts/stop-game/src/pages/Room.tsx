@@ -282,10 +282,35 @@ export default function Room() {
         setSseActive(false);
         es.close();
         if (closed) return;
-        // 📈 Exponential backoff capped at 15 s (avoids "thundering herd" on server hiccups)
-        attempts += 1;
-        const delay = Math.min(15_000, 1000 * Math.pow(1.6, attempts));
-        retryTimeout = setTimeout(connect, delay);
+
+        // A purged room returns a terminal 404 from the SSE endpoint. EventSource
+        // does not expose HTTP status in onerror, so confirm the room once before
+        // entering the normal retry loop. Transient/network failures keep retrying.
+        void fetch(
+          API + "/api/rooms/" + code + "?viewerId=" + encodeURIComponent(player.id),
+          {
+            credentials: "include",
+            headers: { "x-viewer-id": player.id, ...authHeaders() },
+          },
+        ).then((roomResponse) => {
+          if (closed) return;
+          if (roomResponse.status === 404) {
+            clearActiveRoom();
+            setLocation("/multiplayer");
+            return;
+          }
+
+          // 📈 Exponential backoff capped at 15 s (avoids "thundering herd" on server hiccups)
+          attempts += 1;
+          const delay = Math.min(15_000, 1000 * Math.pow(1.6, attempts));
+          retryTimeout = setTimeout(connect, delay);
+        }).catch(() => {
+          if (closed) return;
+          // Network/server failure: preserve the existing retry behavior.
+          attempts += 1;
+          const delay = Math.min(15_000, 1000 * Math.pow(1.6, attempts));
+          retryTimeout = setTimeout(connect, delay);
+        });
       };
     }
     connect();
