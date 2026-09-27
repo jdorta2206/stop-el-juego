@@ -28,11 +28,12 @@ function mergeStats(local: JsonRecord, remote: JsonRecord): JsonRecord {
   for (const [key, value] of Object.entries(remote)) {
     if (accepted >= MAX_STATS || key.length > MAX_KEY_LENGTH) break;
     const old = out[key];
-    if (typeof value === "number" && Number.isFinite(value) && typeof old === "number" && Number.isFinite(old)) {
-      out[key] = Math.max(old, value);
+    if (typeof value === "number" && Number.isFinite(value)) {
+      const previous = typeof old === "number" && Number.isFinite(old) ? old : 0;
+      out[key] = Math.max(previous, value);
       accepted++;
-    } else if (typeof value === "boolean" && typeof old === "boolean") {
-      out[key] = old || value;
+    } else if (typeof value === "boolean") {
+      out[key] = (typeof old === "boolean" ? old : false) || value;
       accepted++;
     } else if (typeof value === "string" && value.length <= MAX_JSON_VALUE_LENGTH) {
       out[key] = value;
