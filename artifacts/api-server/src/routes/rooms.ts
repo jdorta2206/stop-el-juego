@@ -860,6 +860,10 @@ router.patch("/:roomCode/visibility", async (req, res) => {
     .set({ isPublic })
     .where(eq(roomsTable.roomCode, roomCode))
     .returning();
+  // Notify every connected client immediately. The SSE layer sanitizes the
+  // payload for public non-members, so enabling streamer mode does not expose
+  // private/in-round answers to spectators.
+  await broadcastRoom(updated);
   res.json(formatRoom(updated));
 });
 
