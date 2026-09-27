@@ -2199,3 +2199,561 @@ export default function Room() {
                                       {isDupe ? "×2" : "✓"}
                                     </span>
                                   )}
+                                  {/* 👏 Vote-for-funniest button */}
+                                  {revealed && valid && !isMe && (() => {
+                                    const allVotes = ((room as any)?.funVotes ?? []) as Array<{
+                                      round: number; voterId: string; votedPlayerId: string; category: string; answer: string;
+                                    }>;
+                                    const roundNum = currentRound > 1 ? currentRound - 1 : maxRounds;
+                                    const myVote = allVotes.find(v =>
+                                      v.round === roundNum && v.voterId === player?.id);
+                                    const iVotedThis =
+                                      myVote?.votedPlayerId === p.playerId && myVote?.category === cat;
+                                    const voteCount = allVotes.filter(v =>
+                                      v.round === roundNum && v.votedPlayerId === p.playerId && v.category === cat
+                                    ).length;
+                                    return (
+                                      <button
+                                        type="button"
+                                        onClick={async () => {
+                                          if (!player?.id || !roomCode) return;
+                                          try {
+                                            await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/funvote`, {
+                                              method: "POST",
+                                              headers: { "Content-Type": "application/json" },
+                                              body: JSON.stringify({
+                                                playerId: player.id,
+                                                votedPlayerId: p.playerId,
+                                                category: cat,
+                                                round: roundNum,
+                                                answer: raw,
+                                              }),
+                                            });
+                                          } catch {}
+                                        }}
+                                        title={iVotedThis ? "Tu voto" : "Votar como jugada graciosa"}
+                                        className={`text-sm shrink-0 px-1.5 py-0.5 rounded-full transition-all border ${
+                                          iVotedThis
+                                            ? "bg-pink-500/30 border-pink-400/60 scale-110"
+                                            : "bg-white/5 border-transparent hover:bg-white/15 opacity-60 hover:opacity-100"
+                                        }`}
+                                      >
+                                        👏{voteCount > 0 ? <span className="ml-0.5 text-[10px] font-black">{voteCount}</span> : null}
+                                      </button>
+                                    );
+                                  })()}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </motion.div>
+                      );
+                    })}
+                  </div>
+                  <Button size="lg" className="w-full shrink-0"
+                    onClick={() => setRevealedCount(roundCategories.length)}>
+                    ⏭ Ver puntuaciones ({revealedCount}/{roundCategories.length})
+                  </Button>
+                </>
+              ) : (
+                <>
+                  {/* Score summary */}
+                  <div className="space-y-2">
+                    {[...players].sort((a: any, b: any) => (b.score || 0) - (a.score || 0)).map((p: any, i) => {
+                      const medals = ["🥇", "🥈", "🥉"];
+                      const isMe = p.playerId === player?.id;
+                      const roundPts = p.roundScore ?? 0;
+                      return (
+                        <motion.div key={p.playerId}
+                          initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: i * 0.08 }}
+                          className={`flex items-center gap-3 p-3 rounded-xl ${isMe ? "bg-secondary/20 border border-secondary/30" : "bg-black/20 border border-white/10"}`}>
+                          <span className="text-xl">{medals[i] || `#${i + 1}`}</span>
+                          <RoomCosmeticAvatar p={p} size="sm" />
+                          <div className="flex-1 min-w-0">
+                            <p className="font-black text-sm truncate flex items-center gap-1">
+                              <span className="truncate">{p.playerName}</span>
+                              {p.isPremium && <PremiumBadge size="xs" />}
+                              {isMe && <span className="text-secondary text-xs">(tú)</span>}
+                            </p>
+                            <p className="text-xs text-white/40">+{roundPts} pts esta ronda</p>
+                          </div>
+                          <p className="font-black text-secondary text-lg shrink-0">{p.score || 0}</p>
+                        </motion.div>
+                      );
+                    })}
+                  </div>
+                  {isHost ? (
+                    <Button size="xl" className="w-full border-2 border-white/20" onClick={handleStart}>
+                      <Play className="w-5 h-5 mr-2 fill-current" /> Siguiente Ronda ({currentRound}/{maxRounds})
+                    </Button>
+                  ) : (
+                    <div className="bg-black/20 p-4 rounded-xl text-center border border-white/10">
+                      <p className="font-bold animate-pulse text-secondary">Esperando al anfitrión...</p>
+                    </div>
+                  )}
+                </>
+              )}
+            </motion.div>
+          );
+        })()}
+
+        {/* ── FINISHED ── */}
+        {phase === "finished" && (() => {
+          const sorted = [...players].sort((a: any, b: any) => (b.score || 0) - (a.score || 0));
+          const myIdx = sorted.findIndex((p: any) => p.playerId === player?.id);
+          const myPos = myIdx >= 0 ? myIdx + 1 : null;
+          const total = sorted.length;
+          const medals = ["🥇", "🥈", "🥉"];
+          const champ = sorted[0];
+          const wooden = total >= 3 ? sorted[sorted.length - 1] : null;
+          const posEmoji = myPos === 1 ? "🥇" : myPos === 2 ? "🥈" : myPos === 3 ? "🥉" : "💀";
+          const posMsg =
+            myPos === 1 ? "¡CAMPEÓN!"
+            : myPos === 2 ? "¡Casi casi!"
+            : myPos === 3 ? "Top 3, vamos"
+            : myPos === total ? "Cuchara de palo 🐌"
+            : `Quedaste #${myPos}`;
+
+          return (
+          <motion.div key="finished"
+            initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+            className="flex-1 flex flex-col max-w-md mx-auto w-full py-8 gap-6"
+          >
+            {/* 🎯 Position toast — first thing the player sees */}
+            {myPos && total > 1 && (
+              <motion.div
+                initial={{ scale: 0.4, opacity: 0, y: -30 }}
+                animate={{ scale: [0.4, 1.18, 1], opacity: 1, y: 0 }}
+                transition={{ duration: 0.7, times: [0, 0.6, 1], type: "spring", bounce: 0.5 }}
+                className="text-center py-5 px-4 rounded-3xl border-2"
+                style={{
+                  background: myPos === 1
+                    ? "linear-gradient(135deg, rgba(249,168,37,0.35), rgba(220,38,38,0.25))"
+                    : myPos === total
+                      ? "linear-gradient(135deg, rgba(100,116,139,0.35), rgba(30,41,59,0.4))"
+                      : "linear-gradient(135deg, rgba(99,102,241,0.3), rgba(168,85,247,0.25))",
+                  borderColor: myPos === 1 ? "#f9a825" : myPos === total ? "#64748b" : "#a855f7",
+                }}
+              >
+                <div className="text-6xl mb-1">{posEmoji}</div>
+                <p className="text-3xl font-display font-black" style={{
+                  color: myPos === 1 ? "#fbbf24" : "#fff",
+                  textShadow: "0 2px 8px rgba(0,0,0,0.4)",
+                }}>
+                  {posMsg}
+                </p>
+                <p className="text-sm text-white/70 mt-1 font-bold">
+                  {myPos} de {total} jugadores
+                </p>
+              </motion.div>
+            )}
+
+            <div className="text-center">
+              <Trophy className="w-16 h-16 text-secondary mx-auto mb-3" />
+              <h2 className="text-4xl font-display font-black">¡Partida Terminada!</h2>
+              <p className="text-white/60 mt-1">Clasificación final</p>
+            </div>
+
+            <div className="space-y-3">
+              {sorted.map((p: any, i) => {
+                const isMe = p.playerId === player?.id;
+                return (
+                  <motion.div key={p.playerId}
+                    initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: i * 0.1 }}
+                    className={`flex items-center gap-4 p-4 rounded-2xl border ${isMe ? "bg-secondary/20 border-secondary/40 scale-[1.02]" : "bg-black/20 border-white/10"}`}>
+                    <span className="text-2xl">{medals[i] || `#${i + 1}`}</span>
+                    <RoomCosmeticAvatar p={p} size="md" />
+                    <div className="flex-1">
+                      <p className="font-black flex items-center gap-1">
+                        {p.playerName}
+                        {p.isPremium && <PremiumBadge size="sm" />}
+                        {isMe && <span className="text-secondary/80 font-bold">(Tú)</span>}
+                      </p>
+                      {i === 0 && <p className="text-xs text-secondary font-black">¡GANADOR!</p>}
+                      {!isMe && player?.id && (
+                        <div className="mt-1.5">
+                          <FollowButton
+                            meId={player.id}
+                            targetId={p.playerId}
+                            targetName={p.playerName}
+                            targetAvatarColor={p.avatarColor}
+                            isFollowing={followedIds.has(p.playerId)}
+                            follow={follow}
+                            unfollow={unfollow}
+                            size="xs"
+                          />
+                        </div>
+                      )}
+                    </div>
+                    <CountUp
+                      to={p.score || 0}
+                      delayMs={i * 100 + 250}
+                      durationMs={1100 + i * 150}
+                      className="text-2xl font-black text-secondary tabular-nums"
+                    />
+                  </motion.div>
+                );
+              })}
+            </div>
+
+            {/* 🎭 Premios humillación — listo para compartir */}
+            {total >= 2 && (() => {
+              // Compute extra humiliation awards from final-round answers.
+              // Each player has `answers` (Record<category, word>) and `bluffedCategories` (array).
+              type P = any;
+              const norm = (w: string) => (w ?? "").toString().trim().toLowerCase();
+
+              // Build category → list of normalized words across all players (last round)
+              const wordsByCat = new Map<string, string[]>();
+              for (const p of players as P[]) {
+                const ans = (p.answers ?? {}) as Record<string, string>;
+                for (const [cat, w] of Object.entries(ans)) {
+                  const nw = norm(w);
+                  if (!nw) continue;
+                  const arr = wordsByCat.get(cat) ?? [];
+                  arr.push(nw);
+                  wordsByCat.set(cat, arr);
+                }
+              }
+              // Per player: count unique vs duplicated answers in the final round
+              const stats = (players as P[]).map(p => {
+                const ans = (p.answers ?? {}) as Record<string, string>;
+                let unique = 0, dup = 0, filled = 0;
+                for (const [cat, w] of Object.entries(ans)) {
+                  const nw = norm(w);
+                  if (!nw) continue;
+                  filled++;
+                  const occurrences = (wordsByCat.get(cat) ?? []).filter(x => x === nw).length;
+                  if (occurrences === 1) unique++;
+                  else if (occurrences >= 2) dup++;
+                }
+                return {
+                  playerId: p.playerId,
+                  playerName: p.playerName,
+                  unique, dup, filled,
+                  bluffs: (p.bluffedCategories?.length ?? 0) as number,
+                };
+              });
+
+              const winnerOf = <K extends "unique" | "dup" | "bluffs">(k: K, minVal = 1) => {
+                const best = stats.reduce<typeof stats[0] | null>((acc, s) =>
+                  s[k] >= minVal && (!acc || s[k] > acc[k]) ? s : acc, null);
+                if (!best) return null;
+                // Skip if tied with another player on the same metric
+                const tied = stats.filter(s => s[k] === best[k]);
+                return tied.length === 1 ? best : null;
+              };
+              const loserMostEmpty = (() => {
+                const maxEmpty = Math.max(...stats.map(s => Math.max(0, 8 - s.filled)));
+                if (maxEmpty < 3) return null; // only shame if truly bad (3+ empty)
+                const cand = stats.filter(s => (8 - s.filled) === maxEmpty);
+                return cand.length === 1 ? cand[0] : null;
+              })();
+
+              const original = winnerOf("unique", 2);
+              const copion   = winnerOf("dup", 2);
+              const bluffer  = winnerOf("bluffs", 1);
+
+              // 👏 Jugada de la partida: la respuesta con más votos a "graciosa"
+              const allVotes = ((room as any)?.funVotes ?? []) as Array<{
+                round: number; voterId: string; votedPlayerId: string; category: string; answer: string;
+              }>;
+              const tally = new Map<string, { player: any; category: string; answer: string; round: number; votes: number }>();
+              for (const v of allVotes) {
+                const k = `${v.round}|${v.votedPlayerId}|${v.category}`;
+                const t = tally.get(k);
+                if (t) t.votes++;
+                else {
+                  const target = (players as P[]).find(p => p.playerId === v.votedPlayerId);
+                  if (target) tally.set(k, { player: target, category: v.category, answer: v.answer, round: v.round, votes: 1 });
+                }
+              }
+              const funniest = (() => {
+                if (tally.size === 0) return null;
+                const entries = Array.from(tally.values());
+                entries.sort((a, b) => b.votes - a.votes);
+                const top = entries[0];
+                // tie at top → no clear winner
+                if (entries.length > 1 && entries[1].votes === top.votes) return null;
+                return top;
+              })();
+
+              return (
+              <motion.div
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.6 }}
+                className="rounded-2xl p-4 border border-white/10 bg-gradient-to-br from-yellow-900/20 to-red-900/20"
+              >
+                <p className="text-xs font-black text-white/60 uppercase tracking-wider text-center mb-3">
+                  🏅 Premios de la partida
+                </p>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-3 text-sm">
+                    <span className="text-2xl">👑</span>
+                    <div className="flex-1">
+                      <p className="font-black text-yellow-400">Rey del Stop</p>
+                      <p className="text-xs text-white/60">{champ.playerName} · {champ.score || 0} pts</p>
+                    </div>
+                  </div>
+                  {wooden && wooden.playerId !== champ.playerId && (
+                    <div className="flex items-center gap-3 text-sm">
+                      <span className="text-2xl">🐌</span>
+                      <div className="flex-1">
+                        <p className="font-black text-slate-300">Cuchara de palo</p>
+                        <p className="text-xs text-white/60">{wooden.playerName} · {wooden.score || 0} pts</p>
+                      </div>
+                    </div>
+                  )}
+                  {original && (
+                    <div className="flex items-center gap-3 text-sm">
+                      <span className="text-2xl">🦄</span>
+                      <div className="flex-1">
+                        <p className="font-black text-fuchsia-300">El Único</p>
+                        <p className="text-xs text-white/60">{original.playerName} · {original.unique} respuestas que nadie más puso</p>
+                      </div>
+                    </div>
+                  )}
+                  {copion && (
+                    <div className="flex items-center gap-3 text-sm">
+                      <span className="text-2xl">🦜</span>
+                      <div className="flex-1">
+                        <p className="font-black text-orange-300">El Copión</p>
+                        <p className="text-xs text-white/60">{copion.playerName} · {copion.dup} respuestas calcadas</p>
+                      </div>
+                    </div>
+                  )}
+                  {bluffer && (
+                    <div className="flex items-center gap-3 text-sm">
+                      <span className="text-2xl">🎭</span>
+                      <div className="flex-1">
+                        <p className="font-black text-cyan-300">El Bluffer</p>
+                        <p className="text-xs text-white/60">{bluffer.playerName} · {bluffer.bluffs} bluff{bluffer.bluffs === 1 ? "" : "s"}</p>
+                      </div>
+                    </div>
+                  )}
+                  {loserMostEmpty && loserMostEmpty.playerId !== champ.playerId && (
+                    <div className="flex items-center gap-3 text-sm">
+                      <span className="text-2xl">🥶</span>
+                      <div className="flex-1">
+                        <p className="font-black text-blue-300">Cerebro Congelado</p>
+                        <p className="text-xs text-white/60">{loserMostEmpty.playerName} · {8 - loserMostEmpty.filled} casillas en blanco</p>
+                      </div>
+                    </div>
+                  )}
+                  {funniest && (
+                    <div className="flex items-center gap-3 text-sm">
+                      <span className="text-2xl">👏</span>
+                      <div className="flex-1">
+                        <p className="font-black text-pink-300">Jugada de la partida</p>
+                        <p className="text-xs text-white/60">
+                          {funniest.player.playerName} con <span className="font-black text-white">"{funniest.answer}"</span> en {funniest.category} · {funniest.votes} voto{funniest.votes === 1 ? "" : "s"}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+              );
+            })()}
+
+            {/* Share result button */}
+            <motion.button
+              whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
+              onClick={() => setShowShareModal(true)}
+              className="w-full flex items-center justify-center gap-3 py-4 rounded-2xl font-black text-lg"
+              style={{
+                background: "linear-gradient(135deg, rgba(249,168,37,0.25), rgba(181,48,26,0.2))",
+                border: "2px solid rgba(249,168,37,0.5)",
+                color: "#f9a825",
+              }}
+            >
+              <Share2 className="w-5 h-5" />
+              Compartir resultado 🎮
+            </motion.button>
+
+            {/* Clip TikTok button */}
+            <motion.button
+              whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
+              onClick={() => setShowClipModal(true)}
+              className="w-full flex items-center justify-center gap-3 py-3.5 rounded-2xl font-black text-base text-white"
+              style={{ background: "linear-gradient(135deg, #a855f7, #4f46e5)" }}
+            >
+              🎬 Crear clip para TikTok
+            </motion.button>
+
+            {tournamentCtx && (
+              <motion.button
+                whileTap={{ scale: 0.97 }}
+                onClick={() => setLocation("/torneo")}
+                className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-black text-sm"
+                style={{ background: "linear-gradient(135deg, rgba(245,158,11,0.2), rgba(220,38,38,0.2))", border: "1.5px solid rgba(245,158,11,0.4)", color: "#f59e0b" }}
+              >
+                🏆 Ver bracket del torneo
+              </motion.button>
+            )}
+            {/* ⚡ REVANCHA — same opponents, one tap */}
+            {!tournamentCtx && (
+              <motion.button
+                whileTap={{ scale: 0.96 }}
+                onClick={handleRematch}
+                disabled={rematchLoading}
+                animate={rematchCode ? {
+                  boxShadow: [
+                    "0 0 0px rgba(220,38,38,0.0)",
+                    "0 0 24px rgba(220,38,38,0.7)",
+                    "0 0 0px rgba(220,38,38,0.0)",
+                  ],
+                } : {}}
+                transition={{ repeat: Infinity, duration: 1.4 }}
+                className="w-full flex items-center justify-center gap-3 py-5 rounded-2xl font-black text-xl disabled:opacity-60"
+                style={{
+                  background: rematchCode
+                    ? "linear-gradient(135deg, #f9a825, #dc2626)"
+                    : "linear-gradient(135deg, #1a237e, #283593)",
+                  color: "white",
+                  textShadow: "0 2px 6px rgba(0,0,0,0.3)",
+                }}
+              >
+                {rematchLoading
+                  ? "Creando..."
+                  : rematchCode
+                    ? "⚔️ ¡ENTRAR A LA REVANCHA!"
+                    : "🔥 REVANCHA"}
+              </motion.button>
+            )}
+            <div className="grid grid-cols-2 gap-3">
+              <Button variant="secondary" size="lg" onClick={() => setLocation("/ranking")}>
+                <Trophy className="w-4 h-4 mr-2" /> Ranking
+              </Button>
+              <Button size="lg" onClick={() => setLocation("/multiplayer")}>Otra sala</Button>
+            </div>
+          </motion.div>
+          );
+        })()}
+
+      </AnimatePresence>
+      <AnimatePresence>
+        {halloweenScare && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.72, rotate: -4 }}
+            animate={{ opacity: 1, scale: [1, 1.04, 1], rotate: [0, 2, -1, 0] }}
+            exit={{ opacity: 0, scale: 1.12 }}
+            transition={{ duration: 0.45 }}
+            onClick={() => setHalloweenScare(null)}
+            className="fixed inset-0 z-[120] flex items-center justify-center p-6 cursor-pointer"
+            style={{ background: "rgba(0,0,0,0.76)", backdropFilter: "blur(3px)" }}
+            role="alert"
+            aria-live="assertive"
+          >
+            <div className="text-center select-none">
+              <motion.div animate={{ scale: [1, 1.18, 1] }} transition={{ duration: 0.7, repeat: 2 }} className="text-[7rem] sm:text-[10rem] leading-none drop-shadow-[0_0_35px_rgba(168,85,247,0.7)]">
+                {halloweenScare.emoji}
+              </motion.div>
+              <p className="mt-5 text-3xl sm:text-5xl font-black text-white tracking-tight">{halloweenScare.title}</p>
+              <p className="mt-2 text-sm sm:text-lg font-bold text-white/70">{halloweenScare.text}</p>
+              <p className="mt-6 text-[10px] uppercase tracking-[0.25em] text-white/35">Halloween 2026</p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      <ReviewPromptCard
+        open={reviewPrompt.open}
+        onClose={reviewPrompt.close}
+        onRated={reviewPrompt.markRated}
+        onSnooze={reviewPrompt.snooze}
+        onDismissForever={reviewPrompt.dontAskAgain}
+      />
+    </Layout>
+  );
+}
+
+// 📺 Modo Streamer — host can publish the room so anyone can spectate at /live/:code
+// and an OBS-friendly overlay is exposed at /overlay/:code.
+function StreamerModeCard({ room, playerId }: { room: any; playerId: string }) {
+  const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState<string | null>(null);
+  const isPublic = !!room?.isPublic;
+  const code = room?.roomCode;
+  const apiBase = (import.meta.env.VITE_API_BASE_URL || "") as string;
+  const liveUrl = publicLink(`live/${code}`);
+  const overlayUrl = publicLink(`overlay/${code}`);
+
+  const toggle = async () => {
+    if (!code || !playerId) return;
+    setBusy(true);
+    try {
+      await fetch(`${apiBase}/api/rooms/${encodeURIComponent(code)}/visibility`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ hostId: playerId, isPublic: !isPublic }),
+      });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const copy = (url: string, key: string) => {
+    navigator.clipboard.writeText(url).catch(() => {});
+    setCopied(key);
+    setTimeout(() => setCopied(null), 1500);
+  };
+
+  return (
+    <Card className="p-3 flex flex-col gap-2"
+      style={{ background: isPublic ? "rgba(239,68,68,0.10)" : "rgba(255,255,255,0.03)",
+        border: isPublic ? "1.5px solid rgba(239,68,68,0.55)" : "1px solid rgba(255,255,255,0.1)" }}>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <span className="text-base">📺</span>
+          <div>
+            <p className="text-sm font-black text-white">Modo Streamer</p>
+            <p className="text-[11px] text-white/50">
+              {isPublic ? "Sala pública · cualquiera puede mirar" : "Activa para que tus viewers puedan ver la partida"}
+            </p>
+          </div>
+        </div>
+        <Button size="sm" variant={isPublic ? "destructive" : "secondary"} onClick={toggle} disabled={busy}>
+          {isPublic ? "Apagar" : "Activar"}
+        </Button>
+      </div>
+      {isPublic && (
+        <div className="flex gap-3 mt-1">
+          {/* QR for viewers — uses a free QR image service to avoid bundling a lib. */}
+          <img
+            src={`https://api.qrserver.com/v1/create-qr-code/?size=110x110&margin=4&color=ffffff&bgcolor=18181b&data=${encodeURIComponent(liveUrl)}`}
+            alt="QR"
+            width={88}
+            height={88}
+            loading="lazy"
+            className="rounded-lg flex-shrink-0"
+            style={{ background: "#18181b", border: "1px solid rgba(255,255,255,0.12)" }}
+          />
+          <div className="flex flex-col gap-1.5 flex-1 min-w-0">
+            <div className="flex gap-2">
+              <input readOnly value={liveUrl}
+                onClick={(e) => (e.target as HTMLInputElement).select()}
+                className="flex-1 min-w-0 bg-black/40 text-white/80 text-[11px] px-2 py-1 rounded border border-white/10 font-mono" />
+              <Button size="sm" variant="ghost" onClick={() => copy(liveUrl, "live")}>
+                {copied === "live" ? "✓" : "Live"}
+              </Button>
+            </div>
+            <div className="flex gap-2">
+              <input readOnly value={overlayUrl}
+                onClick={(e) => (e.target as HTMLInputElement).select()}
+                className="flex-1 min-w-0 bg-black/40 text-white/80 text-[11px] px-2 py-1 rounded border border-white/10 font-mono" />
+              <Button size="sm" variant="ghost" onClick={() => copy(overlayUrl, "obs")}>
+                {copied === "obs" ? "✓" : "OBS"}
+              </Button>
+            </div>
+            <p className="text-[10px] text-white/45 leading-tight">
+              📷 QR para que viewers entren · OBS = añade como Browser Source 480×720, fondo transparente
+            </p>
+          </div>
+        </div>
+      )}
+    </Card>
+  );
+}
