@@ -1915,7 +1915,7 @@ router.post("/:roomCode/rematch", writeLimiter, async (req, res) => {
           gameMode: oldRoom.gameMode ?? "classic",
           language: oldRoom.language,
           playersJson: JSON.stringify(players),
-          stopperJson: null,
+          stopperJson: persistedPack ? JSON.stringify({ categoryPack: persistedPack }) : null,
           isPublic: oldRoom.isPublic ?? false,
         }).onConflictDoNothing({ target: roomsTable.roomCode }).returning({ roomCode: roomsTable.roomCode });
         if (inserted.length > 0) newCode = inserted[0].roomCode;
