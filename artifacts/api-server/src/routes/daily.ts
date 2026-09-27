@@ -86,7 +86,13 @@ router.post("/submit", async (req, res) => {
   // flat absolute ceiling when none are present (offline play). Never reject,
   // only clamp, so a legit daily score is never lost.
   const { base: verifiedBase, verified } = await sumVerifiedBasePersistent(scoreTokens, 1);
-  const dailyCeiling = verified > 0 ? ceilingFromBase(verifiedBase) : absoluteCeiling("daily");
+  // The daily mode has a hard 600-point ceiling even when a valid voucher is
+  // present. A voucher may certify a real round score, but it must never raise
+  // the mode-specific absolute ceiling.
+  const dailyCeiling = Math.min(
+    absoluteCeiling("daily"),
+    verified > 0 ? ceilingFromBase(verifiedBase) : absoluteCeiling("daily"),
+  );
   const safeScore = Math.max(0, Math.min(Number(score) || 0, dailyCeiling));
 
   // Only allow one submission per player per day. The unique DB constraint is
