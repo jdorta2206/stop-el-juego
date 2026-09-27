@@ -179,6 +179,21 @@ const roomLiveResponses = new Map<string, Map<string, { name: string; responses:
 // roomCode → map of playerId → spy uses this round.
 // Free players: 1 use/round. Premium players: 2 uses/round.
 const roomSpyUsage = new Map<string, Map<string, number>>();
+const roomSpyLocks = new Map<string, Promise<void>>();
+
+async function withSpyLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  const previous = roomSpyLocks.get(key) ?? Promise.resolve();
+  let release!: () => void;
+  const current = new Promise<void>(resolve => { release = resolve; });
+  roomSpyLocks.set(key, current);
+  await previous;
+  try {
+    return await fn();
+  } finally {
+    release();
+    if (roomSpyLocks.get(key) === current) roomSpyLocks.delete(key);
+  }
+}
 const SPY_LIMIT_FREE = 1;
 const SPY_LIMIT_PREMIUM = 2;
 
@@ -1736,49 +1751,58 @@ router.post("/:roomCode/spy", writeLimiter, async (req, res) => {
     return;
   }
 
-  // Enforce per-round usage limit (premium gets 2x)
-  let used = roomSpyUsage.get(code);
-  if (!used) { used = new Map(); roomSpyUsage.set(code, used); }
-  const callerPremium = await isPlayerPremium(playerId);
-  const limit = callerPremium ? SPY_LIMIT_PREMIUM : SPY_LIMIT_FREE;
-  const current = used.get(playerId) ?? 0;
-  if (current >= limit) {
-    res.status(429).json({
-      error: callerPremium
-        ? "Ya usaste tus 2 espías esta ronda"
-        : "Ya espiaste esta ronda. Hazte Premium para 2 usos por ronda.",
-    });
-    return;
-  }
-
-  // Find rivals with at least one fresh non-empty response
-  const lr = roomLiveResponses.get(code);
-  if (!lr || lr.size === 0) {
-    res.status(404).json({ error: "Nadie ha empezado a escribir todavía" });
-    return;
-  }
-  const cutoff = Date.now() - 5000;
-  const candidates: Array<{ pid: string; name: string; cat: string; word: string }> = [];
-  for (const [pid, info] of lr.entries()) {
-    if (pid === playerId) continue;
-    if (info.ts < cutoff) continue;
-    for (const [cat, word] of Object.entries(info.responses)) {
-      if (word && word.length > 0) candidates.push({ pid, name: info.name, cat, word });
+  const result = await withSpyLock(`${code}:${playerId}`, async () => {
+    // Enforce the per-round usage limit under a per-player lock so
+    // simultaneous requests cannot consume the same usage twice.
+    let used = roomSpyUsage.get(code);
+    if (!used) { used = new Map(); roomSpyUsage.set(code, used); }
+    const callerPremium = await isPlayerPremium(playerId);
+    const limit = callerPremium ? SPY_LIMIT_PREMIUM : SPY_LIMIT_FREE;
+    const current = used.get(playerId) ?? 0;
+    if (current >= limit) {
+      return {
+        error: 429,
+        message: callerPremium
+          ? "Ya usaste tus 2 espías esta ronda"
+          : "Ya espiaste esta ronda. Hazte Premium para 2 usos por ronda.",
+      } as const;
     }
-  }
-  if (candidates.length === 0) {
-    res.status(404).json({ error: "Tus rivales aún no escribieron nada 🤷" });
+
+    // Find rivals with at least one fresh non-empty response.
+    const lr = roomLiveResponses.get(code);
+    if (!lr || lr.size === 0) {
+      return { error: 404, message: "Nadie ha empezado a escribir todavía" } as const;
+    }
+    const cutoff = Date.now() - 5000;
+    const candidates: Array<{ pid: string; name: string; cat: string; word: string }> = [];
+    for (const [pid, info] of lr.entries()) {
+      if (pid === playerId || info.ts < cutoff) continue;
+      for (const [cat, word] of Object.entries(info.responses)) {
+        if (word && word.length > 0) candidates.push({ pid, name: info.name, cat, word });
+      }
+    }
+    if (candidates.length === 0) {
+      return { error: 404, message: "Tus rivales aún no escribieron nada 🤷" } as const;
+    }
+
+    const pick = candidates[Math.floor(Math.random() * candidates.length)];
+    const nextUse = current + 1;
+    used.set(playerId, nextUse);
+    return {
+      ok: true as const,
+      rivalName: pick.name,
+      category: pick.cat,
+      word: pick.word,
+      usesLeft: limit - nextUse,
+      limit,
+    };
+  });
+
+  if ("error" in result) {
+    res.status(result.error).json({ error: result.message });
     return;
   }
-  const pick = candidates[Math.floor(Math.random() * candidates.length)];
-  used.set(playerId, current + 1);
-  res.json({
-    rivalName: pick.name,
-    category: pick.cat,
-    word: pick.word,
-    usesLeft: limit - (current + 1),
-    limit,
-  });
+  res.json(result);
 });
 
 // 👏 POST /rooms/:roomCode/funvote — vote for the funniest answer of the round.
