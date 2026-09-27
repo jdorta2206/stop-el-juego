@@ -852,7 +852,7 @@ export default function Room() {
       await fetch(`${apiBase}/api/rooms/${roomCode.toUpperCase()}/bluff-vote`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify({ voterId: player.id, accusedPlayerId, category, vote }),
+        body: JSON.stringify({ voterId: player.id, round: room.currentRound, accusedPlayerId, category, vote }),
       });
     } catch { /* silent */ }
   }, [player, roomCode, apiBase]);
