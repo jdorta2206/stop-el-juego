@@ -1808,25 +1808,47 @@ router.post("/:roomCode/spy", writeLimiter, async (req, res) => {
   if (!playerId) { res.status(400).json({ error: "Missing playerId" }); return; }
   if (!verifyClaimedIdentity(req, playerId)) { res.status(403).json({ error: "Identity verification failed" }); return; }
 
-  // Auth: caller must actually be in the room AND the round must be live
-  const rooms = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, code)).limit(1);
-  if (rooms.length === 0) { res.status(404).json({ error: "Room not found" }); return; }
-  const room = rooms[0];
+  const [room] = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, code)).limit(1);
+  if (!room) { res.status(404).json({ error: "Room not found" }); return; }
   if (room.status !== "playing") {
     res.status(409).json({ error: "El espionaje sólo está activo durante la ronda" });
     return;
   }
+
   const players = parsePlayers(room.playersJson);
   if (!players.some((p: any) => p.playerId === playerId)) {
-    res.status(403).json({ error: "No estás en esta sala" });
+    res.status(403).json({ error: "No estás en esta sala" }); return;
+  }
+
+  const round = Number(room.currentRound ?? 0);
+  const letter = String(room.currentLetter ?? "").toUpperCase();
+  const cutoff = Date.now() - 5000;
+  const lr = roomLiveResponses.get(code);
+  const candidates: Array<{ pid: string; name: string; cat: string; word: string }> = [];
+
+  if (lr) {
+    for (const [pid, info] of lr.entries()) {
+      if (pid === playerId) continue;
+      if (info.ts < cutoff) continue;
+      if (info.round !== round || info.letter !== letter) continue;
+      for (const [cat, word] of Object.entries(info.responses)) {
+        if (word && word.length > 0) {
+          candidates.push({ pid, name: info.name, cat, word });
+        }
+      }
+    }
+  }
+
+  // Do not consume a spy use unless there is an actual current-round rival answer.
+  if (candidates.length === 0) {
+    res.status(404).json({ error: "Tus rivales aún no escribieron nada 🤷" });
     return;
   }
 
-  // Enforce per-round usage limit atomically in PostgreSQL so two API
-  // replicas cannot both grant the same spy use.
   const callerPremium = await isPlayerPremium(playerId);
   const limit = callerPremium ? SPY_LIMIT_PREMIUM : SPY_LIMIT_FREE;
-  const round = room.currentRound ?? 1;
+
+  // Atomic per-round usage in PostgreSQL: safe across Railway replicas.
   const usageRows = await db.insert(roomSpyUsageTable).values({
     roomCode: code,
     playerId,
@@ -1844,6 +1866,7 @@ router.post("/:roomCode/spy", writeLimiter, async (req, res) => {
     },
     where: lt(roomSpyUsageTable.uses, limit),
   }).returning({ uses: roomSpyUsageTable.uses });
+
   if (usageRows.length === 0) {
     res.status(429).json({
       error: callerPremium
@@ -1853,32 +1876,13 @@ router.post("/:roomCode/spy", writeLimiter, async (req, res) => {
     return;
   }
 
-  // Find rivals with at least one fresh non-empty response
-  const lr = roomLiveResponses.get(code);
-  if (!lr || lr.size === 0) {
-    res.status(404).json({ error: "Nadie ha empezado a escribir todavía" });
-    return;
-  }
-  const cutoff = Date.now() - 5000;
-  const candidates: Array<{ pid: string; name: string; cat: string; word: string }> = [];
-  for (const [pid, info] of lr.entries()) {
-    if (pid === playerId) continue;
-    if (info.ts < cutoff) continue;
-    for (const [cat, word] of Object.entries(info.responses)) {
-      if (word && word.length > 0) candidates.push({ pid, name: info.name, cat, word });
-    }
-  }
-  if (candidates.length === 0) {
-    res.status(404).json({ error: "Tus rivales aún no escribieron nada 🤷" });
-    return;
-  }
+  const uses = usageRows[0].uses;
   const pick = candidates[Math.floor(Math.random() * candidates.length)];
-  used.set(playerId, current + 1);
   res.json({
     rivalName: pick.name,
     category: pick.cat,
     word: pick.word,
-    usesLeft: limit - (current + 1),
+    usesLeft: Math.max(0, limit - uses),
     limit,
   });
 });
