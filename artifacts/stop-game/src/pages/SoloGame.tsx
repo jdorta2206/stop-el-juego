@@ -444,6 +444,9 @@ export default function SoloGame() {
   // the game and hand them back on submit so the server can clamp a fabricated
   // total. Reset per new game (where totalScore resets to 0), not per round.
   const scoreTokensRef = useRef<string[]>([]);
+  // Daily uses a separate, single-use voucher so its submission cannot consume
+  // the voucher already used by the global leaderboard submission.
+  const dailyScoreTokensRef = useRef<string[]>([]);
 
   const startGame = () => {
     if (halloweenScareTimerRef.current) clearTimeout(halloweenScareTimerRef.current);
@@ -669,6 +672,7 @@ export default function SoloGame() {
             letter,
             language: getCurrentLang() as import("@workspace/api-client-react").ValidateRoundRequestLanguage,
             playerName: player?.name,
+            mode: isDailyMode ? "daily" : "solo",
             playerResponses: formattedResponses,
           }
         }),
@@ -711,6 +715,7 @@ export default function SoloGame() {
     // 🔒 Capture this round's anti-cheat voucher (online play only — the
     // offline fallback payload has none). Accumulated for the final submit.
     if (apiData?.scoreToken) scoreTokensRef.current.push(apiData.scoreToken);
+    if (isDailyMode && apiData?.dailyScoreToken) dailyScoreTokensRef.current.push(apiData.dailyScoreToken);
 
     // Persist whichever payload we ended up with so the RESULTS effect
     // and the UI read the *current* round's data, not the prior mutation.
@@ -1058,6 +1063,7 @@ export default function SoloGame() {
         won,
         bonus: isBonus,
         scoreTokens: scoreTokensRef.current,
+      dailyScoreTokens: dailyScoreTokensRef.current,
       }
     }, {
       onSuccess: (response: any) => {
