@@ -2115,6 +2115,13 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
   const players = existingPlayers;
   const { playerId, bluffedCategories, bluffedWords } = body.data;
 
+  // Bind every submission to the exact round it was created for. A delayed
+  // mobile request must never be scored against the next round's letter.
+  if (body.data.round !== room.currentRound) {
+    res.status(409).json({ error: "Results belong to a different round" });
+    return;
+  }
+
   // Update this player's score and mark as ready; store bluff data
   const { answers } = body.data;
 
