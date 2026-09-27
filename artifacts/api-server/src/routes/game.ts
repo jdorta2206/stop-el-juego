@@ -1420,8 +1420,11 @@ function isWordValid(word: string, letter: string, category: string, language = 
     categoryWords = findCategoryWords(DICTIONARY["es"], category);
   }
 
-  // No dictionary at all → accept any word ≥ 3 chars (defensive fallback)
-  if (categoryWords.length === 0) return normalizedWord.length >= 3;
+  // Unknown categories are handled by isWordValidAsync's AI fallback.
+  // Never accept them blindly: /validate is public and the client controls the
+  // category string, so accepting any 3+ character word here would let a caller
+  // invent categories and mint arbitrary score tokens for the leaderboard.
+  if (categoryWords.length === 0) return false;
 
   // Strict: word must match (or be a variation of) a dictionary entry.
   return categoryWords.some(w => {
