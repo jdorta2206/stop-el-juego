@@ -41,30 +41,49 @@ export function ChallengeNotification({ challenge, onDismiss }: ChallengeNotific
       if (stored) playerData = JSON.parse(stored);
     } catch { /* ignore */ }
 
+    let roomCode = challenge.roomCode;
     if (!isRoomInvite) {
-      await respondToChallenge(challenge.challengeId, true);
+      const response = await respondToChallenge(challenge.challengeId, true);
+      if (!response.roomCode) {
+        setResponding(false);
+        onDismiss();
+        return;
+      }
+      roomCode = response.roomCode;
     }
 
-    // Always call /join so the player appears in the room lobby (both reto and room invite)
-    if (playerData?.id) {
-      try {
-        const apiBase = (import.meta as any).env?.VITE_API_URL ?? window.location.origin;
-        await fetch(`${apiBase}/api/rooms/${challenge.roomCode.toUpperCase()}/join`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", ...authHeaders() },
-          credentials: "include",
-          body: JSON.stringify({
-            playerId: playerData.id,
-            playerName: playerData.name,
-            avatarColor: playerData.avatarColor,
-            loginMethod: playerData.loginMethod ?? null,
-          }),
-        });
-      } catch { /* silently proceed even if join fails */ }
+    if (!playerData?.id) {
+      setResponding(false);
+      onDismiss();
+      return;
+    }
+
+    try {
+      const apiBase = (import.meta as any).env?.VITE_API_URL ?? window.location.origin;
+      const joinRes = await fetch(apiBase + "/api/rooms/" + roomCode.toUpperCase() + "/join", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        credentials: "include",
+        body: JSON.stringify({
+          playerId: playerData.id,
+          playerName: playerData.name,
+          avatarColor: playerData.avatarColor,
+          loginMethod: playerData.loginMethod ?? null,
+        }),
+      });
+      if (!joinRes.ok) {
+        setResponding(false);
+        onDismiss();
+        return;
+      }
+    } catch {
+      setResponding(false);
+      onDismiss();
+      return;
     }
 
     onDismiss();
-    setLocation(`/room/${challenge.roomCode}`);
+    setLocation("/room/" + roomCode);
   };
 
   const handleDecline = async () => {

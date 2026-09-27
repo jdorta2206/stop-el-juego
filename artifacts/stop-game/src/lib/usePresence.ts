@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import type { PlayerProfile } from "@/hooks/use-player";
-import { getApiUrl } from "@/lib/utils";
+import { getApiUrl, authHeaders } from "@/lib/utils";
 
 const API_BASE = getApiUrl();
 const PING_INTERVAL = 30_000; // 30 seconds
@@ -72,7 +72,8 @@ export async function sendChallenge(
   try {
     const res = await fetch(`${API_BASE}/api/presence/challenge`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      credentials: "include",
       body: JSON.stringify({
         fromPlayerId: player.id,
         fromName: player.name,
@@ -97,7 +98,8 @@ export async function respondToChallenge(
   try {
     const res = await fetch(`${API_BASE}/api/presence/challenge/${challengeId}/respond`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      credentials: "include",
       body: JSON.stringify({ accepted }),
     });
     if (!res.ok) return { roomCode: null };
@@ -117,7 +119,8 @@ export async function sendRoomInvite(
   try {
     const res = await fetch(`${API_BASE}/api/presence/room-invite`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      credentials: "include",
       body: JSON.stringify({
         fromPlayerId: player.id,
         fromName: player.name,
@@ -139,7 +142,7 @@ export async function pollChallengeStatus(
   challengeId: string
 ): Promise<{ status: "pending" | "accepted" | "declined" | "expired"; roomCode: string }> {
   try {
-    const res = await fetch(`${API_BASE}/api/presence/challenge/${challengeId}/status`);
+    const res = await fetch(`${API_BASE}/api/presence/challenge/${challengeId}/status`, { headers: authHeaders(), credentials: "include" });
     if (!res.ok) return { status: "expired", roomCode: "" };
     return await res.json();
   } catch {
@@ -167,7 +170,7 @@ export function usePresence(
   const pollChallenges = useCallback(async () => {
     if (!player || activeChallenge.current) return;
     try {
-      const res = await fetch(`${API_BASE}/api/presence/challenges/${player.id}`);
+      const res = await fetch(`${API_BASE}/api/presence/challenges/${player.id}`, { headers: authHeaders(), credentials: "include" });
       if (!res.ok) return;
       const data = await res.json();
       const challenges: IncomingChallenge[] = data.challenges || [];
