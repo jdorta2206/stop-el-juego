@@ -133,12 +133,22 @@ export default function Room() {
   // an empty list and the custom-pack section in the lobby is hidden for them.
   const { packs: myCustomPacks } = useCustomPacks(meIsPremium ? player?.id : null);
 
-  // Sync spy budget with premium status: 2/round if premium, 1/round otherwise
+  // Sync spy budget with premium status: 2/round if premium, 1/round otherwise.
   useEffect(() => {
     const limit = meIsPremium ? 2 : 1;
     setSpyLimit(limit);
     setSpyUsesLeft(limit);
   }, [meIsPremium]);
+
+  // The server resets its spy budget when the authoritative round advances.
+  // Mirror that reset in the UI so the button is available again every round.
+  useEffect(() => {
+    const limit = meIsPremium ? 2 : 1;
+    setSpyLimit(limit);
+    setSpyUsesLeft(limit);
+    setSpyReveal(null);
+    setSpyError(null);
+  }, [currentRound, meIsPremium]);
 
   const [phase, setPhase] = useState<LocalPhase>("lobby");
   const [responses, setResponses] = useState<Record<string, string>>({});
