@@ -120,54 +120,64 @@ router.post("/progress/:playerId", async (req, res) => {
     return;
   }
 
-  const rows = await db
-    .select()
-    .from(playerScoresTable)
-    .where(eq(playerScoresTable.playerId, playerId))
-    .limit(1);
+  const body = (req.body ?? {}) as JsonRecord;
 
-  if (!rows.length) {
+  // Serialize read/merge/write for this player at the database level. Without
+  // the row lock, two devices/tabs could read the same JSON, merge different
+  // achievements/stats/bests, and the last UPDATE would silently discard the
+  // other request's progress.
+  const found = await db.transaction(async (tx) => {
+    const locked = await tx.execute(sql`
+      SELECT *
+      FROM player_scores
+      WHERE player_id = ${playerId}
+      FOR UPDATE
+    `);
+    const row = locked.rows[0] as Record<string, unknown> | undefined;
+    if (!row) return false;
+
+    const currentAchievements = parseJson<string[]>(String(row.achievements_json ?? "[]"), []);
+    const currentStats = parseJson<JsonRecord>(String(row.achievement_stats_json ?? "{}"), {});
+    const currentPersonalBests = parseJson<JsonRecord>(String(row.personal_bests_json ?? "{}"), {});
+    const updates: JsonRecord = {};
+
+    if (Array.isArray(body.achievements)) {
+      const incoming = body.achievements
+        .filter((x): x is string => typeof x === "string" && x.length > 0 && x.length <= MAX_KEY_LENGTH)
+        .slice(0, MAX_ACHIEVEMENTS);
+      updates.achievementsJson = JSON.stringify([...new Set([...currentAchievements, ...incoming])]);
+    }
+
+    if (body.stats && typeof body.stats === "object" && !Array.isArray(body.stats)) {
+      updates.achievementStatsJson = JSON.stringify(mergeStats(currentStats, body.stats as JsonRecord));
+    }
+
+    if (body.personalBests && typeof body.personalBests === "object" && !Array.isArray(body.personalBests)) {
+      const incoming = body.personalBests as JsonRecord;
+      const merged: JsonRecord = { ...currentPersonalBests };
+      let accepted = 0;
+      for (const [mode, score] of Object.entries(incoming)) {
+        if (accepted >= MAX_PERSONAL_BESTS || mode.length > MAX_KEY_LENGTH) break;
+        if (typeof score !== "number" || !Number.isFinite(score)) continue;
+        const safeScore = Math.max(0, Math.min(Math.floor(score), 100_000));
+        merged[mode] = Math.max(Number(currentPersonalBests[mode] ?? 0), safeScore);
+        accepted++;
+      }
+      updates.personalBestsJson = JSON.stringify(merged);
+    }
+
+    if (Object.keys(updates).length > 0) {
+      await tx
+        .update(playerScoresTable)
+        .set(updates as any)
+        .where(eq(playerScoresTable.playerId, playerId));
+    }
+    return true;
+  });
+
+  if (!found) {
     res.status(404).json({ error: "Player not found" });
     return;
-  }
-
-  const player = rows[0];
-  const body = (req.body ?? {}) as JsonRecord;
-  const updates: JsonRecord = {};
-
-  if (Array.isArray(body.achievements)) {
-    const current = parseJson<string[]>(player.achievementsJson, []);
-    const incoming = body.achievements
-      .filter((x): x is string => typeof x === "string" && x.length > 0 && x.length <= MAX_KEY_LENGTH)
-      .slice(0, MAX_ACHIEVEMENTS);
-    updates.achievementsJson = JSON.stringify([...new Set([...current, ...incoming])]);
-  }
-
-  if (body.stats && typeof body.stats === "object" && !Array.isArray(body.stats)) {
-    const current = parseJson<JsonRecord>(player.achievementStatsJson, {});
-    updates.achievementStatsJson = JSON.stringify(mergeStats(current, body.stats as JsonRecord));
-  }
-
-  if (body.personalBests && typeof body.personalBests === "object" && !Array.isArray(body.personalBests)) {
-    const current = parseJson<JsonRecord>(player.personalBestsJson, {});
-    const incoming = body.personalBests as JsonRecord;
-    const merged: JsonRecord = { ...current };
-    let accepted = 0;
-    for (const [mode, score] of Object.entries(incoming)) {
-      if (accepted >= MAX_PERSONAL_BESTS || mode.length > MAX_KEY_LENGTH) break;
-      if (typeof score !== "number" || !Number.isFinite(score)) continue;
-      const safeScore = Math.max(0, Math.min(Math.floor(score), 100_000));
-      merged[mode] = Math.max(Number(current[mode] ?? 0), safeScore);
-      accepted++;
-    }
-    updates.personalBestsJson = JSON.stringify(merged);
-  }
-
-  if (Object.keys(updates).length > 0) {
-    await db
-      .update(playerScoresTable)
-      .set(updates as any)
-      .where(eq(playerScoresTable.playerId, playerId));
   }
 
   res.json({ ok: true });
