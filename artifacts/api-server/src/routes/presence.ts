@@ -1,9 +1,8 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { playerScoresTable } from "@workspace/db";
-import { inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { roomsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
 import { sendPushToPlayer, notifyFollowersPlayerOnline } from "../lib/pushHelper";
 import { presenceLimiter } from "../middlewares/rateLimit";
 import { verifyClaimedIdentity } from "../lib/playerAuth";
@@ -119,6 +118,20 @@ router.get("/online", async (_req, res) => {
     }
   }
 
+  // Private room codes must never be exposed through the global presence feed.
+  const roomCodes = [...new Set(online.map(p => p.roomCode).filter((code): code is string => Boolean(code)))];
+  const publicRoomCodes = new Set<string>();
+  if (roomCodes.length > 0) {
+    try {
+      const publicRooms = await db.select({ roomCode: roomsTable.roomCode }).from(roomsTable)
+        .where(and(inArray(roomsTable.roomCode, roomCodes), eq(roomsTable.isPublic, true)));
+      for (const room of publicRooms) publicRoomCodes.add(room.roomCode);
+    } catch {}
+  }
+  for (const player of online) {
+    if (player.roomCode && !publicRoomCodes.has(player.roomCode)) player.roomCode = null;
+  }
+
   const ids = online.map(p => p.playerId);
   if (ids.length > 0) {
     try {
@@ -214,7 +227,7 @@ router.post("/challenge", async (req, res) => {
     fromPicture: fromPicture || null,
     fromAvatarColor: fromAvatarColor || "#e53e3e",
     toPlayerId,
-    roomCode,
+    roomCode: normalizedRoomCode,
     status: "pending",
     createdAt: Date.now(),
   });
@@ -234,7 +247,7 @@ router.post("/challenge", async (req, res) => {
 });
 
 // POST /api/presence/room-invite — invite a player to an already-existing room
-router.post("/room-invite", (req, res) => {
+router.post("/room-invite", async (req, res) => {
   const { fromPlayerId, fromName, fromPicture, fromAvatarColor, toPlayerId, roomCode } = req.body as {
     fromPlayerId: string;
     fromName: string;
@@ -249,6 +262,18 @@ router.post("/room-invite", (req, res) => {
   }
   if (!verifyClaimedIdentity(req, fromPlayerId)) {
     return res.status(403).json({ error: "Invalid player identity" });
+  }
+
+  const normalizedRoomCode = String(roomCode).trim().toUpperCase();
+  const roomRows = await db.select({ playersJson: roomsTable.playersJson, status: roomsTable.status })
+    .from(roomsTable).where(eq(roomsTable.roomCode, normalizedRoomCode)).limit(1);
+  const room = roomRows[0];
+  if (!room) return res.status(404).json({ error: "Room not found" });
+  if (room.status !== "waiting") return res.status(409).json({ error: "Room is not accepting invites" });
+  let members: Array<{ playerId?: string }> = [];
+  try { members = JSON.parse(room.playersJson || "[]"); } catch {}
+  if (!members.some((p) => p?.playerId === fromPlayerId)) {
+    return res.status(403).json({ error: "Sender is not a room member" });
   }
 
   // Remove any existing pending room-invite from this sender to this target
@@ -289,7 +314,7 @@ router.post("/room-invite", (req, res) => {
     fr: { title: "🎮 Invitation à la salle !", body: `${fromName} t'invite à rejoindre la salle ${roomCode}` },
   };
   const invMsg = INVITE_MSGS[invLang] || INVITE_MSGS.es;
-  sendPushToPlayer(toPlayerId, { ...invMsg, url: `/multiplayer?room=${roomCode}` }).catch(() => {});
+  sendPushToPlayer(toPlayerId, { ...invMsg, url: `/multiplayer?room=${normalizedRoomCode}` }).catch(() => {});
 
   return res.json({ ok: true, challengeId });
 });
