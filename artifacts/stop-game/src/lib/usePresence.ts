@@ -119,7 +119,8 @@ export async function sendRoomInvite(
   try {
     const res = await fetch(`${API_BASE}/api/presence/room-invite`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      credentials: "include",
       body: JSON.stringify({
         fromPlayerId: player.id,
         fromName: player.name,
