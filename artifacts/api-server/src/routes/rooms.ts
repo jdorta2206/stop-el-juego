@@ -1857,6 +1857,9 @@ router.post("/:roomCode/rematch", writeLimiter, async (req, res) => {
       if (!oldPlayer) {
         return { kind: "not_member" as const };
       }
+      if (oldPlayer.isBot) {
+        return { kind: "bot_forbidden" as const };
+      }
 
       const oldMeta = parseBluffMeta(oldRoom.stopperJson) ?? {};
       const persistedRematch = typeof oldMeta.rematchCode === "string"
@@ -1941,6 +1944,9 @@ router.post("/:roomCode/rematch", writeLimiter, async (req, res) => {
     }
     if (outcome.kind === "not_member") {
       res.status(403).json({ error: "Only players in the room can request a rematch" }); return;
+    }
+    if (outcome.kind === "bot_forbidden") {
+      res.status(403).json({ error: "Bots cannot request rematches" }); return;
     }
 
     roomRematch.set(oldCode, outcome.rematchCode);
