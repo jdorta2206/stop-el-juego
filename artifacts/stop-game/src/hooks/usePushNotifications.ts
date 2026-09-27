@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
-import { getApiUrl } from "@/lib/utils";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { authHeaders, getApiUrl } from "@/lib/utils";
 
 const API_BASE = getApiUrl();
 const VAPID_PUBLIC =
@@ -17,6 +17,7 @@ function urlB64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
 export type NotifPermission = "default" | "granted" | "denied" | "unsupported";
 
 export function usePushNotifications(playerId: string | undefined, language: string) {
+  const previousPlayerIdRef = useRef<string | undefined>(playerId);
   const [permission, setPermission] = useState<NotifPermission>("default");
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -24,8 +25,26 @@ export function usePushNotifications(playerId: string | undefined, language: str
   useEffect(() => {
     let cancelled = false;
 
+    const previousPlayerId = previousPlayerIdRef.current;
+    previousPlayerIdRef.current = playerId;
+
+    const detachPreviousAccount = async () => {
+      if (!previousPlayerId || previousPlayerId === playerId || previousPlayerId === "anonymous") return;
+      try {
+        const reg = await navigator.serviceWorker.ready;
+        const sub = await reg.pushManager.getSubscription();
+        if (!sub) return;
+        await fetch(`${API_BASE}/api/notifications/unsubscribe`, {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json", ...authHeaders() },
+          body: JSON.stringify({ endpoint: sub.endpoint, playerId: previousPlayerId }),
+        });
+      } catch {}
+    };
+
     const initialise = async () => {
       try {
+        await detachPreviousAccount();
         if (!("Notification" in window) || !("serviceWorker" in navigator)) {
           if (!cancelled) setPermission("unsupported");
           return;
@@ -56,7 +75,7 @@ export function usePushNotifications(playerId: string | undefined, language: str
           try {
             const res = await fetch(`${API_BASE}/api/notifications/subscribe`, {
               method: "POST",
-              headers: { "Content-Type": "application/json" },
+              headers: { "Content-Type": "application/json", ...authHeaders() },
               body: JSON.stringify({
                 playerId: playerId || "anonymous",
                 subscription: sub.toJSON(),
@@ -99,7 +118,7 @@ export function usePushNotifications(playerId: string | undefined, language: str
       const tzOffsetMinutes = -new Date().getTimezoneOffset();
       const res = await fetch(`${API_BASE}/api/notifications/subscribe`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({
           playerId: playerId || "anonymous",
           subscription: sub.toJSON(),
@@ -131,11 +150,12 @@ export function usePushNotifications(playerId: string | undefined, language: str
       if (!sub) return null;
       const res = await fetch(
         `${API_BASE}/api/notifications/preferences?endpoint=${encodeURIComponent(sub.endpoint)}&playerId=${encodeURIComponent(playerId || "anonymous")}`,
+        { headers: authHeaders() },
       );
       if (!res.ok) return null;
       return await res.json();
     } catch { return null; }
-  }, []);
+  }, [playerId]);
 
   const updatePreferences = useCallback(async (patch: {
     enabled?: boolean; hourLocal?: number; muteDays?: number;
@@ -147,12 +167,12 @@ export function usePushNotifications(playerId: string | undefined, language: str
       if (!sub) return false;
       const res = await fetch(`${API_BASE}/api/notifications/preferences`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ endpoint: sub.endpoint, playerId: playerId || "anonymous", ...patch }),
       });
       return res.ok;
     } catch { return false; }
-  }, []);
+  }, [playerId]);
 
   const unsubscribe = useCallback(async () => {
     if (!("serviceWorker" in navigator)) return;
@@ -166,7 +186,7 @@ export function usePushNotifications(playerId: string | undefined, language: str
         try {
           await fetch(`${API_BASE}/api/notifications/unsubscribe`, {
             method: "DELETE",
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json", ...authHeaders() },
             body: JSON.stringify({ endpoint: sub.endpoint, playerId: playerId || "anonymous" }),
           });
         } catch (e) {
@@ -180,7 +200,7 @@ export function usePushNotifications(playerId: string | undefined, language: str
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [playerId]);
 
   const isSupported = "Notification" in window && "serviceWorker" in navigator && !!VAPID_PUBLIC;
 
