@@ -315,9 +315,9 @@ function formatRoom(room: any, cosmeticsMap?: Record<string, any>) {
     maxRounds: room.maxRounds,
     maxPlayers: room.maxPlayers ?? 8,
     gameMode: room.gameMode ?? "classic",
-    categoryPack: (roomCategoryPacks.get(code)?.pack) ?? "standard",
-    customCategories: roomCategoryPacks.get(code)?.customCategories ?? null,
-    customPackLabel: roomCategoryPacks.get(code)?.customLabel ?? null,
+    categoryPack: room.categoryPack ?? "standard",
+    customCategories: room.customCategoriesJson ? (() => { try { const v = JSON.parse(room.customCategoriesJson); return Array.isArray(v) ? v : null; } catch { return null; } })() : null,
+    customPackLabel: room.customPackLabel ?? null,
     language: room.language,
     isPublic: room.isPublic ?? false,
     players,
@@ -934,11 +934,9 @@ router.post("/", async (req, res) => {
     isReady: false,
   }];
 
-  // Defensive: room codes are recycled (6-char alphanumeric, collision-checked
-  // against DB but not against in-memory state). Clear any leftover ephemeral
-  // state for this code so a new host can't inherit a previous host's custom
-  // pack or transient reactions/typing.
-  roomCategoryPacks.delete(roomCode);
+  // Defensive: room codes can be recycled. Clear only truly ephemeral state;
+  // the category pack is persisted on the room row and is therefore not part
+  // of this process-local cleanup.
   roomReactions.delete(roomCode);
   roomPhrases.delete(roomCode);
   roomTyping.delete(roomCode);
@@ -953,6 +951,9 @@ router.post("/", async (req, res) => {
     maxPlayers,
     gameMode,
     language: language ?? "es",
+    categoryPack: "standard",
+    customCategoriesJson: null,
+    customPackLabel: null,
     playersJson: JSON.stringify(players),
     stopperJson: null,
     isPublic: safeIsPublic,
@@ -1490,9 +1491,19 @@ router.post("/:roomCode/category-pack", async (req, res) => {
       .slice(0, 12);
     if (clean.length < 3) { res.status(400).json({ error: "Need at least 3 categories" }); return; }
     const label = (typeof body.customLabel === "string" ? body.customLabel.trim() : "").slice(0, 40) || "Personalizado";
-    roomCategoryPacks.set(code, { pack: "custom", customCategories: clean, customLabel: label });
+    await db.update(roomsTable).set({
+      categoryPack: "custom",
+      customCategoriesJson: JSON.stringify(clean),
+      customPackLabel: label,
+      updatedAt: new Date(),
+    }).where(eq(roomsTable.roomCode, code));
   } else {
-    roomCategoryPacks.set(code, { pack });
+    await db.update(roomsTable).set({
+      categoryPack: pack,
+      customCategoriesJson: null,
+      customPackLabel: null,
+      updatedAt: new Date(),
+    }).where(eq(roomsTable.roomCode, code));
   }
   // 🚀 Notify all players the host changed the category pack
   try { broadcastAndFormat(rooms[0]); } catch {}
