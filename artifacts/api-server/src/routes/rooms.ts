@@ -911,11 +911,21 @@ router.post("/", async (req, res) => {
   const isHalloweenTestRoom = String(hostName ?? "").trim().toLowerCase() === "halloween host";
   const safeIsPublic = isHalloweenTestRoom ? false : (isPublic ?? false);
 
-  let roomCode = generateRoomCode();
-  for (let i = 0; i < 5; i++) {
-    const existing = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, roomCode)).limit(1);
-    if (existing.length === 0) break;
-    roomCode = generateRoomCode();
+  // Allocate a code that is confirmed free before attempting the INSERT.
+  // Keep retrying instead of leaving the final collision to the database's
+  // UNIQUE constraint, which would otherwise surface as a generic 500.
+  let roomCode = "";
+  for (let attempt = 0; attempt < 20 && !roomCode; attempt++) {
+    const candidate = generateRoomCode();
+    const existing = await db.select({ roomCode: roomsTable.roomCode })
+      .from(roomsTable)
+      .where(eq(roomsTable.roomCode, candidate))
+      .limit(1);
+    if (existing.length === 0) roomCode = candidate;
+  }
+  if (!roomCode) {
+    res.status(503).json({ error: "Could not allocate a room code" });
+    return;
   }
 
   // Look up premium status from DB (server-validated, can't be faked by client)
