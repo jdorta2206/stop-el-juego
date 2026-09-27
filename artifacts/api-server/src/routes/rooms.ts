@@ -2077,6 +2077,21 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
   if (rooms.length === 0) { res.status(404).json({ error: "Room not found" }); return; }
 
   const room = rooms[0];
+
+  // 🤖 Bot identities are server-controlled. Bots submit through
+  // multiplayerBot.ts directly; /results must never let an external caller
+  // impersonate a bot by guessing its bot_* playerId. Otherwise a forged
+  // result could mark the bot ready (and potentially satisfy allReady) before
+  // the server's own bot action runs.
+  const roomPlayersForResults = parsePlayers(room.playersJson);
+  const submittedPlayer = roomPlayersForResults.find(
+    (p: any) => p.playerId === body.data.playerId,
+  );
+  if (submittedPlayer?.isBot) {
+    res.status(403).json({ error: "Bot results are server-controlled" });
+    return;
+  }
+
   if (room.status !== "stopped" && room.status !== "playing") {
     res.json(formatRoom(room));
     return;
