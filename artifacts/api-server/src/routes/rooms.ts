@@ -2082,6 +2082,18 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
     return;
   }
 
+  // 🔒 The client normally submits when its timer reaches zero, but the server
+  // must remain authoritative. A forged/early /results request must not be able
+  // to score answers or make all players ready while the round is still live.
+  // STOP changes the state to "stopped", so stopped rounds continue normally.
+  if (room.status === "playing") {
+    const endTs = roundEndTimestamp(room);
+    if (endTs && Date.now() < endTs) {
+      res.status(409).json({ error: "Round is still active" });
+      return;
+    }
+  }
+
   // ── Idempotency guard ─────────────────────────────────────────────────────
   // If this player already submitted for the current round (isReady === true),
   // return the current room state without re-applying score — prevents double-submit cheats.
