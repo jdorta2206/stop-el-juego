@@ -398,8 +398,8 @@ const en = {
 
   ftue: {
     welcomeTitle: "Welcome to STOP!",
-    welcomeBody: "A random letter pops up. Write a word in each category that starts with that letter — faster and more original than the AI!",
-    welcomeCta: "Play my first match!",
+    welcomeBody: "Look at the letter, write one word per category and press STOP. Your first 3 games are a quick guide to learn by playing.",
+    welcomeCta: "PLAY NOW!",
     skip: "Skip",
     tipFast: "60 seconds",
     tipOriginal: "Originality +pts",
@@ -410,6 +410,13 @@ const en = {
     firstWinCta: "Keep playing!",
     enableNotifications: "Remind me so I don't lose my streak",
     tutorialBadge: "Tutorial",
+    tutorialGuestTitle: "You can start as a guest",
+    tutorialGuestBody: "No registration required. Play first; decide later if you want to save your progress.",
+    tutorialProgressFirst: "Your first game starts now",
+    tutorialProgressCount: "Great! You have completed {n} of 3 games",
+    tutorialProgressSubtitle: "Complete 3 games to discover everything STOP has to offer.",
+    unlockTitle: "You unlocked the full STOP experience!",
+    unlockBody: "You know the basics. Now the full game is yours: play with friends, compete and discover every mode.",
   },
 } as const;
 

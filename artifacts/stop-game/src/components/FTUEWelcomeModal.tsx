@@ -1,6 +1,6 @@
 import { Link } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
-import { Zap, Sparkles, Trophy } from "lucide-react";
+import { Zap, Sparkles, Trophy, UserRound } from "lucide-react";
 import { useT } from "@/i18n/useT";
 
 interface FTUEWelcomeModalProps {
@@ -54,8 +54,18 @@ export function FTUEWelcomeModal({ open, onClose }: FTUEWelcomeModalProps) {
             </h2>
 
             <p className="text-white/80 text-sm leading-relaxed mb-5">
-              {ftue?.welcomeBody ?? "Sale una letra al azar. Escribe palabras en cada categoría que empiecen por esa letra. ¡Más rápido y original que la IA!"}
+              {ftue?.welcomeBody ?? "Mira la letra, escribe una palabra por categoría y pulsa STOP. Tus primeras 3 partidas son una guía rápida para que aprendas jugando."}
             </p>
+
+            <div className="mb-5 rounded-2xl px-4 py-3 text-left" style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.10)" }}>
+              <div className="flex items-center gap-2 text-white font-black text-sm">
+                <UserRound className="w-4 h-4 text-green-300" />
+                {ftue?.tutorialGuestTitle ?? "Puedes empezar como invitado"}
+              </div>
+              <p className="text-white/50 text-[11px] mt-1 pl-6">
+                {ftue?.tutorialGuestBody ?? "Sin registro obligatorio. Primero juega; ya decidirás después si quieres guardar tu progreso."}
+              </p>
+            </div>
 
             <div className="grid grid-cols-3 gap-2 mb-6">
               <div className="rounded-xl p-2.5 text-center" style={{ background: "rgba(249,168,37,0.12)", border: "1px solid rgba(249,168,37,0.25)" }}>
@@ -72,7 +82,7 @@ export function FTUEWelcomeModal({ open, onClose }: FTUEWelcomeModalProps) {
               </div>
             </div>
 
-            <Link href="/solo?mode=quick&auto=1&ftue=1">
+            <Link href="/solo?auto=1&ftue=1">
               <motion.button
                 whileHover={{ scale: 1.03 }}
                 whileTap={{ scale: 0.97 }}
@@ -84,7 +94,7 @@ export function FTUEWelcomeModal({ open, onClose }: FTUEWelcomeModalProps) {
                   fontFamily: "'Baloo 2', sans-serif",
                 }}
               >
-                {ftue?.welcomeCta ?? "¡Jugar mi primera partida!"}
+                {ftue?.welcomeCta ?? "¡JUGAR AHORA!"}
               </motion.button>
             </Link>
 

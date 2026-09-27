@@ -179,6 +179,10 @@ export default function SoloGame() {
   // Snapshot the tutorial flag at game start so a mid-game state change
   // (after recording the game) doesn't change the rules of the round.
   const [tutorialActive, setTutorialActive] = useState(isTutorial);
+  // Stable 1/2/3 FTUE cohort number captured at game start.
+  const [tutorialGameNumber, setTutorialGameNumber] = useState<number | null>(
+    isTutorial ? Math.min(ftue.gamesPlayed + 1, 3) : null,
+  );
   const dailyLetter = urlParams.get("letter") || "";
   const dailyCategories = urlParams.get("cats")?.split(",").filter(Boolean) || [];
 
@@ -468,11 +472,19 @@ export default function SoloGame() {
   const startGame = () => {
     if (halloweenScareTimerRef.current) clearTimeout(halloweenScareTimerRef.current);
     setHalloweenScare(null);
-    void trackAnalyticsEvent("game_start", { metadata: { mode: isDailyMode ? "daily" : "solo" } });
+    const tutorialNow = ftue.isInTutorial && !isDailyMode;
+    const tutorialNumberNow = tutorialNow ? Math.min(ftue.gamesPlayed + 1, 3) : null;
+    void trackAnalyticsEvent("game_start", {
+      metadata: {
+        mode: isDailyMode ? "daily" : "solo",
+        ftueActive: tutorialNow,
+        ftueGameNumber: tutorialNumberNow,
+      },
+    });
     // Snapshot the tutorial state at the moment the player presses Play so
     // the rules of the round are stable until it ends.
-    const tutorialNow = ftue.isInTutorial && !isDailyMode;
     setTutorialActive(tutorialNow);
+    setTutorialGameNumber(tutorialNumberNow);
     setIsFirstEverGame(tutorialNow && ftue.gamesPlayed === 0);
     // Re-pick personality each game start so CHIP doesn't stick around
     // forever once the tutorial ends.
@@ -483,9 +495,9 @@ export default function SoloGame() {
     setSpyReveal(null);
     // 🎲 Random mode — reroll the secret round time so each round feels different (15–55s)
     if (isRandomMode) setRandomRoundTime(15 + Math.floor(Math.random() * 41));
-    // Pick random event (only in normal solo mode)
-    let event: RandomEvent = null;
-    if (!isDailyMode && !isQuickMode && !isChaosMode) {
+    // New-player FTUE: keep the first 3 games calm and predictable.
+    let event: RandomEvent = tutorialNow ? "easy_letter" : null;
+    if (!tutorialNow && !isDailyMode && !isQuickMode && !isChaosMode) {
       const roll = Math.random();
       if (roll < 0.22) event = "double_xp";
       else if (roll < 0.40) event = "easy_letter";
@@ -505,7 +517,9 @@ export default function SoloGame() {
       const alphabet = event === "easy_letter" ? EASY_LETTERS : getAlphabet();
       const randomLetter = alphabet[Math.floor(Math.random() * alphabet.length)];
       setCurrentLetter(randomLetter);
-      if (isChaosMode) {
+      if (tutorialNow) {
+        setCategories((t.categories ?? packCats()).slice(0, 5));
+      } else if (isChaosMode) {
         const crazyCats = t.crazyCategories && t.crazyCategories.length >= 6
           ? [...t.crazyCategories].sort(() => Math.random() - 0.5).slice(0, 6)
           : packCats().map(() => {
@@ -520,7 +534,7 @@ export default function SoloGame() {
     setResponses({});
 
     // Draw a power card for this round
-    const card = drawPowerCard(isQuickMode, isChaosMode);
+    const card = tutorialNow ? null : drawPowerCard(isQuickMode, isChaosMode);
     setActiveCard(card);
     setCardUsed(false);
     setSabotageCategory(null);
@@ -1212,7 +1226,14 @@ export default function SoloGame() {
 
   const nextRound = async () => {
     if (round >= maxRounds) {
-      void trackAnalyticsEvent("game_complete", { metadata: { mode: isDailyMode ? "daily" : "solo", rounds: maxRounds } });
+      void trackAnalyticsEvent("game_complete", {
+        metadata: {
+          mode: isDailyMode ? "daily" : "solo",
+          rounds: maxRounds,
+          ftueActive: tutorialActive,
+          ftueGameNumber: tutorialGameNumber,
+        },
+      });
       recordPlay();
       // Calculate XP with multipliers
       const validCount = results
