@@ -689,6 +689,10 @@ async function sweepStuckRooms() {
         .where(and(eq(roomsTable.roomCode, room.roomCode), eq(roomsTable.status, "bluffvoting")))
         .returning();
       if (!updated) continue;
+      // Reset per-round in-memory state after automatic bluff resolution.
+      const codeUpper = room.roomCode.toUpperCase();
+      roomSpyUsage.delete(codeUpper);
+      roomLiveResponses.delete(codeUpper);
       if (isGameOver) {
         submitAllScoresToLeaderboard(resolved, room.currentLetter || "A").catch(() => {});
       }
@@ -2416,6 +2420,11 @@ router.post("/:roomCode/bluff-vote", writeLimiter, async (req, res) => {
       res.json(formatRoom(cur));
       return;
     }
+    // Bluff resolution ends the round, so clear per-round in-memory state
+    // before the next round starts. Otherwise spy usage/live responses can leak.
+    const codeUpper = roomCode.toUpperCase();
+    roomSpyUsage.delete(codeUpper);
+    roomLiveResponses.delete(codeUpper);
     if (isGameOver) {
       submitAllScoresToLeaderboard(resolved, room.currentLetter || "A").catch(() => {});
     }
@@ -2479,6 +2488,10 @@ router.post("/:roomCode/resolve-bluffs", async (req, res) => {
     res.json(formatRoom(cur));
     return;
   }
+  // Bluff resolution ends the round, so clear per-round in-memory state.
+  const codeUpper = roomCode.toUpperCase();
+  roomSpyUsage.delete(codeUpper);
+  roomLiveResponses.delete(codeUpper);
   if (isGameOver) {
     submitAllScoresToLeaderboard(resolved, room.currentLetter || "A").catch(() => {});
   }
