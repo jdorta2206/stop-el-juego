@@ -1297,6 +1297,7 @@ export default function SoloGame() {
       setRound(1);
       setTotalScore(0);
       scoreTokensRef.current = [];
+      dailyScoreTokensRef.current = [];
       setAiTotalScore(0);
       setBestRoundScore(0);
       setDoubleUsed(false);
