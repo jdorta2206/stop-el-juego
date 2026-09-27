@@ -122,7 +122,16 @@ export function MultiplayerScreen({ session, onExit }: Props) {
   }
 
   async function leaveRoom() {
-    if (room) { try { await apiFetch(`/api/rooms/${encodeURIComponent(room.roomCode)}/leave`, { method: "POST", body: JSON.stringify({ playerId }) }); } catch {} }
+    // Match Web: only remove the player from the server while still in the lobby.
+    // During a live round the backend keeps the player snapshot stable.
+    if (room?.status === "waiting") {
+      try {
+        await apiFetch(`/api/rooms/${encodeURIComponent(room.roomCode)}/leave`, {
+          method: "POST",
+          body: JSON.stringify({ playerId }),
+        });
+      } catch {}
+    }
     onExit();
   }
 
