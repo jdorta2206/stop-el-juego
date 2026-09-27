@@ -2170,8 +2170,7 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
   const scoredEntries = await Promise.all(
     Object.entries(safeAnswers)
       .filter(([category]) => authoritativeCategories.has(normalizeWord(category)))
-
-    Object.entries(safeAnswers).map(async ([category, word]) => ({
+      .map(async ([category, word]) => ({
       word,
       valid: await isWordValidAsync(word, letter, category, room.language ?? "es", playerId),
     })),
