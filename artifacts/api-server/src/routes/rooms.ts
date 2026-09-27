@@ -2115,6 +2115,27 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
   const players = existingPlayers;
   const { playerId, bluffedCategories, bluffedWords } = body.data;
 
+  // 🔒 Bluff declarations are also part of the authoritative round
+  // configuration. Never allow a client to invent a category and then receive
+  // the +20 bluff reward for it.
+  const safeBluffedCategories = Array.isArray(bluffedCategories)
+    ? [...new Set(
+        bluffedCategories
+          .filter((category): category is string => typeof category === "string")
+          .map((category) => category.trim())
+          .filter((category) => authoritativeCategories.has(normalizeWord(category))),
+      )].slice(0, AUTHORITATIVE_CATEGORY_CAP)
+    : [];
+  const safeBluffedWords: Record<string, string> = {};
+  if (bluffedWords && typeof bluffedWords === "object") {
+    for (const [category, word] of Object.entries(bluffedWords)) {
+      if (!authoritativeCategories.has(normalizeWord(category))) continue;
+      if (typeof word !== "string") continue;
+      const cleanWord = word.trim().slice(0, 80);
+      if (cleanWord.length > 0) safeBluffedWords[category] = cleanWord;
+    }
+  }
+
   // Update this player's score and mark as ready; store bluff data
   const { answers } = body.data;
 
@@ -2215,8 +2236,8 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
         // ⏱️ Tie-breaker source-of-truth: who finished first wins ties
         finishedAt,
         wasStopper: isStopper,
-        bluffedCategories: bluffedCategories ?? [],
-        bluffedWords: bluffedWords ?? {},
+        bluffedCategories: safeBluffedCategories,
+        bluffedWords: safeBluffedWords,
       };
     }
     return p;
