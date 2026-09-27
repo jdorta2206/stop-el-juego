@@ -687,6 +687,26 @@ router.post("/apple/callback", async (req: Request, res: Response) => {
     } catch (_) {}
 
     const playerId = `apple_${payload.sub}`;
+
+    // Persist the Apple profile just like Google/Facebook/Instagram.
+    // Without this row, a later /api/auth/me restore kept the session cookie
+    // but returned name/avatar as null after the OAuth handoff was gone.
+    await db
+      .insert(playerScoresTable)
+      .values({
+        playerId,
+        playerName: displayName.slice(0, 14) || "Apple User",
+        avatarColor: "#f9a825",
+        profilePicture: null,
+      })
+      .onConflictDoUpdate({
+        target: playerScoresTable.playerId,
+        set: {
+          playerName: displayName.slice(0, 14) || "Apple User",
+          updatedAt: new Date(),
+        },
+      });
+
     const user = JSON.stringify({
       id:       playerId,
       name:     displayName,
