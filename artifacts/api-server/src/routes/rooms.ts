@@ -236,9 +236,8 @@ async function startEphemeralListener() {
 
 startEphemeralListener().catch(() => {});
 
-// roomCode → map of playerId → spy uses this round.
 // Free players: 1 use/round. Premium players: 2 uses/round.
-const roomSpyUsage = new Map<string, Map<string, number>>();
+// Usage is persisted in PostgreSQL so all Railway replicas share the same limit.
 const SPY_LIMIT_FREE = 1;
 const SPY_LIMIT_PREMIUM = 2;
 
