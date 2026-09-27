@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db } from "@workspace/db";
+import { db, pool, roomSpyUsageTable } from "@workspace/db";
 import { roomsTable, playerScoresTable, gameHistoryTable } from "@workspace/db";
 import { eq, and, or, lt, inArray, sql } from "drizzle-orm";
 import { CreateRoomBody, JoinRoomBody, SubmitRoomResultsBody } from "@workspace/api-zod";
@@ -176,6 +176,64 @@ function getTyping(code: string, excludeId?: string): { playerId: string; player
 // 🕵️ Live in-progress responses (for spy/peek mechanic). Stale after 5s.
 // playerId → { name, responses: { category: word }, ts }
 const roomLiveResponses = new Map<string, Map<string, { name: string; responses: Record<string, string>; ts: number }>>();
+
+const EPHEMERAL_CLUSTER_CHANNEL = "stop_room_ephemeral";
+const EPHEMERAL_INSTANCE_ID = Math.random().toString(36).slice(2);
+let ephemeralListenerStarting = false;
+
+async function publishEphemeralUpdate(payload: {
+  code: string;
+  type: "typing";
+  playerId: string;
+  playerName: string;
+  responses: Record<string, string>;
+  ts: number;
+}) {
+  try {
+    await pool.query("SELECT pg_notify($1, $2)", [
+      EPHEMERAL_CLUSTER_CHANNEL,
+      JSON.stringify({ ...payload, source: EPHEMERAL_INSTANCE_ID }),
+    ]);
+  } catch {}
+}
+
+async function startEphemeralListener() {
+  if (ephemeralListenerStarting) return;
+  ephemeralListenerStarting = true;
+  try {
+    const client = await pool.connect();
+    await client.query(`LISTEN ${EPHEMERAL_CLUSTER_CHANNEL}`);
+    client.on("notification", (message) => {
+      try {
+        const p = JSON.parse(message.payload ?? "{}");
+        if (!p.code || p.source === EPHEMERAL_INSTANCE_ID || p.type !== "typing") return;
+        const code = String(p.code).toUpperCase();
+        let m = roomTyping.get(code);
+        if (!m) { m = new Map(); roomTyping.set(code, m); }
+        m.set(String(p.playerId), { name: String(p.playerName ?? "?").slice(0, 30), ts: Number(p.ts) || Date.now() });
+        let lr = roomLiveResponses.get(code);
+        if (!lr) { lr = new Map(); roomLiveResponses.set(code, lr); }
+        const safe: Record<string, string> = {};
+        for (const [k, v] of Object.entries(p.responses ?? {})) {
+          if (typeof v === "string" && v.trim()) safe[String(k).slice(0, 60)] = v.trim().slice(0, 80);
+        }
+        lr.set(String(p.playerId), { name: String(p.playerName ?? "?").slice(0, 30), responses: safe, ts: Number(p.ts) || Date.now() });
+      } catch {}
+    });
+    client.on("error", (err) => {
+      console.error("[rooms/ephemeral] listener error:", err.message);
+      client.release();
+      ephemeralListenerStarting = false;
+      setTimeout(() => startEphemeralListener().catch(() => {}), 1000);
+    });
+  } catch {
+    ephemeralListenerStarting = false;
+    setTimeout(() => startEphemeralListener().catch(() => {}), 3000);
+  }
+}
+
+startEphemeralListener().catch(() => {});
+
 // roomCode → map of playerId → spy uses this round.
 // Free players: 1 use/round. Premium players: 2 uses/round.
 const roomSpyUsage = new Map<string, Map<string, number>>();
