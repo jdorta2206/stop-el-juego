@@ -304,6 +304,11 @@ function formatRoom(room: any, cosmeticsMap?: Record<string, any>) {
     }));
   }
 
+  const persistedPack = meta?.categoryPack && typeof meta.categoryPack === "object"
+    ? meta.categoryPack
+    : null;
+  const livePack = roomCategoryPacks.get(code);
+  const effectivePack = livePack ?? persistedPack;
   return {
     id: room.id,
     roomCode: code,
@@ -315,9 +320,9 @@ function formatRoom(room: any, cosmeticsMap?: Record<string, any>) {
     maxRounds: room.maxRounds,
     maxPlayers: room.maxPlayers ?? 8,
     gameMode: room.gameMode ?? "classic",
-    categoryPack: (roomCategoryPacks.get(code)?.pack) ?? "standard",
-    customCategories: roomCategoryPacks.get(code)?.customCategories ?? null,
-    customPackLabel: roomCategoryPacks.get(code)?.customLabel ?? null,
+    categoryPack: effectivePack?.pack ?? "standard",
+    customCategories: Array.isArray(effectivePack?.customCategories) ? effectivePack.customCategories : null,
+    customPackLabel: typeof effectivePack?.customLabel === "string" ? effectivePack.customLabel : null,
     language: room.language,
     isPublic: room.isPublic ?? false,
     players,
