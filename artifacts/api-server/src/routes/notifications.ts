@@ -166,6 +166,9 @@ router.get("/preferences", async (req, res) => {
   const endpoint = String(req.query.endpoint || "").trim();
   const playerId = String(req.query.playerId || "").trim();
   if (!endpoint || !playerId) { res.status(400).json({ error: "Missing endpoint" }); return; }
+  if (playerId !== "anonymous" && !verifyClaimedIdentity(req, playerId)) {
+    return res.status(403).json({ error: "Identity verification failed" });
+  }
   try {
     const rows = await db.select().from(pushSubscriptionsTable)
       .where(eq(pushSubscriptionsTable.endpoint, endpoint)).limit(1);
@@ -278,9 +281,12 @@ router.post("/send-daily", async (req, res) => {
 
 // POST /api/notifications/send-invite — notify a specific player (room invite)
 router.post("/send-invite", inviteLimiter, async (req, res) => {
-  const { targetPlayerId, fromName, roomCode, language } = req.body;
-  if (!targetPlayerId || !fromName || !roomCode) {
+  const { targetPlayerId, fromPlayerId, fromName, roomCode, language } = req.body;
+  if (!targetPlayerId || !fromPlayerId || !fromName || !roomCode) {
     res.status(400).json({ error: "Missing fields" }); return;
+  }
+  if (!verifyClaimedIdentity(req, String(fromPlayerId))) {
+    return res.status(403).json({ error: "Identity verification failed" });
   }
   if (!VAPID_PUBLIC || !VAPID_PRIVATE) {
     res.status(503).json({ error: "VAPID not configured" }); return;
