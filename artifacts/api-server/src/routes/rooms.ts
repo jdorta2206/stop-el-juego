@@ -2201,6 +2201,18 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
     cappedRoundScore = Math.max(0, cappedRoundScore - 10);
   }
 
+  // 🎯 Double or Nothing: authoritative ×2 for the round in which the card
+  // was actually used. The round marker prevents the used card from leaking
+  // into later rounds.
+  const activePowerCard = me.powerCard;
+  if (
+    activePowerCard === "double_or_nothing" &&
+    me.powerCardUsed === true &&
+    me.powerCardUsedRound === room.currentRound
+  ) {
+    cappedRoundScore *= 2;
+  }
+
   // 🛡️ Anti-cheat hard cutoff: submissions that arrive AFTER the grace window
   // score zero. A tampered client that buffered extra words past STOP can't
   // benefit because waiting past the cutoff zeroes them anyway. Honest clients
