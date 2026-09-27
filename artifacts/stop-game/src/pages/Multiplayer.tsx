@@ -14,7 +14,6 @@ import { AnimatePresence, motion } from "framer-motion";
 
 interface PublicRoom {
   roomCode: string;
-  hostId: string;
   hostName: string;
   maxRounds: number;
   language: string;
