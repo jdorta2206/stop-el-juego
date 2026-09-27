@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import type { PlayerProfile } from "@/hooks/use-player";
-import { getApiUrl } from "@/lib/utils";
+import { getApiUrl, authHeaders } from "@/lib/utils";
 
 const API_BASE = getApiUrl();
 const PING_INTERVAL = 30_000; // 30 seconds
@@ -97,7 +97,8 @@ export async function respondToChallenge(
   try {
     const res = await fetch(`${API_BASE}/api/presence/challenge/${challengeId}/respond`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      credentials: "include",
       body: JSON.stringify({ accepted }),
     });
     if (!res.ok) return { roomCode: null };
