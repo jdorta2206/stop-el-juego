@@ -14,6 +14,7 @@ import {
   resolveCategoriesForRound,
   rushBotSubmits,
   clearBotTimers,
+  cleanupBotRoom,
 } from "../lib/multiplayerBot";
 
 const router: IRouter = Router();
@@ -734,6 +735,10 @@ async function purgeStaleRooms() {
       // cleanup this cycle rather than risk dropping active rooms.
       return;
     }
+    const orphanCodes = new Set<string>();
+    for (const map of [roomReactions, roomPhrases, roomTyping, roomCategoryPacks, roomLiveResponses, roomSpyUsage, roomRematch, roomFunVotes]) {
+      for (const code of map.keys()) if (!liveCodesSet.has(code)) orphanCodes.add(code);
+    }
     const dropOrphans = (m: Map<string, unknown>) => {
       for (const code of m.keys()) if (!liveCodesSet.has(code)) m.delete(code);
     };
@@ -752,6 +757,7 @@ async function purgeStaleRooms() {
     dropOrphans(roomSpyUsage as Map<string, unknown>);
     dropOrphans(roomRematch as Map<string, unknown>);
     dropOrphans(roomFunVotes as Map<string, unknown>);
+    for (const code of orphanCodes) cleanupBotRoom(code);
   } catch (err) {
     console.error("[purgeStaleRooms] failed:", (err as Error).message);
   }
@@ -1401,7 +1407,7 @@ router.post("/:roomCode/leave", async (req, res) => {
     roomPhrases.delete(code);
     roomCategoryPacks.delete(code);
     // 🤖 Cancel pending bot timers so they don't fire against a deleted room.
-    clearBotTimers(code);
+    cleanupBotRoom(code);
     res.json({ ok: true, deleted: true });
     return;
   }
