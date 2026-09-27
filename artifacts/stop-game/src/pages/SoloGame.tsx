@@ -1063,7 +1063,6 @@ export default function SoloGame() {
         won,
         bonus: isBonus,
         scoreTokens: scoreTokensRef.current,
-      dailyScoreTokens: dailyScoreTokensRef.current,
       }
     }, {
       onSuccess: (response: any) => {
