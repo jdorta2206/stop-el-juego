@@ -263,7 +263,9 @@ export default function Room() {
     const code = roomCode.toUpperCase();
     const API = getApiUrl();
     const tok = getSessionToken();
-    const url = `${API}/api/rooms/${code}/events?playerId=${player.id}${tok ? `&token=${encodeURIComponent(tok)}` : ""}`;
+    const roomCreatedAt = typeof (room as any)?.createdAt === "string" ? (room as any).createdAt : "";
+    if (!roomCreatedAt) return;
+    const url = `${API}/api/rooms/${code}/events?playerId=${player.id}&roomCreatedAt=${encodeURIComponent(roomCreatedAt)}${tok ? `&token=${encodeURIComponent(tok)}` : ""}`;
     let es: EventSource;
     let retryTimeout: ReturnType<typeof setTimeout>;
     let closed = false;
@@ -275,7 +277,12 @@ export default function Room() {
           headers: { "x-viewer-id": player.id, ...authHeaders() },
           credentials: "include",
         });
-        if (r.status === 404) return false;
+        if (r.status === 404 || r.status === 410) return false;
+        if (!r.ok) return true;
+        const current = await r.json().catch(() => null);
+        if (roomCreatedAt && current?.createdAt) {
+          return new Date(current.createdAt).getTime() === new Date(roomCreatedAt).getTime();
+        }
         // 5xx/network failures are transient: keep SSE retrying rather than
         // treating an infrastructure hiccup as a deleted room.
         return true;
@@ -332,7 +339,7 @@ export default function Room() {
       es?.close();
       setSseActive(false);
     };
-  }, [roomCode, player?.id, queryClient, roomGone, setLocation]);
+  }, [roomCode, player?.id, queryClient, roomGone, setLocation, (room as any)?.createdAt]);
 
   // 🔁 Persist the active room so a closed app / dropped network can find
   // its way back. Saved on mount, refreshed on every round change, cleared
