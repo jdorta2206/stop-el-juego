@@ -1219,6 +1219,7 @@ router.post("/:roomCode/start", async (req, res) => {
       letter: letterForRound,
       categories,
       round: roundForRound,
+      roundDurationSecs: roundDurationSecs(updatedRoom),
       deps: botDeps,
     });
   }
