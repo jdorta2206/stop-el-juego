@@ -2123,6 +2123,25 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
   const players = existingPlayers;
   const { playerId, bluffedCategories, bluffedWords } = body.data;
 
+  // The room row is the authoritative source of the selected pack. This must
+  // not depend on process-local state because Railway may serve requests from
+  // different replicas or restart the API process.
+  let customCategories: string[] | undefined;
+  if (room.customCategoriesJson) {
+    try {
+      const parsed = JSON.parse(room.customCategoriesJson);
+      if (Array.isArray(parsed)) customCategories = parsed.filter((c: unknown): c is string => typeof c === "string");
+    } catch {}
+  }
+  const authoritativeCategories = new Set(
+    resolveCategoriesForRound(
+      room.categoryPack ?? "standard",
+      (room.currentLetter ?? "A").toUpperCase(),
+      room.currentRound ?? 1,
+      customCategories,
+    ).map((category) => normalizeWord(category)),
+  );
+
   // Update this player's score and mark as ready; store bluff data
   const { answers } = body.data;
 
@@ -2149,24 +2168,7 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
   // injects fake category keys, only this many can score (defends against
   // category-key injection padding the score with extra +10s).
   const AUTHORITATIVE_CATEGORY_CAP = 8; // largest pack across ES/EN/PT/FR
-  // The room row is the authoritative source of the selected pack. This must
-  // not depend on process-local state because Railway may serve requests from
-  // different replicas or restart the API process.
-  let customCategories: string[] | undefined;
-  if (room.customCategoriesJson) {
-    try {
-      const parsed = JSON.parse(room.customCategoriesJson);
-      if (Array.isArray(parsed)) customCategories = parsed.filter((c: unknown): c is string => typeof c === "string");
-    } catch {}
-  }
-  const authoritativeCategories = new Set(
-    resolveCategoriesForRound(
-      room.categoryPack ?? "standard",
-      letter,
-      room.currentRound ?? 1,
-      customCategories,
-    ).map((category) => normalizeWord(category)),
-  );
+  // Only categories from the persisted room pack may score.
   const scoredEntries = await Promise.all(
     Object.entries(safeAnswers)
       .filter(([category]) => authoritativeCategories.has(normalizeWord(category)))
