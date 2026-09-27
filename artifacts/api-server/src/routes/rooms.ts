@@ -175,7 +175,7 @@ function getTyping(code: string, excludeId?: string): { playerId: string; player
 
 // 🕵️ Live in-progress responses (for spy/peek mechanic). Stale after 5s.
 // playerId → { name, responses: { category: word }, ts }
-const roomLiveResponses = new Map<string, Map<string, { name: string; responses: Record<string, string>; ts: number }>>();
+const roomLiveResponses = new Map<string, Map<string, { name: string; responses: Record<string, string>; ts: number; round: number; letter: string }>>();
 // roomCode → map of playerId → spy uses this round.
 // Free players: 1 use/round. Premium players: 2 uses/round.
 const roomSpyUsage = new Map<string, Map<string, number>>();
@@ -1650,13 +1650,33 @@ router.get("/:roomCode/events", async (req, res) => {
 // Throttled by the client to once every ~1.5s. Stale entries auto-expire after 3s.
 router.post("/:roomCode/typing", writeLimiter, async (req, res) => {
   const code = paramStr(req.params.roomCode).toUpperCase();
-  const { playerId, playerName, responses } = req.body as {
+  const { playerId, playerName, responses, round, letter } = req.body as {
     playerId: string;
     playerName: string;
     responses?: Record<string, string>;
+    round?: number;
+    letter?: string;
   };
   if (!playerId) { res.status(400).json({ error: "Missing playerId" }); return; }
   if (!verifyClaimedIdentity(req, playerId)) { res.status(403).json({ error: "Identity verification failed" }); return; }
+
+  // Typing/live responses are round-scoped. Reject stale heartbeats that arrive
+  // after a round transition so an old in-flight request cannot repopulate the
+  // new round's spy/draft state.
+  const [room] = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, code)).limit(1);
+  if (!room) { res.status(404).json({ error: "Room not found" }); return; }
+  if (room.status !== "playing") {
+    res.status(409).json({ error: "Typing is only available during a round" }); return;
+  }
+  const members = parsePlayers(room.playersJson);
+  if (!members.some((p: any) => p.playerId === playerId)) {
+    res.status(403).json({ error: "Only players in the room can type" }); return;
+  }
+  const currentRound = room.currentRound ?? 0;
+  const currentLetter = String(room.currentLetter ?? "").toUpperCase();
+  if (typeof round !== "number" || round !== currentRound || String(letter ?? "").toUpperCase() !== currentLetter) {
+    res.status(409).json({ error: "Stale round" }); return;
+  }
 
   let m = roomTyping.get(code);
   if (!m) { m = new Map(); roomTyping.set(code, m); }
@@ -1673,7 +1693,7 @@ router.post("/:roomCode/typing", writeLimiter, async (req, res) => {
         safe[String(k).slice(0, 60)] = v.trim().slice(0, 80);
       }
     }
-    lr.set(playerId, { name: String(playerName ?? "?").slice(0, 30), responses: safe, ts: Date.now() });
+    lr.set(playerId, { name: String(playerName ?? "?").slice(0, 30), responses: safe, ts: Date.now(), round: currentRound, letter: currentLetter });
   }
 
   // Lightweight broadcast — re-fetch room and broadcast formatted state
@@ -1704,13 +1724,17 @@ router.get("/:roomCode/draft", async (req, res) => {
 
   const lr = roomLiveResponses.get(code);
   const entry = lr?.get(playerId);
-  if (!entry) { res.json({ responses: {}, ts: 0, age: null }); return; }
+  if (!entry || entry.round !== (roomRow.currentRound ?? 0) ||
+      entry.letter !== String(roomRow.currentLetter ?? "").toUpperCase()) {
+    res.json({ responses: {}, ts: 0, age: null, round: roomRow.currentRound, letter: roomRow.currentLetter });
+    return;
+  }
   res.json({
     responses: entry.responses,
     ts: entry.ts,
     age: Date.now() - entry.ts,
-    round: roomRow.currentRound,
-    letter: roomRow.currentLetter,
+    round: entry.round,
+    letter: entry.letter,
   });
 });
 
