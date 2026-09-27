@@ -14,6 +14,7 @@ import {
   resolveCategoriesForRound,
   rushBotSubmits,
   clearBotTimers,
+  recoverBotActionsForRoom,
 } from "../lib/multiplayerBot";
 
 const router: IRouter = Router();
@@ -621,7 +622,11 @@ async function sweepStuckRooms() {
     // ran out with no STOP) — either can deadlock if a submission is lost.
     const stuck = await db.select().from(roomsTable)
       .where(or(eq(roomsTable.status, "stopped"), eq(roomsTable.status, "playing")));
+    // 🤖 Bot recovery is DB-backed: any API replica can take over a bot turn
+    // if the replica that originally scheduled its local timer disappeared.
+    // The bot module uses updatedAt CAS, so concurrent recovery attempts are safe.
     for (const room of stuck) {
+      await recoverBotActionsForRoom(room.roomCode, botDeps).catch(() => {});
       const endTs = roundEndTimestamp(room);
       // Before the grace window elapses the normal /results path still advances
       // the round; only step in once it has fully passed. A fresh/in-progress

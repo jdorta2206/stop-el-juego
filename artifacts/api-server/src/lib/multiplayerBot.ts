@@ -455,6 +455,55 @@ async function performBotSubmit(
   }
 }
 
+// Recover bot actions from PostgreSQL so bot turns do not depend on the
+// process-local timer that originally scheduled them. Every API replica can
+// safely call this; performBotSubmit uses updatedAt CAS, so only one writer
+// can actually submit a bot's result.
+function botDelayMs(botPlayerId: string, round: number): number {
+  const seed = botPlayerId + "|" + round;
+  let hash = 2166136261;
+  for (let i = 0; i < seed.length; i++) {
+    hash ^= seed.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return 25_000 + (Math.abs(hash) % 25_001);
+}
+
+export async function recoverBotActionsForRoom(roomCode: string, deps: BotActionDeps): Promise<void> {
+  const code = roomCode.toUpperCase();
+  const rows = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, code)).limit(1);
+  if (rows.length === 0) return;
+  const room = rows[0];
+  if (room.status !== "playing" && room.status !== "stopped") return;
+
+  let players: any[];
+  try { players = JSON.parse(room.playersJson); } catch { return; }
+  const pendingBots = players.filter((p: any) => p.isBot && !p.isReady);
+  if (pendingBots.length === 0) return;
+
+  let meta: any = {};
+  try { meta = room.stopperJson ? JSON.parse(room.stopperJson) : {}; } catch {}
+  const now = Date.now();
+  const round = room.currentRound ?? 1;
+
+  if (room.status === "stopped") {
+    const stopTs = meta?.stopTimestamp ?? meta?.stopper?.stopTimestamp;
+    if (typeof stopTs !== "number" || now - stopTs < 1_500) return;
+    await Promise.all(pendingBots.map((b: any) =>
+      performBotSubmit(code, b.playerId, deps, { triggerStop: false }),
+    ));
+    return;
+  }
+
+  const startedAt = meta?.roundStartedAt;
+  if (typeof startedAt !== "number") return;
+  for (const bot of pendingBots) {
+    if (now - startedAt >= botDelayMs(bot.playerId, round)) {
+      await performBotSubmit(code, bot.playerId, deps, { triggerStop: true });
+    }
+  }
+}
+
 // ── Public scheduler ──────────────────────────────────────────────────────
 // Called by rooms.ts whenever the room transitions into "playing". For
 // every bot in the room we schedule a randomized STOP + submit between
