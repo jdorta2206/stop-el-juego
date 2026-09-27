@@ -982,27 +982,26 @@ router.get("/:roomCode", async (req, res) => {
   // people who are actually in it; a stranger who merely knows the code gets a
   // minimal preview. This closes the info leak AND removes the main way an
   // attacker learned a guest's id (from this very response) to impersonate them.
-  if (full.isPublic !== true) {
-    // Identity resolution. A cryptographically verified token (logged-in users
-    // send x-stop-token / cookie globally) is always trusted. A *self-asserted*
-    // id (?viewerId= or x-viewer-id header) is only trusted when it is a GUEST
-    // id: guest ids aren't discoverable once this gate hides the roster, so they
-    // act as a weak bearer secret. A LOGGED-IN id must NOT be self-assertable —
-    // those ids are public (e.g. the leaderboard), so trusting an unverified
-    // logged-in assertion would let a stranger read any private room that
-    // contains a known account. Logged-in membership therefore requires a real
-    // token match (mirrors verifyClaimedIdentity); no downgrade to assertion.
-    const verified = readPlayerId(req);
-    const asserted =
-      paramStr(req.query["viewerId"]) || paramStr(req.headers["x-viewer-id"]);
-    const viewerId = verified || (asserted && !isLoggedInId(asserted) ? asserted : "");
-    const isMember =
-      !!viewerId &&
-      (full.hostId === viewerId || players.some((p) => p?.playerId === viewerId));
-    if (!isMember) {
-      res.json(sanitizedRoomPreview(full));
-      return;
-    }
+  // Resolve membership for both private and public rooms. Public rooms may
+  // be spectated, but a non-member must never receive in-round answers/typing
+  // through this general room endpoint; the dedicated /spectate endpoint uses
+  // the same sanitized view.
+  const verified = readPlayerId(req);
+  const asserted =
+    paramStr(req.query["viewerId"]) || paramStr(req.headers["x-viewer-id"]);
+  const viewerId = verified || (asserted && !isLoggedInId(asserted) ? asserted : "");
+  const isMember =
+    !!viewerId &&
+    (full.hostId === viewerId || players.some((p) => p?.playerId === viewerId));
+
+  if (full.isPublic !== true && !isMember) {
+    res.json(sanitizedRoomPreview(full));
+    return;
+  }
+
+  if (full.isPublic === true && !isMember) {
+    res.json(sanitizeRoomForSpectator(full));
+    return;
   }
 
   res.json(full);
