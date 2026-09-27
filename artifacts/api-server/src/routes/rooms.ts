@@ -370,9 +370,11 @@ function resolveBluffs(players: any[], bluffVotes: Record<string, any>): any[] {
     for (const cat of p.bluffedCategories) {
       const votes = Object.values(voteMap[cat] ?? {}) as string[];
       const lieCnt = votes.filter(v => v === "lie").length;
-      const caught = votes.length > 0 && lieCnt > votes.length / 2; // strict majority
+      // Shield is authoritative room state set by /use-card before submission.
+      // A shielded bluff cannot be caught by bluff voting.
+      const caught = !p.bluffImmune && votes.length > 0 && lieCnt > votes.length / 2;
       scoreAdjust += caught ? -10 : 20;
-      bluffResults.push({ cat, caught, votes: voteMap[cat] ?? {} });
+      bluffResults.push({ cat, caught, votes: voteMap[cat] ?? {}, shielded: !!p.bluffImmune });
     }
     return { ...p, score: (p.score || 0) + scoreAdjust, bluffResults };
   });
