@@ -1731,7 +1731,16 @@ router.post("/:roomCode/typing", writeLimiter, async (req, res) => {
         safe[String(k).slice(0, 60)] = v.trim().slice(0, 80);
       }
     }
-    lr.set(playerId, { name: String(playerName ?? "?").slice(0, 30), responses: safe, ts: Date.now() });
+    const typingTs = Date.now();
+    lr.set(playerId, { name: String(playerName ?? "?").slice(0, 30), responses: safe, ts: typingTs });
+    publishEphemeralUpdate({
+      code,
+      type: "typing",
+      playerId,
+      playerName: String(playerName ?? "?").slice(0, 30),
+      responses: safe,
+      ts: typingTs,
+    }).catch(() => {});
   }
 
   // Lightweight broadcast — re-fetch room and broadcast formatted state
@@ -1794,13 +1803,29 @@ router.post("/:roomCode/spy", writeLimiter, async (req, res) => {
     return;
   }
 
-  // Enforce per-round usage limit (premium gets 2x)
-  let used = roomSpyUsage.get(code);
-  if (!used) { used = new Map(); roomSpyUsage.set(code, used); }
+  // Enforce per-round usage limit atomically in PostgreSQL so two API
+  // replicas cannot both grant the same spy use.
   const callerPremium = await isPlayerPremium(playerId);
   const limit = callerPremium ? SPY_LIMIT_PREMIUM : SPY_LIMIT_FREE;
-  const current = used.get(playerId) ?? 0;
-  if (current >= limit) {
+  const round = room.currentRound ?? 1;
+  const usageRows = await db.insert(roomSpyUsageTable).values({
+    roomCode: code,
+    playerId,
+    round,
+    uses: 1,
+  }).onConflictDoUpdate({
+    target: [
+      roomSpyUsageTable.roomCode,
+      roomSpyUsageTable.playerId,
+      roomSpyUsageTable.round,
+    ],
+    set: {
+      uses: sql`CASE WHEN ${roomSpyUsageTable.uses} < ${limit} THEN ${roomSpyUsageTable.uses} + 1 ELSE ${roomSpyUsageTable.uses} END`,
+      updatedAt: new Date(),
+    },
+  }).returning({ uses: roomSpyUsageTable.uses });
+  const grantedUses = usageRows[0]?.uses ?? 0;
+  if (grantedUses > limit) {
     res.status(429).json({
       error: callerPremium
         ? "Ya usaste tus 2 espías esta ronda"
