@@ -1538,8 +1538,23 @@ router.post("/:roomCode/use-card", async (req, res) => {
       p.playerId === playerId ? { ...p, powerCardUsed: true } : p
     );
 
-    // Apply server-side effects
+    // Rayo must extend the authoritative server deadline, not only the local UI.
     const card = me.powerCard as string;
+    let updatedStopperJson = room.stopperJson;
+    if (card === "lightning") {
+      const meta = parseBluffMeta(room.stopperJson) ?? {};
+      const startedAt = meta?.roundStartedAt;
+      if (typeof startedAt !== "number") {
+        res.status(409).json({ error: "Round deadline is unavailable" }); return;
+      }
+      const originalEnd = startedAt + roundDurationSecs(room) * 1000;
+      if (Date.now() >= originalEnd) {
+        res.status(409).json({ error: "Round time has already expired" }); return;
+      }
+      updatedStopperJson = JSON.stringify({ ...meta, roundStartedAt: startedAt + 15_000 });
+    }
+
+    // Apply server-side effects
     if (card === "sabotage" || card === "steal") {
       // Steal 10 pts from the current leader (not self)
       const sorted = [...updatedPlayers].filter(p => p.playerId !== playerId).sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
@@ -1557,7 +1572,7 @@ router.post("/:roomCode/use-card", async (req, res) => {
     // lightning and double_or_nothing are handled client-side (time bonus / score multiplier)
 
     const [updated] = await db.update(roomsTable)
-      .set({ playersJson: JSON.stringify(updatedPlayers), updatedAt: new Date() })
+      .set({ playersJson: JSON.stringify(updatedPlayers), stopperJson: updatedStopperJson, updatedAt: new Date() })
       .where(and(eq(roomsTable.roomCode, code), eq(roomsTable.updatedAt, room.updatedAt)))
       .returning();
 
