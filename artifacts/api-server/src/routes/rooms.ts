@@ -145,16 +145,6 @@ const botDeps = {
 // ── In-memory stores (ephemeral, no DB needed) ─────────────────────────────
 type Reaction = { id: string; emoji: string; playerName: string; ts: number };
 const roomReactions = new Map<string, Reaction[]>();
-// Pack selection for each room. "custom" requires a premium host and carries
-// the actual categories list + a human label (so all clients see the same
-// set without needing to load the host's private custom pack collection).
-type RoomPackConfig = {
-  pack: "standard" | "crazy" | "mix" | "custom";
-  customCategories?: string[];
-  customLabel?: string;
-};
-const roomCategoryPacks = new Map<string, RoomPackConfig>();
-
 type QuickPhrase = { id: string; playerName: string; text: string; ts: number };
 const roomPhrases = new Map<string, QuickPhrase[]>();
 
@@ -747,7 +737,6 @@ async function purgeStaleRooms() {
     dropOrphans(roomReactions as Map<string, unknown>);
     dropOrphans(roomPhrases as Map<string, unknown>);
     dropOrphans(roomTyping as Map<string, unknown>);
-    dropOrphans(roomCategoryPacks as Map<string, unknown>);
     dropOrphans(roomLiveResponses as Map<string, unknown>);
     dropOrphans(roomSpyUsage as Map<string, unknown>);
     dropOrphans(roomRematch as Map<string, unknown>);
@@ -1209,11 +1198,17 @@ router.post("/:roomCode/start", async (req, res) => {
   const botsInRoom = resetPlayers.filter((p: any) => p.isBot);
   if (botsInRoom.length > 0) {
     const updatedRoom = updateResult[0];
-    const packCfg = roomCategoryPacks.get(roomCode.toUpperCase());
-    const pack = packCfg?.pack ?? "standard";
+    const pack = updatedRoom.categoryPack ?? "standard";
+    let customCategories: string[] | undefined;
+    if (updatedRoom.customCategoriesJson) {
+      try {
+        const parsed = JSON.parse(updatedRoom.customCategoriesJson);
+        if (Array.isArray(parsed)) customCategories = parsed.filter((c: unknown): c is string => typeof c === "string");
+      } catch {}
+    }
     const letterForRound = (updatedRoom.currentLetter ?? "A").toUpperCase();
     const roundForRound = updatedRoom.currentRound ?? newRound;
-    const categories = resolveCategoriesForRound(pack, letterForRound, roundForRound, packCfg?.customCategories);
+    const categories = resolveCategoriesForRound(pack, letterForRound, roundForRound, customCategories);
     scheduleBotsForRound({
       roomCode: roomCode.toUpperCase(),
       bots: botsInRoom.map((b: any) => ({ playerId: b.playerId })),
@@ -1400,7 +1395,6 @@ router.post("/:roomCode/leave", async (req, res) => {
     roomFunVotes.delete(code);
     roomReactions.delete(code);
     roomPhrases.delete(code);
-    roomCategoryPacks.delete(code);
     // 🤖 Cancel pending bot timers so they don't fire against a deleted room.
     clearBotTimers(code);
     res.json({ ok: true, deleted: true });
@@ -1506,7 +1500,10 @@ router.post("/:roomCode/category-pack", async (req, res) => {
     }).where(eq(roomsTable.roomCode, code));
   }
   // 🚀 Notify all players the host changed the category pack
-  try { broadcastAndFormat(rooms[0]); } catch {}
+  const [updatedRoom] = await db.select().from(roomsTable)
+    .where(eq(roomsTable.roomCode, code)).limit(1);
+  if (!updatedRoom) { res.status(404).json({ error: "Room not found" }); return; }
+  try { broadcastAndFormat(updatedRoom); } catch {}
   res.json({ ok: true, categoryPack: pack });
 });
 
@@ -2152,7 +2149,28 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
   // injects fake category keys, only this many can score (defends against
   // category-key injection padding the score with extra +10s).
   const AUTHORITATIVE_CATEGORY_CAP = 8; // largest pack across ES/EN/PT/FR
+  // The room row is the authoritative source of the selected pack. This must
+  // not depend on process-local state because Railway may serve requests from
+  // different replicas or restart the API process.
+  let customCategories: string[] | undefined;
+  if (room.customCategoriesJson) {
+    try {
+      const parsed = JSON.parse(room.customCategoriesJson);
+      if (Array.isArray(parsed)) customCategories = parsed.filter((c: unknown): c is string => typeof c === "string");
+    } catch {}
+  }
+  const authoritativeCategories = new Set(
+    resolveCategoriesForRound(
+      room.categoryPack ?? "standard",
+      letter,
+      room.currentRound ?? 1,
+      customCategories,
+    ).map((category) => normalizeWord(category)),
+  );
   const scoredEntries = await Promise.all(
+    Object.entries(safeAnswers)
+      .filter(([category]) => authoritativeCategories.has(normalizeWord(category)))
+
     Object.entries(safeAnswers).map(async ([category, word]) => ({
       word,
       valid: await isWordValidAsync(word, letter, category, room.language ?? "es", playerId),
