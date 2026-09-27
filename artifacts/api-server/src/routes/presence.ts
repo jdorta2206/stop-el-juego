@@ -319,6 +319,16 @@ router.post("/challenge/:challengeId/respond", (req, res) => {
     return res.status(404).json({ error: "Challenge not found or expired" });
   }
 
+  // A challenge can only transition once. This prevents stale/double responses
+  // from flipping an already accepted/declined challenge.
+  if (challenge.status !== "pending") {
+    return res.status(409).json({ error: "Challenge is no longer pending" });
+  }
+  if (challenge.createdAt < Date.now() - 60 * 1000) {
+    challengeMap.delete(challengeId);
+    return res.status(410).json({ error: "Challenge expired" });
+  }
+
   // Only the challenged player may accept/decline this challenge.
   if (!verifyClaimedIdentity(req, challenge.toPlayerId)) {
     return res.status(403).json({ error: "Invalid player identity" });
