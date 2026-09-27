@@ -222,7 +222,7 @@ export async function sendLocalizedBroadcast(
       sent++;
     } catch (e: any) {
       failed++;
-      if (e.statusCode === 410 || e.statusCode === 404) toDelete.push(row.endpoint);
+      if (e.statusCode === 410 || e.statusCode === 404 || e.statusCode === 403) toDelete.push(row.endpoint);
       else console.error(`[push] localized broadcast failed status=${e?.statusCode ?? "unknown"}`);
     }
   }));
