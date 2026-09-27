@@ -670,6 +670,26 @@ async function sweepStuckRooms() {
       broadcastAndFormat(updateResult[0]);
     }
 
+    // 🔁 Retry final leaderboard persistence for finished rooms. The claim
+    // ledger makes this idempotent, while the finished-room scan survives a
+    // process restart that happened after the room became finished but before
+    // its background leaderboard write completed.
+    const recentlyFinished = await db.select().from(roomsTable)
+      .where(and(
+        eq(roomsTable.status, "finished"),
+        sql`${roomsTable.updatedAt} >= NOW() - INTERVAL '6 hours'`,
+      ));
+    for (const room of recentlyFinished) {
+      const players = parsePlayers(room.playersJson);
+      await submitAllScoresToLeaderboard(
+        room.roomCode,
+        players,
+        room.currentLetter || "A",
+      ).catch((err) => {
+        console.error("[sweepStuckRooms] finished-room leaderboard retry failed:", (err as Error).message);
+      });
+    }
+
     // 🃏 Also rescue rooms stuck in "bluffvoting": resolution only happens when
     // a client polls /vote or /resolve-bluffs. If everyone closes the tab the
     // round would hang until the 6h purge. Force-resolve once the bluff deadline
