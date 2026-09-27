@@ -61,7 +61,7 @@ setInterval(() => {
 }, 2 * 60 * 1000);
 
 // POST /api/presence/ping
-router.post("/ping", presenceLimiter, (req, res) => {
+router.post("/ping", presenceLimiter, async (req, res) => {
   const { playerId, name, picture, avatarColor, provider, roomCode, language } = req.body as {
     playerId: string;
     name: string;
@@ -79,6 +79,35 @@ router.post("/ping", presenceLimiter, (req, res) => {
     return res.status(403).json({ error: "Invalid player identity" });
   }
 
+  // A client may only advertise a room it actually belongs to.
+  // Without this check, any authenticated player could forge a roomCode in global presence.
+  let verifiedRoomCode: string | null = null;
+  if (roomCode) {
+    const normalizedRoomCode = String(roomCode).trim().toUpperCase();
+    if (normalizedRoomCode) {
+      try {
+        const rows = await db
+          .select({ playersJson: roomsTable.playersJson })
+          .from(roomsTable)
+          .where(eq(roomsTable.roomCode, normalizedRoomCode))
+          .limit(1);
+        const room = rows[0];
+        if (room) {
+          let members: Array<{ playerId?: string }> = [];
+          try {
+            members = JSON.parse(room.playersJson || "[]");
+          } catch {}
+          if (members.some((p) => p?.playerId === playerId)) {
+            verifiedRoomCode = normalizedRoomCode;
+          }
+        }
+      } catch {
+        // On a transient DB error, do not trust the client-supplied roomCode.
+        verifiedRoomCode = null;
+      }
+    }
+  }
+
   // Check if this is a fresh connection (player was offline for > 3 min)
   const existing = presenceMap.get(playerId);
   const wasOffline = !existing || existing.lastSeen < Date.now() - 3 * 60 * 1000;
@@ -88,7 +117,7 @@ router.post("/ping", presenceLimiter, (req, res) => {
     picture: picture || null,
     avatarColor: avatarColor || "#e53e3e",
     provider: provider || null,
-    roomCode: roomCode || null,
+    roomCode: verifiedRoomCode,
     lastSeen: Date.now(),
   });
 
