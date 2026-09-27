@@ -689,6 +689,14 @@ async function sweepStuckRooms() {
         .where(and(eq(roomsTable.roomCode, room.roomCode), eq(roomsTable.status, "bluffvoting")))
         .returning();
       if (!updated) continue;
+
+      // The background rescue bypasses the normal round-advance helper too.
+      // Clear round-scoped ephemeral state after the CAS winner persists the
+      // bluff resolution, so spy usage/live drafts cannot leak into the next round.
+      const codeUpper = room.roomCode.toUpperCase();
+      roomSpyUsage.delete(codeUpper);
+      roomLiveResponses.delete(codeUpper);
+
       if (isGameOver) {
         submitAllScoresToLeaderboard(resolved, room.currentLetter || "A").catch(() => {});
       }
@@ -2419,6 +2427,14 @@ router.post("/:roomCode/bluff-vote", writeLimiter, async (req, res) => {
     if (isGameOver) {
       submitAllScoresToLeaderboard(resolved, room.currentLetter || "A").catch(() => {});
     }
+
+    // 🧹 Bluff resolution bypasses the normal round-advance helper. Clear
+    // round-scoped ephemeral state here so spy usage and live drafts cannot
+    // leak into the next round.
+    const codeUpper = roomCode.toUpperCase();
+    roomSpyUsage.delete(codeUpper);
+    roomLiveResponses.delete(codeUpper);
+
     // 🚀 Broadcast resolution to all players (was waiting for polling — main lag in bluff phase)
     res.json(broadcastAndFormat(updated));
     return;
@@ -2482,6 +2498,11 @@ router.post("/:roomCode/resolve-bluffs", async (req, res) => {
   if (isGameOver) {
     submitAllScoresToLeaderboard(resolved, room.currentLetter || "A").catch(() => {});
   }
+
+  // 🧹 Same cleanup for deadline-forced bluff resolution.
+  const codeUpper = roomCode.toUpperCase();
+  roomSpyUsage.delete(codeUpper);
+  roomLiveResponses.delete(codeUpper);
 
   res.json(broadcastAndFormat(updated));
 });
