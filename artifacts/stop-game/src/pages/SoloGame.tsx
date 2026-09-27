@@ -1181,26 +1181,79 @@ export default function SoloGame() {
   }, [gameState, round, maxRounds, totalScore, aiTotalScore, isDailyMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const submitDailyResult = (finalScore: number) => {
+    const today = getTodayStr();
     // Always save daily score locally (works for guests too)
-    localStorage.setItem(`stop_daily_${getTodayStr()}`, String(finalScore));
+    localStorage.setItem(`stop_daily_${today}`, String(finalScore));
 
-    // Save to server if logged in
+    // Save to server if logged in. Keep a retry payload locally if the
+    // network is unavailable or the server returns a transient error.
     if (!player || player.loginMethod === "guest") return;
+
+    const payload = {
+      playerId: player.id,
+      playerName: player.name,
+      avatarColor: player.avatarColor,
+      score: finalScore,
+      letter: dailyLetter || currentLetter,
+      language: getCurrentLang(),
+      scoreTokens: scoreTokensRef.current,
+    };
+    const pendingKey = `stop_daily_pending_${today}`;
+
     fetch(`${getApiUrl()}/api/daily/submit`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...authHeaders() },
       credentials: "include",
-      body: JSON.stringify({
-        playerId: player.id,
-        playerName: player.name,
-        avatarColor: player.avatarColor,
-        score: finalScore,
-        letter: dailyLetter || currentLetter,
-        language: getCurrentLang(),
-        scoreTokens: scoreTokensRef.current,
-      }),
-    }).catch(() => {});
+      body: JSON.stringify(payload),
+    })
+      .then(async (response) => {
+        if (response.ok) {
+          localStorage.removeItem(pendingKey);
+          return;
+        }
+        // Invalid/stale client data should not be retried forever.
+        if (response.status === 400 || response.status === 422) {
+          localStorage.removeItem(pendingKey);
+          return;
+        }
+        localStorage.setItem(pendingKey, JSON.stringify(payload));
+      })
+      .catch(() => {
+        localStorage.setItem(pendingKey, JSON.stringify(payload));
+      });
   };
+
+  // Retry a daily result that could not reach the server during a previous
+  // completed game. The server's unique player/date constraint makes this
+  // idempotent and the server keeps the highest score.
+  useEffect(() => {
+    if (!player || player.loginMethod === "guest") return;
+
+    const today = getTodayStr();
+    const pendingKey = `stop_daily_pending_${today}`;
+    const raw = localStorage.getItem(pendingKey);
+    if (!raw) return;
+
+    try {
+      const payload = JSON.parse(raw);
+      if (!payload?.playerId || payload.playerId !== player.id) return;
+
+      fetch(`${getApiUrl()}/api/daily/submit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        credentials: "include",
+        body: JSON.stringify(payload),
+      })
+        .then(async (response) => {
+          if (response.ok || response.status === 400 || response.status === 422) {
+            localStorage.removeItem(pendingKey);
+          }
+        })
+        .catch(() => {});
+    } catch {
+      localStorage.removeItem(pendingKey);
+    }
+  }, [player]);
 
   const nextRound = async () => {
     if (round >= maxRounds) {
