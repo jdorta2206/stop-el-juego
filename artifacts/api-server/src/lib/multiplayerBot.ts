@@ -60,7 +60,7 @@ async function generateBotAnswersLLM(
   const L = letter.toUpperCase();
   // Variety knob: bots intentionally miss a few categories so they don't
   // always score 100%. Asking for 60-90% fillrate produces more human-feel.
-  const fillRate = 0.6 + Math.random() * 0.3;
+  const fillRate = 0.45 + Math.random() * 0.30;
   const targetCount = Math.max(1, Math.round(categories.length * fillRate));
   const prompt = [
     `Eres un jugador de STOP (Scattergories) en español.`,
@@ -281,7 +281,7 @@ function pickWordsForRound(letter: string, categoryCount: number): string[] {
   const bank = WORDS_ES[L] ?? [];
   if (bank.length === 0) return [];
   // Realistic bot fillrate: 55-90% of categories (varies per round).
-  const fillRate = 0.55 + Math.random() * 0.35;
+  const fillRate = 0.45 + Math.random() * 0.30;
   const targetCount = Math.max(1, Math.round(categoryCount * fillRate));
   const shuffled = [...bank].sort(() => Math.random() - 0.5);
   return shuffled.slice(0, Math.min(targetCount, bank.length));
@@ -347,10 +347,16 @@ async function performBotSubmit(
     let answers: Record<string, string> = {};
     const pregen = getPendingAnswers(code, botPlayerId, room.currentRound ?? 0, letter);
     if (pregen && Object.keys(pregen).length > 0) {
-      answers = pregen;
+      answers = { ...pregen };
     } else {
       const words = pickWordsForRound(letter, sampleCats.length);
       words.forEach((w, i) => { if (sampleCats[i]) answers[sampleCats[i]] = w; });
+    }
+
+    // Human-like imperfection: a bot should not reliably submit every answer
+    // it generated. Randomly drop a few answers before scoring.
+    for (const category of Object.keys(answers)) {
+      if (Math.random() < 0.12) delete answers[category];
     }
     // 🛡️ Mirror server scoring rules (unique per-letter only). Dedupes any
     // accidental duplicates in the bank so the bot can never out-score itself
@@ -489,9 +495,17 @@ export function scheduleBotsForRound(opts: {
       .catch(() => {});
   }
   for (const b of opts.bots) {
-    const delay = 25_000 + Math.random() * 25_000; // 25-50s
+    // Human-like timing: never all bots act at the same fixed interval.
+    // Most finish late in the round, some are noticeably slower.
+    const slowHuman = Math.random() < 0.22;
+    const minDelay = slowHuman ? 38_000 : 24_000;
+    const maxDelay = slowHuman ? 55_000 : 48_000;
+    const delay = minDelay + Math.random() * (maxDelay - minDelay);
+    // A bot does not STOP every round. Some submit while the round is still
+    // running, allowing a human to be the one who stops the round.
+    const triggerStop = Math.random() < 0.68;
     const t = setTimeout(() => {
-      performBotSubmit(opts.roomCode, b.playerId, opts.deps, { triggerStop: true });
+      performBotSubmit(opts.roomCode, b.playerId, opts.deps, { triggerStop });
     }, delay);
     trackTimer(opts.roomCode, t);
   }
@@ -506,7 +520,12 @@ export function rushBotSubmits(opts: {
 }) {
   clearBotTimers(opts.roomCode);
   for (const b of opts.bots) {
-    const delay = 1_500 + Math.random() * 2_500; // 1.5-4s, mimics real player freeze
+    // A human who gets surprised by STOP does not answer instantly. Vary the
+    // reaction and occasionally make the player hesitate for much longer.
+    const hesitant = Math.random() < 0.18;
+    const minDelay = hesitant ? 7_000 : 2_500;
+    const maxDelay = hesitant ? 13_000 : 7_500;
+    const delay = minDelay + Math.random() * (maxDelay - minDelay);
     const t = setTimeout(() => {
       performBotSubmit(opts.roomCode, b.playerId, opts.deps, { triggerStop: false });
     }, delay);
