@@ -304,6 +304,11 @@ function formatRoom(room: any, cosmeticsMap?: Record<string, any>) {
     }));
   }
 
+  const persistedPack = meta?.categoryPack && typeof meta.categoryPack === "object"
+    ? meta.categoryPack
+    : null;
+  const livePack = roomCategoryPacks.get(code);
+  const effectivePack = livePack ?? persistedPack;
   return {
     id: room.id,
     roomCode: code,
@@ -315,9 +320,9 @@ function formatRoom(room: any, cosmeticsMap?: Record<string, any>) {
     maxRounds: room.maxRounds,
     maxPlayers: room.maxPlayers ?? 8,
     gameMode: room.gameMode ?? "classic",
-    categoryPack: (roomCategoryPacks.get(code)?.pack) ?? "standard",
-    customCategories: roomCategoryPacks.get(code)?.customCategories ?? null,
-    customPackLabel: roomCategoryPacks.get(code)?.customLabel ?? null,
+    categoryPack: effectivePack?.pack ?? "standard",
+    customCategories: Array.isArray(effectivePack?.customCategories) ? effectivePack.customCategories : null,
+    customPackLabel: typeof effectivePack?.customLabel === "string" ? effectivePack.customLabel : null,
     language: room.language,
     isPublic: room.isPublic ?? false,
     players,
@@ -1479,21 +1484,25 @@ router.post("/:roomCode/category-pack", async (req, res) => {
   }
   if (!["standard", "crazy", "mix", "custom"].includes(pack)) { res.status(400).json({ error: "Invalid pack" }); return; }
 
+  // Persist the selected pack in stopperJson so rematches keep it after restart.
+  let persistedPack: { pack: string; customCategories?: string[]; customLabel?: string };
   if (pack === "custom") {
-    // Gate behind premium server-side — client UI hides it but never trust the client.
     const hostPremium = await isPlayerPremium(hostId);
     if (!hostPremium) { res.status(403).json({ error: "Premium required for custom packs" }); return; }
     const cats = Array.isArray(body.customCategories) ? body.customCategories : [];
-    const clean = cats
-      .map(c => typeof c === "string" ? c.trim() : "")
-      .filter(c => c.length > 0 && c.length <= 60)
-      .slice(0, 12);
+    const clean = cats.map(c => typeof c === "string" ? c.trim() : "").filter(c => c.length > 0 && c.length <= 60).slice(0, 12);
     if (clean.length < 3) { res.status(400).json({ error: "Need at least 3 categories" }); return; }
     const label = (typeof body.customLabel === "string" ? body.customLabel.trim() : "").slice(0, 40) || "Personalizado";
-    roomCategoryPacks.set(code, { pack: "custom", customCategories: clean, customLabel: label });
+    persistedPack = { pack: "custom", customCategories: clean, customLabel: label };
   } else {
-    roomCategoryPacks.set(code, { pack });
+    persistedPack = { pack };
   }
+  roomCategoryPacks.set(code, persistedPack);
+  const currentMeta = parseBluffMeta(rooms[0].stopperJson) ?? {};
+  const [savedRoom] = await db.update(roomsTable)
+    .set({ stopperJson: JSON.stringify({ ...currentMeta, categoryPack: persistedPack }), updatedAt: new Date() })
+    .where(eq(roomsTable.id, rooms[0].id))
+    .returning();
   // 🚀 Notify all players the host changed the category pack
   try { broadcastAndFormat(rooms[0]); } catch {}
   res.json({ ok: true, categoryPack: pack });
@@ -1862,6 +1871,9 @@ router.post("/:roomCode/rematch", writeLimiter, async (req, res) => {
       const persistedRematch = typeof oldMeta.rematchCode === "string"
         ? oldMeta.rematchCode.toUpperCase()
         : null;
+      const persistedPack = oldMeta.categoryPack && typeof oldMeta.categoryPack === "object"
+        ? oldMeta.categoryPack
+        : null;
 
       // Idempotency is persisted in the finished room, not just in memory.
       // If the target room was deleted, discard the stale pointer and recreate it.
@@ -1908,8 +1920,8 @@ router.post("/:roomCode/rematch", writeLimiter, async (req, res) => {
           gameMode: oldRoom.gameMode ?? "classic",
           language: oldRoom.language,
           playersJson: JSON.stringify(players),
-          stopperJson: null,
-          isPublic: false,
+          stopperJson: persistedPack ? JSON.stringify({ categoryPack: persistedPack }) : null,
+          isPublic: oldRoom.isPublic ?? false,
         }).onConflictDoNothing({ target: roomsTable.roomCode }).returning({ roomCode: roomsTable.roomCode });
         if (inserted.length > 0) newCode = inserted[0].roomCode;
       }
@@ -1926,10 +1938,18 @@ router.post("/:roomCode/rematch", writeLimiter, async (req, res) => {
         .where(eq(roomsTable.id, oldRoom.id))
         .returning();
 
+      const createdRoom = updatedOldRows[0] ?? { ...oldRoom, stopperJson: JSON.stringify(newMeta) };
+      if (persistedPack) {
+        roomCategoryPacks.set(newCode, {
+          pack: String(persistedPack.pack),
+          customCategories: Array.isArray(persistedPack.customCategories) ? persistedPack.customCategories : undefined,
+          customLabel: typeof persistedPack.customLabel === "string" ? persistedPack.customLabel : undefined,
+        });
+      }
       return {
         kind: "created" as const,
         rematchCode: newCode,
-        oldRoom: updatedOldRows[0] ?? { ...oldRoom, stopperJson: JSON.stringify(newMeta) },
+        oldRoom: createdRoom,
       };
     });
 

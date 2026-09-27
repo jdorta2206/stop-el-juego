@@ -546,7 +546,7 @@ export default function Room() {
   // Trigger Revancha — first caller creates the new room, others piggyback on the broadcast
   const handleRematch = useCallback(async () => {
     if (rematchLoading) return;
-    if (rematchCode) { setLocation(`/sala/${rematchCode}`); return; }
+    if (rematchCode) { setLocation(`/room/${rematchCode}`); return; }
     if (!player?.id || !roomCode) return;
     setRematchLoading(true);
     try {
@@ -683,7 +683,6 @@ export default function Room() {
     extras?: { customCategories?: string[]; customLabel?: string },
   ) => {
     if (!player || !roomCode) return;
-    setCategoryPack(pack);
     try {
       const res = await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/category-pack`, {
         method: "POST",
@@ -693,8 +692,15 @@ export default function Room() {
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         toast({ title: data?.error ?? "No se pudo cambiar categorías", variant: "destructive" });
+        return;
       }
-    } catch {}
+      // Only update local state after the server has accepted the change.
+      // Otherwise a transient network/server error could make this client
+      // render a different pack from the authoritative room state.
+      setCategoryPack(pack);
+    } catch {
+      toast({ title: "Sin conexión: no se cambiaron las categorías", variant: "destructive" });
+    }
   }, [player, roomCode, toast]);
 
   const stopAllTimers = useCallback(() => {
