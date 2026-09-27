@@ -8,6 +8,17 @@ const excludeReplitOrigin = or(
   not(like(pushSubscriptionsTable.origin, '%replit.app%')),
 );
 
+function activePushSubscriptionFilter() {
+  return and(
+    eq(pushSubscriptionsTable.enabled, true),
+    or(
+      eq(pushSubscriptionsTable.mutedUntil, 0),
+      sql`${pushSubscriptionsTable.mutedUntil} <= ${Date.now()}`,
+    ),
+    excludeReplitOrigin,
+  );
+}
+
 const VAPID_PUBLIC  = process.env.VAPID_PUBLIC_KEY  || "";
 const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY || "";
 const VAPID_EMAIL   = process.env.VAPID_EMAIL       || "mailto:dorynex@stopjuegodepalabras.com";
@@ -120,7 +131,7 @@ export async function sendPushToPlayer(playerId: string, payload: PushPayload): 
   }
 
   const rows = await db.select().from(pushSubscriptionsTable)
-    .where(and(eq(pushSubscriptionsTable.playerId, playerId), excludeReplitOrigin));
+    .where(and(eq(pushSubscriptionsTable.playerId, playerId), activePushSubscriptionFilter()));
 
   const picked = dedupeByPlayer(rows);
 
@@ -158,8 +169,8 @@ export async function sendPushToAllSubscribers(
 
   const rows = language
     ? await db.select().from(pushSubscriptionsTable)
-        .where(and(eq(pushSubscriptionsTable.language, language), excludeReplitOrigin))
-    : await db.select().from(pushSubscriptionsTable).where(excludeReplitOrigin);
+        .where(and(eq(pushSubscriptionsTable.language, language), activePushSubscriptionFilter()))
+    : await db.select().from(pushSubscriptionsTable).where(activePushSubscriptionFilter());
 
   const picked = dedupeByPlayer(rows);
   let sent = 0, failed = 0;
