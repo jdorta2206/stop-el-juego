@@ -1219,6 +1219,7 @@ router.post("/:roomCode/start", async (req, res) => {
       letter: letterForRound,
       categories,
       round: roundForRound,
+      roundDurationSecs: roundDurationSecs(updatedRoom),
       deps: botDeps,
     });
   }
@@ -2053,6 +2054,8 @@ router.post("/:roomCode/stop", async (req, res) => {
       roomCode: roomCode.toUpperCase(),
       bots: pendingBots.map((b: any) => ({ playerId: b.playerId })),
       deps: botDeps,
+      round: updated.currentRound ?? 0,
+      letter: (updated.currentLetter ?? "A").toUpperCase(),
     });
   }
 });

@@ -302,7 +302,7 @@ async function performBotSubmit(
   roomCode: string,
   botPlayerId: string,
   deps: BotActionDeps,
-  options: { triggerStop: boolean; attempt?: number },
+  options: { triggerStop: boolean; attempt?: number; expectedRound?: number; expectedLetter?: string; expectedDurationSecs?: number },
 ): Promise<void> {
   const code = roomCode.toUpperCase();
   const attempt = options.attempt ?? 0;
@@ -311,6 +311,10 @@ async function performBotSubmit(
     if (rows.length === 0) return;
     const room = rows[0];
     if (room.status !== "playing" && room.status !== "stopped") return;
+    // A timeout can survive a round transition if its callback is already running.
+    // Never let a bot scheduled for round N mutate round N+1.
+    if (options.expectedRound != null && room.currentRound !== options.expectedRound) return;
+    if (options.expectedLetter && (room.currentLetter ?? "").toUpperCase() !== options.expectedLetter.toUpperCase()) return;
 
     let players: any[];
     try { players = JSON.parse(room.playersJson); } catch { return; }
@@ -319,13 +323,22 @@ async function performBotSubmit(
     if (!me || !me.isBot) return;
     if (me.isReady) return; // already submitted
 
-    // Bot only triggers STOP if nobody has yet AND it's still "playing".
+    // A scheduled bot STOP is only valid while the authoritative round is
+    // still active. For short/blitz rounds the 25-50s bot timer can fire after
+    // the server deadline; let the normal sweep/results path close that round
+    // instead of creating a late STOP.
     let newStatus = room.status as string;
     let newStopperJson = room.stopperJson;
     if (options.triggerStop && room.status === "playing") {
       const stopTimestamp = Date.now();
       let prevMeta: any = {};
       try { prevMeta = room.stopperJson ? JSON.parse(room.stopperJson) : {}; } catch {}
+      const startedAt = prevMeta?.roundStartedAt;
+      if (typeof startedAt === "number") {
+        const durationSecs = options.expectedDurationSecs ?? (room.gameMode === "blitz" ? 30 : 60);
+        const deadline = startedAt + durationSecs * 1000;
+        if (stopTimestamp >= deadline) return;
+      }
       newStopperJson = JSON.stringify({
         ...prevMeta,
         stopper: { id: botPlayerId, name: me.playerName, stopTimestamp },
@@ -381,33 +394,15 @@ async function performBotSubmit(
       };
     });
 
-    // Bot never bluffs, so if its submission completes the round and there
-    // are no human bluffers we can advance directly; otherwise just save and
-    // let the human /results handler decide the next status.
-    let nextStatus = newStatus;
-    let nextRound = room.currentRound;
-    let nextLetter = room.currentLetter;
-    let nextStopperJson: string | null = newStopperJson;
-
-    let didFinishGame = false;
-    const allReady = updatedPlayers.every(p => p.isReady);
-    if (allReady) {
-      const bluffers = updatedPlayers.filter(p => p.bluffedCategories?.length > 0);
-      if (bluffers.length === 0) {
-        // Advance — mirror the rooms.ts /results advancement.
-        nextRound = (room.currentRound ?? 0) + 1;
-        if (nextRound > (room.maxRounds ?? 3)) {
-          nextStatus = "finished";
-          nextRound = room.maxRounds ?? 3;
-          didFinishGame = true;
-        } else {
-          nextStatus = "waiting";
-          // Letter will be re-rolled when host starts next round; clear meta.
-        }
-        nextStopperJson = null;
-      }
-    }
-
+    // Do NOT finalize the room from the bot path. The authoritative
+    // finalizeRoundState() lives in rooms.ts and performs the deadline sweep,
+    // bluff detection, round transition and one-shot side effects. The bot
+    // only contributes its own player state here; /results or the background
+    // sweep will finalize the room exactly like a human submission.
+    const nextStatus = newStatus;
+    const nextRound = room.currentRound;
+    const nextLetter = room.currentLetter;
+    const nextStopperJson: string | null = newStopperJson;
     const updateResult = await db.update(roomsTable)
       .set({
         playersJson: JSON.stringify(updatedPlayers),
@@ -467,6 +462,7 @@ export function scheduleBotsForRound(opts: {
   categories: string[];
   deps: BotActionDeps;
   round: number;
+  roundDurationSecs?: number;
 }) {
   clearBotTimers(opts.roomCode);
   // Wipe any leftover LLM answers from a previous round so a late-resolving
@@ -491,7 +487,7 @@ export function scheduleBotsForRound(opts: {
   for (const b of opts.bots) {
     const delay = 25_000 + Math.random() * 25_000; // 25-50s
     const t = setTimeout(() => {
-      performBotSubmit(opts.roomCode, b.playerId, opts.deps, { triggerStop: true });
+      performBotSubmit(opts.roomCode, b.playerId, opts.deps, { triggerStop: true, expectedRound: round, expectedLetter: letter, expectedDurationSecs: opts.roundDurationSecs });
     }, delay);
     trackTimer(opts.roomCode, t);
   }
@@ -503,12 +499,14 @@ export function rushBotSubmits(opts: {
   roomCode: string;
   bots: { playerId: string }[];
   deps: BotActionDeps;
+  round: number;
+  letter: string;
 }) {
   clearBotTimers(opts.roomCode);
   for (const b of opts.bots) {
     const delay = 1_500 + Math.random() * 2_500; // 1.5-4s, mimics real player freeze
     const t = setTimeout(() => {
-      performBotSubmit(opts.roomCode, b.playerId, opts.deps, { triggerStop: false });
+      performBotSubmit(opts.roomCode, b.playerId, opts.deps, { triggerStop: false, expectedRound: opts.round, expectedLetter: opts.letter });
     }, delay);
     trackTimer(opts.roomCode, t);
   }
