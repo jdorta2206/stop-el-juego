@@ -1484,6 +1484,7 @@ router.post("/validate", async (req, res) => {
   }
 
   const { letter, language, playerResponses: rawPlayerResponses } = body.data;
+  const validationMode = body.data.mode === "daily" ? "daily" : "solo";
 
   // A round is bounded by the category pack (currently at most 12 categories).
   // The client normally sends unique categories, but this endpoint is public and
@@ -1568,13 +1569,17 @@ router.post("/validate", async (req, res) => {
   // 🔒 Anti-cheat: hand back a signed, single-use voucher attesting the
   // server-computed base score for this round. The client returns it when
   // submitting the final game score so the leaderboard can't be fabricated.
-  const scoreToken = issueScoreToken(playerTotalScore, validatedCollectionWords);
+  const scoreToken = issueScoreToken(playerTotalScore, validatedCollectionWords, "solo");
+  const dailyScoreToken = validationMode === "daily"
+    ? issueScoreToken(playerTotalScore, validatedCollectionWords, "daily")
+    : null;
 
   const response = ValidateRoundResponse.parse({
     results,
     playerTotalScore,
     aiTotalScore,
     ...(scoreToken ? { scoreToken } : {}),
+    ...(dailyScoreToken ? { dailyScoreToken } : {}),
   });
 
   res.json(response);

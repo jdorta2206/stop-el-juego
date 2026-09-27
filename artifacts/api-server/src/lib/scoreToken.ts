@@ -185,6 +185,7 @@ export function sumVerifiedBase(
 export async function sumVerifiedBasePersistent(
   tokens: unknown,
   maxTokens = Number.POSITIVE_INFINITY,
+  expectedMode: "global" | "daily" = "global",
 ): Promise<{
   base: number;
   verified: number;
@@ -214,6 +215,10 @@ export async function sumVerifiedBasePersistent(
   for (const token of tokens) {
     const voucher = parseVerifiedVoucher(token, secret, now);
     if (!voucher) continue;
+    // Keep vouchers scoped to their consumer. Daily vouchers cannot be replayed
+    // through the global leaderboard and vice versa.
+    if (expectedMode === "daily" && voucher.mode !== "daily") continue;
+    if (expectedMode === "global" && voucher.mode === "daily") continue;
 
     const claimed = await db
       .insert(scoreVoucherUsesTable)

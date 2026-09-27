@@ -306,6 +306,9 @@ components:
           enum: [es, en, fr, pt]
         playerName:
           type: string
+        mode:
+          type: string
+          enum: [solo, daily]
         playerResponses:
           type: array
           maxItems: 12
@@ -335,6 +338,9 @@ components:
             (alongside any other rounds' tokens) when submitting the final
             game score, so the server can verify the score wasn't fabricated.
             Absent when the round was validated offline.
+        dailyScoreToken:
+          type: string
+          description: Signed, single-use voucher scoped to the Daily Challenge submission.
       required:
         - results
         - playerTotalScore

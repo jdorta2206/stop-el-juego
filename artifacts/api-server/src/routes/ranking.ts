@@ -481,7 +481,7 @@ router.post("/scores", scoreLimiter, async (req, res) => {
     // /ranking/scores is the client solo leaderboard path. Keep its voucher
     // count cap independent of the client-supplied `mode`; otherwise a caller
     // could request `multiplayer` and raise the cap from 3 rounds to 12.
-    : await sumVerifiedBasePersistent(scoreTokens, 3);
+    : await sumVerifiedBasePersistent(scoreTokens, 3, "global");
   if (!isBonus && rawScore > 0 && verified === 0) {
     res.status(422).json({ error: "SCORE_VERIFICATION_REQUIRED" });
     return;

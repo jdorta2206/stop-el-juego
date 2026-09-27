@@ -53,7 +53,7 @@ router.get("/", (req, res) => {
 
 // POST /api/daily/submit  → save a player's score for today
 router.post("/submit", async (req, res) => {
-  const { playerId, playerName, avatarColor, score, letter, language, scoreTokens } = req.body;
+  const { playerId, playerName, avatarColor, score, letter, language, dailyScoreTokens } = req.body;
   if (!playerId || !playerName || score == null || !letter) {
     res.status(400).json({ error: "Missing required fields" });
     return;
@@ -85,8 +85,14 @@ router.post("/submit", async (req, res) => {
   // posted score to a ceiling derived from the verified round voucher(s), or a
   // flat absolute ceiling when none are present (offline play). Never reject,
   // only clamp, so a legit daily score is never lost.
-  const { base: verifiedBase, verified } = await sumVerifiedBasePersistent(scoreTokens, 1);
-  const dailyCeiling = verified > 0 ? ceilingFromBase(verifiedBase) : absoluteCeiling("daily");
+  const { base: verifiedBase, verified } = await sumVerifiedBasePersistent(dailyScoreTokens, 1, "daily");
+  // The daily mode has a hard 600-point ceiling even when a valid voucher is
+  // present. A voucher may certify a real round score, but it must never raise
+  // the mode-specific absolute ceiling.
+  const dailyCeiling = Math.min(
+    absoluteCeiling("daily"),
+    verified > 0 ? ceilingFromBase(verifiedBase) : absoluteCeiling("daily"),
+  );
   const safeScore = Math.max(0, Math.min(Number(score) || 0, dailyCeiling));
 
   // Only allow one submission per player per day. The unique DB constraint is

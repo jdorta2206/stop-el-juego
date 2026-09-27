@@ -23,6 +23,7 @@ export const ValidateRoundBody = zod.object({
   letter: zod.string().min(1).max(validateRoundBodyLetterMax),
   language: zod.enum(["es", "en", "fr", "pt"]),
   playerName: zod.string().optional(),
+  mode: zod.enum(["solo", "daily"]).optional(),
   playerResponses: zod.array(
     zod.object({
       category: zod.string(),
@@ -57,6 +58,7 @@ export const ValidateRoundResponse = zod.object({
     .describe(
       "Signed, single-use voucher attesting the server-computed base\nscore for this round (`playerTotalScore`). The client returns it\n(alongside any other rounds' tokens) when submitting the final\ngame score, so the server can verify the score wasn't fabricated.\nAbsent when the round was validated offline.\n",
     ),
+  dailyScoreToken: zod.string().optional().describe("Signed, single-use voucher scoped to the Daily Challenge submission."),
 });
 
 /**

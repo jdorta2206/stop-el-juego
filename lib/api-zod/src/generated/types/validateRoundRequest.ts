@@ -16,5 +16,6 @@ export interface ValidateRoundRequest {
   letter: string;
   language: ValidateRoundRequestLanguage;
   playerName?: string;
+  mode?: "solo" | "daily";
   playerResponses: CategoryResponse[];
 }

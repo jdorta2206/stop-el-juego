@@ -18,4 +18,6 @@ game score, so the server can verify the score wasn't fabricated.
 Absent when the round was validated offline.
  */
   scoreToken?: string;
+  /** Signed, single-use voucher scoped to the Daily Challenge submission. */
+  dailyScoreToken?: string;
 }

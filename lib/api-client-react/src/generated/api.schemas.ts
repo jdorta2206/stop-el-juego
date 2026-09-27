@@ -48,6 +48,7 @@ export interface ValidateRoundRequest {
   letter: string;
   language: ValidateRoundRequestLanguage;
   playerName?: string;
+  mode?: "solo" | "daily";
   playerResponses: CategoryResponse[];
 }
 
@@ -64,6 +65,8 @@ game score, so the server can verify the score wasn't fabricated.
 Absent when the round was validated offline.
  */
   scoreToken?: string;
+  /** Signed, single-use voucher scoped to the Daily Challenge submission. */
+  dailyScoreToken?: string;
 }
 
 export interface PlayerScore {

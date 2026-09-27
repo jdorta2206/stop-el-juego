@@ -444,6 +444,9 @@ export default function SoloGame() {
   // the game and hand them back on submit so the server can clamp a fabricated
   // total. Reset per new game (where totalScore resets to 0), not per round.
   const scoreTokensRef = useRef<string[]>([]);
+  // Daily uses a separate, single-use voucher so its submission cannot consume
+  // the voucher already used by the global leaderboard submission.
+  const dailyScoreTokensRef = useRef<string[]>([]);
 
   const startGame = () => {
     if (halloweenScareTimerRef.current) clearTimeout(halloweenScareTimerRef.current);
@@ -669,6 +672,7 @@ export default function SoloGame() {
             letter,
             language: getCurrentLang() as import("@workspace/api-client-react").ValidateRoundRequestLanguage,
             playerName: player?.name,
+            mode: isDailyMode ? "daily" : "solo",
             playerResponses: formattedResponses,
           }
         }),
@@ -711,6 +715,7 @@ export default function SoloGame() {
     // 🔒 Capture this round's anti-cheat voucher (online play only — the
     // offline fallback payload has none). Accumulated for the final submit.
     if (apiData?.scoreToken) scoreTokensRef.current.push(apiData.scoreToken);
+    if (isDailyMode && apiData?.dailyScoreToken) dailyScoreTokensRef.current.push(apiData.dailyScoreToken);
 
     // Persist whichever payload we ended up with so the RESULTS effect
     // and the UI read the *current* round's data, not the prior mutation.
@@ -1181,26 +1186,80 @@ export default function SoloGame() {
   }, [gameState, round, maxRounds, totalScore, aiTotalScore, isDailyMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const submitDailyResult = (finalScore: number) => {
+    const today = getTodayStr();
     // Always save daily score locally (works for guests too)
-    localStorage.setItem(`stop_daily_${getTodayStr()}`, String(finalScore));
+    localStorage.setItem(`stop_daily_${today}`, String(finalScore));
 
-    // Save to server if logged in
+    // Save to server if logged in. Keep a retry payload locally if the
+    // network is unavailable or the server returns a transient error.
     if (!player || player.loginMethod === "guest") return;
+
+    const payload = {
+      playerId: player.id,
+      playerName: player.name,
+      avatarColor: player.avatarColor,
+      score: finalScore,
+      letter: dailyLetter || currentLetter,
+      language: getCurrentLang(),
+      scoreTokens: scoreTokensRef.current,
+      dailyScoreTokens: dailyScoreTokensRef.current,
+    };
+    const pendingKey = `stop_daily_pending_${today}`;
+
     fetch(`${getApiUrl()}/api/daily/submit`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...authHeaders() },
       credentials: "include",
-      body: JSON.stringify({
-        playerId: player.id,
-        playerName: player.name,
-        avatarColor: player.avatarColor,
-        score: finalScore,
-        letter: dailyLetter || currentLetter,
-        language: getCurrentLang(),
-        scoreTokens: scoreTokensRef.current,
-      }),
-    }).catch(() => {});
+      body: JSON.stringify(payload),
+    })
+      .then(async (response) => {
+        if (response.ok) {
+          localStorage.removeItem(pendingKey);
+          return;
+        }
+        // Invalid/stale client data should not be retried forever.
+        if (response.status === 400 || response.status === 422) {
+          localStorage.removeItem(pendingKey);
+          return;
+        }
+        localStorage.setItem(pendingKey, JSON.stringify(payload));
+      })
+      .catch(() => {
+        localStorage.setItem(pendingKey, JSON.stringify(payload));
+      });
   };
+
+  // Retry a daily result that could not reach the server during a previous
+  // completed game. The server's unique player/date constraint makes this
+  // idempotent and the server keeps the highest score.
+  useEffect(() => {
+    if (!player || player.loginMethod === "guest") return;
+
+    const today = getTodayStr();
+    const pendingKey = `stop_daily_pending_${today}`;
+    const raw = localStorage.getItem(pendingKey);
+    if (!raw) return;
+
+    try {
+      const payload = JSON.parse(raw);
+      if (!payload?.playerId || payload.playerId !== player.id) return;
+
+      fetch(`${getApiUrl()}/api/daily/submit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        credentials: "include",
+        body: JSON.stringify(payload),
+      })
+        .then(async (response) => {
+          if (response.ok || response.status === 400 || response.status === 422) {
+            localStorage.removeItem(pendingKey);
+          }
+        })
+        .catch(() => {});
+    } catch {
+      localStorage.removeItem(pendingKey);
+    }
+  }, [player]);
 
   const nextRound = async () => {
     if (round >= maxRounds) {
@@ -1238,6 +1297,7 @@ export default function SoloGame() {
       setRound(1);
       setTotalScore(0);
       scoreTokensRef.current = [];
+      dailyScoreTokensRef.current = [];
       setAiTotalScore(0);
       setBestRoundScore(0);
       setDoubleUsed(false);
