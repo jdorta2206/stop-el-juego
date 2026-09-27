@@ -1538,19 +1538,22 @@ router.post("/:roomCode/use-card", async (req, res) => {
       p.playerId === playerId ? { ...p, powerCardUsed: true } : p
     );
 
-    // Rayo must extend the authoritative server deadline, not only the local UI.
+    // Cards are only usable while the authoritative round deadline is still
+    // open. This closes the race between the client timer expiring and the
+    // background sweep changing the room status from "playing".
     const card = me.powerCard as string;
+    const meta = parseBluffMeta(room.stopperJson) ?? {};
+    const startedAt = meta?.roundStartedAt;
+    if (typeof startedAt !== "number") {
+      res.status(409).json({ error: "Round deadline is unavailable" }); return;
+    }
+    const currentEnd = startedAt + roundDurationSecs(room) * 1000;
+    if (Date.now() >= currentEnd) {
+      res.status(409).json({ error: "Round time has already expired" }); return;
+    }
+
     let updatedStopperJson = room.stopperJson;
     if (card === "lightning") {
-      const meta = parseBluffMeta(room.stopperJson) ?? {};
-      const startedAt = meta?.roundStartedAt;
-      if (typeof startedAt !== "number") {
-        res.status(409).json({ error: "Round deadline is unavailable" }); return;
-      }
-      const originalEnd = startedAt + roundDurationSecs(room) * 1000;
-      if (Date.now() >= originalEnd) {
-        res.status(409).json({ error: "Round time has already expired" }); return;
-      }
       updatedStopperJson = JSON.stringify({ ...meta, roundStartedAt: startedAt + 15_000 });
     }
 
