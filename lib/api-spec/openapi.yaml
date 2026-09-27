@@ -636,6 +636,9 @@ components:
           type: string
         roundScore:
           type: integer
+        round:
+          type: integer
+          minimum: 1
         letter:
           type: string
         answers:
@@ -653,4 +656,5 @@ components:
       required:
         - playerId
         - roundScore
+        - round
         - letter

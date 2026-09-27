@@ -114,7 +114,7 @@ export function MultiplayerScreen({ session, onExit }: Props) {
     if (!active || submitted || (active.status !== "playing" && active.status !== "stopped")) return;
     setSubmitted(true); setBusy(true);
     try {
-      const updated = await apiFetch<Room>(`/api/rooms/${encodeURIComponent(active.roomCode)}/results`, { method: "POST", body: JSON.stringify({ playerId, answers, bluffedCategories: [], bluffedWords: {} }) });
+      const updated = await apiFetch<Room>(`/api/rooms/${encodeURIComponent(active.roomCode)}/results`, { method: "POST", body: JSON.stringify({ playerId, round: active.currentRound, letter: active.currentLetter, roundScore: 0, answers, bluffedCategories: [], bluffedWords: {} }) });
       setRoom(updated);
       setAnswers({});
     } catch (e) { setSubmitted(false); setError(e instanceof Error ? e.message : "No se pudieron enviar tus respuestas."); }

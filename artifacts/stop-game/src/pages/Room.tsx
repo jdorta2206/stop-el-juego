@@ -723,6 +723,7 @@ export default function Room() {
       data: {
         playerId: player.id,
         roundScore: finalScore,
+        round: room?.currentRound ?? 1,
         letter: currentLetter,
         answers: { ...responsesSnapshotRef.current },
         bluffedCategories: bluffedList.length > 0 ? bluffedList : undefined,
