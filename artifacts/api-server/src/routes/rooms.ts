@@ -2353,6 +2353,10 @@ router.post("/:roomCode/bluff-vote", writeLimiter, async (req, res) => {
     res.status(403).json({ error: "Only players in the room can vote" });
     return;
   }
+  if (voter.isBot) {
+    res.status(403).json({ error: "Bots cannot vote on bluffs" });
+    return;
+  }
   if (voter.bluffedCategories?.length) {
     res.status(403).json({ error: "Bluffers cannot vote" });
     return;
