@@ -518,7 +518,7 @@ function finalizeRoundState(room: any, players: any[]): {
   const codeUpper = (room.roomCode as string).toUpperCase();
   const endTs = roundEndTimestamp(room);
 
-  const sweptPlayers = (() => {
+  let sweptPlayers = (() => {
     if (!endTs) return players;
     const sinceStop = Date.now() - endTs;
     const gracePassed = sinceStop > SUBMIT_GRACE_MS;
@@ -568,7 +568,13 @@ function finalizeRoundState(room: any, players: any[]): {
       });
       newStatus = "bluffvoting";
     } else {
-      // No bluffs — advance normally
+      // If EVERY player bluffed, there is nobody eligible to vote. Resolve
+      // those bluffs immediately with an empty vote set (there is no opposing
+      // vote to catch them), so the +20 "not caught" reward is not silently lost.
+      if (bluffers.length > 0) {
+        sweptPlayers = resolveBluffs(sweptPlayers, {});
+      }
+      // No bluffs (or all-bluff round already resolved) — advance normally
       newRound = room.currentRound + 1;
       const isGameOver = newRound > room.maxRounds;
       if (isGameOver) {
