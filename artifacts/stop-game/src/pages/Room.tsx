@@ -515,6 +515,8 @@ export default function Room() {
         playerId: player.id,
         playerName: player.name ?? "?",
         responses: { ...responsesRef.current },
+        round: (roomRef.current as any)?.currentRound,
+        letter: (roomRef.current as any)?.currentLetter,
       }),
     }).catch(() => {});
   }, [player?.id, player?.name, roomCode]);
