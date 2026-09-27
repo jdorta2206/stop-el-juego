@@ -2033,14 +2033,30 @@ router.post("/:roomCode/stop", async (req, res) => {
     roundStartedAt: prevMeta.roundStartedAt ?? Date.now(),
   };
 
+  // Atomic STOP claim: only the request that observes the room still in
+  // "playing" may transition it to "stopped". Without this CAS, two nearly
+  // simultaneous STOP requests could both read "playing" and the later writer
+  // would overwrite the authoritative stopper.
   const [updated] = await db.update(roomsTable)
     .set({
       status: "stopped",
       stopperJson: JSON.stringify(newMeta),
       updatedAt: new Date(),
     })
-    .where(eq(roomsTable.roomCode, roomCode.toUpperCase()))
+    .where(and(
+      eq(roomsTable.roomCode, roomCode.toUpperCase()),
+      eq(roomsTable.status, "playing"),
+      eq(roomsTable.updatedAt, room.updatedAt),
+    ))
     .returning();
+
+  if (!updated) {
+    const [current] = await db.select().from(roomsTable)
+      .where(eq(roomsTable.roomCode, roomCode.toUpperCase()))
+      .limit(1);
+    res.json(formatRoom(current ?? room));
+    return;
+  }
 
   res.json(broadcastAndFormat(updated));
 
