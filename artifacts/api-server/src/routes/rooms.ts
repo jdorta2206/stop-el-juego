@@ -1808,6 +1808,15 @@ router.post("/:roomCode/funvote", writeLimiter, async (req, res) => {
   if (!players.some((p: any) => p.playerId === playerId)) {
     res.status(403).json({ error: "No estás en esta sala" }); return;
   }
+
+  // Fun votes are only valid on the reveal screen between rounds. At that
+  // point the authoritative room is waiting and currentRound already points
+  // to the next round, so the answers being voted on belong to currentRound - 1.
+  // Never trust a client-supplied round to write a vote for an arbitrary round.
+  if (room.status !== "waiting" || room.currentRound <= 0 || round !== room.currentRound - 1) {
+    res.status(409).json({ error: "Fun vote is not available for this round" }); return;
+  }
+
   if (!players.some((p: any) => p.playerId === votedPlayerId)) {
     res.status(404).json({ error: "Ese jugador no está en la sala" }); return;
   }
