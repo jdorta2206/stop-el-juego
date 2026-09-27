@@ -2325,12 +2325,13 @@ router.post("/:roomCode/bluff-vote", writeLimiter, async (req, res) => {
   const roomCode = paramStr(req.params.roomCode);
   const { voterId, accusedPlayerId, category, vote } = req.body as {
     voterId: string;
+    round: number;
     accusedPlayerId: string;
     category: string;
     vote: "lie" | "real";
   };
 
-  if (!voterId || !accusedPlayerId || !category || !["lie","real"].includes(vote)) {
+  if (!voterId || !Number.isInteger(round) || round < 1 || !accusedPlayerId || !category || !["lie","real"].includes(vote)) {
     res.status(400).json({ error: "Invalid vote data" });
     return;
   }
@@ -2343,6 +2344,9 @@ router.post("/:roomCode/bluff-vote", writeLimiter, async (req, res) => {
   if (rooms.length === 0) { res.status(404).json({ error: "Room not found" }); return; }
 
   const room = rooms[0];
+  // Bind votes to the exact round that created the bluff phase. A delayed
+  // request from an older round must never become a vote in a later bluff phase.
+  if (round !== room.currentRound) { res.status(409).json({ error: "Vote belongs to a different round" }); return; }
   if (room.status !== "bluffvoting") { res.json(formatRoom(room)); return; }
 
   // 🔒 Only an actual room member may vote, and bluffers cannot vote.
