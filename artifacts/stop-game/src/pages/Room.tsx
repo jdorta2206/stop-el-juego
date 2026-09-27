@@ -239,7 +239,7 @@ export default function Room() {
 
   // When SSE is active it pushes updates in real-time — polling is just a safety fallback
   const pollingInterval = sseActive
-    ? 30_000
+    ? false
     : phase === "bluffvoting"                                          ? 800
     : phase === "playing" || phase === "freeze" || phase === "submitted" ? 1200
     : /* lobby / between_rounds / finished / spinning */                  1500;
@@ -269,6 +269,10 @@ export default function Room() {
       if (closed) return;
       es = new EventSource(url);
       es.onopen = () => {
+        // Once SSE is authoritative, cancel any polling request that may still
+        // be in flight. Otherwise a stale HTTP response can arrive after an
+        // SSE update and overwrite the newer room state in React Query.
+        void queryClient.cancelQueries({ queryKey: getGetRoomQueryKey(code) });
         attempts = 0; // 🔁 reset backoff on successful connection
         setSseActive(true);
       };
