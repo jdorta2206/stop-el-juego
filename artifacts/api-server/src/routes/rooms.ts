@@ -1619,11 +1619,19 @@ router.get("/:roomCode/events", async (req, res) => {
   res.setHeader("X-Accel-Buffering", "no");
   res.flushHeaders?.();
 
-  // Send current state immediately (con cosméticos)
+  // Send only the state this viewer is authorized to see.
+  // Public non-members are spectators and must not receive in-round answers,
+  // typing/live drafts, or other member-only state over SSE.
   const players = parsePlayers(roomRow.playersJson);
-  const playerIds = players.map((p: any) => p.playerId).filter(Boolean);
-  const cosmeticsMap = await fetchCosmeticsForPlayers(playerIds);
-  const initialPayload = formatRoom(roomRow, cosmeticsMap);
+  const isMember = !!playerId && players.some((p: any) => p.playerId === playerId);
+  let initialPayload: any;
+  if (!isMember && (roomRow as any).isPublic === true) {
+    initialPayload = sanitizeRoomForSpectator(roomRow);
+  } else {
+    const playerIds = players.map((p: any) => p.playerId).filter(Boolean);
+    const cosmeticsMap = await fetchCosmeticsForPlayers(playerIds);
+    initialPayload = formatRoom(roomRow, cosmeticsMap);
+  }
   res.write(`data: ${JSON.stringify(initialPayload)}\n\n`);
 
   const client: SseClient = { res, playerId };
