@@ -1483,7 +1483,7 @@ router.post("/validate", async (req, res) => {
     return;
   }
 
-  const { letter, language, playerName, playerResponses: rawPlayerResponses } = body.data;
+  const { letter, language, playerResponses: rawPlayerResponses } = body.data;
   const validationMode = body.data.mode === "daily" ? "daily" : "solo";
 
   // A round is bounded by the category pack (currently at most 12 categories).
