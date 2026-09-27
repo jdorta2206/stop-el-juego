@@ -2141,11 +2141,25 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
   // injects fake category keys, only this many can score (defends against
   // category-key injection padding the score with extra +10s).
   const AUTHORITATIVE_CATEGORY_CAP = 8; // largest pack across ES/EN/PT/FR
+  // 🔒 Only categories belonging to the authoritative room pack may score.
+  // The client can render the correct categories, but the server must not
+  // trust a manipulated payload that injects extra/open categories.
+  const packCfg = roomCategoryPacks.get(roomCode.toUpperCase());
+  const authoritativeCategories = new Set(
+    resolveCategoriesForRound(
+      packCfg?.pack ?? "standard",
+      letter,
+      room.currentRound ?? 1,
+      packCfg?.customCategories,
+    ).map((category) => normalizeWord(category)),
+  );
   const scoredEntries = await Promise.all(
-    Object.entries(safeAnswers).map(async ([category, word]) => ({
-      word,
-      valid: await isWordValidAsync(word, letter, category, room.language ?? "es", playerId),
-    })),
+    Object.entries(safeAnswers)
+      .filter(([category]) => authoritativeCategories.has(normalizeWord(category)))
+      .map(async ([category, word]) => ({
+        word,
+        valid: await isWordValidAsync(word, letter, category, room.language ?? "es", playerId),
+      })),
   );
   const validNorms = new Set<string>();
   let validAnswerCountRaw = 0;
