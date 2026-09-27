@@ -1658,6 +1658,25 @@ router.post("/:roomCode/typing", writeLimiter, async (req, res) => {
   if (!playerId) { res.status(400).json({ error: "Missing playerId" }); return; }
   if (!verifyClaimedIdentity(req, playerId)) { res.status(403).json({ error: "Identity verification failed" }); return; }
 
+  // 🔒 Typing/draft presence is room-scoped state. Never accept a heartbeat
+  // merely because the caller can prove ownership of playerId: an old tab,
+  // stale room code, or guessed code must not be able to inject responses into
+  // another room (which would also make /spy select the injected answer).
+  const [roomRow] = await db.select({
+    playersJson: roomsTable.playersJson,
+    status: roomsTable.status,
+  }).from(roomsTable).where(eq(roomsTable.roomCode, code)).limit(1);
+  if (!roomRow) { res.status(404).json({ error: "Room not found" }); return; }
+  const members = parsePlayers(roomRow.playersJson);
+  if (!members.some((p: any) => p.playerId === playerId)) {
+    res.status(403).json({ error: "Not a member of this room" }); return;
+  }
+  // Typing responses only represent the live round. Ignore late heartbeats
+  // from a previous round rather than leaving stale spyable data behind.
+  if (roomRow.status !== "playing") {
+    res.status(409).json({ error: "Typing is only available during a round" }); return;
+  }
+
   let m = roomTyping.get(code);
   if (!m) { m = new Map(); roomTyping.set(code, m); }
   m.set(playerId, { name: String(playerName ?? "?").slice(0, 30), ts: Date.now() });
