@@ -689,6 +689,14 @@ async function sweepStuckRooms() {
         .where(and(eq(roomsTable.roomCode, room.roomCode), eq(roomsTable.status, "bluffvoting")))
         .returning();
       if (!updated) continue;
+
+      // The background rescue bypasses the normal round-advance helper too.
+      // Clear round-scoped ephemeral state after the CAS winner persists the
+      // bluff resolution, so spy usage/live drafts cannot leak into the next round.
+      const codeUpper = room.roomCode.toUpperCase();
+      roomSpyUsage.delete(codeUpper);
+      roomLiveResponses.delete(codeUpper);
+
       if (isGameOver) {
         submitAllScoresToLeaderboard(resolved, room.currentLetter || "A").catch(() => {});
       }
