@@ -2053,6 +2053,8 @@ router.post("/:roomCode/stop", async (req, res) => {
       roomCode: roomCode.toUpperCase(),
       bots: pendingBots.map((b: any) => ({ playerId: b.playerId })),
       deps: botDeps,
+      round: updated.currentRound ?? 0,
+      letter: (updated.currentLetter ?? "A").toUpperCase(),
     });
   }
 });
