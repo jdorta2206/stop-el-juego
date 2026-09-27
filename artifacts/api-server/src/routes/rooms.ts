@@ -1326,20 +1326,22 @@ router.post("/:roomCode/leave", async (req, res) => {
     const leaving = players.find((p: any) => p.playerId === playerId);
     if (!leaving) return { kind: "noop" } as const;
 
-    // 👑 Mid-game host migration: if the host leaves while a round is in
-    // flight, we can't safely rewrite `playersJson` (would desync scores),
-    // but we MUST move the host badge to someone else — otherwise the room
-    // becomes a zombie that nobody can restart, rematch, or close. We do a
-    // minimal mutation: only `hostId`/`hostName` change, and we flip the
-    // `isHost` flag inside playersJson without touching scores or answers.
+    // 👑 Mid-game host migration: the leaving host must actually be removed
+    // from playersJson. Keeping them as a "ghost" player would make the server
+    // continue waiting for their /results, and they could keep affecting
+    // round readiness, scores and bluff resolution after disconnecting.
     if (status !== "waiting") {
       if (!leaving.isHost) return { kind: "noop" } as const;
       const others = players.filter((p: any) => p.playerId !== playerId);
-      if (others.length === 0) return { kind: "noop" } as const;
+      if (others.length === 0) {
+        // The last player is leaving; delete the abandoned room.
+        await tx.delete(roomsTable).where(eq(roomsTable.roomCode, code));
+        return { kind: "deleted" } as const;
+      }
       const newHost = others[0];
-      const migrated = players.map((p: any) => ({
+      const migrated = others.map((p: any, idx: number) => ({
         ...p,
-        isHost: p.playerId === newHost.playerId,
+        isHost: idx === 0,
       }));
       const updated = await tx
         .update(roomsTable)
