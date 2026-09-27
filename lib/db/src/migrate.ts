@@ -20,6 +20,8 @@ export async function ensureIndexes(): Promise<void> {
     `CREATE INDEX IF NOT EXISTS game_history_player_id_score_desc_idx ON game_history (player_id, score DESC)`,
     `CREATE INDEX IF NOT EXISTS rooms_is_public_status_created_at_idx ON rooms (is_public, status, created_at)`,
     `CREATE INDEX IF NOT EXISTS rooms_status_updated_at_idx ON rooms (status, updated_at)`,
+    `CREATE TABLE IF NOT EXISTS room_spy_usage (id serial PRIMARY KEY, room_code text NOT NULL, player_id text NOT NULL, round integer NOT NULL, uses integer NOT NULL DEFAULT 0, updated_at timestamp NOT NULL DEFAULT now())`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS room_spy_usage_room_player_round_uidx ON room_spy_usage (room_code, player_id, round)`,
     `ALTER TABLE rooms ADD COLUMN IF NOT EXISTS tournament_id integer`,
     `ALTER TABLE rooms ADD COLUMN IF NOT EXISTS tournament_match_id text`,
     `CREATE UNIQUE INDEX IF NOT EXISTS rooms_tournament_match_uidx ON rooms (tournament_id, tournament_match_id) WHERE tournament_id IS NOT NULL AND tournament_match_id IS NOT NULL`,
