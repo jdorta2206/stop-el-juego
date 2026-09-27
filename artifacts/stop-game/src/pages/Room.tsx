@@ -337,7 +337,7 @@ export default function Room() {
     (async () => {
       try {
         const url = `${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/draft?playerId=${encodeURIComponent(player.id)}`;
-        const r = await fetch(url);
+        const r = await fetch(url, { credentials: "include", headers: authHeaders() });
         if (!r.ok) return;
         const data = await r.json() as { responses?: Record<string, string>; round?: number; letter?: string };
         if (cancelled) return;
