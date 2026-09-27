@@ -134,14 +134,22 @@ router.post("/follow", async (req, res) => {
     return res.json({ ok: true, alreadyFollowing: true });
   }
 
-  await db.insert(followsTable).values({
-    followerId,
-    followedId,
-    followedName,
-    followedPicture: followedPicture || null,
-    followedAvatarColor: followedAvatarColor || "#e53e3e",
-    followedProvider: followedProvider || null,
-  });
+  try {
+    await db.insert(followsTable).values({
+      followerId,
+      followedId,
+      followedName,
+      followedPicture: followedPicture || null,
+      followedAvatarColor: followedAvatarColor || "#e53e3e",
+      followedProvider: followedProvider || null,
+    });
+  } catch (error: any) {
+    // The unique pair constraint makes concurrent follow requests idempotent.
+    if (error?.code === "23505") {
+      return res.json({ ok: true, alreadyFollowing: true });
+    }
+    throw error;
+  }
 
   return res.json({ ok: true });
 });
