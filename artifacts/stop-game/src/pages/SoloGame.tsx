@@ -263,7 +263,7 @@ export default function SoloGame() {
       window.removeEventListener("online", goOnline);
       window.removeEventListener("offline", goOffline);
     };
-  }, []);
+  }, [player?.id]);
 
   // 📡 Avisa al jugador la primera vez que entra en modo offline en esta
   // sesión. El banner discreto sigue ahí, pero un toast inicial explica qué
@@ -312,7 +312,11 @@ export default function SoloGame() {
     let cancelled = false;
     const tryFlush = () => {
       if (typeof navigator !== "undefined" && navigator.onLine === false) return;
-      flushScoreOutbox((payload) => submitScoreMutation.mutateAsync({ data: payload }))
+      if (!player?.id) return;
+      flushScoreOutbox(
+        (payload) => submitScoreMutation.mutateAsync({ data: payload }),
+        player.id,
+      )
         .then((res) => {
           if (cancelled || res.flushed <= 0) return;
           queryClient.invalidateQueries({ queryKey: ["/api/ranking/scores"] });
