@@ -91,6 +91,7 @@ export function useCollection(playerId?: string) {
     if (!playerId || syncedRef.current === playerId) return;
     syncedRef.current = playerId;
     syncFromServer(playerId).then(serverMap => {
+      if (syncedRef.current !== playerId) return;
       if (!Object.keys(serverMap).length) return;
       setCollection(prev => {
         const merged = mergeMaps(prev, serverMap);
