@@ -271,14 +271,12 @@ function bridgePageMulti(
   // is never sent to servers / access logs and is stripped client-side on
   // arrival so the token doesn't linger in the address bar.
   const baseDest = returnOrigin + returnPath;
-  // Use a query parameter for the cross-origin handoff. Some Android/TWA
-  // navigation paths can drop URL fragments during an OAuth return, which
-  // leaves the player on the login screen even though Facebook completed.
-  // consumeAuthHandoff() accepts both query and hash forms and removes the
-  // parameter immediately before React mounts.
-  const separator = baseDest.includes("?") ? "&" : "?";
-  const handoffDest = baseDest + separator +
-    "stopauth=" + encodeURIComponent(JSON.stringify(items));
+  // Keep the handoff in the URL fragment. Fragments are not sent in HTTP
+  // requests, access logs, or the Referer header, which is important because
+  // this payload can contain the signed session token and the Facebook access token.
+  // consumeAuthHandoff() imports the fragment and removes it immediately.
+  const handoffDest = baseDest +
+    "#" + "stopauth=" + encodeURIComponent(JSON.stringify(items));
   return `<!DOCTYPE html><html><head><meta charset="utf-8">
 <title>Conectando...</title>
 <style>body{background:#0d1757;color:white;font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;}
