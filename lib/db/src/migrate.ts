@@ -80,6 +80,11 @@ export async function ensureIndexes(): Promise<void> {
     `CREATE TABLE IF NOT EXISTS impossible_results (id serial PRIMARY KEY, player_id text NOT NULL, player_name text NOT NULL, challenge_date text NOT NULL, language text NOT NULL DEFAULT 'es', letter text NOT NULL, category text NOT NULL, attempted_word text NOT NULL DEFAULT '', won boolean NOT NULL DEFAULT false, time_ms integer NOT NULL DEFAULT 60000, created_at timestamp NOT NULL DEFAULT NOW())`,
     `CREATE UNIQUE INDEX IF NOT EXISTS impossible_results_player_date_lang_uniq ON impossible_results (player_id, challenge_date, language)`,
     `CREATE INDEX IF NOT EXISTS impossible_results_date_lang_idx ON impossible_results (challenge_date, language)`,
+    `CREATE TABLE IF NOT EXISTS player_presence (player_id text PRIMARY KEY, name text NOT NULL, picture text, avatar_color text NOT NULL DEFAULT '#e53e3e', provider text, room_code text, last_seen timestamp NOT NULL DEFAULT NOW())`,
+    `CREATE INDEX IF NOT EXISTS player_presence_last_seen_idx ON player_presence (last_seen)`,
+    `CREATE TABLE IF NOT EXISTS presence_challenges (challenge_id text PRIMARY KEY, from_player_id text NOT NULL, from_name text NOT NULL, from_picture text, from_avatar_color text NOT NULL DEFAULT '#e53e3e', to_player_id text NOT NULL, room_code text NOT NULL, status text NOT NULL DEFAULT 'pending', is_room_invite boolean NOT NULL DEFAULT FALSE, created_at timestamp NOT NULL DEFAULT NOW())`,
+    `CREATE INDEX IF NOT EXISTS presence_challenges_target_status_created_idx ON presence_challenges (to_player_id, status, created_at)`,
+    `CREATE INDEX IF NOT EXISTS presence_challenges_sender_status_created_idx ON presence_challenges (from_player_id, status, created_at)`,
   ];
 
   for (const stmt of stmts) {
