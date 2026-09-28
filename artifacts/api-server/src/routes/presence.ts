@@ -109,13 +109,13 @@ router.get("/online", async (_req, res) => {
     picture: string | null;
     avatarColor: string;
     provider: string | null;
-    roomCode: string | null;
+    roomCode: null;
     lastSeen: number;
   }> = [];
 
   for (const [playerId, data] of presenceMap) {
     if (data.lastSeen >= cutoff) {
-      online.push({ playerId, ...data });
+      online.push({ playerId, ...data, roomCode: null });
     }
   }
 
