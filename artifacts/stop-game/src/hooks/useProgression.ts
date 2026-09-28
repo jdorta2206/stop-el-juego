@@ -93,6 +93,7 @@ export function useProgression(playerId?: string) {
 
   // ── Sync from server on mount (server is source of truth) ──────────────
   useEffect(() => {
+    let cancelled = false;
     if (!playerId || playerId.startsWith("guest_")) return;
     const API = getApiUrl();
     fetch(`${API}/api/ranking/profile/${playerId}`)
@@ -105,11 +106,13 @@ export function useProgression(playerId?: string) {
         // unconditionally on mount.
         if (data?.xp != null && data.xp >= 0) {
           const serverXp = data.xp;
+          if (cancelled) return;
           setXp(serverXp);
           try { localStorage.setItem(xpStorageKey(playerId), String(serverXp)); } catch {}
         }
       })
       .catch(() => {});
+    return () => { cancelled = true; };
   }, [playerId]);
 
   const level = calcLevel(xp);
