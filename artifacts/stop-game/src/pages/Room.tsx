@@ -258,8 +258,7 @@ export default function Room() {
     if (!roomCode || !player?.id) return;
     const code = roomCode.toUpperCase();
     const API = getApiUrl();
-    const tok = getSessionToken();
-    const url = `${API}/api/rooms/${code}/events?playerId=${player.id}${tok ? `&token=${encodeURIComponent(tok)}` : ""}`;
+    const url = `${API}/api/rooms/${code}/events?playerId=${encodeURIComponent(player.id)}`;
     let es: EventSource;
     let retryTimeout: ReturnType<typeof setTimeout>;
     let closed = false;
@@ -267,7 +266,7 @@ export default function Room() {
 
     function connect() {
       if (closed) return;
-      es = new EventSource(url);
+      es = new EventSource(url, { withCredentials: true });
       es.onopen = () => {
         attempts = 0; // 🔁 reset backoff on successful connection
         setSseActive(true);
