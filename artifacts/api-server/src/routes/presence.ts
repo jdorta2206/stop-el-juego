@@ -115,7 +115,7 @@ router.get("/online", async (_req, res) => {
 
   for (const [playerId, data] of presenceMap) {
     if (data.lastSeen >= cutoff) {
-      online.push({ playerId, ...data });
+      online.push({ playerId, ...data, roomCode: null });
     }
   }
 
