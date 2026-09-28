@@ -43,7 +43,8 @@ export default function Home() {
   const [dailyDone] = useState(() => {
     try {
       const today = new Date().toISOString().slice(0, 10);
-      return !!localStorage.getItem(`stop_daily_${today}`);
+      const playerKey = player?.id || "guest";
+      return !!localStorage.getItem(`stop_daily_${playerKey}_${today}`);
     } catch {
       return false;
     }
