@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { useParams, useLocation } from "wouter";
@@ -245,8 +245,15 @@ export default function Room() {
     : /* lobby / between_rounds / finished / spinning */                  1500;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const roomQueryKey = useMemo(
+    () => roomCode && player?.id
+      ? [...getGetRoomQueryKey(roomCode.toUpperCase()), player.id] as const
+      : getGetRoomQueryKey(roomCode || ""),
+    [roomCode, player?.id],
+  );
+
   const { data: room, error } = useGetRoom(roomCode || "", {
-    query: { refetchInterval: pollingInterval, enabled: !!roomCode } as any,
+    query: { queryKey: roomQueryKey, refetchInterval: pollingInterval, enabled: !!roomCode } as any,
     // 🔑 Prove membership so private rooms return the full roster. Logged-in
     // users are identified by their global x-stop-token; guests have no token,
     // so we assert their own id via x-viewer-id (not a secret to them).
@@ -275,7 +282,7 @@ export default function Room() {
       es.onmessage = (e) => {
         try {
           const data = JSON.parse(e.data);
-          queryClient.setQueryData(getGetRoomQueryKey(code), data);
+          queryClient.setQueryData(roomQueryKey, data);
         } catch {}
       };
       es.onerror = () => {
@@ -296,7 +303,7 @@ export default function Room() {
       es?.close();
       setSseActive(false);
     };
-  }, [roomCode, player?.id, queryClient]);
+  }, [roomCode, player?.id, queryClient, roomQueryKey]);
 
   // 🔁 Persist the active room so a closed app / dropped network can find
   // its way back. Saved on mount, refreshed on every round change, cleared
@@ -1136,7 +1143,7 @@ export default function Room() {
       if (r.ok) {
         try {
           const data = await r.json();
-          queryClient.setQueryData(getGetRoomQueryKey(roomCode.toUpperCase()), data);
+          queryClient.setQueryData(roomQueryKey, data);
         } catch {}
       }
     } catch (e) { console.error(e); }
