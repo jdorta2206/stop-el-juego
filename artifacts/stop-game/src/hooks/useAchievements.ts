@@ -243,7 +243,9 @@ export function useAchievements(playerId?: string) {
   useEffect(() => {
     if (!playerId || syncedRef.current) return;
     syncedRef.current = true;
+    let cancelled = false;
     syncFromServer(playerId).then(({ achievements: serverIds, stats: serverStats }) => {
+      if (cancelled) return;
       // Merge achievements
       setUnlocked(prev => {
         const merged = new Set([...prev, ...serverIds]);
@@ -275,7 +277,8 @@ export function useAchievements(playerId?: string) {
         // Defer to next tick so the stats setState above has settled.
         setTimeout(() => checkStreakMilestoneRef.current(serverLongest), 0);
       }
-    });
+    }).catch(() => {});
+    return () => { cancelled = true; };
   }, [playerId]);
 
   const afterRound = useCallback((result: RoundResult) => {
