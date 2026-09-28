@@ -1182,7 +1182,8 @@ export default function SoloGame() {
 
   const submitDailyResult = (finalScore: number) => {
     // Always save daily score locally (works for guests too)
-    localStorage.setItem(`stop_daily_${getTodayStr()}`, String(finalScore));
+    const playerKey = player?.id || "guest";
+    localStorage.setItem(`stop_daily_${playerKey}_${getTodayStr()}`, String(finalScore));
 
     // Save to server if logged in
     if (!player || player.loginMethod === "guest") return;
