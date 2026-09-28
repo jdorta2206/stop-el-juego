@@ -1,11 +1,11 @@
 import { Router, type IRouter } from "express";
 import webpush from "web-push";
 import { db } from "@workspace/db";
-import { pushSubscriptionsTable } from "@workspace/db";
+import { pushSubscriptionsTable, roomsTable } from "@workspace/db";
 import { and, eq, isNull, like, not, or, sql } from "drizzle-orm";
 import { sendPushToAllSubscribers } from "../lib/pushHelper";
 import { inviteLimiter } from "../middlewares/rateLimit";
-import { verifyClaimedIdentity } from "../lib/playerAuth";
+import { readPlayerId, verifyClaimedIdentity } from "../lib/playerAuth";
 
 const router: IRouter = Router();
 
@@ -282,6 +282,34 @@ router.post("/send-invite", inviteLimiter, async (req, res) => {
   if (!targetPlayerId || !fromName || !roomCode) {
     res.status(400).json({ error: "Missing fields" }); return;
   }
+
+  // A room invite triggers a real push to another player. Require a signed
+  // identity and prove the sender belongs to the room to prevent this endpoint
+  // from being used as a push-spam relay for arbitrary player IDs.
+  const senderPlayerId = readPlayerId(req);
+  if (!senderPlayerId) {
+    res.status(401).json({ error: "Authentication required" }); return;
+  }
+  if (!verifyClaimedIdentity(req, senderPlayerId)) {
+    res.status(403).json({ error: "Identity verification failed" }); return;
+  }
+  const safeRoomCodeForAuth = String(roomCode).replace(/[^A-Za-z0-9]/g, "").slice(0, 12).toUpperCase();
+  if (!safeRoomCodeForAuth) { res.status(400).json({ error: "Invalid roomCode" }); return; }
+  const [inviteRoom] = await db.select({ playersJson: roomsTable.playersJson })
+    .from(roomsTable)
+    .where(eq(roomsTable.roomCode, safeRoomCodeForAuth))
+    .limit(1);
+  if (!inviteRoom) { res.status(404).json({ error: "Room not found" }); return; }
+  let roomPlayers: any[] = [];
+  try {
+    const parsed = JSON.parse(inviteRoom.playersJson || "[]");
+    roomPlayers = Array.isArray(parsed) ? parsed : [];
+  } catch {
+    res.status(500).json({ error: "Invalid room state" }); return;
+  }
+  if (!roomPlayers.some((p) => p?.playerId === senderPlayerId)) {
+    res.status(403).json({ error: "You are not a member of this room" }); return;
+  }
   if (!VAPID_PUBLIC || !VAPID_PRIVATE) {
     res.status(503).json({ error: "VAPID not configured" }); return;
   }
@@ -291,7 +319,7 @@ router.post("/send-invite", inviteLimiter, async (req, res) => {
   // it as an abuse vector: strip control chars/newlines and cap the length so it
   // can't be used to inject misleading multi-line content into the push payload.
   const safeFromName = String(fromName).replace(/[\r\n\u0000-\u001F\u007F]/g, " ").trim().slice(0, 40) || "Alguien";
-  const safeRoomCode = String(roomCode).replace(/[^A-Za-z0-9]/g, "").slice(0, 12).toUpperCase();
+  const safeRoomCode = safeRoomCodeForAuth;
   if (!safeRoomCode) { res.status(400).json({ error: "Invalid roomCode" }); return; }
 
   const lang = language || "es";
