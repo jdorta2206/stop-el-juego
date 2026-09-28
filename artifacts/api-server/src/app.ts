@@ -60,6 +60,20 @@ app.use(cookieParser());
 app.use(express.json({ limit: "256kb" }));
 app.use(express.urlencoded({ extended: true, limit: "64kb" }));
 app.use("/api", generalLimiter);
+
+// The auth cookie is SameSite=None because the TWA/OAuth bridge spans the
+// canonical web origins. CORS only controls whether a browser may READ a
+// response; it does not stop a cross-site HTML form from sending a credentialed
+// state-changing request. Reject cross-origin browser mutations here to
+// prevent CSRF. Requests without Origin remain allowed for native clients and
+// server-to-server webhooks.
+app.use("/api", (req, res, next) => {
+  if (!["POST", "PUT", "PATCH", "DELETE"].includes(req.method)) return next();
+  const origin = req.headers.origin;
+  if (!origin || CORS_ALLOWLIST.has(origin)) return next();
+  return res.status(403).json({ error: "Cross-origin request blocked" });
+});
+
 app.use("/api", router);
 app.use("/test/analytics", adminAnalytics);
 
