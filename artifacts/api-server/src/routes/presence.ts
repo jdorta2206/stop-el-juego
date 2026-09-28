@@ -109,7 +109,7 @@ router.get("/online", async (_req, res) => {
     picture: string | null;
     avatarColor: string;
     provider: string | null;
-    roomCode: string | null;
+    roomCode: null;
     lastSeen: number;
   }> = [];
 
