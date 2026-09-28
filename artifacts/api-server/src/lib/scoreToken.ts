@@ -185,6 +185,7 @@ export function sumVerifiedBase(
 export async function sumVerifiedBasePersistent(
   tokens: unknown,
   maxTokens = Number.POSITIVE_INFINITY,
+  purpose = "ranking",
 ): Promise<{
   base: number;
   verified: number;
@@ -217,7 +218,7 @@ export async function sumVerifiedBasePersistent(
 
     const claimed = await db
       .insert(scoreVoucherUsesTable)
-      .values({ jti: voucher.jti, expiresAt: new Date(voucher.exp) })
+      .values({ jti: voucher.jti, purpose, expiresAt: new Date(voucher.exp) })
       .onConflictDoNothing()
       .returning({ jti: scoreVoucherUsesTable.jti });
 
