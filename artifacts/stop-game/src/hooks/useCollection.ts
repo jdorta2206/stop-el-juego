@@ -90,8 +90,9 @@ export function useCollection(playerId?: string) {
   useEffect(() => {
     if (!playerId || syncedRef.current === playerId) return;
     syncedRef.current = playerId;
+    let cancelled = false;
     syncFromServer(playerId).then(serverMap => {
-      if (!Object.keys(serverMap).length) return;
+      if (cancelled || !Object.keys(serverMap).length) return;
       setCollection(prev => {
         const merged = mergeMaps(prev, serverMap);
         if (Object.keys(merged).length !== Object.keys(prev).length) {
@@ -100,7 +101,8 @@ export function useCollection(playerId?: string) {
         }
         return prev;
       });
-    });
+    }).catch(() => {});
+    return () => { cancelled = true; };
   }, [playerId]);
 
   /** Call after a round with the valid words. Persists locally + on the
