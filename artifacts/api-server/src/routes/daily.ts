@@ -104,19 +104,10 @@ router.post("/submit", async (req, res) => {
     .limit(1);
 
   if (existing.length > 0) {
-    // Update if new score is higher
-    if (safeScore > existing[0].score) {
-      await db
-        .update(dailyResultsTable)
-        .set({ score: safeScore, playerName, avatarColor: avatarColor || existing[0].avatarColor })
-        .where(
-          and(
-            eq(dailyResultsTable.playerId, playerId),
-            eq(dailyResultsTable.challengeDate, today)
-          )
-        );
-    }
-    res.json({ updated: true, alreadyPlayed: true });
+    // The Daily Challenge is one attempt per player/day. Once a result exists,
+    // a later request must be idempotent rather than allowing a second attempt
+    // to replace it with a higher score.
+    res.json({ updated: false, alreadyPlayed: true });
     return;
   }
 
