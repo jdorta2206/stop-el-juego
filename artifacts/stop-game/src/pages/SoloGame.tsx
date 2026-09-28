@@ -263,7 +263,7 @@ export default function SoloGame() {
       window.removeEventListener("online", goOnline);
       window.removeEventListener("offline", goOffline);
     };
-  }, [player?.id]);
+  }, []);
 
   // 📡 Avisa al jugador la primera vez que entra en modo offline en esta
   // sesión. El banner discreto sigue ahí, pero un toast inicial explica qué
@@ -337,7 +337,7 @@ export default function SoloGame() {
       window.removeEventListener("online", tryFlush);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [player?.id]);
 
   // Keep refs in sync with state so handleStop never reads stale closure values
   useEffect(() => { responsesRef.current = responses; }, [responses]);
