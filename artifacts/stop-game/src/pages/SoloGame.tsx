@@ -623,10 +623,22 @@ export default function SoloGame() {
     }
   };
 
-  // Cleanup card reveal timer on unmount
+  // Cleanup game timers on unmount. If the player leaves SoloGame while a
+  // round is active, the old interval must not survive and submit an abandoned game.
   useEffect(() => {
     return () => {
-      if (cardRevealTimer.current) clearTimeout(cardRevealTimer.current);
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+      if (cardRevealTimer.current) {
+        clearTimeout(cardRevealTimer.current);
+        cardRevealTimer.current = null;
+      }
+      if (halloweenScareTimerRef.current) {
+        clearTimeout(halloweenScareTimerRef.current);
+        halloweenScareTimerRef.current = null;
+      }
     };
   }, []);
 
