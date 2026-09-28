@@ -20,8 +20,15 @@ const SESSION_TOKEN_KEY = "stop_session_token";
 const AVATAR_COLORS = ["#f9a825", "#42a5f5", "#66bb6a", "#ab47bc", "#ef5350", "#26a69a"];
 
 function startOAuth(provider: "google" | "facebook" | "instagram" | "tiktok" | "apple") {
-  const returnPath = window.location.pathname + window.location.search;
-  try { sessionStorage.setItem("oauth_return", returnPath); } catch {}
+  const baseReturnPath = window.location.pathname + window.location.search;
+  const browserNonce = crypto.randomUUID();
+  const returnUrl = new URL(baseReturnPath, window.location.origin);
+  returnUrl.searchParams.set("oauth_nonce", browserNonce);
+  const returnPath = returnUrl.pathname + returnUrl.search;
+  try {
+    sessionStorage.setItem("oauth_return", baseReturnPath);
+    sessionStorage.setItem("oauth_browser_nonce", browserNonce);
+  } catch {}
   const apiBase = (import.meta as { env?: { VITE_API_URL?: string } }).env?.VITE_API_URL ?? window.location.origin;
   const origin = window.location.origin;
   const url = new URL(`${apiBase}/api/auth/${provider}/start`);
@@ -78,6 +85,10 @@ export function consumeAuthHandoff(): void {
 
     const allowed = new Set(["oauth_user", "fb_access_token", "stop_session_token"]);
     const values: Record<string, string> = {};
+    const returnNonce = params.get("oauth_nonce");
+    let browserNonce: string | null = null;
+    try { browserNonce = sessionStorage.getItem("oauth_browser_nonce"); } catch {}
+    if (!returnNonce || !browserNonce || returnNonce !== browserNonce) return;
 
     for (const item of items) {
       if (!Array.isArray(item) || item.length !== 2) continue;
@@ -92,6 +103,9 @@ export function consumeAuthHandoff(): void {
         }
       } catch {}
     }
+
+    params.delete("oauth_nonce");
+    try { sessionStorage.removeItem("oauth_browser_nonce"); } catch {}
 
     // Bootstrap the visible player synchronously. usePlayer() reads this value
     // during its first render, so the OAuth return cannot race the auth modal.
