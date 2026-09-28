@@ -111,7 +111,9 @@ export function useProgression(playerId?: string) {
           try { localStorage.setItem(xpStorageKey(playerId), String(serverXp)); } catch {}
         }
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => { cancelled = true; });
+    return () => { cancelled = true; };
   }, [playerId]);
 
   const level = calcLevel(xp);
