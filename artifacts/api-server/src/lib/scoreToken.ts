@@ -1,6 +1,6 @@
 import crypto from "crypto";
 import { db, scoreVoucherIssuancesTable, scoreVoucherUsesTable } from "@workspace/db";
-import { and, eq, lt } from "drizzle-orm";
+import { lt } from "drizzle-orm";
 
 // ── Score vouchers (anti-cheat for Solo & Daily submissions) ────────────────
 const TTL_MS = 30 * 60 * 1000;
