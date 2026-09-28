@@ -1598,8 +1598,10 @@ router.get("/:roomCode/events", async (req, res) => {
     // param (falls back to the auth cookie). Guests (UUID ids) carry no token and
     // are gated only by knowing their own random id. Fails open when auth is unset.
     if (isLoggedInId(playerId) && isAuthConfigured()) {
-      const queryToken = typeof req.query["token"] === "string" ? (req.query["token"] as string) : undefined;
-      const verified = verifyPlayerToken(queryToken) ?? readPlayerId(req);
+      // EventSource sends cookies but cannot set custom auth headers. Use the
+      // httpOnly session cookie here; never accept the long-lived session token
+      // through the URL, where it can leak into logs/history/referrers.
+      const verified = readPlayerId(req);
       if (verified !== playerId) {
         res.status(403).json({ error: "Identity verification failed" }); return;
       }
