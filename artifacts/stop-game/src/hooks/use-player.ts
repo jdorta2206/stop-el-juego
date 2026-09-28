@@ -87,6 +87,10 @@ export function usePlayer() {
         void (async () => {
           const restored = await tryRestoreSession();
           if (cancelled) return;
+          // The session restore may have started for account A while the user
+          // logged into account B. Never let the late A response overwrite B.
+          const currentStored = readStoredPlayer();
+          if (currentStored?.id !== stored.id) return;
           if (restored) { writeStoredPlayer(restored); setPlayer(restored); setNeedsAuth(false); }
           else { setPlayer(stored); setNeedsAuth(false); }
         })();
@@ -95,6 +99,9 @@ export function usePlayer() {
       void (async () => {
         const restored = await tryRestoreSession();
         if (cancelled) return;
+        // A login can complete while this anonymous restore is still in flight.
+        // Do not let the late restore replace the newly selected account.
+        if (readStoredPlayer()) return;
         if (restored) { writeStoredPlayer(restored); setPlayer(restored); setNeedsAuth(false); }
         else { setPlayer(null); setNeedsAuth(true); }
         setIsLoaded(true);
