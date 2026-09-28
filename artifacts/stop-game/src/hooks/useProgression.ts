@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { getApiUrl } from "@/lib/utils";
 
 const XP_KEY = "stop_xp_v2";
@@ -90,11 +90,13 @@ export function useProgression(playerId?: string) {
   }, [playerId]);
 
   const [levelUpInfo, setLevelUpInfo] = useState<{ from: number; to: number } | null>(null);
+  const syncSeqRef = useRef(0);
 
   // ── Sync from server on mount (server is source of truth) ──────────────
   useEffect(() => {
     if (!playerId || playerId.startsWith("guest_")) return;
     const API = getApiUrl();
+    const seq = ++syncSeqRef.current;
     fetch(`${API}/api/ranking/profile/${playerId}`)
       .then(r => r.ok ? r.json() : null)
       .then((data: { xp?: number } | null) => {
@@ -103,6 +105,7 @@ export function useProgression(playerId?: string) {
         // inflated value if the server had legitimately corrected it down
         // (refund, anti-cheat clawback, manual support fix). Server wins
         // unconditionally on mount.
+        if (seq !== syncSeqRef.current) return;
         if (data?.xp != null && data.xp >= 0) {
           const serverXp = data.xp;
           setXp(serverXp);
