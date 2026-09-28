@@ -1,10 +1,16 @@
 import { Router, type IRouter } from "express";
 import { ValidateRoundBody, ValidateRoundResponse } from "@workspace/api-zod";
 import { validateWordWithAi } from "../lib/aiWordValidator";
-import { issueScoreToken } from "../lib/scoreToken";
+import { createScoreGameSession, issueScoreToken, reserveScoreVoucherIssuance, type ScoreVoucherMode } from "../lib/scoreToken";
 import { normalizeWord, isSafeInput } from "../lib/wordRules";
 
 const router: IRouter = Router();
+
+// Creates a short-lived, per-game opaque session used only to make round voucher
+// issuance idempotent. It is deliberately not an authentication mechanism.
+router.post("/session", (_req, res) => {
+  res.json({ sessionToken: createScoreGameSession() });
+});
 
 // ─── Dictionaries ─────────────────────────────────────────────────────────────
 // Used ONLY for AI answer generation AND for finite categories (animal, color, fruta).
@@ -1568,7 +1574,21 @@ router.post("/validate", async (req, res) => {
   // 🔒 Anti-cheat: hand back a signed, single-use voucher attesting the
   // server-computed base score for this round. The client returns it when
   // submitting the final game score so the leaderboard can't be fabricated.
-  const scoreToken = issueScoreToken(playerTotalScore, validatedCollectionWords);
+  // Voucher issuance is optional for backwards compatibility/offline play, but
+  // when a scored game supplies a server-issued session we allow at most one
+  // voucher for each authoritative game round. The uniqueness check lives in
+  // PostgreSQL so concurrent Railway replicas cannot mint two vouchers.
+  const requestedMode = req.header("x-stop-game-mode");
+  const voucherMode: ScoreVoucherMode = requestedMode === "daily" ? "daily" : "solo";
+  const requestedRound = Number(req.header("x-stop-game-round"));
+  const sessionToken = req.header("x-stop-game-session") || undefined;
+  let scoreToken: string | null = null;
+  if (sessionToken && Number.isInteger(requestedRound)) {
+    const reservedJti = await reserveScoreVoucherIssuance(sessionToken, voucherMode, requestedRound);
+    if (reservedJti) {
+      scoreToken = issueScoreToken(playerTotalScore, validatedCollectionWords, voucherMode, reservedJti);
+    }
+  }
 
   const response = ValidateRoundResponse.parse({
     results,

@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { db, scoreVoucherUsesTable } from "@workspace/db";
+import { db, scoreVoucherIssuancesTable, scoreVoucherUsesTable } from "@workspace/db";
 import { lt } from "drizzle-orm";
 
 // ── Score vouchers (anti-cheat for Solo & Daily submissions) ────────────────
@@ -7,6 +7,7 @@ const TTL_MS = 30 * 60 * 1000;
 const KIND_ROUND = "r";
 const MAX_TOKEN_BATCH = 64;
 const MAX_TOKEN_LENGTH = 2048;
+const SCORE_SESSION_TTL_MS = 2 * 60 * 60 * 1000;
 
 const MAX_ROUNDS_BY_MODE: Record<string, number> = {
   daily: 1,
@@ -57,12 +58,13 @@ export function issueScoreToken(
   base: number,
   collectionWords: Array<{ word: string; category: string }> = [],
   mode: ScoreVoucherMode = "solo",
+  forcedJti?: string,
 ): string | null {
   const secret = getSigningSecret();
   if (!secret) return null;
   const safeBase = Math.max(0, Math.min(100_000, Math.floor(base)));
   const exp = Date.now() + TTL_MS;
-  const jti = crypto.randomBytes(9).toString("base64url");
+  const jti = forcedJti || crypto.randomBytes(9).toString("base64url");
   const safeCollectionWords = collectionWords
     .filter((entry) => typeof entry?.word === "string" && typeof entry?.category === "string")
     .slice(0, 16)
@@ -76,6 +78,46 @@ export function issueScoreToken(
   const collectionData = Buffer.from(JSON.stringify(safeCollectionWords), "utf8").toString("base64url");
   const payload = `${safeBase}.${KIND_ROUND}.${exp}.${jti}.${safeMode}.${collectionData}`;
   return `${payload}.${sign(secret, payload)}`;
+}
+
+export function createScoreGameSession(): string {
+  return crypto.randomBytes(32).toString("base64url");
+}
+
+function hashScoreGameSession(sessionToken: string): string {
+  return crypto.createHash("sha256").update(sessionToken, "utf8").digest("hex");
+}
+
+export async function reserveScoreVoucherIssuance(
+  sessionToken: string | undefined,
+  mode: ScoreVoucherMode,
+  round: number,
+): Promise<string | null> {
+  if (!sessionToken || sessionToken.length < 32 || sessionToken.length > 128) return null;
+  const maxRounds = maxRoundsForMode(mode);
+  if (!Number.isInteger(round) || round < 1 || round > maxRounds) return null;
+  if (!isScoreTokenConfigured()) return null;
+
+  const now = Date.now();
+  await db
+    .delete(scoreVoucherIssuancesTable)
+    .where(lt(scoreVoucherIssuancesTable.expiresAt, new Date(now)));
+
+  const jti = crypto.randomBytes(9).toString("base64url");
+  const expiresAt = new Date(now + SCORE_SESSION_TTL_MS);
+  const inserted = await db
+    .insert(scoreVoucherIssuancesTable)
+    .values({
+      sessionHash: hashScoreGameSession(sessionToken),
+      mode,
+      round,
+      jti,
+      expiresAt,
+    })
+    .onConflictDoNothing()
+    .returning({ jti: scoreVoucherIssuancesTable.jti });
+
+  return inserted[0]?.jti ?? null;
 }
 
 type VerifiedVoucher = {
