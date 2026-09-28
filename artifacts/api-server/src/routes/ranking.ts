@@ -537,7 +537,7 @@ router.post("/scores", scoreLimiter, async (req, res) => {
   let player;
   await db.transaction(async (tx) => {
   if (existing.length > 0) {
-    const [updated] = await db
+    const [updated] = await tx
       .update(playerScoresTable)
       .set({
         playerName,
@@ -570,7 +570,7 @@ router.post("/scores", scoreLimiter, async (req, res) => {
     // plain INSERT could lose that race with a unique-key error and turn a
     // successful game into a 500. Keep the first row and atomically add the
     // concurrent submission instead.
-    const [created] = await db
+    const [created] = await tx
       .insert(playerScoresTable)
       .values({
         playerId,
@@ -663,13 +663,7 @@ router.post("/scores", scoreLimiter, async (req, res) => {
     );
   }
 
-  await db.insert(gameHistoryTable).values({
-    playerId,
-    score,
-    letter,
-    mode: mode ?? "solo",
-    won: won ?? false,
-  });
+
 
   res.status(201).json({
     ...player,
