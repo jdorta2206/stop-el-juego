@@ -2,8 +2,6 @@ import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { challengesTable, playerPresenceTable, playerScoresTable, roomsTable } from "@workspace/db";
 import { and, eq, gt, inArray } from "drizzle-orm";
-import { roomsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
 import { sendPushToPlayer, notifyFollowersPlayerOnline } from "../lib/pushHelper";
 import { presenceLimiter } from "../middlewares/rateLimit";
 import { verifyClaimedIdentity } from "../lib/playerAuth";
@@ -44,42 +42,29 @@ router.post("/ping", presenceLimiter, async (req, res) => {
 
 // GET /api/presence/online
 router.get("/online", async (_req, res) => {
-  const cutoff = Date.now() - 90 * 1000;
-  const online: Array<{
-    playerId: string;
-    name: string;
-    picture: string | null;
-    avatarColor: string;
-    provider: string | null;
-    roomCode: string | null;
-    lastSeen: number;
-  }> = [];
-
-  for (const [playerId, data] of presenceMap) {
-    if (data.lastSeen >= cutoff) {
-      online.push({ playerId, ...data });
-    }
-  }
-
+  const online: Array<any> = await db.select().from(playerPresenceTable)
+    .where(gt(playerPresenceTable.lastSeen, new Date(Date.now() - 90000)))
+    .then(rows => rows.map(data => ({
+      playerId: data.playerId, name: data.name, picture: data.picture, avatarColor: data.avatarColor,
+      provider: data.provider, roomCode: data.roomCode, lastSeen: data.lastSeen.getTime(),
+    })));
   const ids = online.map(p => p.playerId);
   if (ids.length > 0) {
     try {
       const cosmetics = await db.select({
-        playerId: playerScoresTable.playerId,
-        profilePicture: playerScoresTable.profilePicture,
-        equippedAvatar: playerScoresTable.equippedAvatar,
-        equippedFrame: playerScoresTable.equippedFrame,
+        playerId: playerScoresTable.playerId, profilePicture: playerScoresTable.profilePicture,
+        equippedAvatar: playerScoresTable.equippedAvatar, equippedFrame: playerScoresTable.equippedFrame,
         equippedTitle: playerScoresTable.equippedTitle,
       }).from(playerScoresTable).where(inArray(playerScoresTable.playerId, ids));
       const byId = new Map(cosmetics.map(c => [c.playerId, c]));
       for (const p of online) {
         const c = byId.get(p.playerId);
-        if (c) {
-          (p as any).picture = c.profilePicture ?? p.picture ?? null;
-          (p as any).equippedAvatar = c.equippedAvatar ?? null;
-          (p as any).equippedFrame = c.equippedFrame ?? null;
-          (p as any).equippedTitle = c.equippedTitle ?? null;
-        }
+        if (c) Object.assign(p, {
+          picture: c.profilePicture ?? p.picture ?? null,
+          equippedAvatar: c.equippedAvatar ?? null,
+          equippedFrame: c.equippedFrame ?? null,
+          equippedTitle: c.equippedTitle ?? null,
+        });
       }
     } catch {}
   }
