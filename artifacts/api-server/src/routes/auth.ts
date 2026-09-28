@@ -372,7 +372,6 @@ router.get("/google/callback", async (req: Request, res: Response) => {
         headers: { Authorization: `Bearer ${tokenData.access_token}` },
       });
       payload = (await userinfoRes.json()) as OAuthProfile;
-      console.log("Google userinfo payload:", JSON.stringify(payload));
     } else {
       throw new Error("No id_token or access_token in Google response");
     }
