@@ -231,12 +231,14 @@ export function useAchievements(playerId?: string) {
   const [unlocked, setUnlocked] = useState<Set<string>>(() => loadUnlocked(playerId));
   const [newlyUnlocked, setNewlyUnlocked] = useState<AchievementDef | null>(null);
   const syncedRef = useRef(false);
+  const syncPlayerRef = useRef<string | undefined>(undefined);
   const checkStreakMilestoneRef = useRef<(longestStreak: number) => AchievementDef | null>(() => null);
 
   useEffect(() => {
     setStats(loadStats(playerId));
     setUnlocked(loadUnlocked(playerId));
     syncedRef.current = false;
+    syncPlayerRef.current = playerId;
   }, [playerId]);
 
   // ── Sync from server on mount — server wins, then merge with local ────────
@@ -244,6 +246,7 @@ export function useAchievements(playerId?: string) {
     if (!playerId || syncedRef.current) return;
     syncedRef.current = true;
     syncFromServer(playerId).then(({ achievements: serverIds, stats: serverStats }) => {
+      if (!syncedRef.current || syncPlayerRef.current !== playerId) return;
       // Merge achievements
       setUnlocked(prev => {
         const merged = new Set([...prev, ...serverIds]);
