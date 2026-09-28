@@ -195,3 +195,27 @@ export const seasonProgressTable = pgTable("season_progress", {
 export const insertSeasonProgressSchema = createInsertSchema(seasonProgressTable).omit({ id: true, updatedAt: true });
 export type InsertSeasonProgress = z.infer<typeof insertSeasonProgressSchema>;
 export type SeasonProgress = typeof seasonProgressTable.$inferSelect;
+
+
+export const playerPresenceTable = pgTable("player_presence", {
+  playerId: text("player_id").primaryKey(),
+  name: text("name").notNull(),
+  picture: text("picture"),
+  avatarColor: text("avatar_color").notNull().default("#e53e3e"),
+  provider: text("provider"),
+  roomCode: text("room_code"),
+  lastSeen: timestamp("last_seen").notNull().defaultNow(),
+});
+
+export const challengesTable = pgTable("presence_challenges", {
+  challengeId: text("challenge_id").primaryKey(),
+  fromPlayerId: text("from_player_id").notNull(),
+  fromName: text("from_name").notNull(),
+  fromPicture: text("from_picture"),
+  fromAvatarColor: text("from_avatar_color").notNull().default("#e53e3e"),
+  toPlayerId: text("to_player_id").notNull(),
+  roomCode: text("room_code").notNull(),
+  status: text("status").notNull().default("pending"),
+  isRoomInvite: boolean("is_room_invite").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
