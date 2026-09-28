@@ -535,6 +535,7 @@ router.post("/scores", scoreLimiter, async (req, res) => {
     : undefined;
 
   let player;
+  await db.transaction(async (tx) => {
   if (existing.length > 0) {
     const [updated] = await db
       .update(playerScoresTable)
@@ -603,6 +604,15 @@ router.post("/scores", scoreLimiter, async (req, res) => {
       .returning();
     player = created;
   }
+
+    await tx.insert(gameHistoryTable).values({
+      playerId,
+      score,
+      letter,
+      mode: mode ?? "solo",
+      won: won ?? false,
+    });
+  });
 
   if (!isBonus && verified > 0 && scoreTokens) {
     const tokenSetHash = bonusTokenSetHash(playerId, scoreTokens);
