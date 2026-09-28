@@ -552,12 +552,9 @@ router.post("/scores", scoreLimiter, async (req, res) => {
         // to overwrite a newer, higher level with a stale lower one.
         level: sql`GREATEST(${playerScoresTable.level}, ${newLevel})`,
         ...(coinGain > 0 ? { coins: sql`${playerScoresTable.coins} + ${coinGain}` } : {}),
-        ...(!isBonus && updatedToday ? {
-          currentStreak: newStreak,
-          longestStreak: newLongest,
-          lastPlayedDate: today,
-          streakDaysJson: newStreakDaysJson,
-        } : {}),
+        // Streak state is reconciled under a row lock below. Keeping it out of
+        // this snapshot-based update prevents concurrent score submissions from
+        // overwriting a newer streak with stale lastPlayedDate/currentStreak.
         updatedAt: new Date(),
       })
       .where(eq(playerScoresTable.playerId, playerId))
@@ -602,6 +599,40 @@ router.post("/scores", scoreLimiter, async (req, res) => {
       })
       .returning();
     player = created;
+  }
+
+  if (!isBonus) {
+    player = await db.transaction(async (tx) => {
+      const lockedRows = await tx
+        .select()
+        .from(playerScoresTable)
+        .where(eq(playerScoresTable.playerId, playerId))
+        .limit(1)
+        .for("update");
+      const current = lockedRows[0];
+      if (!current) return player;
+
+      const currentLastPlayedDate = current.lastPlayedDate ?? null;
+      const currentStreak = current.currentStreak ?? 0;
+      const streak = calculateStreak(currentLastPlayedDate, currentStreak);
+      if (!streak.updatedToday) return current;
+
+      const currentToday = new Date().toISOString().split("T")[0];
+      const currentLongest = Math.max(current.longestStreak ?? 0, streak.newStreak);
+      const streakDays = appendStreakDay(current.streakDaysJson, currentToday);
+      const [updated] = await tx
+        .update(playerScoresTable)
+        .set({
+          currentStreak: streak.newStreak,
+          longestStreak: currentLongest,
+          lastPlayedDate: currentToday,
+          streakDaysJson: streakDays,
+          updatedAt: new Date(),
+        })
+        .where(eq(playerScoresTable.id, current.id))
+        .returning();
+      return updated ?? current;
+    });
   }
 
   if (!isBonus && verified > 0 && scoreTokens) {
