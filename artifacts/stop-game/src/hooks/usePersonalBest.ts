@@ -36,6 +36,7 @@ export function usePersonalBest(mode: GameMode, playerId?: string) {
     catch { return {}; }
   });
   const syncedRef = useRef(false);
+  const syncPlayerRef = useRef<string | undefined>(undefined);
 
   useEffect(() => {
     try {
@@ -44,6 +45,7 @@ export function usePersonalBest(mode: GameMode, playerId?: string) {
       setBests({});
     }
     syncedRef.current = false;
+    syncPlayerRef.current = playerId;
   }, [playerId]);
 
   // ── Sync from server on mount (server wins for each mode if higher) ──────
@@ -51,6 +53,7 @@ export function usePersonalBest(mode: GameMode, playerId?: string) {
     if (!playerId || syncedRef.current) return;
     syncedRef.current = true;
     syncBestsFromServer(playerId).then(serverBests => {
+      if (syncPlayerRef.current !== playerId) return;
       if (Object.keys(serverBests).length === 0) return;
       setBests(prev => {
         const merged: BestScores = { ...prev };
