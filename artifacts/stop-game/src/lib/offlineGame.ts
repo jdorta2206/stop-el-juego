@@ -296,6 +296,7 @@ let flushing = false;
 
 export async function flushScoreOutbox(
   submit: (payload: OutboxScorePayload) => Promise<unknown>,
+  playerId?: string,
 ): Promise<{ flushed: number; remaining: number }> {
   if (flushing) return { flushed: 0, remaining: readOutbox().length };
   flushing = true;
@@ -307,7 +308,15 @@ export async function flushScoreOutbox(
     while (true) {
       const cur = readOutbox();
       if (cur.length === 0) break;
-      const [next, ...rest] = cur;
+      // Never submit another account's pending score with the currently
+      // authenticated identity. Keep unrelated entries in the queue so they
+      // can be retried when that account is active again.
+      const nextIndex = playerId
+        ? cur.findIndex((entry) => entry.payload?.playerId === playerId)
+        : -1;
+      if (nextIndex < 0) break;
+      const next = cur[nextIndex];
+      const rest = [...cur.slice(0, nextIndex), ...cur.slice(nextIndex + 1)];
       writeOutbox(rest);
       try {
         await submit(next.payload);

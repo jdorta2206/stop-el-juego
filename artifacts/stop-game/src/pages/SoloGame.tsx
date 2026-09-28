@@ -312,7 +312,11 @@ export default function SoloGame() {
     let cancelled = false;
     const tryFlush = () => {
       if (typeof navigator !== "undefined" && navigator.onLine === false) return;
-      flushScoreOutbox((payload) => submitScoreMutation.mutateAsync({ data: payload }))
+      if (!player?.id) return;
+      flushScoreOutbox(
+        (payload) => submitScoreMutation.mutateAsync({ data: payload }),
+        player.id,
+      )
         .then((res) => {
           if (cancelled || res.flushed <= 0) return;
           queryClient.invalidateQueries({ queryKey: ["/api/ranking/scores"] });
@@ -333,7 +337,7 @@ export default function SoloGame() {
       window.removeEventListener("online", tryFlush);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [player?.id]);
 
   // Keep refs in sync with state so handleStop never reads stale closure values
   useEffect(() => { responsesRef.current = responses; }, [responses]);
