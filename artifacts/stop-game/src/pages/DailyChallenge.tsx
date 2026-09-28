@@ -64,7 +64,8 @@ export default function DailyChallenge() {
       .catch(() => {});
 
     // Check if already played today
-    const played = localStorage.getItem(`stop_daily_${getTodayStr()}`);
+    const playerKey = player?.id || "guest";
+    const played = localStorage.getItem(`stop_daily_${playerKey}_${getTodayStr()}`);
     if (played) {
       setPlayedToday(true);
       setMyScore(Number(played));
@@ -90,7 +91,7 @@ export default function DailyChallenge() {
       clearInterval(timer);
       if (reviewTimerRef.current) clearTimeout(reviewTimerRef.current);
     };
-  }, [lang]);
+  }, [lang, player?.id]);
 
   function handlePlay() {
     if (!challenge) return;
