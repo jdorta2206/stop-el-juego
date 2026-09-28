@@ -50,8 +50,9 @@ export function usePersonalBest(mode: GameMode, playerId?: string) {
   useEffect(() => {
     if (!playerId || syncedRef.current) return;
     syncedRef.current = true;
+    let cancelled = false;
     syncBestsFromServer(playerId).then(serverBests => {
-      if (Object.keys(serverBests).length === 0) return;
+      if (cancelled || Object.keys(serverBests).length === 0) return;
       setBests(prev => {
         const merged: BestScores = { ...prev };
         let changed = false;
@@ -67,7 +68,8 @@ export function usePersonalBest(mode: GameMode, playerId?: string) {
         }
         return prev;
       });
-    });
+    }).catch(() => {});
+    return () => { cancelled = true; };
   }, [playerId]);
 
   const best = bests[mode] ?? 0;

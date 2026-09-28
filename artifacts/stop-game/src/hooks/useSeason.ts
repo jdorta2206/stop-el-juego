@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { getApiUrl } from "@/lib/utils";
 
 const API = getApiUrl();
@@ -103,8 +103,10 @@ export function useSeason(playerId?: string | null) {
   const [season, setSeason] = useState<SeasonInfo | null>(null);
   const [progress, setProgress] = useState<SeasonProgress | null>(null);
   const [loading, setLoading] = useState(false);
+  const refreshSeqRef = useRef(0);
 
   const refresh = useCallback(async () => {
+    const seq = ++refreshSeqRef.current;
     setLoading(true);
     try {
       const [s, p] = await Promise.all([
@@ -116,6 +118,7 @@ export function useSeason(playerId?: string | null) {
             }).then((r) => (r.ok ? r.json() : null))
           : Promise.resolve(null),
       ]);
+      if (seq !== refreshSeqRef.current) return;
       if (s) setSeason(s);
       if (p) setProgress(p);
     } catch {
@@ -182,9 +185,11 @@ export function useSeason(playerId?: string | null) {
 export function useSeasonLeaderboard(seasonId?: number | null, enabled: boolean = true) {
   const [data, setData] = useState<Leaderboard | null>(null);
   const [loading, setLoading] = useState(false);
+  const refreshSeqRef = useRef(0);
 
   const refresh = useCallback(async () => {
     if (!enabled) return;
+    const seq = ++refreshSeqRef.current;
     setLoading(true);
     try {
       const url = new URL(`${API}/api/season/leaderboard`);
@@ -193,7 +198,10 @@ export function useSeasonLeaderboard(seasonId?: number | null, enabled: boolean 
         credentials: "include",
         headers: authHeaders(),
       });
-      if (r.ok) setData(await r.json());
+      if (r.ok) {
+        const next = await r.json();
+        if (seq === refreshSeqRef.current) setData(next);
+      }
     } catch {
       /* ignore */
     } finally {

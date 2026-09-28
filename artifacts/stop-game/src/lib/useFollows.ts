@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { getApiUrl } from "@/lib/utils";
 import type { OnlinePlayer } from "@/lib/usePresence";
 
@@ -42,6 +42,7 @@ export function useFollows(
   const [rawFriends, setRawFriends] = useState<FollowedFriendBase[]>([]);
   const [followedIds, setFollowedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
+  const refreshSeqRef = useRef(0);
 
   const refresh = useCallback(async () => {
     if (!meId) {
@@ -49,11 +50,13 @@ export function useFollows(
       setFollowedIds(new Set());
       return;
     }
+    const seq = ++refreshSeqRef.current;
     setLoading(true);
     try {
       const r = await fetch(`${API_BASE}/api/friends/list/${encodeURIComponent(meId)}`);
       const data = await r.json();
       const list: FollowedFriendBase[] = data.friends ?? [];
+      if (seq !== refreshSeqRef.current) return;
       setRawFriends(list);
       setFollowedIds(new Set(list.map((f) => f.followedId)));
     } catch {

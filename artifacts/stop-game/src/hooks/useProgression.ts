@@ -94,10 +94,12 @@ export function useProgression(playerId?: string) {
   // ── Sync from server on mount (server is source of truth) ──────────────
   useEffect(() => {
     if (!playerId || playerId.startsWith("guest_")) return;
+    let cancelled = false;
     const API = getApiUrl();
     fetch(`${API}/api/ranking/profile/${playerId}`)
       .then(r => r.ok ? r.json() : null)
       .then((data: { xp?: number } | null) => {
+        if (cancelled) return;
         // Always trust the server as the source of truth. Previously we only
         // synced when serverXp > localXp, which left the client stuck on an
         // inflated value if the server had legitimately corrected it down
@@ -109,7 +111,9 @@ export function useProgression(playerId?: string) {
           try { localStorage.setItem(xpStorageKey(playerId), String(serverXp)); } catch {}
         }
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => { cancelled = true; });
+    return () => { cancelled = true; };
   }, [playerId]);
 
   const level = calcLevel(xp);
