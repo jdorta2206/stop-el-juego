@@ -169,6 +169,9 @@ export function verifyClaimedIdentity(
 ): boolean {
   if (!claimedId) return true;
   if (!isLoggedInId(claimedId)) return true;
-  if (!isAuthConfigured()) return true;
+  // OAuth identities must fail closed when the signing secret is unavailable.
+  // Failing open here would let anyone who knows an OAuth playerId impersonate
+  // that account while authentication is misconfigured.
+  if (!isAuthConfigured()) return false;
   return readPlayerId(req) === claimedId;
 }
