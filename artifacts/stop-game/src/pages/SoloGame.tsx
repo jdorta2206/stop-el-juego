@@ -11,7 +11,7 @@ import { getCategories, getAlphabet, getCurrentLang, getApiUrl, authHeaders } fr
 import { ensureOfflineBundle, validateRoundOffline, getAiWordOffline, getCachedOfflineBundle, enqueueScoreOutbox, flushScoreOutbox } from "@/lib/offlineGame";
 import { getSelectedPackId, getPackCategories, getSafePackId, getPackById } from "@/data/categoryPacks";
 import { useCustomPacks } from "@/lib/useCustomPacks";
-import { useValidateRound, useSubmitScore, type CategoryResult, type ValidateRoundResponse } from "@workspace/api-client-react";
+import { validateRound, useSubmitScore, type CategoryResult, type ValidateRoundResponse } from "@workspace/api-client-react";
 import { usePlayer } from "@/hooks/use-player";
 import { motion, AnimatePresence } from "framer-motion";
 import { RewardedAd, BannerAd } from "@/components/AdSystem";
@@ -426,7 +426,6 @@ export default function SoloGame() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customPacksLoading]);
 
-  const validateMutation = useValidateRound();
   const submitScoreMutation = useSubmitScore();
   const queryClient = useQueryClient();
   const timerRef = useRef<NodeJS.Timeout>(null);
@@ -444,8 +443,39 @@ export default function SoloGame() {
   // the game and hand them back on submit so the server can clamp a fabricated
   // total. Reset per new game (where totalScore resets to 0), not per round.
   const scoreTokensRef = useRef<string[]>([]);
+  // Server-issued opaque session for this game only. Kept in memory so separate
+  // games/tabs cannot accidentally share a voucher issuance counter.
+  const scoreGameSessionRef = useRef<string | null>(null);
+  const scoreSessionPromiseRef = useRef<Promise<void> | null>(null);
+
+  const beginScoreGameSession = () => {
+    scoreGameSessionRef.current = null;
+    scoreSessionPromiseRef.current = (async () => {
+      try {
+        const controller = new AbortController();
+        const timeout = window.setTimeout(() => controller.abort(), 2500);
+        try {
+          const response = await fetch(`${getApiUrl()}/api/game/session`, {
+            method: "POST",
+            credentials: "include",
+            signal: controller.signal,
+          });
+          if (!response.ok) return;
+          const data = await response.json() as { sessionToken?: unknown };
+          if (typeof data.sessionToken === "string" && data.sessionToken.length >= 32) {
+            scoreGameSessionRef.current = data.sessionToken;
+          }
+        } finally {
+          window.clearTimeout(timeout);
+        }
+      } catch {
+        // Scoring session is best-effort: the game must remain playable offline.
+      }
+    })();
+  };
 
   const startGame = () => {
+    beginScoreGameSession();
     if (halloweenScareTimerRef.current) clearTimeout(halloweenScareTimerRef.current);
     setHalloweenScare(null);
     void trackAnalyticsEvent("game_start", { metadata: { mode: isDailyMode ? "daily" : "solo" } });
@@ -664,14 +694,29 @@ export default function SoloGame() {
       // atascado en "EL JUICIO". Disparamos el fallback offline / RESULTS.
       const TIMEOUT_MS = 25000;
       apiData = await Promise.race([
-        validateMutation.mutateAsync({
-          data: {
+        (async () => {
+          // Give the session handshake a short head start without making the
+          // game start depend on the network.
+          if (scoreSessionPromiseRef.current) {
+            await Promise.race([
+              scoreSessionPromiseRef.current,
+              new Promise<void>(resolve => setTimeout(resolve, 2000)),
+            ]);
+          }
+          return validateRound({
             letter,
             language: getCurrentLang() as import("@workspace/api-client-react").ValidateRoundRequestLanguage,
             playerName: player?.name,
             playerResponses: formattedResponses,
-          }
-        }),
+          }, {
+            credentials: "include",
+            headers: {
+              ...(scoreGameSessionRef.current ? { "x-stop-game-session": scoreGameSessionRef.current } : {}),
+              "x-stop-game-mode": isDailyMode ? "daily" : "solo",
+              "x-stop-game-round": String(round),
+            },
+          });
+        })(),
         new Promise<ValidateRoundResponse>((_, reject) =>
           setTimeout(() => reject(new Error("validate-timeout")), TIMEOUT_MS)
         ),
@@ -1238,6 +1283,8 @@ export default function SoloGame() {
       setRound(1);
       setTotalScore(0);
       scoreTokensRef.current = [];
+      scoreGameSessionRef.current = null;
+      scoreSessionPromiseRef.current = null;
       setAiTotalScore(0);
       setBestRoundScore(0);
       setDoubleUsed(false);
