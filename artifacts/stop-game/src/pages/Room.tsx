@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { useParams, useLocation } from "wouter";
@@ -245,9 +245,12 @@ export default function Room() {
     : /* lobby / between_rounds / finished / spinning */                  1500;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const roomQueryKey = roomCode && player?.id
-    ? [...getGetRoomQueryKey(roomCode.toUpperCase()), player.id] as const
-    : getGetRoomQueryKey(roomCode || "");
+  const roomQueryKey = useMemo(
+    () => roomCode && player?.id
+      ? [...getGetRoomQueryKey(roomCode.toUpperCase()), player.id] as const
+      : getGetRoomQueryKey(roomCode || ""),
+    [roomCode, player?.id],
+  );
 
   const { data: room, error } = useGetRoom(roomCode || "", {
     query: { queryKey: roomQueryKey, refetchInterval: pollingInterval, enabled: !!roomCode } as any,
