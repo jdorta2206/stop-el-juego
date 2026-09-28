@@ -231,6 +231,11 @@ export function useAchievements(playerId?: string) {
   const [unlocked, setUnlocked] = useState<Set<string>>(() => loadUnlocked(playerId));
   const [newlyUnlocked, setNewlyUnlocked] = useState<AchievementDef | null>(null);
   const syncedRef = useRef(false);
+  // Keep the currently rendered account identity available to async callbacks.
+  // A previous account's request may resolve after React has switched accounts;
+  // such a response must never be applied to, or persisted for, the new account.
+  const activePlayerIdRef = useRef(playerId);
+  activePlayerIdRef.current = playerId;
   const checkStreakMilestoneRef = useRef<(longestStreak: number) => AchievementDef | null>(() => null);
 
   useEffect(() => {
@@ -243,7 +248,13 @@ export function useAchievements(playerId?: string) {
   useEffect(() => {
     if (!playerId || syncedRef.current) return;
     syncedRef.current = true;
-    syncFromServer(playerId).then(({ achievements: serverIds, stats: serverStats }) => {
+    const requestedPlayerId = playerId;
+    syncFromServer(requestedPlayerId).then(({ achievements: serverIds, stats: serverStats }) => {
+      // The request belongs to the account that started it. If the user has
+      // switched accounts while it was in flight, discard the stale result
+      // before it can update state or trigger any persistence for the new user.
+      if (activePlayerIdRef.current !== requestedPlayerId) return;
+
       // Merge achievements
       setUnlocked(prev => {
         const merged = new Set([...prev, ...serverIds]);
@@ -273,7 +284,10 @@ export function useAchievements(playerId?: string) {
       const serverLongest = Number(serverStats.longestStreak ?? 0);
       if (serverLongest >= STREAK_MILESTONES[0]) {
         // Defer to next tick so the stats setState above has settled.
-        setTimeout(() => checkStreakMilestoneRef.current(serverLongest), 0);
+        setTimeout(() => {
+          if (activePlayerIdRef.current !== requestedPlayerId) return;
+          checkStreakMilestoneRef.current(serverLongest);
+        }, 0);
       }
     });
   }, [playerId]);
