@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { getApiUrl } from "@/lib/utils";
 
 const API = getApiUrl();
@@ -62,8 +62,10 @@ export interface InventorySnapshot {
 export function useInventory(playerId?: string | null) {
   const [data, setData] = useState<InventorySnapshot | null>(null);
   const [loading, setLoading] = useState(false);
+  const refreshSeqRef = useRef(0);
 
   const refresh = useCallback(async () => {
+    const seq = ++refreshSeqRef.current;
     if (!playerId) { setData(null); return; }
     setLoading(true);
     try {
@@ -71,7 +73,10 @@ export function useInventory(playerId?: string | null) {
         credentials: "include",
         headers: authHeaders(),
       });
-      if (res.ok) setData(await res.json());
+      if (res.ok) {
+        const next = await res.json();
+        if (seq === refreshSeqRef.current) setData(next);
+      }
     } catch { /* ignore */ }
     finally { setLoading(false); }
   }, [playerId]);
