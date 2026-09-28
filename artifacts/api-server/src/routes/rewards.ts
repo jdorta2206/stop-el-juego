@@ -187,29 +187,11 @@ router.get("/admob-result/:requestId", async (req, res) => {
       }
     }
 
-    // Google recommends using the client-side earned callback for immediate UX,
-    // while validating the same reward asynchronously with SSV. The Android
-    // activity only writes this state after AdMob invokes onUserEarnedReward;
-    // it never writes rewarded=true. This keeps SSV as the trusted audit path
-    // without leaving the player stuck on "Cargando anuncio..." while Google
-    // delivers a delayed callback.
-    if (row.client_state === "earned" && !row.rewarded) {
-      const updated = await db.execute(sql`
-        UPDATE admob_reward_requests
-        SET consumed_at = NOW()
-        WHERE request_id = ${requestId}
-          AND consumed_at IS NULL
-          AND rewarded = false
-          AND client_state = 'earned'
-        RETURNING request_id
-      `) as unknown as SqlResult<{ request_id: string }>;
-
-      if (updated.rows?.[0]?.request_id) {
-        res.json({ ready: true, rewarded: true, source: "client" });
-        return;
-      }
-    }
-
+    // The native client callback is only a UX/audit signal. It is NOT proof
+    // that AdMob awarded the user. Never turn client_state="earned" into a
+    // reward here: this endpoint is public and a caller can otherwise create
+    // an arbitrary request and self-report an earned ad. Only verified AdMob
+    // SSV (rewarded=true) may grant the reward.
     if (row.client_state === "dismissed") {
       const updated = await db.execute(sql`
         UPDATE admob_reward_requests
