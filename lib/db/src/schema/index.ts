@@ -25,3 +25,4 @@ export * from "./guestStats";
 export * from "./scoreVoucherUses";
 export * from "./scoreBonusClaims";
 export * from "./admobRewards";
+export * from "./scoreVoucherIssuances";
