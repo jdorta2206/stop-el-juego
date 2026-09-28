@@ -270,12 +270,18 @@ export default function Room() {
       es = new EventSource(url);
       es.onopen = () => {
         attempts = 0; // 🔁 reset backoff on successful connection
-        setSseActive(true);
+        // Keep the fast polling fallback until the initial SSE snapshot has
+        // actually arrived. Opening the connection alone does not mean that
+        // the client has received a current room state.
       };
       es.onmessage = (e) => {
         try {
           const data = JSON.parse(e.data);
           queryClient.setQueryData(getGetRoomQueryKey(code), data);
+          // Only now is it safe to relax polling: the initial snapshot is in
+          // the query cache and subsequent SSE events are handled on this
+          // connection.
+          setSseActive(true);
         } catch {}
       };
       es.onerror = () => {
