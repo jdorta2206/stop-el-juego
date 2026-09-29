@@ -34,9 +34,9 @@ router.post("/send-invite", inviteLimiter, async (req, res) => {
   if (!safeRoomCode) { res.status(400).json({ error: "Invalid roomCode" }); return; }
 
   const roomRows = await db
-    .select({ hostId: (await import("@workspace/db")).roomsTable.hostId })
-    .from((await import("@workspace/db")).roomsTable)
-    .where(eq((await import("@workspace/db")).roomsTable.roomCode, safeRoomCode))
+    .select({ hostId: roomsTable.hostId })
+    .from(roomsTable)
+    .where(eq(roomsTable.roomCode, safeRoomCode))
     .limit(1);
 
   if (!roomRows.length || roomRows[0].hostId !== String(senderPlayerId)) {
