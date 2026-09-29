@@ -92,11 +92,17 @@ router.post("/webhook", async (req: Request, res: Response) => {
     }
 
     // Retry acknowledgement from RTDN when the client-side /verify could not acknowledge the purchase.
-    await acknowledgeSubscription(
+    const acknowledged = await acknowledgeSubscription(
       verified.productId,
       verified.purchaseToken,
       verified.acknowledgementState === 1,
     );
+    if (!acknowledged) {
+      // Keep the Pub/Sub delivery unacknowledged so a transient Google API
+      // failure gets retried instead of risking an unacknowledged purchase
+      // being refunded after Google's acknowledgement deadline.
+      return res.status(503).json({ error: "Subscription acknowledgement failed" });
+    }
     console.log(
       "[playBilling] RTDN processed",
       JSON.stringify({
@@ -156,7 +162,14 @@ router.post("/verify", async (req: Request, res: Response) => {
     const ownership = await upsertPlaySubscription(claimedPlayerId, verified);
     if (ownership.ownershipMismatch) return res.status(403).json({ error: "Esta compra ya está vinculada a otro jugador" });
 
-    await acknowledgeSubscription(verified.productId, verified.purchaseToken, verified.acknowledgementState === 1);
+    const acknowledged = await acknowledgeSubscription(
+      verified.productId,
+      verified.purchaseToken,
+      verified.acknowledgementState === 1,
+    );
+    if (!acknowledged) {
+      return res.status(503).json({ error: "No se pudo confirmar la compra con Google Play" });
+    }
     console.log(`✅ Premium Play verificado para ${claimedPlayerId}`);
     return res.json({ isPremium: true });
   } catch (error: any) {
