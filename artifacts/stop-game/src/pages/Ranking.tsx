@@ -78,20 +78,24 @@ function ChallengeBtn({
     if (!result) { setState("idle"); return; }
     pendingRef.current = result.challengeId;
     setState("waiting");
+    challengeAbortRef.current?.abort();
     if (pollRef.current) clearInterval(pollRef.current);
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    const status = await pollChallengeStatus(pendingRef.current, controller.signal);
-      if (!pendingRef.current) { clearInterval(pollRef.current!); return; }
+    const controller = new AbortController();
+    challengeAbortRef.current = controller;
+    const poll = setInterval(async () => {
+      if (!pendingRef.current || controller.signal.aborted) return;
       const status = await pollChallengeStatus(pendingRef.current, controller.signal);
+      if (!pendingRef.current || controller.signal.aborted) return;
       if (status.status === "accepted") {
-        clearInterval(pollRef.current!);
+        clearInterval(poll);
         pollRef.current = null;
         if (timeoutRef.current) clearTimeout(timeoutRef.current);
         timeoutRef.current = null;
         pendingRef.current = null;
         setLocation(`/room/${status.roomCode}`);
       } else if (status.status === "declined" || status.status === "expired") {
-        clearInterval(pollRef.current!);
+        clearInterval(poll);
         pollRef.current = null;
         if (timeoutRef.current) clearTimeout(timeoutRef.current);
         timeoutRef.current = null;
@@ -99,14 +103,16 @@ function ChallengeBtn({
         setState("idle");
       }
     }, 2500);
+    pollRef.current = poll;
     timeoutRef.current = setTimeout(() => {
-      if (pollRef.current) clearInterval(pollRef.current);
+      controller.abort();
+      clearInterval(poll);
       pollRef.current = null;
       timeoutRef.current = null;
       pendingRef.current = null;
       setState("idle");
     }, 60000);
-  }, [state, currentPlayer, onlinePlayer.playerId]);
+  }, [state, currentPlayer, onlinePlayer.playerId, lang, setLocation]);
 
   if (onlinePlayer.roomCode) {
     return (
@@ -212,7 +218,6 @@ export default function Ranking() {
         credentials: "include",
         headers: authHeaders(),
         signal,
-        signal,
       });
       if (!response.ok) return null;
       return response.json();
@@ -237,6 +242,7 @@ export default function Ranking() {
       const response = await fetch(getApiUrl() + "/api/ranking/monthly/me", {
         credentials: "include",
         headers: authHeaders(),
+        signal,
       });
       if (!response.ok) return null;
       return response.json();
