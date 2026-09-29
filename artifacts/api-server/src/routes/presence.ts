@@ -248,7 +248,7 @@ router.post("/challenge", async (req, res) => {
   }
 
   try {
-    await db.execute(sql`
+    const inserted = await db.execute(sql`
       INSERT INTO player_challenges
         (challenge_id, from_player_id, from_name, from_picture, from_avatar_color,
          to_player_id, room_code, status, is_room_invite, created_at)
@@ -256,9 +256,26 @@ router.post("/challenge", async (req, res) => {
         (${challengeId}, ${fromPlayerId}, ${fromName}, ${fromPicture || null},
          ${fromAvatarColor || "#e53e3e"}, ${toPlayerId}, ${roomCode},
          'pending', FALSE, NOW())
+      ON CONFLICT (from_player_id, to_player_id) WHERE status = 'pending'
+      DO NOTHING
+      RETURNING challenge_id, room_code
     `);
+    if ((inserted as any).rowCount === 0) {
+      await db.delete(roomsTable).where(eq(roomsTable.roomCode, roomCode)).catch(() => {});
+      const existing = await db.execute(sql`
+        SELECT challenge_id, room_code
+        FROM player_challenges
+        WHERE from_player_id = ${fromPlayerId}
+          AND to_player_id = ${toPlayerId}
+          AND status = 'pending'
+        ORDER BY created_at DESC
+        LIMIT 1
+      `);
+      const winner = (existing.rows as any[])[0];
+      if (!winner) return res.status(409).json({ error: "Challenge creation raced; please retry" });
+      return res.json({ challengeId: winner.challenge_id, roomCode: winner.room_code });
+    }
   } catch (err) {
-    // Do not leave a reserved challenge room without its persistent challenge.
     await db.delete(roomsTable).where(eq(roomsTable.roomCode, roomCode)).catch(() => {});
     console.error("[presence/challenge] challenge persistence failed:", err);
     return res.status(503).json({ error: "Unable to create challenge" });
