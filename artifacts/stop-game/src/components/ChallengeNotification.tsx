@@ -15,22 +15,25 @@ export function ChallengeNotification({ challenge, onDismiss }: ChallengeNotific
   const [countdown, setCountdown] = useState(30);
   const [responding, setResponding] = useState(false);
   const actionAbortRef = useRef<AbortController | null>(null);
+  const onDismissRef = useRef(onDismiss);
+  onDismissRef.current = onDismiss;
 
   const isRoomInvite = !!challenge.isRoomInvite;
 
   useEffect(() => {
+    setCountdown(30);
     const timer = setInterval(() => {
       setCountdown((v) => {
         if (v <= 1) {
           clearInterval(timer);
-          onDismiss();
+          onDismissRef.current();
           return 0;
         }
         return v - 1;
       });
     }, 1000);
     return () => clearInterval(timer);
-  }, []);
+  }, [challenge.challengeId]);
 
   const handleAccept = async () => {
     if (responding) return;
