@@ -310,6 +310,8 @@ export async function recordAuthoritativeSeasonEvents(
     const today = todayUTC();
 
     await db.transaction(async (tx) => {
+      // Serialize authoritative events with season finalization at rollover.
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(${season.id}::bigint)`);
       const locked = (await tx.execute(sql`
         SELECT id, missions_json FROM season_progress WHERE id = ${progress.id} FOR UPDATE
       `)) as unknown as SqlResult<Pick<ProgressRowSql, "id" | "missions_json">>;
