@@ -157,6 +157,7 @@ function PlayerRow({
   const challengeAbortRef = useRef<AbortController | null>(null);
   const challengePollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const challengeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const challengePollInFlightRef = useRef(false);
 
   useEffect(() => () => {
     if (challengePollRef.current) clearInterval(challengePollRef.current);
@@ -196,10 +197,12 @@ function PlayerRow({
     const controller = new AbortController();
     challengeAbortRef.current = controller;
     const poll = setInterval(async () => {
-      if (!pendingChallengeId.current || controller.signal.aborted) return;
-      const status = await pollChallengeStatus(pendingChallengeId.current, controller.signal);
-      if (!pendingChallengeId.current || controller.signal.aborted) return;
-      if (status.status === "accepted") {
+      if (!pendingChallengeId.current || controller.signal.aborted || challengePollInFlightRef.current) return;
+      challengePollInFlightRef.current = true;
+      try {
+        const status = await pollChallengeStatus(pendingChallengeId.current, controller.signal);
+        if (!pendingChallengeId.current || controller.signal.aborted) return;
+        if (status.status === "accepted") {
         clearInterval(poll); challengePollRef.current = null;
         if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current);
         challengeTimeoutRef.current = null; pendingChallengeId.current = null;
@@ -208,6 +211,9 @@ function PlayerRow({
         clearInterval(poll); challengePollRef.current = null;
         if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current);
         challengeTimeoutRef.current = null; pendingChallengeId.current = null;
+        }
+      } finally {
+        challengePollInFlightRef.current = false;
       }
     }, 2000);
     challengePollRef.current = poll;
@@ -303,6 +309,7 @@ function InstagramPlayerRow({
   const challengeAbortRef = useRef<AbortController | null>(null);
   const challengePollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const challengeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const challengePollInFlightRef = useRef(false);
 
   useEffect(() => () => {
     if (challengePollRef.current) clearInterval(challengePollRef.current);
@@ -337,10 +344,12 @@ function InstagramPlayerRow({
     const controller = new AbortController();
     challengeAbortRef.current = controller;
     const poll = setInterval(async () => {
-      if (!pendingChallengeId.current || controller.signal.aborted) return;
-      const status = await pollChallengeStatus(pendingChallengeId.current, controller.signal);
-      if (!pendingChallengeId.current || controller.signal.aborted) return;
-      if (status.status === "accepted") {
+      if (!pendingChallengeId.current || controller.signal.aborted || challengePollInFlightRef.current) return;
+      challengePollInFlightRef.current = true;
+      try {
+        const status = await pollChallengeStatus(pendingChallengeId.current, controller.signal);
+        if (!pendingChallengeId.current || controller.signal.aborted) return;
+        if (status.status === "accepted") {
         clearInterval(poll); challengePollRef.current = null;
         if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current);
         challengeTimeoutRef.current = null; pendingChallengeId.current = null;
@@ -349,6 +358,9 @@ function InstagramPlayerRow({
         clearInterval(poll); challengePollRef.current = null;
         if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current);
         challengeTimeoutRef.current = null; pendingChallengeId.current = null;
+        }
+      } finally {
+        challengePollInFlightRef.current = false;
       }
     }, 2000);
     challengePollRef.current = poll;
@@ -431,6 +443,7 @@ function FriendRow({ friend, currentPlayer }: { friend: EnrichedFriend; currentP
   const challengeAbortRef = useRef<AbortController | null>(null);
   const challengePollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const challengeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const challengePollInFlightRef = useRef(false);
 
   useEffect(() => () => {
     if (challengePollRef.current) clearInterval(challengePollRef.current);
@@ -465,10 +478,12 @@ function FriendRow({ friend, currentPlayer }: { friend: EnrichedFriend; currentP
     const controller = new AbortController();
     challengeAbortRef.current = controller;
     const poll = setInterval(async () => {
-      if (!pendingChallengeId.current || controller.signal.aborted) return;
-      const status = await pollChallengeStatus(pendingChallengeId.current, controller.signal);
-      if (!pendingChallengeId.current || controller.signal.aborted) return;
-      if (status.status === "accepted") {
+      if (!pendingChallengeId.current || controller.signal.aborted || challengePollInFlightRef.current) return;
+      challengePollInFlightRef.current = true;
+      try {
+        const status = await pollChallengeStatus(pendingChallengeId.current, controller.signal);
+        if (!pendingChallengeId.current || controller.signal.aborted) return;
+        if (status.status === "accepted") {
         clearInterval(poll); challengePollRef.current = null;
         if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current);
         challengeTimeoutRef.current = null; pendingChallengeId.current = null;
@@ -477,6 +492,9 @@ function FriendRow({ friend, currentPlayer }: { friend: EnrichedFriend; currentP
         clearInterval(poll); challengePollRef.current = null;
         if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current);
         challengeTimeoutRef.current = null; pendingChallengeId.current = null;
+        }
+      } finally {
+        challengePollInFlightRef.current = false;
       }
     }, 2000);
     challengePollRef.current = poll;
