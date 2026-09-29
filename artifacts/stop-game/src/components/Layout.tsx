@@ -362,8 +362,8 @@ export function Layout({ children }: { children: ReactNode }) {
                 </Link>
               </li>
               <li>
-                <Link href="/cookies" className="text-white/50 hover:text-white/80 transition-colors text-xs">
-                  Política de cookies
+                <Link href="/privacidad" className="text-white/50 hover:text-white/80 transition-colors text-xs">
+                  Privacidad y cookies
                 </Link>
               </li>
             </ul>
