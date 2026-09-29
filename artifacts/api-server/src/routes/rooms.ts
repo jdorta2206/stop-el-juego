@@ -830,7 +830,10 @@ async function purgeStaleRooms() {
       if (set) for (const c of set) { try { c.res.end(); } catch { /* already closed */ } }
       sseClients.delete(code);
     }
-    cleanupBotRoom(code);
+    // Bot state must be cleaned for every room removed by this purge.
+    for (const staleCode of Array.from(roomBotTimers.keys())) {
+      if (!liveCodesSet.has(staleCode)) cleanupBotRoom(staleCode);
+    }
     dropOrphans(roomReactions as Map<string, unknown>);
     dropOrphans(roomPhrases as Map<string, unknown>);
     dropOrphans(roomTyping as Map<string, unknown>);
