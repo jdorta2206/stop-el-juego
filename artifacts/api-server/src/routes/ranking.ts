@@ -8,7 +8,7 @@ import { resolveCosmetic } from "../lib/inventoryCatalog";
 import { SubmitScoreBody, GetLeaderboardQueryParams } from "@workspace/api-zod";
 import { scoreLimiter } from "../middlewares/rateLimit";
 import { verifyClaimedIdentity, requirePlayerIdentity, type AuthedRequest } from "../lib/playerAuth";
-import { sumVerifiedBasePersistent, ceilingFromBase, absoluteCeiling } from "../lib/scoreToken";
+import { sumVerifiedBasePersistent, ceilingFromBase, absoluteCeiling } from "../lib/scoreToken";\nimport { recordAuthoritativeSeasonEvents } from "./season";
 import {
   isHappyHourActiveForTzOffset,
   HAPPY_HOUR_MULTIPLIER,
@@ -659,6 +659,16 @@ router.post("/scores", scoreLimiter, async (req, res) => {
     mode: mode ?? "solo",
     won: won ?? false,
   });
+
+  if (!isBonus) {
+    void recordAuthoritativeSeasonEvents(playerId, [
+      { type: "play_game", value: 1 },
+      ...(won ? [{ type: "win_game", value: 1 }] : []),
+      { type: "round_score", value: score },
+      { type: "streak", value: newStreak },
+      ...(collectionWords.length > 0 ? [{ type: "valid_words", value: collectionWords.length }] : []),
+    ]);
+  }
 
   res.status(201).json({
     ...player,
