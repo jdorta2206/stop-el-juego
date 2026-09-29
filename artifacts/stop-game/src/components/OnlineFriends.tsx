@@ -152,6 +152,7 @@ function PlayerRow({
 }) {
   const [, setLocation] = useLocation();
   const [copied, setCopied] = useState(false);
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingChallengeId = useRef<string | null>(null);
   const challengeAbortRef = useRef<AbortController | null>(null);
   const challengePollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -166,11 +167,20 @@ function PlayerRow({
     pendingChallengeId.current = null;
   }, []);
 
+  useEffect(() => () => {
+    if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    copiedTimerRef.current = null;
+  }, []);
+
   const handleCopy = () => {
     if (player.roomCode) {
       navigator.clipboard.writeText(player.roomCode).then(() => {
         setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
+        if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+        copiedTimerRef.current = setTimeout(() => {
+          copiedTimerRef.current = null;
+          setCopied(false);
+        }, 2000);
       });
     }
   };
@@ -283,6 +293,7 @@ function InstagramPlayerRow({
 }) {
   const [, setLocation] = useLocation();
   const [copied, setCopied] = useState(false);
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingChallengeId = useRef<string | null>(null);
   const challengeAbortRef = useRef<AbortController | null>(null);
   const challengePollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -301,7 +312,11 @@ function InstagramPlayerRow({
     if (p.roomCode) {
       navigator.clipboard.writeText(p.roomCode).then(() => {
         setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
+        if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+        copiedTimerRef.current = setTimeout(() => {
+          copiedTimerRef.current = null;
+          setCopied(false);
+        }, 2000);
       });
     }
   };
@@ -401,6 +416,7 @@ function InstagramPlayerRow({
 function FriendRow({ friend, currentPlayer }: { friend: EnrichedFriend; currentPlayer?: PlayerProfile }) {
   const [, setLocation] = useLocation();
   const [copied, setCopied] = useState(false);
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingChallengeId = useRef<string | null>(null);
   const challengeAbortRef = useRef<AbortController | null>(null);
   const challengePollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -419,7 +435,11 @@ function FriendRow({ friend, currentPlayer }: { friend: EnrichedFriend; currentP
     if (friend.onlineData?.roomCode) {
       navigator.clipboard.writeText(friend.onlineData.roomCode).then(() => {
         setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
+        if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+        copiedTimerRef.current = setTimeout(() => {
+          copiedTimerRef.current = null;
+          setCopied(false);
+        }, 2000);
       });
     }
   };
