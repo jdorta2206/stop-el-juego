@@ -13,9 +13,10 @@ router.get("/list/:followerId", async (req, res) => {
     return res.status(403).json({ error: "Invalid player identity" });
   }
 
+  let follows: any[] = [];
   try {
     // 1. Obtener la lista de seguidos
-    const follows = await db
+    follows = await db
       .select()
       .from(followsTable)
       .where(eq(followsTable.followerId, followerId));
