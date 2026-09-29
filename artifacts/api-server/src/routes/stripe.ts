@@ -156,7 +156,8 @@ router.post("/checkout", async (req, res) => {
       customerId,
       priceId,
       `${APP_ORIGIN}/?premium=success`,
-      `${APP_ORIGIN}/?premium=cancel`
+      `${APP_ORIGIN}/?premium=cancel`,
+      `premium-checkout:${playerId}:${priceId}:${Math.floor(Date.now() / 10000)}`
     );
 
     return res.json({ url: session.url });
@@ -240,7 +241,8 @@ router.post("/checkout-pack", async (req, res) => {
         metadata: { playerId, sku },
       },
       `${APP_ORIGIN}/?pack=success&session_id={CHECKOUT_SESSION_ID}`,
-      `${APP_ORIGIN}/?pack=cancel`
+      `${APP_ORIGIN}/?pack=cancel`,
+      `pack-checkout:${playerId}:${sku}:${Math.floor(Date.now() / 10000)}`
     );
 
     return res.json({ url: session.url });
