@@ -738,14 +738,6 @@ async function sweepStuckRooms() {
 //   so abandoned games don't accumulate as DB garbage and slow down public listings.
 async function purgeStaleRooms() {
   try {
-    // 🧪 Test-only Halloween rooms must never leak into the normal public
-    // multiplayer browser. They were created during event QA with the
-    // explicit "Halloween Host" test name; remove them at boot/cleanup and
-    // keep them out of public listings as a defensive second layer.
-    await db.delete(roomsTable).where(
-      eq(roomsTable.hostName, "Halloween Host")
-    );
-
     const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
     const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000);
     await db.delete(roomsTable).where(
