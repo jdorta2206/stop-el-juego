@@ -52,9 +52,9 @@ async function ping(player: PlayerProfile, roomCode?: string | null, language?: 
 }
 
 // Fetch current online players
-export async function fetchOnlinePlayers(): Promise<OnlinePlayer[]> {
+export async function fetchOnlinePlayers(signal?: AbortSignal): Promise<OnlinePlayer[]> {
   try {
-    const res = await fetch(`${API_BASE}/api/presence/online`);
+    const res = await fetch(`${API_BASE}/api/presence/online`, { signal });
     if (!res.ok) return [];
     const data = await res.json();
     return data.online || [];
@@ -158,10 +158,20 @@ export function usePresence(
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const challengePollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const activeChallenge = useRef<string | null>(null); // track if we're already showing one
+  const refreshAbortRef = useRef<AbortController | null>(null);
 
   const refresh = useCallback(async () => {
-    const players = await fetchOnlinePlayers();
-    setOnlinePlayers(players);
+    refreshAbortRef.current?.abort();
+    const controller = new AbortController();
+    refreshAbortRef.current = controller;
+    try {
+      const players = await fetchOnlinePlayers(controller.signal);
+      if (!controller.signal.aborted) setOnlinePlayers(players);
+    } catch {
+      // Abort is expected when a newer refresh supersedes this one.
+    } finally {
+      if (refreshAbortRef.current === controller) refreshAbortRef.current = null;
+    }
   }, []);
 
   const pollChallenges = useCallback(async () => {
@@ -204,6 +214,7 @@ export function usePresence(
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
       if (challengePollRef.current) clearInterval(challengePollRef.current);
+      refreshAbortRef.current?.abort();
     };
   }, [player?.id, roomCode, language]);
 
