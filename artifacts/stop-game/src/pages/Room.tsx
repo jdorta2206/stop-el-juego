@@ -1859,7 +1859,7 @@ export default function Room() {
                       }
                     } catch {
                       setSpyError("Sin conexión 📡");
-                      setTimeout(() => setSpyError(null), 2200);
+                      scheduleUiTimeout(() => setSpyError(null), 2200);
                     } finally {
                       setSpyLoading(false);
                     }
