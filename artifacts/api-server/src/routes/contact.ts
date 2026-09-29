@@ -5,18 +5,27 @@ import { contactLimiter } from "../middlewares/rateLimit";
 
 const router = Router();
 
-const CONTACT_TABLE_READY = db.execute(sql`
-  CREATE TABLE IF NOT EXISTS contact_messages (
-    id bigserial PRIMARY KEY,
-    name text NOT NULL,
-    email text NOT NULL,
-    message text NOT NULL,
-    created_at timestamptz NOT NULL DEFAULT NOW()
-  )
-`).catch((error) => {
-  console.error("[contact] failed to initialize contact_messages:", error);
-  throw error;
-});
+let contactTableReady: Promise<void> | null = null;
+
+function ensureContactTable(): Promise<void> {
+  if (!contactTableReady) {
+    contactTableReady = db.execute(sql`
+      CREATE TABLE IF NOT EXISTS contact_messages (
+        id bigserial PRIMARY KEY,
+        name text NOT NULL,
+        email text NOT NULL,
+        message text NOT NULL,
+        created_at timestamptz NOT NULL DEFAULT NOW()
+      )
+    `).then(() => undefined).catch((error) => {
+      console.error("[contact] failed to initialize contact_messages:", error);
+      // A transient DB failure must not permanently poison the initializer.
+      contactTableReady = null;
+      throw error;
+    });
+  }
+  return contactTableReady;
+}
 
 router.post("/", contactLimiter, async (req: Request, res: Response) => {
   try {
@@ -34,7 +43,7 @@ router.post("/", contactLimiter, async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Correo electrónico no válido" });
     }
 
-    await CONTACT_TABLE_READY;
+    await ensureContactTable();
     await db.execute(sql`
       INSERT INTO contact_messages (name, email, message)
       VALUES (${name}, ${email}, ${message})
