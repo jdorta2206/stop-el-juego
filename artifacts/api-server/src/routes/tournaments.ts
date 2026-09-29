@@ -120,20 +120,42 @@ router.post("/", async (req, res) => {
     res.status(403).json({ error: "Identity verification failed" }); return;
   }
   const safeSize = [4, 8].includes(size) ? size : 4;
-  const code = randomCode();
   const players = [{ playerId: hostId, playerName: hostName ?? "Host" }];
 
-  const [t] = await db.insert(tournamentsTable).values({
-    code,
-    hostId,
-    hostName: hostName ?? "Host",
-    name,
-    status: "waiting",
-    size: safeSize,
-    isPublic: !!isPublic,
-    playersJson: JSON.stringify(players),
-    bracketJson: null,
-  }).returning();
+  // The tournament code has a UNIQUE constraint. A random collision is rare,
+  // but concurrent creation requests must not turn that legitimate collision
+  // into a 500. Retry with a freshly generated code; the database remains the
+  // final authority for uniqueness.
+  let t: typeof tournamentsTable.$inferSelect | undefined;
+  for (let attempt = 0; attempt < 10 && !t; attempt++) {
+    const code = randomCode();
+    try {
+      const inserted = await db.insert(tournamentsTable).values({
+        code,
+        hostId,
+        hostName: hostName ?? "Host",
+        name,
+        status: "waiting",
+        size: safeSize,
+        isPublic: !!isPublic,
+        playersJson: JSON.stringify(players),
+        bracketJson: null,
+      }).returning();
+      t = inserted[0];
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (!/unique|duplicate/i.test(message) || attempt === 9) {
+        console.error("[tournaments/create] failed:", message);
+        res.status(500).json({ error: "Failed to create tournament" });
+        return;
+      }
+    }
+  }
+
+  if (!t) {
+    res.status(503).json({ error: "Unable to allocate tournament code" });
+    return;
+  }
 
   res.json(formatTournament(t));
 });
