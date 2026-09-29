@@ -82,6 +82,7 @@ function FriendCard({
 }) {
   const [, setLocation] = useLocation();
   const [copied, setCopied] = useState(false);
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showUnfollow, setShowUnfollow] = useState(false);
   const pendingId = useRef<string | null>(null);
   const challengeAbortRef = useRef<AbortController | null>(null);
@@ -89,6 +90,8 @@ function FriendCard({
   const challengeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => () => {
+    if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    copiedTimerRef.current = null;
     if (challengePollRef.current) clearInterval(challengePollRef.current);
     if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current);
     challengePollRef.current = null;
@@ -101,7 +104,11 @@ function FriendCard({
     if (friend.onlineData?.roomCode) {
       navigator.clipboard.writeText(friend.onlineData.roomCode).then(() => {
         setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
+        if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+        copiedTimerRef.current = setTimeout(() => {
+          copiedTimerRef.current = null;
+          setCopied(false);
+        }, 2000);
       });
     }
   };
@@ -354,14 +361,24 @@ function OnlinePlayerCard({
 
 function InviteSection({ player }: { player: PlayerProfile }) {
   const [copied, setCopied] = useState(false);
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const shareMsg = `¡Hola! ${player.name} te invita a jugar a STOP 🎮 El clásico juego de palabras. ¡Descárgalo gratis!\n${PLAY_STORE_URL}`;
 
   const copyLink = () => {
     navigator.clipboard.writeText(PLAY_STORE_URL).then(() => {
       setCopied(true);
-      setTimeout(() => setCopied(false), 2500);
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+      copiedTimerRef.current = setTimeout(() => {
+        copiedTimerRef.current = null;
+        setCopied(false);
+      }, 2500);
     });
   };
+
+  useEffect(() => () => {
+    if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    copiedTimerRef.current = null;
+  }, []);
 
   const shareWhatsApp = () => {
     window.open(`https://wa.me/?text=${encodeURIComponent(shareMsg)}`, "_blank");
