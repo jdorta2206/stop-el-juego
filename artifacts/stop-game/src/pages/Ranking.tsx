@@ -58,6 +58,7 @@ function ChallengeBtn({
   const [, setLocation] = useLocation();
   const [state, setState] = useState<ChallengeState>("idle");
   const pendingRef = useRef<string | null>(null);
+  const challengeAbortRef = useRef<AbortController | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -66,6 +67,7 @@ function ChallengeBtn({
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     pollRef.current = null;
     timeoutRef.current = null;
+    challengeAbortRef.current?.abort();
     pendingRef.current = null;
   }, []);
 
@@ -78,9 +80,9 @@ function ChallengeBtn({
     setState("waiting");
     if (pollRef.current) clearInterval(pollRef.current);
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    pollRef.current = setInterval(async () => {
+    const status = await pollChallengeStatus(pendingRef.current, controller.signal);
       if (!pendingRef.current) { clearInterval(pollRef.current!); return; }
-      const status = await pollChallengeStatus(pendingRef.current);
+      const status = await pollChallengeStatus(pendingRef.current, controller.signal);
       if (status.status === "accepted") {
         clearInterval(pollRef.current!);
         pollRef.current = null;
