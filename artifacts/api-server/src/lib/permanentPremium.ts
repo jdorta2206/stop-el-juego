@@ -22,7 +22,8 @@ export async function revokeFakePremium() {
     // Play Store paying user.
     const playSubscribers = await db.execute(
       sql`SELECT DISTINCT player_id FROM play_subscriptions
-          WHERE state IN ('ACTIVE', 'IN_GRACE_PERIOD')
+          WHERE product_id = 'premium_monthly'
+            AND state IN ('ACTIVE', 'IN_GRACE_PERIOD')
             AND expiry_time_ms > ${Date.now()}`,
     );
     const playPremiumIds = new Set<string>(
