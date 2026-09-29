@@ -1766,21 +1766,30 @@ router.get("/:roomCode/events", async (req, res) => {
   res.setHeader("X-Accel-Buffering", "no");
   res.flushHeaders?.();
 
-  // Send current state immediately (con cosméticos)
-  const players = parsePlayers(roomRow.playersJson);
-  const playerIds = players.map((p: any) => p.playerId).filter(Boolean);
-  const cosmeticsMap = await fetchCosmeticsForPlayers(playerIds);
-  const initialPayload = formatRoom(roomRow, cosmeticsMap);
-  const initialMember = !!playerId && players.some((p: any) => p?.playerId === playerId);
-  const initialView =
-    initialPayload.isPublic === true && !initialMember
-      ? sanitizeRoomForSpectator(initialPayload)
-      : initialPayload;
-  res.write(`data: ${JSON.stringify(initialView)}\n\n`);
-
+  // Register the client before loading the initial snapshot. Otherwise an update
+  // can commit/broadcast between the authorization read and registration and be
+  // missed forever by this subscriber.
   const client: SseClient = { res, playerId };
   if (!sseClients.has(code)) sseClients.set(code, new Set());
   sseClients.get(code)!.add(client);
+
+  // Load the latest persisted state only after the client is subscribed.
+  // broadcastRoom() applies the same monotonic updatedAt guard as every other
+  // SSE path, so a concurrent newer broadcast cannot be rolled back by this
+  // initial snapshot.
+  const [latestRoomRow] = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, code)).limit(1);
+  if (!latestRoomRow) {
+    sseClients.get(code)?.delete(client);
+    if (sseClients.get(code)?.size === 0) sseClients.delete(code);
+    res.end();
+    return;
+  }
+
+  const latestPlayers = parsePlayers(latestRoomRow.playersJson);
+  const latestPlayerIds = latestPlayers.map((p: any) => p.playerId).filter(Boolean);
+  const cosmeticsMap = await fetchCosmeticsForPlayers(latestPlayerIds);
+  const initialPayload = formatRoom(latestRoomRow, cosmeticsMap);
+  broadcastRoom(code, initialPayload);
 
   // Heartbeat every 25s to keep connection alive
   const heartbeat = setInterval(() => {
