@@ -546,7 +546,7 @@ export default function Room() {
   // Trigger Revancha — first caller creates the new room, others piggyback on the broadcast
   const handleRematch = useCallback(async () => {
     if (rematchLoading) return;
-    if (rematchCode) { setLocation(`/sala/${rematchCode}`); return; }
+    if (rematchCode) { setLocation(`/room/${rematchCode}`); return; }
     if (!player?.id || !roomCode) return;
     setRematchLoading(true);
     try {
@@ -556,7 +556,7 @@ export default function Room() {
         body: JSON.stringify({ playerId: player.id, playerName: player.name ?? "?", avatarColor: (player as any).avatarColor }),
       });
       const j = await r.json();
-      if (j.rematchCode) { setRematchCode(j.rematchCode); setLocation(`/sala/${j.rematchCode}`); }
+      if (j.rematchCode) { setRematchCode(j.rematchCode); setLocation(`/room/${j.rematchCode}`); }
     } catch {} finally { setRematchLoading(false); }
   }, [rematchCode, rematchLoading, player, roomCode, setLocation, meIsPremium]);
 
@@ -2586,7 +2586,7 @@ export default function Room() {
             {tournamentCtx && (
               <motion.button
                 whileTap={{ scale: 0.97 }}
-                onClick={() => setLocation("/torneo")}
+                onClick={() => tournamentCtx?.code && setLocation(`/torneo/${tournamentCtx.code}`)}
                 className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-black text-sm"
                 style={{ background: "linear-gradient(135deg, rgba(245,158,11,0.2), rgba(220,38,38,0.2))", border: "1.5px solid rgba(245,158,11,0.4)", color: "#f59e0b" }}
               >
