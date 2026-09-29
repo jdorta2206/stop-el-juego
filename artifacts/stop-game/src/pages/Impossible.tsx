@@ -72,35 +72,34 @@ export default function Impossible() {
     if (phase !== "playing") return;
     setPhase("submitting");
     const timeMs = Math.min(ROUND_MS, Date.now() - startedAt.current);
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 15000);
     try {
-      const r = await fetch(`${API}/api/impossible/submit`, {
+      const r = await fetch(API + "/api/impossible/submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          playerId: player.id,
-          playerName: player.name,
-          language: lang,
-          word: w,
-          timeMs,
-          surrendered,
+          playerId: player.id, playerName: player.name, language: lang,
+          word: w, timeMs, surrendered,
         }),
+        signal: controller.signal,
       });
       const data = await r.json();
+      if (!r.ok) throw new Error("impossible-submit-" + r.status);
       if (data.alreadyPlayed && data.result) {
         setMyAttempt(data.result);
       } else {
         setOutcome({ won: !!data.won, word: data.word ?? w, timeMs, stats: data.stats });
-        setMyAttempt({
-          letter: combo?.letter ?? "?",
-          category: combo?.category ?? "",
-          attemptedWord: data.word ?? w,
-          won: !!data.won,
-          timeMs,
-        });
+        setMyAttempt({ letter: combo?.letter ?? "?", category: combo?.category ?? "", attemptedWord: data.word ?? w, won: !!data.won, timeMs });
       }
       setPhase("done");
     } catch {
+      // A stalled request must never leave the player permanently in
+      // "submitting". Abort it after 15s and allow a retry.
+      // The server already protects against duplicate daily attempts.
       setPhase("playing");
+    } finally {
+      window.clearTimeout(timeoutId);
     }
   }, [player, phase, lang, combo]);
 
