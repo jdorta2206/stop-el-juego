@@ -438,8 +438,7 @@ export async function updatePlaySubscriptionByToken(
           OR (
             ${playSubscriptionsTable.expiryTimeMs} = ${v.expiryTimeMs}
             AND (
-              ${v.state} NOT IN ('ACTIVE', 'IN_GRACE_PERIOD')
-              OR ${playSubscriptionsTable.state} IN ('ACTIVE', 'IN_GRACE_PERIOD')
+              ${playSubscriptionsTable.state} IS DISTINCT FROM ${v.state}
             )
           )
         )`,
