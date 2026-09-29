@@ -168,6 +168,11 @@ export function verifyClaimedIdentity(
   claimedId: string | null | undefined,
 ): boolean {
   if (!claimedId) return true;
+  // Bot identities are server-owned and must never be accepted as guest
+  // identities from an HTTP caller. Bots act through server-side bot logic;
+  // allowing a `bot_*` id here would let any client impersonate a bot because
+  // bot ids intentionally do not have user authentication tokens.
+  if (claimedId.startsWith("bot_")) return false;
   if (!isLoggedInId(claimedId)) return true;
   if (!isAuthConfigured()) return true;
   return readPlayerId(req) === claimedId;
