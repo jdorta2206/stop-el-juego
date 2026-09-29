@@ -186,6 +186,19 @@ export default function Room() {
   const [roundCategories, setRoundCategories] = useState<string[]>(CATEGORIES_ES);
   const [halloweenScare, setHalloweenScare] = useState<ReturnType<typeof getHalloweenScare> | null>(null);
   const halloweenScareTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const uiTimeoutsRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
+  const scheduleUiTimeout = useCallback((fn: () => void, delay: number) => {
+    const id = setTimeout(() => {
+      uiTimeoutsRef.current.delete(id);
+      fn();
+    }, delay);
+    uiTimeoutsRef.current.add(id);
+    return id;
+  }, []);
+  useEffect(() => () => {
+    for (const id of uiTimeoutsRef.current) clearTimeout(id);
+    uiTimeoutsRef.current.clear();
+  }, []);
   const halloweenScareHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const CRAZY_CATEGORIES_ES = [
     "Excusa para llegar tarde", "Película que finges haber visto", "Animal que querrías de mascota",
@@ -635,11 +648,11 @@ export default function Room() {
     newOnes.forEach(r => seenReactionIds.current.add(r.id));
     setFloatingReactions(prev => [...prev, ...newOnes]);
     newOnes.forEach(r => {
-      setTimeout(() => {
+      scheduleUiTimeout(() => {
         setFloatingReactions(prev => prev.filter(x => x.id !== r.id));
       }, 3200);
     });
-  }, [(room as any)?.reactions]);
+  }, [(room as any)?.reactions, scheduleUiTimeout]);
 
   const sendReaction = useCallback(async (emoji: string) => {
     if (!player || !roomCode) return;
@@ -660,11 +673,11 @@ export default function Room() {
     newOnes.forEach(p => seenPhraseIds.current.add(p.id));
     setVisiblePhrases(prev => [...prev, ...newOnes].slice(-5));
     newOnes.forEach(p => {
-      setTimeout(() => {
+      scheduleUiTimeout(() => {
         setVisiblePhrases(prev => prev.filter(x => x.id !== p.id));
       }, 6000);
     });
-  }, [(room as any)?.phrases]);
+  }, [(room as any)?.phrases, scheduleUiTimeout]);
 
   const sendQuickPhrase = useCallback(async (phraseIndex: number) => {
     if (!player || !roomCode) return;
@@ -1102,7 +1115,7 @@ export default function Room() {
     sound.playStop();
     haptic.stopHit();
     setStopFlash(true);
-    setTimeout(() => setStopFlash(false), 220);
+    scheduleUiTimeout(() => setStopFlash(false), 220);
     setIsStopping(true);
     try {
       await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/stop`, {
@@ -1158,7 +1171,7 @@ export default function Room() {
     } else {
       navigator.clipboard.writeText(text);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2500);
+      scheduleUiTimeout(() => setCopied(false), 2500);
     }
   };
 
@@ -1836,13 +1849,13 @@ export default function Room() {
                       if (!r.ok) {
                         const j = await r.json().catch(() => ({}));
                         setSpyError(j.error || "No se pudo espiar 🤷");
-                        setTimeout(() => setSpyError(null), 2200);
+                        scheduleUiTimeout(() => setSpyError(null), 2200);
                       } else {
                         const data = await r.json();
                         if (typeof data.usesLeft === "number") setSpyUsesLeft(data.usesLeft);
                         if (typeof data.limit === "number") setSpyLimit(data.limit);
                         setSpyReveal(data);
-                        setTimeout(() => setSpyReveal(null), 5000);
+                        scheduleUiTimeout(() => setSpyReveal(null), 5000);
                       }
                     } catch {
                       setSpyError("Sin conexión 📡");
@@ -2697,7 +2710,7 @@ function StreamerModeCard({ room, playerId }: { room: any; playerId: string }) {
   const copy = (url: string, key: string) => {
     navigator.clipboard.writeText(url).catch(() => {});
     setCopied(key);
-    setTimeout(() => setCopied(null), 1500);
+    scheduleUiTimeout(() => setCopied(null), 1500);
   };
 
   return (
