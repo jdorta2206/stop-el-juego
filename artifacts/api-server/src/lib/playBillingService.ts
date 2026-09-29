@@ -431,7 +431,15 @@ export async function updatePlaySubscriptionByToken(
       rawJson: JSON.stringify(v.raw),
       updatedAt: new Date(),
     })
-    .where(eq(playSubscriptionsTable.purchaseToken, v.purchaseToken))
+    .where(
+      sql` ${eq(playSubscriptionsTable.purchaseToken, v.purchaseToken)}
+        AND (
+          ${playSubscriptionsTable.expiryTimeMs} IS NULL
+          OR ${playSubscriptionsTable.expiryTimeMs} <= ${v.expiryTimeMs}
+          OR ${playSubscriptionsTable.state} IN ('ACTIVE', 'IN_GRACE_PERIOD')
+          OR ${v.state} IN ('ACTIVE', 'IN_GRACE_PERIOD')
+        )`,
+    )
     .returning({ playerId: playSubscriptionsTable.playerId });
   return { playerId: updated[0]?.playerId ?? null };
 }
