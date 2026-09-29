@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { getApiUrl } from "@/lib/utils";
 
 const API_BASE = getApiUrl();
@@ -20,11 +20,12 @@ export function usePushNotifications(playerId: string | undefined, language: str
   const [permission, setPermission] = useState<NotifPermission>("default");
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [loading, setLoading] = useState(false);
+  const currentPlayerIdRef = useRef(playerId);\n  currentPlayerIdRef.current = playerId;
 
   useEffect(() => {
     let cancelled = false;
 
-    const initialise = async () => {
+    const controller = new AbortController();\n    const initialise = async () => {
       try {
         if (!("Notification" in window) || !("serviceWorker" in navigator)) {
           if (!cancelled) setPermission("unsupported");
@@ -51,13 +52,13 @@ export function usePushNotifications(playerId: string | undefined, language: str
           return;
         }
 
-        if (perm === "granted") {
+        if (perm === "granted" && !cancelled && currentPlayerIdRef.current === playerId) {
           const tzOffsetMinutes = -new Date().getTimezoneOffset();
           try {
-            const res = await fetch(`${API_BASE}/api/notifications/subscribe`, {
+            if (currentPlayerIdRef.current !== playerId) return false;\n      const res = await fetch(`${API_BASE}/api/notifications/subscribe`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
+              signal: controller.signal,\n              body: JSON.stringify({
                 playerId: playerId || "anonymous",
                 subscription: sub.toJSON(),
                 language,
@@ -76,7 +77,7 @@ export function usePushNotifications(playerId: string | undefined, language: str
     };
 
     void initialise();
-    return () => { cancelled = true; };
+    return () => { cancelled = true; controller.abort(); };
   }, [playerId, language]);
 
   const subscribe = useCallback(async () => {
@@ -145,7 +146,7 @@ export function usePushNotifications(playerId: string | undefined, language: str
       const reg = await navigator.serviceWorker.ready;
       const sub = await reg.pushManager.getSubscription();
       if (!sub) return false;
-      const res = await fetch(`${API_BASE}/api/notifications/preferences`, {
+      if (currentPlayerIdRef.current !== playerId) return false;\n      const res = await fetch(`${API_BASE}/api/notifications/preferences`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ endpoint: sub.endpoint, playerId: playerId || "anonymous", ...patch }),
