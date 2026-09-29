@@ -15,6 +15,7 @@ import {
   resolveCategoriesForRound,
   rushBotSubmits,
   clearBotTimers,
+  startBotTimerRecovery,
 } from "../lib/multiplayerBot";
 
 const router: IRouter = Router();
@@ -142,6 +143,9 @@ const botDeps = {
   submitFinalScores: (players: any[], letter: string) =>
     submitAllScoresToLeaderboard(players, letter).catch(() => {}),
 };
+
+// Reconstruct bot round timers after API restarts or on another Railway instance.
+startBotTimerRecovery(botDeps);
 
 // ── In-memory stores (ephemeral, no DB needed) ─────────────────────────────
 type Reaction = { id: string; emoji: string; playerName: string; ts: number };
