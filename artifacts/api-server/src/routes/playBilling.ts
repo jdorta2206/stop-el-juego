@@ -82,6 +82,14 @@ router.post("/webhook", async (req: Request, res: Response) => {
     }
 
     const updated = await updatePlaySubscriptionByToken(verified);
+    if (!updated.playerId) {
+      // The RTDN can legitimately arrive before the client has completed
+      // /verify and bound the purchase token to a player. Do not acknowledge
+      // the Pub/Sub delivery in that state: retry it so the later /verify can
+      // establish ownership and the same RTDN can then apply the transition.
+      console.warn("[playBilling] RTDN token is not linked to a player yet; requesting retry");
+      return res.status(503).json({ error: "Purchase token not linked yet" });
+    }
 
     // Retry acknowledgement from RTDN when the client-side /verify could not acknowledge the purchase.
     await acknowledgeSubscription(
