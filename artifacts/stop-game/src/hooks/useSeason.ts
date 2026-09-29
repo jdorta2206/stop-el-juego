@@ -192,7 +192,10 @@ export function useSeasonLeaderboard(seasonId?: number | null, enabled: boolean 
   const leaderboardAbortRef = useRef<AbortController | null>(null);
 
   const refresh = useCallback(async () => {
+    leaderboardAbortRef.current?.abort();
     if (!enabled) return;
+    const controller = new AbortController();
+    leaderboardAbortRef.current = controller;
     setLoading(true);
     try {
       const url = new URL(`${API}/api/season/leaderboard`);
@@ -200,12 +203,16 @@ export function useSeasonLeaderboard(seasonId?: number | null, enabled: boolean 
       const r = await fetch(url.toString(), {
         credentials: "include",
         headers: authHeaders(),
+        signal: controller.signal,
       });
-      if (r.ok) setData(await r.json());
+      if (r.ok && !controller.signal.aborted) setData(await r.json());
     } catch {
       /* ignore */
     } finally {
-      setLoading(false);
+      if (leaderboardAbortRef.current === controller) {
+        leaderboardAbortRef.current = null;
+        setLoading(false);
+      }
     }
   }, [seasonId, enabled]);
 
@@ -219,6 +226,35 @@ export function useSeasonLeaderboard(seasonId?: number | null, enabled: boolean 
     });
     return () => controller.abort();
   }, [refresh, enabled]);
+
+  return { data, loading, refresh };
+}
+
+/**
+ * Reports a gameplay event to the season pass mission tracker. Fire-and-forget.
+ * No-op for guests. Authenticated via httpOnly cookie (or X-Stop-Token header
+ * fallback); the server returns 401 silently if neither is present.
+ */
+export async function reportSeasonEvent(
+  playerId: string | null | undefined,
+  type: "win_game" | "play_game" | "round_score" | "streak" | "valid_words" | "daily_done",
+  value?: number,
+): Promise<void> {
+  if (!playerId) return;
+  try {
+    await fetch(`${API}/api/season/event`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      body: JSON.stringify({ type, value }),
+    });
+  } catch {
+    /* ignore */
+  }
+}  useEffect(() => {
+    void refresh();
+    return () => leaderboardAbortRef.current?.abort();
+  }, [refresh]);
 
   return { data, loading, refresh };
 }
