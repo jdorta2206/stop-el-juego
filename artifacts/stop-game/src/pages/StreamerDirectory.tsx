@@ -28,15 +28,20 @@ export default function StreamerDirectory() {
 
   useEffect(() => {
     let stop = false;
+    let activeController: AbortController | null = null;
     const fetchOnce = () => {
-      fetch(`${API}/api/rooms/live`)
+      activeController?.abort();
+      const controller = new AbortController();
+      activeController = controller;
+      fetch(`${API}/api/rooms/live`, { signal: controller.signal })
         .then(r => r.json())
         .then(d => { if (!stop) { setRooms(d.rooms || []); setLoaded(true); } })
-        .catch(() => { if (!stop) setLoaded(true); });
+        .catch(() => { if (!stop && !controller.signal.aborted) setLoaded(true); })
+        .finally(() => { if (activeController === controller) activeController = null; });
     };
     fetchOnce();
     const id = setInterval(fetchOnce, 5000);
-    return () => { stop = true; clearInterval(id); };
+    return () => { stop = true; clearInterval(id); activeController?.abort(); };
   }, []);
 
   // Filter to same language by default — viewers want rooms they understand.
