@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { publicLink } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { UserPlus, Check, Send, Users, MessageSquare, ChevronDown, ChevronUp } from "lucide-react";
@@ -136,6 +136,7 @@ function InviteRow({ friend, player, roomCode }: { friend: FriendEntry; player: 
 export function RoomInvitePanel({ player, roomCode }: RoomInvitePanelProps) {
   const [onlinePlayers, setOnlinePlayers] = useState<OnlinePlayer[]>([]);
   const [expanded, setExpanded] = useState(true);
+  const onlineAbortRef = useRef<AbortController | null>(null);
 
   const { friends: gameFriends } = useFollows(
     player.loginMethod !== "guest" ? player.id : null,
@@ -147,9 +148,20 @@ export function RoomInvitePanel({ player, roomCode }: RoomInvitePanelProps) {
   );
 
   useEffect(() => {
-    fetchOnlinePlayers().then(setOnlinePlayers);
-    const id = setInterval(() => fetchOnlinePlayers().then(setOnlinePlayers), 15_000);
-    return () => clearInterval(id);
+    const refresh = async () => {
+      onlineAbortRef.current?.abort();
+      const controller = new AbortController();
+      onlineAbortRef.current = controller;
+      try {
+        const players = await fetchOnlinePlayers(controller.signal);
+        if (!controller.signal.aborted) setOnlinePlayers(players);
+      } finally {
+        if (onlineAbortRef.current === controller) onlineAbortRef.current = null;
+      }
+    };
+    void refresh();
+    const id = setInterval(refresh, 15_000);
+    return () => { clearInterval(id); onlineAbortRef.current?.abort(); };
   }, []);
 
   // Build a unified friend list (deduplicated)
