@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Swords, X, Check, DoorOpen } from "lucide-react";
 import { respondToChallenge, type IncomingChallenge } from "@/lib/usePresence";
@@ -14,6 +14,7 @@ export function ChallengeNotification({ challenge, onDismiss }: ChallengeNotific
   const [, setLocation] = useLocation();
   const [countdown, setCountdown] = useState(30);
   const [responding, setResponding] = useState(false);
+  const actionAbortRef = useRef<AbortController | null>(null);
 
   const isRoomInvite = !!challenge.isRoomInvite;
 
@@ -32,7 +33,10 @@ export function ChallengeNotification({ challenge, onDismiss }: ChallengeNotific
   }, []);
 
   const handleAccept = async () => {
+    if (responding) return;
     setResponding(true);
+    const controller = new AbortController();
+    actionAbortRef.current = controller;
 
     // Read player data once — needed for /join in both flows
     let playerData: { id: string; name: string; avatarColor: string; loginMethod?: string | null } | null = null;
@@ -53,6 +57,7 @@ export function ChallengeNotification({ challenge, onDismiss }: ChallengeNotific
           method: "POST",
           headers: { "Content-Type": "application/json", ...authHeaders() },
           credentials: "include",
+          signal: controller.signal,
           body: JSON.stringify({
             playerId: playerData.id,
             playerName: playerData.name,
@@ -63,17 +68,23 @@ export function ChallengeNotification({ challenge, onDismiss }: ChallengeNotific
       } catch { /* silently proceed even if join fails */ }
     }
 
-    onDismiss();
-    setLocation(`/room/${challenge.roomCode}`);
+    if (!controller.signal.aborted) {
+      onDismiss();
+      setLocation(`/room/${challenge.roomCode}`);
+    }
   };
 
   const handleDecline = async () => {
+    if (responding) return;
     setResponding(true);
+    actionAbortRef.current?.abort();
     if (!isRoomInvite) {
       await respondToChallenge(challenge.challengeId, false);
     }
     onDismiss();
   };
+
+  useEffect(() => () => actionAbortRef.current?.abort(), []);
 
   const accentColor = isRoomInvite ? "#34d399" : "#f9a825";
   const borderColor = isRoomInvite ? "rgba(52,211,153,0.4)" : "rgba(249,168,37,0.4)";
