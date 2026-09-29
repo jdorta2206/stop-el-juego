@@ -180,7 +180,34 @@ async function getOrCreateActiveSeason() {
     .orderBy(desc(seasonsTable.id))
     .limit(1);
 
-  if (existing.length > 0) return existing[0];
+  if (existing.length > 0) {
+    // Recovery path: a previous process may have created this season and
+    // crashed before finalizing ended seasons. Re-check whether any ended
+    // season still has progress rows without a corresponding final snapshot.
+    // This is a cheap existence query and keeps finalization recoverable after
+    // a crash instead of depending on the original rollover request.
+    const incomplete = await db.execute(sql`
+      SELECT 1
+      FROM seasons s
+      WHERE s.end_date < ${today}
+        AND EXISTS (
+          SELECT 1
+          FROM season_progress sp
+          WHERE sp.season_id = s.id
+            AND NOT EXISTS (
+              SELECT 1
+              FROM season_finals sf
+              WHERE sf.season_id = sp.season_id
+                AND sf.player_id = sp.player_id
+            )
+        )
+      LIMIT 1
+    `);
+    if ((incomplete as any).rows?.length > 0) {
+      void finalizePreviousSeason(existing[0].id, today);
+    }
+    return existing[0];
+  }
 
   // Race-safe insert: a partial unique index on `start_date` (added in
   // ensureIndexes) lets concurrent first-hit/rollover requests collapse to a
