@@ -2,6 +2,7 @@ import { Router, type IRouter, type Request, type Response, type NextFunction } 
 import { timingSafeEqual } from "crypto";
 import { db } from "@workspace/db";
 import { sql } from "drizzle-orm";
+import { authLimiter } from "../middlewares/rateLimit";
 
 const router: IRouter = Router();
 
@@ -35,7 +36,7 @@ function esc(value: unknown): string {
   return String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-router.get("/", basicAuth, async (_req, res) => {
+router.get("/", authLimiter, basicAuth, async (_req, res) => {
   try {
     const online = await db.execute(sql`
       SELECT platform, COUNT(*)::int AS active
