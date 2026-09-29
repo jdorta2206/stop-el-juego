@@ -177,34 +177,49 @@ router.post("/challenge", async (req, res) => {
   }
 
   const challengeId = `ch_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-  const roomCode = generateRoomCode();
 
-  // Create the room in the DB right now so /join works when the challenge is accepted
-  try {
-    const players = [{
-      playerId: fromPlayerId,
-      playerName: fromName,
-      avatarColor: fromAvatarColor ?? "#e53e3e",
-      loginMethod: null as string | null,
-      score: 0,
-      roundScore: 0,
-      isHost: true,
-      isReady: false,
-    }];
-    await db.insert(roomsTable).values({
-      roomCode,
-      hostId: fromPlayerId,
-      hostName: fromName,
-      status: "waiting",
-      currentRound: 0,
-      maxRounds: 3,
-      language: "es",
-      playersJson: JSON.stringify(players),
-      stopperJson: null,
-      isPublic: false,
-    });
-  } catch (e) {
-    console.error("Challenge room creation failed:", e);
+  // Room codes are UNIQUE in the database. Reserve the room before publishing
+  // the challenge, retrying only on a genuine uniqueness collision. This avoids
+  // a challenge pointing at a room that was never created.
+  const players = [{
+    playerId: fromPlayerId,
+    playerName: fromName,
+    avatarColor: fromAvatarColor ?? "#e53e3e",
+    loginMethod: null as string | null,
+    score: 0,
+    roundScore: 0,
+    isHost: true,
+    isReady: false,
+  }];
+
+  let roomCode: string | null = null;
+  for (let attempt = 0; attempt < 10 && !roomCode; attempt++) {
+    const candidate = generateRoomCode();
+    try {
+      await db.insert(roomsTable).values({
+        roomCode: candidate,
+        hostId: fromPlayerId,
+        hostName: fromName,
+        status: "waiting",
+        currentRound: 0,
+        maxRounds: 3,
+        language: "es",
+        playersJson: JSON.stringify(players),
+        stopperJson: null,
+        isPublic: false,
+      });
+      roomCode = candidate;
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e);
+      if (!/unique|duplicate/i.test(message) || attempt === 9) {
+        console.error("[presence/challenge] room creation failed:", message);
+        return res.status(503).json({ error: "Unable to create challenge room" });
+      }
+    }
+  }
+
+  if (!roomCode) {
+    return res.status(503).json({ error: "Unable to allocate challenge room" });
   }
 
   challengeMap.set(challengeId, {
