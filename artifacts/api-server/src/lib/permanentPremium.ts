@@ -16,54 +16,72 @@ export function isPermanentPremium(_playerId: string): boolean {
 // (those with a non-empty stripe_subscription_id) are never touched.
 export async function revokeFakePremium() {
   try {
-    // Skip players that have an active Google Play subscription on file —
-    // they are legitimately premium even though they have no Stripe row.
-    // Without this filter the boot-time sweep would clear premium for every
-    // Play Store paying user.
-    const playSubscribers = await db.execute(
-      sql`SELECT DISTINCT player_id FROM play_subscriptions
-          WHERE product_id = 'premium_monthly'
-            AND state IN ('ACTIVE', 'IN_GRACE_PERIOD')
-            AND expiry_time_ms > ${Date.now()}`,
-    );
-    const playPremiumIds = new Set<string>(
-      (playSubscribers.rows as Array<{ player_id: string }>).map((r) => r.player_id),
-    );
-
-    const candidates = await db
-      .select({ id: playerScoresTable.id, playerId: playerScoresTable.playerId, name: playerScoresTable.playerName })
-      .from(playerScoresTable)
-      .where(
-        and(
-          eq(playerScoresTable.isPremium, true),
-          or(
-            isNull(playerScoresTable.stripeSubscriptionId),
-            eq(playerScoresTable.stripeSubscriptionId, "")
-          )
+    // Serialize the sweep with premium-grant transactions that update the
+    // same player row. This prevents a legitimate purchase from racing the
+    // read/filter/update sequence below.
+    await db.transaction(async (tx) => {
+      // Lock all currently-premium candidates before checking external
+      // subscription state. Purchase flows that update player_scores must wait
+      // for this decision, so they cannot be revoked by a stale read.
+      const candidates = await tx
+        .select({
+          id: playerScoresTable.id,
+          playerId: playerScoresTable.playerId,
+          name: playerScoresTable.playerName,
+        })
+        .from(playerScoresTable)
+        .where(
+          and(
+            eq(playerScoresTable.isPremium, true),
+            or(
+              isNull(playerScoresTable.stripeSubscriptionId),
+              eq(playerScoresTable.stripeSubscriptionId, ""),
+            ),
+          ),
         )
+        .for("update");
+
+      if (candidates.length === 0) {
+        console.log("[premium] No fake premium accounts found — DB clean.");
+        return;
+      }
+
+      // Re-check Play subscriptions after acquiring the player-row locks.
+      // A concurrent purchase that grants premium through the player row must
+      // therefore wait and cannot be lost by this sweep.
+      const playSubscribers = await tx.execute(
+        sql`SELECT DISTINCT player_id FROM play_subscriptions
+            WHERE product_id = 'premium_monthly'
+              AND state IN ('ACTIVE', 'IN_GRACE_PERIOD')
+              AND expiry_time_ms > ${Date.now()}`,
+      );
+      const playPremiumIds = new Set<string>(
+        (playSubscribers.rows as Array<{ player_id: string }>).map((r) => r.player_id),
       );
 
-    const toRevoke = candidates.filter((c) => !playPremiumIds.has(c.playerId));
-    if (toRevoke.length === 0) {
-      console.log("[premium] No fake premium accounts found — DB clean.");
-      return;
-    }
+      const toRevoke = candidates.filter((c) => !playPremiumIds.has(c.playerId));
+      if (toRevoke.length === 0) {
+        console.log("[premium] No fake premium accounts found — DB clean.");
+        return;
+      }
 
-    const result = await db
-      .update(playerScoresTable)
-      .set({ isPremium: false })
-      .where(
-        sql`id IN (${sql.join(toRevoke.map((c) => sql`${c.id}`), sql`, `)})`,
-      )
-      .returning({ id: playerScoresTable.id, name: playerScoresTable.playerName });
-    if (result.length > 0) {
-      console.log(
-        `[premium] Revoked fake premium from ${result.length} account(s):`,
-        result.map((r) => r.name).join(", ")
-      );
-    } else {
-      console.log("[premium] No fake premium accounts found — DB clean.");
-    }
+      const result = await tx
+        .update(playerScoresTable)
+        .set({ isPremium: false })
+        .where(
+          sql`id IN (${sql.join(toRevoke.map((c) => sql`${c.id}`), sql`, `)})`,
+        )
+        .returning({ id: playerScoresTable.id, name: playerScoresTable.playerName });
+
+      if (result.length > 0) {
+        console.log(
+          `[premium] Revoked fake premium from ${result.length} account(s):`,
+          result.map((r) => r.name).join(", "),
+        );
+      } else {
+        console.log("[premium] No fake premium accounts found — DB clean.");
+      }
+    });
   } catch (err: any) {
     console.error("[premium] revokeFakePremium failed:", err.message);
   }
