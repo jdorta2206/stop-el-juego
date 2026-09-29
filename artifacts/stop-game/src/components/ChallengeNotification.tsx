@@ -15,6 +15,7 @@ export function ChallengeNotification({ challenge, onDismiss }: ChallengeNotific
   const [countdown, setCountdown] = useState(30);
   const [responding, setResponding] = useState(false);
   const actionAbortRef = useRef<AbortController | null>(null);
+  const respondingRef = useRef(false);
   const onDismissRef = useRef(onDismiss);
   onDismissRef.current = onDismiss;
 
@@ -26,7 +27,12 @@ export function ChallengeNotification({ challenge, onDismiss }: ChallengeNotific
       setCountdown((v) => {
         if (v <= 1) {
           clearInterval(timer);
-          onDismissRef.current();
+          if (respondingRef.current) return 0;
+          respondingRef.current = true;
+          setResponding(true);
+          void respondToChallenge(challenge.challengeId, false).finally(() => {
+            onDismissRef.current();
+          });
           return 0;
         }
         return v - 1;
@@ -36,7 +42,8 @@ export function ChallengeNotification({ challenge, onDismiss }: ChallengeNotific
   }, [challenge.challengeId]);
 
   const handleAccept = async () => {
-    if (responding) return;
+    if (responding || respondingRef.current) return;
+    respondingRef.current = true;
     setResponding(true);
     const controller = new AbortController();
     actionAbortRef.current = controller;
@@ -81,9 +88,7 @@ export function ChallengeNotification({ challenge, onDismiss }: ChallengeNotific
     if (responding) return;
     actionAbortRef.current?.abort();
     setResponding(true);
-    if (!isRoomInvite) {
-      await respondToChallenge(challenge.challengeId, false);
-    }
+    await respondToChallenge(challenge.challengeId, false);
     onDismiss();
   };
 
@@ -178,40 +183,3 @@ export function ChallengeNotification({ challenge, onDismiss }: ChallengeNotific
           </div>
 
           {/* Action buttons */}
-          <div className="flex gap-2">
-            <button
-              onClick={handleDecline}
-              disabled={responding}
-              className="flex-shrink-0 flex items-center justify-center gap-1.5 py-2.5 px-4 rounded-xl text-sm font-bold transition-all"
-              style={{
-                background: "rgba(255,255,255,0.06)",
-                border: "1px solid rgba(255,255,255,0.12)",
-                color: "rgba(255,255,255,0.5)",
-              }}
-            >
-              <X size={14} /> {isRoomInvite ? "Ignorar" : "Rechazar"}
-            </button>
-            <button
-              onClick={handleAccept}
-              disabled={responding}
-              className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-bold transition-all"
-              style={{
-                background: isRoomInvite
-                  ? "linear-gradient(135deg, #34d399, #059669)"
-                  : "linear-gradient(135deg, #f9a825, #f57f17)",
-                color: "#000",
-                boxShadow: `0 4px 15px ${accentColor}55`,
-              }}
-            >
-              {isRoomInvite
-                ? <><DoorOpen size={14} /> ¡Unirme!</>
-                : <><Check size={14} /> ¡Aceptar!</>
-              }
-            </button>
-          </div>
-        </div>
-      </motion.div>
-      </div>
-    </AnimatePresence>
-  );
-}
