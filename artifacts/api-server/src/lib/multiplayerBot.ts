@@ -18,7 +18,7 @@
  */
 import { db } from "@workspace/db";
 import { roomsTable } from "@workspace/db";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import OpenAI from "openai";
 
 // ── LLM-backed answer generation ──────────────────────────────────────────
@@ -31,14 +31,28 @@ const LLM_MODEL = "gpt-5-mini";
 // Hard caps. 3 bots × ~3 rounds × ~30 games/day = 270 calls. 500 leaves
 // headroom and matches the budget shape used by aiWordValidator.ts.
 const LLM_GLOBAL_DAILY_LIMIT = 500;
-let llmCounterDay = new Date().toISOString().slice(0, 10);
-let llmGlobalCounter = 0;
-function bumpAndCheckLlmQuota(): boolean {
-  const today = new Date().toISOString().slice(0, 10);
-  if (today !== llmCounterDay) { llmCounterDay = today; llmGlobalCounter = 0; }
-  if (llmGlobalCounter >= LLM_GLOBAL_DAILY_LIMIT) return false;
-  llmGlobalCounter += 1;
-  return true;
+
+const llmQuotaReady = db.execute(sql`
+  CREATE TABLE IF NOT EXISTS bot_llm_daily_quota (
+    quota_date date PRIMARY KEY,
+    used integer NOT NULL DEFAULT 0
+  )
+`).catch((err) => {
+  console.error("[bot] failed to initialize persistent LLM quota:", err);
+  throw err;
+});
+
+async function bumpAndCheckLlmQuota(): Promise<boolean> {
+  await llmQuotaReady;
+  const result = await db.execute(sql`
+    INSERT INTO bot_llm_daily_quota (quota_date, used)
+    VALUES (CURRENT_DATE, 1)
+    ON CONFLICT (quota_date) DO UPDATE
+      SET used = bot_llm_daily_quota.used + 1
+      WHERE bot_llm_daily_quota.used < ${LLM_GLOBAL_DAILY_LIMIT}
+    RETURNING used
+  `);
+  return result.rows.length > 0;
 }
 let _llmClient: OpenAI | null = null;
 function getLlmClient(): OpenAI | null {
@@ -56,7 +70,7 @@ async function generateBotAnswersLLM(
 ): Promise<Record<string, string> | null> {
   const client = getLlmClient();
   if (!client) return null;
-  if (!bumpAndCheckLlmQuota()) return null;
+  if (!(await bumpAndCheckLlmQuota())) return null;
   const L = letter.toUpperCase();
   // Variety knob: bots intentionally miss a few categories so they don't
   // always score 100%. Asking for 60-90% fillrate produces more human-feel.
