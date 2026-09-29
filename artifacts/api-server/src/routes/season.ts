@@ -162,7 +162,7 @@ export async function finalizePreviousSeason(currentSeasonId: number, today: str
       }
 
       console.log(
-        `[finalizePreviousSeason] Finalized season ${prevId} (${processed}/${rows.length} players)`,
+        `[finalizePreviousSeason] Finalized season ${prevId} (${processed}/${standings.rows.length} players)`,
       );
     }
   } catch (e: unknown) {
