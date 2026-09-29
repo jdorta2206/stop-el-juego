@@ -59,9 +59,13 @@ export function PlayUpdateBanner() {
     if (isOwnAppReferrer()) {
       reveal();
     } else {
-      detectPaymentChannel().then((channel) => {
+      try {
+        const channel = detectPaymentChannel();
         if (!cancelled && channel === "play") reveal();
-      });
+      } catch {
+        // Payment-channel detection is synchronous; an unavailable browser API
+        // must not break the app's startup/update-banner effect.
+      }
     }
 
     return () => {
