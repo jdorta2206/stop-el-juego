@@ -42,14 +42,6 @@ router.get("/status", async (req, res) => {
       return res.status(403).json({ error: "Identity verification failed" });
     }
 
-    // Never create another Premium subscription for an account that already
-    // has Premium from either billing channel. This also covers a Stripe
-    // subscription that has just become active/trialing but whose cached
-    // player_scores.isPremium flag is stale.
-    if (await isUserPremium(playerId)) {
-      return res.status(409).json({ error: "Premium subscription already active" });
-    }
-
     const player = await stripeStorage.getPlayer(playerId);
     if (!player) return res.json({ isPremium: false });
 
@@ -143,6 +135,14 @@ router.post("/checkout", async (req, res) => {
     // creating a Stripe session against another player's id (which is public).
     if (!verifyClaimedIdentity(req, playerId)) {
       return res.status(403).json({ error: "Identity verification failed" });
+    }
+
+    // Never create another Premium subscription for an account that already
+    // has Premium from either billing channel. This also covers a Stripe
+    // subscription that has just become active/trialing but whose cached
+    // player_scores.isPremium flag is stale.
+    if (await isUserPremium(playerId)) {
+      return res.status(409).json({ error: "Premium subscription already active" });
     }
 
     const player = await stripeStorage.getPlayer(playerId);
