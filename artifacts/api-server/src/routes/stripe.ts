@@ -137,14 +137,34 @@ router.post("/checkout", async (req, res) => {
       return res.status(403).json({ error: "Identity verification failed" });
     }
 
-    let player = await stripeStorage.getPlayer(playerId);
+    const player = await stripeStorage.getPlayer(playerId);
     let customerId = player?.stripeCustomerId || null;
+
+    // Stripe customers can be deleted outside this application. Never send a
+    // stale customer id to Checkout: recover the account exactly as the pack
+    // checkout flow does, then persist the replacement id.
+    let customerRecoveryKey = `stripe-customer:${playerId}`;
+    if (customerId) {
+      try {
+        const stripe = await getUncachableStripeClient();
+        const customer = await stripe.customers.retrieve(customerId);
+        if (customer.deleted) {
+          customerRecoveryKey = `stripe-customer:${playerId}:recovery:${customerId}`;
+          customerId = null;
+        }
+      } catch (error: any) {
+        const invalidCustomerId = customerId;
+        console.warn(`[stripe/checkout] invalid customer ${invalidCustomerId}: ${error.message}`);
+        customerRecoveryKey = `stripe-customer:${playerId}:recovery:${invalidCustomerId}`;
+        customerId = null;
+      }
+    }
 
     if (!customerId) {
       const customer = await stripeService.createCustomer(
         email || `${playerId}@stop-game.app`,
         playerId,
-        `stripe-customer:${playerId}`
+        customerRecoveryKey
       );
       customerId = customer.id;
       await stripeStorage.updatePlayerStripeInfo(playerId, {
