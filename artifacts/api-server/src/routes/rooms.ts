@@ -2244,6 +2244,18 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
     return;
   }
 
+  // A playing round may accept results only once its natural timer has expired.
+  // Otherwise clients could submit early; when the last player does so,
+  // finalizeRoundState() would advance the round before the authoritative
+  // deadline. Explicit STOP already moves the room to "stopped".
+  if (room.status === "playing") {
+    const endTs = roundEndTimestamp(room);
+    if (endTs && Date.now() < endTs) {
+      res.status(409).json({ error: "Round is still in progress" });
+      return;
+    }
+  }
+
   // ── Idempotency guard ─────────────────────────────────────────────────────
   // If this player already submitted for the current round (isReady === true),
   // return the current room state without re-applying score — prevents double-submit cheats.
