@@ -29,5 +29,8 @@ export async function revokePlayerId(playerId: string, tx?: any): Promise<void> 
     VALUES (${playerId}, NOW())
     ON CONFLICT (player_id) DO NOTHING
   `);
-  revokedPlayerIds.add(playerId);
+}
+
+export function markPlayerRevoked(playerId: string): void {
+  if (playerId) revokedPlayerIds.add(playerId);
 }
