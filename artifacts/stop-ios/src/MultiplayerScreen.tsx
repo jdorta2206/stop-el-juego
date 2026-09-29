@@ -18,6 +18,7 @@ export function MultiplayerScreen({ session, onExit }: Props) {
   const [code, setCode] = useState("");
   const [room, setRoom] = useState<Room | null>(null);
   const [answers, setAnswers] = useState<Record<string, string>>({});
+  const answersRef = useRef<Record<string, string>>({});
   const [secondsLeft, setSecondsLeft] = useState(60);
   const [busy, setBusy] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -28,6 +29,10 @@ export function MultiplayerScreen({ session, onExit }: Props) {
   const playerName = session.user.name || "Jugador STOP";
   const me = room?.players?.find(p => p.playerId === playerId);
   const letter = (room?.currentLetter || "A").toUpperCase();
+
+  useEffect(() => {
+    answersRef.current = answers;
+  }, [answers]);
 
   const refreshRoom = useCallback(async (roomCode: string, signal?: AbortSignal) => {
     try {
@@ -124,7 +129,7 @@ export function MultiplayerScreen({ session, onExit }: Props) {
     submittingRef.current = true;
     setSubmitted(true); setBusy(true);
     try {
-      const updated = await apiFetch<Room>(`/api/rooms/${encodeURIComponent(active.roomCode)}/results`, { method: "POST", body: JSON.stringify({ playerId, answers, bluffedCategories: [], bluffedWords: {} }) });
+      const updated = await apiFetch<Room>(`/api/rooms/${encodeURIComponent(active.roomCode)}/results`, { method: "POST", body: JSON.stringify({ playerId, answers: answersRef.current, bluffedCategories: [], bluffedWords: {} }) });
       setRoom(updated);
       setAnswers({});
     } catch (e) {
