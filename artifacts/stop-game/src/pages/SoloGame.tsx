@@ -430,6 +430,8 @@ export default function SoloGame() {
   const submitScoreMutation = useSubmitScore();
   const queryClient = useQueryClient();
   const timerRef = useRef<NodeJS.Timeout>(null);
+  const stopTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hiddenRevealTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Guards to prevent handleStop / results-accumulation from firing more than once per round
   const stoppedRef = useRef(false);
   const resultsAppliedRef = useRef(false);
@@ -552,7 +554,13 @@ export default function SoloGame() {
     setHintReveal(null);
     setSpyUsesThisRound(0);
     sound.playRoundStart();
-    if (randomEvent === "hidden_category") setTimeout(() => sound.playHiddenReveal(), 400);
+    if (hiddenRevealTimeoutRef.current) clearTimeout(hiddenRevealTimeoutRef.current);
+    if (randomEvent === "hidden_category") {
+      hiddenRevealTimeoutRef.current = setTimeout(() => {
+        hiddenRevealTimeoutRef.current = null;
+        sound.playHiddenReveal();
+      }, 400);
+    }
 
     timerRef.current = setInterval(() => {
       if (gameTimerPausedRef.current || isGameTimerPaused()) return;
@@ -564,7 +572,10 @@ export default function SoloGame() {
             timerRef.current = null;
           }
           // Schedule handleStop outside the state-setter (safe async trigger)
-          setTimeout(handleStop, 0);
+          stopTimeoutRef.current = setTimeout(() => {
+            stopTimeoutRef.current = null;
+            void handleStop();
+          }, 0);
           return 0;
         }
         return prev - 1;
@@ -623,10 +634,17 @@ export default function SoloGame() {
     }
   };
 
-  // Cleanup card reveal timer on unmount
+  // Cleanup round timers on unmount
   useEffect(() => {
     return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+      timerRef.current = null;
+      if (stopTimeoutRef.current) clearTimeout(stopTimeoutRef.current);
+      stopTimeoutRef.current = null;
+      if (hiddenRevealTimeoutRef.current) clearTimeout(hiddenRevealTimeoutRef.current);
+      hiddenRevealTimeoutRef.current = null;
       if (cardRevealTimer.current) clearTimeout(cardRevealTimer.current);
+      cardRevealTimer.current = null;
     };
   }, []);
 
