@@ -165,7 +165,7 @@ export function Roulette({ onSpinComplete, isSpinning, targetLetter, muted = fal
       if (completeTimeoutRef.current) clearTimeout(completeTimeoutRef.current);
       completeTimeoutRef.current = null;
       controls.stop();
-    });
+    };
   }, [isSpinning, targetLetter]);
 
   const SIZE = 280;
