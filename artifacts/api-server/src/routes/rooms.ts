@@ -1977,6 +1977,15 @@ router.post("/:roomCode/rematch", writeLimiter, async (req, res) => {
         isReady: false,
       }];
 
+      // Carry the authoritative category configuration into the new room's
+      // persisted metadata. This makes the rematch independent of process-local
+      // Maps and ensures /start cannot lose the selected deck.
+      const rematchPackMeta = {
+        categoryPack: typeof oldMeta.categoryPack === "string" ? oldMeta.categoryPack : undefined,
+        customCategories: Array.isArray(oldMeta.customCategories) ? [...oldMeta.customCategories] : undefined,
+        customPackLabel: typeof oldMeta.customPackLabel === "string" ? oldMeta.customPackLabel : undefined,
+      };
+
       // The room-code UNIQUE constraint is the final authority. INSERT ...
       // ON CONFLICT DO NOTHING makes collision retries safe even under concurrency.
       let newCode: string | null = null;
@@ -1993,7 +2002,7 @@ router.post("/:roomCode/rematch", writeLimiter, async (req, res) => {
           gameMode: oldRoom.gameMode ?? "classic",
           language: oldRoom.language,
           playersJson: JSON.stringify(players),
-          stopperJson: null,
+          stopperJson: JSON.stringify(rematchPackMeta),
           isPublic: false,
         }).onConflictDoNothing({ target: roomsTable.roomCode }).returning({ roomCode: roomsTable.roomCode });
         if (inserted.length > 0) newCode = inserted[0].roomCode;
