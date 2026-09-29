@@ -64,8 +64,8 @@ router.post("/subscribe", async (req, res) => {
   }
 
   // Clamp to safe ranges. Bad client data should never poison the row.
-  const hour = Number.isFinite(hourLocal) && hourLocal >= 0 && hourLocal <= 23
-    ? Math.floor(hourLocal) : 20;
+  const hasHourLocal = Number.isFinite(hourLocal) && hourLocal >= 0 && hourLocal <= 23;
+  const hour = hasHourLocal ? Math.floor(hourLocal) : 20;
   const tz = Number.isFinite(tzOffsetMinutes) && tzOffsetMinutes >= -14 * 60 && tzOffsetMinutes <= 14 * 60
     ? Math.floor(tzOffsetMinutes) : 0;
 
