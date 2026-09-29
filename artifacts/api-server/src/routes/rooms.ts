@@ -2151,10 +2151,39 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
 
   // ── T002: Letter validation — strip answers that don't start with the correct letter
   const letter = (room.currentLetter ?? "A").toUpperCase();
+
+  // The category key is part of the client payload, so it must never become
+  // authoritative for scoring. Only categories actually shown for this room
+  // and round may contribute points; otherwise an attacker can invent a
+  // category name and exploit the validator's defensive "unknown dictionary"
+  // fallback to score arbitrary words.
+  const packConfig = roomCategoryPacks.get(roomCode.toUpperCase());
+  const configuredPack = packConfig?.pack ?? "standard";
+  const configuredCategories = resolveCategoriesForRound(
+    configuredPack,
+    letter,
+    room.currentRound ?? 1,
+    packConfig?.customCategories,
+  );
+  // The standard pack is localized client-side. Accept its four supported
+  // language labels; crazy/mix intentionally use the Spanish labels used by
+  // the room UI. Custom packs use their exact server-supplied categories.
+  const standardLocalized = [
+    "Nombre", "Lugar", "Animal", "Objeto", "Color", "Fruta", "Marca",
+    "Name", "Place", "Object", "Fruit", "Brand",
+    "Nome", "Cor",
+    "Prénom", "Lieu", "Couleur", "Marque",
+  ];
+  const allowedCategories = new Set(
+    (configuredPack === "standard" ? standardLocalized : configuredCategories)
+      .map((cat) => normalizeWord(cat)),
+  );
+
   const safeAnswers: Record<string, string> = {};
   if (answers && typeof answers === "object") {
     const entries = Object.entries(answers).slice(0, MAX_CATEGORIES_PER_ROUND);
     for (const [cat, val] of entries) {
+      if (!allowedCategories.has(normalizeWord(cat))) continue;
       if (typeof val === "string" && val.trim().length > 0) {
         const word = val.trim().slice(0, 80);
         if (word.toUpperCase().startsWith(letter)) {
