@@ -106,6 +106,20 @@ router.post("/checkout", async (req, res) => {
     if (!playerId || !priceId) {
       return res.status(400).json({ error: "playerId and priceId required" });
     }
+
+    // 🔒 The browser must never choose which Stripe recurring product is sold.
+    // Keep the Premium price id server-side so another active recurring price
+    // (for example an internal/test product) cannot be purchased through this
+    // endpoint and potentially receive the Premium entitlement.
+    const premiumPriceId = process.env["STRIPE_PREMIUM_PRICE_ID"]?.trim();
+    if (!premiumPriceId) {
+      console.error("[stripe/checkout] STRIPE_PREMIUM_PRICE_ID is not configured");
+      return res.status(503).json({ error: "Premium checkout is not configured" });
+    }
+    if (priceId !== premiumPriceId) {
+      return res.status(400).json({ error: "Invalid Premium price" });
+    }
+
     // 🔒 A logged-in account can only check out for ITSELF — blocks anyone from
     // creating a Stripe session against another player's id (which is public).
     if (!verifyClaimedIdentity(req, playerId)) {
