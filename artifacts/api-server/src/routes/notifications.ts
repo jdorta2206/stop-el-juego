@@ -46,7 +46,15 @@ router.post("/subscribe", async (req, res) => {
     return;
   }
 
-  // A push endpoint is bearer-like: whoever can register it will receive future\n  // notifications for the stored playerId. Therefore a logged-in playerId must\n  // be bound to the authenticated session; only the anonymous guest bucket may\n  // be claimed without account authentication.\n  if (playerId !== "anonymous" && !verifyClaimedIdentity(req, String(playerId))) {\n    res.status(403).json({ error: "Identity verification failed" });\n    return;\n  }\n
+  // A push endpoint is bearer-like: whoever can register it will receive future
+  // notifications for the stored playerId. Therefore a logged-in playerId must
+  // be bound to the authenticated session; only the anonymous guest bucket may
+  // be claimed without account authentication.
+  if (playerId !== "anonymous" && !verifyClaimedIdentity(req, String(playerId))) {
+    res.status(403).json({ error: "Identity verification failed" });
+    return;
+  }
+
   const { endpoint, keys } = subscription;
   const { p256dh, auth } = keys || {};
 
@@ -296,7 +304,8 @@ router.post("/send-invite", inviteLimiter, async (req, res) => {
   // up), so we can't fully prevent a spoofed display name — but we DO neutralise
   // it as an abuse vector: strip control chars/newlines and cap the length so it
   // can't be used to inject misleading multi-line content into the push payload.
-  const safeFromName = String(fromName).replace(/[\r\n\u0000-\u001F\u007F]/g, " ").trim().slice(0, 40) || "Alguien";
+  const safeFromName = String(fromName).replace(/[\r
+\u0000-\u001F\u007F]/g, " ").trim().slice(0, 40) || "Alguien";
   const safeRoomCode = String(roomCode).replace(/[^A-Za-z0-9]/g, "").slice(0, 12).toUpperCase();
   if (!safeRoomCode) { res.status(400).json({ error: "Invalid roomCode" }); return; }
 
