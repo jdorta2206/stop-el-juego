@@ -18,7 +18,7 @@ import crypto from "crypto";
 import { issuePlayerToken, clearPlayerToken, PLAYER_TOKEN_BRIDGE_KEY, readPlayerId, isLoggedInId } from "../lib/playerAuth";
 import { db, playerScoresTable } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
-import { revokePlayerId, markPlayerRevoked, restorePlayerId } from "../lib/playerRevocation";
+import { revokePlayerId, markPlayerRevoked, restorePlayerId, isPlayerRevoked } from "../lib/playerRevocation";
 
 const router = Router();
 
@@ -842,7 +842,7 @@ router.get("/tiktok/callback", async (req: Request, res: Response) => {
 // session by another year so casual players never get kicked out.
 router.get("/me", async (req: Request, res: Response) => {
   const playerId = readPlayerId(req);
-  if (!playerId) {
+  if (!playerId || isPlayerRevoked(playerId)) {
     return res.status(401).json({ error: "Not authenticated" });
   }
 
