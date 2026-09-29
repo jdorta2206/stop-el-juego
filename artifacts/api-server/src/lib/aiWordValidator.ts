@@ -196,10 +196,6 @@ export async function validateWordWithAi(opts: AiValidationOptions): Promise<AiV
       }
     }
 
-
-      return { isValid: false, source: "quota_blocked" as const };
-    }
-
     const systemPrompt =
       `Eres un validador permisivo para un juego de palabras tipo "Stop"/"Tutti Frutti". ` +
       `Decides si una palabra puede aceptarse como ejemplo razonable de una categoría. ` +
