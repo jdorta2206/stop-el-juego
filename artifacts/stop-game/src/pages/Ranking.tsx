@@ -178,7 +178,7 @@ export default function Ranking() {
   // Weekly ranking
   const { data: weeklyData, isLoading: weeklyLoading } = useQuery({
     queryKey: ["/api/ranking/weekly"],
-    queryFn: () => fetch(`${getApiUrl()}/api/ranking/weekly`).then(r => r.json()),
+    queryFn: ({ signal }) => fetch(`${getApiUrl()}/api/ranking/weekly`, { signal }).then(r => r.json()),
     refetchOnMount: true,
     staleTime: 0,
   });
@@ -186,10 +186,12 @@ export default function Ranking() {
   const weekCountdown = useWeekCountdown(weeklyData?.nextReset);
   const { data: weeklyMe } = useQuery({
     queryKey: ["/api/ranking/weekly/me", player?.id],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const response = await fetch(getApiUrl() + "/api/ranking/weekly/me", {
         credentials: "include",
         headers: authHeaders(),
+        signal,
+        signal,
       });
       if (!response.ok) return null;
       return response.json();
@@ -202,7 +204,7 @@ export default function Ranking() {
   // Monthly ranking
   const { data: monthlyData, isLoading: monthlyLoading } = useQuery({
     queryKey: ["/api/ranking/monthly"],
-    queryFn: () => fetch(`${getApiUrl()}/api/ranking/monthly`).then(r => r.json()),
+    queryFn: ({ signal }) => fetch(`${getApiUrl()}/api/ranking/monthly`, { signal }).then(r => r.json()),
     refetchOnMount: true,
     staleTime: 0,
   });
@@ -210,7 +212,7 @@ export default function Ranking() {
   const monthCountdown = useWeekCountdown(monthlyData?.nextReset);
   const { data: monthlyMe } = useQuery({
     queryKey: ["/api/ranking/monthly/me", player?.id],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const response = await fetch(getApiUrl() + "/api/ranking/monthly/me", {
         credentials: "include",
         headers: authHeaders(),
