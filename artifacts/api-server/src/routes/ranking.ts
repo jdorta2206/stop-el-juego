@@ -594,6 +594,13 @@ router.post("/scores", scoreLimiter, async (req, res) => {
         })
         .returning();
       if (!created) throw new Error("BONUS_SCORE_INSERT_FAILED");
+      await tx.insert(gameHistoryTable).values({
+        playerId,
+        score,
+        letter,
+        mode: mode ?? "solo",
+        won: won ?? false,
+      });
       return created;
     });
 
@@ -603,8 +610,10 @@ router.post("/scores", scoreLimiter, async (req, res) => {
     }
     player = bonusResult;
   } else {
-if (existing.length > 0) {
-    const [updated] = await db
+    player = await db.transaction(async (tx) => {
+      let txPlayer;
+      if (existing.length > 0) {
+    const [updated] = await tx
       .update(playerScoresTable)
       .set({
         playerName,
@@ -637,7 +646,7 @@ if (existing.length > 0) {
     // plain INSERT could lose that race with a unique-key error and turn a
     // successful game into a 500. Keep the first row and atomically add the
     // concurrent submission instead.
-    const [created] = await db
+    const [created] = await tx
       .insert(playerScoresTable)
       .values({
         playerId,
@@ -669,8 +678,19 @@ if (existing.length > 0) {
         },
       })
       .returning();
-    player = created;
-  }
+    txPlayer = created;
+      }
+
+      if (!txPlayer) throw new Error("SCORE_UPDATE_FAILED");
+      await tx.insert(gameHistoryTable).values({
+        playerId,
+        score,
+        letter,
+        mode: mode ?? "solo",
+        won: won ?? false,
+      });
+      return txPlayer;
+    });
   }
 
   if (!isBonus && verified > 0 && scoreTokens) {
@@ -721,14 +741,6 @@ if (existing.length > 0) {
       )
     );
   }
-
-  await db.insert(gameHistoryTable).values({
-    playerId,
-    score,
-    letter,
-    mode: mode ?? "solo",
-    won: won ?? false,
-  });
 
   if (!isBonus) {
     void recordTrustedAnalyticsEvent({
