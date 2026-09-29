@@ -460,14 +460,12 @@ router.post("/scores", scoreLimiter, async (req, res) => {
       return;
     }
     await db.delete(scoreBonusClaimsTable).where(sql`${scoreBonusClaimsTable.expiresAt} < NOW()`);
-    const [claimed] = await db
-      .delete(scoreBonusClaimsTable)
+    const [availableClaim] = await db
+      .select({ tokenSetHash: scoreBonusClaimsTable.tokenSetHash, maxScore: scoreBonusClaimsTable.maxScore })
+      .from(scoreBonusClaimsTable)
       .where(sql`${scoreBonusClaimsTable.tokenSetHash} = ${tokenSetHash} AND ${scoreBonusClaimsTable.playerId} = ${playerId}`)
-      .returning({
-        tokenSetHash: scoreBonusClaimsTable.tokenSetHash,
-        maxScore: scoreBonusClaimsTable.maxScore,
-      });
-    if (!claimed || rawScore <= 0 || rawScore > claimed.maxScore) {
+      .limit(1);
+    if (!availableClaim || rawScore <= 0 || rawScore > availableClaim.maxScore) {
       res.status(422).json({ error: "INVALID_BONUS_SCORE" });
       return;
     }
@@ -535,7 +533,75 @@ router.post("/scores", scoreLimiter, async (req, res) => {
     : undefined;
 
   let player;
-  if (existing.length > 0) {
+  if (isBonus) {
+    const bonusResult = await db.transaction(async (tx) => {
+      const [claimed] = await tx
+        .delete(scoreBonusClaimsTable)
+        .where(sql`${scoreBonusClaimsTable.tokenSetHash} = ${tokenSetHash} AND ${scoreBonusClaimsTable.playerId} = ${playerId}`)
+        .returning({
+          tokenSetHash: scoreBonusClaimsTable.tokenSetHash,
+          maxScore: scoreBonusClaimsTable.maxScore,
+        });
+      if (!claimed || rawScore <= 0 || rawScore > claimed.maxScore) return null;
+
+      if (existing.length > 0) {
+        const [updated] = await tx
+          .update(playerScoresTable)
+          .set({
+            playerName,
+            avatarColor: avatarColor ?? existing[0].avatarColor,
+            totalScore: sql`${playerScoresTable.totalScore} + ${score}`,
+            xp: sql`${playerScoresTable.xp} + ${xpGain}`,
+            level: sql`GREATEST(${playerScoresTable.level}, ${newLevel})`,
+            updatedAt: new Date(),
+          })
+          .where(eq(playerScoresTable.playerId, playerId))
+          .returning();
+        return updated ?? null;
+      }
+
+      const [created] = await tx
+        .insert(playerScoresTable)
+        .values({
+          playerId,
+          playerName,
+          avatarColor: avatarColor ?? "#e53e3e",
+          totalScore: score,
+          gamesPlayed: 0,
+          wins: 0,
+          currentStreak: 0,
+          longestStreak: 0,
+          lastPlayedDate: null,
+          streakDaysJson: "[]",
+          xp: xpGain,
+          level: calcLevel(xpGain),
+          coins: coinGain,
+        })
+        .onConflictDoUpdate({
+          target: playerScoresTable.playerId,
+          set: {
+            playerName,
+            avatarColor: avatarColor ?? "#e53e3e",
+            totalScore: sql`${playerScoresTable.totalScore} + ${score}`,
+            gamesPlayed: sql`${playerScoresTable.gamesPlayed}`,
+            wins: sql`${playerScoresTable.wins}`,
+            xp: sql`${playerScoresTable.xp} + ${xpGain}`,
+            level: sql`GREATEST(${playerScoresTable.level}, ${calcLevel(xpGain)})`,
+            coins: sql`${playerScoresTable.coins} + ${coinGain}`,
+            updatedAt: new Date(),
+          },
+        })
+        .returning();
+      return created ?? null;
+    });
+
+    if (!bonusResult) {
+      res.status(422).json({ error: "INVALID_BONUS_SCORE" });
+      return;
+    }
+    player = bonusResult;
+  } else {
+if (existing.length > 0) {
     const [updated] = await db
       .update(playerScoresTable)
       .set({
@@ -602,6 +668,7 @@ router.post("/scores", scoreLimiter, async (req, res) => {
       })
       .returning();
     player = created;
+  }
   }
 
   if (!isBonus && verified > 0 && scoreTokens) {
