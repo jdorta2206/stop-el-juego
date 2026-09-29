@@ -55,6 +55,14 @@ const challengeTableReady = db.execute(sql`
   CREATE INDEX IF NOT EXISTS player_challenges_target_status_idx
     ON player_challenges (to_player_id, status, created_at)
  `)).then(() => db.execute(sql`
+  DELETE FROM player_challenges a
+  USING player_challenges b
+  WHERE a.status = 'pending'
+    AND b.status = 'pending'
+    AND a.from_player_id = b.from_player_id
+    AND a.to_player_id = b.to_player_id
+    AND (a.created_at < b.created_at OR (a.created_at = b.created_at AND a.challenge_id < b.challenge_id))
+`)).then(() => db.execute(sql`
   CREATE UNIQUE INDEX IF NOT EXISTS player_challenges_pending_pair_uidx
     ON player_challenges (from_player_id, to_player_id)
     WHERE status = 'pending'
