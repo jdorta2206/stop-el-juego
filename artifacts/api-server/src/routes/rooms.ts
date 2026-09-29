@@ -1982,6 +1982,18 @@ router.post("/:roomCode/rematch", writeLimiter, async (req, res) => {
       res.status(403).json({ error: "Only players in the room can request a rematch" }); return;
     }
 
+    // A rematch must preserve the category deck selected for the finished
+    // room. Without this copy, crazy/mix/custom rooms silently restart as the
+    // standard pack even though the endpoint promises the same game settings.
+    const previousPack = roomCategoryPacks.get(oldCode);
+    if (previousPack) {
+      roomCategoryPacks.set(outcome.rematchCode, {
+        pack: previousPack.pack,
+        customCategories: previousPack.customCategories ? [...previousPack.customCategories] : undefined,
+        customLabel: previousPack.customLabel,
+      });
+    }
+
     roomRematch.set(oldCode, outcome.rematchCode);
     // Auto-clear only the in-memory fast-path after 5 minutes. The authoritative
     // link remains persisted in stopperJson and is still returned after restart.
