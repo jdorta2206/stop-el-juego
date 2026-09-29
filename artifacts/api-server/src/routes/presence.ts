@@ -206,15 +206,12 @@ router.post("/challenge", async (req, res) => {
 
   await challengeTableReady;
 
-  // Remove any existing pending challenge between these two players.
-  await db.execute(sql`
-    DELETE FROM player_challenges
-    WHERE from_player_id = ${fromPlayerId}
-      AND to_player_id = ${toPlayerId}
-      AND is_room_invite = FALSE
-      AND status = 'pending'
-  `);
-
+  // Do not delete an existing pending challenge before creating a replacement
+  // room. Two concurrent requests can otherwise both create rooms, with the
+  // second request deleting the first challenge after the first response has
+  // already handed its room code to the caller. The partial unique index below
+  // is the concurrency authority: if another pending challenge wins, this
+  // request deletes only its own newly-created room and returns the winner.
   const challengeId = `ch_${Date.now()}_${Math.random().toString(36).slice(2, 6)}_${Math.random().toString(36).slice(2, 8)}`;
 
   // Room codes are UNIQUE in the database. Reserve the room before publishing
