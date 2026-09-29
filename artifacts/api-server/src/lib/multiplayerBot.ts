@@ -483,7 +483,7 @@ export function startBotTimerRecovery(deps: BotActionDeps) {
   const recover = async () => {
     if (!recoveryDeps) return;
     try {
-      const rows = await db.select().from(roomsTable).where(eq(roomsTable.status, "playing"));
+      const rows = await db.select().from(roomsTable).where(sql`status IN ('playing', 'stopped')`);
       for (const room of rows) {
         let players: any[];
         try { players = JSON.parse(room.playersJson); } catch { continue; }
@@ -492,15 +492,20 @@ export function startBotTimerRecovery(deps: BotActionDeps) {
 
         let meta: any = {};
         try { meta = room.stopperJson ? JSON.parse(room.stopperJson) : {}; } catch {}
-        const roundStartedAt = Number(meta?.roundStartedAt) || Date.now();
-        const elapsed = Math.max(0, Date.now() - roundStartedAt);
+        const isStopped = room.status === "stopped";
+        const anchor = isStopped
+          ? Number(meta?.stopTimestamp) || Date.now()
+          : Number(meta?.roundStartedAt) || Date.now();
+        const elapsed = Math.max(0, Date.now() - anchor);
 
         for (const bot of bots) {
           const timers = roomBotTimers.get(room.roomCode);
-          if (timers?.size) continue;
-          const delay = Math.max(0, 25_000 + (bot.playerId.charCodeAt(bot.playerId.length - 1) % 26_000) - elapsed);
+          if ((timers?.size ?? 0) >= bots.length) break;
+          const delay = isStopped
+            ? Math.max(0, 1_500 + (bot.playerId.charCodeAt(bot.playerId.length - 1) % 2_500) - elapsed)
+            : Math.max(0, 25_000 + (bot.playerId.charCodeAt(bot.playerId.length - 1) % 26_000) - elapsed);
           const timer = setTimeout(() => {
-            performBotSubmit(room.roomCode, bot.playerId, recoveryDeps!, { triggerStop: true });
+            performBotSubmit(room.roomCode, bot.playerId, recoveryDeps!, { triggerStop: !isStopped });
           }, delay);
           trackTimer(room.roomCode, timer);
         }
