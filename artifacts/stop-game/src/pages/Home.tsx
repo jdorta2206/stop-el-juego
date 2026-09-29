@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link } from "wouter";
 import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui";
@@ -43,6 +43,7 @@ export default function Home() {
   const [dailyDone, setDailyDone] = useState(false);
 
   useEffect(() => {
+    const controller = new AbortController();
     const today = new Date().toISOString().slice(0, 10);
     const localPlayed = (() => {
       try { return !!localStorage.getItem(`stop_daily_${today}`); } catch { return false; }
@@ -56,10 +57,11 @@ export default function Home() {
     fetch(`${getApiUrl()}/api/daily/status?playerId=${encodeURIComponent(player.id)}&language=${encodeURIComponent(lang)}`, {
       headers: { ...authHeaders() },
       credentials: "include",
+      signal: controller.signal,
     })
       .then(r => r.ok ? r.json() : Promise.reject(new Error("daily-status")))
-      .then(d => setDailyDone(!!d.played))
-      .catch(() => setDailyDone(false));
+      .then(d => { if (!controller.signal.aborted) setDailyDone(!!d.played); })
+      .catch(() => { if (!controller.signal.aborted) setDailyDone(false); });
   }, [player?.id, player?.loginMethod, lang]);
 
   const ftue = useFTUE();
@@ -977,20 +979,24 @@ export default function Home() {
 // 🔴 LiveRoomsSection — public spectator-friendly rooms currently in play
 function LiveRoomsSection() {
   const [rooms, setRooms] = useState<any[]>([]);
+  const abortRef = useRef<AbortController | null>(null);
   useEffect(() => {
     let stop = false;
     const fetchRooms = async () => {
       try {
+        abortRef.current?.abort();
+        const controller = new AbortController();
+        abortRef.current = controller;
         const apiBase = (import.meta.env.VITE_API_BASE_URL || "") as string;
-        const r = await fetch(`${apiBase}/api/rooms/live`);
+        const r = await fetch(`${apiBase}/api/rooms/live`, { signal: controller.signal });
         if (!r.ok) return;
         const data = await r.json();
-        if (!stop) setRooms(data.rooms ?? []);
+        if (!stop && !controller.signal.aborted) setRooms(data.rooms ?? []);
       } catch { /* ignore */ }
     };
     fetchRooms();
     const id = setInterval(fetchRooms, 30000);
-    return () => { stop = true; clearInterval(id); };
+    return () => { stop = true; clearInterval(id); abortRef.current?.abort(); };
   }, []);
 
   if (rooms.length === 0) return null;
