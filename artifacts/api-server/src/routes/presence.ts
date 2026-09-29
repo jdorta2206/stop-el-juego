@@ -348,7 +348,7 @@ router.post("/room-invite", async (req, res) => {
 
   const challengeId = `ri_${Date.now()}_${Math.random().toString(36).slice(2, 6)}_${Math.random().toString(36).slice(2, 8)}`;
 
-  await db.execute(sql`
+  const inserted = await db.execute(sql`
     INSERT INTO player_challenges
       (challenge_id, from_player_id, from_name, from_picture, from_avatar_color,
        to_player_id, room_code, status, is_room_invite, created_at)
@@ -356,7 +356,25 @@ router.post("/room-invite", async (req, res) => {
       (${challengeId}, ${fromPlayerId}, ${fromName}, ${fromPicture || null},
        ${fromAvatarColor || "#e53e3e"}, ${toPlayerId}, ${roomCode},
        'pending', TRUE, NOW())
+    ON CONFLICT (from_player_id, to_player_id, is_room_invite) WHERE status = 'pending'
+    DO NOTHING
+    RETURNING challenge_id
   `);
+  if ((inserted as any).rowCount === 0) {
+    const existing = await db.execute(sql`
+      SELECT challenge_id
+      FROM player_challenges
+      WHERE from_player_id = ${fromPlayerId}
+        AND to_player_id = ${toPlayerId}
+        AND is_room_invite = TRUE
+        AND status = 'pending'
+      ORDER BY created_at DESC
+      LIMIT 1
+    `);
+    const winner = (existing.rows as any[])[0];
+    if (!winner) return res.status(409).json({ error: "Room invite creation raced; please retry" });
+    return res.json({ ok: true, challengeId: winner.challenge_id });
+  }
 
   // Push notification to target (works even if app is closed)
   const invLang = (req.body as any).language || "es";
