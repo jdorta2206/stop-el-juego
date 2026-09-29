@@ -312,6 +312,18 @@ export async function recordAuthoritativeSeasonEvents(
     await db.transaction(async (tx) => {
       // Serialize authoritative events with season finalization at rollover.
       await tx.execute(sql`SELECT pg_advisory_xact_lock(${season.id}::bigint)`);
+
+      // The request may have started before midnight and only acquired the
+      // lock after finalization completed. Re-check the season boundary while
+      // holding the same lock so an old-season event can never be appended
+      // after its standings have been frozen.
+      const activeSeason = (await tx.execute(sql`
+        SELECT 1 FROM seasons
+        WHERE id = ${season.id} AND end_date >= ${todayUTC()}
+        LIMIT 1
+      `)) as unknown as SqlResult<{ "?column?": number }>;
+      if ((activeSeason.rows?.length ?? 0) === 0) return;
+
       const locked = (await tx.execute(sql`
         SELECT id, missions_json FROM season_progress WHERE id = ${progress.id} FOR UPDATE
       `)) as unknown as SqlResult<Pick<ProgressRowSql, "id" | "missions_json">>;
