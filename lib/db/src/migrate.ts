@@ -91,9 +91,10 @@ export async function ensureIndexes(): Promise<void> {
     try {
       await db.execute(sql.raw(stmt));
     } catch (err: any) {
-      if (!/already exists/i.test(err?.message ?? "")) {
-        console.error("[ensureIndexes] failed:", err?.message ?? err);
-      }
+      if (/already exists/i.test(err?.message ?? "")) continue;
+      console.error("[ensureIndexes] failed:", err?.message ?? err);
+      _indexesReady = false;
+      throw err;
     }
   }
   _indexesReady = true;
