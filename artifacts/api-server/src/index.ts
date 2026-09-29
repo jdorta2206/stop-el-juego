@@ -5,6 +5,7 @@ import app from "./app";
 import { startDailyCron } from "./lib/dailyCron";
 import { revokeFakePremium } from "./lib/permanentPremium";
 import { ensureIndexes } from "@workspace/db";
+import { loadRevokedPlayerIds } from "./lib/playerRevocation";
 import contactRouter from "./routes/contact";
 
 // Railway deployment trigger: keep the API service in sync with the frontend build.
@@ -139,6 +140,7 @@ async function main() {
   // so Railway can observe the instance; /healthz remains 503 until ready.
   try {
     await ensureIndexes();
+    await loadRevokedPlayerIds();
   } catch (err: any) {
     console.error("[ensureIndexes] failed at startup:", err?.message ?? err);
     process.exit(1);
