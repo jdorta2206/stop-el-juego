@@ -52,7 +52,8 @@ router.get("/", basicAuth, async (_req, res) => {
              COUNT(*) FILTER (WHERE event_name = 'game_complete')::int AS games_completed,
              COUNT(*) FILTER (WHERE event_name IN ('ad_impression','rewarded_ad_completed'))::int AS ad_impressions
       FROM analytics_events
-      WHERE created_at >= date_trunc('day', NOW() AT TIME ZONE 'Europe/Madrid') AT TIME ZONE 'Europe/Madrid'
+      WHERE trusted = TRUE
+        AND created_at >= date_trunc('day', NOW() AT TIME ZONE 'Europe/Madrid') AT TIME ZONE 'Europe/Madrid'
       GROUP BY platform
       ORDER BY platform
     `);
@@ -87,7 +88,8 @@ router.get("/", basicAuth, async (_req, res) => {
     const events = await db.execute(sql`
       SELECT event_name, COUNT(*)::int AS total
       FROM analytics_events
-      WHERE created_at >= NOW() - INTERVAL '7 days'
+      WHERE trusted = TRUE
+        AND created_at >= NOW() - INTERVAL '7 days'
       GROUP BY event_name
       ORDER BY total DESC, event_name
       LIMIT 30
@@ -96,7 +98,8 @@ router.get("/", basicAuth, async (_req, res) => {
     const powerups = await db.execute(sql`
       SELECT event_name, COUNT(*)::int AS total
       FROM analytics_events
-      WHERE created_at >= NOW() - INTERVAL '7 days'
+      WHERE trusted = TRUE
+        AND created_at >= NOW() - INTERVAL '7 days'
         AND event_name IN ('rewarded_ad_requested','rewarded_ad_completed','rewarded_ad_failed','powerup_used','game_start','game_complete')
       GROUP BY event_name
       ORDER BY CASE event_name
