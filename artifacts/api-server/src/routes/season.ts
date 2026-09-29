@@ -79,34 +79,36 @@ export async function finalizePreviousSeason(currentSeasonId: number, today: str
 
     for (const season of endedRows.rows ?? []) {
       const prevId = Number(season.id);
-      const standings = (await db.execute(sql`
-        SELECT player_id, xp,
-               ROW_NUMBER() OVER (ORDER BY xp DESC, id ASC) AS rank,
-               COUNT(*) OVER () AS total
-        FROM season_progress
-        WHERE season_id = ${prevId}
-      `)) as unknown as SqlResult<{
-        player_id: string;
-        xp: number;
-        rank: number | string;
-        total: number | string;
-      }>;
-
-      const rows = standings.rows ?? [];
-      if (rows.length === 0) {
-        console.log(`[finalizePreviousSeason] Season ${prevId} has no players; marked as processed.`);
-        continue;
-      }
-
+      // Finalization and authoritative season events share one transaction-level
+      // advisory lock. This closes the midnight race where an event that started
+      // before rollover could otherwise update the old season after its standings
+      // snapshot had already been taken.
+      const client = await pool.connect();
       let processed = 0;
-      for (const r of rows) {
-        const rank = Number(r.rank);
-        const total = Number(r.total);
-        const cosmetic = rank <= 3 ? championFrameId(prevId, rank as 1 | 2 | 3) : null;
+      try {
+        await client.query("BEGIN");
+        await client.query("SELECT pg_advisory_xact_lock($1::bigint)", [prevId]);
 
-        const client = await pool.connect();
-        try {
-          await client.query("BEGIN");
+        const standings = await client.query<{
+          player_id: string;
+          xp: number;
+          rank: number | string;
+          total: number | string;
+        }>(
+          `SELECT player_id, xp,
+                  ROW_NUMBER() OVER (ORDER BY xp DESC, id ASC) AS rank,
+                  COUNT(*) OVER () AS total
+           FROM season_progress
+           WHERE season_id = $1
+           ORDER BY xp DESC, id ASC`,
+          [prevId],
+        );
+
+        for (const r of standings.rows) {
+          const rank = Number(r.rank);
+          const total = Number(r.total);
+          const cosmetic = rank <= 3 ? championFrameId(prevId, rank as 1 | 2 | 3) : null;
+
           await client.query(
             `INSERT INTO season_finals
                (season_id, player_id, final_rank, final_xp, total_players, awarded_cosmetic)
@@ -141,18 +143,18 @@ export async function finalizePreviousSeason(currentSeasonId: number, today: str
               }
             }
           }
-
-          await client.query("COMMIT");
           processed++;
-        } catch (txErr) {
-          await client.query("ROLLBACK").catch(() => {});
-          console.error(
-            `[finalizePreviousSeason] season ${prevId}, player ${r.player_id} failed:`,
-            txErr instanceof Error ? txErr.message : String(txErr),
-          );
-        } finally {
-          client.release();
         }
+
+        await client.query("COMMIT");
+      } catch (txErr) {
+        await client.query("ROLLBACK").catch(() => {});
+        console.error(
+          `[finalizePreviousSeason] season ${prevId} failed:`,
+          txErr instanceof Error ? txErr.message : String(txErr),
+        );
+      } finally {
+        client.release();
       }
 
       console.log(
