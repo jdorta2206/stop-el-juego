@@ -129,7 +129,12 @@ router.post("/verify", async (req: Request, res: Response) => {
     const claimedPlayerId = String(playerId);
     if (!verifyClaimedIdentity(req, claimedPlayerId)) return res.status(403).json({ error: "Identidad del jugador no válida" });
 
-    const verified = await verifyPurchase(String(productId), String(purchaseToken));
+    const requestedProductId = String(productId).trim();
+    if (requestedProductId !== "premium_monthly") {
+      return res.status(400).json({ error: "Producto de suscripción no válido" });
+    }
+
+    const verified = await verifyPurchase(requestedProductId, String(purchaseToken));
     if ("error" in verified) return res.status(verified.status).json({ error: verified.error });
     if (!verified.isEntitled) return res.status(400).json({ error: "Suscripción no válida o no activa" });
 
