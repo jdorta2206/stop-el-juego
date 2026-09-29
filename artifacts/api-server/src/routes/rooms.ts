@@ -1838,6 +1838,25 @@ router.post("/:roomCode/spy", writeLimiter, async (req, res) => {
   let used = roomSpyUsage.get(code);
   if (!used) { used = new Map(); roomSpyUsage.set(code, used); }
   const callerPremium = await isPlayerPremium(playerId);
+
+  // Premium lookup is asynchronous. The room can advance while it is in
+  // flight, so re-read the authoritative round before consuming the spy.
+  // Otherwise a slow request could reveal a draft from the previous round.
+  const [liveRoom] = await db.select().from(roomsTable)
+    .where(eq(roomsTable.roomCode, code))
+    .limit(1);
+  if (!liveRoom || liveRoom.status !== "playing" ||
+      liveRoom.updatedAt.getTime() !== room.updatedAt.getTime()) {
+    res.status(409).json({ error: "La ronda ya no está activa" });
+    return;
+  }
+
+  const livePlayers = parsePlayers(liveRoom.playersJson);
+  if (!livePlayers.some((p: any) => p.playerId === playerId)) {
+    res.status(403).json({ error: "No estás en esta sala" });
+    return;
+  }
+
   const limit = callerPremium ? SPY_LIMIT_PREMIUM : SPY_LIMIT_FREE;
   const current = used.get(playerId) ?? 0;
   if (current >= limit) {
@@ -1856,7 +1875,7 @@ router.post("/:roomCode/spy", writeLimiter, async (req, res) => {
     return;
   }
   const cutoff = Date.now() - 5000;
-  const memberIds = new Set(players.map((p: any) => p.playerId));
+  const memberIds = new Set(livePlayers.map((p: any) => p.playerId));
   const candidates: Array<{ pid: string; name: string; cat: string; word: string }> = [];
   for (const [pid, info] of lr.entries()) {
     // A player may have left while their last typing snapshot is still fresh.
