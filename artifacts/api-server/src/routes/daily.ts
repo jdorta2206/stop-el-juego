@@ -54,8 +54,7 @@ router.get("/", (req, res) => {
 // GET /api/daily/status?playerId=...&language=es → authoritative completion state
 router.get("/status", async (req, res) => {
   const playerId = typeof req.query.playerId === "string" ? req.query.playerId.trim() : "";
-  const language = typeof req.query.language === "string" ? req.query.language.trim().toLowerCase() : "";
-  if (!playerId || !["es", "en", "pt", "fr"].includes(language)) {
+  if (!playerId) {
     res.status(400).json({ error: "Invalid daily status request" });
     return;
   }
@@ -70,7 +69,6 @@ router.get("/status", async (req, res) => {
     .where(and(
       eq(dailyResultsTable.playerId, playerId),
       eq(dailyResultsTable.challengeDate, today),
-      eq(dailyResultsTable.language, language),
     ))
     .limit(1);
   res.json({ played: rows.length > 0, score: rows[0]?.score ?? null, date: today });
