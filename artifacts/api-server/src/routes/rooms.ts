@@ -1516,6 +1516,17 @@ router.post("/:roomCode/leave", async (req, res) => {
     roomReactions.delete(code);
     roomPhrases.delete(code);
     roomCategoryPacks.delete(code);
+    // The room code can be recycled. Close and discard every SSE connection
+    // still registered under the deleted code so clients from the old room
+    // can never receive snapshots from a newly created room with the same code.
+    const staleSse = sseClients.get(code);
+    if (staleSse) {
+      for (const client of staleSse) { try { client.res.end(); } catch {} }
+      sseClients.delete(code);
+    }
+    // Reset the per-code broadcast ordering marker as well; it belongs to the
+    // deleted room and must not constrain a future room that reuses this code.
+    lastBroadcastUpdatedAt.delete(code);
     // 🤖 Cancel pending bot timers so they don't fire against a deleted room.
     clearBotTimers(code);
     res.json({ ok: true, deleted: true });
