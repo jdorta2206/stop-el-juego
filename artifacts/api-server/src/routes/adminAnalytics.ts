@@ -1,10 +1,18 @@
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
 import { timingSafeEqual } from "crypto";
-import { db } from "@workspace/db";
+import { db, indexesReady } from "@workspace/db";
 import { sql } from "drizzle-orm";
 import { authLimiter } from "../middlewares/rateLimit";
 
 const router: IRouter = Router();
+
+router.use((_req, res, next) => {
+  if (!indexesReady()) {
+    res.setHeader("Retry-After", "2");
+    return res.status(503).json({ error: "Server warming up", ready: false });
+  }
+  next();
+});
 
 function safeEqual(a: string, b: string): boolean {
   const aa = Buffer.from(a, "utf8");
