@@ -61,10 +61,11 @@ const challengeTableReady = db.execute(sql`
     AND b.status = 'pending'
     AND a.from_player_id = b.from_player_id
     AND a.to_player_id = b.to_player_id
+    AND a.is_room_invite = b.is_room_invite
     AND (a.created_at < b.created_at OR (a.created_at = b.created_at AND a.challenge_id < b.challenge_id))
 `)).then(() => db.execute(sql`
   CREATE UNIQUE INDEX IF NOT EXISTS player_challenges_pending_pair_uidx
-    ON player_challenges (from_player_id, to_player_id)
+    ON player_challenges (from_player_id, to_player_id, is_room_invite)
     WHERE status = 'pending'
 `)).catch((err) => {
   console.error("[presence] failed to initialize challenge persistence:", err);
@@ -268,7 +269,7 @@ router.post("/challenge", async (req, res) => {
         (${challengeId}, ${fromPlayerId}, ${fromName}, ${fromPicture || null},
          ${fromAvatarColor || "#e53e3e"}, ${toPlayerId}, ${roomCode},
          'pending', FALSE, NOW())
-      ON CONFLICT (from_player_id, to_player_id) WHERE status = 'pending'
+      ON CONFLICT (from_player_id, to_player_id, is_room_invite) WHERE status = 'pending'
       DO NOTHING
       RETURNING challenge_id, room_code
     `);
