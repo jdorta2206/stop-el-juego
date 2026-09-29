@@ -2,7 +2,8 @@ import { Router, type IRouter } from "express";
 import { db, dailyResultsTable } from "@workspace/db";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { verifyClaimedIdentity } from "../lib/playerAuth";
-import { sumVerifiedBasePersistent, ceilingFromBase, absoluteCeiling } from "../lib/scoreToken";\nimport { recordAuthoritativeSeasonEvents } from "./season";
+import { sumVerifiedBasePersistent, ceilingFromBase, absoluteCeiling } from "../lib/scoreToken";
+import { recordAuthoritativeSeasonEvents } from "./season";
 
 const router: IRouter = Router();
 
