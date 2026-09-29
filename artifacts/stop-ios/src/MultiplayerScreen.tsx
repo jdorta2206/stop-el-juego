@@ -93,7 +93,7 @@ export function MultiplayerScreen({ session, onExit }: Props) {
       }) });
       setRoom(created); setCode(created.roomCode);
     } catch (e) { setError(e instanceof Error ? e.message : "No se pudo crear la sala."); }
-    finally { setBusy(false); }
+    finally { actionInFlightRef.current = false; setBusy(false); }
   }
 
   async function joinRoom() {
