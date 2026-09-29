@@ -482,10 +482,9 @@ router.post("/scores", scoreLimiter, async (req, res) => {
     // count cap independent of the client-supplied `mode`; otherwise a caller
     // could request `multiplayer` and raise the cap from 3 rounds to 12.
     : await sumVerifiedBasePersistent(scoreTokens, 3);
-  if (!isBonus && rawScore > 0 && verified === 0) {
-    res.status(422).json({ error: "SCORE_VERIFICATION_REQUIRED" });
-    return;
-  }
+  // Offline submissions legitimately have no round voucher. They are still
+  // bounded by the absolute per-mode ceiling below; rejecting them here would
+  // make the offline outbox permanently discard every positive offline score.
   const ceiling = isBonus ? existingForBonus[0].totalScore : (verified > 0 ? ceilingFromBase(verifiedBase) : absoluteCeiling(mode));
   const cappedRaw = Math.max(0, Math.min(rawScore, ceiling));
   // 🔒 Never trust the request body for the multiplayer multiplier. It is
