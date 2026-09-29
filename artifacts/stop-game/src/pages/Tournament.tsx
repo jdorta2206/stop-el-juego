@@ -70,11 +70,15 @@ export default function Tournament() {
   const [autoJoinTried, setAutoJoinTried] = useState(false);
   const redirectedMatchRef = useRef<string | null>(null);
   const resumeTournamentRef = useRef<string | null>(null);
+  const pollAbortRef = useRef<AbortController | null>(null);
 
   const poll = useCallback(async () => {
     if (!tournament || !player) return;
+    pollAbortRef.current?.abort();
+    const controller = new AbortController();
+    pollAbortRef.current = controller;
     try {
-      const data: Tournament = await apiFetch(`/${tournament.code}`);
+      const data: Tournament = await apiFetch(`/${tournament.code}`, { signal: controller.signal });
       setTournament(data);
       if (data.status === "active" && view !== "bracket") setView("bracket");
 
@@ -91,13 +95,20 @@ export default function Tournament() {
           navigate(`/room/${myMatch.roomCode}?torneo=${data.code}&match=${myMatch.id}`);
         }
       }
-    } catch {}
+    } catch (error) {
+      if (!controller.signal.aborted) return;
+    } finally {
+      if (pollAbortRef.current === controller) pollAbortRef.current = null;
+    }
   }, [tournament, player, view, navigate]);
 
   useEffect(() => {
     if (!tournament) return;
     const id = setInterval(poll, 2500);
-    return () => clearInterval(id);
+    return () => {
+      clearInterval(id);
+      pollAbortRef.current?.abort();
+    };
   }, [poll, tournament]);
 
   useEffect(() => {
