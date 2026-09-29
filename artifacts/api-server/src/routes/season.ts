@@ -261,20 +261,36 @@ async function getOrCreateProgress(playerId: string, seasonId: number): Promise<
     row = existing[0];
   }
 
-  // Lazily roll missions over to today.
-  const currentDate = (() => {
-    try { return JSON.parse(row.missionsJson || "{}")?.date; }
-    catch { return undefined; }
-  })();
-  if (currentDate !== today) {
-    const rolled: MissionsBlob = { date: today, missions: buildMissionsForDate(today) };
-    await db
-      .update(seasonProgressTable)
-      .set({ missionsJson: JSON.stringify(rolled), updatedAt: new Date() })
-      .where(eq(seasonProgressTable.id, row.id));
-    row.missionsJson = JSON.stringify(rolled);
-  }
-  return row;
+  // Lazily roll missions over to today under the same row lock used by
+  // authoritative mission progress. Without this transaction, a rollover
+  // update could race a gameplay event and overwrite progress written by the
+  // other request.
+  const rolledRow = await db.transaction(async (tx) => {
+    const locked = (await tx.execute(sql`
+      SELECT id, player_id, season_id, xp, claimed_tiers, missions_json, updated_at
+      FROM season_progress
+      WHERE id = ${row.id}
+      FOR UPDATE
+    `)) as unknown as SqlResult<ProgressRow>;
+    const current = locked.rows?.[0];
+    if (!current) return null;
+
+    const currentDate = (() => {
+      try { return JSON.parse(current.missionsJson || "{}")?.date; }
+      catch { return undefined; }
+    })();
+
+    if (currentDate !== today) {
+      const rolled: MissionsBlob = { date: today, missions: buildMissionsForDate(today) };
+      await tx
+        .update(seasonProgressTable)
+        .set({ missionsJson: JSON.stringify(rolled), updatedAt: new Date() })
+        .where(eq(seasonProgressTable.id, row.id));
+      current.missionsJson = JSON.stringify(rolled);
+    }
+    return current;
+  });
+  return rolledRow ?? row;
 }
 
 /**
