@@ -96,9 +96,17 @@ function cleanupNotificationThrottleMaps() {
   }
 }
 
-async function cleanStaleEndpoint(endpoint: string) {
+async function cleanStaleEndpoint(row: Pick<PushRow, "endpoint" | "p256dh" | "auth" | "playerId">) {
+  // Only remove the exact subscription that failed. The same endpoint can be
+  // re-registered concurrently (for example after browser renewal); an
+  // unconditional endpoint delete could otherwise erase the fresh row.
   await db.delete(pushSubscriptionsTable)
-    .where(eq(pushSubscriptionsTable.endpoint, endpoint))
+    .where(and(
+      eq(pushSubscriptionsTable.endpoint, row.endpoint),
+      eq(pushSubscriptionsTable.p256dh, row.p256dh),
+      eq(pushSubscriptionsTable.auth, row.auth),
+      eq(pushSubscriptionsTable.playerId, row.playerId),
+    ))
     .catch(() => {});
 }
 
@@ -160,7 +168,7 @@ export async function sendPushToPlayer(playerId: string, payload: PushPayload): 
       sent++;
     } catch (e: any) {
       if (e.statusCode === 410 || e.statusCode === 404 || e.statusCode === 403) {
-        await cleanStaleEndpoint(row.endpoint);
+        await cleanStaleEndpoint(row);
       } else {
         console.error(`[push] send failed status=${e?.statusCode ?? "unknown"} player=${playerId}`);
       }
@@ -187,7 +195,7 @@ export async function sendPushToAllSubscribers(
 
   const picked = dedupeByPlayer(rows);
   let sent = 0, failed = 0;
-  const toDelete: string[] = [];
+  const toDelete: PushRow[] = [];
 
   await Promise.allSettled(picked.map(async (row) => {
     try {
@@ -204,13 +212,13 @@ export async function sendPushToAllSubscribers(
       sent++;
     } catch (e: any) {
       failed++;
-      if (e.statusCode === 410 || e.statusCode === 404 || e.statusCode === 403) toDelete.push(row.endpoint);
+      if (e.statusCode === 410 || e.statusCode === 404 || e.statusCode === 403) toDelete.push(row);
       else console.error(`[push] broadcast failed status=${e?.statusCode ?? "unknown"}`);
     }
   }));
 
-  for (const ep of toDelete) {
-    await cleanStaleEndpoint(ep);
+  for (const row of toDelete) {
+    await cleanStaleEndpoint(row);
   }
 
   return { sent, failed, removed: toDelete.length };
