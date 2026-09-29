@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import { db } from "@workspace/db";
 import { sql } from "drizzle-orm";
+import { contactLimiter } from "../middlewares/rateLimit";
 
 const router = Router();
 
@@ -17,7 +18,7 @@ const CONTACT_TABLE_READY = db.execute(sql`
   throw error;
 });
 
-router.post("/", async (req: Request, res: Response) => {
+router.post("/", contactLimiter, async (req: Request, res: Response) => {
   try {
     const name = typeof req.body?.name === "string" ? req.body.name.trim() : "";
     const email = typeof req.body?.email === "string" ? req.body.email.trim() : "";
