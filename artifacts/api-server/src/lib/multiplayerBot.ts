@@ -259,6 +259,17 @@ function untrackTimer(code: string, t: NodeJS.Timeout, botId?: string) {
   if (set.size === 0) roomBotTimers.delete(code);
 }
 
+export function cleanupStaleBotRooms(liveRoomCodes: ReadonlySet<string>) {
+  const stale = new Set<string>();
+  for (const code of roomBotTimers.keys()) {
+    if (!liveRoomCodes.has(code)) stale.add(code);
+  }
+  for (const code of roomBotTimerBots.keys()) {
+    if (!liveRoomCodes.has(code)) stale.add(code);
+  }
+  for (const code of stale) cleanupBotRoom(code);
+}
+
 export function clearBotTimers(code: string) {
   const set = roomBotTimers.get(code);
   if (set) {
