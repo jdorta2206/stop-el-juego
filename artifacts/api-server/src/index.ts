@@ -106,10 +106,8 @@ async function initStripe() {
     }
 
     console.log("Syncing Stripe data...");
-    stripeSync
-      .syncBackfill()
-      .then(() => console.log("Stripe data synced"))
-      .catch((err: Error) => console.error("Stripe sync error:", err.message));
+    await stripeSync.syncBackfill();
+    console.log("Stripe data synced");
   } catch (error: any) {
     console.error("Failed to initialize Stripe:", error.message);
   }
@@ -146,13 +144,14 @@ async function main() {
   }
 
   startDailyCron();
-  // 🚫 One-shot cleanup at boot: revoke premium from any account without an
-  // active Stripe subscription. Idempotent — only premium comes from Stripe now.
-  await revokeFakePremium();
 
-  initStripe().catch((err) => {
-    console.error("Stripe init failed:", err.message);
-  });
+  // Stripe backfill must finish before the premium cleanup. Otherwise an
+  // active Stripe subscription may not yet exist in the local mirror and the
+  // cleanup could revoke legitimate Premium during the startup race.
+  await initStripe();
+
+  // One-shot cleanup after Stripe data is synchronized.
+  await revokeFakePremium();
 }
 
 main().catch((err) => {
