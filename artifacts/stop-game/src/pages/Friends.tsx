@@ -88,6 +88,7 @@ function FriendCard({
   const challengeAbortRef = useRef<AbortController | null>(null);
   const challengePollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const challengeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const challengePollInFlightRef = useRef(false);
 
   useEffect(() => () => {
     if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
@@ -124,10 +125,12 @@ function FriendCard({
     const controller = new AbortController();
     challengeAbortRef.current = controller;
     const poll = setInterval(async () => {
-      if (!pendingId.current || controller.signal.aborted) return;
-      const status = await pollChallengeStatus(pendingId.current, controller.signal);
-      if (!pendingId.current || controller.signal.aborted) return;
-      if (status.status === "accepted") {
+      if (!pendingId.current || controller.signal.aborted || challengePollInFlightRef.current) return;
+      challengePollInFlightRef.current = true;
+      try {
+        const status = await pollChallengeStatus(pendingId.current, controller.signal);
+        if (!pendingId.current || controller.signal.aborted) return;
+        if (status.status === "accepted") {
         clearInterval(poll); challengePollRef.current = null;
         if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current);
         challengeTimeoutRef.current = null; pendingId.current = null;
@@ -136,6 +139,9 @@ function FriendCard({
         clearInterval(poll); challengePollRef.current = null;
         if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current);
         challengeTimeoutRef.current = null; pendingId.current = null;
+        }
+      } finally {
+        challengePollInFlightRef.current = false;
       }
     }, 2000);
     challengePollRef.current = poll;
@@ -254,6 +260,7 @@ function OnlinePlayerCard({
   const challengeAbortRef = useRef<AbortController | null>(null);
   const challengePollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const challengeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const challengePollInFlightRef = useRef(false);
 
   useEffect(() => () => {
     if (challengePollRef.current) clearInterval(challengePollRef.current);
@@ -283,10 +290,12 @@ function OnlinePlayerCard({
     const controller = new AbortController();
     challengeAbortRef.current = controller;
     const poll = setInterval(async () => {
-      if (!pendingId.current || controller.signal.aborted) return;
-      const status = await pollChallengeStatus(pendingId.current, controller.signal);
-      if (!pendingId.current || controller.signal.aborted) return;
-      if (status.status === "accepted") {
+      if (!pendingId.current || controller.signal.aborted || challengePollInFlightRef.current) return;
+      challengePollInFlightRef.current = true;
+      try {
+        const status = await pollChallengeStatus(pendingId.current, controller.signal);
+        if (!pendingId.current || controller.signal.aborted) return;
+        if (status.status === "accepted") {
         clearInterval(poll); challengePollRef.current = null;
         if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current);
         challengeTimeoutRef.current = null; pendingId.current = null;
@@ -295,6 +304,9 @@ function OnlinePlayerCard({
         clearInterval(poll); challengePollRef.current = null;
         if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current);
         challengeTimeoutRef.current = null; pendingId.current = null;
+        }
+      } finally {
+        challengePollInFlightRef.current = false;
       }
     }, 2000);
     challengePollRef.current = poll;
