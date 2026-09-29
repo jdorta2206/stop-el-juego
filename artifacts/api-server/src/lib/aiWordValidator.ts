@@ -180,9 +180,6 @@ async function reserveDailyQuota(playerId: string | null): Promise<boolean> {
       if (playerReservation.rows.length === 0) return false;
     }
     return true;
-    } finally {
-      await releaseValidationClaim(claimKey).catch(() => {});
-    }
   });
 }
 
@@ -253,5 +250,8 @@ async function waitForValidationCache(word: string, category: string, lang: stri
       console.error("[aiWordValidator] ai call failed:", err instanceof Error ? err.message : err);
       return { isValid: false, source: "error" as const };
     }
-  });
+  } finally {
+    await releaseValidationClaim(claimKey).catch(() => {});
+  }
 }
+
