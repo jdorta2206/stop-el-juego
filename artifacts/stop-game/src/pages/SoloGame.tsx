@@ -1097,7 +1097,7 @@ export default function SoloGame() {
         // para evitar duplicar puntuaciones cuando es un error de servidor
         // que en realidad sí pudo persistir.
         if (typeof navigator !== "undefined" && navigator.onLine === false) {
-          enqueueScoreOutbox({
+          void enqueueScoreOutbox({
             playerId: player.id,
             playerName: player.name,
             avatarColor: player.avatarColor,
