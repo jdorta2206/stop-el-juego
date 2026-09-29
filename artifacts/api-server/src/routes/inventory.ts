@@ -187,7 +187,6 @@ router.post("/equip", requirePlayerIdentity, async (req: AuthedRequest, res) => 
           .where(eq(playerScoresTable.id, lockedRow.id));
       });
     }
-    }
     res.json({ ok: true, kind, value: finalValue });
   } catch (e: unknown) {
     console.error("[inventory/equip] error:", e instanceof Error ? e.message : String(e));
