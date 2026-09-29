@@ -174,6 +174,9 @@ export function verifyClaimedIdentity(
   // bot ids intentionally do not have user authentication tokens.
   if (claimedId.startsWith("bot_")) return false;
   if (!isLoggedInId(claimedId)) return true;
-  if (!isAuthConfigured()) return true;
+  // Logged-in identities require the signing secret so the caller can be
+  // cryptographically bound to the claimed account. Failing open here would
+  // turn a missing SESSION_SECRET into an IDOR on billing/account endpoints.
+  if (!isAuthConfigured()) return false;
   return readPlayerId(req) === claimedId;
 }
