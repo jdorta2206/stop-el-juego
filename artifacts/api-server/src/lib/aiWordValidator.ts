@@ -222,19 +222,22 @@ async function waitForValidationCache(word: string, category: string, lang: stri
       `¿Podría aceptarse "${word}" como ${category} en ${languageName(lang)}? Responde "si" o "no".`;
 
     try {
-      const resp = await Promise.race([
-        client.chat.completions.create({
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 12_000);
+      let resp;
+      try {
+        resp = await client.chat.completions.create({
           model: MODEL,
           max_completion_tokens: 8192,
           messages: [
             { role: "system", content: systemPrompt },
             { role: "user", content: userPrompt },
           ],
-        }),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error("ai_validator_timeout")), 12_000),
-        ),
-      ]);
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timeout);
+      }
 
       const raw = resp.choices?.[0]?.message?.content?.toLowerCase().trim() ?? "";
       const isValid = /^(si|sí|s|yes|y|true|1)$/.test(raw);
