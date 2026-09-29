@@ -798,11 +798,13 @@ router.post("/claim-tier", requirePlayerIdentity, async (req: AuthedRequest, res
         `);
         depositedCoins = reward.value;
       } else if ((reward.kind === "avatar" || reward.kind === "frame") && typeof reward.value === "string") {
-        let inv: { avatars: string[]; frames: string[] } = { avatars: [], frames: [] };
+        let inv: { avatars: string[]; frames: string[]; backgrounds: string[]; equippedBackground: string | null } = { avatars: [], frames: [], backgrounds: [], equippedBackground: null };
         try {
           const parsed = JSON.parse(playerRow.inventory_json || "{}");
           if (Array.isArray(parsed.avatars)) inv.avatars = parsed.avatars;
           if (Array.isArray(parsed.frames)) inv.frames = parsed.frames;
+          if (Array.isArray(parsed.backgrounds)) inv.backgrounds = parsed.backgrounds;
+          if (typeof parsed.equippedBackground === "string") inv.equippedBackground = parsed.equippedBackground;
         } catch { /* keep defaults */ }
         const bucket = reward.kind === "avatar" ? inv.avatars : inv.frames;
         if (!bucket.includes(reward.value)) bucket.push(reward.value);
