@@ -78,7 +78,12 @@ export function useInventory(playerId?: string | null) {
       });
       if (res.ok && !controller.signal.aborted) setData(await res.json());
     } catch { /* ignore */ }
-    finally { setLoading(false); }
+    finally {
+      if (refreshAbortRef.current === controller) {
+        refreshAbortRef.current = null;
+        setLoading(false);
+      }
+    }
   }, [playerId]);
 
   useEffect(() => {
