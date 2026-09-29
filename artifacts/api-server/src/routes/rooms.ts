@@ -581,6 +581,9 @@ function finalizeRoundState(room: any, players: any[]): {
       }
       const existingMeta = parseBluffMeta(room.stopperJson);
       newStopperJson = JSON.stringify({
+        categoryPack: existingMeta?.categoryPack,
+        customCategories: existingMeta?.customCategories,
+        customPackLabel: existingMeta?.customPackLabel,
         stopper: existingMeta?.stopper ?? existingMeta,
         bluffVotes,
         bluffDeadline,
@@ -600,7 +603,12 @@ function finalizeRoundState(room: any, players: any[]): {
       // 🧹 Clear stopperJson so the next /start gets a fresh roundStartedAt
       // (otherwise the old timestamp lingers and the next round's deadline
       // would start in the past on slow clients).
-      newStopperJson = null;
+      const transitionMeta = parseBluffMeta(room.stopperJson) ?? {};
+      newStopperJson = JSON.stringify({
+        categoryPack: transitionMeta.categoryPack,
+        customCategories: transitionMeta.customCategories,
+        customPackLabel: transitionMeta.customPackLabel,
+      });
       // NOTE: side effects (leaderboard submit on game-over, spy/live map
       // cleanup) are intentionally NOT done here. They run in the CALLER via
       // applyRoundAdvanceSideEffects() and ONLY after the optimistic-concurrency
@@ -702,7 +710,13 @@ async function sweepStuckRooms() {
           currentRound: isGameOver ? room.maxRounds : newRound,
           currentLetter: isGameOver ? room.currentLetter : randomLetter(),
           status: newStatus,
-          stopperJson: JSON.stringify({ stopper: meta.stopper, bluffResults: bluffVotes }),
+          stopperJson: JSON.stringify({
+          categoryPack: meta.categoryPack,
+          customCategories: meta.customCategories,
+          customPackLabel: meta.customPackLabel,
+          stopper: meta.stopper,
+          bluffResults: bluffVotes,
+        }),
           updatedAt: new Date(),
         })
         .where(and(eq(roomsTable.roomCode, room.roomCode), eq(roomsTable.status, "bluffvoting")))
@@ -1181,7 +1195,13 @@ router.post("/:roomCode/start", async (req, res) => {
   // ⏱️ Stamp the authoritative round-start timestamp so every client computes
   // the same deadline regardless of when their poll/SSE picks up the change.
   const newLetter = randomLetter();
-  const startMeta = { roundStartedAt: Date.now() };
+  const startSourceMeta = parseBluffMeta(room.stopperJson) ?? {};
+  const startMeta = {
+    categoryPack: startSourceMeta.categoryPack,
+    customCategories: startSourceMeta.customCategories,
+    customPackLabel: startSourceMeta.customPackLabel,
+    roundStartedAt: Date.now(),
+  };
   // 🔒 Atomic transition: only flip to "playing" if the row is STILL in
   // "waiting". If two requests race past the early guard above (host
   // double-tap from two devices), only one update will succeed; the other
