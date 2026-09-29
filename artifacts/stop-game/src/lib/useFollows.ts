@@ -49,17 +49,18 @@ export function useFollows(
       setFollowedIds(new Set());
       return;
     }
+    const controller = new AbortController();
     setLoading(true);
     try {
-      const r = await fetch(`${API_BASE}/api/friends/list/${encodeURIComponent(meId)}`);
+      const r = await fetch(`${API_BASE}/api/friends/list/${encodeURIComponent(meId)}`, { signal: controller.signal });
       const data = await r.json();
       const list: FollowedFriendBase[] = data.friends ?? [];
       setRawFriends(list);
       setFollowedIds(new Set(list.map((f) => f.followedId)));
     } catch {
-      /* ignore */
+      if (controller.signal.aborted) return;
     } finally {
-      setLoading(false);
+      if (!controller.signal.aborted) setLoading(false);
     }
   }, [meId]);
 
