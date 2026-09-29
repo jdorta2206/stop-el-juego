@@ -20,28 +20,37 @@
     }
 
     // Always call /join so the player appears in the room lobby (both reto and room invite)
-    if (playerData?.id) {
-      try {
-        const apiBase = (import.meta as any).env?.VITE_API_URL ?? window.location.origin;
-        await fetch(`${apiBase}/api/rooms/${challenge.roomCode.toUpperCase()}/join`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", ...authHeaders() },
-          credentials: "include",
-          signal: controller.signal,
-          body: JSON.stringify({
-            playerId: playerData.id,
-            playerName: playerData.name,
-            avatarColor: playerData.avatarColor,
-            loginMethod: playerData.loginMethod ?? null,
-          }),
-        });
-      } catch { /* silently proceed even if join fails */ }
+    if (!playerData?.id) {
+      onDismiss();
+      return;
     }
 
-    if (!controller.signal.aborted) {
+    try {
+      const apiBase = (import.meta as any).env?.VITE_API_URL ?? window.location.origin;
+      const joinResponse = await fetch(`${apiBase}/api/rooms/${challenge.roomCode.toUpperCase()}/join`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        credentials: "include",
+        signal: controller.signal,
+        body: JSON.stringify({
+          playerId: playerData.id,
+          playerName: playerData.name,
+          avatarColor: playerData.avatarColor,
+          loginMethod: playerData.loginMethod ?? null,
+        }),
+      });
+
+      if (!joinResponse.ok || controller.signal.aborted) {
+        onDismiss();
+        return;
+      }
+    } catch {
       onDismiss();
-      setLocation(`/room/${challenge.roomCode}`);
+      return;
     }
+
+    onDismiss();
+    setLocation(`/room/${challenge.roomCode}`);
   };
 
   const handleDecline = async () => {
