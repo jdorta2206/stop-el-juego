@@ -469,6 +469,51 @@ async function performBotSubmit(
   }
 }
 
+// A restarted/multi-instance API process must be able to reconstruct bot timers
+// from the persisted room state. Each instance may race to schedule the same bot;
+// performBotSubmit uses optimistic concurrency, so only one successful write wins.
+let recoveryDeps: BotActionDeps | null = null;
+let recoveryStarted = false;
+
+export function startBotTimerRecovery(deps: BotActionDeps) {
+  recoveryDeps = deps;
+  if (recoveryStarted) return;
+  recoveryStarted = true;
+
+  const recover = async () => {
+    if (!recoveryDeps) return;
+    try {
+      const rows = await db.select().from(roomsTable).where(eq(roomsTable.status, "playing"));
+      for (const room of rows) {
+        let players: any[];
+        try { players = JSON.parse(room.playersJson); } catch { continue; }
+        const bots = players.filter((p: any) => p?.isBot && !p.isReady);
+        if (bots.length === 0) continue;
+
+        let meta: any = {};
+        try { meta = room.stopperJson ? JSON.parse(room.stopperJson) : {}; } catch {}
+        const roundStartedAt = Number(meta?.roundStartedAt) || Date.now();
+        const elapsed = Math.max(0, Date.now() - roundStartedAt);
+
+        for (const bot of bots) {
+          const timers = roomBotTimers.get(room.roomCode);
+          if (timers?.size) continue;
+          const delay = Math.max(0, 25_000 + (bot.playerId.charCodeAt(bot.playerId.length - 1) % 26_000) - elapsed);
+          const timer = setTimeout(() => {
+            performBotSubmit(room.roomCode, bot.playerId, recoveryDeps!, { triggerStop: true });
+          }, delay);
+          trackTimer(room.roomCode, timer);
+        }
+      }
+    } catch (err) {
+      console.error("[bot] timer recovery failed:", err);
+    }
+  };
+
+  void recover();
+  setInterval(() => { void recover(); }, 5_000);
+}
+
 // ── Public scheduler ──────────────────────────────────────────────────────
 // Called by rooms.ts whenever the room transitions into "playing". For
 // every bot in the room we schedule a randomized STOP + submit between
