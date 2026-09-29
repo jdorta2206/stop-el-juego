@@ -53,12 +53,13 @@ export default function DailyChallenge() {
   const reviewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    fetch(`${API_BASE}/api/daily?language=${lang}`)
+    const controller = new AbortController();
+    fetch(`${API_BASE}/api/daily?language=${lang}`, { signal: controller.signal })
       .then(r => r.json())
       .then(setChallenge)
       .catch(() => {});
 
-    fetch(`${API_BASE}/api/daily/rankings?language=${lang}`)
+    fetch(`${API_BASE}/api/daily/rankings?language=${lang}`, { signal: controller.signal })
       .then(r => r.json())
       .then(d => setRankings(d.rankings || []))
       .catch(() => {});
@@ -75,6 +76,7 @@ export default function DailyChallenge() {
       fetch(`${API_BASE}/api/daily/status?playerId=${encodeURIComponent(player.id)}&language=${encodeURIComponent(lang)}`, {
         headers: { ...authHeaders() },
         credentials: "include",
+        signal: controller.signal,
       })
         .then(r => r.ok ? r.json() : Promise.reject(new Error("daily-status")))
         .then(d => {
@@ -107,6 +109,7 @@ export default function DailyChallenge() {
       setTimeLeft(getTimeUntilMidnight());
     }, 60000);
     return () => {
+      controller.abort();
       clearInterval(timer);
       if (reviewTimerRef.current) clearTimeout(reviewTimerRef.current);
     };
