@@ -28,12 +28,13 @@ export function MultiplayerScreen({ session, onExit }: Props) {
   const me = room?.players?.find(p => p.playerId === playerId);
   const letter = (room?.currentLetter || "A").toUpperCase();
 
-  const refreshRoom = useCallback(async (roomCode: string) => {
+  const refreshRoom = useCallback(async (roomCode: string, signal?: AbortSignal) => {
     try {
-      const data = await apiFetch<Room>(`/api/rooms/${encodeURIComponent(roomCode)}?viewerId=${encodeURIComponent(playerId)}`);
+      const data = await apiFetch<Room>(`/api/rooms/${encodeURIComponent(roomCode)}?viewerId=${encodeURIComponent(playerId)}`, { signal });
       setRoom(data);
       return data;
     } catch (e) {
+      if (signal?.aborted) return null;
       setError(e instanceof Error ? e.message : "No se pudo actualizar la sala.");
       return null;
     }
@@ -41,8 +42,14 @@ export function MultiplayerScreen({ session, onExit }: Props) {
 
   useEffect(() => {
     if (!room?.roomCode) return;
-    const timer = setInterval(() => { void refreshRoom(room.roomCode); }, 1500);
-    return () => clearInterval(timer);
+    const controller = new AbortController();
+    const timer = setInterval(() => {
+      if (!controller.signal.aborted) void refreshRoom(room.roomCode, controller.signal);
+    }, 1500);
+    return () => {
+      controller.abort();
+      clearInterval(timer);
+    };
   }, [room?.roomCode, refreshRoom]);
 
   useEffect(() => {
