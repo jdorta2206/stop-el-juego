@@ -58,7 +58,7 @@ export default function Impossible() {
       }
     }, 100);
     return () => clearInterval(id);
-  }, [phase]);
+  }, [phase, player?.id, lang, combo?.letter, combo?.category]);
 
   const start = useCallback(() => {
     startedAt.current = Date.now();
