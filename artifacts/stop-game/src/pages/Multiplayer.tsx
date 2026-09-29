@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { Layout } from "@/components/Layout";
 import { Button, Card, Input } from "@/components/ui";
@@ -57,20 +57,25 @@ export default function Multiplayer() {
       if (saved && saved.playerId !== player.id) clearActiveRoom();
       return;
     }
-    let cancelled = false;
+    const controller = new AbortController();
     (async () => {
       try {
-        const r = await fetch(`${getApiUrl()}/api/rooms/${saved.code}?viewerId=${encodeURIComponent(player.id)}`);
+        const r = await fetch(getApiUrl() + "/api/rooms/" + saved.code + "?viewerId=" + encodeURIComponent(player.id), {
+          signal: controller.signal,
+        });
+        if (controller.signal.aborted) return;
         if (!r.ok) { clearActiveRoom(); return; }
         const room = await r.json() as { status?: string; players?: Array<{ playerId: string }> };
-        if (cancelled) return;
+        if (controller.signal.aborted) return;
         if (room?.status === "finished") { clearActiveRoom(); return; }
         const isMember = (room?.players ?? []).some(p => p.playerId === player.id);
         if (!isMember) { clearActiveRoom(); return; }
         setResumeCode(saved.code);
-      } catch { /* network error — leave the saved pointer alone, retry next mount */ }
+      } catch {
+        if (controller.signal.aborted) return;
+      }
     })();
-    return () => { cancelled = true; };
+    return () => { controller.abort(); };
   }, [player?.id]);
 
   const handleResume = async () => {
