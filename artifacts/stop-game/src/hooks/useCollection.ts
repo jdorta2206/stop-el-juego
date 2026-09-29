@@ -39,10 +39,10 @@ function migrateLegacy(playerId?: string) {
   } catch {}
 }
 
-async function syncFromServer(playerId: string): Promise<CollectionMap> {
+async function syncFromServer(playerId: string, signal?: AbortSignal): Promise<CollectionMap> {
   if (playerId.startsWith("guest_")) return {};
   try {
-    const r = await fetch(`${getApiUrl()}/api/ranking/progress/${playerId}`);
+    const r = await fetch(`${getApiUrl()}/api/ranking/progress/${playerId}`, { signal });
     if (!r.ok) return {};
     const data = await r.json();
     return data.collectedWords && typeof data.collectedWords === "object"
@@ -77,6 +77,7 @@ export function useCollection(playerId?: string) {
   });
   const [lastDiscovered, setLastDiscovered] = useState<CollectedWord | null>(null);
   const syncedRef = useRef<string | null>(null);
+  const syncAbortRef = useRef<AbortController | null>(null);
 
   // When the player changes (login / account switch), reload from the
   // correct scoped cache so we never carry another player's words over.
@@ -84,13 +85,16 @@ export function useCollection(playerId?: string) {
     migrateLegacy(playerId);
     setCollection(loadLocal(playerId));
     syncedRef.current = null;
+    syncAbortRef.current?.abort();
   }, [playerId]);
 
   // Server → local merge on mount (per-player; re-runs on account switch).
   useEffect(() => {
     if (!playerId || syncedRef.current === playerId) return;
     syncedRef.current = playerId;
-    syncFromServer(playerId).then(serverMap => {
+    const controller = new AbortController();
+    syncAbortRef.current = controller;
+    syncFromServer(playerId, controller.signal).then(serverMap => {
       if (!Object.keys(serverMap).length) return;
       setCollection(prev => {
         const merged = mergeMaps(prev, serverMap);
@@ -102,6 +106,8 @@ export function useCollection(playerId?: string) {
       });
     });
   }, [playerId]);
+
+  useEffect(() => () => syncAbortRef.current?.abort(), [playerId]);
 
   /** Call after a round with the valid words. Persists locally + on the
    * server. If at least one NEW word was rare/epic/legendary, surfaces it
