@@ -75,16 +75,20 @@ export function useRewards(playerId?: string | null, onClaimed?: () => void) {
 
   const refresh = useCallback(async () => {
     if (!playerId) { setCollection(null); setPrestige(null); return; }
+    const controller = new AbortController();
     setLoading(true);
     try {
       const [c, p] = await Promise.all([
-        fetch(`${API}/api/rewards/collection`, { credentials: "include", headers: authHeaders() }),
+        fetch(`${API}/api/rewards/collection`, { credentials: "include", headers: authHeaders(), signal: controller.signal }),
         fetch(`${API}/api/rewards/prestige`, { credentials: "include", headers: authHeaders() }),
       ]);
       if (c.ok) setCollection(await c.json());
       if (p.ok) setPrestige(await p.json());
-    } catch { /* ignore */ }
-    finally { setLoading(false); }
+    } catch {
+      if (controller.signal.aborted) return;
+    } finally {
+      if (!controller.signal.aborted) setLoading(false);
+    }
   }, [playerId]);
 
   useEffect(() => { refresh(); }, [refresh]);
