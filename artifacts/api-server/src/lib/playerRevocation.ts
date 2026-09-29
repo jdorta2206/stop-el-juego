@@ -34,3 +34,9 @@ export async function revokePlayerId(playerId: string, tx?: any): Promise<void> 
 export function markPlayerRevoked(playerId: string): void {
   if (playerId) revokedPlayerIds.add(playerId);
 }
+
+export async function restorePlayerId(playerId: string): Promise<void> {
+  if (!playerId) return;
+  await db.execute(sql`DELETE FROM revoked_player_ids WHERE player_id = ${playerId}`);
+  revokedPlayerIds.delete(playerId);
+}
