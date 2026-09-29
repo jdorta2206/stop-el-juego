@@ -558,6 +558,13 @@ router.post("/scores", scoreLimiter, async (req, res) => {
           .where(eq(playerScoresTable.playerId, playerId))
           .returning();
         if (!updated) throw new Error("BONUS_SCORE_UPDATE_FAILED");
+        await tx.insert(gameHistoryTable).values({
+          playerId,
+          score,
+          letter,
+          mode: mode ?? "solo",
+          won: won ?? false,
+        });
         return updated;
       }
 
@@ -639,8 +646,8 @@ router.post("/scores", scoreLimiter, async (req, res) => {
       })
       .where(eq(playerScoresTable.playerId, playerId))
       .returning();
-    player = updated;
-  } else {
+    txPlayer = updated;
+      } else {
     // First-time players can receive two legitimate score submissions at nearly
     // the same instant (for example, two tabs or a reconnect retry). The old
     // plain INSERT could lose that race with a unique-key error and turn a
