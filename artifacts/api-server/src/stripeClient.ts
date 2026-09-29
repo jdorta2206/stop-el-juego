@@ -29,6 +29,12 @@ export async function getStripeSync(): Promise<StripeSync> {
       // Newer stripe-replit-sync requires `poolConfig` (the legacy
       // `databaseUrl` / `schema` options were dropped).
       poolConfig: { connectionString: databaseUrl },
+      // Always refetch subscriptions from Stripe before persisting webhook
+      // state. stripe-replit-sync@1.0.0 protects rows using the webhook
+      // event timestamp; two lifecycle events can legitimately share the
+      // same timestamp, causing the later state to be ignored. Refetching
+      // gives each event a fresh sync timestamp and the current Stripe state.
+      revalidateObjectsViaStripeApi: ["subscription"],
     });
   }
   return stripeSyncInstance;
