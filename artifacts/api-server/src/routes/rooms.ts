@@ -905,9 +905,19 @@ router.patch("/:roomCode/visibility", async (req, res) => {
   if (!rows.length) { res.status(404).json({ error: "Room not found" }); return; }
   if (rows[0].hostId !== hostId) { res.status(403).json({ error: "Only host can change visibility" }); return; }
   const [updated] = await db.update(roomsTable)
-    .set({ isPublic })
-    .where(eq(roomsTable.roomCode, roomCode))
+    .set({ isPublic, updatedAt: new Date() })
+    .where(and(
+      eq(roomsTable.roomCode, roomCode),
+      eq(roomsTable.hostId, hostId),
+      eq(roomsTable.updatedAt, rows[0].updatedAt),
+    ))
     .returning();
+  if (!updated) {
+    // Host migration or another room write won between the authorization read
+    // and this update. Never let the former host modify the new host's room.
+    res.status(409).json({ error: "Room changed, retry" });
+    return;
+  }
   res.json(formatRoom(updated));
 });
 
