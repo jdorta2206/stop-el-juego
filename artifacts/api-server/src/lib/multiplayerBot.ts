@@ -232,17 +232,30 @@ export function makeBotPlayer(identity: { name: string; color: string }): BotPla
 // ── Timer management ──────────────────────────────────────────────────────
 // roomCode → set of scheduled timeouts. Cleared on round advance / room end.
 const roomBotTimers = new Map<string, Set<NodeJS.Timeout>>();
+const roomBotTimerBots = new Map<string, Set<string>>();
 
-function trackTimer(code: string, t: NodeJS.Timeout) {
+function trackTimer(code: string, t: NodeJS.Timeout, botId?: string) {
   let set = roomBotTimers.get(code);
   if (!set) { set = new Set(); roomBotTimers.set(code, set); }
   set.add(t);
+  if (botId) {
+    let bots = roomBotTimerBots.get(code);
+    if (!bots) { bots = new Set(); roomBotTimerBots.set(code, bots); }
+    bots.add(botId);
+  }
 }
 
-function untrackTimer(code: string, t: NodeJS.Timeout) {
+function untrackTimer(code: string, t: NodeJS.Timeout, botId?: string) {
   const set = roomBotTimers.get(code);
   if (!set) return;
   set.delete(t);
+  if (botId) {
+    const bots = roomBotTimerBots.get(code);
+    if (bots) {
+      bots.delete(botId);
+      if (bots.size === 0) roomBotTimerBots.delete(code);
+    }
+  }
   if (set.size === 0) roomBotTimers.delete(code);
 }
 
@@ -252,6 +265,7 @@ export function clearBotTimers(code: string) {
     for (const t of set) clearTimeout(t);
     roomBotTimers.delete(code);
   }
+  roomBotTimerBots.delete(code);
   // NOTE: pending LLM answers are intentionally NOT cleared here.
   // rushBotSubmits() calls clearBotTimers to cancel the long 25-50s timers
   // when a human STOPs early — but bots still need to consume the
@@ -456,10 +470,10 @@ async function performBotSubmit(
         // Track the retry timer so clearBotTimers() can cancel it if the
         // room dies or the round advances before the retry fires.
         const retry = setTimeout(() => {
-          untrackTimer(code, retry);
+          untrackTimer(code, retry, botPlayerId);
           performBotSubmit(code, botPlayerId, deps, { ...options, attempt: 1 });
         }, 200 + Math.random() * 300);
-        trackTimer(code, retry);
+        trackTimer(code, retry, botPlayerId);
       }
       return;
     }
@@ -511,17 +525,17 @@ export function startBotTimerRecovery(deps: BotActionDeps) {
           : Number(meta?.roundStartedAt) || Date.now();
         const elapsed = Math.max(0, Date.now() - anchor);
 
+        const scheduledBots = roomBotTimerBots.get(room.roomCode) ?? new Set<string>();
         for (const bot of bots) {
-          const timers = roomBotTimers.get(room.roomCode);
-          if ((timers?.size ?? 0) >= bots.length) break;
+          if (scheduledBots.has(bot.playerId)) continue;
           const delay = isStopped
             ? Math.max(0, 1_500 + (bot.playerId.charCodeAt(bot.playerId.length - 1) % 2_500) - elapsed)
             : Math.max(0, 25_000 + (bot.playerId.charCodeAt(bot.playerId.length - 1) % 26_000) - elapsed);
           const timer = setTimeout(() => {
-            untrackTimer(room.roomCode, timer);
+            untrackTimer(room.roomCode, timer, bot.playerId);
             performBotSubmit(room.roomCode, bot.playerId, recoveryDeps!, { triggerStop: !isStopped });
           }, delay);
-          trackTimer(room.roomCode, timer);
+          trackTimer(room.roomCode, timer, bot.playerId);
         }
       }
     } catch (err) {
@@ -569,10 +583,10 @@ export function scheduleBotsForRound(opts: {
   for (const b of opts.bots) {
     const delay = 25_000 + Math.random() * 25_000; // 25-50s
     const t = setTimeout(() => {
-      untrackTimer(opts.roomCode, t);
+      untrackTimer(opts.roomCode, t, b.playerId);
       performBotSubmit(opts.roomCode, b.playerId, opts.deps, { triggerStop: true });
     }, delay);
-    trackTimer(opts.roomCode, t);
+    trackTimer(opts.roomCode, t, b.playerId);
   }
 }
 
@@ -587,9 +601,9 @@ export function rushBotSubmits(opts: {
   for (const b of opts.bots) {
     const delay = 1_500 + Math.random() * 2_500; // 1.5-4s, mimics real player freeze
     const t = setTimeout(() => {
-      untrackTimer(opts.roomCode, t);
+      untrackTimer(opts.roomCode, t, b.playerId);
       performBotSubmit(opts.roomCode, b.playerId, opts.deps, { triggerStop: false });
     }, delay);
-    trackTimer(opts.roomCode, t);
+    trackTimer(opts.roomCode, t, b.playerId);
   }
 }
