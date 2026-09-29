@@ -506,6 +506,9 @@ export async function verifyPurchaseByToken(
       case "SUBSCRIPTION_STATE_ON_HOLD":
         state = "ON_HOLD";
         break;
+      case "SUBSCRIPTION_STATE_PAUSED":
+        state = "PAUSED";
+        break;
       case "SUBSCRIPTION_STATE_CANCELED":
         state = expiryTimeMs > Date.now() ? "ACTIVE" : "CANCELED";
         break;
@@ -516,7 +519,7 @@ export async function verifyPurchaseByToken(
         state = "PENDING";
         break;
       default:
-        state = expiryTimeMs > Date.now() ? "ACTIVE" : "EXPIRED";
+        state = "EXPIRED";
         break;
     }
 
