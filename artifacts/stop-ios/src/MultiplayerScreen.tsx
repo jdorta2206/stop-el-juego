@@ -51,9 +51,18 @@ export function MultiplayerScreen({ session, onExit }: Props) {
   useEffect(() => {
     if (!room?.roomCode) return;
     const controller = new AbortController();
-    const timer = setInterval(() => {
-      if (!controller.signal.aborted) void refreshRoom(room.roomCode, controller.signal);
-    }, 1500);
+    let loading = false;
+    const load = async () => {
+      if (loading || controller.signal.aborted) return;
+      loading = true;
+      try {
+        await refreshRoom(room.roomCode, controller.signal);
+      } finally {
+        loading = false;
+      }
+    };
+    void load();
+    const timer = setInterval(() => { void load(); }, 1500);
     return () => {
       controller.abort();
       clearInterval(timer);
