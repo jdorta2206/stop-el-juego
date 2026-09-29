@@ -294,6 +294,11 @@ function InstagramPlayerRow({
   const [, setLocation] = useLocation();
   const [copied, setCopied] = useState(false);
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => {
+    if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    copiedTimerRef.current = null;
+  }, []);
   const pendingChallengeId = useRef<string | null>(null);
   const challengeAbortRef = useRef<AbortController | null>(null);
   const challengePollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -417,6 +422,11 @@ function FriendRow({ friend, currentPlayer }: { friend: EnrichedFriend; currentP
   const [, setLocation] = useLocation();
   const [copied, setCopied] = useState(false);
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => {
+    if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    copiedTimerRef.current = null;
+  }, []);
   const pendingChallengeId = useRef<string | null>(null);
   const challengeAbortRef = useRef<AbortController | null>(null);
   const challengePollRef = useRef<ReturnType<typeof setInterval> | null>(null);
