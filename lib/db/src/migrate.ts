@@ -91,7 +91,10 @@ export async function ensureIndexes(): Promise<void> {
     try {
       await db.execute(sql.raw(stmt));
     } catch (err: any) {
-      if (/already exists/i.test(err?.message ?? "")) continue;
+      // Every bootstrap statement is already idempotent via IF NOT EXISTS.
+      // Never hide an "already exists" error here: it can indicate a real
+      // schema conflict (for example, an existing index with the wrong
+      // definition) that must keep the API in a non-ready state.
       console.error("[ensureIndexes] failed:", err?.message ?? err);
       _indexesReady = false;
       throw err;
