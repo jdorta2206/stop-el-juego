@@ -376,10 +376,6 @@ async function sendHappyHourNotifications() {
 
     for (const slot of slots) {
       const lockKey = `hh_${slot.key}_${today}_${utcBucket}`;
-      const claimed = await claimDailyLock(today, lockKey);
-      if (!claimed) {
-        continue; // another instance already handled this slot+bucket
-      }
 
       const rows = (await db.execute(sql`
         SELECT player_id, language
@@ -393,6 +389,11 @@ async function sendHappyHourNotifications() {
 
       const candidates = rows.rows ?? [];
       if (candidates.length === 0) continue;
+
+      // Claim only after the candidate query succeeds. A transient DB failure
+      // must not consume the bucket and suppress a later retry.
+      const claimed = await claimDailyLock(today, lockKey);
+      if (!claimed) continue;
 
       const seen = new Set<string>();
       let sent = 0;
@@ -431,9 +432,6 @@ async function sendDailyDealsNotifications() {
     const today = utcNow.toISOString().slice(0, 10);
     const utcBucket = Math.floor(utcMinutesOfDay / 5);
 
-    const claimed = await claimDailyLock(today, `deals_${today}_${utcBucket}`);
-    if (!claimed) return; // another instance owns this bucket
-
     const rows = (await db.execute(sql`
       SELECT player_id, language
       FROM push_subscriptions
@@ -446,6 +444,11 @@ async function sendDailyDealsNotifications() {
 
     const candidates = rows.rows ?? [];
     if (candidates.length === 0) return;
+
+    // Claim only after the candidate query succeeds. A transient DB failure
+    // must not consume the bucket and suppress a later retry.
+    const claimed = await claimDailyLock(today, `deals_${today}_${utcBucket}`);
+    if (!claimed) return;
 
     const maxDiscount = Math.max(0, ...getDailyDeals(utcNow).deals.map((d) => d.discountPct));
 
