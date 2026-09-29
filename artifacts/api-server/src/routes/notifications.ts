@@ -348,7 +348,7 @@ router.post("/send-invite", inviteLimiter, async (req, res) => {
     ));
 
   let sent = 0;
-  const toDelete: string[] = [];
+  const toDelete: Array<Pick<typeof rows[number], "endpoint" | "p256dh" | "auth" | "playerId">> = [];
   await Promise.allSettled(rows.map(async (row) => {
     try {
       await webpush.sendNotification(
@@ -358,16 +358,23 @@ router.post("/send-invite", inviteLimiter, async (req, res) => {
       sent++;
     } catch (e: any) {
       if (e?.statusCode === 403 || e?.statusCode === 404 || e?.statusCode === 410) {
-        toDelete.push(row.endpoint);
+        toDelete.push(row);
       } else {
         console.error(`[push] invite failed status=${e?.statusCode ?? "unknown"} target=${targetPlayerId}`);
       }
     }
   }));
 
-  for (const endpoint of toDelete) {
+  for (const row of toDelete) {
+    // Do not erase a fresh re-registration that reused the same endpoint while
+    // this stale delivery was in flight.
     await db.delete(pushSubscriptionsTable)
-      .where(eq(pushSubscriptionsTable.endpoint, endpoint))
+      .where(and(
+        eq(pushSubscriptionsTable.endpoint, row.endpoint),
+        eq(pushSubscriptionsTable.p256dh, row.p256dh),
+        eq(pushSubscriptionsTable.auth, row.auth),
+        eq(pushSubscriptionsTable.playerId, row.playerId),
+      ))
       .catch(() => {});
   }
 
