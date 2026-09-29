@@ -1924,6 +1924,20 @@ router.post("/:roomCode/funvote", writeLimiter, async (req, res) => {
   const rooms = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, code)).limit(1);
   if (rooms.length === 0) { res.status(404).json({ error: "Room not found" }); return; }
   const room = rooms[0];
+
+  // Fun-votes belong to the round currently being revealed. Do not accept
+  // votes while the round is still live, nor let a client manufacture an
+  // arbitrary round number that would pollute the in-memory vote stream.
+  if (room.status !== "stopped" && room.status !== "finished" &&
+      room.status !== "bluffvoting") {
+    res.status(409).json({ error: "La votación divertida sólo está disponible al revelar la ronda" });
+    return;
+  }
+  if (round !== room.currentRound) {
+    res.status(409).json({ error: "La votación pertenece a otra ronda" });
+    return;
+  }
+
   const players = parsePlayers(room.playersJson);
   if (!players.some((p: any) => p.playerId === playerId)) {
     res.status(403).json({ error: "No estás en esta sala" }); return;
