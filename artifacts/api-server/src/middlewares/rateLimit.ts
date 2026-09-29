@@ -72,6 +72,15 @@ export const inviteLimiter = rateLimit({
   keyGenerator: (req) => ipKeyGenerator(req.ip ?? ""),
 });
 
+// Contact-form limiter — unauthenticated endpoint that persists user-controlled
+// text in PostgreSQL. Key it by IP so playerId rotation cannot bypass spam protection.
+export const contactLimiter = rateLimit({
+  ...baseOpts,
+  windowMs: 10 * 60_000,
+  limit: 5,
+  keyGenerator: (req) => ipKeyGenerator(req.ip ?? ""),
+});
+
 // Room-join limiter — keyed by IP, not playerId. Guests can choose arbitrary
 // UUIDs, so a playerId-based key could be rotated to bypass room-code enumeration.
 export const roomJoinLimiter = rateLimit({
