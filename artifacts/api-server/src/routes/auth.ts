@@ -4,7 +4,7 @@ import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import { issuePlayerToken, clearPlayerToken, PLAYER_TOKEN_BRIDGE_KEY, readPlayerId } from "../lib/playerAuth";
 import { db, playerScoresTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 const router = Router();
 
@@ -901,6 +901,93 @@ router.get("/me", async (req: Request, res: Response) => {
 // always 200 so the client can fire it best-effort during logout without
 // caring about the result. The client also wipes its localStorage profile and
 // bridge token; this handles the cross-origin httpOnly cookie.
+router.post("/delete-account", async (req: Request, res: Response) => {
+  const playerId = readPlayerId(req);
+  if (!playerId || !isLoggedInId(playerId)) {
+    return res.status(401).json({ error: "Authentication required" });
+  }
+
+  try {
+    const result = await db.transaction(async (tx) => {
+      const rows = await tx.execute(sql`
+        SELECT player_id, stripe_customer_id
+        FROM player_scores
+        WHERE player_id = ${playerId}
+        FOR UPDATE
+      `);
+      const row = rows.rows?.[0] as
+        | { player_id: string; stripe_customer_id: string | null }
+        | undefined;
+
+      if (!row) return { deleted: false as const, stripeCustomerId: null };
+
+      // Delete user-owned records from every current/future table that uses
+      // player_id, except immutable billing ledgers which are retained for
+      // financial/audit obligations. The whole operation is transactional.
+      const tableRows = await tx.execute(sql`
+        SELECT table_schema, table_name
+        FROM information_schema.columns
+        WHERE column_name = 'player_id'
+          AND table_schema = 'public'
+          AND table_name NOT IN ('player_scores', 'play_subscriptions', 'play_product_purchases')
+        GROUP BY table_schema, table_name
+      `);
+
+      for (const table of tableRows.rows as Array<{ table_schema: string; table_name: string }>) {
+        const qualified = `"${table.table_schema.replace(/"/g, '""')}"."${table.table_name.replace(/"/g, '""')}"`;
+        await tx.execute(sql.raw(
+          `DELETE FROM ${qualified} WHERE "player_id" = '${playerId.replace(/'/g, "''")}'`,
+        ));
+      }
+
+      // Remove rooms/tournaments owned by the deleted account so their host
+      // identity cannot survive after the account is gone.
+      await tx.execute(sql`DELETE FROM rooms WHERE host_id = ${playerId}`);
+      await tx.execute(sql`DELETE FROM tournaments WHERE host_id = ${playerId}`);
+
+      // Keep the Play billing ledgers but sever the personal-account link.
+      await tx.execute(sql`
+        UPDATE play_subscriptions
+        SET player_id = CONCAT('deleted_', LEFT(md5(player_id || ${Date.now()}::text), 24)),
+            raw_json = '{}',
+            updated_at = NOW()
+        WHERE player_id = ${playerId}
+      `);
+      await tx.execute(sql`
+        UPDATE play_product_purchases
+        SET player_id = CONCAT('deleted_', LEFT(md5(player_id || ${Date.now()}::text), 24)),
+            raw_json = '{}',
+            updated_at = NOW()
+        WHERE player_id = ${playerId}
+      `);
+
+      await tx.execute(sql`DELETE FROM player_scores WHERE player_id = ${playerId}`);
+      return { deleted: true as const, stripeCustomerId: row.stripe_customer_id };
+    });
+
+    // Stripe customer deletion is intentionally outside the DB transaction:
+    // if Stripe fails, the account data must not be reported as deleted.
+    if (result.deleted && result.stripeCustomerId) {
+      try {
+        const { getUncachableStripeClient } = await import("../stripeClient");
+        const stripe = await getUncachableStripeClient();
+        await stripe.customers.del(result.stripeCustomerId);
+      } catch (stripeError) {
+        console.error("[auth/delete-account] Stripe customer deletion failed:", stripeError);
+        return res.status(502).json({
+          error: "No se pudo completar la cancelación de la suscripción. Tu cuenta no se ha eliminado.",
+        });
+      }
+    }
+
+    clearPlayerToken(res);
+    return res.json({ ok: true, deleted: result.deleted });
+  } catch (error) {
+    console.error("[auth/delete-account] error:", error);
+    return res.status(500).json({ error: "No se pudo eliminar la cuenta. Inténtalo de nuevo." });
+  }
+});
+
 router.post("/logout", (_req: Request, res: Response) => {
   clearPlayerToken(res);
   res.json({ ok: true });
