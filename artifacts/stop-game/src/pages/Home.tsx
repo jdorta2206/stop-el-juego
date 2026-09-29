@@ -62,6 +62,7 @@ export default function Home() {
       .then(r => r.ok ? r.json() : Promise.reject(new Error("daily-status")))
       .then(d => { if (!controller.signal.aborted) setDailyDone(!!d.played); })
       .catch(() => { if (!controller.signal.aborted) setDailyDone(false); });
+    return () => controller.abort();
   }, [player?.id, player?.loginMethod, lang]);
 
   const ftue = useFTUE();
