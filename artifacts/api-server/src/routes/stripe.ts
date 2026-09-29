@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { stripeStorage } from "../stripeStorage";
 import { stripeService } from "../stripeService";
-import { getUncachableStripeClient } from "../stripeClient";
+import { getUncachableStripeClient, isStripeReady } from "../stripeClient";
 import { verifyClaimedIdentity } from "../lib/playerAuth";
 import { isUserPremium } from "../lib/premiumStatus";
 import {
@@ -13,6 +13,17 @@ import {
 } from "../lib/worldCupPack";
 
 const router: IRouter = Router();
+
+// Stripe schema/sync initialization runs after the main DB bootstrap. Do not
+// expose billing endpoints until both are ready; otherwise a startup failure
+// could turn into misleading 500s or queries against missing stripe.* tables.
+router.use((_req, res, next) => {
+  if (!isStripeReady()) {
+    res.setHeader("Retry-After", "5");
+    return res.status(503).json({ error: "Stripe is still initializing" });
+  }
+  next();
+});
 
 const APP_ORIGIN =
   process.env["APP_ORIGIN"] ||
