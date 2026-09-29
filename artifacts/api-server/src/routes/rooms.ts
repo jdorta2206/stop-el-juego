@@ -120,9 +120,23 @@ const PRESENCE_GRACE_MS = 4_000;
 const lastBroadcastUpdatedAt = new Map<string, number>();
 
 function broadcastRoom(code: string, roomPayload: object) {
+  const room = roomPayload as any;
+  const updatedAtMs = room?.updatedAt instanceof Date
+    ? room.updatedAt.getTime()
+    : new Date(room?.updatedAt ?? 0).getTime();
+
+  // All broadcast paths, including bot broadcasts, pass through here. Never
+  // emit an older persisted room version after a newer one was already sent.
+  const lastMs = lastBroadcastUpdatedAt.get(code);
+  if (Number.isFinite(updatedAtMs) && lastMs !== undefined && updatedAtMs < lastMs) {
+    return;
+  }
+  if (Number.isFinite(updatedAtMs)) {
+    lastBroadcastUpdatedAt.set(code, updatedAtMs);
+  }
+
   const clients = sseClients.get(code);
   if (!clients || clients.size === 0) return;
-  const room = roomPayload as any;
   const memberIds = new Set(
     Array.isArray(room.players)
       ? room.players.map((p: any) => p?.playerId).filter(Boolean)
