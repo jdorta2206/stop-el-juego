@@ -444,7 +444,18 @@ export async function updatePlaySubscriptionByToken(
     })
     .where(sql`${eq(playSubscriptionsTable.purchaseToken, v.purchaseToken)} AND (${playSubscriptionsTable.updatedAt} IS NULL OR ${playSubscriptionsTable.updatedAt} <= ${new Date(v.observedAtMs)})`)
     .returning({ playerId: playSubscriptionsTable.playerId });
-  return { playerId: updated[0]?.playerId ?? null };
+  if (updated[0]) {
+    return { playerId: updated[0].playerId };
+  }
+
+  // A row can exist but be newer than this RTDN verification. That means the
+  // notification is stale, not that the purchase token is unlinked.
+  const existing = await db
+    .select({ playerId: playSubscriptionsTable.playerId })
+    .from(playSubscriptionsTable)
+    .where(eq(playSubscriptionsTable.purchaseToken, v.purchaseToken))
+    .limit(1);
+  return { playerId: existing[0]?.playerId ?? null };
 }
 
 export async function getActivePlaySubscriptionForPlayer(
