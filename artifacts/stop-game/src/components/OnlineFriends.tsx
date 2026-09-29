@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Wifi, Copy, ChevronDown, ChevronUp, Swords, Check, Clock, UserPlus, UserCheck } from "lucide-react";
 import { usePresence, sendChallenge, pollChallengeStatus, type OnlinePlayer } from "@/lib/usePresence";
@@ -153,6 +153,16 @@ function PlayerRow({
   const [, setLocation] = useLocation();
   const [copied, setCopied] = useState(false);
   const pendingChallengeId = useRef<string | null>(null);
+  const challengePollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const challengeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => {
+    if (challengePollRef.current) clearInterval(challengePollRef.current);
+    if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current);
+    challengePollRef.current = null;
+    challengeTimeoutRef.current = null;
+    pendingChallengeId.current = null;
+  }, []);
 
   const handleCopy = () => {
     if (player.roomCode) {
@@ -168,19 +178,22 @@ function PlayerRow({
     const result = await sendChallenge(currentPlayer, player.playerId);
     if (!result) return;
     pendingChallengeId.current = result.challengeId;
+    if (challengePollRef.current) clearInterval(challengePollRef.current);
+    if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current);
     const poll = setInterval(async () => {
       if (!pendingChallengeId.current) { clearInterval(poll); return; }
       const status = await pollChallengeStatus(pendingChallengeId.current);
       if (status.status === "accepted") {
-        clearInterval(poll);
+        clearInterval(poll); challengePollRef.current = null; if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current); challengeTimeoutRef.current = null;
         pendingChallengeId.current = null;
         setLocation(`/room/${status.roomCode}`);
       } else if (status.status === "declined" || status.status === "expired") {
-        clearInterval(poll);
+        clearInterval(poll); challengePollRef.current = null; if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current); challengeTimeoutRef.current = null;
         pendingChallengeId.current = null;
       }
     }, 2000);
-    setTimeout(() => { clearInterval(poll); pendingChallengeId.current = null; }, 60000);
+    challengePollRef.current = poll;
+    challengeTimeoutRef.current = setTimeout(() => { clearInterval(poll); challengePollRef.current = null; pendingChallengeId.current = null; challengeTimeoutRef.current = null; }, 60000);
   };
 
   return (
@@ -260,6 +273,16 @@ function InstagramPlayerRow({
   const [, setLocation] = useLocation();
   const [copied, setCopied] = useState(false);
   const pendingChallengeId = useRef<string | null>(null);
+  const challengePollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const challengeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => {
+    if (challengePollRef.current) clearInterval(challengePollRef.current);
+    if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current);
+    challengePollRef.current = null;
+    challengeTimeoutRef.current = null;
+    pendingChallengeId.current = null;
+  }, []);
 
   const handleJoin = () => {
     if (p.roomCode) {
@@ -275,19 +298,22 @@ function InstagramPlayerRow({
     const result = await sendChallenge(currentPlayer, p.playerId);
     if (!result) return;
     pendingChallengeId.current = result.challengeId;
+    if (challengePollRef.current) clearInterval(challengePollRef.current);
+    if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current);
     const poll = setInterval(async () => {
       if (!pendingChallengeId.current) { clearInterval(poll); return; }
       const status = await pollChallengeStatus(pendingChallengeId.current);
       if (status.status === "accepted") {
-        clearInterval(poll);
+        clearInterval(poll); challengePollRef.current = null; if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current); challengeTimeoutRef.current = null;
         pendingChallengeId.current = null;
         setLocation(`/room/${status.roomCode}`);
       } else if (status.status === "declined" || status.status === "expired") {
-        clearInterval(poll);
+        clearInterval(poll); challengePollRef.current = null; if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current); challengeTimeoutRef.current = null;
         pendingChallengeId.current = null;
       }
     }, 2000);
-    setTimeout(() => { clearInterval(poll); pendingChallengeId.current = null; }, 60000);
+    challengePollRef.current = poll;
+    challengeTimeoutRef.current = setTimeout(() => { clearInterval(poll); challengePollRef.current = null; pendingChallengeId.current = null; challengeTimeoutRef.current = null; }, 60000);
   };
 
   const isMe = currentPlayer?.id === p.playerId;
@@ -354,6 +380,16 @@ function FriendRow({ friend, currentPlayer }: { friend: EnrichedFriend; currentP
   const [, setLocation] = useLocation();
   const [copied, setCopied] = useState(false);
   const pendingChallengeId = useRef<string | null>(null);
+  const challengePollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const challengeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => {
+    if (challengePollRef.current) clearInterval(challengePollRef.current);
+    if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current);
+    challengePollRef.current = null;
+    challengeTimeoutRef.current = null;
+    pendingChallengeId.current = null;
+  }, []);
 
   const handleJoin = () => {
     if (friend.onlineData?.roomCode) {
@@ -369,19 +405,22 @@ function FriendRow({ friend, currentPlayer }: { friend: EnrichedFriend; currentP
     const result = await sendChallenge(currentPlayer, friend.onlineData.playerId);
     if (!result) return;
     pendingChallengeId.current = result.challengeId;
+    if (challengePollRef.current) clearInterval(challengePollRef.current);
+    if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current);
     const poll = setInterval(async () => {
       if (!pendingChallengeId.current) { clearInterval(poll); return; }
       const status = await pollChallengeStatus(pendingChallengeId.current);
       if (status.status === "accepted") {
-        clearInterval(poll);
+        clearInterval(poll); challengePollRef.current = null; if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current); challengeTimeoutRef.current = null;
         pendingChallengeId.current = null;
         setLocation(`/room/${status.roomCode}`);
       } else if (status.status === "declined" || status.status === "expired") {
-        clearInterval(poll);
+        clearInterval(poll); challengePollRef.current = null; if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current); challengeTimeoutRef.current = null;
         pendingChallengeId.current = null;
       }
     }, 2000);
-    setTimeout(() => { clearInterval(poll); pendingChallengeId.current = null; }, 60000);
+    challengePollRef.current = poll;
+    challengeTimeoutRef.current = setTimeout(() => { clearInterval(poll); challengePollRef.current = null; pendingChallengeId.current = null; challengeTimeoutRef.current = null; }, 60000);
   };
 
   return (
