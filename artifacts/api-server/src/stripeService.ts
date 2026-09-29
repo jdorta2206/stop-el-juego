@@ -2,12 +2,15 @@ import { stripeStorage } from "./stripeStorage";
 import { getUncachableStripeClient } from "./stripeClient";
 
 export class StripeService {
-  async createCustomer(email: string, playerId: string) {
+  async createCustomer(email: string, playerId: string, idempotencyKey?: string) {
     const stripe = await getUncachableStripeClient();
-    return await stripe.customers.create({
-      email,
-      metadata: { playerId },
-    });
+    return await stripe.customers.create(
+      {
+        email,
+        metadata: { playerId },
+      },
+      idempotencyKey ? { idempotencyKey } : undefined
+    );
   }
 
   async createCheckoutSession(
