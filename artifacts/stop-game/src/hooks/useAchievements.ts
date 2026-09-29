@@ -246,6 +246,7 @@ export function useAchievements(playerId?: string) {
     if (!playerId || syncedRef.current) return;
     syncedRef.current = true;
     const controller = new AbortController();
+    let milestoneTimer: number | null = null;
     syncAbortRef.current = controller;
     syncFromServer(playerId, controller.signal).then(({ achievements: serverIds, stats: serverStats }) => {
       // Merge achievements
@@ -277,12 +278,15 @@ export function useAchievements(playerId?: string) {
       const serverLongest = Number(serverStats.longestStreak ?? 0);
       if (serverLongest >= STREAK_MILESTONES[0]) {
         // Defer to next tick so the stats setState above has settled.
-        setTimeout(() => checkStreakMilestoneRef.current(serverLongest), 0);
+        milestoneTimer = window.setTimeout(() => checkStreakMilestoneRef.current(serverLongest), 0);
       }
     });
-  }, [playerId]);
 
-  useEffect(() => () => syncAbortRef.current?.abort(), [playerId]);
+    return () => {
+      controller.abort();
+      if (milestoneTimer !== null) window.clearTimeout(milestoneTimer);
+    };
+  }, [playerId]);
 
   const afterRound = useCallback((result: RoundResult) => {
     const current = loadStats(playerId);
