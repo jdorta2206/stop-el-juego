@@ -136,10 +136,11 @@ export async function sendRoomInvite(
 
 // Poll the status of a sent challenge
 export async function pollChallengeStatus(
-  challengeId: string
+  challengeId: string,
+  signal?: AbortSignal,
 ): Promise<{ status: "pending" | "accepted" | "declined" | "expired"; roomCode: string }> {
   try {
-    const res = await fetch(`${API_BASE}/api/presence/challenge/${challengeId}/status`);
+    const res = await fetch(`${API_BASE}/api/presence/challenge/${challengeId}/status`, { signal });
     if (!res.ok) return { status: "expired", roomCode: "" };
     return await res.json();
   } catch {
