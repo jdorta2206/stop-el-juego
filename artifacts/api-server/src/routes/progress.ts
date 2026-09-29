@@ -144,29 +144,43 @@ router.post("/progress/:playerId", async (req, res) => {
     historyRows.map(row => [String(row.mode), Number(row.maxScore ?? 0)])
   );
 
-  const current = parseJson<JsonRecord>(rows[0].personalBestsJson, {});
-  const merged: JsonRecord = { ...current };
+  // Serialize the read/merge/write itself. Without the row lock, two devices
+  // can both read the same JSON, merge different modes, and the second UPDATE
+  // silently discard the first device's legitimate progress.
+  await db.transaction(async (tx) => {
+    const locked = await tx.execute(sql`
+      SELECT personal_bests_json
+      FROM player_scores
+      WHERE player_id = ${playerId}
+      FOR UPDATE
+    `);
+    const lockedRow = (locked.rows as Array<{ personal_bests_json: string | null }>)[0];
+    if (!lockedRow) throw new Error("Player not found");
 
-  for (const mode of modes) {
-    const score = incoming[mode];
-    if (typeof score !== "number" || !Number.isFinite(score)) continue;
+    const current = parseJson<JsonRecord>(lockedRow.personal_bests_json, {});
+    const merged: JsonRecord = { ...current };
 
-    const safeScore = Math.max(0, Math.min(Math.floor(score), 100_000));
-    const serverMax = authoritativeMax.get(mode);
+    for (const mode of modes) {
+      const score = incoming[mode];
+      if (typeof score !== "number" || !Number.isFinite(score)) continue;
 
-    // A local device may report a legitimate score the server already knows,
-    // but it can never manufacture a higher personal best.
-    if (serverMax === undefined || safeScore > serverMax) continue;
+      const safeScore = Math.max(0, Math.min(Math.floor(score), 100_000));
+      const serverMax = authoritativeMax.get(mode);
 
-    merged[mode] = Math.max(Number(current[mode] ?? 0), safeScore);
-  }
+      // A local device may report a legitimate score the server already knows,
+      // but it can never manufacture a higher personal best.
+      if (serverMax === undefined || safeScore > serverMax) continue;
 
-  if (JSON.stringify(merged) !== JSON.stringify(current)) {
-    await db
-      .update(playerScoresTable)
-      .set({ personalBestsJson: JSON.stringify(merged) })
-      .where(eq(playerScoresTable.playerId, playerId));
-  }
+      merged[mode] = Math.max(Number(current[mode] ?? 0), safeScore);
+    }
+
+    if (JSON.stringify(merged) !== JSON.stringify(current)) {
+      await tx
+        .update(playerScoresTable)
+        .set({ personalBestsJson: JSON.stringify(merged) })
+        .where(eq(playerScoresTable.playerId, playerId));
+    }
+  });
 
   res.json({ ok: true });
 });
