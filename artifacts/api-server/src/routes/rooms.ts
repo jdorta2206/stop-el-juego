@@ -15,6 +15,7 @@ import {
   resolveCategoriesForRound,
   rushBotSubmits,
   cleanupBotRoom,
+  cleanupStaleBotRooms,
   startBotTimerRecovery,
 } from "../lib/multiplayerBot";
 
@@ -831,9 +832,7 @@ async function purgeStaleRooms() {
       sseClients.delete(code);
     }
     // Bot state must be cleaned for every room removed by this purge.
-    for (const staleCode of Array.from(roomBotTimers.keys())) {
-      if (!liveCodesSet.has(staleCode)) cleanupBotRoom(staleCode);
-    }
+    cleanupStaleBotRooms(liveCodesSet);
     dropOrphans(roomReactions as Map<string, unknown>);
     dropOrphans(roomPhrases as Map<string, unknown>);
     dropOrphans(roomTyping as Map<string, unknown>);
