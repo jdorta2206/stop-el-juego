@@ -18,6 +18,7 @@ class PgRateLimitStore implements RateLimitStore {
     this.prefix = prefix;
     this.windowMs = windowMs;
     this.cleanupTimer = setInterval(() => {
+      if (!indexesReady()) return;
       void db.execute(sql\`
         DELETE FROM api_rate_limits
         WHERE bucket_key LIKE \${this.prefix + ":%"}
