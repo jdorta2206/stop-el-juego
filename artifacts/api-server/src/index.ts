@@ -1,6 +1,6 @@
 import "./lib/facebookGraphCompat";
 import { runMigrations } from "stripe-replit-sync";
-import { getStripeSync } from "./stripeClient";
+import { getStripeSync, markStripeReady } from "./stripeClient";
 import app from "./app";
 import { startDailyCron } from "./lib/dailyCron";
 import { revokeFakePremium } from "./lib/permanentPremium";
@@ -79,6 +79,9 @@ async function initStripe() {
     console.log("Initializing Stripe schema...");
     await runMigrations({ databaseUrl } as any);
     console.log("Stripe schema ready");
+    // Webhooks may arrive as soon as the HTTP listener is reachable. Mark
+    // Stripe ready only after its own schema migrations have completed.
+    markStripeReady();
 
     const stripeSync = await getStripeSync();
 
