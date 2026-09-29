@@ -112,7 +112,8 @@ router.post("/submit", async (req, res) => {
         .where(
           and(
             eq(dailyResultsTable.playerId, playerId),
-            eq(dailyResultsTable.challengeDate, today)
+            eq(dailyResultsTable.challengeDate, today),
+            sql`${dailyResultsTable.score} < ${safeScore}`
           )
         );
     }
