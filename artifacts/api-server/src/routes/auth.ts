@@ -978,6 +978,16 @@ router.post("/delete-account", async (req: Request, res: Response) => {
         ));
       }
 
+      // player_challenges uses from_player_id/to_player_id rather than the
+      // generic player_id column, so it is not covered by the purge above.
+      // Remove both incoming and outgoing challenges before deleting the
+      // account, otherwise a deleted player can remain in pending/history
+      // challenge records.
+      await tx.execute(sql`
+        DELETE FROM player_challenges
+        WHERE from_player_id = ${playerId} OR to_player_id = ${playerId}
+      `);
+
       // Follows uses follower_id/followed_id rather than player_id, so it is
       // not covered by the generic player_id purge above. Remove both sides
       // of the relationship to avoid orphaned references to a deleted account.
