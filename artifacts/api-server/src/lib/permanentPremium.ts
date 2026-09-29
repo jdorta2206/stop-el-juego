@@ -69,7 +69,15 @@ export async function revokeFakePremium() {
         .update(playerScoresTable)
         .set({ isPremium: false })
         .where(
-          sql`id IN (${sql.join(toRevoke.map((c) => sql`${c.id}`), sql`, `)})`,
+          sql`id IN (${sql.join(toRevoke.map((c) => sql`${c.id}`), sql`, `)})
+            AND NOT EXISTS (
+              SELECT 1
+              FROM play_subscriptions ps
+              WHERE ps.player_id = ${playerScoresTable.playerId}
+                AND ps.product_id = 'premium_monthly'
+                AND ps.state IN ('ACTIVE', 'IN_GRACE_PERIOD')
+                AND ps.expiry_time_ms > ${Date.now()}
+            )`,
         )
         .returning({ id: playerScoresTable.id, name: playerScoresTable.playerName });
 
