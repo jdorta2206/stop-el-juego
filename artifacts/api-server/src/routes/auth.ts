@@ -978,6 +978,14 @@ router.post("/delete-account", async (req: Request, res: Response) => {
         ));
       }
 
+      // Follows uses follower_id/followed_id rather than player_id, so it is
+      // not covered by the generic player_id purge above. Remove both sides
+      // of the relationship to avoid orphaned references to a deleted account.
+      await tx.execute(sql`
+        DELETE FROM follows
+        WHERE follower_id = ${playerId} OR followed_id = ${playerId}
+      `);
+
       await tx.execute(sql`DELETE FROM rooms WHERE host_id = ${playerId}`);
       await tx.execute(sql`DELETE FROM tournaments WHERE host_id = ${playerId}`);
 
