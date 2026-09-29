@@ -2176,14 +2176,33 @@ router.post("/:roomCode/stop", async (req, res) => {
     roundStartedAt: prevMeta.roundStartedAt ?? Date.now(),
   };
 
+  // CAS the transition on the exact room version we inspected. Without this,
+  // concurrent STOP/RESULTS requests could overwrite a newer playersJson or
+  // replace the authoritative stopper with a stale read.
   const [updated] = await db.update(roomsTable)
     .set({
       status: "stopped",
       stopperJson: JSON.stringify(newMeta),
       updatedAt: new Date(),
     })
-    .where(eq(roomsTable.roomCode, roomCode.toUpperCase()))
+    .where(and(
+      eq(roomsTable.roomCode, roomCode.toUpperCase()),
+      eq(roomsTable.status, "playing"),
+      eq(roomsTable.updatedAt, room.updatedAt),
+    ))
     .returning();
+
+  if (!updated) {
+    const [current] = await db.select().from(roomsTable)
+      .where(eq(roomsTable.roomCode, roomCode.toUpperCase()))
+      .limit(1);
+    if (!current) {
+      res.status(404).json({ error: "Room not found" });
+      return;
+    }
+    res.json(formatRoom(current));
+    return;
+  }
 
   res.json(broadcastAndFormat(updated));
 
