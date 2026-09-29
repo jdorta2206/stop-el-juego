@@ -128,8 +128,16 @@ export async function sendPushToPlayer(playerId: string, payload: PushPayload): 
     return 0;
   }
 
-  const rows = await db.select().from(pushSubscriptionsTable)
-    .where(and(eq(pushSubscriptionsTable.playerId, playerId), excludeReplitOrigin));
+  let rows: PushRow[];
+  try {
+    rows = await db.select().from(pushSubscriptionsTable)
+      .where(and(eq(pushSubscriptionsTable.playerId, playerId), excludeReplitOrigin));
+  } catch (error) {
+    // A database read failure happens after the in-memory throttle is claimed.
+    // Release that claim so a transient outage does not suppress later pushes.
+    rollbackNotificationThrottle(playerId, payload);
+    throw error;
+  }
 
   const picked = dedupeByPlayer(rows);
 
