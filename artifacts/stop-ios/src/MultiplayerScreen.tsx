@@ -21,6 +21,7 @@ export function MultiplayerScreen({ session, onExit }: Props) {
   const [secondsLeft, setSecondsLeft] = useState(60);
   const [busy, setBusy] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const submittingRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
 
   const playerId = session.user.id;
@@ -67,6 +68,7 @@ export function MultiplayerScreen({ session, onExit }: Props) {
 
   useEffect(() => {
     if (room?.status === "waiting") {
+      submittingRef.current = false;
       setSubmitted(false);
       setAnswers({});
       setSecondsLeft(room.roundDurationSecs ?? 60);
@@ -118,13 +120,18 @@ export function MultiplayerScreen({ session, onExit }: Props) {
 
   async function submitResults(sourceRoom?: Room) {
     const active = sourceRoom ?? room;
-    if (!active || submitted || (active.status !== "playing" && active.status !== "stopped")) return;
+    if (!active || submitted || submittingRef.current || (active.status !== "playing" && active.status !== "stopped")) return;
+    submittingRef.current = true;
     setSubmitted(true); setBusy(true);
     try {
       const updated = await apiFetch<Room>(`/api/rooms/${encodeURIComponent(active.roomCode)}/results`, { method: "POST", body: JSON.stringify({ playerId, answers, bluffedCategories: [], bluffedWords: {} }) });
       setRoom(updated);
       setAnswers({});
-    } catch (e) { setSubmitted(false); setError(e instanceof Error ? e.message : "No se pudieron enviar tus respuestas."); }
+    } catch (e) {
+      submittingRef.current = false;
+      setSubmitted(false);
+      setError(e instanceof Error ? e.message : "No se pudieron enviar tus respuestas.");
+    }
     finally { setBusy(false); }
   }
 
