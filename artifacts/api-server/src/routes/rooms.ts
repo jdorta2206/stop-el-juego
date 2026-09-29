@@ -4,6 +4,7 @@ import { roomsTable, playerScoresTable, gameHistoryTable } from "@workspace/db";
 import { eq, and, or, lt, inArray, sql } from "drizzle-orm";
 import { CreateRoomBody, JoinRoomBody, SubmitRoomResultsBody } from "@workspace/api-zod";
 import { calculateStreak, appendStreakDay } from "./ranking";
+import { recordTrustedAnalyticsEvent } from "./analytics";
 import { isWordValidAsync } from "./game";
 import { writeLimiter, roomJoinLimiter } from "../middlewares/rateLimit";
 import { verifyClaimedIdentity, verifyPlayerToken, readPlayerId, isLoggedInId, isAuthConfigured } from "../lib/playerAuth";
@@ -485,6 +486,12 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string) {
       mode: "multiplayer",
       won,
     });
+    void recordTrustedAnalyticsEvent({
+      eventName: "game_complete",
+      playerId: p.playerId,
+      mode: "multiplayer",
+      metadata: { source: "server_room_result", roomCode },
+    }).catch((err) => console.error("[analytics] trusted multiplayer game_complete failed:", err));
   }));
 }
 
