@@ -1330,35 +1330,42 @@ router.post("/:roomCode/leave", async (req, res) => {
     const leaving = players.find((p: any) => p.playerId === playerId);
     if (!leaving) return { kind: "noop" } as const;
 
-    // 👑 Mid-game host migration: if the host leaves while a round is in
-    // flight, we can't safely rewrite `playersJson` (would desync scores),
-    // but we MUST move the host badge to someone else — otherwise the room
-    // becomes a zombie that nobody can restart, rematch, or close. We do a
-    // minimal mutation: only `hostId`/`hostName` change, and we flip the
-    // `isHost` flag inside playersJson without touching scores or answers.
+    // 👑 Mid-game leave: the player must actually be removed from the roster.
+    // Keep every remaining player's score/answers untouched. If the host leaves,
+    // migrate the host badge and authoritative host fields in the same locked
+    // transaction so no concurrent join/leave can create a ghost member or a
+    // room with no usable host.
+    const remaining = players.filter((p: any) => p.playerId !== playerId);
+
     if (status !== "waiting") {
-      if (!leaving.isHost) return { kind: "noop" } as const;
-      const others = players.filter((p: any) => p.playerId !== playerId);
-      if (others.length === 0) return { kind: "noop" } as const;
-      const newHost = others[0];
-      const migrated = players.map((p: any) => ({
-        ...p,
-        isHost: p.playerId === newHost.playerId,
-      }));
+      if (remaining.length === 0) {
+        await tx.delete(roomsTable).where(eq(roomsTable.roomCode, code));
+        return { kind: "deleted" } as const;
+      }
+
+      let newHostId: string | null = null;
+      if (leaving.isHost) {
+        remaining.forEach((p: any, idx: number) => { p.isHost = idx === 0; });
+        newHostId = remaining[0].playerId;
+      }
+
+      const setPayload: Record<string, unknown> = {
+        playersJson: JSON.stringify(remaining),
+        updatedAt: new Date(),
+      };
+      if (newHostId) {
+        setPayload.hostId = newHostId;
+        setPayload.hostName = remaining[0].playerName ?? "";
+      }
+
       const updated = await tx
         .update(roomsTable)
-        .set({
-          playersJson: JSON.stringify(migrated),
-          hostId: newHost.playerId,
-          hostName: newHost.playerName ?? "",
-          updatedAt: new Date(),
-        } as any)
+        .set(setPayload as any)
         .where(eq(roomsTable.roomCode, code))
         .returning();
-      return { kind: "updated", row: updated[0], newHostId: newHost.playerId } as const;
-    }
 
-    const remaining = players.filter((p: any) => p.playerId !== playerId);
+      return { kind: "updated", row: updated[0], newHostId } as const;
+    }
 
     // Empty lobby → delete the row and free ephemeral state.
     if (remaining.length === 0) {
