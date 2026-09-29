@@ -2550,8 +2550,13 @@ router.post("/:roomCode/bluff-vote", writeLimiter, async (req, res) => {
   const bluffVotes = meta.bluffVotes ?? {};
   const bluffDeadline = meta.bluffDeadline ?? new Date().toISOString();
 
-  // Store this player's vote
-  if (bluffVotes[accusedPlayerId]?.[category] !== undefined) {
+  // A vote that arrives after the deadline must not affect resolution.
+  // Keep the persisted vote map untouched in that case; the existing votes are
+  // the authoritative set for the expired voting window.
+  const deadlinePassed = Date.now() > new Date(bluffDeadline).getTime();
+
+  // Store this player's vote only while the voting window is still open.
+  if (!deadlinePassed && bluffVotes[accusedPlayerId]?.[category] !== undefined) {
     bluffVotes[accusedPlayerId][category][voterId] = vote;
   }
 
@@ -2568,9 +2573,6 @@ router.post("/:roomCode/bluff-vote", writeLimiter, async (req, res) => {
     }
     if (!allVoted) break;
   }
-
-  // Also auto-resolve if deadline has passed
-  const deadlinePassed = Date.now() > new Date(bluffDeadline).getTime();
 
   if (allVoted || deadlinePassed) {
     // Resolve bluffs
