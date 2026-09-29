@@ -131,16 +131,21 @@ async function main() {
     console.log(`Server listening on port ${port}`);
   });
 
-  // Ensure all critical indexes exist before serving heavy traffic.
-  // Idempotent — safe to run on every boot.
-  ensureIndexes().catch((err: any) => {
+  // Ensure the DB schema is ready before starting tasks that query tables
+  // created by the bootstrap (notably play_subscriptions). Keep the port open
+  // so Railway can observe the instance; /healthz remains 503 until ready.
+  try {
+    await ensureIndexes();
+  } catch (err: any) {
     console.error("[ensureIndexes] failed at startup:", err?.message ?? err);
-  });
+    process.exit(1);
+    return;
+  }
 
   startDailyCron();
   // 🚫 One-shot cleanup at boot: revoke premium from any account without an
   // active Stripe subscription. Idempotent — only premium comes from Stripe now.
-  revokeFakePremium();
+  await revokeFakePremium();
 
   initStripe().catch((err) => {
     console.error("Stripe init failed:", err.message);
