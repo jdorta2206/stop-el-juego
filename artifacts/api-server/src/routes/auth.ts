@@ -1,4 +1,17 @@
 import { Router } from "express";
+
+
+const OAUTH_FETCH_TIMEOUT_MS = 15_000;
+
+async function oauthFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), OAUTH_FETCH_TIMEOUT_MS);
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 import type { Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
@@ -341,7 +354,7 @@ router.get("/google/callback", async (req: Request, res: Response) => {
     const redirectUri = `${APP_ORIGIN}/api/auth/google/callback`;
 
     // Exchange code → tokens
-    const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
+    const tokenRes = await oauthFetch("https://oauth2.googleapis.com/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
@@ -368,7 +381,7 @@ router.get("/google/callback", async (req: Request, res: Response) => {
       ) as OAuthProfile;
     } else if (tokenData.access_token) {
       // Fallback: use userinfo endpoint
-      const userinfoRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+      const userinfoRes = await oauthFetch("https://www.googleapis.com/oauth2/v3/userinfo", {
         headers: { Authorization: `Bearer ${tokenData.access_token}` },
       });
       payload = (await userinfoRes.json()) as OAuthProfile;
@@ -445,7 +458,7 @@ router.get("/facebook/callback", async (req: Request, res: Response) => {
     const redirectUri = `${APP_ORIGIN}/api/auth/facebook/callback`;
 
     // Exchange code → access token
-    const tokenRes = await fetch(
+    const tokenRes = await oauthFetch(
       `https://graph.facebook.com/v26.0/oauth/access_token?` +
       new URLSearchParams({ client_id: FACEBOOK_APP_ID, redirect_uri: redirectUri, client_secret: FACEBOOK_APP_SECRET, code })
     );
@@ -453,7 +466,7 @@ router.get("/facebook/callback", async (req: Request, res: Response) => {
     if (!tokenData.access_token) throw new Error("No access_token");
 
     // Fetch profile
-    const meRes = await fetch(
+    const meRes = await oauthFetch(
       `https://graph.facebook.com/v26.0/me?fields=id,name,email,picture.type(large)&access_token=${tokenData.access_token}`
     );
     const me = (await meRes.json()) as OAuthProfile;
@@ -547,7 +560,7 @@ router.get("/instagram/callback", async (req: Request, res: Response) => {
   try {
     const redirectUri = `${APP_ORIGIN}/api/auth/instagram/callback`;
 
-    const tokenRes = await fetch("https://api.instagram.com/oauth/access_token", {
+    const tokenRes = await oauthFetch("https://api.instagram.com/oauth/access_token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
@@ -565,7 +578,7 @@ router.get("/instagram/callback", async (req: Request, res: Response) => {
     }
     if (!tokenData.access_token) throw new Error("No access_token from Instagram");
 
-    const meRes = await fetch(
+    const meRes = await oauthFetch(
       `https://graph.instagram.com/v21.0/me?fields=id,username,profile_picture_url&access_token=${tokenData.access_token}`
     );
     const me = (await meRes.json()) as OAuthProfile;
@@ -654,7 +667,7 @@ router.post("/apple/callback", async (req: Request, res: Response) => {
     const clientSecret = makeAppleClientSecret();
 
     // Exchange code → tokens
-    const tokenRes = await fetch("https://appleid.apple.com/auth/token", {
+    const tokenRes = await oauthFetch("https://appleid.apple.com/auth/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
@@ -766,7 +779,7 @@ router.get("/tiktok/callback", async (req: Request, res: Response) => {
   try {
     const redirectUri = `${APP_ORIGIN}/api/auth/tiktok/callback`;
 
-    const tokenRes = await fetch("https://open.tiktokapis.com/v2/oauth/token/", {
+    const tokenRes = await oauthFetch("https://open.tiktokapis.com/v2/oauth/token/", {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
@@ -789,7 +802,7 @@ router.get("/tiktok/callback", async (req: Request, res: Response) => {
 
     const openId = tokenData.open_id || tokenData.data?.open_id;
 
-    const meRes = await fetch(
+    const meRes = await oauthFetch(
       "https://open.tiktokapis.com/v2/user/info/?fields=open_id,display_name,avatar_url",
       { headers: { Authorization: `Bearer ${accessToken}` } }
     );
