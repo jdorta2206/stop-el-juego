@@ -211,6 +211,7 @@ router.post("/challenge", async (req, res) => {
     DELETE FROM player_challenges
     WHERE from_player_id = ${fromPlayerId}
       AND to_player_id = ${toPlayerId}
+      AND is_room_invite = FALSE
       AND status = 'pending'
   `);
 
@@ -280,6 +281,7 @@ router.post("/challenge", async (req, res) => {
         FROM player_challenges
         WHERE from_player_id = ${fromPlayerId}
           AND to_player_id = ${toPlayerId}
+          AND is_room_invite = FALSE
           AND status = 'pending'
         ORDER BY created_at DESC
         LIMIT 1
