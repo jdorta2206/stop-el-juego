@@ -47,7 +47,7 @@ function isAllowedOrigin(value: string): boolean {
 
 async function cleanupAdmobRewardRequests(): Promise<void> {
   await db.execute(sql.raw(
-    "DELETE FROM admob_reward_requests WHERE created_at < NOW() - INTERVAL '5 minutes'",
+    "DELETE FROM admob_reward_requests WHERE rewarded = false AND consumed_at IS NULL AND created_at < NOW() - INTERVAL '5 minutes'",
   ));
 }
 
