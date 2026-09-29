@@ -284,6 +284,15 @@ async function sendPerUserDailyNotifications() {
     const candidates = rows.rows ?? [];
     if (candidates.length === 0) return;
 
+    // One cluster-wide claim per UTC 5-minute bucket. Every player whose
+    // local reminder time falls in this window is processed by the single
+    // instance that wins the claim; otherwise two Railway instances could
+    // send the same reminder concurrently.
+    const today = utcNow.toISOString().slice(0, 10);
+    const utcBucket = Math.floor(utcMinutesOfDay / 5);
+    const claimed = await claimDailyLock(today, `daily_${today}_${utcBucket}`);
+    if (!claimed) return;
+
     // Dedup per (player, lang) — a player may have multiple endpoints
     // (e.g. phone + desktop). sendPushToPlayer hits every endpoint
     // already, so we send the message once per player_id here.
