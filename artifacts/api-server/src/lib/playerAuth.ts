@@ -1,6 +1,6 @@
 import crypto from "crypto";
 import type { Request, Response, NextFunction } from "express";
-import { isPlayerRevoked } from "./playerRevocation";
+import { isPlayerRevoked, isPlayerRevocationCacheReady } from "./playerRevocation";
 
 // Session token / cookie lifetime. Kept short (30 days) to bound the blast
 // radius of a leaked token. Active players never notice expiry because
@@ -94,7 +94,7 @@ export function requirePlayerIdentity(
     res.status(401).json({ error: "Authentication required" });
     return;
   }
-  if (isPlayerRevoked(pid)) {
+  if (!isPlayerRevocationCacheReady() || isPlayerRevoked(pid)) {
     res.status(401).json({ error: "Account deleted" });
     return;
   }
@@ -182,7 +182,7 @@ export function verifyClaimedIdentity(
   // A deleted OAuth account must remain unusable even while an old signed token
   // is still inside its normal TTL. Revocations are loaded from the database at
   // startup and updated immediately when an account is deleted.
-  if (isPlayerRevoked(claimedId)) return false;
+  if (!isPlayerRevocationCacheReady() || isPlayerRevoked(claimedId)) return false;
   // Logged-in identities require the signing secret so the caller can be
   // cryptographically bound to the claimed account. Failing open here would
   // turn a missing SESSION_SECRET into an IDOR on billing/account endpoints.
