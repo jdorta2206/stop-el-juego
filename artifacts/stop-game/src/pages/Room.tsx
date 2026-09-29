@@ -10,7 +10,7 @@ import { usePremium } from "@/lib/usePremium";
 import { useFollows } from "@/lib/useFollows";
 import { FollowButton } from "@/components/FollowButton";
 import { Button, Card, Input, Progress } from "@/components/ui";
-import { useGetRoom, useSubmitRoomResults, getGetRoomQueryKey } from "@workspace/api-client-react";
+import { useGetRoom, getRoom, useSubmitRoomResults, getGetRoomQueryKey } from "@workspace/api-client-react";
 import { usePlayer } from "@/hooks/use-player";
 import { Share2, Play, ArrowLeft, Trophy, CheckCircle2, Circle, Volume2, VolumeX, Layers } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -258,8 +258,24 @@ export default function Room() {
     : /* lobby / between_rounds / finished / spinning */                  1500;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const roomQueryKey = getGetRoomQueryKey(roomCode || "");
   const { data: room, error } = useGetRoom(roomCode || "", {
-    query: { refetchInterval: pollingInterval, enabled: !!roomCode } as any,
+    query: {
+      refetchInterval: pollingInterval,
+      enabled: !!roomCode,
+      // A polling request can have started before a newer SSE snapshot arrived.
+      // If that older HTTP response finishes afterwards, never let React Query
+      // roll the room state backwards.
+      queryFn: async ({ signal }) => {
+        const incoming = await getRoom(roomCode || "", { signal, ...(player?.id ? { headers: { "x-viewer-id": player.id } } : {}) });
+        const current = queryClient.getQueryData<any>(roomQueryKey);
+        const incomingMs = new Date((incoming as any)?.updatedAt ?? 0).getTime();
+        const currentMs = new Date(current?.updatedAt ?? 0).getTime();
+        return Number.isFinite(incomingMs) && Number.isFinite(currentMs) && incomingMs < currentMs
+          ? current
+          : incoming;
+      },
+    } as any,
     // 🔑 Prove membership so private rooms return the full roster. Logged-in
     // users are identified by their global x-stop-token; guests have no token,
     // so we assert their own id via x-viewer-id (not a secret to them).
@@ -288,7 +304,13 @@ export default function Room() {
       es.onmessage = (e) => {
         try {
           const data = JSON.parse(e.data);
-          queryClient.setQueryData(getGetRoomQueryKey(code), data);
+          queryClient.setQueryData(getGetRoomQueryKey(code), (current: any) => {
+            const incomingMs = new Date(data?.updatedAt ?? 0).getTime();
+            const currentMs = new Date(current?.updatedAt ?? 0).getTime();
+            return Number.isFinite(incomingMs) && Number.isFinite(currentMs) && incomingMs < currentMs
+              ? current
+              : data;
+          });
         } catch {}
       };
       es.onerror = () => {
