@@ -86,6 +86,7 @@ export default function DailyChallenge() {
           }
         })
         .catch(() => {
+          if (controller.signal.aborted) return;
           // Do not block a logged-in player based on stale local state.
           setPlayedToday(false);
           setMyScore(null);
