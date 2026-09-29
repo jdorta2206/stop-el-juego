@@ -74,16 +74,22 @@ export async function requestRewardedAd(placement: RewardedPlacement): Promise<R
 
   return new Promise<RewardResult>((resolve) => {
     let finished = false;
+    let checkInFlight = false;
     const startedAt = Date.now();
     let timer: number | null = null;
     let deadlineTimer: number | null = null;
 
     const checkNow = async () => {
-      if (finished) return;
-      const result = await readResult(requestId);
-      if (result) finish(result);
-      else if (Date.now() - startedAt >= RESULT_TIMEOUT_MS) {
-        finish({ rewarded: false, source: "error", errorMessage: "Native rewarded ad request timed out" });
+      if (finished || checkInFlight) return;
+      checkInFlight = true;
+      try {
+        const result = await readResult(requestId);
+        if (result) finish(result);
+        else if (Date.now() - startedAt >= RESULT_TIMEOUT_MS) {
+          finish({ rewarded: false, source: "error", errorMessage: "Native rewarded ad request timed out" });
+        }
+      } finally {
+        checkInFlight = false;
       }
     };
 
