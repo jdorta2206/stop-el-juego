@@ -145,19 +145,9 @@ export function useFriendsOnline(
   useEffect(() => {
     if (!meId || friends.length === 0) { setOnline([]); return; }
     let cancelled = false;
-    const fetchOnline = async () => {
-      try {
-        const r = await fetch(`${API_BASE}/api/presence/online`);
-        const data = await r.json();
-        const all: OnlineFriend[] = data.online ?? [];
-        const friendIds = new Set(friends.map((f) => f.followedId));
-        const mine = all.filter((p) => friendIds.has(p.playerId) && p.playerId !== meId);
-        if (!cancelled) setOnline(mine);
-      } catch { /* ignore */ }
-    };
-    fetchOnline();
     const controller = new AbortController();
-    const fetchOnlineSafe = async () => {
+
+    const fetchOnline = async () => {
       try {
         const r = await fetch(`${API_BASE}/api/presence/online`, { signal: controller.signal });
         const data = await r.json();
@@ -167,8 +157,9 @@ export function useFriendsOnline(
         if (!cancelled && !controller.signal.aborted) setOnline(mine);
       } catch { /* ignore */ }
     };
-    fetchOnlineSafe();
-    const id = setInterval(fetchOnlineSafe, 20000);
+
+    void fetchOnline();
+    const id = setInterval(fetchOnline, 20000);
     return () => { cancelled = true; controller.abort(); clearInterval(id); };
   }, [meId, friends]);
 
