@@ -3,11 +3,11 @@ import { useState } from "react";
 export default function DeleteAccount() {
   const [email, setEmail] = useState("");
   const [reason, setReason] = useState("");
-  const [sent, setSent] = useState(false);
+  const [sent, setSent] = useState(false);\n  const [deleted, setDeleted] = useState(false);\n  const [errorMsg, setErrorMsg] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError("");
+    setErrorMsg("");
 
     const token = window.localStorage.getItem("stop_session_token");
 
@@ -114,9 +114,9 @@ export default function DeleteAccount() {
             📧 Solicitud de eliminación
           </h3>
 
-          {sent ? (
+          {deleted ? (
             <div className="text-white/80">
-              <p className="font-semibold mb-2">✅ Tu solicitud está lista para enviar.</p>
+              <p className="font-semibold mb-2">✅ Tu cuenta ha sido eliminada.</p>
               <p className="text-sm text-white/60">
                 Si no has iniciado sesión, la solicitud se ha preparado para enviarla por correo. La cuenta no se considera eliminada hasta que sea verificada y procesada.
                 <br />
