@@ -51,6 +51,31 @@ router.get("/", (req, res) => {
   res.json(challenge);
 });
 
+// GET /api/daily/status?playerId=...&language=es → authoritative completion state
+router.get("/status", async (req, res) => {
+  const playerId = typeof req.query.playerId === "string" ? req.query.playerId.trim() : "";
+  const language = typeof req.query.language === "string" ? req.query.language.trim().toLowerCase() : "";
+  if (!playerId || !["es", "en", "pt", "fr"].includes(language)) {
+    res.status(400).json({ error: "Invalid daily status request" });
+    return;
+  }
+  if (!verifyClaimedIdentity(req, playerId)) {
+    res.status(403).json({ error: "Identity verification failed" });
+    return;
+  }
+  const today = getTodayUTC();
+  const rows = await db
+    .select({ score: dailyResultsTable.score })
+    .from(dailyResultsTable)
+    .where(and(
+      eq(dailyResultsTable.playerId, playerId),
+      eq(dailyResultsTable.challengeDate, today),
+      eq(dailyResultsTable.language, language),
+    ))
+    .limit(1);
+  res.json({ played: rows.length > 0, score: rows[0]?.score ?? null, date: today });
+});
+
 // POST /api/daily/submit  → save a player's score for today
 router.post("/submit", async (req, res) => {
   const { playerId, playerName, avatarColor, score, letter, language, scoreTokens } = req.body;
