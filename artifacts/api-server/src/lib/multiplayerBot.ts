@@ -88,14 +88,19 @@ async function generateBotAnswersLLM(
     `- Responde SOLO con JSON válido: {"NombreCategoria": "palabra", ...}.`,
   ].join("\n");
   try {
-    const completion = await Promise.race([
-      client.chat.completions.create({
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8_000);
+    let completion;
+    try {
+      completion = await client.chat.completions.create({
         model: LLM_MODEL,
         messages: [{ role: "user", content: prompt }],
         response_format: { type: "json_object" },
-      }),
-      new Promise<never>((_, rej) => setTimeout(() => rej(new Error("timeout")), 8000)),
-    ]);
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
     const raw = (completion as any).choices?.[0]?.message?.content;
     if (typeof raw !== "string") return null;
     const parsed = JSON.parse(raw);
