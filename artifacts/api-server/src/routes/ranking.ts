@@ -9,7 +9,8 @@ import { resolveCosmetic } from "../lib/inventoryCatalog";
 import { SubmitScoreBody, GetLeaderboardQueryParams } from "@workspace/api-zod";
 import { scoreLimiter } from "../middlewares/rateLimit";
 import { verifyClaimedIdentity, requirePlayerIdentity, type AuthedRequest } from "../lib/playerAuth";
-import { sumVerifiedBasePersistent, ceilingFromBase, absoluteCeiling } from "../lib/scoreToken";\nimport { recordAuthoritativeSeasonEvents } from "./season";
+import { sumVerifiedBasePersistent, ceilingFromBase, absoluteCeiling } from "../lib/scoreToken";
+import { recordAuthoritativeSeasonEvents } from "./season";
 import {
   isHappyHourActiveForTzOffset,
   HAPPY_HOUR_MULTIPLIER,
