@@ -23,9 +23,13 @@ public class Application extends android.app.Application {
     private static final String TAG = "STOP_REWARDED";
     private static final String REAL_REWARDED_ID = "ca-app-pub-4807272408824742/3559554716";
     private static final long RETRY_DELAY_MS = 2000L;
+    // Google documents that manually preloaded rewarded ads expire after one hour.
+    // Refresh slightly before the hard expiry so a cached object is never shown stale.
+    private static final long PRELOADED_AD_TTL_MS = 55 * 60 * 1000L;
 
     private static volatile RewardedAd preloadedRewardedAd;
     private static volatile boolean loadingRewardedAd;
+    private static volatile long preloadedRewardedAdAt;
     private static Application instance;
     private final Handler handler = new Handler(Looper.getMainLooper());
 
@@ -43,8 +47,10 @@ public class Application extends android.app.Application {
             @Override
             public void onAdLoaded(@NonNull RewardedAd ad) {
                 preloadedRewardedAd = ad;
+                preloadedRewardedAdAt = System.currentTimeMillis();
                 loadingRewardedAd = false;
                 Log.d(TAG, "Rewarded ad preloaded");
+                instance.handler.postDelayed(Application::expirePreloadedRewardedAd, PRELOADED_AD_TTL_MS);
             }
 
             @Override
@@ -60,10 +66,26 @@ public class Application extends android.app.Application {
         });
     }
 
+    private static synchronized void expirePreloadedRewardedAd() {
+        if (preloadedRewardedAd == null || instance == null) return;
+        if (System.currentTimeMillis() - preloadedRewardedAdAt < PRELOADED_AD_TTL_MS) return;
+        preloadedRewardedAd = null;
+        preloadedRewardedAdAt = 0L;
+        Log.d(TAG, "Preloaded rewarded ad expired; reloading");
+        preloadRewardedAd();
+    }
+
     @Nullable
     public static synchronized RewardedAd takePreloadedRewardedAd() {
+        if (preloadedRewardedAd != null
+                && System.currentTimeMillis() - preloadedRewardedAdAt >= PRELOADED_AD_TTL_MS) {
+            preloadedRewardedAd = null;
+            preloadedRewardedAdAt = 0L;
+            Log.d(TAG, "Discarding expired preloaded rewarded ad");
+        }
         RewardedAd ad = preloadedRewardedAd;
         preloadedRewardedAd = null;
+        preloadedRewardedAdAt = 0L;
         if (ad == null) preloadRewardedAd();
         return ad;
     }
