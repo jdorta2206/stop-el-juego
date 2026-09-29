@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { playerScoresTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { playerScoresTable, gameHistoryTable } from "@workspace/db";
+import { eq, and, sql } from "drizzle-orm";
 import { verifyClaimedIdentity } from "../lib/playerAuth";
 
 const router: IRouter = Router();
@@ -135,32 +135,48 @@ router.post("/progress/:playerId", async (req, res) => {
   const body = (req.body ?? {}) as JsonRecord;
   const updates: JsonRecord = {};
 
-  if (Array.isArray(body.achievements)) {
-    const current = parseJson<string[]>(player.achievementsJson, []);
-    const incoming = body.achievements
-      .filter((x): x is string => typeof x === "string" && x.length > 0 && x.length <= MAX_KEY_LENGTH)
-      .slice(0, MAX_ACHIEVEMENTS);
-    updates.achievementsJson = JSON.stringify([...new Set([...current, ...incoming])]);
-  }
-
-  if (body.stats && typeof body.stats === "object" && !Array.isArray(body.stats)) {
-    const current = parseJson<JsonRecord>(player.achievementStatsJson, {});
-    updates.achievementStatsJson = JSON.stringify(mergeStats(current, body.stats as JsonRecord));
-  }
-
+  // Achievements and achievement stats are derived from gameplay and must not
+  // be client-authoritative. The old endpoint accepted arbitrary achievement
+  // ids/counters, allowing a player to grant themselves badges or inflate
+  // progress. Those fields are intentionally ignored here; authoritative
+  // server-side game events are responsible for them.
+  //
+  // Personal bests are also client-supplied for local-device sync, but each
+  // value is bounded by the highest score that actually exists in server game
+  // history for that player/mode. A client can therefore sync a legitimate
+  // local best, but cannot create a best score that the server has never seen.
   if (body.personalBests && typeof body.personalBests === "object" && !Array.isArray(body.personalBests)) {
     const current = parseJson<JsonRecord>(player.personalBestsJson, {});
     const incoming = body.personalBests as JsonRecord;
-    const merged: JsonRecord = { ...current };
-    let accepted = 0;
-    for (const [mode, score] of Object.entries(incoming)) {
-      if (accepted >= MAX_PERSONAL_BESTS || mode.length > MAX_KEY_LENGTH) break;
-      if (typeof score !== "number" || !Number.isFinite(score)) continue;
-      const safeScore = Math.max(0, Math.min(Math.floor(score), 100_000));
-      merged[mode] = Math.max(Number(current[mode] ?? 0), safeScore);
-      accepted++;
+    const modes = Object.keys(incoming).slice(0, MAX_PERSONAL_BESTS);
+
+    if (modes.length > 0) {
+      const rows = await db
+        .select({
+          mode: gameHistoryTable.mode,
+          maxScore: sql<number>`MAX(${gameHistoryTable.score})`,
+        })
+        .from(gameHistoryTable)
+        .where(eq(gameHistoryTable.playerId, playerId))
+        .groupBy(gameHistoryTable.mode);
+
+      const authoritativeMax = new Map(
+        rows.map(row => [String(row.mode), Number(row.maxScore ?? 0)])
+      );
+      const merged: JsonRecord = { ...current };
+      for (const mode of modes) {
+        if (mode.length > MAX_KEY_LENGTH) continue;
+        const score = incoming[mode];
+        if (typeof score !== "number" || !Number.isFinite(score)) continue;
+
+        const safeScore = Math.max(0, Math.min(Math.floor(score), 100_000));
+        const serverMax = authoritativeMax.get(mode);
+        if (serverMax === undefined || safeScore > serverMax) continue;
+
+        merged[mode] = Math.max(Number(current[mode] ?? 0), safeScore);
+      }
+      updates.personalBestsJson = JSON.stringify(merged);
     }
-    updates.personalBestsJson = JSON.stringify(merged);
   }
 
   if (Object.keys(updates).length > 0) {
