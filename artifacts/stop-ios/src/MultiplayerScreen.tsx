@@ -23,6 +23,7 @@ export function MultiplayerScreen({ session, onExit }: Props) {
   const [busy, setBusy] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const submittingRef = useRef(false);
+  const actionInFlightRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
 
   const playerId = session.user.id;
@@ -82,6 +83,8 @@ export function MultiplayerScreen({ session, onExit }: Props) {
   }, [room?.status, room?.currentRound]);
 
   async function createRoom() {
+    if (actionInFlightRef.current) return;
+    actionInFlightRef.current = true;
     setBusy(true); setError(null);
     try {
       const created = await apiFetch<Room>("/api/rooms", { method: "POST", body: JSON.stringify({
@@ -94,18 +97,21 @@ export function MultiplayerScreen({ session, onExit }: Props) {
   }
 
   async function joinRoom() {
+    if (actionInFlightRef.current) return;
     const roomCode = code.trim().toUpperCase();
     if (!roomCode) return;
+    actionInFlightRef.current = true;
     setBusy(true); setError(null);
     try {
       const joined = await apiFetch<Room>(`/api/rooms/${encodeURIComponent(roomCode)}/join`, { method: "POST", body: JSON.stringify({ playerId, playerName, avatarColor: null, picture: (session.user as any).picture ?? null, loginMethod: session.user.loginMethod ?? null }) });
       setRoom(joined); setCode(joined.roomCode);
     } catch (e) { setError(e instanceof Error ? e.message : "No se pudo entrar en la sala."); }
-    finally { setBusy(false); }
+    finally { actionInFlightRef.current = false; setBusy(false); }
   }
 
   async function startGame() {
-    if (!room || room.hostId !== playerId) return;
+    if (!room || room.hostId !== playerId || actionInFlightRef.current) return;
+    actionInFlightRef.current = true;
     setBusy(true); setError(null);
     try { const started = await apiFetch<Room>(`/api/rooms/${encodeURIComponent(room.roomCode)}/start`, { method: "POST", body: JSON.stringify({ hostId: playerId }) }); setRoom(started); }
     catch (e) { setError(e instanceof Error ? e.message : "No se pudo iniciar la partida."); }
@@ -113,14 +119,15 @@ export function MultiplayerScreen({ session, onExit }: Props) {
   }
 
   async function stopRound() {
-    if (!room || submitted || room.status !== "playing") return;
+    if (!room || submitted || room.status !== "playing" || actionInFlightRef.current) return;
+    actionInFlightRef.current = true;
     setBusy(true); setError(null);
     try {
       const stopped = await apiFetch<Room>(`/api/rooms/${encodeURIComponent(room.roomCode)}/stop`, { method: "POST", body: JSON.stringify({ playerId, playerName }) });
       setRoom(stopped);
       await submitResults(stopped);
     } catch (e) { setError(e instanceof Error ? e.message : "No se pudo detener la ronda."); }
-    finally { setBusy(false); }
+    finally { actionInFlightRef.current = false; setBusy(false); }
   }
 
   async function submitResults(sourceRoom?: Room) {
@@ -137,7 +144,7 @@ export function MultiplayerScreen({ session, onExit }: Props) {
       setSubmitted(false);
       setError(e instanceof Error ? e.message : "No se pudieron enviar tus respuestas.");
     }
-    finally { setBusy(false); }
+    finally { actionInFlightRef.current = false; setBusy(false); }
   }
 
   async function leaveRoom() {
