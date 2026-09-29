@@ -139,7 +139,10 @@ export async function sendPushToPlayer(playerId: string, payload: PushPayload): 
     throw error;
   }
 
-  const picked = dedupeByPlayer(rows);
+  // A direct player notification must reach every active device/session owned by
+  // the player. dedupeByPlayer() is only for broadcasts, where one notification
+  // per player is intentional; push_subscriptions.endpoint is already unique.
+  const picked = rows;
 
   let sent = 0;
   await Promise.allSettled(picked.map(async (row) => {
