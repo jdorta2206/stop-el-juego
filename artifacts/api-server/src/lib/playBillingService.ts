@@ -434,10 +434,14 @@ export async function updatePlaySubscriptionByToken(
     .where(
       sql` ${eq(playSubscriptionsTable.purchaseToken, v.purchaseToken)}
         AND (
-          ${playSubscriptionsTable.expiryTimeMs} IS NULL
-          OR ${playSubscriptionsTable.expiryTimeMs} <= ${v.expiryTimeMs}
-          OR ${playSubscriptionsTable.state} IN ('ACTIVE', 'IN_GRACE_PERIOD')
-          OR ${v.state} IN ('ACTIVE', 'IN_GRACE_PERIOD')
+          ${playSubscriptionsTable.expiryTimeMs} < ${v.expiryTimeMs}
+          OR (
+            ${playSubscriptionsTable.expiryTimeMs} = ${v.expiryTimeMs}
+            AND (
+              ${v.state} NOT IN ('ACTIVE', 'IN_GRACE_PERIOD')
+              OR ${playSubscriptionsTable.state} IN ('ACTIVE', 'IN_GRACE_PERIOD')
+            )
+          )
         )`,
     )
     .returning({ playerId: playSubscriptionsTable.playerId });
