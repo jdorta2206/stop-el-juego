@@ -115,7 +115,7 @@ export function MultiplayerScreen({ session, onExit }: Props) {
     setBusy(true); setError(null);
     try { const started = await apiFetch<Room>(`/api/rooms/${encodeURIComponent(room.roomCode)}/start`, { method: "POST", body: JSON.stringify({ hostId: playerId }) }); setRoom(started); }
     catch (e) { setError(e instanceof Error ? e.message : "No se pudo iniciar la partida."); }
-    finally { setBusy(false); }
+    finally { actionInFlightRef.current = false; setBusy(false); }
   }
 
   async function stopRound() {
