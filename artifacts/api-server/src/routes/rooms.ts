@@ -386,7 +386,8 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string) {
   //   2) was the stopper in the LAST round (rewards the player who triggered STOP)
   //   3) earlier finishedAt timestamp (faster typer wins ties)
   //   4) playerId (stable, alphabetical) so we never produce duplicate winners
-  const sorted = [...players].sort((a, b) => {
+  const leaderboardPlayers = players.filter((p: any) => p && !p.isBot);
+  const sorted = [...leaderboardPlayers].sort((a, b) => {
     const ds = (b.score || 0) - (a.score || 0);
     if (ds !== 0) return ds;
     const sa = a.wasStopper ? 1 : 0;
@@ -400,7 +401,7 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string) {
   const winner = sorted[0];
   const today = new Date().toISOString().split("T")[0];
 
-  await Promise.allSettled(players.map(async (p: any) => {
+  await Promise.allSettled(leaderboardPlayers.map(async (p: any) => {
     // Skip guests and players with 0 or no score
     if (!p.playerId || p.loginMethod === "guest") return;
 
