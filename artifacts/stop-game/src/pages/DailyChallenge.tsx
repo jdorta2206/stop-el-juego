@@ -8,7 +8,7 @@ import { ArrowLeft, Trophy, Calendar, Flame } from "lucide-react";
 import { useDisplayStreak } from "@/hooks/useDisplayStreak";
 import { useReviewPrompt } from "@/hooks/useReviewPrompt";
 import { ReviewPromptCard } from "@/components/ReviewPromptCard";
-import { getApiUrl } from "@/lib/utils";
+import { getApiUrl, authHeaders } from "@/lib/utils";
 
 interface DailyChallenge {
   letter: string;
@@ -63,11 +63,31 @@ export default function DailyChallenge() {
       .then(d => setRankings(d.rankings || []))
       .catch(() => {});
 
-    // Check if already played today
-    const played = localStorage.getItem(`stop_daily_${getTodayStr()}`);
-    if (played) {
-      setPlayedToday(true);
-      setMyScore(Number(played));
+    // Logged-in players use the server as the source of truth. Local storage
+    // is only a guest fallback because guests have no server daily result.
+    const localPlayed = localStorage.getItem(`stop_daily_${getTodayStr()}`);
+    if (!player || player.loginMethod === "guest") {
+      if (localPlayed) {
+        setPlayedToday(true);
+        setMyScore(Number(localPlayed));
+      }
+    } else {
+      fetch(`${API_BASE}/api/daily/status?playerId=${encodeURIComponent(player.id)}&language=${encodeURIComponent(lang)}`, {
+        headers: { ...authHeaders() },
+        credentials: "include",
+      })
+        .then(r => r.ok ? r.json() : Promise.reject(new Error("daily-status")))
+        .then(d => {
+          if (d.played) {
+            setPlayedToday(true);
+            setMyScore(typeof d.score === "number" ? d.score : null);
+          }
+        })
+        .catch(() => {
+          // Do not block a logged-in player based on stale local state.
+          setPlayedToday(false);
+          setMyScore(null);
+        });
       // NOTE: do NOT increment the games-played counter here. The daily
       // match itself already runs through SoloGame.tsx (which calls
       // recordGamePlayed() at game end). Counting again on this landing
@@ -90,7 +110,7 @@ export default function DailyChallenge() {
       clearInterval(timer);
       if (reviewTimerRef.current) clearTimeout(reviewTimerRef.current);
     };
-  }, [lang]);
+  }, [lang, player?.id, player?.loginMethod]);
 
   function handlePlay() {
     if (!challenge) return;
