@@ -195,13 +195,13 @@ export function getStreakMilestoneAchievement(streak: number): AchievementDef | 
   return ACHIEVEMENTS.find(a => a.id === id) ?? null;
 }
 
-async function syncFromServer(playerId: string): Promise<{
+async function syncFromServer(playerId: string, signal?: AbortSignal): Promise<{
   achievements: string[];
   stats: Partial<AchievementStats>;
 }> {
   if (playerId.startsWith("guest_")) return { achievements: [], stats: {} };
   try {
-    const r = await fetch(`${getApiUrl()}/api/ranking/progress/${playerId}`);
+    const r = await fetch(`${getApiUrl()}/api/ranking/progress/${playerId}`, { signal });
     if (!r.ok) return { achievements: [], stats: {} };
     const data = await r.json();
     return {
@@ -231,19 +231,23 @@ export function useAchievements(playerId?: string) {
   const [unlocked, setUnlocked] = useState<Set<string>>(() => loadUnlocked(playerId));
   const [newlyUnlocked, setNewlyUnlocked] = useState<AchievementDef | null>(null);
   const syncedRef = useRef(false);
+  const syncAbortRef = useRef<AbortController | null>(null);
   const checkStreakMilestoneRef = useRef<(longestStreak: number) => AchievementDef | null>(() => null);
 
   useEffect(() => {
     setStats(loadStats(playerId));
     setUnlocked(loadUnlocked(playerId));
     syncedRef.current = false;
+    syncAbortRef.current?.abort();
   }, [playerId]);
 
   // ── Sync from server on mount — server wins, then merge with local ────────
   useEffect(() => {
     if (!playerId || syncedRef.current) return;
     syncedRef.current = true;
-    syncFromServer(playerId).then(({ achievements: serverIds, stats: serverStats }) => {
+    const controller = new AbortController();
+    syncAbortRef.current = controller;
+    syncFromServer(playerId, controller.signal).then(({ achievements: serverIds, stats: serverStats }) => {
       // Merge achievements
       setUnlocked(prev => {
         const merged = new Set([...prev, ...serverIds]);
@@ -277,6 +281,8 @@ export function useAchievements(playerId?: string) {
       }
     });
   }, [playerId]);
+
+  useEffect(() => () => syncAbortRef.current?.abort(), [playerId]);
 
   const afterRound = useCallback((result: RoundResult) => {
     const current = loadStats(playerId);
