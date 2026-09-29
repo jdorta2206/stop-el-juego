@@ -24,7 +24,6 @@ export function MultiplayerScreen({ session, onExit }: Props) {
   const [submitted, setSubmitted] = useState(false);
   const submittingRef = useRef(false);
   const actionInFlightRef = useRef(false);
-  const actionInFlightRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
 
   const playerId = session.user.id;
