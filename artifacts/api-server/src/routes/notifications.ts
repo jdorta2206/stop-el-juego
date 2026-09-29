@@ -113,6 +113,10 @@ router.post("/subscribe", async (req, res) => {
                                     ELSE EXCLUDED.player_id
                                   END,
               language          = EXCLUDED.language,
+              hour_local         = CASE
+                                    WHEN ${hasHourLocal} THEN EXCLUDED.hour_local
+                                    ELSE push_subscriptions.hour_local
+                                  END,
               tz_offset_minutes = EXCLUDED.tz_offset_minutes,
               enabled           = TRUE,
               origin            = COALESCE(EXCLUDED.origin, push_subscriptions.origin)
@@ -137,6 +141,10 @@ router.post("/subscribe", async (req, res) => {
                                     ELSE EXCLUDED.player_id
                                   END,
               language          = EXCLUDED.language,
+              hour_local         = CASE
+                                    WHEN ${hasHourLocal} THEN EXCLUDED.hour_local
+                                    ELSE push_subscriptions.hour_local
+                                  END,
               tz_offset_minutes = EXCLUDED.tz_offset_minutes,
               enabled           = TRUE
       `);
