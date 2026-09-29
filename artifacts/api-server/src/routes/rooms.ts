@@ -1847,9 +1847,12 @@ router.post("/:roomCode/spy", writeLimiter, async (req, res) => {
     return;
   }
   const cutoff = Date.now() - 5000;
+  const memberIds = new Set(players.map((p: any) => p.playerId));
   const candidates: Array<{ pid: string; name: string; cat: string; word: string }> = [];
   for (const [pid, info] of lr.entries()) {
-    if (pid === playerId) continue;
+    // A player may have left while their last typing snapshot is still fresh.
+    // Never expose a departed player's draft through the spy mechanic.
+    if (pid === playerId || !memberIds.has(pid)) continue;
     if (info.ts < cutoff) continue;
     for (const [cat, word] of Object.entries(info.responses)) {
       if (word && word.length > 0) candidates.push({ pid, name: info.name, cat, word });
