@@ -996,6 +996,92 @@ router.post("/delete-account", async (req: Request, res: Response) => {
         WHERE follower_id = ${playerId} OR followed_id = ${playerId}
       `);
 
+      // A room/tournament can also retain non-host participants only inside
+      // players_json (and tournaments additionally in bracket_json). Remove
+      // the deleted player from those blobs while holding the row lock so a
+      // concurrent join/leave cannot reintroduce the stale identity.
+      const roomRows = await tx.execute(sql`
+        SELECT id, players_json
+        FROM rooms
+        WHERE host_id <> ${playerId}
+          AND players_json LIKE ${"%" + playerId + "%"}
+        FOR UPDATE
+      `);
+      for (const room of roomRows.rows as Array<{ id: number; players_json: string }>) {
+        let players: any[] = [];
+        try {
+          const parsed = JSON.parse(room.players_json);
+          players = Array.isArray(parsed) ? parsed : [];
+        } catch {
+          continue;
+        }
+        const filtered = players.filter((p) => p?.playerId !== playerId);
+        if (filtered.length !== players.length) {
+          await tx.execute(sql`
+            UPDATE rooms
+            SET players_json = ${JSON.stringify(filtered)}, updated_at = NOW()
+            WHERE id = ${room.id}
+          `);
+        }
+      }
+
+      const tournamentRows = await tx.execute(sql`
+        SELECT id, players_json, bracket_json
+        FROM tournaments
+        WHERE host_id <> ${playerId}
+          AND (players_json LIKE ${"%" + playerId + "%"} OR bracket_json LIKE ${"%" + playerId + "%"})
+        FOR UPDATE
+      `);
+      for (const tournament of tournamentRows.rows as Array<{
+        id: number;
+        players_json: string;
+        bracket_json: string | null;
+      }>) {
+        let players: any[] = [];
+        try {
+          const parsed = JSON.parse(tournament.players_json);
+          players = Array.isArray(parsed) ? parsed : [];
+        } catch {}
+
+        const filteredPlayers = players.filter((p) => p?.playerId !== playerId);
+        let bracket = null as any;
+        try {
+          bracket = tournament.bracket_json ? JSON.parse(tournament.bracket_json) : null;
+        } catch {}
+
+        let bracketChanged = false;
+        const scrub = (value: any): any => {
+          if (Array.isArray(value)) return value.map(scrub);
+          if (!value || typeof value !== "object") return value;
+          const out: Record<string, any> = {};
+          for (const [key, val] of Object.entries(value)) {
+            if ((key === "p1Id" || key === "p2Id" || key === "winnerId") && val === playerId) {
+              out[key] = null;
+              bracketChanged = true;
+              if (key === "p1Id") out.p1Name = "TBD";
+              if (key === "p2Id") out.p2Name = "TBD";
+              if (key === "winnerId") out.winnerName = null;
+            } else {
+              out[key] = scrub(val);
+            }
+          }
+          return out;
+        };
+        const cleanedBracket = bracket ? scrub(bracket) : bracket;
+
+        if (filteredPlayers.length !== players.length || bracketChanged) {
+          await tx.execute(sql`
+            UPDATE tournaments
+            SET players_json = ${JSON.stringify(filteredPlayers)},
+                bracket_json = ${cleanedBracket == null ? null : JSON.stringify(cleanedBracket)},
+                updated_at = NOW()
+            WHERE id = ${tournament.id}
+          `);
+        }
+      }
+
+      // Hosts are removed entirely; participant references above are scrubbed
+      // before these host-owned rows are deleted.
       await tx.execute(sql`DELETE FROM rooms WHERE host_id = ${playerId}`);
       await tx.execute(sql`DELETE FROM tournaments WHERE host_id = ${playerId}`);
 
