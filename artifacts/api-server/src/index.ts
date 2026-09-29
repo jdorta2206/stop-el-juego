@@ -5,6 +5,7 @@ import app from "./app";
 import { startDailyCron } from "./lib/dailyCron";
 import { revokeFakePremium } from "./lib/permanentPremium";
 import { ensureIndexes } from "@workspace/db";
+import contactRouter from "./routes/contact";
 
 // Railway deployment trigger: keep the API service in sync with the frontend build.
 // The root build copies artifacts/stop-game/dist into the API public directory.
@@ -15,6 +16,8 @@ import { ensureIndexes } from "@workspace/db";
 // comparison wrongly blocked multi-digit versions like "1.10.0".
 
 // ---- PÁGINAS PARA POLÍTICA DE PRIVACIDAD Y ELIMINACIÓN DE CUENTA ----
+app.use("/api/contact", contactRouter);
+
 app.get('/privacy', (req, res) => {
   res.send(`
     <!DOCTYPE html>
@@ -58,25 +61,7 @@ app.get('/delete-account', (req, res) => {
 });
 // ---- FIN DE LAS PÁGINAS ----
 
-// ---- RUTA PARA EL FORMULARIO DE CONTACTO ----
-app.post('/api/contact', async (req, res) => {
-  try {
-    const { name, email, message } = req.body;
-    if (!name || !email || !message) {
-      return res.status(400).json({ error: "Faltan campos obligatorios" });
-    }
-    // Aquí puedes procesar el mensaje: guardar en BD, enviar email, etc.
-    console.log(`📩 Nuevo mensaje de contacto:`);
-    console.log(`  Nombre: ${name}`);
-    console.log(`  Email: ${email}`);
-    console.log(`  Mensaje: ${message}`);
-    res.json({ ok: true, message: "Mensaje enviado correctamente" });
-  } catch (error) {
-    console.error("Error en /api/contact:", error);
-    res.status(500).json({ error: "Error interno del servidor" });
-  }
-});
-// ---- FIN RUTA DE CONTACTO ----
+
 
 async function initStripe() {
   const databaseUrl = process.env["DATABASE_URL"];
