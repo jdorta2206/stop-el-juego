@@ -135,7 +135,7 @@ export function usePushNotifications(playerId: string | undefined, language: str
       if (!res.ok) return null;
       return await res.json();
     } catch { return null; }
-  }, []);
+  }, [playerId]);
 
   const updatePreferences = useCallback(async (patch: {
     enabled?: boolean; hourLocal?: number; muteDays?: number;
@@ -152,7 +152,7 @@ export function usePushNotifications(playerId: string | undefined, language: str
       });
       return res.ok;
     } catch { return false; }
-  }, []);
+  }, [playerId]);
 
   const unsubscribe = useCallback(async () => {
     if (!("serviceWorker" in navigator)) return;
