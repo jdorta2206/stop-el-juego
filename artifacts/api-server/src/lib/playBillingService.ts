@@ -443,6 +443,7 @@ export async function getActivePlaySubscriptionForPlayer(
     sql`SELECT product_id, expiry_time_ms
         FROM play_subscriptions
         WHERE player_id = ${playerId}
+          AND product_id = 'premium_monthly'
           AND state IN ('ACTIVE', 'IN_GRACE_PERIOD')
           AND expiry_time_ms > ${Date.now()}
         ORDER BY expiry_time_ms DESC
