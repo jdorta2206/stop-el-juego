@@ -248,13 +248,20 @@ export default function Ranking() {
 
   useEffect(() => {
     if (!player?.id) return;
-    fetch(`${getApiUrl()}/api/friends/list/${encodeURIComponent(player.id)}`)
+    const controller = new AbortController();
+    fetch(`${getApiUrl()}/api/friends/list/${encodeURIComponent(player.id)}`, {
+      signal: controller.signal,
+    })
       .then(r => r.ok ? r.json() : { friends: [] })
       .then(({ friends }: { friends: any[] }) => {
+        if (controller.signal.aborted) return;
         setFollowedFriends(friends);
         setFollowedIds(new Set(friends.map((f: any) => f.followedId)));
       })
-      .catch(() => {});
+      .catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+      });
+    return () => controller.abort();
   }, [player?.id, isFollowing]);
 
   // Follow an offline ranking player (no OnlinePlayer data available)
