@@ -159,6 +159,7 @@ export function usePresence(
   const challengePollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const activeChallenge = useRef<string | null>(null); // track if we're already showing one
   const refreshAbortRef = useRef<AbortController | null>(null);
+  const challengeAbortRef = useRef<AbortController | null>(null);
 
   const refresh = useCallback(async () => {
     refreshAbortRef.current?.abort();
@@ -176,8 +177,11 @@ export function usePresence(
 
   const pollChallenges = useCallback(async () => {
     if (!player || activeChallenge.current) return;
+    challengeAbortRef.current?.abort();
+    const controller = new AbortController();
+    challengeAbortRef.current = controller;
     try {
-      const res = await fetch(`${API_BASE}/api/presence/challenges/${player.id}`);
+      const res = await fetch(`${API_BASE}/api/presence/challenges/${player.id}`, { signal: controller.signal });
       if (!res.ok) return;
       const data = await res.json();
       const challenges: IncomingChallenge[] = data.challenges || [];
@@ -186,12 +190,15 @@ export function usePresence(
         setIncomingChallenge(challenges[0]);
       }
     } catch {
-      // silent
+      // Abort is expected when a newer poll supersedes this one.
+    } finally {
+      if (challengeAbortRef.current === controller) challengeAbortRef.current = null;
     }
   }, [player?.id]);
 
   const dismissChallenge = useCallback(() => {
     activeChallenge.current = null;
+    challengeAbortRef.current?.abort();
     setIncomingChallenge(null);
   }, []);
 
@@ -215,6 +222,7 @@ export function usePresence(
       if (intervalRef.current) clearInterval(intervalRef.current);
       if (challengePollRef.current) clearInterval(challengePollRef.current);
       refreshAbortRef.current?.abort();
+      challengeAbortRef.current?.abort();
     };
   }, [player?.id, roomCode, language]);
 
