@@ -3,6 +3,7 @@ import { randomUUID } from "crypto";
 import { db } from "@workspace/db";
 import { sql } from "drizzle-orm";
 import { presenceLimiter } from "../middlewares/rateLimit";
+import { readPlayerId } from "../lib/playerAuth";
 
 const router: IRouter = Router();
 const PLATFORMS = new Set(["web", "android", "ios"]);
@@ -113,8 +114,10 @@ router.post("/heartbeat", presenceLimiter, async (req, res) => {
     await analyticsTablesReady;
     const body = (req.body ?? {}) as Record<string, unknown>;
     const sessionId = serverSessionId(req, res);
-    const playerId = typeof body.playerId === "string" ? body.playerId.trim() : null;
-    const loginMethod = typeof body.loginMethod === "string" ? body.loginMethod.trim().slice(0, 32) : null;
+    // Never trust analytics identity supplied by the browser. OAuth users can
+    // be bound to the verified session token; unverified guest ids are omitted.
+    const playerId = readPlayerId(req);
+    const loginMethod = null;
     const language = typeof body.language === "string" ? body.language.slice(0, 16) : null;
     const appVersion = String(req.headers["x-client-version"] ?? "").slice(0, 32) || null;
     const platform = platformFromRequest(req);
