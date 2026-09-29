@@ -2,6 +2,7 @@ import { Router, Request, Response } from "express";
 import { grantWorldCupPack, WORLD_CUP_PACK_SKU } from "../lib/worldCupPack";
 import { verifyClaimedIdentity } from "../lib/playerAuth";
 import { isUserPremium } from "../lib/premiumStatus";
+import { stripeStorage } from "../stripeStorage";
 import { verifyPubSubJwt } from "../lib/pubsubAuth";
 import {
   acknowledgeProduct,
@@ -110,6 +111,10 @@ router.get("/status", async (req: Request, res: Response) => {
       return res.status(403).json({ error: "Identidad del jugador no válida" });
     }
     const isPremium = await isUserPremium(playerId);
+    // Keep the legacy cached mirror synchronized with the live unified
+    // entitlement so rankings/rooms do not display stale Premium state after
+    // a Play renewal, restore, cancellation, or expiry.
+    await stripeStorage.updatePlayerStripeInfo(playerId, { isPremium });
     return res.json({ isPremium });
   } catch (error: any) {
     console.error("❌ Error en /status Play Billing:", error.message);
