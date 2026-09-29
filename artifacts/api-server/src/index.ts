@@ -63,16 +63,16 @@ app.get('/delete-account', (req, res) => {
 
 
 
-async function initStripe() {
+async function initStripe(): Promise<boolean> {
   const databaseUrl = process.env["DATABASE_URL"];
   if (!databaseUrl) {
     console.warn("DATABASE_URL not set — skipping Stripe initialization");
-    return;
+    return false;
   }
   const stripeKey = process.env["STRIPE_SECRET_KEY"];
   if (!stripeKey) {
     console.warn("STRIPE_SECRET_KEY not set — skipping Stripe initialization");
-    return;
+    return false;
   }
 
   try {
@@ -81,10 +81,6 @@ async function initStripe() {
     console.log("Stripe schema ready");
 
     const stripeSync = await getStripeSync();
-    // Webhooks may arrive as soon as the HTTP listener is reachable. Mark
-    // Stripe ready only after both its schema and sync processor are ready.
-    markStripeReady();
-
     const domains =
       process.env["REPLIT_DOMAINS"] ||
       process.env["REPLIT_DEV_DOMAIN"] ||
@@ -108,8 +104,14 @@ async function initStripe() {
     console.log("Syncing Stripe data...");
     await stripeSync.syncBackfill();
     console.log("Stripe data synced");
+
+    // Do not accept webhooks, or run Premium cleanup, until the local Stripe
+    // mirror has completed its initial synchronization successfully.
+    markStripeReady();
+    return true;
   } catch (error: any) {
     console.error("Failed to initialize Stripe:", error.message);
+    return false;
   }
 }
 
@@ -148,10 +150,16 @@ async function main() {
   // Stripe backfill must finish before the premium cleanup. Otherwise an
   // active Stripe subscription may not yet exist in the local mirror and the
   // cleanup could revoke legitimate Premium during the startup race.
-  await initStripe();
+  const stripeInitialized = await initStripe();
 
-  // One-shot cleanup after Stripe data is synchronized.
-  await revokeFakePremium();
+  // Never run Premium cleanup against an incomplete Stripe mirror. If Stripe
+  // initialization/backfill failed, local absence of a subscription is not
+  // evidence that the customer no longer has an active Stripe entitlement.
+  if (stripeInitialized) {
+    await revokeFakePremium();
+  } else {
+    console.warn("[Premium cleanup] skipped because Stripe initialization/sync did not complete successfully");
+  }
 }
 
 main().catch((err) => {
