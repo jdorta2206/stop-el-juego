@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams } from "wouter";
 import { getApiUrl } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
@@ -15,18 +15,23 @@ export default function Overlay() {
   useEffect(() => {
     if (!code) return;
     let stop = false;
+    let activeController: AbortController | null = null;
     document.body.style.background = "transparent";
     const fetchOnce = async () => {
+      activeController?.abort();
+      const controller = new AbortController();
+      activeController = controller;
       try {
-        const r = await fetch(`${API}/api/rooms/${encodeURIComponent(code)}/spectate`);
+        const r = await fetch(`${API}/api/rooms/${encodeURIComponent(code)}/spectate`, { signal: controller.signal });
         if (!r.ok) return;
         const data = await r.json();
         if (!stop) setRoom(data);
       } catch { /* ignore */ }
+      finally { if (activeController === controller) activeController = null; }
     };
     fetchOnce();
     const id = setInterval(fetchOnce, 1500);
-    return () => { stop = true; clearInterval(id); document.body.style.background = ""; };
+    return () => { stop = true; clearInterval(id); activeController?.abort(); document.body.style.background = ""; };
   }, [code]);
 
   if (!room) return null;
