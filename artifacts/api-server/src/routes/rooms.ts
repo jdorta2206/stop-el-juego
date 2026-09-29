@@ -2730,9 +2730,9 @@ router.post("/:roomCode/resolve-bluffs", async (req, res) => {
     res.json(formatRoom(cur));
     return;
   }
-  if (isGameOver) {
-    submitAllScoresToLeaderboard(resolved, room.currentLetter || "A").catch(() => {});
-  }
+  // Use the same one-shot transition side effects as the other bluff
+  // resolution paths so spy/live state is cleared consistently.
+  applyRoundAdvanceSideEffects(room, resolved, newStatus);
 
   res.json(broadcastAndFormat(updated));
 });
