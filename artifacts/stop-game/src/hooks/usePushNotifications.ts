@@ -21,6 +21,7 @@ export function usePushNotifications(playerId: string | undefined, language: str
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [loading, setLoading] = useState(false);
   const currentPlayerIdRef = useRef(playerId);
+  const preferencesAbortRef = useRef<AbortController | null>(null);
   currentPlayerIdRef.current = playerId;
 
   useEffect(() => {
@@ -117,6 +118,7 @@ export function usePushNotifications(playerId: string | undefined, language: str
       });
 
       if (!res.ok) throw new Error(`subscription HTTP ${res.status}`);
+      if (currentPlayerIdRef.current !== playerId) return false;
       setIsSubscribed(true);
       return true;
     } catch (e) {
@@ -131,16 +133,23 @@ export function usePushNotifications(playerId: string | undefined, language: str
     enabled: boolean; hourLocal: number; mutedUntil: number; tzOffsetMinutes: number;
   } | null> => {
     if (!("serviceWorker" in navigator)) return null;
+    preferencesAbortRef.current?.abort();
+    const controller = new AbortController();
+    preferencesAbortRef.current = controller;
     try {
       const reg = await navigator.serviceWorker.ready;
       const sub = await reg.pushManager.getSubscription();
       if (!sub) return null;
       const res = await fetch(
         `${API_BASE}/api/notifications/preferences?endpoint=${encodeURIComponent(sub.endpoint)}&playerId=${encodeURIComponent(playerId || "anonymous")}`,
+        { signal: controller.signal },
       );
-      if (!res.ok) return null;
+      if (!res.ok || controller.signal.aborted || currentPlayerIdRef.current !== playerId) return null;
       return await res.json();
     } catch { return null; }
+    finally {
+      if (preferencesAbortRef.current === controller) preferencesAbortRef.current = null;
+    }
   }, [playerId]);
 
   const updatePreferences = useCallback(async (patch: {
@@ -189,6 +198,8 @@ export function usePushNotifications(playerId: string | undefined, language: str
       setLoading(false);
     }
   }, [playerId]);
+
+  useEffect(() => () => preferencesAbortRef.current?.abort(), [playerId]);
 
   const isSupported = "Notification" in window && "serviceWorker" in navigator && !!VAPID_PUBLIC;
 
