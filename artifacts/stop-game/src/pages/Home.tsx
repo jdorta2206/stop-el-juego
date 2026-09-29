@@ -40,14 +40,28 @@ export default function Home() {
   const [showStreakCalendar, setShowStreakCalendar] = useState(false);
   // Whether today's daily challenge was already played (same localStorage key
   // the DailyChallenge page uses), so the banner reflects the player's state.
-  const [dailyDone] = useState(() => {
-    try {
-      const today = new Date().toISOString().slice(0, 10);
-      return !!localStorage.getItem(`stop_daily_${today}`);
-    } catch {
-      return false;
+  const [dailyDone, setDailyDone] = useState(false);
+
+  useEffect(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    const localPlayed = (() => {
+      try { return !!localStorage.getItem(`stop_daily_${today}`); } catch { return false; }
+    })();
+
+    if (!player || player.loginMethod === "guest") {
+      setDailyDone(localPlayed);
+      return;
     }
-  });
+
+    fetch(`${getApiUrl()}/api/daily/status?playerId=${encodeURIComponent(player.id)}&language=${encodeURIComponent(lang)}`, {
+      headers: { ...authHeaders() },
+      credentials: "include",
+    })
+      .then(r => r.ok ? r.json() : Promise.reject(new Error("daily-status")))
+      .then(d => setDailyDone(!!d.played))
+      .catch(() => setDailyDone(false));
+  }, [player?.id, player?.loginMethod, lang]);
+
   const ftue = useFTUE();
   const [showFTUEWelcome, setShowFTUEWelcome] = useState(false);
 
