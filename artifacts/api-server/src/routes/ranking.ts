@@ -696,6 +696,38 @@ router.post("/scores", scoreLimiter, async (req, res) => {
         mode: mode ?? "solo",
         won: won ?? false,
       });
+
+      // Keep voucher-backed collection words in the same transaction as the score.
+      if (collectionWords.length > 0) {
+        const collectionRows = await tx.execute(sql`
+          SELECT id, collected_words_json
+          FROM player_scores
+          WHERE player_id = ${playerId}
+          FOR UPDATE
+        `) as unknown as { rows?: Array<{ id: number; collected_words_json: string }> };
+        const collectionRow = collectionRows.rows?.[0];
+        if (!collectionRow) throw new Error("COLLECTION_PLAYER_NOT_FOUND");
+
+        let current: Record<string, unknown> = {};
+        try {
+          const parsed = JSON.parse(collectionRow.collected_words_json ?? "{}");
+          if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+            current = parsed as Record<string, unknown>;
+          }
+        } catch {}
+
+        for (const entry of collectionWords) {
+          const word = entry.word.trim().slice(0, 80);
+          const category = entry.category.trim().slice(0, 80);
+          if (!word || !category || Object.keys(current).length >= 500) break;
+          if (!Object.prototype.hasOwnProperty.call(current, word)) current[word] = category;
+        }
+
+        await tx.update(playerScoresTable)
+          .set({ collectedWordsJson: JSON.stringify(current), updatedAt: new Date() })
+          .where(eq(playerScoresTable.id, collectionRow.id));
+      }
+
       return txPlayer;
     });
   }
@@ -710,31 +742,6 @@ router.post("/scores", scoreLimiter, async (req, res) => {
         expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
       }).onConflictDoNothing();
     }
-  }
-
-  if (!isBonus && collectionWords.length > 0) {
-    await db.transaction(async (tx) => {
-      const locked = await tx.execute(sql`
-        SELECT id, collected_words_json
-        FROM player_scores
-        WHERE player_id = ${playerId}
-        FOR UPDATE
-      `) as unknown as { rows?: Array<{ id: number; collected_words_json: string }> };
-      const row = locked.rows?.[0];
-      if (!row) return;
-      let current: Record<string, unknown> = {};
-      try {
-        const parsed = JSON.parse(row.collected_words_json ?? "{}");
-        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) current = parsed as Record<string, unknown>;
-      } catch {}
-      for (const entry of collectionWords) {
-        const word = entry.word.trim().slice(0, 80);
-        const category = entry.category.trim().slice(0, 80);
-        if (!word || !category || Object.keys(current).length >= 500) break;
-        if (!Object.prototype.hasOwnProperty.call(current, word)) current[word] = category;
-      }
-      await tx.update(playerScoresTable).set({ collectedWordsJson: JSON.stringify(current), updatedAt: new Date() }).where(eq(playerScoresTable.id, row.id));
-    });
   }
 
   if (overtaken.length > 0) {
