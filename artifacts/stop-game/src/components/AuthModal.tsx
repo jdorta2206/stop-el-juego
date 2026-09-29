@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { AVATAR_COLORS } from "@/lib/utils";
 import type { PlayerProfile } from "@/hooks/use-player";
@@ -37,7 +37,7 @@ export function AuthModal({ onSave, initial, onDismiss }: AuthModalProps) {
   const [oauthId, setOauthId] = useState<string | null>(null);
   const [fbToken, setFbToken] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [existingStats, setExistingStats] = useState<{ totalScore: number; gamesPlayed: number } | null>(null);
+  const [existingStats, setExistingStats] = useState<{ totalScore: number; gamesPlayed: number } | null>(null);\n  const mountedRef = useRef(true);\n  const statsAbortRef = useRef<AbortController | null>(null);\n  const welcomeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);\n\n  useEffect(() => () => {\n    mountedRef.current = false;\n    statsAbortRef.current?.abort();\n    if (welcomeTimerRef.current) clearTimeout(welcomeTimerRef.current);\n  }, []);
 
   useEffect(() => {
     try {
@@ -77,7 +77,7 @@ export function AuthModal({ onSave, initial, onDismiss }: AuthModalProps) {
             picture: oauthUser.picture || null,
             fbAccessToken: fbAccessToken,
           } as any;
-          setTimeout(() => onSave(profile), 2000);
+          if (welcomeTimerRef.current) clearTimeout(welcomeTimerRef.current);\n          welcomeTimerRef.current = setTimeout(() => {\n            if (mountedRef.current && !controller.signal.aborted) onSave(profile);\n          }, 2000);
         }
       })
       .catch(() => {});
