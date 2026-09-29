@@ -3,6 +3,15 @@ import { StripeSync } from "stripe-replit-sync";
 
 let stripeSyncInstance: StripeSync | null = null;
 let stripeClientInstance: Stripe | null = null;
+let stripeReady = false;
+
+export function isStripeReady(): boolean {
+  return stripeReady;
+}
+
+export function markStripeReady(): void {
+  stripeReady = true;
+}
 
 function getStripeSecretKey(): string {
   const key = process.env["STRIPE_SECRET_KEY"];
