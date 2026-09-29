@@ -134,14 +134,19 @@ router.post("/follow", async (req, res) => {
     return res.json({ ok: true, alreadyFollowing: true });
   }
 
-  await db.insert(followsTable).values({
-    followerId,
-    followedId,
-    followedName,
-    followedPicture: followedPicture || null,
-    followedAvatarColor: followedAvatarColor || "#e53e3e",
-    followedProvider: followedProvider || null,
-  });
+  await db
+    .insert(followsTable)
+    .values({
+      followerId,
+      followedId,
+      followedName,
+      followedPicture: followedPicture || null,
+      followedAvatarColor: followedAvatarColor || "#e53e3e",
+      followedProvider: followedProvider || null,
+    })
+    .onConflictDoNothing({
+      target: [followsTable.followerId, followsTable.followedId],
+    });
 
   return res.json({ ok: true });
 });
