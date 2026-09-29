@@ -125,11 +125,14 @@ export async function finalizePreviousSeason(currentSeasonId: number, today: str
             );
             if (invRes.rows.length > 0) {
               const raw = invRes.rows[0].inventory_json;
-              const inv: { avatars: string[]; frames: string[] } = { avatars: [], frames: [] };
+              const inv: Record<string, unknown> = { avatars: [], frames: [] };
               try {
                 const parsed = JSON.parse(raw || "{}");
-                if (Array.isArray(parsed.avatars)) inv.avatars = parsed.avatars;
-                if (Array.isArray(parsed.frames)) inv.frames = parsed.frames;
+                if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+                  Object.assign(inv, parsed);
+                }
+                if (!Array.isArray(inv.avatars)) inv.avatars = [];
+                if (!Array.isArray(inv.frames)) inv.frames = [];
               } catch { /* keep defaults */ }
 
               if (!inv.frames.includes(cosmetic)) {
