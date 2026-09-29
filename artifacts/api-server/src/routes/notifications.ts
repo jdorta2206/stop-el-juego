@@ -165,6 +165,10 @@ router.get("/preferences", async (req, res) => {
   const endpoint = String(req.query.endpoint || "").trim();
   const playerId = String(req.query.playerId || "").trim();
   if (!endpoint || !playerId) { res.status(400).json({ error: "Missing endpoint" }); return; }
+  if (playerId !== "anonymous" && !verifyClaimedIdentity(req, playerId)) {
+    res.status(403).json({ error: "Identity verification failed" });
+    return;
+  }
   try {
     const rows = await db.select().from(pushSubscriptionsTable)
       .where(eq(pushSubscriptionsTable.endpoint, endpoint)).limit(1);
