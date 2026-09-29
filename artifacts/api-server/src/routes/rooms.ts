@@ -1831,8 +1831,24 @@ router.post("/:roomCode/funvote", writeLimiter, async (req, res) => {
   if (!players.some((p: any) => p.playerId === playerId)) {
     res.status(403).json({ error: "No estás en esta sala" }); return;
   }
-  if (!players.some((p: any) => p.playerId === votedPlayerId)) {
+  const votedPlayer = players.find((p: any) => p.playerId === votedPlayerId);
+  if (!votedPlayer) {
     res.status(404).json({ error: "Ese jugador no está en la sala" }); return;
+  }
+
+  // The category/answer pair is displayed from the target player's authoritative
+  // round submission. Do not let a client manufacture a different answer and
+  // attach applause to it; otherwise the public fun-vote feed can be polluted
+  // with fabricated content that was never played.
+  const targetAnswers = votedPlayer.answers && typeof votedPlayer.answers === "object"
+    ? votedPlayer.answers as Record<string, unknown>
+    : {};
+  const targetAnswer = targetAnswers[category];
+  if (typeof targetAnswer !== "string" || targetAnswer.trim().length === 0) {
+    res.status(400).json({ error: "Esa categoría no tiene una respuesta registrada" }); return;
+  }
+  if (normalizeWord(answer ?? "") !== normalizeWord(targetAnswer)) {
+    res.status(400).json({ error: "La respuesta no coincide con la registrada" }); return;
   }
 
   let votes = roomFunVotes.get(code);
