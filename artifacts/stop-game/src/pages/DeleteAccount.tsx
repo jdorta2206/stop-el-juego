@@ -5,17 +5,47 @@ export default function DeleteAccount() {
   const [reason, setReason] = useState("");
   const [sent, setSent] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const subject = encodeURIComponent("Eliminar mis datos — STOP! Juego de Palabras");
-    const body = encodeURIComponent(
-      `Hola,\n\nQuiero eliminar mi cuenta y todos mis datos del juego STOP.\n\n` +
-      `Email / nombre de usuario: ${email}\n\n` +
-      `Motivo (opcional): ${reason}\n\n` +
-      `Confirmo que entiendo que esta acción es irreversible.\n\nGracias.`
-    );
-    window.location.href = `mailto:dorynex@stopjuegodepalabras.com?subject=${subject}&body=${body}`;
-    setSent(true);
+    setError("");
+
+    const token = window.localStorage.getItem("stop_session_token");
+
+    if (!token) {
+      const subject = encodeURIComponent("Solicitud de eliminación de cuenta — STOP");
+      const body = encodeURIComponent(
+        `Hola,\\n\\nQuiero solicitar la eliminación de mi cuenta y mis datos de STOP.\\n\\nEmail / nombre de usuario: ${email}\\n\\nMotivo (opcional): ${reason}\\n\\nGracias.`
+      );
+      window.location.href = `mailto:dorynex@stopjuegodepalabras.com?subject=${subject}&body=${body}`;
+      setSent(true);
+      return;
+    }
+
+    if (!window.confirm("Esta acción eliminará tu cuenta y los datos asociados de forma permanente. ¿Quieres continuar?")) {
+      return;
+    }
+
+    setSent(false);
+    try {
+      const res = await fetch("/api/auth/delete-account", {
+        method: "POST",
+        credentials: "include",
+        headers: { "X-Stop-Token": token },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data?.deleted !== true) {
+        throw new Error(data?.error || "No se pudo eliminar la cuenta.");
+      }
+      window.localStorage.removeItem("stop_session_token");
+      window.localStorage.removeItem("stop_player_v2");
+      window.localStorage.removeItem("oauth_user");
+      window.localStorage.removeItem("stopauth");
+      setSent(true);
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : "No se pudo eliminar la cuenta. Inténtalo de nuevo.");
+      setStatus("error");
+      return;
+    }
   };
 
   return (
@@ -88,7 +118,7 @@ export default function DeleteAccount() {
             <div className="text-white/80">
               <p className="font-semibold mb-2">✅ Tu solicitud está lista para enviar.</p>
               <p className="text-sm text-white/60">
-                Si tu app de correo no se abrió automáticamente, copia esta dirección y mándanos un email manualmente:
+                Si no has iniciado sesión, la solicitud se ha preparado para enviarla por correo. La cuenta no se considera eliminada hasta que sea verificada y procesada.
                 <br />
                 <a href="mailto:dorynex@stopjuegodepalabras.com" className="text-[hsl(48,96%,57%)] underline">
                   dorynex@stopjuegodepalabras.com
