@@ -9,10 +9,10 @@ function storageKey(playerId?: string) {
 type GameMode = "normal" | "quick" | "chaos" | "daily" | "random";
 type BestScores = Partial<Record<GameMode, number>>;
 
-async function syncBestsFromServer(playerId: string): Promise<BestScores> {
+async function syncBestsFromServer(playerId: string, signal?: AbortSignal): Promise<BestScores> {
   if (playerId.startsWith("guest_")) return {};
   try {
-    const r = await fetch(`${getApiUrl()}/api/ranking/progress/${playerId}`);
+    const r = await fetch(`${getApiUrl()}/api/ranking/progress/${playerId}`, { signal });
     if (!r.ok) return {};
     const data = await r.json();
     return (data.personalBests && typeof data.personalBests === "object") ? data.personalBests : {};
@@ -36,6 +36,7 @@ export function usePersonalBest(mode: GameMode, playerId?: string) {
     catch { return {}; }
   });
   const syncedRef = useRef(false);
+  const syncAbortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     try {
@@ -44,13 +45,16 @@ export function usePersonalBest(mode: GameMode, playerId?: string) {
       setBests({});
     }
     syncedRef.current = false;
+    syncAbortRef.current?.abort();
   }, [playerId]);
 
   // ── Sync from server on mount (server wins for each mode if higher) ──────
   useEffect(() => {
     if (!playerId || syncedRef.current) return;
     syncedRef.current = true;
-    syncBestsFromServer(playerId).then(serverBests => {
+    const controller = new AbortController();
+    syncAbortRef.current = controller;
+    syncBestsFromServer(playerId, controller.signal).then(serverBests => {
       if (Object.keys(serverBests).length === 0) return;
       setBests(prev => {
         const merged: BestScores = { ...prev };
@@ -69,6 +73,8 @@ export function usePersonalBest(mode: GameMode, playerId?: string) {
       });
     });
   }, [playerId]);
+
+  useEffect(() => () => syncAbortRef.current?.abort(), [playerId]);
 
   const best = bests[mode] ?? 0;
 
