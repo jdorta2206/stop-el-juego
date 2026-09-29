@@ -1053,17 +1053,20 @@ router.post("/delete-account", async (req: Request, res: Response) => {
         const scrub = (value: any): any => {
           if (Array.isArray(value)) return value.map(scrub);
           if (!value || typeof value !== "object") return value;
+          const obj = value as Record<string, any>;
           const out: Record<string, any> = {};
-          for (const [key, val] of Object.entries(value)) {
-            if ((key === "p1Id" || key === "p2Id" || key === "winnerId") && val === playerId) {
-              out[key] = null;
-              bracketChanged = true;
-              if (key === "p1Id") out.p1Name = "TBD";
-              if (key === "p2Id") out.p2Name = "TBD";
-              if (key === "winnerId") out.winnerName = null;
-            } else {
-              out[key] = scrub(val);
-            }
+          const p1Removed = obj.p1Id === playerId;
+          const p2Removed = obj.p2Id === playerId;
+          const winnerRemoved = obj.winnerId === playerId;
+          if (p1Removed || p2Removed || winnerRemoved) bracketChanged = true;
+          for (const [key, val] of Object.entries(obj)) {
+            if (key === "p1Id" && p1Removed) out[key] = null;
+            else if (key === "p2Id" && p2Removed) out[key] = null;
+            else if (key === "winnerId" && winnerRemoved) out[key] = null;
+            else if (key === "p1Name" && p1Removed) out[key] = "TBD";
+            else if (key === "p2Name" && p2Removed) out[key] = "TBD";
+            else if (key === "winnerName" && winnerRemoved) out[key] = null;
+            else out[key] = scrub(val);
           }
           return out;
         };
