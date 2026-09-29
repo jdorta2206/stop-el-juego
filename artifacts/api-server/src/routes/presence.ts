@@ -54,6 +54,10 @@ const challengeTableReady = db.execute(sql`
 `).then(() => db.execute(sql`
   CREATE INDEX IF NOT EXISTS player_challenges_target_status_idx
     ON player_challenges (to_player_id, status, created_at)
+ `)).then(() => db.execute(sql`
+  CREATE UNIQUE INDEX IF NOT EXISTS player_challenges_pending_pair_uidx
+    ON player_challenges (from_player_id, to_player_id)
+    WHERE status = 'pending'
 `)).catch((err) => {
   console.error("[presence] failed to initialize challenge persistence:", err);
   throw err;
