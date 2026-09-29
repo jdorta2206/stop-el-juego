@@ -20,12 +20,14 @@ export function usePushNotifications(playerId: string | undefined, language: str
   const [permission, setPermission] = useState<NotifPermission>("default");
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [loading, setLoading] = useState(false);
-  const currentPlayerIdRef = useRef(playerId);\n  currentPlayerIdRef.current = playerId;
+  const currentPlayerIdRef = useRef(playerId);
+  currentPlayerIdRef.current = playerId;
 
   useEffect(() => {
     let cancelled = false;
 
-    const controller = new AbortController();\n    const initialise = async () => {
+    const controller = new AbortController();
+    const initialise = async () => {
       try {
         if (!("Notification" in window) || !("serviceWorker" in navigator)) {
           if (!cancelled) setPermission("unsupported");
@@ -55,10 +57,12 @@ export function usePushNotifications(playerId: string | undefined, language: str
         if (perm === "granted" && !cancelled && currentPlayerIdRef.current === playerId) {
           const tzOffsetMinutes = -new Date().getTimezoneOffset();
           try {
-            if (currentPlayerIdRef.current !== playerId) return false;\n      const res = await fetch(`${API_BASE}/api/notifications/subscribe`, {
+            if (currentPlayerIdRef.current !== playerId) return;
+            const res = await fetch(`${API_BASE}/api/notifications/subscribe`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              signal: controller.signal,\n              body: JSON.stringify({
+              signal: controller.signal,
+              body: JSON.stringify({
                 playerId: playerId || "anonymous",
                 subscription: sub.toJSON(),
                 language,
@@ -92,6 +96,7 @@ export function usePushNotifications(playerId: string | undefined, language: str
       try { localStorage.removeItem(DISABLED_KEY); } catch {}
 
       const existing = await reg.pushManager.getSubscription();
+      if (currentPlayerIdRef.current !== playerId) return false;
       const sub = existing || await reg.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlB64ToUint8Array(VAPID_PUBLIC),
@@ -146,7 +151,8 @@ export function usePushNotifications(playerId: string | undefined, language: str
       const reg = await navigator.serviceWorker.ready;
       const sub = await reg.pushManager.getSubscription();
       if (!sub) return false;
-      if (currentPlayerIdRef.current !== playerId) return false;\n      const res = await fetch(`${API_BASE}/api/notifications/preferences`, {
+      if (currentPlayerIdRef.current !== playerId) return false;
+      const res = await fetch(`${API_BASE}/api/notifications/preferences`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ endpoint: sub.endpoint, playerId: playerId || "anonymous", ...patch }),
@@ -164,6 +170,7 @@ export function usePushNotifications(playerId: string | undefined, language: str
       try { localStorage.setItem(DISABLED_KEY, "1"); } catch {}
 
       if (sub) {
+        if (currentPlayerIdRef.current !== playerId) return;
         try {
           await fetch(`${API_BASE}/api/notifications/unsubscribe`, {
             method: "DELETE",
