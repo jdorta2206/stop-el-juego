@@ -14,7 +14,7 @@ import {
   scheduleBotsForRound,
   resolveCategoriesForRound,
   rushBotSubmits,
-  clearBotTimers,
+  cleanupBotRoom,
   startBotTimerRecovery,
 } from "../lib/multiplayerBot";
 
@@ -830,6 +830,7 @@ async function purgeStaleRooms() {
       if (set) for (const c of set) { try { c.res.end(); } catch { /* already closed */ } }
       sseClients.delete(code);
     }
+    cleanupBotRoom(code);
     dropOrphans(roomReactions as Map<string, unknown>);
     dropOrphans(roomPhrases as Map<string, unknown>);
     dropOrphans(roomTyping as Map<string, unknown>);
@@ -1528,7 +1529,7 @@ router.post("/:roomCode/leave", async (req, res) => {
     // deleted room and must not constrain a future room that reuses this code.
     lastBroadcastUpdatedAt.delete(code);
     // 🤖 Cancel pending bot timers so they don't fire against a deleted room.
-    clearBotTimers(code);
+    cleanupBotRoom(code);
     res.json({ ok: true, deleted: true });
     return;
   }
