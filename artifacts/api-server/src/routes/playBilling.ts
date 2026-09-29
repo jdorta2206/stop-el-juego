@@ -82,6 +82,13 @@ router.post("/webhook", async (req: Request, res: Response) => {
     }
 
     const updated = await updatePlaySubscriptionByToken(verified);
+
+    // Retry acknowledgement from RTDN when the client-side /verify could not acknowledge the purchase.
+    await acknowledgeSubscription(
+      verified.productId,
+      verified.purchaseToken,
+      verified.acknowledgementState === 1,
+    );
     console.log(
       "[playBilling] RTDN processed",
       JSON.stringify({
