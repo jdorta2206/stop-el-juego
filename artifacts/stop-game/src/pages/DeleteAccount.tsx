@@ -115,14 +115,17 @@ export default function DeleteAccount() {
           </h3>
 
           {deleted ? (
-            <div className="text-white/80">
+            <div className="text-green-300">
               <p className="font-semibold mb-2">✅ Tu cuenta ha sido eliminada.</p>
               <p className="text-sm text-white/60">
-                Si no has iniciado sesión, la solicitud se ha preparado para enviarla por correo. La cuenta no se considera eliminada hasta que sea verificada y procesada.
-                <br />
-                <a href="mailto:dorynex@stopjuegodepalabras.com" className="text-[hsl(48,96%,57%)] underline">
-                  dorynex@stopjuegodepalabras.com
-                </a>
+                Los datos asociados que no debemos conservar ya no están vinculados a tu cuenta.
+              </p>
+            </div>
+          ) : sent ? (
+            <div className="text-white/80">
+              <p className="font-semibold mb-2">📨 Solicitud manual preparada.</p>
+              <p className="text-sm text-white/60">
+                Se ha abierto tu aplicación de correo. La cuenta no se considera eliminada hasta que la solicitud sea verificada y procesada.
               </p>
               <button
                 onClick={() => setSent(false)}
@@ -131,7 +134,6 @@ export default function DeleteAccount() {
                 ← Editar la solicitud
               </button>
             </div>
-          ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label htmlFor="email" className="block text-sm font-semibold text-white/80 mb-1">
