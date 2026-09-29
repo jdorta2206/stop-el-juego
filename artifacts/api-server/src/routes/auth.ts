@@ -18,7 +18,7 @@ import crypto from "crypto";
 import { issuePlayerToken, clearPlayerToken, PLAYER_TOKEN_BRIDGE_KEY, readPlayerId, isLoggedInId } from "../lib/playerAuth";
 import { db, playerScoresTable } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
-import { revokePlayerId } from "../lib/playerRevocation";
+import { revokePlayerId, markPlayerRevoked } from "../lib/playerRevocation";
 
 const router = Router();
 
@@ -1107,6 +1107,7 @@ router.post("/delete-account", async (req: Request, res: Response) => {
       await tx.execute(sql`DELETE FROM player_scores WHERE player_id = ${playerId}`);
     });
 
+    markPlayerRevoked(playerId);
     clearPlayerToken(res);
     return res.json({ ok: true, deleted: true });
   } catch (error) {
