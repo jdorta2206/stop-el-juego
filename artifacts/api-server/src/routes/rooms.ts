@@ -114,6 +114,11 @@ function isPlayerOnline(code: string, playerId: string): boolean {
 const SUBMIT_GRACE_MS = 15_000;
 const PRESENCE_GRACE_MS = 4_000;
 
+// Last DB version emitted to this process's SSE clients. A request may commit
+// an older snapshot and only reach this function after a newer request has
+// already broadcast its update; never let that stale snapshot roll clients back.
+const lastBroadcastUpdatedAt = new Map<string, number>();
+
 function broadcastRoom(code: string, roomPayload: object) {
   const clients = sseClients.get(code);
   if (!clients || clients.size === 0) return;
@@ -151,7 +156,23 @@ function broadcastRoom(code: string, roomPayload: object) {
 // Format room AND broadcast to SSE clients at the same time
 function broadcastAndFormat(room: any) {
   const formatted = formatRoom(room);
-  broadcastRoom(formatted.roomCode as string, formatted);
+  const code = formatted.roomCode as string;
+  const updatedAtMs = room?.updatedAt instanceof Date
+    ? room.updatedAt.getTime()
+    : new Date(room?.updatedAt ?? 0).getTime();
+
+  // updatedAt is the persisted room version. If a newer snapshot was already
+  // emitted, this request lost the broadcast race and must not overwrite the
+  // SSE clients with stale state.
+  const lastMs = lastBroadcastUpdatedAt.get(code);
+  if (Number.isFinite(updatedAtMs) && lastMs !== undefined && updatedAtMs < lastMs) {
+    return formatted;
+  }
+  if (Number.isFinite(updatedAtMs)) {
+    lastBroadcastUpdatedAt.set(code, updatedAtMs);
+  }
+
+  broadcastRoom(code, formatted);
   return formatted;
 }
 
