@@ -236,7 +236,7 @@ export async function sendLocalizedBroadcast(
   const picked = dedupeByPlayer(rows);
 
   let sent = 0, failed = 0;
-  const toDelete: string[] = [];
+  const toDelete: PushRow[] = [];
 
   await Promise.allSettled(picked.map(async (row) => {
     const payload = (row.language && payloadByLang[row.language]) || fallback;
@@ -254,13 +254,13 @@ export async function sendLocalizedBroadcast(
       sent++;
     } catch (e: any) {
       failed++;
-      if (e.statusCode === 410 || e.statusCode === 404 || e.statusCode === 403) toDelete.push(row.endpoint);
+      if (e.statusCode === 410 || e.statusCode === 404 || e.statusCode === 403) toDelete.push(row);
       else console.error(`[push] localized broadcast failed status=${e?.statusCode ?? "unknown"}`);
     }
   }));
 
-  for (const ep of toDelete) {
-    await cleanStaleEndpoint(ep);
+  for (const row of toDelete) {
+    await cleanStaleEndpoint(row);
   }
 
   return { sent, failed, removed: toDelete.length };
@@ -318,6 +318,3 @@ setInterval(() => {
   cleanupNotificationThrottleMaps();
   const cutoff = Date.now() - FRIEND_ONLINE_COOLDOWN_MS;
   for (const [key, ts] of friendOnlineNotifiedAt) {
-    if (ts < cutoff) friendOnlineNotifiedAt.delete(key);
-  }
-}, 60 * 60 * 1000);
