@@ -4,6 +4,7 @@ import { playerScoresTable } from "@workspace/db";
 import { inArray } from "drizzle-orm";
 import { roomsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { sendPushToPlayer, notifyFollowersPlayerOnline } from "../lib/pushHelper";
 import { presenceLimiter } from "../middlewares/rateLimit";
 import { verifyClaimedIdentity } from "../lib/playerAuth";
@@ -22,7 +23,8 @@ interface PresenceEntry {
 
 const presenceMap = new Map<string, PresenceEntry>();
 
-// In-memory challenges store
+// Challenges are persisted in PostgreSQL so pending state survives restarts
+// and is shared by all Railway instances.
 interface Challenge {
   challengeId: string;
   fromPlayerId: string;
@@ -33,9 +35,29 @@ interface Challenge {
   roomCode: string;
   status: "pending" | "accepted" | "declined";
   createdAt: number;
+  isRoomInvite?: boolean;
 }
 
-const challengeMap = new Map<string, Challenge>();
+const challengeTableReady = db.execute(sql`
+  CREATE TABLE IF NOT EXISTS player_challenges (
+    challenge_id text PRIMARY KEY,
+    from_player_id text NOT NULL,
+    from_name text NOT NULL,
+    from_picture text,
+    from_avatar_color text NOT NULL,
+    to_player_id text NOT NULL,
+    room_code text NOT NULL,
+    status text NOT NULL DEFAULT 'pending',
+    is_room_invite boolean NOT NULL DEFAULT false,
+    created_at timestamptz NOT NULL DEFAULT NOW()
+  )
+`).then(() => db.execute(sql`
+  CREATE INDEX IF NOT EXISTS player_challenges_target_status_idx
+    ON player_challenges (to_player_id, status, created_at)
+`)).catch((err) => {
+  console.error("[presence] failed to initialize challenge persistence:", err);
+  throw err;
+});
 
 function generateRoomCode(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -52,12 +74,12 @@ setInterval(() => {
   for (const [id, data] of presenceMap) {
     if (data.lastSeen < cutoff) presenceMap.delete(id);
   }
-  // Challenges expire after 2 minutes
-  const challengeCutoff = Date.now() - 2 * 60 * 1000;
-  for (const [id] of challengeMap) {
-    const c = challengeMap.get(id)!;
-    if (c.createdAt < challengeCutoff) challengeMap.delete(id);
-  }
+  // Challenges expire after 2 minutes. The database is the shared source
+  // of truth, so this cleanup is safe to run on every instance.
+  void challengeTableReady.then(() => db.execute(sql`
+    DELETE FROM player_challenges
+    WHERE created_at < NOW() - INTERVAL '2 minutes'
+  `)).catch((err) => console.error("[presence] challenge cleanup failed:", err));
 }, 2 * 60 * 1000);
 
 // POST /api/presence/ping
@@ -169,14 +191,17 @@ router.post("/challenge", async (req, res) => {
     return res.status(404).json({ error: "Player is not online" });
   }
 
-  // Remove any existing pending challenge between these two
-  for (const [id, c] of challengeMap) {
-    if (c.fromPlayerId === fromPlayerId && c.toPlayerId === toPlayerId && c.status === "pending") {
-      challengeMap.delete(id);
-    }
-  }
+  await challengeTableReady;
 
-  const challengeId = `ch_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+  // Remove any existing pending challenge between these two players.
+  await db.execute(sql`
+    DELETE FROM player_challenges
+    WHERE from_player_id = ${fromPlayerId}
+      AND to_player_id = ${toPlayerId}
+      AND status = 'pending'
+  `);
+
+  const challengeId = `ch_${Date.now()}_${Math.random().toString(36).slice(2, 6)}_${Math.random().toString(36).slice(2, 8)}`;
 
   // Room codes are UNIQUE in the database. Reserve the room before publishing
   // the challenge, retrying only on a genuine uniqueness collision. This avoids
@@ -222,17 +247,15 @@ router.post("/challenge", async (req, res) => {
     return res.status(503).json({ error: "Unable to allocate challenge room" });
   }
 
-  challengeMap.set(challengeId, {
-    challengeId,
-    fromPlayerId,
-    fromName,
-    fromPicture: fromPicture || null,
-    fromAvatarColor: fromAvatarColor || "#e53e3e",
-    toPlayerId,
-    roomCode,
-    status: "pending",
-    createdAt: Date.now(),
-  });
+  await db.execute(sql`
+    INSERT INTO player_challenges
+      (challenge_id, from_player_id, from_name, from_picture, from_avatar_color,
+       to_player_id, room_code, status, is_room_invite, created_at)
+    VALUES
+      (${challengeId}, ${fromPlayerId}, ${fromName}, ${fromPicture || null},
+       ${fromAvatarColor || "#e53e3e"}, ${toPlayerId}, ${roomCode},
+       'pending', FALSE, NOW())
+  `);
 
   // Send push notification to target (works even if they have the app closed)
   const lang = (req.body as any).language || "es";
@@ -266,34 +289,28 @@ router.post("/room-invite", (req, res) => {
     return res.status(403).json({ error: "Invalid player identity" });
   }
 
-  // Remove any existing pending room-invite from this sender to this target
-  for (const [id, c] of challengeMap) {
-    if (
-      c.fromPlayerId === fromPlayerId &&
-      c.toPlayerId === toPlayerId &&
-      (c as any).isRoomInvite &&
-      c.status === "pending"
-    ) {
-      challengeMap.delete(id);
-    }
-  }
+  await challengeTableReady;
 
-  const challengeId = `ri_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+  // Remove any existing pending room-invite from this sender to this target.
+  await db.execute(sql`
+    DELETE FROM player_challenges
+    WHERE from_player_id = ${fromPlayerId}
+      AND to_player_id = ${toPlayerId}
+      AND is_room_invite = TRUE
+      AND status = 'pending'
+  `);
 
-  const entry: Challenge & { isRoomInvite?: boolean } = {
-    challengeId,
-    fromPlayerId,
-    fromName,
-    fromPicture: fromPicture || null,
-    fromAvatarColor: fromAvatarColor || "#e53e3e",
-    toPlayerId,
-    roomCode,
-    status: "pending",
-    createdAt: Date.now(),
-  };
-  (entry as any).isRoomInvite = true;
+  const challengeId = `ri_${Date.now()}_${Math.random().toString(36).slice(2, 6)}_${Math.random().toString(36).slice(2, 8)}`;
 
-  challengeMap.set(challengeId, entry);
+  await db.execute(sql`
+    INSERT INTO player_challenges
+      (challenge_id, from_player_id, from_name, from_picture, from_avatar_color,
+       to_player_id, room_code, status, is_room_invite, created_at)
+    VALUES
+      (${challengeId}, ${fromPlayerId}, ${fromName}, ${fromPicture || null},
+       ${fromAvatarColor || "#e53e3e"}, ${toPlayerId}, ${roomCode},
+       'pending', TRUE, NOW())
+  `);
 
   // Push notification to target (works even if app is closed)
   const invLang = (req.body as any).language || "es";
@@ -310,53 +327,95 @@ router.post("/room-invite", (req, res) => {
 });
 
 // GET /api/presence/challenges/:playerId — get incoming pending challenges + room invites
-router.get("/challenges/:playerId", (req, res) => {
+router.get("/challenges/:playerId", async (req, res) => {
   const { playerId } = req.params;
   if (!verifyClaimedIdentity(req, playerId)) {
     return res.status(403).json({ error: "Invalid player identity" });
   }
-  const cutoff = Date.now() - 60 * 1000;
-
-  const incoming = Array.from(challengeMap.values())
-    .filter((c) => c.toPlayerId === playerId && c.status === "pending" && c.createdAt >= cutoff)
-    .map((c) => ({ ...c, isRoomInvite: !!(c as any).isRoomInvite }));
-
+  await challengeTableReady;
+  const rows = await db.execute(sql`
+    SELECT challenge_id, from_player_id, from_name, from_picture, from_avatar_color,
+           to_player_id, room_code, status, is_room_invite, created_at
+    FROM player_challenges
+    WHERE to_player_id = ${playerId}
+      AND status = 'pending'
+      AND created_at >= NOW() - INTERVAL '60 seconds'
+    ORDER BY created_at DESC
+  `);
+  const incoming = (rows.rows as any[]).map((c) => ({
+    challengeId: c.challenge_id,
+    fromPlayerId: c.from_player_id,
+    fromName: c.from_name,
+    fromPicture: c.from_picture,
+    fromAvatarColor: c.from_avatar_color,
+    toPlayerId: c.to_player_id,
+    roomCode: c.room_code,
+    status: c.status,
+    createdAt: new Date(c.created_at).getTime(),
+    isRoomInvite: !!c.is_room_invite,
+  }));
   return res.json({ challenges: incoming });
 });
 
 // POST /api/presence/challenge/:challengeId/respond
-router.post("/challenge/:challengeId/respond", (req, res) => {
+router.post("/challenge/:challengeId/respond", async (req, res) => {
   const { challengeId } = req.params;
   const { accepted } = req.body as { accepted: boolean };
 
-  const challenge = challengeMap.get(challengeId);
-  if (!challenge) {
-    return res.status(404).json({ error: "Challenge not found or expired" });
-  }
+  await challengeTableReady;
+  const rows = await db.execute(sql`
+    SELECT challenge_id, from_player_id, from_name, from_picture, from_avatar_color,
+           to_player_id, room_code, status, is_room_invite, created_at
+    FROM player_challenges
+    WHERE challenge_id = ${challengeId}
+      AND created_at >= NOW() - INTERVAL '2 minutes'
+    LIMIT 1
+  `);
+  const row = (rows.rows as any[])[0];
+  if (!row) return res.status(404).json({ error: "Challenge not found or expired" });
 
-  // Only the challenged player may accept/decline this challenge.
-  if (!verifyClaimedIdentity(req, challenge.toPlayerId)) {
+  if (!verifyClaimedIdentity(req, row.to_player_id)) {
     return res.status(403).json({ error: "Invalid player identity" });
   }
+  if (row.status !== "pending") {
+    return res.status(409).json({ error: "Challenge already answered" });
+  }
 
-  challenge.status = accepted ? "accepted" : "declined";
-  return res.json({ ok: true, roomCode: accepted ? challenge.roomCode : null });
+  const nextStatus = accepted ? "accepted" : "declined";
+  const updated = await db.execute(sql`
+    UPDATE player_challenges
+    SET status = ${nextStatus}
+    WHERE challenge_id = ${challengeId}
+      AND status = 'pending'
+  `);
+  if ((updated as any).rowCount === 0) {
+    return res.status(409).json({ error: "Challenge already answered" });
+  }
+  return res.json({ ok: true, roomCode: accepted ? row.room_code : null });
 });
 
 // GET /api/presence/challenge/:challengeId/status — poll status (for sender)
-router.get("/challenge/:challengeId/status", (req, res) => {
+router.get("/challenge/:challengeId/status", async (req, res) => {
   const { challengeId } = req.params;
-  const challenge = challengeMap.get(challengeId);
-  if (!challenge) {
-    return res.json({ status: "expired" });
-  }
+  await challengeTableReady;
+  const rows = await db.execute(sql`
+    SELECT from_player_id, room_code, status, created_at
+    FROM player_challenges
+    WHERE challenge_id = ${challengeId}
+      AND created_at >= NOW() - INTERVAL '2 minutes'
+    LIMIT 1
+  `);
+  const row = (rows.rows as any[])[0];
+  if (!row) return res.json({ status: "expired" });
 
-  // Only the sender may poll the status of a challenge they created.
-  if (!verifyClaimedIdentity(req, challenge.fromPlayerId)) {
+  if (!verifyClaimedIdentity(req, row.from_player_id)) {
     return res.status(403).json({ error: "Invalid player identity" });
   }
-
-  return res.json({ status: challenge.status, roomCode: challenge.roomCode });
+  return res.json({
+    status: row.status,
+    roomCode: row.room_code,
+  });
 });
+
 
 export default router;
