@@ -4,7 +4,7 @@ import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui";
 import { Play, Users, Trophy, Share2, Facebook, Instagram, Crown, Swords, BookOpen, Flame, Calendar, Zap, Star, Medal } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { shareText } from "@/lib/utils";
+import { shareText, getApiUrl, authHeaders } from "@/lib/utils";
 import { PremiumModal } from "@/components/PremiumModal";
 import { usePremium } from "@/lib/usePremium";
 import { useFollows, useFriendsOnline } from "@/lib/useFollows";
@@ -33,7 +33,7 @@ export default function Home() {
   const { isPremium } = usePremium(player?.id);
   const { friends } = useFollows(player?.id);
   const friendsOnline = useFriendsOnline(player?.id, friends);
-  const { t } = useT();
+  const { t, lang } = useT();
   const { streak, playedToday } = useDisplayStreak();
   const streakAtRisk = streak.current > 0 && !playedToday;
   const { unlocked, newlyUnlocked, clearNewlyUnlocked, checkStreakMilestone } = useAchievements(player?.id);
