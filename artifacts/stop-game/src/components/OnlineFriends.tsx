@@ -180,22 +180,31 @@ function PlayerRow({
     const result = await sendChallenge(currentPlayer, player.playerId);
     if (!result) return;
     pendingChallengeId.current = result.challengeId;
+    challengeAbortRef.current?.abort();
     if (challengePollRef.current) clearInterval(challengePollRef.current);
     if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current);
-    const status = await pollChallengeStatus(pendingChallengeId.current, controller.signal);
-      if (!pendingChallengeId.current) { clearInterval(poll); return; }
+    const controller = new AbortController();
+    challengeAbortRef.current = controller;
+    const poll = setInterval(async () => {
+      if (!pendingChallengeId.current || controller.signal.aborted) return;
       const status = await pollChallengeStatus(pendingChallengeId.current, controller.signal);
+      if (!pendingChallengeId.current || controller.signal.aborted) return;
       if (status.status === "accepted") {
-        clearInterval(poll); challengePollRef.current = null; if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current); challengeTimeoutRef.current = null;
-        pendingChallengeId.current = null;
+        clearInterval(poll); challengePollRef.current = null;
+        if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current);
+        challengeTimeoutRef.current = null; pendingChallengeId.current = null;
         setLocation(`/room/${status.roomCode}`);
       } else if (status.status === "declined" || status.status === "expired") {
-        clearInterval(poll); challengePollRef.current = null; if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current); challengeTimeoutRef.current = null;
-        pendingChallengeId.current = null;
+        clearInterval(poll); challengePollRef.current = null;
+        if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current);
+        challengeTimeoutRef.current = null; pendingChallengeId.current = null;
       }
     }, 2000);
     challengePollRef.current = poll;
-    challengeTimeoutRef.current = setTimeout(() => { clearInterval(poll); challengePollRef.current = null; pendingChallengeId.current = null; challengeTimeoutRef.current = null; }, 60000);
+    challengeTimeoutRef.current = setTimeout(() => {
+      controller.abort(); clearInterval(poll); challengePollRef.current = null;
+      pendingChallengeId.current = null; challengeTimeoutRef.current = null;
+    }, 60000);
   };
 
   return (
@@ -302,22 +311,31 @@ function InstagramPlayerRow({
     const result = await sendChallenge(currentPlayer, p.playerId);
     if (!result) return;
     pendingChallengeId.current = result.challengeId;
+    challengeAbortRef.current?.abort();
     if (challengePollRef.current) clearInterval(challengePollRef.current);
     if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current);
-    const status = await pollChallengeStatus(pendingChallengeId.current, controller.signal);
-      if (!pendingChallengeId.current) { clearInterval(poll); return; }
+    const controller = new AbortController();
+    challengeAbortRef.current = controller;
+    const poll = setInterval(async () => {
+      if (!pendingChallengeId.current || controller.signal.aborted) return;
       const status = await pollChallengeStatus(pendingChallengeId.current, controller.signal);
+      if (!pendingChallengeId.current || controller.signal.aborted) return;
       if (status.status === "accepted") {
-        clearInterval(poll); challengePollRef.current = null; if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current); challengeTimeoutRef.current = null;
-        pendingChallengeId.current = null;
+        clearInterval(poll); challengePollRef.current = null;
+        if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current);
+        challengeTimeoutRef.current = null; pendingChallengeId.current = null;
         setLocation(`/room/${status.roomCode}`);
       } else if (status.status === "declined" || status.status === "expired") {
-        clearInterval(poll); challengePollRef.current = null; if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current); challengeTimeoutRef.current = null;
-        pendingChallengeId.current = null;
+        clearInterval(poll); challengePollRef.current = null;
+        if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current);
+        challengeTimeoutRef.current = null; pendingChallengeId.current = null;
       }
     }, 2000);
     challengePollRef.current = poll;
-    challengeTimeoutRef.current = setTimeout(() => { clearInterval(poll); challengePollRef.current = null; pendingChallengeId.current = null; challengeTimeoutRef.current = null; }, 60000);
+    challengeTimeoutRef.current = setTimeout(() => {
+      controller.abort(); clearInterval(poll); challengePollRef.current = null;
+      pendingChallengeId.current = null; challengeTimeoutRef.current = null;
+    }, 60000);
   };
 
   const isMe = currentPlayer?.id === p.playerId;
@@ -411,22 +429,31 @@ function FriendRow({ friend, currentPlayer }: { friend: EnrichedFriend; currentP
     const result = await sendChallenge(currentPlayer, friend.onlineData.playerId);
     if (!result) return;
     pendingChallengeId.current = result.challengeId;
+    challengeAbortRef.current?.abort();
     if (challengePollRef.current) clearInterval(challengePollRef.current);
     if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current);
-    const status = await pollChallengeStatus(pendingChallengeId.current, controller.signal);
-      if (!pendingChallengeId.current) { clearInterval(poll); return; }
+    const controller = new AbortController();
+    challengeAbortRef.current = controller;
+    const poll = setInterval(async () => {
+      if (!pendingChallengeId.current || controller.signal.aborted) return;
       const status = await pollChallengeStatus(pendingChallengeId.current, controller.signal);
+      if (!pendingChallengeId.current || controller.signal.aborted) return;
       if (status.status === "accepted") {
-        clearInterval(poll); challengePollRef.current = null; if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current); challengeTimeoutRef.current = null;
-        pendingChallengeId.current = null;
+        clearInterval(poll); challengePollRef.current = null;
+        if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current);
+        challengeTimeoutRef.current = null; pendingChallengeId.current = null;
         setLocation(`/room/${status.roomCode}`);
       } else if (status.status === "declined" || status.status === "expired") {
-        clearInterval(poll); challengePollRef.current = null; if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current); challengeTimeoutRef.current = null;
-        pendingChallengeId.current = null;
+        clearInterval(poll); challengePollRef.current = null;
+        if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current);
+        challengeTimeoutRef.current = null; pendingChallengeId.current = null;
       }
     }, 2000);
     challengePollRef.current = poll;
-    challengeTimeoutRef.current = setTimeout(() => { clearInterval(poll); challengePollRef.current = null; pendingChallengeId.current = null; challengeTimeoutRef.current = null; }, 60000);
+    challengeTimeoutRef.current = setTimeout(() => {
+      controller.abort(); clearInterval(poll); challengePollRef.current = null;
+      pendingChallengeId.current = null; challengeTimeoutRef.current = null;
+    }, 60000);
   };
 
   return (
