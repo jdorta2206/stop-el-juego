@@ -239,6 +239,13 @@ function trackTimer(code: string, t: NodeJS.Timeout) {
   set.add(t);
 }
 
+function untrackTimer(code: string, t: NodeJS.Timeout) {
+  const set = roomBotTimers.get(code);
+  if (!set) return;
+  set.delete(t);
+  if (set.size === 0) roomBotTimers.delete(code);
+}
+
 export function clearBotTimers(code: string) {
   const set = roomBotTimers.get(code);
   if (set) {
@@ -449,6 +456,7 @@ async function performBotSubmit(
         // Track the retry timer so clearBotTimers() can cancel it if the
         // room dies or the round advances before the retry fires.
         const retry = setTimeout(() => {
+          untrackTimer(code, retry);
           performBotSubmit(code, botPlayerId, deps, { ...options, attempt: 1 });
         }, 200 + Math.random() * 300);
         trackTimer(code, retry);
@@ -510,6 +518,7 @@ export function startBotTimerRecovery(deps: BotActionDeps) {
             ? Math.max(0, 1_500 + (bot.playerId.charCodeAt(bot.playerId.length - 1) % 2_500) - elapsed)
             : Math.max(0, 25_000 + (bot.playerId.charCodeAt(bot.playerId.length - 1) % 26_000) - elapsed);
           const timer = setTimeout(() => {
+            untrackTimer(room.roomCode, timer);
             performBotSubmit(room.roomCode, bot.playerId, recoveryDeps!, { triggerStop: !isStopped });
           }, delay);
           trackTimer(room.roomCode, timer);
@@ -560,6 +569,7 @@ export function scheduleBotsForRound(opts: {
   for (const b of opts.bots) {
     const delay = 25_000 + Math.random() * 25_000; // 25-50s
     const t = setTimeout(() => {
+      untrackTimer(opts.roomCode, t);
       performBotSubmit(opts.roomCode, b.playerId, opts.deps, { triggerStop: true });
     }, delay);
     trackTimer(opts.roomCode, t);
@@ -577,6 +587,7 @@ export function rushBotSubmits(opts: {
   for (const b of opts.bots) {
     const delay = 1_500 + Math.random() * 2_500; // 1.5-4s, mimics real player freeze
     const t = setTimeout(() => {
+      untrackTimer(opts.roomCode, t);
       performBotSubmit(opts.roomCode, b.playerId, opts.deps, { triggerStop: false });
     }, delay);
     trackTimer(opts.roomCode, t);
