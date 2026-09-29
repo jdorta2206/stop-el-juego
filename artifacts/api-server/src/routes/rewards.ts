@@ -384,15 +384,28 @@ function parseStrArray(raw: string | null | undefined): string[] {
   }
 }
 
-function parseInventory(raw: string): { avatars: string[]; frames: string[] } {
+function parseInventory(raw: string): {
+  avatars: string[];
+  frames: string[];
+  backgrounds: string[];
+  equippedBackground: string | null;
+} {
   try {
-    const parsed = JSON.parse(raw || "{}") as Partial<{ avatars: string[]; frames: string[] }>;
+    const parsed = JSON.parse(raw || "{}") as Partial<{
+      avatars: string[];
+      frames: string[];
+      backgrounds: string[];
+      equippedBackground: string | null;
+    }>;
     return {
       avatars: Array.isArray(parsed.avatars) ? parsed.avatars : [],
       frames: Array.isArray(parsed.frames) ? parsed.frames : [],
+      backgrounds: Array.isArray(parsed.backgrounds) ? parsed.backgrounds : [],
+      equippedBackground:
+        typeof parsed.equippedBackground === "string" ? parsed.equippedBackground : null,
     };
   } catch {
-    return { avatars: [], frames: [] };
+    return { avatars: [], frames: [], backgrounds: [], equippedBackground: null };
   }
 }
 
