@@ -105,26 +105,29 @@ export function useSeason(playerId?: string | null) {
   const [loading, setLoading] = useState(false);
 
   const refresh = useCallback(async () => {
+    const controller = new AbortController();
     setLoading(true);
     try {
       const [s, p] = await Promise.all([
-        fetch(`${API}/api/season/current`).then((r) => (r.ok ? r.json() : null)),
+        fetch(`${API}/api/season/current`, { signal: controller.signal }).then((r) => (r.ok ? r.json() : null)),
         playerId
           ? fetch(`${API}/api/season/progress`, {
               credentials: "include",
               headers: authHeaders(),
+              signal: controller.signal,
             }).then((r) => (r.ok ? r.json() : null))
           : Promise.resolve(null),
       ]);
       if (s) setSeason(s);
       if (p) setProgress(p);
-    } catch {
-      /* ignore */
+    } catch (error) {
+      if (controller.signal.aborted) return;
     } finally {
-      setLoading(false);
+      if (!controller.signal.aborted) setLoading(false);
     }
   }, [playerId]);
 
+  useEffect(() => { return () => { /* refresh requests are scoped by their own controller */ }; }, [playerId]);
   useEffect(() => { refresh(); }, [refresh]);
 
   const claimMission = useCallback(async (missionId: string) => {
