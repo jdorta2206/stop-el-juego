@@ -1446,7 +1446,8 @@ router.post("/:roomCode/react", writeLimiter, async (req, res) => {
   }
   if (!VALID_REACTIONS.includes(emoji)) { res.status(400).json({ error: "Invalid emoji" }); return; }
   const list = roomReactions.get(code) ?? [];
-  list.push({ id: Math.random().toString(36).slice(2), emoji, playerName: playerName ?? "?", ts: Date.now() });
+  const memberName = String(roomPlayers.find((p: any) => p.playerId === playerId)?.playerName ?? "?").slice(0, 30);
+  list.push({ id: Math.random().toString(36).slice(2), emoji, playerName: memberName, ts: Date.now() });
   roomReactions.set(code, list.slice(-40));
   // 🚀 Push reactions to all clients immediately (otherwise wait up to 1.5s)
   try {
@@ -1674,7 +1675,8 @@ router.post("/:roomCode/typing", writeLimiter, async (req, res) => {
 
   let m = roomTyping.get(code);
   if (!m) { m = new Map(); roomTyping.set(code, m); }
-  m.set(playerId, { name: String(playerName ?? "?").slice(0, 30), ts: Date.now() });
+  const memberName = String(roomPlayers.find((p: any) => p.playerId === playerId)?.playerName ?? "?").slice(0, 30);
+  m.set(playerId, { name: memberName, ts: Date.now() });
 
   // 🕵️ Stash live responses so /spy can peek at them. Stale after 5 s.
   if (responses && typeof responses === "object") {
@@ -1687,7 +1689,7 @@ router.post("/:roomCode/typing", writeLimiter, async (req, res) => {
         safe[String(k).slice(0, 60)] = v.trim().slice(0, 80);
       }
     }
-    lr.set(playerId, { name: String(playerName ?? "?").slice(0, 30), responses: safe, ts: Date.now() });
+    lr.set(playerId, { name: memberName, responses: safe, ts: Date.now() });
   }
 
   // Lightweight broadcast — re-fetch room and broadcast formatted state
@@ -1990,7 +1992,7 @@ router.post("/:roomCode/phrase", writeLimiter, async (req, res) => {
   }
   const phrase: QuickPhrase = {
     id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-    playerName: String(playerName ?? "?").slice(0, 30),
+    playerName: String(roomPlayers.find((p: any) => p.playerId === playerId)?.playerName ?? "?").slice(0, 30),
     text: QUICK_PHRASES[phraseIndex],
     ts: Date.now(),
   };
@@ -2035,7 +2037,8 @@ router.post("/:roomCode/stop", async (req, res) => {
     return;
   }
 
-  const stopper = { id: playerId, name: playerName, stopTimestamp: Date.now() };
+  const memberName = String(roomPlayers.find((p: any) => p.playerId === playerId)?.playerName ?? "?").slice(0, 30);
+  const stopper = { id: playerId, name: memberName, stopTimestamp: Date.now() };
 
   // Preserve the authoritative round-start timestamp so clients keep seeing
   // a consistent deadline through STOP → freeze → submit transitions.
