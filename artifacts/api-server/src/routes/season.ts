@@ -135,8 +135,9 @@ export async function finalizePreviousSeason(currentSeasonId: number, today: str
                 if (!Array.isArray(inv.frames)) inv.frames = [];
               } catch { /* keep defaults */ }
 
-              if (!inv.frames.includes(cosmetic)) {
-                inv.frames.push(cosmetic);
+              const frames = inv.frames as string[];
+              if (!frames.includes(cosmetic)) {
+                frames.push(cosmetic);
                 await client.query(
                   `UPDATE player_scores
                    SET inventory_json = $1, updated_at = NOW()
