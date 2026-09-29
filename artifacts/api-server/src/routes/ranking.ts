@@ -557,7 +557,8 @@ router.post("/scores", scoreLimiter, async (req, res) => {
           })
           .where(eq(playerScoresTable.playerId, playerId))
           .returning();
-        return updated ?? null;
+        if (!updated) throw new Error("BONUS_SCORE_UPDATE_FAILED");
+        return updated;
       }
 
       const [created] = await tx
@@ -592,7 +593,8 @@ router.post("/scores", scoreLimiter, async (req, res) => {
           },
         })
         .returning();
-      return created ?? null;
+      if (!created) throw new Error("BONUS_SCORE_INSERT_FAILED");
+      return created;
     });
 
     if (!bonusResult) {
