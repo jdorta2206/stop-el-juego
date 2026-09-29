@@ -28,22 +28,23 @@ export default function Impossible() {
 
   // Load combo + my prior attempt.
   useEffect(() => {
-    let stop = false;
-    fetch(`${API}/api/impossible?language=${lang}`)
+    const controller = new AbortController();
+    const signal = controller.signal;
+    fetch(`${API}/api/impossible?language=${lang}`, { signal })
       .then(r => r.json())
-      .then(d => { if (!stop) setCombo(d); })
+      .then(d => { if (!signal.aborted) setCombo(d); })
       .catch(() => {});
     if (player?.id) {
-      fetch(`${API}/api/impossible/me/${encodeURIComponent(player.id)}?language=${lang}`)
+      fetch(`${API}/api/impossible/me/${encodeURIComponent(player.id)}?language=${lang}`, { signal })
         .then(r => r.json())
         .then((d: Result) => {
-          if (stop || !d.played || !d.result) return;
+          if (signal.aborted || !d.played || !d.result) return;
           setMyAttempt(d.result);
           setPhase("done");
         })
         .catch(() => {});
     }
-    return () => { stop = true; };
+    return () => controller.abort();
   }, [lang, player?.id]);
 
   // Timer.
