@@ -75,15 +75,15 @@ export function useRewards(playerId?: string | null, onClaimed?: () => void) {
   const requestRef = useRef<AbortController | null>(null);
 
   const refresh = useCallback(async () => {
-    if (!playerId) { setCollection(null); setPrestige(null); return; }
     requestRef.current?.abort();
+    if (!playerId) { setCollection(null); setPrestige(null); return; }
     const controller = new AbortController();
     requestRef.current = controller;
     setLoading(true);
     try {
       const [c, p] = await Promise.all([
         fetch(`${API}/api/rewards/collection`, { credentials: "include", headers: authHeaders(), signal: controller.signal }),
-        fetch(`${API}/api/rewards/prestige`, { credentials: "include", headers: authHeaders() }),
+        fetch(`${API}/api/rewards/prestige`, { credentials: "include", headers: authHeaders(), signal: controller.signal }),
       ]);
       if (c.ok) setCollection(await c.json());
       if (p.ok) setPrestige(await p.json());
