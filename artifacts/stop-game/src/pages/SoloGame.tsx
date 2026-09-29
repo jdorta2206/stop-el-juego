@@ -1181,11 +1181,13 @@ export default function SoloGame() {
   }, [gameState, round, maxRounds, totalScore, aiTotalScore, isDailyMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const submitDailyResult = (finalScore: number) => {
-    // Always save daily score locally (works for guests too)
-    localStorage.setItem(`stop_daily_${getTodayStr()}`, String(finalScore));
-
-    // Save to server if logged in
-    if (!player || player.loginMethod === "guest") return;
+    // Guests have no server daily result, so local storage is their completion
+    // record. Logged-in players are marked locally only after the server
+    // confirms the score was accepted.
+    if (!player || player.loginMethod === "guest") {
+      localStorage.setItem(`stop_daily_${getTodayStr()}`, String(finalScore));
+      return;
+    }
     fetch(`${getApiUrl()}/api/daily/submit`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...authHeaders() },
@@ -1199,7 +1201,15 @@ export default function SoloGame() {
         language: getCurrentLang(),
         scoreTokens: scoreTokensRef.current,
       }),
-    }).catch(() => {});
+    })
+      .then((response) => {
+        if (!response.ok) throw new Error(`daily-submit-${response.status}`);
+        localStorage.setItem(`stop_daily_${getTodayStr()}`, String(finalScore));
+      })
+      .catch(() => {
+        // Never mark a logged-in daily as completed locally when the server
+        // rejected or failed to persist the result.
+      });
   };
 
   const nextRound = async () => {
