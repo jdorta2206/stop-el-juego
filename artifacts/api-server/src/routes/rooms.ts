@@ -1728,10 +1728,11 @@ router.get("/:roomCode/events", async (req, res) => {
 // Throttled by the client to once every ~1.5s. Stale entries auto-expire after 3s.
 router.post("/:roomCode/typing", writeLimiter, async (req, res) => {
   const code = paramStr(req.params.roomCode).toUpperCase();
-  const { playerId, playerName, responses } = req.body as {
+  const { playerId, playerName, responses, round } = req.body as {
     playerId: string;
     playerName: string;
     responses?: Record<string, string>;
+    round?: number;
   };
   if (!playerId) { res.status(400).json({ error: "Missing playerId" }); return; }
   if (!verifyClaimedIdentity(req, playerId)) { res.status(403).json({ error: "Identity verification failed" }); return; }
@@ -1744,6 +1745,14 @@ router.post("/:roomCode/typing", writeLimiter, async (req, res) => {
   const roomPlayers = parsePlayers(room.playersJson);
   if (!roomPlayers.some((p: any) => p.playerId === playerId)) {
     res.status(403).json({ error: "Only players in the room can send typing updates" }); return;
+  }
+
+  // Bind each typing snapshot to the round it was captured in. A delayed
+  // request from the previous round must never repopulate the live-draft map
+  // after the room has already advanced.
+  if (!Number.isInteger(round) || round !== room.currentRound || room.status !== "playing") {
+    res.status(409).json({ error: "Typing update belongs to an inactive round" });
+    return;
   }
 
   let m = roomTyping.get(code);
