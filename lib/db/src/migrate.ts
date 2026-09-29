@@ -58,6 +58,8 @@ export async function ensureIndexes(): Promise<void> {
     `CREATE UNIQUE INDEX IF NOT EXISTS daily_results_player_date_uidx
        ON daily_results (player_id, challenge_date)`,
     `CREATE TABLE IF NOT EXISTS cron_locks (lock_key text PRIMARY KEY, last_run_date text NOT NULL, updated_at timestamp NOT NULL DEFAULT NOW())`,
+    `CREATE TABLE IF NOT EXISTS revoked_player_ids (player_id text PRIMARY KEY, revoked_at timestamp NOT NULL DEFAULT NOW())`,
+    `CREATE INDEX IF NOT EXISTS revoked_player_ids_revoked_at_idx ON revoked_player_ids (revoked_at)`,
     `CREATE TABLE IF NOT EXISTS api_rate_limits (bucket_key text PRIMARY KEY, window_start timestamp NOT NULL, hits integer NOT NULL DEFAULT 0)`,
     `CREATE TABLE IF NOT EXISTS ai_word_validation_claims (cache_key text PRIMARY KEY, claimed_at timestamp NOT NULL DEFAULT NOW())`,
     `CREATE TABLE IF NOT EXISTS ai_word_validation_daily_quota (quota_date date NOT NULL, scope text NOT NULL, used integer NOT NULL DEFAULT 0, PRIMARY KEY (quota_date, scope))`,
