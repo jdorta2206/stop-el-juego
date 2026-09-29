@@ -180,7 +180,7 @@ export function usePushNotifications(playerId: string | undefined, language: str
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [playerId]);
 
   const isSupported = "Notification" in window && "serviceWorker" in navigator && !!VAPID_PUBLIC;
 
