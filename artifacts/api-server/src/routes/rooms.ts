@@ -291,6 +291,13 @@ async function fetchCosmeticsForPlayers(playerIds: string[]): Promise<Record<str
 function formatRoom(room: any, cosmeticsMap?: Record<string, any>) {
   const meta = parseBluffMeta(room.stopperJson);
   const code = room.roomCode as string;
+  const persistedPack = meta?.categoryPack;
+  const persistedCustomCategories = Array.isArray(meta?.customCategories)
+    ? meta.customCategories
+    : null;
+  const persistedCustomLabel = typeof meta?.customPackLabel === "string"
+    ? meta.customPackLabel
+    : null;
   const durationSecs = roundDurationSecs(room);
   const startedAtRaw = meta?.roundStartedAt;
   const roundStartedAt = typeof startedAtRaw === "number" ? startedAtRaw : null;
@@ -320,9 +327,9 @@ function formatRoom(room: any, cosmeticsMap?: Record<string, any>) {
     maxRounds: room.maxRounds,
     maxPlayers: room.maxPlayers ?? 8,
     gameMode: room.gameMode ?? "classic",
-    categoryPack: (roomCategoryPacks.get(code)?.pack) ?? "standard",
-    customCategories: roomCategoryPacks.get(code)?.customCategories ?? null,
-    customPackLabel: roomCategoryPacks.get(code)?.customLabel ?? null,
+    categoryPack: roomCategoryPacks.get(code)?.pack ?? persistedPack ?? "standard",
+    customCategories: roomCategoryPacks.get(code)?.customCategories ?? persistedCustomCategories,
+    customPackLabel: roomCategoryPacks.get(code)?.customLabel ?? persistedCustomLabel,
     language: room.language,
     isPublic: room.isPublic ?? false,
     players,
@@ -1506,6 +1513,25 @@ router.post("/:roomCode/category-pack", async (req, res) => {
   } else {
     roomCategoryPacks.set(code, { pack });
   }
+
+  // Persist the selected deck in the room metadata so a Railway restart or
+  // another API replica cannot silently turn an existing room back into
+  // "standard". Preserve all other round/rematch metadata.
+  const currentMeta = parseBluffMeta(rooms[0].stopperJson) ?? {};
+  const packMeta = {
+    ...currentMeta,
+    categoryPack: pack,
+    customCategories: pack === "custom" ? (
+      roomCategoryPacks.get(code)?.customCategories ?? null
+    ) : null,
+    customPackLabel: pack === "custom" ? (
+      roomCategoryPacks.get(code)?.customLabel ?? null
+    ) : null,
+  };
+  await db.update(roomsTable)
+    .set({ stopperJson: JSON.stringify(packMeta), updatedAt: new Date() })
+    .where(eq(roomsTable.roomCode, code));
+
   // 🚀 Notify all players the host changed the category pack
   try { broadcastAndFormat(rooms[0]); } catch {}
   res.json({ ok: true, categoryPack: pack });
@@ -1986,11 +2012,24 @@ router.post("/:roomCode/rematch", writeLimiter, async (req, res) => {
     // room. Without this copy, crazy/mix/custom rooms silently restart as the
     // standard pack even though the endpoint promises the same game settings.
     const previousPack = roomCategoryPacks.get(oldCode);
-    if (previousPack) {
+    const oldMetaForPack = parseBluffMeta(outcome.oldRoom.stopperJson) ?? {};
+    const persistedPack = typeof oldMetaForPack.categoryPack === "string"
+      ? oldMetaForPack.categoryPack
+      : null;
+    const persistedCustomCategories = Array.isArray(oldMetaForPack.customCategories)
+      ? [...oldMetaForPack.customCategories]
+      : undefined;
+    const persistedCustomLabel = typeof oldMetaForPack.customPackLabel === "string"
+      ? oldMetaForPack.customPackLabel
+      : undefined;
+
+    if (previousPack || persistedPack) {
       roomCategoryPacks.set(outcome.rematchCode, {
-        pack: previousPack.pack,
-        customCategories: previousPack.customCategories ? [...previousPack.customCategories] : undefined,
-        customLabel: previousPack.customLabel,
+        pack: previousPack?.pack ?? persistedPack as any,
+        customCategories: previousPack?.customCategories
+          ? [...previousPack.customCategories]
+          : persistedCustomCategories,
+        customLabel: previousPack?.customLabel ?? persistedCustomLabel,
       });
     }
 
