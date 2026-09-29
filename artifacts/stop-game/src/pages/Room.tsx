@@ -528,9 +528,10 @@ export default function Room() {
         playerId: player.id,
         playerName: player.name ?? "?",
         responses: { ...responsesRef.current },
+        round: (room as any)?.currentRound,
       }),
     }).catch(() => {});
-  }, [player?.id, player?.name, roomCode]);
+  }, [player?.id, player?.name, roomCode, (room as any)?.currentRound]);
 
   // 🤖 Add a bot opponent (host only, lobby only). Cold-start killer:
   // if nobody's online, the host can fill the room with CPU players that
