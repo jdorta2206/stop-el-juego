@@ -94,7 +94,11 @@ export function requirePlayerIdentity(
     res.status(401).json({ error: "Authentication required" });
     return;
   }
-  if (!isPlayerRevocationCacheReady() || isPlayerRevoked(pid)) {
+  if (!isPlayerRevocationCacheReady()) {
+    res.status(503).json({ error: "Server auth warming up" });
+    return;
+  }
+  if (isPlayerRevoked(pid)) {
     res.status(401).json({ error: "Account deleted" });
     return;
   }
