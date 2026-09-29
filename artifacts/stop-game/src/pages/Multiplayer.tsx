@@ -41,6 +41,7 @@ export default function Multiplayer() {
   const [loadingPublic, setLoadingPublic] = useState(false);
   const [resumeCode, setResumeCode] = useState<string | null>(null);
   const [resuming, setResuming] = useState(false);
+  const publicRoomsAbortRef = useRef<AbortController | null>(null);
 
   const createMutation = useCreateRoom();
   const joinMutation = useJoinRoom();
@@ -99,22 +100,30 @@ export default function Multiplayer() {
   };
 
   const loadPublicRooms = async () => {
+    publicRoomsAbortRef.current?.abort();
+    const controller = new AbortController();
+    publicRoomsAbortRef.current = controller;
     setLoadingPublic(true);
     try {
-      const res = await fetch(`${getApiUrl()}/api/rooms/public`);
+      const res = await fetch(`${getApiUrl()}/api/rooms/public`, { signal: controller.signal });
       if (res.ok) {
         const data = await res.json();
         setPublicRooms(data.rooms || []);
       }
     } catch {}
-    setLoadingPublic(false);
+    finally {
+      if (publicRoomsAbortRef.current === controller) {
+        publicRoomsAbortRef.current = null;
+        setLoadingPublic(false);
+      }
+    }
   };
 
   // Load on mount and auto-refresh every 6 seconds
   useEffect(() => {
     loadPublicRooms();
     const interval = setInterval(loadPublicRooms, 6000);
-    return () => clearInterval(interval);
+    return () => { clearInterval(interval); publicRoomsAbortRef.current?.abort(); };
   }, []);
 
   const handleCreate = async () => {
