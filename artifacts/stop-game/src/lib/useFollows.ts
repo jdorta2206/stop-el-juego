@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { getApiUrl } from "@/lib/utils";
 import type { OnlinePlayer } from "@/lib/usePresence";
 
