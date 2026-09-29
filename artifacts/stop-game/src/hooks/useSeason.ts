@@ -217,15 +217,9 @@ export function useSeasonLeaderboard(seasonId?: number | null, enabled: boolean 
   }, [seasonId, enabled]);
 
   useEffect(() => {
-    leaderboardAbortRef.current?.abort();
-    if (!enabled) return;
-    const controller = new AbortController();
-    leaderboardAbortRef.current = controller;
-    void refresh().finally(() => {
-      if (leaderboardAbortRef.current === controller) leaderboardAbortRef.current = null;
-    });
-    return () => controller.abort();
-  }, [refresh, enabled]);
+    void refresh();
+    return () => leaderboardAbortRef.current?.abort();
+  }, [refresh]);
 
   return { data, loading, refresh };
 }
