@@ -138,32 +138,27 @@ export async function validateWordWithAi(opts: AiValidationOptions): Promise<AiV
   const client = getClient();
   if (!client) return { isValid: false, source: "no_client" };
 
-  // Serialize cache misses for the same (word, category, language) across
-  // all Railway replicas. The DB-level advisory lock is transaction-scoped:
-  // once one request finishes inserting the verdict, concurrent requests
-  // re-check the cache and return it without calling the LLM again.
+  // Cross-replica single-flight without holding a PostgreSQL connection during
+// the external OpenAI call.
+async function claimValidation(key: string): Promise<boolean> {
+  const result = await db.execute(sql`
+    INSERT INTO ai_word_validation_claims (cache_key, claimed_at)
+    VALUES (${key}, NOW())
+    ON CONFLICT (cache_key) DO UPDATE
+      SET claimed_at = NOW()
+      WHERE ai_word_validation_claims.claimed_at < NOW() - INTERVAL '30 seconds'
+    RETURNING cache_key
+  `);
+  return result.rows.length > 0;
+}
+
+async function releaseValidationClaim(key: string): Promise<void> {
+  await db.execute(sql`DELETE FROM ai_word_validation_claims WHERE cache_key = ${key}`);
+}
+
+async function reserveDailyQuota(playerId: string | null): Promise<boolean> {
+  const quotaDate = currentUtcDay();
   return db.transaction(async (tx) => {
-    const lockKey = `${word}\u0000${category}\u0000${lang}`;
-    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`);
-
-    const rows = await tx
-      .select({ isValid: wordValidationCacheTable.isValid })
-      .from(wordValidationCacheTable)
-      .where(and(
-        eq(wordValidationCacheTable.word, word),
-        eq(wordValidationCacheTable.category, category),
-        eq(wordValidationCacheTable.lang, lang),
-      ))
-      .limit(1);
-
-    if (rows[0]) {
-      return { isValid: rows[0].isValid, source: "cache" as const };
-    }
-
-    // Reserve the daily quota atomically in PostgreSQL. Both the global and
-    // per-player reservations happen in this transaction; if the player cap
-    // rejects the request, the global reservation is released before commit.
-    const quotaDate = currentUtcDay();
     const globalReservation = await tx.execute(sql`
       INSERT INTO ai_word_validation_daily_quota (quota_date, scope, used)
       VALUES (${quotaDate}::date, ${GLOBAL_QUOTA_SCOPE}, 1)
@@ -172,10 +167,7 @@ export async function validateWordWithAi(opts: AiValidationOptions): Promise<AiV
         WHERE ai_word_validation_daily_quota.used < ${GLOBAL_DAILY_LIMIT}
       RETURNING used
     `);
-    if (globalReservation.rows.length === 0) {
-      return { isValid: false, source: "quota_blocked" as const };
-    }
-
+    if (globalReservation.rows.length === 0) return false;
     if (playerId) {
       const playerReservation = await tx.execute(sql`
         INSERT INTO ai_word_validation_daily_quota (quota_date, scope, used)
@@ -185,16 +177,38 @@ export async function validateWordWithAi(opts: AiValidationOptions): Promise<AiV
           WHERE ai_word_validation_daily_quota.used < ${PER_PLAYER_DAILY_LIMIT}
         RETURNING used
       `);
-      if (playerReservation.rows.length === 0) {
-        await tx.execute(sql`
-          UPDATE ai_word_validation_daily_quota
-          SET used = used - 1
-          WHERE quota_date = ${quotaDate}::date
-            AND scope = ${GLOBAL_QUOTA_SCOPE}
-        `);
-        return { isValid: false, source: "quota_blocked" as const };
-      }
+      if (playerReservation.rows.length === 0) return false;
     }
+    return true;
+    } finally {
+      await releaseValidationClaim(claimKey).catch(() => {});
+    }
+  });
+}
+
+async function waitForValidationCache(word: string, category: string, lang: string): Promise<boolean | null> {
+  const deadline = Date.now() + 13_000;
+  while (Date.now() < deadline) {
+    const cached = await lookupCachedValidation(word, category, lang);
+    if (cached !== null) return cached;
+    await new Promise((resolve) => setTimeout(resolve, 150));
+  }
+  return null;
+}
+    const claimKey = `${word}\u0000${category}\u0000${lang}`;
+    let claimed = await claimValidation(claimKey);
+    if (!claimed) {
+      const waited = await waitForValidationCache(word, category, lang);
+      if (waited !== null) return { isValid: waited, source: "cache" as const };
+      claimed = await claimValidation(claimKey);
+      if (!claimed) return { isValid: false, source: "error" as const };
+    }
+
+    try {
+      const secondCheck = await lookupCachedValidation(word, category, lang);
+      if (secondCheck !== null) return { isValid: secondCheck, source: "cache" as const };
+      const quotaAllowed = await reserveDailyQuota(playerId);
+      if (!quotaAllowed) return { isValid: false, source: "quota_blocked" as const };
 
     const systemPrompt =
       `Eres un validador permisivo para un juego de palabras tipo "Stop"/"Tutti Frutti". ` +
@@ -228,7 +242,7 @@ export async function validateWordWithAi(opts: AiValidationOptions): Promise<AiV
       const raw = resp.choices?.[0]?.message?.content?.toLowerCase().trim() ?? "";
       const isValid = /^(si|sí|s|yes|y|true|1)$/.test(raw);
 
-      await tx.execute(sql`
+      await db.execute(sql`
         INSERT INTO word_validation_cache (word, category, lang, is_valid, source, model)
         VALUES (${word}, ${category}, ${lang}, ${isValid}, 'ai', ${MODEL})
         ON CONFLICT (word, category, lang) DO NOTHING
