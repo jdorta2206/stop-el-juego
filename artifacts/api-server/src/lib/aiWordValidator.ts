@@ -163,67 +163,74 @@ export async function validateWordWithAi(opts: AiValidationOptions): Promise<AiV
   const client = getClient();
   if (!client) return { isValid: false, source: "no_client" };
 
-  if (!bumpAndCheckQuota(playerId)) {
-    return { isValid: false, source: "quota_blocked" };
-  }
+  // Serialize cache misses for the same (word, category, language) across
+  // all Railway replicas. The DB-level advisory lock is transaction-scoped:
+  // once one request finishes inserting the verdict, concurrent requests
+  // re-check the cache and return it without calling the LLM again.
+  return db.transaction(async (tx) => {
+    const lockKey = `${word}\u0000${category}\u0000${lang}`;
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`);
 
-  // Prompt is deliberately strict and one-shot. We ask for a single token
-  // ("si"/"no") so the answer is cheap to generate and trivial to parse.
-  // We do NOT trust the model's first-letter check (the caller already did
-  // that); we only ask: "is this a real member of the category?".
-  // Permisivo a propósito: el objetivo es NO penalizar al jugador por
-  // palabras reales que simplemente no estén en nuestro diccionario estático.
-  // Aceptamos regionalismos, variantes sin tilde, sinónimos, nombres comunes
-  // de tonos/especies/etc. Solo rechazamos basura clara (random keyboard
-  // mashing, palabras de otra categoría, nombres propios de personas/marcas
-  // cuando la categoría no es nombre/marca).
-  const systemPrompt =
-    `Eres un validador permisivo para un juego de palabras tipo "Stop"/"Tutti Frutti". ` +
-    `Decides si una palabra puede aceptarse como ejemplo razonable de una categoría. ` +
-    `Responde SOLO con "si" o "no", sin nada más. ` +
-    `Sé generoso: acepta regionalismos, variantes sin tilde, formas coloquiales, tonos/matices/especies/subtipos y cualquier palabra que un hablante nativo aceptaría sin discutir. ` +
-    `Si dudas entre aceptar o rechazar, acepta. ` +
-    `Rechaza solo: palabras inventadas/aleatorias, palabras claramente de otra categoría, errores ortográficos graves que cambian la palabra.`;
+    const rows = await tx
+      .select({ isValid: wordValidationCacheTable.isValid })
+      .from(wordValidationCacheTable)
+      .where(and(
+        eq(wordValidationCacheTable.word, word),
+        eq(wordValidationCacheTable.category, category),
+        eq(wordValidationCacheTable.lang, lang),
+      ))
+      .limit(1);
 
-  const userPrompt =
-    `Idioma: ${languageName(lang)}.\n` +
-    `Categoría: ${category}.\n` +
-    `Palabra: "${word}".\n` +
-    `¿Podría aceptarse "${word}" como ${category} en ${languageName(lang)}? Responde "si" o "no".`;
+    if (rows[0]) {
+      return { isValid: rows[0].isValid, source: "cache" as const };
+    }
 
-  try {
-    const resp = await Promise.race([
-      client.chat.completions.create({
-        model: MODEL,
-        // gpt-5-mini is a reasoning model — `max_completion_tokens` counts
-        // reasoning tokens too. Set high enough to leave room for thought;
-        // the actual answer is just one word so output cost stays minimal.
-        max_completion_tokens: 8192,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-      }),
-      // 12s timeout — gpt-5-mini reasoning is slower than chat models but
-      // we still cap it so a slow LLM never blocks the player's scoreboard.
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("ai_validator_timeout")), 12_000),
-      ),
-    ]);
+    if (!bumpAndCheckQuota(playerId)) {
+      return { isValid: false, source: "quota_blocked" as const };
+    }
 
-    const raw = resp.choices?.[0]?.message?.content?.toLowerCase().trim() ?? "";
-    // Accept "si", "sí", "yes", "true", "1" as positive verdicts. Anything
-    // else (including the model refusing to answer) counts as "no".
-    const isValid = /^(si|sí|s|yes|y|true|1)$/.test(raw);
+    const systemPrompt =
+      `Eres un validador permisivo para un juego de palabras tipo "Stop"/"Tutti Frutti". ` +
+      `Decides si una palabra puede aceptarse como ejemplo razonable de una categoría. ` +
+      `Responde SOLO con "si" o "no", sin nada más. ` +
+      `Sé generoso: acepta regionalismos, variantes sin tilde, formas coloquiales, tonos/matices/especies/subtipos y cualquier palabra que un hablante nativo aceptaría sin discutir. ` +
+      `Si dudas entre aceptar o rechazar, acepta. ` +
+      `Rechaza solo: palabras inventadas/aleatorias, palabras claramente de otra categoría, errores ortográficos graves que cambian la palabra.`;
 
-    // Cache both positive AND negative answers — the whole point is to
-    // never ask twice. Negatives are arguably the more valuable cache
-    // entries since they prevent a player from grinding the API.
-    await writeCache(word, category, lang, isValid, MODEL);
+    const userPrompt =
+      `Idioma: ${languageName(lang)}.\n` +
+      `Categoría: ${category}.\n` +
+      `Palabra: "${word}".\n` +
+      `¿Podría aceptarse "${word}" como ${category} en ${languageName(lang)}? Responde "si" o "no".`;
 
-    return { isValid, source: "ai" };
-  } catch (err) {
-    console.error("[aiWordValidator] ai call failed:", err instanceof Error ? err.message : err);
-    return { isValid: false, source: "error" };
-  }
+    try {
+      const resp = await Promise.race([
+        client.chat.completions.create({
+          model: MODEL,
+          max_completion_tokens: 8192,
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt },
+          ],
+        }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("ai_validator_timeout")), 12_000),
+        ),
+      ]);
+
+      const raw = resp.choices?.[0]?.message?.content?.toLowerCase().trim() ?? "";
+      const isValid = /^(si|sí|s|yes|y|true|1)$/.test(raw);
+
+      await tx.execute(sql`
+        INSERT INTO word_validation_cache (word, category, lang, is_valid, source, model)
+        VALUES (${word}, ${category}, ${lang}, ${isValid}, 'ai', ${MODEL})
+        ON CONFLICT (word, category, lang) DO NOTHING
+      `);
+
+      return { isValid, source: "ai" as const };
+    } catch (err) {
+      console.error("[aiWordValidator] ai call failed:", err instanceof Error ? err.message : err);
+      return { isValid: false, source: "error" as const };
+    }
+  });
 }
