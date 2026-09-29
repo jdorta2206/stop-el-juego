@@ -247,15 +247,22 @@ router.post("/challenge", async (req, res) => {
     return res.status(503).json({ error: "Unable to allocate challenge room" });
   }
 
-  await db.execute(sql`
-    INSERT INTO player_challenges
-      (challenge_id, from_player_id, from_name, from_picture, from_avatar_color,
-       to_player_id, room_code, status, is_room_invite, created_at)
-    VALUES
-      (${challengeId}, ${fromPlayerId}, ${fromName}, ${fromPicture || null},
-       ${fromAvatarColor || "#e53e3e"}, ${toPlayerId}, ${roomCode},
-       'pending', FALSE, NOW())
-  `);
+  try {
+    await db.execute(sql`
+      INSERT INTO player_challenges
+        (challenge_id, from_player_id, from_name, from_picture, from_avatar_color,
+         to_player_id, room_code, status, is_room_invite, created_at)
+      VALUES
+        (${challengeId}, ${fromPlayerId}, ${fromName}, ${fromPicture || null},
+         ${fromAvatarColor || "#e53e3e"}, ${toPlayerId}, ${roomCode},
+         'pending', FALSE, NOW())
+    `);
+  } catch (err) {
+    // Do not leave a reserved challenge room without its persistent challenge.
+    await db.delete(roomsTable).where(eq(roomsTable.roomCode, roomCode)).catch(() => {});
+    console.error("[presence/challenge] challenge persistence failed:", err);
+    return res.status(503).json({ error: "Unable to create challenge" });
+  }
 
   // Send push notification to target (works even if they have the app closed)
   const lang = (req.body as any).language || "es";
@@ -272,7 +279,7 @@ router.post("/challenge", async (req, res) => {
 });
 
 // POST /api/presence/room-invite — invite a player to an already-existing room
-router.post("/room-invite", (req, res) => {
+router.post("/room-invite", async (req, res) => {
   const { fromPlayerId, fromName, fromPicture, fromAvatarColor, toPlayerId, roomCode } = req.body as {
     fromPlayerId: string;
     fromName: string;
