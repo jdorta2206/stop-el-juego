@@ -274,6 +274,65 @@ async function getOrCreateProgress(playerId: string, seasonId: number): Promise<
   return row;
 }
 
+/**
+ * Records season progress only from server-authoritative gameplay results.
+ * The public /event endpoint must never accept client-supplied progress values.
+ */
+export async function recordAuthoritativeSeasonEvents(
+  playerId: string,
+  events: Array<{ type: "win_game" | "play_game" | "round_score" | "streak" | "valid_words" | "daily_done"; value?: number }>,
+): Promise<void> {
+  if (!playerId || events.length === 0) return;
+  try {
+    const season = await getOrCreateActiveSeason();
+    const progress = await getOrCreateProgress(playerId, season.id);
+    const today = todayUTC();
+
+    await db.transaction(async (tx) => {
+      const locked = (await tx.execute(sql`
+        SELECT id, missions_json FROM season_progress WHERE id = ${progress.id} FOR UPDATE
+      `)) as unknown as SqlResult<Pick<ProgressRowSql, "id" | "missions_json">>;
+      const row = locked.rows?.[0];
+      if (!row) return;
+
+      const blob = parseMissions(row.missions_json, today);
+      let mutated = false;
+
+      for (const event of events) {
+        const value = Number.isFinite(event.value) && Number(event.value) > 0
+          ? Math.floor(Number(event.value))
+          : 1;
+
+        for (const m of blob.missions) {
+          if (m.type !== event.type || m.claimed) continue;
+          if (m.type === "round_score" || m.type === "streak") {
+            if (value > m.progress) {
+              m.progress = Math.min(value, m.target);
+              mutated = true;
+            }
+          } else {
+            const next = Math.min(m.progress + value, m.target);
+            if (next !== m.progress) {
+              m.progress = next;
+              mutated = true;
+            }
+          }
+          if (m.progress >= m.target) m.completed = true;
+        }
+      }
+
+      if (mutated) {
+        await tx.update(seasonProgressTable)
+          .set({ missionsJson: JSON.stringify(blob), updatedAt: new Date() })
+          .where(eq(seasonProgressTable.id, progress.id));
+      }
+    });
+  } catch (e: unknown) {
+    // Season progression is auxiliary and must never make a valid game result fail.
+    console.error("[season/authoritative-event] error:", e instanceof Error ? e.message : String(e));
+  }
+}
+
 // ── Routes ─────────────────────────────────────────────────────────────────
 
 // GET /api/season/current → active season metadata + tier list (public)
@@ -530,68 +589,12 @@ router.post("/ack-final", requirePlayerIdentity, async (req: AuthedRequest, res)
   }
 });
 
-// POST /api/season/event { type, value? }  (auth required)
-// Increments mission progress for any matching mission. XP is granted on /claim-mission.
-router.post("/event", requirePlayerIdentity, async (req: AuthedRequest, res) => {
-  const playerId = req.playerId!;
-  const { type, value } = (req.body ?? {}) as { type?: string; value?: number };
-  if (!type) {
-    res.status(400).json({ error: "Missing type" });
-    return;
-  }
-  const v = typeof value === "number" && value > 0 ? value : 1;
-
-  try {
-    const season = await getOrCreateActiveSeason();
-    const progress = await getOrCreateProgress(playerId, season.id);
-    const today = todayUTC();
-
-    // Atomic: serialize against concurrent /event and /claim-mission for this row
-    const result = await db.transaction(async (tx) => {
-      const locked = (await tx.execute(sql`
-        SELECT id, missions_json FROM season_progress WHERE id = ${progress.id} FOR UPDATE
-      `)) as unknown as SqlResult<Pick<ProgressRowSql, "id" | "missions_json">>;
-      const row = locked.rows?.[0];
-      if (!row) return null;
-      const blob = parseMissions(row.missions_json, today);
-
-      let mutated = false;
-      for (const m of blob.missions) {
-        if (m.type !== type || m.claimed) continue;
-        if (m.type === "round_score" || m.type === "streak") {
-          if (v > m.progress) {
-            m.progress = Math.min(v, m.target);
-            mutated = true;
-          }
-        } else {
-          m.progress = Math.min(m.progress + v, m.target);
-          mutated = true;
-        }
-        if (m.progress >= m.target) m.completed = true;
-      }
-      if (mutated) {
-        await tx
-          .update(seasonProgressTable)
-          .set({ missionsJson: JSON.stringify(blob), updatedAt: new Date() })
-          .where(eq(seasonProgressTable.id, progress.id));
-      }
-      return blob;
-    });
-
-    if (!result) {
-      res.status(404).json({ error: "Progress row not found" });
-      return;
-    }
-
-    res.json({
-      ok: true,
-      missions: result.missions,
-      hasUnclaimedMissions: result.missions.some((m) => m.completed && !m.claimed),
-    });
-  } catch (e: unknown) {
-    console.error("[season/event] error:", e instanceof Error ? e.message : String(e));
-    res.status(500).json({ error: "Failed to record event" });
-  }
+// POST /api/season/event
+// Deprecated: mission progress is now recorded only by server-authoritative
+// gameplay endpoints. Keeping this route closed prevents forged type/value
+// submissions from granting season progress.
+router.post("/event", requirePlayerIdentity, async (_req: AuthedRequest, res) => {
+  res.status(410).json({ error: "Season events are server-authoritative" });
 });
 
 // POST /api/season/claim-mission { missionId }  (auth required)
