@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { getApiUrl } from "@/lib/utils";
 
 const API = getApiUrl();
@@ -103,9 +103,12 @@ export function useSeason(playerId?: string | null) {
   const [season, setSeason] = useState<SeasonInfo | null>(null);
   const [progress, setProgress] = useState<SeasonProgress | null>(null);
   const [loading, setLoading] = useState(false);
+  const requestRef = useRef<AbortController | null>(null);
 
   const refresh = useCallback(async () => {
+    requestRef.current?.abort();
     const controller = new AbortController();
+    requestRef.current = controller;
     setLoading(true);
     try {
       const [s, p] = await Promise.all([
@@ -124,10 +127,11 @@ export function useSeason(playerId?: string | null) {
       if (controller.signal.aborted) return;
     } finally {
       if (!controller.signal.aborted) setLoading(false);
+      if (requestRef.current === controller) requestRef.current = null;
     }
   }, [playerId]);
 
-  useEffect(() => { return () => { /* refresh requests are scoped by their own controller */ }; }, [playerId]);
+  useEffect(() => () => { requestRef.current?.abort(); }, [playerId]);
   useEffect(() => { refresh(); }, [refresh]);
 
   const claimMission = useCallback(async (missionId: string) => {
