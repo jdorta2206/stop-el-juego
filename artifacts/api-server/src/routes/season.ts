@@ -68,94 +68,97 @@ function addDays(dateStr: string, days: number): string {
  */
 export async function finalizePreviousSeason(currentSeasonId: number, today: string): Promise<void> {
   try {
-    // Find the most recent season that ended strictly before today AND is
-    // not the freshly-opened one. We process at most one prior season per
-    // call; older un-finalized seasons would be picked up the next time
-    // rollover happens.
-    const prevRows = (await db.execute(sql`
+    // Finalize every ended season, not just the immediately preceding one.
+    // This matters after downtime: several season periods may have elapsed
+    // before the next request/cron creates or discovers the current season.
+    const endedRows = (await db.execute(sql`
       SELECT id FROM seasons
       WHERE end_date < ${today} AND id <> ${currentSeasonId}
-      ORDER BY id DESC LIMIT 1
+      ORDER BY id ASC
     `)) as unknown as SqlResult<{ id: number }>;
-    const prevId = prevRows.rows?.[0]?.id;
-    if (!prevId) return;
 
-    const standings = (await db.execute(sql`
-      SELECT player_id, xp,
-             ROW_NUMBER() OVER (ORDER BY xp DESC, id ASC) AS rank,
-             COUNT(*) OVER () AS total
-      FROM season_progress
-      WHERE season_id = ${prevId}
-    `)) as unknown as SqlResult<{ player_id: string; xp: number; rank: number | string; total: number | string }>;
+    for (const season of endedRows.rows ?? []) {
+      const prevId = Number(season.id);
+      const standings = (await db.execute(sql`
+        SELECT player_id, xp,
+               ROW_NUMBER() OVER (ORDER BY xp DESC, id ASC) AS rank,
+               COUNT(*) OVER () AS total
+        FROM season_progress
+        WHERE season_id = ${prevId}
+      `)) as unknown as SqlResult<{
+        player_id: string;
+        xp: number;
+        rank: number | string;
+        total: number | string;
+      }>;
 
-    const rows = standings.rows ?? [];
-    if (rows.length === 0) return;
+      const rows = standings.rows ?? [];
+      if (rows.length === 0) {
+        console.log(`[finalizePreviousSeason] Season ${prevId} has no players; marked as processed.`);
+        continue;
+      }
 
-    // We deliberately do NOT short-circuit if some finals rows already
-    // exist — a previous run may have failed mid-loop. Each per-player
-    // step is fully idempotent: the finals INSERT relies on the unique
-    // (season_id, player_id) index, and the inventory UPDATE happens
-    // inside a transaction with FOR UPDATE so concurrent writers (tier
-    // claims, shop purchases) cannot clobber the JSON blob.
-    let processed = 0;
-    for (const r of rows) {
-      const rank = Number(r.rank);
-      const total = Number(r.total);
-      const cosmetic = rank <= 3 ? championFrameId(prevId, rank as 1 | 2 | 3) : null;
+      let processed = 0;
+      for (const r of rows) {
+        const rank = Number(r.rank);
+        const total = Number(r.total);
+        const cosmetic = rank <= 3 ? championFrameId(prevId, rank as 1 | 2 | 3) : null;
 
-      const client = await pool.connect();
-      try {
-        await client.query("BEGIN");
-        await client.query(
-          `INSERT INTO season_finals
-             (season_id, player_id, final_rank, final_xp, total_players, awarded_cosmetic)
-           VALUES ($1, $2, $3, $4, $5, $6)
-           ON CONFLICT (season_id, player_id) DO NOTHING`,
-          [prevId, r.player_id, rank, r.xp, total, cosmetic],
-        );
-
-        if (cosmetic) {
-          // Lock the player_scores row so concurrent inventory writers
-          // serialize behind us.
-          const invRes = await client.query<{ inventory_json: string }>(
-            `SELECT inventory_json FROM player_scores
-             WHERE player_id = $1 FOR UPDATE`,
-            [r.player_id],
+        const client = await pool.connect();
+        try {
+          await client.query("BEGIN");
+          await client.query(
+            `INSERT INTO season_finals
+               (season_id, player_id, final_rank, final_xp, total_players, awarded_cosmetic)
+             VALUES ($1, $2, $3, $4, $5, $6)
+             ON CONFLICT (season_id, player_id) DO NOTHING`,
+            [prevId, r.player_id, rank, r.xp, total, cosmetic],
           );
-          if (invRes.rows.length > 0) {
-            const raw = invRes.rows[0].inventory_json;
-            const inv: { avatars: string[]; frames: string[] } = { avatars: [], frames: [] };
-            try {
-              const parsed = JSON.parse(raw || "{}");
-              if (Array.isArray(parsed.avatars)) inv.avatars = parsed.avatars;
-              if (Array.isArray(parsed.frames)) inv.frames = parsed.frames;
-            } catch { /* keep defaults */ }
-            if (!inv.frames.includes(cosmetic)) {
-              inv.frames.push(cosmetic);
-              await client.query(
-                `UPDATE player_scores
-                 SET inventory_json = $1, updated_at = NOW()
-                 WHERE player_id = $2`,
-                [JSON.stringify(inv), r.player_id],
-              );
+
+          if (cosmetic) {
+            const invRes = await client.query<{ inventory_json: string }>(
+              `SELECT inventory_json FROM player_scores
+               WHERE player_id = $1 FOR UPDATE`,
+              [r.player_id],
+            );
+            if (invRes.rows.length > 0) {
+              const raw = invRes.rows[0].inventory_json;
+              const inv: { avatars: string[]; frames: string[] } = { avatars: [], frames: [] };
+              try {
+                const parsed = JSON.parse(raw || "{}");
+                if (Array.isArray(parsed.avatars)) inv.avatars = parsed.avatars;
+                if (Array.isArray(parsed.frames)) inv.frames = parsed.frames;
+              } catch { /* keep defaults */ }
+
+              if (!inv.frames.includes(cosmetic)) {
+                inv.frames.push(cosmetic);
+                await client.query(
+                  `UPDATE player_scores
+                   SET inventory_json = $1, updated_at = NOW()
+                   WHERE player_id = $2`,
+                  [JSON.stringify(inv), r.player_id],
+                );
+              }
             }
           }
-        }
 
-        await client.query("COMMIT");
-        processed++;
-      } catch (txErr) {
-        await client.query("ROLLBACK").catch(() => {});
-        // Log per-player failures but keep going — finalize is resumable.
-        console.error(
-          `[finalizePreviousSeason] player ${r.player_id} failed:`,
-          txErr instanceof Error ? txErr.message : String(txErr),
-        );
-      } finally {
-        client.release();
+          await client.query("COMMIT");
+          processed++;
+        } catch (txErr) {
+          await client.query("ROLLBACK").catch(() => {});
+          console.error(
+            `[finalizePreviousSeason] season ${prevId}, player ${r.player_id} failed:`,
+            txErr instanceof Error ? txErr.message : String(txErr),
+          );
+        } finally {
+          client.release();
+        }
       }
+
+      console.log(
+        `[finalizePreviousSeason] Finalized season ${prevId} (${processed}/${rows.length} players)`,
+      );
     }
-    console.log(`[finalizePreviousSeason] Finalized season ${prevId} (${processed}/${rows.length} players)`);
   } catch (e: unknown) {
     console.error("[finalizePreviousSeason] error:", e instanceof Error ? e.message : String(e));
   }
