@@ -143,7 +143,8 @@ router.post("/checkout", async (req, res) => {
     if (!customerId) {
       const customer = await stripeService.createCustomer(
         email || `${playerId}@stop-game.app`,
-        playerId
+        playerId,
+        `stripe-customer:${playerId}`
       );
       customerId = customer.id;
       await stripeStorage.updatePlayerStripeInfo(playerId, {
@@ -194,6 +195,7 @@ router.post("/checkout-pack", async (req, res) => {
     // VALIDAR QUE EL CUSTOMER EXISTA EN STRIPE
     // ============================================================
     let validCustomerId: string | undefined;
+    let customerRecoveryKey = `stripe-customer:${playerId}`;
     if (customerId) {
       try {
         const stripe = await getUncachableStripeClient();
@@ -203,10 +205,13 @@ router.post("/checkout-pack", async (req, res) => {
           console.log(`Customer ${customerId} validated successfully`);
         } else {
           console.warn(`Customer ${customerId} is deleted, will create new one`);
+          customerRecoveryKey = `stripe-customer:${playerId}:recovery:${customerId}`;
           customerId = null;
         }
       } catch (error: any) {
-        console.warn(`Invalid Stripe customer ${customerId}: ${error.message}. Creating new customer.`);
+        const invalidCustomerId = customerId;
+        console.warn(`Invalid Stripe customer ${invalidCustomerId}: ${error.message}. Creating new customer.`);
+        customerRecoveryKey = `stripe-customer:${playerId}:recovery:${invalidCustomerId}`;
         customerId = null;
       }
     }
@@ -215,7 +220,8 @@ router.post("/checkout-pack", async (req, res) => {
     if (!customerId) {
       const customer = await stripeService.createCustomer(
         email || `${playerId}@stop-game.app`,
-        playerId
+        playerId,
+        customerRecoveryKey
       );
       customerId = customer.id;
       validCustomerId = customerId;
