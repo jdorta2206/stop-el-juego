@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui";
 import { Mail, Phone, MapPin, Twitter, Instagram, Facebook, CheckCircle, AlertCircle } from "lucide-react";
@@ -9,17 +9,24 @@ export default function Contact() {
   const [message, setMessage] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState("");
+  const requestAbortRef = useRef<AbortController | null>(null);
+  const statusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setStatus("loading");
     setErrorMsg("");
+    requestAbortRef.current?.abort();
+    const controller = new AbortController();
+    requestAbortRef.current = controller;
+    if (statusTimerRef.current) clearTimeout(statusTimerRef.current);
 
     try {
       const res = await fetch("/api/contact", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, email, message }),
+        signal: controller.signal,
       });
       const data = await res.json();
       if (!res.ok) {
@@ -29,13 +36,27 @@ export default function Contact() {
       setName("");
       setEmail("");
       setMessage("");
-      setTimeout(() => setStatus("idle"), 5000);
+      statusTimerRef.current = setTimeout(() => {
+        statusTimerRef.current = null;
+        if (!controller.signal.aborted) setStatus("idle");
+      }, 5000);
     } catch (error: any) {
+      if (controller.signal.aborted) return;
       setStatus("error");
       setErrorMsg(error.message || "Hubo un problema. Inténtalo de nuevo.");
-      setTimeout(() => setStatus("idle"), 5000);
+      statusTimerRef.current = setTimeout(() => {
+        statusTimerRef.current = null;
+        if (!controller.signal.aborted) setStatus("idle");
+      }, 5000);
     }
   };
+
+  useEffect(() => () => {
+    requestAbortRef.current?.abort();
+    requestAbortRef.current = null;
+    if (statusTimerRef.current) clearTimeout(statusTimerRef.current);
+    statusTimerRef.current = null;
+  }, []);
 
   return (
     <Layout>
