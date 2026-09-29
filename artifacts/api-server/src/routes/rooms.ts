@@ -2099,7 +2099,14 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
   // return the current room state without re-applying score — prevents double-submit cheats.
   const existingPlayers = parsePlayers(room.playersJson);
   const me = existingPlayers.find((p: any) => p.playerId === body.data.playerId);
-  if (me?.isReady === true) {
+  // A valid session alone is not enough: /results mutates the room state and
+  // can trigger round advancement/final leaderboard side effects. Only an
+  // actual member of this room may submit results for it.
+  if (!me) {
+    res.status(403).json({ error: "Player is not a member of this room" });
+    return;
+  }
+  if (me.isReady === true) {
     res.json(formatRoom(room));
     return;
   }
