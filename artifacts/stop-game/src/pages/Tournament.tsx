@@ -71,6 +71,7 @@ export default function Tournament() {
   const redirectedMatchRef = useRef<string | null>(null);
   const resumeTournamentRef = useRef<string | null>(null);
   const pollAbortRef = useRef<AbortController | null>(null);
+  const inviteInFlightRef = useRef<Set<string>>(new Set());
 
   const poll = useCallback(async () => {
     if (!tournament || !player) return;
@@ -262,15 +263,20 @@ export default function Tournament() {
   };
 
   const inviteToTournament = async (targetId: string, targetName: string) => {
-    if (!tournament || !player) return;
+    if (!tournament || !player || invitedIds.has(targetId) || inviteInFlightRef.current.has(targetId)) return;
+    inviteInFlightRef.current.add(targetId);
     const roomCode = tournament.code;
     const online = onlinePlayers.find(p => p.playerId === targetId);
-    if (online) {
-      await sendChallenge(player, targetId, "es");
-    }
-    setInvitedIds(prev => new Set([...prev, targetId]));
-    if (!online) {
-      window.open(`https://wa.me/?text=${encodeURIComponent(`¡${player.name} te invita al torneo STOP! 🎮\n${tournament.name}\nCódigo: ${roomCode}`)}`, "_blank");
+    try {
+      if (online) {
+        const result = await sendChallenge(player, targetId, "es");
+        if (!result) return;
+      } else {
+        window.open(`https://wa.me/?text=${encodeURIComponent(`¡${player.name} te invita al torneo STOP! 🎮\n${tournament.name}\nCódigo: ${roomCode}`)}`, "_blank");
+      }
+      setInvitedIds(prev => new Set([...prev, targetId]));
+    } finally {
+      inviteInFlightRef.current.delete(targetId);
     }
   };
 
