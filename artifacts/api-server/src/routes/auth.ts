@@ -2,7 +2,7 @@ import { Router } from "express";
 import type { Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
-import { issuePlayerToken, clearPlayerToken, PLAYER_TOKEN_BRIDGE_KEY, readPlayerId } from "../lib/playerAuth";
+import { issuePlayerToken, clearPlayerToken, PLAYER_TOKEN_BRIDGE_KEY, readPlayerId, isLoggedInId } from "../lib/playerAuth";
 import { db, playerScoresTable } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
 
@@ -908,22 +908,47 @@ router.post("/delete-account", async (req: Request, res: Response) => {
   }
 
   try {
-    const result = await db.transaction(async (tx) => {
-      const rows = await tx.execute(sql`
-        SELECT player_id, stripe_customer_id
+    const rows = await db.execute(sql`
+      SELECT player_id, stripe_customer_id
+      FROM player_scores
+      WHERE player_id = ${playerId}
+      LIMIT 1
+    `);
+    const row = rows.rows?.[0] as
+      | { player_id: string; stripe_customer_id: string | null }
+      | undefined;
+
+    if (!row) {
+      clearPlayerToken(res);
+      return res.json({ ok: true, deleted: false });
+    }
+
+    // Cancel/delete the Stripe customer before removing the local account so
+    // an active web subscription cannot survive the account deletion.
+    if (row.stripe_customer_id) {
+      try {
+        const { getUncachableStripeClient } = await import("../stripeClient");
+        const stripe = await getUncachableStripeClient();
+        await stripe.customers.del(row.stripe_customer_id);
+      } catch (stripeError) {
+        console.error("[auth/delete-account] Stripe customer deletion failed:", stripeError);
+        return res.status(502).json({
+          error: "No se pudo completar la cancelación de la suscripción. Tu cuenta no se ha eliminado.",
+        });
+      }
+    }
+
+    await db.transaction(async (tx) => {
+      const locked = await tx.execute(sql`
+        SELECT player_id
         FROM player_scores
         WHERE player_id = ${playerId}
         FOR UPDATE
       `);
-      const row = rows.rows?.[0] as
-        | { player_id: string; stripe_customer_id: string | null }
-        | undefined;
-
-      if (!row) return { deleted: false as const, stripeCustomerId: null };
+      if (!locked.rows?.length) return;
 
       // Delete user-owned records from every current/future table that uses
-      // player_id, except immutable billing ledgers which are retained for
-      // financial/audit obligations. The whole operation is transactional.
+      // player_id, except immutable billing ledgers retained for audit.
       const tableRows = await tx.execute(sql`
         SELECT table_schema, table_name
         FROM information_schema.columns
@@ -935,53 +960,34 @@ router.post("/delete-account", async (req: Request, res: Response) => {
 
       for (const table of tableRows.rows as Array<{ table_schema: string; table_name: string }>) {
         const qualified = `"${table.table_schema.replace(/"/g, '""')}"."${table.table_name.replace(/"/g, '""')}"`;
+        const escapedPlayerId = playerId.replace(/'/g, "''");
         await tx.execute(sql.raw(
-          `DELETE FROM ${qualified} WHERE "player_id" = '${playerId.replace(/'/g, "''")}'`,
+          `DELETE FROM ${qualified} WHERE "player_id" = '${escapedPlayerId}'`,
         ));
       }
 
-      // Remove rooms/tournaments owned by the deleted account so their host
-      // identity cannot survive after the account is gone.
       await tx.execute(sql`DELETE FROM rooms WHERE host_id = ${playerId}`);
       await tx.execute(sql`DELETE FROM tournaments WHERE host_id = ${playerId}`);
 
-      // Keep the Play billing ledgers but sever the personal-account link.
+      // Keep Google Play purchase ledgers but sever their link to the deleted
+      // account and remove stored provider payloads that may contain PII.
+      const deletedId = sql`CONCAT('deleted_', LEFT(md5(${playerId} || ${Date.now()}::text), 24))`;
       await tx.execute(sql`
         UPDATE play_subscriptions
-        SET player_id = CONCAT('deleted_', LEFT(md5(player_id || ${Date.now()}::text), 24)),
-            raw_json = '{}',
-            updated_at = NOW()
+        SET player_id = ${deletedId}, raw_json = '{}', updated_at = NOW()
         WHERE player_id = ${playerId}
       `);
       await tx.execute(sql`
         UPDATE play_product_purchases
-        SET player_id = CONCAT('deleted_', LEFT(md5(player_id || ${Date.now()}::text), 24)),
-            raw_json = '{}',
-            updated_at = NOW()
+        SET player_id = ${deletedId}, raw_json = '{}', updated_at = NOW()
         WHERE player_id = ${playerId}
       `);
 
       await tx.execute(sql`DELETE FROM player_scores WHERE player_id = ${playerId}`);
-      return { deleted: true as const, stripeCustomerId: row.stripe_customer_id };
     });
 
-    // Stripe customer deletion is intentionally outside the DB transaction:
-    // if Stripe fails, the account data must not be reported as deleted.
-    if (result.deleted && result.stripeCustomerId) {
-      try {
-        const { getUncachableStripeClient } = await import("../stripeClient");
-        const stripe = await getUncachableStripeClient();
-        await stripe.customers.del(result.stripeCustomerId);
-      } catch (stripeError) {
-        console.error("[auth/delete-account] Stripe customer deletion failed:", stripeError);
-        return res.status(502).json({
-          error: "No se pudo completar la cancelación de la suscripción. Tu cuenta no se ha eliminado.",
-        });
-      }
-    }
-
     clearPlayerToken(res);
-    return res.json({ ok: true, deleted: result.deleted });
+    return res.json({ ok: true, deleted: true });
   } catch (error) {
     console.error("[auth/delete-account] error:", error);
     return res.status(500).json({ error: "No se pudo eliminar la cuenta. Inténtalo de nuevo." });
