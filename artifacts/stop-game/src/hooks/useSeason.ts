@@ -189,6 +189,7 @@ export function useSeason(playerId?: string | null) {
 export function useSeasonLeaderboard(seasonId?: number | null, enabled: boolean = true) {
   const [data, setData] = useState<Leaderboard | null>(null);
   const [loading, setLoading] = useState(false);
+  const leaderboardAbortRef = useRef<AbortController | null>(null);
 
   const refresh = useCallback(async () => {
     if (!enabled) return;
@@ -208,7 +209,16 @@ export function useSeasonLeaderboard(seasonId?: number | null, enabled: boolean 
     }
   }, [seasonId, enabled]);
 
-  useEffect(() => { refresh(); }, [refresh]);
+  useEffect(() => {
+    leaderboardAbortRef.current?.abort();
+    if (!enabled) return;
+    const controller = new AbortController();
+    leaderboardAbortRef.current = controller;
+    void refresh().finally(() => {
+      if (leaderboardAbortRef.current === controller) leaderboardAbortRef.current = null;
+    });
+    return () => controller.abort();
+  }, [refresh, enabled]);
 
   return { data, loading, refresh };
 }
