@@ -2596,12 +2596,60 @@ router.post("/:roomCode/bluff-vote", writeLimiter, async (req, res) => {
     .returning();
 
   if (!updated) {
-    // Another vote won the race. Return the latest authoritative state; the
-    // other request already persisted its vote.
+    // Another vote won the race. Retry against the latest authoritative state
+    // instead of returning 200 while silently dropping THIS player's vote.
     const [current] = await db.select().from(roomsTable)
       .where(eq(roomsTable.roomCode, roomCode.toUpperCase()))
       .limit(1);
-    res.json(formatRoom(current));
+    if (!current) {
+      res.status(404).json({ error: "Room not found" });
+      return;
+    }
+    if (current.status !== "bluffvoting") {
+      res.json(formatRoom(current));
+      return;
+    }
+
+    const currentPlayers = parsePlayers(current.playersJson);
+    const currentVoter = currentPlayers.find((p: any) => p.playerId === voterId);
+    const currentAccused = currentPlayers.find((p: any) => p.playerId === accusedPlayerId);
+    if (!currentVoter || currentVoter.bluffedCategories?.length ||
+        !currentAccused?.bluffedCategories?.includes(category)) {
+      res.status(409).json({ error: "Vote no longer applicable" });
+      return;
+    }
+
+    const latestMeta = parseBluffMeta(current.stopperJson) ?? {};
+    const latestVotes = latestMeta.bluffVotes ?? {};
+    if (latestVotes[accusedPlayerId]?.[category]?.[voterId] === vote) {
+      res.json(formatRoom(current));
+      return;
+    }
+    if (latestVotes[accusedPlayerId]?.[category]) {
+      latestVotes[accusedPlayerId][category][voterId] = vote;
+    }
+
+    const [retried] = await db.update(roomsTable)
+      .set({
+        stopperJson: JSON.stringify({ ...latestMeta, bluffVotes: latestVotes }),
+        updatedAt: new Date(),
+      })
+      .where(and(
+        eq(roomsTable.roomCode, roomCode.toUpperCase()),
+        eq(roomsTable.status, "bluffvoting"),
+        eq(roomsTable.updatedAt, current.updatedAt),
+      ))
+      .returning();
+
+    if (!retried) {
+      const [latest] = await db.select().from(roomsTable)
+        .where(eq(roomsTable.roomCode, roomCode.toUpperCase()))
+        .limit(1);
+      res.status(409).json({ error: "Concurrent vote; please retry", room: latest ? formatRoom(latest) : null });
+      return;
+    }
+
+    res.json(broadcastAndFormat(retried));
     return;
   }
 
