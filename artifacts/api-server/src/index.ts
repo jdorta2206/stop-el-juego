@@ -79,11 +79,11 @@ async function initStripe() {
     console.log("Initializing Stripe schema...");
     await runMigrations({ databaseUrl } as any);
     console.log("Stripe schema ready");
-    // Webhooks may arrive as soon as the HTTP listener is reachable. Mark
-    // Stripe ready only after its own schema migrations have completed.
-    markStripeReady();
 
     const stripeSync = await getStripeSync();
+    // Webhooks may arrive as soon as the HTTP listener is reachable. Mark
+    // Stripe ready only after both its schema and sync processor are ready.
+    markStripeReady();
 
     const domains =
       process.env["REPLIT_DOMAINS"] ||
