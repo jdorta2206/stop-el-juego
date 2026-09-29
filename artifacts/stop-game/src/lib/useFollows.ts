@@ -45,12 +45,12 @@ export function useFollows(
   const requestRef = useRef<AbortController | null>(null);
 
   const refresh = useCallback(async () => {
+    requestRef.current?.abort();
     if (!meId) {
       setRawFriends([]);
       setFollowedIds(new Set());
       return;
     }
-    requestRef.current?.abort();
     const controller = new AbortController();
     requestRef.current = controller;
     setLoading(true);
