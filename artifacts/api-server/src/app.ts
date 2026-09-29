@@ -112,7 +112,7 @@ if (process.env["SERVE_CLIENT"] === "1") {
   app.get("/app-ads.txt", (_req, res) => {
     res.type("text/plain");
     res.setHeader("Cache-Control", "public, max-age=3600");
-    res.status(200).send("google.com, pub-4807272408824742, DIRECT, f08c47fec0942fa0\\n");
+    res.status(200).send("google.com, pub-4807272408824742, DIRECT, f08c47fec0942fa0\n");
   });
 
   app.get("/.well-known/assetlinks.json", (_req, res) => {
