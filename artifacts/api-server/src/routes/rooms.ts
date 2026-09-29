@@ -1533,6 +1533,7 @@ router.post("/:roomCode/category-pack", async (req, res) => {
   }
   if (!["standard", "crazy", "mix", "custom"].includes(pack)) { res.status(400).json({ error: "Invalid pack" }); return; }
 
+  let selectedPack: CategoryPack;
   if (pack === "custom") {
     // Gate behind premium server-side — client UI hides it but never trust the client.
     const hostPremium = await isPlayerPremium(hostId);
@@ -1544,9 +1545,9 @@ router.post("/:roomCode/category-pack", async (req, res) => {
       .slice(0, 12);
     if (clean.length < 3) { res.status(400).json({ error: "Need at least 3 categories" }); return; }
     const label = (typeof body.customLabel === "string" ? body.customLabel.trim() : "").slice(0, 40) || "Personalizado";
-    roomCategoryPacks.set(code, { pack: "custom", customCategories: clean, customLabel: label });
+    selectedPack = { pack: "custom", customCategories: clean, customLabel: label };
   } else {
-    roomCategoryPacks.set(code, { pack });
+    selectedPack = { pack };
   }
 
   // Revalidate after the asynchronous Premium lookup. /start may have won
@@ -1556,12 +1557,8 @@ router.post("/:roomCode/category-pack", async (req, res) => {
   const packMeta = {
     ...currentMeta,
     categoryPack: pack,
-    customCategories: pack === "custom" ? (
-      roomCategoryPacks.get(code)?.customCategories ?? null
-    ) : null,
-    customPackLabel: pack === "custom" ? (
-      roomCategoryPacks.get(code)?.customLabel ?? null
-    ) : null,
+    customCategories: pack === "custom" ? (selectedPack.customCategories ?? null) : null,
+    customPackLabel: pack === "custom" ? (selectedPack.customLabel ?? null) : null,
   };
   const [updatedPackRoom] = await db.update(roomsTable)
     .set({ stopperJson: JSON.stringify(packMeta), updatedAt: new Date() })
@@ -1574,12 +1571,12 @@ router.post("/:roomCode/category-pack", async (req, res) => {
     .returning();
 
   if (!updatedPackRoom) {
-    // Do not leave the process-local pack changed if the persisted transition
-    // lost a concurrent /start race.
-    roomCategoryPacks.delete(code);
     res.status(409).json({ error: "Room is no longer waiting" });
     return;
   }
+
+  // Update the process-local fast path only after the persisted CAS succeeds.
+  roomCategoryPacks.set(code, selectedPack);
 
   // 🚀 Notify all players the host changed the category pack
   try { broadcastAndFormat(updatedPackRoom); } catch {}
