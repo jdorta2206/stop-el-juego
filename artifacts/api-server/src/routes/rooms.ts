@@ -1247,6 +1247,7 @@ router.post("/:roomCode/start", async (req, res) => {
     .where(and(
       eq(roomsTable.roomCode, roomCode.toUpperCase()),
       eq(roomsTable.status, "waiting"),
+      eq(roomsTable.updatedAt, room.updatedAt),
     ))
     .returning();
 
