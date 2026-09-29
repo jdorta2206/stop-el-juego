@@ -296,6 +296,15 @@ router.post("/room-invite", async (req, res) => {
     return res.status(403).json({ error: "Invalid player identity" });
   }
 
+  const normalizedRoomCode = String(roomCode).trim().toUpperCase();
+  const [room] = await db.select({ hostId: roomsTable.hostId })
+    .from(roomsTable)
+    .where(eq(roomsTable.roomCode, normalizedRoomCode))
+    .limit(1);
+  if (!room || room.hostId !== fromPlayerId) {
+    return res.status(403).json({ error: "Not authorized to invite from this room" });
+  }
+
   await challengeTableReady;
 
   // Remove any existing pending room-invite from this sender to this target.
