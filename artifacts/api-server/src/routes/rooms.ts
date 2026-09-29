@@ -959,14 +959,10 @@ router.post("/", async (req, res) => {
   const isHalloweenTestRoom = String(hostName ?? "").trim().toLowerCase() === "halloween host";
   const safeIsPublic = isHalloweenTestRoom ? false : (isPublic ?? false);
 
-  let roomCode = generateRoomCode();
-  for (let i = 0; i < 5; i++) {
-    const existing = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, roomCode)).limit(1);
-    if (existing.length === 0) break;
-    roomCode = generateRoomCode();
-  }
-
-  // Look up premium status from DB (server-validated, can't be faked by client)
+  // The code check and the INSERT are separated by asynchronous work, so the
+  // check alone cannot reserve a code. The DB unique constraint is the final
+  // arbiter; retry on a collision instead of turning a rare concurrent create
+  // into a 500.
   const hostPremium = await isPlayerPremium(hostId);
 
   const players = [{
@@ -982,29 +978,47 @@ router.post("/", async (req, res) => {
     isReady: false,
   }];
 
-  // Defensive: room codes are recycled (6-char alphanumeric, collision-checked
-  // against DB but not against in-memory state). Clear any leftover ephemeral
-  // state for this code so a new host can't inherit a previous host's custom
-  // pack or transient reactions/typing.
-  roomCategoryPacks.delete(roomCode);
-  roomReactions.delete(roomCode);
-  roomPhrases.delete(roomCode);
-  roomTyping.delete(roomCode);
+  let room: typeof roomsTable.$inferSelect | undefined;
+  let roomCode = "";
+  for (let attempt = 0; attempt < 8; attempt++) {
+    roomCode = generateRoomCode();
 
-  const [room] = await db.insert(roomsTable).values({
-    roomCode,
-    hostId,
-    hostName: hostName ?? "",
-    status: "waiting",
-    currentRound: 0,
-    maxRounds: maxRounds ?? 3,
-    maxPlayers,
-    gameMode,
-    language: language ?? "es",
-    playersJson: JSON.stringify(players),
-    stopperJson: null,
-    isPublic: safeIsPublic,
-  }).returning();
+    // Defensive: room codes are recycled. Clear only the candidate code that
+    // this creation attempt is actually going to use.
+    roomCategoryPacks.delete(roomCode);
+    roomReactions.delete(roomCode);
+    roomPhrases.delete(roomCode);
+    roomTyping.delete(roomCode);
+
+    try {
+      const inserted = await db.insert(roomsTable).values({
+        roomCode,
+        hostId,
+        hostName: hostName ?? "",
+        status: "waiting",
+        currentRound: 0,
+        maxRounds: maxRounds ?? 3,
+        maxPlayers,
+        gameMode,
+        language: language ?? "es",
+        playersJson: JSON.stringify(players),
+        stopperJson: null,
+        isPublic: safeIsPublic,
+      }).returning();
+
+      room = inserted[0];
+      break;
+    } catch (error: any) {
+      // PostgreSQL unique_violation: another concurrent creator won this code.
+      // Any other DB error is genuine and must not be hidden as a collision.
+      if (error?.code !== "23505") throw error;
+    }
+  }
+
+  if (!room) {
+    res.status(503).json({ error: "Could not allocate a unique room code" });
+    return;
+  }
 
   res.status(201).json(formatRoom(room));
 });
