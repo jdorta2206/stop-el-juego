@@ -431,18 +431,7 @@ export async function updatePlaySubscriptionByToken(
       rawJson: JSON.stringify(v.raw),
       updatedAt: new Date(),
     })
-    .where(
-      sql` ${eq(playSubscriptionsTable.purchaseToken, v.purchaseToken)}
-        AND (
-          ${playSubscriptionsTable.expiryTimeMs} < ${v.expiryTimeMs}
-          OR (
-            ${playSubscriptionsTable.expiryTimeMs} = ${v.expiryTimeMs}
-            AND (
-              ${playSubscriptionsTable.state} IS DISTINCT FROM ${v.state}
-            )
-          )
-        )`,
-    )
+    .where(eq(playSubscriptionsTable.purchaseToken, v.purchaseToken))
     .returning({ playerId: playSubscriptionsTable.playerId });
   return { playerId: updated[0]?.playerId ?? null };
 }
