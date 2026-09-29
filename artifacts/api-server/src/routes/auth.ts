@@ -18,7 +18,7 @@ import crypto from "crypto";
 import { issuePlayerToken, clearPlayerToken, PLAYER_TOKEN_BRIDGE_KEY, readPlayerId, isLoggedInId } from "../lib/playerAuth";
 import { db, playerScoresTable } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
-import { revokePlayerId, markPlayerRevoked } from "../lib/playerRevocation";
+import { revokePlayerId, markPlayerRevoked, restorePlayerId } from "../lib/playerRevocation";
 
 const router = Router();
 
@@ -402,6 +402,7 @@ router.get("/google/callback", async (req: Request, res: Response) => {
       provider: "google",
     });
 
+    await restorePlayerId(playerId);
     const sessionToken = issuePlayerToken(res, playerId);
     res.send(bridgePageMulti([
       ["oauth_user", user],
@@ -505,6 +506,7 @@ router.get("/facebook/callback", async (req: Request, res: Response) => {
       provider: "facebook",
     });
 
+    await restorePlayerId(playerId);
     const sessionToken = issuePlayerToken(res, playerId);
     res.send(bridgePageMulti([
       ["oauth_user", user],
@@ -593,6 +595,7 @@ router.get("/instagram/callback", async (req: Request, res: Response) => {
 
     await db.insert(playerScoresTable).values({ playerId, playerName: String(me.username || me.name || "Usuario").trim().slice(0, 14) || "Usuario", avatarColor: "#f9a825", profilePicture: me.profile_picture_url || null }).onConflictDoUpdate({ target: playerScoresTable.playerId, set: { playerName: String(me.username || me.name || "Usuario").trim().slice(0, 14) || "Usuario", profilePicture: me.profile_picture_url || null, updatedAt: new Date() } });
 
+    await restorePlayerId(playerId);
     const sessionToken = issuePlayerToken(res, playerId);
     res.send(bridgePageMulti([
       ["oauth_user", user],
@@ -728,6 +731,7 @@ router.post("/apple/callback", async (req: Request, res: Response) => {
       provider: "apple",
     });
 
+    await restorePlayerId(playerId);
     const sessionToken = issuePlayerToken(res, playerId);
     res.send(bridgePageMulti([
       ["oauth_user", user],
@@ -817,6 +821,7 @@ router.get("/tiktok/callback", async (req: Request, res: Response) => {
       provider: "tiktok",
     });
 
+    await restorePlayerId(playerId);
     const sessionToken = issuePlayerToken(res, playerId);
     res.send(bridgePageMulti([
       ["oauth_user", user],
