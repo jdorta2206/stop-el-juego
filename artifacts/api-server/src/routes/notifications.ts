@@ -304,8 +304,7 @@ router.post("/send-invite", inviteLimiter, async (req, res) => {
   // up), so we can't fully prevent a spoofed display name — but we DO neutralise
   // it as an abuse vector: strip control chars/newlines and cap the length so it
   // can't be used to inject misleading multi-line content into the push payload.
-  const safeFromName = String(fromName).replace(/[\r
-\u0000-\u001F\u007F]/g, " ").trim().slice(0, 40) || "Alguien";
+  const safeFromName = String(fromName).replace(/[\r\n\u0000-\u001F\u007F]/g, " ").trim().slice(0, 40) || "Alguien";
   const safeRoomCode = String(roomCode).replace(/[^A-Za-z0-9]/g, "").slice(0, 12).toUpperCase();
   if (!safeRoomCode) { res.status(400).json({ error: "Invalid roomCode" }); return; }
 
