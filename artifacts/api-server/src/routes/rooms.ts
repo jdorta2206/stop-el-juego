@@ -1533,7 +1533,7 @@ router.post("/:roomCode/category-pack", async (req, res) => {
   }
   if (!["standard", "crazy", "mix", "custom"].includes(pack)) { res.status(400).json({ error: "Invalid pack" }); return; }
 
-  let selectedPack: CategoryPack;
+  let selectedPack: RoomPackConfig;
   if (pack === "custom") {
     // Gate behind premium server-side — client UI hides it but never trust the client.
     const hostPremium = await isPlayerPremium(hostId);
