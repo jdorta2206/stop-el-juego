@@ -336,15 +336,10 @@ router.post("/room-invite", async (req, res) => {
 
   await challengeTableReady;
 
-  // Remove any existing pending room-invite from this sender to this target.
-  await db.execute(sql`
-    DELETE FROM player_challenges
-    WHERE from_player_id = ${fromPlayerId}
-      AND to_player_id = ${toPlayerId}
-      AND is_room_invite = TRUE
-      AND status = 'pending'
-  `);
-
+  // Do not delete an existing pending invite before inserting the
+  // replacement. Concurrent requests must be serialized by the partial unique
+  // index below; otherwise one request can return a challengeId that another
+  // concurrent request has already deleted.
   const challengeId = `ri_${Date.now()}_${Math.random().toString(36).slice(2, 6)}_${Math.random().toString(36).slice(2, 8)}`;
 
   const inserted = await db.execute(sql`
