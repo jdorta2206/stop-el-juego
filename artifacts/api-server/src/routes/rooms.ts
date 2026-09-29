@@ -2453,12 +2453,30 @@ router.post("/:roomCode/bluff-vote", writeLimiter, async (req, res) => {
     return;
   }
 
-  // Save partial votes and return updated room
+  // Save partial votes with optimistic concurrency. Multiple opponents can
+  // vote at nearly the same time; without a CAS, their read-modify-write
+  // operations could overwrite each other's votes and leave the bluff phase
+  // waiting until the deadline.
+  const currentUpdatedAt = room.updatedAt;
   const newMeta = { ...meta, bluffVotes };
   const [updated] = await db.update(roomsTable)
     .set({ stopperJson: JSON.stringify(newMeta), updatedAt: new Date() })
-    .where(eq(roomsTable.roomCode, roomCode.toUpperCase()))
+    .where(and(
+      eq(roomsTable.roomCode, roomCode.toUpperCase()),
+      eq(roomsTable.status, "bluffvoting"),
+      eq(roomsTable.updatedAt, currentUpdatedAt),
+    ))
     .returning();
+
+  if (!updated) {
+    // Another vote won the race. Return the latest authoritative state; the
+    // other request already persisted its vote.
+    const [current] = await db.select().from(roomsTable)
+      .where(eq(roomsTable.roomCode, roomCode.toUpperCase()))
+      .limit(1);
+    res.json(formatRoom(current));
+    return;
+  }
 
   // 🚀 Broadcast partial vote progress so everyone sees votes coming in live
   res.json(broadcastAndFormat(updated));
