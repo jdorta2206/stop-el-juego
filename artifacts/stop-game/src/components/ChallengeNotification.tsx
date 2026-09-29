@@ -76,8 +76,8 @@ export function ChallengeNotification({ challenge, onDismiss }: ChallengeNotific
 
   const handleDecline = async () => {
     if (responding) return;
-    setResponding(true);
     actionAbortRef.current?.abort();
+    setResponding(true);
     if (!isRoomInvite) {
       await respondToChallenge(challenge.challengeId, false);
     }
