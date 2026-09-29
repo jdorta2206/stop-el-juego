@@ -1549,9 +1549,9 @@ router.post("/:roomCode/category-pack", async (req, res) => {
     roomCategoryPacks.set(code, { pack });
   }
 
-  // Persist the selected deck in the room metadata so a Railway restart or
-  // another API replica cannot silently turn an existing room back into
-  // "standard". Preserve all other round/rematch metadata.
+  // Revalidate after the asynchronous Premium lookup. /start may have won
+  // the race while isPlayerPremium() was in flight; never mutate a game that
+  // has already left the waiting state.
   const currentMeta = parseBluffMeta(rooms[0].stopperJson) ?? {};
   const packMeta = {
     ...currentMeta,
@@ -1563,12 +1563,26 @@ router.post("/:roomCode/category-pack", async (req, res) => {
       roomCategoryPacks.get(code)?.customLabel ?? null
     ) : null,
   };
-  await db.update(roomsTable)
+  const [updatedPackRoom] = await db.update(roomsTable)
     .set({ stopperJson: JSON.stringify(packMeta), updatedAt: new Date() })
-    .where(eq(roomsTable.roomCode, code));
+    .where(and(
+      eq(roomsTable.roomCode, code),
+      eq(roomsTable.status, "waiting"),
+      eq(roomsTable.updatedAt, rooms[0].updatedAt),
+      eq(roomsTable.hostId, hostId),
+    ))
+    .returning();
+
+  if (!updatedPackRoom) {
+    // Do not leave the process-local pack changed if the persisted transition
+    // lost a concurrent /start race.
+    roomCategoryPacks.delete(code);
+    res.status(409).json({ error: "Room is no longer waiting" });
+    return;
+  }
 
   // 🚀 Notify all players the host changed the category pack
-  try { broadcastAndFormat(rooms[0]); } catch {}
+  try { broadcastAndFormat(updatedPackRoom); } catch {}
   res.json({ ok: true, categoryPack: pack });
 });
 
