@@ -25,6 +25,7 @@ export default function Impossible() {
   const [outcome, setOutcome] = useState<{ won: boolean; word: string; timeMs: number; stats: { attempts: number; wins: number } } | null>(null);
   const startedAt = useRef<number>(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const focusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const submitAbortRef = useRef<AbortController | null>(null);
 
   // Load combo + my prior attempt.
@@ -66,7 +67,11 @@ export default function Impossible() {
     startedAt.current = Date.now();
     setRemaining(ROUND_MS);
     setPhase("playing");
-    setTimeout(() => inputRef.current?.focus(), 50);
+    if (focusTimeoutRef.current) clearTimeout(focusTimeoutRef.current);
+    focusTimeoutRef.current = setTimeout(() => {
+      focusTimeoutRef.current = null;
+      inputRef.current?.focus();
+    }, 50);
   }, []);
 
   const submit = useCallback(async (w: string, surrendered: boolean) => {
@@ -108,4 +113,6 @@ export default function Impossible() {
   useEffect(() => () => {
     submitAbortRef.current?.abort();
     submitAbortRef.current = null;
+    if (focusTimeoutRef.current) clearTimeout(focusTimeoutRef.current);
+    focusTimeoutRef.current = null;
   }, [player?.id, lang]);
