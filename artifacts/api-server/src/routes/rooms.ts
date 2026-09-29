@@ -79,16 +79,14 @@ function paramStr(value: unknown): string {
   return String(value ?? "");
 }
 
-// Server-validated premium lookup: reads isPremium from the player_scores table.
-// Cosmetic-grade: a guest spoofing another playerId would also need to spoof their identity end-to-end.
+// Server-validated premium lookup from the unified live entitlement.
+// The legacy player_scores flag is only a cache and may lag behind Play/Stripe.
 async function isPlayerPremium(playerId: string | null | undefined): Promise<boolean> {
   if (!playerId) return false;
   try {
-    const rows = await db.select({ isPremium: playerScoresTable.isPremium })
-      .from(playerScoresTable)
-      .where(eq(playerScoresTable.playerId, playerId))
-      .limit(1);
-    return rows[0]?.isPremium === true;
+    const premium = await isUserPremium(playerId);
+    void stripeStorage.updatePlayerStripeInfo(playerId, { isPremium: premium }).catch(() => {});
+    return premium;
   } catch {
     return false;
   }
