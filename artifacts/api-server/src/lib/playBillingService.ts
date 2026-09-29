@@ -196,12 +196,12 @@ export async function acknowledgeSubscription(
   productId: string,
   purchaseToken: string,
   alreadyAcknowledged: boolean,
-): Promise<void> {
-  if (alreadyAcknowledged) return;
+): Promise<boolean> {
+  if (alreadyAcknowledged) return true;
   const packageName = getPackageName();
-  if (!packageName) return;
+  if (!packageName) return false;
   const client = await getClient();
-  if (!client) return;
+  if (!client) return false;
   try {
     await client.purchases.subscriptions.acknowledge({
       packageName,
@@ -211,9 +211,11 @@ export async function acknowledgeSubscription(
     console.log(
       `[playBilling] acknowledged subscription ${productId} (token ${purchaseToken.slice(0, 12)}…)`,
     );
+    return true;
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error("[playBilling] acknowledge failed:", msg);
+    return false;
   }
 }
 
