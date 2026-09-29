@@ -84,6 +84,7 @@ function FriendCard({
   const [copied, setCopied] = useState(false);
   const [showUnfollow, setShowUnfollow] = useState(false);
   const pendingId = useRef<string | null>(null);
+  const challengeAbortRef = useRef<AbortController | null>(null);
   const challengePollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const challengeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -92,6 +93,7 @@ function FriendCard({
     if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current);
     challengePollRef.current = null;
     challengeTimeoutRef.current = null;
+    challengeAbortRef.current?.abort();
     pendingId.current = null;
   }, []);
 
@@ -111,9 +113,9 @@ function FriendCard({
     pendingId.current = result.challengeId;
     if (challengePollRef.current) clearInterval(challengePollRef.current);
     if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current);
-    const poll = setInterval(async () => {
+    const status = await pollChallengeStatus(pendingId.current, controller.signal);
       if (!pendingId.current) { clearInterval(poll); return; }
-      const status = await pollChallengeStatus(pendingId.current);
+      const status = await pollChallengeStatus(pendingId.current, controller.signal);
       if (status.status === "accepted") {
         clearInterval(poll); challengePollRef.current = null; if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current); challengeTimeoutRef.current = null; pendingId.current = null;
         setLocation(`/room/${status.roomCode}`);
@@ -231,6 +233,7 @@ function OnlinePlayerCard({
   const [, setLocation] = useLocation();
   const [copied, setCopied] = useState(false);
   const pendingId = useRef<string | null>(null);
+  const challengeAbortRef = useRef<AbortController | null>(null);
   const challengePollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const challengeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -239,6 +242,7 @@ function OnlinePlayerCard({
     if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current);
     challengePollRef.current = null;
     challengeTimeoutRef.current = null;
+    challengeAbortRef.current?.abort();
     pendingId.current = null;
   }, []);
 
@@ -257,9 +261,9 @@ function OnlinePlayerCard({
     pendingId.current = result.challengeId;
     if (challengePollRef.current) clearInterval(challengePollRef.current);
     if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current);
-    const poll = setInterval(async () => {
+    const status = await pollChallengeStatus(pendingId.current, controller.signal);
       if (!pendingId.current) { clearInterval(poll); return; }
-      const status = await pollChallengeStatus(pendingId.current);
+      const status = await pollChallengeStatus(pendingId.current, controller.signal);
       if (status.status === "accepted") {
         clearInterval(poll); challengePollRef.current = null; if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current); challengeTimeoutRef.current = null; pendingId.current = null;
         setLocation(`/room/${status.roomCode}`);
