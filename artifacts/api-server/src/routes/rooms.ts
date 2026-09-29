@@ -745,9 +745,9 @@ async function sweepStuckRooms() {
         .where(and(eq(roomsTable.roomCode, room.roomCode), eq(roomsTable.status, "bluffvoting")))
         .returning();
       if (!updated) continue;
-      if (isGameOver) {
-        submitAllScoresToLeaderboard(resolved, room.currentLetter || "A").catch(() => {});
-      }
+      // Reuse the same one-shot round-transition cleanup as the normal
+      // resolution paths so spy/live state cannot leak into the next round.
+      applyRoundAdvanceSideEffects(room, resolved, newStatus);
       broadcastAndFormat(updated);
     }
   } catch (err) {
