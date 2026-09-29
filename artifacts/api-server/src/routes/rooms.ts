@@ -391,6 +391,9 @@ function formatRoom(room: any, cosmeticsMap?: Record<string, any>) {
     rematchCode: roomRematch.get(code) ?? meta?.rematchCode ?? null,
     funVotes: getFunVotes(code),
     createdAt: room.createdAt,
+    // Internal version marker used to order SSE snapshots across concurrent
+    // request/bot completions. Harmless to clients and not user-controlled.
+    updatedAt: room.updatedAt,
   };
 }
 
