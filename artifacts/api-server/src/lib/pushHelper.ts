@@ -256,6 +256,7 @@ export async function sendLocalizedBroadcast(
 }
 
 const friendOnlineNotifiedAt = new Map<string, number>();
+const friendOnlineInFlight = new Set<string>();
 const FRIEND_ONLINE_COOLDOWN_MS = 30 * 60 * 1000;
 
 export async function notifyFollowersPlayerOnline(
@@ -285,8 +286,17 @@ export async function notifyFollowersPlayerOnline(
       const lastNotified = friendOnlineNotifiedAt.get(dedupeKey) || 0;
       if (now - lastNotified < FRIEND_ONLINE_COOLDOWN_MS) return;
 
-      const sent = await sendPushToPlayer(follower.followerId, msg);
-      if (sent > 0) friendOnlineNotifiedAt.set(dedupeKey, now);
+      // Two simultaneous presence events can otherwise both observe the old
+      // timestamp before either async push completes. Claim the pair while the
+      // delivery is in flight, and release the claim if delivery fails.
+      if (friendOnlineInFlight.has(dedupeKey)) return;
+      friendOnlineInFlight.add(dedupeKey);
+      try {
+        const sent = await sendPushToPlayer(follower.followerId, msg);
+        if (sent > 0) friendOnlineNotifiedAt.set(dedupeKey, now);
+      } finally {
+        friendOnlineInFlight.delete(dedupeKey);
+      }
     }));
   } catch (e) {
     console.error("[pushHelper] notifyFollowersPlayerOnline error:", e);
