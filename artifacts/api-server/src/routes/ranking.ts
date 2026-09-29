@@ -482,9 +482,17 @@ router.post("/scores", scoreLimiter, async (req, res) => {
     // count cap independent of the client-supplied `mode`; otherwise a caller
     // could request `multiplayer` and raise the cap from 3 rounds to 12.
     : await sumVerifiedBasePersistent(scoreTokens, 3);
+  // A request that supplies vouchers must prove at least one fresh voucher.
+  // Otherwise a replay of an already-consumed token set would fall through
+  // to the offline absolute ceiling and could credit the same score again.
+  const suppliedTokens = Array.isArray(scoreTokens) && scoreTokens.length > 0;
+  if (!isBonus && suppliedTokens && verified === 0) {
+    res.status(422).json({ error: "INVALID_SCORE_VOUCHER" });
+    return;
+  }
   // Offline submissions legitimately have no round voucher. They are still
-  // bounded by the absolute per-mode ceiling below; rejecting them here would
-  // make the offline outbox permanently discard every positive offline score.
+  // bounded by the absolute per-mode ceiling below; only requests with no
+  // vouchers at all use that fallback.
   const ceiling = isBonus ? existingForBonus[0].totalScore : (verified > 0 ? ceilingFromBase(verifiedBase) : absoluteCeiling(mode));
   const cappedRaw = Math.max(0, Math.min(rawScore, ceiling));
   // 🔒 Never trust the request body for the multiplayer multiplier. It is
