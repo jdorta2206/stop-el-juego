@@ -42,6 +42,7 @@ export function useFollows(
   const [rawFriends, setRawFriends] = useState<FollowedFriendBase[]>([]);
   const [followedIds, setFollowedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
+  const requestRef = useRef<AbortController | null>(null);
 
   const refresh = useCallback(async () => {
     if (!meId) {
@@ -49,7 +50,9 @@ export function useFollows(
       setFollowedIds(new Set());
       return;
     }
+    requestRef.current?.abort();
     const controller = new AbortController();
+    requestRef.current = controller;
     setLoading(true);
     try {
       const r = await fetch(`${API_BASE}/api/friends/list/${encodeURIComponent(meId)}`, { signal: controller.signal });
@@ -61,6 +64,7 @@ export function useFollows(
       if (controller.signal.aborted) return;
     } finally {
       if (!controller.signal.aborted) setLoading(false);
+      if (requestRef.current === controller) requestRef.current = null;
     }
   }, [meId]);
 
