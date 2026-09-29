@@ -1,6 +1,6 @@
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import type { Request } from "express";
-import { db } from "@workspace/db";
+import { db, indexesReady } from "@workspace/db";
 import { sql } from "drizzle-orm";
 
 interface RateLimitStore {
@@ -78,7 +78,7 @@ function playerKey(req: Request): string {
 const baseOpts = {
   standardHeaders: "draft-7" as const,
   legacyHeaders: false,
-  skip: (req: Request) => req.path === "/health",
+  // The limiter itself uses the api_rate_limits table, which is created during\n  // startup. Do not query that table before schema bootstrap has completed;\n  // the global API readiness gate will return 503 for non-health routes.\n  skip: (req: Request) => req.path === "/healthz" || !indexesReady(),
   message: { error: "Too many requests, slow down a bit ⏳" },
 };
 
