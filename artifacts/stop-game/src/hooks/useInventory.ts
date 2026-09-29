@@ -81,7 +81,10 @@ export function useInventory(playerId?: string | null) {
     finally { setLoading(false); }
   }, [playerId]);
 
-  useEffect(() => () => { refreshAbortRef.current?.abort(); }, []);
+  useEffect(() => {
+    void refresh();
+    return () => { refreshAbortRef.current?.abort(); };
+  }, [refresh]);
 
   const equip = useCallback(async (kind: EquipKind, value: string | null) => {
     if (!playerId) return null;
