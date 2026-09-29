@@ -153,6 +153,7 @@ function PlayerRow({
   const [, setLocation] = useLocation();
   const [copied, setCopied] = useState(false);
   const pendingChallengeId = useRef<string | null>(null);
+  const challengeAbortRef = useRef<AbortController | null>(null);
   const challengePollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const challengeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -161,6 +162,7 @@ function PlayerRow({
     if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current);
     challengePollRef.current = null;
     challengeTimeoutRef.current = null;
+    challengeAbortRef.current?.abort();
     pendingChallengeId.current = null;
   }, []);
 
@@ -180,9 +182,9 @@ function PlayerRow({
     pendingChallengeId.current = result.challengeId;
     if (challengePollRef.current) clearInterval(challengePollRef.current);
     if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current);
-    const poll = setInterval(async () => {
+    const status = await pollChallengeStatus(pendingChallengeId.current, controller.signal);
       if (!pendingChallengeId.current) { clearInterval(poll); return; }
-      const status = await pollChallengeStatus(pendingChallengeId.current);
+      const status = await pollChallengeStatus(pendingChallengeId.current, controller.signal);
       if (status.status === "accepted") {
         clearInterval(poll); challengePollRef.current = null; if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current); challengeTimeoutRef.current = null;
         pendingChallengeId.current = null;
@@ -273,6 +275,7 @@ function InstagramPlayerRow({
   const [, setLocation] = useLocation();
   const [copied, setCopied] = useState(false);
   const pendingChallengeId = useRef<string | null>(null);
+  const challengeAbortRef = useRef<AbortController | null>(null);
   const challengePollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const challengeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -281,6 +284,7 @@ function InstagramPlayerRow({
     if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current);
     challengePollRef.current = null;
     challengeTimeoutRef.current = null;
+    challengeAbortRef.current?.abort();
     pendingChallengeId.current = null;
   }, []);
 
@@ -300,9 +304,9 @@ function InstagramPlayerRow({
     pendingChallengeId.current = result.challengeId;
     if (challengePollRef.current) clearInterval(challengePollRef.current);
     if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current);
-    const poll = setInterval(async () => {
+    const status = await pollChallengeStatus(pendingChallengeId.current, controller.signal);
       if (!pendingChallengeId.current) { clearInterval(poll); return; }
-      const status = await pollChallengeStatus(pendingChallengeId.current);
+      const status = await pollChallengeStatus(pendingChallengeId.current, controller.signal);
       if (status.status === "accepted") {
         clearInterval(poll); challengePollRef.current = null; if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current); challengeTimeoutRef.current = null;
         pendingChallengeId.current = null;
@@ -380,6 +384,7 @@ function FriendRow({ friend, currentPlayer }: { friend: EnrichedFriend; currentP
   const [, setLocation] = useLocation();
   const [copied, setCopied] = useState(false);
   const pendingChallengeId = useRef<string | null>(null);
+  const challengeAbortRef = useRef<AbortController | null>(null);
   const challengePollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const challengeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -388,6 +393,7 @@ function FriendRow({ friend, currentPlayer }: { friend: EnrichedFriend; currentP
     if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current);
     challengePollRef.current = null;
     challengeTimeoutRef.current = null;
+    challengeAbortRef.current?.abort();
     pendingChallengeId.current = null;
   }, []);
 
@@ -407,9 +413,9 @@ function FriendRow({ friend, currentPlayer }: { friend: EnrichedFriend; currentP
     pendingChallengeId.current = result.challengeId;
     if (challengePollRef.current) clearInterval(challengePollRef.current);
     if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current);
-    const poll = setInterval(async () => {
+    const status = await pollChallengeStatus(pendingChallengeId.current, controller.signal);
       if (!pendingChallengeId.current) { clearInterval(poll); return; }
-      const status = await pollChallengeStatus(pendingChallengeId.current);
+      const status = await pollChallengeStatus(pendingChallengeId.current, controller.signal);
       if (status.status === "accepted") {
         clearInterval(poll); challengePollRef.current = null; if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current); challengeTimeoutRef.current = null;
         pendingChallengeId.current = null;
