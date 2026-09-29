@@ -86,8 +86,6 @@ export function MultiplayerScreen({ session, onExit }: Props) {
   async function createRoom() {
     if (actionInFlightRef.current) return;
     actionInFlightRef.current = true;
-    if (actionInFlightRef.current) return;
-    actionInFlightRef.current = true;
     setBusy(true); setError(null);
     try {
       const created = await apiFetch<Room>("/api/rooms", { method: "POST", body: JSON.stringify({
@@ -101,8 +99,6 @@ export function MultiplayerScreen({ session, onExit }: Props) {
 
   async function joinRoom() {
     if (actionInFlightRef.current) return;
-    actionInFlightRef.current = true;
-    if (actionInFlightRef.current) return;
     const roomCode = code.trim().toUpperCase();
     if (!roomCode) return;
     actionInFlightRef.current = true;
@@ -115,9 +111,7 @@ export function MultiplayerScreen({ session, onExit }: Props) {
   }
 
   async function startGame() {
-    if (actionInFlightRef.current) return;
-    actionInFlightRef.current = true;
-    if (!room || room.hostId !== playerId || actionInFlightRef.current) return;
+    if (actionInFlightRef.current || !room || room.hostId !== playerId) return;
     actionInFlightRef.current = true;
     setBusy(true); setError(null);
     try { const started = await apiFetch<Room>(`/api/rooms/${encodeURIComponent(room.roomCode)}/start`, { method: "POST", body: JSON.stringify({ hostId: playerId }) }); setRoom(started); }
@@ -126,9 +120,7 @@ export function MultiplayerScreen({ session, onExit }: Props) {
   }
 
   async function stopRound() {
-    if (actionInFlightRef.current) return;
-    actionInFlightRef.current = true;
-    if (!room || submitted || room.status !== "playing" || actionInFlightRef.current) return;
+    if (actionInFlightRef.current || !room || submitted || room.status !== "playing") return;
     actionInFlightRef.current = true;
     setBusy(true); setError(null);
     try {
