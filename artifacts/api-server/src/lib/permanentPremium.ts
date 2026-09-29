@@ -1,6 +1,6 @@
 import { db } from "@workspace/db";
 import { playerScoresTable } from "@workspace/db";
-import { and, eq, or, isNull, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 // 🚫 Permanent premium hard-coded accounts have been removed.
 // Premium is now granted EXCLUSIVELY via an active Stripe subscription.
@@ -12,8 +12,9 @@ export function isPermanentPremium(_playerId: string): boolean {
 }
 
 // Runs once at startup. Revokes is_premium for any account that does NOT have
-// an active Stripe subscription on file. Safe & idempotent — paying customers
-// (those with a non-empty stripe_subscription_id) are never touched.
+// a currently active Stripe subscription or Play subscription. A non-empty
+// stripe_subscription_id alone is not sufficient because Stripe keeps the
+// subscription ID after cancellation.
 export async function revokeFakePremium() {
   try {
     // Serialize the sweep with premium-grant transactions that update the
@@ -28,17 +29,10 @@ export async function revokeFakePremium() {
           id: playerScoresTable.id,
           playerId: playerScoresTable.playerId,
           name: playerScoresTable.playerName,
+          stripeCustomerId: playerScoresTable.stripeCustomerId,
         })
         .from(playerScoresTable)
-        .where(
-          and(
-            eq(playerScoresTable.isPremium, true),
-            or(
-              isNull(playerScoresTable.stripeSubscriptionId),
-              eq(playerScoresTable.stripeSubscriptionId, ""),
-            ),
-          ),
-        )
+        .where(eq(playerScoresTable.isPremium, true))
         .for("update");
 
       if (candidates.length === 0) {
@@ -46,9 +40,18 @@ export async function revokeFakePremium() {
         return;
       }
 
-      // Re-check Play subscriptions after acquiring the player-row locks.
+      // Re-check both billing sources after acquiring the player-row locks.
       // A concurrent purchase that grants premium through the player row must
       // therefore wait and cannot be lost by this sweep.
+      const activeStripeRows = await tx.execute(
+        sql`SELECT DISTINCT customer
+            FROM stripe.subscriptions
+            WHERE status IN ('active', 'trialing')`,
+      );
+      const activeStripeCustomers = new Set<string>(
+        (activeStripeRows.rows as Array<{ customer: string }>).map((r) => r.customer),
+      );
+
       const playSubscribers = await tx.execute(
         sql`SELECT DISTINCT player_id FROM play_subscriptions
             WHERE product_id = 'premium_monthly'
@@ -59,7 +62,10 @@ export async function revokeFakePremium() {
         (playSubscribers.rows as Array<{ player_id: string }>).map((r) => r.player_id),
       );
 
-      const toRevoke = candidates.filter((c) => !playPremiumIds.has(c.playerId));
+      const toRevoke = candidates.filter(
+        (c) => !playPremiumIds.has(c.playerId)
+          && (!c.stripeCustomerId || !activeStripeCustomers.has(c.stripeCustomerId)),
+      );
       if (toRevoke.length === 0) {
         console.log("[premium] No fake premium accounts found — DB clean.");
         return;
@@ -70,6 +76,12 @@ export async function revokeFakePremium() {
         .set({ isPremium: false })
         .where(
           sql`id IN (${sql.join(toRevoke.map((c) => sql`${c.id}`), sql`, `)})
+            AND NOT EXISTS (
+              SELECT 1
+              FROM stripe.subscriptions ss
+              WHERE ss.customer = ${playerScoresTable.stripeCustomerId}
+                AND ss.status IN ('active', 'trialing')
+            )
             AND NOT EXISTS (
               SELECT 1
               FROM play_subscriptions ps
