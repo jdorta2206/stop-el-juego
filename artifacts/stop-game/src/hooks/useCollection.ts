@@ -95,8 +95,9 @@ export function useCollection(playerId?: string) {
     const controller = new AbortController();
     syncAbortRef.current = controller;
     syncFromServer(playerId, controller.signal).then(serverMap => {
-      if (!Object.keys(serverMap).length) return;
+      if (controller.signal.aborted || !Object.keys(serverMap).length) return;
       setCollection(prev => {
+        if (controller.signal.aborted || syncAbortRef.current !== controller) return prev;
         const merged = mergeMaps(prev, serverMap);
         if (Object.keys(merged).length !== Object.keys(prev).length) {
           saveLocal(playerId, merged);
