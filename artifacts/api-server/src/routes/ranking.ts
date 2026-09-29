@@ -4,6 +4,7 @@ import { db } from "@workspace/db";
 import { playerScoresTable, gameHistoryTable, pushSubscriptionsTable, scoreBonusClaimsTable } from "@workspace/db";
 import { eq, desc, sql } from "drizzle-orm";
 import { sendPushToPlayer } from "../lib/pushHelper";
+import { recordTrustedAnalyticsEvent } from "./analytics";
 import { resolveCosmetic } from "../lib/inventoryCatalog";
 import { SubmitScoreBody, GetLeaderboardQueryParams } from "@workspace/api-zod";
 import { scoreLimiter } from "../middlewares/rateLimit";
@@ -661,6 +662,12 @@ router.post("/scores", scoreLimiter, async (req, res) => {
   });
 
   if (!isBonus) {
+    void recordTrustedAnalyticsEvent({
+      eventName: "game_complete",
+      playerId,
+      mode: mode ?? "solo",
+      metadata: { source: "server_score_submission" },
+    }).catch((err) => console.error("[analytics] trusted game_complete failed:", err));
     void recordAuthoritativeSeasonEvents(playerId, [
       { type: "play_game", value: 1 },
       ...(won ? [{ type: "win_game", value: 1 }] : []),
