@@ -167,15 +167,33 @@ export default function Tournament() {
   useEffect(() => {
     if (view !== "join" && view !== "home") return;
     let cancelled = false;
+    let controller: AbortController | null = null;
+    let loading = false;
+
     const load = async () => {
+      if (loading || cancelled) return;
+      loading = true;
+      controller?.abort();
+      controller = new AbortController();
       try {
-        const data = await apiFetch("/public");
-        if (!cancelled && Array.isArray(data)) setPublicList(data);
+        const data = await apiFetch("/public", { signal: controller.signal });
+        if (!cancelled && !controller.signal.aborted && Array.isArray(data)) {
+          setPublicList(data);
+        }
       } catch {}
+      finally {
+        loading = false;
+      }
     };
-    load();
-    const id = setInterval(load, 8000);
-    return () => { cancelled = true; clearInterval(id); };
+
+    void load();
+    const id = setInterval(() => { void load(); }, 8000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+      controller?.abort();
+      controller = null;
+    };
   }, [view]);
 
   const joinTournament = async () => {
