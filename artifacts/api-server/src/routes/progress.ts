@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { playerScoresTable, gameHistoryTable } from "@workspace/db";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { verifyClaimedIdentity } from "../lib/playerAuth";
 
 const router: IRouter = Router();
