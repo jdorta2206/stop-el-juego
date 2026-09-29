@@ -2364,7 +2364,11 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
   // score zero. A tampered client that buffered extra words past STOP can't
   // benefit because waiting past the cutoff zeroes them anyway. Honest clients
   // freeze for 3s and submit immediately, so they comfortably beat the 8s.
-  if (stopTimestamp && Date.now() - stopTimestamp > SUBMIT_GRACE_MS) {
+  // Apply the same hard cutoff to both explicit STOP and natural timer expiry.
+  // Without this, a late /results request after a round timed out naturally could
+  // still score before the background sweeper persisted the zeroed player.
+  const roundEndTs = roundEndTimestamp(room);
+  if (roundEndTs && Date.now() - roundEndTs > SUBMIT_GRACE_MS) {
     cappedRoundScore = 0;
   }
 
