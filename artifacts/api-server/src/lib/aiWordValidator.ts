@@ -156,31 +156,45 @@ async function releaseValidationClaim(key: string): Promise<void> {
   await db.execute(sql`DELETE FROM ai_word_validation_claims WHERE cache_key = ${key}`);
 }
 
+class QuotaUnavailableError extends Error {
+  constructor() {
+    super("AI validation quota unavailable");
+    this.name = "QuotaUnavailableError";
+  }
+}
+
 async function reserveDailyQuota(playerId: string | null): Promise<boolean> {
   const quotaDate = currentUtcDay();
-  return db.transaction(async (tx) => {
-    const globalReservation = await tx.execute(sql`
-      INSERT INTO ai_word_validation_daily_quota (quota_date, scope, used)
-      VALUES (${quotaDate}::date, ${GLOBAL_QUOTA_SCOPE}, 1)
-      ON CONFLICT (quota_date, scope) DO UPDATE
-        SET used = ai_word_validation_daily_quota.used + 1
-        WHERE ai_word_validation_daily_quota.used < ${GLOBAL_DAILY_LIMIT}
-      RETURNING used
-    `);
-    if (globalReservation.rows.length === 0) return false;
-    if (playerId) {
-      const playerReservation = await tx.execute(sql`
+  try {
+    return await db.transaction(async (tx) => {
+      const globalReservation = await tx.execute(sql`
         INSERT INTO ai_word_validation_daily_quota (quota_date, scope, used)
-        VALUES (${quotaDate}::date, ${playerId}, 1)
+        VALUES (${quotaDate}::date, ${GLOBAL_QUOTA_SCOPE}, 1)
         ON CONFLICT (quota_date, scope) DO UPDATE
           SET used = ai_word_validation_daily_quota.used + 1
-          WHERE ai_word_validation_daily_quota.used < ${PER_PLAYER_DAILY_LIMIT}
+          WHERE ai_word_validation_daily_quota.used < ${GLOBAL_DAILY_LIMIT}
         RETURNING used
       `);
-      if (playerReservation.rows.length === 0) return false;
-    }
-    return true;
-  });
+      if (globalReservation.rows.length === 0) throw new QuotaUnavailableError();
+
+      if (playerId) {
+        const playerReservation = await tx.execute(sql`
+          INSERT INTO ai_word_validation_daily_quota (quota_date, scope, used)
+          VALUES (${quotaDate}::date, ${playerId}, 1)
+          ON CONFLICT (quota_date, scope) DO UPDATE
+            SET used = ai_word_validation_daily_quota.used + 1
+            WHERE ai_word_validation_daily_quota.used < ${PER_PLAYER_DAILY_LIMIT}
+          RETURNING used
+        `);
+        if (playerReservation.rows.length === 0) throw new QuotaUnavailableError();
+      }
+
+      return true;
+    });
+  } catch (err) {
+    if (err instanceof QuotaUnavailableError) return false;
+    throw err;
+  }
 }
 
 async function waitForValidationCache(word: string, category: string, lang: string): Promise<boolean | null> {
