@@ -76,6 +76,15 @@ function allowNotification(playerId: string, payload: PushPayload): boolean {
   return true;
 }
 
+function rollbackNotificationThrottle(playerId: string, payload: PushPayload) {
+  if (!playerId || playerId === "anonymous") return;
+  const kind = notificationKind(payload);
+  if (kind === "daily" || kind === "invite" || kind === "friend") return;
+  if (kind === "promo") promotionalLastSentAt.delete(`${playerId}:${kind}`);
+  else if (kind === "rank") playerLastSentAt.delete(`${playerId}:${kind}`);
+  else playerLastSentAt.delete(playerId);
+}
+
 function cleanupNotificationThrottleMaps() {
   const cutoff = Date.now() - PROMOTIONAL_COOLDOWN_MS;
   for (const [key, ts] of promotionalLastSentAt) {
@@ -146,6 +155,10 @@ export async function sendPushToPlayer(playerId: string, payload: PushPayload): 
       }
     }
   }));
+
+  // A failed delivery must not consume the cooldown: otherwise a transient
+  // webpush/provider failure can suppress the player's next valid notification.
+  if (sent === 0) rollbackNotificationThrottle(playerId, payload);
 
   return sent;
 }
