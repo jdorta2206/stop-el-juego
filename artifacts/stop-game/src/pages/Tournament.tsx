@@ -72,6 +72,11 @@ export default function Tournament() {
   const resumeTournamentRef = useRef<string | null>(null);
   const pollAbortRef = useRef<AbortController | null>(null);
   const inviteInFlightRef = useRef<Set<string>>(new Set());
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    copiedTimerRef.current = null;
+  }, []);
   const tournamentActionInFlightRef = useRef(false);
 
   const poll = useCallback(async () => {
@@ -241,7 +246,11 @@ export default function Tournament() {
     if (!tournament) return;
     navigator.clipboard.writeText(tournament.code);
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    copiedTimerRef.current = setTimeout(() => {
+      copiedTimerRef.current = null;
+      setCopied(false);
+    }, 2000);
   };
 
   const getInviteUrl = () => {
@@ -251,7 +260,10 @@ export default function Tournament() {
 
   const getInviteText = () => {
     if (!tournament) return "";
-    return `¡Únete a mi torneo STOP! 🎮\nTorneo: ${tournament.name}\nCódigo: ${tournament.code}\nLink: ${getInviteUrl()}`;
+    return `¡Únete a mi torneo STOP! 🎮
+Torneo: ${tournament.name}
+Código: ${tournament.code}
+Link: ${getInviteUrl()}`;
   };
 
   const shareTournament = async () => {
@@ -278,7 +290,9 @@ export default function Tournament() {
         const result = await sendChallenge(player, targetId, "es");
         if (!result) return;
       } else {
-        window.open(`https://wa.me/?text=${encodeURIComponent(`¡${player.name} te invita al torneo STOP! 🎮\n${tournament.name}\nCódigo: ${roomCode}`)}`, "_blank");
+        window.open(`https://wa.me/?text=${encodeURIComponent(`¡${player.name} te invita al torneo STOP! 🎮
+${tournament.name}
+Código: ${roomCode}`)}`, "_blank");
       }
       setInvitedIds(prev => new Set([...prev, targetId]));
     } finally {
