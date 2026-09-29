@@ -27,37 +27,12 @@ const MODEL = "gpt-5-mini";
 const GLOBAL_DAILY_LIMIT = 500;
 const PER_PLAYER_DAILY_LIMIT = 10;
 
-// In-memory per-day counters. Reset at the start of every UTC day.
-// Process-local: if the server restarts the counter resets, which is fine
-// for our purposes — we are protecting against runaway loops, not enforcing
-// strict billing.
-let counterDay = currentUtcDay();
-let globalCounter = 0;
-const playerCounters = new Map<string, number>();
+// Persistent daily quota. The counter lives in PostgreSQL so the limit is
+// shared across Railway replicas, deploys and process restarts.
+const GLOBAL_QUOTA_SCOPE = "__global__";
 
 function currentUtcDay(): string {
   return new Date().toISOString().slice(0, 10); // YYYY-MM-DD UTC
-}
-
-function rolloverIfNewDay(): void {
-  const today = currentUtcDay();
-  if (today !== counterDay) {
-    counterDay = today;
-    globalCounter = 0;
-    playerCounters.clear();
-  }
-}
-
-function bumpAndCheckQuota(playerId: string | null): boolean {
-  rolloverIfNewDay();
-  if (globalCounter >= GLOBAL_DAILY_LIMIT) return false;
-  if (playerId) {
-    const used = playerCounters.get(playerId) ?? 0;
-    if (used >= PER_PLAYER_DAILY_LIMIT) return false;
-    playerCounters.set(playerId, used + 1);
-  }
-  globalCounter += 1;
-  return true;
 }
 
 // Lazy client — instantiated on first use so the module loads even if the
@@ -185,7 +160,43 @@ export async function validateWordWithAi(opts: AiValidationOptions): Promise<AiV
       return { isValid: rows[0].isValid, source: "cache" as const };
     }
 
-    if (!bumpAndCheckQuota(playerId)) {
+    // Reserve the daily quota atomically in PostgreSQL. Both the global and
+    // per-player reservations happen in this transaction; if the player cap
+    // rejects the request, the global reservation is released before commit.
+    const quotaDate = currentUtcDay();
+    const globalReservation = await tx.execute(sql`
+      INSERT INTO ai_word_validation_daily_quota (quota_date, scope, used)
+      VALUES (${quotaDate}::date, ${GLOBAL_QUOTA_SCOPE}, 1)
+      ON CONFLICT (quota_date, scope) DO UPDATE
+        SET used = ai_word_validation_daily_quota.used + 1
+        WHERE ai_word_validation_daily_quota.used < ${GLOBAL_DAILY_LIMIT}
+      RETURNING used
+    `);
+    if (globalReservation.rows.length === 0) {
+      return { isValid: false, source: "quota_blocked" as const };
+    }
+
+    if (playerId) {
+      const playerReservation = await tx.execute(sql`
+        INSERT INTO ai_word_validation_daily_quota (quota_date, scope, used)
+        VALUES (${quotaDate}::date, ${playerId}, 1)
+        ON CONFLICT (quota_date, scope) DO UPDATE
+          SET used = ai_word_validation_daily_quota.used + 1
+          WHERE ai_word_validation_daily_quota.used < ${PER_PLAYER_DAILY_LIMIT}
+        RETURNING used
+      `);
+      if (playerReservation.rows.length === 0) {
+        await tx.execute(sql`
+          UPDATE ai_word_validation_daily_quota
+          SET used = used - 1
+          WHERE quota_date = ${quotaDate}::date
+            AND scope = ${GLOBAL_QUOTA_SCOPE}
+        `);
+        return { isValid: false, source: "quota_blocked" as const };
+      }
+    }
+
+
       return { isValid: false, source: "quota_blocked" as const };
     }
 
