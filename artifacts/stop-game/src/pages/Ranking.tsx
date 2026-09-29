@@ -59,6 +59,15 @@ function ChallengeBtn({
   const [state, setState] = useState<ChallengeState>("idle");
   const pendingRef = useRef<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => {
+    if (pollRef.current) clearInterval(pollRef.current);
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    pollRef.current = null;
+    timeoutRef.current = null;
+    pendingRef.current = null;
+  }, []);
 
   const handleChallenge = useCallback(async () => {
     if (state !== "idle" || !currentPlayer) return;
@@ -67,21 +76,31 @@ function ChallengeBtn({
     if (!result) { setState("idle"); return; }
     pendingRef.current = result.challengeId;
     setState("waiting");
+    if (pollRef.current) clearInterval(pollRef.current);
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
     pollRef.current = setInterval(async () => {
       if (!pendingRef.current) { clearInterval(pollRef.current!); return; }
       const status = await pollChallengeStatus(pendingRef.current);
       if (status.status === "accepted") {
         clearInterval(pollRef.current!);
+        pollRef.current = null;
+        if (timeoutRef.current) clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
         pendingRef.current = null;
         setLocation(`/room/${status.roomCode}`);
       } else if (status.status === "declined" || status.status === "expired") {
         clearInterval(pollRef.current!);
+        pollRef.current = null;
+        if (timeoutRef.current) clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
         pendingRef.current = null;
         setState("idle");
       }
     }, 2500);
-    setTimeout(() => {
+    timeoutRef.current = setTimeout(() => {
       if (pollRef.current) clearInterval(pollRef.current);
+      pollRef.current = null;
+      timeoutRef.current = null;
       pendingRef.current = null;
       setState("idle");
     }, 60000);
