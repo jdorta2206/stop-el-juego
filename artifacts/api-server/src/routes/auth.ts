@@ -973,7 +973,7 @@ router.post("/delete-account", async (req: Request, res: Response) => {
         FROM information_schema.columns
         WHERE column_name = 'player_id'
           AND table_schema = 'public'
-          AND table_name NOT IN ('player_scores', 'play_subscriptions', 'play_product_purchases')
+          AND table_name NOT IN ('player_scores', 'play_subscriptions', 'play_product_purchases', 'revoked_player_ids')
         GROUP BY table_schema, table_name
       `);
 
