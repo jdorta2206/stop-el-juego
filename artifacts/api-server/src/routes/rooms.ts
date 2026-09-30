@@ -216,10 +216,10 @@ function broadcastAndFormat(room: any) {
 const botDeps = {
   broadcast: (code: string, payload: object) => broadcastRoom(code, payload),
   formatRoom: (room: any) => formatRoom(room),
-  // Persists final scores to the global leaderboard when the bot's submission
-  // happens to be the one that ends the match.
-  submitFinalScores: (players: any[], letter: string, roomId: number, roomCode: string) =>
-    submitAllScoresToLeaderboard(players, letter, roomId, roomCode).catch(() => {}),
+  // Keep bot-driven round transitions on the exact same side-effect path
+  // as human /results and the stuck-room sweeper.
+  onRoundAdvanced: (room: any, players: any[], newStatus: string) =>
+    applyRoundAdvanceSideEffects(room, players, newStatus),
   getRoundCategories: (room: any) => {
     const code = String(room.roomCode ?? "").toUpperCase();
     const cfg = roomCategoryPacks.get(code);
