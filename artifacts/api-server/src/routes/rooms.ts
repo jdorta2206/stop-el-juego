@@ -6,7 +6,7 @@ import { CreateRoomBody, JoinRoomBody, SubmitRoomResultsBody } from "@workspace/
 import { calculateStreak, appendStreakDay, calcXpGain, calcCoinGain, calcLevel, lookupPlayerTzOffset } from "./ranking";
 import { recordTrustedAnalyticsEvent } from "./analytics";
 import { recordAuthoritativeSeasonEvents } from "./season";
-import { recordHalloweenEvent, isHalloweenPreviewAuthorized } from "./halloween";
+import { recordHalloweenEvent, recordHalloweenScareEvents, isHalloweenPreviewAuthorized } from "./halloween";
 import { isHappyHourActiveForTzOffset, HAPPY_HOUR_MULTIPLIER } from "../lib/happyHour";
 import { isWordValidAsync, HALLOWEEN_CATEGORY_ALIASES } from "./game";
 import { writeLimiter, roomJoinLimiter } from "../middlewares/rateLimit";
@@ -2650,12 +2650,18 @@ router.post("/:roomCode/halloween-scare", writeLimiter, async (req, res) => {
   };
   halloweenScareCooldowns.set(cooldownKey, now);
   roomHalloweenScares.set(code, event);
-  void Promise.allSettled([
-    recordHalloweenEvent(playerId, "scare_provoked", `provoked:${event.id}`, isHalloweenPreviewAuthorized(req), room.id),
-    ...players.filter((p: any) => p.playerId && p.playerId !== playerId && !p.isBot).map((p: any) =>
-      recordHalloweenEvent(p.playerId, "scare_received", `received:${event.id}:${p.playerId}`, isHalloweenPreviewAuthorized(req), room.id)
-    ),
-  ]).catch(() => {});
+  void recordHalloweenScareEvents(
+    [
+      { playerId, type: "scare_provoked", eventKey: `provoked:${event.id}` },
+      ...players.filter((p: any) => p.playerId && p.playerId !== playerId && !p.isBot).map((p: any) => ({
+        playerId: p.playerId,
+        type: "scare_received" as const,
+        eventKey: `received:${event.id}:${p.playerId}`,
+      })),
+    ],
+    isHalloweenPreviewAuthorized(req),
+    room.id,
+  ).catch(() => {});
   broadcastAndFormat(room);
   res.json({ ok: true, eventId: event.id, cooldownMs: 18_000 });
 });
