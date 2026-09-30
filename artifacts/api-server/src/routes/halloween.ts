@@ -189,18 +189,23 @@ export async function recordHalloweenEvent(
           throw new Error("Player score row missing while granting Halloween reward");
         }
         {
-          let inventory: { avatars: string[]; frames: string[]; backgrounds?: string[] } = { avatars: [], frames: [] };
+          let inventory: Record<string, unknown> = {};
           try {
             const parsed = JSON.parse(p.inventory_json || "{}");
-            if (Array.isArray(parsed.avatars)) inventory.avatars = parsed.avatars;
-            if (Array.isArray(parsed.frames)) inventory.frames = parsed.frames;
-            if (Array.isArray(parsed.backgrounds)) inventory.backgrounds = parsed.backgrounds;
+            if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+              inventory = parsed as Record<string, unknown>;
+            }
           } catch {}
-          inventory.backgrounds ??= [];
+          const avatars = Array.isArray(inventory.avatars) ? inventory.avatars as string[] : [];
+          const frames = Array.isArray(inventory.frames) ? inventory.frames as string[] : [];
+          const backgrounds = Array.isArray(inventory.backgrounds) ? inventory.backgrounds as string[] : [];
+          inventory.avatars = avatars;
+          inventory.frames = frames;
+          inventory.backgrounds = backgrounds;
           for (const item of newRewardItems) {
-            if (item.startsWith("avatar_") && !inventory.avatars.includes(item)) inventory.avatars.push(item);
-            else if (item.startsWith("frame_") && !inventory.frames.includes(item)) inventory.frames.push(item);
-            else if (item.startsWith("bg_") && !inventory.backgrounds.includes(item)) inventory.backgrounds.push(item);
+            if (item.startsWith("avatar_") && !avatars.includes(item)) avatars.push(item);
+            else if (item.startsWith("frame_") && !frames.includes(item)) frames.push(item);
+            else if (item.startsWith("bg_") && !backgrounds.includes(item)) backgrounds.push(item);
           }
           await tx.execute(sql`
             UPDATE player_scores
