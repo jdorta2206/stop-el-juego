@@ -1004,10 +1004,35 @@ router.post("/", async (req, res) => {
   const gameMode = (body.data as any).gameMode ?? "classic";
   const maxPlayers = (body.data as any).maxPlayers ?? 8;
 
+  const [canonicalHost] = await db
+    .select({
+      playerName: playerScoresTable.playerName,
+      avatarColor: playerScoresTable.avatarColor,
+      profilePicture: playerScoresTable.profilePicture,
+    })
+    .from(playerScoresTable)
+    .where(eq(playerScoresTable.playerId, hostId))
+    .limit(1);
+
+  const isGuestHost = !canonicalHost;
+  const effectiveHostName = isGuestHost ? hostName : canonicalHost.playerName;
+  const effectiveAvatarColor = isGuestHost ? (avatarColor ?? "#e53e3e") : canonicalHost.avatarColor;
+  const effectivePicture = isGuestHost
+    ? (typeof picture === "string" ? picture.slice(0, 1000) : null)
+    : canonicalHost.profilePicture;
+  const effectiveLoginMethod = isGuestHost
+    ? "guest"
+    : hostId.startsWith("google_") ? "google"
+    : hostId.startsWith("fb_") ? "facebook"
+    : hostId.startsWith("ig_") || hostId.startsWith("instagram_") ? "instagram"
+    : hostId.startsWith("tt_") || hostId.startsWith("tiktok_") ? "tiktok"
+    : hostId.startsWith("apple_") ? "apple"
+    : "account";
+
   // 🧪 Halloween QA rooms are internal test rooms. Never publish one into
   // the normal public-room browser, even if a test client accidentally sends
   // isPublic=true.
-  const isHalloweenTestRoom = String(hostName ?? "").trim().toLowerCase() === "halloween host";
+  const isHalloweenTestRoom = String(effectiveHostName ?? "").trim().toLowerCase() === "halloween host";
   const safeIsPublic = isHalloweenTestRoom ? false : (isPublic ?? false);
 
   // The code check and the INSERT are separated by asynchronous work, so the
@@ -1018,10 +1043,10 @@ router.post("/", async (req, res) => {
 
   const players = [{
     playerId: hostId,
-    playerName: hostName,
-    avatarColor: avatarColor ?? "#e53e3e",
-    picture: typeof picture === "string" ? picture.slice(0, 1000) : null,
-    loginMethod: loginMethod ?? null,
+    playerName: effectiveHostName,
+    avatarColor: effectiveAvatarColor,
+    picture: effectivePicture,
+    loginMethod: effectiveLoginMethod,
     isPremium: hostPremium,
     score: 0,
     roundScore: 0,
