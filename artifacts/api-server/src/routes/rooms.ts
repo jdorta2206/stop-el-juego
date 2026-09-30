@@ -576,7 +576,7 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string) {
     // events directly from the final server result.
     // Use the server-validated count computed above, never the raw
     // client answer count, for the "valid_words" mission.
-    const validWords = validAnswerCount;
+    const validWords = Number.isFinite(p.validAnswerCount) ? Math.max(0, Math.floor(p.validAnswerCount)) : 0;
     void recordAuthoritativeSeasonEvents(p.playerId, [
       { type: "play_game", value: 1 },
       ...(won ? [{ type: "win_game", value: 1 }] : []),
@@ -2627,6 +2627,9 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
         roundScore: cappedRoundScore,
         isReady: true,
         answers: safeAnswers,
+        // Server-validated count is persisted with the round snapshot so
+        // final Season Pass events never need to trust raw client answers.
+        validAnswerCount,
         // ⏱️ Tie-breaker source-of-truth: who finished first wins ties
         finishedAt,
         wasStopper: isStopper,
