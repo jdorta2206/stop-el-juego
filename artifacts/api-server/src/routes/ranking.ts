@@ -519,9 +519,7 @@ router.post("/scores", scoreLimiter, async (req, res) => {
   const newTotal = oldTotal + score;
 
   const today = new Date().toISOString().split("T")[0];
-  const lastPlayedDate = existing[0]?.lastPlayedDate ?? null;
-  const { newStreak, updatedToday } = calculateStreak(lastPlayedDate, existing[0]?.currentStreak ?? 0);
-  const newLongest = Math.max(existing[0]?.longestStreak ?? 0, newStreak);
+  let authoritativeStreak = existing[0]?.currentStreak ?? 0;
 
   // 🔒 For voucher-backed Solo submissions, the win/loss result must come
   // from the server-signed AI score, not from the client body. Legacy/offline
@@ -644,6 +642,22 @@ router.post("/scores", scoreLimiter, async (req, res) => {
     player = bonusResult;
   } else {
     player = await db.transaction(async (tx) => {
+      const lockedRows = await tx
+        .select()
+        .from(playerScoresTable)
+        .where(eq(playerScoresTable.playerId, playerId))
+        .for("update");
+      const lockedExisting = lockedRows[0];
+      const lockedToday = new Date().toISOString().split("T")[0];
+      const { newStreak: lockedStreak, updatedToday: lockedUpdatedToday } = calculateStreak(
+        lockedExisting?.lastPlayedDate ?? null,
+        lockedExisting?.currentStreak ?? 0,
+      );
+      const lockedLongest = Math.max(lockedExisting?.longestStreak ?? 0, lockedStreak);
+      const lockedStreakDaysJson = lockedUpdatedToday
+        ? appendStreakDay(lockedExisting?.streakDaysJson, lockedToday)
+        : undefined;
+      authoritativeStreak = lockedStreak;
       let txPlayer;
       if (existing.length > 0) {
     const [updated] = await tx
@@ -662,11 +676,11 @@ router.post("/scores", scoreLimiter, async (req, res) => {
         // to overwrite a newer, higher level with a stale lower one.
         level: sql`GREATEST(${playerScoresTable.level}, ${newLevel})`,
         ...(coinGain > 0 ? { coins: sql`${playerScoresTable.coins} + ${coinGain}` } : {}),
-        ...(!isBonus && updatedToday ? {
-          currentStreak: newStreak,
-          longestStreak: newLongest,
-          lastPlayedDate: today,
-          streakDaysJson: newStreakDaysJson,
+        ...(!isBonus && lockedUpdatedToday ? {
+          currentStreak: lockedStreak,
+          longestStreak: lockedLongest,
+          lastPlayedDate: lockedToday,
+          streakDaysJson: lockedStreakDaysJson,
         } : {}),
         updatedAt: new Date(),
       })
@@ -812,7 +826,7 @@ router.post("/scores", scoreLimiter, async (req, res) => {
       { type: "play_game", value: 1 },
       ...(effectiveWon ? [{ type: "win_game", value: 1 }] : []),
       { type: "round_score", value: score },
-      { type: "streak", value: newStreak },
+      { type: "streak", value: authoritativeStreak },
       ...(collectionWords.length > 0 ? [{ type: "valid_words", value: collectionWords.length }] : []),
     ]);
   }
