@@ -552,10 +552,6 @@ router.post("/scores", scoreLimiter, async (req, res) => {
   const newXp = (existing[0]?.xp ?? 0) + xpGain;
   const newLevel = calcLevel(newXp);
 
-  const newStreakDaysJson = (!isBonus && updatedToday)
-    ? appendStreakDay(existing[0]?.streakDaysJson, today)
-    : undefined;
-
   let player;
   if (isBonus) {
     const bonusResult = await db.transaction(async (tx) => {
