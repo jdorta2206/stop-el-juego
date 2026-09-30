@@ -38,6 +38,7 @@ export function HalloweenAmbience({ active, muted, heavy = false }: HalloweenAmb
     }
 
     let cancelled = false;
+    let unlockAudio: (() => void) | null = null;
 
     const start = async () => {
       try {
@@ -45,7 +46,7 @@ export function HalloweenAmbience({ active, muted, heavy = false }: HalloweenAmb
         if (!AudioCtx) return;
         const ctx = ctxRef.current ?? new AudioCtx();
         ctxRef.current = ctx;
-        const unlockAudio = () => {
+        unlockAudio = () => {
           if (cancelled || ctx.state !== "suspended") return;
           void ctx.resume().catch(() => {});
         };
@@ -183,9 +184,12 @@ export function HalloweenAmbience({ active, muted, heavy = false }: HalloweenAmb
 
     return () => {
       cancelled = true;
-      window.removeEventListener("pointerdown", unlockAudio);
-      window.removeEventListener("touchstart", unlockAudio);
-      window.removeEventListener("keydown", unlockAudio);
+      if (unlockAudio) {
+        window.removeEventListener("pointerdown", unlockAudio);
+        window.removeEventListener("touchstart", unlockAudio);
+        window.removeEventListener("keydown", unlockAudio);
+        unlockAudio = null;
+      }
       stop();
     };
   }, [active, muted, heavy]);
