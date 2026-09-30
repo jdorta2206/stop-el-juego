@@ -109,20 +109,6 @@ const SAFE_RETURN_ORIGINS = new Set<string>([
 ]);
 
 function pickReturnOrigin(req: Request, requestedOrigin: string | null): string {
-  // Halloween's temporary preview runs behind a short-lived Cloudflare
-  // trycloudflare.com origin. The preview proxy marks these requests with
-  // X-Halloween-Preview so OAuth can safely return to that exact preview
-  // origin instead of falling back to production. This is intentionally
-  // limited to HTTPS trycloudflare.com hosts and never applies to production.
-  const isHalloweenPreview = String(req.headers?.["x-halloween-preview"] ?? "") === "1";
-  if (isHalloweenPreview && requestedOrigin) {
-    try {
-      const u = new URL(requestedOrigin);
-      if (u.protocol === "https:" && u.hostname.endsWith(".trycloudflare.com")) {
-        return u.origin;
-      }
-    } catch { /* malformed preview origin — fall through */ }
-  }
   if (requestedOrigin && SAFE_RETURN_ORIGINS.has(requestedOrigin)) {
     return requestedOrigin;
   }
