@@ -122,9 +122,19 @@ async function generateBotAnswersLLM(
 }
 
 // roomCode → botPlayerId → { round, letter, answers } ready for the round.
-// Tagged with round+letter so a late-resolving LLM promise from a previous
-// round can never bleed into the next one (race seen in code review).
-type PendingEntry = { round: number; letter: string; answers: Record<string, string> };
+// Tagged with round+letter AND a per-room generation token. Round numbers reset
+// on rematch, so round+letter alone cannot prevent a late LLM promise from an
+// old match from populating the new match's pending answers.
+type PendingEntry = { round: number; letter: string; generation: number; answers: Record<string, string> };
+const botAnswerGeneration = new Map<string, number>();
+function nextAnswerGeneration(code: string): number {
+  const generation = (botAnswerGeneration.get(code) ?? 0) + 1;
+  botAnswerGeneration.set(code, generation);
+  return generation;
+}
+function isCurrentAnswerGeneration(code: string, generation: number): boolean {
+  return botAnswerGeneration.get(code) === generation;
+}
 const botPendingAnswers = new Map<string, Map<string, PendingEntry>>();
 function setPendingAnswers(code: string, botId: string, entry: PendingEntry) {
   let m = botPendingAnswers.get(code);
@@ -138,10 +148,12 @@ function getPendingAnswers(
   if (!e) return null;
   if (e.round !== round) return null;
   if (e.letter.toUpperCase() !== letter.toUpperCase()) return null;
+  if (!isCurrentAnswerGeneration(code, e.generation)) return null;
   return e.answers;
 }
 function clearPendingAnswers(code: string) {
   botPendingAnswers.delete(code);
+  botAnswerGeneration.delete(code);
 }
 
 // Strip Spanish accents so "Águila" passes the "starts with A" check, in
@@ -577,6 +589,7 @@ export function scheduleBotsForRound(opts: {
   // tag on each pending entry is a second line of defence inside
   // getPendingAnswers.
   clearPendingAnswers(opts.roomCode);
+  const answerGeneration = nextAnswerGeneration(opts.roomCode);
   // 🧠 Fire LLM generation in the background per bot at round start. Each
   // bot gets a DIFFERENT result because gpt-5-mini varies with temperature
   // (no caching), so the table doesn't see identical answers. If the LLM
@@ -587,7 +600,9 @@ export function scheduleBotsForRound(opts: {
   for (const b of opts.bots) {
     generateBotAnswersLLM(letter, opts.categories)
       .then(answers => {
-        if (answers) setPendingAnswers(opts.roomCode, b.playerId, { round, letter, answers });
+        if (answers && isCurrentAnswerGeneration(opts.roomCode, answerGeneration)) {
+          setPendingAnswers(opts.roomCode, b.playerId, { round, letter, generation: answerGeneration, answers });
+        }
       })
       .catch(() => {});
   }
