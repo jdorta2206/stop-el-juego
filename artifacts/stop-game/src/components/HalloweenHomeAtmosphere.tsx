@@ -194,7 +194,10 @@ function createController(): HalloweenAmbientController {
     if (started || starting || typeof window === "undefined") return;
     starting = true;
     const AC = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!AC) return;
+    if (!AC) {
+      starting = false;
+      return;
+    }
 
     try {
       ctx = new AC();
