@@ -442,7 +442,7 @@ router.post("/scores", scoreLimiter, async (req, res) => {
 
   const { playerId, playerName, avatarColor, score: rawScore, letter, mode, won, bonus, scoreTokens, submissionId } = body.data;
 
-  if (!verifyClaimedIdentity(req, playerId)) {
+  if (!await verifyClaimedIdentity(req, playerId)) {
     res.status(403).json({ error: "Identity verification failed" });
     return;
   }
