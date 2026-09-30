@@ -414,16 +414,11 @@ async function sendHappyHourNotifications() {
       { key: "last", target: HAPPY_HOUR_LAST_LOCAL_MIN, url: "/solo?mode=quick&auto=1" },
     ];
 
-    // Multi-instance idempotency: each (slot, UTC-5min-bucket) is claimed at
-    // most once across the cluster. A given tz cohort falls inside exactly
-    // one UTC bucket per day per slot, so locking by bucket guarantees one
-    // notification per player per slot per day, while still allowing
-    // different tz cohorts (different buckets) to fire on the same day.
+    // Per-player claims provide cluster-wide idempotency for each slot while
+    // allowing failed deliveries to be retried on the next cron tick.
     const today = utcNow.toISOString().slice(0, 10);
-    const utcBucket = Math.floor(utcMinutesOfDay / 5);
 
     for (const slot of slots) {
-      const lockKey = `hh_${slot.key}_${today}_${utcBucket}`;
 
       const rows = (await db.execute(sql`
         SELECT player_id, language
