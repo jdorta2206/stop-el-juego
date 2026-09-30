@@ -1126,8 +1126,30 @@ router.post("/:roomCode/join", roomJoinLimiter, async (req, res) => {
     res.status(403).json({ error: "Identity verification failed" }); return;
   }
   const joinerPremium = await isPlayerPremium(playerId);
+  const [canonicalProfile] = await db
+    .select({
+      playerName: playerScoresTable.playerName,
+      avatarColor: playerScoresTable.avatarColor,
+      profilePicture: playerScoresTable.profilePicture,
+    })
+    .from(playerScoresTable)
+    .where(eq(playerScoresTable.playerId, playerId))
+    .limit(1);
 
-  const myNorm = normalizePlayerName(playerName);
+  // Authenticated accounts keep their canonical profile identity. Guests may
+  // still choose a room display name because they have no persistent profile.
+  const isGuestIdentity = loginMethod === "guest" || playerId.startsWith("guest_");
+  const effectivePlayerName = !isGuestIdentity && canonicalProfile
+    ? canonicalProfile.playerName
+    : playerName;
+  const effectiveAvatarColor = !isGuestIdentity && canonicalProfile
+    ? canonicalProfile.avatarColor
+    : (avatarColor ?? "#3182ce");
+  const effectivePicture = !isGuestIdentity && canonicalProfile
+    ? canonicalProfile.profilePicture
+    : (typeof picture === "string" ? picture.slice(0, 1000) : null);
+
+  const myNorm = normalizePlayerName(effectivePlayerName);
   if (myNorm.length === 0) {
     res.status(400).json({ error: "Name cannot be empty" });
     return;
@@ -1173,9 +1195,9 @@ router.post("/:roomCode/join", roomJoinLimiter, async (req, res) => {
       if (players.length >= maxPlayers) return { kind: "full" } as const;
       players.push({
         playerId,
-        playerName,
-        avatarColor: avatarColor ?? "#3182ce",
-        picture: typeof picture === "string" ? picture.slice(0, 1000) : null,
+        playerName: effectivePlayerName,
+        avatarColor: effectiveAvatarColor,
+        picture: effectivePicture,
         loginMethod: loginMethod ?? null,
         isPremium: joinerPremium,
         score: 0,
