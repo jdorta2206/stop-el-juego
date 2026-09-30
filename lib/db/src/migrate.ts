@@ -21,7 +21,7 @@ export async function ensureIndexes(): Promise<void> {
     `CREATE INDEX IF NOT EXISTS rooms_is_public_status_created_at_idx ON rooms (is_public, status, created_at)`,
     `CREATE INDEX IF NOT EXISTS rooms_status_updated_at_idx ON rooms (status, updated_at)`,
     `ALTER TABLE rooms ADD COLUMN IF NOT EXISTS room_version bigint NOT NULL DEFAULT 0`,
-    `CREATE OR REPLACE FUNCTION stop_rooms_bump_version() RETURNS trigger AS $ BEGIN NEW.room_version := OLD.room_version + 1; RETURN NEW; END; $ LANGUAGE plpgsql`,
+    `CREATE OR REPLACE FUNCTION stop_rooms_bump_version() RETURNS trigger AS $stop_rooms$ BEGIN NEW.room_version := OLD.room_version + 1; RETURN NEW; END; $stop_rooms$ LANGUAGE plpgsql`,
     `DROP TRIGGER IF EXISTS rooms_bump_version_trigger ON rooms`,
     `CREATE TRIGGER rooms_bump_version_trigger BEFORE UPDATE ON rooms FOR EACH ROW EXECUTE FUNCTION stop_rooms_bump_version()`,
     `ALTER TABLE rooms ADD COLUMN IF NOT EXISTS tournament_id integer`,
