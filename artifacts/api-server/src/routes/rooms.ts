@@ -1019,6 +1019,9 @@ async function sweepStuckRooms() {
 //   so abandoned games don't accumulate as DB garbage and slow down public listings.
 async function purgeStaleRooms() {
   try {
+    // 🧹 Halloween manual-scare cooldowns are durable for cross-replica safety;
+    // remove expired rows so the table cannot grow with abandoned rooms.
+    await db.execute(sql`DELETE FROM halloween_scare_cooldowns WHERE available_at < NOW() - INTERVAL '6 hours'`);
     const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
     const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000);
     await db.delete(roomsTable).where(
