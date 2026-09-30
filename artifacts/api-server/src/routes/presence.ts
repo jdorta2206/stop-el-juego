@@ -221,7 +221,7 @@ router.post("/challenge", async (req, res) => {
     return res.status(403).json({ error: "Invalid player identity" });
   }
 
-  // Check target player is online
+  const profile = await getCanonicalPresenceProfile(fromPlayerId);\n  if (!profile) return res.status(404).json({ error: "Player not found" });\n\n  // Check target player is online
   const cutoff = Date.now() - 90 * 1000;
   const target = presenceMap.get(toPlayerId);
   if (!target || target.lastSeen < cutoff) {
@@ -243,8 +243,8 @@ router.post("/challenge", async (req, res) => {
   // a challenge pointing at a room that was never created.
   const players = [{
     playerId: fromPlayerId,
-    playerName: fromName,
-    avatarColor: fromAvatarColor ?? "#e53e3e",
+    playerName: profile.name,
+    avatarColor: profile.avatarColor ?? "#e53e3e",
     loginMethod: null as string | null,
     score: 0,
     roundScore: 0,
@@ -288,7 +288,7 @@ router.post("/challenge", async (req, res) => {
         (challenge_id, from_player_id, from_name, from_picture, from_avatar_color,
          to_player_id, room_code, status, is_room_invite, created_at)
       VALUES
-        (${challengeId}, ${fromPlayerId}, ${fromName}, ${fromPicture || null},
+        (${challengeId}, ${fromPlayerId}, ${profile.name}, ${fromPicture || null},
          ${fromAvatarColor || "#e53e3e"}, ${toPlayerId}, ${roomCode},
          'pending', FALSE, NOW())
       ON CONFLICT (from_player_id, to_player_id, is_room_invite) WHERE status = 'pending'
@@ -320,10 +320,10 @@ router.post("/challenge", async (req, res) => {
   // Send push notification to target (works even if they have the app closed)
   const lang = (req.body as any).language || "es";
   const CHALLENGE_MSGS: Record<string, { title: string; body: string }> = {
-    es: { title: "⚔️ ¡Nuevo reto!", body: `${fromName} te desafía a una partida de STOP. ¡Acepta si te atreves!` },
-    en: { title: "⚔️ New challenge!", body: `${fromName} is challenging you to a STOP game. Do you dare accept?` },
-    pt: { title: "⚔️ Novo desafio!", body: `${fromName} desafia-te para uma partida de STOP. Aceitas?` },
-    fr: { title: "⚔️ Nouveau défi !", body: `${fromName} te défie à une partie de STOP. Tu oses accepter ?` },
+    es: { title: "⚔️ ¡Nuevo reto!", body: `${profile.name} te desafía a una partida de STOP. ¡Acepta si te atreves!` },
+    en: { title: "⚔️ New challenge!", body: `${profile.name} is challenging you to a STOP game. Do you dare accept?` },
+    pt: { title: "⚔️ Novo desafio!", body: `${profile.name} desafia-te para uma partida de STOP. Aceitas?` },
+    fr: { title: "⚔️ Nouveau défi !", body: `${profile.name} te défie à une partie de STOP. Tu oses accepter ?` },
   };
   const challengeMsg = CHALLENGE_MSGS[lang] || CHALLENGE_MSGS.es;
   sendPushToPlayer(toPlayerId, { ...challengeMsg, url: "/multiplayer" }).catch(() => {});
