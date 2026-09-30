@@ -3153,7 +3153,11 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
   // actually consumed the card this round. Merely owning the card is not enough.
   // The use-card route marks powerCardUsed atomically, so the multiplier cannot
   // be replayed by a second /results request.
-  if (me.powerCardUsed === true && me.powerCard === "double_or_nothing") {
+  if (
+    me.powerCardUsed === true &&
+    me.powerCardUsedRound === room.currentRound &&
+    me.powerCard === "double_or_nothing"
+  ) {
     cappedRoundScore *= 2;
   }
 
