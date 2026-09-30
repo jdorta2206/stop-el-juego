@@ -2724,7 +2724,9 @@ router.post("/:roomCode/stop", async (req, res) => {
 
   res.json(broadcastAndFormat(updated));
 
-  if (halloweenEventAllowed(req) && roomCategoryPacks.get(roomCode.toUpperCase())?.pack !== "custom") {
+  const stopMeta = parseBluffMeta(room.stopperJson) ?? {};
+  const stopPack = roomCategoryPacks.get(roomCode.toUpperCase())?.pack ?? stopMeta.categoryPack ?? "standard";
+  if (halloweenEventAllowed(req) && stopPack !== "custom") {
     const scareKey = `stop:${roomCode.toUpperCase()}:${room.currentRound ?? 0}:${stopper.stopTimestamp}`;
     void Promise.allSettled([
       recordHalloweenEvent(playerId, "scare_provoked", `provoked:${scareKey}`, isHalloweenPreviewAuthorized(req)),
