@@ -111,40 +111,49 @@ setInterval(() => {
 }, 2 * 60 * 1000);
 
 // POST /api/presence/ping
-router.post("/ping", presenceLimiter, (req, res) => {
-  const { playerId, name, picture, avatarColor, provider, roomCode, language } = req.body as {
+router.post("/ping", presenceLimiter, async (req, res) => {
+  const { playerId, roomCode, language } = req.body as {
     playerId: string;
-    name: string;
-    picture?: string | null;
-    avatarColor?: string;
-    provider?: string | null;
     roomCode?: string | null;
     language?: string;
   };
 
-  if (!playerId || !name) {
-    return res.status(400).json({ error: "playerId and name required" });
-  }
+  if (!playerId) return res.status(400).json({ error: "playerId required" });
   if (!verifyClaimedIdentity(req, playerId)) {
     return res.status(403).json({ error: "Invalid player identity" });
   }
 
-  // Check if this is a fresh connection (player was offline for > 3 min)
+  const profile = await getCanonicalPresenceProfile(playerId);
+  if (!profile) return res.status(404).json({ error: "Player not found" });
+
+  let canonicalRoomCode: string | null = null;
+  if (roomCode) {
+    const [room] = await db.select({
+      roomCode: roomsTable.roomCode,
+      playersJson: roomsTable.playersJson,
+    }).from(roomsTable)
+      .where(eq(roomsTable.roomCode, String(roomCode).trim().toUpperCase()))
+      .limit(1);
+    if (room) {
+      try {
+        const players = JSON.parse(room.playersJson || "[]");
+        if (Array.isArray(players) && players.some((p: any) => p?.playerId === playerId)) {
+          canonicalRoomCode = room.roomCode;
+        }
+      } catch {}
+    }
+  }
+
   const existing = presenceMap.get(playerId);
   const wasOffline = !existing || existing.lastSeen < Date.now() - 3 * 60 * 1000;
-
   presenceMap.set(playerId, {
-    name,
-    picture: picture || null,
-    avatarColor: avatarColor || "#e53e3e",
-    provider: provider || null,
-    roomCode: roomCode || null,
+    ...profile,
+    roomCode: canonicalRoomCode,
     lastSeen: Date.now(),
   });
 
-  // Notify followers asynchronously (non-blocking) when player reconnects
-  if (wasOffline && provider && provider !== "guest") {
-    notifyFollowersPlayerOnline(playerId, name, language || "es").catch(() => {});
+  if (wasOffline && profile.provider && profile.provider !== "guest") {
+    notifyFollowersPlayerOnline(playerId, profile.name, language || "es").catch(() => {});
   }
 
   return res.json({ ok: true });
