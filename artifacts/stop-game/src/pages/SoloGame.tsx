@@ -140,6 +140,13 @@ export default function SoloGame() {
   const pendingAutoStartRef = useRef(false);
   const packId = getSafePackId(getSelectedPackId(), isPremium, customPacks);
   const activePack = getPackById(packId, customPacks);
+
+  // Daily / Quick / Chaos mode — read URL params once
+  const urlParams = new URLSearchParams(window.location.search);
+  const isDailyMode = urlParams.get("daily") === "true";
+  const isQuickMode = urlParams.get("mode") === "quick";
+  const isChaosMode = urlParams.get("mode") === "chaos";
+  const isRandomMode = urlParams.get("mode") === "random";
   const packCats = () => packId === "classic" ? getCategories() : getPackCategories(packId, getCurrentLang(), customPacks);
   const [categories, setCategories] = useState<string[]>(() => applyHalloweenCategory(packCats(), lang, { enabled: packId === "classic" && !isDailyMode && !isQuickMode && !isChaosMode && !isRandomMode }));
   const [muted, setMuted] = useState(false);
@@ -178,13 +185,6 @@ export default function SoloGame() {
   }, [round, gameState]);
   // Round result announcement
   const [roundWon, setRoundWon] = useState<boolean | null>(null);
-
-  // Daily / Quick / Chaos mode — read URL params once
-  const urlParams = new URLSearchParams(window.location.search);
-  const isDailyMode = urlParams.get("daily") === "true";
-  const isQuickMode = urlParams.get("mode") === "quick";
-  const isChaosMode = urlParams.get("mode") === "chaos";
-  const isRandomMode = urlParams.get("mode") === "random";
 
   // Preload Halloween assets while the lobby is visible so the scare never waits for network/decode.
   useEffect(() => {
