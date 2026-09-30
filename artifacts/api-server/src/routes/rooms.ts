@@ -303,7 +303,6 @@ function getHalloweenScareEvent(code: string): HalloweenRoomScare | null {
   if (!event) return null;
   if (Date.now() - event.ts > 4500) {
     roomHalloweenScares.delete(code);
-  for (const key of halloweenScareCooldowns.keys()) if (key.startsWith(code + ":")) halloweenScareCooldowns.delete(key);
     return null;
   }
   return event;
@@ -1814,6 +1813,8 @@ router.post("/:roomCode/leave", async (req, res) => {
     roomReactions.delete(code);
     roomPhrases.delete(code);
     roomCategoryPacks.delete(code);
+    roomHalloweenScares.delete(code);
+    for (const key of halloweenScareCooldowns.keys()) if (key.startsWith(code + ":")) halloweenScareCooldowns.delete(key);
     // The room code can be recycled. Close and discard every SSE connection
     // still registered under the deleted code so clients from the old room
     // can never receive snapshots from a newly created room with the same code.
