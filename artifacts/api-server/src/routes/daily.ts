@@ -135,7 +135,68 @@ router.post("/submit", async (req, res) => {
 
   // Only allow one submission per player per day. Voucher consumption and
   // the daily write share one transaction so a failed write cannot burn a valid
-  // voucher and leave the player unable to retry.\n  let alreadyPlayed = false;\n  let submitted = false;\n  try {\n    await db.transaction(async (tx) => {\n      if (verified > 0 && voucherJtis.length > 0) {\n        await consumeScoreVoucherJtis(tx, voucherJtis);\n      }\n\n      const existing = await tx\n        .select()\n        .from(dailyResultsTable)\n        .where(\n          and(\n            eq(dailyResultsTable.playerId, playerId),\n            eq(dailyResultsTable.challengeDate, today)\n          )\n        )\n        .limit(1);\n\n      if (existing.length > 0) {\n        alreadyPlayed = true;\n        if (safeScore > existing[0].score) {\n          await tx\n            .update(dailyResultsTable)\n            .set({ score: safeScore, playerName: canonicalPlayerName, avatarColor: canonicalAvatarColor })\n            .where(\n              and(\n                eq(dailyResultsTable.playerId, playerId),\n                eq(dailyResultsTable.challengeDate, today),\n                sql`${dailyResultsTable.score} < ${safeScore}`\n              )\n            );\n        }\n        return;\n      }\n\n      await tx.insert(dailyResultsTable).values({\n        playerId,\n        playerName: canonicalPlayerName,\n        avatarColor: canonicalAvatarColor || "#e53e3e",\n        challengeDate: today,\n        score: safeScore,\n        letter,\n        language: normalizedLanguage,\n      }).onConflictDoUpdate({\n        target: [dailyResultsTable.playerId, dailyResultsTable.challengeDate],\n        set: {\n          score: sql`GREATEST(${dailyResultsTable.score}, EXCLUDED.score)`,\n          playerName: sql`CASE WHEN EXCLUDED.score > ${dailyResultsTable.score} THEN ${canonicalPlayerName} ELSE ${dailyResultsTable.playerName} END`,\n          avatarColor: sql`CASE WHEN EXCLUDED.score > ${dailyResultsTable.score} THEN ${canonicalAvatarColor} ELSE ${dailyResultsTable.avatarColor} END`,\n        },\n      });\n      submitted = true;\n    });\n  } catch (error) {\n    if (error instanceof Error && error.message === "SCORE_VOUCHER_CONFLICT") {\n      res.status(422).json({ error: "INVALID_SCORE_VOUCHER" });\n      return;\n    }\n    throw error;\n  }\n\n  void recordAuthoritativeSeasonEvents(playerId, [{ type: "daily_done", value: 1 }]);
+  // voucher and leave the player unable to retry.
+  let alreadyPlayed = false;
+  let submitted = false;
+  try {
+    await db.transaction(async (tx) => {
+      const existing = await tx
+        .select()
+        .from(dailyResultsTable)
+        .where(and(
+          eq(dailyResultsTable.playerId, playerId),
+          eq(dailyResultsTable.challengeDate, today),
+        ))
+        .limit(1);
+
+      if (existing.length > 0) {
+        alreadyPlayed = true;
+        if (safeScore <= existing[0].score) return;
+
+        if (verified > 0 && voucherJtis.length > 0) {
+          await consumeScoreVoucherJtis(tx, voucherJtis);
+        }
+
+        await tx.update(dailyResultsTable)
+          .set({ score: safeScore, playerName: canonicalPlayerName, avatarColor: canonicalAvatarColor })
+          .where(and(
+            eq(dailyResultsTable.playerId, playerId),
+            eq(dailyResultsTable.challengeDate, today),
+            sql`${dailyResultsTable.score} < ${safeScore}`,
+          ));
+        return;
+      }
+
+      if (verified > 0 && voucherJtis.length > 0) {
+        await consumeScoreVoucherJtis(tx, voucherJtis);
+      }
+      await tx.insert(dailyResultsTable).values({
+        playerId,
+        playerName: canonicalPlayerName,
+        avatarColor: canonicalAvatarColor || "#e53e3e",
+        challengeDate: today,
+        score: safeScore,
+        letter,
+        language: normalizedLanguage,
+      }).onConflictDoUpdate({
+        target: [dailyResultsTable.playerId, dailyResultsTable.challengeDate],
+        set: {
+          score: sql`GREATEST(${dailyResultsTable.score}, EXCLUDED.score)`,
+          playerName: sql`CASE WHEN EXCLUDED.score > ${dailyResultsTable.score} THEN ${canonicalPlayerName} ELSE ${dailyResultsTable.playerName} END`,
+          avatarColor: sql`CASE WHEN EXCLUDED.score > ${dailyResultsTable.score} THEN ${canonicalAvatarColor} ELSE ${dailyResultsTable.avatarColor} END`,
+        },
+      });
+      submitted = true;
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message === "SCORE_VOUCHER_CONFLICT") {
+      res.status(422).json({ error: "INVALID_SCORE_VOUCHER" });
+      return;
+    }
+    throw error;
+  }
+
+  void recordAuthoritativeSeasonEvents(playerId, [{ type: "daily_done", value: 1 }]);
   res.status(submitted ? 201 : 200).json({ submitted, alreadyPlayed });
 });
 
