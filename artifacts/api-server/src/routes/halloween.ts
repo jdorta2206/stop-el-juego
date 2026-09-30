@@ -96,7 +96,8 @@ router.get("/progress", async (req: AuthedRequest, res) => {
     res.json({ active: false, year: new Date().getUTCFullYear(), progress: null });
     return;
   }
-\n  // Guests are intentionally excluded from persistent Halloween rewards/progress.
+
+  // Guests are intentionally excluded from persistent Halloween rewards/progress.
   // Do not create rows for arbitrary UUIDs: guest identities are tokenless by design,
   // so accepting any UUID here would let an attacker fill halloween_progress at will.
   if (!isLoggedInId(playerId)) {
