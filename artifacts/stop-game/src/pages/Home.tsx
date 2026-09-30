@@ -71,6 +71,10 @@ export default function Home() {
 
   const ftue = useFTUE();
   const [showFTUEWelcome, setShowFTUEWelcome] = useState(false);
+  const [halloweenModeEnabled, setHalloweenModeEnabledState] = useState(() => HALLOWEEN_PREVIEW ? true : isHalloweenModeEnabled());
+  const [halloweenAudioStarted, setHalloweenAudioStarted] = useState(false);
+  const [showHalloweenAnnouncement, setShowHalloweenAnnouncement] = useState(false);
+  const { data: halloweenProgressData } = useHalloweenProgress(player?.id);
 
   // Open the FTUE welcome modal once on first ever visit (after a tiny delay
   // so the home page can render its hero animation first).
