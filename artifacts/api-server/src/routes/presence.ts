@@ -11,7 +11,7 @@ import { verifyClaimedIdentity } from "../lib/playerAuth";
 
 const router: IRouter = Router();
 
-// In-memory presence store: playerId → presence data
+// PostgreSQL-backed presence is the shared source of truth across Railway instances.
 interface PresenceEntry {
   name: string;
   picture: string | null;
@@ -21,7 +21,24 @@ interface PresenceEntry {
   lastSeen: number;
 }
 
-const presenceMap = new Map<string, PresenceEntry>();
+const presenceMap = new Map<string, PresenceEntry>(); // local cache only; DB is authoritative
+
+const presenceTableReady = db.execute(sql`
+  CREATE TABLE IF NOT EXISTS player_presence (
+    player_id text PRIMARY KEY,
+    name text NOT NULL,
+    picture text,
+    avatar_color text NOT NULL,
+    provider text,
+    room_code text,
+    last_seen timestamptz NOT NULL DEFAULT NOW()
+  )
+`).then(() => db.execute(sql`
+  CREATE INDEX IF NOT EXISTS player_presence_last_seen_idx ON player_presence (last_seen)
+`)).catch((err) => {
+  console.error("[presence] failed to initialize presence persistence:", err);
+  throw err;
+});
 
 async function getCanonicalPresenceProfile(playerId: string) {
   const [profile] = await db.select({
@@ -96,18 +113,19 @@ function generateRoomCode(): string {
   return code;
 }
 
-// Clean up stale entries every 2 minutes
+// Clean up stale presence/challenges every 2 minutes. Both are DB-backed,
+ // so cleanup is safe and consistent across all Railway instances.
 setInterval(() => {
-  const cutoff = Date.now() - 3 * 60 * 1000;
-  for (const [id, data] of presenceMap) {
-    if (data.lastSeen < cutoff) presenceMap.delete(id);
-  }
-  // Challenges expire after 2 minutes. The database is the shared source
-  // of truth, so this cleanup is safe to run on every instance.
+  void presenceTableReady.then(() => db.execute(sql`
+    DELETE FROM player_presence WHERE last_seen < NOW() - INTERVAL '3 minutes'
+  `)).catch((err) => console.error("[presence] presence cleanup failed:", err));
   void challengeTableReady.then(() => db.execute(sql`
     DELETE FROM player_challenges
     WHERE created_at < NOW() - INTERVAL '2 minutes'
   `)).catch((err) => console.error("[presence] challenge cleanup failed:", err));
+  for (const [id, data] of presenceMap) {
+    if (data.lastSeen < Date.now() - 3 * 60 * 1000) presenceMap.delete(id);
+  }
 }, 2 * 60 * 1000);
 
 // POST /api/presence/ping
@@ -144,12 +162,33 @@ router.post("/ping", presenceLimiter, async (req, res) => {
     }
   }
 
-  const existing = presenceMap.get(playerId);
-  const wasOffline = !existing || existing.lastSeen < Date.now() - 3 * 60 * 1000;
+  await presenceTableReady;
+  const existingRows = await db.execute(sql`
+    SELECT last_seen
+    FROM player_presence
+    WHERE player_id = ${playerId}
+    LIMIT 1
+  `);
+  const wasOffline = (existingRows.rows as any[]).length === 0 ||
+    new Date((existingRows.rows as any[])[0].last_seen).getTime() < Date.now() - 3 * 60 * 1000;
+  const lastSeen = new Date();
+  await db.execute(sql`
+    INSERT INTO player_presence
+      (player_id, name, picture, avatar_color, provider, room_code, last_seen)
+    VALUES
+      (${playerId}, ${profile.name}, ${profile.picture}, ${profile.avatarColor}, ${profile.provider}, ${canonicalRoomCode}, ${lastSeen})
+    ON CONFLICT (player_id) DO UPDATE SET
+      name = EXCLUDED.name,
+      picture = EXCLUDED.picture,
+      avatar_color = EXCLUDED.avatar_color,
+      provider = EXCLUDED.provider,
+      room_code = EXCLUDED.room_code,
+      last_seen = EXCLUDED.last_seen
+  `);
   presenceMap.set(playerId, {
     ...profile,
     roomCode: canonicalRoomCode,
-    lastSeen: Date.now(),
+    lastSeen: lastSeen.getTime(),
   });
 
   if (wasOffline && profile.provider && profile.provider !== "guest") {
@@ -161,22 +200,22 @@ router.post("/ping", presenceLimiter, async (req, res) => {
 
 // GET /api/presence/online
 router.get("/online", async (_req, res) => {
-  const cutoff = Date.now() - 90 * 1000;
-  const online: Array<{
-    playerId: string;
-    name: string;
-    picture: string | null;
-    avatarColor: string;
-    provider: string | null;
-    roomCode: string | null;
-    lastSeen: number;
-  }> = [];
-
-  for (const [playerId, data] of presenceMap) {
-    if (data.lastSeen >= cutoff) {
-      online.push({ playerId, ...data });
-    }
-  }
+  await presenceTableReady;
+  const rows = await db.execute(sql`
+    SELECT player_id, name, picture, avatar_color, provider, room_code, EXTRACT(EPOCH FROM last_seen) * 1000 AS last_seen_ms
+    FROM player_presence
+    WHERE last_seen >= NOW() - INTERVAL '90 seconds'
+    ORDER BY last_seen DESC
+  `);
+  const online = ((rows.rows as any[]) || []).map((p) => ({
+    playerId: p.player_id,
+    name: p.name,
+    picture: p.picture ?? null,
+    avatarColor: p.avatar_color,
+    provider: p.provider ?? null,
+    roomCode: p.room_code ?? null,
+    lastSeen: Number(p.last_seen_ms),
+  }));
 
   const ids = online.map(p => p.playerId);
   if (ids.length > 0) {
@@ -200,7 +239,6 @@ router.get("/online", async (_req, res) => {
       }
     } catch {}
   }
-  online.sort((a, b) => b.lastSeen - a.lastSeen);
   return res.json({ online });
 });
 
@@ -225,9 +263,15 @@ router.post("/challenge", async (req, res) => {
   if (!profile) return res.status(404).json({ error: "Player not found" });
 
   // Check target player is online
-  const cutoff = Date.now() - 90 * 1000;
-  const target = presenceMap.get(toPlayerId);
-  if (!target || target.lastSeen < cutoff) {
+  await presenceTableReady;
+  const targetRows = await db.execute(sql`
+    SELECT 1
+    FROM player_presence
+    WHERE player_id = ${toPlayerId}
+      AND last_seen >= NOW() - INTERVAL '90 seconds'
+    LIMIT 1
+  `);
+  if ((targetRows.rows as any[]).length === 0) {
     return res.status(404).json({ error: "Player is not online" });
   }
 
