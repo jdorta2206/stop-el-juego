@@ -3,10 +3,11 @@ import { db } from "@workspace/db";
 import { roomsTable, playerScoresTable, gameHistoryTable } from "@workspace/db";
 import { eq, and, or, lt, inArray, sql } from "drizzle-orm";
 import { CreateRoomBody, JoinRoomBody, SubmitRoomResultsBody } from "@workspace/api-zod";
-import { calculateStreak, appendStreakDay } from "./ranking";
+import { calculateStreak, appendStreakDay, calcXpGain, calcCoinGain, calcLevel, lookupPlayerTzOffset } from "./ranking";
 import { recordTrustedAnalyticsEvent } from "./analytics";
 import { recordAuthoritativeSeasonEvents } from "./season";
 import { recordHalloweenEvent } from "./halloween";
+import { isHappyHourActiveForTzOffset, HAPPY_HOUR_MULTIPLIER } from "../lib/happyHour";
 import { isWordValidAsync, HALLOWEEN_CATEGORY_ALIASES } from "./game";
 import { writeLimiter, roomJoinLimiter } from "../middlewares/rateLimit";
 import { verifyClaimedIdentity, verifyPlayerToken, readPlayerId, isLoggedInId, isAuthConfigured } from "../lib/playerAuth";
@@ -530,7 +531,7 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
     const existing = await db
       .select({
         lastPlayedDate: playerScoresTable.lastPlayedDate,
-        currentStreak: playerScoresTable.currentStreak,
+        currentStreak: playerScoresTable.currentStreak,\n        xp: playerScoresTable.xp,
         longestStreak: playerScoresTable.longestStreak,
         avatarColor: playerScoresTable.avatarColor,
         streakDaysJson: playerScoresTable.streakDaysJson,
