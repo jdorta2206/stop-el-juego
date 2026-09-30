@@ -202,6 +202,16 @@ const botDeps = {
   // happens to be the one that ends the match.
   submitFinalScores: (players: any[], letter: string) =>
     submitAllScoresToLeaderboard(players, letter).catch(() => {}),
+  getRoundCategories: (room: any) => {
+    const code = String(room.roomCode ?? "").toUpperCase();
+    const cfg = roomCategoryPacks.get(code);
+    return resolveCategoriesForRound(
+      cfg?.pack ?? "standard",
+      room.currentLetter ?? "A",
+      room.currentRound ?? 1,
+      cfg?.customCategories,
+    );
+  },
 };
 
 // Reconstruct bot round timers after API restarts or on another Railway instance.
