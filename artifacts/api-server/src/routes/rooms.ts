@@ -1054,6 +1054,8 @@ async function purgeStaleRooms() {
     dropOrphans(roomSpyUsage as Map<string, unknown>);
     dropOrphans(roomRematch as Map<string, unknown>);
     dropOrphans(roomFunVotes as Map<string, unknown>);
+    dropOrphans(roomHalloweenScares as Map<string, unknown>);
+    dropOrphans(halloweenScareCooldowns as Map<string, unknown>);
   } catch (err) {
     console.error("[purgeStaleRooms] failed:", (err as Error).message);
   }
