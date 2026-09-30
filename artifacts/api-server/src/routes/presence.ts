@@ -137,7 +137,7 @@ router.post("/ping", presenceLimiter, async (req, res) => {
   };
 
   if (!playerId) return res.status(400).json({ error: "playerId required" });
-  if (!verifyClaimedIdentity(req, playerId)) {
+  if (!await verifyClaimedIdentity(req, playerId)) {
     return res.status(403).json({ error: "Invalid player identity" });
   }
 
@@ -255,7 +255,7 @@ router.post("/challenge", async (req, res) => {
   if (!fromPlayerId || !toPlayerId || !fromName) {
     return res.status(400).json({ error: "fromPlayerId, fromName and toPlayerId required" });
   }
-  if (!verifyClaimedIdentity(req, fromPlayerId)) {
+  if (!await verifyClaimedIdentity(req, fromPlayerId)) {
     return res.status(403).json({ error: "Invalid player identity" });
   }
 
@@ -392,7 +392,7 @@ router.post("/room-invite", async (req, res) => {
   if (!fromPlayerId || !toPlayerId || !fromName || !roomCode) {
     return res.status(400).json({ error: "fromPlayerId, fromName, toPlayerId and roomCode required" });
   }
-  if (!verifyClaimedIdentity(req, fromPlayerId)) {
+  if (!await verifyClaimedIdentity(req, fromPlayerId)) {
     return res.status(403).json({ error: "Invalid player identity" });
   }
 
@@ -476,7 +476,7 @@ router.post("/room-invite", async (req, res) => {
 // GET /api/presence/challenges/:playerId — get incoming pending challenges + room invites
 router.get("/challenges/:playerId", async (req, res) => {
   const { playerId } = req.params;
-  if (!verifyClaimedIdentity(req, playerId)) {
+  if (!await verifyClaimedIdentity(req, playerId)) {
     return res.status(403).json({ error: "Invalid player identity" });
   }
   await challengeTableReady;
@@ -521,7 +521,7 @@ router.post("/challenge/:challengeId/respond", async (req, res) => {
   const row = (rows.rows as any[])[0];
   if (!row) return res.status(404).json({ error: "Challenge not found or expired" });
 
-  if (!verifyClaimedIdentity(req, row.to_player_id)) {
+  if (!await verifyClaimedIdentity(req, row.to_player_id)) {
     return res.status(403).json({ error: "Invalid player identity" });
   }
   if (row.status !== "pending") {
@@ -555,7 +555,7 @@ router.get("/challenge/:challengeId/status", async (req, res) => {
   const row = (rows.rows as any[])[0];
   if (!row) return res.json({ status: "expired" });
 
-  if (!verifyClaimedIdentity(req, row.from_player_id)) {
+  if (!await verifyClaimedIdentity(req, row.from_player_id)) {
     return res.status(403).json({ error: "Invalid player identity" });
   }
   return res.json({
