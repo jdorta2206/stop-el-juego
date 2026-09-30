@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { roomsTable, playerScoresTable, gameHistoryTable } from "@workspace/db";
-import { eq, and, or, lt, gt, inArray, sql } from "drizzle-orm";
+import { eq, and, or, lt, gt, ne, inArray, sql } from "drizzle-orm";
 import { CreateRoomBody, JoinRoomBody, SubmitRoomResultsBody } from "@workspace/api-zod";
 import { calculateStreak, appendStreakDay, calcXpGain, calcCoinGain, calcLevel, lookupPlayerTzOffset } from "./ranking";
 import { recordTrustedAnalyticsEvent } from "./analytics";
@@ -939,7 +939,32 @@ async function purgeStaleRooms() {
     await db.delete(roomsTable).where(
       and(eq(roomsTable.status, "waiting"), lt(roomsTable.updatedAt, twoHoursAgo))
     );
-    await db.delete(roomsTable).where(lt(roomsTable.updatedAt, sixHoursAgo));
+    // Never purge a finished room while a non-guest player still lacks a
+    // settlement claim. The room JSON is the durable source needed to retry
+    // the settlement; deleting it would make a long-lived outage permanent.
+    await db.delete(roomsTable).where(
+      and(ne(roomsTable.status, "finished"), lt(roomsTable.updatedAt, sixHoursAgo))
+    );
+    const staleFinished = await db.select().from(roomsTable).where(
+      and(eq(roomsTable.status, "finished"), lt(roomsTable.updatedAt, sixHoursAgo))
+    );
+    for (const room of staleFinished) {
+      const players = parsePlayers(room.playersJson);
+      const eligible = players.filter((p: any) => p && !p.isBot && p.playerId && p.loginMethod !== "guest");
+      if (eligible.length === 0) {
+        await db.delete(roomsTable).where(eq(roomsTable.id, room.id));
+        continue;
+      }
+      const claimRows = await db.execute(sql`
+        SELECT player_id
+        FROM multiplayer_settlement_claims
+        WHERE room_id = ${room.id}
+      `);
+      const claimedIds = new Set((claimRows.rows ?? []).map((row: any) => String(row.player_id)));
+      if (eligible.every((p: any) => claimedIds.has(String(p.playerId)))) {
+        await db.delete(roomsTable).where(eq(roomsTable.id, room.id));
+      }
+    }
 
     // 🧹 In-memory map cleanup: drop entries for any room code that no
     // longer exists in the DB. Without this, sseClients/roomReactions/
