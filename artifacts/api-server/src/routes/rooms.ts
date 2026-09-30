@@ -2017,6 +2017,14 @@ router.post("/:roomCode/use-card", async (req, res) => {
     if (room.status !== "playing") {
       res.status(409).json({ error: "Cards can only be used during a round" }); return;
     }
+    // The DB status can remain "playing" briefly after the natural timer
+    // expires, until /results or the background sweeper advances the room.
+    // Cards are round actions, so the authoritative deadline must also be
+    // enforced here; otherwise a late client could activate a card after time.
+    const cardDeadline = roundEndTimestamp(room);
+    if (cardDeadline !== undefined && Date.now() >= cardDeadline) {
+      res.status(409).json({ error: "Round has ended" }); return;
+    }
     const me = players.find(p => p.playerId === playerId);
     if (!me || me.powerCardUsed || !me.powerCard) {
       res.status(400).json({ error: "Card not available" }); return;
