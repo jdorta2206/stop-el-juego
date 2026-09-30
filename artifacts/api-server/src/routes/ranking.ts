@@ -835,7 +835,7 @@ router.post("/scores", scoreLimiter, async (req, res) => {
         playerId,
         score,
         letter,
-        mode: mode ?? "solo",
+        mode: effectiveMode,
         won: effectiveWon,
       });
 
@@ -934,7 +934,7 @@ router.post("/scores", scoreLimiter, async (req, res) => {
     void recordTrustedAnalyticsEvent({
       eventName: "game_complete",
       playerId,
-      mode: mode ?? "solo",
+      mode: effectiveMode,
       metadata: { source: "server_score_submission" },
     }).catch((err) => console.error("[analytics] trusted game_complete failed:", err));
 
