@@ -8,10 +8,12 @@ const excludeReplitOrigin = or(
   not(like(pushSubscriptionsTable.origin, '%replit.app%')),
 );
 
-const enabledAndUnmuted = and(
-  eq(pushSubscriptionsTable.enabled, true),
-  sql`COALESCE(${pushSubscriptionsTable.mutedUntil}, 0) <= ${Date.now()}`,
-);
+function enabledAndUnmuted() {
+  return and(
+    eq(pushSubscriptionsTable.enabled, true),
+    sql`COALESCE(${pushSubscriptionsTable.mutedUntil}, 0) <= ${Date.now()}`,
+  );
+}
 
 const VAPID_PUBLIC  = process.env.VAPID_PUBLIC_KEY  || "";
 const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY || "";
@@ -199,8 +201,8 @@ export async function sendPushToAllSubscribers(
 
   const rows = language
     ? await db.select().from(pushSubscriptionsTable)
-        .where(and(eq(pushSubscriptionsTable.language, language), excludeReplitOrigin, enabledAndUnmuted))
-    : await db.select().from(pushSubscriptionsTable).where(and(excludeReplitOrigin, enabledAndUnmuted));
+        .where(and(eq(pushSubscriptionsTable.language, language), excludeReplitOrigin, enabledAndUnmuted()))
+    : await db.select().from(pushSubscriptionsTable).where(and(excludeReplitOrigin, enabledAndUnmuted()));
 
   const picked = dedupeByPlayer(rows);
   let sent = 0, failed = 0;
@@ -241,7 +243,7 @@ export async function sendLocalizedBroadcast(
   const fallback = payloadByLang[fallbackLang];
   if (!fallback) return { sent: 0, failed: 0, removed: 0 };
 
-  const rows = await db.select().from(pushSubscriptionsTable).where(and(excludeReplitOrigin, enabledAndUnmuted));
+  const rows = await db.select().from(pushSubscriptionsTable).where(and(excludeReplitOrigin, enabledAndUnmuted()));
   const picked = dedupeByPlayer(rows);
 
   let sent = 0, failed = 0;
