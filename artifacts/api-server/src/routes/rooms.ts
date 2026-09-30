@@ -1139,6 +1139,14 @@ router.post("/:roomCode/join", roomJoinLimiter, async (req, res) => {
   // Authenticated accounts keep their canonical profile identity. Guests may
   // still choose a room display name because they have no persistent profile.
   const isGuestIdentity = !canonicalProfile;
+  const effectiveLoginMethod = isGuestIdentity
+    ? "guest"
+    : playerId.startsWith("google_") ? "google"
+    : playerId.startsWith("fb_") ? "facebook"
+    : playerId.startsWith("ig_") || playerId.startsWith("instagram_") ? "instagram"
+    : playerId.startsWith("tt_") || playerId.startsWith("tiktok_") ? "tiktok"
+    : playerId.startsWith("apple_") ? "apple"
+    : "account";
   const effectivePlayerName = !isGuestIdentity && canonicalProfile
     ? canonicalProfile.playerName
     : playerName;
@@ -1198,7 +1206,7 @@ router.post("/:roomCode/join", roomJoinLimiter, async (req, res) => {
         playerName: effectivePlayerName,
         avatarColor: effectiveAvatarColor,
         picture: effectivePicture,
-        loginMethod: loginMethod ?? null,
+        loginMethod: effectiveLoginMethod,
         isPremium: joinerPremium,
         score: 0,
         roundScore: 0,
