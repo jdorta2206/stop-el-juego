@@ -2544,7 +2544,10 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
   // cap valid answers at AUTHORITATIVE_CATEGORY_CAP — even if the client
   // injects fake category keys, only this many can score (defends against
   // category-key injection padding the score with extra +10s).
-  const AUTHORITATIVE_CATEGORY_CAP = 8; // largest pack across ES/EN/PT/FR
+  // Custom room packs may contain up to 12 categories; the 8-category limit
+  // only applies to the standard language packs. Use the authoritative round
+  // configuration so legitimate custom answers are not silently discarded.
+  const AUTHORITATIVE_CATEGORY_CAP = Math.min(12, Math.max(1, configuredCategories.length));
   const scoredEntries = await Promise.all(
     Object.entries(safeAnswers).map(async ([category, word]) => ({
       word,
