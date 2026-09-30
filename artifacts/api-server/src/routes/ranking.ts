@@ -594,8 +594,26 @@ router.post("/scores", scoreLimiter, async (req, res) => {
   const newLevel = calcLevel(newXp);
 
   let player;
+  let duplicateSubmission = false;
   if (isBonus) {
     const bonusResult = await db.transaction(async (tx) => {
+      if (submissionId) {
+        const [claim] = await tx
+          .insert(scoreSubmissionClaimsTable)
+          .values({ playerId, submissionId, isBonus: true })
+          .onConflictDoNothing()
+          .returning({ id: scoreSubmissionClaimsTable.id });
+        if (!claim) {
+          duplicateSubmission = true;
+          const [currentPlayer] = await tx
+            .select()
+            .from(playerScoresTable)
+            .where(eq(playerScoresTable.playerId, playerId))
+            .limit(1);
+          return currentPlayer ?? null;
+        }
+      }
+
       const [claimed] = await tx
         .delete(scoreBonusClaimsTable)
         .where(sql`${scoreBonusClaimsTable.tokenSetHash} = ${bonusClaimTokenSetHash} AND ${scoreBonusClaimsTable.playerId} = ${playerId}`)
@@ -677,8 +695,33 @@ router.post("/scores", scoreLimiter, async (req, res) => {
       return;
     }
     player = bonusResult;
+    if (duplicateSubmission) {
+      res.status(201).json({
+        ...player,
+        rank: 0,
+        rewards: { xpAwarded: 0, coinsAwarded: 0, happyHourActive: false, multiplier: 1 },
+      });
+      return;
+    }
   } else {
     player = await db.transaction(async (tx) => {
+      if (submissionId) {
+        const [claim] = await tx
+          .insert(scoreSubmissionClaimsTable)
+          .values({ playerId, submissionId, isBonus: false })
+          .onConflictDoNothing()
+          .returning({ id: scoreSubmissionClaimsTable.id });
+        if (!claim) {
+          duplicateSubmission = true;
+          const [currentPlayer] = await tx
+            .select()
+            .from(playerScoresTable)
+            .where(eq(playerScoresTable.playerId, playerId))
+            .limit(1);
+          return currentPlayer ?? null;
+        }
+      }
+
       const lockedRows = await tx
         .select()
         .from(playerScoresTable)
@@ -824,6 +867,14 @@ router.post("/scores", scoreLimiter, async (req, res) => {
 
       return txPlayer;
     });
+    if (duplicateSubmission) {
+      res.status(201).json({
+        ...player,
+        rank: 0,
+        rewards: { xpAwarded: 0, coinsAwarded: 0, happyHourActive: false, multiplier: 1 },
+      });
+      return;
+    }
   }
 
   if (!isBonus && verified > 0 && scoreTokens) {
