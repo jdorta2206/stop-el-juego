@@ -1745,6 +1745,16 @@ router.post("/:roomCode/leave", async (req, res) => {
     return { kind: "updated", row: updated[0], newHostId } as const;
   });
 
+  if (outcome.kind === "settlementPending") {
+    // Keep the finished-room snapshot intact. Settlement recovery will retry
+    // the missing claim; once it exists, a later leave/purge can remove it.
+    res.status(409).json({
+      error: "settlement_pending",
+      message: "La partida aún está terminando de guardar tus recompensas. Inténtalo de nuevo en unos segundos.",
+    });
+    return;
+  }
+
   if (outcome.kind === "deleted") {
     roomTyping.delete(code);
     roomLiveResponses.delete(code);
