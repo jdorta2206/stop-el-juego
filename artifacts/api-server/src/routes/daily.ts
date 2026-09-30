@@ -196,7 +196,13 @@ router.post("/submit", async (req, res) => {
     throw error;
   }
 
-  void recordAuthoritativeSeasonEvents(playerId, [{ type: "daily_done", value: 1 }]);
+  if (submitted) {
+    void recordAuthoritativeSeasonEvents(
+      playerId,
+      [{ type: "daily_done", value: 1 }],
+      `daily:${today}`,
+    );
+  }
   res.status(submitted ? 201 : 200).json({ submitted, alreadyPlayed });
 });
 
