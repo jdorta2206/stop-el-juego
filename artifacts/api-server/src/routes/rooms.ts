@@ -601,9 +601,6 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
         currentStreak: 1,
         longestStreak: 1,
         lastPlayedDate: today,
-        xp: xpGain,
-        level: newLevel,
-        coins: coinGain,
         streakDaysJson: JSON.stringify([today]),
       }).onConflictDoUpdate({
         target: playerScoresTable.playerId,
