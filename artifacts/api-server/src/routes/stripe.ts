@@ -305,7 +305,7 @@ router.post("/checkout-pack", async (req, res) => {
       },
       `${APP_ORIGIN}/?pack=success&session_id={CHECKOUT_SESSION_ID}`,
       `${APP_ORIGIN}/?pack=cancel`,
-      `pack-checkout:${playerId}:${sku}:${Math.floor(Date.now() / 10000)}`
+      `pack-checkout:${playerId}:${sku}`
     );
 
     return res.json({ url: session.url });
