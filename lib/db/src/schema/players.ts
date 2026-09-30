@@ -51,6 +51,24 @@ export const gameHistoryTable = pgTable("game_history", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+export const scoreSubmissionClaimsTable = pgTable("score_submission_claims", {
+  id: serial("id").primaryKey(),
+  playerId: text("player_id").notNull(),
+  submissionId: text("submission_id").notNull(),
+  isBonus: boolean("is_bonus").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => ({
+  playerSubmissionUnique: uniqueIndex("score_submission_claims_player_submission_uidx").on(
+    t.playerId,
+    t.submissionId,
+    t.isBonus,
+  ),
+}));
+
+export const insertScoreSubmissionClaimSchema = createInsertSchema(scoreSubmissionClaimsTable).omit({ id: true, createdAt: true });
+export type InsertScoreSubmissionClaim = z.infer<typeof insertScoreSubmissionClaimSchema>;
+export type ScoreSubmissionClaim = typeof scoreSubmissionClaimsTable.$inferSelect;
+
 export const insertGameHistorySchema = createInsertSchema(gameHistoryTable).omit({ id: true, createdAt: true });
 export type InsertGameHistory = z.infer<typeof insertGameHistorySchema>;
 export type GameHistory = typeof gameHistoryTable.$inferSelect;
