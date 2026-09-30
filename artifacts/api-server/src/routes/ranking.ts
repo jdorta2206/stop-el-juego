@@ -480,7 +480,7 @@ router.post("/scores", scoreLimiter, async (req, res) => {
     : [];
 
   const { base: verifiedBase, verified, collectionWords, mode: certifiedMode, aiBase: certifiedAiBase } = isBonus
-    ? { base: 0, verified: 0, collectionWords: [] as Array<{ word: string; category: string }>, mode: null }
+    ? { base: 0, verified: 0, collectionWords: [] as Array<{ word: string; category: string }>, mode: null, aiBase: 0 }
     // /ranking/scores is the client solo leaderboard path. Keep its voucher
     // count cap independent of the client-supplied `mode`; otherwise a caller
     // could request `multiplayer` and raise the cap from 3 rounds to 12.
