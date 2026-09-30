@@ -537,7 +537,6 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
       .select({
         lastPlayedDate: playerScoresTable.lastPlayedDate,
         currentStreak: playerScoresTable.currentStreak,
-        xp: playerScoresTable.xp,
         longestStreak: playerScoresTable.longestStreak,
         avatarColor: playerScoresTable.avatarColor,
         streakDaysJson: playerScoresTable.streakDaysJson,
