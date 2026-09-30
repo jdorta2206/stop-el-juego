@@ -263,7 +263,8 @@ export async function recordHalloweenEvent(
 }
 
 
-export async function recordHalloweenScareEvents(
+export async function recordHalloweenScareEventsInTransaction(
+  tx: any,
   events: Array<{
     playerId: string;
     type: "scare_received" | "scare_provoked";
@@ -394,7 +395,30 @@ export async function recordHalloweenScareEvents(
       results.push({ playerId: event.playerId, eventKey: event.eventKey, coinsAwarded });
     }
     return results;
-  });
+
+}
+
+export async function recordHalloweenScareEvents(
+  events: Array<{
+    playerId: string;
+    type: "scare_received" | "scare_provoked";
+    eventKey: string;
+  }>,
+  preview = false,
+  activeRoomId?: number,
+  activeRoomStatus: "playing" | "stopped" = "playing",
+  activeRoomRound?: number,
+) {
+  return await db.transaction(async (tx) =>
+    recordHalloweenScareEventsInTransaction(
+      tx,
+      events,
+      preview,
+      activeRoomId,
+      activeRoomStatus,
+      activeRoomRound,
+    )
+  );
 }
 
 router.post("/event", async (_req, res) => {
