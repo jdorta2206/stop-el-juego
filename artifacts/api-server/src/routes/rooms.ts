@@ -1435,17 +1435,9 @@ router.post("/", async (req, res) => {
   for (let attempt = 0; attempt < 8; attempt++) {
     roomCode = generateRoomCode();
 
-    // Defensive: room codes are recycled. Clear only the candidate code that
-    // this creation attempt is actually going to use.
-    roomCategoryPacks.delete(roomCode);
-    roomReactions.delete(roomCode);
-    roomPhrases.delete(roomCode);
-    roomTyping.delete(roomCode);
-    roomHalloweenScares.delete(roomCode);
-    for (const key of halloweenScareCooldowns.keys()) {
-      if (key.startsWith(roomCode + ":")) halloweenScareCooldowns.delete(key);
-    }
-
+    // Do not clear ephemeral state before the INSERT: a rare code collision
+    // may belong to a still-active room, and its in-memory state must survive.
+    // Cleanup is performed only after this candidate is actually inserted.
     try {
       const inserted = await db.insert(roomsTable).values({
         roomCode,
@@ -1463,6 +1455,23 @@ router.post("/", async (req, res) => {
       }).returning();
 
       room = inserted[0];
+
+      // The code is now ours. It may have been recycled from an older room,
+      // so discard only the stale ephemeral state belonging to this newly
+      // allocated code.
+      roomCategoryPacks.delete(roomCode);
+      roomReactions.delete(roomCode);
+      roomPhrases.delete(roomCode);
+      roomTyping.delete(roomCode);
+      roomHalloweenScares.delete(roomCode);
+      for (const key of halloweenScareCooldowns.keys()) {
+        if (key.startsWith(roomCode + ":")) halloweenScareCooldowns.delete(key);
+      }
+      lastBroadcastUpdatedAt.delete(roomCode);
+      roomLiveResponses.delete(roomCode);
+      roomSpyUsage.delete(roomCode);
+      roomFunVotes.delete(roomCode);
+      roomRematch.delete(roomCode);
       break;
     } catch (error: any) {
       // PostgreSQL unique_violation: another concurrent creator won this code.
