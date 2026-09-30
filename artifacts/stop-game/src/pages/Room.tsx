@@ -212,6 +212,10 @@ export default function Room() {
     uiTimeoutsRef.current.clear();
   }, []);
   const halloweenScareHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const seenHalloweenEventRef = useRef<string | null>(null);
+  const previousRoomStatusRef = useRef<string>("");
+  const manualScareBusyRef = useRef(false);
+  const [halloweenScareCooldownUntil, setHalloweenScareCooldownUntil] = useState(0);
   const CRAZY_CATEGORIES_ES = [
     "Excusa para llegar tarde", "Película que finges haber visto", "Animal que querrías de mascota",
     "Cosa que no debes decir en una cita", "Superhéroe inventado", "Profesión del futuro",
