@@ -11,7 +11,7 @@ on:
       - "pnpm-lock.yaml"
       - ".github/workflows/halloween-production-ci.yml"
   push:
-    branches: [fix/halloween-production-ready]
+    branches: [fix/halloween-production-ready, halloween-2026-final]
   workflow_dispatch:
 
 concurrency:
