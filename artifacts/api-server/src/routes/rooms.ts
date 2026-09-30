@@ -2951,7 +2951,16 @@ router.post("/:roomCode/bluff-vote", writeLimiter, async (req, res) => {
         currentRound: isGameOver ? room.maxRounds : newRound,
         currentLetter: isGameOver ? room.currentLetter : randomLetter(),
         status: newStatus,
-        stopperJson: JSON.stringify({\n          // Preserve the authoritative room deck through the bluff transition.\n          // These fields are persisted so a server restart cannot silently turn\n          // a custom/Halloween pack into the standard pack on the next round.\n          categoryPack: meta.categoryPack,\n          customCategories: meta.customCategories,\n          customPackLabel: meta.customPackLabel,\n          stopper: meta.stopper,\n          bluffResults: bluffVotes,\n        }),
+        stopperJson: JSON.stringify({
+          // Preserve the authoritative room deck through the bluff transition.
+          // These fields are persisted so a server restart cannot silently turn
+          // a custom/Halloween pack into the standard pack on the next round.
+          categoryPack: meta.categoryPack,
+          customCategories: meta.customCategories,
+          customPackLabel: meta.customPackLabel,
+          stopper: meta.stopper,
+          bluffResults: bluffVotes,
+        }),
         updatedAt: new Date(),
       })
       .where(and(eq(roomsTable.roomCode, roomCode.toUpperCase()), eq(roomsTable.status, "bluffvoting")))
