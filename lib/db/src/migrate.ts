@@ -93,12 +93,7 @@ export async function ensureIndexes(): Promise<void> {
     `CREATE UNIQUE INDEX IF NOT EXISTS halloween_progress_player_year_uidx ON halloween_progress (player_id, event_year)`,
     `CREATE INDEX IF NOT EXISTS halloween_progress_year_games_idx ON halloween_progress (event_year, games_completed DESC)`,
     `CREATE TABLE IF NOT EXISTS halloween_event_claims (event_year integer NOT NULL, player_id text NOT NULL, event_key text NOT NULL, created_at timestamp NOT NULL DEFAULT NOW(), PRIMARY KEY (event_year, player_id, event_key))`,
-    `INSERT INTO halloween_event_claims (event_year, player_id, event_key)
-       SELECT hp.event_year, hp.player_id, key_value
-       FROM halloween_progress hp
-       CROSS JOIN LATERAL jsonb_array_elements_text(
-         CASE
-           WHEN hp.event_keys_json ~ '^\\s*\\[.*\\]\\s*
+
   ];
 
   for (const stmt of stmts) {
@@ -114,29 +109,38 @@ export async function ensureIndexes(): Promise<void> {
       throw err;
     }
   }
-  _indexesReady = true;
-  console.log("[ensureIndexes] All indexes verified");
-}
-             THEN hp.event_keys_json::jsonb
-           ELSE '[]'::jsonb
-         END
-       ) AS key_value
-       ON CONFLICT (event_year, player_id, event_key) DO NOTHING`,
-  ];
-
-  for (const stmt of stmts) {
-    try {
-      await db.execute(sql.raw(stmt));
-    } catch (err: any) {
-      // Every bootstrap statement is already idempotent via IF NOT EXISTS.
-      // Never hide an "already exists" error here: it can indicate a real
-      // schema conflict (for example, an existing index with the wrong
-      // definition) that must keep the API in a non-ready state.
-      console.error("[ensureIndexes] failed:", err?.message ?? err);
-      _indexesReady = false;
-      throw err;
+  // Backfill legacy Halloween claims in application code so malformed historical JSON
+  // cannot abort the entire API bootstrap. Invalid rows are simply skipped; runtime
+  // event recording remains authoritative through halloween_event_claims.
+  try {
+    const legacy = await db.execute(sql`
+      SELECT event_year, player_id, event_keys_json
+      FROM halloween_progress
+      WHERE event_keys_json IS NOT NULL AND event_keys_json <> '[]'
+    `);
+    for (const row of (legacy.rows ?? []) as Array<{ event_year: number; player_id: string; event_keys_json: string }>) {
+      let keys: unknown;
+      try {
+        keys = JSON.parse(row.event_keys_json);
+      } catch {
+        continue;
+      }
+      if (!Array.isArray(keys)) continue;
+      for (const key of keys) {
+        if (typeof key !== "string" || !key) continue;
+        await db.execute(sql`
+          INSERT INTO halloween_event_claims (event_year, player_id, event_key)
+          VALUES (${row.event_year}, ${row.player_id}, ${key})
+          ON CONFLICT (event_year, player_id, event_key) DO NOTHING
+        `);
+      }
     }
+  } catch (err: any) {
+    console.error("[ensureIndexes] Halloween claim backfill failed:", err?.message ?? err);
+    _indexesReady = false;
+    throw err;
   }
+
   _indexesReady = true;
   console.log("[ensureIndexes] All indexes verified");
 }
