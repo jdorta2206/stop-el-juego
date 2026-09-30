@@ -227,9 +227,9 @@ export const GetRoomResponse = zod.object({
       score: zod.number(),
       isHost: zod.boolean(),
       isReady: zod.boolean(),
-      roomVersion: zod.number().optional(),
-  }),
+    }),
   ),
+  roomVersion: zod.number().optional(),
   createdAt: zod.date().optional(),
 });
 
