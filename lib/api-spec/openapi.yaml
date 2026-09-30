@@ -618,6 +618,15 @@ components:
         isPublic:
           type: boolean
           default: false
+        gameMode:
+          type: string
+          enum: [classic, blitz, challenge, random]
+          default: classic
+        maxPlayers:
+          type: integer
+          minimum: 1
+          maximum: 8
+          default: 8
       required:
         - hostId
         - hostName
