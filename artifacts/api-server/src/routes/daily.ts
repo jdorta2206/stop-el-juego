@@ -77,7 +77,7 @@ router.get("/status", async (req, res) => {
 
 // POST /api/daily/submit  → save a player's score for today
 router.post("/submit", async (req, res) => {
-  const { playerId, playerName, avatarColor, score, letter, language, scoreTokens } = req.body;
+  const { playerId, playerName, score, letter, language, scoreTokens } = req.body;
   if (!playerId || !playerName || score == null || !letter) {
     res.status(400).json({ error: "Missing required fields" });
     return;
