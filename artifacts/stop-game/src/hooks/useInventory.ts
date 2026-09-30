@@ -3,6 +3,7 @@ import { getApiUrl } from "@/lib/utils";
 
 const API = getApiUrl();
 const TOKEN_KEY = "stop_session_token";
+const PREVIEW_HEADERS = import.meta.env.VITE_HALLOWEEN_PREVIEW === "true" ? { "x-halloween-preview": "1" } : {};
 
 function authHeaders(): Record<string, string> {
   if (typeof window === "undefined") return {};
@@ -69,7 +70,7 @@ export function useInventory(playerId?: string | null) {
     try {
       const res = await fetch(`${API}/api/inventory`, {
         credentials: "include",
-        headers: authHeaders(),
+        headers: { ...authHeaders(), ...(import.meta.env.VITE_HALLOWEEN_PREVIEW === "true" ? { "x-halloween-player-id": playerId } : {}), ...PREVIEW_HEADERS },
       });
       if (res.ok) setData(await res.json());
     } catch { /* ignore */ }
@@ -83,7 +84,7 @@ export function useInventory(playerId?: string | null) {
     const res = await fetch(`${API}/api/inventory/equip`, {
       method: "POST",
       credentials: "include",
-      headers: { "Content-Type": "application/json", ...authHeaders() },
+      headers: { "Content-Type": "application/json", ...authHeaders(), ...(import.meta.env.VITE_HALLOWEEN_PREVIEW === "true" ? { "x-halloween-player-id": playerId } : {}), ...PREVIEW_HEADERS },
       body: JSON.stringify({ kind, value }),
     });
     if (!res.ok) {
