@@ -214,7 +214,6 @@ router.get("/rankings", async (req, res) => {
   const results = await db
     .select({
       id: dailyResultsTable.id,
-      playerId: dailyResultsTable.playerId,
       playerName: dailyResultsTable.playerName,
       avatarColor: dailyResultsTable.avatarColor,
       challengeDate: dailyResultsTable.challengeDate,
