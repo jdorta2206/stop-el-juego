@@ -626,7 +626,7 @@ router.post("/scores", scoreLimiter, async (req, res) => {
         score,
         letter,
         mode: mode ?? "solo",
-        won: won ?? false,
+        won: effectiveWon,
       });
       return created;
     });
