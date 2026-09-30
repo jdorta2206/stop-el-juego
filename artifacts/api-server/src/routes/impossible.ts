@@ -76,9 +76,9 @@ router.get("/me/:playerId", async (req, res) => {
 // ── POST /api/impossible/submit ─────────────────────────────────────────────
 // One attempt per player per day and supported language.
 router.post("/submit", async (req, res) => {
-  const { playerId, playerName, word = "", timeMs = 60000, surrendered = false } = req.body ?? {};
+  const { playerId, word = "", timeMs = 60000, surrendered = false } = req.body ?? {};
   const language = parseLanguage(req.body?.language) ?? null;
-  if (!playerId || !playerName) {
+  if (!playerId) {
     res.status(400).json({ error: "Missing playerId or playerName" }); return;
   }
   if (!language) {
@@ -140,7 +140,7 @@ router.post("/submit", async (req, res) => {
 
   const inserted = await db.insert(impossibleResultsTable).values({
     playerId,
-    playerName,
+    playerName: canonicalPlayer.playerName,
     challengeDate: today,
     language,
     letter: combo.letter,
