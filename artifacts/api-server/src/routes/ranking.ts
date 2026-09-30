@@ -520,7 +520,7 @@ router.post("/scores", scoreLimiter, async (req, res) => {
   // 🔒 For voucher-backed Solo submissions, the win/loss result must come
   // from the server-signed AI score, not from the client body. Legacy/offline
   // submissions have no trusted AI score and therefore cannot claim a win.
-  const authoritativeWon = !isBonus && certifiedMode === "solo" && verified > 0
+  const authoritativeWon = !isBonus && certifiedMode === "solo" && verified > 0 && certifiedAiBase !== null
     ? verifiedBase > certifiedAiBase
     : false;
   const effectiveWon = authoritativeWon;
