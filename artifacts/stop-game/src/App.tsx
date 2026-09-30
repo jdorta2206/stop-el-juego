@@ -149,6 +149,7 @@ function ScoreOutboxHandler() {
   useEffect(() => {
     const tryFlush = () => {
       if (typeof navigator !== "undefined" && navigator.onLine === false) return;
+      if (!player?.id) return;
       void flushScoreOutbox(async (payload) => {
         const response = await fetch(getApiUrl() + "/api/ranking/scores", {
           method: "POST",
@@ -158,7 +159,7 @@ function ScoreOutboxHandler() {
         });
         if (!response.ok) throw new Error("score-sync-" + response.status);
         return response.json();
-      });
+      }, player.id);
     };
 
     tryFlush();
