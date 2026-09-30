@@ -18,7 +18,7 @@ import crypto from "crypto";
 import { issuePlayerToken, clearPlayerToken, PLAYER_TOKEN_BRIDGE_KEY, readPlayerId, isLoggedInId } from "../lib/playerAuth";
 import { db, playerScoresTable } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
-import { revokePlayerId, markPlayerRevoked, restorePlayerId, isPlayerRevoked } from "../lib/playerRevocation";
+import { revokePlayerId, markPlayerRevoked, isPlayerRevoked } from "../lib/playerRevocation";
 
 const router = Router();
 
@@ -1011,6 +1011,7 @@ router.post("/delete-account", async (req: Request, res: Response) => {
     }
 
     await db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${playerId}, 0))`);
       await revokePlayerId(playerId, tx);
       const locked = await tx.execute(sql`
         SELECT player_id
