@@ -145,6 +145,7 @@ export const GetPlayerStatsResponse = zod.object({
     bestScore: zod.number().optional(),
     createdAt: zod.date().optional(),
     updatedAt: zod.date().optional(),
+    roomVersion: zod.number().optional(),
   }),
   recentGames: zod.array(
     zod.object({
