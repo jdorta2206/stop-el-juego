@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db } from "@workspace/db";
+import { db, playerScoresTable } from "@workspace/db";
 import { tournamentsTable, roomsTable } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
 import { requirePlayerIdentity, verifyClaimedIdentity, type AuthedRequest } from "../lib/playerAuth.js";
@@ -119,8 +119,10 @@ router.post("/", async (req, res) => {
   if (!verifyClaimedIdentity(req, hostId)) {
     res.status(403).json({ error: "Identity verification failed" }); return;
   }
+  const [hostProfile] = await db.select({ playerName: playerScoresTable.playerName }).from(playerScoresTable).where(eq(playerScoresTable.playerId, hostId)).limit(1);
+  if (!hostProfile) { res.status(404).json({ error: "Player not found" }); return; }
   const safeSize = [4, 8].includes(size) ? size : 4;
-  const players = [{ playerId: hostId, playerName: hostName ?? "Host" }];
+  const players = [{ playerId: hostId, playerName: hostProfile.playerName }];
 
   // The tournament code has a UNIQUE constraint. A random collision is rare,
   // but concurrent creation requests must not turn that legitimate collision
@@ -133,7 +135,7 @@ router.post("/", async (req, res) => {
       const inserted = await db.insert(tournamentsTable).values({
         code,
         hostId,
-        hostName: hostName ?? "Host",
+        hostName: hostProfile.playerName,
         name,
         status: "waiting",
         size: safeSize,
@@ -177,11 +179,11 @@ router.get("/:code", async (req, res) => {
 
 router.post("/:code/join", async (req, res) => {
   const code = req.params.code.toUpperCase();
-  const { playerId, playerName } = req.body as { playerId: string; playerName: string };
+  const { playerId } = req.body as { playerId: string };
   if (!playerId || !verifyClaimedIdentity(req, playerId)) {
     res.status(403).json({ error: "Identity verification failed" }); return;
   }
-  const joined = await db.transaction(async (tx) => {
+  const [playerProfile] = await db.select({ playerName: playerScoresTable.playerName }).from(playerScoresTable).where(eq(playerScoresTable.playerId, playerId)).limit(1);\n  if (!playerProfile) { res.status(404).json({ error: "Player not found" }); return; }\n  const joined = await db.transaction(async (tx) => {
     const rows = await tx.select().from(tournamentsTable)
       .where(eq(tournamentsTable.code, code))
       .for("update");
@@ -193,7 +195,7 @@ router.post("/:code/join", async (req, res) => {
     if (players.some(p => p.playerId === playerId)) return { tournament: t };
     if (players.length >= t.size) return { error: "FULL" as const };
 
-    players.push({ playerId, playerName });
+    players.push({ playerId, playerName: playerProfile.playerName });
     const [updated] = await tx.update(tournamentsTable)
       .set({ playersJson: JSON.stringify(players), updatedAt: new Date() })
       .where(eq(tournamentsTable.id, t.id))
