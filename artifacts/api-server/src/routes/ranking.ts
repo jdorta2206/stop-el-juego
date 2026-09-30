@@ -840,6 +840,18 @@ router.post("/scores", scoreLimiter, async (req, res) => {
       }
 
       // Keep voucher-backed collection words in the same transaction as the score.
+      if (!isBonus && verified > 0 && scoreTokens) {
+        const tokenSetHash = bonusTokenSetHash(playerId, scoreTokens);
+        if (tokenSetHash) {
+          await tx.insert(scoreBonusClaimsTable).values({
+            tokenSetHash,
+            playerId,
+            maxScore: score,
+            expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+          }).onConflictDoNothing();
+        }
+      }
+
       if (collectionWords.length > 0) {
         const collectionRows = await tx.execute(sql`
           SELECT id, collected_words_json
@@ -886,18 +898,6 @@ router.post("/scores", scoreLimiter, async (req, res) => {
         rewards: { xpAwarded: 0, coinsAwarded: 0, happyHourActive: false, multiplier: 1 },
       });
       return;
-    }
-  }
-
-  if (!isBonus && verified > 0 && scoreTokens) {
-    const tokenSetHash = bonusTokenSetHash(playerId, scoreTokens);
-    if (tokenSetHash) {
-      await db.insert(scoreBonusClaimsTable).values({
-        tokenSetHash,
-        playerId,
-        maxScore: score,
-        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
-      }).onConflictDoNothing();
     }
   }
 
