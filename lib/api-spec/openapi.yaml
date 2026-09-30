@@ -590,6 +590,9 @@ components:
         createdAt:
           type: string
           format: date-time
+        roomVersion:
+          type: integer
+          format: int64
       required:
         - id
         - roomCode
