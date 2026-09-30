@@ -93,6 +93,7 @@ export async function ensureIndexes(): Promise<void> {
     `CREATE UNIQUE INDEX IF NOT EXISTS halloween_progress_player_year_uidx ON halloween_progress (player_id, event_year)`,
     `CREATE INDEX IF NOT EXISTS halloween_progress_year_games_idx ON halloween_progress (event_year, games_completed DESC)`,
     `CREATE TABLE IF NOT EXISTS halloween_event_claims (event_year integer NOT NULL, player_id text NOT NULL, event_key text NOT NULL, created_at timestamp NOT NULL DEFAULT NOW(), PRIMARY KEY (event_year, player_id, event_key))`,
+    `CREATE TABLE IF NOT EXISTS halloween_scare_cooldowns (room_id integer NOT NULL, player_id text NOT NULL, available_at timestamp NOT NULL, updated_at timestamp NOT NULL DEFAULT NOW(), PRIMARY KEY (room_id, player_id))`,
     `CREATE TABLE IF NOT EXISTS halloween_migration_state (migration_key text PRIMARY KEY, completed_at timestamp NOT NULL DEFAULT NOW())`,
 
   ];
