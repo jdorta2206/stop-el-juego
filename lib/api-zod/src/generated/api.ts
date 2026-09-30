@@ -186,6 +186,8 @@ export const GetStreakCalendarResponse = zod.object({
 export const createRoomBodyMaxRoundsDefault = 3;
 export const createRoomBodyLanguageDefault = `es`;
 export const createRoomBodyIsPublicDefault = false;
+export const createRoomBodyGameModeDefault = "classic" as const;
+export const createRoomBodyMaxPlayersDefault = 8;
 
 export const CreateRoomBody = zod.object({
   hostId: zod.string(),
@@ -196,6 +198,8 @@ export const CreateRoomBody = zod.object({
   language: zod.string().default(createRoomBodyLanguageDefault),
   loginMethod: zod.string().nullish(),
   isPublic: zod.boolean().default(createRoomBodyIsPublicDefault),
+  gameMode: zod.enum(["classic", "blitz", "challenge", "random"]).default(createRoomBodyGameModeDefault),
+  maxPlayers: zod.number().int().min(1).max(8).default(createRoomBodyMaxPlayersDefault),
 });
 
 /**
