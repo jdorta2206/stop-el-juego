@@ -523,6 +523,11 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
     // Apply 1.5x multiplier for multiplayer
     const score = Math.round(rawScore * 1.5);
     const won = winner?.playerId === p.playerId;
+    const xpBase = calcXpGain(score, won, "multiplayer");
+    const tzOffset = await lookupPlayerTzOffset(p.playerId);
+    const happyHour = tzOffset !== null && isHappyHourActiveForTzOffset(tzOffset);
+    const xpGain = happyHour ? xpBase * HAPPY_HOUR_MULTIPLIER : xpBase;
+    const coinGain = calcCoinGain(score, won, "multiplayer", false);
 
     // 🔒 Atomic upsert: avoids the read-modify-write race that lost
     // concurrent finishers' totals under heavy multiplayer load.
@@ -531,7 +536,8 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
     const existing = await db
       .select({
         lastPlayedDate: playerScoresTable.lastPlayedDate,
-        currentStreak: playerScoresTable.currentStreak,\n        xp: playerScoresTable.xp,
+        currentStreak: playerScoresTable.currentStreak,
+        xp: playerScoresTable.xp,
         longestStreak: playerScoresTable.longestStreak,
         avatarColor: playerScoresTable.avatarColor,
         streakDaysJson: playerScoresTable.streakDaysJson,
@@ -558,6 +564,9 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
           playerName: p.playerName,
           avatarColor: p.avatarColor ?? existing[0].avatarColor,
           totalScore: sql`${playerScoresTable.totalScore} + ${score}`,
+          xp: sql`${playerScoresTable.xp} + ${xpGain}`,
+          level: sql`GREATEST(${playerScoresTable.level}, ${calcLevel((existing[0]?.xp ?? 0) + xpGain)})`,
+          coins: sql`${playerScoresTable.coins} + ${coinGain}`,
           gamesPlayed: sql`${playerScoresTable.gamesPlayed} + 1`,
           wins: sql`${playerScoresTable.wins} + ${won ? 1 : 0}`,
           ...(updatedToday ? {
@@ -576,6 +585,9 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
         playerName: p.playerName,
         avatarColor: p.avatarColor ?? "#e53e3e",
         totalScore: score,
+        xp: xpGain,
+        level: calcLevel(xpGain),
+        coins: coinGain,
         gamesPlayed: 1,
         wins: won ? 1 : 0,
         currentStreak: 1,
