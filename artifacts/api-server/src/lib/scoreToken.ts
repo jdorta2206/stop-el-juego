@@ -85,7 +85,7 @@ type VerifiedVoucher = {
   exp: number;
   jti: string;
   mode: ScoreVoucherMode | null;
-  aiBase: number;
+  aiBase: number | null;
   collectionWords: Array<{ word: string; category: string }>;
 };
 
@@ -127,10 +127,10 @@ function parseVerifiedVoucher(
 
   const exp = Number(expStr);
   const b = Number(baseStr);
-  const aiBase = Number(aiBaseStr);
+  const aiBase = hasAiBase ? Number(aiBaseStr) : null;
   if (!Number.isSafeInteger(exp) || exp <= now) return null;
   if (!Number.isFinite(b) || !Number.isSafeInteger(b) || b < 0 || b > 100_000) return null;
-  if (!Number.isFinite(aiBase) || !Number.isSafeInteger(aiBase) || aiBase < 0 || aiBase > 100_000) return null;
+  if (aiBase !== null && (!Number.isFinite(aiBase) || !Number.isSafeInteger(aiBase) || aiBase < 0 || aiBase > 100_000)) return null;
 
   let collectionWords: Array<{ word: string; category: string }> = [];
   if (collectionData) {
@@ -199,7 +199,7 @@ export async function sumVerifiedBasePersistent(
   verified: number;
   collectionWords: Array<{ word: string; category: string }>;
   mode: ScoreVoucherMode | null;
-  aiBase: number;
+  aiBase: number | null;
 }> {
   if (!Array.isArray(tokens) || tokens.length === 0 || tokens.length > MAX_TOKEN_BATCH) {
     return { base: 0, verified: 0, collectionWords: [], mode: null, aiBase: 0 };
@@ -218,7 +218,7 @@ export async function sumVerifiedBasePersistent(
   const validBases: Array<{
     base: number;
     mode: ScoreVoucherMode | null;
-    aiBase: number;
+    aiBase: number | null;
     collectionWords: Array<{ word: string; category: string }>;
   }> = [];
 
@@ -252,7 +252,9 @@ export async function sumVerifiedBasePersistent(
     verified: counted.length,
     collectionWords: counted.flatMap((entry) => entry.collectionWords),
     mode,
-    aiBase: counted.reduce((sum, entry) => sum + entry.aiBase, 0),
+    aiBase: counted.every((entry) => entry.aiBase !== null)
+      ? counted.reduce((sum, entry) => sum + (entry.aiBase ?? 0), 0)
+      : null,
   };
 }
 
