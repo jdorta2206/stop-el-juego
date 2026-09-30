@@ -11,6 +11,7 @@ import { scoreLimiter } from "../middlewares/rateLimit";
 import { verifyClaimedIdentity, requirePlayerIdentity, type AuthedRequest } from "../lib/playerAuth";
 import { sumVerifiedBasePersistent, ceilingFromBase, absoluteCeiling } from "../lib/scoreToken";
 import { recordAuthoritativeSeasonEvents } from "./season";
+import { recordHalloweenEvent } from "./halloween";
 import {
   isHappyHourActiveForTzOffset,
   HAPPY_HOUR_MULTIPLIER,
@@ -788,6 +789,18 @@ router.post("/scores", scoreLimiter, async (req, res) => {
       mode: mode ?? "solo",
       metadata: { source: "server_score_submission" },
     }).catch((err) => console.error("[analytics] trusted game_complete failed:", err));
+    if (certifiedMode === "solo" && Array.isArray(scoreTokens) && scoreTokens.length > 0) {
+      const halloweenEventKey = bonusTokenSetHash(playerId, scoreTokens);
+      if (halloweenEventKey) {
+        void recordHalloweenEvent(
+          playerId,
+          "game_completed",
+          `solo:${halloweenEventKey}`,
+          String(req.headers["x-halloween-preview"] ?? "") === "1",
+        ).catch((err) => console.error("[halloween] authoritative solo completion failed:", err));
+      }
+    }
+
     void recordAuthoritativeSeasonEvents(playerId, [
       { type: "play_game", value: 1 },
       ...(effectiveWon ? [{ type: "win_game", value: 1 }] : []),
