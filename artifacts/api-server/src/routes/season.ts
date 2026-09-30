@@ -339,8 +339,6 @@ async function applyAuthoritativeSeasonEventsInTransaction(
   if (!playerId || events.length === 0) return;
 
   const today = todayUTC();
-  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('season-rollover'))`);
-
   await tx.execute(sql`
     INSERT INTO seasons (start_date, end_date, theme_json)
     VALUES (${today}, ${addDays(today, SEASON_LENGTH_DAYS - 1)}, ${JSON.stringify(themeForStartDate(today))})
