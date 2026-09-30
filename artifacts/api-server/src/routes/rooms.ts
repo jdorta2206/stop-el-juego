@@ -5,6 +5,7 @@ import { eq, and, or, lt, inArray, sql } from "drizzle-orm";
 import { CreateRoomBody, JoinRoomBody, SubmitRoomResultsBody } from "@workspace/api-zod";
 import { calculateStreak, appendStreakDay } from "./ranking";
 import { recordTrustedAnalyticsEvent } from "./analytics";
+import { recordAuthoritativeSeasonEvents } from "./season";
 import { isWordValidAsync } from "./game";
 import { writeLimiter, roomJoinLimiter } from "../middlewares/rateLimit";
 import { verifyClaimedIdentity, verifyPlayerToken, readPlayerId, isLoggedInId, isAuthConfigured } from "../lib/playerAuth";
@@ -570,6 +571,20 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string) {
       mode: "multiplayer",
       metadata: { source: "server_room_result", roomCode },
     }).catch((err) => console.error("[analytics] trusted multiplayer game_complete failed:", err));
+    // Season Pass progression is server-authoritative. The client event
+    // endpoint is intentionally closed (410), so multiplayer emits trusted
+    // events directly from the final server result.
+    const validWords = p.answers && typeof p.answers === "object"
+      ? Object.values(p.answers as Record<string, unknown>)
+          .filter((word) => String(word ?? "").trim().length > 0).length
+      : 0;
+    void recordAuthoritativeSeasonEvents(p.playerId, [
+      { type: "play_game", value: 1 },
+      ...(won ? [{ type: "win_game", value: 1 }] : []),
+      ...(rawScore > 0 ? [{ type: "round_score", value: rawScore }] : []),
+      ...(validWords > 0 ? [{ type: "valid_words", value: validWords }] : []),
+      { type: "streak", value: newStreak },
+    ]).catch((err) => console.error("[season] trusted multiplayer events failed:", err));
   }));
 }
 
