@@ -248,8 +248,8 @@ export async function sumVerifiedBasePersistent(
 }
 
 /** Atomically burns the verified voucher JTIs in the caller's transaction. */
-export async function consumeScoreVoucherJtis(tx: any, jtis: string[]): Promise<boolean> {
-  if (jtis.length === 0) return true;
+export async function consumeScoreVoucherJtis(tx: any, jtis: string[]): Promise<void> {
+  if (jtis.length === 0) return;
   let consumed = 0;
   for (const jti of jtis) {
     const [row] = await tx
@@ -259,7 +259,9 @@ export async function consumeScoreVoucherJtis(tx: any, jtis: string[]): Promise<
       .returning({ jti: scoreVoucherUsesTable.jti });
     if (row) consumed++;
   }
-  return consumed === jtis.length;
+  if (consumed !== jtis.length) {
+    throw new Error("SCORE_VOUCHER_CONFLICT");
+  }
 }
 
 export function ceilingFromBase(base: number): number {
