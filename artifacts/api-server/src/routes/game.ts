@@ -1568,7 +1568,7 @@ router.post("/validate", async (req, res) => {
   // 🔒 Anti-cheat: hand back a signed, single-use voucher attesting the
   // server-computed base score for this round. The client returns it when
   // submitting the final game score so the leaderboard can't be fabricated.
-  const scoreToken = issueScoreToken(playerTotalScore, validatedCollectionWords);
+  const scoreToken = issueScoreToken(playerTotalScore, validatedCollectionWords, "solo", aiTotalScore);
 
   const response = ValidateRoundResponse.parse({
     results,
