@@ -1960,7 +1960,8 @@ router.post("/:roomCode/use-card", async (req, res) => {
         p.playerId === playerId ? { ...p, bluffImmune: true } : p
       );
     }
-    // lightning and double_or_nothing are handled client-side (time bonus / score multiplier)
+    // lightning is a local time display bonus, but score effects must be
+  // authoritative because final rewards are calculated from the server state.
 
     const [updated] = await db.update(roomsTable)
       .set({ playersJson: JSON.stringify(updatedPlayers), updatedAt: new Date() })
@@ -2874,6 +2875,13 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
   const spies = stopMetaForScore?.spyUsage;
   if (spies && Number(spies[playerId] ?? 0) > 0) {
     cappedRoundScore = Math.max(0, cappedRoundScore - 10);
+  }
+
+  // 🎯 Doble o Nada: apply the advertised x2 to this round's score on the
+  // server. The card is consumed atomically above, so a repeated request
+  // cannot apply the multiplier twice.
+  if (card === "double_or_nothing") {
+    cappedRoundScore *= 2;
   }
 
   // 🛡️ Anti-cheat hard cutoff: submissions that arrive AFTER the grace window
