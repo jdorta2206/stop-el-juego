@@ -109,7 +109,7 @@ function calcScore(responses: Record<string, string>, letter: string): number {
   const normLetter = normalizeForScore(letter);
   for (const val of Object.values(responses)) {
     const norm = normalizeForScore(val);
-    if (norm.length >= 2 && norm.startsWith(normLetter) && !usedNorm.has(norm)) {
+    if (norm.length >= 3 && norm.startsWith(normLetter) && !usedNorm.has(norm)) {
       score += 10;
       usedNorm.add(norm);
     }
