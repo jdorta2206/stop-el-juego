@@ -87,6 +87,7 @@ export function Roulette({ onSpinComplete, isSpinning, targetLetter, muted = fal
   const [isAnimating, setIsAnimating] = useState(false);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const tickIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const completeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const rotationRef = useRef(0);
 
   const getAudioCtx = useCallback(() => {
