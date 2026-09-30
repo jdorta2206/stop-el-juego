@@ -15,4 +15,6 @@ export interface CreateRoomRequest {
   language?: string;
   loginMethod?: string | null;
   isPublic?: boolean;
+  gameMode?: "classic" | "blitz" | "challenge" | "random";
+  maxPlayers?: number;
 }
