@@ -556,6 +556,11 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
       `);
       if ((claim.rows?.length ?? 0) === 0) return false;
 
+      // 🔒 Serialize concurrent settlements for the same player. Without
+      // a row lock, two rooms finishing at once can both read the same streak
+      // and one increment is lost even though score/gamesPlayed use atomic SQL.
+      await tx.execute(sql`SELECT player_id FROM player_scores WHERE player_id = ${p.playerId} FOR UPDATE`);
+
       const existing = await tx
         .select({
           lastPlayedDate: playerScoresTable.lastPlayedDate,
