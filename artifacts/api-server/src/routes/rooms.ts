@@ -1070,7 +1070,7 @@ router.post("/", async (req, res) => {
       const inserted = await db.insert(roomsTable).values({
         roomCode,
         hostId,
-        hostName: hostName ?? "",
+        hostName: effectiveHostName ?? "",
         status: "waiting",
         currentRound: 0,
         maxRounds: maxRounds ?? 3,
