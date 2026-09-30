@@ -620,7 +620,7 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
       p.playerId,
       "game_completed",
       `multiplayer:${roomCode}:${room.currentRound ?? 0}:${p.playerId}`,
-      String((req as any)?.headers?.["x-halloween-preview"] ?? "") === "1",
+      false,
     ).catch((err) => console.error("[halloween] trusted multiplayer completion failed:", err));
     void recordAuthoritativeSeasonEvents(p.playerId, [
       { type: "play_game", value: 1 },
