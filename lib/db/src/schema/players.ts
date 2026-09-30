@@ -35,7 +35,6 @@ export const playerScoresTable = pgTable("player_scores", {
   collectedWordsJson: text("collected_words_json").notNull().default("{}"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-  roomVersion: bigint("room_version", { mode: "number" }).notNull().default(0),
 });
 
 export const insertPlayerScoreSchema = createInsertSchema(playerScoresTable).omit({ id: true, createdAt: true, updatedAt: true });
@@ -93,6 +92,7 @@ export const roomsTable = pgTable("rooms", {
   tournamentMatchId: text("tournament_match_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  roomVersion: bigint("room_version", { mode: "number" }).notNull().default(0),
 });
 
 export const insertRoomSchema = createInsertSchema(roomsTable).omit({ id: true, createdAt: true, updatedAt: true });
