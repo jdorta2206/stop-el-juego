@@ -470,6 +470,17 @@ export default function SoloGame() {
   // the game and hand them back on submit so the server can clamp a fabricated
   // total. Reset per new game (where totalScore resets to 0), not per round.
   const scoreTokensRef = useRef<string[]>([]);
+  // Stable idempotency key for the logical game score. It survives all round
+  // transitions and is replaced only when a genuinely new game starts.
+  const gameSubmissionIdRef = useRef<string | null>(null);
+  const createSubmissionId = () => {
+    try {
+      if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+        return crypto.randomUUID();
+      }
+    } catch {}
+    return `stop-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+  };
 
   // Halloween scares only run while actively answering. Daily/quick/chaos/random are excluded.
   useEffect(() => {
@@ -529,6 +540,7 @@ export default function SoloGame() {
   }, [responses, gameState, round, lang, halloweenScare, isDailyMode, isQuickMode, isChaosMode, isRandomMode]);
 
   const startGame = () => {
+    if (!gameSubmissionIdRef.current) gameSubmissionIdRef.current = createSubmissionId();
     if (halloweenScareTimerRef.current) clearTimeout(halloweenScareTimerRef.current);
     if (halloweenAnswerScareTimerRef.current) clearTimeout(halloweenAnswerScareTimerRef.current);
     halloweenScareRoundRef.current = null;
@@ -1147,6 +1159,7 @@ export default function SoloGame() {
     const isBonus = opts?.bonus === true;
     submitScoreMutation.mutate({
       data: {
+        submissionId: `${gameSubmissionIdRef.current ?? createSubmissionId()}${isBonus ? ":bonus" : ""}`,
         playerId: player.id,
         playerName: player.name,
         avatarColor: player.avatarColor,
@@ -1346,6 +1359,7 @@ export default function SoloGame() {
       setRound(1);
       setTotalScore(0);
       scoreTokensRef.current = [];
+      gameSubmissionIdRef.current = null;
       setAiTotalScore(0);
       setBestRoundScore(0);
       setDoubleUsed(false);
