@@ -174,6 +174,7 @@ export interface Room {
   language: string;
   players: RoomPlayer[];
   createdAt?: string;
+  roomVersion?: number;
 }
 
 export interface CreateRoomRequest {
