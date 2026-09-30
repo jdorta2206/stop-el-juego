@@ -347,7 +347,7 @@ function pickWordsForRound(letter: string, categoryCount: number): string[] {
 type BotActionDeps = {
   broadcast: (code: string, payload: object) => void;
   formatRoom: (room: any) => any;
-  submitFinalScores: (players: any[], letter: string, roomCode: string) => void | Promise<void>;
+  onRoundAdvanced: (room: any, players: any[], newStatus: string) => void;
   getRoundCategories: (room: any) => string[];
 };
 
@@ -497,11 +497,8 @@ async function performBotSubmit(
     // Persist final scores to the global leaderboard when the bot's submit
     // was the one that ended the match — otherwise humans get no XP/ranking
     // update from games the bot "finished".
-    if (didFinishGame) {
-      deps.submitFinalScores(updatedPlayers, room.currentLetter ?? "A", code);
-    }
-
     if (nextStatus === "finished" || nextStatus === "waiting") {
+      deps.onRoundAdvanced(room, updatedPlayers, nextStatus);
       clearBotTimers(code);
     }
   } catch (err) {
