@@ -524,7 +524,9 @@ function resolveBluffs(players: any[], bluffVotes: Record<string, any>): any[] {
     for (const cat of p.bluffedCategories) {
       const votes = Object.values(voteMap[cat] ?? {}) as string[];
       const lieCnt = votes.filter(v => v === "lie").length;
-      const caught = votes.length > 0 && lieCnt > votes.length / 2; // strict majority
+      // Shield is an authoritative immunity: lie votes may still be displayed
+      // for transparency, but they cannot catch the protected player.
+      const caught = !p.bluffImmune && votes.length > 0 && lieCnt > votes.length / 2;
       scoreAdjust += caught ? -10 : 20;
       bluffResults.push({ cat, caught, votes: voteMap[cat] ?? {} });
     }
