@@ -70,6 +70,7 @@ export async function ensureIndexes(): Promise<void> {
     `CREATE INDEX IF NOT EXISTS seasons_dates_idx ON seasons (start_date, end_date)`,
     `CREATE UNIQUE INDEX IF NOT EXISTS seasons_start_date_uidx ON seasons (start_date)`,
     `CREATE UNIQUE INDEX IF NOT EXISTS season_progress_player_season_uidx ON season_progress (player_id, season_id)`,
+    `CREATE TABLE IF NOT EXISTS season_event_claims (season_id integer NOT NULL, player_id text NOT NULL, event_key text NOT NULL, created_at timestamp NOT NULL DEFAULT NOW(), PRIMARY KEY (season_id, player_id, event_key))`,
     `CREATE INDEX IF NOT EXISTS season_progress_season_xp_desc_idx ON season_progress (season_id, xp DESC)`,
     `CREATE TABLE IF NOT EXISTS play_subscriptions (id serial PRIMARY KEY, player_id text NOT NULL, product_id text NOT NULL, purchase_token text NOT NULL UNIQUE, order_id text, state text NOT NULL DEFAULT 'ACTIVE', expiry_time_ms bigint NOT NULL DEFAULT 0, start_time_ms bigint NOT NULL DEFAULT 0, raw_json text NOT NULL DEFAULT '{}', created_at timestamp NOT NULL DEFAULT NOW(), updated_at timestamp NOT NULL DEFAULT NOW())`,
     `CREATE TABLE IF NOT EXISTS play_product_purchases (id serial PRIMARY KEY, player_id text NOT NULL, product_id text NOT NULL, purchase_token text NOT NULL UNIQUE, order_id text, purchase_state bigint NOT NULL DEFAULT 0, raw_json text NOT NULL DEFAULT '{}', created_at timestamp NOT NULL DEFAULT NOW(), updated_at timestamp NOT NULL DEFAULT NOW())`,
