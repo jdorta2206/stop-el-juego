@@ -3119,15 +3119,15 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
   const baseScore = Math.min(baseScoreRaw, validAnswerCount * 10);
 
   // ⏱️ Stopper +5 speed bonus — only if THIS player called STOP and filled
-  // (almost) every category. Threshold 7 matches the real standard pack
-  // (Nombre/Lugar/Animal/Objeto/Color/Fruta/Marca → 7 categories) across
-  // every supported language. Computed server-side from stopperJson, never
-  // trusting the client.
+  // every authoritative category for this exact room/round. The threshold must
+  // follow the actual pack size: custom packs can have 3–12 categories, while
+  // standard/crazy/mix can differ. This mirrors the client's "all filled" rule
+  // but remains server-authoritative.
   const stopMetaForScore = parseBluffMeta(room.stopperJson);
   const stopperId: string | undefined =
     stopMetaForScore?.stopper?.id ?? stopMetaForScore?.id;
   const isStopper = stopperId === playerId;
-  const STOPPER_BONUS_THRESHOLD = 7;
+  const STOPPER_BONUS_THRESHOLD = Math.min(12, Math.max(1, configuredCategories.length));
   let cappedRoundScore = baseScore;
   if (isStopper && validAnswerCount >= STOPPER_BONUS_THRESHOLD) {
     cappedRoundScore += 5;
