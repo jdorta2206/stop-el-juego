@@ -50,7 +50,7 @@ router.post("/subscribe", async (req, res) => {
   // notifications for the stored playerId. Therefore a logged-in playerId must
   // be bound to the authenticated session; only the anonymous guest bucket may
   // be claimed without account authentication.
-  if (playerId !== "anonymous" && !verifyClaimedIdentity(req, String(playerId))) {
+  if (playerId !== "anonymous" && !await verifyClaimedIdentity(req, String(playerId))) {
     res.status(403).json({ error: "Identity verification failed" });
     return;
   }
@@ -190,7 +190,7 @@ router.get("/preferences", async (req, res) => {
   const endpoint = String(req.query.endpoint || "").trim();
   const playerId = String(req.query.playerId || "").trim();
   if (!endpoint || !playerId) { res.status(400).json({ error: "Missing endpoint" }); return; }
-  if (playerId !== "anonymous" && !verifyClaimedIdentity(req, playerId)) {
+  if (playerId !== "anonymous" && !await verifyClaimedIdentity(req, playerId)) {
     res.status(403).json({ error: "Identity verification failed" });
     return;
   }
@@ -235,7 +235,7 @@ router.patch("/preferences", async (req, res) => {
   }
   if (sets.length === 0) { res.status(400).json({ error: "Nothing to update" }); return; }
 
-  if (playerId !== "anonymous" && !verifyClaimedIdentity(req, String(playerId))) {
+  if (playerId !== "anonymous" && !await verifyClaimedIdentity(req, String(playerId))) {
     res.status(403).json({ error: "Identity verification failed" });
     return;
   }
@@ -261,7 +261,7 @@ router.delete("/unsubscribe", async (req, res) => {
   const { endpoint, playerId } = req.body || {};
   if (!endpoint || !playerId) { res.status(400).json({ error: "Missing endpoint or playerId" }); return; }
   try {
-    if (playerId !== "anonymous" && !verifyClaimedIdentity(req, String(playerId))) {
+    if (playerId !== "anonymous" && !await verifyClaimedIdentity(req, String(playerId))) {
       res.status(403).json({ error: "Identity verification failed" });
       return;
     }
@@ -309,7 +309,7 @@ router.post("/send-invite", inviteLimiter, async (req, res) => {
   if (!senderPlayerId || !targetPlayerId || !fromName || !roomCode) {
     res.status(400).json({ error: "Missing fields" }); return;
   }
-  if (!verifyClaimedIdentity(req, String(senderPlayerId))) {
+  if (!await verifyClaimedIdentity(req, String(senderPlayerId))) {
     res.status(403).json({ error: "Identity verification failed" });
     return;
   }
