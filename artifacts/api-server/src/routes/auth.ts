@@ -458,7 +458,7 @@ router.get("/google/callback", async (req: Request, res: Response) => {
     if (!googleSub) throw new Error("No sub from Google");
     const playerId = `google_${googleSub}`;
     const googlePicture = typeof payload.picture === "string" ? payload.picture : null;
-    await db.insert(playerScoresTable).values({ playerId, playerName: String(payload.name || "Usuario").trim().slice(0, 14) || "Usuario", avatarColor: "#f9a825", profilePicture: googlePicture }).onConflictDoUpdate({ target: playerScoresTable.playerId, set: { playerName: String(payload.name || "Usuario").trim().slice(0, 14) || "Usuario", profilePicture: googlePicture, updatedAt: new Date() } });
+    await persistOAuthProfile(playerId, String(payload.name || "Usuario").trim().slice(0, 14) || "Usuario", googlePicture, authStartedAt);
 
     const user = JSON.stringify({
       id:       playerId,
@@ -468,8 +468,7 @@ router.get("/google/callback", async (req: Request, res: Response) => {
       provider: "google",
     });
 
-    await restorePlayerId(playerId);
-    const sessionToken = issuePlayerToken(res, playerId);
+        const sessionToken = issuePlayerToken(res, playerId);
     res.send(await bridgePageMulti([
       ["oauth_user", user],
       ...(sessionToken ? [[PLAYER_TOKEN_BRIDGE_KEY, sessionToken] as [string, string]] : []),
@@ -550,22 +549,7 @@ router.get("/facebook/callback", async (req: Request, res: Response) => {
     // This is important for Android/TWA: if the browser drops the handoff URL
     // during the provider return, /api/auth/me must still be able to hydrate
     // the logged-in player instead of returning name=null and reopening AuthModal.
-    await db
-      .insert(playerScoresTable)
-      .values({
-        playerId,
-        playerName: facebookName,
-        avatarColor: "#f9a825",
-        profilePicture: facebookPicture,
-      })
-      .onConflictDoUpdate({
-        target: playerScoresTable.playerId,
-        set: {
-          playerName: facebookName,
-          profilePicture: facebookPicture,
-          updatedAt: new Date(),
-        },
-      });
+    await persistOAuthProfile(playerId, facebookName, facebookPicture, authStartedAt);
 
     const user = JSON.stringify({
       id:       playerId,
@@ -575,8 +559,7 @@ router.get("/facebook/callback", async (req: Request, res: Response) => {
       provider: "facebook",
     });
 
-    await restorePlayerId(playerId);
-    const sessionToken = issuePlayerToken(res, playerId);
+        const sessionToken = issuePlayerToken(res, playerId);
     res.send(await bridgePageMulti([
       ["oauth_user", user],
       ["fb_access_token", tokenData.access_token],
@@ -665,10 +648,9 @@ router.get("/instagram/callback", async (req: Request, res: Response) => {
       provider: "instagram",
     });
 
-    await db.insert(playerScoresTable).values({ playerId, playerName: String(me.username || me.name || "Usuario").trim().slice(0, 14) || "Usuario", avatarColor: "#f9a825", profilePicture: me.profile_picture_url || null }).onConflictDoUpdate({ target: playerScoresTable.playerId, set: { playerName: String(me.username || me.name || "Usuario").trim().slice(0, 14) || "Usuario", profilePicture: me.profile_picture_url || null, updatedAt: new Date() } });
+    await persistOAuthProfile(playerId, String(me.username || me.name || "Usuario").trim().slice(0, 14) || "Usuario", me.profile_picture_url || null, authStartedAt);
 
-    await restorePlayerId(playerId);
-    const sessionToken = issuePlayerToken(res, playerId);
+        const sessionToken = issuePlayerToken(res, playerId);
     res.send(await bridgePageMulti([
       ["oauth_user", user],
       ...(sessionToken ? [[PLAYER_TOKEN_BRIDGE_KEY, sessionToken] as [string, string]] : []),
@@ -782,21 +764,7 @@ router.post("/apple/callback", async (req: Request, res: Response) => {
     // Persist the Apple profile just like Google/Facebook/Instagram.
     // Without this row, a later /api/auth/me restore kept the session cookie
     // but returned name/avatar as null after the OAuth handoff was gone.
-    await db
-      .insert(playerScoresTable)
-      .values({
-        playerId,
-        playerName: displayName.slice(0, 14) || "Apple User",
-        avatarColor: "#f9a825",
-        profilePicture: null,
-      })
-      .onConflictDoUpdate({
-        target: playerScoresTable.playerId,
-        set: {
-          playerName: displayName.slice(0, 14) || "Apple User",
-          updatedAt: new Date(),
-        },
-      });
+    await persistOAuthProfile(playerId, displayName.slice(0, 14) || "Apple User", null, authStartedAt);
 
     const user = JSON.stringify({
       id:       playerId,
@@ -806,8 +774,7 @@ router.post("/apple/callback", async (req: Request, res: Response) => {
       provider: "apple",
     });
 
-    await restorePlayerId(playerId);
-    const sessionToken = issuePlayerToken(res, playerId);
+        const sessionToken = issuePlayerToken(res, playerId);
     res.send(await bridgePageMulti([
       ["oauth_user", user],
       ...(sessionToken ? [[PLAYER_TOKEN_BRIDGE_KEY, sessionToken] as [string, string]] : []),
@@ -900,22 +867,7 @@ router.get("/tiktok/callback", async (req: Request, res: Response) => {
     const tiktokName = String(me.display_name || "TikToker").trim().slice(0, 14) || "TikToker";
     const tiktokPicture = typeof me.avatar_url === "string" ? me.avatar_url : null;
 
-    await db
-      .insert(playerScoresTable)
-      .values({
-        playerId,
-        playerName: tiktokName,
-        avatarColor: "#f9a825",
-        profilePicture: tiktokPicture,
-      })
-      .onConflictDoUpdate({
-        target: playerScoresTable.playerId,
-        set: {
-          playerName: tiktokName,
-          profilePicture: tiktokPicture,
-          updatedAt: new Date(),
-        },
-      });
+    await persistOAuthProfile(playerId, tiktokName, tiktokPicture, authStartedAt);
 
     const user = JSON.stringify({
       id:       playerId,
@@ -924,8 +876,7 @@ router.get("/tiktok/callback", async (req: Request, res: Response) => {
       provider: "tiktok",
     });
 
-    await restorePlayerId(playerId);
-    const sessionToken = issuePlayerToken(res, playerId);
+        const sessionToken = issuePlayerToken(res, playerId);
     res.send(await bridgePageMulti([
       ["oauth_user", user],
       ...(sessionToken ? [[PLAYER_TOKEN_BRIDGE_KEY, sessionToken] as [string, string]] : []),
