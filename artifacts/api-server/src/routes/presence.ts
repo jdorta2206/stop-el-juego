@@ -349,7 +349,7 @@ router.post("/room-invite", async (req, res) => {
     return res.status(403).json({ error: "Invalid player identity" });
   }
 
-  const normalizedRoomCode = String(roomCode).trim().toUpperCase();
+  const normalizedRoomCode = String(roomCode).trim().toUpperCase();\n  const profile = await getCanonicalPresenceProfile(fromPlayerId);\n  if (!profile) return res.status(404).json({ error: "Player not found" });
 
   await challengeTableReady;
 
@@ -376,8 +376,8 @@ router.post("/room-invite", async (req, res) => {
         (challenge_id, from_player_id, from_name, from_picture, from_avatar_color,
          to_player_id, room_code, status, is_room_invite, created_at)
       VALUES
-        (${challengeId}, ${fromPlayerId}, ${fromName}, ${fromPicture || null},
-         ${fromAvatarColor || "#e53e3e"}, ${toPlayerId}, ${normalizedRoomCode},
+        (${challengeId}, ${fromPlayerId}, ${profile.name}, ${profile.picture || null},
+         ${profile.avatarColor || "#e53e3e"}, ${toPlayerId}, ${normalizedRoomCode},
          'pending', TRUE, NOW())
       ON CONFLICT (from_player_id, to_player_id, is_room_invite) WHERE status = 'pending'
       DO NOTHING
@@ -413,13 +413,13 @@ router.post("/room-invite", async (req, res) => {
   // Push notification to target (works even if app is closed)
   const invLang = (req.body as any).language || "es";
   const INVITE_MSGS: Record<string, { title: string; body: string }> = {
-    es: { title: "🎮 ¡Te invitan a tu sala!", body: `${fromName} te invita a unirte a la sala ${roomCode}` },
-    en: { title: "🎮 Room invite!", body: `${fromName} invites you to join room ${roomCode}` },
-    pt: { title: "🎮 Convite para sala!", body: `${fromName} convida-te para a sala ${roomCode}` },
-    fr: { title: "🎮 Invitation à la salle !", body: `${fromName} t'invite à rejoindre la salle ${roomCode}` },
+    es: { title: "🎮 ¡Te invitan a tu sala!", body: `${profile.name} te invita a unirte a la sala ${normalizedRoomCode}` },
+    en: { title: "🎮 Room invite!", body: `${profile.name} invites you to join room ${normalizedRoomCode}` },
+    pt: { title: "🎮 Convite para sala!", body: `${profile.name} convida-te para a sala ${normalizedRoomCode}` },
+    fr: { title: "🎮 Invitation à la salle !", body: `${profile.name} t'invite à rejoindre la salle ${normalizedRoomCode}` },
   };
   const invMsg = INVITE_MSGS[invLang] || INVITE_MSGS.es;
-  sendPushToPlayer(toPlayerId, { ...invMsg, url: `/multiplayer?room=${roomCode}` }).catch(() => {});
+  sendPushToPlayer(toPlayerId, { ...invMsg, url: `/multiplayer?room=${normalizedRoomCode}` }).catch(() => {});
 
   return res.json({ ok: true, challengeId });
 });
