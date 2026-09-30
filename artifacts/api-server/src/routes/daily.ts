@@ -168,8 +168,8 @@ router.post("/submit", async (req, res) => {
 
   await db.insert(dailyResultsTable).values({
     playerId,
-    playerName,
-    avatarColor: avatarColor || "#e53e3e",
+    playerName: canonicalPlayerName,
+    avatarColor: canonicalAvatarColor || "#e53e3e",
     challengeDate: today,
     score: safeScore,
     letter,
