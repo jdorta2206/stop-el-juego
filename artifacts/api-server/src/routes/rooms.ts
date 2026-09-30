@@ -1285,6 +1285,7 @@ router.get("/public", async (_req, res) => {
       eq(roomsTable.isPublic, true),
       eq(roomsTable.status, "waiting"),
       sql`LOWER(TRIM(${roomsTable.hostName})) <> 'halloween host'`,
+      sql`COALESCE(${roomsTable.stopperJson}::jsonb ->> 'halloweenPreview', 'false') <> 'true'`,
     ))
     .orderBy(roomsTable.createdAt)
     .limit(20);
@@ -1346,7 +1347,7 @@ router.post("/", async (req, res) => {
   // the normal public-room browser, even if a test client accidentally sends
   // isPublic=true.
   const isHalloweenTestRoom = String(effectiveHostName ?? "").trim().toLowerCase() === "halloween host";
-  const safeIsPublic = isHalloweenTestRoom ? false : (isPublic ?? false);
+  const safeIsPublic = isHalloweenTestRoom || isHalloweenPreviewAuthorized(req) ? false : (isPublic ?? false);
 
   // The code check and the INSERT are separated by asynchronous work, so the
   // check alone cannot reserve a code. The DB unique constraint is the final
