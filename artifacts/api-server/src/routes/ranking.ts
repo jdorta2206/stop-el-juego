@@ -9,7 +9,7 @@ import { resolveCosmetic } from "../lib/inventoryCatalog";
 import { SubmitScoreBody, GetLeaderboardQueryParams } from "@workspace/api-zod";
 import { scoreLimiter } from "../middlewares/rateLimit";
 import { verifyClaimedIdentity, requirePlayerIdentity, type AuthedRequest } from "../lib/playerAuth";
-import { sumVerifiedBasePersistent, ceilingFromBase, absoluteCeiling } from "../lib/scoreToken";
+import { sumVerifiedBasePersistent, consumeScoreVoucherJtis, ceilingFromBase, absoluteCeiling } from "../lib/scoreToken";
 import { recordAuthoritativeSeasonEvents } from "./season";
 import { recordHalloweenEventInTransaction, isHalloweenPreviewAuthorized } from "./halloween";
 import {
@@ -521,7 +521,7 @@ router.post("/scores", scoreLimiter, async (req, res) => {
     ? await db.select().from(playerScoresTable).where(eq(playerScoresTable.playerId, playerId)).limit(1)
     : [];
 
-  const { base: verifiedBase, verified, collectionWords, mode: certifiedMode, aiBase: certifiedAiBase } = isBonus
+  const { base: verifiedBase, verified, collectionWords, mode: certifiedMode, aiBase: certifiedAiBase, voucherJtis } = isBonus
     ? { base: 0, verified: 0, collectionWords: [] as Array<{ word: string; category: string }>, mode: null, aiBase: 0 }
     // /ranking/scores is the client solo leaderboard path. Keep its voucher
     // count cap independent of the client-supplied `mode`; otherwise a caller
@@ -704,7 +704,12 @@ router.post("/scores", scoreLimiter, async (req, res) => {
       return;
     }
   } else {
-    player = await db.transaction(async (tx) => {
+    try {
+      player = await db.transaction(async (tx) => {
+      if (verified > 0 && voucherJtis.length > 0) {
+        await consumeScoreVoucherJtis(tx, voucherJtis);
+      }
+
       if (submissionId) {
         const [claim] = await tx
           .insert(scoreSubmissionClaimsTable)
@@ -866,7 +871,14 @@ router.post("/scores", scoreLimiter, async (req, res) => {
       }
 
       return txPlayer;
-    });
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message === "SCORE_VOUCHER_CONFLICT") {
+        res.status(422).json({ error: "INVALID_SCORE_VOUCHER" });
+        return;
+      }
+      throw error;
+    }
     if (duplicateSubmission) {
       res.status(201).json({
         ...player,
