@@ -40,7 +40,7 @@ router.get("/happy-hour", async (req, res) => {
 // fires at the player's chosen local time instead of a global UTC hour.
 // Falls back to (20:00, 0) if absent for back-compat with older clients.
 router.post("/subscribe", async (req, res) => {
-  const { playerId, subscription, language, hourLocal, tzOffsetMinutes, origin: bodyOrigin } = req.body;
+  const { playerId, subscription, language, hourLocal, tzOffsetMinutes, timeZone: bodyTimeZone, origin: bodyOrigin } = req.body;
   if (!playerId || !subscription?.endpoint) {
     res.status(400).json({ error: "Missing playerId or subscription" });
     return;
@@ -68,6 +68,14 @@ router.post("/subscribe", async (req, res) => {
   const hour = hasHourLocal ? Math.floor(hourLocal) : 20;
   const tz = Number.isFinite(tzOffsetMinutes) && tzOffsetMinutes >= -14 * 60 && tzOffsetMinutes <= 14 * 60
     ? Math.floor(tzOffsetMinutes) : 0;
+  let timeZone: string | null = null;
+  if (typeof bodyTimeZone === "string" && bodyTimeZone.trim()) {
+    const candidate = bodyTimeZone.trim();
+    try {
+      new Intl.DateTimeFormat("en-US", { timeZone: candidate }).format();
+      timeZone = candidate;
+    } catch {}
+  }
 
   // Detectar origen del navegador para poder filtrar suscripciones duplicadas
   // entre stop-el-juego.replit.app y stopjuegodepalabras.com. Preferimos el
@@ -99,11 +107,11 @@ router.post("/subscribe", async (req, res) => {
       await db.execute(sql`
         INSERT INTO push_subscriptions (
           player_id, endpoint, p256dh, auth, language,
-          hour_local, tz_offset_minutes, enabled, muted_until, origin
+          hour_local, tz_offset_minutes, time_zone, enabled, muted_until, origin
         )
         VALUES (
           ${playerId}, ${endpoint}, ${p256dh}, ${auth}, ${language || "es"},
-          ${hour}, ${tz}, TRUE, 0, ${origin}
+          ${hour}, ${tz}, ${timeZone}, TRUE, 0, ${origin}
         )
         ON CONFLICT (endpoint) DO UPDATE
           SET player_id         = CASE
@@ -118,6 +126,7 @@ router.post("/subscribe", async (req, res) => {
                                     ELSE push_subscriptions.hour_local
                                   END,
               tz_offset_minutes = EXCLUDED.tz_offset_minutes,
+              time_zone        = COALESCE(EXCLUDED.time_zone, push_subscriptions.time_zone),
               enabled           = TRUE,
               origin            = COALESCE(EXCLUDED.origin, push_subscriptions.origin)
       `);
@@ -128,10 +137,10 @@ router.post("/subscribe", async (req, res) => {
       await db.execute(sql`
         INSERT INTO push_subscriptions (
           player_id, endpoint, p256dh, auth, language,
-          hour_local, tz_offset_minutes, enabled, muted_until
+          hour_local, tz_offset_minutes, time_zone, enabled, muted_until
         )        VALUES (
           ${playerId}, ${endpoint}, ${p256dh}, ${auth}, ${language || "es"},
-          ${hour}, ${tz}, TRUE, 0
+          ${hour}, ${tz}, ${timeZone}, TRUE, 0
         )
         ON CONFLICT (endpoint) DO UPDATE
           SET player_id         = CASE
