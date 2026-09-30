@@ -1285,7 +1285,7 @@ router.get("/public", async (_req, res) => {
       eq(roomsTable.isPublic, true),
       eq(roomsTable.status, "waiting"),
       sql`LOWER(TRIM(${roomsTable.hostName})) <> 'halloween host'`,
-      sql`COALESCE(${roomsTable.stopperJson}::jsonb ->> 'halloweenPreview', 'false') <> 'true'`,
+      sql`COALESCE(${roomsTable.stopperJson}, '') NOT LIKE '%"halloweenPreview":true%'`,
     ))
     .orderBy(roomsTable.createdAt)
     .limit(20);
