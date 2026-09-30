@@ -578,9 +578,6 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
           coins: sql`${playerScoresTable.coins} + ${coinGain}`,
           gamesPlayed: sql`${playerScoresTable.gamesPlayed} + 1`,
           wins: sql`${playerScoresTable.wins} + ${won ? 1 : 0}`,
-          xp: sql`${playerScoresTable.xp} + ${xpGain}`,
-          level: sql`GREATEST(${playerScoresTable.level}, ${newLevel})`,
-          coins: sql`${playerScoresTable.coins} + ${coinGain}`,
           ...(updatedToday ? {
             currentStreak: newStreak,
             longestStreak: newLongest,
