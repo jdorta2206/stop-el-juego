@@ -6,7 +6,7 @@ import { CreateRoomBody, JoinRoomBody, SubmitRoomResultsBody } from "@workspace/
 import { calculateStreak, appendStreakDay, calcXpGain, calcCoinGain, calcLevel, lookupPlayerTzOffset } from "./ranking";
 import { recordTrustedAnalyticsEvent } from "./analytics";
 import { recordAuthoritativeSeasonEvents } from "./season";
-import { recordHalloweenEvent, recordHalloweenScareEvents, isHalloweenPreviewAuthorized } from "./halloween";
+import { recordHalloweenEvent, recordHalloweenScareEvents, recordHalloweenScareEventsInTransaction, isHalloweenPreviewAuthorized } from "./halloween";
 import { isHappyHourActiveForTzOffset, HAPPY_HOUR_MULTIPLIER } from "../lib/happyHour";
 import { isWordValidAsync, HALLOWEEN_CATEGORY_ALIASES } from "./game";
 import { writeLimiter, roomJoinLimiter } from "../middlewares/rateLimit";
@@ -2793,21 +2793,53 @@ router.post("/:roomCode/stop", async (req, res) => {
     roundStartedAt: prevMeta.roundStartedAt ?? Date.now(),
   };
 
-  // CAS the transition on the exact room version we inspected. Without this,
-  // concurrent STOP/RESULTS requests could overwrite a newer playersJson or
-  // replace the authoritative stopper with a stale read.
-  const [updated] = await db.update(roomsTable)
-    .set({
-      status: "stopped",
-      stopperJson: JSON.stringify(newMeta),
-      updatedAt: new Date(),
-    })
-    .where(and(
-      eq(roomsTable.roomCode, roomCode.toUpperCase()),
-      eq(roomsTable.status, "playing"),
-      eq(roomsTable.updatedAt, room.updatedAt),
-    ))
-    .returning();
+  // 🔒 Atomically transition PLAYING → STOPPED and persist the trusted Halloween
+  // scare events. Keeping these in one transaction prevents /results from
+  // advancing the round between the STOP write and Halloween persistence.
+  const updated = await db.transaction(async (tx) => {
+    const [stopped] = await tx.update(roomsTable)
+      .set({
+        status: "stopped",
+        stopperJson: JSON.stringify(newMeta),
+        updatedAt: new Date(),
+      })
+      .where(and(
+        eq(roomsTable.roomCode, roomCode.toUpperCase()),
+        eq(roomsTable.status, "playing"),
+        eq(roomsTable.updatedAt, room.updatedAt),
+      ))
+      .returning();
+
+    if (!stopped) return null;
+
+    const stopMeta = parseBluffMeta(room.stopperJson) ?? {};
+    const stopPack = roomCategoryPacks.get(roomCode.toUpperCase())?.pack ?? stopMeta.categoryPack ?? "standard";
+    if (halloweenEventAllowed(req) && stopPack !== "custom") {
+      const scareKey = `stop:${roomCode.toUpperCase()}:${room.currentRound ?? 0}:${stopper.stopTimestamp}`;
+      const stopScareEvents = [
+        ...(roomPlayers.find((p: any) => p.playerId === playerId && p.loginMethod !== "guest")
+          ? [{ playerId, type: "scare_provoked" as const, eventKey: `provoked:${scareKey}` }]
+          : []),
+        ...roomPlayers.filter((p: any) => p.playerId && p.playerId !== playerId && !p.isBot && p.loginMethod !== "guest").map((p: any) => ({
+          playerId: p.playerId,
+          type: "scare_received" as const,
+          eventKey: `received:${scareKey}:${p.playerId}`,
+        })),
+      ];
+      if (stopScareEvents.length > 0) {
+        await recordHalloweenScareEventsInTransaction(
+          tx,
+          stopScareEvents,
+          isHalloweenPreviewAuthorized(req),
+          stopped.id,
+          "stopped",
+          room.currentRound,
+        );
+      }
+    }
+
+    return stopped;
+  });
 
   if (!updated) {
     const [current] = await db.select().from(roomsTable)
@@ -2820,30 +2852,6 @@ router.post("/:roomCode/stop", async (req, res) => {
     res.json(formatRoom(current));
     return;
   }
-
-  const stopMeta = parseBluffMeta(room.stopperJson) ?? {};
-  const stopPack = roomCategoryPacks.get(roomCode.toUpperCase())?.pack ?? stopMeta.categoryPack ?? "standard";
-  if (halloweenEventAllowed(req) && stopPack !== "custom") {
-    const scareKey = `stop:${roomCode.toUpperCase()}:${room.currentRound ?? 0}:${stopper.stopTimestamp}`;
-    const stopScareEvents = [
-      ...(roomPlayers.find((p: any) => p.playerId === playerId && p.loginMethod !== "guest")
-        ? [{ playerId, type: "scare_provoked" as const, eventKey: `provoked:${scareKey}` }]
-        : []),
-      ...roomPlayers.filter((p: any) => p.playerId && p.playerId !== playerId && !p.isBot && p.loginMethod !== "guest").map((p: any) => ({
-        playerId: p.playerId,
-        type: "scare_received" as const,
-        eventKey: `received:${scareKey}:${p.playerId}`,
-      })),
-    ];
-    await recordHalloweenScareEvents(
-      stopScareEvents,
-      isHalloweenPreviewAuthorized(req),
-      room.id,
-      "stopped",
-      room.currentRound,
-    ).catch((err) => console.error("[halloween] trusted STOP scare events failed:", err));
-  }
-
   res.json(broadcastAndFormat(updated));
 
   // 🤖 If bots are in this room and haven't submitted yet, rush them so the
