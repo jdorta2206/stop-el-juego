@@ -271,6 +271,8 @@ export async function recordHalloweenScareEvents(
   }>,
   preview = false,
   activeRoomId?: number,
+  activeRoomStatus: "playing" | "stopped" = "playing",
+  activeRoomRound?: number,
 ) {
   const year = getEventYear(new Date(), preview);
   if (year === null || events.length === 0) return [];
@@ -283,7 +285,8 @@ export async function recordHalloweenScareEvents(
       WHERE id = ${activeRoomId}
       FOR UPDATE
     `);
-    if (String(activeRoom.rows?.[0]?.status ?? "") !== "playing") return [];
+    if (String(activeRoom.rows?.[0]?.status ?? "") !== activeRoomStatus) return [];
+    if (activeRoomRound !== undefined && Number(activeRoom.rows?.[0]?.current_round) !== activeRoomRound) return [];
 
     const results: unknown[] = [];
     // Always lock Halloween progress rows in a deterministic player order.
