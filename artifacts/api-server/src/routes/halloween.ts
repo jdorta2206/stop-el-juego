@@ -517,6 +517,11 @@ export async function recordHalloweenScareEventsWithCooldown(
       "playing",
       roomRound,
     );
+    // Manual scares are atomic: if any eligible event could not be persisted,
+    // roll back the cooldown and every partial Halloween reward as well.
+    if (recorded.length !== filteredEvents.length) {
+      throw new Error("Halloween scare persistence incomplete");
+    }
     return { recorded, cooldownMs: 18000, ended: false, cooldownClaimed: true };
   });
 }
