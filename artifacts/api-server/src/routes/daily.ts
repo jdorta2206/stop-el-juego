@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db, dailyResultsTable } from "@workspace/db";
+import { db, dailyResultsTable, playerScoresTable } from "@workspace/db";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { verifyClaimedIdentity } from "../lib/playerAuth";
 import { sumVerifiedBasePersistent, ceilingFromBase, absoluteCeiling } from "../lib/scoreToken";
@@ -88,6 +88,21 @@ router.post("/submit", async (req, res) => {
     return;
   }
 
+  const [canonicalPlayer] = await db
+    .select({
+      playerName: playerScoresTable.playerName,
+      avatarColor: playerScoresTable.avatarColor,
+    })
+    .from(playerScoresTable)
+    .where(eq(playerScoresTable.playerId, playerId))
+    .limit(1);
+  if (!canonicalPlayer) {
+    res.status(404).json({ error: "Player not found" });
+    return;
+  }
+  const canonicalPlayerName = canonicalPlayer.playerName;
+  const canonicalAvatarColor = canonicalPlayer.avatarColor;
+
   // 🔒 Bind the submission to the server-generated challenge. A client must not
   // be able to submit a score under a different letter/language for today's
   // ranking. Unsupported languages fall back to Spanish for GET, but submissions
@@ -137,7 +152,7 @@ router.post("/submit", async (req, res) => {
     if (safeScore > existing[0].score) {
       await db
         .update(dailyResultsTable)
-        .set({ score: safeScore, playerName, avatarColor: avatarColor || existing[0].avatarColor })
+        .set({ score: safeScore, playerName: canonicalPlayerName, avatarColor: canonicalAvatarColor })
         .where(
           and(
             eq(dailyResultsTable.playerId, playerId),
@@ -163,8 +178,8 @@ router.post("/submit", async (req, res) => {
     target: [dailyResultsTable.playerId, dailyResultsTable.challengeDate],
     set: {
       score: sql`GREATEST(${dailyResultsTable.score}, EXCLUDED.score)`,
-      playerName: sql`CASE WHEN EXCLUDED.score > ${dailyResultsTable.score} THEN EXCLUDED.player_name ELSE ${dailyResultsTable.playerName} END`,
-      avatarColor: sql`CASE WHEN EXCLUDED.score > ${dailyResultsTable.score} THEN EXCLUDED.avatar_color ELSE ${dailyResultsTable.avatarColor} END`,
+      playerName: sql`CASE WHEN EXCLUDED.score > ${dailyResultsTable.score} THEN ${canonicalPlayerName} ELSE ${dailyResultsTable.playerName} END`,
+      avatarColor: sql`CASE WHEN EXCLUDED.score > ${dailyResultsTable.score} THEN ${canonicalAvatarColor} ELSE ${dailyResultsTable.avatarColor} END`,
     },
   });
 
