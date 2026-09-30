@@ -6,7 +6,7 @@ import { CreateRoomBody, JoinRoomBody, SubmitRoomResultsBody } from "@workspace/
 import { calculateStreak, appendStreakDay, calcXpGain, calcCoinGain, calcLevel, lookupPlayerTzOffset } from "./ranking";
 import { recordTrustedAnalyticsEvent } from "./analytics";
 import { recordAuthoritativeSeasonEvents } from "./season";
-import { recordHalloweenEvent, recordHalloweenScareEvents, recordHalloweenScareEventsInTransaction, recordHalloweenScareEventsWithCooldown, isHalloweenPreviewAuthorized } from "./halloween";
+import { recordHalloweenEvent, recordHalloweenScareEvents, getHalloweenEventYear, recordHalloweenScareEventsInTransaction, recordHalloweenScareEventsWithCooldown, isHalloweenPreviewAuthorized } from "./halloween";
 import { isHappyHourActiveForTzOffset, HAPPY_HOUR_MULTIPLIER } from "../lib/happyHour";
 import { isWordValidAsync, HALLOWEEN_CATEGORY_ALIASES } from "./game";
 import { writeLimiter, roomJoinLimiter, halloweenScareLimiter } from "../middlewares/rateLimit";
@@ -40,6 +40,27 @@ const multiplayerSettlementClaimsReady = db.execute(sql`
   throw err;
 });
 
+const multiplayerAuxClaimsReady = db.execute(sql`
+  CREATE TABLE IF NOT EXISTS multiplayer_settlement_aux_claims (
+    room_id integer NOT NULL,
+    player_id text NOT NULL,
+    effect text NOT NULL,
+    created_at timestamp NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (room_id, player_id, effect)
+  )
+`).catch((err) => {
+  console.error("[rooms] failed to initialize multiplayer auxiliary settlement claims:", err);
+  throw err;
+});
+
+async function markMultiplayerAuxClaim(roomId: number, playerId: string, effect: "season" | "halloween") {
+  await multiplayerAuxClaimsReady;
+  await db.execute(sql`
+    INSERT INTO multiplayer_settlement_aux_claims (room_id, player_id, effect)
+    VALUES (${roomId}, ${playerId}, ${effect})
+    ON CONFLICT (room_id, player_id, effect) DO NOTHING
+  `);
+}
 // ── Round duration model ─────────────────────────────────────────────────
 // Mirrors the client's RANDOM_MIN/MAX so deadlines computed on the server
 // match what the client expects when it falls back to local rendering.
@@ -692,20 +713,20 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
     }).catch((err) => console.error("[analytics] trusted multiplayer game_complete failed:", err));
 
     const validWords = Number.isFinite(p.validAnswerCount) ? Math.max(0, Math.floor(p.validAnswerCount)) : 0;
-    void recordHalloweenEvent(
-      p.playerId,
-      "game_completed",
-      `multiplayer:${roomId}:${p.playerId}`,
-      halloweenPreview,
-    ).catch((err) => console.error("[halloween] trusted multiplayer completion failed:", err));
+    const halloweenApplicable = getHalloweenEventYear(new Date(), halloweenPreview) !== null;
+    try {
+      const halloweenResult = await recordHalloweenEvent(p.playerId, "game_completed", `multiplayer:${roomId}:${p.playerId}`, halloweenPreview);
+      if (!halloweenApplicable || halloweenResult !== null) await markMultiplayerAuxClaim(roomId, p.playerId, "halloween");
+    } catch (err) { console.error("[halloween] trusted multiplayer completion failed:", err); }
 
-    void recordAuthoritativeSeasonEvents(p.playerId, [
+    const seasonOk = await recordAuthoritativeSeasonEvents(p.playerId, [
       { type: "play_game", value: 1 },
       ...(won ? [{ type: "win_game", value: 1 }] : []),
       ...(rawScore > 0 ? [{ type: "round_score", value: rawScore }] : []),
       ...(validWords > 0 ? [{ type: "valid_words", value: validWords }] : []),
       { type: "streak", value: settlementStreak },
-    ], `multiplayer:${roomId}:${p.playerId}`).catch((err) => console.error("[season] trusted multiplayer events failed:", err));
+    ], `multiplayer:${roomId}:${p.playerId}`);
+    if (seasonOk) await markMultiplayerAuxClaim(roomId, p.playerId, "season");
   }));
 }
 
@@ -754,6 +775,9 @@ async function recoverMultiplayerAuxiliaryEffects(room: any, players: any[]): Pr
 
   for (const p of eligible) {
     const eventKey = `multiplayer:${room.id}:${p.playerId}`;
+    const auxRows = await db.execute(sql`SELECT effect FROM multiplayer_settlement_aux_claims WHERE room_id = ${room.id} AND player_id = ${p.playerId}`);
+    const aux = new Set((auxRows.rows ?? []).map((r: any) => String(r.effect)));
+    if (aux.has("season") && aux.has("halloween")) continue;
     const existingSeasonEvent = await db.execute(sql`SELECT 1 FROM season_event_claims WHERE event_key = ${eventKey} LIMIT 1`);
     const won = winnerId === p.playerId;
     const rawScore = Number.isFinite(p.score) ? Math.max(0, Math.floor(p.score)) : 0;
@@ -767,16 +791,19 @@ async function recoverMultiplayerAuxiliaryEffects(room: any, players: any[]): Pr
       p.finishedAt,
       scoreRow[0]?.currentStreak ?? 0,
     );
-    if ((existingSeasonEvent.rows ?? []).length === 0) {
-      await recordAuthoritativeSeasonEvents(p.playerId, [
-        { type: "play_game", value: 1 },
-        ...(won ? [{ type: "win_game", value: 1 }] : []),
-        ...(rawScore > 0 ? [{ type: "round_score", value: rawScore }] : []),
-        ...(validWords > 0 ? [{ type: "valid_words", value: validWords }] : []),
+    if (!aux.has("season") && (existingSeasonEvent.rows ?? []).length === 0) {
+      const seasonOk = await recordAuthoritativeSeasonEvents(p.playerId, [
+        { type: "play_game", value: 1 }, ...(won ? [{ type: "win_game", value: 1 }] : []),
+        ...(rawScore > 0 ? [{ type: "round_score", value: rawScore }] : []), ...(validWords > 0 ? [{ type: "valid_words", value: validWords }] : []),
         ...(streak > 0 ? [{ type: "streak", value: streak }] : []),
       ], eventKey);
+      if (seasonOk) await markMultiplayerAuxClaim(room.id, p.playerId, "season");
+    } else if (!aux.has("season")) await markMultiplayerAuxClaim(room.id, p.playerId, "season");
+    if (!aux.has("halloween")) {
+      const halloweenApplicable = getHalloweenEventYear(new Date(), halloweenPreview) !== null;
+      const halloweenResult = await recordHalloweenEvent(p.playerId, "game_completed", eventKey, halloweenPreview);
+      if (!halloweenApplicable || halloweenResult !== null) await markMultiplayerAuxClaim(room.id, p.playerId, "halloween");
     }
-    await recordHalloweenEvent(p.playerId, "game_completed", `multiplayer:${room.id}:${p.playerId}`, halloweenPreview);
   }
 }
 
