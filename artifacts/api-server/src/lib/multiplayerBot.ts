@@ -20,6 +20,7 @@ import { db } from "@workspace/db";
 import { roomsTable } from "@workspace/db";
 import { eq, and, sql } from "drizzle-orm";
 import OpenAI from "openai";
+import { isWordValidAsync } from "../routes/game";
 
 // ── LLM-backed answer generation ──────────────────────────────────────────
 // Bots used to pick random nouns from a hand-curated bank ignoring the round
@@ -347,6 +348,7 @@ type BotActionDeps = {
   broadcast: (code: string, payload: object) => void;
   formatRoom: (room: any) => any;
   submitFinalScores: (players: any[], letter: string) => void | Promise<void>;
+  getRoundCategories: (room: any) => string[];
 };
 
 async function performBotSubmit(
@@ -390,11 +392,7 @@ async function performBotSubmit(
     // start (category-aware), fall back to the random word bank if the LLM
     // call failed or quota was exceeded.
     const letter = (room.currentLetter ?? "A").toUpperCase();
-    const sampleCats = (() => {
-      const human = players.find(p => !p.isBot && p.answers && typeof p.answers === "object");
-      if (human?.answers) return Object.keys(human.answers);
-      return ["cat_0","cat_1","cat_2","cat_3","cat_4","cat_5","cat_6"];
-    })();
+    const sampleCats = deps.getRoundCategories(room);
     let answers: Record<string, string> = {};
     const pregen = getPendingAnswers(code, botPlayerId, room.currentRound ?? 0, letter);
     if (pregen && Object.keys(pregen).length > 0) {
@@ -403,15 +401,20 @@ async function performBotSubmit(
       const words = pickWordsForRound(letter, sampleCats.length);
       words.forEach((w, i) => { if (sampleCats[i]) answers[sampleCats[i]] = w; });
     }
-    // 🛡️ Mirror server scoring rules (unique per-letter only). Dedupes any
-    // accidental duplicates in the bank so the bot can never out-score itself
-    // by saying the same word twice.
-    const normLetter = letter.toLowerCase();
+    // 🔒 Use the exact same authoritative validator as human /results.
+    // Bots must never score from a weaker "starts with letter" rule because
+    // their score participates in the winner calculation.
     const seen = new Set<string>();
     let validBotWords = 0;
-    for (const w of Object.values(answers)) {
+    for (const category of sampleCats) {
+      const w = answers[category];
+      if (typeof w !== "string" || !w.trim()) continue;
       const norm = w.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-      if (norm.length >= 2 && norm.startsWith(normLetter) && !seen.has(norm)) {
+      if (seen.has(norm)) continue;
+      const valid = await isWordValidAsync(
+        w, letter, category, room.language ?? "es", botPlayerId,
+      );
+      if (valid) {
         seen.add(norm);
         validBotWords++;
       }
