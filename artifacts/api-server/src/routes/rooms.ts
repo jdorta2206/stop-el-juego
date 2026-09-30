@@ -2509,6 +2509,16 @@ router.post("/:roomCode/stop", async (req, res) => {
 
   res.json(broadcastAndFormat(updated));
 
+  if (halloweenEventAllowed(req) && roomCategoryPacks.get(roomCode.toUpperCase())?.pack !== "custom") {
+    const scareKey = `stop:${roomCode.toUpperCase()}:${room.currentRound ?? 0}:${stopper.stopTimestamp}`;
+    void Promise.allSettled([
+      recordHalloweenEvent(playerId, "scare_provoked", `provoked:${scareKey}`, String(req.headers?.["x-halloween-preview"] ?? "") === "1"),
+      ...roomPlayers.filter((p: any) => p.playerId && p.playerId !== playerId && !p.isBot).map((p: any) =>
+        recordHalloweenEvent(p.playerId, "scare_received", `received:${scareKey}:${p.playerId}`, String(req.headers?.["x-halloween-preview"] ?? "") === "1")
+      ),
+    ]).catch(() => {});
+  }
+
   // 🤖 If bots are in this room and haven't submitted yet, rush them so the
   // round can advance ~3s after STOP (mimics a human freezing then submitting).
   const updatedPlayers = parsePlayers(updated.playersJson);
