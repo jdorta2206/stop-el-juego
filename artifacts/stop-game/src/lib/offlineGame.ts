@@ -323,14 +323,21 @@ export async function flushScoreOutbox(
       while (true) {
         const cur = readOutbox();
         if (cur.length === 0) break;
-        const [next, ...rest] = cur;
-        writeOutbox(rest);
+        const [next] = cur;
         try {
+          // Keep the entry durable until the server acknowledges the POST.
+          // Removing it before the await could permanently lose the score if
+          // the tab/WebView crashes between localStorage.remove and the request.
           await submit({ ...next.payload, submissionId: next.payload.submissionId ?? next.id });
+          const after = readOutbox();
+          // Remove exactly the entry that was acknowledged. If another writer
+          // changed the queue, preserve every other entry rather than replacing
+          // the whole array with a stale snapshot.
+          writeOutbox(after.filter((entry) => entry.id !== next.id));
           flushed++;
         } catch {
-          const after = readOutbox();
-          writeOutbox([next, ...after]);
+          // Leave the entry in place for the next online retry. Keeping it
+          // durable also makes process/tab crashes safe during the await.
           break;
         }
       }
