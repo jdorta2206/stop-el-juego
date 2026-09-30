@@ -9,7 +9,7 @@ const router: IRouter = Router();
 router.get("/list/:followerId", async (req, res) => {
   const { followerId } = req.params;
   if (!followerId) return res.status(400).json({ error: "followerId required" });
-  if (!verifyClaimedIdentity(req, followerId)) {
+  if (!await verifyClaimedIdentity(req, followerId)) {
     return res.status(403).json({ error: "Invalid player identity" });
   }
 
@@ -119,7 +119,7 @@ router.post("/follow", async (req, res) => {
   if (!followerId || !followedId || !followedName) {
     return res.status(400).json({ error: "followerId, followedId and followedName required" });
   }
-  if (!verifyClaimedIdentity(req, followerId)) {
+  if (!await verifyClaimedIdentity(req, followerId)) {
     return res.status(403).json({ error: "Invalid player identity" });
   }
   if (followerId === followedId) {
@@ -159,7 +159,7 @@ router.delete("/unfollow", async (req, res) => {
   if (!followerId || !followedId) {
     return res.status(400).json({ error: "followerId and followedId required" });
   }
-  if (!verifyClaimedIdentity(req, followerId)) {
+  if (!await verifyClaimedIdentity(req, followerId)) {
     return res.status(403).json({ error: "Invalid player identity" });
   }
 
