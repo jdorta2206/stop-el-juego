@@ -538,8 +538,12 @@ function resolveBluffs(players: any[], bluffVotes: Record<string, any>): any[] {
 // player score/history transaction. Concurrent/replayed callers therefore become
 // no-ops instead of paying XP/coins/stats twice.
 async function submitAllScoresToLeaderboard(players: any[], letter: string, roomId: number, roomCode: string) {
-  const leaderboardPlayers = players.filter((p: any) => p && !p.isBot && p.loginMethod !== "guest");
-  const sorted = [...leaderboardPlayers].sort((a, b) => {
+  // Guests do not receive persistent leaderboard settlement, but they still
+  // participate in the actual game. Keep them in winner calculation so an
+  // account cannot be awarded a false win merely because a guest scored higher.
+  const allScoringPlayers = players.filter((p: any) => p && !p.isBot);
+  const leaderboardPlayers = allScoringPlayers.filter((p: any) => p.loginMethod !== "guest");
+  const sorted = [...allScoringPlayers].sort((a, b) => {
     const ds = (b.score || 0) - (a.score || 0);
     if (ds !== 0) return ds;
     const sa = a.wasStopper ? 1 : 0;
