@@ -9,7 +9,7 @@ import { recordAuthoritativeSeasonEvents } from "./season";
 import { recordHalloweenEvent, recordHalloweenScareEvents, recordHalloweenScareEventsInTransaction, recordHalloweenScareEventsWithCooldown, isHalloweenPreviewAuthorized } from "./halloween";
 import { isHappyHourActiveForTzOffset, HAPPY_HOUR_MULTIPLIER } from "../lib/happyHour";
 import { isWordValidAsync, HALLOWEEN_CATEGORY_ALIASES } from "./game";
-import { writeLimiter, roomJoinLimiter } from "../middlewares/rateLimit";
+import { writeLimiter, roomJoinLimiter, halloweenScareLimiter } from "../middlewares/rateLimit";
 import { verifyClaimedIdentity, verifyPlayerToken, readPlayerId, isLoggedInId, isAuthConfigured } from "../lib/playerAuth";
 import {
   pickBotIdentity,
@@ -2664,7 +2664,7 @@ router.post("/:roomCode/phrase", writeLimiter, async (req, res) => {
 });
 
 // POST /rooms/:roomCode/halloween-scare — cosmetic scare sent to the other players in the active round.
-router.post("/:roomCode/halloween-scare", writeLimiter, async (req, res) => {
+router.post("/:roomCode/halloween-scare", halloweenScareLimiter, async (req, res) => {
   const code = paramStr(req.params.roomCode).toUpperCase();
   const { playerId, scareId } = req.body ?? {};
   if (!playerId || !verifyClaimedIdentity(req, playerId)) {
