@@ -493,13 +493,11 @@ function resolveBluffs(players: any[], bluffVotes: Record<string, any>): any[] {
   });
 }
 
-// Auto-submit all non-guest players' scores to the global leaderboard when the game ends
+// Auto-submit all non-guest players' scores to the global leaderboard when the game ends.
+// The core settlement is DB-idempotent: one (room, player) claim owns the entire
+// player score/history transaction. Concurrent/replayed callers therefore become
+// no-ops instead of paying XP/coins/stats twice.
 async function submitAllScoresToLeaderboard(players: any[], letter: string, roomCode: string) {
-  // ⚖️ Deterministic tie-breaker — must match the client's winner display:
-  //   1) higher final score
-  //   2) was the stopper in the LAST round (rewards the player who triggered STOP)
-  //   3) earlier finishedAt timestamp (faster typer wins ties)
-  //   4) playerId (stable, alphabetical) so we never produce duplicate winners
   const leaderboardPlayers = players.filter((p: any) => p && !p.isBot);
   const sorted = [...leaderboardPlayers].sort((a, b) => {
     const ds = (b.score || 0) - (a.score || 0);
@@ -514,13 +512,12 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
   });
   const winner = sorted[0];
   const today = new Date().toISOString().split("T")[0];
+  const normalizedRoomCode = String(roomCode || "").toUpperCase();
 
   await Promise.allSettled(leaderboardPlayers.map(async (p: any) => {
-    // Skip guests and players with 0 or no score
     if (!p.playerId || p.loginMethod === "guest") return;
 
     const rawScore = p.score || 0;
-    // Apply 1.5x multiplier for multiplayer
     const score = Math.round(rawScore * 1.5);
     const won = winner?.playerId === p.playerId;
     const xpBase = calcXpGain(score, won, "multiplayer");
@@ -529,127 +526,128 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
     const xpGain = happyHour ? xpBase * HAPPY_HOUR_MULTIPLIER : xpBase;
     const coinGain = calcCoinGain(score, won, "multiplayer", false);
 
-    // 🔒 Atomic upsert: avoids the read-modify-write race that lost
-    // concurrent finishers' totals under heavy multiplayer load.
-    // Streak still needs the prior `lastPlayedDate`, so we read it once,
-    // but every counter increment is delegated to SQL in a single statement.
-    const existing = await db
-      .select({
-        lastPlayedDate: playerScoresTable.lastPlayedDate,
-        currentStreak: playerScoresTable.currentStreak,
-        longestStreak: playerScoresTable.longestStreak,
-        avatarColor: playerScoresTable.avatarColor,
-        streakDaysJson: playerScoresTable.streakDaysJson,
-        xp: playerScoresTable.xp,
-        level: playerScoresTable.level,
-        coins: playerScoresTable.coins,
-      })
-      .from(playerScoresTable)
-      .where(eq(playerScoresTable.playerId, p.playerId))
-      .limit(1);
+    // Claim + all core leaderboard/history mutations are one DB transaction.
+    // If two requests race, exactly one INSERT ... ON CONFLICT wins. If the
+    // transaction fails, its claim rolls back too, so a later retry can recover.
+    const claimed = await db.transaction(async (tx) => {
+      const claim = await tx.execute(sql`
+        INSERT INTO multiplayer_settlement_claims (room_code, player_id)
+        VALUES (${normalizedRoomCode}, ${p.playerId})
+        ON CONFLICT (room_code, player_id) DO NOTHING
+        RETURNING player_id
+      `);
+      if ((claim.rows?.length ?? 0) === 0) return false;
 
-    const { newStreak, updatedToday } = calculateStreak(
-      existing[0]?.lastPlayedDate ?? null,
-      existing[0]?.currentStreak ?? 0
-    );
-    const newLongest = Math.max(existing[0]?.longestStreak ?? 0, newStreak);
-    // Append today to the rolling 30-day streak-days list using the same
-    // shared helper as the solo /ranking/scores path so the streak calendar
-    // is consistent regardless of which mode the player progressed through.
-    const newStreakDaysJson = updatedToday
-      ? appendStreakDay(existing[0]?.streakDaysJson, today)
-      : undefined;
-    // Derive the resulting level from the same authoritative XP gain above.
-    // Keep the Happy Hour multiplier already applied to xpGain.
-    const newXp = (existing[0]?.xp ?? 0) + xpGain;
-    const newLevel = calcLevel(newXp);
-
-    if (existing.length > 0) {
-      await db.update(playerScoresTable)
-        .set({
-          playerName: p.playerName,
-          avatarColor: p.avatarColor ?? existing[0].avatarColor,
-          totalScore: sql`${playerScoresTable.totalScore} + ${score}`,
-          xp: sql`${playerScoresTable.xp} + ${xpGain}`,
-          level: sql`GREATEST(${playerScoresTable.level}, ${calcLevel((existing[0]?.xp ?? 0) + xpGain)})`,
-          coins: sql`${playerScoresTable.coins} + ${coinGain}`,
-          gamesPlayed: sql`${playerScoresTable.gamesPlayed} + 1`,
-          wins: sql`${playerScoresTable.wins} + ${won ? 1 : 0}`,
-          ...(updatedToday ? {
-            currentStreak: newStreak,
-            longestStreak: newLongest,
-            lastPlayedDate: today,
-            streakDaysJson: newStreakDaysJson,
-          } : {}),
-          updatedAt: new Date(),
+      const existing = await tx
+        .select({
+          lastPlayedDate: playerScoresTable.lastPlayedDate,
+          currentStreak: playerScoresTable.currentStreak,
+          longestStreak: playerScoresTable.longestStreak,
+          avatarColor: playerScoresTable.avatarColor,
+          streakDaysJson: playerScoresTable.streakDaysJson,
+          xp: playerScoresTable.xp,
+          level: playerScoresTable.level,
+          coins: playerScoresTable.coins,
         })
-        .where(eq(playerScoresTable.playerId, p.playerId));
-    } else {
-      // Use INSERT … ON CONFLICT to be safe under simultaneous first-time inserts.
-      await db.insert(playerScoresTable).values({
-        playerId: p.playerId,
-        playerName: p.playerName,
-        avatarColor: p.avatarColor ?? "#e53e3e",
-        totalScore: score,
-        xp: xpGain,
-        level: calcLevel(xpGain),
-        coins: coinGain,
-        gamesPlayed: 1,
-        wins: won ? 1 : 0,
-        currentStreak: 1,
-        longestStreak: 1,
-        lastPlayedDate: today,
-        streakDaysJson: JSON.stringify([today]),
-      }).onConflictDoUpdate({
-        target: playerScoresTable.playerId,
-        set: {
+        .from(playerScoresTable)
+        .where(eq(playerScoresTable.playerId, p.playerId))
+        .limit(1);
+
+      const { newStreak, updatedToday } = calculateStreak(
+        existing[0]?.lastPlayedDate ?? null,
+        existing[0]?.currentStreak ?? 0
+      );
+      const newLongest = Math.max(existing[0]?.longestStreak ?? 0, newStreak);
+      const newStreakDaysJson = updatedToday
+        ? appendStreakDay(existing[0]?.streakDaysJson, today)
+        : undefined;
+      const newXp = (existing[0]?.xp ?? 0) + xpGain;
+      const newLevel = calcLevel(newXp);
+
+      if (existing.length > 0) {
+        await tx.update(playerScoresTable)
+          .set({
+            playerName: p.playerName,
+            avatarColor: p.avatarColor ?? existing[0].avatarColor,
+            totalScore: sql`${playerScoresTable.totalScore} + ${score}`,
+            xp: sql`${playerScoresTable.xp} + ${xpGain}`,
+            level: sql`GREATEST(${playerScoresTable.level}, ${newLevel})`,
+            coins: sql`${playerScoresTable.coins} + ${coinGain}`,
+            gamesPlayed: sql`${playerScoresTable.gamesPlayed} + 1`,
+            wins: sql`${playerScoresTable.wins} + ${won ? 1 : 0}`,
+            ...(updatedToday ? {
+              currentStreak: newStreak,
+              longestStreak: newLongest,
+              lastPlayedDate: today,
+              streakDaysJson: newStreakDaysJson,
+            } : {}),
+            updatedAt: new Date(),
+          })
+          .where(eq(playerScoresTable.playerId, p.playerId));
+      } else {
+        await tx.insert(playerScoresTable).values({
+          playerId: p.playerId,
           playerName: p.playerName,
           avatarColor: p.avatarColor ?? "#e53e3e",
-          totalScore: sql`${playerScoresTable.totalScore} + ${score}`,
-          xp: sql`${playerScoresTable.xp} + ${xpGain}`,
-          level: sql`GREATEST(${playerScoresTable.level}, ${newLevel})`,
-          coins: sql`${playerScoresTable.coins} + ${coinGain}`,
-          gamesPlayed: sql`${playerScoresTable.gamesPlayed} + 1`,
-          wins: sql`${playerScoresTable.wins} + ${won ? 1 : 0}`,
-          // The conflicting row was created by the concurrent submission.
-          // Preserve its already-authoritative streak (typically day 1)
-          // instead of applying this request's stale pre-insert snapshot.
-          updatedAt: new Date(),
-        },
-      });
-    }
+          totalScore: score,
+          xp: xpGain,
+          level: calcLevel(xpGain),
+          coins: coinGain,
+          gamesPlayed: 1,
+          wins: won ? 1 : 0,
+          currentStreak: 1,
+          longestStreak: 1,
+          lastPlayedDate: today,
+          streakDaysJson: JSON.stringify([today]),
+        }).onConflictDoUpdate({
+          target: playerScoresTable.playerId,
+          set: {
+            playerName: p.playerName,
+            avatarColor: p.avatarColor ?? "#e53e3e",
+            totalScore: sql`${playerScoresTable.totalScore} + ${score}`,
+            xp: sql`${playerScoresTable.xp} + ${xpGain}`,
+            level: sql`GREATEST(${playerScoresTable.level}, ${newLevel})`,
+            coins: sql`${playerScoresTable.coins} + ${coinGain}`,
+            gamesPlayed: sql`${playerScoresTable.gamesPlayed} + 1`,
+            wins: sql`${playerScoresTable.wins} + ${won ? 1 : 0}`,
+            updatedAt: new Date(),
+          },
+        });
+      }
 
-    await db.insert(gameHistoryTable).values({
-      playerId: p.playerId,
-      score,
-      letter,
-      mode: "multiplayer",
-      won,
+      await tx.insert(gameHistoryTable).values({
+        playerId: p.playerId,
+        score,
+        letter,
+        mode: "multiplayer",
+        won,
+      });
+      return true;
     });
+
+    if (!claimed) return;
+
     void recordTrustedAnalyticsEvent({
       eventName: "game_complete",
       playerId: p.playerId,
       mode: "multiplayer",
-      metadata: { source: "server_room_result", roomCode },
+      metadata: { source: "server_room_result", roomCode: normalizedRoomCode },
     }).catch((err) => console.error("[analytics] trusted multiplayer game_complete failed:", err));
-    // Season Pass progression is server-authoritative. The client event
-    // endpoint is intentionally closed (410), so multiplayer emits trusted
-    // events directly from the final server result.
-    // Use the server-validated count computed above, never the raw
-    // client answer count, for the "valid_words" mission.
+
     const validWords = Number.isFinite(p.validAnswerCount) ? Math.max(0, Math.floor(p.validAnswerCount)) : 0;
     void recordHalloweenEvent(
       p.playerId,
       "game_completed",
-      `multiplayer:${roomCode}:${room.currentRound ?? 0}:${p.playerId}`,
+      `multiplayer:${normalizedRoomCode}:${p.playerId}`,
       false,
     ).catch((err) => console.error("[halloween] trusted multiplayer completion failed:", err));
+
     void recordAuthoritativeSeasonEvents(p.playerId, [
       { type: "play_game", value: 1 },
       ...(won ? [{ type: "win_game", value: 1 }] : []),
       ...(rawScore > 0 ? [{ type: "round_score", value: rawScore }] : []),
       ...(validWords > 0 ? [{ type: "valid_words", value: validWords }] : []),
-      { type: "streak", value: newStreak },
+      { type: "streak", value: 1 },
     ]).catch((err) => console.error("[season] trusted multiplayer events failed:", err));
   }));
 }
