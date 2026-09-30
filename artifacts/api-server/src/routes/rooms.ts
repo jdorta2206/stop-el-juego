@@ -2739,6 +2739,26 @@ router.post("/:roomCode/rematch", writeLimiter, async (req, res) => {
       });
     }
 
+    // A rematch code can be recycled from a previously deleted room.
+    // Clear only after the INSERT committed, so stale in-memory state cannot
+    // leak into the new match while active-room collisions remain untouched.
+    if (outcome.kind === "created") {
+      const newCode = outcome.rematchCode;
+      roomCategoryPacks.delete(newCode);
+      roomReactions.delete(newCode);
+      roomPhrases.delete(newCode);
+      roomTyping.delete(newCode);
+      roomHalloweenScares.delete(newCode);
+      for (const key of halloweenScareCooldowns.keys()) {
+        if (key.startsWith(newCode + ":")) halloweenScareCooldowns.delete(key);
+      }
+      lastBroadcastUpdatedAt.delete(newCode);
+      roomLiveResponses.delete(newCode);
+      roomSpyUsage.delete(newCode);
+      roomFunVotes.delete(newCode);
+      roomRematch.delete(newCode);
+    }
+
     roomRematch.set(oldCode, outcome.rematchCode);
     // Auto-clear only the in-memory fast-path after 5 minutes. The authoritative
     // link remains persisted in stopperJson and is still returned after restart.
