@@ -559,10 +559,8 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
     const newStreakDaysJson = updatedToday
       ? appendStreakDay(existing[0]?.streakDaysJson, today)
       : undefined;
-    // Multiplayer uses the same authoritative reward formulas as Solo.
-    // The score is already certified here, so XP/coins are derived server-side.
-    const xpGain = calcXpGain(score, won, "multiplayer");
-    const coinGain = calcCoinGain(score, won, "multiplayer", false);
+    // Derive the resulting level from the same authoritative XP gain above.
+    // Keep the Happy Hour multiplier already applied to xpGain.
     const newXp = (existing[0]?.xp ?? 0) + xpGain;
     const newLevel = calcLevel(newXp);
 
