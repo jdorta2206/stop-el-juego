@@ -708,7 +708,7 @@ async function recoverMultiplayerAuxiliaryEffects(room: any, players: any[]): Pr
         ...(streak > 0 ? [{ type: "streak", value: streak }] : []),
       ], eventKey);
     }
-    await recordHalloweenEvent(p.playerId, "game_completed", `multiplayer:${String(room.roomCode).toUpperCase()}:${p.playerId}`, false);
+    await recordHalloweenEvent(p.playerId, "game_completed", `multiplayer:${room.id}:${p.playerId}`, false);
   }
 }
 
