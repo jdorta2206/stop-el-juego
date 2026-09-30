@@ -73,6 +73,12 @@ export default function Home() {
   const [showFTUEWelcome, setShowFTUEWelcome] = useState(false);
   const [halloweenModeEnabled, setHalloweenModeEnabledState] = useState(() => HALLOWEEN_PREVIEW ? true : isHalloweenModeEnabled());
   const [halloweenAudioStarted, setHalloweenAudioStarted] = useState(false);
+
+  useEffect(() => {
+    const onHalloweenAudioStarted = () => setHalloweenAudioStarted(true);
+    window.addEventListener("halloween:audio-started", onHalloweenAudioStarted);
+    return () => window.removeEventListener("halloween:audio-started", onHalloweenAudioStarted);
+  }, []);
   const [showHalloweenAnnouncement, setShowHalloweenAnnouncement] = useState(false);
   const { data: halloweenProgressData } = useHalloweenProgress(player?.id);
 
