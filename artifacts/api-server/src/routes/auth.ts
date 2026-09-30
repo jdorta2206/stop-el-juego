@@ -910,7 +910,7 @@ router.get("/tiktok/callback", async (req: Request, res: Response) => {
 // session by another year so casual players never get kicked out.
 router.get("/me", async (req: Request, res: Response) => {
   const playerId = readPlayerId(req);
-  if (!playerId || isPlayerRevoked(playerId)) {
+  if (!playerId || await isPlayerRevoked(playerId)) {
     return res.status(401).json({ error: "Not authenticated" });
   }
 
