@@ -2623,15 +2623,56 @@ router.post("/:roomCode/rematch", writeLimiter, async (req, res) => {
       const persistedRematch = typeof oldMeta.rematchCode === "string"
         ? oldMeta.rematchCode.toUpperCase()
         : null;
+      const persistedRematchRoomId = Number.isInteger(oldMeta.rematchRoomId)
+        ? oldMeta.rematchRoomId
+        : null;
 
-      // Idempotency is persisted in the finished room, not just in memory.
-      // If the target room was deleted, discard the stale pointer and recreate it.
-      if (persistedRematch) {
-        const target = await tx.select({ roomCode: roomsTable.roomCode })
+      // Idempotency is persisted against the immutable room id. The roomCode
+      // is only a public locator and can be recycled after cleanup.
+      if (persistedRematch && persistedRematchRoomId !== null) {
+        const target = await tx.select({
+          id: roomsTable.id,
+          roomCode: roomsTable.roomCode,
+          hostId: roomsTable.hostId,
+          status: roomsTable.status,
+        })
+          .from(roomsTable)
+          .where(eq(roomsTable.id, persistedRematchRoomId))
+          .limit(1);
+        if (
+          target.length > 0 &&
+          target[0].roomCode === persistedRematch &&
+          target[0].hostId === playerId &&
+          target[0].status === "waiting"
+        ) {
+          return { kind: "existing" as const, rematchCode: persistedRematch, oldRoom };
+        }
+      } else if (persistedRematch) {
+        // Legacy finished rooms predate rematchRoomId. Accept the old pointer
+        // only while its target still matches the immutable ownership/settings
+        // that a rematch created by this player must have; otherwise treat it
+        // as stale and create a fresh rematch.
+        const target = await tx.select({
+          roomCode: roomsTable.roomCode,
+          hostId: roomsTable.hostId,
+          status: roomsTable.status,
+          maxRounds: roomsTable.maxRounds,
+          maxPlayers: roomsTable.maxPlayers,
+          gameMode: roomsTable.gameMode,
+          language: roomsTable.language,
+        })
           .from(roomsTable)
           .where(eq(roomsTable.roomCode, persistedRematch))
           .limit(1);
-        if (target.length > 0) {
+        if (
+          target.length > 0 &&
+          target[0].hostId === playerId &&
+          target[0].status === "waiting" &&
+          target[0].maxRounds === oldRoom.maxRounds &&
+          target[0].maxPlayers === (oldRoom.maxPlayers ?? 8) &&
+          target[0].gameMode === (oldRoom.gameMode ?? "classic") &&
+          target[0].language === oldRoom.language
+        ) {
           return { kind: "existing" as const, rematchCode: persistedRematch, oldRoom };
         }
       }
@@ -2691,7 +2732,19 @@ router.post("/:roomCode/rematch", writeLimiter, async (req, res) => {
 
       // Persist the link in the old finished room so it remains idempotent after
       // a process restart and consistent across Railway replicas.
-      const newMeta = { ...oldMeta, rematchCode: newCode };
+      const createdRematch = await tx.select({ id: roomsTable.id })
+        .from(roomsTable)
+        .where(eq(roomsTable.roomCode, newCode))
+        .limit(1);
+      if (createdRematch.length === 0) {
+        throw new Error("Rematch room disappeared before link persistence");
+      }
+
+      const newMeta = {
+        ...oldMeta,
+        rematchCode: newCode,
+        rematchRoomId: createdRematch[0].id,
+      };
       const updatedOldRows = await tx.update(roomsTable)
         .set({ stopperJson: JSON.stringify(newMeta), updatedAt: new Date() })
         .where(eq(roomsTable.id, oldRoom.id))
