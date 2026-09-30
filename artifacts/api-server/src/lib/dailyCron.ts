@@ -125,14 +125,22 @@ async function sendStreakRescueNotifications() {
     let sent = 0;
     for (const row of rows.rows as Array<{ player_id: string; current_streak: number; language: string }>) {
       const lang = STREAK_RESCUE_MSGS[row.language] ? row.language : "es";
-      const msg = STREAK_RESCUE_MSGS[lang](row.current_streak);
-      const n = await sendPushToPlayer(row.player_id, {
-        ...msg,
-        icon: "/images/icon-192.png",
-        badge: "/images/badge-96.png",
-        url: "/solo?mode=quick&auto=1",
-      });
-      sent += n;
+      const claimKey = "streak_rescue_player";
+      if (!await claimPlayerNotification(today, claimKey, row.player_id)) continue;
+      try {
+        const msg = STREAK_RESCUE_MSGS[lang](row.current_streak);
+        const n = await sendPushToPlayer(row.player_id, {
+          ...msg,
+          icon: "/images/icon-192.png",
+          badge: "/images/badge-96.png",
+          url: "/solo?mode=quick&auto=1",
+        });
+        sent += n;
+        if (n === 0) await releasePlayerNotification(today, claimKey, row.player_id);
+      } catch (error) {
+        await releasePlayerNotification(today, claimKey, row.player_id);
+        console.error("[streakRescueCron] player notification failed:", error);
+      }
     }
     console.log(`[streakRescueCron] Notifications sent: ${sent} (candidates: ${rows.rows.length}, date: ${today})`);
   } catch (e) {
@@ -219,14 +227,22 @@ async function sendSeasonClaimNotifications() {
       candidates++;
 
       const lang = SEASON_CLAIM_MSGS[row.language] ? row.language : "es";
-      const msg = SEASON_CLAIM_MSGS[lang];
-      const n = await sendPushToPlayer(row.player_id, {
-        ...msg,
-        icon: "/images/icon-192.png",
-        badge: "/images/badge-96.png",
-        url: "/season",
-      });
-      sent += n;
+      const claimKey = "season_claim_player";
+      if (!await claimPlayerNotification(today, claimKey, row.player_id)) continue;
+      try {
+        const msg = SEASON_CLAIM_MSGS[lang];
+        const n = await sendPushToPlayer(row.player_id, {
+          ...msg,
+          icon: "/images/icon-192.png",
+          badge: "/images/badge-96.png",
+          url: "/season",
+        });
+        sent += n;
+        if (n === 0) await releasePlayerNotification(today, claimKey, row.player_id);
+      } catch (error) {
+        await releasePlayerNotification(today, claimKey, row.player_id);
+        console.error("[seasonClaimCron] player notification failed:", error);
+      }
     }
     console.log(
       `[seasonClaimCron] Notifications sent: ${sent} (eligible: ${candidates}, scanned: ${candidateRows.length}, season: ${activeSeason.id}, date: ${today})`,
@@ -469,8 +485,6 @@ async function sendDailyDealsNotifications() {
     const utcNow = new Date(now);
     const utcMinutesOfDay = utcNow.getUTCHours() * 60 + utcNow.getUTCMinutes();
     const today = utcNow.toISOString().slice(0, 10);
-    const utcBucket = Math.floor(utcMinutesOfDay / 5);
-
     const rows = (await db.execute(sql`
       SELECT player_id, language
       FROM push_subscriptions
@@ -488,11 +502,6 @@ async function sendDailyDealsNotifications() {
     const candidates = rows.rows ?? [];
     if (candidates.length === 0) return;
 
-    // Claim only after the candidate query succeeds. A transient DB failure
-    // must not consume the bucket and suppress a later retry.
-    const claimed = await claimDailyLock(today, `deals_${today}_${utcBucket}`);
-    if (!claimed) return;
-
     const maxDiscount = Math.max(0, ...getDailyDeals(utcNow).deals.map((d) => d.discountPct));
 
     const seen = new Set<string>();
@@ -500,15 +509,23 @@ async function sendDailyDealsNotifications() {
     for (const row of candidates) {
       if (seen.has(row.player_id)) continue;
       seen.add(row.player_id);
-      const lang = DEALS_MSGS[row.language] ? row.language : "es";
-      const msg = DEALS_MSGS[lang](maxDiscount);
-      const n = await sendPushToPlayer(row.player_id, {
-        ...msg,
-        icon: "/images/icon-192.png",
-        badge: "/images/badge-96.png",
-        url: `/player/${row.player_id}#tienda`,
-      });
-      sent += n;
+      const claimKey = "deals_player";
+      if (!await claimPlayerNotification(today, claimKey, row.player_id)) continue;
+      try {
+        const lang = DEALS_MSGS[row.language] ? row.language : "es";
+        const msg = DEALS_MSGS[lang](maxDiscount);
+        const n = await sendPushToPlayer(row.player_id, {
+          ...msg,
+          icon: "/images/icon-192.png",
+          badge: "/images/badge-96.png",
+          url: `/player/${row.player_id}#tienda`,
+        });
+        sent += n;
+        if (n === 0) await releasePlayerNotification(today, claimKey, row.player_id);
+      } catch (error) {
+        await releasePlayerNotification(today, claimKey, row.player_id);
+        console.error("[dailyDealsCron] player notification failed:", error);
+      }
     }
     console.log(`[dailyDealsCron] sent=${sent} candidates=${candidates.length} maxDiscount=${maxDiscount}`);
   } catch (e) {
@@ -540,7 +557,7 @@ export function startDailyCron() {
 
     // Daily-deals nudge — timezone-aware, once per player per day at ~10:00
     // local. Tells them fresh shop discounts are live (they reset 00:00 UTC).
-    // Same per-tz bucket-lock as Happy Hour so it never double-sends.
+    // Per-player claims prevent duplicate sends across cron instances.
     await sendDailyDealsNotifications();
 
     // 19:00–19:05 UTC → streak rescue. 19:00 UTC was chosen because it
