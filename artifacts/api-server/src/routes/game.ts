@@ -1332,7 +1332,7 @@ const NEVER_VALID_WORDS = new Set([
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 // `normalizeWord` and `isSafeInput` live in ../lib/wordRules (pure, unit-tested).
 
-const HALLOWEEN_CATEGORY_ALIASES: Record<string, string> = {
+export const HALLOWEEN_CATEGORY_ALIASES: Record<string, string> = {
   [normalizeWord("Disfraz de miedo")]: "Objeto",
   [normalizeWord("Monstruo")]: "Animal",
   [normalizeWord("Película de terror")]: "Película",
