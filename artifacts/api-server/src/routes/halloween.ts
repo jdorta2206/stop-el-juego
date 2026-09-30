@@ -464,16 +464,16 @@ export async function recordHalloweenScareEventsWithCooldown(
 
     const claimed = await tx.execute(sql`
       INSERT INTO halloween_scare_cooldowns (room_id, player_id, available_at)
-      VALUES (${roomId}, ${playerId}, NOW() + INTERVAL '18 seconds')
+      VALUES (${roomId}, ${playerId}, clock_timestamp() + INTERVAL '18 seconds')
       ON CONFLICT (room_id, player_id) DO UPDATE
       SET available_at = EXCLUDED.available_at,
           updated_at = NOW()
-      WHERE halloween_scare_cooldowns.available_at <= NOW()
+      WHERE halloween_scare_cooldowns.available_at <= clock_timestamp()
       RETURNING available_at
     `);
     if ((claimed.rows?.length ?? 0) === 0) {
       const current = await tx.execute(sql`
-        SELECT GREATEST(0, EXTRACT(EPOCH FROM (available_at - NOW())) * 1000) AS remaining_ms
+        SELECT GREATEST(0, EXTRACT(EPOCH FROM (available_at - clock_timestamp())) * 1000) AS remaining_ms
         FROM halloween_scare_cooldowns
         WHERE room_id = ${roomId} AND player_id = ${playerId}
         LIMIT 1
