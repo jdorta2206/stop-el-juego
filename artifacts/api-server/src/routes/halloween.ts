@@ -10,6 +10,13 @@ const START_DAY = 15;
 const END_MONTH = 10; // November, UTC
 const END_DAY = 3;
 
+export function isHalloweenPreviewAuthorized(req: { headers?: Record<string, unknown> }): boolean {
+  const enabled = String(req.headers?.["x-halloween-preview"] ?? "") === "1";
+  const configuredSecret = String(process.env.HALLOWEEN_PREVIEW_SECRET ?? "");
+  const suppliedSecret = String(req.headers?.["x-halloween-preview-token"] ?? "");
+  return enabled && configuredSecret.length >= 32 && suppliedSecret === configuredSecret;
+}
+
 function getEventYear(now = new Date(), preview = false): number | null {
   if (preview) return now.getUTCFullYear();
   const year = now.getUTCFullYear();
@@ -82,7 +89,7 @@ router.get("/progress", async (req: AuthedRequest, res) => {
     res.status(401).json({ error: "Authentication required" });
     return;
   }
-  const preview = req.headers["x-halloween-preview"] === "1";
+  const preview = isHalloweenPreviewAuthorized(req);
   const year = getEventYear(new Date(), preview);
   if (year === null) {
     res.json({ active: false, year: new Date().getUTCFullYear(), progress: null });
