@@ -259,10 +259,7 @@ export async function recordHalloweenEventInTransaction(
         newRewardItems,
         duplicate: false,
       };
-}
-}
-
-export async function recordHalloweenEvent(
+}export async function recordHalloweenEvent(
   playerId: string,
   type: "game_completed" | "scare_received" | "scare_provoked",
   eventKey: string,
