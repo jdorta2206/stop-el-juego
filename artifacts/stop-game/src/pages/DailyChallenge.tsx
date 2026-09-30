@@ -126,8 +126,11 @@ export default function DailyChallenge() {
     setLocation(`/solo?${params.toString()}`);
   }
 
+  // The API supplies the authoritative rank (including ties). Only show it
+  // when the player is actually present in the visible top-10; otherwise do
+  // not invent a rank from the array index.
   const myRank = player
-    ? rankings.findIndex(r => r.playerName === player.name) + 1
+    ? (rankings.find(r => r.playerName === player.name)?.rank ?? 0)
     : 0;
 
   return (
