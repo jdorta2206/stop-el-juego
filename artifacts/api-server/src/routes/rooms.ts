@@ -1120,6 +1120,11 @@ function sanitizeRoomForSpectator(room: any) {
       ...room,
       players: (room.players ?? []).map((p: any) => ({
         ...p,
+        // Guest playerId values act as bearer credentials for room access.
+        // Never expose them in a public spectator snapshot, otherwise a
+        // spectator could replay the id through GET /rooms/:code and obtain
+        // the full private player view.
+        playerId: undefined,
         answers: undefined,
         bluffedCategories: undefined,
         // Power cards are private player state. A public spectator must never
