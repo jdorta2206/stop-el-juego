@@ -541,6 +541,9 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
         longestStreak: playerScoresTable.longestStreak,
         avatarColor: playerScoresTable.avatarColor,
         streakDaysJson: playerScoresTable.streakDaysJson,
+        xp: playerScoresTable.xp,
+        level: playerScoresTable.level,
+        coins: playerScoresTable.coins,
       })
       .from(playerScoresTable)
       .where(eq(playerScoresTable.playerId, p.playerId))
@@ -557,6 +560,12 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
     const newStreakDaysJson = updatedToday
       ? appendStreakDay(existing[0]?.streakDaysJson, today)
       : undefined;
+    // Multiplayer uses the same authoritative reward formulas as Solo.
+    // The score is already certified here, so XP/coins are derived server-side.
+    const xpGain = calcXpGain(score, won, "multiplayer");
+    const coinGain = calcCoinGain(score, won, "multiplayer", false);
+    const newXp = (existing[0]?.xp ?? 0) + xpGain;
+    const newLevel = calcLevel(newXp);
 
     if (existing.length > 0) {
       await db.update(playerScoresTable)
@@ -569,6 +578,9 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
           coins: sql`${playerScoresTable.coins} + ${coinGain}`,
           gamesPlayed: sql`${playerScoresTable.gamesPlayed} + 1`,
           wins: sql`${playerScoresTable.wins} + ${won ? 1 : 0}`,
+          xp: sql`${playerScoresTable.xp} + ${xpGain}`,
+          level: sql`GREATEST(${playerScoresTable.level}, ${newLevel})`,
+          coins: sql`${playerScoresTable.coins} + ${coinGain}`,
           ...(updatedToday ? {
             currentStreak: newStreak,
             longestStreak: newLongest,
@@ -593,6 +605,9 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
         currentStreak: 1,
         longestStreak: 1,
         lastPlayedDate: today,
+        xp: xpGain,
+        level: newLevel,
+        coins: coinGain,
         streakDaysJson: JSON.stringify([today]),
       }).onConflictDoUpdate({
         target: playerScoresTable.playerId,
