@@ -3390,7 +3390,9 @@ router.post("/:roomCode/bluff-vote", writeLimiter, async (req, res) => {
     bluffVotes[accusedPlayerId][category][voterId] = vote;
   }
 
-  const nonBlufferIds = players.filter((p: any) => !p.bluffedCategories?.length).map((p: any) => p.playerId);
+  const nonBlufferIds = players
+    .filter((p: any) => !p.isBot && !p.bluffedCategories?.length)
+    .map((p: any) => p.playerId);
 
   // Check if all non-bluffers have voted on all categories
   let allVoted = true;
