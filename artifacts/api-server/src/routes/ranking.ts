@@ -27,7 +27,7 @@ function bonusTokenSetHash(playerId: string, tokens: unknown): string | null {
   return crypto.createHash("sha256").update(playerId + "\n" + normalized.join("\n")).digest("hex");
 }
 
-function calcCoinGain(score: number, won: boolean, mode: string, isBonus: boolean): number {
+export function calcCoinGain(score: number, won: boolean, mode: string, isBonus: boolean): number {
   if (isBonus) return 0;
   const base = Math.max(1, Math.floor(score / 30));
   const winBonus = won ? 3 : 0;
@@ -35,7 +35,7 @@ function calcCoinGain(score: number, won: boolean, mode: string, isBonus: boolea
   return base + winBonus + modeBonus;
 }
 
-async function lookupPlayerTzOffset(playerId: string): Promise<number | null> {
+export async function lookupPlayerTzOffset(playerId: string): Promise<number | null> {
   try {
     const rows = await db
       .select({ tz: pushSubscriptionsTable.tzOffsetMinutes })
