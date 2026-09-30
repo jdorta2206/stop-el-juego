@@ -1122,6 +1122,12 @@ function sanitizeRoomForSpectator(room: any) {
         ...p,
         answers: undefined,
         bluffedCategories: undefined,
+        // Power cards are private player state. A public spectator must never
+        // receive the card itself or its round-bound consumption/immunity state.
+        powerCard: undefined,
+        powerCardUsed: undefined,
+        powerCardUsedRound: undefined,
+        bluffImmune: undefined,
       })),
       // Bluff votes are private game-state and must never be exposed to spectators.
       bluffData: undefined,
