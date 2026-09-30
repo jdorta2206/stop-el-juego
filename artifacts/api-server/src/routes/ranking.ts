@@ -714,7 +714,7 @@ router.post("/scores", scoreLimiter, async (req, res) => {
         score,
         letter,
         mode: mode ?? "solo",
-        won: won ?? false,
+        won: effectiveWon,
       });
 
       // Keep voucher-backed collection words in the same transaction as the score.
