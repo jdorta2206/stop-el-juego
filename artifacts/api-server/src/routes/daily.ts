@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import { db, dailyResultsTable, playerScoresTable } from "@workspace/db";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { verifyClaimedIdentity } from "../lib/playerAuth";
-import { sumVerifiedBasePersistent, ceilingFromBase, absoluteCeiling } from "../lib/scoreToken";
+import { sumVerifiedBasePersistent, consumeScoreVoucherJtis, ceilingFromBase, absoluteCeiling } from "../lib/scoreToken";
 import { recordAuthoritativeSeasonEvents } from "./season";
 
 const router: IRouter = Router();
@@ -124,7 +124,7 @@ router.post("/submit", async (req, res) => {
   // posted score to a ceiling derived from the verified round voucher(s), or a
   // flat absolute ceiling when none are present (offline play). Never reject,
   // only clamp, so a legit daily score is never lost.
-  const { base: verifiedBase, verified } = await sumVerifiedBasePersistent(scoreTokens, 1);
+  const { base: verifiedBase, verified, voucherJtis } = await sumVerifiedBasePersistent(scoreTokens, 1);
   const suppliedTokens = Array.isArray(scoreTokens) && scoreTokens.length > 0;
   if (suppliedTokens && verified === 0) {
     res.status(422).json({ error: "INVALID_SCORE_VOUCHER" });
@@ -133,35 +133,7 @@ router.post("/submit", async (req, res) => {
   const dailyCeiling = verified > 0 ? ceilingFromBase(verifiedBase) : absoluteCeiling("daily");
   const safeScore = Math.max(0, Math.min(Number(score) || 0, dailyCeiling));
 
-  // Only allow one submission per player per day. The unique DB constraint is
-  // the final arbiter; the upsert below makes two simultaneous first submits
-  // deterministic instead of racing SELECT → INSERT and returning a 500.
-  const existing = await db
-    .select()
-    .from(dailyResultsTable)
-    .where(
-      and(
-        eq(dailyResultsTable.playerId, playerId),
-        eq(dailyResultsTable.challengeDate, today)
-      )
-    )
-    .limit(1);
-
-  if (existing.length > 0) {
-    // Update if new score is higher
-    if (safeScore > existing[0].score) {
-      await db
-        .update(dailyResultsTable)
-        .set({ score: safeScore, playerName: canonicalPlayerName, avatarColor: canonicalAvatarColor })
-        .where(
-          and(
-            eq(dailyResultsTable.playerId, playerId),
-            eq(dailyResultsTable.challengeDate, today),
-            sql`${dailyResultsTable.score} < ${safeScore}`
-          )
-        );
-    }
-    void recordAuthoritativeSeasonEvents(playerId, [{ type: "daily_done", value: 1 }]);
+  // Only allow one submission per player per day. Voucher consumption and\n  // the daily write share one transaction so a failed write cannot burn a valid\n  // voucher and leave the player unable to retry.\n  let alreadyPlayed = false;\n  let submitted = false;\n  try {\n    await db.transaction(async (tx) => {\n      if (verified > 0 && voucherJtis.length > 0) {\n        await consumeScoreVoucherJtis(tx, voucherJtis);\n      }\n\n      const existing = await tx\n        .select()\n        .from(dailyResultsTable)\n        .where(\n          and(\n            eq(dailyResultsTable.playerId, playerId),\n            eq(dailyResultsTable.challengeDate, today)\n          )\n        )\n        .limit(1);\n\n      if (existing.length > 0) {\n        alreadyPlayed = true;\n        if (safeScore > existing[0].score) {\n          await tx\n            .update(dailyResultsTable)\n            .set({ score: safeScore, playerName: canonicalPlayerName, avatarColor: canonicalAvatarColor })\n            .where(\n              and(\n                eq(dailyResultsTable.playerId, playerId),\n                eq(dailyResultsTable.challengeDate, today),\n                sql`${dailyResultsTable.score} < ${safeScore}`\n              )\n            );\n        }\n        return;\n      }\n\n      await tx.insert(dailyResultsTable).values({\n        playerId,\n        playerName: canonicalPlayerName,\n        avatarColor: canonicalAvatarColor || "#e53e3e",\n        challengeDate: today,\n        score: safeScore,\n        letter,\n        language: normalizedLanguage,\n      }).onConflictDoUpdate({\n        target: [dailyResultsTable.playerId, dailyResultsTable.challengeDate],\n        set: {\n          score: sql`GREATEST(${dailyResultsTable.score}, EXCLUDED.score)`,\n          playerName: sql`CASE WHEN EXCLUDED.score > ${dailyResultsTable.score} THEN ${canonicalPlayerName} ELSE ${dailyResultsTable.playerName} END`,\n          avatarColor: sql`CASE WHEN EXCLUDED.score > ${dailyResultsTable.score} THEN ${canonicalAvatarColor} ELSE ${dailyResultsTable.avatarColor} END`,\n        },\n      });\n      submitted = true;\n    });\n  } catch (error) {\n    if (error instanceof Error && error.message === "SCORE_VOUCHER_CONFLICT") {\n      res.status(422).json({ error: "INVALID_SCORE_VOUCHER" });\n      return;\n    }\n    throw error;\n  }\n\n  void recordAuthoritativeSeasonEvents(playerId, [{ type: "daily_done", value: 1 }]);
     res.json({ updated: true, alreadyPlayed: true });
     return;
   }
@@ -184,7 +156,7 @@ router.post("/submit", async (req, res) => {
   });
 
   void recordAuthoritativeSeasonEvents(playerId, [{ type: "daily_done", value: 1 }]);
-  res.status(201).json({ submitted: true });
+  res.status(submitted ? 201 : 200).json({ submitted, alreadyPlayed });
 });
 
 // GET /api/daily/rankings?language=es  → top 10 players for today
