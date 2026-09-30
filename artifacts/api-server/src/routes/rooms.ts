@@ -731,6 +731,8 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
 }
 
 async function recoverMultiplayerAuxiliaryEffects(room: any, players: any[]): Promise<void> {
+  // Recovery may run during a cold start; wait for the eager table creation before querying it.
+  await multiplayerAuxClaimsReady;
   const eligible = players.filter((p: any) => p && !p.isBot && p.playerId && p.loginMethod !== "guest");
   if (eligible.length === 0) return;
   const halloweenPreview = parseBluffMeta(room.stopperJson)?.halloweenPreview === true;
@@ -1092,6 +1094,8 @@ async function sweepStuckRooms() {
 //   so abandoned games don't accumulate as DB garbage and slow down public listings.
 async function purgeStaleRooms() {
   try {
+    // Purge can run immediately at module boot; never query the auxiliary claims table before its creation settles.
+    await multiplayerAuxClaimsReady;
     // 🧹 Halloween manual-scare cooldowns are durable for cross-replica safety;
     // remove expired rows so the table cannot grow with abandoned rooms.
     await db.execute(sql`DELETE FROM halloween_scare_cooldowns WHERE available_at < NOW() - INTERVAL '6 hours'`);
