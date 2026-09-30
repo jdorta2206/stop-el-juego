@@ -219,6 +219,7 @@ function createController(): HalloweenAmbientController {
         if (!ctx || !master || !stormMaster) return;
         started = true;
         starting = false;
+        window.dispatchEvent(new Event("halloween:audio-started"));
         const now = ctx.currentTime;
         master.gain.cancelScheduledValues(now);
         master.gain.setTargetAtTime(0.18, now, 0.8);
@@ -321,10 +322,7 @@ export function HalloweenHomeAtmosphere({
     const controllerInstance = createController();
     controllerRef.current = controllerInstance;
 
-    const markAudioStarted = () => {
-      window.dispatchEvent(new Event("halloween:audio-started"));
-    };
-    const startAudio = () => {
+        const startAudio = () => {
       controllerInstance.start();
       markAudioStarted();
     };
@@ -340,8 +338,7 @@ export function HalloweenHomeAtmosphere({
     events.forEach((event) => window.addEventListener(event, startAudio, { once: true, passive: true }));
     window.addEventListener("visibilitychange", resumeAudio);
     window.addEventListener("halloween:activate-audio", activateFromHome);
-    window.addEventListener("halloween:audio-started", markAudioStarted);
-
+    
     return () => {
       events.forEach((event) => window.removeEventListener(event, startAudio));
       window.removeEventListener("visibilitychange", resumeAudio);
