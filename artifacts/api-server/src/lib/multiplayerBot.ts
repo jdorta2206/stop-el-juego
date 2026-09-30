@@ -434,7 +434,14 @@ async function performBotSubmit(
         validBotWords++;
       }
     }
-    const roundScore = validBotWords * 10;
+    let roundScore = validBotWords * 10;
+    // Keep bot scoring aligned with the server-authoritative human STOP bonus:
+    // a bot that actually triggers STOP gets +5 only when it fills every
+    // authoritative category for the round.
+    const stopperBonusThreshold = Math.min(12, Math.max(1, sampleCats.length));
+    if (options.triggerStop && newStatus === "stopped" && validBotWords >= stopperBonusThreshold) {
+      roundScore += 5;
+    }
 
     const finishedAt = Date.now();
     const updatedPlayers = players.map(p => {
