@@ -221,7 +221,10 @@ router.post("/challenge", async (req, res) => {
     return res.status(403).json({ error: "Invalid player identity" });
   }
 
-  const profile = await getCanonicalPresenceProfile(fromPlayerId);\n  if (!profile) return res.status(404).json({ error: "Player not found" });\n\n  // Check target player is online
+  const profile = await getCanonicalPresenceProfile(fromPlayerId);
+  if (!profile) return res.status(404).json({ error: "Player not found" });
+
+  // Check target player is online
   const cutoff = Date.now() - 90 * 1000;
   const target = presenceMap.get(toPlayerId);
   if (!target || target.lastSeen < cutoff) {
@@ -259,7 +262,7 @@ router.post("/challenge", async (req, res) => {
       await db.insert(roomsTable).values({
         roomCode: candidate,
         hostId: fromPlayerId,
-        hostName: fromName,
+        hostName: profile.name,
         status: "waiting",
         currentRound: 0,
         maxRounds: 3,
@@ -288,8 +291,8 @@ router.post("/challenge", async (req, res) => {
         (challenge_id, from_player_id, from_name, from_picture, from_avatar_color,
          to_player_id, room_code, status, is_room_invite, created_at)
       VALUES
-        (${challengeId}, ${fromPlayerId}, ${profile.name}, ${fromPicture || null},
-         ${fromAvatarColor || "#e53e3e"}, ${toPlayerId}, ${roomCode},
+        (${challengeId}, ${fromPlayerId}, ${profile.name}, ${profile.picture || null},
+         ${profile.avatarColor || "#e53e3e"}, ${toPlayerId}, ${roomCode},
          'pending', FALSE, NOW())
       ON CONFLICT (from_player_id, to_player_id, is_room_invite) WHERE status = 'pending'
       DO NOTHING
@@ -349,7 +352,9 @@ router.post("/room-invite", async (req, res) => {
     return res.status(403).json({ error: "Invalid player identity" });
   }
 
-  const normalizedRoomCode = String(roomCode).trim().toUpperCase();\n  const profile = await getCanonicalPresenceProfile(fromPlayerId);\n  if (!profile) return res.status(404).json({ error: "Player not found" });
+  const normalizedRoomCode = String(roomCode).trim().toUpperCase();
+  const profile = await getCanonicalPresenceProfile(fromPlayerId);
+  if (!profile) return res.status(404).json({ error: "Player not found" });
 
   await challengeTableReady;
 
