@@ -60,7 +60,7 @@ export function ChallengeNotification({ challenge, onDismiss }: ChallengeNotific
     // Always call /join so the player appears in the room lobby (both reto and room invite)
     if (playerData?.id) {
       try {
-        await fetch(`${getApiUrl()}/api/rooms/${challenge.roomCode.toUpperCase()}/join`, {
+        const joinResponse = await fetch(`${getApiUrl()}/api/rooms/${challenge.roomCode.toUpperCase()}/join`, {
           method: "POST",
           headers: { "Content-Type": "application/json", ...authHeaders() },
           credentials: "include",
