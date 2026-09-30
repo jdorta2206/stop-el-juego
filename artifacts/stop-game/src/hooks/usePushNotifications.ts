@@ -57,6 +57,8 @@ export function usePushNotifications(playerId: string | undefined, language: str
 
         if (perm === "granted" && !cancelled && currentPlayerIdRef.current === playerId) {
           const tzOffsetMinutes = -new Date().getTimezoneOffset();
+      const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
+          const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
           try {
             if (currentPlayerIdRef.current !== playerId) return;
             const res = await fetch(`${API_BASE}/api/notifications/subscribe`, {
@@ -68,6 +70,7 @@ export function usePushNotifications(playerId: string | undefined, language: str
                 subscription: sub.toJSON(),
                 language,
                 tzOffsetMinutes,
+                timeZone,
                 origin: window.location.origin,
               }),
             });
@@ -113,6 +116,7 @@ export function usePushNotifications(playerId: string | undefined, language: str
           language,
           hourLocal: 20,
           tzOffsetMinutes,
+          timeZone,
           origin: typeof window !== "undefined" ? window.location.origin : undefined,
         }),
       });
