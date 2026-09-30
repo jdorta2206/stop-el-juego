@@ -2648,20 +2648,34 @@ router.post("/:roomCode/halloween-scare", writeLimiter, async (req, res) => {
     round: room.currentRound ?? 0,
     ts: now,
   };
+  const persistentEvents = [
+    ...(me.loginMethod !== "guest" ? [{ playerId, type: "scare_provoked" as const, eventKey: `provoked:${event.id}` }] : []),
+    ...players.filter((p: any) => p.playerId && p.playerId !== playerId && !p.isBot && p.loginMethod !== "guest").map((p: any) => ({
+      playerId: p.playerId,
+      type: "scare_received" as const,
+      eventKey: `received:${event.id}:${p.playerId}`,
+    })),
+  ];
+  try {
+    if (persistentEvents.length > 0) {
+      await recordHalloweenScareEvents(
+        persistentEvents,
+        isHalloweenPreviewAuthorized(req),
+        room.id,
+      );
+    }
+  } catch (error) {
+    console.error("[rooms/halloween-scare] persistence failed:", error);
+    res.status(503).json({ error: "Halloween scare could not be recorded" });
+    return;
+  }
+
+  // Only consume the cooldown and publish the cosmetic event after the
+  // authoritative progress transaction has succeeded. Otherwise a transient
+  // DB failure could show the scare, return 200, and block the player for 18s
+  // while silently losing their Halloween progress/reward.
   halloweenScareCooldowns.set(cooldownKey, now);
   roomHalloweenScares.set(code, event);
-  void recordHalloweenScareEvents(
-    [
-      ...(me.loginMethod !== "guest" ? [{ playerId, type: "scare_provoked" as const, eventKey: `provoked:${event.id}` }] : []),
-      ...players.filter((p: any) => p.playerId && p.playerId !== playerId && !p.isBot && p.loginMethod !== "guest").map((p: any) => ({
-        playerId: p.playerId,
-        type: "scare_received" as const,
-        eventKey: `received:${event.id}:${p.playerId}`,
-      })),
-    ],
-    isHalloweenPreviewAuthorized(req),
-    room.id,
-  ).catch(() => {});
   broadcastAndFormat(room);
   res.json({ ok: true, eventId: event.id, cooldownMs: 18_000 });
 });
