@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db, impossibleResultsTable } from "@workspace/db";
+import { db, impossibleResultsTable, playerScoresTable } from "@workspace/db";
 import { eq, and, count, sql } from "drizzle-orm";
 import { getImpossibleCombo } from "../lib/impossibleCombos";
 import { validateWordWithAi } from "../lib/aiWordValidator";
@@ -86,6 +86,16 @@ router.post("/submit", async (req, res) => {
   }
   if (!verifyClaimedIdentity(req, String(playerId))) {
     res.status(403).json({ error: "PLAYER_ID_MISMATCH" });
+    return;
+  }
+
+  const [canonicalPlayer] = await db
+    .select({ playerName: playerScoresTable.playerName })
+    .from(playerScoresTable)
+    .where(eq(playerScoresTable.playerId, String(playerId)))
+    .limit(1);
+  if (!canonicalPlayer) {
+    res.status(404).json({ error: "Player not found" });
     return;
   }
 
