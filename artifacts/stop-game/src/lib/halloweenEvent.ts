@@ -96,8 +96,9 @@ export function getHalloweenCategory(lang: string, seed = Math.random()): string
   return list[Math.floor(safeSeed * list.length)];
 }
 
-export function applyHalloweenCategory(categories: string[], lang: string, options: { enabled?: boolean; seed?: number } = {}): string[] {
-  if (!isHalloweenActive() || !isHalloweenModeEnabled() || options.enabled === false || categories.length === 0) return categories;
+export function applyHalloweenCategory(categories: string[], lang: string, options: { enabled?: boolean; seed?: number; respectMode?: boolean } = {}): string[] {
+  if (!isHalloweenActive() || options.enabled === false || categories.length === 0) return categories;
+  if (options.respectMode !== false && !isHalloweenModeEnabled()) return categories;
   const result = [...categories];
   const seed = options.seed ?? Math.random();
   const idx = Math.floor(Math.max(0, Math.min(0.999999, seed)) * result.length);
