@@ -1281,7 +1281,9 @@ router.post("/", async (req, res) => {
     roomPhrases.delete(roomCode);
     roomTyping.delete(roomCode);
     roomHalloweenScares.delete(roomCode);
-    halloweenScareCooldowns.delete(roomCode);
+    for (const key of halloweenScareCooldowns.keys()) {
+      if (key.startsWith(roomCode + ":")) halloweenScareCooldowns.delete(key);
+    }
 
     try {
       const inserted = await db.insert(roomsTable).values({
