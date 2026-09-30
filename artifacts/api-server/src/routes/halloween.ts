@@ -259,7 +259,7 @@ export async function recordHalloweenEventInTransaction(
         newRewardItems,
         duplicate: false,
       };
-  });
+}
 }
 
 export async function recordHalloweenEvent(
