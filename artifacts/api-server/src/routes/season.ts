@@ -428,15 +428,17 @@ export async function recordAuthoritativeSeasonEvents(
   playerId: string,
   events: Array<{ type: "win_game" | "play_game" | "round_score" | "streak" | "valid_words" | "daily_done"; value?: number }>,
   eventKey?: string,
-): Promise<void> {
-  if (!playerId || events.length === 0) return;
+ ): Promise<boolean> {
+  if (!playerId || events.length === 0) return true;
   try {
     await db.transaction(async (tx) => {
       await applyAuthoritativeSeasonEventsInTransaction(tx, playerId, events, eventKey);
     });
+    return true;
   } catch (e: unknown) {
     // Season progression is auxiliary and must never make a valid game result fail.
     console.error("[season/authoritative-event] error:", e instanceof Error ? e.message : String(e));
+    return false;
   }
 }
 
