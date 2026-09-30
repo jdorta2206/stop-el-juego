@@ -108,34 +108,17 @@ router.get("/progress", async (req: AuthedRequest, res) => {
   }
 });
 
-router.post("/event", async (req: AuthedRequest, res) => {
-  const playerId = String(req.headers["x-halloween-player-id"] ?? "").trim();
-  if (!playerId || !verifyClaimedIdentity(req, playerId)) {
-    res.status(401).json({ error: "Authentication required" });
-    return;
-  }
-  const preview = req.headers["x-halloween-preview"] === "1";
+
+export async function recordHalloweenEvent(
+  playerId: string,
+  type: "game_completed" | "scare_received" | "scare_provoked",
+  eventKey: string,
+  preview = false,
+) {
   const year = getEventYear(new Date(), preview);
-  if (year === null) {
-    res.status(409).json({ error: "Halloween event is not active" });
-    return;
-  }
-
-  const { type, eventKey } = (req.body ?? {}) as {
-    type?: "game_completed" | "scare_received" | "scare_provoked";
-    eventKey?: string;
-  };
-  if (!["game_completed", "scare_received", "scare_provoked"].includes(type ?? "")) {
-    res.status(400).json({ error: "Invalid Halloween event type" });
-    return;
-  }
-  if (!eventKey || typeof eventKey !== "string" || eventKey.length > 160) {
-    res.status(400).json({ error: "Missing eventKey" });
-    return;
-  }
-
-  try {
-    const result = await db.transaction(async (tx) => {
+  if (year === null) return null;
+  if (!playerId || !eventKey || eventKey.length > 160) return null;
+  return await db.transaction(async (tx) => {
       await tx.execute(sql`
         INSERT INTO halloween_progress (player_id, event_year)
         VALUES (${playerId}, ${year})
@@ -239,13 +222,13 @@ router.post("/event", async (req: AuthedRequest, res) => {
         newRewardItems,
         duplicate: false,
       };
-    });
+  });
+}
 
-    res.json({ ok: true, year, ...result });
-  } catch (e) {
-    console.error("[halloween/event] error:", e);
-    res.status(500).json({ error: "Failed to record Halloween event" });
-  }
+router.post("/event", async (_req, res) => {
+  // Halloween progress is authoritative server state. Clients cannot mint
+  // progress/rewards by posting arbitrary event types or keys.
+  res.status(410).json({ error: "Halloween progress is recorded by gameplay" });
 });
 
 export default router;
