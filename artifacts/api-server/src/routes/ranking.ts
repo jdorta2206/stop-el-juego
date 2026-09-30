@@ -11,7 +11,7 @@ import { scoreLimiter } from "../middlewares/rateLimit";
 import { verifyClaimedIdentity, requirePlayerIdentity, type AuthedRequest } from "../lib/playerAuth";
 import { sumVerifiedBasePersistent, ceilingFromBase, absoluteCeiling } from "../lib/scoreToken";
 import { recordAuthoritativeSeasonEvents } from "./season";
-import { recordHalloweenEvent, recordHalloweenEventInTransaction, isHalloweenPreviewAuthorized } from "./halloween";
+import { recordHalloweenEventInTransaction, isHalloweenPreviewAuthorized } from "./halloween";
 import {
   isHappyHourActiveForTzOffset,
   HAPPY_HOUR_MULTIPLIER,
