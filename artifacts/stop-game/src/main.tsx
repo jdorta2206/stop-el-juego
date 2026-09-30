@@ -96,18 +96,21 @@ async function startAnalyticsHeartbeat() {
   window.setInterval(ping, 30_000);
 }
 
-void startAnalyticsHeartbeat();
-consumeAuthHandoff();
+async function bootstrapApp() {
+  await consumeAuthHandoff();
+  createRoot(document.getElementById("root")!).render(
+    <HelmetProvider>
+      <App />
+    </HelmetProvider>
+  );
 
-createRoot(document.getElementById("root")!).render(
-  <HelmetProvider>
-    <App />
-  </HelmetProvider>
-);
-
-if (typeof window !== "undefined") {
-  setTimeout(() => { ensureOfflineBundle(); }, 1500);
+  if (typeof window !== "undefined") {
+    setTimeout(() => { ensureOfflineBundle(); }, 1500);
+  }
 }
+
+void startAnalyticsHeartbeat();
+void bootstrapApp();
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
