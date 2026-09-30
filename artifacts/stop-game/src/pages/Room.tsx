@@ -897,7 +897,15 @@ export default function Room() {
       const r = roomRef.current as any;
       const roundEndsAt: number | null = typeof r?.roundEndsAt === "number" ? r.roundEndsAt : null;
       if (!roundEndsAt) return fallbackDuration;
-      const localDeadline = roundEndsAt + clockSkew;
+      const me = Array.isArray(r?.players)
+        ? r.players.find((p: any) => p?.playerId === player?.id)
+        : null;
+      const lightningUsedThisRound =
+        me?.powerCard === "lightning" &&
+        me?.powerCardUsed === true &&
+        me?.powerCardUsedRound === currentRound;
+      const localDeadline =
+        roundEndsAt + (lightningUsedThisRound ? 15_000 : 0) + clockSkew;
       return Math.max(0, Math.ceil((localDeadline - Date.now()) / 1000));
     };
 
