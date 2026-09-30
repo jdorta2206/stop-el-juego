@@ -678,6 +678,7 @@ export default function Room() {
     if (!event?.id || event.round !== currentRound || !isHalloweenActive() || !isHalloweenModeEnabled() || event.playerId === player?.id) return;
     if (seenHalloweenEventRef.current === event.id) return;
     seenHalloweenEventRef.current = event.id;
+    if (!isHalloweenModeEnabled()) return;
     if (halloweenScareTimerRef.current) clearTimeout(halloweenScareTimerRef.current);
     setHalloweenScare(getHalloweenScareById(getCurrentLang(), (event.scareId as any) ?? "clown"));
     halloweenScareHideTimerRef.current = window.setTimeout(() => setHalloweenScare(null), 1550);
