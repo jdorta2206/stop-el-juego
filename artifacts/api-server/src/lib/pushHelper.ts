@@ -149,7 +149,7 @@ export async function sendPushToPlayer(playerId: string, payload: PushPayload): 
       .where(and(
         eq(pushSubscriptionsTable.playerId, playerId),
         excludeReplitOrigin,
-        enabledAndUnmuted,
+        enabledAndUnmuted(),
       ));
   } catch (error) {
     // A database read failure happens after the in-memory throttle is claimed.
