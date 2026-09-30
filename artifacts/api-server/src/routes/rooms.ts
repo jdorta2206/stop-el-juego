@@ -545,9 +545,13 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string) {
         target: playerScoresTable.playerId,
         set: {
           playerName: p.playerName,
+          avatarColor: p.avatarColor ?? "#e53e3e",
           totalScore: sql`${playerScoresTable.totalScore} + ${score}`,
           gamesPlayed: sql`${playerScoresTable.gamesPlayed} + 1`,
           wins: sql`${playerScoresTable.wins} + ${won ? 1 : 0}`,
+          // The conflicting row was created by the concurrent submission.
+          // Preserve its already-authoritative streak (typically day 1)
+          // instead of applying this request's stale pre-insert snapshot.
           updatedAt: new Date(),
         },
       });
