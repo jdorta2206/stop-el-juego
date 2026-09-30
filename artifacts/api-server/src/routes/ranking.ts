@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import crypto from "crypto";
 import { db } from "@workspace/db";
-import { playerScoresTable, gameHistoryTable, pushSubscriptionsTable, scoreBonusClaimsTable } from "@workspace/db";
+import { playerScoresTable, gameHistoryTable, pushSubscriptionsTable, scoreBonusClaimsTable, scoreSubmissionClaimsTable } from "@workspace/db";
 import { eq, desc, sql } from "drizzle-orm";
 import { sendPushToPlayer } from "../lib/pushHelper";
 import { recordTrustedAnalyticsEvent } from "./analytics";
@@ -440,7 +440,7 @@ router.post("/scores", scoreLimiter, async (req, res) => {
     return;
   }
 
-  const { playerId, playerName, avatarColor, score: rawScore, letter, mode, won, bonus, scoreTokens } = body.data;
+  const { playerId, playerName, avatarColor, score: rawScore, letter, mode, won, bonus, scoreTokens, submissionId } = body.data;
 
   if (!verifyClaimedIdentity(req, playerId)) {
     res.status(403).json({ error: "Identity verification failed" });
@@ -448,6 +448,47 @@ router.post("/scores", scoreLimiter, async (req, res) => {
   }
 
   const isBonus = bonus === true;
+
+  // Every authoritative client submission carries a stable ID for the logical
+  // score write. A retry must resolve to the already-accepted write rather than
+  // crediting score/XP/coins/history a second time. Legacy requests without an
+  // ID are still accepted only when they carry server vouchers (those vouchers
+  // already provide replay protection); unverified offline requests must use
+  // the idempotency key.
+  if (typeof submissionId === "string" && !/^[A-Za-z0-9._:-]{8,160}$/.test(submissionId)) {
+    res.status(400).json({ error: "INVALID_SUBMISSION_ID" });
+    return;
+  }
+  if (!submissionId && !isBonus && (!Array.isArray(scoreTokens) || scoreTokens.length === 0)) {
+    res.status(422).json({ error: "SUBMISSION_ID_REQUIRED" });
+    return;
+  }
+  if (submissionId) {
+    const [priorClaim] = await db
+      .select({ id: scoreSubmissionClaimsTable.id })
+      .from(scoreSubmissionClaimsTable)
+      .where(sql`${scoreSubmissionClaimsTable.playerId} = ${playerId}
+        AND ${scoreSubmissionClaimsTable.submissionId} = ${submissionId}
+        AND ${scoreSubmissionClaimsTable.isBonus} = ${isBonus}`)
+      .limit(1);
+    if (priorClaim) {
+      const [currentPlayer] = await db
+        .select()
+        .from(playerScoresTable)
+        .where(eq(playerScoresTable.playerId, playerId))
+        .limit(1);
+      if (!currentPlayer) {
+        res.status(409).json({ error: "SUBMISSION_ALREADY_CLAIMED" });
+        return;
+      }
+      res.status(201).json({
+        ...currentPlayer,
+        rank: 0,
+        rewards: { xpAwarded: 0, coinsAwarded: 0, happyHourActive: false, multiplier: 1 },
+      });
+      return;
+    }
+  }
   // Keep the bonus claim identity outside the validation block because the
   // same value is atomically consumed inside the transaction below.
   let bonusClaimTokenSetHash: string | null = null;
