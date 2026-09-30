@@ -167,6 +167,15 @@ export default function SoloGame() {
   const halloweenScareRoundRef = useRef<number | null>(null);
   const halloweenAnswerScareTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const halloweenAnswerScareRoundRef = useRef<number | null>(null);
+
+  // Never let an answer-triggered scare timer cross a round/state boundary.
+  useEffect(() => {
+    if (halloweenAnswerScareTimerRef.current) {
+      clearTimeout(halloweenAnswerScareTimerRef.current);
+      halloweenAnswerScareTimerRef.current = null;
+    }
+    halloweenAnswerScareRoundRef.current = null;
+  }, [round, gameState]);
   // Round result announcement
   const [roundWon, setRoundWon] = useState<boolean | null>(null);
 
