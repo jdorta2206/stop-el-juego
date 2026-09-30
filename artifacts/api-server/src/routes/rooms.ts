@@ -6,7 +6,7 @@ import { CreateRoomBody, JoinRoomBody, SubmitRoomResultsBody } from "@workspace/
 import { calculateStreak, appendStreakDay, calcXpGain, calcCoinGain, calcLevel, lookupPlayerTzOffset } from "./ranking";
 import { recordTrustedAnalyticsEvent } from "./analytics";
 import { recordAuthoritativeSeasonEvents } from "./season";
-import { recordHalloweenEvent } from "./halloween";
+import { recordHalloweenEvent, isHalloweenPreviewAuthorized } from "./halloween";
 import { isHappyHourActiveForTzOffset, HAPPY_HOUR_MULTIPLIER } from "../lib/happyHour";
 import { isWordValidAsync, HALLOWEEN_CATEGORY_ALIASES } from "./game";
 import { writeLimiter, roomJoinLimiter } from "../middlewares/rateLimit";
@@ -308,15 +308,8 @@ function getHalloweenScareEvent(code: string): HalloweenRoomScare | null {
   return event;
 }
 
-function halloweenPreviewAuthorized(req: any): boolean {
-  const enabled = halloweenPreviewAuthorized(req);
-  const configuredSecret = String(process.env.HALLOWEEN_PREVIEW_SECRET ?? "");
-  const suppliedSecret = String(req.headers?.["x-halloween-preview-token"] ?? "");
-  return enabled && configuredSecret.length >= 32 && suppliedSecret === configuredSecret;
-}
-
 function halloweenEventAllowed(req: any): boolean {
-  if (halloweenPreviewAuthorized(req)) return true;
+  if (isHalloweenPreviewAuthorized(req)) return true;
   const now = Date.now();
   return now >= Date.parse("2026-10-15T00:00:00Z") && now < Date.parse("2026-11-03T00:00:00Z");
 }
@@ -2635,9 +2628,9 @@ router.post("/:roomCode/halloween-scare", writeLimiter, async (req, res) => {
   halloweenScareCooldowns.set(cooldownKey, now);
   roomHalloweenScares.set(code, event);
   void Promise.allSettled([
-    recordHalloweenEvent(playerId, "scare_provoked", `provoked:${event.id}`, halloweenPreviewAuthorized(req)),
+    recordHalloweenEvent(playerId, "scare_provoked", `provoked:${event.id}`, isHalloweenPreviewAuthorized(req)),
     ...players.filter((p: any) => p.playerId && p.playerId !== playerId && !p.isBot).map((p: any) =>
-      recordHalloweenEvent(p.playerId, "scare_received", `received:${event.id}:${p.playerId}`, halloweenPreviewAuthorized(req))
+      recordHalloweenEvent(p.playerId, "scare_received", `received:${event.id}:${p.playerId}`, isHalloweenPreviewAuthorized(req))
     ),
   ]).catch(() => {});
   broadcastAndFormat(room);
@@ -2721,9 +2714,9 @@ router.post("/:roomCode/stop", async (req, res) => {
   if (halloweenEventAllowed(req) && roomCategoryPacks.get(roomCode.toUpperCase())?.pack !== "custom") {
     const scareKey = `stop:${roomCode.toUpperCase()}:${room.currentRound ?? 0}:${stopper.stopTimestamp}`;
     void Promise.allSettled([
-      recordHalloweenEvent(playerId, "scare_provoked", `provoked:${scareKey}`, halloweenPreviewAuthorized(req)),
+      recordHalloweenEvent(playerId, "scare_provoked", `provoked:${scareKey}`, isHalloweenPreviewAuthorized(req)),
       ...roomPlayers.filter((p: any) => p.playerId && p.playerId !== playerId && !p.isBot).map((p: any) =>
-        recordHalloweenEvent(p.playerId, "scare_received", `received:${scareKey}:${p.playerId}`, halloweenPreviewAuthorized(req))
+        recordHalloweenEvent(p.playerId, "scare_received", `received:${scareKey}:${p.playerId}`, isHalloweenPreviewAuthorized(req))
       ),
     ]).catch(() => {});
   }
