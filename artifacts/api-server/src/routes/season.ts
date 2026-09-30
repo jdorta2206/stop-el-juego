@@ -333,6 +333,7 @@ async function getOrCreateProgress(playerId: string, seasonId: number): Promise<
 export async function recordAuthoritativeSeasonEvents(
   playerId: string,
   events: Array<{ type: "win_game" | "play_game" | "round_score" | "streak" | "valid_words" | "daily_done"; value?: number }>,
+  eventKey?: string,
 ): Promise<void> {
   if (!playerId || events.length === 0) return;
   try {
@@ -341,6 +342,15 @@ export async function recordAuthoritativeSeasonEvents(
     const today = todayUTC();
 
     await db.transaction(async (tx) => {
+      // A settlement can commit before auxiliary Season work runs. Claiming a
+      // stable event key makes recovery safe: a retry is ignored after the
+      // first successful application instead of incrementing missions twice.
+      if (eventKey) {
+        await tx.execute(sql`CREATE TABLE IF NOT EXISTS season_event_claims (season_id integer NOT NULL, player_id text NOT NULL, event_key text NOT NULL, created_at timestamp NOT NULL DEFAULT NOW(), PRIMARY KEY (season_id, player_id, event_key))`);
+        const claim = await tx.execute(sql`INSERT INTO season_event_claims (season_id, player_id, event_key) VALUES (${season.id}, ${playerId}, ${eventKey}) ON CONFLICT (season_id, player_id, event_key) DO NOTHING RETURNING event_key`);
+        if ((claim.rows?.length ?? 0) === 0) return;
+      }
+
       // Serialize authoritative events with season finalization at rollover.
       await tx.execute(sql`SELECT pg_advisory_xact_lock(${season.id}::bigint)`);
 
