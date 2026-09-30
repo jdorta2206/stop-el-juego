@@ -133,7 +133,6 @@ function isPlayerOnline(code: string, playerId: string): boolean {
 // PRESENCE_GRACE_MS: buffer before treating an SSE drop as "offline".
 const SUBMIT_GRACE_MS = 15_000;
 const PRESENCE_GRACE_MS = 4_000;
-const HALLOWEEN_PREVIEW_ENV = String(process.env.HALLOWEEN_PREVIEW_SECRET ?? "").length >= 32;
 
 // Last DB version emitted to this process's SSE clients. A request may commit
 // an older snapshot and only reach this function after a newer request has
@@ -554,6 +553,11 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
   const winner = sorted[0];
   const today = new Date().toISOString().split("T")[0];
   const normalizedRoomCode = String(roomCode || "").toUpperCase();
+  const [settlementRoom] = await db.select({ stopperJson: roomsTable.stopperJson })
+    .from(roomsTable)
+    .where(eq(roomsTable.id, roomId))
+    .limit(1);
+  const halloweenPreview = parseBluffMeta(settlementRoom?.stopperJson)?.halloweenPreview === true;
 
   await multiplayerSettlementClaimsReady;
   await Promise.allSettled(leaderboardPlayers.map(async (p: any) => {
@@ -688,7 +692,7 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
       p.playerId,
       "game_completed",
       `multiplayer:${roomId}:${p.playerId}`,
-      HALLOWEEN_PREVIEW_ENV,
+      halloweenPreview,
     ).catch((err) => console.error("[halloween] trusted multiplayer completion failed:", err));
 
     void recordAuthoritativeSeasonEvents(p.playerId, [
@@ -704,6 +708,7 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
 async function recoverMultiplayerAuxiliaryEffects(room: any, players: any[]): Promise<void> {
   const eligible = players.filter((p: any) => p && !p.isBot && p.playerId && p.loginMethod !== "guest");
   if (eligible.length === 0) return;
+  const halloweenPreview = parseBluffMeta(room.stopperJson)?.halloweenPreview === true;
   const sorted = [...eligible].sort((a, b) => {
     const ds = (b.score || 0) - (a.score || 0);
     if (ds !== 0) return ds;
@@ -767,7 +772,7 @@ async function recoverMultiplayerAuxiliaryEffects(room: any, players: any[]): Pr
         ...(streak > 0 ? [{ type: "streak", value: streak }] : []),
       ], eventKey);
     }
-    await recordHalloweenEvent(p.playerId, "game_completed", `multiplayer:${room.id}:${p.playerId}`, HALLOWEEN_PREVIEW_ENV);
+    await recordHalloweenEvent(p.playerId, "game_completed", `multiplayer:${room.id}:${p.playerId}`, halloweenPreview);
   }
 }
 
@@ -855,6 +860,7 @@ function finalizeRoundState(room: any, players: any[]): {
         categoryPack: existingMeta?.categoryPack,
         customCategories: existingMeta?.customCategories,
         customPackLabel: existingMeta?.customPackLabel,
+        halloweenPreview: existingMeta?.halloweenPreview === true,
         stopper: existingMeta?.stopper ?? existingMeta,
         bluffVotes,
         bluffDeadline,
@@ -879,6 +885,7 @@ function finalizeRoundState(room: any, players: any[]): {
         categoryPack: transitionMeta.categoryPack,
         customCategories: transitionMeta.customCategories,
         customPackLabel: transitionMeta.customPackLabel,
+        halloweenPreview: transitionMeta.halloweenPreview === true,
       });
       // NOTE: side effects (leaderboard submit on game-over, spy/live map
       // cleanup) are intentionally NOT done here. They run in the CALLER via
@@ -1025,6 +1032,7 @@ async function sweepStuckRooms() {
           categoryPack: meta.categoryPack,
           customCategories: meta.customCategories,
           customPackLabel: meta.customPackLabel,
+          halloweenPreview: meta.halloweenPreview === true,
           stopper: meta.stopper,
           bluffResults: bluffVotes,
         }),
@@ -1387,7 +1395,7 @@ router.post("/", async (req, res) => {
         gameMode,
         language: language ?? "es",
         playersJson: JSON.stringify(players),
-        stopperJson: null,
+        stopperJson: isHalloweenPreviewAuthorized(req) ? JSON.stringify({ halloweenPreview: true }) : null,
         isPublic: safeIsPublic,
       }).returning();
 
@@ -1646,6 +1654,7 @@ router.post("/:roomCode/start", async (req, res) => {
     categoryPack: startSourceMeta.categoryPack,
     customCategories: startSourceMeta.customCategories,
     customPackLabel: startSourceMeta.customPackLabel,
+    halloweenPreview: startSourceMeta.halloweenPreview === true,
     roundStartedAt: Date.now(),
   };
   // 🔒 Atomic transition: only flip to "playing" if the row is STILL in
@@ -2579,6 +2588,7 @@ router.post("/:roomCode/rematch", writeLimiter, async (req, res) => {
         categoryPack: typeof oldMeta.categoryPack === "string" ? oldMeta.categoryPack : undefined,
         customCategories: Array.isArray(oldMeta.customCategories) ? [...oldMeta.customCategories] : undefined,
         customPackLabel: typeof oldMeta.customPackLabel === "string" ? oldMeta.customPackLabel : undefined,
+        halloweenPreview: oldMeta.halloweenPreview === true,
       };
 
       // The room-code UNIQUE constraint is the final authority. INSERT ...
@@ -3416,6 +3426,7 @@ router.post("/:roomCode/bluff-vote", writeLimiter, async (req, res) => {
           categoryPack: meta.categoryPack,
           customCategories: meta.customCategories,
           customPackLabel: meta.customPackLabel,
+          halloweenPreview: meta.halloweenPreview === true,
           stopper: meta.stopper,
           bluffResults: bluffVotes,
         }),
@@ -3569,6 +3580,7 @@ router.post("/:roomCode/resolve-bluffs", async (req, res) => {
             categoryPack: meta.categoryPack,
             customCategories: meta.customCategories,
             customPackLabel: meta.customPackLabel,
+            halloweenPreview: meta.halloweenPreview === true,
             stopper: meta.stopper,
             bluffResults: bluffVotes,
           }),
