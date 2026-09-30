@@ -777,10 +777,17 @@ function finalizeRoundState(room: any, players: any[]): {
     const presenceArmed = sinceStop > PRESENCE_GRACE_MS;
     return players.map((p: any) => {
       if (p.isReady) return p;
-      if (gracePassed) {
+      const lightningUsedThisRound =
+        p.powerCard === "lightning" &&
+        p.powerCardUsed === true &&
+        p.powerCardUsedRound === room.currentRound;
+      const playerEndTs = endTs + (lightningUsedThisRound ? 15_000 : 0);
+      const playerGracePassed = Date.now() - playerEndTs > SUBMIT_GRACE_MS;
+      const playerPresenceArmed = Date.now() - playerEndTs > PRESENCE_GRACE_MS;
+      if (playerGracePassed) {
         return { ...p, isReady: true, roundScore: 0, validAnswerCount: 0, finishedAt: Date.now() };
       }
-      if (presenceArmed && !isPlayerOnline(codeUpper, p.playerId)) {
+      if (playerPresenceArmed && !isPlayerOnline(codeUpper, p.playerId)) {
         return { ...p, isReady: true, roundScore: 0, finishedAt: Date.now() };
       }
       return p;
@@ -1570,6 +1577,7 @@ router.post("/:roomCode/start", async (req, res) => {
       ? MP_CARDS[Math.floor(Math.random() * MP_CARDS.length)]
       : (p.powerCard ?? null),
     powerCardUsed: newRound === 1 ? false : (p.powerCardUsed ?? false),
+    powerCardUsedRound: p.powerCardUsedRound ?? null,
     bluffImmune: false,
   }));
 
@@ -2037,7 +2045,7 @@ router.post("/:roomCode/use-card", async (req, res) => {
     }
 
     let updatedPlayers = players.map(p =>
-      p.playerId === playerId ? { ...p, powerCardUsed: true } : p
+      p.playerId === playerId ? { ...p, powerCardUsed: true, powerCardUsedRound: room.currentRound } : p
     );
 
     // Apply server-side effects
@@ -2917,7 +2925,9 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
   // The power-card state is authoritative in the room snapshot. Only a card
   // actually consumed during this round may affect scoring; merely owning a
   // "double_or_nothing" card must never double a score.
-  const card = me.powerCardUsed ? String(me.powerCard ?? "") : "";
+  const card = me.powerCardUsed && me.powerCardUsedRound === room.currentRound
+    ? String(me.powerCard ?? "")
+    : "";
 
   // Update this player's score and mark as ready; store only server-approved
   // bluff data.
@@ -3078,7 +3088,14 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
   // Without this, a late /results request after a round timed out naturally could
   // still score before the background sweeper persisted the zeroed player.
   const roundEndTs = roundEndTimestamp(room);
-  if (roundEndTs && Date.now() - roundEndTs > SUBMIT_GRACE_MS) {
+  const lightningUsedThisRound =
+    me.powerCard === "lightning" &&
+    me.powerCardUsed === true &&
+    me.powerCardUsedRound === room.currentRound;
+  const effectivePlayerEndTs = roundEndTs
+    ? roundEndTs + (lightningUsedThisRound ? 15_000 : 0)
+    : undefined;
+  if (effectivePlayerEndTs && Date.now() - effectivePlayerEndTs > SUBMIT_GRACE_MS) {
     cappedRoundScore = 0;
   }
 
