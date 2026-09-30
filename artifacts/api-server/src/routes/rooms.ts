@@ -2151,9 +2151,9 @@ router.post("/:roomCode/spy", writeLimiter, async (req, res) => {
     return;
   }
 
-  // Enforce per-round usage limit (premium gets 2x)
-  let used = roomSpyUsage.get(code);
-  if (!used) { used = new Map(); roomSpyUsage.set(code, used); }
+  // Enforce per-round usage limit from the persisted round state. The old
+  // in-memory map was lost on API restart and was also raceable by two
+  // simultaneous spy requests.
   const callerPremium = await isPlayerPremium(playerId);
 
   // Premium lookup is asynchronous. The room can advance while it is in
@@ -2175,7 +2175,11 @@ router.post("/:roomCode/spy", writeLimiter, async (req, res) => {
   }
 
   const limit = callerPremium ? SPY_LIMIT_PREMIUM : SPY_LIMIT_FREE;
-  const current = used.get(playerId) ?? 0;
+  const liveMeta = parseBluffMeta(liveRoom.stopperJson) ?? {};
+  const persistedSpyUsage = liveMeta.spyUsage && typeof liveMeta.spyUsage === "object"
+    ? liveMeta.spyUsage as Record<string, number>
+    : {};
+  const current = Number(persistedSpyUsage[playerId] ?? 0);
   if (current >= limit) {
     res.status(429).json({
       error: callerPremium
@@ -2208,6 +2212,28 @@ router.post("/:roomCode/spy", writeLimiter, async (req, res) => {
     return;
   }
   const pick = candidates[Math.floor(Math.random() * candidates.length)];
+  // Atomically consume the usage in the room row. This prevents concurrent
+  // requests from both spending the same remaining spy budget.
+  const nextSpyUsage = { ...persistedSpyUsage, [playerId]: current + 1 };
+  const [spyConsumed] = await db.update(roomsTable)
+    .set({
+      stopperJson: JSON.stringify({ ...liveMeta, spyUsage: nextSpyUsage }),
+      updatedAt: new Date(),
+    })
+    .where(and(
+      eq(roomsTable.roomCode, code),
+      eq(roomsTable.status, "playing"),
+      eq(roomsTable.updatedAt, liveRoom.updatedAt),
+    ))
+    .returning();
+  if (!spyConsumed) {
+    res.status(409).json({ error: "La ronda cambió o el espía ya fue usado; inténtalo de nuevo" });
+    return;
+  }
+  // Keep the in-memory map in sync as a fast path for the scoring code; the
+  // persisted value remains authoritative across restarts.
+  let used = roomSpyUsage.get(code);
+  if (!used) { used = new Map(); roomSpyUsage.set(code, used); }
   used.set(playerId, current + 1);
   res.json({
     rivalName: pick.name,
@@ -2818,9 +2844,10 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
     cappedRoundScore += 5;
   }
 
-  // 🕵️ Authoritative spy penalty: -10 pts if the server registered a spy use this round
-  const spies = roomSpyUsage.get(roomCode.toUpperCase());
-  if (spies?.has(playerId)) {
+  // 🕵️ Authoritative spy penalty: -10 pts if the server registered a spy use this round.
+  // Persisted round metadata is the source of truth after API restarts.
+  const spies = stopMetaForScore?.spyUsage;
+  if (spies && Number(spies[playerId] ?? 0) > 0) {
     cappedRoundScore = Math.max(0, cappedRoundScore - 10);
   }
 
