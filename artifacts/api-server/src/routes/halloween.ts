@@ -116,7 +116,8 @@ router.get("/progress", async (req: AuthedRequest, res) => {
 });
 
 
-export async function recordHalloweenEvent(
+export async function recordHalloweenEventInTransaction(
+  tx: any,
   playerId: string,
   type: "game_completed" | "scare_received" | "scare_provoked",
   eventKey: string,
@@ -128,7 +129,6 @@ export async function recordHalloweenEvent(
   const year = getEventYear(new Date(), preview);
   if (year === null) return null;
   if (!playerId || !eventKey || eventKey.length > 160) return null;
-  return await db.transaction(async (tx) => {
       if (activeRoomId !== undefined) {
         const activeRoom = await tx.execute(sql`
           SELECT status, current_round
@@ -260,6 +260,29 @@ export async function recordHalloweenEvent(
         duplicate: false,
       };
   });
+}
+
+export async function recordHalloweenEvent(
+  playerId: string,
+  type: "game_completed" | "scare_received" | "scare_provoked",
+  eventKey: string,
+  preview = false,
+  activeRoomId?: number,
+  activeRoomStatus?: "playing" | "stopped",
+  activeRoomRound?: number,
+) {
+  return await db.transaction(async (tx) =>
+    recordHalloweenEventInTransaction(
+      tx,
+      playerId,
+      type,
+      eventKey,
+      preview,
+      activeRoomId,
+      activeRoomStatus,
+      activeRoomRound,
+    )
+  );
 }
 
 
