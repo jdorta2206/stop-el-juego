@@ -849,6 +849,24 @@ async function sweepStuckRooms() {
       broadcastAndFormat(updateResult[0]);
     }
 
+    // 🔁 Recovery for final settlement: the room transition to "finished" is
+    // already durable, while leaderboard settlement is intentionally asynchronous.
+    // If the original settlement failed (DB/network/transient error), retry it on
+    // the next sweep. #291's room+player claim makes successful retries no-ops.
+    const finishedRooms = await db.select().from(roomsTable)
+      .where(eq(roomsTable.status, "finished"));
+    for (const room of finishedRooms) {
+      const players = parsePlayers(room.playersJson);
+      void submitAllScoresToLeaderboard(
+        players,
+        room.currentLetter || "A",
+        room.id,
+        room.roomCode,
+      ).catch((err) => {
+        console.error("[sweepStuckRooms] final settlement retry failed:", (err as Error).message);
+      });
+    }
+
     // 🃏 Also rescue rooms stuck in "bluffvoting": resolution only happens when
     // a client polls /vote or /resolve-bluffs. If everyone closes the tab the
     // round would hang until the 6h purge. Force-resolve once the bluff deadline
