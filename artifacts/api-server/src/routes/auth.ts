@@ -287,7 +287,7 @@ function verifyAuthState(
   // legacy links, or no SESSION_SECRET configured): fail open so login works.
   if (signed) {
     // Trust the integrity-checked (HMAC) payload for the return target.
-    return { returnPath: signed.r, returnOrigin: signed.o, csrfFail: false };
+    return { returnPath: signed.r, returnOrigin: signed.o, csrfFail: false, authStartedAt: signed.t };
   }
   // Legacy / unsigned state — preserve prior behavior.
   const legacy = decodeAuthState(raw);
