@@ -1536,10 +1536,15 @@ router.post("/:roomCode/start", async (req, res) => {
   if (botsInRoom.length > 0) {
     const updatedRoom = updateResult[0];
     const packCfg = roomCategoryPacks.get(roomCode.toUpperCase());
-    const pack = packCfg?.pack ?? "standard";
+    // Recover the persisted pack after an API restart; bots must use the same
+    // authoritative categories as humans in custom/crazy/mix rooms.
+    const persistedStartMeta = parseBluffMeta(updatedRoom.stopperJson) ?? {};
+    const pack = packCfg?.pack ?? persistedStartMeta.categoryPack ?? "standard";
+    const customCategories = packCfg?.customCategories ??
+      (Array.isArray(persistedStartMeta.customCategories) ? persistedStartMeta.customCategories : undefined);
     const letterForRound = (updatedRoom.currentLetter ?? "A").toUpperCase();
     const roundForRound = updatedRoom.currentRound ?? newRound;
-    const categories = resolveCategoriesForRound(pack, letterForRound, roundForRound, packCfg?.customCategories);
+    const categories = resolveCategoriesForRound(pack, letterForRound, roundForRound, customCategories);
     scheduleBotsForRound({
       roomCode: roomCode.toUpperCase(),
       bots: botsInRoom.map((b: any) => ({ playerId: b.playerId })),
