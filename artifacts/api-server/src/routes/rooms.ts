@@ -2622,6 +2622,16 @@ router.post("/:roomCode/halloween-scare", writeLimiter, async (req, res) => {
   const me = players.find((p: any) => p.playerId === playerId);
   if (!me) { res.status(403).json({ error: "Only players in the room can scare" }); return; }
 
+  // Keep manual Halloween scares consistent with STOP/Solo: custom-category
+  // rooms are not part of the standard Halloween event layer. Recover the
+  // pack from persisted stopper metadata after an API restart.
+  const scareMeta = parseBluffMeta(room.stopperJson) ?? {};
+  const scarePack = roomCategoryPacks.get(code)?.pack ?? scareMeta.categoryPack ?? "standard";
+  if (scarePack === "custom") {
+    res.status(409).json({ error: "Halloween scares are disabled for custom category rooms" });
+    return;
+  }
+
   const allowed = ["clown", "horrorMask", "hauntedDoll", "creepyDoll", "demonMask"] as const;
   const safeScareId = allowed.includes(scareId) ? scareId : allowed[Math.floor(Math.random() * allowed.length)];
   const cooldownKey = code + ":" + playerId;
