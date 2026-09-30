@@ -2773,9 +2773,9 @@ router.post("/:roomCode/stop", async (req, res) => {
   if (halloweenEventAllowed(req) && stopPack !== "custom") {
     const scareKey = `stop:${roomCode.toUpperCase()}:${room.currentRound ?? 0}:${stopper.stopTimestamp}`;
     void Promise.allSettled([
-      recordHalloweenEvent(playerId, "scare_provoked", `provoked:${scareKey}`, isHalloweenPreviewAuthorized(req)),
+      recordHalloweenEvent(playerId, "scare_provoked", `provoked:${scareKey}`, isHalloweenPreviewAuthorized(req), room.id, "stopped", room.currentRound),
       ...roomPlayers.filter((p: any) => p.playerId && p.playerId !== playerId && !p.isBot).map((p: any) =>
-        recordHalloweenEvent(p.playerId, "scare_received", `received:${scareKey}:${p.playerId}`, isHalloweenPreviewAuthorized(req))
+        recordHalloweenEvent(p.playerId, "scare_received", `received:${scareKey}:${p.playerId}`, isHalloweenPreviewAuthorized(req), room.id, "stopped", room.currentRound)
       ),
     ]).catch(() => {});
   }
