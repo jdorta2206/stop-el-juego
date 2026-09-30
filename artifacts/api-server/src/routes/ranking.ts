@@ -447,6 +447,9 @@ router.post("/scores", scoreLimiter, async (req, res) => {
   }
 
   const isBonus = bonus === true;
+  // Keep the bonus claim identity outside the validation block because the
+  // same value is atomically consumed inside the transaction below.
+  let bonusClaimTokenSetHash: string | null = null;
 
   // A rewarded-video bonus must consume a server-issued, single-use claim
   // created from the exact voucher set that funded the original score.
@@ -455,8 +458,8 @@ router.post("/scores", scoreLimiter, async (req, res) => {
       res.status(422).json({ error: "INVALID_BONUS_MODE" });
       return;
     }
-    const tokenSetHash = bonusTokenSetHash(playerId, scoreTokens);
-    if (!tokenSetHash) {
+    bonusClaimTokenSetHash = bonusTokenSetHash(playerId, scoreTokens);
+    if (!bonusClaimTokenSetHash) {
       res.status(422).json({ error: "BONUS_PROOF_REQUIRED" });
       return;
     }
@@ -464,7 +467,7 @@ router.post("/scores", scoreLimiter, async (req, res) => {
     const [availableClaim] = await db
       .select({ tokenSetHash: scoreBonusClaimsTable.tokenSetHash, maxScore: scoreBonusClaimsTable.maxScore })
       .from(scoreBonusClaimsTable)
-      .where(sql`${scoreBonusClaimsTable.tokenSetHash} = ${tokenSetHash} AND ${scoreBonusClaimsTable.playerId} = ${playerId}`)
+      .where(sql`${scoreBonusClaimsTable.tokenSetHash} = ${bonusClaimTokenSetHash} AND ${scoreBonusClaimsTable.playerId} = ${playerId}`)
       .limit(1);
     if (!availableClaim || rawScore <= 0 || rawScore > availableClaim.maxScore) {
       res.status(422).json({ error: "INVALID_BONUS_SCORE" });
@@ -546,7 +549,7 @@ router.post("/scores", scoreLimiter, async (req, res) => {
     const bonusResult = await db.transaction(async (tx) => {
       const [claimed] = await tx
         .delete(scoreBonusClaimsTable)
-        .where(sql`${scoreBonusClaimsTable.tokenSetHash} = ${tokenSetHash} AND ${scoreBonusClaimsTable.playerId} = ${playerId}`)
+        .where(sql`${scoreBonusClaimsTable.tokenSetHash} = ${bonusClaimTokenSetHash} AND ${scoreBonusClaimsTable.playerId} = ${playerId}`)
         .returning({
           tokenSetHash: scoreBonusClaimsTable.tokenSetHash,
           maxScore: scoreBonusClaimsTable.maxScore,
