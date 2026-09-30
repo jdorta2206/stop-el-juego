@@ -676,6 +676,41 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
   }));
 }
 
+async function recoverMultiplayerAuxiliaryEffects(room: any, players: any[]): Promise<void> {
+  const eligible = players.filter((p: any) => p && !p.isBot && p.playerId && p.loginMethod !== "guest");
+  if (eligible.length === 0) return;
+  const sorted = [...eligible].sort((a, b) => {
+    const ds = (b.score || 0) - (a.score || 0);
+    if (ds !== 0) return ds;
+    const sa = a.wasStopper ? 1 : 0, sb = b.wasStopper ? 1 : 0;
+    if (sa !== sb) return sb - sa;
+    const fa = typeof a.finishedAt === "number" ? a.finishedAt : Number.MAX_SAFE_INTEGER;
+    const fb = typeof b.finishedAt === "number" ? b.finishedAt : Number.MAX_SAFE_INTEGER;
+    if (fa !== fb) return fa - fb;
+    return String(a.playerId || "").localeCompare(String(b.playerId || ""));
+  });
+  const winnerId = sorted[0]?.playerId;
+  for (const p of eligible) {
+    const eventKey = `multiplayer:${room.id}:${p.playerId}`;
+    const existingSeasonEvent = await db.execute(sql`SELECT 1 FROM season_event_claims WHERE event_key = ${eventKey} LIMIT 1`);
+    if ((existingSeasonEvent.rows ?? []).length > 0) continue;
+    const won = winnerId === p.playerId;
+    const rawScore = Number.isFinite(p.score) ? Math.max(0, Math.floor(p.score)) : 0;
+    const validWords = Number.isFinite(p.validAnswerCount) ? Math.max(0, Math.floor(p.validAnswerCount)) : 0;
+    const scoreRow = await db.select({ currentStreak: playerScoresTable.currentStreak })
+      .from(playerScoresTable).where(eq(playerScoresTable.playerId, p.playerId)).limit(1);
+    const streak = scoreRow[0]?.currentStreak ?? 0;
+    await recordAuthoritativeSeasonEvents(p.playerId, [
+      { type: "play_game", value: 1 },
+      ...(won ? [{ type: "win_game", value: 1 }] : []),
+      ...(rawScore > 0 ? [{ type: "round_score", value: rawScore }] : []),
+      ...(validWords > 0 ? [{ type: "valid_words", value: validWords }] : []),
+      ...(streak > 0 ? [{ type: "streak", value: streak }] : []),
+    ], eventKey);
+    await recordHalloweenEvent(p.playerId, "game_completed", `multiplayer:${String(room.roomCode).toUpperCase()}:${p.playerId}`, false);
+  }
+}
+
 // Run the stuck-player sweep and, if everyone is ready, compute the next
 // round state. Extracted so BOTH the /results handler and the background
 // sweepStuckRooms() failsafe use identical logic — otherwise the round could
@@ -872,7 +907,15 @@ async function sweepStuckRooms() {
       const claimRows = await db.execute(sql`SELECT player_id FROM multiplayer_settlement_claims WHERE room_id = ${room.id}`);
       const claimedIds = new Set((claimRows.rows ?? []).map((row: any) => String(row.player_id)));
       const pending = eligible.filter((p: any) => !claimedIds.has(String(p.playerId)));
-      if (pending.length === 0) continue;
+      if (pending.length === 0) {
+        // Core settlement already succeeded; recover only auxiliary effects
+        // that may have been lost if the process crashed immediately after
+        // the claim transaction committed. Season/Halloween are idempotent.
+        void recoverMultiplayerAuxiliaryEffects(room, players).catch((err) => {
+          console.error("[sweepStuckRooms] auxiliary settlement recovery failed:", (err as Error).message);
+        });
+        continue;
+      }
 
       // #291 remains the final idempotency barrier if the original settlement
       // races this retry or multiple sweep ticks overlap.
