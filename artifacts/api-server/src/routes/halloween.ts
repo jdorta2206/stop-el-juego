@@ -122,6 +122,8 @@ export async function recordHalloweenEvent(
   eventKey: string,
   preview = false,
   activeRoomId?: number,
+  activeRoomStatus?: "playing" | "stopped",
+  activeRoomRound?: number,
 ) {
   const year = getEventYear(new Date(), preview);
   if (year === null) return null;
@@ -129,12 +131,15 @@ export async function recordHalloweenEvent(
   return await db.transaction(async (tx) => {
       if (activeRoomId !== undefined) {
         const activeRoom = await tx.execute(sql`
-          SELECT status
+          SELECT status, current_round
           FROM rooms
           WHERE id = ${activeRoomId}
           FOR UPDATE
         `);
-        if (String(activeRoom.rows?.[0]?.status ?? "") !== "playing") return null;
+        const activeStatus = String(activeRoom.rows?.[0]?.status ?? "");
+        const expectedStatus = activeRoomStatus ?? "playing";
+        if (activeStatus !== expectedStatus) return null;
+        if (activeRoomRound !== undefined && Number(activeRoom.rows?.[0]?.current_round) !== activeRoomRound) return null;
       }
 
       await tx.execute(sql`
