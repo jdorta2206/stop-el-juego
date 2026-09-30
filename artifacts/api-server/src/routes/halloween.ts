@@ -522,7 +522,12 @@ export async function recordHalloweenScareEventsWithCooldown(
     if (recorded.length !== filteredEvents.length) {
       throw new Error("Halloween scare persistence incomplete");
     }
-    return { recorded, cooldownMs: 18000, ended: false, cooldownClaimed: true };
+    return {
+      recorded,
+      cooldownMs: 18000,
+      cooldownClaimed: true,
+      cooldownUntil: claimed.rows?.[0]?.available_at ?? null,
+    };
   });
 }
 
