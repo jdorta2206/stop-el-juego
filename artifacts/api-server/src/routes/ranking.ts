@@ -479,7 +479,7 @@ router.post("/scores", scoreLimiter, async (req, res) => {
     ? await db.select().from(playerScoresTable).where(eq(playerScoresTable.playerId, playerId)).limit(1)
     : [];
 
-  const { base: verifiedBase, verified, collectionWords, mode: certifiedMode } = isBonus
+  const { base: verifiedBase, verified, collectionWords, mode: certifiedMode, aiBase: certifiedAiBase } = isBonus
     ? { base: 0, verified: 0, collectionWords: [] as Array<{ word: string; category: string }>, mode: null }
     // /ranking/scores is the client solo leaderboard path. Keep its voucher
     // count cap independent of the client-supplied `mode`; otherwise a caller
@@ -517,6 +517,14 @@ router.post("/scores", scoreLimiter, async (req, res) => {
   const { newStreak, updatedToday } = calculateStreak(lastPlayedDate, existing[0]?.currentStreak ?? 0);
   const newLongest = Math.max(existing[0]?.longestStreak ?? 0, newStreak);
 
+  // 🔒 For voucher-backed Solo submissions, the win/loss result must come
+  // from the server-signed AI score, not from the client body. Legacy/offline
+  // submissions have no trusted AI score and therefore cannot claim a win.
+  const authoritativeWon = !isBonus && certifiedMode === "solo" && verified > 0
+    ? verifiedBase > certifiedAiBase
+    : false;
+  const effectiveWon = authoritativeWon;
+
   const overtaken = score > 0 && newTotal > oldTotal
     ? await db
         .select({ playerId: playerScoresTable.playerId, playerName: playerScoresTable.playerName })
@@ -528,8 +536,8 @@ router.post("/scores", scoreLimiter, async (req, res) => {
         )
     : [];
 
-  const baseXpGain = calcXpGain(score, won ?? false, mode ?? "solo");
-  const baseCoinGain = calcCoinGain(score, won ?? false, mode ?? "solo", isBonus);
+  const baseXpGain = calcXpGain(score, effectiveWon, mode ?? "solo");
+  const baseCoinGain = calcCoinGain(score, effectiveWon, mode ?? "solo", isBonus);
   const tzOffset = await lookupPlayerTzOffset(playerId);
   const happyHourActive =
     tzOffset !== null && isHappyHourActiveForTzOffset(tzOffset);
@@ -575,7 +583,7 @@ router.post("/scores", scoreLimiter, async (req, res) => {
           score,
           letter,
           mode: mode ?? "solo",
-          won: won ?? false,
+          won: effectiveWon,
         });
         return updated;
       }
@@ -640,7 +648,7 @@ router.post("/scores", scoreLimiter, async (req, res) => {
         totalScore: sql`${playerScoresTable.totalScore} + ${score}`,
         ...(isBonus ? {} : {
           gamesPlayed: sql`${playerScoresTable.gamesPlayed} + 1`,
-          wins: sql`${playerScoresTable.wins} + ${won ? 1 : 0}`,
+          wins: sql`${playerScoresTable.wins} + ${effectiveWon ? 1 : 0}`,
         }),
         xp: sql`${playerScoresTable.xp} + ${xpGain}`,
         // Concurrency hardening: another simultaneous score submission may have
@@ -689,7 +697,7 @@ router.post("/scores", scoreLimiter, async (req, res) => {
           avatarColor: avatarColor ?? "#e53e3e",
           totalScore: sql`${playerScoresTable.totalScore} + ${score}`,
           gamesPlayed: sql`${playerScoresTable.gamesPlayed} + ${isBonus ? 0 : 1}`,
-          wins: sql`${playerScoresTable.wins} + ${isBonus || !won ? 0 : 1}`,
+          wins: sql`${playerScoresTable.wins} + ${isBonus || !effectiveWon ? 0 : 1}`,
           xp: sql`${playerScoresTable.xp} + ${xpGain}`,
           level: sql`GREATEST(${playerScoresTable.level}, ${calcLevel(xpGain)})`,
           coins: sql`${playerScoresTable.coins} + ${coinGain}`,
@@ -777,7 +785,7 @@ router.post("/scores", scoreLimiter, async (req, res) => {
     }).catch((err) => console.error("[analytics] trusted game_complete failed:", err));
     void recordAuthoritativeSeasonEvents(playerId, [
       { type: "play_game", value: 1 },
-      ...(won ? [{ type: "win_game", value: 1 }] : []),
+      ...(effectiveWon ? [{ type: "win_game", value: 1 }] : []),
       { type: "round_score", value: score },
       { type: "streak", value: newStreak },
       ...(collectionWords.length > 0 ? [{ type: "valid_words", value: collectionWords.length }] : []),
