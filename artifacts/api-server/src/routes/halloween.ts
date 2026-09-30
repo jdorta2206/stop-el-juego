@@ -448,7 +448,7 @@ export async function recordHalloweenScareEventsWithCooldown(
   playerId: string,
 ) {
   const year = getEventYear(new Date(), preview);
-  if (year === null || events.length === 0) return { recorded: [], cooldownMs: 0, ended: false };
+  if (year === null) return { recorded: [], cooldownMs: 0, ended: false };
 
   return await db.transaction(async (tx) => {
     const activeRoom = await tx.execute(sql`
@@ -485,6 +485,7 @@ export async function recordHalloweenScareEventsWithCooldown(
       };
     }
 
+    if (events.length === 0) return { recorded: [], cooldownMs: 18000, ended: false };
     const recorded = await recordHalloweenScareEventsInTransaction(
       tx,
       events,
