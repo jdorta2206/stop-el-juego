@@ -11,7 +11,7 @@ import { scoreLimiter } from "../middlewares/rateLimit";
 import { verifyClaimedIdentity, requirePlayerIdentity, type AuthedRequest } from "../lib/playerAuth";
 import { sumVerifiedBasePersistent, ceilingFromBase, absoluteCeiling } from "../lib/scoreToken";
 import { recordAuthoritativeSeasonEvents } from "./season";
-import { recordHalloweenEvent, isHalloweenPreviewAuthorized } from "./halloween";
+import { recordHalloweenEvent, recordHalloweenEventInTransaction, isHalloweenPreviewAuthorized } from "./halloween";
 import {
   isHappyHourActiveForTzOffset,
   HAPPY_HOUR_MULTIPLIER,
@@ -723,6 +723,23 @@ router.post("/scores", scoreLimiter, async (req, res) => {
         won: effectiveWon,
       });
 
+      // Halloween Solo completion is part of the same transaction as the
+      // score/history mutation. If the transaction rolls back, Halloween progress
+      // rolls back too; if it commits, the completion cannot be lost in a process
+      // crash between two independent transactions.
+      if (certifiedMode === "solo" && Array.isArray(scoreTokens) && scoreTokens.length > 0) {
+        const halloweenEventKey = bonusTokenSetHash(playerId, scoreTokens);
+        if (halloweenEventKey) {
+          await recordHalloweenEventInTransaction(
+            tx,
+            playerId,
+            "game_completed",
+            `solo:${halloweenEventKey}`,
+            isHalloweenPreviewAuthorized(req),
+          );
+        }
+      }
+
       // Keep voucher-backed collection words in the same transaction as the score.
       if (collectionWords.length > 0) {
         const collectionRows = await tx.execute(sql`
@@ -789,17 +806,7 @@ router.post("/scores", scoreLimiter, async (req, res) => {
       mode: mode ?? "solo",
       metadata: { source: "server_score_submission" },
     }).catch((err) => console.error("[analytics] trusted game_complete failed:", err));
-    if (certifiedMode === "solo" && Array.isArray(scoreTokens) && scoreTokens.length > 0) {
-      const halloweenEventKey = bonusTokenSetHash(playerId, scoreTokens);
-      if (halloweenEventKey) {
-        void recordHalloweenEvent(
-          playerId,
-          "game_completed",
-          `solo:${halloweenEventKey}`,
-          isHalloweenPreviewAuthorized(req),
-        ).catch((err) => console.error("[halloween] authoritative solo completion failed:", err));
-      }
-    }
+
 
     void recordAuthoritativeSeasonEvents(playerId, [
       { type: "play_game", value: 1 },
