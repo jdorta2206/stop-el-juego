@@ -495,6 +495,7 @@ function formatRoom(room: any, cosmeticsMap?: Record<string, any>) {
     // Internal version marker used to order SSE snapshots across concurrent
     // request/bot completions. Harmless to clients and not user-controlled.
     updatedAt: room.updatedAt,
+    roomVersion: Number(room.roomVersion ?? room.room_version ?? 0),
   };
 }
 
