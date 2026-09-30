@@ -2916,7 +2916,7 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
     if (!allowedCategories.has(normalizeWord(category))) continue;
     if (uniqueBluffedCategories.some((c) => normalizeWord(c) === normalizeWord(category))) continue;
     uniqueBluffedCategories.push(category.slice(0, 80));
-    if (uniqueBluffedCategories.length >= AUTHORITATIVE_CATEGORY_CAP) break;
+    if (uniqueBluffedCategories.length >= Math.min(12, Math.max(1, configuredCategories.length))) break;
   }
   const rawBluffedWords = body.data.bluffedWords;
   const serverBluffedWords: Record<string, string> = {};
