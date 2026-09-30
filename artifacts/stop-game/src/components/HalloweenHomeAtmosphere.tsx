@@ -246,6 +246,19 @@ function createController(): HalloweenAmbientController {
           playThunder();
           stormTimer = window.setInterval(playThunder, 9000);
         }, firstStormDelay);
+      }).catch(() => {
+        // Autoplay/user-gesture rejection must not permanently lock retries.
+        starting = false;
+        try { void ctx?.close(); } catch {}
+        ctx = null;
+        master = null;
+        stormMaster = null;
+        musicAudio = null;
+        stormAudio = null;
+        if (stormAudioUrl) {
+          try { URL.revokeObjectURL(stormAudioUrl); } catch {}
+          stormAudioUrl = null;
+        }
       });
 
     } catch {
