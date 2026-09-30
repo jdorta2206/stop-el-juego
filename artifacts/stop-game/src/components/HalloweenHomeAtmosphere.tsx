@@ -211,7 +211,8 @@ function createController(): HalloweenAmbientController {
       stormMaster.connect(ctx.destination);
 
       void ctx.resume().then(() => {
-        if (!ctx || !master) return;
+        if (!ctx || !master || !stormMaster) return;
+        started = true;
         const now = ctx.currentTime;
         master.gain.cancelScheduledValues(now);
         master.gain.setTargetAtTime(0.18, now, 0.8);
@@ -237,7 +238,6 @@ function createController(): HalloweenAmbientController {
         }, firstStormDelay);
       });
 
-      started = true;
     } catch {
       stop();
     }
