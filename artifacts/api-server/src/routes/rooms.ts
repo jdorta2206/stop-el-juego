@@ -1106,7 +1106,7 @@ g[SWEEP_TIMER_KEY] = setInterval(() => { sweepStuckRooms().catch(() => {}); }, 3
 // Sanitize a formatted room for public spectator/overlay views.
 // Hide individual players' answers while a round is in progress to prevent cheating.
 function sanitizeRoomForSpectator(room: any) {
-  if (room.status === "playing" || room.status === "stopping") {
+  if (room.status === "playing" || room.status === "stopping" || room.status === "bluffvoting") {
     return {
       ...room,
       players: (room.players ?? []).map((p: any) => ({
@@ -1114,6 +1114,8 @@ function sanitizeRoomForSpectator(room: any) {
         answers: undefined,
         bluffedCategories: undefined,
       })),
+      // Bluff votes are private game-state and must never be exposed to spectators.
+      bluffData: undefined,
       typing: undefined,
       stopper: room.stopper ? { stopperName: room.stopper.stopperName } : null,
     };
