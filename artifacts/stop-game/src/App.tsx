@@ -7,6 +7,8 @@ import { SplashScreen } from "@/components/SplashScreen";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { usePlayer } from "@/hooks/use-player";
 import { claimStripePack } from "@/lib/worldCupPack";
+import { flushScoreOutbox } from "@/lib/offlineGame";
+import { getApiUrl, authHeaders } from "@/lib/utils";
 import Home from "@/pages/Home";
 import SoloGame from "@/pages/SoloGame";
 import Multiplayer from "@/pages/Multiplayer";
@@ -141,7 +143,7 @@ function PackClaimHandler() {
   return null;
 }
 
-function App() {
+function ScoreOutboxHandler() {\n  const { player } = usePlayer();\n\n  useEffect(() => {\n    const tryFlush = () => {\n      if (typeof navigator !== "undefined" && navigator.onLine === false) return;\n      void flushScoreOutbox(async (payload) => {\n        const response = await fetch(getApiUrl() + "/api/ranking/scores", {\n          method: "POST",\n          headers: { "Content-Type": "application/json", ...authHeaders() },\n          credentials: "include",\n          body: JSON.stringify(payload),\n        });\n        if (!response.ok) throw new Error("score-sync-" + response.status);\n        return response.json();\n      });\n    };\n\n    tryFlush();\n    window.addEventListener("online", tryFlush);\n    return () => window.removeEventListener("online", tryFlush);\n  }, [player?.id]);\n\n  return null;\n}\n\nfunction App() {
   const [splashDone, setSplashDone] = useState(false);
   const lang = (localStorage.getItem("stop_lang") ?? "es") as string;
 
@@ -178,7 +180,7 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <MotionConfig reducedMotion="user">
         <ErrorBoundary>
-          <PackClaimHandler />
+          <PackClaimHandler />\n          <ScoreOutboxHandler />
           <SplashScreen onDone={() => setSplashDone(true)} lang={lang} />
           {splashDone && (
             <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
