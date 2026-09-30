@@ -496,7 +496,9 @@ router.post("/scores", scoreLimiter, async (req, res) => {
   // Offline submissions legitimately have no round voucher. They are still
   // bounded by the absolute per-mode ceiling below; only requests with no
   // vouchers at all use that fallback.
-  const ceiling = isBonus ? existingForBonus[0].totalScore : (verified > 0 ? ceilingFromBase(verifiedBase) : absoluteCeiling(mode));
+  const ceiling = isBonus
+    ? existingForBonus[0].totalScore
+    : (verified > 0 ? ceilingFromBase(verifiedBase) : absoluteCeiling(certifiedMode ?? "solo"));
   const cappedRaw = Math.max(0, Math.min(rawScore, ceiling));
   // 🔒 Never trust the request body for the multiplayer multiplier. It is
   // derived only from the HMAC-signed voucher metadata. Legacy vouchers have
