@@ -183,12 +183,13 @@ router.get("/weekly", async (req, res) => {
       ps.achievements_json AS "achievementsJson",
       SUM(gh.score)       AS "totalScore",
       COUNT(*)            AS "gamesPlayed",
-      SUM(CASE WHEN gh.won THEN 1 ELSE 0 END) AS "wins"
+      SUM(CASE WHEN gh.won THEN 1 ELSE 0 END) AS "wins",
+      RANK() OVER (ORDER BY SUM(gh.score) DESC) AS "rank"
     FROM game_history gh
     LEFT JOIN player_scores ps ON gh.player_id = ps.player_id
     WHERE gh.created_at >= date_trunc('week', NOW() AT TIME ZONE 'UTC')
     GROUP BY gh.player_id, ps.player_name, ps.avatar_color, ps.profile_picture, ps.equipped_avatar, ps.equipped_frame, ps.equipped_title, ps.current_streak, ps.is_premium, ps.achievements_json
-    ORDER BY SUM(gh.score) DESC
+    ORDER BY SUM(gh.score) DESC, gh.player_id ASC
     LIMIT 100
   `);
 
