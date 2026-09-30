@@ -5,6 +5,7 @@ import { requirePlayerIdentity, verifyClaimedIdentity, type AuthedRequest } from
 import { resolveCosmetic, shopItem, SHOP_ITEMS } from "../lib/inventoryCatalog";
 import { computeTitleStats, evaluateTitles, isTitleUnlocked } from "../lib/titleCatalog";
 import { getWeeklyShop, dealPriceFor, isWeeklyShopItem } from "../lib/dailyShop";
+import { isHalloweenPreviewAuthorized } from "./halloween";
 
 const HALLOWEEN_SHOP_MARKER = "_halloween_";
 const HALLOWEEN_START_MS = Date.parse("2026-10-15T00:00:00Z");
@@ -218,7 +219,7 @@ router.post("/buy", requireInventoryIdentity, async (req: AuthedRequest, res) =>
   const item = shopItem(itemId);
   if (!item) { res.status(400).json({ error: "Unknown shop item" }); return; }
   const halloweenItem = isHalloweenShopItem(itemId);
-  const preview = req.headers["x-halloween-preview"] === "1";
+  const preview = isHalloweenPreviewAuthorized(req);
   if (halloweenItem) {
     if (!isHalloweenActive(new Date(), preview)) {
       res.status(400).json({ error: "Halloween event is not active" });
