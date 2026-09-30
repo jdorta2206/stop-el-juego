@@ -318,3 +318,6 @@ setInterval(() => {
   cleanupNotificationThrottleMaps();
   const cutoff = Date.now() - FRIEND_ONLINE_COOLDOWN_MS;
   for (const [key, ts] of friendOnlineNotifiedAt) {
+    if (ts < cutoff) friendOnlineNotifiedAt.delete(key);
+  }
+}, 60 * 60 * 1000);
