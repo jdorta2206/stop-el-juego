@@ -2772,12 +2772,21 @@ router.post("/:roomCode/stop", async (req, res) => {
   const stopPack = roomCategoryPacks.get(roomCode.toUpperCase())?.pack ?? stopMeta.categoryPack ?? "standard";
   if (halloweenEventAllowed(req) && stopPack !== "custom") {
     const scareKey = `stop:${roomCode.toUpperCase()}:${room.currentRound ?? 0}:${stopper.stopTimestamp}`;
-    void Promise.allSettled([
-      recordHalloweenEvent(playerId, "scare_provoked", `provoked:${scareKey}`, isHalloweenPreviewAuthorized(req), room.id, "stopped", room.currentRound),
-      ...roomPlayers.filter((p: any) => p.playerId && p.playerId !== playerId && !p.isBot).map((p: any) =>
-        recordHalloweenEvent(p.playerId, "scare_received", `received:${scareKey}:${p.playerId}`, isHalloweenPreviewAuthorized(req), room.id, "stopped", room.currentRound)
-      ),
-    ]).catch(() => {});
+    const stopScareEvents = [
+      { playerId, type: "scare_provoked" as const, eventKey: `provoked:${scareKey}` },
+      ...roomPlayers.filter((p: any) => p.playerId && p.playerId !== playerId && !p.isBot && p.loginMethod !== "guest").map((p: any) => ({
+        playerId: p.playerId,
+        type: "scare_received" as const,
+        eventKey: `received:${scareKey}:${p.playerId}`,
+      })),
+    ];
+    void recordHalloweenScareEvents(
+      stopScareEvents,
+      isHalloweenPreviewAuthorized(req),
+      room.id,
+      "stopped",
+      room.currentRound,
+    ).catch((err) => console.error("[halloween] trusted STOP scare events failed:", err));
   }
 
   // 🤖 If bots are in this room and haven't submitted yet, rush them so the
