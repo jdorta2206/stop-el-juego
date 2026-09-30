@@ -303,6 +303,7 @@ function getHalloweenScareEvent(code: string): HalloweenRoomScare | null {
   if (!event) return null;
   if (Date.now() - event.ts > 4500) {
     roomHalloweenScares.delete(code);
+  for (const key of halloweenScareCooldowns.keys()) if (key.startsWith(code + ":")) halloweenScareCooldowns.delete(key);
     return null;
   }
   return event;
