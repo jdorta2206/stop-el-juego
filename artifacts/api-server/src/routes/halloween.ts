@@ -279,7 +279,6 @@ export async function recordHalloweenScareEventsInTransaction(
   if (year === null || events.length === 0) return [];
   if (activeRoomId === undefined) return [];
 
-  return await db.transaction(async (tx) => {
     const activeRoom = await tx.execute(sql`
       SELECT status, current_round
       FROM rooms
