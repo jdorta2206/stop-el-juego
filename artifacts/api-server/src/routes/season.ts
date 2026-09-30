@@ -330,6 +330,102 @@ async function getOrCreateProgress(playerId: string, seasonId: number): Promise<
  * Records season progress only from server-authoritative gameplay results.
  * The public /event endpoint must never accept client-supplied progress values.
  */
+async function applyAuthoritativeSeasonEventsInTransaction(
+  tx: any,
+  playerId: string,
+  events: Array<{ type: "win_game" | "play_game" | "round_score" | "streak" | "valid_words" | "daily_done"; value?: number }>,
+  eventKey?: string,
+): Promise<void> {
+  if (!playerId || events.length === 0) return;
+
+  const today = todayUTC();
+  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('season-rollover'))`);
+
+  await tx.execute(sql`
+    INSERT INTO seasons (start_date, end_date, theme_json)
+    VALUES (${today}, ${addDays(today, SEASON_LENGTH_DAYS - 1)}, ${JSON.stringify(themeForStartDate(today))})
+    ON CONFLICT (start_date) DO NOTHING
+  `);
+
+  const seasonRows = (await tx.execute(sql`
+    SELECT id FROM seasons
+    WHERE start_date <= ${today} AND end_date >= ${today}
+    ORDER BY id DESC
+    LIMIT 1
+  `)) as unknown as SqlResult<{ id: number }>;
+  const season = seasonRows.rows?.[0];
+  if (!season) return;
+
+  await tx.execute(sql`
+    SELECT pg_advisory_xact_lock(${Number(season.id)}::bigint)
+  `);
+
+  const activeSeason = (await tx.execute(sql`
+    SELECT 1 FROM seasons
+    WHERE id = ${Number(season.id)} AND end_date >= ${todayUTC()}
+    LIMIT 1
+  `)) as unknown as SqlResult<{ "?column?": number }>;
+  if ((activeSeason.rows?.length ?? 0) === 0) return;
+
+  const fresh: MissionsBlob = { date: today, missions: buildMissionsForDate(today) };
+  await tx.execute(sql`
+    INSERT INTO season_progress (player_id, season_id, xp, claimed_tiers, missions_json)
+    VALUES (${playerId}, ${Number(season.id)}, 0, '{"free":[],"premium":[]}', ${JSON.stringify(fresh)})
+    ON CONFLICT (player_id, season_id) DO NOTHING
+  `);
+
+  const progressRows = (await tx.execute(sql`
+    SELECT id, missions_json
+    FROM season_progress
+    WHERE player_id = ${playerId} AND season_id = ${Number(season.id)}
+    FOR UPDATE
+  `)) as unknown as SqlResult<{ id: number; missions_json: string }>;
+  const row = progressRows.rows?.[0];
+  if (!row) return;
+
+  if (eventKey) {
+    const claim = await tx.execute(sql`
+      INSERT INTO season_event_claims (season_id, player_id, event_key)
+      VALUES (${Number(season.id)}, ${playerId}, ${eventKey})
+      ON CONFLICT (season_id, player_id, event_key) DO NOTHING
+      RETURNING event_key
+    `);
+    if ((claim.rows?.length ?? 0) === 0) return;
+  }
+
+  const blob = parseMissions(row.missions_json, today);
+  let mutated = false;
+
+  for (const event of events) {
+    const value = Number.isFinite(event.value) && Number(event.value) > 0
+      ? Math.floor(Number(event.value))
+      : 1;
+
+    for (const m of blob.missions) {
+      if (m.type !== event.type || m.claimed) continue;
+      if (m.type === "round_score" || m.type === "streak") {
+        if (value > m.progress) {
+          m.progress = Math.min(value, m.target);
+          mutated = true;
+        }
+      } else {
+        const next = Math.min(m.progress + value, m.target);
+        if (next !== m.progress) {
+          m.progress = next;
+          mutated = true;
+        }
+      }
+      if (m.progress >= m.target) m.completed = true;
+    }
+  }
+
+  if (mutated) {
+    await tx.update(seasonProgressTable)
+      .set({ missionsJson: JSON.stringify(blob), updatedAt: new Date() })
+      .where(eq(seasonProgressTable.id, row.id));
+  }
+}
+
 export async function recordAuthoritativeSeasonEvents(
   playerId: string,
   events: Array<{ type: "win_game" | "play_game" | "round_score" | "streak" | "valid_words" | "daily_done"; value?: number }>,
@@ -337,75 +433,16 @@ export async function recordAuthoritativeSeasonEvents(
 ): Promise<void> {
   if (!playerId || events.length === 0) return;
   try {
-    const season = await getOrCreateActiveSeason();
-    const progress = await getOrCreateProgress(playerId, season.id);
-    const today = todayUTC();
-
     await db.transaction(async (tx) => {
-      // Serialize authoritative events with season finalization at rollover.
-      await tx.execute(sql`SELECT pg_advisory_xact_lock(${season.id}::bigint)`);
-
-      // The request may have started before midnight and only acquired the
-      // lock after finalization completed. Re-check the season boundary while
-      // holding the same lock so an old-season event can never be appended
-      // after its standings have been frozen.
-      const activeSeason = (await tx.execute(sql`
-        SELECT 1 FROM seasons
-        WHERE id = ${season.id} AND end_date >= ${todayUTC()}
-        LIMIT 1
-      `)) as unknown as SqlResult<{ "?column?": number }>;
-      if ((activeSeason.rows?.length ?? 0) === 0) return;
-
-      // Claim only after the active-season check. A rollover must never leave
-      // an event permanently claimed without its mission update being applied.
-      if (eventKey) {
-        const claim = await tx.execute(sql`INSERT INTO season_event_claims (season_id, player_id, event_key) VALUES (${season.id}, ${playerId}, ${eventKey}) ON CONFLICT (season_id, player_id, event_key) DO NOTHING RETURNING event_key`);
-        if ((claim.rows?.length ?? 0) === 0) return;
-      }
-
-      const locked = (await tx.execute(sql`
-        SELECT id, missions_json FROM season_progress WHERE id = ${progress.id} FOR UPDATE
-      `)) as unknown as SqlResult<Pick<ProgressRowSql, "id" | "missions_json">>;
-      const row = locked.rows?.[0];
-      if (!row) return;
-
-      const blob = parseMissions(row.missions_json, today);
-      let mutated = false;
-
-      for (const event of events) {
-        const value = Number.isFinite(event.value) && Number(event.value) > 0
-          ? Math.floor(Number(event.value))
-          : 1;
-
-        for (const m of blob.missions) {
-          if (m.type !== event.type || m.claimed) continue;
-          if (m.type === "round_score" || m.type === "streak") {
-            if (value > m.progress) {
-              m.progress = Math.min(value, m.target);
-              mutated = true;
-            }
-          } else {
-            const next = Math.min(m.progress + value, m.target);
-            if (next !== m.progress) {
-              m.progress = next;
-              mutated = true;
-            }
-          }
-          if (m.progress >= m.target) m.completed = true;
-        }
-      }
-
-      if (mutated) {
-        await tx.update(seasonProgressTable)
-          .set({ missionsJson: JSON.stringify(blob), updatedAt: new Date() })
-          .where(eq(seasonProgressTable.id, progress.id));
-      }
+      await applyAuthoritativeSeasonEventsInTransaction(tx, playerId, events, eventKey);
     });
   } catch (e: unknown) {
     // Season progression is auxiliary and must never make a valid game result fail.
     console.error("[season/authoritative-event] error:", e instanceof Error ? e.message : String(e));
   }
 }
+
+export { applyAuthoritativeSeasonEventsInTransaction };
 
 // ── Routes ─────────────────────────────────────────────────────────────────
 
