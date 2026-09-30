@@ -853,10 +853,24 @@ async function sweepStuckRooms() {
     // already durable, while leaderboard settlement is intentionally asynchronous.
     // If the original settlement failed (DB/network/transient error), retry it on
     // the next sweep. #291's room+player claim makes successful retries no-ops.
+    // Only retry finished rooms that still have at least one unclaimed
+    // non-guest player. Without this guard every 3s sweep would re-run the
+    // settlement function for every finished room, including already-settled
+    // games, causing avoidable DB/CPU load and repeated timezone lookups.
     const finishedRooms = await db.select().from(roomsTable)
-      .where(eq(roomsTable.status, "finished"));
+      .where(and(eq(roomsTable.status, "finished"), lt(roomsTable.updatedAt, new Date(Date.now() + 1))));
     for (const room of finishedRooms) {
       const players = parsePlayers(room.playersJson);
+      const eligible = players.filter((p: any) => p && !p.isBot && p.playerId && p.loginMethod !== "guest");
+      if (eligible.length === 0) continue;
+
+      const claimRows = await db.execute(sql`SELECT player_id FROM multiplayer_settlement_claims WHERE room_id = ${room.id}`);
+      const claimedIds = new Set((claimRows.rows ?? []).map((row: any) => String(row.player_id)));
+      const pending = eligible.filter((p: any) => !claimedIds.has(String(p.playerId)));
+      if (pending.length === 0) continue;
+
+      // #291 remains the final idempotency barrier if the original settlement
+      // races this retry or multiple sweep ticks overlap.
       void submitAllScoresToLeaderboard(
         players,
         room.currentLetter || "A",
