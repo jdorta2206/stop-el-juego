@@ -3401,8 +3401,20 @@ router.post("/:roomCode/bluff-vote", writeLimiter, async (req, res) => {
   // the authoritative set for the expired voting window.
   const deadlinePassed = Date.now() > new Date(bluffDeadline).getTime();
 
+  // A voter gets exactly one immutable vote per bluffed category.
+  // Do not let repeated API calls flip the authoritative vote after the UI
+  // has already recorded it. Repeating the exact same vote is idempotent;
+  // attempting to change it is rejected.
+  const existingVote = bluffVotes[accusedPlayerId]?.[category]?.[voterId];
+  if (!deadlinePassed && existingVote !== undefined) {
+    if (existingVote !== vote) {
+      res.status(409).json({ error: "Vote already cast for this category" });
+      return;
+    }
+  }
+
   // Store this player's vote only while the voting window is still open.
-  if (!deadlinePassed && bluffVotes[accusedPlayerId]?.[category] !== undefined) {
+  if (!deadlinePassed && existingVote === undefined) {
     bluffVotes[accusedPlayerId][category][voterId] = vote;
   }
 
@@ -3523,8 +3535,13 @@ router.post("/:roomCode/bluff-vote", writeLimiter, async (req, res) => {
       res.json(formatRoom(current));
       return;
     }
-    if (latestVotes[accusedPlayerId]?.[category]?.[voterId] === vote) {
-      res.json(formatRoom(current));
+    const latestExistingVote = latestVotes[accusedPlayerId]?.[category]?.[voterId];
+    if (latestExistingVote !== undefined) {
+      if (latestExistingVote === vote) {
+        res.json(formatRoom(current));
+        return;
+      }
+      res.status(409).json({ error: "Vote already cast for this category" });
       return;
     }
     if (latestVotes[accusedPlayerId]?.[category]) {
