@@ -2727,6 +2727,9 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
         roundScore: cappedRoundScore,
         isReady: true,
         answers: safeAnswers,
+        // Preserve the server-validated word count when this submission is
+        // merged after losing the optimistic-concurrency race.
+        validAnswerCount,
         finishedAt,
         wasStopper: isStopper,
         bluffedCategories: bluffedCategories ?? [],
