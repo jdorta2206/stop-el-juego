@@ -480,7 +480,18 @@ async function performBotSubmit(
           nextStatus = "waiting";
           // Letter will be re-rolled when host starts next round; clear meta.
         }
-        nextStopperJson = null;
+        // Preserve authoritative room metadata across bot-driven round transitions.
+        // A bot can be the final submitter, so this path must not erase the
+        // category pack/custom categories or Halloween preview marker before
+        // the next /start or final settlement/recovery reads them.
+        let transitionMeta: any = {};
+        try { transitionMeta = room.stopperJson ? JSON.parse(room.stopperJson) : {}; } catch {}
+        nextStopperJson = JSON.stringify({
+          categoryPack: transitionMeta?.categoryPack,
+          customCategories: transitionMeta?.customCategories,
+          customPackLabel: transitionMeta?.customPackLabel,
+          halloweenPreview: transitionMeta?.halloweenPreview === true,
+        });
       }
     }
 
