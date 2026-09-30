@@ -500,6 +500,20 @@ function sanitizedRoomPreview(full: any) {
   };
 }
 
+function formatRoomForRequester(req: any, room: any) {
+  const full = formatRoom(room);
+  const players = parsePlayers(room.playersJson);
+  const verified = readPlayerId(req);
+  const asserted =
+    paramStr(req.query?.["viewerId"]) || paramStr(req.headers?.["x-viewer-id"]);
+  const viewerId = verified || (asserted && !isLoggedInId(asserted) ? asserted : "");
+  const isMember =
+    !!viewerId &&
+    (full.hostId === viewerId || players.some((p: any) => p?.playerId === viewerId));
+  if (isMember) return full;
+  return full.isPublic === true ? sanitizeRoomForSpectator(full) : sanitizedRoomPreview(full);
+}
+
 // Resolve bluff votes: majority "lie" = caught, otherwise not caught. Adjust scores.
 function resolveBluffs(players: any[], bluffVotes: Record<string, any>): any[] {
   return players.map((p: any) => {
@@ -3365,13 +3379,13 @@ router.post("/:roomCode/resolve-bluffs", async (req, res) => {
   if (rooms.length === 0) { res.status(404).json({ error: "Room not found" }); return; }
 
   const room = rooms[0];
-  if (room.status !== "bluffvoting") { res.json(formatRoom(room)); return; }
+  if (room.status !== "bluffvoting") { res.json(formatRoomForRequester(req, room)); return; }
 
   const meta = parseBluffMeta(room.stopperJson) ?? {};
   const bluffDeadline = meta.bluffDeadline;
   if (bluffDeadline && Date.now() < new Date(bluffDeadline).getTime()) {
     // Deadline hasn't passed yet
-    res.json(formatRoom(room));
+    res.json(formatRoomForRequester(req, room));
     return;
   }
 
@@ -3410,14 +3424,15 @@ router.post("/:roomCode/resolve-bluffs", async (req, res) => {
     .returning();
   if (!updated) {
     const [cur] = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, roomCode.toUpperCase())).limit(1);
-    res.json(formatRoom(cur));
+    res.json(formatRoomForRequester(req, cur));
     return;
   }
   // Use the same one-shot transition side effects as the other bluff
   // resolution paths so spy/live state is cleared consistently.
   applyRoundAdvanceSideEffects(room, resolved, newStatus);
 
-  res.json(broadcastAndFormat(updated));
+  broadcastAndFormat(updated);
+  res.json(formatRoomForRequester(req, updated));
 });
 
 export default router;
