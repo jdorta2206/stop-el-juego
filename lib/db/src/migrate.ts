@@ -114,46 +114,37 @@ export async function ensureIndexes(): Promise<void> {
   // claims commit together, so a crash rolls the marker back and the next boot retries.
   try {
     await db.transaction(async (tx) => {
-    // Backfill legacy Halloween claims exactly once. The marker is claimed atomically;
-    // concurrent API processes either perform the migration or observe it already done.
-    try {
       const claimed = await tx.execute(sql`
         INSERT INTO halloween_migration_state (migration_key)
         VALUES ('legacy_event_claims_v1')
         ON CONFLICT (migration_key) DO NOTHING
         RETURNING migration_key
       `);
-      if ((claimed.rows?.length ?? 0) > 0) {
-        const legacy = await tx.execute(sql`
-          SELECT event_year, player_id, event_keys_json
-          FROM halloween_progress
-          WHERE event_keys_json IS NOT NULL AND event_keys_json <> '[]'
-        `);
-        for (const row of (legacy.rows ?? []) as Array<{ event_year: number; player_id: string; event_keys_json: string }>) {
-          let keys: unknown;
-          try {
-            keys = JSON.parse(row.event_keys_json);
-          } catch {
-            continue;
-          }
-          if (!Array.isArray(keys)) continue;
-          for (const key of keys) {
-            if (typeof key !== "string" || !key) continue;
-            await tx.execute(sql`
-              INSERT INTO halloween_event_claims (event_year, player_id, event_key)
-              VALUES (${row.event_year}, ${row.player_id}, ${key})
-              ON CONFLICT (event_year, player_id, event_key) DO NOTHING
-            `);
-          }
+      if ((claimed.rows?.length ?? 0) === 0) return;
+
+      const legacy = await tx.execute(sql`
+        SELECT event_year, player_id, event_keys_json
+        FROM halloween_progress
+        WHERE event_keys_json IS NOT NULL AND event_keys_json <> '[]'
+      `);
+      for (const row of (legacy.rows ?? []) as Array<{ event_year: number; player_id: string; event_keys_json: string }>) {
+        let keys: unknown;
+        try {
+          keys = JSON.parse(row.event_keys_json);
+        } catch {
+          continue;
+        }
+        if (!Array.isArray(keys)) continue;
+
+        for (const key of keys) {
+          if (typeof key !== "string" || !key) continue;
+          await tx.execute(sql`
+            INSERT INTO halloween_event_claims (event_year, player_id, event_key)
+            VALUES (${row.event_year}, ${row.player_id}, ${key})
+            ON CONFLICT (event_year, player_id, event_key) DO NOTHING
+          `);
         }
       }
-    } catch (err: any) {
-      console.error("[ensureIndexes] Halloween claim backfill failed:", err?.message ?? err);
-      _indexesReady = false;
-      throw err;
-    }
-
-
     });
   } catch (err: any) {
     console.error("[ensureIndexes] Halloween claim backfill failed:", err?.message ?? err);
