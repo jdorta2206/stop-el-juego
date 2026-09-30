@@ -106,10 +106,17 @@ export function applyHalloweenCategory(categories: string[], lang: string, optio
   return result;
 }
 
-export function getHalloweenScare(lang: string): HalloweenScare {
+export function getHalloweenScare(lang: string, seed?: number): HalloweenScare {
   const key = lang === "en" || lang === "pt" || lang === "fr" ? lang : "es";
   const list = HALLOWEEN_SCARES[key];
-  const id = pickHalloweenScareVisual();
+  // A supplied seed lets synchronized STOP snapshots choose the same visual
+  // independently on every client; ambient/local scares keep random selection.
+  const safeSeed = seed === undefined ? null : Math.max(0, Math.min(0.999999, seed));
+  const id = safeSeed === null
+    ? pickHalloweenScareVisual()
+    : (Object.keys(HALLOWEEN_SCARES.es).length
+      ? (HALLOWEEN_SCARES.es[Math.floor(safeSeed * HALLOWEEN_SCARES.es.length)]?.id ?? "clown")
+      : "clown");
   return list.find((scare) => scare.id === id) ?? list[0];
 }
 
