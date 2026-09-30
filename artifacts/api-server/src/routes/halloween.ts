@@ -185,7 +185,10 @@ export async function recordHalloweenEvent(
           WHERE player_id = ${playerId} FOR UPDATE
         `);
         const p = player.rows?.[0] as { coins: number; inventory_json: string } | undefined;
-        if (p) {
+        if (!p) {
+          throw new Error("Player score row missing while granting Halloween reward");
+        }
+        {
           let inventory: { avatars: string[]; frames: string[]; backgrounds?: string[] } = { avatars: [], frames: [] };
           try {
             const parsed = JSON.parse(p.inventory_json || "{}");
