@@ -201,7 +201,7 @@ const botDeps = {
   // Persists final scores to the global leaderboard when the bot's submission
   // happens to be the one that ends the match.
   submitFinalScores: (players: any[], letter: string) =>
-    submitAllScoresToLeaderboard(players, letter).catch(() => {}),
+    submitAllScoresToLeaderboard(players, letter, code).catch(() => {}),
   getRoundCategories: (room: any) => {
     const code = String(room.roomCode ?? "").toUpperCase();
     const cfg = roomCategoryPacks.get(code);
@@ -464,7 +464,7 @@ function resolveBluffs(players: any[], bluffVotes: Record<string, any>): any[] {
 }
 
 // Auto-submit all non-guest players' scores to the global leaderboard when the game ends
-async function submitAllScoresToLeaderboard(players: any[], letter: string) {
+async function submitAllScoresToLeaderboard(players: any[], letter: string, roomCode: string) {
   // ⚖️ Deterministic tie-breaker — must match the client's winner display:
   //   1) higher final score
   //   2) was the stopper in the LAST round (rewards the player who triggered STOP)
