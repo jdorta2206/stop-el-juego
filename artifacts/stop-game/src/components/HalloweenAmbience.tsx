@@ -45,7 +45,14 @@ export function HalloweenAmbience({ active, muted, heavy = false }: HalloweenAmb
         if (!AudioCtx) return;
         const ctx = ctxRef.current ?? new AudioCtx();
         ctxRef.current = ctx;
-        if (ctx.state === "suspended") await ctx.resume();
+        const unlockAudio = () => {
+          if (cancelled || ctx.state !== "suspended") return;
+          void ctx.resume().catch(() => {});
+        };
+        window.addEventListener("pointerdown", unlockAudio, { passive: true });
+        window.addEventListener("touchstart", unlockAudio, { passive: true });
+        window.addEventListener("keydown", unlockAudio);
+        await ctx.resume().catch(() => {});
         if (cancelled) return;
 
         const master = ctx.createGain();
@@ -176,6 +183,9 @@ export function HalloweenAmbience({ active, muted, heavy = false }: HalloweenAmb
 
     return () => {
       cancelled = true;
+      window.removeEventListener("pointerdown", unlockAudio);
+      window.removeEventListener("touchstart", unlockAudio);
+      window.removeEventListener("keydown", unlockAudio);
       stop();
     };
   }, [active, muted, heavy]);
