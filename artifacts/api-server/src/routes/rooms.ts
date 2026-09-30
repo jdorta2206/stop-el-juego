@@ -29,10 +29,10 @@ const router: IRouter = Router();
 // bootstrap. ensureIndexes() creates the same table idempotently as well.
 const multiplayerSettlementClaimsReady = db.execute(sql`
   CREATE TABLE IF NOT EXISTS multiplayer_settlement_claims (
-    room_code text NOT NULL,
+    room_id integer NOT NULL,
     player_id text NOT NULL,
     created_at timestamp NOT NULL DEFAULT NOW(),
-    PRIMARY KEY (room_code, player_id)
+    PRIMARY KEY (room_id, player_id)
   )
 `).catch((err) => {
   console.error("[rooms] failed to initialize multiplayer settlement claims:", err);
