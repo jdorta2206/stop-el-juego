@@ -3259,7 +3259,11 @@ router.post("/:roomCode/bluff-vote", writeLimiter, async (req, res) => {
         }),
         updatedAt: new Date(),
       })
-      .where(and(eq(roomsTable.roomCode, roomCode.toUpperCase()), eq(roomsTable.status, "bluffvoting")))
+      .where(and(
+        eq(roomsTable.roomCode, roomCode.toUpperCase()),
+        eq(roomsTable.status, "bluffvoting"),
+        eq(roomsTable.updatedAt, room.updatedAt),
+      ))
       .returning();
     if (!updated) {
       // Someone else already resolved this round — return current state, no submit.
@@ -3397,7 +3401,11 @@ router.post("/:roomCode/resolve-bluffs", async (req, res) => {
           }),
       updatedAt: new Date(),
     })
-    .where(and(eq(roomsTable.roomCode, roomCode.toUpperCase()), eq(roomsTable.status, "bluffvoting")))
+    .where(and(
+      eq(roomsTable.roomCode, roomCode.toUpperCase()),
+      eq(roomsTable.status, "bluffvoting"),
+      eq(roomsTable.updatedAt, room.updatedAt),
+    ))
     .returning();
   if (!updated) {
     const [cur] = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, roomCode.toUpperCase())).limit(1);
