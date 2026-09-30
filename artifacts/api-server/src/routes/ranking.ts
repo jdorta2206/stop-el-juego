@@ -10,7 +10,7 @@ import { SubmitScoreBody, GetLeaderboardQueryParams } from "@workspace/api-zod";
 import { scoreLimiter } from "../middlewares/rateLimit";
 import { verifyClaimedIdentity, requirePlayerIdentity, type AuthedRequest } from "../lib/playerAuth";
 import { sumVerifiedBasePersistent, consumeScoreVoucherJtis, ceilingFromBase, absoluteCeiling } from "../lib/scoreToken";
-import { recordAuthoritativeSeasonEvents } from "./season";
+import { applyAuthoritativeSeasonEventsInTransaction } from "./season";
 import { recordHalloweenEventInTransaction, isHalloweenPreviewAuthorized } from "./halloween";
 import {
   isHappyHourActiveForTzOffset,
@@ -723,6 +723,16 @@ router.post("/scores", scoreLimiter, async (req, res) => {
         }
       }
 
+      if (!isBonus) {
+        await applyAuthoritativeSeasonEventsInTransaction(tx, playerId, [
+          { type: "play_game", value: 1 },
+          ...(effectiveWon ? [{ type: "win_game", value: 1 }] : []),
+          { type: "round_score", value: score },
+          { type: "streak", value: authoritativeStreak },
+          ...(collectionWords.length > 0 ? [{ type: "valid_words", value: collectionWords.length }] : []),
+        ]);
+      }
+
       if (verified > 0 && voucherJtis.length > 0) {
         await consumeScoreVoucherJtis(tx, voucherJtis);
       }
@@ -922,13 +932,6 @@ router.post("/scores", scoreLimiter, async (req, res) => {
     }).catch((err) => console.error("[analytics] trusted game_complete failed:", err));
 
 
-    void recordAuthoritativeSeasonEvents(playerId, [
-      { type: "play_game", value: 1 },
-      ...(effectiveWon ? [{ type: "win_game", value: 1 }] : []),
-      { type: "round_score", value: score },
-      { type: "streak", value: authoritativeStreak },
-      ...(collectionWords.length > 0 ? [{ type: "valid_words", value: collectionWords.length }] : []),
-    ]);
   }
 
   res.status(201).json({
