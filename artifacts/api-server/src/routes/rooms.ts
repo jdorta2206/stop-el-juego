@@ -2666,7 +2666,7 @@ router.post("/:roomCode/phrase", writeLimiter, async (req, res) => {
 // POST /rooms/:roomCode/halloween-scare — cosmetic scare sent to the other players in the active round.
 router.post("/:roomCode/halloween-scare", writeLimiter, async (req, res) => {
   const code = paramStr(req.params.roomCode).toUpperCase();
-  const { playerId, playerName, scareId } = req.body ?? {};
+  const { playerId, scareId } = req.body ?? {};
   if (!playerId || !verifyClaimedIdentity(req, playerId)) {
     res.status(403).json({ error: "Identity verification failed" }); return;
   }
@@ -2702,7 +2702,7 @@ router.post("/:roomCode/halloween-scare", writeLimiter, async (req, res) => {
     id: String(now) + "-" + Math.random().toString(36).slice(2),
     playerId,
     scareId: safeScareId,
-    playerName: String(playerName ?? me.playerName ?? "?").slice(0, 30),
+    playerName: String(me.playerName ?? "?").slice(0, 30),
     round: room.currentRound ?? 0,
     ts: now,
   };
