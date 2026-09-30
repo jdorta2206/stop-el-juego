@@ -683,9 +683,7 @@ router.get("/instagram/callback", async (req: Request, res: Response) => {
 // Requires: APPLE_CLIENT_ID (Service ID), APPLE_TEAM_ID, APPLE_KEY_ID, APPLE_PRIVATE_KEY (.p8 content)
 
 function makeAppleClientSecret(): string {
-  const privateKey = (process.env["APPLE_PRIVATE_KEY"] || "").replace(/\
-/g, "
-");
+  const privateKey = (process.env["APPLE_PRIVATE_KEY"] || "").replace(/\\n/g, "\n");
   const teamId     = process.env["APPLE_TEAM_ID"]!;
   const clientId   = process.env["APPLE_CLIENT_ID"]!;
   const keyId      = process.env["APPLE_KEY_ID"]!;
