@@ -216,7 +216,10 @@ function createController(): HalloweenAmbientController {
       stormMaster.connect(ctx.destination);
 
       void ctx.resume().then(() => {
-        if (!ctx || !master || !stormMaster) return;
+        if (!ctx || !master || !stormMaster) {
+          starting = false;
+          return;
+        }
         started = true;
         starting = false;
         window.dispatchEvent(new Event("halloween:audio-started"));
