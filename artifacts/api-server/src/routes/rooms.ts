@@ -1283,7 +1283,8 @@ router.get("/public", async (_req, res) => {
 
   const formatted = rooms.map(r => ({
     roomCode: r.roomCode,
-    hostId: r.hostId,
+    // Public room discovery must not expose host identifiers; guest IDs can
+    // act as bearer credentials and are not needed to join a room.
     hostName: r.hostName || "Anfitrión",
     maxRounds: r.maxRounds,
     maxPlayers: r.maxPlayers ?? 8,
