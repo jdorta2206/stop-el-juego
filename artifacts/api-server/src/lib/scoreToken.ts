@@ -199,6 +199,7 @@ export async function sumVerifiedBasePersistent(
   verified: number;
   collectionWords: Array<{ word: string; category: string }>;
   mode: ScoreVoucherMode | null;
+  aiBase: number;
 }> {
   if (!Array.isArray(tokens) || tokens.length === 0 || tokens.length > MAX_TOKEN_BATCH) {
     return { base: 0, verified: 0, collectionWords: [], mode: null, aiBase: 0 };
@@ -251,6 +252,7 @@ export async function sumVerifiedBasePersistent(
     verified: counted.length,
     collectionWords: counted.flatMap((entry) => entry.collectionWords),
     mode,
+    aiBase: counted.reduce((sum, entry) => sum + entry.aiBase, 0),
   };
 }
 
