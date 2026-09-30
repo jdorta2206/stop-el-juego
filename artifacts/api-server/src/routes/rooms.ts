@@ -3397,6 +3397,16 @@ router.post("/:roomCode/bluff-vote", writeLimiter, async (req, res) => {
 
     const latestMeta = parseBluffMeta(current.stopperJson) ?? {};
     const latestVotes = latestMeta.bluffVotes ?? {};
+    const latestDeadline = latestMeta.bluffDeadline
+      ? new Date(latestMeta.bluffDeadline).getTime()
+      : 0;
+    // Re-check the authoritative deadline after losing the CAS race. The
+    // original request may have been valid when sent, but another vote can
+    // delay this retry until the voting window has already expired.
+    if (!latestDeadline || Date.now() > latestDeadline) {
+      res.json(formatRoom(current));
+      return;
+    }
     if (latestVotes[accusedPlayerId]?.[category]?.[voterId] === vote) {
       res.json(formatRoom(current));
       return;
