@@ -121,11 +121,22 @@ export async function recordHalloweenEvent(
   type: "game_completed" | "scare_received" | "scare_provoked",
   eventKey: string,
   preview = false,
+  activeRoomId?: number,
 ) {
   const year = getEventYear(new Date(), preview);
   if (year === null) return null;
   if (!playerId || !eventKey || eventKey.length > 160) return null;
   return await db.transaction(async (tx) => {
+      if (activeRoomId !== undefined) {
+        const activeRoom = await tx.execute(sql`
+          SELECT status
+          FROM rooms
+          WHERE id = ${activeRoomId}
+          FOR UPDATE
+        `);
+        if (String(activeRoom.rows?.[0]?.status ?? "") !== "playing") return null;
+      }
+
       await tx.execute(sql`
         INSERT INTO halloween_progress (player_id, event_year)
         VALUES (${playerId}, ${year})
