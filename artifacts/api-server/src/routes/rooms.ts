@@ -2652,8 +2652,8 @@ router.post("/:roomCode/halloween-scare", writeLimiter, async (req, res) => {
   roomHalloweenScares.set(code, event);
   void recordHalloweenScareEvents(
     [
-      { playerId, type: "scare_provoked", eventKey: `provoked:${event.id}` },
-      ...players.filter((p: any) => p.playerId && p.playerId !== playerId && !p.isBot).map((p: any) => ({
+      ...(me.loginMethod !== "guest" ? [{ playerId, type: "scare_provoked" as const, eventKey: `provoked:${event.id}` }] : []),
+      ...players.filter((p: any) => p.playerId && p.playerId !== playerId && !p.isBot && p.loginMethod !== "guest").map((p: any) => ({
         playerId: p.playerId,
         type: "scare_received" as const,
         eventKey: `received:${event.id}:${p.playerId}`,
