@@ -342,15 +342,6 @@ export async function recordAuthoritativeSeasonEvents(
     const today = todayUTC();
 
     await db.transaction(async (tx) => {
-      // A settlement can commit before auxiliary Season work runs. Claiming a
-      // stable event key makes recovery safe: a retry is ignored after the
-      // first successful application instead of incrementing missions twice.
-      if (eventKey) {
-        await tx.execute(sql`CREATE TABLE IF NOT EXISTS season_event_claims (season_id integer NOT NULL, player_id text NOT NULL, event_key text NOT NULL, created_at timestamp NOT NULL DEFAULT NOW(), PRIMARY KEY (season_id, player_id, event_key))`);
-        const claim = await tx.execute(sql`INSERT INTO season_event_claims (season_id, player_id, event_key) VALUES (${season.id}, ${playerId}, ${eventKey}) ON CONFLICT (season_id, player_id, event_key) DO NOTHING RETURNING event_key`);
-        if ((claim.rows?.length ?? 0) === 0) return;
-      }
-
       // Serialize authoritative events with season finalization at rollover.
       await tx.execute(sql`SELECT pg_advisory_xact_lock(${season.id}::bigint)`);
 
@@ -364,6 +355,13 @@ export async function recordAuthoritativeSeasonEvents(
         LIMIT 1
       `)) as unknown as SqlResult<{ "?column?": number }>;
       if ((activeSeason.rows?.length ?? 0) === 0) return;
+
+      // Claim only after the active-season check. A rollover must never leave
+      // an event permanently claimed without its mission update being applied.
+      if (eventKey) {
+        const claim = await tx.execute(sql`INSERT INTO season_event_claims (season_id, player_id, event_key) VALUES (${season.id}, ${playerId}, ${eventKey}) ON CONFLICT (season_id, player_id, event_key) DO NOTHING RETURNING event_key`);
+        if ((claim.rows?.length ?? 0) === 0) return;
+      }
 
       const locked = (await tx.execute(sql`
         SELECT id, missions_json FROM season_progress WHERE id = ${progress.id} FOR UPDATE
