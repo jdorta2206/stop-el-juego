@@ -664,9 +664,19 @@ export default function Room() {
     const stopper = (room as any)?.stopper as { id?: string; stopTimestamp?: number } | null;
     const wasPlaying = previousRoomStatusRef.current === "playing";
     previousRoomStatusRef.current = status;
-    if (!isHalloweenActive() || !isHalloweenModeEnabled() || !wasPlaying || status !== "stopped" || !stopper?.stopTimestamp || stopper.id === player?.id) return;
+    if (!stopper?.stopTimestamp || stopper.id === player?.id) return;
+    if (!isHalloweenActive() || !isHalloweenModeEnabled()) return;
+
+    // The stopped snapshot can be skipped by polling/SSE when bots or the
+    // last result advances the round quickly. A new stopTimestamp observed
+    // immediately after a playing snapshot is still the authoritative STOP.
+    // Do not scare players who join after the stop: on first observation,
+    // only accept it when the room is actually in the stopped transition.
     const eventKey = `stop:${currentRound}:${stopper.stopTimestamp}`;
     if (seenHalloweenEventRef.current === eventKey) return;
+    const isNewStopAfterPlaying = wasPlaying && status !== "playing";
+    if (status !== "stopped" && !isNewStopAfterPlaying) return;
+
     seenHalloweenEventRef.current = eventKey;
     setHalloweenScare(getHalloweenScare(getCurrentLang(), (stopper.stopTimestamp % 100000) / 100000));
     halloweenScareHideTimerRef.current = window.setTimeout(() => setHalloweenScare(null), 1550);
