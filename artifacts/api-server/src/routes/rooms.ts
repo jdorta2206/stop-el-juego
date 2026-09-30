@@ -2658,26 +2658,40 @@ router.post("/:roomCode/halloween-scare", writeLimiter, async (req, res) => {
   ];
   try {
     if (persistentEvents.length > 0) {
-      await recordHalloweenScareEvents(
+      const recorded = await recordHalloweenScareEvents(
         persistentEvents,
         isHalloweenPreviewAuthorized(req),
         room.id,
       );
+      // An empty result means the room was no longer "playing" when the
+      // authoritative transaction acquired its row lock.
+      if (recorded.length !== persistentEvents.length) {
+        res.status(409).json({ error: "Round ended before Halloween scare was recorded" });
+        return;
+      }
     }
+
+    // The persistence transaction protects the room only while it runs. Fetch
+    // the current snapshot before publishing the cosmetic event so a round
+    // that ended during the await can never receive a stale "playing" update.
+    const [currentRoom] = await db.select().from(roomsTable)
+      .where(eq(roomsTable.id, room.id))
+      .limit(1);
+    if (!currentRoom || currentRoom.status !== "playing") {
+      res.status(409).json({ error: "Round ended before Halloween scare was published" });
+      return;
+    }
+
+    // Only consume the cooldown and publish the cosmetic event after the
+    // authoritative progress transaction and fresh room-state check succeed.
+    halloweenScareCooldowns.set(cooldownKey, now);
+    roomHalloweenScares.set(code, event);
+    broadcastAndFormat(currentRoom);
+    res.json({ ok: true, eventId: event.id, cooldownMs: 18_000 });
   } catch (error) {
     console.error("[rooms/halloween-scare] persistence failed:", error);
     res.status(503).json({ error: "Halloween scare could not be recorded" });
-    return;
   }
-
-  // Only consume the cooldown and publish the cosmetic event after the
-  // authoritative progress transaction has succeeded. Otherwise a transient
-  // DB failure could show the scare, return 200, and block the player for 18s
-  // while silently losing their Halloween progress/reward.
-  halloweenScareCooldowns.set(cooldownKey, now);
-  roomHalloweenScares.set(code, event);
-  broadcastAndFormat(room);
-  res.json({ ok: true, eventId: event.id, cooldownMs: 18_000 });
 });
 
 // POST /rooms/:roomCode/stop — ANY player IN THE ROOM can stop the round globally
