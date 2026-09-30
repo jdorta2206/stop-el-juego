@@ -23,6 +23,21 @@ interface PresenceEntry {
 
 const presenceMap = new Map<string, PresenceEntry>();
 
+async function getCanonicalPresenceProfile(playerId: string) {
+  const [profile] = await db.select({
+    name: playerScoresTable.playerName,
+    picture: playerScoresTable.profilePicture,
+    avatarColor: playerScoresTable.avatarColor,
+  }).from(playerScoresTable).where(eq(playerScoresTable.playerId, playerId)).limit(1);
+  if (!profile) return null;
+  const prefixes: Array<[string, string]> = [
+    ["google_", "google"], ["fb_", "facebook"], ["instagram_", "instagram"],
+    ["ig_", "instagram"], ["apple_", "apple"], ["tiktok_", "tiktok"], ["tt_", "tiktok"],
+  ];
+  const provider = prefixes.find(([prefix]) => playerId.startsWith(prefix))?.[1] ?? null;
+  return { ...profile, provider };
+}
+
 // Challenges are persisted in PostgreSQL so pending state survives restarts
 // and is shared by all Railway instances.
 interface Challenge {
