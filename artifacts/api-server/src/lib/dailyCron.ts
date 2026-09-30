@@ -290,8 +290,16 @@ async function sendPerUserDailyNotifications() {
       FROM push_subscriptions
       WHERE enabled = TRUE
         AND muted_until < ${now}
-        AND hour_local = (((${utcMinutesOfDay}::int + tz_offset_minutes + 10080) / 60) % 24)
-        AND (((${utcMinutesOfDay}::int + tz_offset_minutes + 10080) % 60) < 5)
+        AND hour_local = CASE
+          WHEN NULLIF(time_zone, '') IS NOT NULL
+            THEN EXTRACT(HOUR FROM (NOW() AT TIME ZONE time_zone))::int
+          ELSE (((${utcMinutesOfDay}::int + tz_offset_minutes + 10080) / 60) % 24)
+        END
+        AND CASE
+          WHEN NULLIF(time_zone, '') IS NOT NULL
+            THEN EXTRACT(MINUTE FROM (NOW() AT TIME ZONE time_zone))::int
+          ELSE ((${utcMinutesOfDay}::int + tz_offset_minutes + 10080) % 60)
+        END < 5
       LIMIT 10000
     `)) as unknown as { rows?: SubscriptionWithPrefsRow[] };
 
@@ -451,8 +459,12 @@ async function sendDailyDealsNotifications() {
       FROM push_subscriptions
       WHERE enabled = TRUE
         AND muted_until < ${now}
-        AND (((${utcMinutesOfDay}::int + tz_offset_minutes + 10080) % 1440)) >= ${DAILY_DEALS_LOCAL_MIN}
-        AND (((${utcMinutesOfDay}::int + tz_offset_minutes + 10080) % 1440)) < ${DAILY_DEALS_LOCAL_MIN + 5}
+        AND (CASE WHEN NULLIF(time_zone, '') IS NOT NULL
+          THEN (EXTRACT(HOUR FROM (NOW() AT TIME ZONE time_zone))::int * 60 + EXTRACT(MINUTE FROM (NOW() AT TIME ZONE time_zone))::int)
+          ELSE (((${utcMinutesOfDay}::int + tz_offset_minutes + 10080) % 1440)) END) >= ${DAILY_DEALS_LOCAL_MIN}
+        AND (CASE WHEN NULLIF(time_zone, '') IS NOT NULL
+          THEN (EXTRACT(HOUR FROM (NOW() AT TIME ZONE time_zone))::int * 60 + EXTRACT(MINUTE FROM (NOW() AT TIME ZONE time_zone))::int)
+          ELSE (((${utcMinutesOfDay}::int + tz_offset_minutes + 10080) % 1440)) END) < ${DAILY_DEALS_LOCAL_MIN + 5}
       LIMIT 10000
     `)) as unknown as { rows?: Array<{ player_id: string; language: string }> };
 
