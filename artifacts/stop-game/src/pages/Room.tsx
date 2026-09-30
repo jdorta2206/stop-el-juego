@@ -255,6 +255,10 @@ export default function Room() {
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const freezeTimerRef = useRef<NodeJS.Timeout | null>(null);
   const hasSubmittedRef = useRef(false);
+  // Prevent overlapping submission/retry requests while keeping hasSubmittedRef
+  // reserved for the authoritative server acknowledgement.
+  const submitInFlightRef = useRef(false);
+  const submitRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Synchronous flag: true once freeze has started (avoids double-freeze from stale phase closure)
   const isFreezingRef = useRef(false);
   // Track whether we've intentionally left so cleanup doesn't double-fire
@@ -501,6 +505,7 @@ export default function Room() {
   const reviewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => {
     if (reviewTimerRef.current) clearTimeout(reviewTimerRef.current);
+    if (submitRetryTimerRef.current) clearTimeout(submitRetryTimerRef.current);
   }, []);
   const { toast } = useToast();
   const prevHostIdRef = useRef<string | null>(null);
@@ -810,8 +815,8 @@ export default function Room() {
   }, []);
 
   const submitResults = useCallback(async (score: number, isStopper = false) => {
-    if (hasSubmittedRef.current || !player || !roomCode) return;
-    hasSubmittedRef.current = true;
+    if (hasSubmittedRef.current || submitInFlightRef.current || !player || !roomCode) return;
+    submitInFlightRef.current = true;
     sound.playCorrect();
     haptic.submit();
     setPhase("submitted");
@@ -841,6 +846,12 @@ export default function Room() {
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
         await submitMutation.mutateAsync(payload);
+        hasSubmittedRef.current = true;
+        submitInFlightRef.current = false;
+        if (submitRetryTimerRef.current) {
+          clearTimeout(submitRetryTimerRef.current);
+          submitRetryTimerRef.current = null;
+        }
         return;
       } catch (e) {
         console.error(`submit error (attempt ${attempt}/3):`, e);
@@ -849,7 +860,24 @@ export default function Room() {
         }
       }
     }
-  }, [player, roomCode, currentLetter]);
+
+    submitInFlightRef.current = false;
+    // A failed network request must not permanently lock the client in
+    // "Enviando…". Keep the exact payload and retry while the server is still
+    // on this round. The server-side /results endpoint is idempotent, so a
+    // response lost after a successful commit is safe to retry as well.
+    const retryRound = roomRef.current?.currentRound;
+    const retryStatus = roomRef.current?.status;
+    if (retryRound === currentRound &&
+        (retryStatus === "playing" || retryStatus === "stopped" || retryStatus === "finished")) {
+      submitRetryTimerRef.current = setTimeout(() => {
+        submitRetryTimerRef.current = null;
+        if (roomRef.current?.currentRound === retryRound && !hasSubmittedRef.current) {
+          void submitResults(score, isStopper);
+        }
+      }, 2500);
+    }
+  }, [player, roomCode, currentLetter, currentRound]);
 
   const autoSubmit = useCallback((asStopper = false) => {
     // Snapshot current responses before clearing for the bluff words map
