@@ -1141,6 +1141,19 @@ async function purgeStaleRooms() {
       if (auxComplete) await db.delete(roomsTable).where(eq(roomsTable.id, room.id));
     }
 
+    // 🧹 Settlement claims belong to the immutable room ID. Rooms are
+    // eventually deleted, so remove orphaned claims as well. The NOT EXISTS
+    // predicate makes this safe if a stale recovery process races a room
+    // deletion: any claim it writes for a now-missing room is removed on the
+    // next purge cycle.
+    await db.execute(sql`
+      DELETE FROM multiplayer_settlement_claims c
+      WHERE NOT EXISTS (SELECT 1 FROM rooms r WHERE r.id = c.room_id)
+    `);
+    await db.execute(sql`
+      DELETE FROM multiplayer_settlement_aux_claims c
+      WHERE NOT EXISTS (SELECT 1 FROM rooms r WHERE r.id = c.room_id)
+    `);
     // 🧹 In-memory map cleanup: drop entries for any room code that no
     // longer exists in the DB. Without this, sseClients/roomReactions/
     // roomPhrases/roomTyping grow unbounded as games end and rooms get
