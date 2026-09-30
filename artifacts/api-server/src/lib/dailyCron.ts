@@ -563,11 +563,9 @@ export function startDailyCron() {
     // preferences/timezone column yet; if/when one is added, gate the
     // SELECT in sendStreakRescueNotifications() on it.
     if (utcHour === 19 && utcMinute < 5) {
-      const claimed = await claimDailyLock(today, STREAK_RESCUE_KEY);
-      if (claimed) {
-        console.log(`[streakRescueCron] Lock claimed for ${today} — sending streak rescue`);
-        await sendStreakRescueNotifications();
-      }
+      // Per-player claims inside the job provide cluster-wide idempotency and
+      // allow failed recipients to retry without blocking the whole batch.
+      await sendStreakRescueNotifications();
     }
 
     // 08:00–08:05 UTC → season rollover. Idempotent: only opens a new season
@@ -586,11 +584,9 @@ export function startDailyCron() {
     // hours for every supported locale (es/fr 22-23h CET, pt 18h BRT,
     // en spans US afternoon to EU late evening).
     if (utcHour === 21 && utcMinute < 5) {
-      const claimed = await claimDailyLock(today, SEASON_CLAIM_KEY);
-      if (claimed) {
-        console.log(`[seasonClaimCron] Lock claimed for ${today} — sending claim reminders`);
-        await sendSeasonClaimNotifications();
-      }
+      // Per-player claims inside the job provide cluster-wide idempotency and
+      // allow failed recipients to retry without blocking the whole batch.
+      await sendSeasonClaimNotifications();
     }
   }, 5 * 60 * 1000);
 
