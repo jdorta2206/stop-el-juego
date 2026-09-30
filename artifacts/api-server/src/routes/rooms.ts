@@ -969,7 +969,11 @@ async function sweepStuckRooms() {
         }),
           updatedAt: new Date(),
         })
-        .where(and(eq(roomsTable.roomCode, room.roomCode), eq(roomsTable.status, "bluffvoting")))
+        .where(and(
+          eq(roomsTable.roomCode, room.roomCode),
+          eq(roomsTable.status, "bluffvoting"),
+          eq(roomsTable.updatedAt, room.updatedAt),
+        ))
         .returning();
       if (!updated) continue;
       // Reuse the same one-shot round-transition cleanup as the normal
