@@ -2717,12 +2717,20 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
   // category name and exploit the validator's defensive "unknown dictionary"
   // fallback to score arbitrary words.
   const packConfig = roomCategoryPacks.get(roomCode.toUpperCase());
-  const configuredPack = packConfig?.pack ?? "standard";
+  // The in-memory pack map is only a fast path. After an API restart it is
+  // empty, so scoring/validation MUST recover the authoritative pack and
+  // custom categories persisted in stopperJson (formatRoom already does this).
+  const persistedRoundMeta = parseBluffMeta(room.stopperJson) ?? {};
+  const configuredPack = packConfig?.pack ?? persistedRoundMeta.categoryPack ?? "standard";
+  const persistedCustomCategories = Array.isArray(persistedRoundMeta.customCategories)
+    ? persistedRoundMeta.customCategories
+    : undefined;
+  const configuredCustomCategories = packConfig?.customCategories ?? persistedCustomCategories;
   const configuredCategories = resolveCategoriesForRound(
     configuredPack,
     letter,
     room.currentRound ?? 1,
-    packConfig?.customCategories,
+    configuredCustomCategories,
   );
   // The standard pack is localized client-side. Accept its four supported
   // language labels; crazy/mix intentionally use the Spanish labels used by
