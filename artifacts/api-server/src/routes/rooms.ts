@@ -6,6 +6,7 @@ import { CreateRoomBody, JoinRoomBody, SubmitRoomResultsBody } from "@workspace/
 import { calculateStreak, appendStreakDay } from "./ranking";
 import { recordTrustedAnalyticsEvent } from "./analytics";
 import { recordAuthoritativeSeasonEvents } from "./season";
+import { recordHalloweenEvent } from "./halloween";
 import { isWordValidAsync } from "./game";
 import { writeLimiter, roomJoinLimiter } from "../middlewares/rateLimit";
 import { verifyClaimedIdentity, verifyPlayerToken, readPlayerId, isLoggedInId, isAuthConfigured } from "../lib/playerAuth";
@@ -615,6 +616,12 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
     // Use the server-validated count computed above, never the raw
     // client answer count, for the "valid_words" mission.
     const validWords = Number.isFinite(p.validAnswerCount) ? Math.max(0, Math.floor(p.validAnswerCount)) : 0;
+    void recordHalloweenEvent(
+      p.playerId,
+      "game_completed",
+      `multiplayer:${roomCode}:${room.currentRound ?? 0}:${p.playerId}`,
+      String((req as any)?.headers?.["x-halloween-preview"] ?? "") === "1",
+    ).catch((err) => console.error("[halloween] trusted multiplayer completion failed:", err));
     void recordAuthoritativeSeasonEvents(p.playerId, [
       { type: "play_game", value: 1 },
       ...(won ? [{ type: "win_game", value: 1 }] : []),
@@ -2418,6 +2425,12 @@ router.post("/:roomCode/halloween-scare", writeLimiter, async (req, res) => {
   };
   halloweenScareCooldowns.set(cooldownKey, now);
   roomHalloweenScares.set(code, event);
+  void Promise.allSettled([
+    recordHalloweenEvent(playerId, "scare_provoked", `provoked:${event.id}`, String(req.headers?.["x-halloween-preview"] ?? "") === "1"),
+    ...players.filter((p: any) => p.playerId && p.playerId !== playerId && !p.isBot).map((p: any) =>
+      recordHalloweenEvent(p.playerId, "scare_received", `received:${event.id}:${p.playerId}`, String(req.headers?.["x-halloween-preview"] ?? "") === "1")
+    ),
+  ]).catch(() => {});
   broadcastAndFormat(room);
   res.json({ ok: true, eventId: event.id, cooldownMs: 18_000 });
 });
