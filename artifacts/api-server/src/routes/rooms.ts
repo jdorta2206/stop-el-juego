@@ -2642,7 +2642,6 @@ router.post("/:roomCode/rematch", writeLimiter, async (req, res) => {
         if (
           target.length > 0 &&
           target[0].roomCode === persistedRematch &&
-          target[0].hostId === playerId &&
           target[0].status === "waiting"
         ) {
           return { kind: "existing" as const, rematchCode: persistedRematch, oldRoom };
@@ -2666,8 +2665,8 @@ router.post("/:roomCode/rematch", writeLimiter, async (req, res) => {
           .limit(1);
         if (
           target.length > 0 &&
-          target[0].hostId === playerId &&
           target[0].status === "waiting" &&
+          oldPlayers.some((p: any) => p.playerId === target[0].hostId) &&
           target[0].maxRounds === oldRoom.maxRounds &&
           target[0].maxPlayers === (oldRoom.maxPlayers ?? 8) &&
           target[0].gameMode === (oldRoom.gameMode ?? "classic") &&
