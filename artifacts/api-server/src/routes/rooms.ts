@@ -723,7 +723,7 @@ function applyRoundAdvanceSideEffects(room: any, sweptPlayers: any[], newStatus:
   }
   if (newStatus === "finished") {
     // 🏆 Persist final scores to the global leaderboard exactly once.
-    submitAllScoresToLeaderboard(sweptPlayers, room.currentLetter || "A").catch(() => {});
+    submitAllScoresToLeaderboard(sweptPlayers, room.currentLetter || "A", room.roomCode).catch(() => {});
   }
 }
 
@@ -2865,7 +2865,7 @@ router.post("/:roomCode/bluff-vote", writeLimiter, async (req, res) => {
       return;
     }
     if (isGameOver) {
-      submitAllScoresToLeaderboard(resolved, room.currentLetter || "A").catch(() => {});
+      submitAllScoresToLeaderboard(resolved, room.currentLetter || "A", room.roomCode).catch(() => {});
     }
     // 🚀 Broadcast resolution to all players (was waiting for polling — main lag in bluff phase)
     res.json(broadcastAndFormat(updated));
