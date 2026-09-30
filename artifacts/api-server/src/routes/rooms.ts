@@ -3149,10 +3149,11 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
     cappedRoundScore = Math.max(0, cappedRoundScore - 10);
   }
 
-  // 🎯 Doble o Nada: apply the advertised x2 to this round's score on the
-  // server. The card is consumed atomically above, so a repeated request
-  // cannot apply the multiplier twice.
-  if (card === "double_or_nothing") {
+  // 🎯 Doble o Nada: apply the advertised x2 only when this exact player
+  // actually consumed the card this round. Merely owning the card is not enough.
+  // The use-card route marks powerCardUsed atomically, so the multiplier cannot
+  // be replayed by a second /results request.
+  if (me.powerCardUsed === true && me.powerCard === "double_or_nothing") {
     cappedRoundScore *= 2;
   }
 
