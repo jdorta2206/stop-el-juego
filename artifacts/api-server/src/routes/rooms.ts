@@ -2237,21 +2237,24 @@ router.get("/:roomCode/events", async (req, res) => {
   const [roomRow] = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, code)).limit(1);
   if (!roomRow) { res.status(404).json({ error: "Room not found" }); return; }
 
-  // 2. Private rooms require the caller to be a real member of the room.
-  if ((roomRow as any).isPublic === false) {
-    const members = parsePlayers(roomRow.playersJson);
-    const isMember = !!playerId && members.some((p: any) => p.playerId === playerId);
-    if (!isMember) { res.status(403).json({ error: "Not a member of this room" }); return; }
-    // 🔒 If the claimed member is a logged-in account, prove ownership. EventSource
-    // cannot send custom headers, so accept the signed token via the `token` query
-    // param (falls back to the auth cookie). Guests (UUID ids) carry no token and
-    // are gated only by knowing their own random id. Fails open when auth is unset.
-    if (isLoggedInId(playerId) && isAuthConfigured()) {
-      const queryToken = typeof req.query["token"] === "string" ? (req.query["token"] as string) : undefined;
-      const verified = verifyPlayerToken(queryToken) ?? readPlayerId(req);
-      if (verified !== playerId) {
-        res.status(403).json({ error: "Identity verification failed" }); return;
-      }
+  // 2. Never trust a playerId supplied by EventSource. For private rooms the
+  // caller must be a member; for public rooms a caller claiming a logged-in
+  // identity must also prove ownership, otherwise a known member id could be
+  // used to receive the full (non-spectator) room payload.
+  const members = parsePlayers(roomRow.playersJson);
+  const isMember = !!playerId && members.some((p: any) => p.playerId === playerId);
+  if ((roomRow as any).isPublic === false && !isMember) {
+    res.status(403).json({ error: "Not a member of this room" }); return;
+  }
+  if (playerId && isLoggedInId(playerId) && isAuthConfigured()) {
+    // EventSource cannot send custom headers, so accept the signed token via the
+    // token query param (falls back to the auth cookie). This applies to both
+    // private and public rooms because public rooms still contain richer state
+    // for authenticated members.
+    const queryToken = typeof req.query["token"] === "string" ? (req.query["token"] as string) : undefined;
+    const verified = verifyPlayerToken(queryToken) ?? readPlayerId(req);
+    if (verified !== playerId) {
+      res.status(403).json({ error: "Identity verification failed" }); return;
     }
   }
 
