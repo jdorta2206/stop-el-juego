@@ -179,6 +179,7 @@ export const pushSubscriptionsTable = pgTable("push_subscriptions", {
   enabled: boolean("enabled").notNull().default(true),
   hourLocal: integer("hour_local").notNull().default(20),
   tzOffsetMinutes: integer("tz_offset_minutes").notNull().default(0),
+  timeZone: text("time_zone"),
   mutedUntil: bigint("muted_until", { mode: "number" }).notNull().default(0),
   origin: text("origin"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
