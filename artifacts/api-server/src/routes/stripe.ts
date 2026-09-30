@@ -41,7 +41,7 @@ router.get("/status", async (req, res) => {
     // 🔒 Never allow the public playerId to be used to inspect or mutate
     // another player's premium state. The endpoint self-heals isPremium below,
     // so identity verification is required before reading that account.
-    if (!verifyClaimedIdentity(req, playerId)) {
+    if (!await verifyClaimedIdentity(req, playerId)) {
       return res.status(403).json({ error: "Identity verification failed" });
     }
 
@@ -136,7 +136,7 @@ router.post("/checkout", async (req, res) => {
 
     // 🔒 A logged-in account can only check out for ITSELF — blocks anyone from
     // creating a Stripe session against another player's id (which is public).
-    if (!verifyClaimedIdentity(req, playerId)) {
+    if (!await verifyClaimedIdentity(req, playerId)) {
       return res.status(403).json({ error: "Identity verification failed" });
     }
 
@@ -221,7 +221,7 @@ router.post("/checkout-pack", async (req, res) => {
       return res.status(400).json({ error: "Unknown pack" });
     }
     // 🔒 A logged-in account can only check out for ITSELF.
-    if (!verifyClaimedIdentity(req, playerId)) {
+    if (!await verifyClaimedIdentity(req, playerId)) {
       return res.status(403).json({ error: "Identity verification failed" });
     }
 
@@ -327,7 +327,7 @@ router.post("/claim-pack", async (req, res) => {
       sessionId?: string;
     };
     if (!playerId) return res.status(400).json({ error: "playerId required" });
-    if (!verifyClaimedIdentity(req, playerId)) {
+    if (!await verifyClaimedIdentity(req, playerId)) {
       return res.status(403).json({ error: "Identity verification failed" });
     }
 
@@ -385,7 +385,7 @@ router.post("/portal", async (req, res) => {
     if (!playerId) return res.status(400).json({ error: "playerId required" });
     // 🔒 Critical IDOR fix: only the authenticated owner can open the billing
     // portal for their id — otherwise anyone could cancel another user's sub.
-    if (!verifyClaimedIdentity(req, playerId)) {
+    if (!await verifyClaimedIdentity(req, playerId)) {
       return res.status(403).json({ error: "Identity verification failed" });
     }
 
