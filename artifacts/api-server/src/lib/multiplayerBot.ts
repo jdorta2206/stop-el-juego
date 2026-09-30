@@ -127,8 +127,9 @@ async function generateBotAnswersLLM(
 // old match from populating the new match's pending answers.
 type PendingEntry = { round: number; letter: string; generation: number; answers: Record<string, string> };
 const botAnswerGeneration = new Map<string, number>();
+let answerGenerationCounter = 0;
 function nextAnswerGeneration(code: string): number {
-  const generation = (botAnswerGeneration.get(code) ?? 0) + 1;
+  const generation = ++answerGenerationCounter;
   botAnswerGeneration.set(code, generation);
   return generation;
 }
@@ -153,8 +154,8 @@ function getPendingAnswers(
 }
 function clearPendingAnswers(code: string) {
   botPendingAnswers.delete(code);
-  botAnswerGeneration.delete(code);
-}
+  // Do not reset the generation: old LLM promises may still resolve after
+  // this cleanup, and room codes can eventually be reused.
 
 // Strip Spanish accents so "Águila" passes the "starts with A" check, in
 // line with how the scoring layer normalizes user submissions.
