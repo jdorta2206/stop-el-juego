@@ -529,6 +529,7 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
     // Claim + all core leaderboard/history mutations are one DB transaction.
     // If two requests race, exactly one INSERT ... ON CONFLICT wins. If the
     // transaction fails, its claim rolls back too, so a later retry can recover.
+    let settlementStreak = 1;
     const claimed = await db.transaction(async (tx) => {
       const claim = await tx.execute(sql`
         INSERT INTO multiplayer_settlement_claims (room_code, player_id)
@@ -558,6 +559,7 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
         existing[0]?.currentStreak ?? 0
       );
       const newLongest = Math.max(existing[0]?.longestStreak ?? 0, newStreak);
+      settlementStreak = newStreak;
       const newStreakDaysJson = updatedToday
         ? appendStreakDay(existing[0]?.streakDaysJson, today)
         : undefined;
@@ -647,7 +649,7 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
       ...(won ? [{ type: "win_game", value: 1 }] : []),
       ...(rawScore > 0 ? [{ type: "round_score", value: rawScore }] : []),
       ...(validWords > 0 ? [{ type: "valid_words", value: validWords }] : []),
-      { type: "streak", value: 1 },
+      { type: "streak", value: settlementStreak },
     ]).catch((err) => console.error("[season] trusted multiplayer events failed:", err));
   }));
 }
