@@ -183,7 +183,9 @@ router.post("/:code/join", async (req, res) => {
   if (!playerId || !verifyClaimedIdentity(req, playerId)) {
     res.status(403).json({ error: "Identity verification failed" }); return;
   }
-  const [playerProfile] = await db.select({ playerName: playerScoresTable.playerName }).from(playerScoresTable).where(eq(playerScoresTable.playerId, playerId)).limit(1);\n  if (!playerProfile) { res.status(404).json({ error: "Player not found" }); return; }\n  const joined = await db.transaction(async (tx) => {
+  const [playerProfile] = await db.select({ playerName: playerScoresTable.playerName }).from(playerScoresTable).where(eq(playerScoresTable.playerId, playerId)).limit(1);
+  if (!playerProfile) { res.status(404).json({ error: "Player not found" }); return; }
+  const joined = await db.transaction(async (tx) => {
     const rows = await tx.select().from(tournamentsTable)
       .where(eq(tournamentsTable.code, code))
       .for("update");
