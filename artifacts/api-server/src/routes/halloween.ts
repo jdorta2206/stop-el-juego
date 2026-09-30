@@ -280,7 +280,7 @@ export async function recordHalloweenScareEvents(
 
   return await db.transaction(async (tx) => {
     const activeRoom = await tx.execute(sql`
-      SELECT status
+      SELECT status, current_round
       FROM rooms
       WHERE id = ${activeRoomId}
       FOR UPDATE
