@@ -17,7 +17,7 @@ export function isHalloweenPreviewAuthorized(req: { headers?: Record<string, unk
   return enabled && configuredSecret.length >= 32 && suppliedSecret === configuredSecret;
 }
 
-function getEventYear(now = new Date(), preview = false): number | null {
+export function getHalloweenEventYear(now = new Date(), preview = false): number | null {
   if (preview) return now.getUTCFullYear();
   const year = now.getUTCFullYear();
   const start = Date.UTC(year, START_MONTH, START_DAY);
@@ -90,7 +90,7 @@ router.get("/progress", async (req: AuthedRequest, res) => {
     return;
   }
   const preview = isHalloweenPreviewAuthorized(req);
-  const year = getEventYear(new Date(), preview);
+  const year = getHalloweenEventYear(new Date(), preview);
   if (year === null) {
     res.json({ active: false, year: new Date().getUTCFullYear(), progress: null });
     return;
