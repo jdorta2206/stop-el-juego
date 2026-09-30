@@ -454,7 +454,9 @@ router.get("/google/callback", async (req: Request, res: Response) => {
       throw new Error("No id_token or access_token in Google response");
     }
 
-    const googleSub = typeof payload.sub === "string" ? payload.sub.trim() : "";\n    if (!googleSub) throw new Error("No sub from Google");\n    const playerId = `google_${googleSub}`;
+    const googleSub = typeof payload.sub === "string" ? payload.sub.trim() : "";
+    if (!googleSub) throw new Error("No sub from Google");
+    const playerId = `google_${googleSub}`;
     const googlePicture = typeof payload.picture === "string" ? payload.picture : null;
     await db.insert(playerScoresTable).values({ playerId, playerName: String(payload.name || "Usuario").trim().slice(0, 14) || "Usuario", avatarColor: "#f9a825", profilePicture: googlePicture }).onConflictDoUpdate({ target: playerScoresTable.playerId, set: { playerName: String(payload.name || "Usuario").trim().slice(0, 14) || "Usuario", profilePicture: googlePicture, updatedAt: new Date() } });
 
@@ -537,7 +539,9 @@ router.get("/facebook/callback", async (req: Request, res: Response) => {
     );
     const me = (await meRes.json()) as OAuthProfile;
 
-    const facebookId = typeof me.id === "string" ? me.id.trim() : "";\n    if (!facebookId) throw new Error("No id from Facebook");\n    const playerId = `fb_${facebookId}`;
+    const facebookId = typeof me.id === "string" ? me.id.trim() : "";
+    if (!facebookId) throw new Error("No id from Facebook");
+    const playerId = `fb_${facebookId}`;
     const facebookName = String(me.name || "Facebook User").trim().slice(0, 14) || "Facebook User";
     const facebookPicture =
       (typeof me.picture === "object" ? me.picture.data?.url : undefined) || null;
@@ -651,7 +655,9 @@ router.get("/instagram/callback", async (req: Request, res: Response) => {
     );
     const me = (await meRes.json()) as OAuthProfile;
 
-    const instagramId = typeof me.id === "string" ? me.id.trim() : "";\n    if (!instagramId) throw new Error("No id from Instagram");\n    const playerId = `ig_${instagramId}`;
+    const instagramId = typeof me.id === "string" ? me.id.trim() : "";
+    if (!instagramId) throw new Error("No id from Instagram");
+    const playerId = `ig_${instagramId}`;
     const user = JSON.stringify({
       id:       playerId,
       name:     me.username || me.name || "Usuario",
@@ -677,7 +683,9 @@ router.get("/instagram/callback", async (req: Request, res: Response) => {
 // Requires: APPLE_CLIENT_ID (Service ID), APPLE_TEAM_ID, APPLE_KEY_ID, APPLE_PRIVATE_KEY (.p8 content)
 
 function makeAppleClientSecret(): string {
-  const privateKey = (process.env["APPLE_PRIVATE_KEY"] || "").replace(/\\n/g, "\n");
+  const privateKey = (process.env["APPLE_PRIVATE_KEY"] || "").replace(/\
+/g, "
+");
   const teamId     = process.env["APPLE_TEAM_ID"]!;
   const clientId   = process.env["APPLE_CLIENT_ID"]!;
   const keyId      = process.env["APPLE_KEY_ID"]!;
@@ -769,7 +777,9 @@ router.post("/apple/callback", async (req: Request, res: Response) => {
       }
     } catch (_) {}
 
-    const appleSub = typeof payload.sub === "string" ? payload.sub.trim() : "";\n    if (!appleSub) throw new Error("No sub from Apple");\n    const playerId = `apple_${appleSub}`;
+    const appleSub = typeof payload.sub === "string" ? payload.sub.trim() : "";
+    if (!appleSub) throw new Error("No sub from Apple");
+    const playerId = `apple_${appleSub}`;
 
     // Persist the Apple profile just like Google/Facebook/Instagram.
     // Without this row, a later /api/auth/me restore kept the session cookie
