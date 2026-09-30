@@ -881,11 +881,38 @@ router.get("/tiktok/callback", async (req: Request, res: Response) => {
     const meData = (await meRes.json()) as TikTokUserResponse;
     const me = meData.data?.user || meData.user || {};
 
-    const playerId = `tt_${me.open_id || openId}`;
+    const resolvedOpenId = typeof me.open_id === "string" && me.open_id.trim()
+      ? me.open_id.trim()
+      : typeof openId === "string" && openId.trim()
+        ? openId.trim()
+        : "";
+    if (!resolvedOpenId) throw new Error("No open_id from TikTok");
+
+    const playerId = `tt_${resolvedOpenId}`;
+    const tiktokName = String(me.display_name || "TikToker").trim().slice(0, 14) || "TikToker";
+    const tiktokPicture = typeof me.avatar_url === "string" ? me.avatar_url : null;
+
+    await db
+      .insert(playerScoresTable)
+      .values({
+        playerId,
+        playerName: tiktokName,
+        avatarColor: "#f9a825",
+        profilePicture: tiktokPicture,
+      })
+      .onConflictDoUpdate({
+        target: playerScoresTable.playerId,
+        set: {
+          playerName: tiktokName,
+          profilePicture: tiktokPicture,
+          updatedAt: new Date(),
+        },
+      });
+
     const user = JSON.stringify({
       id:       playerId,
-      name:     me.display_name || "TikToker",
-      picture:  me.avatar_url || null,
+      name:     tiktokName,
+      picture:  tiktokPicture,
       provider: "tiktok",
     });
 
