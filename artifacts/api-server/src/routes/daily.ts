@@ -59,7 +59,7 @@ router.get("/status", async (req, res) => {
     res.status(400).json({ error: "Invalid daily status request" });
     return;
   }
-  if (!verifyClaimedIdentity(req, playerId)) {
+  if (!await verifyClaimedIdentity(req, playerId)) {
     res.status(403).json({ error: "Identity verification failed" });
     return;
   }
@@ -83,7 +83,7 @@ router.post("/submit", async (req, res) => {
     return;
   }
   // 🔒 Only the authenticated owner may submit a daily score for a logged-in id.
-  if (!verifyClaimedIdentity(req, playerId)) {
+  if (!await verifyClaimedIdentity(req, playerId)) {
     res.status(403).json({ error: "Identity verification failed" });
     return;
   }
