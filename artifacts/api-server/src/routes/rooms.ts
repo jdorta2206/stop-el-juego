@@ -133,6 +133,7 @@ function isPlayerOnline(code: string, playerId: string): boolean {
 // PRESENCE_GRACE_MS: buffer before treating an SSE drop as "offline".
 const SUBMIT_GRACE_MS = 15_000;
 const PRESENCE_GRACE_MS = 4_000;
+const HALLOWEEN_PREVIEW_ENV = String(process.env.HALLOWEEN_PREVIEW_SECRET ?? "").length >= 32;
 
 // Last DB version emitted to this process's SSE clients. A request may commit
 // an older snapshot and only reach this function after a newer request has
@@ -667,7 +668,7 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
       p.playerId,
       "game_completed",
       `multiplayer:${roomId}:${p.playerId}`,
-      false,
+      HALLOWEEN_PREVIEW_ENV,
     ).catch((err) => console.error("[halloween] trusted multiplayer completion failed:", err));
 
     void recordAuthoritativeSeasonEvents(p.playerId, [
@@ -712,7 +713,7 @@ async function recoverMultiplayerAuxiliaryEffects(room: any, players: any[]): Pr
         ...(streak > 0 ? [{ type: "streak", value: streak }] : []),
       ], eventKey);
     }
-    await recordHalloweenEvent(p.playerId, "game_completed", `multiplayer:${room.id}:${p.playerId}`, false);
+    await recordHalloweenEvent(p.playerId, "game_completed", `multiplayer:${room.id}:${p.playerId}`, HALLOWEEN_PREVIEW_ENV);
   }
 }
 
