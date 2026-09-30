@@ -681,7 +681,7 @@ router.post("/scores", scoreLimiter, async (req, res) => {
         avatarColor: avatarColor ?? "#e53e3e",
         totalScore: score,
         gamesPlayed: isBonus ? 0 : 1,
-        wins: isBonus ? 0 : (won ? 1 : 0),
+        wins: isBonus ? 0 : (effectiveWon ? 1 : 0),
         currentStreak: isBonus ? 0 : 1,
         longestStreak: isBonus ? 0 : 1,
         lastPlayedDate: isBonus ? null : today,
