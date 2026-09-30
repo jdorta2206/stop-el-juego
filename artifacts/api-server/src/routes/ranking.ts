@@ -706,10 +706,6 @@ router.post("/scores", scoreLimiter, async (req, res) => {
   } else {
     try {
       player = await db.transaction(async (tx) => {
-      if (verified > 0 && voucherJtis.length > 0) {
-        await consumeScoreVoucherJtis(tx, voucherJtis);
-      }
-
       if (submissionId) {
         const [claim] = await tx
           .insert(scoreSubmissionClaimsTable)
@@ -725,6 +721,10 @@ router.post("/scores", scoreLimiter, async (req, res) => {
             .limit(1);
           return currentPlayer ?? null;
         }
+      }
+
+      if (verified > 0 && voucherJtis.length > 0) {
+        await consumeScoreVoucherJtis(tx, voucherJtis);
       }
 
       const lockedRows = await tx
