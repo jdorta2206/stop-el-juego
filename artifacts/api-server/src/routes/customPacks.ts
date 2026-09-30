@@ -59,7 +59,7 @@ router.get("/:playerId", async (req, res) => {
     return;
   }
   // 🔒 Block reading another logged-in user's packs by guessing their id.
-  if (!verifyClaimedIdentity(req, playerId)) {
+  if (!await verifyClaimedIdentity(req, playerId)) {
     res.status(403).json({ error: "Identity verification failed" });
     return;
   }
@@ -84,7 +84,7 @@ router.post("/", writeLimiter, async (req, res) => {
     return;
   }
   const { playerId, name, icon, color, language, categories } = parsed.data;
-  if (!verifyClaimedIdentity(req, playerId)) {
+  if (!await verifyClaimedIdentity(req, playerId)) {
     res.status(403).json({ error: "Identity verification failed" });
     return;
   }
@@ -148,7 +148,7 @@ router.put("/:id", writeLimiter, async (req, res) => {
     return;
   }
   const { playerId, name, icon, color, language, categories } = parsed.data;
-  if (!verifyClaimedIdentity(req, playerId)) {
+  if (!await verifyClaimedIdentity(req, playerId)) {
     res.status(403).json({ error: "Identity verification failed" });
     return;
   }
@@ -189,7 +189,7 @@ router.delete("/:id", writeLimiter, async (req, res) => {
     res.status(400).json({ error: "Invalid id or playerId" });
     return;
   }
-  if (!verifyClaimedIdentity(req, playerId)) {
+  if (!await verifyClaimedIdentity(req, playerId)) {
     res.status(403).json({ error: "Identity verification failed" });
     return;
   }
