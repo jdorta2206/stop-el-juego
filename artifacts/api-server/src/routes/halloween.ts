@@ -151,6 +151,17 @@ export async function recordHalloweenEventInTransaction(
         if (activeRoomRound !== undefined && Number(activeRoom.rows?.[0]?.current_round) !== activeRoomRound) return null;
       }
 
+      // Lock player_scores before halloween_progress so Solo score settlement
+      // and concurrent Halloween scares always acquire locks in the same order.
+      const playerLock = await tx.execute(sql`
+        SELECT coins, inventory_json
+        FROM player_scores
+        WHERE player_id = ${playerId}
+        FOR UPDATE
+      `);
+      const lockedPlayer = playerLock.rows?.[0] as { coins: number; inventory_json: string } | undefined;
+      if (!lockedPlayer) throw new Error("Player score row missing while recording Halloween event");
+
       await tx.execute(sql`
         INSERT INTO halloween_progress (player_id, event_year)
         VALUES (${playerId}, ${year})
@@ -205,14 +216,7 @@ export async function recordHalloweenEventInTransaction(
       }
 
       if (coinsAwarded > 0 || newRewardItems.length > 0) {
-        const player = await tx.execute(sql`
-          SELECT coins, inventory_json FROM player_scores
-          WHERE player_id = ${playerId} FOR UPDATE
-        `);
-        const p = player.rows?.[0] as { coins: number; inventory_json: string } | undefined;
-        if (!p) {
-          throw new Error("Player score row missing while granting Halloween reward");
-        }
+        const p = lockedPlayer;
         {
           let inventory: Record<string, unknown> = {};
           try {
@@ -327,6 +331,17 @@ export async function recordHalloweenScareEventsInTransaction(
     for (const event of orderedEvents) {
       if (!event.playerId || !event.eventKey || event.eventKey.length > 160) continue;
 
+      // Lock player_scores before halloween_progress to match Solo score
+      // settlement and every other Halloween reward path.
+      const playerLock = await tx.execute(sql`
+        SELECT coins, inventory_json
+        FROM player_scores
+        WHERE player_id = ${event.playerId}
+        FOR UPDATE
+      `);
+      const lockedPlayer = playerLock.rows?.[0] as { coins: number; inventory_json: string } | undefined;
+      if (!lockedPlayer) throw new Error("Player score row missing while recording Halloween scare event");
+
       await tx.execute(sql`
         INSERT INTO halloween_progress (player_id, event_year)
         VALUES (${event.playerId}, ${year})
@@ -371,12 +386,7 @@ export async function recordHalloweenScareEventsInTransaction(
       }
 
       if (coinsAwarded > 0 || newRewardItems.length > 0) {
-        const player = await tx.execute(sql`
-          SELECT coins, inventory_json FROM player_scores
-          WHERE player_id = ${event.playerId} FOR UPDATE
-        `);
-        const p = player.rows?.[0] as { coins: number; inventory_json: string } | undefined;
-        if (!p) throw new Error("Player score row missing while granting Halloween reward");
+        const p = lockedPlayer;
 
         let inventory: Record<string, unknown> = {};
         try {
