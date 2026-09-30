@@ -46,7 +46,8 @@ function getDailyChallenge(dateStr: string, language: string) {
 
 // GET /api/daily?language=es  → today's challenge (letter + categories)
 router.get("/", (req, res) => {
-  const language = (req.query.language as string) || "es";
+  const requestedLanguage = typeof req.query.language === "string" ? req.query.language.trim().toLowerCase() : "es";
+  const language = ["es", "en", "pt", "fr"].includes(requestedLanguage) ? requestedLanguage : "es";
   const today = getTodayUTC();
   const challenge = getDailyChallenge(today, language);
   res.json(challenge);
@@ -208,7 +209,8 @@ router.post("/submit", async (req, res) => {
 
 // GET /api/daily/rankings?language=es  → top 10 players for today
 router.get("/rankings", async (req, res) => {
-  const language = (req.query.language as string) || "es";
+  const requestedLanguage = typeof req.query.language === "string" ? req.query.language.trim().toLowerCase() : "es";
+  const language = ["es", "en", "pt", "fr"].includes(requestedLanguage) ? requestedLanguage : "es";
   const today = getTodayUTC();
 
   const results = await db
