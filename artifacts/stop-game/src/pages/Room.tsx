@@ -697,15 +697,6 @@ export default function Room() {
         const ms = Number(data.cooldownMs ?? 18000);
         setHalloweenScareCooldownUntil(Date.now() + ms);
         window.setTimeout(() => setHalloweenScareCooldownUntil(0), ms + 50);
-      } else if (response.status === 409 && isHalloweenPreview()) {
-        await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/react`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ emoji: "🤯", playerId: player.id, playerName: `__HALLOWEEN_SCARE__${player.id}__${player.name ?? ""}` }),
-        });
-        const ms = 18000;
-        setHalloweenScareCooldownUntil(Date.now() + ms);
-        window.setTimeout(() => setHalloweenScareCooldownUntil(0), ms + 50);
       } else if (response.status === 429) {
         const ms = Number(data.retryAfterMs ?? 5000);
         setHalloweenScareCooldownUntil(Date.now() + ms);
