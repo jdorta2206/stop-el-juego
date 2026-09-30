@@ -502,6 +502,9 @@ router.post("/scores", scoreLimiter, async (req, res) => {
   // derived only from the HMAC-signed voucher metadata. Legacy vouchers have
   // no certified mode and therefore can never receive the x1.5 multiplier.
   const score = certifiedMode === "multiplayer" ? Math.round(cappedRaw * 1.5) : cappedRaw;
+  // 🔒 Rewards must use the same authoritative mode as the score. Never let
+  // the request body select the multiplayer XP/coin rules for a Solo voucher.
+  const effectiveMode = certifiedMode ?? "solo";
 
   const existing = await db
     .select()
@@ -536,8 +539,8 @@ router.post("/scores", scoreLimiter, async (req, res) => {
         )
     : [];
 
-  const baseXpGain = calcXpGain(score, effectiveWon, mode ?? "solo");
-  const baseCoinGain = calcCoinGain(score, effectiveWon, mode ?? "solo", isBonus);
+  const baseXpGain = calcXpGain(score, effectiveWon, effectiveMode);
+  const baseCoinGain = calcCoinGain(score, effectiveWon, effectiveMode, isBonus);
   const tzOffset = await lookupPlayerTzOffset(playerId);
   const happyHourActive =
     tzOffset !== null && isHappyHourActiveForTzOffset(tzOffset);
