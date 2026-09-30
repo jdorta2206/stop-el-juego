@@ -224,11 +224,15 @@ const botDeps = {
   getRoundCategories: (room: any) => {
     const code = String(room.roomCode ?? "").toUpperCase();
     const cfg = roomCategoryPacks.get(code);
+    const persistedMeta = parseBluffMeta(room.stopperJson) ?? {};
+    const pack = cfg?.pack ?? persistedMeta.categoryPack ?? "standard";
+    const customCategories = cfg?.customCategories ??
+      (Array.isArray(persistedMeta.customCategories) ? persistedMeta.customCategories : undefined);
     return resolveCategoriesForRound(
-      cfg?.pack ?? "standard",
+      pack,
       room.currentLetter ?? "A",
       room.currentRound ?? 1,
-      cfg?.customCategories,
+      customCategories,
     );
   },
 };
