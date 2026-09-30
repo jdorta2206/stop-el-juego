@@ -624,7 +624,7 @@ export default function Room() {
       const halloweenSeed = (seed % 100000) / 100000;
       setRoundCategories(applyHalloweenCategory(base, getCurrentLang(), {
         enabled: categoryPack === "standard" && isHalloweenActive(),
-      respectMode: false,
+        respectMode: false,
         seed: halloweenSeed,
       }));
     }
