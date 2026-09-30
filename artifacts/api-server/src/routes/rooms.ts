@@ -2773,7 +2773,9 @@ router.post("/:roomCode/stop", async (req, res) => {
   if (halloweenEventAllowed(req) && stopPack !== "custom") {
     const scareKey = `stop:${roomCode.toUpperCase()}:${room.currentRound ?? 0}:${stopper.stopTimestamp}`;
     const stopScareEvents = [
-      { playerId, type: "scare_provoked" as const, eventKey: `provoked:${scareKey}` },
+      ...(roomPlayers.find((p: any) => p.playerId === playerId && p.loginMethod !== "guest")
+        ? [{ playerId, type: "scare_provoked" as const, eventKey: `provoked:${scareKey}` }]
+        : []),
       ...roomPlayers.filter((p: any) => p.playerId && p.playerId !== playerId && !p.isBot && p.loginMethod !== "guest").map((p: any) => ({
         playerId: p.playerId,
         type: "scare_received" as const,
