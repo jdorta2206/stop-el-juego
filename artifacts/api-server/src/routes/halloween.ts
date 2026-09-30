@@ -146,8 +146,13 @@ export async function recordHalloweenEvent(
       } | undefined;
       if (!row) throw new Error("Halloween progress row missing");
 
-      const keys = parseJsonArray(row.event_keys_json);
-      if (keys.includes(eventKey)) {
+      const claim = await tx.execute(sql`
+        INSERT INTO halloween_event_claims (event_year, player_id, event_key)
+        VALUES (${year}, ${playerId}, ${eventKey})
+        ON CONFLICT (event_year, player_id, event_key) DO NOTHING
+        RETURNING event_key
+      `);
+      if ((claim.rows?.length ?? 0) === 0) {
         return {
           gamesCompleted: row.games_completed,
           scaresReceived: row.scares_received,
@@ -204,6 +209,7 @@ export async function recordHalloweenEvent(
         }
       }
 
+      const keys = parseJsonArray(row.event_keys_json);
       keys.push(eventKey);
       if (keys.length > 500) keys.splice(0, keys.length - 500);
       const totalCoins = row.coins_earned + coinsAwarded;
