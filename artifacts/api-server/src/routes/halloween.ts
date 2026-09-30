@@ -281,7 +281,13 @@ export async function recordHalloweenScareEvents(
     if (String(activeRoom.rows?.[0]?.status ?? "") !== "playing") return [];
 
     const results: unknown[] = [];
-    for (const event of events) {
+    // Always lock Halloween progress rows in a deterministic player order.
+    // Concurrent scares involving the same players otherwise could lock A→B
+    // in one transaction and B→A in another, causing a PostgreSQL deadlock.
+    const orderedEvents = [...events].sort((a, b) =>
+      a.playerId.localeCompare(b.playerId) || a.eventKey.localeCompare(b.eventKey)
+    );
+    for (const event of orderedEvents) {
       if (!event.playerId || !event.eventKey || event.eventKey.length > 160) continue;
 
       await tx.execute(sql`
