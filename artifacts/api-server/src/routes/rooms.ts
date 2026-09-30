@@ -298,9 +298,13 @@ type HalloweenRoomScare = {
 const roomHalloweenScares = new Map<string, HalloweenRoomScare>();
 const halloweenScareCooldowns = new Map<string, number>();
 
-function getHalloweenScareEvent(code: string): HalloweenRoomScare | null {
+function getHalloweenScareEvent(code: string, currentRound: number | null | undefined): HalloweenRoomScare | null {
   const event = roomHalloweenScares.get(code);
   if (!event) return null;
+  if (event.round !== (currentRound ?? 0)) {
+    roomHalloweenScares.delete(code);
+    return null;
+  }
   if (Date.now() - event.ts > 4500) {
     roomHalloweenScares.delete(code);
     return null;
@@ -456,7 +460,7 @@ function formatRoom(room: any, cosmeticsMap?: Record<string, any>) {
     roundDurationSecs: durationSecs,
     serverNow: Date.now(),
     reactions: getReactions(code),
-    halloweenScare: getHalloweenScareEvent(code),
+    halloweenScare: getHalloweenScareEvent(code, room.currentRound),
     phrases: getPhrases(code),
     typing: getTyping(code),
     // Persisted rematch survives process restarts; memory map is only a fast-path.
