@@ -1138,7 +1138,7 @@ router.post("/:roomCode/join", roomJoinLimiter, async (req, res) => {
 
   // Authenticated accounts keep their canonical profile identity. Guests may
   // still choose a room display name because they have no persistent profile.
-  const isGuestIdentity = loginMethod === "guest" || playerId.startsWith("guest_");
+  const isGuestIdentity = !canonicalProfile;
   const effectivePlayerName = !isGuestIdentity && canonicalProfile
     ? canonicalProfile.playerName
     : playerName;
