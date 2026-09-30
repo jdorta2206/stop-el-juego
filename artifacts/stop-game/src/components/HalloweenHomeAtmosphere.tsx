@@ -230,7 +230,7 @@ function createController(): HalloweenAmbientController {
         }
 
         // Sync the first thunder with the first cinematic lightning flash (~71% of 9s).
-        const firstStormDelay = 2500;
+        const firstStormDelay = 6300;
         stormTimer = window.setTimeout(() => {
           playThunder();
           stormTimer = window.setInterval(playThunder, 9000);
