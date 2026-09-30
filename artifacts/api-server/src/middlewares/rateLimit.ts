@@ -95,6 +95,7 @@ function limiter(prefix: string, windowMs: number, limit: number, keyGenerator: 
 
 export const generalLimiter = limiter("general", 60_000, 240, playerKey);
 export const writeLimiter = limiter("write", 60_000, 120, playerKey);
+export const halloweenScareLimiter = limiter("halloween-scare", 60_000, 60, (req) => ipKeyGenerator(req.ip ?? ""));
 export const presenceLimiter = limiter("presence", 60_000, 90, playerKey);
 export const authLimiter = limiter("auth", 5 * 60_000, 20, (req) => ipKeyGenerator(req.ip ?? ""));
 export const scoreLimiter = limiter("score", 5 * 60_000, 30, playerKey);
