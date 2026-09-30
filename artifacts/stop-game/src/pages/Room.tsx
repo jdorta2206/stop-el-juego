@@ -623,7 +623,7 @@ export default function Room() {
       for (let i = 0; i < key.length; i++) seed = (Math.imul(seed, 31) + key.charCodeAt(i)) >>> 0;
       const halloweenSeed = (seed % 100000) / 100000;
       setRoundCategories(applyHalloweenCategory(base, getCurrentLang(), {
-        enabled: categoryPack === "standard" && isHalloweenActive(),
+        enabled: categoryPack === "standard" && isHalloweenActive(),\n      respectMode: false,
         seed: halloweenSeed,
       }));
     }
