@@ -53,6 +53,8 @@ jobs:
       - name: Verify preview build
         run: test -s artifacts/stop-game/dist/index.html
       - name: Start preview server with real game API proxy
+        env:
+          HALLOWEEN_PREVIEW_SECRET: ${{ secrets.HALLOWEEN_PREVIEW_SECRET }}
         run: |
           set -euo pipefail
           cat > /tmp/halloween-preview-server.py <<'PY'
@@ -99,6 +101,9 @@ jobs:
                   headers = {k:v for k,v in self.headers.items() if k.lower() not in {"host","content-length","origin","referer","connection"}}
                   headers["Host"] = UPSTREAM
                   headers["X-Halloween-Preview"] = "1"
+                  preview_token = os.environ.get("HALLOWEEN_PREVIEW_SECRET", "")
+                  if preview_token:
+                      headers["X-Halloween-Preview-Token"] = preview_token
                   if path.startswith("/api/game/peek"):
                       from urllib.parse import parse_qsl, urlencode
                       query_items = parse_qsl(target.query, keep_blank_values=True)
