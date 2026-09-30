@@ -269,6 +269,33 @@ type FunVote = {
   category: string;
   answer: string;
 };
+type HalloweenRoomScare = {
+  id: string;
+  playerId: string;
+  scareId: "clown" | "horrorMask" | "hauntedDoll" | "creepyDoll" | "demonMask";
+  playerName: string;
+  round: number;
+  ts: number;
+};
+const roomHalloweenScares = new Map<string, HalloweenRoomScare>();
+const halloweenScareCooldowns = new Map<string, number>();
+
+function getHalloweenScareEvent(code: string): HalloweenRoomScare | null {
+  const event = roomHalloweenScares.get(code);
+  if (!event) return null;
+  if (Date.now() - event.ts > 4500) {
+    roomHalloweenScares.delete(code);
+    return null;
+  }
+  return event;
+}
+
+function halloweenEventAllowed(req: any): boolean {
+  if (String(req.headers?.["x-halloween-preview"] ?? "") === "1") return true;
+  const now = Date.now();
+  return now >= Date.parse("2026-10-15T00:00:00Z") && now < Date.parse("2026-11-03T00:00:00Z");
+}
+
 const roomFunVotes = new Map<string, Map<string, FunVote>>();
 function getFunVotes(code: string): FunVote[] {
   const m = roomFunVotes.get(code);
@@ -411,6 +438,7 @@ function formatRoom(room: any, cosmeticsMap?: Record<string, any>) {
     roundDurationSecs: durationSecs,
     serverNow: Date.now(),
     reactions: getReactions(code),
+    halloweenScare: getHalloweenScareEvent(code),
     phrases: getPhrases(code),
     typing: getTyping(code),
     // Persisted rematch survives process restarts; memory map is only a fast-path.
@@ -2353,6 +2381,45 @@ router.post("/:roomCode/phrase", writeLimiter, async (req, res) => {
     if (rooms.length > 0) broadcastAndFormat(rooms[0]);
   } catch {}
   res.json({ ok: true });
+});
+
+// POST /rooms/:roomCode/halloween-scare — cosmetic scare sent to the other players in the active round.
+router.post("/:roomCode/halloween-scare", writeLimiter, async (req, res) => {
+  const code = paramStr(req.params.roomCode).toUpperCase();
+  const { playerId, playerName, scareId } = req.body ?? {};
+  if (!playerId || !verifyClaimedIdentity(req, playerId)) {
+    res.status(403).json({ error: "Identity verification failed" }); return;
+  }
+  if (!halloweenEventAllowed(req)) {
+    res.status(409).json({ error: "Halloween event is not active" }); return;
+  }
+  const [room] = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, code)).limit(1);
+  if (!room) { res.status(404).json({ error: "Room not found" }); return; }
+  if (room.status !== "playing") { res.status(409).json({ error: "Scares are only available during a round" }); return; }
+  const players = parsePlayers(room.playersJson);
+  const me = players.find((p: any) => p.playerId === playerId);
+  if (!me) { res.status(403).json({ error: "Only players in the room can scare" }); return; }
+
+  const allowed = ["clown", "horrorMask", "hauntedDoll", "creepyDoll", "demonMask"] as const;
+  const safeScareId = allowed.includes(scareId) ? scareId : allowed[Math.floor(Math.random() * allowed.length)];
+  const cooldownKey = code + ":" + playerId;
+  const last = halloweenScareCooldowns.get(cooldownKey) ?? 0;
+  const now = Date.now();
+  const remaining = 18_000 - (now - last);
+  if (remaining > 0) { res.status(429).json({ error: "Susto en enfriamiento", retryAfterMs: remaining }); return; }
+
+  const event: HalloweenRoomScare = {
+    id: String(now) + "-" + Math.random().toString(36).slice(2),
+    playerId,
+    scareId: safeScareId,
+    playerName: String(playerName ?? me.playerName ?? "?").slice(0, 30),
+    round: room.currentRound ?? 0,
+    ts: now,
+  };
+  halloweenScareCooldowns.set(cooldownKey, now);
+  roomHalloweenScares.set(code, event);
+  broadcastAndFormat(room);
+  res.json({ ok: true, eventId: event.id, cooldownMs: 18_000 });
 });
 
 // POST /rooms/:roomCode/stop — ANY player IN THE ROOM can stop the round globally
