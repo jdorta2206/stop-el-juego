@@ -3271,9 +3271,10 @@ router.post("/:roomCode/bluff-vote", writeLimiter, async (req, res) => {
       res.json(formatRoom(cur));
       return;
     }
-    if (isGameOver) {
-      submitAllScoresToLeaderboard(resolved, room.currentLetter || "A", room.id, room.roomCode).catch(() => {});
-    }
+    // Reuse the authoritative one-shot transition side effects for bluff
+    // resolutions too: this clears per-round spy/live state and, on game over,
+    // performs the idempotent final leaderboard settlement.
+    applyRoundAdvanceSideEffects(room, resolved, newStatus);
     // 🚀 Broadcast resolution to all players (was waiting for polling — main lag in bluff phase)
     res.json(broadcastAndFormat(updated));
     return;
