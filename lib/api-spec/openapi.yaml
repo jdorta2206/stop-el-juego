@@ -423,6 +423,12 @@ components:
     SubmitScoreRequest:
       type: object
       properties:
+        submissionId:
+          type: string
+          minLength: 8
+          maxLength: 160
+          pattern: "^[A-Za-z0-9._:-]+$"
+          description: Stable idempotency key for one logical score submission.
         playerId:
           type: string
         playerName:
@@ -459,6 +465,7 @@ components:
             this is the anti-cheat guard. Omitted for offline submissions,
             which fall back to a flat absolute ceiling.
       required:
+        - submissionId
         - playerId
         - playerName
         - score
