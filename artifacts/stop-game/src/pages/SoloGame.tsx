@@ -1209,6 +1209,7 @@ export default function SoloGame() {
         // que en realidad sí pudo persistir.
         if (typeof navigator !== "undefined" && navigator.onLine === false) {
           await enqueueScoreOutbox({
+            submissionId: `${gameSubmissionIdRef.current ?? createSubmissionId()}${isBonus ? ":bonus" : ""}`,
             playerId: player.id,
             playerName: player.name,
             avatarColor: player.avatarColor,
