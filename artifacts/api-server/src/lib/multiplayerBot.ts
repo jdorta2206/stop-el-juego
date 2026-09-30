@@ -156,6 +156,7 @@ function clearPendingAnswers(code: string) {
   botPendingAnswers.delete(code);
   // Do not reset the generation: old LLM promises may still resolve after
   // this cleanup, and room codes can eventually be reused.
+}
 
 // Strip Spanish accents so "Águila" passes the "starts with A" check, in
 // line with how the scoring layer normalizes user submissions.
