@@ -97,7 +97,7 @@ export const GetLeaderboardResponse = zod.object({
  * @summary Submit a player score
  */
 export const SubmitScoreBody = zod.object({
-  submissionId: zod.string().min(8).max(160).regex(/^[A-Za-z0-9._:-]+$/),
+  submissionId: zod.string().min(8).max(160).regex(/^[A-Za-z0-9._:-]+$/).optional(),
   playerId: zod.string(),
   playerName: zod.string(),
   avatarColor: zod.string().optional(),
