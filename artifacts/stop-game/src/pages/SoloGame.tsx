@@ -141,7 +141,7 @@ export default function SoloGame() {
   const packId = getSafePackId(getSelectedPackId(), isPremium, customPacks);
   const activePack = getPackById(packId, customPacks);
   const packCats = () => packId === "classic" ? getCategories() : getPackCategories(packId, getCurrentLang(), customPacks);
-  const [categories, setCategories] = useState<string[]>(() => applyHalloweenCategory(packCats(), lang, { enabled: !packId.startsWith("custom:") }));
+  const [categories, setCategories] = useState<string[]>(() => applyHalloweenCategory(packCats(), lang, { enabled: packId === "classic" && !isDailyMode && !isQuickMode && !isChaosMode && !isRandomMode }));
   const [muted, setMuted] = useState(false);
   const [halloweenScareAfterglow, setHalloweenScareAfterglow] = useState(false);
   const [stopFlash, setStopFlash] = useState(false);
