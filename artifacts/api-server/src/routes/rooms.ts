@@ -693,20 +693,21 @@ async function recoverMultiplayerAuxiliaryEffects(room: any, players: any[]): Pr
   for (const p of eligible) {
     const eventKey = `multiplayer:${room.id}:${p.playerId}`;
     const existingSeasonEvent = await db.execute(sql`SELECT 1 FROM season_event_claims WHERE event_key = ${eventKey} LIMIT 1`);
-    if ((existingSeasonEvent.rows ?? []).length > 0) continue;
     const won = winnerId === p.playerId;
     const rawScore = Number.isFinite(p.score) ? Math.max(0, Math.floor(p.score)) : 0;
     const validWords = Number.isFinite(p.validAnswerCount) ? Math.max(0, Math.floor(p.validAnswerCount)) : 0;
     const scoreRow = await db.select({ currentStreak: playerScoresTable.currentStreak })
       .from(playerScoresTable).where(eq(playerScoresTable.playerId, p.playerId)).limit(1);
     const streak = scoreRow[0]?.currentStreak ?? 0;
-    await recordAuthoritativeSeasonEvents(p.playerId, [
-      { type: "play_game", value: 1 },
-      ...(won ? [{ type: "win_game", value: 1 }] : []),
-      ...(rawScore > 0 ? [{ type: "round_score", value: rawScore }] : []),
-      ...(validWords > 0 ? [{ type: "valid_words", value: validWords }] : []),
-      ...(streak > 0 ? [{ type: "streak", value: streak }] : []),
-    ], eventKey);
+    if ((existingSeasonEvent.rows ?? []).length === 0) {
+      await recordAuthoritativeSeasonEvents(p.playerId, [
+        { type: "play_game", value: 1 },
+        ...(won ? [{ type: "win_game", value: 1 }] : []),
+        ...(rawScore > 0 ? [{ type: "round_score", value: rawScore }] : []),
+        ...(validWords > 0 ? [{ type: "valid_words", value: validWords }] : []),
+        ...(streak > 0 ? [{ type: "streak", value: streak }] : []),
+      ], eventKey);
+    }
     await recordHalloweenEvent(p.playerId, "game_completed", `multiplayer:${String(room.roomCode).toUpperCase()}:${p.playerId}`, false);
   }
 }
