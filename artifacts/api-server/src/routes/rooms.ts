@@ -2811,6 +2811,8 @@ router.post("/:roomCode/stop", async (req, res) => {
     ).catch((err) => console.error("[halloween] trusted STOP scare events failed:", err));
   }
 
+  res.json(broadcastAndFormat(updated));
+
   // 🤖 If bots are in this room and haven't submitted yet, rush them so the
   // round can advance ~3s after STOP (mimics a human freezing then submitting).
   const updatedPlayers = parsePlayers(updated.playersJson);
