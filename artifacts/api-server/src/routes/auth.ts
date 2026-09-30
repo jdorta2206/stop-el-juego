@@ -252,7 +252,7 @@ function parseSignedState(
 function verifyAuthState(
   req: Request,
   res: Response,
-): { returnPath: string; returnOrigin: string; csrfFail: boolean } {
+): { returnPath: string; returnOrigin: string; csrfFail: boolean; authStartedAt: number | null } {
   const raw = (req.query?.["state"] ?? req.body?.["state"]) as string | undefined;
   const nonceCookie = req.cookies?.[OAUTH_NONCE_COOKIE] as string | undefined;
   if (nonceCookie) res.clearCookie(OAUTH_NONCE_COOKIE, NONCE_COOKIE_OPTS);
@@ -265,7 +265,7 @@ function verifyAuthState(
   // to the legacy decode here, or an attacker could downgrade to bypass the nonce.
   if (nonceCookie) {
     if (!signed) {
-      return { returnPath: "/", returnOrigin: APP_ORIGIN, csrfFail: true };
+      return { returnPath: "/", returnOrigin: APP_ORIGIN, csrfFail: true, authStartedAt: signed?.t ?? null };
     }
     const age = Date.now() - signed.t;
     const fresh = age <= STATE_TTL_MS && age >= -60_000;
@@ -278,9 +278,9 @@ function verifyAuthState(
       match = false;
     }
     if (!fresh || !match) {
-      return { returnPath: signed.r, returnOrigin: signed.o, csrfFail: true };
+      return { returnPath: signed.r, returnOrigin: signed.o, csrfFail: true, authStartedAt: signed.t };
     }
-    return { returnPath: signed.r, returnOrigin: signed.o, csrfFail: false };
+    return { returnPath: signed.r, returnOrigin: signed.o, csrfFail: false, authStartedAt: signed.t };
   }
 
   // No nonce cookie reached this host (cross-origin www/TWA, Apple form_post,
@@ -291,7 +291,7 @@ function verifyAuthState(
   }
   // Legacy / unsigned state — preserve prior behavior.
   const legacy = decodeAuthState(raw);
-  return { returnPath: legacy.returnPath, returnOrigin: legacy.returnOrigin, csrfFail: false };
+  return { returnPath: legacy.returnPath, returnOrigin: legacy.returnOrigin, csrfFail: false, authStartedAt: null };
 }
 
 // ── Dedup cache: prevent double-use of OAuth codes (mobile browsers fire callback twice) ──
@@ -371,6 +371,37 @@ router.post("/handoff", async (req: Request, res: Response) => {
   }
 });
 
+async function persistOAuthProfile(
+  playerId: string,
+  playerName: string,
+  profilePicture: string | null,
+  authStartedAt: number | null,
+): Promise<void> {
+  await db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${playerId}, 0))`);
+    const revoked = await tx.execute(sql`
+      SELECT revoked_at FROM revoked_player_ids WHERE player_id = ${playerId} LIMIT 1
+    `);
+    const revokedAt = (revoked.rows?.[0] as { revoked_at?: string | Date } | undefined)?.revoked_at;
+    if (revokedAt && authStartedAt != null) {
+      const revokedMs = new Date(revokedAt).getTime();
+      if (Number.isFinite(revokedMs) && revokedMs >= authStartedAt) {
+        throw new Error("Account was deleted during OAuth login");
+      }
+    }
+    await tx.insert(playerScoresTable).values({
+      playerId,
+      playerName,
+      avatarColor: "#f9a825",
+      profilePicture,
+    }).onConflictDoUpdate({
+      target: playerScoresTable.playerId,
+      set: { playerName, profilePicture, updatedAt: new Date() },
+    });
+    await tx.execute(sql`DELETE FROM revoked_player_ids WHERE player_id = ${playerId}`);
+  });
+}
+
 // ── GOOGLE ─────────────────────────────────────────────────────────────────────
 
 router.get("/google/start", (req: Request, res: Response) => {
@@ -398,7 +429,7 @@ router.get("/google/start", (req: Request, res: Response) => {
 
 router.get("/google/callback", async (req: Request, res: Response) => {
   const code  = req.query["code"]  as string | undefined;
-  const { returnPath, returnOrigin, csrfFail } = verifyAuthState(req, res);
+  const { returnPath, returnOrigin, csrfFail, authStartedAt } = verifyAuthState(req, res);
   if (csrfFail) return res.redirect(`${APP_ORIGIN}/?auth_error=csrf`);
   const error = req.query["error"] as string | undefined;
 
@@ -504,7 +535,7 @@ router.get("/facebook/start", (req: Request, res: Response) => {
 
 router.get("/facebook/callback", async (req: Request, res: Response) => {
   const code  = req.query["code"]  as string | undefined;
-  const { returnPath, returnOrigin, csrfFail } = verifyAuthState(req, res);
+  const { returnPath, returnOrigin, csrfFail, authStartedAt } = verifyAuthState(req, res);
   if (csrfFail) return res.redirect(`${APP_ORIGIN}/?auth_error=csrf`);
   const error = req.query["error"] as string | undefined;
 
@@ -595,7 +626,7 @@ router.get("/instagram/start", (req: Request, res: Response) => {
 
 router.get("/instagram/callback", async (req: Request, res: Response) => {
   const code  = req.query["code"]  as string | undefined;
-  const { returnPath, returnOrigin, csrfFail } = verifyAuthState(req, res);
+  const { returnPath, returnOrigin, csrfFail, authStartedAt } = verifyAuthState(req, res);
   if (csrfFail) return res.redirect(`${APP_ORIGIN}/?auth_error=csrf`);
   const error = req.query["error"] as string | undefined;
 
@@ -704,7 +735,7 @@ router.get("/apple/start", (req: Request, res: Response) => {
 // Apple sends a POST (form_post response_mode)
 router.post("/apple/callback", async (req: Request, res: Response) => {
   const code  = req.body?.["code"]  as string | undefined;
-  const { returnPath, returnOrigin, csrfFail } = verifyAuthState(req, res);
+  const { returnPath, returnOrigin, csrfFail, authStartedAt } = verifyAuthState(req, res);
   if (csrfFail) return res.redirect(`${APP_ORIGIN}/?auth_error=csrf`);
   const error = req.body?.["error"] as string | undefined;
 
@@ -809,7 +840,7 @@ router.get("/tiktok/start", (req: Request, res: Response) => {
 
 router.get("/tiktok/callback", async (req: Request, res: Response) => {
   const code  = req.query["code"]  as string | undefined;
-  const { returnPath, returnOrigin, csrfFail } = verifyAuthState(req, res);
+  const { returnPath, returnOrigin, csrfFail, authStartedAt } = verifyAuthState(req, res);
   if (csrfFail) return res.redirect(`${APP_ORIGIN}/?auth_error=csrf`);
   const error = req.query["error"] as string | undefined;
 
