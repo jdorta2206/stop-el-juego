@@ -662,7 +662,7 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
     void recordHalloweenEvent(
       p.playerId,
       "game_completed",
-      `multiplayer:${normalizedRoomCode}:${p.playerId}`,
+      `multiplayer:${roomId}:${p.playerId}`,
       false,
     ).catch((err) => console.error("[halloween] trusted multiplayer completion failed:", err));
 
