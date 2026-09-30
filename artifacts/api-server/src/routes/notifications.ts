@@ -341,6 +341,8 @@ router.post("/send-invite", inviteLimiter, async (req, res) => {
   const rows = await db.select().from(pushSubscriptionsTable)
     .where(and(
       eq(pushSubscriptionsTable.playerId, targetPlayerId),
+      eq(pushSubscriptionsTable.enabled, true),
+      sql`COALESCE(${pushSubscriptionsTable.mutedUntil}, 0) <= ${Date.now()}`,
       or(
         isNull(pushSubscriptionsTable.origin),
         not(like(pushSubscriptionsTable.origin, '%replit.app%')),
