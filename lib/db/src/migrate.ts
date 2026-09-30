@@ -96,7 +96,31 @@ export async function ensureIndexes(): Promise<void> {
     `INSERT INTO halloween_event_claims (event_year, player_id, event_key)
        SELECT hp.event_year, hp.player_id, key_value
        FROM halloween_progress hp
-       CROSS JOIN LATERAL jsonb_array_elements_text(hp.event_keys_json::jsonb) AS key_value
+       CROSS JOIN LATERAL jsonb_array_elements_text(
+         CASE
+           WHEN hp.event_keys_json ~ '^\\s*\\[.*\\]\\s*
+  ];
+
+  for (const stmt of stmts) {
+    try {
+      await db.execute(sql.raw(stmt));
+    } catch (err: any) {
+      // Every bootstrap statement is already idempotent via IF NOT EXISTS.
+      // Never hide an "already exists" error here: it can indicate a real
+      // schema conflict (for example, an existing index with the wrong
+      // definition) that must keep the API in a non-ready state.
+      console.error("[ensureIndexes] failed:", err?.message ?? err);
+      _indexesReady = false;
+      throw err;
+    }
+  }
+  _indexesReady = true;
+  console.log("[ensureIndexes] All indexes verified");
+}
+             THEN hp.event_keys_json::jsonb
+           ELSE '[]'::jsonb
+         END
+       ) AS key_value
        ON CONFLICT (event_year, player_id, event_key) DO NOTHING`,
   ];
 
