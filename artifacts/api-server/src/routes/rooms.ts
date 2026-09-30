@@ -574,10 +574,9 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string) {
     // Season Pass progression is server-authoritative. The client event
     // endpoint is intentionally closed (410), so multiplayer emits trusted
     // events directly from the final server result.
-    const validWords = p.answers && typeof p.answers === "object"
-      ? Object.values(p.answers as Record<string, unknown>)
-          .filter((word) => String(word ?? "").trim().length > 0).length
-      : 0;
+    // Use the server-validated count computed above, never the raw
+    // client answer count, for the "valid_words" mission.
+    const validWords = validAnswerCount;
     void recordAuthoritativeSeasonEvents(p.playerId, [
       { type: "play_game", value: 1 },
       ...(won ? [{ type: "win_game", value: 1 }] : []),
