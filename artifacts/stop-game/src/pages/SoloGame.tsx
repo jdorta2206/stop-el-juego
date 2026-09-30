@@ -336,7 +336,8 @@ export default function SoloGame() {
     let cancelled = false;
     const tryFlush = () => {
       if (typeof navigator !== "undefined" && navigator.onLine === false) return;
-      flushScoreOutbox((payload) => submitScoreMutation.mutateAsync({ data: payload }))
+      if (!player?.id) return;
+      flushScoreOutbox((payload) => submitScoreMutation.mutateAsync({ data: payload }), player.id)
         .then((res) => {
           if (cancelled || res.flushed <= 0) return;
           queryClient.invalidateQueries({ queryKey: ["/api/ranking/scores"] });
