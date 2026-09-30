@@ -2797,6 +2797,18 @@ router.post("/:roomCode/halloween-scare", halloweenScareLimiter, async (req, res
     if (!currentRoom ||
         currentRoom.status !== "playing" ||
         Number(currentRoom.currentRound) !== Number(room.currentRound)) {
+      // The DB transaction already persisted this exact cooldown before the
+      // cosmetic broadcast. If the round changed in the tiny post-commit
+      // window, roll back only this claim so the player can scare normally in
+      // the new round. Matching available_at prevents deleting a newer claim.
+      if (cooldownResult.cooldownUntil !== null) {
+        await db.execute(sql`
+          DELETE FROM halloween_scare_cooldowns
+          WHERE room_id = ${room.id}
+            AND player_id = ${playerId}
+            AND available_at = ${cooldownResult.cooldownUntil}
+        `);
+      }
       res.status(409).json({ error: "Round changed before Halloween scare was published" });
       return;
     }
