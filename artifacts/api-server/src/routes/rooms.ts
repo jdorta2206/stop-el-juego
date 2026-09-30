@@ -1642,6 +1642,7 @@ router.post("/:roomCode/leave", async (req, res) => {
   type LeaveOutcome =
     | { kind: "noop" }
     | { kind: "deleted" }
+    | { kind: "settlementPending" }
     | { kind: "updated"; row: any; newHostId: string | null };
 
   const outcome: LeaveOutcome = await db.transaction(async (tx) => {
@@ -1657,6 +1658,22 @@ router.post("/:roomCode/leave", async (req, res) => {
     const players = parsePlayers(playersJson);
     const leaving = players.find((p: any) => p.playerId === playerId);
     if (!leaving) return { kind: "noop" } as const;
+
+    // 🏆 A finished room is also the durable recovery snapshot for any
+    // settlement that has not yet been claimed. Never remove an eligible
+    // player (or delete the room) before that player's settlement claim
+    // exists; otherwise recovery can no longer reconstruct the final result.
+    if (status === "finished" && !leaving.isBot && leaving.loginMethod !== "guest") {
+      const claimRows = await tx
+        .select({ playerId: multiplayerSettlementClaimsPlayerId })
+        .from(multiplayerSettlementClaimsTable)
+        .where(and(
+          eq(multiplayerSettlementClaimsTable.roomId, raw.id),
+          eq(multiplayerSettlementClaimsTable.playerId, playerId),
+        ))
+        .limit(1);
+      if (claimRows.length === 0) return { kind: "settlementPending" } as const;
+    }
 
     // 👑 Mid-game leave: the player must actually be removed from the roster.
     // Keep every remaining player's score/answers untouched. If the host leaves,
