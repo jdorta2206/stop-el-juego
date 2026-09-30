@@ -927,7 +927,7 @@ export default function Room() {
         autoSubmit(false);
       }
     }, 250) as unknown as ReturnType<typeof setInterval>;
-  }, [stopAllTimers, autoSubmit, roundDurationFor, currentRound, currentLetter]);
+  }, [stopAllTimers, autoSubmit, roundDurationFor, currentRound, currentLetter, player?.id]);
 
   // Start freeze countdown (when STOP is called by someone).
   // isFreezingRef is set SYNCHRONOUSLY so the polling effect can check it
