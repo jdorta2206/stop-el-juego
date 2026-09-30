@@ -93,6 +93,11 @@ export async function ensureIndexes(): Promise<void> {
     `CREATE UNIQUE INDEX IF NOT EXISTS halloween_progress_player_year_uidx ON halloween_progress (player_id, event_year)`,
     `CREATE INDEX IF NOT EXISTS halloween_progress_year_games_idx ON halloween_progress (event_year, games_completed DESC)`,
     `CREATE TABLE IF NOT EXISTS halloween_event_claims (event_year integer NOT NULL, player_id text NOT NULL, event_key text NOT NULL, created_at timestamp NOT NULL DEFAULT NOW(), PRIMARY KEY (event_year, player_id, event_key))`,
+    `INSERT INTO halloween_event_claims (event_year, player_id, event_key)
+       SELECT hp.event_year, hp.player_id, key_value
+       FROM halloween_progress hp
+       CROSS JOIN LATERAL jsonb_array_elements_text(hp.event_keys_json::jsonb) AS key_value
+       ON CONFLICT (event_year, player_id, event_key) DO NOTHING`,
   ];
 
   for (const stmt of stmts) {
