@@ -1280,6 +1280,8 @@ router.post("/", async (req, res) => {
     roomReactions.delete(roomCode);
     roomPhrases.delete(roomCode);
     roomTyping.delete(roomCode);
+    roomHalloweenScares.delete(roomCode);
+    halloweenScareCooldowns.delete(roomCode);
 
     try {
       const inserted = await db.insert(roomsTable).values({
