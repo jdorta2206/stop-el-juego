@@ -628,7 +628,7 @@ function finalizeRoundState(room: any, players: any[]): {
     return players.map((p: any) => {
       if (p.isReady) return p;
       if (gracePassed) {
-        return { ...p, isReady: true, roundScore: 0, finishedAt: Date.now() };
+        return { ...p, isReady: true, roundScore: 0, validAnswerCount: 0, finishedAt: Date.now() };
       }
       if (presenceArmed && !isPlayerOnline(codeUpper, p.playerId)) {
         return { ...p, isReady: true, roundScore: 0, finishedAt: Date.now() };
@@ -1336,6 +1336,7 @@ router.post("/:roomCode/start", async (req, res) => {
     ...p,
     isReady: false,
     roundScore: 0,
+    validAnswerCount: 0,
     finishedAt: undefined,
     // Assign 1 random card at game start (round 1); keep it for subsequent rounds until used
     powerCard: newRound === 1
