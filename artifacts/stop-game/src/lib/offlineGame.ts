@@ -239,6 +239,7 @@ export function validateRoundOffline(req: OfflineValidateRequest): OfflineValida
 const OUTBOX_KEY = "stop-score-outbox-v1";
 
 export type OutboxScorePayload = {
+  submissionId?: string;
   playerId: string;
   playerName: string;
   avatarColor?: string;
@@ -292,7 +293,11 @@ const withOutboxLock: OutboxLock = async <T>(work: () => Promise<T>): Promise<T>
 
 export async function enqueueScoreOutbox(payload: OutboxScorePayload): Promise<OutboxEntry> {
   const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-  const entry: OutboxEntry = { id, payload, createdAt: Date.now() };
+  const entry: OutboxEntry = {
+    id,
+    payload: { ...payload, submissionId: payload.submissionId ?? id },
+    createdAt: Date.now(),
+  };
   return withOutboxLock(async () => {
     const cur = readOutbox();
     cur.push(entry);
@@ -321,7 +326,7 @@ export async function flushScoreOutbox(
         const [next, ...rest] = cur;
         writeOutbox(rest);
         try {
-          await submit(next.payload);
+          await submit({ ...next.payload, submissionId: next.payload.submissionId ?? next.id });
           flushed++;
         } catch {
           const after = readOutbox();
