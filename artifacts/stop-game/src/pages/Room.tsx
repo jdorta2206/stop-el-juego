@@ -289,6 +289,11 @@ export default function Room() {
       queryFn: async ({ signal }) => {
         const incoming = await getRoom(roomCode || "", { signal, ...(player?.id ? { headers: { "x-viewer-id": player.id } } : {}) });
         const current = queryClient.getQueryData<any>(roomQueryKey);
+        const incomingVersion = Number((incoming as any)?.roomVersion);
+        const currentVersion = Number(current?.roomVersion);
+        if (Number.isFinite(incomingVersion) && Number.isFinite(currentVersion)) {
+          return incomingVersion < currentVersion ? current : incoming;
+        }
         const incomingMs = new Date((incoming as any)?.updatedAt ?? 0).getTime();
         const currentMs = new Date(current?.updatedAt ?? 0).getTime();
         return Number.isFinite(incomingMs) && Number.isFinite(currentMs) && incomingMs < currentMs
@@ -325,6 +330,11 @@ export default function Room() {
         try {
           const data = JSON.parse(e.data);
           queryClient.setQueryData(getGetRoomQueryKey(code), (current: any) => {
+            const incomingVersion = Number(data?.roomVersion);
+            const currentVersion = Number(current?.roomVersion);
+            if (Number.isFinite(incomingVersion) && Number.isFinite(currentVersion)) {
+              return incomingVersion < currentVersion ? current : data;
+            }
             const incomingMs = new Date(data?.updatedAt ?? 0).getTime();
             const currentMs = new Date(current?.updatedAt ?? 0).getTime();
             return Number.isFinite(incomingMs) && Number.isFinite(currentMs) && incomingMs < currentMs
