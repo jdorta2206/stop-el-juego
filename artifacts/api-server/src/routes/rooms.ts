@@ -715,15 +715,49 @@ async function recoverMultiplayerAuxiliaryEffects(room: any, players: any[]): Pr
     return String(a.playerId || "").localeCompare(String(b.playerId || ""));
   });
   const winnerId = sorted[0]?.playerId;
+
+  // Recovery can run after later games have already updated player_scores.
+  // Reconstruct the streak as it stood on THIS finished game's date from the
+  // durable streak-day history instead of trusting the now-current streak.
+  function streakForSettlementDate(
+    streakDaysJson: unknown,
+    finishedAt: unknown,
+    fallback: number,
+  ): number {
+    if (typeof finishedAt !== "number" || !Number.isFinite(finishedAt)) return fallback;
+    let parsed: unknown;
+    try { parsed = JSON.parse(String(streakDaysJson ?? "[]")); } catch { return fallback; }
+    if (!Array.isArray(parsed)) return fallback;
+    const days = new Set(parsed.filter((d): d is string =>
+      typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d)
+    ));
+    const target = new Date(finishedAt).toISOString().slice(0, 10);
+    if (!days.has(target)) return fallback;
+
+    let count = 0;
+    let cursor = new Date(`${target}T00:00:00.000Z`);
+    while (days.has(cursor.toISOString().slice(0, 10))) {
+      count++;
+      cursor = new Date(cursor.getTime() - 86_400_000);
+    }
+    return count;
+  }
+
   for (const p of eligible) {
     const eventKey = `multiplayer:${room.id}:${p.playerId}`;
     const existingSeasonEvent = await db.execute(sql`SELECT 1 FROM season_event_claims WHERE event_key = ${eventKey} LIMIT 1`);
     const won = winnerId === p.playerId;
     const rawScore = Number.isFinite(p.score) ? Math.max(0, Math.floor(p.score)) : 0;
     const validWords = Number.isFinite(p.validAnswerCount) ? Math.max(0, Math.floor(p.validAnswerCount)) : 0;
-    const scoreRow = await db.select({ currentStreak: playerScoresTable.currentStreak })
-      .from(playerScoresTable).where(eq(playerScoresTable.playerId, p.playerId)).limit(1);
-    const streak = scoreRow[0]?.currentStreak ?? 0;
+    const scoreRow = await db.select({
+      currentStreak: playerScoresTable.currentStreak,
+      streakDaysJson: playerScoresTable.streakDaysJson,
+    }).from(playerScoresTable).where(eq(playerScoresTable.playerId, p.playerId)).limit(1);
+    const streak = streakForSettlementDate(
+      scoreRow[0]?.streakDaysJson,
+      p.finishedAt,
+      scoreRow[0]?.currentStreak ?? 0,
+    );
     if ((existingSeasonEvent.rows ?? []).length === 0) {
       await recordAuthoritativeSeasonEvents(p.playerId, [
         { type: "play_game", value: 1 },
