@@ -24,6 +24,21 @@ import {
 
 const router: IRouter = Router();
 
+// Settlement-claim table is also initialized eagerly so an API request that
+// reaches final settlement during a cold start never races the general DB
+// bootstrap. ensureIndexes() creates the same table idempotently as well.
+const multiplayerSettlementClaimsReady = db.execute(sql`
+  CREATE TABLE IF NOT EXISTS multiplayer_settlement_claims (
+    room_code text NOT NULL,
+    player_id text NOT NULL,
+    created_at timestamp NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (room_code, player_id)
+  )
+`).catch((err) => {
+  console.error("[rooms] failed to initialize multiplayer settlement claims:", err);
+  throw err;
+});
+
 // ── Round duration model ─────────────────────────────────────────────────
 // Mirrors the client's RANDOM_MIN/MAX so deadlines computed on the server
 // match what the client expects when it falls back to local rendering.
@@ -514,6 +529,7 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
   const today = new Date().toISOString().split("T")[0];
   const normalizedRoomCode = String(roomCode || "").toUpperCase();
 
+  await multiplayerSettlementClaimsReady;
   await Promise.allSettled(leaderboardPlayers.map(async (p: any) => {
     if (!p.playerId || p.loginMethod === "guest") return;
 
