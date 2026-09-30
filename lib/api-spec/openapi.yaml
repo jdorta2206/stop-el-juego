@@ -465,7 +465,6 @@ components:
             this is the anti-cheat guard. Omitted for offline submissions,
             which fall back to a flat absolute ceiling.
       required:
-        - submissionId
         - playerId
         - playerName
         - score
