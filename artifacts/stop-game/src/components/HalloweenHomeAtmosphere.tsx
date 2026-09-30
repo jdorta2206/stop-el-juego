@@ -324,15 +324,12 @@ export function HalloweenHomeAtmosphere({
 
         const startAudio = () => {
       controllerInstance.start();
-      markAudioStarted();
     };
     const resumeAudio = () => {
       controllerInstance.start();
-      markAudioStarted();
     };
     const activateFromHome = () => {
       controllerInstance.start();
-      markAudioStarted();
     };
     const events = ["pointerdown", "touchstart", "keydown"] as const;
     events.forEach((event) => window.addEventListener(event, startAudio, { once: true, passive: true }));
@@ -343,7 +340,6 @@ export function HalloweenHomeAtmosphere({
       events.forEach((event) => window.removeEventListener(event, startAudio));
       window.removeEventListener("visibilitychange", resumeAudio);
       window.removeEventListener("halloween:activate-audio", activateFromHome);
-      window.removeEventListener("halloween:audio-started", markAudioStarted);
       controllerInstance.stop();
       if (controllerRef.current === controllerInstance) controllerRef.current = null;
     };
