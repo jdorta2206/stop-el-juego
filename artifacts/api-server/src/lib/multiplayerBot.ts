@@ -304,6 +304,7 @@ export function clearBotTimers(code: string) {
 export function cleanupBotRoom(code: string) {
   clearBotTimers(code);
   clearPendingAnswers(code);
+  botAnswerGeneration.delete(code);
 }
 
 // ── Category resolution (server mirror of the client packs) ───────────────
