@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, followsTable, playerScoresTable } from "@workspace/db";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { verifyClaimedIdentity } from "../lib/playerAuth";
 
 const router: IRouter = Router();
@@ -126,44 +126,30 @@ router.post("/follow", async (req, res) => {
     return res.status(400).json({ error: "Cannot follow yourself" });
   }
 
-  const target = await db
-    .select({
-      playerId: playerScoresTable.playerId,
-      playerName: playerScoresTable.playerName,
-      profilePicture: playerScoresTable.profilePicture,
-      avatarColor: playerScoresTable.avatarColor,
-    })
-    .from(playerScoresTable)
-    .where(eq(playerScoresTable.playerId, followedId))
-    .limit(1);
+  const result = await db.transaction(async (tx) => {
+    const targetRows = await tx.execute(sql`SELECT player_id, player_name, profile_picture, avatar_color FROM player_scores WHERE player_id = ${followedId} FOR UPDATE`);
+    const target = (targetRows.rows as Array<{player_id:string;player_name:string;profile_picture:string|null;avatar_color:string|null}>)[0];
+    if (!target) return { notFound: true, alreadyFollowing: false };
 
-  if (!target.length) {
-    return res.status(404).json({ error: "Player not found" });
-  }
+    const existing = await tx.select().from(followsTable)
+      .where(and(eq(followsTable.followerId, followerId), eq(followsTable.followedId, followedId)));
+    if (existing.length > 0) return { notFound: false, alreadyFollowing: true };
 
-  const existing = await db
-    .select()
-    .from(followsTable)
-    .where(and(eq(followsTable.followerId, followerId), eq(followsTable.followedId, followedId)));
-
-  if (existing.length > 0) {
-    return res.json({ ok: true, alreadyFollowing: true });
-  }
-
-  await db
-    .insert(followsTable)
-    .values({
+    await tx.insert(followsTable).values({
       followerId,
-      followedId: target[0].playerId,
-      followedName: target[0].playerName,
-      followedPicture: target[0].profilePicture ?? null,
-      followedAvatarColor: target[0].avatarColor ?? "#e53e3e",
+      followedId: target.player_id,
+      followedName: target.player_name,
+      followedPicture: target.profile_picture ?? null,
+      followedAvatarColor: target.avatar_color ?? "#e53e3e",
       followedProvider: null,
-    })
-    .onConflictDoNothing({
+    }).onConflictDoNothing({
       target: [followsTable.followerId, followsTable.followedId],
     });
+    return { notFound: false, alreadyFollowing: false };
+  });
 
+  if (result.notFound) return res.status(404).json({ error: "Player not found" });
+  if (result.alreadyFollowing) return res.json({ ok: true, alreadyFollowing: true });
   return res.json({ ok: true });
 });
 
