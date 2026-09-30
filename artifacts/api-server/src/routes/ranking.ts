@@ -293,7 +293,7 @@ router.get("/monthly", async (_req, res) => {
     isPremium:     p.isPremium ?? false,
     achievementCount: parseAchievementCount(p.achievementsJson),
     title:         getTitle(Number(p.rank ?? (i + 1))),
-    rank:         i + 1,
+    rank:         Number(p.rank ?? (i + 1)),
   }));
 
   const now = new Date();
