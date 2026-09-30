@@ -14,6 +14,7 @@ import { applyAuthoritativeSeasonEventsInTransaction } from "./season";
 import { recordHalloweenEventInTransaction, isHalloweenPreviewAuthorized } from "./halloween";
 import {
   isHappyHourActiveForTzOffset,
+  isHappyHourActiveForTimeZone,
   HAPPY_HOUR_MULTIPLIER,
 } from "../lib/happyHour";
 
@@ -35,21 +36,20 @@ export function calcCoinGain(score: number, won: boolean, mode: string, isBonus:
   return base + winBonus + modeBonus;
 }
 
-export async function lookupPlayerTzOffset(playerId: string): Promise<number | null> {
+export async function lookupPlayerTimezone(playerId: string): Promise<{ timeZone: string | null; tzOffset: number | null }> {
   try {
     const rows = await db
-      .select({ tz: pushSubscriptionsTable.tzOffsetMinutes })
+      .select({ timeZone: pushSubscriptionsTable.timeZone, tz: pushSubscriptionsTable.tzOffsetMinutes })
       .from(pushSubscriptionsTable)
       .where(sql`${pushSubscriptionsTable.playerId} = ${playerId}
               AND ${pushSubscriptionsTable.enabled} = TRUE`)
-      .orderBy(desc(pushSubscriptionsTable.id))
+      .orderBy(sql`CASE WHEN ${pushSubscriptionsTable.timeZone} IS NOT NULL THEN 0 ELSE 1 END`)
       .limit(1);
-    return rows[0]?.tz ?? null;
+    return { timeZone: rows[0]?.timeZone ?? null, tzOffset: rows[0]?.tz ?? null };
   } catch {
-    return null;
+    return { timeZone: null, tzOffset: null };
   }
 }
-
 const router: IRouter = Router();
 
 const LEVEL_THRESHOLDS = [
@@ -583,9 +583,10 @@ router.post("/scores", scoreLimiter, async (req, res) => {
 
   const baseXpGain = calcXpGain(score, effectiveWon, effectiveMode);
   const baseCoinGain = calcCoinGain(score, effectiveWon, effectiveMode, isBonus);
-  const tzOffset = await lookupPlayerTzOffset(playerId);
-  const happyHourActive =
-    tzOffset !== null && isHappyHourActiveForTzOffset(tzOffset);
+  const playerTimezone = await lookupPlayerTimezone(playerId);
+  const happyHourActive = playerTimezone.timeZone
+    ? isHappyHourActiveForTimeZone(playerTimezone.timeZone)
+    : playerTimezone.tzOffset !== null && isHappyHourActiveForTzOffset(playerTimezone.tzOffset);
   const xpMultiplier = happyHourActive ? HAPPY_HOUR_MULTIPLIER : 1;
   const coinMultiplier = happyHourActive ? HAPPY_HOUR_MULTIPLIER : 1;
   const xpGain = baseXpGain * xpMultiplier;
