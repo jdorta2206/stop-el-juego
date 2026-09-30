@@ -89,6 +89,8 @@ export interface GameHistory {
   letter: string;
   mode: string;
   createdAt?: string;
+  updatedAt?: string;
+  roomVersion?: number;
 }
 
 export interface PlayerStats {
