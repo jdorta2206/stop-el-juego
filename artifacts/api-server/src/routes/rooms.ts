@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { roomsTable, playerScoresTable, gameHistoryTable } from "@workspace/db";
-import { eq, and, or, lt, inArray, sql } from "drizzle-orm";
+import { eq, and, or, lt, gt, inArray, sql } from "drizzle-orm";
 import { CreateRoomBody, JoinRoomBody, SubmitRoomResultsBody } from "@workspace/api-zod";
 import { calculateStreak, appendStreakDay, calcXpGain, calcCoinGain, calcLevel, lookupPlayerTzOffset } from "./ranking";
 import { recordTrustedAnalyticsEvent } from "./analytics";
@@ -858,7 +858,7 @@ async function sweepStuckRooms() {
     // settlement function for every finished room, including already-settled
     // games, causing avoidable DB/CPU load and repeated timezone lookups.
     const finishedRooms = await db.select().from(roomsTable)
-      .where(and(eq(roomsTable.status, "finished"), lt(roomsTable.updatedAt, new Date(Date.now() + 1))));
+      .where(and(eq(roomsTable.status, "finished"), gt(roomsTable.updatedAt, new Date(Date.now() - 6 * 60 * 60 * 1000))));
     for (const room of finishedRooms) {
       const players = parsePlayers(room.playersJson);
       const eligible = players.filter((p: any) => p && !p.isBot && p.playerId && p.loginMethod !== "guest");
