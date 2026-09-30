@@ -212,7 +212,17 @@ router.get("/rankings", async (req, res) => {
   const today = getTodayUTC();
 
   const results = await db
-    .select()
+    .select({
+      id: dailyResultsTable.id,
+      playerId: dailyResultsTable.playerId,
+      playerName: dailyResultsTable.playerName,
+      avatarColor: dailyResultsTable.avatarColor,
+      challengeDate: dailyResultsTable.challengeDate,
+      score: dailyResultsTable.score,
+      letter: dailyResultsTable.letter,
+      language: dailyResultsTable.language,
+      rank: sql<number>`RANK() OVER (ORDER BY ${dailyResultsTable.score} DESC)`,
+    })
     .from(dailyResultsTable)
     .where(
       and(
@@ -223,7 +233,7 @@ router.get("/rankings", async (req, res) => {
     .orderBy(desc(dailyResultsTable.score))
     .limit(10);
 
-  res.json({ date: today, rankings: results.map((r, i) => ({ ...r, rank: i + 1 })) });
+  res.json({ date: today, rankings: results });
 });
 
 export default router;
