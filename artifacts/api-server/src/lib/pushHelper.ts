@@ -8,6 +8,11 @@ const excludeReplitOrigin = or(
   not(like(pushSubscriptionsTable.origin, '%replit.app%')),
 );
 
+const enabledAndUnmuted = and(
+  eq(pushSubscriptionsTable.enabled, true),
+  sql`COALESCE(${pushSubscriptionsTable.mutedUntil}, 0) <= ${Date.now()}`,
+);
+
 const VAPID_PUBLIC  = process.env.VAPID_PUBLIC_KEY  || "";
 const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY || "";
 const VAPID_EMAIL   = process.env.VAPID_EMAIL       || "mailto:dorynex@stopjuegodepalabras.com";
@@ -139,7 +144,11 @@ export async function sendPushToPlayer(playerId: string, payload: PushPayload): 
   let rows: PushRow[];
   try {
     rows = await db.select().from(pushSubscriptionsTable)
-      .where(and(eq(pushSubscriptionsTable.playerId, playerId), excludeReplitOrigin));
+      .where(and(
+        eq(pushSubscriptionsTable.playerId, playerId),
+        excludeReplitOrigin,
+        enabledAndUnmuted,
+      ));
   } catch (error) {
     // A database read failure happens after the in-memory throttle is claimed.
     // Release that claim so a transient outage does not suppress later pushes.
@@ -190,8 +199,8 @@ export async function sendPushToAllSubscribers(
 
   const rows = language
     ? await db.select().from(pushSubscriptionsTable)
-        .where(and(eq(pushSubscriptionsTable.language, language), excludeReplitOrigin))
-    : await db.select().from(pushSubscriptionsTable).where(excludeReplitOrigin);
+        .where(and(eq(pushSubscriptionsTable.language, language), excludeReplitOrigin, enabledAndUnmuted))
+    : await db.select().from(pushSubscriptionsTable).where(and(excludeReplitOrigin, enabledAndUnmuted));
 
   const picked = dedupeByPlayer(rows);
   let sent = 0, failed = 0;
@@ -232,7 +241,7 @@ export async function sendLocalizedBroadcast(
   const fallback = payloadByLang[fallbackLang];
   if (!fallback) return { sent: 0, failed: 0, removed: 0 };
 
-  const rows = await db.select().from(pushSubscriptionsTable).where(excludeReplitOrigin);
+  const rows = await db.select().from(pushSubscriptionsTable).where(and(excludeReplitOrigin, enabledAndUnmuted));
   const picked = dedupeByPlayer(rows);
 
   let sent = 0, failed = 0;
