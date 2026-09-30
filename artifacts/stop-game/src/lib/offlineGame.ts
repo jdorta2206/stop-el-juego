@@ -314,6 +314,7 @@ let flushing = false;
 
 export async function flushScoreOutbox(
   submit: (payload: OutboxScorePayload) => Promise<unknown>,
+  currentPlayerId?: string,
 ): Promise<{ flushed: number; remaining: number }> {
   if (flushing) return { flushed: 0, remaining: readOutbox().length };
   flushing = true;
@@ -323,7 +324,11 @@ export async function flushScoreOutbox(
       while (true) {
         const cur = readOutbox();
         if (cur.length === 0) break;
-        const [next] = cur;
+        const nextIndex = currentPlayerId
+          ? cur.findIndex((entry) => entry.payload?.playerId === currentPlayerId)
+          : 0;
+        if (nextIndex < 0) break;
+        const next = cur[nextIndex];
         try {
           // Keep the entry durable until the server acknowledges the POST.
           // Removing it before the await could permanently lose the score if
