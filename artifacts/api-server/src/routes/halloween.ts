@@ -90,7 +90,8 @@ router.get("/progress", async (req: AuthedRequest, res) => {
     return;
   }
   const preview = isHalloweenPreviewAuthorized(req);
-  const year = getHalloweenEventYear(new Date(), preview);\n
+  const year = getHalloweenEventYear(new Date(), preview);
+
   if (year === null) {
     res.json({ active: false, year: new Date().getUTCFullYear(), progress: null });
     return;
