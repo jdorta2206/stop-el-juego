@@ -1152,16 +1152,22 @@ g[SWEEP_TIMER_KEY] = setInterval(() => { sweepStuckRooms().catch(() => {}); }, 3
 // Sanitize a formatted room for public spectator/overlay views.
 // Hide individual players' answers while a round is in progress to prevent cheating.
 function sanitizeRoomForSpectator(room: any) {
-  if (room.status === "playing" || room.status === "stopping" || room.status === "revealing" || room.status === "bluffvoting") {
-    return {
-      ...room,
-      players: (room.players ?? []).map((p: any) => ({
-        ...p,
-        // Guest playerId values act as bearer credentials for room access.
-        // Never expose them in a public spectator snapshot, otherwise a
-        // spectator could replay the id through GET /rooms/:code and obtain
-        // the full private player view.
-        playerId: undefined,
+  const activeRound =
+    room.status === "playing" ||
+    room.status === "stopping" ||
+    room.status === "revealing" ||
+    room.status === "bluffvoting";
+
+  return {
+    ...room,
+    // Guest playerId values act as bearer credentials for room access.
+    // Never expose player IDs in a public spectator snapshot, regardless of
+    // room status. A waiting/finished room is still a public endpoint.
+    hostId: undefined,
+    players: (room.players ?? []).map((p: any) => ({
+      ...p,
+      playerId: undefined,
+      ...(activeRound ? {
         answers: undefined,
         bluffedCategories: undefined,
         // Power cards are private player state. A public spectator must never
@@ -1170,16 +1176,16 @@ function sanitizeRoomForSpectator(room: any) {
         powerCardUsed: undefined,
         powerCardUsedRound: undefined,
         bluffImmune: undefined,
-      })),
+      } : {}),
+    })),
+    ...(activeRound ? {
       // Bluff votes are private game-state and must never be exposed to spectators.
       bluffData: undefined,
       typing: undefined,
       // formatRoom stores the stopper display name as "name", not "stopperName".
-      // Keep the public spectator payload consistent with that authoritative shape.
       stopper: room.stopper ? { stopperName: room.stopper.name } : null,
-    };
-  }
-  return room;
+    } : {}),
+  };
 }
 
 // GET /rooms/live — public rooms currently mid-game (for streamer directory)
