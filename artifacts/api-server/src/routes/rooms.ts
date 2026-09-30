@@ -3090,7 +3090,12 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
       if (!allowedCategories.has(normalizeWord(cat))) continue;
       if (typeof val === "string" && val.trim().length > 0) {
         const word = val.trim().slice(0, 80);
-        if (word.toUpperCase().startsWith(letter)) {
+        const normalizedWord = normalizeWord(word);
+        const normalizedLetter = normalizeWord(letter);
+        if (
+          normalizedWord.length >= 2 &&
+          normalizedWord.startsWith(normalizedLetter)
+        ) {
           safeAnswers[cat] = word;
         }
         // Answers starting with wrong letter are silently dropped
