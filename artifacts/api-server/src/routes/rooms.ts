@@ -2901,9 +2901,37 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
   // ─────────────────────────────────────────────────────────────────────────
 
   const players = existingPlayers;
-  const { playerId, bluffedCategories, bluffedWords } = body.data;
+  const { playerId } = body.data;
 
-  // Update this player's score and mark as ready; store bluff data
+  // Bluff declarations are client input and must be constrained to the
+  // authoritative categories for this exact room/round. Otherwise a malicious
+  // client can inject arbitrary category names and resolveBluffs() awards +20
+  // for each fabricated category with no votes.
+  const rawBluffedCategories = Array.isArray(body.data.bluffedCategories)
+    ? body.data.bluffedCategories
+    : [];
+  const uniqueBluffedCategories: string[] = [];
+  for (const category of rawBluffedCategories) {
+    if (typeof category !== "string") continue;
+    if (!allowedCategories.has(normalizeWord(category))) continue;
+    if (uniqueBluffedCategories.some((c) => normalizeWord(c) === normalizeWord(category))) continue;
+    uniqueBluffedCategories.push(category.slice(0, 80));
+    if (uniqueBluffedCategories.length >= AUTHORITATIVE_CATEGORY_CAP) break;
+  }
+  const rawBluffedWords = body.data.bluffedWords;
+  const serverBluffedWords: Record<string, string> = {};
+  if (rawBluffedWords && typeof rawBluffedWords === "object") {
+    for (const category of uniqueBluffedCategories) {
+      const value = rawBluffedWords[category];
+      if (typeof value === "string" && value.trim()) {
+        serverBluffedWords[category] = value.trim().slice(0, 80);
+      }
+    }
+  }
+  const serverBluffedCategories = uniqueBluffedCategories;
+
+  // Update this player's score and mark as ready; store only server-approved
+  // bluff data.
   const { answers } = body.data;
 
   // ── T002: Letter validation — strip answers that don't start with the correct letter
@@ -3052,8 +3080,8 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
         // ⏱️ Tie-breaker source-of-truth: who finished first wins ties
         finishedAt,
         wasStopper: isStopper,
-        bluffedCategories: bluffedCategories ?? [],
-        bluffedWords: bluffedWords ?? {},
+        bluffedCategories: serverBluffedCategories,
+        bluffedWords: serverBluffedWords,
       };
     }
     return p;
@@ -3150,8 +3178,8 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
         validAnswerCount,
         finishedAt,
         wasStopper: isStopper,
-        bluffedCategories: bluffedCategories ?? [],
-        bluffedWords: bluffedWords ?? {},
+        bluffedCategories: serverBluffedCategories,
+        bluffedWords: serverBluffedWords,
       };
     });
 
