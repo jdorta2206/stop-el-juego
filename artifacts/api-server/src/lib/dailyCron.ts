@@ -94,6 +94,17 @@ async function claimDailyLock(today: string, key: string = CRON_KEY): Promise<bo
  *   - last_played_date is exactly yesterday (UTC) — they haven't played today yet
  * Looks up each player's preferred language from their first push subscription.
  */
+// Per-recipient claim for scheduled pushes. A failed delivery releases only
+// that player's claim so a later cron tick can retry without resending to players
+// who already received the notification.
+async function claimPlayerNotification(today: string, key: string, playerId: string): Promise<boolean> {
+  return claimDailyLock(today, key + "_" + playerId);
+}
+
+async function releasePlayerNotification(today: string, key: string, playerId: string): Promise<void> {
+  await releaseDailyLock(today, key + "_" + playerId);
+}
+
 async function sendStreakRescueNotifications() {
   try {
     const today = new Date().toISOString().slice(0, 10);
@@ -306,32 +317,31 @@ async function sendPerUserDailyNotifications() {
     const candidates = rows.rows ?? [];
     if (candidates.length === 0) return;
 
-    // One cluster-wide claim per UTC 5-minute bucket. Every player whose
-    // local reminder time falls in this window is processed by the single
-    // instance that wins the claim; otherwise two Railway instances could
-    // send the same reminder concurrently.
     const today = utcNow.toISOString().slice(0, 10);
-    const utcBucket = Math.floor(utcMinutesOfDay / 5);
-    const claimed = await claimDailyLock(today, `daily_${today}_${utcBucket}`);
-    if (!claimed) return;
-
-    // Dedup per (player, lang) — a player may have multiple endpoints
-    // (e.g. phone + desktop). sendPushToPlayer hits every endpoint
-    // already, so we send the message once per player_id here.
+    // Claim independently per player: concurrent cron instances cannot both
+    // deliver, while a failed delivery can release its own claim for retry.
     const seen = new Set<string>();
     let sent = 0;
     for (const row of candidates) {
       if (seen.has(row.player_id)) continue;
       seen.add(row.player_id);
-      const lang = DAILY_VARIANTS[row.language] ? row.language : "es";
-      const msg = variantForToday(lang);
-      const n = await sendPushToPlayer(row.player_id, {
-        ...msg,
-        icon: "/images/icon-192.png",
-        badge: "/images/badge-96.png",
-        url: "/reto",
-      });
-      sent += n;
+      const claimKey = "daily_player";
+      if (!await claimPlayerNotification(today, claimKey, row.player_id)) continue;
+      try {
+        const lang = DAILY_VARIANTS[row.language] ? row.language : "es";
+        const msg = variantForToday(lang);
+        const n = await sendPushToPlayer(row.player_id, {
+          ...msg,
+          icon: "/images/icon-192.png",
+          badge: "/images/badge-96.png",
+          url: "/reto",
+        });
+        sent += n;
+        if (n === 0) await releasePlayerNotification(today, claimKey, row.player_id);
+      } catch (error) {
+        await releasePlayerNotification(today, claimKey, row.player_id);
+        console.error("[dailyCron] daily notification failed:", error);
+      }
     }
     console.log(`[dailyCron] Per-user daily sent: ${sent} (candidates: ${candidates.length})`);
   } catch (e) {
@@ -416,25 +426,28 @@ async function sendHappyHourNotifications() {
       const candidates = rows.rows ?? [];
       if (candidates.length === 0) continue;
 
-      // Claim only after the candidate query succeeds. A transient DB failure
-      // must not consume the bucket and suppress a later retry.
-      const claimed = await claimDailyLock(today, lockKey);
-      if (!claimed) continue;
-
       const seen = new Set<string>();
       let sent = 0;
       for (const row of candidates) {
         if (seen.has(row.player_id)) continue;
         seen.add(row.player_id);
-        const lang = HAPPY_HOUR_MSGS[slot.key][row.language] ? row.language : "es";
-        const msg = HAPPY_HOUR_MSGS[slot.key][lang];
-        const n = await sendPushToPlayer(row.player_id, {
-          ...msg,
-          icon: "/images/icon-192.png",
-          badge: "/images/badge-96.png",
-          url: slot.url,
-        });
-        sent += n;
+        const claimKey = "hh_" + slot.key;
+        if (!await claimPlayerNotification(today, claimKey, row.player_id)) continue;
+        try {
+          const lang = HAPPY_HOUR_MSGS[slot.key][row.language] ? row.language : "es";
+          const msg = HAPPY_HOUR_MSGS[slot.key][lang];
+          const n = await sendPushToPlayer(row.player_id, {
+            ...msg,
+            icon: "/images/icon-192.png",
+            badge: "/images/badge-96.png",
+            url: slot.url,
+          });
+          sent += n;
+          if (n === 0) await releasePlayerNotification(today, claimKey, row.player_id);
+        } catch (error) {
+          await releasePlayerNotification(today, claimKey, row.player_id);
+          console.error("[happyHourCron] notification failed:", error);
+        }
       }
       console.log(`[happyHourCron] slot=${slot.key} sent=${sent} candidates=${candidates.length}`);
     }
