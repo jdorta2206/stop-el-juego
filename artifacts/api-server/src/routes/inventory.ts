@@ -5,16 +5,11 @@ import { requirePlayerIdentity, verifyClaimedIdentity, type AuthedRequest } from
 import { resolveCosmetic, shopItem, SHOP_ITEMS } from "../lib/inventoryCatalog";
 import { computeTitleStats, evaluateTitles, isTitleUnlocked } from "../lib/titleCatalog";
 import { getWeeklyShop, dealPriceFor, isWeeklyShopItem } from "../lib/dailyShop";
-import { isHalloweenPreviewAuthorized } from "./halloween";
+import { isHalloweenPreviewAuthorized, getHalloweenEventYear } from "./halloween";
 
 const HALLOWEEN_SHOP_MARKER = "_halloween_";
-const HALLOWEEN_START_MS = Date.parse("2026-10-15T00:00:00Z");
-const HALLOWEEN_END_MS = Date.parse("2026-11-03T00:00:00Z");
-
 function isHalloweenActive(now: Date = new Date(), preview = false): boolean {
-  if (preview) return true;
-  const ms = now.getTime();
-  return ms >= HALLOWEEN_START_MS && ms < HALLOWEEN_END_MS;
+  return getHalloweenEventYear(now, preview) !== null;
 }
 
 function isHalloweenShopItem(itemId: string): boolean {
