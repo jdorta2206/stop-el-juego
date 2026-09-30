@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, indexesReady } from "@workspace/db";
-import { verifyClaimedIdentity, type AuthedRequest } from "../lib/playerAuth";
+import { verifyClaimedIdentity, isLoggedInId, type AuthedRequest } from "../lib/playerAuth";
 import { sql } from "drizzle-orm";
 
 const router: IRouter = Router();
@@ -90,7 +90,14 @@ router.get("/progress", async (req: AuthedRequest, res) => {
     return;
   }
   const preview = isHalloweenPreviewAuthorized(req);
-  const year = getHalloweenEventYear(new Date(), preview);
+  const year = getHalloweenEventYear(new Date(), preview);\n  // Guests are intentionally excluded from persistent Halloween rewards/progress.
+  // Do not create rows for arbitrary UUIDs: guest identities are tokenless by design,
+  // so accepting any UUID here would let an attacker fill halloween_progress at will.
+  if (!isLoggedInId(playerId)) {
+    res.json({ active: true, year, progress: null, rewards: REWARD_RULES });
+    return;
+  }
+
   if (year === null) {
     res.json({ active: false, year: new Date().getUTCFullYear(), progress: null });
     return;
