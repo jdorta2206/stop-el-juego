@@ -1,5 +1,7 @@
 import { Router, type IRouter } from "express";
 import { stripeStorage } from "../stripeStorage";
+import { db, playerScoresTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
 import { stripeService } from "../stripeService";
 import { getUncachableStripeClient, isStripeReady } from "../stripeClient";
 import { verifyClaimedIdentity } from "../lib/playerAuth";
@@ -10,6 +12,7 @@ import {
   WORLD_CUP_PACK_CURRENCY,
   WORLD_CUP_PACK_NAME,
   grantWorldCupPack,
+  worldCupPackItemIds,
 } from "../lib/worldCupPack";
 
 const router: IRouter = Router();
@@ -146,6 +149,33 @@ router.post("/checkout", async (req, res) => {
     }
 
     const player = await stripeStorage.getPlayer(playerId);
+
+    // The World Cup pack is a one-time bundle. Enforce ownership server-side,
+    // not only in the UI, so a direct/replayed API call cannot create another
+    // paid Checkout session after the player already owns every pack item.
+    const scoreRows = await db
+      .select({ inventoryJson: playerScoresTable.inventoryJson })
+      .from(playerScoresTable)
+      .where(eq(playerScoresTable.playerId, playerId))
+      .limit(1);
+    const rawInventory = scoreRows[0]?.inventoryJson ?? "{}";
+    let ownedIds = new Set<string>();
+    try {
+      const parsed = JSON.parse(rawInventory) as Record<string, unknown>;
+      ownedIds = new Set([
+        ...(Array.isArray(parsed.avatars) ? parsed.avatars.filter((v): v is string => typeof v === "string") : []),
+        ...(Array.isArray(parsed.frames) ? parsed.frames.filter((v): v is string => typeof v === "string") : []),
+        ...(Array.isArray(parsed.backgrounds) ? parsed.backgrounds.filter((v): v is string => typeof v === "string") : []),
+      ]);
+    } catch {
+      // Corrupt inventory cannot prove ownership; allow checkout and let the
+      // idempotent grant repair the inventory after a genuine payment.
+    }
+    const packItemIds = worldCupPackItemIds();
+    if (packItemIds.length > 0 && packItemIds.every((id) => ownedIds.has(id))) {
+      return res.status(409).json({ error: "World Cup pack already owned" });
+    }
+
     let customerId = player?.stripeCustomerId || null;
 
     // Stripe customers can be deleted outside this application. Never send a
