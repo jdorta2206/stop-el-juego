@@ -42,7 +42,11 @@ function migrateLegacy(playerId?: string) {
 async function syncFromServer(playerId: string, signal?: AbortSignal): Promise<CollectionMap> {
   if (playerId.startsWith("guest_")) return {};
   try {
-    const r = await fetch(`${getApiUrl()}/api/ranking/progress/${playerId}`, { signal });
+    const r = await fetch(`${getApiUrl()}/api/ranking/progress/${playerId}`, {
+      credentials: "include",
+      headers: authHeaders(),
+      signal,
+    });
     if (!r.ok) return {};
     const data = await r.json();
     return data.collectedWords && typeof data.collectedWords === "object"
