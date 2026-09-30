@@ -207,8 +207,8 @@ router.get("/weekly", async (req, res) => {
     currentStreak: Number(p.currentStreak ?? 0),
     isPremium:     p.isPremium ?? false,
     achievementCount: parseAchievementCount(p.achievementsJson),
-    title:         getTitle(i + 1),
-    rank:          i + 1,
+    title:         getTitle(Number(p.rank ?? (i + 1))),
+    rank:          Number(p.rank ?? (i + 1)),
   }));
 
   const now = new Date();
@@ -292,7 +292,7 @@ router.get("/monthly", async (_req, res) => {
     currentStreak: Number(p.currentStreak ?? 0),
     isPremium:     p.isPremium ?? false,
     achievementCount: parseAchievementCount(p.achievementsJson),
-    title:         getTitle(i + 1),
+    title:         getTitle(Number(p.rank ?? (i + 1))),
     rank:         i + 1,
   }));
 
