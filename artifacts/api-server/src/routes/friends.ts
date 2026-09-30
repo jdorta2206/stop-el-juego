@@ -126,6 +126,21 @@ router.post("/follow", async (req, res) => {
     return res.status(400).json({ error: "Cannot follow yourself" });
   }
 
+  const target = await db
+    .select({
+      playerId: playerScoresTable.playerId,
+      playerName: playerScoresTable.playerName,
+      profilePicture: playerScoresTable.profilePicture,
+      avatarColor: playerScoresTable.avatarColor,
+    })
+    .from(playerScoresTable)
+    .where(eq(playerScoresTable.playerId, followedId))
+    .limit(1);
+
+  if (!target.length) {
+    return res.status(404).json({ error: "Player not found" });
+  }
+
   const existing = await db
     .select()
     .from(followsTable)
@@ -139,11 +154,11 @@ router.post("/follow", async (req, res) => {
     .insert(followsTable)
     .values({
       followerId,
-      followedId,
-      followedName,
-      followedPicture: followedPicture || null,
-      followedAvatarColor: followedAvatarColor || "#e53e3e",
-      followedProvider: followedProvider || null,
+      followedId: target[0].playerId,
+      followedName: target[0].playerName,
+      followedPicture: target[0].profilePicture ?? null,
+      followedAvatarColor: target[0].avatarColor ?? "#e53e3e",
+      followedProvider: null,
     })
     .onConflictDoNothing({
       target: [followsTable.followerId, followsTable.followedId],
