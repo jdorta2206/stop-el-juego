@@ -12,6 +12,7 @@ function createController(): HalloweenAmbientController {
   let musicTimer: number | null = null;
   let stormTimer: number | null = null;
   let started = false;
+  let starting = false;
   let step = 0;
   let musicAudio: HTMLAudioElement | null = null;
   let stormAudio: HTMLAudioElement | null = null;
@@ -190,7 +191,8 @@ function createController(): HalloweenAmbientController {
   };
 
   const start = () => {
-    if (started || typeof window === "undefined") return;
+    if (started || starting || typeof window === "undefined") return;
+    starting = true;
     const AC = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!AC) return;
 
@@ -213,6 +215,7 @@ function createController(): HalloweenAmbientController {
       void ctx.resume().then(() => {
         if (!ctx || !master || !stormMaster) return;
         started = true;
+        starting = false;
         const now = ctx.currentTime;
         master.gain.cancelScheduledValues(now);
         master.gain.setTargetAtTime(0.18, now, 0.8);
@@ -289,6 +292,7 @@ function createController(): HalloweenAmbientController {
     master = null;
     stormMaster = null;
     started = false;
+    starting = false;
     step = 0;
   };
 
