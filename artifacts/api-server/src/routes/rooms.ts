@@ -2783,8 +2783,10 @@ router.post("/:roomCode/halloween-scare", halloweenScareLimiter, async (req, res
     const [currentRoom] = await db.select().from(roomsTable)
       .where(eq(roomsTable.id, room.id))
       .limit(1);
-    if (!currentRoom || currentRoom.status !== "playing") {
-      res.status(409).json({ error: "Round ended before Halloween scare was published" });
+    if (!currentRoom ||
+        currentRoom.status !== "playing" ||
+        Number(currentRoom.currentRound) !== Number(room.currentRound)) {
+      res.status(409).json({ error: "Round changed before Halloween scare was published" });
       return;
     }
 
