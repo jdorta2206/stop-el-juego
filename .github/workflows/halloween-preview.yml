@@ -11,6 +11,7 @@ on:
       - feature/halloween-solo-surprise
       - fix/halloween-production-ready
       - fix/halloween-complete-preview
+      - halloween-2026-final
   pull_request:
     branches:
       - feature/halloween-2026
@@ -68,28 +69,17 @@ jobs:
                   super().__init__(*args, directory=DIST, **kwargs)
               def _proxy(self):
                   target = urlsplit(self.path)
-                  path = target.path + (("?" + target.query) if target.query else "")
+                  path = target.path + (("?"+target.query) if target.query else "")
                   length = int(self.headers.get("Content-Length", "0") or "0")
                   body = self.rfile.read(length) if length else None
                   halloween_category_map = {
-                      "Disfraz de miedo": "Objeto",
-                      "Monstruo": "Animal",
-                      "Película de terror": "Película",
-                      "Cosa de una casa encantada": "Objeto",
-                      "Criatura sobrenatural": "Animal",
-                      "Scary costume": "Object",
-                      "Monster": "Animal",
-                      "Horror movie": "Movie",
-                      "Haunted house item": "Object",
-                      "Supernatural creature": "Animal",
-                      "Fantasia assustadora": "Objeto",
-                      "Monstro": "Animal",
-                      "Filme de terror": "Filme",
-                      "Coisa de uma casa assombrada": "Objeto",
-                      "Déguisement effrayant": "Objet",
-                      "Monstre": "Animal",
-                      "Film d'horreur": "Film",
-                      "Objet d'une maison hantée": "Objet",
+                      "Disfraz de miedo": "Objeto", "Monstruo": "Animal", "Película de terror": "Película",
+                      "Cosa de una casa encantada": "Objeto", "Criatura sobrenatural": "Animal",
+                      "Scary costume": "Object", "Monster": "Animal", "Horror movie": "Movie",
+                      "Haunted house item": "Object", "Supernatural creature": "Animal",
+                      "Fantasia assustadora": "Objeto", "Monstro": "Animal", "Filme de terror": "Filme",
+                      "Coisa de uma casa assombrada": "Objeto", "Déguisement effrayant": "Objet",
+                      "Monstre": "Animal", "Film d'horreur": "Film", "Objet d'une maison hantée": "Objet",
                       "Créature surnaturelle": "Animal",
                   }
                   original_categories = {}
@@ -106,22 +96,14 @@ jobs:
                           length = len(body)
                       except Exception:
                           pass
-                  headers = {k: v for k, v in self.headers.items()
-                             if k.lower() not in {"host","content-length","origin","referer","connection"}}
+                  headers = {k:v for k,v in self.headers.items() if k.lower() not in {"host","content-length","origin","referer","connection"}}
                   headers["Host"] = UPSTREAM
                   headers["X-Halloween-Preview"] = "1"
-                  # Solo AI uses GET /game/peek. Translate the visible
-                  # Halloween category to a production-compatible category
-                  # only inside this preview proxy.
                   if path.startswith("/api/game/peek"):
                       from urllib.parse import parse_qsl, urlencode
                       query_items = parse_qsl(target.query, keep_blank_values=True)
-                      mapped_items = []
-                      for key, value in query_items:
-                          if key == "category":
-                              value = halloween_category_map.get(value, value)
-                          mapped_items.append((key, value))
-                      path = target.path + ("?" + urlencode(mapped_items) if mapped_items else "")
+                      mapped_items = [(key, halloween_category_map.get(value, value) if key=="category" else value) for key,value in query_items]
+                      path = target.path + (("?"+urlencode(mapped_items)) if mapped_items else "")
                   host = UPSTREAM
                   for _ in range(MAX_REDIRECTS + 1):
                       conn = http.client.HTTPSConnection(host, timeout=90)
@@ -144,15 +126,11 @@ jobs:
                               data=resp.read()
                               if original_categories and content_type.startswith("application/json"):
                                   try:
-                                      result = json.loads(data.decode("utf-8"))
+                                      result=json.loads(data.decode("utf-8"))
                                       if isinstance(result.get("results"), dict):
-                                          result["results"] = {
-                                              original_categories.get(key, key): value
-                                              for key, value in result["results"].items()
-                                          }
-                                      data = json.dumps(result).encode("utf-8")
-                                  except Exception:
-                                      pass
+                                          result["results"]={original_categories.get(key,key):value for key,value in result["results"].items()}
+                                      data=json.dumps(result).encode("utf-8")
+                                  except Exception: pass
                               self.send_header("Content-Length",str(len(data)))
                               self.end_headers()
                               if data: self.wfile.write(data); self.wfile.flush()
@@ -162,12 +140,11 @@ jobs:
                               self.send_response(resp.status,resp.reason); self.end_headers(); return
                           next_url=urlsplit(location)
                           host=next_url.hostname or host
-                          path=next_url.path + (("?" + next_url.query) if next_url.query else "")
+                          path=next_url.path + (("?"+next_url.query) if next_url.query else "")
                           if next_url.scheme and next_url.scheme!="https":
                               self.send_error(502,"Unsupported upstream redirect"); return
                           headers["Host"]=host
-                      finally:
-                          conn.close()
+                      finally: conn.close()
                   self.send_error(508,"Too many upstream redirects")
               def do_GET(self):
                   if self.path.startswith("/api/"): return self._proxy()
@@ -215,19 +192,16 @@ jobs:
           RESPONSE=$(curl -fsS --max-time 30 -H "Accept: application/json" http://127.0.0.1:4173/api/rooms/public)
           echo "$RESPONSE"
           echo "$RESPONSE" | grep -q '"rooms"'
-
       - name: Smoke test create, join and scoreboard through preview proxy
         run: |
           set -euo pipefail
           A="guest_preview_${GITHUB_RUN_ID}_a"
           B="guest_preview_${GITHUB_RUN_ID}_b"
-          CREATE=$(curl -fsS --max-time 30 -H "Content-Type: application/json" -X POST http://127.0.0.1:4173/api/rooms \
-            --data "{\"hostId\":\"$A\",\"hostName\":\"Preview A\",\"avatarColor\":\"#f9a825\",\"maxRounds\":3,\"language\":\"es\",\"loginMethod\":\"guest\",\"isPublic\":true,\"gameMode\":\"classic\",\"maxPlayers\":4}")
+          CREATE=$(curl -fsS --max-time 30 -H "Content-Type: application/json" -X POST http://127.0.0.1:4173/api/rooms --data "{\"hostId\":\"$A\",\"hostName\":\"Preview A\",\"avatarColor\":\"#f9a825\",\"maxRounds\":3,\"language\":\"es\",\"loginMethod\":\"guest\",\"isPublic\":true,\"gameMode\":\"classic\",\"maxPlayers\":4}")
           echo "$CREATE"
           CODE=$(python3 -c 'import json,sys; print(json.loads(sys.stdin.read())["roomCode"])' <<<"$CREATE")
           test -n "$CODE"
-          JOIN=$(curl -fsS --max-time 30 -H "Content-Type: application/json" -X POST "http://127.0.0.1:4173/api/rooms/$CODE/join" \
-            --data "{\"playerId\":\"$B\",\"playerName\":\"Preview B\",\"avatarColor\":\"#42a5f5\",\"loginMethod\":\"guest\"}")
+          JOIN=$(curl -fsS --max-time 30 -H "Content-Type: application/json" -X POST "http://127.0.0.1:4173/api/rooms/$CODE/join" --data "{\"playerId\":\"$B\",\"playerName\":\"Preview B\",\"avatarColor\":\"#42a5f5\",\"loginMethod\":\"guest\"}")
           echo "$JOIN"
           echo "$JOIN" | grep -q "\"roomCode\":\"$CODE\""
           ROOM=$(curl -fsS --max-time 30 "http://127.0.0.1:4173/api/rooms/$CODE?viewerId=$A")
