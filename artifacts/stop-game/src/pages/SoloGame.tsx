@@ -368,7 +368,7 @@ export default function SoloGame() {
   // Re-read categories when language changes (only if not daily mode)
   useEffect(() => {
     if (!isDailyMode) {
-      setCategories(applyHalloweenCategory(packCats(), lang, { enabled: !packId.startsWith("custom:") }));
+      setCategories(applyHalloweenCategory(packCats(), lang, { enabled: packId === "classic" && !isDailyMode && !isQuickMode && !isChaosMode && !isRandomMode }));
     }
   }, [lang, isDailyMode, packId, customPacksLoading]);
 
