@@ -1255,7 +1255,7 @@ router.patch("/:roomCode/visibility", async (req, res) => {
     res.status(400).json({ error: "Missing hostId or isPublic" }); return;
   }
   // 🔒 Bind to the token first so a leaked hostId can't be replayed by a third party.
-  if (!verifyClaimedIdentity(req, hostId)) {
+  if (!await verifyClaimedIdentity(req, hostId)) {
     res.status(403).json({ error: "Identity verification failed" }); return;
   }
   const rows = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, roomCode));
@@ -1316,7 +1316,7 @@ router.post("/", async (req, res) => {
 
   const { hostId, hostName, avatarColor, picture, loginMethod, maxRounds, language, isPublic } = body.data;
   // 🔒 A logged-in account can only create a room AS ITSELF. Guests (UUID ids) pass.
-  if (!verifyClaimedIdentity(req, hostId)) {
+  if (!await verifyClaimedIdentity(req, hostId)) {
     res.status(403).json({ error: "Identity verification failed" }); return;
   }
   const gameMode = (body.data as any).gameMode ?? "classic";
@@ -1469,7 +1469,7 @@ router.post("/:roomCode/join", roomJoinLimiter, async (req, res) => {
   const code = roomCode.toUpperCase();
   const { playerId, playerName, avatarColor, picture, loginMethod } = body.data;
   // 🔒 A logged-in account can only join AS ITSELF. Guests (UUID ids) pass.
-  if (!verifyClaimedIdentity(req, playerId)) {
+  if (!await verifyClaimedIdentity(req, playerId)) {
     res.status(403).json({ error: "Identity verification failed" }); return;
   }
   const joinerPremium = await isPlayerPremium(playerId);
@@ -1614,7 +1614,7 @@ router.post("/:roomCode/start", async (req, res) => {
     return;
   }
   // 🔒 Bind a logged-in host to its real identity (guests pass through).
-  if (!verifyClaimedIdentity(req, hostId)) {
+  if (!await verifyClaimedIdentity(req, hostId)) {
     res.status(403).json({ error: "Identity verification failed" }); return;
   }
   // 🔁 Idempotency: /start is only valid from the lobby ("waiting") state.
@@ -1727,7 +1727,7 @@ router.post("/:roomCode/add-bot", async (req, res) => {
   const { hostId } = (req.body ?? {}) as { hostId?: string };
   const code = roomCode.toUpperCase();
   // 🔒 Bind a logged-in host to its real identity (guests pass through).
-  if (!verifyClaimedIdentity(req, hostId)) {
+  if (!await verifyClaimedIdentity(req, hostId)) {
     res.status(403).json({ error: "Identity verification failed" }); return;
   }
 
@@ -1797,7 +1797,7 @@ router.post("/:roomCode/leave", async (req, res) => {
   // third party who knows a member's id from force-removing them or hijacking
   // the host migration. Token rides via the auth cookie (sendBeacon/keepalive)
   // or x-stop-token header. Fails open for guests / unconfigured auth.
-  if (!verifyClaimedIdentity(req, playerId)) {
+  if (!await verifyClaimedIdentity(req, playerId)) {
     res.status(403).json({ error: "Identity verification failed" }); return;
   }
 
@@ -1973,7 +1973,7 @@ router.post("/:roomCode/leave", async (req, res) => {
 router.post("/:roomCode/react", writeLimiter, async (req, res) => {
   const code = paramStr(req.params.roomCode).toUpperCase();
   const { emoji, playerId, playerName } = req.body as { emoji: string; playerId?: string; playerName: string };
-  if (!playerId || !verifyClaimedIdentity(req, playerId)) {
+  if (!playerId || !await verifyClaimedIdentity(req, playerId)) {
     res.status(403).json({ error: "Identity verification failed" }); return;
   }
   const [room] = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, code)).limit(1);
@@ -2007,7 +2007,7 @@ router.post("/:roomCode/category-pack", async (req, res) => {
   };
   const { hostId, pack } = body;
   // 🔒 Bind to the token first so a leaked hostId can't be replayed by a third party.
-  if (!verifyClaimedIdentity(req, hostId)) {
+  if (!await verifyClaimedIdentity(req, hostId)) {
     res.status(403).json({ error: "Identity verification failed" }); return;
   }
   const rooms = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, code)).limit(1);
@@ -2078,7 +2078,7 @@ router.post("/:roomCode/use-card", async (req, res) => {
   const { playerId } = req.body as { playerId: string };
 
   // 🔒 A logged-in account can only use a card AS ITSELF (guests pass through).
-  if (!verifyClaimedIdentity(req, playerId)) {
+  if (!await verifyClaimedIdentity(req, playerId)) {
     res.status(403).json({ error: "Identity verification failed" }); return;
   }
 
@@ -2253,7 +2253,7 @@ router.post("/:roomCode/typing", writeLimiter, async (req, res) => {
     round?: number;
   };
   if (!playerId) { res.status(400).json({ error: "Missing playerId" }); return; }
-  if (!verifyClaimedIdentity(req, playerId)) { res.status(403).json({ error: "Identity verification failed" }); return; }
+  if (!await verifyClaimedIdentity(req, playerId)) { res.status(403).json({ error: "Identity verification failed" }); return; }
 
   // Typing presence and live drafts are room-scoped state. A valid identity
   // must also be a current member, otherwise an outsider could inject fake
@@ -2307,7 +2307,7 @@ router.get("/:roomCode/draft", async (req, res) => {
   const code = paramStr(req.params.roomCode).toUpperCase();
   const playerId = (req.query["playerId"] as string) || "";
   if (!playerId) { res.status(400).json({ error: "playerId required" }); return; }
-  if (!verifyClaimedIdentity(req, playerId)) { res.status(403).json({ error: "Identity verification failed" }); return; }
+  if (!await verifyClaimedIdentity(req, playerId)) { res.status(403).json({ error: "Identity verification failed" }); return; }
 
   // Auth: caller must actually be in the room (private rooms expose nothing).
   const [roomRow] = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, code)).limit(1);
@@ -2336,7 +2336,7 @@ router.post("/:roomCode/spy", writeLimiter, async (req, res) => {
   const code = paramStr(req.params.roomCode).toUpperCase();
   const { playerId } = req.body as { playerId: string };
   if (!playerId) { res.status(400).json({ error: "Missing playerId" }); return; }
-  if (!verifyClaimedIdentity(req, playerId)) { res.status(403).json({ error: "Identity verification failed" }); return; }
+  if (!await verifyClaimedIdentity(req, playerId)) { res.status(403).json({ error: "Identity verification failed" }); return; }
 
   // Auth: caller must actually be in the room AND the round must be live
   const rooms = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, code)).limit(1);
@@ -2459,7 +2459,7 @@ router.post("/:roomCode/funvote", writeLimiter, async (req, res) => {
   if (!playerId || !votedPlayerId || !category || typeof round !== "number") {
     res.status(400).json({ error: "Missing fields" }); return;
   }
-  if (!verifyClaimedIdentity(req, playerId)) { res.status(403).json({ error: "Identity verification failed" }); return; }
+  if (!await verifyClaimedIdentity(req, playerId)) { res.status(403).json({ error: "Identity verification failed" }); return; }
   if (playerId === votedPlayerId) {
     res.status(400).json({ error: "No puedes votarte a ti mismo" }); return;
   }
@@ -2527,7 +2527,7 @@ router.post("/:roomCode/rematch", writeLimiter, async (req, res) => {
   const oldCode = paramStr(req.params.roomCode).toUpperCase();
   const { playerId } = req.body as { playerId: string };
   // 🔒 A logged-in account can only request a rematch AS ITSELF (guests pass).
-  if (!verifyClaimedIdentity(req, playerId)) {
+  if (!await verifyClaimedIdentity(req, playerId)) {
     res.status(403).json({ error: "Identity verification failed" }); return;
   }
 
@@ -2691,7 +2691,7 @@ router.post("/:roomCode/rematch", writeLimiter, async (req, res) => {
 router.post("/:roomCode/phrase", writeLimiter, async (req, res) => {
   const code = paramStr(req.params.roomCode).toUpperCase();
   const { playerId, playerName, phraseIndex } = req.body as { playerId?: string; playerName: string; phraseIndex: number };
-  if (!playerId || !verifyClaimedIdentity(req, playerId)) {
+  if (!playerId || !await verifyClaimedIdentity(req, playerId)) {
     res.status(403).json({ error: "Identity verification failed" }); return;
   }
   const [room] = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, code)).limit(1);
@@ -2723,7 +2723,7 @@ router.post("/:roomCode/phrase", writeLimiter, async (req, res) => {
 router.post("/:roomCode/halloween-scare", halloweenScareLimiter, async (req, res) => {
   const code = paramStr(req.params.roomCode).toUpperCase();
   const { playerId, scareId } = req.body ?? {};
-  if (!playerId || !verifyClaimedIdentity(req, playerId)) {
+  if (!playerId || !await verifyClaimedIdentity(req, playerId)) {
     res.status(403).json({ error: "Identity verification failed" }); return;
   }
   if (!halloweenEventAllowed(req)) {
@@ -2836,7 +2836,7 @@ router.post("/:roomCode/stop", async (req, res) => {
 
   if (!playerId) { res.status(400).json({ error: "playerId required" }); return; }
   // 🔒 A logged-in account can only call STOP AS ITSELF (guests pass through).
-  if (!verifyClaimedIdentity(req, playerId)) {
+  if (!await verifyClaimedIdentity(req, playerId)) {
     res.status(403).json({ error: "Identity verification failed" }); return;
   }
 
@@ -2961,7 +2961,7 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
 
   // 🔒 A logged-in account can only submit results AS ITSELF — blocks score
   // injection under another account's id. Guests (UUID ids) pass through.
-  if (!verifyClaimedIdentity(req, body.data.playerId)) {
+  if (!await verifyClaimedIdentity(req, body.data.playerId)) {
     res.status(403).json({ error: "Identity verification failed" }); return;
   }
 
@@ -3364,7 +3364,7 @@ router.post("/:roomCode/bluff-vote", writeLimiter, async (req, res) => {
     return;
   }
   // 🔒 A logged-in account can only vote AS ITSELF (guests pass through).
-  if (!verifyClaimedIdentity(req, voterId)) {
+  if (!await verifyClaimedIdentity(req, voterId)) {
     res.status(403).json({ error: "Identity verification failed" }); return;
   }
 
