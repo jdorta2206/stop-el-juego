@@ -185,12 +185,9 @@ export function sumVerifiedBase(
   };
 }
 
-/**
- * Production verifier. Valid voucher JTIs are atomically burned in PostgreSQL.
- * The unique primary key makes concurrent submissions and post-restart replays
- * fail closed. All valid vouchers in the bounded batch are burned, while only
- * the highest maxTokens bases contribute to the score ceiling.
- */
+/** Verify score vouchers without consuming them. Consumption is performed
+ * inside the caller's score transaction so a failed score write cannot burn
+ * the player's vouchers. */
 export async function sumVerifiedBasePersistent(
   tokens: unknown,
   maxTokens = Number.POSITIVE_INFINITY,
@@ -200,23 +197,22 @@ export async function sumVerifiedBasePersistent(
   collectionWords: Array<{ word: string; category: string }>;
   mode: ScoreVoucherMode | null;
   aiBase: number | null;
+  voucherJtis: string[];
 }> {
-  if (!Array.isArray(tokens) || tokens.length === 0 || tokens.length > MAX_TOKEN_BATCH) {
-    return { base: 0, verified: 0, collectionWords: [], mode: null, aiBase: 0 };
-  }
+  const empty = { base: 0, verified: 0, collectionWords: [], mode: null, aiBase: 0, voucherJtis: [] as string[] };
+  if (!Array.isArray(tokens) || tokens.length === 0 || tokens.length > MAX_TOKEN_BATCH) return empty;
   const secret = getSigningSecret();
-  if (!secret) return { base: 0, verified: 0, collectionWords: [], mode: null, aiBase: 0 };
+  if (!secret) return empty;
 
   const now = Date.now();
   const cap = Number.isFinite(maxTokens) ? Math.max(0, Math.floor(maxTokens)) : tokens.length;
-  if (cap === 0) return { base: 0, verified: 0, collectionWords: [], mode: null, aiBase: 0 };
+  if (cap === 0) return empty;
 
-  await db
-    .delete(scoreVoucherUsesTable)
-    .where(lt(scoreVoucherUsesTable.expiresAt, new Date(now)));
+  await db.delete(scoreVoucherUsesTable).where(lt(scoreVoucherUsesTable.expiresAt, new Date(now)));
 
   const validBases: Array<{
     base: number;
+    jti: string;
     mode: ScoreVoucherMode | null;
     aiBase: number | null;
     collectionWords: Array<{ word: string; category: string }>;
@@ -225,28 +221,20 @@ export async function sumVerifiedBasePersistent(
   for (const token of tokens) {
     const voucher = parseVerifiedVoucher(token, secret, now);
     if (!voucher) continue;
-
-    const claimed = await db
-      .insert(scoreVoucherUsesTable)
-      .values({ jti: voucher.jti, expiresAt: new Date(voucher.exp) })
-      .onConflictDoNothing()
-      .returning({ jti: scoreVoucherUsesTable.jti });
-
-    if (claimed.length > 0) {
-      validBases.push({
-        base: voucher.base,
-        mode: voucher.mode,
-        aiBase: voucher.aiBase,
-        collectionWords: voucher.collectionWords,
-      });
-    }
+    validBases.push({
+      base: voucher.base,
+      jti: voucher.jti,
+      mode: voucher.mode,
+      aiBase: voucher.aiBase,
+      collectionWords: voucher.collectionWords,
+    });
   }
 
   validBases.sort((a, b) => b.base - a.base);
   const counted = validBases.slice(0, cap);
-
   const certifiedModes = new Set(counted.map((entry) => entry.mode).filter(Boolean));
   const mode = certifiedModes.size === 1 ? (Array.from(certifiedModes)[0] as ScoreVoucherMode) : null;
+
   return {
     base: counted.reduce((sum, entry) => sum + entry.base, 0),
     verified: counted.length,
@@ -255,7 +243,23 @@ export async function sumVerifiedBasePersistent(
     aiBase: counted.every((entry) => entry.aiBase !== null)
       ? counted.reduce((sum, entry) => sum + (entry.aiBase ?? 0), 0)
       : null,
+    voucherJtis: validBases.map((entry) => entry.jti),
   };
+}
+
+/** Atomically burns the verified voucher JTIs in the caller's transaction. */
+export async function consumeScoreVoucherJtis(tx: any, jtis: string[]): Promise<boolean> {
+  if (jtis.length === 0) return true;
+  let consumed = 0;
+  for (const jti of jtis) {
+    const [row] = await tx
+      .insert(scoreVoucherUsesTable)
+      .values({ jti, expiresAt: new Date(Date.now() + TTL_MS) })
+      .onConflictDoNothing()
+      .returning({ jti: scoreVoucherUsesTable.jti });
+    if (row) consumed++;
+  }
+  return consumed === jtis.length;
 }
 
 export function ceilingFromBase(base: number): number {
