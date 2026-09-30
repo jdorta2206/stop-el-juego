@@ -7,7 +7,7 @@ import { calculateStreak, appendStreakDay } from "./ranking";
 import { recordTrustedAnalyticsEvent } from "./analytics";
 import { recordAuthoritativeSeasonEvents } from "./season";
 import { recordHalloweenEvent } from "./halloween";
-import { isWordValidAsync } from "./game";
+import { isWordValidAsync, HALLOWEEN_CATEGORY_ALIASES } from "./game";
 import { writeLimiter, roomJoinLimiter } from "../middlewares/rateLimit";
 import { verifyClaimedIdentity, verifyPlayerToken, readPlayerId, isLoggedInId, isAuthConfigured } from "../lib/playerAuth";
 import {
@@ -2641,6 +2641,14 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
     (configuredPack === "standard" ? standardLocalized : configuredCategories)
       .map((cat) => normalizeWord(cat)),
   );
+  // Halloween can replace one standard label with a themed label on the client.
+  // Accept those labels here; isWordValidAsync canonicalizes them back to the
+  // authoritative category before dictionary/AI validation.
+  if (configuredPack === "standard") {
+    for (const alias of Object.keys(HALLOWEEN_CATEGORY_ALIASES)) {
+      allowedCategories.add(normalizeWord(alias));
+    }
+  }
 
   const safeAnswers: Record<string, string> = {};
   if (answers && typeof answers === "object") {
