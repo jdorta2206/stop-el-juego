@@ -728,7 +728,6 @@ router.post("/scores", scoreLimiter, async (req, res) => {
           { type: "play_game", value: 1 },
           ...(effectiveWon ? [{ type: "win_game", value: 1 }] : []),
           { type: "round_score", value: score },
-          { type: "streak", value: authoritativeStreak },
           ...(collectionWords.length > 0 ? [{ type: "valid_words", value: collectionWords.length }] : []),
         ]);
       }
@@ -753,6 +752,13 @@ router.post("/scores", scoreLimiter, async (req, res) => {
         ? appendStreakDay(lockedExisting?.streakDaysJson, lockedToday)
         : undefined;
       authoritativeStreak = lockedStreak;
+
+      if (!isBonus) {
+        await applyAuthoritativeSeasonEventsInTransaction(tx, playerId, [
+          { type: "streak", value: lockedStreak },
+        ]);
+      }
+
       let txPlayer;
       if (existing.length > 0) {
     const [updated] = await tx
