@@ -2810,6 +2810,17 @@ router.post("/:roomCode/rematch", writeLimiter, async (req, res) => {
       roomSpyUsage.delete(newCode);
       roomFunVotes.delete(newCode);
       roomRematch.delete(newCode);
+
+      // Restore the authoritative pack snapshot after stale-state cleanup.
+      if (previousPack || persistedPack) {
+        roomCategoryPacks.set(newCode, {
+          pack: previousPack?.pack ?? persistedPack as any,
+          customCategories: previousPack?.customCategories
+            ? [...previousPack.customCategories]
+            : persistedCustomCategories,
+          customLabel: previousPack?.customLabel ?? persistedCustomLabel,
+        });
+      }
     }
 
     roomRematch.set(oldCode, outcome.rematchCode);
