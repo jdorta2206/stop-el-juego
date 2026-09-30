@@ -3527,6 +3527,58 @@ router.post("/:roomCode/bluff-vote", writeLimiter, async (req, res) => {
       latestVotes[accusedPlayerId][category][voterId] = vote;
     }
 
+    // Recompute completion after merging the retried vote. This retry can be
+    // the final vote that completes every required category, so it must use
+    // the same resolution path as the non-conflicted request.
+    let retriedAllVoted = true;
+    for (const [, cats] of Object.entries(latestVotes)) {
+      for (const [, votes] of Object.entries(cats as Record<string, any>)) {
+        for (const nbId of nonBlufferIds) {
+          if (!(votes as any)[nbId]) { retriedAllVoted = false; break; }
+        }
+        if (!retriedAllVoted) break;
+      }
+      if (!retriedAllVoted) break;
+    }
+
+    if (retriedAllVoted) {
+      const retriedResolved = resolveBluffs(currentPlayers, latestVotes);
+      const retriedNewRound = current.currentRound + 1;
+      const retriedGameOver = retriedNewRound > current.maxRounds;
+      const retriedStatus = retriedGameOver ? "finished" : "waiting";
+      const [resolvedRoom] = await db.update(roomsTable)
+        .set({
+          playersJson: JSON.stringify(retriedResolved),
+          currentRound: retriedGameOver ? current.maxRounds : retriedNewRound,
+          currentLetter: retriedGameOver ? current.currentLetter : randomLetter(),
+          status: retriedStatus,
+          stopperJson: JSON.stringify({
+            categoryPack: latestMeta.categoryPack,
+            customCategories: latestMeta.customCategories,
+            customPackLabel: latestMeta.customPackLabel,
+            stopper: latestMeta.stopper,
+            bluffResults: latestVotes,
+          }),
+          updatedAt: new Date(),
+        })
+        .where(and(
+          eq(roomsTable.roomCode, roomCode.toUpperCase()),
+          eq(roomsTable.status, "bluffvoting"),
+          eq(roomsTable.updatedAt, current.updatedAt),
+        ))
+        .returning();
+      if (resolvedRoom) {
+        applyRoundAdvanceSideEffects(current, retriedResolved, retriedStatus);
+        res.json(broadcastAndFormat(resolvedRoom));
+        return;
+      }
+      const [latest] = await db.select().from(roomsTable)
+        .where(eq(roomsTable.roomCode, roomCode.toUpperCase()))
+        .limit(1);
+      res.json(formatRoom(latest));
+      return;
+    }
+
     const [retried] = await db.update(roomsTable)
       .set({
         stopperJson: JSON.stringify({ ...latestMeta, bluffVotes: latestVotes }),
