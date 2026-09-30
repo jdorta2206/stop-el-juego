@@ -6,7 +6,7 @@ import { CreateRoomBody, JoinRoomBody, SubmitRoomResultsBody } from "@workspace/
 import { calculateStreak, appendStreakDay, calcXpGain, calcCoinGain, calcLevel, lookupPlayerTzOffset } from "./ranking";
 import { recordTrustedAnalyticsEvent } from "./analytics";
 import { recordAuthoritativeSeasonEvents } from "./season";
-import { recordHalloweenEvent, recordHalloweenScareEvents, recordHalloweenScareEventsInTransaction, isHalloweenPreviewAuthorized } from "./halloween";
+import { recordHalloweenEvent, recordHalloweenScareEvents, recordHalloweenScareEventsInTransaction, recordHalloweenScareEventsWithCooldown, isHalloweenPreviewAuthorized } from "./halloween";
 import { isHappyHourActiveForTzOffset, HAPPY_HOUR_MULTIPLIER } from "../lib/happyHour";
 import { isWordValidAsync, HALLOWEEN_CATEGORY_ALIASES } from "./game";
 import { writeLimiter, roomJoinLimiter } from "../middlewares/rateLimit";
@@ -2713,15 +2713,22 @@ router.post("/:roomCode/halloween-scare", writeLimiter, async (req, res) => {
   ];
   try {
     if (persistentEvents.length > 0) {
-      const recorded = await recordHalloweenScareEvents(
+      const cooldownResult = await recordHalloweenScareEventsWithCooldown(
         persistentEvents,
         isHalloweenPreviewAuthorized(req),
         room.id,
+        room.currentRound ?? 0,
+        playerId,
       );
-      // An empty result means the room was no longer "playing" when the
-      // authoritative transaction acquired its row lock.
-      if (recorded.length !== persistentEvents.length) {
+      if (cooldownResult.ended) {
         res.status(409).json({ error: "Round ended before Halloween scare was recorded" });
+        return;
+      }
+      if (cooldownResult.recorded.length !== persistentEvents.length) {
+        res.status(429).json({
+          error: "Susto en enfriamiento",
+          retryAfterMs: cooldownResult.cooldownMs,
+        });
         return;
       }
     }
