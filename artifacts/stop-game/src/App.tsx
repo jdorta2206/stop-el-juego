@@ -143,7 +143,33 @@ function PackClaimHandler() {
   return null;
 }
 
-function ScoreOutboxHandler() {\n  const { player } = usePlayer();\n\n  useEffect(() => {\n    const tryFlush = () => {\n      if (typeof navigator !== "undefined" && navigator.onLine === false) return;\n      void flushScoreOutbox(async (payload) => {\n        const response = await fetch(getApiUrl() + "/api/ranking/scores", {\n          method: "POST",\n          headers: { "Content-Type": "application/json", ...authHeaders() },\n          credentials: "include",\n          body: JSON.stringify(payload),\n        });\n        if (!response.ok) throw new Error("score-sync-" + response.status);\n        return response.json();\n      });\n    };\n\n    tryFlush();\n    window.addEventListener("online", tryFlush);\n    return () => window.removeEventListener("online", tryFlush);\n  }, [player?.id]);\n\n  return null;\n}\n\nfunction App() {
+function ScoreOutboxHandler() {
+  const { player } = usePlayer();
+
+  useEffect(() => {
+    const tryFlush = () => {
+      if (typeof navigator !== "undefined" && navigator.onLine === false) return;
+      void flushScoreOutbox(async (payload) => {
+        const response = await fetch(getApiUrl() + "/api/ranking/scores", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...authHeaders() },
+          credentials: "include",
+          body: JSON.stringify(payload),
+        });
+        if (!response.ok) throw new Error("score-sync-" + response.status);
+        return response.json();
+      });
+    };
+
+    tryFlush();
+    window.addEventListener("online", tryFlush);
+    return () => window.removeEventListener("online", tryFlush);
+  }, [player?.id]);
+
+  return null;
+}
+
+function App() {
   const [splashDone, setSplashDone] = useState(false);
   const lang = (localStorage.getItem("stop_lang") ?? "es") as string;
 
