@@ -122,6 +122,30 @@ function pickReturnOrigin(req: Request, requestedOrigin: string | null): string 
   return APP_ORIGIN;
 }
 
+/**
+ * OAuth callbacks always land on APP_ORIGIN. When login starts from another
+ * allowlisted origin (www/TWA), bounce the start request through APP_ORIGIN
+ * first so the nonce cookie is created on the SAME origin that receives the
+ * provider callback. Without this, the callback could not bind state to the
+ * initiating browser and login-CSRF remained possible across origins.
+ */
+function redirectOAuthStartToCanonical(
+  req: Request,
+  res: Response,
+  provider: string,
+): boolean {
+  const host = req.get("host");
+  let appHost = "";
+  try { appHost = new URL(APP_ORIGIN).host; } catch { return false; }
+  if (!host || host === appHost) return false;
+
+  const returnPath = typeof req.query["return"] === "string" ? req.query["return"] : "/";
+  const requestedOrigin = typeof req.query["origin"] === "string" ? req.query["origin"] : null;
+  const returnOrigin = pickReturnOrigin(req, requestedOrigin);
+  const params = new URLSearchParams({ return: returnPath, origin: returnOrigin });
+  res.redirect(APP_ORIGIN + "/api/auth/" + provider + "/start?" + params.toString());
+  return true;
+}
 /** Encode {returnPath, returnOrigin} into the OAuth `state` param. Keep it
  *  short — Google/Facebook accept up to ~2KB but smaller is safer. */
 function encodeAuthState(returnPath: string, returnOrigin: string): string {
@@ -350,6 +374,7 @@ router.post("/handoff", async (req: Request, res: Response) => {
 // ── GOOGLE ─────────────────────────────────────────────────────────────────────
 
 router.get("/google/start", (req: Request, res: Response) => {
+  if (redirectOAuthStartToCanonical(req, res, "google")) return;
   const GOOGLE_CLIENT_ID = process.env["VITE_GOOGLE_CLIENT_ID"];
   if (!GOOGLE_CLIENT_ID) {
     return res.redirect(`${APP_ORIGIN}/?auth_error=google_not_configured`);
@@ -456,6 +481,7 @@ router.get("/google/callback", async (req: Request, res: Response) => {
 // ── FACEBOOK ───────────────────────────────────────────────────────────────────
 
 router.get("/facebook/start", (req: Request, res: Response) => {
+  if (redirectOAuthStartToCanonical(req, res, "facebook")) return;
   const FACEBOOK_APP_ID = process.env["VITE_FACEBOOK_APP_ID"];
   if (!FACEBOOK_APP_ID) {
     return res.redirect(`${APP_ORIGIN}/?auth_error=facebook_not_configured`);
@@ -561,6 +587,7 @@ router.get("/facebook/callback", async (req: Request, res: Response) => {
 // ── INSTAGRAM ─────────────────────────────────────────────────────────────────
 
 router.get("/instagram/start", (req: Request, res: Response) => {
+  if (redirectOAuthStartToCanonical(req, res, "instagram")) return;
   const INSTAGRAM_CLIENT_ID = process.env["INSTAGRAM_CLIENT_ID"];
   if (!INSTAGRAM_CLIENT_ID) {
     return res.redirect(`${APP_ORIGIN}/?auth_error=instagram_not_configured`);
@@ -666,6 +693,7 @@ function makeAppleClientSecret(): string {
 }
 
 router.get("/apple/start", (req: Request, res: Response) => {
+  if (redirectOAuthStartToCanonical(req, res, "apple")) return;
   const APPLE_CLIENT_ID = process.env["APPLE_CLIENT_ID"];
   if (!APPLE_CLIENT_ID) {
     return res.redirect(`${APP_ORIGIN}/?auth_error=apple_not_configured`);
@@ -785,6 +813,7 @@ router.post("/apple/callback", async (req: Request, res: Response) => {
 // ── TIKTOK ────────────────────────────────────────────────────────────────────
 
 router.get("/tiktok/start", (req: Request, res: Response) => {
+  if (redirectOAuthStartToCanonical(req, res, "tiktok")) return;
   const TIKTOK_CLIENT_KEY = process.env["TIKTOK_CLIENT_KEY"]?.trim();
   if (!TIKTOK_CLIENT_KEY) {
     return res.redirect(`${APP_ORIGIN}/?auth_error=tiktok_not_configured`);
