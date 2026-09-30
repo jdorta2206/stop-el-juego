@@ -453,7 +453,7 @@ export async function recordHalloweenScareEventsWithCooldown(
   playerId: string,
 ) {
   const year = getEventYear(new Date(), preview);
-  if (year === null) return { recorded: [], cooldownMs: 0, ended: false, cooldownClaimed: false };
+  if (year === null) return { recorded: [], cooldownMs: 0, ended: false, cooldownClaimed: false, cooldownUntil: null };
 
   return await db.transaction(async (tx) => {
     const activeRoom = await tx.execute(sql`
@@ -464,7 +464,7 @@ export async function recordHalloweenScareEventsWithCooldown(
     `);
     if (String(activeRoom.rows?.[0]?.status ?? "") !== "playing" ||
         Number(activeRoom.rows?.[0]?.current_round) !== roomRound) {
-      return { recorded: [], cooldownMs: 0, ended: true, cooldownClaimed: false };
+      return { recorded: [], cooldownMs: 0, ended: true, cooldownClaimed: false, cooldownUntil: null };
     }
 
     let currentPlayers: any[] = [];
@@ -476,7 +476,7 @@ export async function recordHalloweenScareEventsWithCooldown(
     }
     const currentActor = currentPlayers.find((p: any) => p?.playerId === playerId);
     if (!currentActor) {
-      return { recorded: [], cooldownMs: 0, ended: true, cooldownClaimed: false };
+      return { recorded: [], cooldownMs: 0, ended: true, cooldownClaimed: false, cooldownUntil: null };
     }
 
     const claimed = await tx.execute(sql`
@@ -500,10 +500,11 @@ export async function recordHalloweenScareEventsWithCooldown(
         cooldownMs: Math.max(1, Math.ceil(Number((current.rows?.[0] as any)?.remaining_ms ?? 18000))),
         ended: false,
         cooldownClaimed: false,
+        cooldownUntil: null,
       };
     }
 
-    if (events.length === 0) return { recorded: [], cooldownMs: 18000, ended: false, cooldownClaimed: true };
+    if (events.length === 0) return { recorded: [], cooldownMs: 18000, ended: false, cooldownClaimed: true, cooldownUntil: claimed.rows?.[0]?.available_at ?? null };
     const currentEligibleIds = new Set(currentPlayers.filter((p: any) => p?.playerId && !p?.isBot && p?.loginMethod !== "guest").map((p: any) => String(p.playerId)));
     const filteredEvents = events.filter((event) => {
       if (event.type === "scare_provoked") return String(event.playerId) === String(playerId) && currentEligibleIds.has(String(event.playerId));
