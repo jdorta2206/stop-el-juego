@@ -1347,7 +1347,6 @@ const HALLOWEEN_CATEGORY_ALIASES: Record<string, string> = {
   [normalizeWord("Monstro")]: "Animal",
   [normalizeWord("Filme de terror")]: "Filme",
   [normalizeWord("Coisa de uma casa assombrada")]: "Objeto",
-  [normalizeWord("Criatura sobrenatural")]: "Animal",
   [normalizeWord("Déguisement effrayant")]: "Objet",
   [normalizeWord("Monstre")]: "Animal",
   [normalizeWord("Film d'horreur")]: "Film",
