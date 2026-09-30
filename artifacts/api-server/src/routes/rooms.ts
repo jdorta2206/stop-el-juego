@@ -2651,9 +2651,9 @@ router.post("/:roomCode/halloween-scare", writeLimiter, async (req, res) => {
   halloweenScareCooldowns.set(cooldownKey, now);
   roomHalloweenScares.set(code, event);
   void Promise.allSettled([
-    recordHalloweenEvent(playerId, "scare_provoked", `provoked:${event.id}`, isHalloweenPreviewAuthorized(req)),
+    recordHalloweenEvent(playerId, "scare_provoked", `provoked:${event.id}`, isHalloweenPreviewAuthorized(req), room.id),
     ...players.filter((p: any) => p.playerId && p.playerId !== playerId && !p.isBot).map((p: any) =>
-      recordHalloweenEvent(p.playerId, "scare_received", `received:${event.id}:${p.playerId}`, isHalloweenPreviewAuthorized(req))
+      recordHalloweenEvent(p.playerId, "scare_received", `received:${event.id}:${p.playerId}`, isHalloweenPreviewAuthorized(req), room.id)
     ),
   ]).catch(() => {});
   broadcastAndFormat(room);
