@@ -448,18 +448,30 @@ export async function recordHalloweenScareEventsWithCooldown(
   playerId: string,
 ) {
   const year = getEventYear(new Date(), preview);
-  if (year === null) return { recorded: [], cooldownMs: 0, ended: false };
+  if (year === null) return { recorded: [], cooldownMs: 0, ended: false, cooldownClaimed: false };
 
   return await db.transaction(async (tx) => {
     const activeRoom = await tx.execute(sql`
-      SELECT status, current_round
+      SELECT status, current_round, players_json
       FROM rooms
       WHERE id = ${roomId}
       FOR UPDATE
     `);
     if (String(activeRoom.rows?.[0]?.status ?? "") !== "playing" ||
         Number(activeRoom.rows?.[0]?.current_round) !== roomRound) {
-      return { recorded: [], cooldownMs: 0, ended: true };
+      return { recorded: [], cooldownMs: 0, ended: true, cooldownClaimed: false };
+    }
+
+    let currentPlayers: any[] = [];
+    try {
+      const parsed = JSON.parse(String((activeRoom.rows?.[0] as any)?.players_json ?? "[]"));
+      currentPlayers = Array.isArray(parsed) ? parsed : [];
+    } catch {
+      currentPlayers = [];
+    }
+    const currentActor = currentPlayers.find((p: any) => p?.playerId === playerId);
+    if (!currentActor) {
+      return { recorded: [], cooldownMs: 0, ended: true, cooldownClaimed: false };
     }
 
     const claimed = await tx.execute(sql`
@@ -482,19 +494,25 @@ export async function recordHalloweenScareEventsWithCooldown(
         recorded: [],
         cooldownMs: Math.max(1, Math.ceil(Number((current.rows?.[0] as any)?.remaining_ms ?? 18000))),
         ended: false,
+        cooldownClaimed: false,
       };
     }
 
-    if (events.length === 0) return { recorded: [], cooldownMs: 18000, ended: false };
+    if (events.length === 0) return { recorded: [], cooldownMs: 18000, ended: false, cooldownClaimed: true };
+    const currentEligibleIds = new Set(currentPlayers.filter((p: any) => p?.playerId && !p?.isBot && p?.loginMethod !== "guest").map((p: any) => String(p.playerId)));
+    const filteredEvents = events.filter((event) => {
+      if (event.type === "scare_provoked") return String(event.playerId) === String(playerId) && currentEligibleIds.has(String(event.playerId));
+      return currentEligibleIds.has(String(event.playerId));
+    });
     const recorded = await recordHalloweenScareEventsInTransaction(
       tx,
-      events,
+      filteredEvents,
       preview,
       roomId,
       "playing",
       roomRound,
     );
-    return { recorded, cooldownMs: 18000, ended: false };
+    return { recorded, cooldownMs: 18000, ended: false, cooldownClaimed: true };
   });
 }
 
