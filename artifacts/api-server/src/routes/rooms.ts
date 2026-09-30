@@ -1137,7 +1137,9 @@ function sanitizeRoomForSpectator(room: any) {
       // Bluff votes are private game-state and must never be exposed to spectators.
       bluffData: undefined,
       typing: undefined,
-      stopper: room.stopper ? { stopperName: room.stopper.stopperName } : null,
+      // formatRoom stores the stopper display name as "name", not "stopperName".
+      // Keep the public spectator payload consistent with that authoritative shape.
+      stopper: room.stopper ? { stopperName: room.stopper.name } : null,
     };
   }
   return room;
