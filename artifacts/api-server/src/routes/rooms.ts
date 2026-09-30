@@ -3090,7 +3090,15 @@ router.post("/:roomCode/resolve-bluffs", async (req, res) => {
       currentRound: isGameOver ? room.maxRounds : newRound,
       currentLetter: isGameOver ? room.currentLetter : randomLetter(),
       status: newStatus,
-      stopperJson: JSON.stringify({ stopper: meta.stopper, bluffResults: bluffVotes }),
+      stopperJson: JSON.stringify({
+            // Preserve the authoritative room deck when the background
+            // failsafe resolves an abandoned Bluff vote.
+            categoryPack: meta.categoryPack,
+            customCategories: meta.customCategories,
+            customPackLabel: meta.customPackLabel,
+            stopper: meta.stopper,
+            bluffResults: bluffVotes,
+          }),
       updatedAt: new Date(),
     })
     .where(and(eq(roomsTable.roomCode, roomCode.toUpperCase()), eq(roomsTable.status, "bluffvoting")))
