@@ -2864,6 +2864,10 @@ router.post("/:roomCode/stop", async (req, res) => {
   }
   res.json(broadcastAndFormat(updated));
 
+  // The STOP response is sent only after Halloween persistence has been attempted,
+  // keeping the event transaction ordered before bot-driven round advancement.
+  res.json(broadcastAndFormat(updated));
+
   // 🤖 If bots are in this room and haven't submitted yet, rush them so the
   // round can advance ~3s after STOP (mimics a human freezing then submitting).
   const updatedPlayers = parsePlayers(updated.playersJson);
