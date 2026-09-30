@@ -342,7 +342,7 @@ export async function recordHalloweenScareEventsInTransaction(
         FOR UPDATE
       `);
       const lockedPlayer = playerLock.rows?.[0] as { coins: number; inventory_json: string } | undefined;
-      if (!lockedPlayer) throw new Error("Player score row missing while recording Halloween scare event");
+      // A corrupted/missing score row must not block a gameplay STOP.\n      // This event is skipped; callers that require every event to persist\n      // can detect it from the returned event count.\n      if (!lockedPlayer) continue;
 
       await tx.execute(sql`
         INSERT INTO halloween_progress (player_id, event_year)
