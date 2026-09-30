@@ -1117,14 +1117,28 @@ async function purgeStaleRooms() {
         continue;
       }
       const claimRows = await db.execute(sql`
-        SELECT player_id
-        FROM multiplayer_settlement_claims
-        WHERE room_id = ${room.id}
+        SELECT player_id FROM multiplayer_settlement_claims WHERE room_id = ${room.id}
       `);
       const claimedIds = new Set((claimRows.rows ?? []).map((row: any) => String(row.player_id)));
-      if (eligible.every((p: any) => claimedIds.has(String(p.playerId)))) {
-        await db.delete(roomsTable).where(eq(roomsTable.id, room.id));
+      if (!eligible.every((p: any) => claimedIds.has(String(p.playerId)))) continue;
+
+      // A finished room is deletable only after BOTH auxiliary settlement effects
+      // have durable completion markers. This preserves the room as recovery data
+      // if Season/Halloween failed after the core leaderboard transaction.
+      const auxRows = await db.execute(sql`
+        SELECT player_id, effect FROM multiplayer_settlement_aux_claims WHERE room_id = ${room.id}
+      `);
+      const auxByPlayer = new Map<string, Set<string>>();
+      for (const row of (auxRows.rows ?? []) as any[]) {
+        const set = auxByPlayer.get(String(row.player_id)) ?? new Set<string>();
+        set.add(String(row.effect));
+        auxByPlayer.set(String(row.player_id), set);
       }
+      const auxComplete = eligible.every((p: any) => {
+        const effects = auxByPlayer.get(String(p.playerId));
+        return effects?.has("season") && effects?.has("halloween");
+      });
+      if (auxComplete) await db.delete(roomsTable).where(eq(roomsTable.id, room.id));
     }
 
     // 🧹 In-memory map cleanup: drop entries for any room code that no
