@@ -1664,12 +1664,12 @@ router.post("/:roomCode/leave", async (req, res) => {
     // player (or delete the room) before that player's settlement claim
     // exists; otherwise recovery can no longer reconstruct the final result.
     if (status === "finished" && !leaving.isBot && leaving.loginMethod !== "guest") {
-      const claimRows = await tx.execute(sql\`
+      const claimRows = await tx.execute(sql`
         SELECT player_id
         FROM multiplayer_settlement_claims
         WHERE room_id = ${raw.id} AND player_id = ${playerId}
         LIMIT 1
-      \`);
+      `);
       if ((claimRows.rows ?? []).length === 0) return { kind: "settlementPending" } as const;
     }
 
