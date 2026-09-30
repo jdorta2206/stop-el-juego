@@ -217,8 +217,8 @@ const botDeps = {
   formatRoom: (room: any) => formatRoom(room),
   // Persists final scores to the global leaderboard when the bot's submission
   // happens to be the one that ends the match.
-  submitFinalScores: (players: any[], letter: string) =>
-    submitAllScoresToLeaderboard(players, letter, code).catch(() => {}),
+  submitFinalScores: (players: any[], letter: string, roomId: number) =>
+    submitAllScoresToLeaderboard(players, letter, roomId, code).catch(() => {}),
   getRoundCategories: (room: any) => {
     const code = String(room.roomCode ?? "").toUpperCase();
     const cfg = roomCategoryPacks.get(code);
@@ -512,7 +512,7 @@ function resolveBluffs(players: any[], bluffVotes: Record<string, any>): any[] {
 // The core settlement is DB-idempotent: one (room, player) claim owns the entire
 // player score/history transaction. Concurrent/replayed callers therefore become
 // no-ops instead of paying XP/coins/stats twice.
-async function submitAllScoresToLeaderboard(players: any[], letter: string, roomCode: string) {
+async function submitAllScoresToLeaderboard(players: any[], letter: string, roomId: number, roomCode: string) {
   const leaderboardPlayers = players.filter((p: any) => p && !p.isBot);
   const sorted = [...leaderboardPlayers].sort((a, b) => {
     const ds = (b.score || 0) - (a.score || 0);
@@ -548,9 +548,9 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
     let settlementStreak = 1;
     const claimed = await db.transaction(async (tx) => {
       const claim = await tx.execute(sql`
-        INSERT INTO multiplayer_settlement_claims (room_code, player_id)
-        VALUES (${normalizedRoomCode}, ${p.playerId})
-        ON CONFLICT (room_code, player_id) DO NOTHING
+        INSERT INTO multiplayer_settlement_claims (room_id, player_id)
+        VALUES (${roomId}, ${p.playerId})
+        ON CONFLICT (room_id, player_id) DO NOTHING
         RETURNING player_id
       `);
       if ((claim.rows?.length ?? 0) === 0) return false;
@@ -796,7 +796,7 @@ function applyRoundAdvanceSideEffects(room: any, sweptPlayers: any[], newStatus:
   }
   if (newStatus === "finished") {
     // 🏆 Persist final scores to the global leaderboard exactly once.
-    submitAllScoresToLeaderboard(sweptPlayers, room.currentLetter || "A", room.roomCode).catch(() => {});
+    submitAllScoresToLeaderboard(sweptPlayers, room.currentLetter || "A", room.id, room.roomCode).catch(() => {});
   }
 }
 
@@ -3010,7 +3010,7 @@ router.post("/:roomCode/bluff-vote", writeLimiter, async (req, res) => {
       return;
     }
     if (isGameOver) {
-      submitAllScoresToLeaderboard(resolved, room.currentLetter || "A", room.roomCode).catch(() => {});
+      submitAllScoresToLeaderboard(resolved, room.currentLetter || "A", room.id, room.roomCode).catch(() => {});
     }
     // 🚀 Broadcast resolution to all players (was waiting for polling — main lag in bluff phase)
     res.json(broadcastAndFormat(updated));
