@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 interface HalloweenAmbienceProps {
   active: boolean;
@@ -12,6 +12,7 @@ interface HalloweenAmbienceProps {
  * No external media is downloaded.
  */
 export function HalloweenAmbience({ active, muted, heavy = false }: HalloweenAmbienceProps) {
+  const [lightning, setLightning] = useState(false);
   const ctxRef = useRef<AudioContext | null>(null);
   const nodesRef = useRef<AudioNode[]>([]);
   const timersRef = useRef<number[]>([]);
@@ -87,6 +88,35 @@ export function HalloweenAmbience({ active, muted, heavy = false }: HalloweenAmb
         lfo.start();
         nodesRef.current.push(lfo);
 
+        const triggerLightning = () => {
+          if (cancelled || ctx.state === "closed") return;
+          setLightning(true);
+          window.setTimeout(() => { if (!cancelled) setLightning(false); }, 120);
+          // Short broadband crack/rumble: deliberately subtle under gameplay.
+          const now = ctx.currentTime;
+          const buffer = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.55), ctx.sampleRate);
+          const data = buffer.getChannelData(0);
+          for (let i = 0; i < data.length; i++) {
+            const t = i / data.length;
+            data[i] = (Math.random() * 2 - 1) * Math.exp(-3.8 * t);
+          }
+          const source = ctx.createBufferSource();
+          const filter = ctx.createBiquadFilter();
+          const gain = ctx.createGain();
+          source.buffer = buffer;
+          filter.type = "lowpass";
+          filter.frequency.setValueAtTime(900, now);
+          filter.frequency.exponentialRampToValueAtTime(90, now + 0.5);
+          gain.gain.setValueAtTime(0.0001, now);
+          gain.gain.exponentialRampToValueAtTime(heavy ? 0.12 : 0.085, now + 0.025);
+          gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.55);
+          source.connect(filter).connect(gain).connect(master);
+          source.start(now);
+          source.stop(now + 0.56);
+          timersRef.current.push(window.setTimeout(triggerLightning, 14000 + Math.random() * 18000));
+        };
+        timersRef.current.push(window.setTimeout(triggerLightning, 9000 + Math.random() * 12000));
+
         const scheduleHeartbeat = () => {
           if (cancelled || ctx.state === "closed") return;
           const now = ctx.currentTime;
@@ -150,5 +180,11 @@ export function HalloweenAmbience({ active, muted, heavy = false }: HalloweenAmb
     };
   }, [active, muted, heavy]);
 
-  return null;
+  return lightning ? (
+    <div
+      aria-hidden="true"
+      className="pointer-events-none fixed inset-0 z-[2147483000] bg-white/35"
+      style={{ mixBlendMode: "screen" }}
+    />
+  ) : null;
 }
