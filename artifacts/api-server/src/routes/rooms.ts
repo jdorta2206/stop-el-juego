@@ -672,7 +672,7 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
       ...(rawScore > 0 ? [{ type: "round_score", value: rawScore }] : []),
       ...(validWords > 0 ? [{ type: "valid_words", value: validWords }] : []),
       { type: "streak", value: settlementStreak },
-    ]).catch((err) => console.error("[season] trusted multiplayer events failed:", err));
+    ], `multiplayer:${roomId}:${p.playerId}`).catch((err) => console.error("[season] trusted multiplayer events failed:", err));
   }));
 }
 
