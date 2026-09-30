@@ -436,6 +436,67 @@ export async function recordHalloweenScareEventsInTransaction(
 
 }
 
+export async function recordHalloweenScareEventsWithCooldown(
+  events: Array<{
+    playerId: string;
+    type: "scare_received" | "scare_provoked";
+    eventKey: string;
+  }>,
+  preview: boolean,
+  roomId: number,
+  roomRound: number,
+  playerId: string,
+) {
+  const year = getEventYear(new Date(), preview);
+  if (year === null || events.length === 0) return { recorded: [], cooldownMs: 0, ended: false };
+
+  return await db.transaction(async (tx) => {
+    const activeRoom = await tx.execute(sql`
+      SELECT status, current_round
+      FROM rooms
+      WHERE id = ${roomId}
+      FOR UPDATE
+    `);
+    if (String(activeRoom.rows?.[0]?.status ?? "") !== "playing" ||
+        Number(activeRoom.rows?.[0]?.current_round) !== roomRound) {
+      return { recorded: [], cooldownMs: 0, ended: true };
+    }
+
+    const claimed = await tx.execute(sql`
+      INSERT INTO halloween_scare_cooldowns (room_id, player_id, available_at)
+      VALUES (${roomId}, ${playerId}, NOW() + INTERVAL '18 seconds')
+      ON CONFLICT (room_id, player_id) DO UPDATE
+      SET available_at = EXCLUDED.available_at,
+          updated_at = NOW()
+      WHERE halloween_scare_cooldowns.available_at <= NOW()
+      RETURNING available_at
+    `);
+    if ((claimed.rows?.length ?? 0) === 0) {
+      const current = await tx.execute(sql`
+        SELECT GREATEST(0, EXTRACT(EPOCH FROM (available_at - NOW())) * 1000) AS remaining_ms
+        FROM halloween_scare_cooldowns
+        WHERE room_id = ${roomId} AND player_id = ${playerId}
+        LIMIT 1
+      `);
+      return {
+        recorded: [],
+        cooldownMs: Math.max(1, Math.ceil(Number((current.rows?.[0] as any)?.remaining_ms ?? 18000))),
+        ended: false,
+      };
+    }
+
+    const recorded = await recordHalloweenScareEventsInTransaction(
+      tx,
+      events,
+      preview,
+      roomId,
+      "playing",
+      roomRound,
+    );
+    return { recorded, cooldownMs: 18000, ended: false };
+  });
+}
+
 export async function recordHalloweenScareEvents(
   events: Array<{
     playerId: string;
