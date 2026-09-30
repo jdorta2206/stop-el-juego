@@ -3,7 +3,9 @@ import { useState } from "react";
 export default function DeleteAccount() {
   const [email, setEmail] = useState("");
   const [reason, setReason] = useState("");
-  const [sent, setSent] = useState(false);\n  const [deleted, setDeleted] = useState(false);\n  const [errorMsg, setErrorMsg] = useState("");
+  const [sent, setSent] = useState(false);
+  const [deleted, setDeleted] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
