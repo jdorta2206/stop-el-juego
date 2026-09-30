@@ -2904,6 +2904,10 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
 
   const players = existingPlayers;
   const { playerId } = body.data;
+  // The power-card state is authoritative in the room snapshot. Only a card
+  // actually consumed during this round may affect scoring; merely owning a
+  // "double_or_nothing" card must never double a score.
+  const card = me.powerCardUsed ? String(me.powerCard ?? "") : "";
 
   // Update this player's score and mark as ready; store only server-approved
   // bluff data.
