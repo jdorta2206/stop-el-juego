@@ -2712,7 +2712,7 @@ router.post("/:roomCode/halloween-scare", writeLimiter, async (req, res) => {
     })),
   ];
   try {
-    if (persistentEvents.length > 0) {
+    {
       const cooldownResult = await recordHalloweenScareEventsWithCooldown(
         persistentEvents,
         isHalloweenPreviewAuthorized(req),
@@ -2724,7 +2724,7 @@ router.post("/:roomCode/halloween-scare", writeLimiter, async (req, res) => {
         res.status(409).json({ error: "Round ended before Halloween scare was recorded" });
         return;
       }
-      if (cooldownResult.recorded.length !== persistentEvents.length) {
+      if (persistentEvents.length > 0 && cooldownResult.recorded.length !== persistentEvents.length) {
         res.status(429).json({
           error: "Susto en enfriamiento",
           retryAfterMs: cooldownResult.cooldownMs,
