@@ -57,7 +57,6 @@ export function usePushNotifications(playerId: string | undefined, language: str
 
         if (perm === "granted" && !cancelled && currentPlayerIdRef.current === playerId) {
           const tzOffsetMinutes = -new Date().getTimezoneOffset();
-      const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
           const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
           try {
             if (currentPlayerIdRef.current !== playerId) return;
