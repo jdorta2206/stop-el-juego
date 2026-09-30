@@ -257,6 +257,132 @@ export async function recordHalloweenEvent(
   });
 }
 
+
+export async function recordHalloweenScareEvents(
+  events: Array<{
+    playerId: string;
+    type: "scare_received" | "scare_provoked";
+    eventKey: string;
+  }>,
+  preview = false,
+  activeRoomId?: number,
+) {
+  const year = getEventYear(new Date(), preview);
+  if (year === null || events.length === 0) return [];
+  if (activeRoomId === undefined) return [];
+
+  return await db.transaction(async (tx) => {
+    const activeRoom = await tx.execute(sql`
+      SELECT status
+      FROM rooms
+      WHERE id = ${activeRoomId}
+      FOR UPDATE
+    `);
+    if (String(activeRoom.rows?.[0]?.status ?? "") !== "playing") return [];
+
+    const results: unknown[] = [];
+    for (const event of events) {
+      if (!event.playerId || !event.eventKey || event.eventKey.length > 160) continue;
+
+      await tx.execute(sql`
+        INSERT INTO halloween_progress (player_id, event_year)
+        VALUES (${event.playerId}, ${year})
+        ON CONFLICT (player_id, event_year) DO NOTHING
+      `);
+
+      const locked = await tx.execute(sql`
+        SELECT id, games_completed, scares_received, scares_provoked,
+               coins_earned, rewards_json, event_keys_json
+        FROM halloween_progress
+        WHERE player_id = ${event.playerId} AND event_year = ${year}
+        FOR UPDATE
+      `);
+      const row = locked.rows?.[0] as {
+        id: number; games_completed: number; scares_received: number; scares_provoked: number;
+        coins_earned: number; rewards_json: string; event_keys_json: string;
+      } | undefined;
+      if (!row) throw new Error("Halloween progress row missing");
+
+      const claim = await tx.execute(sql`
+        INSERT INTO halloween_event_claims (event_year, player_id, event_key)
+        VALUES (${year}, ${event.playerId}, ${event.eventKey})
+        ON CONFLICT (event_year, player_id, event_key) DO NOTHING
+        RETURNING event_key
+      `);
+      if ((claim.rows?.length ?? 0) === 0) continue;
+
+      const games = row.games_completed;
+      const received = row.scares_received + (event.type === "scare_received" ? 1 : 0);
+      const provoked = row.scares_provoked + (event.type === "scare_provoked" ? 1 : 0);
+      const rewards = parseJsonArray(row.rewards_json);
+      let coinsAwarded = 0;
+      const newRewardItems: string[] = [];
+
+      for (const rule of REWARD_RULES) {
+        const value = rule.field === "games_completed" ? games
+          : rule.field === "scares_received" ? received : provoked;
+        if (value < rule.threshold || rewards.includes(rule.key)) continue;
+        rewards.push(rule.key);
+        if (rule.kind === "coins") coinsAwarded += rule.amount;
+        else if ("item" in rule && rule.item) newRewardItems.push(rule.item);
+      }
+
+      if (coinsAwarded > 0 || newRewardItems.length > 0) {
+        const player = await tx.execute(sql`
+          SELECT coins, inventory_json FROM player_scores
+          WHERE player_id = ${event.playerId} FOR UPDATE
+        `);
+        const p = player.rows?.[0] as { coins: number; inventory_json: string } | undefined;
+        if (!p) throw new Error("Player score row missing while granting Halloween reward");
+
+        let inventory: Record<string, unknown> = {};
+        try {
+          const parsed = JSON.parse(p.inventory_json || "{}");
+          if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+            inventory = parsed as Record<string, unknown>;
+          }
+        } catch {}
+        const avatars = Array.isArray(inventory.avatars) ? inventory.avatars as string[] : [];
+        const frames = Array.isArray(inventory.frames) ? inventory.frames as string[] : [];
+        const backgrounds = Array.isArray(inventory.backgrounds) ? inventory.backgrounds as string[] : [];
+        inventory.avatars = avatars;
+        inventory.frames = frames;
+        inventory.backgrounds = backgrounds;
+        for (const item of newRewardItems) {
+          if (item.startsWith("avatar_") && !avatars.includes(item)) avatars.push(item);
+          else if (item.startsWith("frame_") && !frames.includes(item)) frames.push(item);
+          else if (item.startsWith("bg_") && !backgrounds.includes(item)) backgrounds.push(item);
+        }
+        await tx.execute(sql`
+          UPDATE player_scores
+          SET coins = coins + ${coinsAwarded},
+              inventory_json = ${JSON.stringify(inventory)},
+              updated_at = NOW()
+          WHERE player_id = ${event.playerId}
+        `);
+      }
+
+      const keys = parseJsonArray(row.event_keys_json);
+      keys.push(event.eventKey);
+      if (keys.length > 500) keys.splice(0, keys.length - 500);
+      const totalCoins = row.coins_earned + coinsAwarded;
+      await tx.execute(sql`
+        UPDATE halloween_progress
+        SET games_completed = ${games},
+            scares_received = ${received},
+            scares_provoked = ${provoked},
+            coins_earned = ${totalCoins},
+            rewards_json = ${JSON.stringify(rewards)},
+            event_keys_json = ${JSON.stringify(keys)},
+            updated_at = NOW()
+        WHERE id = ${row.id}
+      `);
+      results.push({ playerId: event.playerId, eventKey: event.eventKey, coinsAwarded });
+    }
+    return results;
+  });
+}
+
 router.post("/event", async (_req, res) => {
   // Halloween progress is authoritative server state. Clients cannot mint
   // progress/rewards by posting arbitrary event types or keys.
