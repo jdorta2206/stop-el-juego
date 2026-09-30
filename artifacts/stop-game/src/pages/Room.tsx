@@ -2410,7 +2410,19 @@ export default function Room() {
 
         {/* ── FINISHED ── */}
         {phase === "finished" && (() => {
-          const sorted = [...players].sort((a: any, b: any) => (b.score || 0) - (a.score || 0));
+          const sorted = [...players].sort((a: any, b: any) => {
+            const ds = (b.score || 0) - (a.score || 0);
+            if (ds !== 0) return ds;
+            // Keep the final UI identical to the authoritative server winner:
+            // stopper → finishedAt → playerId.
+            const sa = a.wasStopper ? 1 : 0;
+            const sb = b.wasStopper ? 1 : 0;
+            if (sa !== sb) return sb - sa;
+            const fa = typeof a.finishedAt === "number" ? a.finishedAt : Number.MAX_SAFE_INTEGER;
+            const fb = typeof b.finishedAt === "number" ? b.finishedAt : Number.MAX_SAFE_INTEGER;
+            if (fa !== fb) return fa - fb;
+            return String(a.playerId || "").localeCompare(String(b.playerId || ""));
+          });
           const myIdx = sorted.findIndex((p: any) => p.playerId === player?.id);
           const myPos = myIdx >= 0 ? myIdx + 1 : null;
           const total = sorted.length;
