@@ -22,6 +22,38 @@ import { revokePlayerId, markPlayerRevoked, restorePlayerId, isPlayerRevoked } f
 
 const router = Router();
 
+const oauthHandoffTableReady = db.execute(sql`
+  CREATE TABLE IF NOT EXISTS oauth_handoffs (
+    code_hash text PRIMARY KEY,
+    payload_json text NOT NULL,
+    expires_at timestamptz NOT NULL
+  )
+`).then(() => db.execute(sql`
+  CREATE INDEX IF NOT EXISTS oauth_handoffs_expires_idx
+    ON oauth_handoffs (expires_at)
+`)).catch((err) => {
+  console.error("[auth] failed to initialize OAuth handoff storage:", err);
+  throw err;
+});
+
+const oauthHandoffCleanup = setInterval(() => {
+  void oauthHandoffTableReady.then(() => db.execute(sql`
+    DELETE FROM oauth_handoffs WHERE expires_at <= NOW()
+  `)).catch((err) => console.error("[auth] OAuth handoff cleanup failed:", err));
+}, 5 * 60 * 1000);
+oauthHandoffCleanup.unref?.();
+
+async function createOAuthHandoff(items: [string, string][]): Promise<string> {
+  await oauthHandoffTableReady;
+  const code = crypto.randomBytes(32).toString("base64url");
+  const codeHash = crypto.createHash("sha256").update(code).digest("hex");
+  await db.execute(sql`
+    INSERT INTO oauth_handoffs (code_hash, payload_json, expires_at)
+    VALUES (${codeHash}, ${JSON.stringify(items)}, NOW() + INTERVAL '2 minutes')
+  `);
+  return code;
+}
+
 // ── OAuth response shapes ───────────────────────────────────────────────────
 // External JSON from each provider. We only declare the fields we actually read;
 // everything is optional because the provider may omit fields or return an error
@@ -247,66 +279,73 @@ function claimCode(code: string): boolean {
   return true;
 }
 
-// Helper: build a tiny HTML page that writes data to sessionStorage and redirects
-function bridgePage(key: string, value: string, returnPath: string) {
-  return bridgePageMulti([[key, value]], returnPath);
-}
-
-// Multi-key bridge page — writes multiple sessionStorage entries before redirecting.
-// `returnOrigin` lets us bounce the user back to the domain they came from
-// (e.g. stopjuegodepalabras.com) instead of hardcoded APP_ORIGIN, so the TWA
-// stays inside its trusted scope. Defaults to APP_ORIGIN for legacy callers.
-function bridgePageMulti(
+// Helper: build a tiny HTML page that redirects to the destination origin.
+// OAuth material is stored server-side under a single-use, 2-minute handoff code.
+// The code is intentionally opaque and contains no session/provider credentials.
+async function bridgePageMulti(
   items: [string, string][],
   returnPath: string,
   returnOrigin: string = APP_ORIGIN,
 ) {
-  // Most items are session-scoped (OAuth profile handoff). The
-  // PLAYER_TOKEN_BRIDGE_KEY entry, however, must persist across tabs and
-  // browser restarts so daily Season Pass missions keep accumulating — write
-  // it to localStorage. NOTE: these writes only help when returnOrigin equals
-  // APP_ORIGIN (same-origin). For the cross-origin case the items are also
-  // carried in the URL hash below (see handoffDest) and imported by the
-  // destination origin; that is the path that actually fixes cross-domain login.
-  const setItems = items
-    .map(([k, v]) => {
-      const store = k === PLAYER_TOKEN_BRIDGE_KEY ? "localStorage" : "sessionStorage";
-      return `${store}.setItem(${JSON.stringify(k)}, ${JSON.stringify(v)});`;
-    })
-    .join("\n    ");
-
-  // Cross-origin handoff. The storage writes above land on APP_ORIGIN (where
-  // this bridge is served), but the user is being redirected to returnOrigin
-  // (e.g. www.stopjuegodepalabras.com / the TWA), a DIFFERENT origin whose
-  // sessionStorage/localStorage are separate — so those writes are invisible
-  // there and the session wouldn't "stick" (user bounced back to login). To
-  // fix that we ALSO carry the items in the URL hash: the destination imports
-  // them into its OWN storage on load (consumeAuthHandoff). The hash fragment
-  // is never sent to servers / access logs and is stripped client-side on
-  // arrival so the token doesn't linger in the address bar.
+  const handoffCode = await createOAuthHandoff(items);
   const baseDest = returnOrigin + returnPath;
-  // Use a query parameter for the cross-origin handoff. Some Android/TWA
-  // navigation paths can drop URL fragments during an OAuth return, which
-  // leaves the player on the login screen even though Facebook completed.
-  // consumeAuthHandoff() accepts both query and hash forms and removes the
-  // parameter immediately before React mounts.
   const separator = baseDest.includes("?") ? "&" : "?";
-  const handoffDest = baseDest + separator +
-    "stopauth=" + encodeURIComponent(JSON.stringify(items));
+  const handoffDest = baseDest + separator + "stopauth=" + encodeURIComponent(handoffCode);
+
   return `<!DOCTYPE html><html><head><meta charset="utf-8">
 <title>Conectando...</title>
 <style>body{background:#0d1757;color:white;font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;}
 .logo{text-align:center;}.spinner{width:40px;height:40px;border:4px solid rgba(255,255,255,.2);border-top-color:#f9a825;border-radius:50%;animation:spin 0.8s linear infinite;margin:16px auto;}
 @keyframes spin{to{transform:rotate(360deg)}}</style></head>
 <body><div class="logo"><div class="spinner"></div><p>Conectando cuenta...</p></div>
-<script>
-  try {
-    ${setItems}
-  } catch(e) {}
-  window.location.replace(${JSON.stringify(handoffDest)});
-</script>
+<script>window.location.replace(${JSON.stringify(handoffDest)});</script>
 </body></html>`;
 }
+
+// The destination redeems the opaque handoff with POST, so the actual OAuth
+// session token and provider token never travel in a URL, Referer, or access log.
+router.post("/handoff", async (req: Request, res: Response) => {
+  const code = typeof req.body?.code === "string" ? req.body.code : "";
+  if (!/^[A-Za-z0-9_-]{40,64}$/.test(code)) {
+    return res.status(400).json({ error: "Invalid handoff code" });
+  }
+
+  try {
+    await oauthHandoffTableReady;
+    const codeHash = crypto.createHash("sha256").update(code).digest("hex");
+
+    const payload = await db.transaction(async (tx) => {
+      const rows = await tx.execute(sql`
+        SELECT payload_json
+        FROM oauth_handoffs
+        WHERE code_hash = ${codeHash}
+          AND expires_at > NOW()
+        FOR UPDATE
+      `);
+      const row = (rows.rows as any[])[0];
+      if (!row) return null;
+      await tx.execute(sql`DELETE FROM oauth_handoffs WHERE code_hash = ${codeHash}`);
+      return typeof row.payload_json === "string" ? row.payload_json : null;
+    });
+
+    if (!payload) {
+      return res.status(410).json({ error: "Handoff expired or already used" });
+    }
+
+    let items: unknown;
+    try { items = JSON.parse(payload); } catch {
+      return res.status(500).json({ error: "Invalid handoff payload" });
+    }
+    if (!Array.isArray(items)) {
+      return res.status(500).json({ error: "Invalid handoff payload" });
+    }
+
+    return res.json({ items });
+  } catch (err: any) {
+    console.error("[auth/handoff] redemption failed:", err?.message ?? err);
+    return res.status(503).json({ error: "OAuth handoff unavailable" });
+  }
+});
 
 // ── GOOGLE ─────────────────────────────────────────────────────────────────────
 
@@ -404,7 +443,7 @@ router.get("/google/callback", async (req: Request, res: Response) => {
 
     await restorePlayerId(playerId);
     const sessionToken = issuePlayerToken(res, playerId);
-    res.send(bridgePageMulti([
+    res.send(await bridgePageMulti([
       ["oauth_user", user],
       ...(sessionToken ? [[PLAYER_TOKEN_BRIDGE_KEY, sessionToken] as [string, string]] : []),
     ], returnPath, returnOrigin));
@@ -508,7 +547,7 @@ router.get("/facebook/callback", async (req: Request, res: Response) => {
 
     await restorePlayerId(playerId);
     const sessionToken = issuePlayerToken(res, playerId);
-    res.send(bridgePageMulti([
+    res.send(await bridgePageMulti([
       ["oauth_user", user],
       ["fb_access_token", tokenData.access_token],
       ...(sessionToken ? [[PLAYER_TOKEN_BRIDGE_KEY, sessionToken] as [string, string]] : []),
@@ -597,7 +636,7 @@ router.get("/instagram/callback", async (req: Request, res: Response) => {
 
     await restorePlayerId(playerId);
     const sessionToken = issuePlayerToken(res, playerId);
-    res.send(bridgePageMulti([
+    res.send(await bridgePageMulti([
       ["oauth_user", user],
       ...(sessionToken ? [[PLAYER_TOKEN_BRIDGE_KEY, sessionToken] as [string, string]] : []),
     ], returnPath, returnOrigin));
@@ -733,7 +772,7 @@ router.post("/apple/callback", async (req: Request, res: Response) => {
 
     await restorePlayerId(playerId);
     const sessionToken = issuePlayerToken(res, playerId);
-    res.send(bridgePageMulti([
+    res.send(await bridgePageMulti([
       ["oauth_user", user],
       ...(sessionToken ? [[PLAYER_TOKEN_BRIDGE_KEY, sessionToken] as [string, string]] : []),
     ], returnPath, returnOrigin));
@@ -823,7 +862,7 @@ router.get("/tiktok/callback", async (req: Request, res: Response) => {
 
     await restorePlayerId(playerId);
     const sessionToken = issuePlayerToken(res, playerId);
-    res.send(bridgePageMulti([
+    res.send(await bridgePageMulti([
       ["oauth_user", user],
       ...(sessionToken ? [[PLAYER_TOKEN_BRIDGE_KEY, sessionToken] as [string, string]] : []),
     ], returnPath, returnOrigin));
