@@ -251,6 +251,8 @@ export type OutboxScorePayload = {
   // (offline) submissions since offline rounds are validated locally and get
   // no token — those fall back to the server's absolute ceiling.
   scoreTokens?: string[];
+  /** Stable id carried to the server so a lost response cannot double-credit the game. */
+  submissionId?: string;
 };
 
 export type OutboxEntry = {
@@ -264,7 +266,18 @@ function readOutbox(): OutboxEntry[] {
     const raw = localStorage.getItem(OUTBOX_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.filter((e) => e && typeof e === "object" && e.payload) : [];
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((e) => e && typeof e === "object" && e.payload)
+      .map((e) => ({
+        ...e,
+        payload: {
+          ...e.payload,
+          submissionId: typeof e.payload.submissionId === "string" && e.payload.submissionId
+            ? e.payload.submissionId
+            : e.id,
+        },
+      }));
   } catch {
     return [];
   }
@@ -292,7 +305,16 @@ const withOutboxLock: OutboxLock = async <T>(work: () => Promise<T>): Promise<T>
 
 export async function enqueueScoreOutbox(payload: OutboxScorePayload): Promise<OutboxEntry> {
   const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-  const entry: OutboxEntry = { id, payload, createdAt: Date.now() };
+  const submissionId =
+    payload.submissionId ||
+    (typeof globalThis.crypto?.randomUUID === "function"
+      ? globalThis.crypto.randomUUID()
+      : `${id}-${Math.random().toString(36).slice(2, 10)}`);
+  const entry: OutboxEntry = {
+    id,
+    payload: { ...payload, submissionId },
+    createdAt: Date.now(),
+  };
   return withOutboxLock(async () => {
     const cur = readOutbox();
     cur.push(entry);
