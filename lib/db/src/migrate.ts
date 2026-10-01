@@ -76,6 +76,8 @@ export async function ensureIndexes(): Promise<void> {
     `CREATE INDEX IF NOT EXISTS play_subscriptions_player_id_idx ON play_subscriptions (player_id)`,
     `CREATE INDEX IF NOT EXISTS play_subscriptions_player_state_expiry_idx ON play_subscriptions (player_id, state, expiry_time_ms)`,
     `CREATE TABLE IF NOT EXISTS score_voucher_uses (jti text PRIMARY KEY, expires_at timestamp NOT NULL, used_at timestamp NOT NULL DEFAULT NOW())`,
+    `CREATE TABLE IF NOT EXISTS push_notification_throttles (throttle_key text PRIMARY KEY, claimed_at timestamp NOT NULL DEFAULT NOW())`,
+    `CREATE INDEX IF NOT EXISTS push_notification_throttles_claimed_at_idx ON push_notification_throttles (claimed_at)`,
     `CREATE TABLE IF NOT EXISTS score_submission_idempotency (submission_id text PRIMARY KEY, player_id text NOT NULL, request_hash text NOT NULL, response_json text NOT NULL, created_at timestamp NOT NULL DEFAULT NOW())`,
     `CREATE INDEX IF NOT EXISTS score_submission_idempotency_player_id_idx ON score_submission_idempotency (player_id)`,
     `CREATE TABLE IF NOT EXISTS score_bonus_claims (token_set_hash text PRIMARY KEY, player_id text NOT NULL, max_score integer NOT NULL, expires_at timestamp NOT NULL, created_at timestamp NOT NULL DEFAULT NOW())`,
