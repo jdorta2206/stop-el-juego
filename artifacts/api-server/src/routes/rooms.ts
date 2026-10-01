@@ -3202,6 +3202,7 @@ router.post("/:roomCode/stop", async (req, res) => {
       })
       .where(and(
         eq(roomsTable.roomCode, roomCode.toUpperCase()),
+        eq(roomsTable.id, room.id),
         eq(roomsTable.status, "playing"),
         eq(roomsTable.roomVersion, room.roomVersion),
       ))
