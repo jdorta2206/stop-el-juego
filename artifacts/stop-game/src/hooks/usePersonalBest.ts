@@ -48,7 +48,7 @@ export function usePersonalBest(mode: GameMode, playerId?: string) {
     syncAbortRef.current?.abort();
   }, [playerId]);
 
-  // ── Sync from server on mount (server wins for each mode if higher) ──────
+  // ── Sync from server on mount (server is authoritative) ─────────────────
   useEffect(() => {
     if (!playerId || syncedRef.current) return;
     syncedRef.current = true;
@@ -57,19 +57,14 @@ export function usePersonalBest(mode: GameMode, playerId?: string) {
     syncBestsFromServer(playerId, controller.signal).then(serverBests => {
       if (Object.keys(serverBests).length === 0) return;
       setBests(prev => {
-        const merged: BestScores = { ...prev };
-        let changed = false;
+        const authoritative: BestScores = {};
         for (const [m, score] of Object.entries(serverBests)) {
-          if ((merged[m as GameMode] ?? 0) < (score as number)) {
-            merged[m as GameMode] = score as number;
-            changed = true;
+          if (typeof score === "number" && Number.isFinite(score) && score >= 0) {
+            authoritative[m as GameMode] = score;
           }
         }
-        if (changed) {
-          try { localStorage.setItem(storageKey(playerId), JSON.stringify(merged)); } catch {}
-          return merged;
-        }
-        return prev;
+        try { localStorage.setItem(storageKey(playerId), JSON.stringify(authoritative)); } catch {}
+        return authoritative;
       });
     });
   }, [playerId]);
