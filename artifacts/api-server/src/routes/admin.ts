@@ -241,6 +241,7 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
   </table>
 
   <a class="btn" href="">🔄 Actualizar</a>
+  <a class="btn" href="/test/analytics">📡 Ver conexiones, login y publicidad en detalle</a>
 
   <h2>Notificaciones</h2>
   <form method="post" action="/test/notify-mundial" onsubmit="return confirm('¿Enviar la notificación del Pack Mundial a TODOS los jugadores suscritos?');">
