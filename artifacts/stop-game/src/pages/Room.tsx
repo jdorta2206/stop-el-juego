@@ -2710,6 +2710,12 @@ export default function Room() {
 function StreamerModeCard({ room, playerId }: { room: any; playerId: string }) {
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => {
+    if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    copiedTimerRef.current = null;
+  }, []);
   const isPublic = !!room?.isPublic;
   const code = room?.roomCode;
   const apiBase = (import.meta.env.VITE_API_BASE_URL || "") as string;
@@ -2733,7 +2739,11 @@ function StreamerModeCard({ room, playerId }: { room: any; playerId: string }) {
   const copy = (url: string, key: string) => {
     navigator.clipboard.writeText(url).catch(() => {});
     setCopied(key);
-    scheduleUiTimeout(() => setCopied(null), 1500);
+    if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    copiedTimerRef.current = setTimeout(() => {
+      copiedTimerRef.current = null;
+      setCopied(null);
+    }, 1500);
   };
 
   return (
