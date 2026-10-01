@@ -521,7 +521,7 @@ function formatRoom(room: any, cosmeticsMap?: Record<string, any>) {
     phrases: getPhrases(code, room.id),
     typing: getTyping(code, room.id, room.currentRound ?? 0),
     // Persisted rematch survives process restarts; memory map is only a fast-path.
-    rematchCode: roomRematch.get(code)?.rematchCode ?? meta?.rematchCode ?? null,
+    rematchCode: roomRematch.get(code)?.roomId === room.id ? roomRematch.get(code)!.rematchCode : (meta?.rematchCode ?? null),
     funVotes: getFunVotes(code, room.id, room.currentRound),
     createdAt: room.createdAt,
     // Internal version marker used to order SSE snapshots across concurrent
