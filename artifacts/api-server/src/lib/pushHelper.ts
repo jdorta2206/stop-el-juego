@@ -301,8 +301,6 @@ export async function notifyFollowersPlayerOnline(
       pt: { title: "🟢 Amigo online!", body: `${playerName} está jogando agora. Desafia-o!`, url: "/multiplayer" },
       fr: { title: "🟢 Ami connecté !", body: `${playerName} joue maintenant. Lance-lui un défi !`, url: "/multiplayer" },
     };
-    const msg = MSGS[language] || MSGS.es;
-
     await Promise.allSettled(followers.map(async (follower) => {
       const dedupeKey = `${follower.followerId}:${playerId}`;
       const lastNotified = friendOnlineNotifiedAt.get(dedupeKey) || 0;
@@ -314,7 +312,32 @@ export async function notifyFollowersPlayerOnline(
       if (friendOnlineInFlight.has(dedupeKey)) return;
       friendOnlineInFlight.add(dedupeKey);
       try {
-        const sent = await sendPushToPlayer(follower.followerId, msg);
+        const subscriptions = await db.select().from(pushSubscriptionsTable).where(and(
+          eq(pushSubscriptionsTable.playerId, follower.followerId),
+          excludeReplitOrigin,
+          enabledAndUnmuted(),
+        ));
+        let sent = 0;
+        for (const row of subscriptions) {
+          const msg = MSGS[row.language] || MSGS.es;
+          try {
+            await webpush.sendNotification(
+              { endpoint: row.endpoint, keys: { p256dh: row.p256dh, auth: row.auth } },
+              JSON.stringify({
+                ...msg,
+                icon: "/images/icon-192.png",
+                badge: "/images/badge-96.png",
+              }),
+            );
+            sent++;
+          } catch (e: any) {
+            if (e?.statusCode === 410 || e?.statusCode === 404 || e?.statusCode === 403) {
+              await cleanStaleEndpoint(row);
+            } else {
+              console.error(`[push] friend-online failed status=${e?.statusCode ?? "unknown"} follower=${follower.followerId}`);
+            }
+          }
+        }
         if (sent > 0) friendOnlineNotifiedAt.set(dedupeKey, now);
       } finally {
         friendOnlineInFlight.delete(dedupeKey);
