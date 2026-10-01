@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { AVATAR_COLORS, getApiUrl } from "@/lib/utils";
 
 const SESSION_TOKEN_KEY = "stop_session_token";
@@ -51,7 +51,7 @@ function writeStoredPlayer(profile: PlayerProfile | null) {
   try { window.dispatchEvent(new CustomEvent(PLAYER_EVENT)); } catch {}
 }
 
-async function tryRestoreFrom(apiBase: string): Promise<PlayerProfile | null> {
+async function tryRestoreFrom(apiBase: string, shouldCommit: () => boolean = () => true): Promise<PlayerProfile | null> {
   try {
     const headers: Record<string, string> = {};
     let token: string | null = null;
@@ -67,18 +67,18 @@ async function tryRestoreFrom(apiBase: string): Promise<PlayerProfile | null> {
 
     const data = await res.json();
     if (!data?.id || !data.name) return null;
-    if (data.token) { try { localStorage.setItem(SESSION_TOKEN_KEY, data.token); } catch {} }
+    if (data.token && shouldCommit()) { try { localStorage.setItem(SESSION_TOKEN_KEY, data.token); } catch {} }
 
     return { id: data.id, name: String(data.name).trim().slice(0, 14), avatarColor: data.avatarColor || AVATAR_COLORS[0], loginMethod: data.loginMethod ?? null, picture: data.picture ?? null, fbAccessToken: null };
   } catch { return null; }
 }
 
-async function tryRestoreSession(): Promise<PlayerProfile | null> {
+async function tryRestoreSession(shouldCommit: () => boolean = () => true): Promise<PlayerProfile | null> {
   const localBase = getApiUrl();
-  const restored = await tryRestoreFrom(localBase);
+  const restored = await tryRestoreFrom(localBase, shouldCommit);
   if (restored) return restored;
   try {
-    if (new URL(localBase, window.location.origin).origin !== CANONICAL_API_ORIGIN) return await tryRestoreFrom(CANONICAL_API_ORIGIN);
+    if (new URL(localBase, window.location.origin).origin !== CANONICAL_API_ORIGIN) return await tryRestoreFrom(CANONICAL_API_ORIGIN, shouldCommit);
   } catch {}
   return null;
 }
@@ -91,7 +91,13 @@ export function usePlayer() {
 
   useEffect(() => {
     let cancelled = false;
-    const refresh = () => { const stored = readStoredPlayer(); setPlayer(stored); setNeedsAuth(!stored); };
+    let identityGeneration = 0;
+    const refresh = () => {
+      identityGeneration += 1;
+      const stored = readStoredPlayer();
+      setPlayer(stored);
+      setNeedsAuth(!stored);
+    };
     try { localStorage.removeItem("stop_auth_dismissed_v1"); } catch {}
     const stored = readStoredPlayer();
 
@@ -99,7 +105,7 @@ export function usePlayer() {
       setPlayer(stored); setNeedsAuth(false); setIsLoaded(true);
       if (isLoggedInId(stored.id)) {
         void (async () => {
-          const restored = await tryRestoreSession();
+          const generation = identityGeneration;          const restored = await tryRestoreSession(() => !cancelled && generation === identityGeneration);
           if (cancelled) return;
           if (restored) { writeStoredPlayer(restored); setPlayer(restored); setNeedsAuth(false); }
           else { setPlayer(stored); setNeedsAuth(false); }
@@ -107,7 +113,7 @@ export function usePlayer() {
       }
     } else {
       void (async () => {
-        const restored = await tryRestoreSession();
+        const generation = identityGeneration;        const restored = await tryRestoreSession(() => !cancelled && generation === identityGeneration);
         if (cancelled) return;
         if (restored) { writeStoredPlayer(restored); setPlayer(restored); setNeedsAuth(false); }
         else { setPlayer(null); setNeedsAuth(true); }
