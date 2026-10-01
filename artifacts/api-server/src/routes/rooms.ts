@@ -1249,6 +1249,12 @@ function sanitizeRoomForSpectator(room: any) {
         bluffImmune: undefined,
       } : {}),
     })),
+    // Internal player IDs in ephemeral social/game events are bearer-like
+    // identifiers too. A public spectator does not need them.
+    halloweenScare: room.halloweenScare
+      ? { ...room.halloweenScare, playerId: undefined }
+      : null,
+    funVotes: undefined,
     ...(activeRound ? {
       // Bluff votes are private game-state and must never be exposed to spectators.
       bluffData: undefined,
