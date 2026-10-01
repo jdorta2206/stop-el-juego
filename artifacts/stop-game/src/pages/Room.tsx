@@ -250,9 +250,12 @@ export default function Room() {
   const submitMutation = useSubmitRoomResults();
   const queryClient = useQueryClient();
 
-  // When SSE is active it pushes updates in real-time — polling is just a safety fallback
+  // SSE is process-local on Railway. Keep a short DB poll even while SSE
+  // is connected so a mutation handled by another instance reaches this client
+  // promptly instead of waiting up to 30s. SSE still provides the immediate path
+  // on the instance that handled the mutation.
   const pollingInterval = sseActive
-    ? 30_000
+    ? 5_000
     : phase === "bluffvoting"                                          ? 800
     : phase === "playing" || phase === "freeze" || phase === "submitted" ? 1200
     : /* lobby / between_rounds / finished / spinning */                  1500;
