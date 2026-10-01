@@ -201,7 +201,7 @@ async function syncFromServer(playerId: string, signal?: AbortSignal): Promise<{
 }> {
   if (playerId.startsWith("guest_")) return { achievements: [], stats: {} };
   try {
-    const r = await fetch(`${getApiUrl()}/api/ranking/progress/${playerId}`, { signal });
+    const r = await fetch(`${getApiUrl()}/api/ranking/progress/${playerId}`, { signal, headers: authHeaders(), credentials: "include" });
     if (!r.ok) return { achievements: [], stats: {} };
     const data = await r.json();
     return {
