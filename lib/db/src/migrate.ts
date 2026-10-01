@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { db } from "./index";
+import { db, pool } from "./index";
 
 /**
  * Creates all critical indexes idempotently. Safe to call on every boot.
@@ -12,7 +12,11 @@ export function indexesReady(): boolean {
 }
 
 export async function ensureIndexes(): Promise<void> {
-  const stmts = [
+  const client = await pool.connect();
+  const lockKey = "stop:ensure-indexes:v1";
+  try {
+    await client.query(`SELECT pg_advisory_lock(hashtext($1))`, [lockKey]);
+    const stmts = [
     `CREATE INDEX IF NOT EXISTS player_scores_total_score_desc_idx ON player_scores (total_score DESC)`,
     `CREATE INDEX IF NOT EXISTS player_scores_xp_desc_idx ON player_scores (xp DESC)`,
     `CREATE INDEX IF NOT EXISTS game_history_created_at_idx ON game_history (created_at)`,
@@ -108,7 +112,7 @@ export async function ensureIndexes(): Promise<void> {
 
   for (const stmt of stmts) {
     try {
-      await db.execute(sql.raw(stmt));
+      await client.query(stmt);
     } catch (err: any) {
       // Every bootstrap statement is already idempotent via IF NOT EXISTS.
       // Never hide an "already exists" error here: it can indicate a real
@@ -122,8 +126,9 @@ export async function ensureIndexes(): Promise<void> {
   // Backfill legacy Halloween claims exactly once. The marker and all imported
   // claims commit together, so a crash rolls the marker back and the next boot retries.
   try {
-    await db.transaction(async (tx) => {
-      const claimed = await tx.execute(sql`
+    await client.query("BEGIN");
+    try {
+      const claimed = await client.query(sql`
         INSERT INTO halloween_migration_state (migration_key)
         VALUES ('legacy_event_claims_v1')
         ON CONFLICT (migration_key) DO NOTHING
@@ -131,7 +136,7 @@ export async function ensureIndexes(): Promise<void> {
       `);
       if ((claimed.rows?.length ?? 0) === 0) return;
 
-      const legacy = await tx.execute(sql`
+      const legacy = await client.query(sql`
         SELECT event_year, player_id, event_keys_json
         FROM halloween_progress
         WHERE event_keys_json IS NOT NULL AND event_keys_json <> '[]'
@@ -147,7 +152,7 @@ export async function ensureIndexes(): Promise<void> {
 
         for (const key of keys) {
           if (typeof key !== "string" || !key) continue;
-          await tx.execute(sql`
+          await client.query(sql`
             INSERT INTO halloween_event_claims (event_year, player_id, event_key)
             VALUES (${row.event_year}, ${row.player_id}, ${key})
             ON CONFLICT (event_year, player_id, event_key) DO NOTHING
