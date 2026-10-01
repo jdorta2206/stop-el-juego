@@ -2844,7 +2844,7 @@ function StreamerModeCard({ room, playerId }: { room: any; playerId: string }) {
       await fetch(`${apiBase}/api/rooms/${encodeURIComponent(code)}/visibility`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify({ hostId: playerId, isPublic: !isPublic }),
+        body: JSON.stringify({ hostId: playerId, roomId: room?.id, isPublic: !isPublic }),
       });
     } finally {
       setBusy(false);
