@@ -3686,14 +3686,19 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
   }
 
   if (!writeSucceeded) {
-    // Extremely unlikely after three bounded CAS retries. Return the latest
-    // state instead of looping indefinitely or reporting a false success.
+    // Extremely unlikely after three bounded CAS retries. The room may also
+    // have been deleted between the final CAS miss and this read, so never
+    // pass an undefined snapshot to formatRoom().
     const [refreshed] = await db.select().from(roomsTable)
       .where(and(
         eq(roomsTable.roomCode, roomCode.toUpperCase()),
         eq(roomsTable.id, room.id),
       ))
       .limit(1);
+    if (!refreshed) {
+      res.status(404).json({ error: "Room no longer exists" });
+      return;
+    }
     res.json(formatRoom(refreshed));
   }
 });
