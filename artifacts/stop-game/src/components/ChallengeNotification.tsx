@@ -55,10 +55,10 @@ export function ChallengeNotification({ challenge, onDismiss }: ChallengeNotific
       return;
     }
 
-    // Join first. The server only marks the challenge accepted once membership
-    // is confirmed, so a transient/full-room join failure cannot consume it.
-    try {
-      let joinResponse: Response | null = null;
+    // Join first, binding the request to the immutable challenge row. If the
+    // same pending room invite was refreshed while this notification was open,
+    // the server returns the current roomCode and we retry with that code.
+    let joinResponse: Response | null = null;
     let joinRoomCode = challenge.roomCode.toUpperCase();
     try {
       for (let attempt = 0; attempt < 2; attempt++) {
