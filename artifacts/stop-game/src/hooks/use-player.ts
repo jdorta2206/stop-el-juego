@@ -51,14 +51,19 @@ function writeStoredPlayer(profile: PlayerProfile | null) {
   try { window.dispatchEvent(new CustomEvent(PLAYER_EVENT)); } catch {}
 }
 
-async function tryRestoreFrom(apiBase: string, shouldCommit: () => boolean = () => true): Promise<PlayerProfile | null> {
+async function tryRestoreFrom(apiBase: string, shouldCommit: () => boolean = () => true, expectedPlayerId: string | null = null): Promise<PlayerProfile | null> {
   try {
     const headers: Record<string, string> = {};
     let token: string | null = null;
     try { token = localStorage.getItem(SESSION_TOKEN_KEY); if (token) headers["x-stop-token"] = token; } catch {}
     const canCommitCurrentSession = () => {
       if (!shouldCommit()) return false;
-      try { return localStorage.getItem(SESSION_TOKEN_KEY) === token; } catch { return false; }
+      try {
+        if (localStorage.getItem(SESSION_TOKEN_KEY) !== token) return false;
+        const raw = localStorage.getItem(STORAGE_KEY);
+        const current = raw ? JSON.parse(raw) : null;
+        return (typeof current?.id === "string" ? current.id : null) === expectedPlayerId;
+      } catch { return false; }
     };
 
     const res = await fetch(`${apiBase}/api/auth/me`, { credentials: "include", headers, cache: "no-store" });
@@ -77,12 +82,12 @@ async function tryRestoreFrom(apiBase: string, shouldCommit: () => boolean = () 
   } catch { return null; }
 }
 
-async function tryRestoreSession(shouldCommit: () => boolean = () => true): Promise<PlayerProfile | null> {
+async function tryRestoreSession(shouldCommit: () => boolean = () => true, expectedPlayerId: string | null = null): Promise<PlayerProfile | null> {
   const localBase = getApiUrl();
-  const restored = await tryRestoreFrom(localBase, shouldCommit);
+  const restored = await tryRestoreFrom(localBase, shouldCommit, expectedPlayerId);
   if (restored) return restored;
   try {
-    if (new URL(localBase, window.location.origin).origin !== CANONICAL_API_ORIGIN) return await tryRestoreFrom(CANONICAL_API_ORIGIN, shouldCommit);
+    if (new URL(localBase, window.location.origin).origin !== CANONICAL_API_ORIGIN) return await tryRestoreFrom(CANONICAL_API_ORIGIN, shouldCommit, expectedPlayerId);
   } catch {}
   return null;
 }
@@ -110,7 +115,7 @@ export function usePlayer() {
       if (isLoggedInId(stored.id)) {
         void (async () => {
           const generation = identityGeneration;
-          const restored = await tryRestoreSession(() => !cancelled && generation === identityGeneration);
+          const restored = await tryRestoreSession(() => !cancelled && generation === identityGeneration, stored?.id ?? null);
           if (cancelled || generation !== identityGeneration) return;
           if (restored) { writeStoredPlayer(restored); setPlayer(restored); setNeedsAuth(false); }
           else { setPlayer(stored); setNeedsAuth(false); }
