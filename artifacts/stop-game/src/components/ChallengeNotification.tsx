@@ -26,7 +26,7 @@ export function ChallengeNotification({ challenge, onDismiss }: ChallengeNotific
       setCountdown((v) => {
         if (v <= 1) {
           clearInterval(timer);
-          onDismiss();
+          void respondToChallenge(challenge.challengeId, false).finally(onDismiss);
           return 0;
         }
         return v - 1;
