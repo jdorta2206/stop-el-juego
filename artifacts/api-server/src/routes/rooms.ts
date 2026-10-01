@@ -2889,9 +2889,9 @@ router.post("/:roomCode/bluff-vote", writeLimiter, async (req, res) => {
       res.json(formatRoom(cur));
       return;
     }
-    if (isGameOver) {
-      submitAllScoresToLeaderboard(resolved, room.currentLetter || "A", room.roomCode).catch(() => {});
-    }
+    // Final-score persistence is handled exactly once by
+    // applyRoundAdvanceSideEffects(), which runs after the CAS transition above.
+    // Do not submit here again: doing so would duplicate games, scores and wins.
     // 🚀 Broadcast resolution to all players (was waiting for polling — main lag in bluff phase)
     res.json(broadcastAndFormat(updated));
     return;
