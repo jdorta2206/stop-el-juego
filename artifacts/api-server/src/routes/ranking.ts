@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import crypto from "crypto";
 import { db } from "@workspace/db";
-import { playerScoresTable, gameHistoryTable, pushSubscriptionsTable, scoreBonusClaimsTable } from "@workspace/db";
+import { playerScoresTable, gameHistoryTable, pushSubscriptionsTable, scoreBonusClaimsTable, scoreSubmissionIdempotencyTable } from "@workspace/db";
 import { eq, desc, sql } from "drizzle-orm";
 import { sendPushToPlayer } from "../lib/pushHelper";
 import { recordTrustedAnalyticsEvent } from "./analytics";
@@ -24,6 +24,31 @@ function bonusTokenSetHash(playerId: string, tokens: unknown): string | null {
     .sort();
   if (normalized.length !== tokens.length) return null;
   return crypto.createHash("sha256").update(playerId + "\n" + normalized.join("\n")).digest("hex");
+}
+
+function offlineSubmissionRequestHash(input: {
+  playerId: string;
+  playerName: string;
+  avatarColor?: string;
+  score: number;
+  letter: string;
+  mode: string;
+  won?: boolean;
+  bonus?: boolean;
+  scoreTokens?: string[];
+}): string {
+  const canonical = JSON.stringify({
+    playerId: input.playerId,
+    playerName: input.playerName,
+    avatarColor: input.avatarColor ?? null,
+    score: input.score,
+    letter: input.letter,
+    mode: input.mode,
+    won: input.won ?? false,
+    bonus: input.bonus ?? false,
+    scoreTokens: Array.isArray(input.scoreTokens) ? [...input.scoreTokens].sort() : [],
+  });
+  return crypto.createHash("sha256").update(canonical).digest("hex");
 }
 
 function calcCoinGain(score: number, won: boolean, mode: string, isBonus: boolean): number {
@@ -475,6 +500,18 @@ router.post("/scores", scoreLimiter, async (req, res) => {
   }
 
   const { playerId, playerName, avatarColor, score: rawScore, letter, mode, won, bonus, scoreTokens } = body.data;
+  const offlineSubmissionId = body.data.offlineSubmissionId;
+  const offlineSubmissionHash = offlineSubmissionId
+    ? offlineSubmissionRequestHash(body.data)
+    : null;
+  // Offline submissions must be voucher-free: the offline path is explicitly
+  // bounded by the absolute ceiling and therefore must never burn online
+  // score vouchers before the idempotency guard runs.
+  if (offlineSubmissionId && (bonus === true || (Array.isArray(scoreTokens) && scoreTokens.length > 0))) {
+    res.status(422).json({ error: "INVALID_OFFLINE_SUBMISSION" });
+    return;
+  }
+
 
   if (!verifyClaimedIdentity(req, playerId)) {
     res.status(403).json({ error: "Identity verification failed" });
@@ -598,6 +635,7 @@ router.post("/scores", scoreLimiter, async (req, res) => {
     ? appendStreakDay(existing[0]?.streakDaysJson, today)
     : undefined;
 
+  let replayedOfflineResponse: Record<string, unknown> | null = null;
   let player;
   if (isBonus) {
     const bonusResult = await db.transaction(async (tx) => {
