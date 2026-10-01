@@ -1788,7 +1788,8 @@ router.post("/:roomCode/join", roomJoinLimiter, async (req, res) => {
 // POST /rooms/:roomCode/start — host starts / continues the game
 router.post("/:roomCode/start", async (req, res) => {
   const roomCode = paramStr(req.params.roomCode);
-  const { hostId } = (req.body ?? {}) as { hostId?: string };
+  const { hostId, roomId } = (req.body ?? {}) as { hostId?: string; roomId?: number };
+  if (!Number.isInteger(roomId) || roomId <= 0) { res.status(400).json({ error: "Missing roomId" }); return; }
   const rooms = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, roomCode.toUpperCase())).limit(1);
   if (rooms.length === 0) { res.status(404).json({ error: "Room not found" }); return; }
 
