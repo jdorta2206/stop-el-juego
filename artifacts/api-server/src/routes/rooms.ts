@@ -207,11 +207,16 @@ const botDeps = {
   getRoundCategories: (room: any) => {
     const code = String(room.roomCode ?? "").toUpperCase();
     const cfg = roomCategoryPacks.get(code);
+    const persistedMeta = parseBluffMeta(room.stopperJson) ?? {};
+    const persistedPack = typeof persistedMeta.categoryPack === "string" ? persistedMeta.categoryPack : "standard";
+    const persistedCategories = Array.isArray(persistedMeta.customCategories)
+      ? persistedMeta.customCategories
+      : undefined;
     return resolveCategoriesForRound(
-      cfg?.pack ?? "standard",
+      cfg?.pack ?? persistedPack,
       room.currentLetter ?? "A",
       room.currentRound ?? 1,
-      cfg?.customCategories,
+      cfg?.customCategories ?? persistedCategories,
     );
   },
 };
@@ -1407,10 +1412,12 @@ router.post("/:roomCode/start", async (req, res) => {
   if (botsInRoom.length > 0) {
     const updatedRoom = updateResult[0];
     const packCfg = roomCategoryPacks.get(roomCode.toUpperCase());
-    const pack = packCfg?.pack ?? "standard";
+    const pack = packCfg?.pack ?? startSourceMeta.categoryPack ?? "standard";
+    const customCategories = packCfg?.customCategories
+      ?? (Array.isArray(startSourceMeta.customCategories) ? startSourceMeta.customCategories : undefined);
     const letterForRound = (updatedRoom.currentLetter ?? "A").toUpperCase();
     const roundForRound = updatedRoom.currentRound ?? newRound;
-    const categories = resolveCategoriesForRound(pack, letterForRound, roundForRound, packCfg?.customCategories);
+    const categories = resolveCategoriesForRound(pack, letterForRound, roundForRound, customCategories);
     scheduleBotsForRound({
       roomCode: roomCode.toUpperCase(),
       bots: botsInRoom.map((b: any) => ({ playerId: b.playerId })),
@@ -2533,12 +2540,17 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
   // category name and exploit the validator's defensive "unknown dictionary"
   // fallback to score arbitrary words.
   const packConfig = roomCategoryPacks.get(roomCode.toUpperCase());
-  const configuredPack = packConfig?.pack ?? "standard";
+  const resultMeta = parseBluffMeta(room.stopperJson) ?? {};
+  const persistedPack = typeof resultMeta.categoryPack === "string" ? resultMeta.categoryPack : "standard";
+  const persistedCustomCategories = Array.isArray(resultMeta.customCategories)
+    ? resultMeta.customCategories
+    : undefined;
+  const configuredPack = packConfig?.pack ?? persistedPack;
   const configuredCategories = resolveCategoriesForRound(
     configuredPack,
     letter,
     room.currentRound ?? 1,
-    packConfig?.customCategories,
+    packConfig?.customCategories ?? persistedCustomCategories,
   );
   // The standard pack is localized client-side. Accept its four supported
   // language labels; crazy/mix intentionally use the Spanish labels used by
