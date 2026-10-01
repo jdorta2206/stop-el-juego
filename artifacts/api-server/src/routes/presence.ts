@@ -494,7 +494,7 @@ router.post("/room-invite", async (req, res) => {
     fr: { title: "🎮 Invitation à la salle !", body: `${profile.name} t'invite à rejoindre la salle ${normalizedRoomCode}` },
   };
   const invMsg = INVITE_MSGS[invLang] || INVITE_MSGS.es;
-  sendPushToPlayer(toPlayerId, { ...invMsg, url: `/multiplayer?room=${normalizedRoomCode}` }).catch(() => {});
+  sendPushToPlayer(toPlayerId, { ...invMsg, url: "/multiplayer" }).catch(() => {});
 
   return res.json({ ok: true, challengeId });
 });
@@ -512,7 +512,7 @@ router.get("/challenges/:playerId", async (req, res) => {
     FROM player_challenges
     WHERE to_player_id = ${playerId}
       AND status = 'pending'
-      AND created_at >= NOW() - INTERVAL '60 seconds'
+      AND created_at >= NOW() - INTERVAL '2 minutes'
     ORDER BY created_at DESC
   `);
   const incoming = (rows.rows as any[]).map((c) => ({
