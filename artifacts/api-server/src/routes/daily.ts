@@ -173,7 +173,7 @@ router.post("/submit", async (req, res) => {
       .set({
         score: sql`GREATEST(${dailyResultsTable.score}, ${safeScore})`,
         playerName: sql`CASE WHEN ${dailyResultsTable.score} < ${safeScore} THEN ${canonicalPlayerName} ELSE ${dailyResultsTable.playerName} END`,
-        avatarColor: sql`CASE WHEN ${dailyResultsTable.score} < ${safeScore} THEN ${canonicalPlayerName} ELSE ${dailyResultsTable.avatarColor} END`,
+        avatarColor: sql`CASE WHEN ${dailyResultsTable.score} < ${safeScore} THEN ${canonicalAvatarColor} ELSE ${dailyResultsTable.avatarColor} END`,
       })
       .where(
         and(
