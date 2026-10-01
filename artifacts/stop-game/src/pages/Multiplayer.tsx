@@ -8,7 +8,7 @@ import { OnlineFriends } from "@/components/OnlineFriends";
 import { InviteFriends } from "@/components/InviteFriends";
 import { Users, Plus, LogIn, UserPlus, Globe, Lock, RefreshCw, Flag } from "lucide-react";
 import { useT } from "@/i18n/useT";
-import { getCurrentLang, getApiUrl } from "@/lib/utils";
+import { getCurrentLang, getApiUrl, authHeaders } from "@/lib/utils";
 import { loadActiveRoom, clearActiveRoom } from "@/lib/activeRoom";
 import { AnimatePresence, motion } from "framer-motion";
 
@@ -62,6 +62,8 @@ export default function Multiplayer() {
       try {
         const r = await fetch(getApiUrl() + "/api/rooms/" + saved.code + "?viewerId=" + encodeURIComponent(player.id), {
           signal: controller.signal,
+          credentials: "include",
+          headers: authHeaders(),
         });
         if (controller.signal.aborted) return;
         if (!r.ok) { clearActiveRoom(); return; }
