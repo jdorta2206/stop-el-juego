@@ -335,10 +335,10 @@ function InstagramPlayerRow({
     }
   };
 
-  const handleChallenge = async () => {
-    if (!currentPlayer) return;
+  const handleChallenge = async (): Promise<boolean> => {
+    if (!currentPlayer) return false;
     const result = await sendChallenge(currentPlayer, p.playerId);
-    if (!result) return;
+    if (!result) return false;
     pendingChallengeId.current = result.challengeId;
     challengeAbortRef.current?.abort();
     if (challengePollRef.current) clearInterval(challengePollRef.current);
@@ -370,6 +370,7 @@ function InstagramPlayerRow({
       controller.abort(); clearInterval(poll); challengePollRef.current = null;
       pendingChallengeId.current = null; challengeTimeoutRef.current = null;
     }, 60000);
+    return true;
   };
 
   const isMe = currentPlayer?.id === p.playerId;
@@ -469,10 +470,10 @@ function FriendRow({ friend, currentPlayer }: { friend: EnrichedFriend; currentP
     }
   };
 
-  const handleChallenge = async () => {
-    if (!currentPlayer || !friend.onlineData?.playerId) return;
+  const handleChallenge = async (): Promise<boolean> => {
+    if (!currentPlayer || !friend.onlineData?.playerId) return false;
     const result = await sendChallenge(currentPlayer, friend.onlineData.playerId);
-    if (!result) return;
+    if (!result) return false;
     pendingChallengeId.current = result.challengeId;
     challengeAbortRef.current?.abort();
     if (challengePollRef.current) clearInterval(challengePollRef.current);
@@ -504,6 +505,7 @@ function FriendRow({ friend, currentPlayer }: { friend: EnrichedFriend; currentP
       controller.abort(); clearInterval(poll); challengePollRef.current = null;
       pendingChallengeId.current = null; challengeTimeoutRef.current = null;
     }, 60000);
+    return true;
   };
 
   return (
