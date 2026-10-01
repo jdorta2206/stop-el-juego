@@ -245,33 +245,4 @@ export async function reportSeasonEvent(
   } catch {
     /* ignore */
   }
-}  useEffect(() => {
-    void refresh();
-    return () => leaderboardAbortRef.current?.abort();
-  }, [refresh]);
-
-  return { data, loading, refresh };
-}
-
-/**
- * Reports a gameplay event to the season pass mission tracker. Fire-and-forget.
- * No-op for guests. Authenticated via httpOnly cookie (or X-Stop-Token header
- * fallback); the server returns 401 silently if neither is present.
- */
-export async function reportSeasonEvent(
-  playerId: string | null | undefined,
-  type: "win_game" | "play_game" | "round_score" | "streak" | "valid_words" | "daily_done",
-  value?: number,
-): Promise<void> {
-  if (!playerId) return;
-  try {
-    await fetch(`${API}/api/season/event`, {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json", ...authHeaders() },
-      body: JSON.stringify({ type, value }),
-    });
-  } catch {
-    /* ignore */
-  }
 }
