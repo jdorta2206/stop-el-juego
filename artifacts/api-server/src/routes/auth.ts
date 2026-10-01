@@ -851,6 +851,9 @@ router.get("/tiktok/callback", async (req: Request, res: Response) => {
   if (!TIKTOK_CLIENT_KEY || !TIKTOK_CLIENT_SECRET) {
     return res.redirect(`${APP_ORIGIN}/?auth_error=tiktok_not_configured`);
   }
+  if (!claimCode(`tiktok_${code}`)) {
+    return res.redirect(`${returnOrigin}${returnPath}`);
+  }
 
   try {
     const redirectUri = `${APP_ORIGIN}/api/auth/tiktok/callback`;
