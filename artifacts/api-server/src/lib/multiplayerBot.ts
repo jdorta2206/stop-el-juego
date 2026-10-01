@@ -297,6 +297,16 @@ export function cleanupStaleBotRooms(liveRoomIdsByCode: ReadonlyMap<string, numb
       cleanupBotRoom(code, liveRoomId);
     }
   }
+  // A completed/deleted room can retain an answer-generation token even after
+  // its timers are gone. It is room-scoped state too, so remove it by immutable
+  // room ID when the code no longer belongs to that room.
+  for (const [code, generation] of botAnswerGeneration.entries()) {
+    const liveRoomId = liveRoomIdsByCode.get(code);
+    if (liveRoomId === undefined || liveRoomId !== generation.roomId) {
+      botAnswerGeneration.delete(code);
+      botPendingAnswers.delete(code);
+    }
+  }
 }
 
 export function clearBotTimers(code: string) {
