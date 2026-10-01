@@ -444,7 +444,10 @@ router.post("/scores", scoreLimiter, requirePlayerIdentity, async (req: AuthedRe
 
   const { playerId, playerName, avatarColor, score: rawScore, letter, mode, won, bonus, scoreTokens, submissionId } = body.data;
 
-  if (!await verifyClaimedIdentity(req, playerId)) {
+  // Score writes are account-owned state. This endpoint is only used by the
+  // logged-in Solo client, so ownership comes from the signed session rather
+  // than a caller-controlled guest/player id.
+  if (req.playerId !== playerId) {
     res.status(403).json({ error: "Identity verification failed" });
     return;
   }
