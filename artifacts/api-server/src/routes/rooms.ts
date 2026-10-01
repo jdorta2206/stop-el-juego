@@ -1232,15 +1232,18 @@ async function purgeStaleRooms() {
         if (storedRoomId !== undefined && liveRoomId !== storedRoomId) m.delete(code);
       }
     };
-    // SSE: close leftover client connections before dropping the set.
-    for (const code of sseClients.keys()) {
-      if (liveCodesSet.has(code)) continue;
-      const set = sseClients.get(code);
-      if (set) for (const c of set) { try { c.res.end(); } catch { /* already closed */ } }
-      sseClients.delete(code);
+    // SSE clients carry their immutable roomId, so cleanup only closes clients
+    // whose exact room no longer exists. A recycled code keeps its new clients.
+    for (const [code, set] of sseClients.entries()) {
+      for (const client of [...set]) {
+        if (liveRoomIdsByCode.get(code) === Number(client.roomId)) continue;
+        try { client.res.end(); } catch { /* already closed */ }
+        set.delete(client);
+      }
+      if (set.size === 0) sseClients.delete(code);
     }
-    // Bot state must be cleaned for every room removed by this purge.
-    cleanupStaleBotRooms(liveCodesSet);
+    // Bot state is also bound to immutable room IDs.
+    cleanupStaleBotRooms(liveRoomIdsByCode);
     dropOrphansByRoomId(roomReactions as Map<string, unknown>);
     dropOrphansByRoomId(roomPhrases as Map<string, unknown>);
     dropOrphansByRoomId(roomTyping as Map<string, unknown>);
