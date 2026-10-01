@@ -537,6 +537,7 @@ async function performBotSubmit(
     // update from games the bot "finished".
     if (committed.didFinishGame) {
       deps.submitFinalScores(committed.players, committed.letter, code);
+      deps.clearRoundLiveResponses?.(code);
     }
 
     if (committed.status === "finished" || committed.status === "waiting") {
