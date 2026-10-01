@@ -347,13 +347,7 @@ router.post("/challenge", async (req, res) => {
          ${profile.avatarColor || "#e53e3e"}, ${toPlayerId}, ${roomCode}, ${roomId},
          'pending', FALSE, NOW())
       ON CONFLICT (from_player_id, to_player_id, is_room_invite) WHERE status = 'pending'
-      DO UPDATE SET
-        from_name = EXCLUDED.from_name,
-        from_picture = EXCLUDED.from_picture,
-        from_avatar_color = EXCLUDED.from_avatar_color,
-        room_code = EXCLUDED.room_code,
-        room_id = EXCLUDED.room_id,
-        created_at = NOW()
+      DO NOTHING
       RETURNING challenge_id, room_code, room_id
     `);
     if ((inserted as any).rowCount === 0) {
