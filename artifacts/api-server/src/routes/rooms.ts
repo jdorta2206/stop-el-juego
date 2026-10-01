@@ -3592,6 +3592,7 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
       })
       .where(and(
         eq(roomsTable.roomCode, roomCode.toUpperCase()),
+        eq(roomsTable.id, authoritativeRoom.id),
         eq(roomsTable.roomVersion, authoritativeRoom.roomVersion),
       ))
       .returning();
