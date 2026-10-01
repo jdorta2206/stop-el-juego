@@ -1600,7 +1600,7 @@ router.post("/:roomCode/join", roomJoinLimiter, async (req, res) => {
   if (!body.success) { res.status(400).json({ error: "Invalid request body" }); return; }
 
   const code = roomCode.toUpperCase();
-  const { playerId, playerName, avatarColor, picture, loginMethod } = body.data;
+  const { playerId, playerName, avatarColor, picture, loginMethod, challengeId } = body.data;
   // 🔒 A logged-in account can only join AS ITSELF. Guests (UUID ids) pass.
   if (!await verifyClaimedIdentity(req, playerId)) {
     res.status(403).json({ error: "Identity verification failed" }); return;
@@ -1653,7 +1653,9 @@ router.post("/:roomCode/join", roomJoinLimiter, async (req, res) => {
     | { kind: "notFound" }
     | { kind: "nameTaken" }
     | { kind: "started" }
-    | { kind: "full" };
+    | { kind: "full" }
+    | { kind: "challengeMismatch"; roomCode: string | null }
+    | { kind: "challengeInvalid" };
 
   const outcome: JoinOutcome = await db.transaction(async (tx) => {
     const rows = await tx.execute(
@@ -1664,6 +1666,20 @@ router.post("/:roomCode/join", roomJoinLimiter, async (req, res) => {
 
     // pg returns snake_case; map the two columns we need.
     const raw = list[0];
+
+    // Bind challenge-originated joins to the exact pending challenge row.
+    // Lock order is room -> challenge, matching /presence/room-invite.
+    if (challengeId) {
+      const challengeRows = await tx.execute(sql`SELECT challenge_id, to_player_id, room_code, room_id, status, created_at FROM player_challenges WHERE challenge_id = ${challengeId} LIMIT 1 FOR UPDATE`);
+      const challenge = ((challengeRows as any).rows ?? challengeRows)[0];
+      if (!challenge || challenge.status !== "pending" || challenge.to_player_id !== playerId || new Date(challenge.created_at).getTime() < Date.now() - 2 * 60 * 1000) {
+        return { kind: "challengeInvalid" } as const;
+      }
+      if (Number(challenge.room_id) !== Number(raw.id) || String(challenge.room_code).toUpperCase() !== code) {
+        return { kind: "challengeMismatch", roomCode: String(challenge.room_code || "").toUpperCase() || null } as const;
+      }
+    }
+
     const playersJson = raw.players_json ?? raw.playersJson;
     const players = parsePlayers(playersJson);
 
@@ -1711,6 +1727,12 @@ router.post("/:roomCode/join", roomJoinLimiter, async (req, res) => {
       message: "Ese nombre ya está en uso en esta sala. Prueba con otro o añade un número.",
     });
     return;
+  }
+  if (outcome.kind === "challengeInvalid") {
+    res.status(409).json({ error: "challenge_invalid" }); return;
+  }
+  if (outcome.kind === "challengeMismatch") {
+    res.status(409).json({ error: "challenge_room_mismatch", roomCode: outcome.roomCode }); return;
   }
   if (outcome.kind === "started") {
     res.status(409).json({
