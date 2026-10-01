@@ -314,6 +314,7 @@ const roomRematch = new Map<string, string>();
 // 👏 Votos a "Jugada de la ronda" — 1 voto por ronda por jugador.
 // Key: roomCode → Map<`${round}:${voterId}`, FunVote>
 type FunVote = {
+  roomId: number;
   round: number;
   voterId: string;
   votedPlayerId: string;
@@ -356,10 +357,10 @@ function halloweenEventAllowed(req: any): boolean {
 }
 
 const roomFunVotes = new Map<string, Map<string, FunVote>>();
-function getFunVotes(code: string, round?: number): FunVote[] {
+function getFunVotes(code: string, roomId: number, round?: number): FunVote[] {
   const m = roomFunVotes.get(code);
   if (!m) return [];
-  const votes = Array.from(m.values());
+  const votes = Array.from(m.values()).filter(v => v.roomId === roomId);
   return typeof round === "number" ? votes.filter(v => v.round === round) : votes;
 }
 
@@ -506,7 +507,7 @@ function formatRoom(room: any, cosmeticsMap?: Record<string, any>) {
     typing: getTyping(code, room.id, room.currentRound ?? 0),
     // Persisted rematch survives process restarts; memory map is only a fast-path.
     rematchCode: roomRematch.get(code) ?? meta?.rematchCode ?? null,
-    funVotes: getFunVotes(code, room.currentRound),
+    funVotes: getFunVotes(code, room.id, room.currentRound),
     createdAt: room.createdAt,
     // Internal version marker used to order SSE snapshots across concurrent
     // request/bot completions. Harmless to clients and not user-controlled.
@@ -2658,6 +2659,7 @@ router.post("/:roomCode/funvote", writeLimiter, async (req, res) => {
   if (!votes) { votes = new Map(); roomFunVotes.set(code, votes); }
   const key = `${round}:${playerId}`;
   votes.set(key, {
+    roomId: room.id,
     round,
     voterId: playerId,
     votedPlayerId,
