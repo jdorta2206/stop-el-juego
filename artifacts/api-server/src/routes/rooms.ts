@@ -1395,6 +1395,7 @@ router.patch("/:roomCode/visibility", async (req, res) => {
     res.status(400).json({ error: "Missing hostId or isPublic" }); return;
   }
   // 🔒 Bind to the token first so a leaked hostId can't be replayed by a third party.
+  if (!Number.isInteger(roomId) || roomId <= 0) { res.status(400).json({ error: "Missing roomId" }); return; }
   if (!await verifyClaimedIdentity(req, hostId)) {
     res.status(403).json({ error: "Identity verification failed" }); return;
   }
@@ -1864,6 +1865,7 @@ router.post("/:roomCode/start", async (req, res) => {
     })
     .where(and(
       eq(roomsTable.roomCode, roomCode.toUpperCase()),
+      eq(roomsTable.id, roomId),
       eq(roomsTable.status, "waiting"),
       eq(roomsTable.roomVersion, room.roomVersion),
     ))
