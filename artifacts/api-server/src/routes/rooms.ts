@@ -1838,6 +1838,7 @@ router.post("/:roomCode/start", async (req, res) => {
     const categories = resolveCategoriesForRound(pack, letterForRound, roundForRound, customCategories);
     scheduleBotsForRound({
       roomCode: roomCode.toUpperCase(),
+      roomId: updatedRoom.id,
       bots: botsInRoom.map((b: any) => ({ playerId: b.playerId })),
       letter: letterForRound,
       categories,
@@ -3187,6 +3188,7 @@ router.post("/:roomCode/stop", async (req, res) => {
   if (pendingBots.length > 0) {
     rushBotSubmits({
       roomCode: roomCode.toUpperCase(),
+      roomId: updated.id,
       bots: pendingBots.map((b: any) => ({ playerId: b.playerId })),
       deps: botDeps,
     });
