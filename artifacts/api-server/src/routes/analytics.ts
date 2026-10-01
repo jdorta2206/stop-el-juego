@@ -90,8 +90,6 @@ function serverSessionId(req: Request, res: any): string {
   return id;
 }
 
-// Fallback for cached clients: normal API/page requests also refresh a session.
-// Analytics errors are swallowed and can never block gameplay.
 router.use(async (req, res, next) => {
   if (req.path === "/summary" || req.path === "/event" || req.path === "/heartbeat") return next();
   try {
@@ -114,10 +112,14 @@ router.post("/heartbeat", presenceLimiter, async (req, res) => {
     await analyticsTablesReady;
     const body = (req.body ?? {}) as Record<string, unknown>;
     const sessionId = serverSessionId(req, res);
-    // Never trust analytics identity supplied by the browser. OAuth users can
-    // be bound to the verified session token; unverified guest ids are omitted.
+    // OAuth/player identity is always taken from the verified server token.
+    // For guests there is no authenticated identity, so only the non-sensitive
+    // login-method label "guest" is accepted for analytics classification.
     const playerId = readPlayerId(req);
-    const loginMethod = null;
+    const loginMethod =
+      !playerId && body.loginMethod === "guest"
+        ? "guest"
+        : null;
     const language = typeof body.language === "string" ? body.language.slice(0, 16) : null;
     const appVersion = String(req.headers["x-client-version"] ?? "").slice(0, 32) || null;
     const platform = platformFromRequest(req);
@@ -150,7 +152,7 @@ router.post("/event", presenceLimiter, async (req, res) => {
     await db.execute(sql`
       INSERT INTO analytics_events (event_name, player_id, session_id, platform, app_version, language, mode, ai_difficulty, metadata_json)
       VALUES (${eventName}, ${clean(body.playerId, 128)}, ${clean(body.sessionId, 128)}, ${platformFromRequest(req)}, ${String(req.headers["x-client-version"] ?? "").slice(0, 32) || null}, ${clean(body.language, 16)}, ${clean(body.mode, 32)}, ${clean(body.aiDifficulty, 32)}, ${metadataJson})
-    `);
+  `);
     return res.json({ ok: true });
   } catch (err) {
     console.error("[analytics] event failed:", err);
