@@ -2024,9 +2024,8 @@ router.post("/:roomCode/spy", writeLimiter, async (req, res) => {
     return;
   }
 
-  // Enforce per-round usage limit (premium gets 2x)
-  let used = roomSpyUsage.get(code);
-  if (!used) { used = new Map(); roomSpyUsage.set(code, used); }
+  // Enforce per-round usage limit in PostgreSQL so concurrent requests and
+  // multiple Railway replicas cannot reset/bypass the spy budget.
   const callerPremium = await isPlayerPremium(playerId);
 
   // Premium lookup is asynchronous. The room can advance while it is in
@@ -2048,15 +2047,7 @@ router.post("/:roomCode/spy", writeLimiter, async (req, res) => {
   }
 
   const limit = callerPremium ? SPY_LIMIT_PREMIUM : SPY_LIMIT_FREE;
-  const current = used.get(playerId) ?? 0;
-  if (current >= limit) {
-    res.status(429).json({
-      error: callerPremium
-        ? "Ya usaste tus 2 espías esta ronda"
-        : "Ya espiaste esta ronda. Hazte Premium para 2 usos por ronda.",
-    });
-    return;
-  }
+  const round = Number(liveRoom.currentRound ?? 0);
 
   // Find rivals with at least one fresh non-empty response
   const lr = roomLiveResponses.get(code);
@@ -2081,12 +2072,33 @@ router.post("/:roomCode/spy", writeLimiter, async (req, res) => {
     return;
   }
   const pick = candidates[Math.floor(Math.random() * candidates.length)];
-  used.set(playerId, current + 1);
+
+  // Atomically consume one use only after a valid target exists. The round is
+  // part of the key, so advancing the room automatically starts a fresh budget.
+  const consumed = await db.execute(sql`
+    INSERT INTO room_spy_usage (room_code, player_id, round, uses)
+    VALUES (${code}, ${playerId}, ${round}, 1)
+    ON CONFLICT (room_code, player_id, round) DO UPDATE
+      SET uses = room_spy_usage.uses + 1
+      WHERE room_spy_usage.uses < ${limit}
+    RETURNING uses
+  `);
+  const consumedRows = (consumed as any).rows ?? consumed;
+  const uses = Number(consumedRows?.[0]?.uses ?? 0);
+  if (uses <= 0) {
+    res.status(429).json({
+      error: callerPremium
+        ? "Ya usaste tus 2 espías esta ronda"
+        : "Ya espiaste esta ronda. Hazte Premium para 2 usos por ronda.",
+    });
+    return;
+  }
+
   res.json({
     rivalName: pick.name,
     category: pick.cat,
     word: pick.word,
-    usesLeft: limit - (current + 1),
+    usesLeft: Math.max(0, limit - uses),
     limit,
   });
 });
