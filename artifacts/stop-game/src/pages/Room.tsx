@@ -602,7 +602,7 @@ export default function Room() {
       const res = await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/add-bot`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify({ hostId: player.id }),
+        body: JSON.stringify({ hostId: player.id, roomId: room?.id }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
