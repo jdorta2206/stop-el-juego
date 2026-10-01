@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { guestStatsTable } from "@workspace/db";
-import { sql, gte, desc } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { writeLimiter } from "../middlewares/rateLimit";
 
 const router: IRouter = Router();
@@ -49,36 +49,6 @@ router.post("/conversion", writeLimiter, async (_req, res) => {
     console.error("[guest-stats] failed to record conversion:", err);
   }
   res.status(204).end();
-});
-
-// GET /guest-stats/summary — aggregate guest activity for this week + recent days.
-router.get("/summary", async (_req, res) => {
-  const weekRows = await db.execute(sql`
-    SELECT
-      COALESCE(SUM(games), 0)       AS "games",
-      COALESCE(SUM(conversions), 0) AS "conversions"
-    FROM guest_stats
-    WHERE day >= to_char(date_trunc('week', NOW() AT TIME ZONE 'UTC'), 'YYYY-MM-DD')
-  `);
-
-  const recent = await db
-    .select()
-    .from(guestStatsTable)
-    .orderBy(desc(guestStatsTable.day))
-    .limit(14);
-
-  const w = (weekRows.rows?.[0] ?? {}) as Record<string, unknown>;
-  res.json({
-    week: {
-      guestGames: Number(w.games ?? 0),
-      conversions: Number(w.conversions ?? 0),
-    },
-    recent: recent.map((r) => ({
-      day: r.day,
-      guestGames: r.games,
-      conversions: r.conversions,
-    })),
-  });
 });
 
 export default router;

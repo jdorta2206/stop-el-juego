@@ -239,6 +239,7 @@ export function validateRoundOffline(req: OfflineValidateRequest): OfflineValida
 const OUTBOX_KEY = "stop-score-outbox-v1";
 
 export type OutboxScorePayload = {
+  submissionId?: string;
   playerId: string;
   playerName: string;
   avatarColor?: string;
@@ -279,13 +280,30 @@ function writeOutbox(entries: OutboxEntry[]) {
   }
 }
 
-export function enqueueScoreOutbox(payload: OutboxScorePayload): OutboxEntry {
+export type OutboxLock = <T>(work: () => Promise<T>) => Promise<T>;
+
+const withOutboxLock: OutboxLock = async <T>(work: () => Promise<T>): Promise<T> => {
+  if (typeof navigator !== "undefined" && "locks" in navigator && navigator.locks?.request) {
+    return navigator.locks.request("stop-score-outbox", { mode: "exclusive" }, work);
+  }
+  // Single-tab fallback for older browsers. Modern supported clients use the
+  // cross-tab Web Locks API, which is the required path for shared storage.
+  return work();
+}
+
+export async function enqueueScoreOutbox(payload: OutboxScorePayload): Promise<OutboxEntry> {
   const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-  const entry: OutboxEntry = { id, payload, createdAt: Date.now() };
-  const cur = readOutbox();
-  cur.push(entry);
-  writeOutbox(cur);
-  return entry;
+  const entry: OutboxEntry = {
+    id,
+    payload: { ...payload, submissionId: payload.submissionId ?? id },
+    createdAt: Date.now(),
+  };
+  return withOutboxLock(async () => {
+    const cur = readOutbox();
+    cur.push(entry);
+    writeOutbox(cur);
+    return entry;
+  });
 }
 
 export function getScoreOutboxSize(): number {
@@ -296,33 +314,41 @@ let flushing = false;
 
 export async function flushScoreOutbox(
   submit: (payload: OutboxScorePayload) => Promise<unknown>,
+  currentPlayerId?: string,
 ): Promise<{ flushed: number; remaining: number }> {
   if (flushing) return { flushed: 0, remaining: readOutbox().length };
   flushing = true;
-  let flushed = 0;
   try {
-    // Each iteration claims and removes the head entry BEFORE sending so a
-    // second concurrent flush can't pick up the same item and create a
-    // duplicate score on the server.
-    while (true) {
-      const cur = readOutbox();
-      if (cur.length === 0) break;
-      const [next, ...rest] = cur;
-      writeOutbox(rest);
-      try {
-        await submit(next.payload);
-        flushed++;
-      } catch {
-        // Likely still offline / server unreachable — restore the entry at
-        // the head and stop retrying for this round. Other queued entries
-        // would presumably fail too.
-        const after = readOutbox();
-        writeOutbox([next, ...after]);
-        break;
+    return await withOutboxLock(async () => {
+      let flushed = 0;
+      while (true) {
+        const cur = readOutbox();
+        if (cur.length === 0) break;
+        const nextIndex = currentPlayerId
+          ? cur.findIndex((entry) => entry.payload?.playerId === currentPlayerId)
+          : 0;
+        if (nextIndex < 0) break;
+        const next = cur[nextIndex];
+        try {
+          // Keep the entry durable until the server acknowledges the POST.
+          // Removing it before the await could permanently lose the score if
+          // the tab/WebView crashes between localStorage.remove and the request.
+          await submit({ ...next.payload, submissionId: next.payload.submissionId ?? next.id });
+          const after = readOutbox();
+          // Remove exactly the entry that was acknowledged. If another writer
+          // changed the queue, preserve every other entry rather than replacing
+          // the whole array with a stale snapshot.
+          writeOutbox(after.filter((entry) => entry.id !== next.id));
+          flushed++;
+        } catch {
+          // Leave the entry in place for the next online retry. Keeping it
+          // durable also makes process/tab crashes safe during the await.
+          break;
+        }
       }
-    }
+      return { flushed, remaining: readOutbox().length };
+    });
   } finally {
     flushing = false;
   }
-  return { flushed, remaining: readOutbox().length };
 }

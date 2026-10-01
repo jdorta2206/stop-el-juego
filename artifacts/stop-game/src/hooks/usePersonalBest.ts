@@ -1,41 +1,8 @@
-import { useState, useCallback, useEffect, useRef } from "react";
-import { getApiUrl, authHeaders } from "@/lib/utils";
-
-const STORAGE_KEY = "stop_best_score_v2";
-function storageKey(playerId?: string) {
-  return playerId ? `${STORAGE_KEY}:${playerId}` : `${STORAGE_KEY}:guest`;
-}
-
-type GameMode = "normal" | "quick" | "chaos" | "daily" | "random";
-type BestScores = Partial<Record<GameMode, number>>;
-
-async function syncBestsFromServer(playerId: string): Promise<BestScores> {
-  if (playerId.startsWith("guest_")) return {};
-  try {
-    const r = await fetch(`${getApiUrl()}/api/ranking/progress/${playerId}`);
-    if (!r.ok) return {};
-    const data = await r.json();
-    return (data.personalBests && typeof data.personalBests === "object") ? data.personalBests : {};
-  } catch { return {}; }
-}
-
-async function saveBestsToServer(playerId: string, personalBests: BestScores) {
-  if (playerId.startsWith("guest_")) return;
-  try {
-    await fetch(`${getApiUrl()}/api/ranking/progress/${playerId}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...authHeaders() },
-      body: JSON.stringify({ personalBests }),
-    });
-  } catch {}
-}
-
-export function usePersonalBest(mode: GameMode, playerId?: string) {
-  const [bests, setBests] = useState<BestScores>(() => {
     try { return JSON.parse(localStorage.getItem(storageKey(playerId)) || "{}"); }
     catch { return {}; }
   });
   const syncedRef = useRef(false);
+  const syncAbortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     try {
@@ -44,31 +11,30 @@ export function usePersonalBest(mode: GameMode, playerId?: string) {
       setBests({});
     }
     syncedRef.current = false;
+    syncAbortRef.current?.abort();
   }, [playerId]);
 
-  // ── Sync from server on mount (server wins for each mode if higher) ──────
+  // ── Sync from server on mount (server is authoritative) ─────────────────
   useEffect(() => {
     if (!playerId || syncedRef.current) return;
     syncedRef.current = true;
-    syncBestsFromServer(playerId).then(serverBests => {
-      if (Object.keys(serverBests).length === 0) return;
+    const controller = new AbortController();
+    syncAbortRef.current = controller;
+    syncBestsFromServer(playerId, controller.signal).then(serverBests => {
       setBests(prev => {
-        const merged: BestScores = { ...prev };
-        let changed = false;
+        const authoritative: BestScores = {};
         for (const [m, score] of Object.entries(serverBests)) {
-          if ((merged[m as GameMode] ?? 0) < (score as number)) {
-            merged[m as GameMode] = score as number;
-            changed = true;
+          if (typeof score === "number" && Number.isFinite(score) && score >= 0) {
+            authoritative[m as GameMode] = score;
           }
         }
-        if (changed) {
-          try { localStorage.setItem(storageKey(playerId), JSON.stringify(merged)); } catch {}
-          return merged;
-        }
-        return prev;
+        try { localStorage.setItem(storageKey(playerId), JSON.stringify(authoritative)); } catch {}
+        return authoritative;
       });
     });
   }, [playerId]);
+
+  useEffect(() => () => syncAbortRef.current?.abort(), [playerId]);
 
   const best = bests[mode] ?? 0;
 

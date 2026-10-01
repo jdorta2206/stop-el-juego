@@ -27,7 +27,6 @@ import { useT } from "@/i18n/useT";
 import { useTicker } from "@/hooks/useTicker";
 import { useStreak } from "@/hooks/useStreak";
 import { useProgression, calcXpFromResults } from "@/hooks/useProgression";
-import { reportSeasonEvent } from "@/hooks/useSeason";
 import { trackGuestGame, trackGuestConversion } from "@/lib/guestStats";
 import { useSound } from "@/hooks/useSound";
 import { useToast } from "@/hooks/use-toast";
@@ -44,8 +43,12 @@ import { useReviewPrompt, recordGamePlayed, recordScoreAndPercentile } from "@/h
 import { maybeShowInterstitial, recordInterstitialGameCompleted } from "@/lib/interstitialAd";
 import { ReviewPromptCard } from "@/components/ReviewPromptCard";
 import { HalloweenBanner } from "@/components/HalloweenBanner";
-import { applyHalloweenCategory, isHalloweenActive } from "@/lib/halloweenEvent";
-import { HalloweenScareOverlay, getHalloweenScare, type HalloweenScare } from "@/components/HalloweenScare";
+import { HalloweenAmbience } from "@/components/HalloweenAmbience";
+import { applyHalloweenCategory, isHalloweenActive, isHalloweenPreview, isHalloweenModeEnabled, getHalloweenScare } from "@/lib/halloweenEvent";
+import { HalloweenScareOverlay } from "@/components/HalloweenScare";
+import type { HalloweenScare } from "@/lib/halloweenEvent";
+import { preloadHalloweenScareAssets } from "@/lib/halloweenScareAssets";
+import { preloadHalloweenScareAudio } from "@/lib/halloweenScareAudio";
 
 function vibrate(pattern: number | number[]) {
   try { if (navigator.vibrate) navigator.vibrate(pattern); } catch {}
@@ -136,9 +139,17 @@ export default function SoloGame() {
   const pendingAutoStartRef = useRef(false);
   const packId = getSafePackId(getSelectedPackId(), isPremium, customPacks);
   const activePack = getPackById(packId, customPacks);
+
+  // Daily / Quick / Chaos mode — read URL params once
+  const urlParams = new URLSearchParams(window.location.search);
+  const isDailyMode = urlParams.get("daily") === "true";
+  const isQuickMode = urlParams.get("mode") === "quick";
+  const isChaosMode = urlParams.get("mode") === "chaos";
+  const isRandomMode = urlParams.get("mode") === "random";
   const packCats = () => packId === "classic" ? getCategories() : getPackCategories(packId, getCurrentLang(), customPacks);
-  const [categories, setCategories] = useState<string[]>(() => applyHalloweenCategory(packCats(), lang, { enabled: !packId.startsWith("custom:") }));
+  const [categories, setCategories] = useState<string[]>(() => applyHalloweenCategory(packCats(), lang, { enabled: packId === "classic" && !isDailyMode && !isQuickMode && !isChaosMode && !isRandomMode }));
   const [muted, setMuted] = useState(false);
+  const [halloweenScareAfterglow, setHalloweenScareAfterglow] = useState(false);
   const [stopFlash, setStopFlash] = useState(false);
   // 🕵️ Espía / Robar respuesta — free: 1 uso/partida, premium: 2 usos/partida. -10 pts cada uso.
   // `spyUsesLeft` persists across rounds (per-game allowance).
@@ -159,15 +170,27 @@ export default function SoloGame() {
   const [randomEvent, setRandomEvent] = useState<RandomEvent>(null);
   const [halloweenScare, setHalloweenScare] = useState<HalloweenScare | null>(null);
   const halloweenScareTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const halloweenScareRoundRef = useRef<number | null>(null);
+  const halloweenAnswerScareTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const halloweenAnswerScareRoundRef = useRef<number | null>(null);
+
+  // Never let an answer-triggered scare timer cross a round/state boundary.
+  useEffect(() => {
+    if (halloweenAnswerScareTimerRef.current) {
+      clearTimeout(halloweenAnswerScareTimerRef.current);
+      halloweenAnswerScareTimerRef.current = null;
+    }
+    halloweenAnswerScareRoundRef.current = null;
+  }, [round, gameState]);
   // Round result announcement
   const [roundWon, setRoundWon] = useState<boolean | null>(null);
 
-  // Daily / Quick / Chaos mode — read URL params once
-  const urlParams = new URLSearchParams(window.location.search);
-  const isDailyMode = urlParams.get("daily") === "true";
-  const isQuickMode = urlParams.get("mode") === "quick";
-  const isChaosMode = urlParams.get("mode") === "chaos";
-  const isRandomMode = urlParams.get("mode") === "random";
+  // Preload Halloween assets while the lobby is visible so the scare never waits for network/decode.
+  useEffect(() => {
+    if (!isHalloweenActive() || !isHalloweenModeEnabled() || isDailyMode) return;
+    void preloadHalloweenScareAssets();
+    preloadHalloweenScareAudio();
+  }, [isDailyMode]);
 
   // First-Time User Experience: handicap the AI for the first 3 games to
   // guarantee an early win and a smoother onboarding. Read once on mount —
@@ -312,7 +335,8 @@ export default function SoloGame() {
     let cancelled = false;
     const tryFlush = () => {
       if (typeof navigator !== "undefined" && navigator.onLine === false) return;
-      flushScoreOutbox((payload) => submitScoreMutation.mutateAsync({ data: payload }))
+      if (!player?.id) return;
+      flushScoreOutbox((payload) => submitScoreMutation.mutateAsync({ data: payload }), player.id)
         .then((res) => {
           if (cancelled || res.flushed <= 0) return;
           queryClient.invalidateQueries({ queryKey: ["/api/ranking/scores"] });
@@ -344,7 +368,7 @@ export default function SoloGame() {
   // Re-read categories when language changes (only if not daily mode)
   useEffect(() => {
     if (!isDailyMode) {
-      setCategories(applyHalloweenCategory(packCats(), lang, { enabled: !packId.startsWith("custom:") }));
+      setCategories(applyHalloweenCategory(packCats(), lang, { enabled: packId === "classic" && !isDailyMode && !isQuickMode && !isChaosMode && !isRandomMode }));
     }
   }, [lang, isDailyMode, packId, customPacksLoading]);
 
@@ -430,6 +454,8 @@ export default function SoloGame() {
   const submitScoreMutation = useSubmitScore();
   const queryClient = useQueryClient();
   const timerRef = useRef<NodeJS.Timeout>(null);
+  const stopTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hiddenRevealTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Guards to prevent handleStop / results-accumulation from firing more than once per round
   const stoppedRef = useRef(false);
   const resultsAppliedRef = useRef(false);
@@ -444,9 +470,81 @@ export default function SoloGame() {
   // the game and hand them back on submit so the server can clamp a fabricated
   // total. Reset per new game (where totalScore resets to 0), not per round.
   const scoreTokensRef = useRef<string[]>([]);
+  // Stable idempotency key for the logical game score. It survives all round
+  // transitions and is replaced only when a genuinely new game starts.
+  const gameSubmissionIdRef = useRef<string | null>(null);
+  const createSubmissionId = () => {
+    try {
+      if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+        return crypto.randomUUID();
+      }
+    } catch {}
+    return `stop-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+  };
+
+  // Halloween scares only run while actively answering. Daily/quick/chaos/random are excluded.
+  useEffect(() => {
+    if (gameState !== "PLAYING" || !isHalloweenActive() || !isHalloweenModeEnabled() || isDailyMode || isQuickMode || isChaosMode || isRandomMode) {
+      if (halloweenScareTimerRef.current) { clearTimeout(halloweenScareTimerRef.current); halloweenScareTimerRef.current = null; }
+      if (halloweenAnswerScareTimerRef.current) { clearTimeout(halloweenAnswerScareTimerRef.current); halloweenAnswerScareTimerRef.current = null; }
+      return;
+    }
+    if (halloweenScare || halloweenScareRoundRef.current === round) return;
+
+    const preview = isHalloweenPreview();
+    const min = preview ? 4000 : 10000;
+    const max = preview ? 7500 : 50000;
+    const delay = min + Math.floor(Math.random() * (max - min));
+    halloweenScareTimerRef.current = window.setTimeout(() => {
+      halloweenScareTimerRef.current = null;
+      if (gameState !== "PLAYING" || halloweenScareRoundRef.current === round) return;
+      halloweenScareRoundRef.current = round;
+      setHalloweenScare(getHalloweenScare(lang));
+    }, delay);
+    return () => {
+      if (halloweenScareTimerRef.current) { clearTimeout(halloweenScareTimerRef.current); halloweenScareTimerRef.current = null; }
+    };
+  }, [gameState, round, lang, halloweenScare, isDailyMode, isQuickMode, isChaosMode, isRandomMode]);
+
+  // Answer-triggered scare: after a real answer (>=3 chars), wait a random
+  // extra delay. Once armed it is not tied to further keystrokes, so it feels
+  // unpredictable instead of firing on a fixed input pattern.
+  useEffect(() => {
+    if (gameState !== "PLAYING" || !isHalloweenActive() || !isHalloweenModeEnabled() || isDailyMode || isQuickMode || isChaosMode || isRandomMode || halloweenScare || halloweenAnswerScareRoundRef.current === round) return;
+    const hasRealWord = Object.values(responses).some(v => typeof v === "string" && v.trim().length >= 3);
+    if (!hasRealWord || halloweenAnswerScareTimerRef.current) return;
+
+    const pauseMs = isHalloweenPreview() ? 650 : 900;
+    halloweenAnswerScareTimerRef.current = window.setTimeout(() => {
+      halloweenAnswerScareTimerRef.current = null;
+      if (halloweenScare || gameState !== "PLAYING" || halloweenAnswerScareRoundRef.current === round) return;
+      const chance = isHalloweenPreview() ? 0.72 : 0.32;
+      if (Math.random() > chance) { halloweenAnswerScareRoundRef.current = round; return; }
+      halloweenAnswerScareRoundRef.current = round;
+      const minDelay = isHalloweenPreview() ? 900 : 1600;
+      const maxDelay = isHalloweenPreview() ? 2600 : 5200;
+      halloweenAnswerScareTimerRef.current = window.setTimeout(() => {
+        halloweenAnswerScareTimerRef.current = null;
+        if (gameState === "PLAYING" && halloweenScareRoundRef.current !== round) {
+          halloweenScareRoundRef.current = round;
+          setHalloweenScare(getHalloweenScare(lang));
+        }
+      }, minDelay + Math.floor(Math.random() * (maxDelay - minDelay)));
+    }, pauseMs);
+    return () => {
+      if (halloweenAnswerScareTimerRef.current && halloweenAnswerScareRoundRef.current !== round) {
+        clearTimeout(halloweenAnswerScareTimerRef.current);
+        halloweenAnswerScareTimerRef.current = null;
+      }
+    };
+  }, [responses, gameState, round, lang, halloweenScare, isDailyMode, isQuickMode, isChaosMode, isRandomMode]);
 
   const startGame = () => {
+    if (!gameSubmissionIdRef.current) gameSubmissionIdRef.current = createSubmissionId();
     if (halloweenScareTimerRef.current) clearTimeout(halloweenScareTimerRef.current);
+    if (halloweenAnswerScareTimerRef.current) clearTimeout(halloweenAnswerScareTimerRef.current);
+    halloweenScareRoundRef.current = null;
+    halloweenAnswerScareRoundRef.current = null;
     setHalloweenScare(null);
     void trackAnalyticsEvent("game_start", { metadata: { mode: isDailyMode ? "daily" : "solo" } });
     // Snapshot the tutorial state at the moment the player presses Play so
@@ -477,17 +575,13 @@ export default function SoloGame() {
     setRandomEvent(event);
     setRoundWon(null);
 
-    // Halloween scare: visual-only, rare, normal games only. It never
-    // changes score, timer, categories or gameplay rules.
-    if (isHalloweenActive() && !isDailyMode && !isQuickMode && !isChaosMode && !isRandomMode) {
-      if (Math.random() < 0.38) {
-        const delay = 9000 + Math.floor(Math.random() * 16000);
-        halloweenScareTimerRef.current = setTimeout(() => {
-          setHalloweenScare(getHalloweenScare(lang));
-          window.setTimeout(() => setHalloweenScare(null), 2600);
-        }, delay);
-      }
-    }
+    // Halloween scare timers are owned by the round effects below.
+    // Never schedule a scare here: startGame can run before PLAYING and could
+    // otherwise fire over the lobby/results screens.
+    if (halloweenScareTimerRef.current) clearTimeout(halloweenScareTimerRef.current);
+    if (halloweenAnswerScareTimerRef.current) clearTimeout(halloweenAnswerScareTimerRef.current);
+    halloweenScareRoundRef.current = null;
+    halloweenAnswerScareRoundRef.current = null;
 
     if (isDailyMode) {
       setCurrentLetter(dailyLetter);
@@ -552,7 +646,13 @@ export default function SoloGame() {
     setHintReveal(null);
     setSpyUsesThisRound(0);
     sound.playRoundStart();
-    if (randomEvent === "hidden_category") setTimeout(() => sound.playHiddenReveal(), 400);
+    if (hiddenRevealTimeoutRef.current) clearTimeout(hiddenRevealTimeoutRef.current);
+    if (randomEvent === "hidden_category") {
+      hiddenRevealTimeoutRef.current = setTimeout(() => {
+        hiddenRevealTimeoutRef.current = null;
+        sound.playHiddenReveal();
+      }, 400);
+    }
 
     timerRef.current = setInterval(() => {
       if (gameTimerPausedRef.current || isGameTimerPaused()) return;
@@ -564,7 +664,10 @@ export default function SoloGame() {
             timerRef.current = null;
           }
           // Schedule handleStop outside the state-setter (safe async trigger)
-          setTimeout(handleStop, 0);
+          stopTimeoutRef.current = setTimeout(() => {
+            stopTimeoutRef.current = null;
+            void handleStop();
+          }, 0);
           return 0;
         }
         return prev - 1;
@@ -623,10 +726,17 @@ export default function SoloGame() {
     }
   };
 
-  // Cleanup card reveal timer on unmount
+  // Cleanup round timers on unmount
   useEffect(() => {
     return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+      timerRef.current = null;
+      if (stopTimeoutRef.current) clearTimeout(stopTimeoutRef.current);
+      stopTimeoutRef.current = null;
+      if (hiddenRevealTimeoutRef.current) clearTimeout(hiddenRevealTimeoutRef.current);
+      hiddenRevealTimeoutRef.current = null;
       if (cardRevealTimer.current) clearTimeout(cardRevealTimer.current);
+      cardRevealTimer.current = null;
     };
   }, []);
 
@@ -966,18 +1076,11 @@ export default function SoloGame() {
           const finalAi = aiTotalScore + as_;
           submitToLeaderboard(finalPlayerScore, finalAi);
           if (isDailyMode) submitDailyResult(finalPlayerScore);
-          // ── Season Pass mission tracking ──────────────────────────────
-          // Must fire here (not just in the auto-submit effect below) — the
-          // auto-submit effect early-returns once submittedRef is set, which
-          // happens RIGHT ABOVE on the same render cycle. So if we relied on
-          // the effect, missions would silently never advance from gameplay.
-          // The effect path remains as a fallback for any reload/edge case
-          // and is itself idempotent via `seasonEventsReportedRef`.
-          // We pass `newBestRound` explicitly because `setBestRoundScore`
-          // above is async — reading state would yield the previous value
-          // and under-report when the best round IS the final round.
-          reportGameEndSeasonEvents(finalPlayerScore, finalAi, results, newBestRound);
         }
+        // Count the completed game when the final round actually finishes,
+        // not when the player later presses "Jugar de nuevo". This preserves
+        // the every-3-games cadence even if the player leaves the RESULTS screen.
+        if (!isDailyMode) recordInterstitialGameCompleted();
       }
 
       // AI personality comment
@@ -1049,6 +1152,7 @@ export default function SoloGame() {
     const isBonus = opts?.bonus === true;
     submitScoreMutation.mutate({
       data: {
+        submissionId: `${gameSubmissionIdRef.current ?? createSubmissionId()}${isBonus ? ":bonus" : ""}`,
         playerId: player.id,
         playerName: player.name,
         avatarColor: player.avatarColor,
@@ -1090,14 +1194,15 @@ export default function SoloGame() {
           setTimeout(() => toast({ title: hhMsg }), 1200);
         }
       },
-      onError: () => {
+      onError: async () => {
         // 📡 Sin conexión: aparcamos la puntuación en la outbox para
         // reenviarla cuando vuelva la red (evento `online` o próximo
         // arranque). Sólo lo hacemos cuando el navegador reporta offline,
         // para evitar duplicar puntuaciones cuando es un error de servidor
         // que en realidad sí pudo persistir.
         if (typeof navigator !== "undefined" && navigator.onLine === false) {
-          enqueueScoreOutbox({
+          await enqueueScoreOutbox({
+            submissionId: `${gameSubmissionIdRef.current ?? createSubmissionId()}${isBonus ? ":bonus" : ""}`,
             playerId: player.id,
             playerName: player.name,
             avatarColor: player.avatarColor,
@@ -1133,59 +1238,14 @@ export default function SoloGame() {
   // the submission fires exactly once per game.
   const submittedRef = useRef(false);
 
-  // Single-fire guard for Season Pass mission events. Independent of
-  // submittedRef because the inline final-round block sets submittedRef
-  // before this effect can read it — see the call at line ~580.
-  const seasonEventsReportedRef = useRef(false);
-
-  /**
-   * Reports all end-of-game Season Pass events exactly once per game.
-   * Safe to call from multiple submit paths (inline final-round block AND
-   * the fallback auto-submit effect). Guests are silently no-op'd.
-   */
-  const reportGameEndSeasonEvents = (
-    finalScore: number,
-    finalAi: number,
-    finalResults: typeof results,
-    bestRoundOverride?: number,
-  ) => {
-    if (seasonEventsReportedRef.current) return;
-    if (!player || player.loginMethod === "guest") return;
-    seasonEventsReportedRef.current = true;
-    const won = finalScore > finalAi;
-    // Caller may pass a freshly-computed best-round value (the inline
-    // final-round path does this) so we don't read stale React state.
-    const bestRound = bestRoundOverride !== undefined ? bestRoundOverride : bestRoundScore;
-    reportSeasonEvent(player.id, "play_game", 1);
-    if (won) reportSeasonEvent(player.id, "win_game", 1);
-    if (isDailyMode) reportSeasonEvent(player.id, "daily_done", 1);
-    if (bestRound > 0) reportSeasonEvent(player.id, "round_score", bestRound);
-    const validCount = finalResults
-      ? Object.values(finalResults.results ?? {}).filter(
-          (r) => ((r as CategoryResult).player?.score ?? 0) > 0
-        ).length
-      : 0;
-    if (validCount > 0) reportSeasonEvent(player.id, "valid_words", validCount);
-    if (soloStreak.current > 0) reportSeasonEvent(player.id, "streak", soloStreak.current);
-  };
-
-  useEffect(() => {
-    if (gameState !== "RESULTS" || round < maxRounds || submittedRef.current) return;
-    submittedRef.current = true;
-    if (!player || player.loginMethod === "guest") trackGuestGame();
-    submitToLeaderboard(totalScore, aiTotalScore);
-    if (isDailyMode) submitDailyResult(totalScore);
-    // Fallback path — the inline block already reports events on the normal
-    // happy path; this catches any case where the inline path didn't run.
-    reportGameEndSeasonEvents(totalScore, aiTotalScore, results);
-  }, [gameState, round, maxRounds, totalScore, aiTotalScore, isDailyMode]); // eslint-disable-line react-hooks/exhaustive-deps
-
   const submitDailyResult = (finalScore: number) => {
-    // Always save daily score locally (works for guests too)
-    localStorage.setItem(`stop_daily_${getTodayStr()}`, String(finalScore));
-
-    // Save to server if logged in
-    if (!player || player.loginMethod === "guest") return;
+    // Guests have no server daily result, so local storage is their completion
+    // record. Logged-in players are marked locally only after the server
+    // confirms the score was accepted.
+    if (!player || player.loginMethod === "guest") {
+      localStorage.setItem(`stop_daily_${getTodayStr()}`, String(finalScore));
+      return;
+    }
     fetch(`${getApiUrl()}/api/daily/submit`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...authHeaders() },
@@ -1199,7 +1259,15 @@ export default function SoloGame() {
         language: getCurrentLang(),
         scoreTokens: scoreTokensRef.current,
       }),
-    }).catch(() => {});
+    })
+      .then((response) => {
+        if (!response.ok) throw new Error(`daily-submit-${response.status}`);
+        localStorage.setItem(`stop_daily_${getTodayStr()}`, String(finalScore));
+      })
+      .catch(() => {
+        // Never mark a logged-in daily as completed locally when the server
+        // rejected or failed to persist the result.
+      });
   };
 
   const nextRound = async () => {
@@ -1230,7 +1298,6 @@ export default function SoloGame() {
         return;
       }
       submittedRef.current = false;
-      if (!isDailyMode) recordInterstitialGameCompleted();
 
       // Never block the replay transition on an ad. The player must always
       // return to the lobby even if the native TWA bridge/ad fails or times out.
@@ -1238,6 +1305,7 @@ export default function SoloGame() {
       setRound(1);
       setTotalScore(0);
       scoreTokensRef.current = [];
+      gameSubmissionIdRef.current = null;
       setAiTotalScore(0);
       setBestRoundScore(0);
       setDoubleUsed(false);
@@ -1255,16 +1323,6 @@ export default function SoloGame() {
       setRound(r => r + 1);
       startGame();
     }
-  };
-
-  // Tiny inline starter pool — gives the player a 3-letter prefix to build on.
-  // Not exhaustive: when no match, falls back to "<letter>" alone as a nudge.
-  const HINT_STARTERS: Record<string, string[]> = {
-    A: ["ALA", "ARE", "ABA", "ACA"], B: ["BAR", "BEL", "BOL"], C: ["CAR", "CAS", "COR"],
-    D: ["DAN", "DOR"], E: ["ELE", "EST"], F: ["FIL", "FOR"], G: ["GAL", "GAR"],
-    H: ["HAR", "HEL"], I: ["INE", "ITA"], J: ["JAR", "JUL"], L: ["LAR", "LEO"],
-    M: ["MAR", "MEL"], N: ["NAR", "NEL"], O: ["OLI", "ORE"], P: ["PAL", "PAR"],
-    R: ["RAM", "RIO"], S: ["SAL", "SAN"], T: ["TAR", "TOR"], V: ["VAL", "VER"],
   };
 
   /** Pick a real valid word from the cached dictionary for the current letter/category. */
@@ -1519,7 +1577,8 @@ export default function SoloGame() {
           onShared={() => recordExternalStat(player?.id, { timesShared: 1 })}
         />
 
-        <AnimatePresence>{halloweenScare && <HalloweenScareOverlay scare={halloweenScare} onDone={() => setHalloweenScare(null)} />}</AnimatePresence>
+        <HalloweenAmbience active={isHalloweenActive() && isHalloweenModeEnabled() && !isDailyMode && !isQuickMode && !isChaosMode && !isRandomMode && gameState === "PLAYING"} muted={muted} heavy={halloweenScareAfterglow || !!halloweenScare} />
+        <AnimatePresence>{halloweenScare && <HalloweenScareOverlay scare={halloweenScare} muted={muted} reducedEffects={false} onDone={() => { setHalloweenScare(null); setHalloweenScareAfterglow(true); window.setTimeout(() => setHalloweenScareAfterglow(false), 3000); }} />}</AnimatePresence>
 
         {/* Achievement toast notification */}
         <AchievementToast
@@ -2083,14 +2142,20 @@ export default function SoloGame() {
                 )}
                 {!hintUsed && isPremium && (
                   <button
-                    onClick={() => {
+                    onClick={async () => {
                       const empty = categories.find(c => !(responses[c] && responses[c].trim().length > 0));
                       if (empty) {
-                        const pool = HINT_STARTERS[currentLetter] ?? [currentLetter];
-                        const word = pool[Math.floor(Math.random() * pool.length)];
+                        const word = await getHintWord(currentLetter, empty);
+                        if (!word) {
+                          toast({ title: lang === "en" ? "No valid hint available right now" : lang === "pt" ? "Não há uma pista válida disponível agora" : lang === "fr" ? "Aucune piste valide disponible pour le moment" : "No hay una pista válida disponible ahora", variant: "destructive" });
+                          return;
+                        }
                         setResponses(prev => ({ ...prev, [empty]: word }));
                         setHintReveal({ category: empty, word });
                         setTimeout(() => setHintReveal(null), 3500);
+                      } else {
+                        toast({ title: lang === "en" ? "Leave a category empty for the hint" : lang === "pt" ? "Deixa uma categoria vazia para a pista" : lang === "fr" ? "Laisse une catégorie vide pour l'indice" : "Deja una categoría vacía para recibir la pista" });
+                        return;
                       }
                       setHintUsed(true);
                     }}
@@ -2326,685 +2391,3 @@ export default function SoloGame() {
                   {t.bluff.judging_title}
                 </h2>
                 <p className="text-sm text-white/50 mt-1">{t.bluff.judging_sub}</p>
-              </motion.div>
-
-              {/* PHASE 1: Player bluff results */}
-              {judgingPhase === "player_bluffs" && (
-                <div className="w-full space-y-3">
-                  {bluffResults.length === 0 ? (
-                    <motion.p
-                      initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }}
-                      className="text-center text-white/40 text-sm py-4"
-                    >
-                      {t.bluff.noBluffs}
-                    </motion.p>
-                  ) : (
-                    bluffResults.map((result, i) => (
-                      <motion.div
-                        key={result.category}
-                        initial={{ opacity: 0, x: -40 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: i * 1.4, type: "spring", stiffness: 150, damping: 18 }}
-                        className="p-4 rounded-2xl border-2 flex items-center gap-4"
-                        style={{
-                          borderColor: result.caught ? "#ef4444" : "#22c55e",
-                          background: result.caught ? "rgba(239,68,68,0.1)" : "rgba(34,197,94,0.1)",
-                        }}
-                      >
-                        <motion.span
-                          initial={{ scale: 0 }} animate={{ scale: 1 }}
-                          transition={{ delay: i * 1.4 + 0.4, type: "spring" }}
-                          className="text-3xl"
-                        >
-                          {result.caught ? "🕵️" : "🎉"}
-                        </motion.span>
-                        <div className="flex-1">
-                          <p className="text-xs uppercase tracking-wider opacity-50">{result.category}</p>
-                          <p className="font-black text-lg" style={{ color: result.caught ? "#f87171" : "#4ade80" }}>
-                            {result.caught ? t.bluff.caught : t.bluff.perfect}
-                          </p>
-                        </div>
-                        <motion.span
-                          initial={{ scale: 0 }} animate={{ scale: 1 }}
-                          transition={{ delay: i * 1.4 + 0.7 }}
-                          className="text-xl font-black"
-                          style={{ color: result.caught ? "#f87171" : "#4ade80" }}
-                        >
-                          {result.scoreChange > 0 ? "+" : ""}{result.scoreChange}{t.bluff.pts}
-                        </motion.span>
-                      </motion.div>
-                    ))
-                  )}
-
-                  {/* Proceed to AI bluff phase */}
-                  <motion.button
-                    initial={{ opacity: 0, y: 16 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: Math.max(bluffResults.length * 1.4 + 0.6, 0.8) }}
-                    onClick={() => setJudgingPhase("ai_bluff")}
-                    className="w-full py-4 rounded-2xl font-black text-white text-lg shadow-lg"
-                    style={{ background: "hsl(222 47% 25%)", border: "2px solid rgba(255,255,255,0.12)" }}
-                  >
-                    {t.bluff.aiPhaseTitle} →
-                  </motion.button>
-                </div>
-              )}
-
-              {/* PHASE 2: AI bluff accusation */}
-              {judgingPhase === "ai_bluff" && aiBluffReveal && playerJudgedAi === null && (
-                <motion.div
-                  initial={{ opacity: 0, y: 24 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ type: "spring" }}
-                  className="w-full space-y-5"
-                >
-                  <p className="text-center text-white/60 text-sm">{t.bluff.aiSuspicious}</p>
-
-                  {/* AI's suspicious answer card */}
-                  <div
-                    className="p-6 rounded-3xl border-2 text-center shadow-2xl"
-                    style={{ background: "hsl(222 47% 20%)", borderColor: "rgba(255,255,255,0.12)" }}
-                  >
-                    <p className="text-xs uppercase tracking-widest opacity-50 mb-2">{aiBluffReveal.category}</p>
-                    <p className="text-4xl font-black mb-1">{aiBluffReveal.answer || "—"}</p>
-                    <div className="flex items-center justify-center gap-2 mt-2">
-                      <span className="text-2xl">{aiPersonality.emoji}</span>
-                      <p className="text-sm font-bold opacity-60">{aiPersonality.name}</p>
-                    </div>
-                  </div>
-
-                  <p className="text-center font-bold text-white">{t.bluff.aiQuestion}</p>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <motion.button
-                      whileTap={{ scale: 0.95 }}
-                      onClick={() => handleJudgeAi(false)}
-                      className="py-5 rounded-2xl font-black text-green-300 text-lg border-2"
-                      style={{ background: "rgba(34,197,94,0.12)", borderColor: "rgba(34,197,94,0.4)" }}
-                    >
-                      {t.bluff.btnReal}
-                    </motion.button>
-                    <motion.button
-                      whileTap={{ scale: 0.95 }}
-                      onClick={() => handleJudgeAi(true)}
-                      className="py-5 rounded-2xl font-black text-purple-300 text-lg border-2"
-                      style={{ background: "rgba(168,85,247,0.12)", borderColor: "rgba(168,85,247,0.4)" }}
-                    >
-                      {t.bluff.btnLie}
-                    </motion.button>
-                  </div>
-                </motion.div>
-              )}
-
-              {/* PHASE 2 reveal: after player judges AI */}
-              {judgingPhase === "ai_bluff" && playerJudgedAi !== null && aiBluffReveal && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.88 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ type: "spring", stiffness: 180, damping: 16 }}
-                  className="w-full space-y-4 text-center"
-                >
-                  {aiBluffReveal.wasActuallyBluffing === playerJudgedAi ? (
-                    <>
-                      <motion.p
-                        initial={{ scale: 0 }} animate={{ scale: 1 }}
-                        transition={{ type: "spring", stiffness: 200 }}
-                        className="text-6xl"
-                      >🕵️</motion.p>
-                      <p className="text-3xl font-black text-green-400">{t.bluff.detectPerfect}</p>
-                      <p className="text-green-300 font-bold text-xl">+15{t.bluff.pts}</p>
-                      <p className="text-sm text-white/50">
-                        {playerJudgedAi ? t.bluff.aiActuallyLied : t.bluff.aiWasReal}
-                      </p>
-                    </>
-                  ) : (
-                    <>
-                      <motion.p
-                        initial={{ scale: 0 }} animate={{ scale: 1 }}
-                        transition={{ type: "spring", stiffness: 200 }}
-                        className="text-6xl"
-                      >{aiPersonality.emoji}</motion.p>
-                      <p className="text-3xl font-black text-red-400">{t.bluff.aiWon} 😈</p>
-                      <p className="text-sm text-white/50">
-                        {aiBluffReveal.wasActuallyBluffing ? t.bluff.aiActuallyLied : t.bluff.aiWasReal}
-                      </p>
-                    </>
-                  )}
-
-                  <motion.button
-                    initial={{ opacity: 0, y: 12 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.5 }}
-                    onClick={() => setGameState("RESULTS")}
-                    className="w-full py-4 rounded-2xl font-black text-white text-lg"
-                    style={{ background: "hsl(6 90% 55%)" }}
-                  >
-                    {t.bluff.seeResults}
-                  </motion.button>
-                </motion.div>
-              )}
-            </motion.div>
-          )}
-
-          {/* RESULTS */}
-          {gameState === "RESULTS" && (
-            <motion.div
-              key="results"
-              initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-              className="flex-1 flex flex-col pb-8"
-            >
-              {/* Round won/lost announcement */}
-              <AnimatePresence>
-                {roundWon !== null && (
-                  <motion.div
-                    key={roundWon ? "won" : "lost"}
-                    initial={{ scale: 0.7, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    transition={{ type: "spring", bounce: 0.55 }}
-                    className="flex items-center justify-center gap-3 mb-4 py-3 px-4 rounded-2xl"
-                    style={{
-                      background: roundWon
-                        ? "linear-gradient(135deg, rgba(34,197,94,0.2), rgba(21,128,61,0.15))"
-                        : "linear-gradient(135deg, rgba(239,68,68,0.15), rgba(185,28,28,0.1))",
-                      border: roundWon
-                        ? "2px solid rgba(34,197,94,0.4)"
-                        : "2px solid rgba(239,68,68,0.3)",
-                    }}
-                  >
-                    {roundWon
-                      ? <Trophy className="w-6 h-6 text-green-400" fill="rgba(34,197,94,0.5)" />
-                      : <span className="text-2xl">💻</span>
-                    }
-                    <div>
-                      <p className={`font-black text-lg ${roundWon ? "text-green-300" : "text-red-300"}`}>
-                        {roundWon ? t.game.roundWon : t.game.roundLost}
-                      </p>
-                      {/* Close-loss frustration message */}
-                      {roundWon === false && results && (() => {
-                        const roundPs = results.playerTotalScore || 0;
-                        const roundAs = results.aiTotalScore || 0;
-                        const margin = roundAs - roundPs;
-                        if (margin > 0 && margin <= 15) {
-                          return (
-                            <p className="text-red-200/80 text-xs font-bold mt-0.5">
-                              {lang === "en" ? `Only ${margin} pts behind 😤` : lang === "pt" ? `Só ${margin} pts atrás 😤` : lang === "fr" ? `Juste ${margin} pts de retard 😤` : `Perdiste por solo ${margin} pts 😤`}
-                            </p>
-                          );
-                        }
-                        return null;
-                      })()}
-                    </div>
-                    {combo >= 2 && roundWon && (
-                      <div
-                        className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-black"
-                        style={{ background: "rgba(239,68,68,0.3)", color: "#fca5a5" }}
-                      >
-                        <Flame size={10} /> x{combo}
-                      </div>
-                    )}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              <h2 className="text-xl font-display font-bold mb-3 text-center opacity-70">{t.game.results}</h2>
-
-              <div className="bg-primary/50 rounded-2xl p-4 flex justify-around mb-3 border border-white/10">
-                <div className="text-center">
-                  <p className="text-sm font-bold text-white/60">{t.game.you}</p>
-                  <motion.p
-                    key={results?.playerTotalScore}
-                    initial={{ scale: 1.4, color: "#fbbf24" }}
-                    animate={{ scale: 1, color: "hsl(48 96% 57%)" }}
-                    transition={{ duration: 0.4 }}
-                    className="text-4xl font-display font-black"
-                    style={{ color: "hsl(48 96% 57%)" }}
-                  >
-                    +{results?.playerTotalScore || 0}
-                  </motion.p>
-                </div>
-                <div className="text-center border-l border-white/20 pl-8">
-                  <p className="text-sm font-bold text-white/60">
-                    {aiPersonality.emoji} {aiPersonality.name}
-                  </p>
-                  <p className="text-4xl font-display font-black">+{results?.aiTotalScore || 0}</p>
-                </div>
-              </div>
-
-              {/* AI personality comment bubble */}
-              <AnimatePresence>
-                {aiComment && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 10, scale: 0.92 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ type: "spring", bounce: 0.4 }}
-                    className="flex items-start gap-2 px-4 py-2.5 rounded-2xl mb-4"
-                    style={{
-                      background: `${aiPersonality.color}18`,
-                      border: `1.5px solid ${aiPersonality.color}44`,
-                    }}
-                  >
-                    <span className="text-2xl flex-shrink-0 mt-0.5">{aiPersonality.emoji}</span>
-                    <div>
-                      <p className="text-xs font-black mb-0.5" style={{ color: aiPersonality.color }}>
-                        {aiPersonality.name}
-                      </p>
-                      <p className="text-white/85 text-sm font-semibold italic">"{aiComment}"</p>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              {/* Special card reveal (Oracle / Steal / Sabotage) */}
-              <AnimatePresence>
-                {specialReveal && (() => {
-                  const isSabotageReveal = specialReveal.type === "sabotage";
-                  const isOracle = specialReveal.type === "oracle";
-                  const color = isSabotageReveal ? "#ef4444" : isOracle ? "#a855f7" : "#22d3ee";
-                  const emoji = isSabotageReveal ? "💣" : isOracle ? "🔮" : "🔄";
-                  const label = isSabotageReveal
-                    ? t.powerCards.sabotage_steal
-                    : isOracle ? t.powerCards.oracle_reveal : t.powerCards.steal_reveal;
-                  return (
-                    <motion.div
-                      key="special-reveal"
-                      initial={{ opacity: 0, scale: 0.88, y: 10 }}
-                      animate={{ opacity: 1, scale: 1, y: 0 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ type: "spring", stiffness: 200, damping: 20 }}
-                      className="mb-4 px-4 py-3 rounded-2xl border-2 flex items-center gap-3"
-                      style={{ background: `${color}18`, borderColor: `${color}55` }}
-                    >
-                      <span className="text-3xl">{emoji}</span>
-                      <div>
-                        <p className="text-xs font-black uppercase" style={{ color }}>{label}</p>
-                        <p className="text-sm font-bold text-white">
-                          {specialReveal.category}: <span style={{ color }} className="font-black">{specialReveal.word || "—"}</span>
-                          {isSabotageReveal && specialReveal.pts
-                            ? <span className="ml-2 text-green-400 font-black">+{specialReveal.pts}pts</span>
-                            : null}
-                        </p>
-                      </div>
-                    </motion.div>
-                  );
-                })()}
-              </AnimatePresence>
-
-              <div className="space-y-3 mb-6 flex-1 overflow-y-auto">
-                {categories.map((category, idx) => {
-                  const res = results?.results?.[category];
-                  const playerRes = res?.player;
-                  const aiRes = res?.ai;
-                  const isSabotaged = sabotageCategory === category;
-                  const isDuplicate = (playerRes as (typeof playerRes & { isDuplicate?: boolean }) | undefined)?.isDuplicate === true;
-                  const isCaughtBluff = bluffResults.some(br => br.category === category && br.caught);
-                  const playerWon = !isDuplicate && !isCaughtBluff && (playerRes?.score ?? 0) > ((isSabotaged ? 0 : aiRes?.score) ?? 0);
-                  const tied = !isSabotaged && !isDuplicate && !isCaughtBluff && (playerRes?.score ?? 0) === (aiRes?.score ?? 0) && (playerRes?.score ?? 0) > 0;
-
-                  return (
-                    <motion.div
-                      key={category}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: idx * 0.07 }}
-                    >
-                      <Card className="p-4 bg-black/20 border-white/5">
-                        <div className="flex items-center gap-2 mb-2">
-                          <h4 className="font-bold text-secondary text-xs uppercase tracking-wider flex-1">{category}</h4>
-                          {isDuplicate && <span className="text-red-400 text-xs font-black">REPETIDA ❌</span>}
-                          {isCaughtBluff && <span className="text-red-400 text-xs font-black">PILLADO 🕵️ −10pts</span>}
-                          {!isDuplicate && !isCaughtBluff && playerWon && <span className="text-green-400 text-xs font-black">+{playerRes?.score}pts ✓</span>}
-                          {!isDuplicate && !isCaughtBluff && tied && <span className="text-yellow-400 text-xs font-black">={playerRes?.score}pts</span>}
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className={`bg-card p-3 rounded-lg border relative overflow-hidden ${isDuplicate || isCaughtBluff ? "border-red-500/40" : "border-white/10"}`}>
-                            <p className="text-xs text-white/50 font-bold mb-1">{t.game.you}</p>
-                            <p className={`font-semibold text-lg break-words ${isDuplicate || isCaughtBluff ? "line-through opacity-50" : ""}`}>{playerRes?.response || t.game.empty}</p>
-                            {isDuplicate && <p className="text-red-400 text-xs font-bold mt-1">0pts — respuesta repetida</p>}
-                            {isCaughtBluff && <p className="text-red-400 text-xs font-bold mt-1">0pts — pillado mintiendo</p>}
-                            <div className={`absolute top-0 right-0 h-full w-1.5 ${isDuplicate || isCaughtBluff ? "bg-red-500/60" : (playerRes?.score ?? 0) >= 10 ? "bg-green-500" : (playerRes?.score ?? 0) >= 5 ? "bg-yellow-400" : "bg-red-500/60"}`} />
-                            {!isDuplicate && !isCaughtBluff && <span className="absolute bottom-2 right-3 text-xs font-bold opacity-50">{playerRes?.score ?? 0}{t.game.points}</span>}
-                          </div>
-                          <div
-                            className="p-3 rounded-lg border relative overflow-hidden"
-                            style={{
-                              background: isSabotaged ? "rgba(239,68,68,0.12)" : "hsl(222 47% 25%)",
-                              borderColor: isSabotaged ? "#ef444455" : "rgba(255,255,255,0.1)",
-                            }}
-                          >
-                            <p className="text-xs text-white/50 font-bold mb-1">{t.game.ai}</p>
-                            {isSabotaged ? (
-                              <p className="font-bold text-red-400 text-sm">❌ SABOTAJE</p>
-                            ) : (
-                              <p className="font-semibold text-lg break-words">{aiRes?.response || t.game.empty}</p>
-                            )}
-                            <div className={`absolute top-0 right-0 h-full w-1.5 ${isSabotaged ? "bg-red-500" : (aiRes?.score ?? 0) >= 10 ? "bg-green-500" : (aiRes?.score ?? 0) >= 5 ? "bg-yellow-400" : "bg-red-500/60"}`} />
-                            <span className="absolute bottom-2 right-3 text-xs font-bold opacity-50">
-                              {isSabotaged ? "0" : (aiRes?.score ?? 0)}{t.game.points}
-                            </span>
-                          </div>
-                        </div>
-                      </Card>
-                    </motion.div>
-                  );
-                })}
-              </div>
-
-              {!isPremium && (
-                <ContextualPremiumPrompt
-                  className="mb-4"
-                  context={{
-                    isPremium,
-                    roundLost: (results?.playerTotalScore ?? 0) < (results?.aiTotalScore ?? 0),
-                    margin: Math.abs((results?.playerTotalScore ?? 0) - (results?.aiTotalScore ?? 0)),
-                    spyExhausted: spyUsesLeft <= 0,
-                    streakDays: soloStreak.current,
-                  }}
-                  onUpgrade={() => setShowPremiumModal(true)}
-                  fallback={null}
-                />
-              )}
-
-              {/* Double or Nothing result badge */}
-              {activeCard === "double_or_nothing" && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.85 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  className="flex items-center gap-3 justify-center mb-3 py-2 px-4 rounded-xl font-black"
-                  style={{
-                    background: roundWon ? "rgba(249,115,22,0.15)" : "rgba(100,100,100,0.12)",
-                    border: roundWon ? "1px solid rgba(249,115,22,0.4)" : "1px solid rgba(150,150,150,0.2)",
-                  }}
-                >
-                  <span className="text-xl">🎯</span>
-                  <span style={{ color: roundWon ? "#f97316" : "#888" }}>
-                    {roundWon ? "DOBLE O NADA: ×3 XP 🔥" : "DOBLE O NADA: ×0 XP 💀"}
-                  </span>
-                </motion.div>
-              )}
-
-              {/* Shield used badge */}
-              {activeCard === "shield" && roundWon === false && (
-                <motion.div
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="flex items-center gap-2 justify-center mb-3 py-2 px-4 rounded-xl text-sm font-bold"
-                  style={{ background: "rgba(74,222,128,0.12)", border: "1px solid rgba(74,222,128,0.3)", color: "#4ade80" }}
-                >
-                  🛡️ {t.powerCards.shield_desc}
-                </motion.div>
-              )}
-
-              {/* XP multiplier hint (mid-game) */}
-              {round < maxRounds && randomEvent && (
-                <div
-                  className="flex items-center gap-2 justify-center mb-3 py-1.5 px-3 rounded-xl text-xs font-bold"
-                  style={{ background: "rgba(249,168,37,0.1)", border: "1px solid rgba(249,168,37,0.2)" }}
-                >
-                  <Star size={12} className="text-[#f9a825]" />
-                  <span className="text-[#f9a825]">
-                    {randomEvent === "double_xp" && t.game.doubleXp}
-                    {randomEvent === "easy_letter" && t.game.easyLetter}
-                    {randomEvent === "speed" && t.game.speedBonus}
-                    {randomEvent === "hidden_category" && t.game.hiddenCategory}
-                    {randomEvent === "time_bomb" && t.game.timeBomb}
-                  </span>
-                </div>
-              )}
-
-              {/* XP earned notification (final) */}
-              {round >= maxRounds && lastXpGain > 0 && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.8 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  className="flex items-center justify-center gap-2 mb-3 py-2 px-4 rounded-xl"
-                  style={{ background: "rgba(249,168,37,0.15)", border: "1px solid rgba(249,168,37,0.3)" }}
-                >
-                  <Star className="w-4 h-4 text-[#f9a825]" fill="rgba(249,168,37,0.5)" />
-                  <span className="text-[#f9a825] font-black text-sm">+{lastXpGain} {t.game.xpEarned}</span>
-                  {(randomEvent === "double_xp" || (randomEvent === "speed" && roundWon) || combo >= 2) && (
-                    <span className="text-[#f9a825]/60 text-xs font-bold">
-                      {randomEvent === "double_xp" ? "×2" : randomEvent === "speed" && roundWon ? "×3" : combo >= 4 ? "×2" : "×1.5"}
-                    </span>
-                  )}
-                </motion.div>
-              )}
-
-              {/* Personal best result — shown on final round */}
-              {round >= maxRounds && bestResult && (
-                <motion.div
-                  key="personal-best"
-                  initial={{ scale: 0.8, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  transition={{ type: "spring", bounce: 0.55, delay: 0.3 }}
-                  className="flex flex-col items-center justify-center mb-3 py-3 px-4 rounded-2xl gap-1"
-                  style={
-                    bestResult.isNew
-                      ? { background: "linear-gradient(135deg,rgba(249,168,37,0.25),rgba(181,48,26,0.2))", border: "2px solid rgba(249,168,37,0.6)" }
-                      : { background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)" }
-                  }
-                >
-                  {bestResult.isNew ? (
-                    <>
-                      <span className="text-2xl">🏆</span>
-                      <p className="text-yellow-300 font-black text-base text-center">
-                        {lang === "en" ? "NEW PERSONAL RECORD!" : lang === "pt" ? "NOVO RECORDE PESSOAL!" : lang === "fr" ? "NOUVEAU RECORD PERSO !" : "¡NUEVO RÉCORD PERSONAL!"}
-                      </p>
-                      <p className="text-yellow-200/70 text-xs font-bold text-center">
-                        {totalScore} {lang === "en" ? "pts — your best ever" : lang === "pt" ? "pts — o teu melhor" : lang === "fr" ? "pts — ton meilleur" : "pts — ¡tu mejor marca!"}
-                      </p>
-                    </>
-                  ) : personalBest > 0 ? (
-                    <>
-                      <p className="text-white/50 text-xs font-bold text-center">
-                        🏆 {lang === "en" ? "Record" : lang === "pt" ? "Recorde" : lang === "fr" ? "Record" : "Récord"}: {personalBest} pts
-                      </p>
-                      {bestResult.diff > -20 ? (
-                        <p className="text-white/80 font-black text-sm text-center">
-                          {lang === "en" ? `So close! ${Math.abs(bestResult.diff)} pts away 😤` : lang === "pt" ? `Tão perto! Faltaram ${Math.abs(bestResult.diff)} pts 😤` : lang === "fr" ? `Si proche ! ${Math.abs(bestResult.diff)} pts de plus 😤` : `¡Tan cerca! Te faltaron ${Math.abs(bestResult.diff)} pts 😤`}
-                        </p>
-                      ) : (
-                        <p className="text-white/60 text-xs text-center">
-                          {lang === "en" ? "Can you beat your record? 🎯" : lang === "pt" ? "Consegues bater o teu recorde? 🎯" : lang === "fr" ? "Peux-tu battre ton record ? 🎯" : "¿Puedes superar tu récord? 🎯"}
-                        </p>
-                      )}
-                    </>
-                  ) : null}
-                </motion.div>
-              )}
-
-              {/* Level up notification */}
-              <AnimatePresence>
-                {levelUpInfo && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -10, scale: 0.9 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.9 }}
-                    className="flex items-center justify-center gap-2 mb-3 py-2 px-4 rounded-xl cursor-pointer"
-                    style={{ background: "linear-gradient(135deg, rgba(249,168,37,0.3), rgba(181,48,26,0.2))", border: "2px solid rgba(249,168,37,0.5)" }}
-                    onClick={clearLevelUp}
-                  >
-                    <span className="text-2xl">🎉</span>
-                    <span className="text-white font-black text-sm">{t.game.newLevel} {levelUpInfo.from} → {levelUpInfo.to}</span>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              {/* RAGE message — final game loss (taunt = repeat) */}
-              {round >= maxRounds && totalScore < aiTotalScore && (() => {
-                const diff = aiTotalScore - totalScore;
-                const rageMsgs = {
-                  es: diff <= 15
-                    ? ["¿Lo ves? Estabas TAN cerca 💀", "Eso dolió, ¿verdad? 💀", "Una palabra más y ganabas 😤"]
-                    : diff <= 40
-                    ? ["¿En serio perdiste eso? 💀", "La IA te aplastó 😬", "¿Así nomas? ¿Sin luchar? 💀"]
-                    : ["Eso fue doloroso de ver 💀", "La IA lo da todo, tú no 😂", "¿Seguro que esto es lo tuyo? 💀"],
-                  en: diff <= 15
-                    ? ["You were SO close 💀", "That hurt, didn't it? 💀", "One more word and you had it 😤"]
-                    : diff <= 40
-                    ? ["Seriously? You lost that? 💀", "The AI destroyed you 😬", "You gave up that easily? 💀"]
-                    : ["That was painful to watch 💀", "The AI goes all in, you don't 😂", "Is this really your game? 💀"],
-                  pt: diff <= 15
-                    ? ["Estavas TÃO perto 💀", "Isso doeu, não? 💀", "Mais uma palavra e tinhas ganho 😤"]
-                    : diff <= 40
-                    ? ["A sério? Perdeste isso? 💀", "A IA destruiu-te 😬", "Desististe assim tão fácil? 💀"]
-                    : ["Foi doloroso de ver 💀", "A IA dá tudo, tu não 😂", "Tens a certeza que isto é o teu jogo? 💀"],
-                  fr: diff <= 15
-                    ? ["T'étais SI près 💀", "Ça fait mal, non ? 💀", "Un mot de plus et t'avais gagné 😤"]
-                    : diff <= 40
-                    ? ["Sérieusement ? T'as perdu ça ? 💀", "L'IA t'a écrasé 😬", "T'as abandonné aussi facilement ? 💀"]
-                    : ["C'était douloureux à regarder 💀", "L'IA met tout, pas toi 😂", "T'es sûr que c'est ton jeu ? 💀"],
-                };
-                const pool = (rageMsgs as any)[lang] ?? rageMsgs.es;
-                const msg = pool[Math.floor(totalScore * 7 % pool.length)];
-                return (
-                  <motion.div
-                    key="rage-msg"
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 1.2, type: "spring", bounce: 0.4 }}
-                    className="mb-3 px-4 py-2.5 rounded-xl text-center"
-                    style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.25)" }}
-                  >
-                    <p className="text-red-300 font-black text-sm">{msg}</p>
-                    <p className="text-white/40 text-xs mt-0.5 font-bold">
-                      {lang === "en" ? "— The game nobody beats" : lang === "pt" ? "— O jogo que ninguém vence" : lang === "fr" ? "— Le jeu que personne ne bat" : "— El juego que nadie supera"}
-                    </p>
-                  </motion.div>
-                );
-              })()}
-
-              {/* Guest prompt: score not saved → convert to a logged-in account
-                  so the player appears in the weekly/global ranking. Guests are
-                  never written to the leaderboard server-side, so this is the
-                  only path to get them counted. */}
-              {round >= maxRounds && (!player || player.loginMethod === "guest") && (
-                <motion.div
-                  initial={{ opacity: 0, y: 8, scale: 0.97 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  transition={{ delay: 0.6, type: "spring", bounce: 0.4 }}
-                  className="mb-3 rounded-2xl px-4 py-4"
-                  style={{
-                    background: "linear-gradient(135deg, rgba(249,168,37,0.22), rgba(181,48,26,0.18))",
-                    border: "2px solid rgba(249,168,37,0.6)",
-                    boxShadow: "0 4px 20px rgba(249,168,37,0.18)",
-                  }}
-                >
-                  <div className="flex items-start gap-3 mb-3">
-                    <span className="text-2xl mt-0.5">🏆</span>
-                    <div>
-                      <p className="text-yellow-300 font-black text-sm leading-tight">
-                        {lang === "pt"
-                          ? `Os teus ${totalScore} pontos não foram guardados`
-                          : lang === "en"
-                          ? `Your ${totalScore} points weren't saved`
-                          : lang === "fr"
-                          ? `Tes ${totalScore} points n'ont pas été enregistrés`
-                          : `Tus ${totalScore} puntos no se han guardado`}
-                      </p>
-                      <p className="text-yellow-200/80 text-xs mt-1 leading-snug">
-                        {lang === "pt"
-                          ? "Inicia sessão para guardar a pontuação e aparecer no ranking. É grátis!"
-                          : lang === "en"
-                          ? "Sign in to save your score and appear on the leaderboard. It's free!"
-                          : lang === "fr"
-                          ? "Connecte-toi pour sauvegarder ton score et apparaître au classement. C'est gratuit !"
-                          : "Inicia sesión para guardar tu puntuación y aparecer en el ranking. ¡Es gratis!"}
-                      </p>
-                    </div>
-                  </div>
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => {
-                      trackGuestConversion();
-                      showAuth();
-                    }}
-                    className="w-full py-3 rounded-xl font-black text-sm tracking-wide flex items-center justify-center gap-2"
-                    style={{
-                      background: "linear-gradient(135deg, #f9a825, #f57f17)",
-                      color: "#0d1757",
-                      boxShadow: "0 3px 14px rgba(249,168,37,0.4)",
-                    }}
-                  >
-                    <Star size={16} />
-                    {lang === "pt"
-                      ? "Iniciar sessão e guardar"
-                      : lang === "en"
-                      ? "Sign in & save my score"
-                      : lang === "fr"
-                      ? "Se connecter et sauvegarder"
-                      : "Iniciar sesión y guardar"}
-                  </motion.button>
-                </motion.div>
-              )}
-
-              {round >= maxRounds && !doubleUsed && totalScore > 0 && !isDailyMode && !isPremium && !REWARDED_ADS_DISABLED && (
-                <motion.button
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  whileHover={{ scale: 1.02 }}
-                  onClick={() => setRewardedAdType("double")}
-                  className="w-full mb-3 py-3 px-4 rounded-xl flex items-center justify-center gap-2 font-black text-sm"
-                  style={{
-                    background: "linear-gradient(135deg, rgba(249,168,37,0.25), rgba(181,48,26,0.2))",
-                    border: "2px solid rgba(249,168,37,0.6)",
-                    color: "#fde047",
-                  }}
-                >
-                  <Tv2 className="w-4 h-4" />
-                  {lang === "en" ? `Watch ad → DOUBLE your ${totalScore} pts!` :
-                   lang === "pt" ? `Vê anúncio → DUPLICA os teus ${totalScore} pts!` :
-                   lang === "fr" ? `Voir pub → DOUBLE tes ${totalScore} pts !` :
-                   `Ver anuncio → ¡DUPLICA tus ${totalScore} pts!`}
-                </motion.button>
-              )}
-              {round >= maxRounds && doubleUsed && (
-                <div className="w-full mb-3 py-2 px-4 rounded-xl text-center text-xs font-bold text-yellow-300 bg-yellow-500/10 border border-yellow-500/30">
-                  ✨ {lang === "en" ? "Score doubled!" : lang === "pt" ? "Pontuação duplicada!" : lang === "fr" ? "Score doublé !" : "¡Puntuación duplicada!"}
-                </div>
-              )}
-
-              <div className="grid grid-cols-2 gap-3">
-                {round >= maxRounds ? (
-                  isDailyMode ? (
-                    <Button size="lg" className="col-span-2" onClick={nextRound}>
-                      {t.daily.seeRanking ?? "Ver ranking del día"}
-                    </Button>
-                  ) : (
-                    <>
-                      <Button size="lg" onClick={nextRound}>
-                        {t.game.playAgain}
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        size="lg"
-                        onClick={() => setShowShareModal(true)}
-                        className="flex items-center justify-center gap-2"
-                      >
-                        <Star size={16} /> {t.game.shareResults}
-                      </Button>
-                      <Button
-                        size="lg"
-                        onClick={() => setShowClipModal(true)}
-                        className="col-span-2 flex items-center justify-center gap-2 font-black"
-                        style={{ background: "linear-gradient(135deg, #a855f7, #4f46e5)", color: "white" }}
-                      >
-                        🎬 {(t as any).game.shareClip ?? "Crear clip para TikTok"}
-                      </Button>
-                    </>
-                  )
-                ) : (
-                  <Button size="lg" className="col-span-2" onClick={nextRound}>
-                    {t.game.nextRound} ({round + 1}/{maxRounds})
-                  </Button>
-                )}
-              </div>
-            </motion.div>
-          )}
-
-        </AnimatePresence>
-      </div>
-    </Layout>
-  );
-}

@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db } from "@workspace/db";
+import { db, playerScoresTable } from "@workspace/db";
 import { tournamentsTable, roomsTable } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
 import { requirePlayerIdentity, verifyClaimedIdentity, type AuthedRequest } from "../lib/playerAuth.js";
@@ -116,24 +116,48 @@ router.post("/", async (req, res) => {
     hostId: string; hostName: string; name: string; size: number; isPublic?: boolean;
   };
   if (!hostId || !name) { res.status(400).json({ error: "Missing fields" }); return; }
-  if (!verifyClaimedIdentity(req, hostId)) {
+  if (!await verifyClaimedIdentity(req, hostId)) {
     res.status(403).json({ error: "Identity verification failed" }); return;
   }
+  const [hostProfile] = await db.select({ playerName: playerScoresTable.playerName }).from(playerScoresTable).where(eq(playerScoresTable.playerId, hostId)).limit(1);
+  if (!hostProfile) { res.status(404).json({ error: "Player not found" }); return; }
   const safeSize = [4, 8].includes(size) ? size : 4;
-  const code = randomCode();
-  const players = [{ playerId: hostId, playerName: hostName ?? "Host" }];
+  const players = [{ playerId: hostId, playerName: hostProfile.playerName }];
 
-  const [t] = await db.insert(tournamentsTable).values({
-    code,
-    hostId,
-    hostName: hostName ?? "Host",
-    name,
-    status: "waiting",
-    size: safeSize,
-    isPublic: !!isPublic,
-    playersJson: JSON.stringify(players),
-    bracketJson: null,
-  }).returning();
+  // The tournament code has a UNIQUE constraint. A random collision is rare,
+  // but concurrent creation requests must not turn that legitimate collision
+  // into a 500. Retry with a freshly generated code; the database remains the
+  // final authority for uniqueness.
+  let t: typeof tournamentsTable.$inferSelect | undefined;
+  for (let attempt = 0; attempt < 10 && !t; attempt++) {
+    const code = randomCode();
+    try {
+      const inserted = await db.insert(tournamentsTable).values({
+        code,
+        hostId,
+        hostName: hostProfile.playerName,
+        name,
+        status: "waiting",
+        size: safeSize,
+        isPublic: !!isPublic,
+        playersJson: JSON.stringify(players),
+        bracketJson: null,
+      }).returning();
+      t = inserted[0];
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (!/unique|duplicate/i.test(message) || attempt === 9) {
+        console.error("[tournaments/create] failed:", message);
+        res.status(500).json({ error: "Failed to create tournament" });
+        return;
+      }
+    }
+  }
+
+  if (!t) {
+    res.status(503).json({ error: "Unable to allocate tournament code" });
+    return;
+  }
 
   res.json(formatTournament(t));
 });
@@ -155,10 +179,12 @@ router.get("/:code", async (req, res) => {
 
 router.post("/:code/join", async (req, res) => {
   const code = req.params.code.toUpperCase();
-  const { playerId, playerName } = req.body as { playerId: string; playerName: string };
-  if (!playerId || !verifyClaimedIdentity(req, playerId)) {
+  const { playerId } = req.body as { playerId: string };
+  if (!playerId || !await verifyClaimedIdentity(req, playerId)) {
     res.status(403).json({ error: "Identity verification failed" }); return;
   }
+  const [playerProfile] = await db.select({ playerName: playerScoresTable.playerName }).from(playerScoresTable).where(eq(playerScoresTable.playerId, playerId)).limit(1);
+  if (!playerProfile) { res.status(404).json({ error: "Player not found" }); return; }
   const joined = await db.transaction(async (tx) => {
     const rows = await tx.select().from(tournamentsTable)
       .where(eq(tournamentsTable.code, code))
@@ -171,7 +197,7 @@ router.post("/:code/join", async (req, res) => {
     if (players.some(p => p.playerId === playerId)) return { tournament: t };
     if (players.length >= t.size) return { error: "FULL" as const };
 
-    players.push({ playerId, playerName });
+    players.push({ playerId, playerName: playerProfile.playerName });
     const [updated] = await tx.update(tournamentsTable)
       .set({ playersJson: JSON.stringify(players), updatedAt: new Date() })
       .where(eq(tournamentsTable.id, t.id))
@@ -191,7 +217,7 @@ router.post("/:code/join", async (req, res) => {
 router.post("/:code/start", async (req, res) => {
   const code = req.params.code.toUpperCase();
   const { hostId } = req.body as { hostId: string };
-  if (!hostId || !verifyClaimedIdentity(req, hostId)) {
+  if (!hostId || !await verifyClaimedIdentity(req, hostId)) {
     res.status(403).json({ error: "Identity verification failed" }); return;
   }
 

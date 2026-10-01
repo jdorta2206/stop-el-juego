@@ -1,4 +1,4 @@
-import { useRef, useCallback } from "react";
+import { useRef, useCallback, useEffect } from "react";
 
 const MAX_VOICES = 12;
 let activeVoices = 0;
@@ -107,6 +107,16 @@ function withReverb(
 
 export function useSound(muted: boolean) {
   const ctxRef = useRef<AudioContext | null>(null);
+
+  useEffect(() => {
+    return () => {
+      const ctx = ctxRef.current;
+      ctxRef.current = null;
+      if (ctx && ctx.state !== "closed") {
+        void ctx.close().catch(() => {});
+      }
+    };
+  }, []);
 
   const getCtx = useCallback(() => {
     if (!ctxRef.current || ctxRef.current.state === "closed") {

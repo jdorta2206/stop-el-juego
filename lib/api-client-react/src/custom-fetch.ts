@@ -277,8 +277,12 @@ function getApiBase(): string {
   try {
     const envUrl =
       typeof import.meta !== "undefined" &&
-      (import.meta as { env?: { VITE_API_URL?: string } }).env?.VITE_API_URL;
-    return envUrl || "";
+      (import.meta as { env?: { VITE_API_URL?: string } }).env?.VITE_API_URL?.trim();
+    if (!envUrl) return "";
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    const url = new URL(envUrl, origin || undefined);
+    if (/\.replit\.(app|dev)$/i.test(url.hostname)) return "";
+    return url.origin;
   } catch {
     return "";
   }

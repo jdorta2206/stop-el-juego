@@ -8,7 +8,7 @@ import { ArrowLeft, Trophy, Calendar, Flame } from "lucide-react";
 import { useDisplayStreak } from "@/hooks/useDisplayStreak";
 import { useReviewPrompt } from "@/hooks/useReviewPrompt";
 import { ReviewPromptCard } from "@/components/ReviewPromptCard";
-import { getApiUrl } from "@/lib/utils";
+import { getApiUrl, authHeaders } from "@/lib/utils";
 
 interface DailyChallenge {
   letter: string;
@@ -53,21 +53,44 @@ export default function DailyChallenge() {
   const reviewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    fetch(`${API_BASE}/api/daily?language=${lang}`)
+    const controller = new AbortController();
+    fetch(`${API_BASE}/api/daily?language=${lang}`, { signal: controller.signal })
       .then(r => r.json())
       .then(setChallenge)
       .catch(() => {});
 
-    fetch(`${API_BASE}/api/daily/rankings?language=${lang}`)
+    fetch(`${API_BASE}/api/daily/rankings?language=${lang}`, { signal: controller.signal })
       .then(r => r.json())
       .then(d => setRankings(d.rankings || []))
       .catch(() => {});
 
-    // Check if already played today
-    const played = localStorage.getItem(`stop_daily_${getTodayStr()}`);
-    if (played) {
-      setPlayedToday(true);
-      setMyScore(Number(played));
+    // Logged-in players use the server as the source of truth. Local storage
+    // is only a guest fallback because guests have no server daily result.
+    const localPlayed = localStorage.getItem(`stop_daily_${getTodayStr()}`);
+    if (!player || player.loginMethod === "guest") {
+      if (localPlayed) {
+        setPlayedToday(true);
+        setMyScore(Number(localPlayed));
+      }
+    } else {
+      fetch(`${API_BASE}/api/daily/status?playerId=${encodeURIComponent(player.id)}&language=${encodeURIComponent(lang)}`, {
+        headers: { ...authHeaders() },
+        credentials: "include",
+        signal: controller.signal,
+      })
+        .then(r => r.ok ? r.json() : Promise.reject(new Error("daily-status")))
+        .then(d => {
+          if (d.played) {
+            setPlayedToday(true);
+            setMyScore(typeof d.score === "number" ? d.score : null);
+          }
+        })
+        .catch(() => {
+          if (controller.signal.aborted) return;
+          // Do not block a logged-in player based on stale local state.
+          setPlayedToday(false);
+          setMyScore(null);
+        });
       // NOTE: do NOT increment the games-played counter here. The daily
       // match itself already runs through SoloGame.tsx (which calls
       // recordGamePlayed() at game end). Counting again on this landing
@@ -87,10 +110,11 @@ export default function DailyChallenge() {
       setTimeLeft(getTimeUntilMidnight());
     }, 60000);
     return () => {
+      controller.abort();
       clearInterval(timer);
       if (reviewTimerRef.current) clearTimeout(reviewTimerRef.current);
     };
-  }, [lang]);
+  }, [lang, player?.id, player?.loginMethod]);
 
   function handlePlay() {
     if (!challenge) return;
@@ -102,8 +126,11 @@ export default function DailyChallenge() {
     setLocation(`/solo?${params.toString()}`);
   }
 
+  // The API supplies the authoritative rank (including ties). Only show it
+  // when the player is actually present in the visible top-10; otherwise do
+  // not invent a rank from the array index.
   const myRank = player
-    ? rankings.findIndex(r => r.playerName === player.name) + 1
+    ? (rankings.find(r => r.playerName === player.name)?.rank ?? 0)
     : 0;
 
   return (

@@ -47,7 +47,7 @@ function isAllowedOrigin(value: string): boolean {
 
 async function cleanupAdmobRewardRequests(): Promise<void> {
   await db.execute(sql.raw(
-    "DELETE FROM admob_reward_requests WHERE created_at < NOW() - INTERVAL '5 minutes'",
+    "DELETE FROM admob_reward_requests WHERE rewarded = false AND consumed_at IS NULL AND created_at < NOW() - INTERVAL '5 minutes'",
   ));
 }
 
@@ -172,43 +172,17 @@ router.get("/admob-result/:requestId", async (req, res) => {
     }
 
     if (row.rewarded) {
-      const updated = await db.execute(sql`
-        UPDATE admob_reward_requests
-        SET consumed_at = NOW()
-        WHERE request_id = ${requestId}
-          AND consumed_at IS NULL
-          AND rewarded = true
-        RETURNING rewarded
-      `) as unknown as SqlResult<{ rewarded: boolean }>;
-
-      if (updated.rows?.[0]?.rewarded) {
-        res.json({ ready: true, rewarded: true, source: "admob" });
-        return;
-      }
+      // Do not consume on GET: the HTTP response itself can be lost after the
+      // database mutation succeeds. Consumption is acknowledged explicitly by
+      // the web client after it has received the reward result.
+      res.json({ ready: true, rewarded: true, source: "admob" });
+      return;
     }
 
-    // Google recommends using the client-side earned callback for immediate UX,
-    // while validating the same reward asynchronously with SSV. The Android
-    // activity only writes this state after AdMob invokes onUserEarnedReward;
-    // it never writes rewarded=true. This keeps SSV as the trusted audit path
-    // without leaving the player stuck on "Cargando anuncio..." while Google
-    // delivers a delayed callback.
-    if (row.client_state === "earned" && !row.rewarded) {
-      const updated = await db.execute(sql`
-        UPDATE admob_reward_requests
-        SET consumed_at = NOW()
-        WHERE request_id = ${requestId}
-          AND consumed_at IS NULL
-          AND rewarded = false
-          AND client_state = 'earned'
-        RETURNING request_id
-      `) as unknown as SqlResult<{ request_id: string }>;
-
-      if (updated.rows?.[0]?.request_id) {
-        res.json({ ready: true, rewarded: true, source: "client" });
-        return;
-      }
-    }
+    // The client/native earned callback is only a UX signal. It is attacker-controlled
+    // over this HTTP endpoint, so it MUST NOT grant a reward by itself. The only
+    // trusted grant path is the signed AdMob SSV callback, which sets rewarded=true.
+    // We keep polling here so a delayed SSV callback can still reconcile the ad.
 
     if (row.client_state === "dismissed") {
       const updated = await db.execute(sql`
@@ -228,7 +202,10 @@ router.get("/admob-result/:requestId", async (req, res) => {
 
     const ageMs = Date.now() - new Date(row.created_at).getTime();
 
-    if (ageMs >= 45_000) {
+    // Keep pending requests alive for the same window the web client polls.
+    // AdMob SSV can legitimately arrive well after the ad UI has been dismissed;
+    // expiring at 45s could consume a still-valid reward before its signed SSV.
+    if (ageMs >= 120_000) {
       const updated = await db.execute(sql`
         UPDATE admob_reward_requests
         SET consumed_at = NOW()
@@ -254,6 +231,36 @@ router.get("/admob-result/:requestId", async (req, res) => {
   }
 });
 
+router.post("/admob-result/:requestId/consume", async (req, res) => {
+  if (!indexesReady()) {
+    res.setHeader("Retry-After", "2");
+    res.status(503).json({ error: "Server warming up", ready: false });
+    return;
+  }
+
+  const requestId = req.params.requestId;
+  if (!ADMOB_REQUEST_ID_RE.test(requestId)) {
+    res.status(400).json({ error: "Invalid requestId" });
+    return;
+  }
+
+  try {
+    await db.execute(sql`
+      UPDATE admob_reward_requests
+      SET consumed_at = NOW()
+      WHERE request_id = ${requestId}
+        AND rewarded = true
+        AND consumed_at IS NULL
+    `);
+    res.status(204).end();
+  } catch (error) {
+    console.error(
+      "[rewards/admob-result/consume] error:",
+      error instanceof Error ? error.message : String(error),
+    );
+    res.status(500).json({ error: "Failed to acknowledge rewarded ad result" });
+  }
+});
 router.get("/admob-ssv", async (req, res) => {
   try {
     if (!indexesReady()) {
@@ -402,15 +409,28 @@ function parseStrArray(raw: string | null | undefined): string[] {
   }
 }
 
-function parseInventory(raw: string): { avatars: string[]; frames: string[] } {
+function parseInventory(raw: string): {
+  avatars: string[];
+  frames: string[];
+  backgrounds: string[];
+  equippedBackground: string | null;
+} {
   try {
-    const parsed = JSON.parse(raw || "{}") as Partial<{ avatars: string[]; frames: string[] }>;
+    const parsed = JSON.parse(raw || "{}") as Partial<{
+      avatars: string[];
+      frames: string[];
+      backgrounds: string[];
+      equippedBackground: string | null;
+    }>;
     return {
       avatars: Array.isArray(parsed.avatars) ? parsed.avatars : [],
       frames: Array.isArray(parsed.frames) ? parsed.frames : [],
+      backgrounds: Array.isArray(parsed.backgrounds) ? parsed.backgrounds : [],
+      equippedBackground:
+        typeof parsed.equippedBackground === "string" ? parsed.equippedBackground : null,
     };
   } catch {
-    return { avatars: [], frames: [] };
+    return { avatars: [], frames: [], backgrounds: [], equippedBackground: null };
   }
 }
 

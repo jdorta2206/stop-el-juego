@@ -53,24 +53,19 @@ export function PlayUpdateBanner() {
       }, 700);
     };
 
-    // Our installed app opens as an Android Custom Tab (a visible browser
-    // toolbar), so the TWA-only signals (android-app referrer / Play Billing)
-    // are frequently absent and the prompt never fired. The new/clean build
-    // (www) is already excluded above, so ANY Android visitor reaching this
-    // point is on an old build and should be nudged to update on Google Play.
-    // We therefore treat Android as a reliable trigger, keeping the referrer /
-    // Play Billing checks as extra coverage for other cases.
-    const isAndroid =
-      typeof navigator !== "undefined" && /android/i.test(navigator.userAgent);
-
-    if (isOwnAppReferrer() || isAndroid) {
+    // Do not treat a generic Android user-agent as proof that the page is
+    // running inside our TWA. Ordinary Android browser visitors must not
+    // receive an app-update prompt. Use only app-specific signals.
+    if (isOwnAppReferrer()) {
       reveal();
     } else {
-      // Non-Android fallback: the authoritative Play Billing check, which
-      // Chrome only resolves inside the installed TWA.
-      detectPaymentChannel().then((channel) => {
+      try {
+        const channel = detectPaymentChannel();
         if (!cancelled && channel === "play") reveal();
-      });
+      } catch {
+        // Payment-channel detection is synchronous; an unavailable browser API
+        // must not break the app's startup/update-banner effect.
+      }
     }
 
     return () => {

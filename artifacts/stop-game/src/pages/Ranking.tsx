@@ -58,7 +58,18 @@ function ChallengeBtn({
   const [, setLocation] = useLocation();
   const [state, setState] = useState<ChallengeState>("idle");
   const pendingRef = useRef<string | null>(null);
+  const challengeAbortRef = useRef<AbortController | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => {
+    if (pollRef.current) clearInterval(pollRef.current);
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    pollRef.current = null;
+    timeoutRef.current = null;
+    challengeAbortRef.current?.abort();
+    pendingRef.current = null;
+  }, []);
 
   const handleChallenge = useCallback(async () => {
     if (state !== "idle" || !currentPlayer) return;
@@ -67,25 +78,41 @@ function ChallengeBtn({
     if (!result) { setState("idle"); return; }
     pendingRef.current = result.challengeId;
     setState("waiting");
-    pollRef.current = setInterval(async () => {
-      if (!pendingRef.current) { clearInterval(pollRef.current!); return; }
-      const status = await pollChallengeStatus(pendingRef.current);
+    challengeAbortRef.current?.abort();
+    if (pollRef.current) clearInterval(pollRef.current);
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    const controller = new AbortController();
+    challengeAbortRef.current = controller;
+    const poll = setInterval(async () => {
+      if (!pendingRef.current || controller.signal.aborted) return;
+      const status = await pollChallengeStatus(pendingRef.current, controller.signal);
+      if (!pendingRef.current || controller.signal.aborted) return;
       if (status.status === "accepted") {
-        clearInterval(pollRef.current!);
+        clearInterval(poll);
+        pollRef.current = null;
+        if (timeoutRef.current) clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
         pendingRef.current = null;
         setLocation(`/room/${status.roomCode}`);
       } else if (status.status === "declined" || status.status === "expired") {
-        clearInterval(pollRef.current!);
+        clearInterval(poll);
+        pollRef.current = null;
+        if (timeoutRef.current) clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
         pendingRef.current = null;
         setState("idle");
       }
     }, 2500);
-    setTimeout(() => {
-      if (pollRef.current) clearInterval(pollRef.current);
+    pollRef.current = poll;
+    timeoutRef.current = setTimeout(() => {
+      controller.abort();
+      clearInterval(poll);
+      pollRef.current = null;
+      timeoutRef.current = null;
       pendingRef.current = null;
       setState("idle");
     }, 60000);
-  }, [state, currentPlayer, onlinePlayer.playerId]);
+  }, [state, currentPlayer, onlinePlayer.playerId, lang, setLocation]);
 
   if (onlinePlayer.roomCode) {
     return (
@@ -178,7 +205,7 @@ export default function Ranking() {
   // Weekly ranking
   const { data: weeklyData, isLoading: weeklyLoading } = useQuery({
     queryKey: ["/api/ranking/weekly"],
-    queryFn: () => fetch(`${getApiUrl()}/api/ranking/weekly`).then(r => r.json()),
+    queryFn: ({ signal }) => fetch(`${getApiUrl()}/api/ranking/weekly`, { signal }).then(r => r.json()),
     refetchOnMount: true,
     staleTime: 0,
   });
@@ -186,10 +213,11 @@ export default function Ranking() {
   const weekCountdown = useWeekCountdown(weeklyData?.nextReset);
   const { data: weeklyMe } = useQuery({
     queryKey: ["/api/ranking/weekly/me", player?.id],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const response = await fetch(getApiUrl() + "/api/ranking/weekly/me", {
         credentials: "include",
         headers: authHeaders(),
+        signal,
       });
       if (!response.ok) return null;
       return response.json();
@@ -202,7 +230,7 @@ export default function Ranking() {
   // Monthly ranking
   const { data: monthlyData, isLoading: monthlyLoading } = useQuery({
     queryKey: ["/api/ranking/monthly"],
-    queryFn: () => fetch(`${getApiUrl()}/api/ranking/monthly`).then(r => r.json()),
+    queryFn: ({ signal }) => fetch(`${getApiUrl()}/api/ranking/monthly`, { signal }).then(r => r.json()),
     refetchOnMount: true,
     staleTime: 0,
   });
@@ -210,10 +238,11 @@ export default function Ranking() {
   const monthCountdown = useWeekCountdown(monthlyData?.nextReset);
   const { data: monthlyMe } = useQuery({
     queryKey: ["/api/ranking/monthly/me", player?.id],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const response = await fetch(getApiUrl() + "/api/ranking/monthly/me", {
         credentials: "include",
         headers: authHeaders(),
+        signal,
       });
       if (!response.ok) return null;
       return response.json();
@@ -246,13 +275,20 @@ export default function Ranking() {
 
   useEffect(() => {
     if (!player?.id) return;
-    fetch(`${getApiUrl()}/api/friends/list/${encodeURIComponent(player.id)}`)
+    const controller = new AbortController();
+    fetch(`${getApiUrl()}/api/friends/list/${encodeURIComponent(player.id)}`, {
+      signal: controller.signal,
+    })
       .then(r => r.ok ? r.json() : { friends: [] })
       .then(({ friends }: { friends: any[] }) => {
+        if (controller.signal.aborted) return;
         setFollowedFriends(friends);
         setFollowedIds(new Set(friends.map((f: any) => f.followedId)));
       })
-      .catch(() => {});
+      .catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+      });
+    return () => controller.abort();
   }, [player?.id, isFollowing]);
 
   // Follow an offline ranking player (no OnlinePlayer data available)

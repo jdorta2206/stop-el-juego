@@ -52,9 +52,9 @@ async function ping(player: PlayerProfile, roomCode?: string | null, language?: 
 }
 
 // Fetch current online players
-export async function fetchOnlinePlayers(): Promise<OnlinePlayer[]> {
+export async function fetchOnlinePlayers(signal?: AbortSignal): Promise<OnlinePlayer[]> {
   try {
-    const res = await fetch(`${API_BASE}/api/presence/online`);
+    const res = await fetch(`${API_BASE}/api/presence/online`, { signal });
     if (!res.ok) return [];
     const data = await res.json();
     return data.online || [];
@@ -93,17 +93,18 @@ export async function sendChallenge(
 export async function respondToChallenge(
   challengeId: string,
   accepted: boolean
-): Promise<{ roomCode: string | null }> {
+): Promise<{ roomCode: string | null; ok: boolean }> {
   try {
     const res = await fetch(`${API_BASE}/api/presence/challenge/${challengeId}/respond`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ accepted }),
     });
-    if (!res.ok) return { roomCode: null };
-    return await res.json();
+    let data: any = null;
+    try { data = await res.json(); } catch {}
+    return { ok: res.ok, roomCode: typeof data?.roomCode === "string" ? data.roomCode : null };
   } catch {
-    return { roomCode: null };
+    return { roomCode: null, ok: false };
   }
 }
 
@@ -136,10 +137,11 @@ export async function sendRoomInvite(
 
 // Poll the status of a sent challenge
 export async function pollChallengeStatus(
-  challengeId: string
+  challengeId: string,
+  signal?: AbortSignal,
 ): Promise<{ status: "pending" | "accepted" | "declined" | "expired"; roomCode: string }> {
   try {
-    const res = await fetch(`${API_BASE}/api/presence/challenge/${challengeId}/status`);
+    const res = await fetch(`${API_BASE}/api/presence/challenge/${challengeId}/status`, { signal });
     if (!res.ok) return { status: "expired", roomCode: "" };
     return await res.json();
   } catch {
@@ -158,30 +160,60 @@ export function usePresence(
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const challengePollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const activeChallenge = useRef<string | null>(null); // track if we're already showing one
+  const refreshAbortRef = useRef<AbortController | null>(null);
+  const challengeAbortRef = useRef<AbortController | null>(null);
 
   const refresh = useCallback(async () => {
-    const players = await fetchOnlinePlayers();
-    setOnlinePlayers(players);
+    refreshAbortRef.current?.abort();
+    const controller = new AbortController();
+    refreshAbortRef.current = controller;
+    try {
+      const players = await fetchOnlinePlayers(controller.signal);
+      if (!controller.signal.aborted) setOnlinePlayers(players);
+    } catch {
+      // Abort is expected when a newer refresh supersedes this one.
+    } finally {
+      if (refreshAbortRef.current === controller) refreshAbortRef.current = null;
+    }
   }, []);
 
   const pollChallenges = useCallback(async () => {
-    if (!player || activeChallenge.current) return;
+    if (!player) return;
+    challengeAbortRef.current?.abort();
+    const controller = new AbortController();
+    challengeAbortRef.current = controller;
     try {
-      const res = await fetch(`${API_BASE}/api/presence/challenges/${player.id}`);
+      const res = await fetch(`${API_BASE}/api/presence/challenges/${player.id}`, { signal: controller.signal });
       if (!res.ok) return;
       const data = await res.json();
       const challenges: IncomingChallenge[] = data.challenges || [];
+      const activeId = activeChallenge.current;
+      if (activeId) {
+        const refreshed = challenges.find((c) => c.challengeId === activeId);
+        if (refreshed) {
+          // A room invite can be refreshed in-place (same challengeId) while
+          // the notification is already visible. Keep the active notification
+          // synchronized with its authoritative roomCode/createdAt.
+          setIncomingChallenge(refreshed);
+          return;
+        }
+        activeChallenge.current = null;
+        setIncomingChallenge(null);
+      }
       if (challenges.length > 0) {
         activeChallenge.current = challenges[0].challengeId;
         setIncomingChallenge(challenges[0]);
       }
     } catch {
-      // silent
+      // Abort is expected when a newer poll supersedes this one.
+    } finally {
+      if (challengeAbortRef.current === controller) challengeAbortRef.current = null;
     }
   }, [player?.id]);
 
   const dismissChallenge = useCallback(() => {
     activeChallenge.current = null;
+    challengeAbortRef.current?.abort();
     setIncomingChallenge(null);
   }, []);
 
@@ -204,6 +236,8 @@ export function usePresence(
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
       if (challengePollRef.current) clearInterval(challengePollRef.current);
+      refreshAbortRef.current?.abort();
+      challengeAbortRef.current?.abort();
     };
   }, [player?.id, roomCode, language]);
 

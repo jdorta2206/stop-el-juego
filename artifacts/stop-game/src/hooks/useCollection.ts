@@ -34,15 +34,34 @@ function migrateLegacy(playerId?: string) {
     if (localStorage.getItem(scopedKey)) return;
     const legacy = localStorage.getItem(LEGACY_KEY);
     if (!legacy) return;
+
+    // The legacy cache had no owner identity. Never attribute it to the
+    // currently logged-in account unless the persisted player identity proves
+    // that the cache belongs to that same account.
+    const rawPlayer = localStorage.getItem("stop_player_v2");
+    let storedPlayerId: string | null = null;
+    try {
+      const parsed = rawPlayer ? JSON.parse(rawPlayer) : null;
+      storedPlayerId = typeof parsed?.id === "string" ? parsed.id : null;
+    } catch {}
+    if (storedPlayerId !== playerId) {
+      localStorage.removeItem(LEGACY_KEY);
+      return;
+    }
+
     localStorage.setItem(scopedKey, legacy);
     localStorage.removeItem(LEGACY_KEY);
   } catch {}
 }
 
-async function syncFromServer(playerId: string): Promise<CollectionMap> {
+async function syncFromServer(playerId: string, signal?: AbortSignal): Promise<CollectionMap> {
   if (playerId.startsWith("guest_")) return {};
   try {
-    const r = await fetch(`${getApiUrl()}/api/ranking/progress/${playerId}`);
+    const r = await fetch(`${getApiUrl()}/api/ranking/progress/${playerId}`, {
+      credentials: "include",
+      headers: authHeaders(),
+      signal,
+    });
     if (!r.ok) return {};
     const data = await r.json();
     return data.collectedWords && typeof data.collectedWords === "object"
@@ -68,65 +87,4 @@ function mergeMaps(a: CollectionMap, b: CollectionMap): CollectionMap {
     if (!out[k]) out[k] = v;
   }
   return out;
-}
-
-export function useCollection(playerId?: string) {
-  const [collection, setCollection] = useState<CollectionMap>(() => {
-    migrateLegacy(playerId);
-    return loadLocal(playerId);
-  });
-  const [lastDiscovered, setLastDiscovered] = useState<CollectedWord | null>(null);
-  const syncedRef = useRef<string | null>(null);
-
-  // When the player changes (login / account switch), reload from the
-  // correct scoped cache so we never carry another player's words over.
-  useEffect(() => {
-    migrateLegacy(playerId);
-    setCollection(loadLocal(playerId));
-    syncedRef.current = null;
-  }, [playerId]);
-
-  // Server → local merge on mount (per-player; re-runs on account switch).
-  useEffect(() => {
-    if (!playerId || syncedRef.current === playerId) return;
-    syncedRef.current = playerId;
-    syncFromServer(playerId).then(serverMap => {
-      if (!Object.keys(serverMap).length) return;
-      setCollection(prev => {
-        const merged = mergeMaps(prev, serverMap);
-        if (Object.keys(merged).length !== Object.keys(prev).length) {
-          saveLocal(playerId, merged);
-          return merged;
-        }
-        return prev;
-      });
-    });
-  }, [playerId]);
-
-  /** Call after a round with the valid words. Persists locally + on the
-   * server. If at least one NEW word was rare/epic/legendary, surfaces it
-   * via lastDiscovered for the toast. */
-  const recordRound = useCallback((words: Array<{ word: string; category: string }>) => {
-    if (!words.length) return;
-    const current = loadLocal(playerId);
-    const { next, added } = mergeDiscoveries(current, words);
-    if (!added.length) return;
-    saveLocal(playerId, next);
-    setCollection(next);
-
-    // Surface the rarest new discovery for the toast (common ones don't
-    // interrupt — the page badge increment is enough).
-    const ranked = [...added].sort((a, b) => {
-      const order = { legendary: 0, epic: 1, rare: 2, common: 3 };
-      return order[a.r] - order[b.r];
-    });
-    const headline = ranked[0];
-    if (headline.r !== "common") setLastDiscovered(headline);
-
-    if (playerId) saveToServer(playerId, next);
-  }, [playerId]);
-
-  const clearLastDiscovered = useCallback(() => setLastDiscovered(null), []);
-
-  return { collection, lastDiscovered, recordRound, clearLastDiscovered };
 }

@@ -3,7 +3,7 @@ import { getApiUrl, authHeaders } from "@/lib/utils";
 import { restorePlayPurchases } from "@/lib/playBilling";
 
 const API_BASE = getApiUrl();
-const OAUTH_ID_PREFIXES = ["google_", "fb_", "apple_", "tt_"];
+const OAUTH_ID_PREFIXES = ["google_", "fb_", "ig_", "apple_", "tt_"];
 
 export interface PremiumStatus { isPremium: boolean; loading: boolean; error: string | null; }
 export const PREMIUM_REFRESH_EVENT = "stop:premium-refresh";

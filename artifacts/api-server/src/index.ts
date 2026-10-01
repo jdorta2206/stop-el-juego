@@ -1,10 +1,13 @@
 import "./lib/facebookGraphCompat";
 import { runMigrations } from "stripe-replit-sync";
-import { getStripeSync } from "./stripeClient";
+import { getStripeSync, markStripeReady } from "./stripeClient";
 import app from "./app";
-import { startDailyCron } from "./lib/dailyCron";
+import { startDailyCron, stopDailyCron } from "./lib/dailyCron";
 import { revokeFakePremium } from "./lib/permanentPremium";
 import { ensureIndexes } from "@workspace/db";
+import { loadRevokedPlayerIds } from "./lib/playerRevocation";
+import contactRouter from "./routes/contact";
+import { closeDbPool } from "@workspace/db";
 
 // Railway deployment trigger: keep the API service in sync with the frontend build.
 // The root build copies artifacts/stop-game/dist into the API public directory.
@@ -15,6 +18,8 @@ import { ensureIndexes } from "@workspace/db";
 // comparison wrongly blocked multi-digit versions like "1.10.0".
 
 // ---- PÁGINAS PARA POLÍTICA DE PRIVACIDAD Y ELIMINACIÓN DE CUENTA ----
+app.use("/api/contact", contactRouter);
+
 app.get('/privacy', (req, res) => {
   res.send(`
     <!DOCTYPE html>
@@ -58,45 +63,44 @@ app.get('/delete-account', (req, res) => {
 });
 // ---- FIN DE LAS PÁGINAS ----
 
-// ---- RUTA PARA EL FORMULARIO DE CONTACTO ----
-app.post('/api/contact', async (req, res) => {
-  try {
-    const { name, email, message } = req.body;
-    if (!name || !email || !message) {
-      return res.status(400).json({ error: "Faltan campos obligatorios" });
-    }
-    // Aquí puedes procesar el mensaje: guardar en BD, enviar email, etc.
-    console.log(`📩 Nuevo mensaje de contacto:`);
-    console.log(`  Nombre: ${name}`);
-    console.log(`  Email: ${email}`);
-    console.log(`  Mensaje: ${message}`);
-    res.json({ ok: true, message: "Mensaje enviado correctamente" });
-  } catch (error) {
-    console.error("Error en /api/contact:", error);
-    res.status(500).json({ error: "Error interno del servidor" });
-  }
-});
-// ---- FIN RUTA DE CONTACTO ----
 
-async function initStripe() {
+
+const STRIPE_STARTUP_TIMEOUT_MS = 60_000;
+
+async function withStartupTimeout<T>(operation: Promise<T>, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      operation,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+          reject(new Error(`${label} timed out after ${STRIPE_STARTUP_TIMEOUT_MS}ms`));
+        }, STRIPE_STARTUP_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+async function initStripe(): Promise<boolean> {
   const databaseUrl = process.env["DATABASE_URL"];
   if (!databaseUrl) {
     console.warn("DATABASE_URL not set — skipping Stripe initialization");
-    return;
+    return false;
   }
   const stripeKey = process.env["STRIPE_SECRET_KEY"];
   if (!stripeKey) {
     console.warn("STRIPE_SECRET_KEY not set — skipping Stripe initialization");
-    return;
+    return false;
   }
 
   try {
     console.log("Initializing Stripe schema...");
-    await runMigrations({ databaseUrl } as any);
+    await withStartupTimeout(runMigrations({ databaseUrl } as any), "Stripe schema migration");
     console.log("Stripe schema ready");
 
     const stripeSync = await getStripeSync();
-
     const domains =
       process.env["REPLIT_DOMAINS"] ||
       process.env["REPLIT_DEV_DOMAIN"] ||
@@ -111,21 +115,42 @@ async function initStripe() {
     if (webhookHost) {
       console.log("Setting up managed Stripe webhook...");
       const webhookBaseUrl = `https://${webhookHost}`;
-      await stripeSync.findOrCreateManagedWebhook(
+      await withStartupTimeout(\n        stripeSync.findOrCreateManagedWebhook(
         `${webhookBaseUrl}/api/stripe/webhook`
       );
       console.log("Stripe webhook configured");
     }
 
     console.log("Syncing Stripe data...");
-    stripeSync
-      .syncBackfill()
-      .then(() => console.log("Stripe data synced"))
-      .catch((err: Error) => console.error("Stripe sync error:", err.message));
+    await withStartupTimeout(stripeSync.syncBackfill(), "Stripe backfill");
+    console.log("Stripe data synced");
+
+    // Do not accept webhooks, or run Premium cleanup, until the local Stripe
+    // mirror has completed its initial synchronization successfully.
+    markStripeReady();
+    return true;
   } catch (error: any) {
     console.error("Failed to initialize Stripe:", error.message);
+    return false;
   }
 }
+
+let httpServer: ReturnType<typeof app.listen> | null = null;
+let shuttingDown = false;
+
+async function shutdown(signal: string) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`[shutdown] ${signal} received — stopping server`);
+  stopDailyCron();
+  if (httpServer) {
+    await new Promise<void>((resolve) => httpServer!.close(() => resolve()));
+  }
+  try { await closeDbPool(); } catch (error: any) { console.error("[shutdown] DB pool close failed:", error?.message ?? error); }
+}
+
+process.once("SIGTERM", () => { void shutdown("SIGTERM").finally(() => process.exit(0)); });
+process.once("SIGINT", () => { void shutdown("SIGINT").finally(() => process.exit(0)); });
 
 async function main() {
   const rawPort = process.env["PORT"];
@@ -142,24 +167,37 @@ async function main() {
 
   // Start listening immediately so the deployment platform detects the port.
   // Stripe initializes in the background — it can take several seconds.
-  app.listen(port, () => {
+  httpServer = app.listen(port, () => {
     console.log(`Server listening on port ${port}`);
   });
 
-  // Ensure all critical indexes exist before serving heavy traffic.
-  // Idempotent — safe to run on every boot.
-  ensureIndexes().catch((err: any) => {
+  // Ensure the DB schema is ready before starting tasks that query tables
+  // created by the bootstrap (notably play_subscriptions). Keep the port open
+  // so Railway can observe the instance; /healthz remains 503 until ready.
+  try {
+    await ensureIndexes();
+    await loadRevokedPlayerIds();
+  } catch (err: any) {
     console.error("[ensureIndexes] failed at startup:", err?.message ?? err);
-  });
+    process.exit(1);
+    return;
+  }
 
   startDailyCron();
-  // 🚫 One-shot cleanup at boot: revoke premium from any account without an
-  // active Stripe subscription. Idempotent — only premium comes from Stripe now.
-  revokeFakePremium();
 
-  initStripe().catch((err) => {
-    console.error("Stripe init failed:", err.message);
-  });
+  // Stripe backfill must finish before the premium cleanup. Otherwise an
+  // active Stripe subscription may not yet exist in the local mirror and the
+  // cleanup could revoke legitimate Premium during the startup race.
+  const stripeInitialized = await initStripe();
+
+  // Never run Premium cleanup against an incomplete Stripe mirror. If Stripe
+  // initialization/backfill failed, local absence of a subscription is not
+  // evidence that the customer no longer has an active Stripe entitlement.
+  if (stripeInitialized) {
+    await revokeFakePremium();
+  } else {
+    console.warn("[Premium cleanup] skipped because Stripe initialization/sync did not complete successfully");
+  }
 }
 
 main().catch((err) => {

@@ -85,6 +85,9 @@ export interface VerifiedPurchase {
   isEntitled: boolean;
   acknowledgementState: number;
   raw: Record<string, unknown>;
+  // Local timestamp captured immediately before the Google API read. Used to
+  // prevent a slower, older verification from overwriting a newer RTDN state.
+  observedAtMs: number;
 }
 
 export async function verifyPurchase(
@@ -99,6 +102,7 @@ export async function verifyPurchase(
   if (!client) {
     return { error: "Play Billing not configured", status: 503 };
   }
+  const observedAtMs = Date.now();
   try {
     // Google has replaced purchases.subscriptions.get with subscriptionsv2.get.
     // Use the v2 resource here as the source of truth, just like RTDN.
@@ -140,6 +144,9 @@ export async function verifyPurchase(
       case "SUBSCRIPTION_STATE_ON_HOLD":
         state = "ON_HOLD";
         break;
+      case "SUBSCRIPTION_STATE_PAUSED":
+        state = "PAUSED";
+        break;
       case "SUBSCRIPTION_STATE_CANCELED":
         state = expiryTimeMs > Date.now() ? "ACTIVE" : "CANCELED";
         break;
@@ -150,7 +157,7 @@ export async function verifyPurchase(
         state = "PENDING";
         break;
       default:
-        state = expiryTimeMs > Date.now() ? "ACTIVE" : "EXPIRED";
+        state = "EXPIRED";
         break;
     }
 
@@ -174,6 +181,7 @@ export async function verifyPurchase(
         : false,
       acknowledgementState,
       raw: sub as Record<string, unknown>,
+      observedAtMs,
     };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -193,12 +201,12 @@ export async function acknowledgeSubscription(
   productId: string,
   purchaseToken: string,
   alreadyAcknowledged: boolean,
-): Promise<void> {
-  if (alreadyAcknowledged) return;
+): Promise<boolean> {
+  if (alreadyAcknowledged) return true;
   const packageName = getPackageName();
-  if (!packageName) return;
+  if (!packageName) return false;
   const client = await getClient();
-  if (!client) return;
+  if (!client) return false;
   try {
     await client.purchases.subscriptions.acknowledge({
       packageName,
@@ -208,9 +216,11 @@ export async function acknowledgeSubscription(
     console.log(
       `[playBilling] acknowledged subscription ${productId} (token ${purchaseToken.slice(0, 12)}…)`,
     );
+    return true;
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error("[playBilling] acknowledge failed:", msg);
+    return false;
   }
 }
 
@@ -386,6 +396,7 @@ export async function upsertPlaySubscription(
       expiryTimeMs: v.expiryTimeMs,
       startTimeMs: v.startTimeMs,
       rawJson: JSON.stringify(v.raw),
+      updatedAt: new Date(v.observedAtMs),
     })
     .onConflictDoNothing({ target: playSubscriptionsTable.purchaseToken });
 
@@ -407,9 +418,9 @@ export async function upsertPlaySubscription(
       expiryTimeMs: v.expiryTimeMs,
       startTimeMs: v.startTimeMs,
       rawJson: JSON.stringify(v.raw),
-      updatedAt: new Date(),
+      updatedAt: new Date(v.observedAtMs),
     })
-    .where(eq(playSubscriptionsTable.purchaseToken, v.purchaseToken));
+    .where(sql`${eq(playSubscriptionsTable.purchaseToken, v.purchaseToken)} AND (${playSubscriptionsTable.updatedAt} IS NULL OR ${playSubscriptionsTable.updatedAt} <= ${new Date(v.observedAtMs)})`);
   return { ownershipMismatch: false };
 }
 
@@ -429,11 +440,22 @@ export async function updatePlaySubscriptionByToken(
       expiryTimeMs: v.expiryTimeMs,
       startTimeMs: v.startTimeMs,
       rawJson: JSON.stringify(v.raw),
-      updatedAt: new Date(),
+      updatedAt: new Date(v.observedAtMs),
     })
-    .where(eq(playSubscriptionsTable.purchaseToken, v.purchaseToken))
+    .where(sql`${eq(playSubscriptionsTable.purchaseToken, v.purchaseToken)} AND (${playSubscriptionsTable.updatedAt} IS NULL OR ${playSubscriptionsTable.updatedAt} <= ${new Date(v.observedAtMs)})`)
     .returning({ playerId: playSubscriptionsTable.playerId });
-  return { playerId: updated[0]?.playerId ?? null };
+  if (updated[0]) {
+    return { playerId: updated[0].playerId };
+  }
+
+  // A row can exist but be newer than this RTDN verification. That means the
+  // notification is stale, not that the purchase token is unlinked.
+  const existing = await db
+    .select({ playerId: playSubscriptionsTable.playerId })
+    .from(playSubscriptionsTable)
+    .where(eq(playSubscriptionsTable.purchaseToken, v.purchaseToken))
+    .limit(1);
+  return { playerId: existing[0]?.playerId ?? null };
 }
 
 export async function getActivePlaySubscriptionForPlayer(
@@ -443,6 +465,7 @@ export async function getActivePlaySubscriptionForPlayer(
     sql`SELECT product_id, expiry_time_ms
         FROM play_subscriptions
         WHERE player_id = ${playerId}
+          AND product_id = 'premium_monthly'
           AND state IN ('ACTIVE', 'IN_GRACE_PERIOD')
           AND expiry_time_ms > ${Date.now()}
         ORDER BY expiry_time_ms DESC
@@ -469,6 +492,7 @@ export async function verifyPurchaseByToken(
     return { error: "Play Billing not configured", status: 503 };
   }
 
+  const observedAtMs = Date.now();
   try {
     const response = await client.purchases.subscriptionsv2.get({
       packageName,
@@ -502,6 +526,9 @@ export async function verifyPurchaseByToken(
       case "SUBSCRIPTION_STATE_ON_HOLD":
         state = "ON_HOLD";
         break;
+      case "SUBSCRIPTION_STATE_PAUSED":
+        state = "PAUSED";
+        break;
       case "SUBSCRIPTION_STATE_CANCELED":
         state = expiryTimeMs > Date.now() ? "ACTIVE" : "CANCELED";
         break;
@@ -512,7 +539,7 @@ export async function verifyPurchaseByToken(
         state = "PENDING";
         break;
       default:
-        state = expiryTimeMs > Date.now() ? "ACTIVE" : "EXPIRED";
+        state = "EXPIRED";
         break;
     }
 
@@ -538,6 +565,7 @@ export async function verifyPurchaseByToken(
         : false,
       acknowledgementState,
       raw: sub as Record<string, unknown>,
+      observedAtMs,
     };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);

@@ -1,4 +1,9 @@
-# See https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files for more about ignoring files.
+# See https://github.com/gitignore.io/api/node for a comprehensive Node.js baseline.
+
+# Environment files — never commit local secrets
+.env
+.env.*
+!.env.example
 
 # compiled output
 dist

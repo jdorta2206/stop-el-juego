@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { publicLink } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -17,7 +17,9 @@ function buildInviteLink(player: PlayerProfile) {
 }
 
 function buildWhatsAppMsg(player: PlayerProfile, url: string) {
-  return `¡Hola! ${player.name} te invita a jugar a STOP 🎮\nEl clásico juego de palabras.\n¡Únete aquí: ${url}`;
+  return `¡Hola! ${player.name} te invita a jugar a STOP 🎮
+El clásico juego de palabras.
+¡Únete aquí: ${url}`;
 }
 
 type ContactItem = { name: string[]; tel?: string[] };
@@ -80,6 +82,7 @@ function ShareBtn({
 
 export function InviteFriends({ player, onClose }: InviteFriendsProps) {
   const [copied, setCopied] = useState(false);
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [pickedContacts, setPickedContacts] = useState<ContactItem[]>([]);
   const [contactSupported] = useState(hasContactPicker());
 
@@ -94,6 +97,11 @@ export function InviteFriends({ player, onClose }: InviteFriendsProps) {
       setTimeout(() => setCopied(false), 2500);
     });
   };
+
+  useEffect(() => () => {
+    if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    copiedTimerRef.current = null;
+  }, []);
 
   const handlePickContacts = async () => {
     const contacts = await pickContacts();

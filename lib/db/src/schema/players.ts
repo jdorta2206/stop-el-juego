@@ -51,6 +51,24 @@ export const gameHistoryTable = pgTable("game_history", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+export const scoreSubmissionClaimsTable = pgTable("score_submission_claims", {
+  id: serial("id").primaryKey(),
+  playerId: text("player_id").notNull(),
+  submissionId: text("submission_id").notNull(),
+  isBonus: boolean("is_bonus").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => ({
+  playerSubmissionUnique: uniqueIndex("score_submission_claims_player_submission_uidx").on(
+    t.playerId,
+    t.submissionId,
+    t.isBonus,
+  ),
+}));
+
+export const insertScoreSubmissionClaimSchema = createInsertSchema(scoreSubmissionClaimsTable).omit({ id: true, createdAt: true });
+export type InsertScoreSubmissionClaim = z.infer<typeof insertScoreSubmissionClaimSchema>;
+export type ScoreSubmissionClaim = typeof scoreSubmissionClaimsTable.$inferSelect;
+
 export const insertGameHistorySchema = createInsertSchema(gameHistoryTable).omit({ id: true, createdAt: true });
 export type InsertGameHistory = z.infer<typeof insertGameHistorySchema>;
 export type GameHistory = typeof gameHistoryTable.$inferSelect;
@@ -74,6 +92,7 @@ export const roomsTable = pgTable("rooms", {
   tournamentMatchId: text("tournament_match_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  roomVersion: bigint("room_version", { mode: "number" }).notNull().default(0),
 });
 
 export const insertRoomSchema = createInsertSchema(roomsTable).omit({ id: true, createdAt: true, updatedAt: true });
@@ -161,6 +180,7 @@ export const pushSubscriptionsTable = pgTable("push_subscriptions", {
   enabled: boolean("enabled").notNull().default(true),
   hourLocal: integer("hour_local").notNull().default(20),
   tzOffsetMinutes: integer("tz_offset_minutes").notNull().default(0),
+  timeZone: text("time_zone"),
   mutedUntil: bigint("muted_until", { mode: "number" }).notNull().default(0),
   origin: text("origin"),
   createdAt: timestamp("created_at").defaultNow().notNull(),

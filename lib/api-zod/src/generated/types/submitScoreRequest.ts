@@ -7,6 +7,8 @@
  */
 
 export interface SubmitScoreRequest {
+  /** Stable idempotency key for one logical score submission. */
+  submissionId?: string;
   playerId: string;
   playerName: string;
   avatarColor?: string;

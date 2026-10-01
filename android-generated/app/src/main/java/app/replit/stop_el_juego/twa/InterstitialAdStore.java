@@ -15,11 +15,14 @@ import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback;
 public final class InterstitialAdStore {
     private static final String TAG = "STOP_INTERSTITIAL";
     private static final String INTERSTITIAL_ID = "ca-app-pub-4807272408824742/7242069847";
+    // Google documents that cached ads expire after about one hour; keep a safety margin.
+    private static final long PRELOADED_AD_TTL_MS = 55 * 60 * 1000L;
 
     private static Context appContext;
     private static InterstitialAd preloadedAd;
     private static boolean initializing;
     private static boolean loading;
+    private static long preloadedAdAt;
 
     private InterstitialAdStore() {}
 
@@ -48,6 +51,7 @@ public final class InterstitialAdStore {
                         synchronized (InterstitialAdStore.class) {
                             loading = false;
                             preloadedAd = ad;
+                            preloadedAdAt = System.currentTimeMillis();
                         }
                         Log.d(TAG, "Production interstitial preloaded");
                     }
@@ -67,8 +71,16 @@ public final class InterstitialAdStore {
 
     @Nullable
     public static synchronized InterstitialAd take() {
+        if (preloadedAd != null
+                && System.currentTimeMillis() - preloadedAdAt >= PRELOADED_AD_TTL_MS) {
+            Log.d(TAG, "Discarding expired preloaded interstitial");
+            preloadedAd = null;
+            preloadedAdAt = 0L;
+        }
+
         InterstitialAd ad = preloadedAd;
         preloadedAd = null;
+        preloadedAdAt = 0L;
         if (ad != null) preload();
         return ad;
     }

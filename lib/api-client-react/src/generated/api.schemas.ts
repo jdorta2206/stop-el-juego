@@ -89,6 +89,8 @@ export interface GameHistory {
   letter: string;
   mode: string;
   createdAt?: string;
+  updatedAt?: string;
+  roomVersion?: number;
 }
 
 export interface PlayerStats {
@@ -97,6 +99,8 @@ export interface PlayerStats {
 }
 
 export interface SubmitScoreRequest {
+  /** Stable idempotency key for one logical score submission. */
+  submissionId?: string;
   playerId: string;
   playerName: string;
   avatarColor?: string;
@@ -170,6 +174,7 @@ export interface Room {
   language: string;
   players: RoomPlayer[];
   createdAt?: string;
+  roomVersion?: number;
 }
 
 export interface CreateRoomRequest {
@@ -181,6 +186,8 @@ export interface CreateRoomRequest {
   language?: string;
   loginMethod?: string | null;
   isPublic?: boolean;
+  gameMode?: "classic" | "blitz" | "challenge" | "random";
+  maxPlayers?: number;
 }
 
 export interface JoinRoomRequest {

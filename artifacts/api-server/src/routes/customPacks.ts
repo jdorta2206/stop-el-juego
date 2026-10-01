@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { customCategoryPacksTable } from "@workspace/db";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 import { z } from "zod";
 import { isUserPremium } from "../lib/premiumStatus";
 import { writeLimiter } from "../middlewares/rateLimit";
@@ -59,7 +59,7 @@ router.get("/:playerId", async (req, res) => {
     return;
   }
   // 🔒 Block reading another logged-in user's packs by guessing their id.
-  if (!verifyClaimedIdentity(req, playerId)) {
+  if (!await verifyClaimedIdentity(req, playerId)) {
     res.status(403).json({ error: "Identity verification failed" });
     return;
   }
@@ -84,7 +84,7 @@ router.post("/", writeLimiter, async (req, res) => {
     return;
   }
   const { playerId, name, icon, color, language, categories } = parsed.data;
-  if (!verifyClaimedIdentity(req, playerId)) {
+  if (!await verifyClaimedIdentity(req, playerId)) {
     res.status(403).json({ error: "Identity verification failed" });
     return;
   }
@@ -93,28 +93,46 @@ router.post("/", writeLimiter, async (req, res) => {
     res.status(403).json({ error: "Premium subscription required" });
     return;
   }
-  const existing = await db
-    .select({ id: customCategoryPacksTable.id })
-    .from(customCategoryPacksTable)
-    .where(eq(customCategoryPacksTable.playerId, playerId));
-  if (existing.length >= MAX_PACKS_PER_USER) {
+  const result = await db.transaction(async (tx) => {
+    // Serialize pack creation per player. A plain SELECT-count followed by
+    // INSERT lets two concurrent requests both observe 19 packs and create
+    // #20/#21. PostgreSQL's transaction-scoped advisory lock makes the
+    // count-and-insert atomic for this player's quota without blocking other
+    // players.
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${playerId}))`);
+
+    const existing = await tx
+      .select({ id: customCategoryPacksTable.id })
+      .from(customCategoryPacksTable)
+      .where(eq(customCategoryPacksTable.playerId, playerId));
+
+    if (existing.length >= MAX_PACKS_PER_USER) {
+      return { error: "LIMIT" as const };
+    }
+
+    const [row] = await tx
+      .insert(customCategoryPacksTable)
+      .values({
+        playerId,
+        name,
+        icon,
+        color,
+        language,
+        categoriesJson: JSON.stringify(categories),
+      })
+      .returning();
+
+    return { row };
+  });
+
+  if ("error" in result) {
     res.status(409).json({
       error: `Maximum ${MAX_PACKS_PER_USER} custom packs reached`,
     });
     return;
   }
-  const [row] = await db
-    .insert(customCategoryPacksTable)
-    .values({
-      playerId,
-      name,
-      icon,
-      color,
-      language,
-      categoriesJson: JSON.stringify(categories),
-    })
-    .returning();
-  res.status(201).json({ data: packRowToApi(row) });
+
+  res.status(201).json({ data: packRowToApi(result.row) });
 });
 
 // PUT /api/custom-packs/:id — update a pack (premium-gated, must own it).
@@ -130,7 +148,7 @@ router.put("/:id", writeLimiter, async (req, res) => {
     return;
   }
   const { playerId, name, icon, color, language, categories } = parsed.data;
-  if (!verifyClaimedIdentity(req, playerId)) {
+  if (!await verifyClaimedIdentity(req, playerId)) {
     res.status(403).json({ error: "Identity verification failed" });
     return;
   }
@@ -171,7 +189,7 @@ router.delete("/:id", writeLimiter, async (req, res) => {
     res.status(400).json({ error: "Invalid id or playerId" });
     return;
   }
-  if (!verifyClaimedIdentity(req, playerId)) {
+  if (!await verifyClaimedIdentity(req, playerId)) {
     res.status(403).json({ error: "Identity verification failed" });
     return;
   }

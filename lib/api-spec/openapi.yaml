@@ -28,6 +28,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+        "503":
+          description: Service starting; database schema is not ready
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
 
   /game/validate:
     post:
@@ -407,6 +413,9 @@ components:
         createdAt:
           type: string
           format: date-time
+        roomVersion:
+          type: integer
+          format: int64
       required:
         - id
         - playerId
@@ -417,6 +426,12 @@ components:
     SubmitScoreRequest:
       type: object
       properties:
+        submissionId:
+          type: string
+          minLength: 8
+          maxLength: 160
+          pattern: "^[A-Za-z0-9._:-]+$"
+          description: Stable idempotency key for one logical score submission.
         playerId:
           type: string
         playerName:
@@ -575,6 +590,9 @@ components:
         createdAt:
           type: string
           format: date-time
+        roomVersion:
+          type: integer
+          format: int64
       required:
         - id
         - roomCode
@@ -606,6 +624,15 @@ components:
         isPublic:
           type: boolean
           default: false
+        gameMode:
+          type: string
+          enum: [classic, blitz, challenge, random]
+          default: classic
+        maxPlayers:
+          type: integer
+          minimum: 1
+          maximum: 8
+          default: 8
       required:
         - hostId
         - hostName
@@ -625,6 +652,8 @@ components:
         loginMethod:
           type: string
           nullable: true
+        challengeId:
+          type: string
       required:
         - playerId
         - playerName

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
 import { motion } from "framer-motion";
 import { Bell, BellOff, Clock, MoonStar, ArrowLeft } from "lucide-react";
@@ -26,6 +26,7 @@ export default function NotificationsPage() {
   const [prefs, setPrefs] = useState<Prefs>(null);
   const [savingHour, setSavingHour] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Load prefs whenever the subscription becomes active.
   useEffect(() => {
@@ -35,8 +36,17 @@ export default function NotificationsPage() {
 
   const flashToast = (msg: string) => {
     setToast(msg);
-    setTimeout(() => setToast(null), 2500);
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => {
+      toastTimerRef.current = null;
+      setToast(null);
+    }, 2500);
   };
+
+  useEffect(() => () => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = null;
+  }, []);
 
   const T = {
     es: {

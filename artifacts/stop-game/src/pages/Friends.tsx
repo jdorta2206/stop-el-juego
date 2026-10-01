@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Layout, ProfilePhotoAvatar } from "@/components/Layout";
 import { usePlayer } from "@/hooks/use-player";
 import { useFollows, type FollowedFriend } from "@/lib/useFollows";
@@ -82,14 +82,34 @@ function FriendCard({
 }) {
   const [, setLocation] = useLocation();
   const [copied, setCopied] = useState(false);
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showUnfollow, setShowUnfollow] = useState(false);
   const pendingId = useRef<string | null>(null);
+  const challengeAbortRef = useRef<AbortController | null>(null);
+  const challengePollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const challengeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const challengePollInFlightRef = useRef(false);
+
+  useEffect(() => () => {
+    if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    copiedTimerRef.current = null;
+    if (challengePollRef.current) clearInterval(challengePollRef.current);
+    if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current);
+    challengePollRef.current = null;
+    challengeTimeoutRef.current = null;
+    challengeAbortRef.current?.abort();
+    pendingId.current = null;
+  }, []);
 
   const handleJoin = () => {
     if (friend.onlineData?.roomCode) {
       navigator.clipboard.writeText(friend.onlineData.roomCode).then(() => {
         setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
+        if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+        copiedTimerRef.current = setTimeout(() => {
+          copiedTimerRef.current = null;
+          setCopied(false);
+        }, 2000);
       });
     }
   };
@@ -99,17 +119,36 @@ function FriendCard({
     const result = await sendChallenge(currentPlayer, friend.onlineData.playerId);
     if (!result) return;
     pendingId.current = result.challengeId;
+    challengeAbortRef.current?.abort();
+    if (challengePollRef.current) clearInterval(challengePollRef.current);
+    if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current);
+    const controller = new AbortController();
+    challengeAbortRef.current = controller;
     const poll = setInterval(async () => {
-      if (!pendingId.current) { clearInterval(poll); return; }
-      const status = await pollChallengeStatus(pendingId.current);
-      if (status.status === "accepted") {
-        clearInterval(poll); pendingId.current = null;
+      if (!pendingId.current || controller.signal.aborted || challengePollInFlightRef.current) return;
+      challengePollInFlightRef.current = true;
+      try {
+        const status = await pollChallengeStatus(pendingId.current, controller.signal);
+        if (!pendingId.current || controller.signal.aborted) return;
+        if (status.status === "accepted") {
+        clearInterval(poll); challengePollRef.current = null;
+        if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current);
+        challengeTimeoutRef.current = null; pendingId.current = null;
         setLocation(`/room/${status.roomCode}`);
       } else if (status.status === "declined" || status.status === "expired") {
-        clearInterval(poll); pendingId.current = null;
+        clearInterval(poll); challengePollRef.current = null;
+        if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current);
+        challengeTimeoutRef.current = null; pendingId.current = null;
+        }
+      } finally {
+        challengePollInFlightRef.current = false;
       }
     }, 2000);
-    setTimeout(() => { clearInterval(poll); pendingId.current = null; }, 60000);
+    challengePollRef.current = poll;
+    challengeTimeoutRef.current = setTimeout(() => {
+      controller.abort(); clearInterval(poll); challengePollRef.current = null;
+      pendingId.current = null; challengeTimeoutRef.current = null;
+    }, 60000);
   };
 
   return (
@@ -218,6 +257,19 @@ function OnlinePlayerCard({
   const [, setLocation] = useLocation();
   const [copied, setCopied] = useState(false);
   const pendingId = useRef<string | null>(null);
+  const challengeAbortRef = useRef<AbortController | null>(null);
+  const challengePollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const challengeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const challengePollInFlightRef = useRef(false);
+
+  useEffect(() => () => {
+    if (challengePollRef.current) clearInterval(challengePollRef.current);
+    if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current);
+    challengePollRef.current = null;
+    challengeTimeoutRef.current = null;
+    challengeAbortRef.current?.abort();
+    pendingId.current = null;
+  }, []);
 
   const handleJoin = () => {
     if (player.roomCode) {
@@ -232,17 +284,36 @@ function OnlinePlayerCard({
     const result = await sendChallenge(currentPlayer, player.playerId);
     if (!result) return;
     pendingId.current = result.challengeId;
+    challengeAbortRef.current?.abort();
+    if (challengePollRef.current) clearInterval(challengePollRef.current);
+    if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current);
+    const controller = new AbortController();
+    challengeAbortRef.current = controller;
     const poll = setInterval(async () => {
-      if (!pendingId.current) { clearInterval(poll); return; }
-      const status = await pollChallengeStatus(pendingId.current);
-      if (status.status === "accepted") {
-        clearInterval(poll); pendingId.current = null;
+      if (!pendingId.current || controller.signal.aborted || challengePollInFlightRef.current) return;
+      challengePollInFlightRef.current = true;
+      try {
+        const status = await pollChallengeStatus(pendingId.current, controller.signal);
+        if (!pendingId.current || controller.signal.aborted) return;
+        if (status.status === "accepted") {
+        clearInterval(poll); challengePollRef.current = null;
+        if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current);
+        challengeTimeoutRef.current = null; pendingId.current = null;
         setLocation(`/room/${status.roomCode}`);
       } else if (status.status === "declined" || status.status === "expired") {
-        clearInterval(poll); pendingId.current = null;
+        clearInterval(poll); challengePollRef.current = null;
+        if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current);
+        challengeTimeoutRef.current = null; pendingId.current = null;
+        }
+      } finally {
+        challengePollInFlightRef.current = false;
       }
     }, 2000);
-    setTimeout(() => { clearInterval(poll); pendingId.current = null; }, 60000);
+    challengePollRef.current = poll;
+    challengeTimeoutRef.current = setTimeout(() => {
+      controller.abort(); clearInterval(poll); challengePollRef.current = null;
+      pendingId.current = null; challengeTimeoutRef.current = null;
+    }, 60000);
   };
 
   const isMe = player.playerId === currentPlayer.id;
@@ -302,14 +373,24 @@ function OnlinePlayerCard({
 
 function InviteSection({ player }: { player: PlayerProfile }) {
   const [copied, setCopied] = useState(false);
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const shareMsg = `¡Hola! ${player.name} te invita a jugar a STOP 🎮 El clásico juego de palabras. ¡Descárgalo gratis!\n${PLAY_STORE_URL}`;
 
   const copyLink = () => {
     navigator.clipboard.writeText(PLAY_STORE_URL).then(() => {
       setCopied(true);
-      setTimeout(() => setCopied(false), 2500);
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+      copiedTimerRef.current = setTimeout(() => {
+        copiedTimerRef.current = null;
+        setCopied(false);
+      }, 2500);
     });
   };
+
+  useEffect(() => () => {
+    if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    copiedTimerRef.current = null;
+  }, []);
 
   const shareWhatsApp = () => {
     window.open(`https://wa.me/?text=${encodeURIComponent(shareMsg)}`, "_blank");

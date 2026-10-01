@@ -24,19 +24,24 @@ export default function Live() {
   useEffect(() => {
     if (!code) return;
     let stop = false;
+    let activeController: AbortController | null = null;
     const fetchOnce = async () => {
+      activeController?.abort();
+      const controller = new AbortController();
+      activeController = controller;
       try {
-        const r = await fetch(`${API}/api/rooms/${encodeURIComponent(code)}/spectate`);
+        const r = await fetch(`${API}/api/rooms/${encodeURIComponent(code)}/spectate`, { signal: controller.signal });
         if (r.status === 404) { setError("Sala no encontrada"); return; }
         if (r.status === 403) { setError("Esta sala no es pública"); return; }
         if (!r.ok) return;
         const data = await r.json();
         if (!stop) { setRoom(data); setError(null); }
       } catch { /* ignore */ }
+      finally { if (activeController === controller) activeController = null; }
     };
     fetchOnce();
     const id = setInterval(fetchOnce, 2000);
-    return () => { stop = true; clearInterval(id); };
+    return () => { stop = true; clearInterval(id); activeController?.abort(); };
   }, [code]);
 
   if (error) {

@@ -3,6 +3,7 @@ import { randomUUID } from "crypto";
 import { db } from "@workspace/db";
 import { sql } from "drizzle-orm";
 import { presenceLimiter } from "../middlewares/rateLimit";
+import { readPlayerId } from "../lib/playerAuth";
 
 const router: IRouter = Router();
 const PLATFORMS = new Set(["web", "android", "ios"]);
@@ -44,11 +45,13 @@ async function ensureAnalyticsTables(): Promise<void> {
       mode text,
       ai_difficulty text,
       metadata_json text NOT NULL DEFAULT '{}',
+      trusted boolean NOT NULL DEFAULT FALSE,
       created_at timestamp NOT NULL DEFAULT NOW()
     );
     CREATE INDEX IF NOT EXISTS analytics_events_created_at_idx ON analytics_events (created_at);
     CREATE INDEX IF NOT EXISTS analytics_events_platform_created_at_idx ON analytics_events (platform, created_at);
     CREATE INDEX IF NOT EXISTS analytics_events_name_created_at_idx ON analytics_events (event_name, created_at);
+    ALTER TABLE analytics_events ADD COLUMN IF NOT EXISTS trusted boolean NOT NULL DEFAULT FALSE;
   `));
 }
 
@@ -56,6 +59,27 @@ const analyticsTablesReady = ensureAnalyticsTables().catch((err) => {
   console.error("[analytics] schema initialization failed:", err);
   throw err;
 });
+
+export async function recordTrustedAnalyticsEvent(input: {
+  eventName: string;
+  playerId?: string | null;
+  platform?: "web" | "android" | "ios";
+  appVersion?: string | null;
+  language?: string | null;
+  mode?: string | null;
+  metadata?: Record<string, unknown>;
+}): Promise<void> {
+  await analyticsTablesReady;
+  const metadataJson = JSON.stringify(input.metadata ?? {}).slice(0, 4000);
+  await db.execute(sql`
+    INSERT INTO analytics_events
+      (event_name, player_id, platform, app_version, language, mode, metadata_json, trusted)
+    VALUES
+      (${input.eventName}, ${input.playerId ?? null}, ${input.platform ?? "web"},
+       ${input.appVersion ?? null}, ${input.language ?? null}, ${input.mode ?? null},
+       ${metadataJson}, TRUE)
+  `);
+}
 
 function serverSessionId(req: Request, res: any): string {
   const raw = String(req.headers.cookie ?? "");
@@ -89,10 +113,11 @@ router.post("/heartbeat", presenceLimiter, async (req, res) => {
   try {
     await analyticsTablesReady;
     const body = (req.body ?? {}) as Record<string, unknown>;
-    const sessionId = typeof body.sessionId === "string" ? body.sessionId.trim() : "";
-    if (!sessionId || sessionId.length > 128) return res.status(400).json({ error: "sessionId required" });
-    const playerId = typeof body.playerId === "string" ? body.playerId.trim() : null;
-    const loginMethod = typeof body.loginMethod === "string" ? body.loginMethod.trim().slice(0, 32) : null;
+    const sessionId = serverSessionId(req, res);
+    // Never trust analytics identity supplied by the browser. OAuth users can
+    // be bound to the verified session token; unverified guest ids are omitted.
+    const playerId = readPlayerId(req);
+    const loginMethod = null;
     const language = typeof body.language === "string" ? body.language.slice(0, 16) : null;
     const appVersion = String(req.headers["x-client-version"] ?? "").slice(0, 32) || null;
     const platform = platformFromRequest(req);
@@ -102,8 +127,8 @@ router.post("/heartbeat", presenceLimiter, async (req, res) => {
       ON CONFLICT (session_id) DO UPDATE SET player_id = EXCLUDED.player_id, login_method = EXCLUDED.login_method, platform = EXCLUDED.platform, app_version = EXCLUDED.app_version, language = EXCLUDED.language, last_seen = NOW()
     `);
     await db.execute(sql`
-      INSERT INTO analytics_events (event_name, session_id, platform, app_version, language, metadata_json)
-      SELECT 'session_start', ${sessionId}, ${platform}, ${appVersion}, ${language}, '{}'
+      INSERT INTO analytics_events (event_name, session_id, platform, app_version, language, metadata_json, trusted)
+      SELECT 'session_start', ${sessionId}, ${platform}, ${appVersion}, ${language}, '{}', TRUE
       WHERE NOT EXISTS (SELECT 1 FROM analytics_events WHERE event_name = 'session_start' AND session_id = ${sessionId})
     `);
     return res.json({ ok: true, platform, appVersion });

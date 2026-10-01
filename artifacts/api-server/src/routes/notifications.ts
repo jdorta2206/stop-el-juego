@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import webpush from "web-push";
 import { db } from "@workspace/db";
-import { pushSubscriptionsTable } from "@workspace/db";
+import { pushSubscriptionsTable, roomsTable } from "@workspace/db";
 import { and, eq, isNull, like, not, or, sql } from "drizzle-orm";
 import { sendPushToAllSubscribers } from "../lib/pushHelper";
 import { inviteLimiter } from "../middlewares/rateLimit";
@@ -40,13 +40,21 @@ router.get("/happy-hour", async (req, res) => {
 // fires at the player's chosen local time instead of a global UTC hour.
 // Falls back to (20:00, 0) if absent for back-compat with older clients.
 router.post("/subscribe", async (req, res) => {
-  const { playerId, subscription, language, hourLocal, tzOffsetMinutes, origin: bodyOrigin } = req.body;
+  const { playerId, subscription, language, hourLocal, tzOffsetMinutes, timeZone: bodyTimeZone, origin: bodyOrigin } = req.body;
   if (!playerId || !subscription?.endpoint) {
     res.status(400).json({ error: "Missing playerId or subscription" });
     return;
   }
 
-  // A push endpoint is bearer-like: whoever can register it will receive future\n  // notifications for the stored playerId. Therefore a logged-in playerId must\n  // be bound to the authenticated session; only the anonymous guest bucket may\n  // be claimed without account authentication.\n  if (playerId !== "anonymous" && !verifyClaimedIdentity(req, String(playerId))) {\n    res.status(403).json({ error: "Identity verification failed" });\n    return;\n  }\n
+  // A push endpoint is bearer-like: whoever can register it will receive future
+  // notifications for the stored playerId. Therefore a logged-in playerId must
+  // be bound to the authenticated session; only the anonymous guest bucket may
+  // be claimed without account authentication.
+  if (playerId !== "anonymous" && !await verifyClaimedIdentity(req, String(playerId))) {
+    res.status(403).json({ error: "Identity verification failed" });
+    return;
+  }
+
   const { endpoint, keys } = subscription;
   const { p256dh, auth } = keys || {};
 
@@ -56,10 +64,18 @@ router.post("/subscribe", async (req, res) => {
   }
 
   // Clamp to safe ranges. Bad client data should never poison the row.
-  const hour = Number.isFinite(hourLocal) && hourLocal >= 0 && hourLocal <= 23
-    ? Math.floor(hourLocal) : 20;
+  const hasHourLocal = Number.isFinite(hourLocal) && hourLocal >= 0 && hourLocal <= 23;
+  const hour = hasHourLocal ? Math.floor(hourLocal) : 20;
   const tz = Number.isFinite(tzOffsetMinutes) && tzOffsetMinutes >= -14 * 60 && tzOffsetMinutes <= 14 * 60
     ? Math.floor(tzOffsetMinutes) : 0;
+  let timeZone: string | null = null;
+  if (typeof bodyTimeZone === "string" && bodyTimeZone.trim()) {
+    const candidate = bodyTimeZone.trim();
+    try {
+      new Intl.DateTimeFormat("en-US", { timeZone: candidate }).format();
+      timeZone = candidate;
+    } catch {}
+  }
 
   // Detectar origen del navegador para poder filtrar suscripciones duplicadas
   // entre stop-el-juego.replit.app y stopjuegodepalabras.com. Preferimos el
@@ -91,11 +107,11 @@ router.post("/subscribe", async (req, res) => {
       await db.execute(sql`
         INSERT INTO push_subscriptions (
           player_id, endpoint, p256dh, auth, language,
-          hour_local, tz_offset_minutes, enabled, muted_until, origin
+          hour_local, tz_offset_minutes, time_zone, enabled, muted_until, origin
         )
         VALUES (
           ${playerId}, ${endpoint}, ${p256dh}, ${auth}, ${language || "es"},
-          ${hour}, ${tz}, TRUE, 0, ${origin}
+          ${hour}, ${tz}, ${timeZone}, TRUE, 0, ${origin}
         )
         ON CONFLICT (endpoint) DO UPDATE
           SET player_id         = CASE
@@ -105,7 +121,12 @@ router.post("/subscribe", async (req, res) => {
                                     ELSE EXCLUDED.player_id
                                   END,
               language          = EXCLUDED.language,
+              hour_local         = CASE
+                                    WHEN ${hasHourLocal} THEN EXCLUDED.hour_local
+                                    ELSE push_subscriptions.hour_local
+                                  END,
               tz_offset_minutes = EXCLUDED.tz_offset_minutes,
+              time_zone        = COALESCE(EXCLUDED.time_zone, push_subscriptions.time_zone),
               enabled           = TRUE,
               origin            = COALESCE(EXCLUDED.origin, push_subscriptions.origin)
       `);
@@ -116,11 +137,10 @@ router.post("/subscribe", async (req, res) => {
       await db.execute(sql`
         INSERT INTO push_subscriptions (
           player_id, endpoint, p256dh, auth, language,
-          hour_local, tz_offset_minutes, enabled, muted_until
-        )
-        VALUES (
+          hour_local, tz_offset_minutes, time_zone, enabled, muted_until
+        )        VALUES (
           ${playerId}, ${endpoint}, ${p256dh}, ${auth}, ${language || "es"},
-          ${hour}, ${tz}, TRUE, 0
+          ${hour}, ${tz}, ${timeZone}, TRUE, 0
         )
         ON CONFLICT (endpoint) DO UPDATE
           SET player_id         = CASE
@@ -130,6 +150,10 @@ router.post("/subscribe", async (req, res) => {
                                     ELSE EXCLUDED.player_id
                                   END,
               language          = EXCLUDED.language,
+              hour_local         = CASE
+                                    WHEN ${hasHourLocal} THEN EXCLUDED.hour_local
+                                    ELSE push_subscriptions.hour_local
+                                  END,
               tz_offset_minutes = EXCLUDED.tz_offset_minutes,
               enabled           = TRUE
       `);
@@ -166,6 +190,10 @@ router.get("/preferences", async (req, res) => {
   const endpoint = String(req.query.endpoint || "").trim();
   const playerId = String(req.query.playerId || "").trim();
   if (!endpoint || !playerId) { res.status(400).json({ error: "Missing endpoint" }); return; }
+  if (playerId !== "anonymous" && !await verifyClaimedIdentity(req, playerId)) {
+    res.status(403).json({ error: "Identity verification failed" });
+    return;
+  }
   try {
     const rows = await db.select().from(pushSubscriptionsTable)
       .where(eq(pushSubscriptionsTable.endpoint, endpoint)).limit(1);
@@ -207,7 +235,7 @@ router.patch("/preferences", async (req, res) => {
   }
   if (sets.length === 0) { res.status(400).json({ error: "Nothing to update" }); return; }
 
-  if (playerId !== "anonymous" && !verifyClaimedIdentity(req, String(playerId))) {
+  if (playerId !== "anonymous" && !await verifyClaimedIdentity(req, String(playerId))) {
     res.status(403).json({ error: "Identity verification failed" });
     return;
   }
@@ -233,12 +261,11 @@ router.delete("/unsubscribe", async (req, res) => {
   const { endpoint, playerId } = req.body || {};
   if (!endpoint || !playerId) { res.status(400).json({ error: "Missing endpoint or playerId" }); return; }
   try {
-    if (playerId !== "anonymous" && !verifyClaimedIdentity(req, String(playerId))) {
+    if (playerId !== "anonymous" && !await verifyClaimedIdentity(req, String(playerId))) {
       res.status(403).json({ error: "Identity verification failed" });
       return;
     }
-    await db.delete(pushSubscriptionsTable).where(and(eq(pushSubscriptionsTable.endpoint, endpoint), eq(pushSubscriptionsTable.playerId, playerId)));
-    res.json({ ok: true });
+    await db.delete(pushSubscriptionsTable).where(and(eq(pushSubscriptionsTable.endpoint, endpoint), eq(pushSubscriptionsTable.playerId, playerId)));    res.json({ ok: true });
   } catch {
     res.status(500).json({ error: "Failed" });
   }
@@ -278,9 +305,13 @@ router.post("/send-daily", async (req, res) => {
 
 // POST /api/notifications/send-invite — notify a specific player (room invite)
 router.post("/send-invite", inviteLimiter, async (req, res) => {
-  const { targetPlayerId, fromName, roomCode, language } = req.body;
-  if (!targetPlayerId || !fromName || !roomCode) {
+  const { senderPlayerId, targetPlayerId, fromName, roomCode, language } = req.body;
+  if (!senderPlayerId || !targetPlayerId || !fromName || !roomCode) {
     res.status(400).json({ error: "Missing fields" }); return;
+  }
+  if (!await verifyClaimedIdentity(req, String(senderPlayerId))) {
+    res.status(403).json({ error: "Identity verification failed" });
+    return;
   }
   if (!VAPID_PUBLIC || !VAPID_PRIVATE) {
     res.status(503).json({ error: "VAPID not configured" }); return;
@@ -293,6 +324,17 @@ router.post("/send-invite", inviteLimiter, async (req, res) => {
   const safeFromName = String(fromName).replace(/[\r\n\u0000-\u001F\u007F]/g, " ").trim().slice(0, 40) || "Alguien";
   const safeRoomCode = String(roomCode).replace(/[^A-Za-z0-9]/g, "").slice(0, 12).toUpperCase();
   if (!safeRoomCode) { res.status(400).json({ error: "Invalid roomCode" }); return; }
+
+  const roomRows = await db
+    .select({ hostId: roomsTable.hostId })
+    .from(roomsTable)
+    .where(eq(roomsTable.roomCode, safeRoomCode))
+    .limit(1);
+
+  if (!roomRows.length || roomRows[0].hostId !== String(senderPlayerId)) {
+    res.status(403).json({ error: "Not authorized to invite from this room" });
+    return;
+  }
 
   const lang = language || "es";
   const INVITE_MSGS: Record<string, { title: string; body: string }> = {
@@ -308,6 +350,8 @@ router.post("/send-invite", inviteLimiter, async (req, res) => {
   const rows = await db.select().from(pushSubscriptionsTable)
     .where(and(
       eq(pushSubscriptionsTable.playerId, targetPlayerId),
+      eq(pushSubscriptionsTable.enabled, true),
+      sql`COALESCE(${pushSubscriptionsTable.mutedUntil}, 0) <= ${Date.now()}`,
       or(
         isNull(pushSubscriptionsTable.origin),
         not(like(pushSubscriptionsTable.origin, '%replit.app%')),
@@ -315,26 +359,33 @@ router.post("/send-invite", inviteLimiter, async (req, res) => {
     ));
 
   let sent = 0;
-  const toDelete: string[] = [];
+  const toDelete: Array<Pick<typeof rows[number], "endpoint" | "p256dh" | "auth" | "playerId">> = [];
   await Promise.allSettled(rows.map(async (row) => {
     try {
       await webpush.sendNotification(
         { endpoint: row.endpoint, keys: { p256dh: row.p256dh, auth: row.auth } },
-        JSON.stringify({ ...msg, icon: "/images/icon-192.png", badge: "/images/badge-96.png", url: `/multijugador?room=${safeRoomCode}` })
+        JSON.stringify({ ...msg, icon: "/images/icon-192.png", badge: "/images/badge-96.png", url: `/multiplayer?room=${safeRoomCode}` })
       );
       sent++;
     } catch (e: any) {
       if (e?.statusCode === 403 || e?.statusCode === 404 || e?.statusCode === 410) {
-        toDelete.push(row.endpoint);
+        toDelete.push(row);
       } else {
         console.error(`[push] invite failed status=${e?.statusCode ?? "unknown"} target=${targetPlayerId}`);
       }
     }
   }));
 
-  for (const endpoint of toDelete) {
+  for (const row of toDelete) {
+    // Do not erase a fresh re-registration that reused the same endpoint while
+    // this stale delivery was in flight.
     await db.delete(pushSubscriptionsTable)
-      .where(eq(pushSubscriptionsTable.endpoint, endpoint))
+      .where(and(
+        eq(pushSubscriptionsTable.endpoint, row.endpoint),
+        eq(pushSubscriptionsTable.p256dh, row.p256dh),
+        eq(pushSubscriptionsTable.auth, row.auth),
+        eq(pushSubscriptionsTable.playerId, row.playerId),
+      ))
       .catch(() => {});
   }
 

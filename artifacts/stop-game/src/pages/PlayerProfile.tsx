@@ -269,8 +269,8 @@ export default function PlayerProfile() {
 
   const { data, isLoading, isError } = useQuery({
     queryKey: [`/api/ranking/profile/${id}`],
-    queryFn: () =>
-      fetch(`${getApiUrl()}/api/ranking/profile/${encodeURIComponent(id!)}`)
+    queryFn: ({ signal }) =>
+      fetch(`${getApiUrl()}/api/ranking/profile/${encodeURIComponent(id!)}`, { signal })
         .then(r => { if (!r.ok) throw new Error("not found"); return r.json(); }),
     enabled: !!id,
     staleTime: 30_000,

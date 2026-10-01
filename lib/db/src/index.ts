@@ -32,5 +32,9 @@ pool.on("error", (err) => {
 
 export const db = drizzle(pool, { schema });
 
+export async function closeDbPool(): Promise<void> {
+  await pool.end();
+}
+
 export * from "./schema";
 export { ensureIndexes, indexesReady } from "./migrate";

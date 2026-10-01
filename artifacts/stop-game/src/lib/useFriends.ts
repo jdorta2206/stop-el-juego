@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import type { OnlinePlayer } from "./usePresence";
 
 export interface FBFriend {
@@ -9,10 +9,11 @@ export interface FBFriend {
 
 // Fetch Facebook app-friends via Graph API client-side
 // NOTE: /me/friends only returns friends who have also authorized this app
-export async function fetchFacebookFriends(accessToken: string): Promise<FBFriend[]> {
+export async function fetchFacebookFriends(accessToken: string, signal?: AbortSignal): Promise<FBFriend[]> {
   try {
     const res = await fetch(
-      `https://graph.facebook.com/me/friends?fields=id,name,picture.type(normal)&access_token=${accessToken}&limit=50`
+      "https://graph.facebook.com/me/friends?fields=id,name,picture.type(normal)&limit=50",
+      { signal, headers: { Authorization: `Bearer ${accessToken}` } }
     );
     if (!res.ok) return [];
     const data = await res.json();
@@ -63,13 +64,18 @@ export function useFacebookFriends(
   const [friends, setFriends] = useState<FBFriend[]>([]);
   const [enriched, setEnriched] = useState<EnrichedFriend[]>([]);
   const [loading, setLoading] = useState(false);
+  const requestRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     if (!fbAccessToken) return;
+    requestRef.current?.abort();
+    const controller = new AbortController();
+    requestRef.current = controller;
     setLoading(true);
-    fetchFacebookFriends(fbAccessToken)
-      .then((f) => setFriends(f))
-      .finally(() => setLoading(false));
+    fetchFacebookFriends(fbAccessToken, controller.signal)
+      .then((f) => { if (!controller.signal.aborted) setFriends(f); })
+      .finally(() => { if (requestRef.current === controller) setLoading(false); });
+    return () => controller.abort();
   }, [fbAccessToken]);
 
   useEffect(() => {

@@ -8,6 +8,13 @@ const excludeReplitOrigin = or(
   not(like(pushSubscriptionsTable.origin, '%replit.app%')),
 );
 
+function enabledAndUnmuted() {
+  return and(
+    eq(pushSubscriptionsTable.enabled, true),
+    sql`COALESCE(${pushSubscriptionsTable.mutedUntil}, 0) <= ${Date.now()}`,
+  );
+}
+
 const VAPID_PUBLIC  = process.env.VAPID_PUBLIC_KEY  || "";
 const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY || "";
 const VAPID_EMAIL   = process.env.VAPID_EMAIL       || "mailto:dorynex@stopjuegodepalabras.com";
@@ -76,6 +83,15 @@ function allowNotification(playerId: string, payload: PushPayload): boolean {
   return true;
 }
 
+function rollbackNotificationThrottle(playerId: string, payload: PushPayload) {
+  if (!playerId || playerId === "anonymous") return;
+  const kind = notificationKind(payload);
+  if (kind === "daily" || kind === "invite" || kind === "friend") return;
+  if (kind === "promo") promotionalLastSentAt.delete(`${playerId}:${kind}`);
+  else if (kind === "rank") playerLastSentAt.delete(`${playerId}:${kind}`);
+  else playerLastSentAt.delete(playerId);
+}
+
 function cleanupNotificationThrottleMaps() {
   const cutoff = Date.now() - PROMOTIONAL_COOLDOWN_MS;
   for (const [key, ts] of promotionalLastSentAt) {
@@ -87,9 +103,17 @@ function cleanupNotificationThrottleMaps() {
   }
 }
 
-async function cleanStaleEndpoint(endpoint: string) {
+async function cleanStaleEndpoint(row: Pick<PushRow, "endpoint" | "p256dh" | "auth" | "playerId">) {
+  // Only remove the exact subscription that failed. The same endpoint can be
+  // re-registered concurrently (for example after browser renewal); an
+  // unconditional endpoint delete could otherwise erase the fresh row.
   await db.delete(pushSubscriptionsTable)
-    .where(eq(pushSubscriptionsTable.endpoint, endpoint))
+    .where(and(
+      eq(pushSubscriptionsTable.endpoint, row.endpoint),
+      eq(pushSubscriptionsTable.p256dh, row.p256dh),
+      eq(pushSubscriptionsTable.auth, row.auth),
+      eq(pushSubscriptionsTable.playerId, row.playerId),
+    ))
     .catch(() => {});
 }
 
@@ -119,10 +143,25 @@ export async function sendPushToPlayer(playerId: string, payload: PushPayload): 
     return 0;
   }
 
-  const rows = await db.select().from(pushSubscriptionsTable)
-    .where(and(eq(pushSubscriptionsTable.playerId, playerId), excludeReplitOrigin));
+  let rows: PushRow[];
+  try {
+    rows = await db.select().from(pushSubscriptionsTable)
+      .where(and(
+        eq(pushSubscriptionsTable.playerId, playerId),
+        excludeReplitOrigin,
+        enabledAndUnmuted(),
+      ));
+  } catch (error) {
+    // A database read failure happens after the in-memory throttle is claimed.
+    // Release that claim so a transient outage does not suppress later pushes.
+    rollbackNotificationThrottle(playerId, payload);
+    throw error;
+  }
 
-  const picked = dedupeByPlayer(rows);
+  // A direct player notification must reach every active device/session owned by
+  // the player. dedupeByPlayer() is only for broadcasts, where one notification
+  // per player is intentional; push_subscriptions.endpoint is already unique.
+  const picked = rows;
 
   let sent = 0;
   await Promise.allSettled(picked.map(async (row) => {
@@ -140,12 +179,16 @@ export async function sendPushToPlayer(playerId: string, payload: PushPayload): 
       sent++;
     } catch (e: any) {
       if (e.statusCode === 410 || e.statusCode === 404 || e.statusCode === 403) {
-        await cleanStaleEndpoint(row.endpoint);
+        await cleanStaleEndpoint(row);
       } else {
         console.error(`[push] send failed status=${e?.statusCode ?? "unknown"} player=${playerId}`);
       }
     }
   }));
+
+  // A failed delivery must not consume the cooldown: otherwise a transient
+  // webpush/provider failure can suppress the player's next valid notification.
+  if (sent === 0) rollbackNotificationThrottle(playerId, payload);
 
   return sent;
 }
@@ -158,12 +201,12 @@ export async function sendPushToAllSubscribers(
 
   const rows = language
     ? await db.select().from(pushSubscriptionsTable)
-        .where(and(eq(pushSubscriptionsTable.language, language), excludeReplitOrigin))
-    : await db.select().from(pushSubscriptionsTable).where(excludeReplitOrigin);
+        .where(and(eq(pushSubscriptionsTable.language, language), excludeReplitOrigin, enabledAndUnmuted()))
+    : await db.select().from(pushSubscriptionsTable).where(and(excludeReplitOrigin, enabledAndUnmuted()));
 
   const picked = dedupeByPlayer(rows);
   let sent = 0, failed = 0;
-  const toDelete: string[] = [];
+  const toDelete: PushRow[] = [];
 
   await Promise.allSettled(picked.map(async (row) => {
     try {
@@ -180,13 +223,13 @@ export async function sendPushToAllSubscribers(
       sent++;
     } catch (e: any) {
       failed++;
-      if (e.statusCode === 410 || e.statusCode === 404 || e.statusCode === 403) toDelete.push(row.endpoint);
+      if (e.statusCode === 410 || e.statusCode === 404 || e.statusCode === 403) toDelete.push(row);
       else console.error(`[push] broadcast failed status=${e?.statusCode ?? "unknown"}`);
     }
   }));
 
-  for (const ep of toDelete) {
-    await cleanStaleEndpoint(ep);
+  for (const row of toDelete) {
+    await cleanStaleEndpoint(row);
   }
 
   return { sent, failed, removed: toDelete.length };
@@ -200,11 +243,11 @@ export async function sendLocalizedBroadcast(
   const fallback = payloadByLang[fallbackLang];
   if (!fallback) return { sent: 0, failed: 0, removed: 0 };
 
-  const rows = await db.select().from(pushSubscriptionsTable).where(excludeReplitOrigin);
+  const rows = await db.select().from(pushSubscriptionsTable).where(and(excludeReplitOrigin, enabledAndUnmuted()));
   const picked = dedupeByPlayer(rows);
 
   let sent = 0, failed = 0;
-  const toDelete: string[] = [];
+  const toDelete: PushRow[] = [];
 
   await Promise.allSettled(picked.map(async (row) => {
     const payload = (row.language && payloadByLang[row.language]) || fallback;
@@ -222,19 +265,20 @@ export async function sendLocalizedBroadcast(
       sent++;
     } catch (e: any) {
       failed++;
-      if (e.statusCode === 410 || e.statusCode === 404 || e.statusCode === 403) toDelete.push(row.endpoint);
+      if (e.statusCode === 410 || e.statusCode === 404 || e.statusCode === 403) toDelete.push(row);
       else console.error(`[push] localized broadcast failed status=${e?.statusCode ?? "unknown"}`);
     }
   }));
 
-  for (const ep of toDelete) {
-    await cleanStaleEndpoint(ep);
+  for (const row of toDelete) {
+    await cleanStaleEndpoint(row);
   }
 
   return { sent, failed, removed: toDelete.length };
 }
 
 const friendOnlineNotifiedAt = new Map<string, number>();
+const friendOnlineInFlight = new Set<string>();
 const FRIEND_ONLINE_COOLDOWN_MS = 30 * 60 * 1000;
 
 export async function notifyFollowersPlayerOnline(
@@ -257,15 +301,47 @@ export async function notifyFollowersPlayerOnline(
       pt: { title: "🟢 Amigo online!", body: `${playerName} está jogando agora. Desafia-o!`, url: "/multiplayer" },
       fr: { title: "🟢 Ami connecté !", body: `${playerName} joue maintenant. Lance-lui un défi !`, url: "/multiplayer" },
     };
-    const msg = MSGS[language] || MSGS.es;
-
     await Promise.allSettled(followers.map(async (follower) => {
       const dedupeKey = `${follower.followerId}:${playerId}`;
       const lastNotified = friendOnlineNotifiedAt.get(dedupeKey) || 0;
       if (now - lastNotified < FRIEND_ONLINE_COOLDOWN_MS) return;
 
-      const sent = await sendPushToPlayer(follower.followerId, msg);
-      if (sent > 0) friendOnlineNotifiedAt.set(dedupeKey, now);
+      // Two simultaneous presence events can otherwise both observe the old
+      // timestamp before either async push completes. Claim the pair while the
+      // delivery is in flight, and release the claim if delivery fails.
+      if (friendOnlineInFlight.has(dedupeKey)) return;
+      friendOnlineInFlight.add(dedupeKey);
+      try {
+        const subscriptions = await db.select().from(pushSubscriptionsTable).where(and(
+          eq(pushSubscriptionsTable.playerId, follower.followerId),
+          excludeReplitOrigin,
+          enabledAndUnmuted(),
+        ));
+        let sent = 0;
+        for (const row of subscriptions) {
+          const msg = MSGS[row.language] || MSGS.es;
+          try {
+            await webpush.sendNotification(
+              { endpoint: row.endpoint, keys: { p256dh: row.p256dh, auth: row.auth } },
+              JSON.stringify({
+                ...msg,
+                icon: "/images/icon-192.png",
+                badge: "/images/badge-96.png",
+              }),
+            );
+            sent++;
+          } catch (e: any) {
+            if (e?.statusCode === 410 || e?.statusCode === 404 || e?.statusCode === 403) {
+              await cleanStaleEndpoint(row);
+            } else {
+              console.error(`[push] friend-online failed status=${e?.statusCode ?? "unknown"} follower=${follower.followerId}`);
+            }
+          }
+        }
+        if (sent > 0) friendOnlineNotifiedAt.set(dedupeKey, now);
+      } finally {
+        friendOnlineInFlight.delete(dedupeKey);
+      }
     }));
   } catch (e) {
     console.error("[pushHelper] notifyFollowersPlayerOnline error:", e);

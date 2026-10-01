@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { getApiUrl } from "@/lib/utils";
 
 const API_BASE = getApiUrl();
@@ -20,10 +20,14 @@ export function usePushNotifications(playerId: string | undefined, language: str
   const [permission, setPermission] = useState<NotifPermission>("default");
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [loading, setLoading] = useState(false);
+  const currentPlayerIdRef = useRef(playerId);
+  const preferencesAbortRef = useRef<AbortController | null>(null);
+  currentPlayerIdRef.current = playerId;
 
   useEffect(() => {
     let cancelled = false;
 
+    const controller = new AbortController();
     const initialise = async () => {
       try {
         if (!("Notification" in window) || !("serviceWorker" in navigator)) {
@@ -51,17 +55,21 @@ export function usePushNotifications(playerId: string | undefined, language: str
           return;
         }
 
-        if (perm === "granted") {
+        if (perm === "granted" && !cancelled && currentPlayerIdRef.current === playerId) {
           const tzOffsetMinutes = -new Date().getTimezoneOffset();
+          const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
           try {
+            if (currentPlayerIdRef.current !== playerId) return;
             const res = await fetch(`${API_BASE}/api/notifications/subscribe`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
+              signal: controller.signal,
               body: JSON.stringify({
                 playerId: playerId || "anonymous",
                 subscription: sub.toJSON(),
                 language,
                 tzOffsetMinutes,
+                timeZone,
                 origin: window.location.origin,
               }),
             });
@@ -76,7 +84,7 @@ export function usePushNotifications(playerId: string | undefined, language: str
     };
 
     void initialise();
-    return () => { cancelled = true; };
+    return () => { cancelled = true; controller.abort(); };
   }, [playerId, language]);
 
   const subscribe = useCallback(async () => {
@@ -91,12 +99,14 @@ export function usePushNotifications(playerId: string | undefined, language: str
       try { localStorage.removeItem(DISABLED_KEY); } catch {}
 
       const existing = await reg.pushManager.getSubscription();
+      if (currentPlayerIdRef.current !== playerId) return false;
       const sub = existing || await reg.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlB64ToUint8Array(VAPID_PUBLIC),
       });
 
       const tzOffsetMinutes = -new Date().getTimezoneOffset();
+      const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
       const res = await fetch(`${API_BASE}/api/notifications/subscribe`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -106,11 +116,13 @@ export function usePushNotifications(playerId: string | undefined, language: str
           language,
           hourLocal: 20,
           tzOffsetMinutes,
+          timeZone,
           origin: typeof window !== "undefined" ? window.location.origin : undefined,
         }),
       });
 
       if (!res.ok) throw new Error(`subscription HTTP ${res.status}`);
+      if (currentPlayerIdRef.current !== playerId) return false;
       setIsSubscribed(true);
       return true;
     } catch (e) {
@@ -125,17 +137,24 @@ export function usePushNotifications(playerId: string | undefined, language: str
     enabled: boolean; hourLocal: number; mutedUntil: number; tzOffsetMinutes: number;
   } | null> => {
     if (!("serviceWorker" in navigator)) return null;
+    preferencesAbortRef.current?.abort();
+    const controller = new AbortController();
+    preferencesAbortRef.current = controller;
     try {
       const reg = await navigator.serviceWorker.ready;
       const sub = await reg.pushManager.getSubscription();
       if (!sub) return null;
       const res = await fetch(
         `${API_BASE}/api/notifications/preferences?endpoint=${encodeURIComponent(sub.endpoint)}&playerId=${encodeURIComponent(playerId || "anonymous")}`,
+        { signal: controller.signal },
       );
-      if (!res.ok) return null;
+      if (!res.ok || controller.signal.aborted || currentPlayerIdRef.current !== playerId) return null;
       return await res.json();
     } catch { return null; }
-  }, []);
+    finally {
+      if (preferencesAbortRef.current === controller) preferencesAbortRef.current = null;
+    }
+  }, [playerId]);
 
   const updatePreferences = useCallback(async (patch: {
     enabled?: boolean; hourLocal?: number; muteDays?: number;
@@ -145,6 +164,7 @@ export function usePushNotifications(playerId: string | undefined, language: str
       const reg = await navigator.serviceWorker.ready;
       const sub = await reg.pushManager.getSubscription();
       if (!sub) return false;
+      if (currentPlayerIdRef.current !== playerId) return false;
       const res = await fetch(`${API_BASE}/api/notifications/preferences`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -152,7 +172,7 @@ export function usePushNotifications(playerId: string | undefined, language: str
       });
       return res.ok;
     } catch { return false; }
-  }, []);
+  }, [playerId]);
 
   const unsubscribe = useCallback(async () => {
     if (!("serviceWorker" in navigator)) return;
@@ -163,6 +183,7 @@ export function usePushNotifications(playerId: string | undefined, language: str
       try { localStorage.setItem(DISABLED_KEY, "1"); } catch {}
 
       if (sub) {
+        if (currentPlayerIdRef.current !== playerId) return;
         try {
           await fetch(`${API_BASE}/api/notifications/unsubscribe`, {
             method: "DELETE",
@@ -180,7 +201,9 @@ export function usePushNotifications(playerId: string | undefined, language: str
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [playerId]);
+
+  useEffect(() => () => preferencesAbortRef.current?.abort(), [playerId]);
 
   const isSupported = "Notification" in window && "serviceWorker" in navigator && !!VAPID_PUBLIC;
 

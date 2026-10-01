@@ -7,12 +7,46 @@ import router from "./routes";
 import adminPanel from "./routes/admin";
 import adminAnalytics from "./routes/adminAnalytics";
 import { WebhookHandlers } from "./webhookHandlers";
+import { isStripeReady } from "./stripeClient";
 import { generalLimiter } from "./middlewares/rateLimit";
+import { indexesReady } from "@workspace/db";
 
 // Production trigger: frontend/runtime stability fixes are deployed together with the API.
 const app: Express = express();
 
 app.set("trust proxy", 1);
+
+// Baseline response hardening. Keep CSP out of this middleware because the
+// frontend uses third-party OAuth, AdMob/TWA bridges and runtime assets whose
+// exact policy is application-specific.
+app.use((_req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  if (process.env.NODE_ENV === "production") {
+    res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  }
+  next();
+});
+
+// Railway health/readiness endpoint. Database bootstrap must complete before
+// the instance is considered ready to receive API traffic.
+app.get("/healthz", (_req, res) => {
+  if (!indexesReady()) {
+    res.setHeader("Retry-After", "2");
+    return res.status(503).json({ status: "starting" });
+  }
+  return res.status(200).json({ status: "ok" });
+});
+
+// Keep all API routes behind the same bootstrap gate. Health checks remain
+// available so Railway can distinguish startup (503) from readiness (200).
+app.use("/api", (req, res, next) => {
+  if (req.path === "/healthz" || indexesReady()) return next();
+  res.setHeader("Retry-After", "2");
+  return res.status(503).json({ error: "Service is still initializing" });
+});
 
 app.post(
   "/api/stripe/webhook",
@@ -20,6 +54,10 @@ app.post(
   async (req, res) => {
     const signature = req.headers["stripe-signature"];
     if (!signature) return res.status(400).json({ error: "Missing stripe-signature" });
+    if (!isStripeReady()) {
+      res.setHeader("Retry-After", "5");
+      return res.status(503).json({ error: "Stripe is still initializing" });
+    }
     try {
       const sig = Array.isArray(signature) ? signature[0] : signature;
       if (!Buffer.isBuffer(req.body)) {
@@ -107,7 +145,7 @@ if (process.env["SERVE_CLIENT"] === "1") {
   app.get("/app-ads.txt", (_req, res) => {
     res.type("text/plain");
     res.setHeader("Cache-Control", "public, max-age=3600");
-    res.status(200).send("google.com, pub-4807272408824742, DIRECT, f08c47fec0942fa0\\n");
+    res.status(200).send("google.com, pub-4807272408824742, DIRECT, f08c47fec0942fa0\n");
   });
 
   app.get("/.well-known/assetlinks.json", (_req, res) => {

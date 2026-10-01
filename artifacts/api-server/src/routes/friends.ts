@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, followsTable, playerScoresTable } from "@workspace/db";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { verifyClaimedIdentity } from "../lib/playerAuth";
 
 const router: IRouter = Router();
@@ -9,13 +9,14 @@ const router: IRouter = Router();
 router.get("/list/:followerId", async (req, res) => {
   const { followerId } = req.params;
   if (!followerId) return res.status(400).json({ error: "followerId required" });
-  if (!verifyClaimedIdentity(req, followerId)) {
+  if (!await verifyClaimedIdentity(req, followerId)) {
     return res.status(403).json({ error: "Invalid player identity" });
   }
 
+  let follows: any[] = [];
   try {
     // 1. Obtener la lista de seguidos
-    const follows = await db
+    follows = await db
       .select()
       .from(followsTable)
       .where(eq(followsTable.followerId, followerId));
@@ -118,31 +119,37 @@ router.post("/follow", async (req, res) => {
   if (!followerId || !followedId || !followedName) {
     return res.status(400).json({ error: "followerId, followedId and followedName required" });
   }
-  if (!verifyClaimedIdentity(req, followerId)) {
+  if (!await verifyClaimedIdentity(req, followerId)) {
     return res.status(403).json({ error: "Invalid player identity" });
   }
   if (followerId === followedId) {
     return res.status(400).json({ error: "Cannot follow yourself" });
   }
 
-  const existing = await db
-    .select()
-    .from(followsTable)
-    .where(and(eq(followsTable.followerId, followerId), eq(followsTable.followedId, followedId)));
+  const result = await db.transaction(async (tx) => {
+    const targetRows = await tx.execute(sql`SELECT player_id, player_name, profile_picture, avatar_color FROM player_scores WHERE player_id = ${followedId} FOR UPDATE`);
+    const target = (targetRows.rows as Array<{player_id:string;player_name:string;profile_picture:string|null;avatar_color:string|null}>)[0];
+    if (!target) return { notFound: true, alreadyFollowing: false };
 
-  if (existing.length > 0) {
-    return res.json({ ok: true, alreadyFollowing: true });
-  }
+    const existing = await tx.select().from(followsTable)
+      .where(and(eq(followsTable.followerId, followerId), eq(followsTable.followedId, followedId)));
+    if (existing.length > 0) return { notFound: false, alreadyFollowing: true };
 
-  await db.insert(followsTable).values({
-    followerId,
-    followedId,
-    followedName,
-    followedPicture: followedPicture || null,
-    followedAvatarColor: followedAvatarColor || "#e53e3e",
-    followedProvider: followedProvider || null,
+    await tx.insert(followsTable).values({
+      followerId,
+      followedId: target.player_id,
+      followedName: target.player_name,
+      followedPicture: target.profile_picture ?? null,
+      followedAvatarColor: target.avatar_color ?? "#e53e3e",
+      followedProvider: null,
+    }).onConflictDoNothing({
+      target: [followsTable.followerId, followsTable.followedId],
+    });
+    return { notFound: false, alreadyFollowing: false };
   });
 
+  if (result.notFound) return res.status(404).json({ error: "Player not found" });
+  if (result.alreadyFollowing) return res.json({ ok: true, alreadyFollowing: true });
   return res.json({ ok: true });
 });
 
@@ -153,7 +160,7 @@ router.delete("/unfollow", async (req, res) => {
   if (!followerId || !followedId) {
     return res.status(400).json({ error: "followerId and followedId required" });
   }
-  if (!verifyClaimedIdentity(req, followerId)) {
+  if (!await verifyClaimedIdentity(req, followerId)) {
     return res.status(403).json({ error: "Invalid player identity" });
   }
 

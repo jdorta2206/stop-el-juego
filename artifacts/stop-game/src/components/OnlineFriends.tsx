@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Wifi, Copy, ChevronDown, ChevronUp, Swords, Check, Clock, UserPlus, UserCheck } from "lucide-react";
 import { usePresence, sendChallenge, pollChallengeStatus, type OnlinePlayer } from "@/lib/usePresence";
@@ -57,15 +57,16 @@ type ChallengeState = "idle" | "sending" | "waiting" | "accepted" | "declined" |
 function ChallengeButton({
   onChallenge,
 }: {
-  onChallenge: () => Promise<void>;
+  onChallenge: () => Promise<boolean>;
 }) {
   const [state, setState] = useState<ChallengeState>("idle");
 
   const handleClick = async () => {
     if (state !== "idle") return;
     setState("sending");
-    await onChallenge();
-    setState("waiting");
+    const sent = await onChallenge();
+    if (sent) setState("waiting");
+    else setState("idle");
   };
 
   if (state === "idle") {
@@ -152,35 +153,76 @@ function PlayerRow({
 }) {
   const [, setLocation] = useLocation();
   const [copied, setCopied] = useState(false);
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingChallengeId = useRef<string | null>(null);
+  const challengeAbortRef = useRef<AbortController | null>(null);
+  const challengePollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const challengeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const challengePollInFlightRef = useRef(false);
+
+  useEffect(() => () => {
+    if (challengePollRef.current) clearInterval(challengePollRef.current);
+    if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current);
+    challengePollRef.current = null;
+    challengeTimeoutRef.current = null;
+    challengeAbortRef.current?.abort();
+    pendingChallengeId.current = null;
+  }, []);
+
+  useEffect(() => () => {
+    if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    copiedTimerRef.current = null;
+  }, []);
 
   const handleCopy = () => {
     if (player.roomCode) {
       navigator.clipboard.writeText(player.roomCode).then(() => {
         setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
+        if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+        copiedTimerRef.current = setTimeout(() => {
+          copiedTimerRef.current = null;
+          setCopied(false);
+        }, 2000);
       });
     }
   };
 
-  const handleChallenge = async () => {
-    if (!currentPlayer) return;
+  const handleChallenge = async (): Promise<boolean> => {
+    if (!currentPlayer) return false;
     const result = await sendChallenge(currentPlayer, player.playerId);
-    if (!result) return;
+    if (!result) return false;
     pendingChallengeId.current = result.challengeId;
+    challengeAbortRef.current?.abort();
+    if (challengePollRef.current) clearInterval(challengePollRef.current);
+    if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current);
+    const controller = new AbortController();
+    challengeAbortRef.current = controller;
     const poll = setInterval(async () => {
-      if (!pendingChallengeId.current) { clearInterval(poll); return; }
-      const status = await pollChallengeStatus(pendingChallengeId.current);
-      if (status.status === "accepted") {
-        clearInterval(poll);
-        pendingChallengeId.current = null;
+      if (!pendingChallengeId.current || controller.signal.aborted || challengePollInFlightRef.current) return;
+      challengePollInFlightRef.current = true;
+      try {
+        const status = await pollChallengeStatus(pendingChallengeId.current, controller.signal);
+        if (!pendingChallengeId.current || controller.signal.aborted) return;
+        if (status.status === "accepted") {
+        clearInterval(poll); challengePollRef.current = null;
+        if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current);
+        challengeTimeoutRef.current = null; pendingChallengeId.current = null;
         setLocation(`/room/${status.roomCode}`);
       } else if (status.status === "declined" || status.status === "expired") {
-        clearInterval(poll);
-        pendingChallengeId.current = null;
+        clearInterval(poll); challengePollRef.current = null;
+        if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current);
+        challengeTimeoutRef.current = null; pendingChallengeId.current = null;
+        }
+      } finally {
+        challengePollInFlightRef.current = false;
       }
     }, 2000);
-    setTimeout(() => { clearInterval(poll); pendingChallengeId.current = null; }, 60000);
+    challengePollRef.current = poll;
+    challengeTimeoutRef.current = setTimeout(() => {
+      controller.abort(); clearInterval(poll); challengePollRef.current = null;
+      pendingChallengeId.current = null; challengeTimeoutRef.current = null;
+    }, 60000);
+    return true;
   };
 
   return (
@@ -259,35 +301,76 @@ function InstagramPlayerRow({
 }) {
   const [, setLocation] = useLocation();
   const [copied, setCopied] = useState(false);
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => {
+    if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    copiedTimerRef.current = null;
+  }, []);
   const pendingChallengeId = useRef<string | null>(null);
+  const challengeAbortRef = useRef<AbortController | null>(null);
+  const challengePollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const challengeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const challengePollInFlightRef = useRef(false);
+
+  useEffect(() => () => {
+    if (challengePollRef.current) clearInterval(challengePollRef.current);
+    if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current);
+    challengePollRef.current = null;
+    challengeTimeoutRef.current = null;
+    challengeAbortRef.current?.abort();
+    pendingChallengeId.current = null;
+  }, []);
 
   const handleJoin = () => {
     if (p.roomCode) {
       navigator.clipboard.writeText(p.roomCode).then(() => {
         setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
+        if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+        copiedTimerRef.current = setTimeout(() => {
+          copiedTimerRef.current = null;
+          setCopied(false);
+        }, 2000);
       });
     }
   };
 
-  const handleChallenge = async () => {
-    if (!currentPlayer) return;
+  const handleChallenge = async (): Promise<boolean> => {
+    if (!currentPlayer) return false;
     const result = await sendChallenge(currentPlayer, p.playerId);
-    if (!result) return;
+    if (!result) return false;
     pendingChallengeId.current = result.challengeId;
+    challengeAbortRef.current?.abort();
+    if (challengePollRef.current) clearInterval(challengePollRef.current);
+    if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current);
+    const controller = new AbortController();
+    challengeAbortRef.current = controller;
     const poll = setInterval(async () => {
-      if (!pendingChallengeId.current) { clearInterval(poll); return; }
-      const status = await pollChallengeStatus(pendingChallengeId.current);
-      if (status.status === "accepted") {
-        clearInterval(poll);
-        pendingChallengeId.current = null;
+      if (!pendingChallengeId.current || controller.signal.aborted || challengePollInFlightRef.current) return;
+      challengePollInFlightRef.current = true;
+      try {
+        const status = await pollChallengeStatus(pendingChallengeId.current, controller.signal);
+        if (!pendingChallengeId.current || controller.signal.aborted) return;
+        if (status.status === "accepted") {
+        clearInterval(poll); challengePollRef.current = null;
+        if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current);
+        challengeTimeoutRef.current = null; pendingChallengeId.current = null;
         setLocation(`/room/${status.roomCode}`);
       } else if (status.status === "declined" || status.status === "expired") {
-        clearInterval(poll);
-        pendingChallengeId.current = null;
+        clearInterval(poll); challengePollRef.current = null;
+        if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current);
+        challengeTimeoutRef.current = null; pendingChallengeId.current = null;
+        }
+      } finally {
+        challengePollInFlightRef.current = false;
       }
     }, 2000);
-    setTimeout(() => { clearInterval(poll); pendingChallengeId.current = null; }, 60000);
+    challengePollRef.current = poll;
+    challengeTimeoutRef.current = setTimeout(() => {
+      controller.abort(); clearInterval(poll); challengePollRef.current = null;
+      pendingChallengeId.current = null; challengeTimeoutRef.current = null;
+    }, 60000);
+    return true;
   };
 
   const isMe = currentPlayer?.id === p.playerId;
@@ -353,35 +436,76 @@ function InstagramPlayerRow({
 function FriendRow({ friend, currentPlayer }: { friend: EnrichedFriend; currentPlayer?: PlayerProfile }) {
   const [, setLocation] = useLocation();
   const [copied, setCopied] = useState(false);
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => {
+    if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    copiedTimerRef.current = null;
+  }, []);
   const pendingChallengeId = useRef<string | null>(null);
+  const challengeAbortRef = useRef<AbortController | null>(null);
+  const challengePollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const challengeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const challengePollInFlightRef = useRef(false);
+
+  useEffect(() => () => {
+    if (challengePollRef.current) clearInterval(challengePollRef.current);
+    if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current);
+    challengePollRef.current = null;
+    challengeTimeoutRef.current = null;
+    challengeAbortRef.current?.abort();
+    pendingChallengeId.current = null;
+  }, []);
 
   const handleJoin = () => {
     if (friend.onlineData?.roomCode) {
       navigator.clipboard.writeText(friend.onlineData.roomCode).then(() => {
         setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
+        if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+        copiedTimerRef.current = setTimeout(() => {
+          copiedTimerRef.current = null;
+          setCopied(false);
+        }, 2000);
       });
     }
   };
 
-  const handleChallenge = async () => {
-    if (!currentPlayer || !friend.onlineData?.playerId) return;
+  const handleChallenge = async (): Promise<boolean> => {
+    if (!currentPlayer || !friend.onlineData?.playerId) return false;
     const result = await sendChallenge(currentPlayer, friend.onlineData.playerId);
-    if (!result) return;
+    if (!result) return false;
     pendingChallengeId.current = result.challengeId;
+    challengeAbortRef.current?.abort();
+    if (challengePollRef.current) clearInterval(challengePollRef.current);
+    if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current);
+    const controller = new AbortController();
+    challengeAbortRef.current = controller;
     const poll = setInterval(async () => {
-      if (!pendingChallengeId.current) { clearInterval(poll); return; }
-      const status = await pollChallengeStatus(pendingChallengeId.current);
-      if (status.status === "accepted") {
-        clearInterval(poll);
-        pendingChallengeId.current = null;
+      if (!pendingChallengeId.current || controller.signal.aborted || challengePollInFlightRef.current) return;
+      challengePollInFlightRef.current = true;
+      try {
+        const status = await pollChallengeStatus(pendingChallengeId.current, controller.signal);
+        if (!pendingChallengeId.current || controller.signal.aborted) return;
+        if (status.status === "accepted") {
+        clearInterval(poll); challengePollRef.current = null;
+        if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current);
+        challengeTimeoutRef.current = null; pendingChallengeId.current = null;
         setLocation(`/room/${status.roomCode}`);
       } else if (status.status === "declined" || status.status === "expired") {
-        clearInterval(poll);
-        pendingChallengeId.current = null;
+        clearInterval(poll); challengePollRef.current = null;
+        if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current);
+        challengeTimeoutRef.current = null; pendingChallengeId.current = null;
+        }
+      } finally {
+        challengePollInFlightRef.current = false;
       }
     }, 2000);
-    setTimeout(() => { clearInterval(poll); pendingChallengeId.current = null; }, 60000);
+    challengePollRef.current = poll;
+    challengeTimeoutRef.current = setTimeout(() => {
+      controller.abort(); clearInterval(poll); challengePollRef.current = null;
+      pendingChallengeId.current = null; challengeTimeoutRef.current = null;
+    }, 60000);
+    return true;
   };
 
   return (
