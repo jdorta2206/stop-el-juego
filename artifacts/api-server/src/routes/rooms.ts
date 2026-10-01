@@ -2806,33 +2806,13 @@ router.post("/:roomCode/rematch", writeLimiter, async (req, res) => {
           return { kind: "existing" as const, rematchCode: persistedRematch, oldRoom };
         }
       } else if (persistedRematch) {
-        // Legacy finished rooms predate rematchRoomId. Accept the old pointer
-        // only while its target still matches the immutable ownership/settings
-        // that a rematch created by this player must have; otherwise treat it
-        // as stale and create a fresh rematch.
-        const target = await tx.select({
-          roomCode: roomsTable.roomCode,
-          hostId: roomsTable.hostId,
-          status: roomsTable.status,
-          maxRounds: roomsTable.maxRounds,
-          maxPlayers: roomsTable.maxPlayers,
-          gameMode: roomsTable.gameMode,
-          language: roomsTable.language,
-        })
-          .from(roomsTable)
-          .where(eq(roomsTable.roomCode, persistedRematch))
-          .limit(1);
-        if (
-          target.length > 0 &&
-          (target[0].status === "waiting" || target[0].status === "playing") &&
-          oldPlayers.some((p: any) => p.playerId === target[0].hostId) &&
-          target[0].maxRounds === oldRoom.maxRounds &&
-          target[0].maxPlayers === (oldRoom.maxPlayers ?? 8) &&
-          target[0].gameMode === (oldRoom.gameMode ?? "classic") &&
-          target[0].language === oldRoom.language
-        ) {
-          return { kind: "existing" as const, rematchCode: persistedRematch, oldRoom };
-        }
+        // Legacy rooms only stored the rematch by recyclable roomCode. That
+        // pointer is not safe as an idempotency key: after the target room is
+        // deleted, the same code can be allocated to an unrelated room whose
+        // host/settings happen to match. Without the immutable rematchRoomId
+        // there is no authoritative way to prove ownership, so create a fresh
+        // rematch instead of following an ambiguous legacy pointer.
+      }}
       }
 
       // The caller's identity/name/cosmetics come from the authoritative old
