@@ -652,6 +652,8 @@ components:
         loginMethod:
           type: string
           nullable: true
+        challengeId:
+          type: string
       required:
         - playerId
         - playerName
