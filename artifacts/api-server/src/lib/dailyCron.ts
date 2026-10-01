@@ -528,10 +528,13 @@ async function sendDailyDealsNotifications() {
   }
 }
 
+let dailyCronTimer: ReturnType<typeof setInterval> | null = null;
+
 export function startDailyCron() {
+  if (dailyCronTimer) return;
   // Check every 5 minutes if it's time to send notifications.
   // Both fires use a per-key DB lock so only ONE instance sends across the cluster.
-  setInterval(async () => {
+  dailyCronTimer = setInterval(async () => {
     const now = new Date();
     const utcHour = now.getUTCHours();
     const utcMinute = now.getUTCMinutes();
@@ -591,6 +594,13 @@ export function startDailyCron() {
   }, 5 * 60 * 1000);
 
   console.log("[dailyCron] Crons started — per-user daily, happy hour, daily deals ~10:00 local, streak rescue 19:00 UTC, season rollover 08:00 UTC, season claim 21:00 UTC");
+}
+
+export function stopDailyCron() {
+  if (!dailyCronTimer) return;
+  clearInterval(dailyCronTimer);
+  dailyCronTimer = null;
+  console.log("[dailyCron] Crons stopped");
 }
 
 /**
