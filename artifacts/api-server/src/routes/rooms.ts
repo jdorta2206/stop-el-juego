@@ -134,7 +134,7 @@ async function isPlayerPremium(playerId: string | null | undefined): Promise<boo
 }
 
 // ── SSE listeners: roomCode → set of response objects ──────────────────────
-type SseClient = { res: import("express").Response; playerId: string };
+type SseClient = { res: import("express").Response; playerId: string; roomId: number };
 const sseClients = new Map<string, Set<SseClient>>();
 
 // 🛰️ Presence: a player is "online" if they currently have an open SSE
@@ -160,7 +160,7 @@ const PRESENCE_GRACE_MS = 4_000;
 // the fallback for legacy rows that still expose version 0. Comparing only
 // Date#getTime() is unsafe because two PostgreSQL writes can legitimately be
 // stamped with the same JavaScript-millisecond value.
-type BroadcastMarker = { roomVersion: number; updatedAtMs: number };
+type BroadcastMarker = { roomId: number; roomVersion: number; updatedAtMs: number };
 const lastBroadcastMarker = new Map<string, BroadcastMarker>();
 
 function shouldDropStaleBroadcast(code: string, roomPayload: any): boolean {
@@ -170,6 +170,8 @@ function shouldDropStaleBroadcast(code: string, roomPayload: any): boolean {
     : new Date(roomPayload?.updatedAt ?? 0).getTime();
   const last = lastBroadcastMarker.get(code);
   if (!last) return false;
+  const roomId = Number(roomPayload?.id);
+  if (Number.isFinite(roomId) && roomId > 0 && last.roomId !== roomId) return false;
 
   if (roomVersion > 0 && last.roomVersion > 0) {
     return roomVersion < last.roomVersion;
@@ -184,7 +186,7 @@ function markBroadcast(code: string, roomPayload: any) {
   const updatedAtMs = roomPayload?.updatedAt instanceof Date
     ? roomPayload.updatedAt.getTime()
     : new Date(roomPayload?.updatedAt ?? 0).getTime();
-  lastBroadcastMarker.set(code, { roomVersion, updatedAtMs });
+  lastBroadcastMarker.set(code, { roomId: Number(roomPayload?.id) || 0, roomVersion, updatedAtMs });
 }
 
 function broadcastRoom(code: string, roomPayload: object) {
@@ -203,6 +205,11 @@ function broadcastRoom(code: string, roomPayload: object) {
 
   for (const client of [...clients]) {
     try {
+      if (Number(room?.id) !== Number(client.roomId)) {
+        client.res.end();
+        clients.delete(client);
+        continue;
+      }
       if ((room.isPublic === false || isHalloweenPreview) && !memberIds.has(client.playerId)) {
         client.res.end();
         clients.delete(client);
@@ -2335,7 +2342,7 @@ router.get("/:roomCode/events", async (req, res) => {
   // Register the client before loading the initial snapshot. Otherwise an update
   // can commit/broadcast between the authorization read and registration and be
   // missed forever by this subscriber.
-  const client: SseClient = { res, playerId };
+  const client: SseClient = { res, playerId, roomId: roomRow.id };
   if (!sseClients.has(code)) sseClients.set(code, new Set());
   sseClients.get(code)!.add(client);
 
