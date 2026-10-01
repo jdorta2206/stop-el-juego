@@ -295,8 +295,16 @@ function getTyping(code: string, excludeId?: string): { playerId: string; player
 }
 
 // 🕵️ Live in-progress responses (for spy/peek mechanic). Stale after 5s.
-// playerId → { name, responses: { category: word }, ts }
-const roomLiveResponses = new Map<string, Map<string, { name: string; responses: Record<string, string>; ts: number }>>();
+// playerId → { name, responses, round, letter, ts }
+// Round/letter are persisted in-memory with the draft so a response from a
+// previous round can never be replayed as if it belonged to the current one.
+const roomLiveResponses = new Map<string, Map<string, {
+  name: string;
+  responses: Record<string, string>;
+  round: number;
+  letter: string;
+  ts: number;
+}>>();
 // roomCode → map of playerId → spy uses this round.
 // Free players: 1 use/round. Premium players: 2 uses/round.
 const roomSpyUsage = new Map<string, Map<string, number>>();
@@ -2391,7 +2399,13 @@ router.post("/:roomCode/typing", writeLimiter, async (req, res) => {
         safe[String(k).slice(0, 60)] = v.trim().slice(0, 80);
       }
     }
-    lr.set(playerId, { name: memberName, responses: safe, ts: Date.now() });
+    lr.set(playerId, {
+      name: memberName,
+      responses: safe,
+      round: room.currentRound,
+      letter: String(room.currentLetter ?? "").toUpperCase(),
+      ts: Date.now(),
+    });
   }
 
   // Lightweight broadcast — re-fetch room and broadcast formatted state
@@ -2423,12 +2437,17 @@ router.get("/:roomCode/draft", async (req, res) => {
   const lr = roomLiveResponses.get(code);
   const entry = lr?.get(playerId);
   if (!entry) { res.json({ responses: {}, ts: 0, age: null }); return; }
+  const currentLetter = String(roomRow.currentLetter ?? "").toUpperCase();
+  if (entry.round !== roomRow.currentRound || entry.letter !== currentLetter) {
+    res.json({ responses: {}, ts: 0, age: null });
+    return;
+  }
   res.json({
     responses: entry.responses,
     ts: entry.ts,
     age: Date.now() - entry.ts,
-    round: roomRow.currentRound,
-    letter: roomRow.currentLetter,
+    round: entry.round,
+    letter: entry.letter,
   });
 });
 
@@ -2505,6 +2524,8 @@ router.post("/:roomCode/spy", writeLimiter, async (req, res) => {
     // A player may have left while their last typing snapshot is still fresh.
     // Never expose a departed player's draft through the spy mechanic.
     if (pid === playerId || !memberIds.has(pid)) continue;
+    if (info.round !== liveRoom.currentRound) continue;
+    if (info.letter !== String(liveRoom.currentLetter ?? "").toUpperCase()) continue;
     if (info.ts < cutoff) continue;
     for (const [cat, word] of Object.entries(info.responses)) {
       if (word && word.length > 0) candidates.push({ pid, name: info.name, cat, word });
