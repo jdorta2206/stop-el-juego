@@ -2893,7 +2893,8 @@ router.post("/:roomCode/rematch", writeLimiter, async (req, res) => {
     // standard pack even though the endpoint promises the same game settings.
     const previousPack = getRoomPack(oldCode, outcome.oldRoom.id);
     const oldMetaForPack = parseBluffMeta(outcome.oldRoom.stopperJson) ?? {};
-    const rematchRoomId = Number.isInteger(oldMetaForPack.rematchRoomId) ? oldMetaForPack.rematchRoomId : null;\n    const persistedPack = typeof oldMetaForPack.categoryPack === "string"
+    const rematchRoomId = Number.isInteger(oldMetaForPack.rematchRoomId) ? oldMetaForPack.rematchRoomId : null;
+    const persistedPack = typeof oldMetaForPack.categoryPack === "string"
       ? oldMetaForPack.categoryPack
       : null;
     const persistedCustomCategories = Array.isArray(oldMetaForPack.customCategories)
@@ -2924,7 +2925,7 @@ router.post("/:roomCode/rematch", writeLimiter, async (req, res) => {
       roomTyping.delete(newCode);
       roomHalloweenScares.delete(newCode);
       for (const key of halloweenScareCooldowns.keys()) {
-        if (key.startsWith(String(createdRematchRoomId) + ":")) halloweenScareCooldowns.delete(key);
+        if (key.startsWith(String(rematchRoomId) + ":")) halloweenScareCooldowns.delete(key);
       }
       lastBroadcastMarker.delete(newCode);
       roomLiveResponses.delete(newCode);
