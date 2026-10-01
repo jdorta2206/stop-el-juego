@@ -161,7 +161,8 @@ router.post("/submit", async (req, res) => {
           )
         );
     }
-    void recordAuthoritativeSeasonEvents(playerId, [{ type: "daily_done", value: 1 }]);
+    // A repeat submission for the same daily must not increment the season's
+    // daily_done mission again. The first successful insert below records it once.
     res.json({ updated: true, alreadyPlayed: true });
     return;
   }
