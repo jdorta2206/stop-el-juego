@@ -1300,6 +1300,15 @@ router.get("/:roomCode/spectate", async (req, res) => {
   const room = rows[0];
   if (!room.isPublic) { res.status(403).json({ error: "Room is private" }); return; }
 
+  // Defense in depth: a legacy/test preview room must never become a public
+  // spectator target, even if its isPublic flag was set before the visibility
+  // guard existed.
+  const spectateMeta = parseBluffMeta(room.stopperJson) ?? {};
+  if (spectateMeta.halloweenPreview === true) {
+    res.status(403).json({ error: "Halloween preview rooms are private" });
+    return;
+  }
+
   // Obtener cosméticos para los jugadores de la sala (para espectadores)
   const players = parsePlayers(room.playersJson);
   const playerIds = players.map((p: any) => p.playerId).filter(Boolean);
