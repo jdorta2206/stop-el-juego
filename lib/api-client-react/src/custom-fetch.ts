@@ -281,7 +281,7 @@ function getApiBase(): string {
     if (!envUrl) return "";
     const origin = typeof window !== "undefined" ? window.location.origin : "";
     const url = new URL(envUrl, origin || undefined);
-    if (/\\.replit\\.(app|dev)$/i.test(url.hostname)) return "";
+    if (/\.replit\.(app|dev)$/i.test(url.hostname)) return "";
     return url.origin;
   } catch {
     return "";
