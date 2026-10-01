@@ -3603,6 +3603,15 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
       break;
     }
 
+    // The retry must still target the exact immutable room instance. A room
+    // code can be recycled after deletion; matching the code/round alone could
+    // otherwise inject a stale submission into the new room.
+    if (refreshed.id !== room.id) {
+      res.status(409).json({ error: "Room changed; result submission is no longer applicable" });
+      writeSucceeded = true;
+      break;
+    }
+
     const refreshedPlayers = parsePlayers(refreshed.playersJson);
     const refreshedMe = refreshedPlayers.find((p: any) => p.playerId === playerId);
 
@@ -3655,7 +3664,10 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
     // Extremely unlikely after three bounded CAS retries. Return the latest
     // state instead of looping indefinitely or reporting a false success.
     const [refreshed] = await db.select().from(roomsTable)
-      .where(eq(roomsTable.roomCode, roomCode.toUpperCase()))
+      .where(and(
+        eq(roomsTable.roomCode, roomCode.toUpperCase()),
+        eq(roomsTable.id, room.id),
+      ))
       .limit(1);
     res.json(formatRoom(refreshed));
   }
