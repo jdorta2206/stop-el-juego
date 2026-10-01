@@ -174,15 +174,9 @@ function decodeAuthState(raw: string | undefined): { returnPath: string; returnO
 // SESSION_SECRET plus a timestamp (15-min TTL) and (b) bind it to the browser
 // with a single-use httpOnly nonce cookie set at /start.
 //
-// Cross-origin caveat: /start runs on the user's current origin (e.g. www via
-// Railway) but the provider always redirects to the callback on APP_ORIGIN
-// (stop-el-juego.replit.app). The Lax nonce cookie set at /start therefore only
-// reaches the callback when BOTH ran on the same origin (replit.app / dev). So
-// we ENFORCE binding only when the nonce cookie is present and FAIL OPEN when
-// it's absent (the cross-origin www path), keeping the fragile live login
-// working everywhere while still adding real CSRF protection on the
-// same-origin path. Apple (form_post → cross-site POST) never sends the Lax
-// cookie either, so it also fails open — fine, it isn't enabled.
+// /start is canonicalized onto APP_ORIGIN before the provider redirect.
+// The nonce cookie therefore belongs to the same host that receives every
+// callback, including Apple's cross-site form_post.
 const OAUTH_NONCE_COOKIE = "stop_oauth_nonce";
 const STATE_TTL_MS = 15 * 60 * 1000;
 
@@ -201,8 +195,9 @@ const NONCE_COOKIE_OPTS = {
   path: "/",
 };
 
-/** Set a single-use nonce cookie and return a signed state carrying it. Falls
- *  back to the legacy unsigned encoding when no secret is configured. */
+/** Set a single-use nonce cookie and return a signed state carrying it.
+ *  OAuth callbacks require the signed state, so a missing SESSION_SECRET is
+ *  intentionally a configuration failure rather than a CSRF bypass. */
 function beginAuthState(res: Response, returnPath: string, returnOrigin: string): string {
   const secret = stateSecret();
   if (!secret) return encodeAuthState(returnPath, returnOrigin);
