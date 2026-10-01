@@ -448,6 +448,10 @@ components:
             `totalScore` and grants XP, but skips incrementing
             `gamesPlayed`/`wins` and does not bump the daily streak — those
             already counted on the original (non-bonus) submission.
+        offlineSubmissionId:
+          type: string
+          maxLength: 128
+          description: Stable client-generated identifier for one offline game, reused for every synchronization retry.
         scoreTokens:
           type: array
           items:
