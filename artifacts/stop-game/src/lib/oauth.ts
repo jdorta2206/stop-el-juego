@@ -19,10 +19,22 @@ const PLAYER_STORAGE_KEY = "stop_player_v2";
 const SESSION_TOKEN_KEY = "stop_session_token";
 const AVATAR_COLORS = ["#f9a825", "#42a5f5", "#66bb6a", "#ab47bc", "#ef5350", "#26a69a"];
 
+function getApiBase(): string {
+  const configured = (import.meta as { env?: { VITE_API_URL?: string } }).env?.VITE_API_URL?.trim();
+  if (!configured) return window.location.origin;
+  try {
+    const url = new URL(configured, window.location.origin);
+    if (/\\.replit\\.(app|dev)$/i.test(url.hostname)) return window.location.origin;
+    return url.origin;
+  } catch {
+    return window.location.origin;
+  }
+}
+
 function startOAuth(provider: "google" | "facebook" | "instagram" | "tiktok" | "apple") {
   const returnPath = window.location.pathname + window.location.search;
   try { sessionStorage.setItem("oauth_return", returnPath); } catch {}
-  const apiBase = (import.meta as { env?: { VITE_API_URL?: string } }).env?.VITE_API_URL ?? window.location.origin;
+  const apiBase = getApiBase();
   const origin = window.location.origin;
   const url = new URL(`${apiBase}/api/auth/${provider}/start`);
   url.searchParams.set("return", returnPath);
@@ -82,9 +94,7 @@ export async function consumeAuthHandoff(): Promise<void> {
     const query = params.toString();
     window.history.replaceState({}, "", `${window.location.pathname}${query ? `?${query}` : ""}${hash ? `#${hash}` : ""}`);
 
-    const apiBase =
-      (import.meta as { env?: { VITE_API_URL?: string } }).env?.VITE_API_URL ??
-      window.location.origin;
+    const apiBase = getApiBase();
 
     const response = await fetch(`${apiBase}/api/auth/handoff`, {
       method: "POST",
