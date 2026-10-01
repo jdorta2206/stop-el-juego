@@ -277,6 +277,8 @@ export default function Ranking() {
     if (!player?.id) return;
     const controller = new AbortController();
     fetch(`${getApiUrl()}/api/friends/list/${encodeURIComponent(player.id)}`, {
+      headers: authHeaders(),
+      credentials: "include",
       signal: controller.signal,
     })
       .then(r => r.ok ? r.json() : { friends: [] })
