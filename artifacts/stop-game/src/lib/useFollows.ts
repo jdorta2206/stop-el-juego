@@ -118,7 +118,8 @@ export function useFollows(
     try {
       const r = await fetch(`${API_BASE}/api/friends/unfollow`, {
         method: "DELETE",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        credentials: "include",
         body: JSON.stringify({ followerId: meId, followedId: targetId }),
       });
       if (!r.ok) return false;
