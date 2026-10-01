@@ -3,7 +3,9 @@ import { useState } from "react";
 export default function DeleteAccount() {
   const [email, setEmail] = useState("");
   const [reason, setReason] = useState("");
-  const [sent, setSent] = useState(false);\n  const [deleted, setDeleted] = useState(false);\n  const [errorMsg, setErrorMsg] = useState("");
+  const [sent, setSent] = useState(false);
+  const [deleted, setDeleted] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -14,7 +16,7 @@ export default function DeleteAccount() {
     if (!token) {
       const subject = encodeURIComponent("Solicitud de eliminación de cuenta — STOP");
       const body = encodeURIComponent(
-        `Hola,\\n\\nQuiero solicitar la eliminación de mi cuenta y mis datos de STOP.\\n\\nEmail / nombre de usuario: ${email}\\n\\nMotivo (opcional): ${reason}\\n\\nGracias.`
+        `Hola,\n\nQuiero solicitar la eliminación de mi cuenta y mis datos de STOP.\n\nEmail / nombre de usuario: ${email}\n\nMotivo (opcional): ${reason}\n\nGracias.`
       );
       window.location.href = `mailto:dorynex@stopjuegodepalabras.com?subject=${subject}&body=${body}`;
       setSent(true);
@@ -40,11 +42,9 @@ export default function DeleteAccount() {
       window.localStorage.removeItem("stop_player_v2");
       window.localStorage.removeItem("oauth_user");
       window.localStorage.removeItem("stopauth");
-      setSent(true);
+      setDeleted(true);
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : "No se pudo eliminar la cuenta. Inténtalo de nuevo.");
-      setStatus("error");
-      return;
     }
   };
 
@@ -134,7 +134,13 @@ export default function DeleteAccount() {
                 ← Editar la solicitud
               </button>
             </div>
+          ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
+              {errorMsg && (
+                <div className="rounded-lg bg-red-500/10 border border-red-500/30 p-3 text-sm text-red-200">
+                  ⚠️ {errorMsg}
+                </div>
+              )}
               <div>
                 <label htmlFor="email" className="block text-sm font-semibold text-white/80 mb-1">
                   Tu email o nombre de usuario *
