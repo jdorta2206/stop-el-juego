@@ -1253,6 +1253,7 @@ async function purgeStaleRooms() {
     dropOrphansByRoomId(roomRematch as Map<string, unknown>);
     dropOrphansByRoomId(roomFunVotes as Map<string, unknown>);
     dropOrphansByRoomId(roomHalloweenScares as Map<string, unknown>);
+    dropOrphansByRoomId(lastBroadcastMarker as Map<string, unknown>);
     for (const key of halloweenScareCooldowns.keys()) {
       const roomId = Number(String(key).split(":", 1)[0]);
       if (Number.isFinite(roomId) && !Array.from(liveRoomIdsByCode.values()).includes(roomId)) halloweenScareCooldowns.delete(key);
