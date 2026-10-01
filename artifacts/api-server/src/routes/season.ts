@@ -266,6 +266,17 @@ function parseClaimed(raw: string): { free: number[]; premium: number[] } {
 async function getOrCreateProgress(playerId: string, seasonId: number): Promise<ProgressRow> {
   const today = todayUTC();
 
+  // Serialize account deletion/authentication against season-progress creation.
+  // A request that started before deletion must never recreate this player's
+  // persistent season row after delete-account has committed.
+  await db.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${playerId}, 0))`);
+  const revoked = await db.execute(sql`
+    SELECT 1 FROM revoked_player_ids WHERE player_id = ${playerId} LIMIT 1
+  `);
+  if ((revoked as any).rows?.length) {
+    throw new Error("ACCOUNT_DELETED");
+  }
+
   // Race-safe upsert: relies on the unique index on (player_id, season_id).
   // ON CONFLICT DO NOTHING + RETURNING gives us the new row on insert OR
   // nothing on conflict — in which case we SELECT the winning row.
