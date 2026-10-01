@@ -437,13 +437,15 @@ router.post("/room-invite", async (req, res) => {
          ${profile.avatarColor || "#e53e3e"}, ${toPlayerId}, ${normalizedRoomCode}, ${room.roomId},
          'pending', TRUE, NOW())
       ON CONFLICT (from_player_id, to_player_id, is_room_invite) WHERE status = 'pending'
-      DO NOTHING
+      DO UPDATE SET
+        from_name = EXCLUDED.from_name,
+        from_picture = EXCLUDED.from_picture,
+        from_avatar_color = EXCLUDED.from_avatar_color,
+        room_code = EXCLUDED.room_code,
+        room_id = EXCLUDED.room_id,
+        created_at = NOW()
       RETURNING challenge_id
     `);
-    if ((inserted as any).rowCount === 0) {
-      return { error: "raced" as const };
-    }
-
     return { challengeId };
   });
 
