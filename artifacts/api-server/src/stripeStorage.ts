@@ -73,7 +73,8 @@ export class StripeStorage {
 
   async updatePlayerStripeInfo(
     playerId: string,
-    info: { stripeCustomerId?: string; stripeSubscriptionId?: string; isPremium?: boolean }
+    info: { stripeCustomerId?: string; stripeSubscriptionId?: string; isPremium?: boolean },
+    options?: { skipLock?: boolean },
   ) {
     // Account deletion uses the same per-player advisory transaction lock and
     // inserts a durable revocation before deleting player_scores. Acquire the
@@ -81,7 +82,9 @@ export class StripeStorage {
     // a concurrent Premium self-heal / Stripe request could resurrect the
     // deleted player_scores row after the deletion transaction commits.
     return db.transaction(async (tx) => {
-      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${playerId}, 0))`);
+      if (!options?.skipLock) {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${playerId}, 0))`);
+      }
       const revoked = await tx.execute(sql`
         SELECT 1
         FROM revoked_player_ids
