@@ -649,6 +649,17 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
       // and one increment is lost even though score/gamesPlayed use atomic SQL.
       await tx.execute(sql`SELECT player_id FROM player_scores WHERE player_id = ${p.playerId} FOR UPDATE`);
 
+      // Account deletion can commit before this settlement reaches the lock.
+      // In that case player_scores is gone but the durable revocation remains.
+      // Never let a late room settlement recreate the deleted account.
+      const revoked = await tx.execute(sql`
+        SELECT 1
+        FROM revoked_player_ids
+        WHERE player_id = ${p.playerId}
+        LIMIT 1
+      `);
+      if ((revoked.rows?.length ?? 0) > 0) return false;
+
       const existing = await tx
         .select({
           lastPlayedDate: playerScoresTable.lastPlayedDate,
