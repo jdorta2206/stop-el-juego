@@ -800,6 +800,11 @@ router.post("/scores", scoreLimiter, async (req, res) => {
           xp: sql`${playerScoresTable.xp} + ${xpGain}`,
           level: sql`GREATEST(${playerScoresTable.level}, ${calcLevel(xpGain)})`,
           coins: sql`${playerScoresTable.coins} + ${coinGain}`,
+          ...(!isBonus ? {
+            currentStreak: sql`GREATEST(${playerScoresTable.currentStreak}, 1)`,
+            longestStreak: sql`GREATEST(${playerScoresTable.longestStreak}, 1)`,
+            lastPlayedDate: today,
+          } : {}),
           updatedAt: new Date(),
         },
       })
