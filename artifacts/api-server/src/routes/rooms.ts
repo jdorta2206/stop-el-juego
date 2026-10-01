@@ -316,6 +316,7 @@ const roomLiveResponses = new Map<string, Map<string, {
   letter: string;
   ts: number;
   seq: number;
+  sessionId: string;
 }>>();
 // roomCode → map of playerId → spy uses this round.
 // Free players: 1 use/round. Premium players: 2 uses/round.
