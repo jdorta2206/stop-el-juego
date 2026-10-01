@@ -12,7 +12,7 @@ type BestScores = Partial<Record<GameMode, number>>;
 async function syncBestsFromServer(playerId: string, signal?: AbortSignal): Promise<BestScores> {
   if (playerId.startsWith("guest_")) return {};
   try {
-    const r = await fetch(`${getApiUrl()}/api/ranking/progress/${playerId}`, { signal });
+    const r = await fetch(`${getApiUrl()}/api/ranking/progress/${playerId}`, { signal, headers: authHeaders(), credentials: "include" });
     if (!r.ok) return {};
     const data = await r.json();
     return (data.personalBests && typeof data.personalBests === "object") ? data.personalBests : {};
