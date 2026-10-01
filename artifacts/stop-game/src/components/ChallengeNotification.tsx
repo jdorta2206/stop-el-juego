@@ -49,12 +49,10 @@ export function ChallengeNotification({ challenge, onDismiss }: ChallengeNotific
       if (stored) playerData = JSON.parse(stored);
     } catch { /* ignore */ }
 
-    if (!isRoomInvite) {
-      const response = await respondToChallenge(challenge.challengeId, true);
-      if (!response.roomCode || response.roomCode.toUpperCase() !== challenge.roomCode.toUpperCase()) {
-        onDismiss();
-        return;
-      }
+    const response = await respondToChallenge(challenge.challengeId, true);
+    if (!response.roomCode || response.roomCode.toUpperCase() !== challenge.roomCode.toUpperCase()) {
+      onDismiss();
+      return;
     }
 
     // Always call /join so the player appears in the room lobby (both reto and room invite)
