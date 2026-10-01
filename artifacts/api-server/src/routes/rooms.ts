@@ -2840,7 +2840,6 @@ router.post("/:roomCode/rematch", writeLimiter, async (req, res) => {
         // host/settings happen to match. Without the immutable rematchRoomId
         // there is no authoritative way to prove ownership, so create a fresh
         // rematch instead of following an ambiguous legacy pointer.
-      }}
       }
 
       // The caller's identity/name/cosmetics come from the authoritative old
