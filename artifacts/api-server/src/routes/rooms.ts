@@ -1396,7 +1396,6 @@ router.patch("/:roomCode/visibility", async (req, res) => {
   }
   // 🔒 Bind to the token first so a leaked hostId can't be replayed by a third party.
   if (!Number.isInteger(roomId) || roomId <= 0) { res.status(400).json({ error: "Missing roomId" }); return; }
-  if (!Number.isInteger(roomId) || roomId <= 0) { res.status(400).json({ error: "Missing roomId" }); return; }
   if (!await verifyClaimedIdentity(req, hostId)) {
     res.status(403).json({ error: "Identity verification failed" }); return;
   }
@@ -2218,6 +2217,7 @@ router.post("/:roomCode/category-pack", async (req, res) => {
     customLabel?: string;
   };
   const { hostId, roomId, pack } = body;
+  if (!Number.isInteger(roomId) || roomId <= 0) { res.status(400).json({ error: "Missing roomId" }); return; }
   // 🔒 Bind to the token first so a leaked hostId can't be replayed by a third party.
   if (!await verifyClaimedIdentity(req, hostId)) {
     res.status(403).json({ error: "Identity verification failed" }); return;
