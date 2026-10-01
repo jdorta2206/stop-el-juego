@@ -815,7 +815,7 @@ export default function Room() {
       const res = await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/category-pack`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify({ hostId: player.id, pack, ...(extras ?? {}) }),
+        body: JSON.stringify({ hostId: player.id, roomId: room?.id, pack, ...(extras ?? {}) }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
