@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { stripeService } from "../stripeService";
 import { getUncachableStripeClient, isStripeReady } from "../stripeClient";
 import { verifyClaimedIdentity } from "../lib/playerAuth";
+import { isPlayerRevoked } from "../lib/playerRevocation";
 import { isUserPremium } from "../lib/premiumStatus";
 import {
   WORLD_CUP_PACK_SKU,
@@ -141,6 +142,9 @@ router.post("/checkout", async (req, res) => {
     }
 
     return await withPlayerBillingLock(playerId, async () => {
+      if (await isPlayerRevoked(playerId)) {
+        return res.status(401).json({ error: "Account deleted" });
+      }
 
     // Never create another Premium subscription for an account that already
     // has Premium from either billing channel. This also covers a Stripe
@@ -229,6 +233,9 @@ router.post("/checkout-pack", async (req, res) => {
     }
 
     return await withPlayerBillingLock(playerId, async () => {
+      if (await isPlayerRevoked(playerId)) {
+        return res.status(401).json({ error: "Account deleted" });
+      }
 
     const player = await stripeStorage.getPlayer(playerId);
 
