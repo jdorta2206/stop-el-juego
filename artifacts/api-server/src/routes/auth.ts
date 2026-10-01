@@ -875,6 +875,9 @@ router.get("/tiktok/callback", async (req: Request, res: Response) => {
     if (!accessToken) throw new Error("No access_token from TikTok");
 
     const openId = tokenData.open_id || tokenData.data?.open_id;
+    if (typeof openId !== "string" || !openId.trim()) {
+      throw new Error("TikTok OAuth response missing open_id");
+    }
 
     const meRes = await oauthFetch(
       "https://open.tiktokapis.com/v2/user/info/?fields=open_id,display_name,avatar_url",
@@ -883,7 +886,8 @@ router.get("/tiktok/callback", async (req: Request, res: Response) => {
     const meData = (await meRes.json()) as TikTokUserResponse;
     const me = meData.data?.user || meData.user || {};
 
-    const playerId = `tt_${me.open_id || openId}`;
+    const resolvedOpenId = typeof me.open_id === "string" && me.open_id.trim() ? me.open_id : openId;
+    const playerId = `tt_${resolvedOpenId}`;
 
     await db
       .insert(playerScoresTable)
