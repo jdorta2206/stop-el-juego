@@ -26,6 +26,14 @@ app.get("/healthz", (_req, res) => {
   return res.status(200).json({ status: "ok" });
 });
 
+// Keep all API routes behind the same bootstrap gate. Health checks remain
+// available so Railway can distinguish startup (503) from readiness (200).
+app.use("/api", (req, res, next) => {
+  if (req.path === "/healthz" || indexesReady()) return next();
+  res.setHeader("Retry-After", "2");
+  return res.status(503).json({ error: "Service is still initializing" });
+});
+
 app.post(
   "/api/stripe/webhook",
   express.raw({ type: "application/json" }),
