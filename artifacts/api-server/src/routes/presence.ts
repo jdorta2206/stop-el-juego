@@ -472,7 +472,9 @@ router.post("/room-invite", async (req, res) => {
         created_at = NOW()
       RETURNING challenge_id
     `);
-    return { challengeId };
+    const persistedChallengeId = (inserted.rows as any[])[0]?.challenge_id as string | undefined;
+    if (!persistedChallengeId) return { error: "raced" as const };
+    return { challengeId: persistedChallengeId };
   });
 
   if ("error" in result) {
