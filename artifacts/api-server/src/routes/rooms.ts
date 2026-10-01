@@ -3956,6 +3956,10 @@ router.post("/:roomCode/bluff-vote", writeLimiter, async (req, res) => {
       const [latest] = await db.select().from(roomsTable)
         .where(eq(roomsTable.roomCode, roomCode.toUpperCase()))
         .limit(1);
+      if (!latest) {
+        res.status(404).json({ error: "Room no longer exists" });
+        return;
+      }
       res.json(formatRoom(latest));
       return;
     }
@@ -3978,7 +3982,11 @@ router.post("/:roomCode/bluff-vote", writeLimiter, async (req, res) => {
       const [latest] = await db.select().from(roomsTable)
         .where(eq(roomsTable.roomCode, roomCode.toUpperCase()))
         .limit(1);
-      res.status(409).json({ error: "Concurrent vote; please retry", room: latest ? formatRoom(latest) : null });
+      if (!latest) {
+        res.status(404).json({ error: "Room no longer exists" });
+        return;
+      }
+      res.status(409).json({ error: "Concurrent vote; please retry", room: formatRoom(latest) });
       return;
     }
 
@@ -4045,7 +4053,16 @@ router.post("/:roomCode/resolve-bluffs", async (req, res) => {
     ))
     .returning();
   if (!updated) {
-    const [cur] = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, roomCode.toUpperCase())).limit(1);
+    const [cur] = await db.select().from(roomsTable)
+      .where(and(
+        eq(roomsTable.roomCode, roomCode.toUpperCase()),
+        eq(roomsTable.id, room.id),
+      ))
+      .limit(1);
+    if (!cur) {
+      res.status(404).json({ error: "Room no longer exists" });
+      return;
+    }
     res.json(formatRoomForRequester(req, cur));
     return;
   }
