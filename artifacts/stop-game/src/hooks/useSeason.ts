@@ -229,20 +229,17 @@ export function useSeasonLeaderboard(seasonId?: number | null, enabled: boolean 
  * No-op for guests. Authenticated via httpOnly cookie (or X-Stop-Token header
  * fallback); the server returns 401 silently if neither is present.
  */
+/**
+ * Deprecated compatibility helper.
+ * Season progress is now recorded exclusively from server-authoritative
+ * gameplay results (score submission, multiplayer finalization and Daily).
+ * Keeping this function as a no-op prevents legacy callers from generating
+ * expected-but-noisy 410 requests against the closed client event endpoint.
+ */
 export async function reportSeasonEvent(
-  playerId: string | null | undefined,
-  type: "win_game" | "play_game" | "round_score" | "streak" | "valid_words" | "daily_done",
-  value?: number,
+  _playerId: string | null | undefined,
+  _type: "win_game" | "play_game" | "round_score" | "streak" | "valid_words" | "daily_done",
+  _value?: number,
 ): Promise<void> {
-  if (!playerId) return;
-  try {
-    await fetch(`${API}/api/season/event`, {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json", ...authHeaders() },
-      body: JSON.stringify({ type, value }),
-    });
-  } catch {
-    /* ignore */
-  }
+  return;
 }
