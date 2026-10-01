@@ -582,6 +582,7 @@ router.post("/challenge/:challengeId/respond", async (req, res) => {
 
     const [lockedRoom] = await tx.select({
       id: roomsTable.id,
+      roomCode: roomsTable.roomCode,
       playersJson: roomsTable.playersJson,
     })
       .from(roomsTable)
@@ -601,7 +602,12 @@ router.post("/challenge/:challengeId/respond", async (req, res) => {
     const row = (rows.rows as any[])[0];
     if (!row) return { kind: "not_found" as const };
     if (row.status === "accepted") {
-      return { kind: "already_accepted" as const, roomCode: row.room_code as string };
+      // An accepted challenge remains in PostgreSQL until the 2-minute cleanup.
+      // The original room may meanwhile have been deleted and its 4-char code
+      // recycled. Never return a stale code from the challenge alone: the
+      // immutable room_id must still resolve to the original room.
+      if (!lockedRoom) return { kind: "room_gone" as const };
+      return { kind: "already_accepted" as const, roomCode: lockedRoom.roomCode as string };
     }
     if (row.status !== "pending") return { kind: "answered" as const };
 
@@ -660,16 +666,15 @@ router.post("/challenge/:challengeId/respond", async (req, res) => {
   if (result.kind === "already_accepted") {
     return res.json({ ok: true, roomCode: result.roomCode });
   }
+  if (result.kind === "room_gone") {
+    return res.status(409).json({ error: "Challenge room no longer exists" });
+  }
   if (result.kind === "answered") {
     return res.status(409).json({ error: "Challenge already answered" });
   }
   if (result.kind === "not_joined") {
     return res.status(409).json({ error: "Join the challenge room before accepting", roomCode: result.roomCode });
   }
-  if (result.kind === "room_gone") {
-    return res.status(409).json({ error: "Challenge room no longer exists" });
-  }
-
   return res.json({ ok: true, roomCode: result.roomCode });
 });
 
