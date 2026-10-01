@@ -1875,10 +1875,25 @@ router.post("/:roomCode/start", async (req, res) => {
     .returning();
 
   if (updateResult.length === 0) {
-    // Lost the race — read the winner's state and return it.
+    // Lost the race. The original room may have been deleted and its code
+    // recycled before this recovery read, so never return another room's
+    // snapshot to the original host.
     const [latest] = await db.select().from(roomsTable)
-      .where(eq(roomsTable.roomCode, roomCode.toUpperCase())).limit(1);
-    res.json(broadcastAndFormat(latest ?? room));
+      .where(and(
+        eq(roomsTable.roomCode, roomCode.toUpperCase()),
+        eq(roomsTable.id, room.id),
+      ))
+      .limit(1);
+    if (!latest) {
+      res.status(409).json({ error: "Room changed; please refresh" });
+      return;
+    }
+    const latestPlayers = parsePlayers(latest.playersJson);
+    if (!latestPlayers.some((p: any) => p.playerId === hostId)) {
+      res.status(403).json({ error: "You are no longer in this room" });
+      return;
+    }
+    res.json(broadcastAndFormat(latest));
     return;
   }
 
