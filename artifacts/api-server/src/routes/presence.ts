@@ -228,6 +228,7 @@ router.get("/online", async (_req, res) => {
       roomCode: roomsTable.roomCode,
       playersJson: roomsTable.playersJson,
       stopperJson: roomsTable.stopperJson,
+      isPublic: roomsTable.isPublic,
     }).from(roomsTable).where(inArray(roomsTable.roomCode, roomCodes));
     for (const room of rooms) {
       try {
@@ -241,11 +242,15 @@ router.get("/online", async (_req, res) => {
               return {};
             }
           })();
-          roomMembership.set(room.roomCode, new Set(
-            players.map((p: any) => String(p?.playerId ?? "")).filter(Boolean),
-          ));
-          if (meta.halloweenPreview === true) {
+          // Presence is public. Never disclose the code of a private room
+          // through this endpoint; private rooms must remain discoverable only
+          // via an explicit invitation or a code shared by the host.
+          if (room.isPublic !== true || meta.halloweenPreview === true) {
             roomMembership.set(room.roomCode, new Set());
+          } else {
+            roomMembership.set(room.roomCode, new Set(
+              players.map((p: any) => String(p?.playerId ?? "")).filter(Boolean),
+            ));
           }
         }
       } catch {
