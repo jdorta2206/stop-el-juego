@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { stripeStorage } from "../stripeStorage";
+import { stripeStorage, withPlayerBillingLock } from "../stripeStorage";
 import { db, playerScoresTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { stripeService } from "../stripeService";
@@ -140,6 +140,8 @@ router.post("/checkout", async (req, res) => {
       return res.status(403).json({ error: "Identity verification failed" });
     }
 
+    return await withPlayerBillingLock(playerId, async () => {
+
     // Never create another Premium subscription for an account that already
     // has Premium from either billing channel. This also covers a Stripe
     // subscription that has just become active/trialing but whose cached
@@ -197,6 +199,7 @@ router.post("/checkout", async (req, res) => {
     );
 
     return res.json({ url: session.url });
+    });
   } catch (err: any) {
     console.error("stripe/checkout error:", err.message);
     return res.status(500).json({ error: "Internal server error" });
@@ -224,6 +227,8 @@ router.post("/checkout-pack", async (req, res) => {
     if (!await verifyClaimedIdentity(req, playerId)) {
       return res.status(403).json({ error: "Identity verification failed" });
     }
+
+    return await withPlayerBillingLock(playerId, async () => {
 
     const player = await stripeStorage.getPlayer(playerId);
 
@@ -309,6 +314,7 @@ router.post("/checkout-pack", async (req, res) => {
     );
 
     return res.json({ url: session.url });
+    });
   } catch (err: any) {
     console.error("stripe/checkout-pack error:", err.message);
     return res.status(500).json({ error: "Internal server error" });
