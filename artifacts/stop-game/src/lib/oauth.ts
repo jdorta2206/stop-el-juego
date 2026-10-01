@@ -117,10 +117,7 @@ export async function consumeAuthHandoff(): Promise<void> {
       values[key] = value;
       try {
         if (key === "stop_session_token") localStorage.setItem(SESSION_TOKEN_KEY, value);
-        else {
-          sessionStorage.setItem(key, value);
-          localStorage.setItem(key, value);
-        }
+        else sessionStorage.setItem(key, value);
       } catch {}
     }
 
@@ -172,7 +169,6 @@ export function checkOAuthReturn(): OAuthUser | null {
 export function consumeFacebookAccessToken(): string | null {
   let token: string | null = null;
   try { token = sessionStorage.getItem("fb_access_token"); } catch {}
-  if (!token) { try { token = localStorage.getItem("fb_access_token"); } catch {} }
   if (token) {
     try { sessionStorage.removeItem("fb_access_token"); } catch {}
     try { localStorage.removeItem("fb_access_token"); } catch {}
