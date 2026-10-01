@@ -19,6 +19,7 @@ import { issuePlayerToken, clearPlayerToken, PLAYER_TOKEN_BRIDGE_KEY, readPlayer
 import { db, playerScoresTable } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
 import { revokePlayerId, markPlayerRevoked, isPlayerRevoked } from "../lib/playerRevocation";
+import { withPlayerBillingLock } from "../stripeStorage";
 
 const router = Router();
 
@@ -1007,6 +1008,7 @@ router.post("/delete-account", async (req: Request, res: Response) => {
   }
 
   try {
+    return await withPlayerBillingLock(playerId, async () => {
     const rows = await db.execute(sql`
       SELECT player_id, stripe_customer_id
       FROM player_scores
@@ -1197,6 +1199,7 @@ router.post("/delete-account", async (req: Request, res: Response) => {
     markPlayerRevoked(playerId);
     clearPlayerToken(res);
     return res.json({ ok: true, deleted: true });
+    });
   } catch (error) {
     console.error("[auth/delete-account] error:", error);
     return res.status(500).json({ error: "No se pudo eliminar la cuenta. Inténtalo de nuevo." });
