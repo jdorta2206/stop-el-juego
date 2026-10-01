@@ -22,6 +22,7 @@ export function ChallengeNotification({ challenge, onDismiss }: ChallengeNotific
   useEffect(() => () => actionAbortRef.current?.abort(), []);
 
   useEffect(() => {
+    setCountdown(30);
     const timer = setInterval(() => {
       setCountdown((v) => {
         if (v <= 1) {
@@ -33,7 +34,7 @@ export function ChallengeNotification({ challenge, onDismiss }: ChallengeNotific
       });
     }, 1000);
     return () => clearInterval(timer);
-  }, []);
+  }, [challenge.createdAt]);
 
   const handleAccept = async () => {
     if (responding || respondingRef.current) return;
