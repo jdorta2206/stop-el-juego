@@ -1531,7 +1531,7 @@ router.post("/", async (req, res) => {
       roomTyping.delete(roomCode);
       roomHalloweenScares.delete(roomCode);
       for (const key of halloweenScareCooldowns.keys()) {
-        if (key.startsWith(String(roomId) + ":")) halloweenScareCooldowns.delete(key);
+        if (key.startsWith(String(room.id) + ":")) halloweenScareCooldowns.delete(key);
       }
       lastBroadcastMarker.delete(roomCode);
       roomLiveResponses.delete(roomCode);
