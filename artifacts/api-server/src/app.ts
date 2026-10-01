@@ -16,6 +16,20 @@ const app: Express = express();
 
 app.set("trust proxy", 1);
 
+// Baseline response hardening. Keep CSP out of this middleware because the
+// frontend uses third-party OAuth, AdMob/TWA bridges and runtime assets whose
+// exact policy is application-specific.
+app.use((_req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  if (process.env.NODE_ENV === "production") {
+    res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  }
+  next();
+});
+
 // Railway health/readiness endpoint. Database bootstrap must complete before
 // the instance is considered ready to receive API traffic.
 app.get("/healthz", (_req, res) => {
