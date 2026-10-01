@@ -518,42 +518,63 @@ router.post("/challenge/:challengeId/respond", async (req, res) => {
   const { accepted } = req.body as { accepted: boolean };
 
   await challengeTableReady;
-  const rows = await db.execute(sql`
-    SELECT challenge_id, from_player_id, from_name, from_picture, from_avatar_color,
-           to_player_id, room_code, room_id, status, is_room_invite, created_at
-    FROM player_challenges
-    WHERE challenge_id = ${challengeId}
-      AND created_at >= NOW() - INTERVAL '2 minutes'
-    LIMIT 1
-  `);
-  const row = (rows.rows as any[])[0];
-  if (!row) return res.status(404).json({ error: "Challenge not found or expired" });
 
-  if (!await verifyClaimedIdentity(req, row.to_player_id)) {
+  const result = await db.transaction(async (tx) => {
+    const rows = await tx.execute(sql`
+      SELECT challenge_id, from_player_id, from_name, from_picture, from_avatar_color,
+             to_player_id, room_code, room_id, status, is_room_invite, created_at
+      FROM player_challenges
+      WHERE challenge_id = ${challengeId}
+        AND created_at >= NOW() - INTERVAL '2 minutes'
+      LIMIT 1
+      FOR UPDATE
+    `);
+    const row = (rows.rows as any[])[0];
+    if (!row) return { kind: "not_found" as const };
+    if (row.status !== "pending") return { kind: "answered" as const };
+
+    if (accepted) {
+      const [targetRoom] = await tx.select({ id: roomsTable.id })
+        .from(roomsTable)
+        .where(eq(roomsTable.id, Number(row.room_id)))
+        .for("update")
+        .limit(1);
+      if (!targetRoom || Number(targetRoom.id) !== Number(row.room_id)) {
+        return { kind: "room_gone" as const };
+      }
+    }
+
+    const nextStatus = accepted ? "accepted" : "declined";
+    const updated = await tx.execute(sql`
+      UPDATE player_challenges
+      SET status = ${nextStatus}
+      WHERE challenge_id = ${challengeId}
+        AND status = 'pending'
+    `);
+    if ((updated as any).rowCount === 0) return { kind: "answered" as const };
+
+    return {
+      kind: "ok" as const,
+      toPlayerId: row.to_player_id as string,
+      roomCode: accepted ? row.room_code as string : null,
+    };
+  });
+
+  if (result.kind === "not_found") {
+    return res.status(404).json({ error: "Challenge not found or expired" });
+  }
+  if (result.kind === "answered") {
+    return res.status(409).json({ error: "Challenge already answered" });
+  }
+  if (result.kind === "room_gone") {
+    return res.status(409).json({ error: "Challenge room no longer exists" });
+  }
+
+  if (!await verifyClaimedIdentity(req, result.toPlayerId)) {
     return res.status(403).json({ error: "Invalid player identity" });
   }
-  if (row.status !== "pending") {
-    return res.status(409).json({ error: "Challenge already answered" });
-  }
 
-  if (accepted) {
-    const [targetRoom] = await db.select({ id: roomsTable.id }).from(roomsTable).where(eq(roomsTable.roomCode, row.room_code)).limit(1);
-    if (!targetRoom || Number(row.room_id) !== Number(targetRoom.id)) {
-      return res.status(409).json({ error: "Challenge room no longer exists" });
-    }
-  }
-
-  const nextStatus = accepted ? "accepted" : "declined";
-  const updated = await db.execute(sql`
-    UPDATE player_challenges
-    SET status = ${nextStatus}
-    WHERE challenge_id = ${challengeId}
-      AND status = 'pending'
-  `);
-  if ((updated as any).rowCount === 0) {
-    return res.status(409).json({ error: "Challenge already answered" });
-  }
-  return res.json({ ok: true, roomCode: accepted ? row.room_code : null });
+  return res.json({ ok: true, roomCode: result.roomCode });
 });
 
 // GET /api/presence/challenge/:challengeId/status — poll status (for sender)
