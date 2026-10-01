@@ -72,7 +72,8 @@ export async function sendChallenge(
   try {
     const res = await fetch(`${API_BASE}/api/presence/challenge`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      credentials: "include",
       body: JSON.stringify({
         fromPlayerId: player.id,
         fromName: player.name,
@@ -97,7 +98,8 @@ export async function respondToChallenge(
   try {
     const res = await fetch(`${API_BASE}/api/presence/challenge/${challengeId}/respond`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      credentials: "include",
       body: JSON.stringify({ accepted }),
     });
     if (!res.ok) return { roomCode: null };
