@@ -93,17 +93,39 @@ export function ChallengeNotification({ challenge, onDismiss }: ChallengeNotific
       return;
     }
 
-    // Only consume the invitation after /join has succeeded. The response code
-    // is authoritative because an existing room invite may have been refreshed.
-    const response = await respondToChallenge(challenge.challengeId, true);
-    if (!response.roomCode) {
+    // Consume the invitation after /join. If the sender refreshed the same
+    // pending invite in the tiny gap between those requests, /respond returns
+    // the new roomCode; join that room and retry the acceptance once.
+    let response = await respondToChallenge(challenge.challengeId, true);
+    if (!response.ok && response.roomCode) {
+      const retryJoin = await fetch(
+        getApiUrl() + "/api/rooms/" + response.roomCode.toUpperCase() + "/join",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...authHeaders() },
+          credentials: "include",
+          signal: controller.signal,
+          body: JSON.stringify({
+            playerId: playerData.id,
+            playerName: playerData.name,
+            avatarColor: playerData.avatarColor,
+            loginMethod: playerData.loginMethod ?? null,
+            challengeId: challenge.challengeId,
+          }),
+        },
+      );
+      if (retryJoin.ok) {
+        response = await respondToChallenge(challenge.challengeId, true);
+      }
+    }
+    if (!response.ok || !response.roomCode) {
       respondingRef.current = false;
       setResponding(false);
       return;
     }
 
     onDismiss();
-    setLocation(`/room/${response.roomCode.toUpperCase()}`);
+    setLocation("/room/" + response.roomCode.toUpperCase());
   };
 
   const handleDecline = async () => {
