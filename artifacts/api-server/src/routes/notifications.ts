@@ -364,7 +364,7 @@ router.post("/send-invite", inviteLimiter, async (req, res) => {
     try {
       await webpush.sendNotification(
         { endpoint: row.endpoint, keys: { p256dh: row.p256dh, auth: row.auth } },
-        JSON.stringify({ ...msg, icon: "/images/icon-192.png", badge: "/images/badge-96.png", url: `/multijugador?room=${safeRoomCode}` })
+        JSON.stringify({ ...msg, icon: "/images/icon-192.png", badge: "/images/badge-96.png", url: `/multiplayer?room=${safeRoomCode}` })
       );
       sent++;
     } catch (e: any) {
