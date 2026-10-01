@@ -466,7 +466,7 @@ router.post("/challenge", async (req, res) => {
       return res.json({ challengeId: winner.challenge_id, roomCode: winner.room_code });
     }
   } catch (err) {
-    await db.delete(roomsTable).where(eq(roomsTable.roomCode, roomCode)).catch(() => {});
+    await db.delete(roomsTable).where(eq(roomsTable.id, roomId)).catch(() => {});
     console.error("[presence/challenge] challenge persistence failed:", err);
     return res.status(503).json({ error: "Unable to create challenge" });
   }
