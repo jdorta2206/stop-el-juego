@@ -187,7 +187,7 @@ router.post("/checkout", async (req, res) => {
       customerId = customer.id;
       await stripeStorage.updatePlayerStripeInfo(playerId, {
         stripeCustomerId: customerId,
-      });
+      }, { skipLock: true });
     }
 
     const session = await stripeService.createCheckoutSession(
@@ -303,7 +303,7 @@ router.post("/checkout-pack", async (req, res) => {
       validCustomerId = customerId;
       await stripeStorage.updatePlayerStripeInfo(playerId, {
         stripeCustomerId: customerId,
-      });
+      }, { skipLock: true });
       console.log(`Created new customer ${customerId} for player ${playerId}`);
     }
 
