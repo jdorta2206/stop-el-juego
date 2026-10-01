@@ -9,6 +9,8 @@ import { recordAuthoritativeSeasonEvents } from "./season";
 import { isWordValidAsync } from "./game";
 import { writeLimiter, roomJoinLimiter } from "../middlewares/rateLimit";
 import { verifyClaimedIdentity, verifyPlayerToken, readPlayerId, isLoggedInId, isAuthConfigured } from "../lib/playerAuth";
+import { isUserPremium } from "../lib/premiumStatus";
+import { stripeStorage } from "../stripeStorage";
 import {
   pickBotIdentity,
   makeBotPlayer,
