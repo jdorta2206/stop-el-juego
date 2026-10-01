@@ -2346,7 +2346,11 @@ router.post("/:roomCode/use-card", async (req, res) => {
 
     const [updated] = await db.update(roomsTable)
       .set({ playersJson: JSON.stringify(updatedPlayers), updatedAt: new Date(), roomVersion: sql`${roomsTable.roomVersion} + 1` })
-      .where(and(eq(roomsTable.roomCode, code), eq(roomsTable.roomVersion, room.roomVersion)))
+      .where(and(
+        eq(roomsTable.roomCode, code),
+        eq(roomsTable.id, room.id),
+        eq(roomsTable.roomVersion, room.roomVersion),
+      ))
       .returning();
 
     if (!updated) continue; // someone else wrote first — retry with fresh state
