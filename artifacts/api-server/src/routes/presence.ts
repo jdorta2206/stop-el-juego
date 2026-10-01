@@ -304,6 +304,7 @@ router.post("/challenge", async (req, res) => {
   }];
 
   let roomCode: string | null = null;
+  let roomId: number | null = null;
   for (let attempt = 0; attempt < 10 && !roomCode; attempt++) {
     const candidate = generateRoomCode();
     try {
@@ -320,6 +321,8 @@ router.post("/challenge", async (req, res) => {
         isPublic: false,
       });
       roomCode = candidate;
+      const [createdRoom] = await db.select({ id: roomsTable.id }).from(roomsTable).where(eq(roomsTable.roomCode, candidate)).limit(1);
+      roomId = createdRoom?.id ?? null;
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : String(e);
       if (!/unique|duplicate/i.test(message) || attempt === 9) {
@@ -329,7 +332,8 @@ router.post("/challenge", async (req, res) => {
     }
   }
 
-  if (!roomCode) {
+  if (!roomCode || roomId === null) {
+    if (roomCode) await db.delete(roomsTable).where(eq(roomsTable.roomCode, roomCode)).catch(() => {});
     return res.status(503).json({ error: "Unable to allocate challenge room" });
   }
 
@@ -337,14 +341,14 @@ router.post("/challenge", async (req, res) => {
     const inserted = await db.execute(sql`
       INSERT INTO player_challenges
         (challenge_id, from_player_id, from_name, from_picture, from_avatar_color,
-         to_player_id, room_code, status, is_room_invite, created_at)
+         to_player_id, room_code, room_id, status, is_room_invite, created_at)
       VALUES
         (${challengeId}, ${fromPlayerId}, ${profile.name}, ${profile.picture || null},
-         ${profile.avatarColor || "#e53e3e"}, ${toPlayerId}, ${roomCode},
+         ${profile.avatarColor || "#e53e3e"}, ${toPlayerId}, ${roomCode}, ${roomId},
          'pending', FALSE, NOW())
       ON CONFLICT (from_player_id, to_player_id, is_room_invite) WHERE status = 'pending'
       DO NOTHING
-      RETURNING challenge_id, room_code
+      RETURNING challenge_id, room_code, room_id
     `);
     if ((inserted as any).rowCount === 0) {
       await db.delete(roomsTable).where(eq(roomsTable.roomCode, roomCode)).catch(() => {});
