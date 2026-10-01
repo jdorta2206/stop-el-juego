@@ -413,32 +413,6 @@ router.post("/room-invite", async (req, res) => {
   // Lock the room row while validating ownership and creating the invite.
   // /leave also locks the room before deleting it, so an invite cannot point
   // at a room that disappears between the ownership check and INSERT.
-  const identityRows = await db.execute(sql`
-    SELECT to_player_id
-    FROM player_challenges
-    WHERE challenge_id = ${challengeId}
-      AND created_at >= NOW() - INTERVAL '2 minutes'
-    LIMIT 1
-  `);
-  const identityRow = (identityRows.rows as any[])[0];
-  if (!identityRow) return res.status(404).json({ error: "Challenge not found or expired" });
-  if (!await verifyClaimedIdentity(req, identityRow.to_player_id)) {
-    return res.status(403).json({ error: "Invalid player identity" });
-  }
-
-  const identityRows = await db.execute(sql`
-    SELECT to_player_id
-    FROM player_challenges
-    WHERE challenge_id = ${challengeId}
-      AND created_at >= NOW() - INTERVAL '2 minutes'
-    LIMIT 1
-  `);
-  const identityRow = (identityRows.rows as any[])[0];
-  if (!identityRow) return res.status(404).json({ error: "Challenge not found or expired" });
-  if (!await verifyClaimedIdentity(req, identityRow.to_player_id)) {
-    return res.status(403).json({ error: "Invalid player identity" });
-  }
-
   const result = await db.transaction(async (tx) => {
     const [room] = await tx
       .select({ hostId: roomsTable.hostId, roomId: roomsTable.id })
@@ -544,6 +518,19 @@ router.post("/challenge/:challengeId/respond", async (req, res) => {
   const { accepted } = req.body as { accepted: boolean };
 
   await challengeTableReady;
+
+  const identityRows = await db.execute(sql`
+    SELECT to_player_id
+    FROM player_challenges
+    WHERE challenge_id = ${challengeId}
+      AND created_at >= NOW() - INTERVAL '2 minutes'
+    LIMIT 1
+  `);
+  const identityRow = (identityRows.rows as any[])[0];
+  if (!identityRow) return res.status(404).json({ error: "Challenge not found or expired" });
+  if (!await verifyClaimedIdentity(req, identityRow.to_player_id)) {
+    return res.status(403).json({ error: "Invalid player identity" });
+  }
 
   const result = await db.transaction(async (tx) => {
     const rows = await tx.execute(sql`
