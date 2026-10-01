@@ -76,7 +76,8 @@ async function tryRestoreFrom(apiBase: string, shouldCommit: () => boolean = () 
 
     const data = await res.json();
     if (!data?.id || !data.name) return null;
-    if (data.token && canCommitCurrentSession()) { try { localStorage.setItem(SESSION_TOKEN_KEY, data.token); } catch {} }
+    if (!canCommitCurrentSession()) return null;
+    if (data.token) { try { localStorage.setItem(SESSION_TOKEN_KEY, data.token); } catch {} }
 
     return { id: data.id, name: String(data.name).trim().slice(0, 14), avatarColor: data.avatarColor || AVATAR_COLORS[0], loginMethod: data.loginMethod ?? null, picture: data.picture ?? null, fbAccessToken: null };
   } catch { return null; }
