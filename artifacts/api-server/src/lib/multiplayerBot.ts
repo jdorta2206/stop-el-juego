@@ -133,8 +133,9 @@ function nextAnswerGeneration(code: string, roomId: number): number {
   botAnswerGeneration.set(code, { generation, roomId });
   return generation;
 }
-function isCurrentAnswerGeneration(code: string, generation: number): boolean {
-  return botAnswerGeneration.get(code) === generation;
+function isCurrentAnswerGeneration(code: string, generation: number, roomId?: number): boolean {
+  const current = botAnswerGeneration.get(code);
+  return !!current && current.generation === generation && (roomId === undefined || current.roomId === roomId);
 }
 const botPendingAnswers = new Map<string, Map<string, PendingEntry>>();
 function setPendingAnswers(code: string, botId: string, entry: PendingEntry) {
@@ -301,10 +302,19 @@ export function clearBotTimers(code: string) {
 }
 
 // Full cleanup — call when a room is destroyed (last player /leave delete).
-export function cleanupBotRoom(code: string) {
+export function cleanupBotRoom(code: string, expectedRoomId?: number) {
+  if (expectedRoomId !== undefined) {
+    const timerRoomId = roomBotTimerRoomIds.get(code);
+    const answerRoomId = botAnswerGeneration.get(code)?.roomId;
+    if (timerRoomId !== undefined && timerRoomId !== expectedRoomId) return;
+    if (timerRoomId === undefined && answerRoomId !== undefined && answerRoomId !== expectedRoomId) return;
+  }
   clearBotTimers(code);
   clearPendingAnswers(code);
-  botAnswerGeneration.delete(code);
+  const current = botAnswerGeneration.get(code);
+  if (expectedRoomId === undefined || current?.roomId === expectedRoomId) {
+    botAnswerGeneration.delete(code);
+  }
 }
 
 // ── Category resolution (server mirror of the client packs) ───────────────
