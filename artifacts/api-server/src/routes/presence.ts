@@ -84,6 +84,10 @@ const challengeTableReady = db.execute(sql`
     created_at timestamptz NOT NULL DEFAULT NOW()
   )
 `).then(() => db.execute(sql`
+  ALTER TABLE player_challenges ADD COLUMN IF NOT EXISTS room_id integer
+`)).then(() => db.execute(sql`
+  DELETE FROM player_challenges WHERE room_id IS NULL AND status = 'pending'
+`)).then(() => db.execute(sql`
   CREATE INDEX IF NOT EXISTS player_challenges_target_status_idx
     ON player_challenges (to_player_id, status, created_at)
  `)).then(() => db.execute(sql`
