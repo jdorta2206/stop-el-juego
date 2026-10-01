@@ -562,16 +562,33 @@ router.post("/challenge/:challengeId/respond", async (req, res) => {
     `);
     const row = (rows.rows as any[])[0];
     if (!row) return { kind: "not_found" as const };
+    if (row.status === "accepted") {
+      return { kind: "already_accepted" as const, roomCode: row.room_code as string };
+    }
     if (row.status !== "pending") return { kind: "answered" as const };
 
     if (accepted) {
-      const [targetRoom] = await tx.select({ id: roomsTable.id })
+      const [targetRoom] = await tx.select({
+        id: roomsTable.id,
+        playersJson: roomsTable.playersJson,
+      })
         .from(roomsTable)
         .where(eq(roomsTable.id, Number(row.room_id)))
         .for("update")
         .limit(1);
       if (!targetRoom || Number(targetRoom.id) !== Number(row.room_id)) {
         return { kind: "room_gone" as const };
+      }
+
+      let players: any[] = [];
+      try {
+        const parsed = JSON.parse(targetRoom.playersJson || "[]");
+        if (Array.isArray(parsed)) players = parsed;
+      } catch {
+        players = [];
+      }
+      if (!players.some((p) => p?.playerId === row.to_player_id)) {
+        return { kind: "not_joined" as const, roomCode: row.room_code as string };
       }
     }
 
@@ -594,8 +611,14 @@ router.post("/challenge/:challengeId/respond", async (req, res) => {
   if (result.kind === "not_found") {
     return res.status(404).json({ error: "Challenge not found or expired" });
   }
+  if (result.kind === "already_accepted") {
+    return res.json({ ok: true, roomCode: result.roomCode });
+  }
   if (result.kind === "answered") {
     return res.status(409).json({ error: "Challenge already answered" });
+  }
+  if (result.kind === "not_joined") {
+    return res.status(409).json({ error: "Join the challenge room before accepting", roomCode: result.roomCode });
   }
   if (result.kind === "room_gone") {
     return res.status(409).json({ error: "Challenge room no longer exists" });
