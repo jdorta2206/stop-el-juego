@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import type { PlayerProfile } from "@/hooks/use-player";
-import { getApiUrl } from "@/lib/utils";
+import { getApiUrl, authHeaders } from "@/lib/utils";
 
 const API_BASE = getApiUrl();
 const PING_INTERVAL = 30_000; // 30 seconds
@@ -35,7 +35,7 @@ async function ping(player: PlayerProfile, roomCode?: string | null, language?: 
   try {
     await fetch(`${API_BASE}/api/presence/ping`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify({
         playerId: player.id,
         name: player.name,
@@ -182,7 +182,7 @@ export function usePresence(
     const controller = new AbortController();
     challengeAbortRef.current = controller;
     try {
-      const res = await fetch(`${API_BASE}/api/presence/challenges/${player.id}`, { signal: controller.signal });
+      const res = await fetch(`${API_BASE}/api/presence/challenges/${player.id}`, { signal: controller.signal, headers: authHeaders() });
       if (!res.ok) return;
       const data = await res.json();
       const challenges: IncomingChallenge[] = data.challenges || [];
