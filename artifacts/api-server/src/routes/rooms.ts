@@ -1268,6 +1268,9 @@ router.get("/live", async (_req, res) => {
       eq(roomsTable.isPublic, true),
       inArray(roomsTable.status, ["playing", "stopping", "revealing", "bluffvoting"]),
       sql`LOWER(TRIM(${roomsTable.hostName})) <> 'halloween host'`,
+      // Halloween preview rooms are never eligible for the public/live directory,
+      // even if visibility was toggled after creation.
+      sql`COALESCE(${roomsTable.stopperJson}, '') NOT LIKE '%"halloweenPreview":true%'`,
     ))
     .orderBy(roomsTable.createdAt)
     .limit(12);
@@ -1320,6 +1323,16 @@ router.patch("/:roomCode/visibility", async (req, res) => {
   const rows = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, roomCode));
   if (!rows.length) { res.status(404).json({ error: "Room not found" }); return; }
   if (rows[0].hostId !== hostId) { res.status(403).json({ error: "Only host can change visibility" }); return; }
+
+  // Preview/test rooms are permanently private. Otherwise a preview host could
+  // toggle isPublic=true after creation and leak the Halloween test room into
+  // /live and /spectate.
+  const visibilityMeta = parseBluffMeta(rows[0].stopperJson) ?? {};
+  if (visibilityMeta.halloweenPreview === true && isPublic) {
+    res.status(409).json({ error: "Halloween preview rooms cannot be made public" });
+    return;
+  }
+
   const [updated] = await db.update(roomsTable)
     .set({ isPublic, updatedAt: new Date() })
     .where(and(
