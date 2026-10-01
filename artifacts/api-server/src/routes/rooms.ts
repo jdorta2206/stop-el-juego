@@ -258,9 +258,8 @@ function getTyping(code: string, excludeId?: string): { playerId: string; player
 // 🕵️ Live in-progress responses (for spy/peek mechanic). Stale after 5s.
 // playerId → { name, responses: { category: word }, ts }
 const roomLiveResponses = new Map<string, Map<string, { name: string; responses: Record<string, string>; ts: number }>>();
-// roomCode → map of playerId → spy uses this round.
+// Spy usage is persisted in PostgreSQL, keyed by room/player/round.
 // Free players: 1 use/round. Premium players: 2 uses/round.
-const roomSpyUsage = new Map<string, Map<string, number>>();
 const SPY_LIMIT_FREE = 1;
 const SPY_LIMIT_PREMIUM = 2;
 
@@ -724,8 +723,8 @@ function finalizeRoundState(room: any, players: any[]): {
 function applyRoundAdvanceSideEffects(room: any, sweptPlayers: any[], newStatus: string) {
   if (newStatus === "waiting" || newStatus === "finished") {
     const codeUpper = (room.roomCode as string).toUpperCase();
-    // 🕵️ Reset spy budgets and stale live responses for the new round.
-    roomSpyUsage.delete(codeUpper);
+    // 🕵️ Stale live responses reset for the new round. Spy budgets are
+    // automatically scoped by the persisted room/player/round key.
     roomLiveResponses.delete(codeUpper);
   }
   if (newStatus === "finished") {
