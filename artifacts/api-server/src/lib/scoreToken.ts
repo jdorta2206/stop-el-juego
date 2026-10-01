@@ -243,7 +243,9 @@ export async function sumVerifiedBasePersistent(
     aiBase: counted.every((entry) => entry.aiBase !== null)
       ? counted.reduce((sum, entry) => sum + (entry.aiBase ?? 0), 0)
       : null,
-    // Only consume vouchers that actually contributed to the capped score.\n    // Extra valid vouchers in the request must remain available for a later retry/game.\n    voucherJtis: counted.map((entry) => entry.jti),
+    // Only consume vouchers that actually contributed to the capped score.
+    // Extra valid vouchers in the request must remain available for a later retry/game.
+    voucherJtis: counted.map((entry) => entry.jti),
   };
 }
 
