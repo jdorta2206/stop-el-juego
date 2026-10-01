@@ -459,7 +459,6 @@ router.get("/google/callback", async (req: Request, res: Response) => {
       }),
     });
     const tokenData = (await tokenRes.json()) as OAuthTokenResponse;
-    console.log("Google token response keys:", Object.keys(tokenData));
     if (tokenData.error) {
       console.error("Google token error:", tokenData.error, tokenData.error_description);
       throw new Error(`Google error: ${tokenData.error} - ${tokenData.error_description}`);
