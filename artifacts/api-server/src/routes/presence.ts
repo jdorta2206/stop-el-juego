@@ -117,16 +117,72 @@ function generateRoomCode(): string {
   return code;
 }
 
+// Remove expired challenge-created rooms together with their pending challenge.
+// Lock order is room -> challenge, matching /room-invite and /challenge/:id/respond.
+async function purgeStaleChallenges() {
+  const stale = await db.execute(sql`
+    SELECT challenge_id, room_id
+    FROM player_challenges
+    WHERE status = 'pending'
+      AND is_room_invite = FALSE
+      AND created_at < NOW() - INTERVAL '2 minutes'
+      AND room_id IS NOT NULL
+    LIMIT 100
+  `);
+
+  for (const candidate of (stale.rows ?? []) as any[]) {
+    try {
+      await db.transaction(async (tx) => {
+        const [room] = await tx.select({ id: roomsTable.id })
+          .from(roomsTable)
+          .where(eq(roomsTable.id, Number(candidate.room_id)))
+          .for("update")
+          .limit(1);
+
+        const rows = await tx.execute(sql`
+          SELECT status, is_room_invite, room_id
+          FROM player_challenges
+          WHERE challenge_id = ${candidate.challenge_id}
+          FOR UPDATE
+        `);
+        const challenge = (rows.rows as any[])[0];
+        if (!challenge ||
+            challenge.status !== "pending" ||
+            challenge.is_room_invite === true ||
+            Number(challenge.room_id) !== Number(candidate.room_id)) {
+          return;
+        }
+
+        if (room) {
+          await tx.delete(roomsTable).where(eq(roomsTable.id, room.id));
+        }
+        await tx.execute(sql`
+          DELETE FROM player_challenges
+          WHERE challenge_id = ${candidate.challenge_id}
+            AND status = 'pending'
+        `);
+      });
+    } catch (err) {
+      console.error("[presence] stale challenge cleanup failed:", err);
+    }
+  }
+
+  // Room invites reuse an existing room and therefore must never delete it.
+  await db.execute(sql`
+    DELETE FROM player_challenges
+    WHERE created_at < NOW() - INTERVAL '2 minutes'
+      AND (is_room_invite = TRUE OR room_id IS NULL)
+  `);
+}
+
 // Clean up stale presence/challenges every 2 minutes. Both are DB-backed,
- // so cleanup is safe and consistent across all Railway instances.
+// so cleanup is safe and consistent across all Railway instances.
 setInterval(() => {
   void presenceTableReady.then(() => db.execute(sql`
     DELETE FROM player_presence WHERE last_seen < NOW() - INTERVAL '3 minutes'
   `)).catch((err) => console.error("[presence] presence cleanup failed:", err));
-  void challengeTableReady.then(() => db.execute(sql`
-    DELETE FROM player_challenges
-    WHERE created_at < NOW() - INTERVAL '2 minutes'
-  `)).catch((err) => console.error("[presence] challenge cleanup failed:", err));
+  void challengeTableReady.then(() => purgeStaleChallenges())
+    .catch((err) => console.error("[presence] challenge cleanup failed:", err));
   for (const [id, data] of presenceMap) {
     if (data.lastSeen < Date.now() - 3 * 60 * 1000) presenceMap.delete(id);
   }
