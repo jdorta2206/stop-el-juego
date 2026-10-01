@@ -2359,7 +2359,7 @@ router.get("/:roomCode/events", async (req, res) => {
 // Throttled by the client to once every ~1.5s. Stale entries auto-expire after 3s.
 router.post("/:roomCode/typing", writeLimiter, async (req, res) => {
   const code = paramStr(req.params.roomCode).toUpperCase();
-  const { playerId, playerName, responses, round } = req.body as {
+  const { playerId, playerName, responses, round, seq } = req.body as {
     playerId: string;
     playerName: string;
     responses?: Record<string, string>;
