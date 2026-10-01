@@ -10,7 +10,7 @@ import { SubmitScoreBody, GetLeaderboardQueryParams } from "@workspace/api-zod";
 import { scoreLimiter } from "../middlewares/rateLimit";
 import { verifyClaimedIdentity, requirePlayerIdentity, type AuthedRequest } from "../lib/playerAuth";
 import { sumVerifiedBasePersistent, ceilingFromBase, absoluteCeiling } from "../lib/scoreToken";
-import { recordAuthoritativeSeasonEvents } from "./season";
+import { applyAuthoritativeSeasonEventsTx, getOrCreateActiveSeason, getOrCreateProgress, recordAuthoritativeSeasonEvents } from "./season";
 import {
   isHappyHourActiveForTzOffset,
   HAPPY_HOUR_MULTIPLIER,
@@ -594,6 +594,17 @@ router.post("/scores", scoreLimiter, async (req, res) => {
     ? appendStreakDay(existing[0]?.streakDaysJson, today)
     : undefined;
 
+  // Season mission progress for a score submission is prepared before the
+  // score transaction, but the actual mission mutation is performed inside
+  // that same transaction so a rollback cannot leave season progress ahead
+  // of the credited game.
+  const scoreSeasonContext = !isBonus
+    ? await getOrCreateActiveSeason().then(async (season) => ({
+        seasonId: season.id,
+        progressId: (await getOrCreateProgress(playerId, season.id)).id,
+      }))
+    : null;
+
   let player;
   if (isBonus) {
     const bonusResult = await db.transaction(async (tx) => {
@@ -836,6 +847,21 @@ router.post("/scores", scoreLimiter, async (req, res) => {
           .where(eq(playerScoresTable.id, collectionRow.id));
       }
 
+      if (scoreSeasonContext) {
+        await applyAuthoritativeSeasonEventsTx(
+          tx,
+          scoreSeasonContext.seasonId,
+          scoreSeasonContext.progressId,
+          [
+            { type: "play_game", value: 1 },
+            ...(effectiveWon ? [{ type: "win_game", value: 1 }] : []),
+            { type: "round_score", value: score },
+            { type: "streak", value: newStreak },
+            ...(collectionWords.length > 0 ? [{ type: "valid_words", value: collectionWords.length }] : []),
+          ],
+        );
+      }
+
       const response = {
         ...txPlayer,
         rank: 0,
@@ -894,13 +920,6 @@ router.post("/scores", scoreLimiter, async (req, res) => {
       mode: mode ?? "solo",
       metadata: { source: "server_score_submission" },
     }).catch((err) => console.error("[analytics] trusted game_complete failed:", err));
-    void recordAuthoritativeSeasonEvents(playerId, [
-      { type: "play_game", value: 1 },
-      ...(effectiveWon ? [{ type: "win_game", value: 1 }] : []),
-      { type: "round_score", value: score },
-      { type: "streak", value: newStreak },
-      ...(collectionWords.length > 0 ? [{ type: "valid_words", value: collectionWords.length }] : []),
-    ]);
   }
 
   res.status(201).json({
