@@ -24,7 +24,7 @@ function getApiBase(): string {
   if (!configured) return window.location.origin;
   try {
     const url = new URL(configured, window.location.origin);
-    if (/\\.replit\\.(app|dev)$/i.test(url.hostname)) return window.location.origin;
+    if (/\.replit\.(app|dev)$/i.test(url.hostname)) return window.location.origin;
     return url.origin;
   } catch {
     return window.location.origin;
