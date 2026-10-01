@@ -355,9 +355,11 @@ function halloweenEventAllowed(req: any): boolean {
 }
 
 const roomFunVotes = new Map<string, Map<string, FunVote>>();
-function getFunVotes(code: string): FunVote[] {
+function getFunVotes(code: string, round?: number): FunVote[] {
   const m = roomFunVotes.get(code);
-  return m ? Array.from(m.values()) : [];
+  if (!m) return [];
+  const votes = Array.from(m.values());
+  return typeof round === "number" ? votes.filter(v => v.round === round) : votes;
 }
 
 const QUICK_PHRASES = [
@@ -501,7 +503,7 @@ function formatRoom(room: any, cosmeticsMap?: Record<string, any>) {
     typing: getTyping(code),
     // Persisted rematch survives process restarts; memory map is only a fast-path.
     rematchCode: roomRematch.get(code) ?? meta?.rematchCode ?? null,
-    funVotes: getFunVotes(code),
+    funVotes: getFunVotes(code, room.currentRound),
     createdAt: room.createdAt,
     // Internal version marker used to order SSE snapshots across concurrent
     // request/bot completions. Harmless to clients and not user-controlled.
