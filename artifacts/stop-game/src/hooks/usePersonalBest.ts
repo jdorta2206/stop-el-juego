@@ -1,37 +1,3 @@
-import { useState, useCallback, useEffect, useRef } from "react";
-import { getApiUrl, authHeaders } from "@/lib/utils";
-
-const STORAGE_KEY = "stop_best_score_v2";
-function storageKey(playerId?: string) {
-  return playerId ? `${STORAGE_KEY}:${playerId}` : `${STORAGE_KEY}:guest`;
-}
-
-type GameMode = "normal" | "quick" | "chaos" | "daily" | "random";
-type BestScores = Partial<Record<GameMode, number>>;
-
-async function syncBestsFromServer(playerId: string, signal?: AbortSignal): Promise<BestScores> {
-  if (playerId.startsWith("guest_")) return {};
-  try {
-    const r = await fetch(`${getApiUrl()}/api/ranking/progress/${playerId}`, { signal });
-    if (!r.ok) return {};
-    const data = await r.json();
-    return (data.personalBests && typeof data.personalBests === "object") ? data.personalBests : {};
-  } catch { return {}; }
-}
-
-async function saveBestsToServer(playerId: string, personalBests: BestScores) {
-  if (playerId.startsWith("guest_")) return;
-  try {
-    await fetch(`${getApiUrl()}/api/ranking/progress/${playerId}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...authHeaders() },
-      body: JSON.stringify({ personalBests }),
-    });
-  } catch {}
-}
-
-export function usePersonalBest(mode: GameMode, playerId?: string) {
-  const [bests, setBests] = useState<BestScores>(() => {
     try { return JSON.parse(localStorage.getItem(storageKey(playerId)) || "{}"); }
     catch { return {}; }
   });
@@ -55,7 +21,6 @@ export function usePersonalBest(mode: GameMode, playerId?: string) {
     const controller = new AbortController();
     syncAbortRef.current = controller;
     syncBestsFromServer(playerId, controller.signal).then(serverBests => {
-      if (Object.keys(serverBests).length === 0) return;
       setBests(prev => {
         const authoritative: BestScores = {};
         for (const [m, score] of Object.entries(serverBests)) {
