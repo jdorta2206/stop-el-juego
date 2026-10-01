@@ -1416,6 +1416,7 @@ router.patch("/:roomCode/visibility", async (req, res) => {
     .set({ isPublic, updatedAt: new Date(), roomVersion: sql`${roomsTable.roomVersion} + 1` })
     .where(and(
       eq(roomsTable.roomCode, roomCode),
+      eq(roomsTable.id, roomId),
       eq(roomsTable.hostId, hostId),
       eq(roomsTable.roomVersion, rows[0].roomVersion),
     ))
