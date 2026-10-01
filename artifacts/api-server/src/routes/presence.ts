@@ -415,7 +415,7 @@ router.post("/room-invite", async (req, res) => {
   // at a room that disappears between the ownership check and INSERT.
   const result = await db.transaction(async (tx) => {
     const [room] = await tx
-      .select({ hostId: roomsTable.hostId })
+      .select({ hostId: roomsTable.hostId, roomId: roomsTable.id })
       .from(roomsTable)
       .where(eq(roomsTable.roomCode, normalizedRoomCode))
       .for("update")
@@ -431,10 +431,10 @@ router.post("/room-invite", async (req, res) => {
     const inserted = await tx.execute(sql`
       INSERT INTO player_challenges
         (challenge_id, from_player_id, from_name, from_picture, from_avatar_color,
-         to_player_id, room_code, status, is_room_invite, created_at)
+         to_player_id, room_code, room_id, status, is_room_invite, created_at)
       VALUES
         (${challengeId}, ${fromPlayerId}, ${profile.name}, ${profile.picture || null},
-         ${profile.avatarColor || "#e53e3e"}, ${toPlayerId}, ${normalizedRoomCode},
+         ${profile.avatarColor || "#e53e3e"}, ${toPlayerId}, ${normalizedRoomCode}, ${room.roomId},
          'pending', TRUE, NOW())
       ON CONFLICT (from_player_id, to_player_id, is_room_invite) WHERE status = 'pending'
       DO NOTHING
@@ -490,7 +490,7 @@ router.get("/challenges/:playerId", async (req, res) => {
   await challengeTableReady;
   const rows = await db.execute(sql`
     SELECT challenge_id, from_player_id, from_name, from_picture, from_avatar_color,
-           to_player_id, room_code, status, is_room_invite, created_at
+           to_player_id, room_code, room_id, status, is_room_invite, created_at
     FROM player_challenges
     WHERE to_player_id = ${playerId}
       AND status = 'pending'
@@ -534,6 +534,13 @@ router.post("/challenge/:challengeId/respond", async (req, res) => {
   }
   if (row.status !== "pending") {
     return res.status(409).json({ error: "Challenge already answered" });
+  }
+
+  if (accepted) {
+    const [targetRoom] = await db.select({ id: roomsTable.id }).from(roomsTable).where(eq(roomsTable.roomCode, row.room_code)).limit(1);
+    if (!targetRoom || Number(row.room_id) !== Number(targetRoom.id)) {
+      return res.status(409).json({ error: "Challenge room no longer exists" });
+    }
   }
 
   const nextStatus = accepted ? "accepted" : "declined";
