@@ -9,11 +9,22 @@ import adminAnalytics from "./routes/adminAnalytics";
 import { WebhookHandlers } from "./webhookHandlers";
 import { isStripeReady } from "./stripeClient";
 import { generalLimiter } from "./middlewares/rateLimit";
+import { indexesReady } from "@workspace/db";
 
 // Production trigger: frontend/runtime stability fixes are deployed together with the API.
 const app: Express = express();
 
 app.set("trust proxy", 1);
+
+// Railway health/readiness endpoint. Database bootstrap must complete before
+// the instance is considered ready to receive API traffic.
+app.get("/healthz", (_req, res) => {
+  if (!indexesReady()) {
+    res.setHeader("Retry-After", "2");
+    return res.status(503).json({ status: "starting" });
+  }
+  return res.status(200).json({ status: "ok" });
+});
 
 app.post(
   "/api/stripe/webhook",
