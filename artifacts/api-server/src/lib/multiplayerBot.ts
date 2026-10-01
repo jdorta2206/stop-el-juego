@@ -248,9 +248,11 @@ export function makeBotPlayer(identity: { name: string; color: string }): BotPla
 // ── Timer management ──────────────────────────────────────────────────────
 // roomCode → set of scheduled timeouts. Cleared on round advance / room end.
 const roomBotTimers = new Map<string, Set<NodeJS.Timeout>>();
-const roomBotTimerBots = new Map<string, Set<string>>();\nconst roomBotTimerRoomIds = new Map<string, number>();
+const roomBotTimerBots = new Map<string, Set<string>>();
+const roomBotTimerRoomIds = new Map<string, number>();
 
-function trackTimer(code: string, t: NodeJS.Timeout, botId?: string, roomId?: number) {\n  if (roomId !== undefined) roomBotTimerRoomIds.set(code, roomId);
+function trackTimer(code: string, t: NodeJS.Timeout, botId?: string, roomId?: number) {
+  if (roomId !== undefined) roomBotTimerRoomIds.set(code, roomId);
   let set = roomBotTimers.get(code);
   if (!set) { set = new Set(); roomBotTimers.set(code, set); }
   set.add(t);
@@ -292,7 +294,8 @@ export function clearBotTimers(code: string) {
     for (const t of set) clearTimeout(t);
     roomBotTimers.delete(code);
   }
-  roomBotTimerBots.delete(code);\n  roomBotTimerRoomIds.delete(code);
+  roomBotTimerBots.delete(code);
+  roomBotTimerRoomIds.delete(code);
   // NOTE: pending LLM answers are intentionally NOT cleared here.
   // rushBotSubmits() calls clearBotTimers to cancel the long 25-50s timers
   // when a human STOPs early — but bots still need to consume the
@@ -665,6 +668,6 @@ export function rushBotSubmits(opts: {
       untrackTimer(opts.roomCode, t, b.playerId, opts.roomId);
       performBotSubmit(opts.roomCode, opts.roomId, b.playerId, opts.deps, { triggerStop: false });
     }, delay);
-    trackTimer(opts.roomCode, t, b.playerId);
+    trackTimer(opts.roomCode, t, b.playerId, opts.roomId);
   }
 }
