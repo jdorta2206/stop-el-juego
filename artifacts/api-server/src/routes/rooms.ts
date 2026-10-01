@@ -2024,6 +2024,21 @@ router.post("/:roomCode/leave", async (req, res) => {
         LIMIT 1
       `);
       if ((claimRows.rows ?? []).length === 0) return { kind: "settlementPending" } as const;
+
+      // The core leaderboard claim is not enough to safely delete the
+      // finished-room recovery snapshot: Season/Halloween effects are recorded
+      // separately and can fail after the core transaction commits. Keep the
+      // room until both auxiliary completion markers exist so the background
+      // recovery can still reconstruct and retry those effects.
+      const auxRows = await tx.execute(sql`
+        SELECT effect
+        FROM multiplayer_settlement_aux_claims
+        WHERE room_id = ${raw.id} AND player_id = ${playerId}
+      `);
+      const auxEffects = new Set((auxRows.rows ?? []).map((row: any) => String(row.effect)));
+      if (!auxEffects.has("season") || !auxEffects.has("halloween")) {
+        return { kind: "settlementPending" } as const;
+      }
     }
 
     // 👑 Mid-game leave: the player must actually be removed from the roster.
