@@ -571,7 +571,7 @@ export default function Room() {
 
   // Throttled "I'm typing" ping — fires at most once every 1.5s while typing.
   // Also sends a snapshot of current responses so /spy can peek at what rivals wrote.
-  const pingTyping = useCallback(() => {
+  const pingTyping = useCallback((snapshot?: Record<string, string>) => {
     if (!player?.id || !roomCode) return;
     const now = Date.now();
     if (now - lastTypingPing.current < 1500) return;
@@ -583,7 +583,7 @@ export default function Room() {
       body: JSON.stringify({
         playerId: player.id,
         playerName: player.name ?? "?",
-        responses: { ...responsesRef.current },
+        responses: snapshot ? { ...snapshot } : { ...responsesRef.current },
         round: (room as any)?.currentRound,
         seq,
         sessionId: typingSessionId.current,
@@ -1943,7 +1943,7 @@ export default function Room() {
                         const wasEmpty = !(responses[cat]?.trim());
                         const nowFilled = !!next.trim();
                         setResponses(r => ({ ...r, [cat]: next }));
-                        pingTyping();
+                        pingTyping({ ...responsesRef.current, [cat]: next });
                         if (wasEmpty && nowFilled) haptic.select();
                         if (showMpCoachmark) dismissMpCoachmark();
                       }}
