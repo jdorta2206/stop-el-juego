@@ -1396,6 +1396,7 @@ router.patch("/:roomCode/visibility", async (req, res) => {
   }
   // 🔒 Bind to the token first so a leaked hostId can't be replayed by a third party.
   if (!Number.isInteger(roomId) || roomId <= 0) { res.status(400).json({ error: "Missing roomId" }); return; }
+  if (!Number.isInteger(roomId) || roomId <= 0) { res.status(400).json({ error: "Missing roomId" }); return; }
   if (!await verifyClaimedIdentity(req, hostId)) {
     res.status(403).json({ error: "Identity verification failed" }); return;
   }
@@ -2211,11 +2212,12 @@ router.post("/:roomCode/category-pack", async (req, res) => {
   const code = paramStr(req.params.roomCode).toUpperCase();
   const body = req.body as {
     hostId: string;
+    roomId?: number;
     pack: "standard" | "crazy" | "mix" | "custom";
     customCategories?: string[];
     customLabel?: string;
   };
-  const { hostId, pack } = body;
+  const { hostId, roomId, pack } = body;
   // 🔒 Bind to the token first so a leaked hostId can't be replayed by a third party.
   if (!await verifyClaimedIdentity(req, hostId)) {
     res.status(403).json({ error: "Identity verification failed" }); return;
@@ -2263,6 +2265,7 @@ router.post("/:roomCode/category-pack", async (req, res) => {
     .set({ stopperJson: JSON.stringify(packMeta), updatedAt: new Date(), roomVersion: sql`${roomsTable.roomVersion} + 1` })
     .where(and(
       eq(roomsTable.roomCode, code),
+      eq(roomsTable.id, roomId),
       eq(roomsTable.status, "waiting"),
       eq(roomsTable.roomVersion, rooms[0].roomVersion),
       eq(roomsTable.hostId, hostId),
