@@ -3,7 +3,7 @@ import { db, dailyResultsTable, playerScoresTable } from "@workspace/db";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { verifyClaimedIdentity } from "../lib/playerAuth";
 import { sumVerifiedBasePersistent, ceilingFromBase, absoluteCeiling } from "../lib/scoreToken";
-import { recordAuthoritativeSeasonEvents } from "./season";
+import { applyAuthoritativeSeasonEventsTx, getOrCreateActiveSeason, getOrCreateProgress } from "./season";
 
 const router: IRouter = Router();
 
@@ -133,48 +133,67 @@ router.post("/submit", async (req, res) => {
   const dailyCeiling = verified > 0 ? ceilingFromBase(verifiedBase) : absoluteCeiling("daily");
   const safeScore = Math.max(0, Math.min(Number(score) || 0, dailyCeiling));
 
-  // The first insert atomically owns the daily_done event. A concurrent
-  // request can update the score, but can never claim the completion event.
-  const inserted = await db
-    .insert(dailyResultsTable)
-    .values({
-      playerId,
-      playerName: canonicalPlayerName,
-      avatarColor: canonicalAvatarColor || "#e53e3e",
-      challengeDate: today,
-      score: safeScore,
-      letter,
-      language: normalizedLanguage,
-    })
-    .onConflictDoNothing({
-      target: [dailyResultsTable.playerId, dailyResultsTable.challengeDate],
-    })
-    .returning({ playerId: dailyResultsTable.playerId });
+  // The daily result and its authoritative season mission update must commit
+  // in the same transaction. Otherwise a process crash after the daily INSERT
+  // but before the async season event can permanently lose daily_done progress.
+  const season = await getOrCreateActiveSeason();
+  const seasonProgress = await getOrCreateProgress(playerId, season.id);
+  const submitted = await db.transaction(async (tx) => {
+    const inserted = await tx
+      .insert(dailyResultsTable)
+      .values({
+        playerId,
+        playerName: canonicalPlayerName,
+        avatarColor: canonicalAvatarColor || "#e53e3e",
+        challengeDate: today,
+        score: safeScore,
+        letter,
+        language: normalizedLanguage,
+      })
+      .onConflictDoNothing({
+        target: [dailyResultsTable.playerId, dailyResultsTable.challengeDate],
+      })
+      .returning({ playerId: dailyResultsTable.playerId });
 
-  if (inserted.length > 0) {
-    void recordAuthoritativeSeasonEvents(playerId, [{ type: "daily_done", value: 1 }]);
+    if (inserted.length > 0) {
+      await applyAuthoritativeSeasonEventsTx(
+        tx,
+        season.id,
+        seasonProgress.id,
+        [{ type: "daily_done", value: 1 }],
+      );
+      return true;
+    }
+
+    // Another request already created today's row. Only improve the score;
+    // re-applying daily_done is harmless because the mission is capped at 1,
+    // and repairs a previous response that predated this transactional path.
+    await tx
+      .update(dailyResultsTable)
+      .set({
+        score: sql`GREATEST(${dailyResultsTable.score}, ${safeScore})`,
+        playerName: sql`CASE WHEN ${dailyResultsTable.score} < ${safeScore} THEN ${canonicalPlayerName} ELSE ${dailyResultsTable.playerName} END`,
+        avatarColor: sql`CASE WHEN ${dailyResultsTable.score} < ${safeScore} THEN ${canonicalPlayerName} ELSE ${dailyResultsTable.avatarColor} END`,
+      })
+      .where(
+        and(
+          eq(dailyResultsTable.playerId, playerId),
+          eq(dailyResultsTable.challengeDate, today),
+        ),
+      );
+    await applyAuthoritativeSeasonEventsTx(
+      tx,
+      season.id,
+      seasonProgress.id,
+      [{ type: "daily_done", value: 1 }],
+    );
+    return false;
+  });
+
+  if (submitted) {
     res.status(201).json({ submitted: true });
     return;
-  }
-
-  // Another request already created today's row. Only improve the score;
-  // never emit the daily completion event again.
-  await db
-    .update(dailyResultsTable)
-    .set({
-      score: sql`GREATEST(${dailyResultsTable.score}, ${safeScore})`,
-      playerName: sql`CASE WHEN ${dailyResultsTable.score} < ${safeScore} THEN ${canonicalPlayerName} ELSE ${dailyResultsTable.playerName} END`,
-      avatarColor: sql`CASE WHEN ${dailyResultsTable.score} < ${safeScore} THEN ${canonicalAvatarColor} ELSE ${dailyResultsTable.avatarColor} END`,
-    })
-    .where(
-      and(
-        eq(dailyResultsTable.playerId, playerId),
-        eq(dailyResultsTable.challengeDate, today),
-      ),
-    );
-
-  res.json({ updated: true, alreadyPlayed: true });
-});
+  });
 
 // GET /api/daily/rankings?language=es  → top 10 players for today
 router.get("/rankings", async (req, res) => {
