@@ -188,6 +188,7 @@ export default function Room() {
   const [rematchLoading, setRematchLoading] = useState(false);
   const interstitialCountedRoomRef = useRef<string>("");
   const lastTypingPing = useRef(0);
+  const typingSeq = useRef(0);
   const [categoryPack, setCategoryPack] = useState<"standard" | "crazy" | "mix" | "custom">("standard");
   // When a Premium host picks one of their own custom packs, the categories
   // travel via the room state (`customCategories`) so every player — including
@@ -574,6 +575,7 @@ export default function Room() {
     const now = Date.now();
     if (now - lastTypingPing.current < 1500) return;
     lastTypingPing.current = now;
+    const seq = ++typingSeq.current;
     fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/typing`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -582,6 +584,7 @@ export default function Room() {
         playerName: player.name ?? "?",
         responses: { ...responsesRef.current },
         round: (room as any)?.currentRound,
+        seq,
       }),
     }).catch(() => {});
   }, [player?.id, player?.name, roomCode, (room as any)?.currentRound]);
