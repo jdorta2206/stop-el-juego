@@ -1199,17 +1199,38 @@ async function purgeStaleRooms() {
     // roomPhrases/roomTyping grow unbounded as games end and rooms get
     // purged. We compare against the live set of codes rather than
     // selecting "stale" codes upfront (which was throwing at boot).
-    const liveCodesSet = new Set<string>();
+    const liveRoomIdsByCode = new Map<string, number>();
     try {
-      const live = await db.select({ code: roomsTable.roomCode }).from(roomsTable);
-      for (const r of live) if (r?.code) liveCodesSet.add(r.code);
+      const live = await db.select({ code: roomsTable.roomCode, id: roomsTable.id }).from(roomsTable);
+      for (const r of live) if (r?.code && r?.id != null) liveRoomIdsByCode.set(r.code, Number(r.id));
     } catch {
-      // If the live-codes query fails we conservatively skip in-memory
+      // If the live-room query fails we conservatively skip in-memory
       // cleanup this cycle rather than risk dropping active rooms.
       return;
     }
-    const dropOrphans = (m: Map<string, unknown>) => {
-      for (const code of m.keys()) if (!liveCodesSet.has(code)) m.delete(code);
+    // Every room-scoped memory entry carries the immutable room ID. Cleanup
+    // must compare that ID, not only the recyclable code: a new room can be
+    // created with the same code between the DB snapshot and this pass.
+    const entryRoomId = (value: any): number | undefined => {
+      if (value && typeof value === "object" && !Array.isArray(value)) {
+        if (typeof value.roomId === "number") return value.roomId;
+        if (value instanceof Map) {
+          for (const nested of value.values()) {
+            const id = entryRoomId(nested);
+            if (id !== undefined) return id;
+          }
+        }
+      }
+      return undefined;
+    };
+    const dropOrphansByRoomId = (m: Map<string, unknown>) => {
+      for (const [code, value] of m.entries()) {
+        const liveRoomId = liveRoomIdsByCode.get(code);
+        const storedRoomId = entryRoomId(value);
+        // If we cannot prove which room an entry belongs to, leave it alone.
+        // This is safer than deleting state belonging to a newly recycled room.
+        if (storedRoomId !== undefined && liveRoomId !== storedRoomId) m.delete(code);
+      }
     };
     // SSE: close leftover client connections before dropping the set.
     for (const code of sseClients.keys()) {
@@ -1220,15 +1241,15 @@ async function purgeStaleRooms() {
     }
     // Bot state must be cleaned for every room removed by this purge.
     cleanupStaleBotRooms(liveCodesSet);
-    dropOrphans(roomReactions as Map<string, unknown>);
-    dropOrphans(roomPhrases as Map<string, unknown>);
-    dropOrphans(roomTyping as Map<string, unknown>);
-    dropOrphans(roomCategoryPacks as Map<string, unknown>);
-    dropOrphans(roomLiveResponses as Map<string, unknown>);
-    dropOrphans(roomSpyUsage as Map<string, unknown>);
-    dropOrphans(roomRematch as Map<string, unknown>);
-    dropOrphans(roomFunVotes as Map<string, unknown>);
-    dropOrphans(roomHalloweenScares as Map<string, unknown>);
+    dropOrphansByRoomId(roomReactions as Map<string, unknown>);
+    dropOrphansByRoomId(roomPhrases as Map<string, unknown>);
+    dropOrphansByRoomId(roomTyping as Map<string, unknown>);
+    dropOrphansByRoomId(roomCategoryPacks as Map<string, unknown>);
+    dropOrphansByRoomId(roomLiveResponses as Map<string, unknown>);
+    dropOrphansByRoomId(roomSpyUsage as Map<string, unknown>);
+    dropOrphansByRoomId(roomRematch as Map<string, unknown>);
+    dropOrphansByRoomId(roomFunVotes as Map<string, unknown>);
+    dropOrphansByRoomId(roomHalloweenScares as Map<string, unknown>);
     dropOrphans(halloweenScareCooldowns as Map<string, unknown>);
   } catch (err) {
     console.error("[purgeStaleRooms] failed:", (err as Error).message);
@@ -2628,8 +2649,11 @@ router.post("/:roomCode/spy", writeLimiter, async (req, res) => {
   // Keep the in-memory map in sync as a fast path for the scoring code; the
   // persisted value remains authoritative across restarts.
   let used = roomSpyUsage.get(code);
-  if (!used) { used = new Map(); roomSpyUsage.set(code, used); }
-  used.set(playerId, outcome.current + 1);
+  if (!used || used.roomId !== room.id) {
+    used = { roomId: room.id, uses: new Map<string, number>() };
+    roomSpyUsage.set(code, used);
+  }
+  used.uses.set(playerId, outcome.current + 1);
   res.json({
     rivalName: outcome.pick.name,
     category: outcome.pick.cat,
