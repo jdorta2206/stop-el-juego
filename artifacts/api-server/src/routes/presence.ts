@@ -22,6 +22,21 @@ interface PresenceEntry {
 }
 
 const presenceMap = new Map<string, PresenceEntry>();
+// Presence is persisted so online state works correctly across Railway instances.
+// The in-memory map remains a short-lived cache, not the source of truth.
+const presenceTableReady = db.execute(sql`
+  CREATE TABLE IF NOT EXISTS player_presence (
+    player_id text PRIMARY KEY,
+    room_code text,
+    last_seen timestamptz NOT NULL DEFAULT NOW()
+  )
+`).then(() => db.execute(sql`
+  CREATE INDEX IF NOT EXISTS player_presence_last_seen_idx
+    ON player_presence (last_seen)
+`)).catch((err) => {
+  console.error("[presence] failed to initialize presence persistence:", err);
+  throw err;
+});
 
 async function getCanonicalPresenceProfile(playerId: string) {
   const [profile] = await db.select({
@@ -102,12 +117,17 @@ setInterval(() => {
   for (const [id, data] of presenceMap) {
     if (data.lastSeen < cutoff) presenceMap.delete(id);
   }
-  // Challenges expire after 2 minutes. The database is the shared source
-  // of truth, so this cleanup is safe to run on every instance.
-  void challengeTableReady.then(() => db.execute(sql`
-    DELETE FROM player_challenges
-    WHERE created_at < NOW() - INTERVAL '2 minutes'
-  `)).catch((err) => console.error("[presence] challenge cleanup failed:", err));
+  // Presence and challenges are shared PostgreSQL state; cleanup is safe on every instance.
+  void Promise.all([
+    presenceTableReady.then(() => db.execute(sql`
+      DELETE FROM player_presence
+      WHERE last_seen < NOW() - INTERVAL '3 minutes'
+    `)),
+    challengeTableReady.then(() => db.execute(sql`
+      DELETE FROM player_challenges
+      WHERE created_at < NOW() - INTERVAL '2 minutes'
+    `)),
+  ]).catch((err) => console.error("[presence] cleanup failed:", err));
 }, 2 * 60 * 1000);
 
 // POST /api/presence/ping
@@ -144,12 +164,30 @@ router.post("/ping", presenceLimiter, async (req, res) => {
     }
   }
 
-  const existing = presenceMap.get(playerId);
-  const wasOffline = !existing || existing.lastSeen < Date.now() - 3 * 60 * 1000;
+  await presenceTableReady;
+  const [existingRow] = await db.execute(sql`
+    SELECT last_seen
+    FROM player_presence
+    WHERE player_id = ${playerId}
+    LIMIT 1
+  `).then((result) => result.rows as Array<{ last_seen: string | Date }>);
+
+  const lastSeenMs = existingRow ? new Date(existingRow.last_seen).getTime() : 0;
+  const wasOffline = !existingRow || lastSeenMs < Date.now() - 3 * 60 * 1000;
+  const now = new Date();
+
+  await db.execute(sql`
+    INSERT INTO player_presence (player_id, room_code, last_seen)
+    VALUES (${playerId}, ${canonicalRoomCode}, ${now})
+    ON CONFLICT (player_id) DO UPDATE
+      SET room_code = EXCLUDED.room_code,
+          last_seen = EXCLUDED.last_seen
+  `);
+
   presenceMap.set(playerId, {
     ...profile,
     roomCode: canonicalRoomCode,
-    lastSeen: Date.now(),
+    lastSeen: now.getTime(),
   });
 
   if (wasOffline && profile.provider && profile.provider !== "guest") {
@@ -161,46 +199,51 @@ router.post("/ping", presenceLimiter, async (req, res) => {
 
 // GET /api/presence/online
 router.get("/online", async (_req, res) => {
-  const cutoff = Date.now() - 90 * 1000;
-  const online: Array<{
-    playerId: string;
-    name: string;
-    picture: string | null;
-    avatarColor: string;
-    provider: string | null;
-    roomCode: string | null;
-    lastSeen: number;
-  }> = [];
+  const cutoff = new Date(Date.now() - 90 * 1000);
+  await presenceTableReady;
+  const rows = await db.execute(sql`
+    SELECT player_id, room_code, last_seen
+    FROM player_presence
+    WHERE last_seen >= ${cutoff}
+    ORDER BY last_seen DESC
+  `);
+  const presenceRows = rows.rows as Array<{
+    player_id: string;
+    room_code: string | null;
+    last_seen: string | Date;
+  }>;
 
-  for (const [playerId, data] of presenceMap) {
-    if (data.lastSeen >= cutoff) {
-      online.push({ playerId, ...data });
-    }
-  }
+  const ids = presenceRows.map((row) => row.player_id);
+  if (ids.length === 0) return res.json({ online: [] });
 
-  const ids = online.map(p => p.playerId);
-  if (ids.length > 0) {
-    try {
-      const cosmetics = await db.select({
-        playerId: playerScoresTable.playerId,
-        profilePicture: playerScoresTable.profilePicture,
-        equippedAvatar: playerScoresTable.equippedAvatar,
-        equippedFrame: playerScoresTable.equippedFrame,
-        equippedTitle: playerScoresTable.equippedTitle,
-      }).from(playerScoresTable).where(inArray(playerScoresTable.playerId, ids));
-      const byId = new Map(cosmetics.map(c => [c.playerId, c]));
-      for (const p of online) {
-        const c = byId.get(p.playerId);
-        if (c) {
-          (p as any).picture = c.profilePicture ?? p.picture ?? null;
-          (p as any).equippedAvatar = c.equippedAvatar ?? null;
-          (p as any).equippedFrame = c.equippedFrame ?? null;
-          (p as any).equippedTitle = c.equippedTitle ?? null;
-        }
-      }
-    } catch {}
-  }
-  online.sort((a, b) => b.lastSeen - a.lastSeen);
+  const profiles = await db.select({
+    playerId: playerScoresTable.playerId,
+    name: playerScoresTable.playerName,
+    picture: playerScoresTable.profilePicture,
+    avatarColor: playerScoresTable.avatarColor,
+    equippedAvatar: playerScoresTable.equippedAvatar,
+    equippedFrame: playerScoresTable.equippedFrame,
+    equippedTitle: playerScoresTable.equippedTitle,
+  }).from(playerScoresTable).where(inArray(playerScoresTable.playerId, ids));
+
+  const byId = new Map(profiles.map((p) => [p.playerId, p]));
+  const online = presenceRows.flatMap((row) => {
+    const profile = byId.get(row.player_id);
+    if (!profile) return [];
+    return [{
+      playerId: row.player_id,
+      name: profile.name,
+      picture: profile.picture ?? null,
+      avatarColor: profile.avatarColor ?? "#e53e3e",
+      provider: null,
+      roomCode: row.room_code,
+      lastSeen: new Date(row.last_seen).getTime(),
+      equippedAvatar: profile.equippedAvatar ?? null,
+      equippedFrame: profile.equippedFrame ?? null,
+      equippedTitle: profile.equippedTitle ?? null,
+    }];
+  });
+
   return res.json({ online });
 });
 
@@ -224,10 +267,16 @@ router.post("/challenge", async (req, res) => {
   const profile = await getCanonicalPresenceProfile(fromPlayerId);
   if (!profile) return res.status(404).json({ error: "Player not found" });
 
-  // Check target player is online
-  const cutoff = Date.now() - 90 * 1000;
-  const target = presenceMap.get(toPlayerId);
-  if (!target || target.lastSeen < cutoff) {
+  // Check target player is online using shared PostgreSQL presence.
+  await presenceTableReady;
+  const targetRows = await db.execute(sql`
+    SELECT player_id
+    FROM player_presence
+    WHERE player_id = ${toPlayerId}
+      AND last_seen >= NOW() - INTERVAL '90 seconds'
+    LIMIT 1
+  `);
+  if ((targetRows.rows as unknown[]).length === 0) {
     return res.status(404).json({ error: "Player is not online" });
   }
 
