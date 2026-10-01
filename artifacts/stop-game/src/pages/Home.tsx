@@ -1074,8 +1074,7 @@ function LiveRoomsSection() {
         abortRef.current?.abort();
         const controller = new AbortController();
         abortRef.current = controller;
-        const apiBase = (import.meta.env.VITE_API_BASE_URL || "") as string;
-        const r = await fetch(`${apiBase}/api/rooms/live`, { signal: controller.signal });
+        const r = await fetch(`${getApiUrl()}/api/rooms/live`, { signal: controller.signal });
         if (!r.ok) return;
         const data = await r.json();
         if (!stop && !controller.signal.aborted) setRooms(data.rooms ?? []);
