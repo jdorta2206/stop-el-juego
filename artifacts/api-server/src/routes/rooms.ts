@@ -260,7 +260,7 @@ startBotTimerRecovery(botDeps);
 
 // ── In-memory stores (ephemeral, no DB needed) ─────────────────────────────
 type Reaction = { id: string; emoji: string; playerName: string; ts: number };
-const roomReactions = new Map<string, Reaction[]>();
+const roomReactions = new Map<string, { roomId: number; items: Reaction[] }>();
 // Pack selection for each room. "custom" requires a premium host and carries
 // the actual categories list + a human label (so all clients see the same
 // set without needing to load the host's private custom pack collection).
@@ -272,7 +272,7 @@ type RoomPackConfig = {
 const roomCategoryPacks = new Map<string, RoomPackConfig>();
 
 type QuickPhrase = { id: string; playerName: string; text: string; ts: number };
-const roomPhrases = new Map<string, QuickPhrase[]>();
+const roomPhrases = new Map<string, { roomId: number; items: QuickPhrase[] }>();
 
 // Live typing presence — playerId → { name, ts }. Stale after 3 seconds.
 const roomTyping = new Map<string, Map<string, { name: string; ts: number }>>();
@@ -363,18 +363,20 @@ const QUICK_PHRASES = [
   "🔥 ¡Brillante!", "😂 ¡Me ganaste!", "¡GG!", "🤔 ¡Difícil esa!",
 ];
 
-function getPhrases(code: string): QuickPhrase[] {
-  const all = roomPhrases.get(code) ?? [];
+function getPhrases(code: string, roomId?: number): QuickPhrase[] {
+  const entry = roomPhrases.get(code);
+  if (!entry || (roomId !== undefined && entry.roomId !== roomId)) return [];
   const cutoff = Date.now() - 30_000;
-  return all.filter(p => p.ts > cutoff);
+  return entry.items.filter(p => p.ts > cutoff);
 }
 
 const VALID_REACTIONS = ["🔥", "❤️", "😂", "👑", "🎯", "😤", "💪", "🤯"];
 
-function getReactions(code: string): Reaction[] {
-  const all = roomReactions.get(code) ?? [];
-  const fresh = all.filter(r => Date.now() - r.ts < 8000);
-  if (fresh.length !== all.length) roomReactions.set(code, fresh);
+function getReactions(code: string, roomId?: number): Reaction[] {
+  const entry = roomReactions.get(code);
+  if (!entry || (roomId !== undefined && entry.roomId !== roomId)) return [];
+  const fresh = entry.items.filter(r => Date.now() - r.ts < 8000);
+  if (fresh.length !== entry.items.length) roomReactions.set(code, { roomId: entry.roomId, items: fresh });
   return fresh;
 }
 
@@ -493,9 +495,9 @@ function formatRoom(room: any, cosmeticsMap?: Record<string, any>) {
     roundEndsAt,
     roundDurationSecs: durationSecs,
     serverNow: Date.now(),
-    reactions: getReactions(code),
+    reactions: getReactions(code, room.id),
     halloweenScare: getHalloweenScareEvent(code, room.currentRound),
-    phrases: getPhrases(code),
+    phrases: getPhrases(code, room.id),
     typing: getTyping(code),
     // Persisted rematch survives process restarts; memory map is only a fast-path.
     rematchCode: roomRematch.get(code) ?? meta?.rematchCode ?? null,
@@ -2093,10 +2095,11 @@ router.post("/:roomCode/react", writeLimiter, async (req, res) => {
     res.status(403).json({ error: "Only players in the room can react" }); return;
   }
   if (!VALID_REACTIONS.includes(emoji)) { res.status(400).json({ error: "Invalid emoji" }); return; }
-  const list = roomReactions.get(code) ?? [];
+  const existing = roomReactions.get(code);
+  const list = existing?.roomId === room.id ? existing.items : [];
   const memberName = String(roomPlayers.find((p: any) => p.playerId === playerId)?.playerName ?? "?").slice(0, 30);
   list.push({ id: Math.random().toString(36).slice(2), emoji, playerName: memberName, ts: Date.now() });
-  roomReactions.set(code, list.slice(-40));
+  roomReactions.set(code, { roomId: room.id, items: list.slice(-40) });
   // 🚀 Push reactions to all clients immediately (otherwise wait up to 1.5s)
   try {
     const rooms = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, code)).limit(1);
@@ -2931,8 +2934,9 @@ router.post("/:roomCode/phrase", writeLimiter, async (req, res) => {
     text: QUICK_PHRASES[phraseIndex],
     ts: Date.now(),
   };
-  const existing = getPhrases(code);
-  roomPhrases.set(code, [...existing, phrase].slice(-30));
+  const existing = roomPhrases.get(code);
+  const current = existing?.roomId === room.id ? existing.items : [];
+  roomPhrases.set(code, { roomId: room.id, items: [...current, phrase].slice(-30) });
   // 🚀 Push phrases to all clients in real time
   try {
     const rooms = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, code)).limit(1);
