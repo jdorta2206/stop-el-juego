@@ -189,6 +189,7 @@ export default function Room() {
   const interstitialCountedRoomRef = useRef<string>("");
   const lastTypingPing = useRef(0);
   const typingSeq = useRef(0);
+  const typingSessionId = useRef(`${Date.now()}-${Math.random().toString(36).slice(2)}`);
   const [categoryPack, setCategoryPack] = useState<"standard" | "crazy" | "mix" | "custom">("standard");
   // When a Premium host picks one of their own custom packs, the categories
   // travel via the room state (`customCategories`) so every player — including
@@ -585,6 +586,7 @@ export default function Room() {
         responses: { ...responsesRef.current },
         round: (room as any)?.currentRound,
         seq,
+        sessionId: typingSessionId.current,
       }),
     }).catch(() => {});
   }, [player?.id, player?.name, roomCode, (room as any)?.currentRound]);
