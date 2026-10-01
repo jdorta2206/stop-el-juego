@@ -201,7 +201,7 @@ const NONCE_COOKIE_OPTS = {
  *  intentionally a configuration failure rather than a CSRF bypass. */
 function beginAuthState(res: Response, returnPath: string, returnOrigin: string): string {
   const secret = stateSecret();
-  if (!secret) return encodeAuthState(returnPath, returnOrigin);
+  if (!secret) throw new Error("SESSION_SECRET is required for OAuth state protection");
   const nonce = crypto.randomBytes(16).toString("base64url");
   res.cookie(OAUTH_NONCE_COOKIE, nonce, { ...NONCE_COOKIE_OPTS, maxAge: STATE_TTL_MS });
   const body = Buffer.from(
