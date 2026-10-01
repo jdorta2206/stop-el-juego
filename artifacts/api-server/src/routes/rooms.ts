@@ -529,22 +529,49 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
       : undefined;
 
     if (existing.length > 0) {
-      await db.update(playerScoresTable)
-        .set({
-          playerName: p.playerName,
-          avatarColor: p.avatarColor ?? existing[0].avatarColor,
-          totalScore: sql`${playerScoresTable.totalScore} + ${score}`,
-          gamesPlayed: sql`${playerScoresTable.gamesPlayed} + 1`,
-          wins: sql`${playerScoresTable.wins} + ${won ? 1 : 0}`,
-          ...(updatedToday ? {
-            currentStreak: newStreak,
-            longestStreak: newLongest,
-            lastPlayedDate: today,
-            streakDaysJson: newStreakDaysJson,
-          } : {}),
-          updatedAt: new Date(),
-        })
-        .where(eq(playerScoresTable.playerId, p.playerId));
+      // Serialize streak calculation with the row update. Without a row lock,
+      // two multiplayer games finishing concurrently could both calculate the
+      // streak from the same old lastPlayedDate and one increment would be lost.
+      await db.transaction(async (tx) => {
+        const [locked] = await tx
+          .select({
+            lastPlayedDate: playerScoresTable.lastPlayedDate,
+            currentStreak: playerScoresTable.currentStreak,
+            longestStreak: playerScoresTable.longestStreak,
+            avatarColor: playerScoresTable.avatarColor,
+            streakDaysJson: playerScoresTable.streakDaysJson,
+          })
+          .from(playerScoresTable)
+          .where(eq(playerScoresTable.playerId, p.playerId))
+          .for("update");
+
+        if (!locked) return;
+        const lockedStreak = calculateStreak(
+          locked.lastPlayedDate ?? null,
+          locked.currentStreak ?? 0,
+        );
+        const lockedLongest = Math.max(locked.longestStreak ?? 0, lockedStreak.newStreak);
+        const lockedDays = lockedStreak.updatedToday
+          ? appendStreakDay(locked.streakDaysJson, today)
+          : undefined;
+
+        await tx.update(playerScoresTable)
+          .set({
+            playerName: p.playerName,
+            avatarColor: p.avatarColor ?? locked.avatarColor,
+            totalScore: sql`${playerScoresTable.totalScore} + ${score}`,
+            gamesPlayed: sql`${playerScoresTable.gamesPlayed} + 1`,
+            wins: sql`${playerScoresTable.wins} + ${won ? 1 : 0}`,
+            ...(lockedStreak.updatedToday ? {
+              currentStreak: lockedStreak.newStreak,
+              longestStreak: lockedLongest,
+              lastPlayedDate: today,
+              streakDaysJson: lockedDays,
+            } : {}),
+            updatedAt: new Date(),
+          })
+          .where(eq(playerScoresTable.playerId, p.playerId));
+      });
     } else {
       // Use INSERT … ON CONFLICT to be safe under simultaneous first-time inserts.
       await db.insert(playerScoresTable).values({
