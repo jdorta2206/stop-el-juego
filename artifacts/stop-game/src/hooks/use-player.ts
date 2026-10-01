@@ -105,16 +105,18 @@ export function usePlayer() {
       setPlayer(stored); setNeedsAuth(false); setIsLoaded(true);
       if (isLoggedInId(stored.id)) {
         void (async () => {
-          const generation = identityGeneration;          const restored = await tryRestoreSession(() => !cancelled && generation === identityGeneration);
-          if (cancelled) return;
+          const generation = identityGeneration;
+          const restored = await tryRestoreSession(() => !cancelled && generation === identityGeneration);
+          if (cancelled || generation !== identityGeneration) return;
           if (restored) { writeStoredPlayer(restored); setPlayer(restored); setNeedsAuth(false); }
           else { setPlayer(stored); setNeedsAuth(false); }
         })();
       }
     } else {
       void (async () => {
-        const generation = identityGeneration;        const restored = await tryRestoreSession(() => !cancelled && generation === identityGeneration);
-        if (cancelled) return;
+        const generation = identityGeneration;
+        const restored = await tryRestoreSession(() => !cancelled && generation === identityGeneration);
+        if (cancelled || generation !== identityGeneration) return;
         if (restored) { writeStoredPlayer(restored); setPlayer(restored); setNeedsAuth(false); }
         else { setPlayer(null); setNeedsAuth(true); }
         setIsLoaded(true);
