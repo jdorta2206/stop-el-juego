@@ -2,6 +2,7 @@ import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import type { Request } from "express";
 import { db, indexesReady } from "@workspace/db";
 import { sql } from "drizzle-orm";
+import { readPlayerId } from "../lib/playerAuth";
 
 interface RateLimitStore {
   increment: (key: string) => Promise<{ totalHits: number; resetTime: Date }>;
@@ -69,11 +70,11 @@ class PgRateLimitStore implements RateLimitStore {
 }
 
 function playerKey(req: Request): string {
-  const pid =
-    (req.body && (req.body as any).playerId) ||
-    (req.query && (req.query as any).playerId) ||
-    "";
-  return \`\${pid || "anon"}|\${ipKeyGenerator(req.ip ?? "")}\`;
+  // Never trust a client-supplied playerId for throttling: it can be rotated
+  // on every request to bypass score/write limits. Prefer the cryptographically
+  // verified session identity; guests have no token, so fall back to IP.
+  const pid = readPlayerId(req);
+  return pid ? `player:${pid}` : `ip:${ipKeyGenerator(req.ip ?? "")}`;
 }
 
 const baseOpts = {
