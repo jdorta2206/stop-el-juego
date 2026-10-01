@@ -125,7 +125,7 @@ async function generateBotAnswersLLM(
 // Tagged with round+letter AND a per-room generation token. Round numbers reset
 // on rematch, so round+letter alone cannot prevent a late LLM promise from an
 // old match from populating the new match's pending answers.
-type PendingEntry = { round: number; letter: string; generation: number; answers: Record<string, string> };
+type PendingEntry = { round: number; letter: string; generation: number; roomId: number; answers: Record<string, string> };
 const botAnswerGeneration = new Map<string, { generation: number; roomId: number }>();
 let answerGenerationCounter = 0;
 function nextAnswerGeneration(code: string, roomId: number): number {
@@ -149,7 +149,7 @@ function getPendingAnswers(
   if (!e) return null;
   if (e.round !== round) return null;
   if (e.letter.toUpperCase() !== letter.toUpperCase()) return null;
-  if (!isCurrentAnswerGeneration(code, e.generation)) return null;
+  if (!isCurrentAnswerGeneration(code, e.generation, e.roomId)) return null;
   return e.answers;
 }
 function clearPendingAnswers(code: string) {
@@ -260,7 +260,7 @@ function trackTimer(code: string, t: NodeJS.Timeout, botId?: string, roomId?: nu
   }
 }
 
-function untrackTimer(code: string, t: NodeJS.Timeout, botId?: string) {
+function untrackTimer(code: string, t: NodeJS.Timeout, botId?: string, roomId?: number) {
   const set = roomBotTimers.get(code);
   if (!set) return;
   set.delete(t);
@@ -522,7 +522,7 @@ async function performBotSubmit(
           untrackTimer(code, retry, botPlayerId, expectedRoomId);
           performBotSubmit(code, expectedRoomId, botPlayerId, deps, { ...options, attempt: 1 });
         }, 200 + Math.random() * 300);
-        trackTimer(code, retry, botPlayerId);
+        trackTimer(code, retry, botPlayerId, expectedRoomId);
       }
       return;
     }
@@ -581,7 +581,7 @@ export function startBotTimerRecovery(deps: BotActionDeps) {
             untrackTimer(room.roomCode, timer, bot.playerId, Number(room.id));
             performBotSubmit(room.roomCode, room.id, bot.playerId, recoveryDeps!, { triggerStop: !isStopped });
           }, delay);
-          trackTimer(room.roomCode, timer, bot.playerId);
+          trackTimer(room.roomCode, timer, bot.playerId, Number(room.id));
         }
       }
     } catch (err) {
@@ -625,7 +625,7 @@ export function scheduleBotsForRound(opts: {
     generateBotAnswersLLM(letter, opts.categories)
       .then(answers => {
         if (answers && isCurrentAnswerGeneration(opts.roomCode, answerGeneration, opts.roomId)) {
-          setPendingAnswers(opts.roomCode, b.playerId, { round, letter, generation: answerGeneration, answers });
+          setPendingAnswers(opts.roomCode, b.playerId, { round, letter, generation: answerGeneration, roomId: opts.roomId, answers });
         }
       })
       .catch(() => {});
@@ -636,7 +636,7 @@ export function scheduleBotsForRound(opts: {
       untrackTimer(opts.roomCode, t, b.playerId, opts.roomId);
       performBotSubmit(opts.roomCode, opts.roomId, b.playerId, opts.deps, { triggerStop: true });
     }, delay);
-    trackTimer(opts.roomCode, t, b.playerId);
+    trackTimer(opts.roomCode, t, b.playerId, opts.roomId);
   }
 }
 
@@ -652,7 +652,7 @@ export function rushBotSubmits(opts: {
   for (const b of opts.bots) {
     const delay = 1_500 + Math.random() * 2_500; // 1.5-4s, mimics real player freeze
     const t = setTimeout(() => {
-      untrackTimer(opts.roomCode, t, b.playerId);
+      untrackTimer(opts.roomCode, t, b.playerId, opts.roomId);
       performBotSubmit(opts.roomCode, opts.roomId, b.playerId, opts.deps, { triggerStop: false });
     }, delay);
     trackTimer(opts.roomCode, t, b.playerId);
