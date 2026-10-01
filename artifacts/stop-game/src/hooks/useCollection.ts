@@ -25,19 +25,12 @@ function saveLocal(playerId: string | undefined, c: CollectionMap) {
   try { localStorage.setItem(localKey(playerId), JSON.stringify(c)); } catch {}
 }
 
-// One-time migration: if the player has a legacy unscoped cache and no
-// scoped cache yet, move it under their key. Idempotent.
-function migrateLegacy(playerId?: string) {
-  if (!playerId) return;
-  try {
-    const scopedKey = localKey(playerId);
-    if (localStorage.getItem(scopedKey)) return;
-    const legacy = localStorage.getItem(LEGACY_KEY);
-    if (!legacy) return;
-    localStorage.setItem(scopedKey, legacy);
-    localStorage.removeItem(LEGACY_KEY);
-  } catch {}
-}
+// The legacy collection key was not scoped to an account. Never migrate it
+// into an authenticated player's namespace: on a shared device it may belong
+// to a different account (or to a previous guest), which would contaminate the
+// new account and could later be synced back to the server. Server data is the
+// authoritative recovery path for authenticated players. Keep the legacy key
+// untouched so an explicit, future migration can be handled safely.
 
 async function syncFromServer(playerId: string, signal?: AbortSignal): Promise<CollectionMap> {
   if (playerId.startsWith("guest_")) return {};
@@ -76,7 +69,6 @@ function mergeMaps(a: CollectionMap, b: CollectionMap): CollectionMap {
 
 export function useCollection(playerId?: string) {
   const [collection, setCollection] = useState<CollectionMap>(() => {
-    migrateLegacy(playerId);
     return loadLocal(playerId);
   });
   const [lastDiscovered, setLastDiscovered] = useState<CollectedWord | null>(null);
@@ -86,7 +78,6 @@ export function useCollection(playerId?: string) {
   // When the player changes (login / account switch), reload from the
   // correct scoped cache so we never carry another player's words over.
   useEffect(() => {
-    migrateLegacy(playerId);
     setCollection(loadLocal(playerId));
     syncedRef.current = null;
     syncAbortRef.current?.abort();
