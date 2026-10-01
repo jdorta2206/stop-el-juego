@@ -33,11 +33,19 @@ function getApiBase(): string {
 
 function startOAuth(provider: "google" | "facebook" | "instagram" | "tiktok" | "apple") {
   const returnPath = window.location.pathname + window.location.search;
-  try { sessionStorage.setItem("oauth_return", returnPath); } catch {}
+  const handoffNonce = crypto.randomUUID();
+  try {
+    sessionStorage.setItem("oauth_return", returnPath);
+    sessionStorage.setItem("oauth_handoff_nonce", handoffNonce);
+  } catch {}
+  const returnUrl = new URL(returnPath, window.location.origin);
+  returnUrl.searchParams.set("oauth_handoff_nonce", handoffNonce);
+  const returnPathWithNonce =
+    returnUrl.pathname + (returnUrl.search ? returnUrl.search : "");
   const apiBase = getApiBase();
   const origin = window.location.origin;
   const url = new URL(`${apiBase}/api/auth/${provider}/start`);
-  url.searchParams.set("return", returnPath);
+  url.searchParams.set("return", returnPathWithNonce);
   url.searchParams.set("origin", origin);
   window.location.href = url.toString();
 }
@@ -85,11 +93,23 @@ export async function consumeAuthHandoff(): Promise<void> {
     const code = hashHandoff || queryHandoff;
     if (!code) return;
 
-    // Remove the opaque one-time code from the address bar before making the
+    // Bind the bearer handoff to the browser session that initiated OAuth.
+    // Without this check, a valid handoff URL could be forwarded to another
+    // user and silently sign that browser into the attacker's account.
+    const handoffNonce = params.get("oauth_handoff_nonce");
+    let expectedNonce: string | null = null;
+    try { expectedNonce = sessionStorage.getItem("oauth_handoff_nonce"); } catch {}
+    if (!handoffNonce || !expectedNonce || handoffNonce !== expectedNonce) return;
+
+    // Remove the opaque one-time code and browser-binding nonce from the address bar
+    // before making the redemption request.
     // redemption request. The code itself carries no credentials and expires
     // after two minutes; the actual session/provider tokens stay server-side.
     params.delete("stopauth");
+    params.delete("oauth_handoff_nonce");
     hashParams.delete("stopauth");
+    hashParams.delete("oauth_handoff_nonce");
+    try { sessionStorage.removeItem("oauth_handoff_nonce"); } catch {}
     const hash = hashParams.toString();
     const query = params.toString();
     window.history.replaceState({}, "", `${window.location.pathname}${query ? `?${query}` : ""}${hash ? `#${hash}` : ""}`);
