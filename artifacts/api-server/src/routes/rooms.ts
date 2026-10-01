@@ -1524,7 +1524,7 @@ router.post("/", async (req, res) => {
       roomTyping.delete(roomCode);
       roomHalloweenScares.delete(roomCode);
       for (const key of halloweenScareCooldowns.keys()) {
-        if (key.startsWith(roomCode + ":")) halloweenScareCooldowns.delete(key);
+        if (key.startsWith(String(roomId) + ":")) halloweenScareCooldowns.delete(key);
       }
       lastBroadcastMarker.delete(roomCode);
       roomLiveResponses.delete(roomCode);
@@ -2056,7 +2056,7 @@ router.post("/:roomCode/leave", async (req, res) => {
     roomPhrases.delete(code);
     roomCategoryPacks.delete(code);
     roomHalloweenScares.delete(code);
-    for (const key of halloweenScareCooldowns.keys()) if (key.startsWith(code + ":")) halloweenScareCooldowns.delete(key);
+    for (const key of halloweenScareCooldowns.keys()) if (key.startsWith(String(room.id) + ":")) halloweenScareCooldowns.delete(key);
     // The room code can be recycled. Close and discard every SSE connection
     // still registered under the deleted code so clients from the old room
     // can never receive snapshots from a newly created room with the same code.
@@ -2894,7 +2894,7 @@ router.post("/:roomCode/rematch", writeLimiter, async (req, res) => {
       roomTyping.delete(newCode);
       roomHalloweenScares.delete(newCode);
       for (const key of halloweenScareCooldowns.keys()) {
-        if (key.startsWith(newCode + ":")) halloweenScareCooldowns.delete(key);
+        if (key.startsWith(String(createdRematchRoomId) + ":")) halloweenScareCooldowns.delete(key);
       }
       lastBroadcastMarker.delete(newCode);
       roomLiveResponses.delete(newCode);
@@ -2991,7 +2991,7 @@ router.post("/:roomCode/halloween-scare", halloweenScareLimiter, async (req, res
 
   const allowed = ["clown", "horrorMask", "hauntedDoll", "creepyDoll", "demonMask"] as const;
   const safeScareId = allowed.includes(scareId) ? scareId : allowed[Math.floor(Math.random() * allowed.length)];
-  const cooldownKey = code + ":" + playerId;
+  const cooldownKey = String(room.id) + ":" + playerId;
   const last = halloweenScareCooldowns.get(cooldownKey) ?? 0;
   const now = Date.now();
   const remaining = 18_000 - (now - last);
