@@ -1390,7 +1390,7 @@ router.get("/:roomCode/spectate", async (req, res) => {
 // PATCH /rooms/:code/visibility — host toggles streamer mode (isPublic)
 router.patch("/:roomCode/visibility", async (req, res) => {
   const roomCode = paramStr(req.params.roomCode).toUpperCase();
-  const { hostId, isPublic } = req.body ?? {};
+  const { hostId, isPublic, roomId } = req.body ?? {};
   if (typeof isPublic !== "boolean" || !hostId) {
     res.status(400).json({ error: "Missing hostId or isPublic" }); return;
   }
