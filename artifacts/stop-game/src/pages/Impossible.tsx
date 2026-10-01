@@ -85,7 +85,8 @@ export default function Impossible() {
     try {
       const r = await fetch(API + "/api/impossible/submit", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        credentials: "include",
         body: JSON.stringify({
           playerId: player.id, playerName: player.name, language: lang,
           word: w, timeMs, surrendered,
