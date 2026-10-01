@@ -304,6 +304,7 @@ const roomLiveResponses = new Map<string, Map<string, {
   round: number;
   letter: string;
   ts: number;
+  seq: number;
 }>>();
 // roomCode → map of playerId → spy uses this round.
 // Free players: 1 use/round. Premium players: 2 uses/round.
@@ -2363,6 +2364,7 @@ router.post("/:roomCode/typing", writeLimiter, async (req, res) => {
     playerName: string;
     responses?: Record<string, string>;
     round?: number;
+    seq?: number;
   };
   if (!playerId) { res.status(400).json({ error: "Missing playerId" }); return; }
   if (!await verifyClaimedIdentity(req, playerId)) { res.status(403).json({ error: "Identity verification failed" }); return; }
@@ -2401,13 +2403,20 @@ router.post("/:roomCode/typing", writeLimiter, async (req, res) => {
         safe[String(k).slice(0, 60)] = v.trim().slice(0, 80);
       }
     }
-    lr.set(playerId, {
-      name: memberName,
-      responses: safe,
-      round: room.currentRound,
-      letter: String(room.currentLetter ?? "").toUpperCase(),
-      ts: Date.now(),
-    });
+    const nextSeq = Number.isInteger(seq) ? seq : 0;
+    const previous = lr.get(playerId);
+    // Requests are throttled client-side, but network latency can reorder them.
+    // Never let an older snapshot overwrite a newer one for the same player.
+    if (!previous || previous.round !== room.currentRound || nextSeq >= previous.seq) {
+      lr.set(playerId, {
+        name: memberName,
+        responses: safe,
+        round: room.currentRound,
+        letter: String(room.currentLetter ?? "").toUpperCase(),
+        ts: Date.now(),
+        seq: nextSeq,
+      });
+    }
   }
 
   // Lightweight broadcast — re-fetch room and broadcast formatted state
