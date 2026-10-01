@@ -2545,9 +2545,9 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
   // the room UI. Custom packs use their exact server-supplied categories.
   const standardLocalized = [
     "Nombre", "Lugar", "Animal", "Objeto", "Color", "Fruta", "Marca",
-    "Name", "Place", "Object", "Fruit", "Brand",
-    "Nome", "Cor",
-    "Prénom", "Lieu", "Couleur", "Marque",
+    "Name", "Place", "Animal", "Object", "Color", "Fruit", "Brand",
+    "Nome", "Lugar", "Animal", "Objeto", "Cor", "Fruta", "Marca",
+    "Prénom", "Lieu", "Animal", "Objet", "Couleur", "Fruit", "Marque",
   ];
   const allowedCategories = new Set(
     (configuredPack === "standard" ? standardLocalized : configuredCategories)
