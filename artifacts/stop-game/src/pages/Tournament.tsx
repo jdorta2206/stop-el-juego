@@ -4,7 +4,7 @@ import { useLocation, useRoute } from "wouter";
 import { usePlayer } from "@/hooks/use-player";
 import { usePresence, sendChallenge, type OnlinePlayer } from "@/lib/usePresence";
 import { useFollows } from "@/lib/useFollows";
-import { getApiUrl, publicLink } from "@/lib/utils";
+import { getApiUrl, publicLink, authHeaders } from "@/lib/utils";
 import {
   Trophy, Users, Play, Copy, Check, ChevronRight,
   Swords, Crown, ArrowLeft, Loader2, Plus, LogIn, Share2, MessageCircle, Send
@@ -42,7 +42,7 @@ const API = getApiUrl();
 
 async function apiFetch(path: string, opts?: RequestInit) {
   const r = await fetch(`${API}/api/tournaments${path}`, {
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...authHeaders() },
     ...opts,
   });
   return r.json();
