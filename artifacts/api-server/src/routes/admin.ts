@@ -269,7 +269,7 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
     // ── Incidencias derivadas de señales reales ────────────────────────────
     // No llamamos "error" a algo que no esté registrado como tal. Estas
     // alertas detectan síntomas medibles que merecen investigación.
-    const incidentHealth = (await db.execute(sql\`
+    const incidentHealth = (await db.execute(sql`
       SELECT
         COUNT(*) FILTER (WHERE event_name = 'game_start')::int AS starts,
         COUNT(*) FILTER (WHERE event_name = 'game_complete')::int AS completes,
@@ -279,21 +279,21 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
         COUNT(DISTINCT session_id) FILTER (WHERE event_name = 'session_start')::int AS sessions
       FROM analytics_events
       WHERE created_at >= NOW() - INTERVAL '24 hours'
-    \`)).rows[0] as Record<string,unknown> | undefined;
+    `)).rows[0] as Record<string,unknown> | undefined;
 
     const incidentRows: { level:string; title:string; detail:string }[] = [];
     const iStarts=num(incidentHealth?.starts), iCompletes=num(incidentHealth?.completes);
     const iAdReq=num(incidentHealth?.ad_requests), iAdOk=num(incidentHealth?.ad_completes), iAdFail=num(incidentHealth?.ad_failures);
     const iSessions=num(incidentHealth?.sessions);
-    if (iStarts >= 10 && iCompletes / iStarts < 0.5) incidentRows.push({level:"🔴",title:"Baja finalización de partidas",detail:\`\${iCompletes}/\${iStarts} partidas terminadas en 24 h (\${((iCompletes/iStarts)*100).toFixed(0)}%).\`});
-    if (iAdReq >= 10 && iAdFail / iAdReq >= 0.2) incidentRows.push({level:"🟠",title:"Rewarded con demasiados fallos",detail:\`\${iAdFail}/\${iAdReq} solicitudes fallaron (\${((iAdFail/iAdReq)*100).toFixed(0)}%).\`});
-    if (iSessions >= 10 && iStarts / iSessions < 0.3) incidentRows.push({level:"🟠",title:"Muchas sesiones no llegan a jugar",detail:\`\${iStarts} partidas iniciadas frente a \${iSessions} sesiones (\${((iStarts/iSessions)*100).toFixed(0)}%).\`});
+    if (iStarts >= 10 && iCompletes / iStarts < 0.5) incidentRows.push({level:"🔴",title:"Baja finalización de partidas",detail:`${iCompletes}/${iStarts} partidas terminadas en 24 h (${((iCompletes/iStarts)*100).toFixed(0)}%).`});
+    if (iAdReq >= 10 && iAdFail / iAdReq >= 0.2) incidentRows.push({level:"🟠",title:"Rewarded con demasiados fallos",detail:`${iAdFail}/${iAdReq} solicitudes fallaron (${((iAdFail/iAdReq)*100).toFixed(0)}%).`});
+    if (iSessions >= 10 && iStarts / iSessions < 0.3) incidentRows.push({level:"🟠",title:"Muchas sesiones no llegan a jugar",detail:`${iStarts} partidas iniciadas frente a ${iSessions} sesiones (${((iStarts/iSessions)*100).toFixed(0)}%).`});
     if (incidentRows.length === 0) incidentRows.push({level:"🟢",title:"Sin anomalías derivadas detectadas",detail:"No se ha cruzado ninguno de los umbrales de alerta configurados con los datos disponibles."});
 
-    const incidentHtml = incidentRows.map((x) => \`<tr><td>\${x.level}</td><td>\${esc(x.title)}</td><td>\${esc(x.detail)}</td></tr>\`).join("");
+    const incidentHtml = incidentRows.map((x) => `<tr><td>${x.level}</td><td>${esc(x.title)}</td><td>${esc(x.detail)}</td></tr>`).join("");
 
     // ── Crecimiento y salud del juego ─────────────────────────────────────
-    const growthDaily = (await db.execute(sql\`
+    const growthDaily = (await db.execute(sql`
       SELECT d,
              COALESCE(regs,0)::int AS regs,
              COALESCE(sessions,0)::int AS sessions,
@@ -303,13 +303,13 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
       FROM (
         SELECT to_char((created_at AT TIME ZONE 'UTC') AT TIME ZONE 'Europe/Madrid','YYYY-MM-DD') AS d, COUNT(*)::int AS games
         FROM game_history
-        WHERE \${NOT_BOT} AND created_at >= NOW() - INTERVAL '30 days'
+        WHERE ${NOT_BOT} AND created_at >= NOW() - INTERVAL '30 days'
         GROUP BY 1
       ) g
       FULL OUTER JOIN (
         SELECT to_char((created_at AT TIME ZONE 'UTC') AT TIME ZONE 'Europe/Madrid','YYYY-MM-DD') AS d, COUNT(*)::int AS regs
         FROM player_scores
-        WHERE \${NOT_BOT} AND created_at >= NOW() - INTERVAL '30 days'
+        WHERE ${NOT_BOT} AND created_at >= NOW() - INTERVAL '30 days'
         GROUP BY 1
       ) r USING (d)
       FULL OUTER JOIN (
@@ -328,9 +328,9 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
         GROUP BY 1
       ) e USING (d)
       ORDER BY d DESC
-    \`)).rows as Record<string, unknown>[];
+    `)).rows as Record<string, unknown>[];
 
-    const platformGrowth = (await db.execute(sql\`
+    const platformGrowth = (await db.execute(sql`
       SELECT platform,
         COUNT(*) FILTER (WHERE started_at >= NOW() - INTERVAL '7 days')::int AS current_sessions,
         COUNT(*) FILTER (WHERE started_at >= NOW() - INTERVAL '14 days' AND started_at < NOW() - INTERVAL '7 days')::int AS previous_sessions,
@@ -340,9 +340,9 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
       WHERE started_at >= NOW() - INTERVAL '14 days'
       GROUP BY platform
       ORDER BY current_sessions DESC
-    \`)).rows as Record<string, unknown>[];
+    `)).rows as Record<string, unknown>[];
 
-    const funnelHealth = (await db.execute(sql\`
+    const funnelHealth = (await db.execute(sql`
       SELECT
         COUNT(DISTINCT CASE WHEN event_name = 'session_start' THEN session_id END)::int AS sessions,
         COUNT(*) FILTER (WHERE event_name = 'game_start')::int AS starts,
@@ -352,19 +352,19 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
         COUNT(*) FILTER (WHERE event_name = 'rewarded_ad_failed')::int AS ad_failures
       FROM analytics_events
       WHERE created_at >= NOW() - INTERVAL '7 days'
-    \`)).rows[0] as Record<string, unknown> | undefined;
+    `)).rows[0] as Record<string, unknown> | undefined;
 
     const pctChange = (current: number, previous: number): string => {
       if (previous === 0) return current > 0 ? "+100%" : "0%";
       const value = ((current - previous) / previous) * 100;
-      return \`\${value >= 0 ? "+" : ""}\${value.toFixed(0)}%\`;
+      return `${value >= 0 ? "+" : ""}${value.toFixed(0)}%`;
     };
 
     const growthRows = growthDaily.map((row) => {
       const starts = num(row.starts);
       const completes = num(row.completes);
-      const completion = starts > 0 ? \`\${((completes / starts) * 100).toFixed(0)}%\` : "—";
-      return \`<tr><td>\${esc(row.d)}</td><td>\${num(row.regs)}</td><td>\${num(row.sessions)}</td><td>\${num(row.games)}</td><td>\${starts}</td><td>\${completes}</td><td>\${completion}</td></tr>\`;
+      const completion = starts > 0 ? `${((completes / starts) * 100).toFixed(0)}%` : "—";
+      return `<tr><td>${esc(row.d)}</td><td>${num(row.regs)}</td><td>${num(row.sessions)}</td><td>${num(row.games)}</td><td>${starts}</td><td>${completes}</td><td>${completion}</td></tr>`;
     }).join("");
 
     const platformGrowthRows = platformGrowth.map((row) => {
@@ -375,7 +375,7 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
       const change = pctChange(currentSessions, previousSessions);
       const trend = currentSessions > previousSessions ? "📈" : currentSessions < previousSessions ? "📉" : "➡️";
       const platform = String(row.platform) === "android" ? "🤖 Android" : String(row.platform) === "ios" ? "🍎 iOS" : "🌐 Web";
-      return \`<tr><td>\${platform}</td><td>\${currentSessions}</td><td>\${previousSessions}</td><td>\${change} \${trend}</td><td>\${currentPlayers}</td><td>\${previousPlayers}</td></tr>\`;
+      return `<tr><td>${platform}</td><td>${currentSessions}</td><td>${previousSessions}</td><td>${change} ${trend}</td><td>${currentPlayers}</td><td>${previousPlayers}</td></tr>`;
     }).join("");
 
     const funnelSessions = num(funnelHealth?.sessions);
@@ -384,9 +384,9 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
     const funnelAdRequests = num(funnelHealth?.ad_requests);
     const funnelAdCompletes = num(funnelHealth?.ad_completes);
     const funnelAdFailures = num(funnelHealth?.ad_failures);
-    const startRate = funnelSessions > 0 ? \`\${((funnelStarts / funnelSessions) * 100).toFixed(0)}%\` : "—";
-    const completionRate = funnelStarts > 0 ? \`\${((funnelCompletes / funnelStarts) * 100).toFixed(0)}%\` : "—";
-    const adCompletionRate = funnelAdRequests > 0 ? \`\${((funnelAdCompletes / funnelAdRequests) * 100).toFixed(0)}%\` : "—";
+    const startRate = funnelSessions > 0 ? `${((funnelStarts / funnelSessions) * 100).toFixed(0)}%` : "—";
+    const completionRate = funnelStarts > 0 ? `${((funnelCompletes / funnelStarts) * 100).toFixed(0)}%` : "—";
+    const adCompletionRate = funnelAdRequests > 0 ? `${((funnelAdCompletes / funnelAdRequests) * 100).toFixed(0)}%` : "—";
     const html = `<!doctype html>
 <html lang="es"><head>
 <meta charset="utf-8"/>
@@ -473,31 +473,31 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
 
   <h2>📈 Crecimiento · últimos 30 días</h2>
   <div class="cards">
-    <div class="card"><div class="label">Sesiones → partidas · 7 días</div><div class="val">\${startRate}</div></div>
-    <div class="card"><div class="label">Partidas terminadas · 7 días</div><div class="val">\${completionRate}</div></div>
-    <div class="card"><div class="label">Rewarded completados</div><div class="val">\${adCompletionRate}</div></div>
-    <div class="card"><div class="label">Rewarded fallidos</div><div class="val">\${funnelAdFailures}</div></div>
+    <div class="card"><div class="label">Sesiones → partidas · 7 días</div><div class="val">${startRate}</div></div>
+    <div class="card"><div class="label">Partidas terminadas · 7 días</div><div class="val">${completionRate}</div></div>
+    <div class="card"><div class="label">Rewarded completados</div><div class="val">${adCompletionRate}</div></div>
+    <div class="card"><div class="label">Rewarded fallidos</div><div class="val">${funnelAdFailures}</div></div>
   </div>
   <table>
     <thead><tr><th>Día</th><th>Nuevos</th><th>Sesiones</th><th>Partidas</th><th>Iniciadas</th><th>Terminadas</th><th>Finalización</th></tr></thead>
-    <tbody>\${growthRows || '<tr><td colspan="7">Sin datos.</td></tr>'}</tbody>
+    <tbody>${growthRows || '<tr><td colspan="7">Sin datos.</td></tr>'}</tbody>
   </table>
 
   <h2>🌍 Crecimiento por plataforma · 7 días vs 7 anteriores</h2>
   <table>
     <thead><tr><th>Plataforma</th><th>Sesiones 7d</th><th>Sesiones 7d anteriores</th><th>Variación</th><th>Jugadores 7d</th><th>Jugadores anteriores</th></tr></thead>
-    <tbody>\${platformGrowthRows || '<tr><td colspan="6">Sin datos de plataforma.</td></tr>'}</tbody>
+    <tbody>${platformGrowthRows || '<tr><td colspan="6">Sin datos de plataforma.</td></tr>'}</tbody>
   </table>
 
   <h2>🔎 Embudo · dónde estamos perdiendo gente · últimos 7 días</h2>
   <table>
     <thead><tr><th>Etapa</th><th>Personas / eventos</th><th>Conversión respecto a la anterior</th></tr></thead>
     <tbody>
-      <tr><td>👥 Sesiones</td><td>\${funnelSessions}</td><td>100%</td></tr>
-      <tr><td>🎮 Partidas iniciadas</td><td>\${funnelStarts}</td><td>\${startRate}</td></tr>
-      <tr><td>🏁 Partidas terminadas</td><td>\${funnelCompletes}</td><td>\${completionRate}</td></tr>
-      <tr><td>📺 Rewarded solicitados</td><td>\${funnelAdRequests}</td><td>—</td></tr>
-      <tr><td>🎁 Rewarded completados</td><td>\${funnelAdCompletes}</td><td>\${adCompletionRate}</td></tr>
+      <tr><td>👥 Sesiones</td><td>${funnelSessions}</td><td>100%</td></tr>
+      <tr><td>🎮 Partidas iniciadas</td><td>${funnelStarts}</td><td>${startRate}</td></tr>
+      <tr><td>🏁 Partidas terminadas</td><td>${funnelCompletes}</td><td>${completionRate}</td></tr>
+      <tr><td>📺 Rewarded solicitados</td><td>${funnelAdRequests}</td><td>—</td></tr>
+      <tr><td>🎁 Rewarded completados</td><td>${funnelAdCompletes}</td><td>${adCompletionRate}</td></tr>
     </tbody>
   </table>
 
@@ -505,7 +505,7 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
   <h2>🚨 Incidencias y señales de alarma · últimas 24 h</h2>
   <table>
     <thead><tr><th>Estado</th><th>Señal</th><th>Qué significa</th></tr></thead>
-    <tbody>\${incidentHtml}</tbody>
+    <tbody>${incidentHtml}</tbody>
   </table>
   <p class="sub">Estas alertas son diagnósticos automáticos basados únicamente en datos registrados. No sustituyen a un error técnico real.</p>
 
