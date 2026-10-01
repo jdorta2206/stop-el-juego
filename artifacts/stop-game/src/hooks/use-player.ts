@@ -25,6 +25,13 @@ function readStoredPlayer(): PlayerProfile | null {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
+    if (parsed && Object.prototype.hasOwnProperty.call(parsed, "fbAccessToken")) {
+      try {
+        const { fbAccessToken: _legacyFbToken, ...sanitized } = parsed;
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(sanitized));
+        delete parsed.fbAccessToken;
+      } catch {}
+    }
     if (parsed && typeof parsed.id === "string" && typeof parsed.name === "string" && parsed.name.trim()) {
       let fbAccessToken: string | null = null;
       try { fbAccessToken = sessionStorage.getItem("fb_access_token"); } catch {}
