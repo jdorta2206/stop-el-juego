@@ -320,7 +320,7 @@ const roomLiveResponses = new Map<string, Map<string, {
 }>>();
 // roomCode → map of playerId → spy uses this round.
 // Free players: 1 use/round. Premium players: 2 uses/round.
-const roomSpyUsage = new Map<string, Map<string, number>>();
+const roomSpyUsage = new Map<string, { roomId: number; uses: Map<string, number> }>();
 const SPY_LIMIT_FREE = 1;
 const SPY_LIMIT_PREMIUM = 2;
 
