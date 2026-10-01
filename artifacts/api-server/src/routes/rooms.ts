@@ -241,7 +241,7 @@ const botDeps = {
     applyRoundAdvanceSideEffects(room, players, newStatus),
   getRoundCategories: (room: any) => {
     const code = String(room.roomCode ?? "").toUpperCase();
-    const cfg = roomCategoryPacks.get(code);
+    const cfg = getRoomPack(code, room.id);
     const persistedMeta = parseBluffMeta(room.stopperJson) ?? {};
     const pack = cfg?.pack ?? persistedMeta.categoryPack ?? "standard";
     const customCategories = cfg?.customCategories ??
@@ -269,7 +269,15 @@ type RoomPackConfig = {
   customCategories?: string[];
   customLabel?: string;
 };
-const roomCategoryPacks = new Map<string, RoomPackConfig>();
+const roomCategoryPacks = new Map<string, { roomId: number; config: RoomPackConfig }>();
+function getRoomPack(code: string, roomId: number): RoomPackConfig | undefined {
+  const entry = roomCategoryPacks.get(code);
+  if (!entry || entry.roomId !== roomId) return undefined;
+  return entry.config;
+}
+function setRoomPack(code: string, roomId: number, config: RoomPackConfig): void {
+  roomCategoryPacks.set(code, { roomId, config });
+}
 
 type QuickPhrase = { id: string; playerName: string; text: string; ts: number };
 const roomPhrases = new Map<string, { roomId: number; items: QuickPhrase[] }>();
@@ -488,9 +496,9 @@ function formatRoom(room: any, cosmeticsMap?: Record<string, any>) {
     maxRounds: room.maxRounds,
     maxPlayers: room.maxPlayers ?? 8,
     gameMode: room.gameMode ?? "classic",
-    categoryPack: roomCategoryPacks.get(code)?.pack ?? persistedPack ?? "standard",
-    customCategories: roomCategoryPacks.get(code)?.customCategories ?? persistedCustomCategories,
-    customPackLabel: roomCategoryPacks.get(code)?.customLabel ?? persistedCustomLabel,
+    categoryPack: getRoomPack(code, room.id)?.pack ?? persistedPack ?? "standard",
+    customCategories: getRoomPack(code, room.id)?.customCategories ?? persistedCustomCategories,
+    customPackLabel: getRoomPack(code, room.id)?.customLabel ?? persistedCustomLabel,
     language: room.language,
     isPublic: room.isPublic ?? false,
     players,
@@ -1818,7 +1826,7 @@ router.post("/:roomCode/start", async (req, res) => {
   const botsInRoom = resetPlayers.filter((p: any) => p.isBot);
   if (botsInRoom.length > 0) {
     const updatedRoom = updateResult[0];
-    const packCfg = roomCategoryPacks.get(roomCode.toUpperCase());
+    const packCfg = getRoomPack(roomCode.toUpperCase(), room.id);
     // Recover the persisted pack after an API restart; bots must use the same
     // authoritative categories as humans in custom/crazy/mix rooms.
     const persistedStartMeta = parseBluffMeta(updatedRoom.stopperJson) ?? {};
@@ -2184,7 +2192,7 @@ router.post("/:roomCode/category-pack", async (req, res) => {
   }
 
   // Update the process-local fast path only after the persisted CAS succeeds.
-  roomCategoryPacks.set(code, selectedPack);
+  setRoomPack(code, updatedPackRoom.id, selectedPack);
 
   // 🚀 Notify all players the host changed the category pack
   try { broadcastAndFormat(updatedPackRoom); } catch {}
@@ -2853,9 +2861,9 @@ router.post("/:roomCode/rematch", writeLimiter, async (req, res) => {
     // A rematch must preserve the category deck selected for the finished
     // room. Without this copy, crazy/mix/custom rooms silently restart as the
     // standard pack even though the endpoint promises the same game settings.
-    const previousPack = roomCategoryPacks.get(oldCode);
+    const previousPack = getRoomPack(oldCode, outcome.oldRoom.id);
     const oldMetaForPack = parseBluffMeta(outcome.oldRoom.stopperJson) ?? {};
-    const persistedPack = typeof oldMetaForPack.categoryPack === "string"
+    const rematchRoomId = Number.isInteger(oldMetaForPack.rematchRoomId) ? oldMetaForPack.rematchRoomId : null;\n    const persistedPack = typeof oldMetaForPack.categoryPack === "string"
       ? oldMetaForPack.categoryPack
       : null;
     const persistedCustomCategories = Array.isArray(oldMetaForPack.customCategories)
@@ -2865,8 +2873,8 @@ router.post("/:roomCode/rematch", writeLimiter, async (req, res) => {
       ? oldMetaForPack.customPackLabel
       : undefined;
 
-    if (previousPack || persistedPack) {
-      roomCategoryPacks.set(outcome.rematchCode, {
+    if ((previousPack || persistedPack) && rematchRoomId !== null) {
+      setRoomPack(outcome.rematchCode, rematchRoomId, {
         pack: previousPack?.pack ?? persistedPack as any,
         customCategories: previousPack?.customCategories
           ? [...previousPack.customCategories]
@@ -2895,8 +2903,8 @@ router.post("/:roomCode/rematch", writeLimiter, async (req, res) => {
       roomRematch.delete(newCode);
 
       // Restore the authoritative pack snapshot after stale-state cleanup.
-      if (previousPack || persistedPack) {
-        roomCategoryPacks.set(newCode, {
+      if ((previousPack || persistedPack) && rematchRoomId !== null) {
+        setRoomPack(newCode, rematchRoomId, {
           pack: previousPack?.pack ?? persistedPack as any,
           customCategories: previousPack?.customCategories
             ? [...previousPack.customCategories]
@@ -2975,7 +2983,7 @@ router.post("/:roomCode/halloween-scare", halloweenScareLimiter, async (req, res
   // rooms are not part of the standard Halloween event layer. Recover the
   // pack from persisted stopper metadata after an API restart.
   const scareMeta = parseBluffMeta(room.stopperJson) ?? {};
-  const scarePack = roomCategoryPacks.get(code)?.pack ?? scareMeta.categoryPack ?? "standard";
+  const scarePack = getRoomPack(code, room.id)?.pack ?? scareMeta.categoryPack ?? "standard";
   if (scarePack === "custom") {
     res.status(409).json({ error: "Halloween scares are disabled for custom category rooms" });
     return;
@@ -3129,7 +3137,7 @@ router.post("/:roomCode/stop", async (req, res) => {
     if (!stopped) return null;
 
     const stopMeta = parseBluffMeta(room.stopperJson) ?? {};
-    const stopPack = roomCategoryPacks.get(roomCode.toUpperCase())?.pack ?? stopMeta.categoryPack ?? "standard";
+    const stopPack = getRoomPack(roomCode.toUpperCase(), room.id)?.pack ?? stopMeta.categoryPack ?? "standard";
     if (halloweenEventAllowed(req) && stopPack !== "custom") {
       const scareKey = `stop:${roomCode.toUpperCase()}:${room.currentRound ?? 0}:${stopper.stopTimestamp}`;
       const stopScareEvents = [
@@ -3280,7 +3288,7 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
   // and round may contribute points; otherwise an attacker can invent a
   // category name and exploit the validator's defensive "unknown dictionary"
   // fallback to score arbitrary words.
-  const packConfig = roomCategoryPacks.get(roomCode.toUpperCase());
+  const packConfig = getRoomPack(roomCode.toUpperCase(), room.id);
   // The in-memory pack map is only a fast path. After an API restart it is
   // empty, so scoring/validation MUST recover the authoritative pack and
   // custom categories persisted in stopperJson (formatRoom already does this).
