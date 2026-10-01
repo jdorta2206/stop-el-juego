@@ -693,6 +693,7 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
               streakDaysJson: newStreakDaysJson,
             } : {}),
             updatedAt: new Date(),
+          roomVersion: sql`${roomsTable.roomVersion} + 1`,
           })
           .where(eq(playerScoresTable.playerId, p.playerId));
       } else {
@@ -722,6 +723,7 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
             gamesPlayed: sql`${playerScoresTable.gamesPlayed} + 1`,
             wins: sql`${playerScoresTable.wins} + ${won ? 1 : 0}`,
             updatedAt: new Date(),
+          roomVersion: sql`${roomsTable.roomVersion} + 1`,
           },
         });
       }
@@ -1016,8 +1018,9 @@ async function sweepStuckRooms() {
           status: newStatus,
           stopperJson: newStopperJson,
           updatedAt: new Date(),
+          roomVersion: sql`${roomsTable.roomVersion} + 1`,
         })
-        .where(and(eq(roomsTable.roomCode, room.roomCode), eq(roomsTable.updatedAt, room.updatedAt)))
+        .where(and(eq(roomsTable.roomCode, room.roomCode), eq(roomsTable.roomVersion, room.roomVersion)))
         .returning();
 
       if (updateResult.length === 0) continue;
@@ -1103,11 +1106,12 @@ async function sweepStuckRooms() {
           bluffResults: bluffVotes,
         }),
           updatedAt: new Date(),
+          roomVersion: sql`${roomsTable.roomVersion} + 1`,
         })
         .where(and(
           eq(roomsTable.roomCode, room.roomCode),
           eq(roomsTable.status, "bluffvoting"),
-          eq(roomsTable.updatedAt, room.updatedAt),
+          eq(roomsTable.roomVersion, room.roomVersion),
         ))
         .returning();
       if (!updated) continue;
@@ -1381,11 +1385,11 @@ router.patch("/:roomCode/visibility", async (req, res) => {
   }
 
   const [updated] = await db.update(roomsTable)
-    .set({ isPublic, updatedAt: new Date() })
+    .set({ isPublic, updatedAt: new Date(), roomVersion: sql`${roomsTable.roomVersion} + 1` })
     .where(and(
       eq(roomsTable.roomCode, roomCode),
       eq(roomsTable.hostId, hostId),
-      eq(roomsTable.updatedAt, rows[0].updatedAt),
+      eq(roomsTable.roomVersion, rows[0].roomVersion),
     ))
     .returning();
   if (!updated) {
@@ -1713,7 +1717,7 @@ router.post("/:roomCode/join", roomJoinLimiter, async (req, res) => {
 
     const updated = await tx
       .update(roomsTable)
-      .set({ playersJson: JSON.stringify(players), updatedAt: new Date() })
+      .set({ playersJson: JSON.stringify(players), updatedAt: new Date(), roomVersion: sql`${roomsTable.roomVersion} + 1` })
       .where(eq(roomsTable.roomCode, code))
       .returning();
 
@@ -1829,11 +1833,12 @@ router.post("/:roomCode/start", async (req, res) => {
       playersJson: JSON.stringify(resetPlayers),
       stopperJson: JSON.stringify(startMeta),
       updatedAt: new Date(),
+          roomVersion: sql`${roomsTable.roomVersion} + 1`,
     })
     .where(and(
       eq(roomsTable.roomCode, roomCode.toUpperCase()),
       eq(roomsTable.status, "waiting"),
-      eq(roomsTable.updatedAt, room.updatedAt),
+      eq(roomsTable.roomVersion, room.roomVersion),
     ))
     .returning();
 
@@ -1919,7 +1924,7 @@ router.post("/:roomCode/add-bot", async (req, res) => {
     if (!identity) return { kind: "noName" };
     players.push(makeBotPlayer(identity));
     const updated = await tx.update(roomsTable)
-      .set({ playersJson: JSON.stringify(players), updatedAt: new Date() })
+      .set({ playersJson: JSON.stringify(players), updatedAt: new Date(), roomVersion: sql`${roomsTable.roomVersion} + 1` })
       .where(eq(roomsTable.roomCode, code))
       .returning();
     return { kind: "ok", row: updated[0] };
@@ -2016,6 +2021,7 @@ router.post("/:roomCode/leave", async (req, res) => {
       const setPayload: Record<string, unknown> = {
         playersJson: JSON.stringify(remaining),
         updatedAt: new Date(),
+          roomVersion: sql`${roomsTable.roomVersion} + 1`,
       };
       if (newHostId) {
         setPayload.hostId = newHostId;
@@ -2051,6 +2057,7 @@ router.post("/:roomCode/leave", async (req, res) => {
     const setPayload: Record<string, unknown> = {
       playersJson: JSON.stringify(remaining),
       updatedAt: new Date(),
+          roomVersion: sql`${roomsTable.roomVersion} + 1`,
     };
     if (newHostId) {
       setPayload.hostId = newHostId;
@@ -2207,11 +2214,11 @@ router.post("/:roomCode/category-pack", async (req, res) => {
     customPackLabel: pack === "custom" ? (selectedPack.customLabel ?? null) : null,
   };
   const [updatedPackRoom] = await db.update(roomsTable)
-    .set({ stopperJson: JSON.stringify(packMeta), updatedAt: new Date() })
+    .set({ stopperJson: JSON.stringify(packMeta), updatedAt: new Date(), roomVersion: sql`${roomsTable.roomVersion} + 1` })
     .where(and(
       eq(roomsTable.roomCode, code),
       eq(roomsTable.status, "waiting"),
-      eq(roomsTable.updatedAt, rooms[0].updatedAt),
+      eq(roomsTable.roomVersion, rooms[0].roomVersion),
       eq(roomsTable.hostId, hostId),
     ))
     .returning();
@@ -2296,8 +2303,8 @@ router.post("/:roomCode/use-card", async (req, res) => {
   // authoritative because final rewards are calculated from the server state.
 
     const [updated] = await db.update(roomsTable)
-      .set({ playersJson: JSON.stringify(updatedPlayers), updatedAt: new Date() })
-      .where(and(eq(roomsTable.roomCode, code), eq(roomsTable.updatedAt, room.updatedAt)))
+      .set({ playersJson: JSON.stringify(updatedPlayers), updatedAt: new Date(), roomVersion: sql`${roomsTable.roomVersion} + 1` })
+      .where(and(eq(roomsTable.roomCode, code), eq(roomsTable.roomVersion, room.roomVersion)))
       .returning();
 
     if (!updated) continue; // someone else wrote first — retry with fresh state
@@ -2581,6 +2588,7 @@ router.post("/:roomCode/spy", writeLimiter, async (req, res) => {
       .set({
         stopperJson: JSON.stringify({ ...liveMeta, spyUsage: nextSpyUsage }),
         updatedAt: new Date(),
+          roomVersion: sql`${roomsTable.roomVersion} + 1`,
       })
       .where(eq(roomsTable.id, liveRoom.id))
       .returning();
@@ -2867,7 +2875,7 @@ router.post("/:roomCode/rematch", writeLimiter, async (req, res) => {
         rematchRoomId: createdRematch[0].id,
       };
       const updatedOldRows = await tx.update(roomsTable)
-        .set({ stopperJson: JSON.stringify(newMeta), updatedAt: new Date() })
+        .set({ stopperJson: JSON.stringify(newMeta), updatedAt: new Date(), roomVersion: sql`${roomsTable.roomVersion} + 1` })
         .where(eq(roomsTable.id, oldRoom.id))
         .returning();
 
@@ -3158,11 +3166,12 @@ router.post("/:roomCode/stop", async (req, res) => {
         status: "stopped",
         stopperJson: JSON.stringify(newMeta),
         updatedAt: new Date(),
+          roomVersion: sql`${roomsTable.roomVersion} + 1`,
       })
       .where(and(
         eq(roomsTable.roomCode, roomCode.toUpperCase()),
         eq(roomsTable.status, "playing"),
-        eq(roomsTable.updatedAt, room.updatedAt),
+        eq(roomsTable.roomVersion, room.roomVersion),
       ))
       .returning();
 
@@ -3542,10 +3551,11 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
         status: authoritativeStatus,
         stopperJson: authoritativeStopperJson,
         updatedAt: new Date(),
+          roomVersion: sql`${roomsTable.roomVersion} + 1`,
       })
       .where(and(
         eq(roomsTable.roomCode, roomCode.toUpperCase()),
-        eq(roomsTable.updatedAt, authoritativeRoom.updatedAt),
+        eq(roomsTable.roomVersion, authoritativeRoom.roomVersion),
       ))
       .returning();
 
@@ -3739,11 +3749,12 @@ router.post("/:roomCode/bluff-vote", writeLimiter, async (req, res) => {
           bluffResults: bluffVotes,
         }),
         updatedAt: new Date(),
+          roomVersion: sql`${roomsTable.roomVersion} + 1`,
       })
       .where(and(
         eq(roomsTable.roomCode, roomCode.toUpperCase()),
         eq(roomsTable.status, "bluffvoting"),
-        eq(roomsTable.updatedAt, room.updatedAt),
+        eq(roomsTable.roomVersion, room.roomVersion),
       ))
       .returning();
     if (!updated) {
@@ -3765,14 +3776,14 @@ router.post("/:roomCode/bluff-vote", writeLimiter, async (req, res) => {
   // vote at nearly the same time; without a CAS, their read-modify-write
   // operations could overwrite each other's votes and leave the bluff phase
   // waiting until the deadline.
-  const currentUpdatedAt = room.updatedAt;
+  const currentRoomVersion = room.roomVersion;
   const newMeta = { ...meta, bluffVotes };
   const [updated] = await db.update(roomsTable)
-    .set({ stopperJson: JSON.stringify(newMeta), updatedAt: new Date() })
+    .set({ stopperJson: JSON.stringify(newMeta), updatedAt: new Date(), roomVersion: sql`${roomsTable.roomVersion} + 1` })
     .where(and(
       eq(roomsTable.roomCode, roomCode.toUpperCase()),
       eq(roomsTable.status, "bluffvoting"),
-      eq(roomsTable.updatedAt, currentUpdatedAt),
+      eq(roomsTable.roomVersion, currentRoomVersion),
     ))
     .returning();
 
@@ -3858,11 +3869,12 @@ router.post("/:roomCode/bluff-vote", writeLimiter, async (req, res) => {
             bluffResults: latestVotes,
           }),
           updatedAt: new Date(),
+          roomVersion: sql`${roomsTable.roomVersion} + 1`,
         })
         .where(and(
           eq(roomsTable.roomCode, roomCode.toUpperCase()),
           eq(roomsTable.status, "bluffvoting"),
-          eq(roomsTable.updatedAt, current.updatedAt),
+          eq(roomsTable.roomVersion, current.roomVersion),
         ))
         .returning();
       if (resolvedRoom) {
@@ -3881,11 +3893,12 @@ router.post("/:roomCode/bluff-vote", writeLimiter, async (req, res) => {
       .set({
         stopperJson: JSON.stringify({ ...latestMeta, bluffVotes: latestVotes }),
         updatedAt: new Date(),
+          roomVersion: sql`${roomsTable.roomVersion} + 1`,
       })
       .where(and(
         eq(roomsTable.roomCode, roomCode.toUpperCase()),
         eq(roomsTable.status, "bluffvoting"),
-        eq(roomsTable.updatedAt, current.updatedAt),
+        eq(roomsTable.roomVersion, current.roomVersion),
       ))
       .returning();
 
@@ -3950,11 +3963,12 @@ router.post("/:roomCode/resolve-bluffs", async (req, res) => {
             bluffResults: bluffVotes,
           }),
       updatedAt: new Date(),
+          roomVersion: sql`${roomsTable.roomVersion} + 1`,
     })
     .where(and(
       eq(roomsTable.roomCode, roomCode.toUpperCase()),
       eq(roomsTable.status, "bluffvoting"),
-      eq(roomsTable.updatedAt, room.updatedAt),
+      eq(roomsTable.roomVersion, room.roomVersion),
     ))
     .returning();
   if (!updated) {
