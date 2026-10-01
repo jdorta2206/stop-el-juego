@@ -435,7 +435,7 @@ router.get("/profile/:playerId", async (req, res) => {
 // ============================================================
 // POST /scores
 // ============================================================
-router.post("/scores", scoreLimiter, async (req, res) => {
+router.post("/scores", scoreLimiter, requirePlayerIdentity, async (req: AuthedRequest, res) => {
   const body = SubmitScoreBody.safeParse(req.body);
   if (!body.success) {
     res.status(400).json({ error: "Invalid request body" });
