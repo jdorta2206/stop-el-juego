@@ -270,7 +270,6 @@ export async function notifyFollowersPlayerOnline(
 
     if (followers.length === 0) return;
 
-    const now = Date.now();
     const MSGS: Record<string, PushPayload> = {
       es: { title: "🟢 ¡Amigo conectado!", body: `${playerName} está jugando ahora. ¡Reta a partida!`, url: "/multiplayer" },
       en: { title: "🟢 Friend online!", body: `${playerName} is playing now. Challenge them!`, url: "/multiplayer" },
@@ -280,19 +279,12 @@ export async function notifyFollowersPlayerOnline(
     const msg = MSGS[language] || MSGS.es;
 
     await Promise.allSettled(followers.map(async (follower) => {
-      // The durable player/kind claim is atomic in PostgreSQL, so two
-      // Railway instances cannot both send this notification.
-      const claimed = await claimNotificationThrottle(
-        follower.followerId,
-        "friend",
-        FRIEND_ONLINE_COOLDOWN_MS,
-      );
-      if (!claimed) return;
       try {
-        const sent = await sendPushToPlayer(follower.followerId, msg);
-        if (sent === 0) await rollbackNotificationThrottle(follower.followerId, "friend");
+        // sendPushToPlayer performs the durable PostgreSQL claim. Keeping the
+        // claim in one place prevents a double-claim on the same notification.
+        await sendPushToPlayer(follower.followerId, msg);
       } catch {
-        await rollbackNotificationThrottle(follower.followerId, "friend");
+        // sendPushToPlayer rolls back its claim when delivery fails.
       }
     }));
   } catch (e) {
