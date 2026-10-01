@@ -65,6 +65,24 @@ app.get('/delete-account', (req, res) => {
 
 
 
+const STRIPE_STARTUP_TIMEOUT_MS = 60_000;
+
+async function withStartupTimeout<T>(operation: Promise<T>, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      operation,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+          reject(new Error(`${label} timed out after ${STRIPE_STARTUP_TIMEOUT_MS}ms`));
+        }, STRIPE_STARTUP_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 async function initStripe(): Promise<boolean> {
   const databaseUrl = process.env["DATABASE_URL"];
   if (!databaseUrl) {
@@ -79,7 +97,7 @@ async function initStripe(): Promise<boolean> {
 
   try {
     console.log("Initializing Stripe schema...");
-    await runMigrations({ databaseUrl } as any);
+    await withStartupTimeout(runMigrations({ databaseUrl } as any), "Stripe schema migration");
     console.log("Stripe schema ready");
 
     const stripeSync = await getStripeSync();
@@ -97,14 +115,14 @@ async function initStripe(): Promise<boolean> {
     if (webhookHost) {
       console.log("Setting up managed Stripe webhook...");
       const webhookBaseUrl = `https://${webhookHost}`;
-      await stripeSync.findOrCreateManagedWebhook(
+      await withStartupTimeout(\n        stripeSync.findOrCreateManagedWebhook(
         `${webhookBaseUrl}/api/stripe/webhook`
       );
       console.log("Stripe webhook configured");
     }
 
     console.log("Syncing Stripe data...");
-    await stripeSync.syncBackfill();
+    await withStartupTimeout(stripeSync.syncBackfill(), "Stripe backfill");
     console.log("Stripe data synced");
 
     // Do not accept webhooks, or run Premium cleanup, until the local Stripe
