@@ -170,7 +170,7 @@ export async function finalizePreviousSeason(currentSeasonId: number, today: str
   }
 }
 
-export export async function getOrCreateActiveSeason() {
+export async function getOrCreateActiveSeason() {
   const today = todayUTC();
 
   const existing = await db
@@ -263,7 +263,7 @@ function parseClaimed(raw: string): { free: number[]; premium: number[] } {
   }
 }
 
-export export async function getOrCreateProgress(playerId: string, seasonId: number): Promise<ProgressRow> {
+export async function getOrCreateProgress(playerId: string, seasonId: number): Promise<ProgressRow> {
   const today = todayUTC();
 
   // Race-safe upsert: relies on the unique index on (player_id, season_id).
