@@ -2087,8 +2087,16 @@ router.post("/:roomCode/leave", async (req, res) => {
 
       let newHostId: string | null = null;
       if (leaving.isHost) {
-        remaining.forEach((p: any, idx: number) => { p.isHost = idx === 0; });
-        newHostId = remaining[0].playerId;
+        // A bot can never become the authoritative host: it cannot authenticate
+        // or call /start. If the last human leaves and only bots remain, delete
+        // the room instead of creating an unrecoverable lobby/game.
+        const nextHuman = remaining.find((p: any) => !p.isBot);
+        if (!nextHuman) {
+          await tx.delete(roomsTable).where(eq(roomsTable.roomCode, code));
+          return { kind: "deleted", roomId: Number(raw.id) } as const;
+        }
+        remaining.forEach((p: any) => { p.isHost = p.playerId === nextHuman.playerId; });
+        newHostId = nextHuman.playerId;
       }
 
       const setPayload: Record<string, unknown> = {
@@ -2123,8 +2131,14 @@ router.post("/:roomCode/leave", async (req, res) => {
     // even if a previous code path forgot to clear it.
     let newHostId: string | null = null;
     if (leaving.isHost) {
-      remaining.forEach((p: any, idx: number) => { p.isHost = idx === 0; });
-      newHostId = remaining[0].playerId;
+      // Never promote a bot to host. Bots cannot authenticate or start rounds.
+      const nextHuman = remaining.find((p: any) => !p.isBot);
+      if (!nextHuman) {
+        await tx.delete(roomsTable).where(eq(roomsTable.roomCode, code));
+        return { kind: "deleted", roomId: Number(raw.id) } as const;
+      }
+      remaining.forEach((p: any) => { p.isHost = p.playerId === nextHuman.playerId; });
+      newHostId = nextHuman.playerId;
     }
 
     const setPayload: Record<string, unknown> = {
