@@ -1962,7 +1962,7 @@ router.post("/:roomCode/leave", async (req, res) => {
   // person in the room and corrupt the player list.
   type LeaveOutcome =
     | { kind: "noop" }
-    | { kind: "deleted" }
+    | { kind: "deleted"; roomId: number }
     | { kind: "settlementPending" }
     | { kind: "updated"; row: any; newHostId: string | null };
 
@@ -2004,7 +2004,7 @@ router.post("/:roomCode/leave", async (req, res) => {
     if (status !== "waiting") {
       if (remaining.length === 0) {
         await tx.delete(roomsTable).where(eq(roomsTable.roomCode, code));
-        return { kind: "deleted" } as const;
+        return { kind: "deleted", roomId: Number(raw.id) } as const;
       }
 
       let newHostId: string | null = null;
@@ -2034,7 +2034,7 @@ router.post("/:roomCode/leave", async (req, res) => {
     // Empty lobby → delete the row and free ephemeral state.
     if (remaining.length === 0) {
       await tx.delete(roomsTable).where(eq(roomsTable.roomCode, code));
-      return { kind: "deleted" } as const;
+      return { kind: "deleted", roomId: Number(raw.id) } as const;
     }
 
     // 👑 If the host is the one leaving, promote the next player in arrival
@@ -2086,7 +2086,7 @@ router.post("/:roomCode/leave", async (req, res) => {
     roomPhrases.delete(code);
     roomCategoryPacks.delete(code);
     roomHalloweenScares.delete(code);
-    for (const key of halloweenScareCooldowns.keys()) if (key.startsWith(String(room.id) + ":")) halloweenScareCooldowns.delete(key);
+    for (const key of halloweenScareCooldowns.keys()) if (key.startsWith(String(outcome.roomId) + ":")) halloweenScareCooldowns.delete(key);
     // The room code can be recycled. Close and discard every SSE connection
     // still registered under the deleted code so clients from the old room
     // can never receive snapshots from a newly created room with the same code.
