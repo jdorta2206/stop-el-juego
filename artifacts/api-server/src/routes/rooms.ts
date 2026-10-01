@@ -321,6 +321,7 @@ type FunVote = {
   answer: string;
 };
 type HalloweenRoomScare = {
+  roomId: number;
   id: string;
   playerId: string;
   scareId: "clown" | "horrorMask" | "hauntedDoll" | "creepyDoll" | "demonMask";
@@ -331,9 +332,12 @@ type HalloweenRoomScare = {
 const roomHalloweenScares = new Map<string, HalloweenRoomScare>();
 const halloweenScareCooldowns = new Map<string, number>();
 
-function getHalloweenScareEvent(code: string, currentRound: number | null | undefined): HalloweenRoomScare | null {
+function getHalloweenScareEvent(code: string, roomId: number, currentRound: number | null | undefined): HalloweenRoomScare | null {
   const event = roomHalloweenScares.get(code);
-  if (!event) return null;
+  if (!event || event.roomId !== roomId) {
+    if (event) roomHalloweenScares.delete(code);
+    return null;
+  }
   if (event.round !== (currentRound ?? 0)) {
     roomHalloweenScares.delete(code);
     return null;
@@ -497,7 +501,7 @@ function formatRoom(room: any, cosmeticsMap?: Record<string, any>) {
     roundDurationSecs: durationSecs,
     serverNow: Date.now(),
     reactions: getReactions(code, room.id),
-    halloweenScare: getHalloweenScareEvent(code, room.currentRound),
+    halloweenScare: getHalloweenScareEvent(code, room.id, room.currentRound),
     phrases: getPhrases(code, room.id),
     typing: getTyping(code, room.id, room.currentRound ?? 0),
     // Persisted rematch survives process restarts; memory map is only a fast-path.
@@ -2984,6 +2988,7 @@ router.post("/:roomCode/halloween-scare", halloweenScareLimiter, async (req, res
   if (remaining > 0) { res.status(429).json({ error: "Susto en enfriamiento", retryAfterMs: remaining }); return; }
 
   const event: HalloweenRoomScare = {
+    roomId: room.id,
     id: String(now) + "-" + Math.random().toString(36).slice(2),
     playerId,
     scareId: safeScareId,
