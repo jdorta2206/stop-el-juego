@@ -31,22 +31,36 @@ const PER_PLAYER_DAILY_LIMIT = 10;
 // shared across Railway replicas, deploys and process restarts.
 const GLOBAL_QUOTA_SCOPE = "__global__";
 
-const aiQuotaTablesReady = db.execute(sql`
-  CREATE TABLE IF NOT EXISTS ai_word_validation_claims (
-    cache_key text PRIMARY KEY,
-    claimed_at timestamptz NOT NULL DEFAULT NOW()
-  )
-`).then(() => db.execute(sql`
-  CREATE TABLE IF NOT EXISTS ai_word_validation_daily_quota (
-    quota_date date NOT NULL,
-    scope text NOT NULL,
-    used integer NOT NULL DEFAULT 0,
-    PRIMARY KEY (quota_date, scope)
-  )
-`)).catch((err) => {
-  console.error("[aiWordValidator] failed to initialize quota tables:", err);
-  throw err;
-});
+let aiQuotaTablesReady: Promise<void> | null = null;
+
+async function ensureAiQuotaTables(): Promise<boolean> {
+  if (!aiQuotaTablesReady) {
+    aiQuotaTablesReady = db.execute(sql`
+      CREATE TABLE IF NOT EXISTS ai_word_validation_claims (
+        cache_key text PRIMARY KEY,
+        claimed_at timestamptz NOT NULL DEFAULT NOW()
+      )
+    `).then(() => db.execute(sql`
+      CREATE TABLE IF NOT EXISTS ai_word_validation_daily_quota (
+        quota_date date NOT NULL,
+        scope text NOT NULL,
+        used integer NOT NULL DEFAULT 0,
+        PRIMARY KEY (quota_date, scope)
+      )
+    `)).then(() => undefined).catch((err) => {
+      aiQuotaTablesReady = null;
+      console.error("[aiWordValidator] failed to initialize quota tables:", err);
+      throw err;
+    });
+  }
+
+  try {
+    if (!(await ensureAiQuotaTables())) return { isValid: false, source: "error" };
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 function currentUtcDay(): string {
   return new Date().toISOString().slice(0, 10); // YYYY-MM-DD UTC
