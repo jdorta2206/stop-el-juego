@@ -520,7 +520,7 @@ router.post("/challenge/:challengeId/respond", async (req, res) => {
   await challengeTableReady;
   const rows = await db.execute(sql`
     SELECT challenge_id, from_player_id, from_name, from_picture, from_avatar_color,
-           to_player_id, room_code, status, is_room_invite, created_at
+           to_player_id, room_code, room_id, status, is_room_invite, created_at
     FROM player_challenges
     WHERE challenge_id = ${challengeId}
       AND created_at >= NOW() - INTERVAL '2 minutes'
