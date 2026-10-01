@@ -134,32 +134,36 @@ export async function ensureIndexes(): Promise<void> {
         ON CONFLICT (migration_key) DO NOTHING
         RETURNING migration_key
       `);
-      if ((claimed.rows?.length ?? 0) === 0) return;
+      if ((claimed.rows?.length ?? 0) > 0) {
+        const legacy = await client.query(sql`
+          SELECT event_year, player_id, event_keys_json
+          FROM halloween_progress
+          WHERE event_keys_json IS NOT NULL AND event_keys_json <> '[]'
+        `);
+        for (const row of (legacy.rows ?? []) as Array<{ event_year: number; player_id: string; event_keys_json: string }>) {
+          let keys: unknown;
+          try {
+            keys = JSON.parse(row.event_keys_json);
+          } catch {
+            continue;
+          }
+          if (!Array.isArray(keys)) continue;
 
-      const legacy = await client.query(sql`
-        SELECT event_year, player_id, event_keys_json
-        FROM halloween_progress
-        WHERE event_keys_json IS NOT NULL AND event_keys_json <> '[]'
-      `);
-      for (const row of (legacy.rows ?? []) as Array<{ event_year: number; player_id: string; event_keys_json: string }>) {
-        let keys: unknown;
-        try {
-          keys = JSON.parse(row.event_keys_json);
-        } catch {
-          continue;
-        }
-        if (!Array.isArray(keys)) continue;
-
-        for (const key of keys) {
-          if (typeof key !== "string" || !key) continue;
-          await client.query(sql`
-            INSERT INTO halloween_event_claims (event_year, player_id, event_key)
-            VALUES (${row.event_year}, ${row.player_id}, ${key})
-            ON CONFLICT (event_year, player_id, event_key) DO NOTHING
-          `);
+          for (const key of keys) {
+            if (typeof key !== "string" || !key) continue;
+            await client.query(sql`
+              INSERT INTO halloween_event_claims (event_year, player_id, event_key)
+              VALUES (${row.event_year}, ${row.player_id}, ${key})
+              ON CONFLICT (event_year, player_id, event_key) DO NOTHING
+            `);
+          }
         }
       }
-    });
+      await client.query("COMMIT");
+    } catch (err) {
+      await client.query("ROLLBACK");
+      throw err;
+    }
   } catch (err: any) {
     console.error("[ensureIndexes] Halloween claim backfill failed:", err?.message ?? err);
     _indexesReady = false;
@@ -168,4 +172,11 @@ export async function ensureIndexes(): Promise<void> {
 
   _indexesReady = true;
   console.log("[ensureIndexes] All indexes verified");
+  } finally {
+    try {
+      await client.query(`SELECT pg_advisory_unlock(hashtext($1))`, [lockKey]);
+    } finally {
+      client.release();
+    }
+  }
 }
