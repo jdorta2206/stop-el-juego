@@ -155,26 +155,42 @@ function isPlayerOnline(code: string, playerId: string): boolean {
 const SUBMIT_GRACE_MS = 15_000;
 const PRESENCE_GRACE_MS = 4_000;
 
-// Last DB version emitted to this process's SSE clients. A request may commit
-// an older snapshot and only reach this function after a newer request has
-// already broadcast its update; never let that stale snapshot roll clients back.
-const lastBroadcastUpdatedAt = new Map<string, number>();
+// Last persisted room version emitted to this process's SSE clients.
+// roomVersion is the authoritative monotonic ordering key; updatedAt is only
+// the fallback for legacy rows that still expose version 0. Comparing only
+// Date#getTime() is unsafe because two PostgreSQL writes can legitimately be
+// stamped with the same JavaScript-millisecond value.
+type BroadcastMarker = { roomVersion: number; updatedAtMs: number };
+const lastBroadcastMarker = new Map<string, BroadcastMarker>();
+
+function shouldDropStaleBroadcast(code: string, roomPayload: any): boolean {
+  const roomVersion = Number(roomPayload?.roomVersion ?? roomPayload?.room_version ?? 0);
+  const updatedAtMs = roomPayload?.updatedAt instanceof Date
+    ? roomPayload.updatedAt.getTime()
+    : new Date(roomPayload?.updatedAt ?? 0).getTime();
+  const last = lastBroadcastMarker.get(code);
+  if (!last) return false;
+
+  if (roomVersion > 0 && last.roomVersion > 0) {
+    return roomVersion < last.roomVersion;
+  }
+  if (roomVersion === 0 && last.roomVersion > 0) return true;
+  if (roomVersion > 0 && last.roomVersion === 0) return false;
+  return Number.isFinite(updatedAtMs) && updatedAtMs < last.updatedAtMs;
+}
+
+function markBroadcast(code: string, roomPayload: any) {
+  const roomVersion = Number(roomPayload?.roomVersion ?? roomPayload?.room_version ?? 0);
+  const updatedAtMs = roomPayload?.updatedAt instanceof Date
+    ? roomPayload.updatedAt.getTime()
+    : new Date(roomPayload?.updatedAt ?? 0).getTime();
+  lastBroadcastMarker.set(code, { roomVersion, updatedAtMs });
+}
 
 function broadcastRoom(code: string, roomPayload: object) {
   const room = roomPayload as any;
-  const updatedAtMs = room?.updatedAt instanceof Date
-    ? room.updatedAt.getTime()
-    : new Date(room?.updatedAt ?? 0).getTime();
-
-  // All broadcast paths, including bot broadcasts, pass through here. Never
-  // emit an older persisted room version after a newer one was already sent.
-  const lastMs = lastBroadcastUpdatedAt.get(code);
-  if (Number.isFinite(updatedAtMs) && lastMs !== undefined && updatedAtMs < lastMs) {
-    return;
-  }
-  if (Number.isFinite(updatedAtMs)) {
-    lastBroadcastUpdatedAt.set(code, updatedAtMs);
-  }
+  if (shouldDropStaleBroadcast(code, room)) return;
+  markBroadcast(code, room);
 
   const clients = sseClients.get(code);
   if (!clients || clients.size === 0) return;
@@ -187,19 +203,11 @@ function broadcastRoom(code: string, roomPayload: object) {
 
   for (const client of [...clients]) {
     try {
-      // A private-room member who has since left must lose the stream immediately;
-      // otherwise an already-open SSE would bypass the membership check performed
-      // only during connection setup.
       if ((room.isPublic === false || isHalloweenPreview) && !memberIds.has(client.playerId)) {
-        // Preview/test rooms are never public spectator targets. This also
-        // protects already-open SSE connections from legacy/tampered rows.
         client.res.end();
         clients.delete(client);
         continue;
       }
-
-      // Public rooms are discoverable, but non-members must receive the same
-      // sanitized view as /spectate rather than the full in-round answers.
       const payload = room.isPublic === true && !memberIds.has(client.playerId)
         ? sanitizeRoomForSpectator(room)
         : room;
@@ -215,21 +223,8 @@ function broadcastRoom(code: string, roomPayload: object) {
 function broadcastAndFormat(room: any) {
   const formatted = formatRoom(room);
   const code = formatted.roomCode as string;
-  const updatedAtMs = room?.updatedAt instanceof Date
-    ? room.updatedAt.getTime()
-    : new Date(room?.updatedAt ?? 0).getTime();
-
-  // updatedAt is the persisted room version. If a newer snapshot was already
-  // emitted, this request lost the broadcast race and must not overwrite the
-  // SSE clients with stale state.
-  const lastMs = lastBroadcastUpdatedAt.get(code);
-  if (Number.isFinite(updatedAtMs) && lastMs !== undefined && updatedAtMs < lastMs) {
-    return formatted;
-  }
-  if (Number.isFinite(updatedAtMs)) {
-    lastBroadcastUpdatedAt.set(code, updatedAtMs);
-  }
-
+  if (shouldDropStaleBroadcast(code, formatted)) return formatted;
+  markBroadcast(code, formatted);
   broadcastRoom(code, formatted);
   return formatted;
 }
