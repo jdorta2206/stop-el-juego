@@ -174,6 +174,97 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
       )
       .join("");
 
+    const activeSessions = (await db.execute(sql`
+      SELECT s.player_id, COALESCE(ps.player_name, CASE WHEN s.player_id IS NULL THEN 'Invitado' ELSE s.player_id END) AS player_name,
+             s.platform, s.app_version, s.language, s.last_seen,
+             CASE
+               WHEN s.login_method IN ('google','gmail') OR s.player_id LIKE 'google_%' THEN 'Google / Gmail'
+               WHEN s.login_method = 'facebook' OR s.player_id LIKE 'fb_%' THEN 'Facebook'
+               WHEN s.login_method = 'apple' OR s.player_id LIKE 'apple_%' THEN 'Apple'
+               WHEN s.login_method = 'instagram' OR s.player_id LIKE 'ig_%' THEN 'Instagram'
+               WHEN s.login_method = 'tiktok' OR s.player_id LIKE 'tt_%' THEN 'TikTok'
+               WHEN s.player_id IS NULL THEN 'Invitado' ELSE 'Cuenta'
+             END AS login_method
+      FROM analytics_sessions s LEFT JOIN player_scores ps ON ps.player_id = s.player_id
+      WHERE s.last_seen >= NOW() - INTERVAL '90 seconds'
+      ORDER BY s.last_seen DESC LIMIT 200
+    `)).rows as Record<string, unknown>[];
+
+    const loginMethods = (await db.execute(sql`
+      SELECT method, COUNT(*) FILTER (WHERE last_seen >= NOW() - INTERVAL '90 seconds')::int AS active, COUNT(*)::int AS sessions
+      FROM (
+        SELECT s.session_id, s.last_seen,
+          CASE
+            WHEN s.login_method IN ('google','gmail') THEN 'google'
+            WHEN s.login_method = 'facebook' THEN 'facebook'
+            WHEN s.login_method = 'apple' THEN 'apple'
+            WHEN s.login_method = 'instagram' THEN 'instagram'
+            WHEN s.login_method = 'tiktok' THEN 'tiktok'
+            WHEN s.player_id LIKE 'google_%' THEN 'google'
+            WHEN s.player_id LIKE 'fb_%' THEN 'facebook'
+            WHEN s.player_id LIKE 'apple_%' THEN 'apple'
+            WHEN s.player_id LIKE 'ig_%' THEN 'instagram'
+            WHEN s.player_id LIKE 'tt_%' THEN 'tiktok'
+            WHEN s.player_id IS NOT NULL THEN 'account' ELSE 'guest'
+          END AS method
+        FROM analytics_sessions s WHERE s.started_at >= NOW() - INTERVAL '24 hours'
+      ) x GROUP BY method ORDER BY sessions DESC, method
+    `)).rows as Record<string, unknown>[];
+
+    const platformToday = (await db.execute(sql`
+      SELECT platform,
+             COUNT(*) FILTER (WHERE event_name = 'session_start')::int AS sessions,
+             COUNT(*) FILTER (WHERE event_name = 'game_start')::int AS games_started,
+             COUNT(*) FILTER (WHERE event_name = 'game_complete')::int AS games_completed,
+             COUNT(*) FILTER (WHERE event_name IN ('ad_impression','rewarded_ad_completed'))::int AS ads
+      FROM analytics_events
+      WHERE created_at >= ${MADRID_TODAY}
+      GROUP BY platform
+    `)).rows as Record<string, unknown>[];
+
+    const adViewers = (await db.execute(sql`
+      SELECT COALESCE(ps.player_name, CASE WHEN e.player_id IS NULL THEN 'Invitado' ELSE e.player_id END) AS player_name,
+             e.platform, e.event_name, MAX(e.created_at) AS last_seen, COUNT(*)::int AS events
+      FROM analytics_events e LEFT JOIN player_scores ps ON ps.player_id = e.player_id
+      WHERE e.created_at >= NOW() - INTERVAL '7 days'
+        AND e.event_name IN ('ad_impression','rewarded_ad_requested','rewarded_ad_completed','rewarded_ad_failed')
+      GROUP BY e.player_id, ps.player_name, e.platform, e.event_name ORDER BY last_seen DESC LIMIT 300
+    `)).rows as Record<string, unknown>[];
+
+    const adUnique = (await db.execute(sql`
+      SELECT
+        COUNT(DISTINCT CASE WHEN event_name = 'ad_impression' THEN COALESCE(player_id, session_id) END)::int AS impressions,
+        COUNT(DISTINCT CASE WHEN event_name = 'rewarded_ad_requested' THEN COALESCE(player_id, session_id) END)::int AS requested,
+        COUNT(DISTINCT CASE WHEN event_name = 'rewarded_ad_completed' THEN COALESCE(player_id, session_id) END)::int AS completed,
+        COUNT(DISTINCT CASE WHEN event_name = 'rewarded_ad_failed' THEN COALESCE(player_id, session_id) END)::int AS failed
+      FROM analytics_events
+      WHERE created_at >= NOW() - INTERVAL '7 days'
+        AND event_name IN ('ad_impression','rewarded_ad_requested','rewarded_ad_completed','rewarded_ad_failed')
+    `)).rows[0] as Record<string, unknown> | undefined;
+
+    const activeSessionRows = activeSessions.map((row) => {
+      const platform = String(row.platform) === "android" ? "🤖 Android" : String(row.platform) === "ios" ? "🍎 iOS" : "🌐 Web";
+      const lastSeen = row.last_seen ? new Date(String(row.last_seen)).toLocaleString("es-ES", { timeZone: "Europe/Madrid" }) : "—";
+      return `<tr><td>${esc(row.player_name)}</td><td>${esc(row.login_method)}</td><td>${platform}</td><td>${esc(row.app_version || "—")}</td><td>${esc(row.language || "—")}</td><td>${lastSeen}</td></tr>`;
+    }).join("");
+
+    const loginRows = loginMethods.map((row) => {
+      const labels: Record<string,string> = { google:"🔵 Google / Gmail", facebook:"🔵 Facebook", apple:"🍎 Apple", instagram:"📸 Instagram", tiktok:"🎵 TikTok", account:"👤 Cuenta", guest:"👤 Invitado" };
+      return `<tr><td>${labels[String(row.method)] ?? esc(row.method)}</td><td>${num(row.active)}</td><td>${num(row.sessions)}</td></tr>`;
+    }).join("");
+
+    const platformRows = platformToday.map((row) => {
+      const platform = String(row.platform) === "android" ? "🤖 Android" : String(row.platform) === "ios" ? "🍎 iOS" : "🌐 Web";
+      return `<tr><td>${platform}</td><td>${num(row.sessions)}</td><td>${num(row.games_started)}</td><td>${num(row.games_completed)}</td><td>${num(row.ads)}</td></tr>`;
+    }).join("");
+
+    const adViewerRows = adViewers.map((row) => {
+      const platform = String(row.platform) === "android" ? "🤖 Android" : String(row.platform) === "ios" ? "🍎 iOS" : "🌐 Web";
+      const labels: Record<string,string> = { ad_impression:"📺 Anuncio visto", rewarded_ad_requested:"▶️ Rewarded solicitado", rewarded_ad_completed:"✅ Rewarded completado", rewarded_ad_failed:"❌ Rewarded fallido" };
+      const lastSeen = row.last_seen ? new Date(String(row.last_seen)).toLocaleString("es-ES", { timeZone: "Europe/Madrid" }) : "—";
+      return `<tr><td>${esc(row.player_name)}</td><td>${labels[String(row.event_name)] ?? esc(row.event_name)}</td><td>${platform}</td><td>${num(row.events)}</td><td>${lastSeen}</td></tr>`;
+    }).join("");
+
     const html = `<!doctype html>
 <html lang="es"><head>
 <meta charset="utf-8"/>
@@ -233,6 +324,29 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
   </table>
 
   <a class="btn" href="">🔄 Actualizar</a>
+
+  <h2>👥 Quién está conectado ahora</h2>
+  <div class="cards">
+    <div class="card accent"><div class="label">Conectados últimos 90 s</div><div class="val">${activeSessions.length}</div></div>
+    <div class="card"><div class="label">Publicidad · vistas 7 días</div><div class="val">${num(adUnique?.impressions)}</div></div>
+    <div class="card"><div class="label">Rewarded solicitados</div><div class="val">${num(adUnique?.requested)}</div></div>
+    <div class="card"><div class="label">Rewarded completados</div><div class="val">${num(adUnique?.completed)}</div></div>
+    <div class="card"><div class="label">Rewarded fallidos</div><div class="val">${num(adUnique?.failed)}</div></div>
+  </div>
+  <table><thead><tr><th>Jugador</th><th>Cómo se conecta</th><th>Desde</th><th>Versión</th><th>Idioma</th><th>Última conexión</th></tr></thead>
+  <tbody>${activeSessionRows || '<tr><td colspan="6">Ahora mismo no hay conexiones activas.</td></tr>'}</tbody></table>
+
+  <h2>🔐 Desde dónde / cómo se conectan · últimas 24 h</h2>
+  <table><thead><tr><th>Método</th><th>Activos ahora</th><th>Sesiones</th></tr></thead>
+  <tbody>${loginRows || '<tr><td colspan="3">Sin datos.</td></tr>'}</tbody></table>
+
+  <h2>📱 Actividad por plataforma · hoy</h2>
+  <table><thead><tr><th>Plataforma</th><th>Sesiones</th><th>Partidas iniciadas</th><th>Partidas terminadas</th><th>Publicidad</th></tr></thead>
+  <tbody>${platformRows || '<tr><td colspan="5">Sin actividad.</td></tr>'}</tbody></table>
+
+  <h2>📺 Quién ve publicidad · últimos 7 días</h2>
+  <table><thead><tr><th>Jugador</th><th>Evento</th><th>Desde</th><th>Veces</th><th>Último evento</th></tr></thead>
+  <tbody>${adViewerRows || '<tr><td colspan="5">Sin eventos de publicidad.</td></tr>'}</tbody></table>
 
   <h2>Notificaciones</h2>
   <form method="post" action="/test/notify-mundial" onsubmit="return confirm('¿Enviar la notificación del Pack Mundial a TODOS los jugadores suscritos?');">
