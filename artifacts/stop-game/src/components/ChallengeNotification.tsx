@@ -26,7 +26,18 @@ export function ChallengeNotification({ challenge, onDismiss }: ChallengeNotific
       setCountdown((v) => {
         if (v <= 1) {
           clearInterval(timer);
-          onDismiss();
+          // Expired/ignored invitations must be transitioned out of pending
+          // state; otherwise the 4s poll can surface the same challenge again
+          // during its remaining PostgreSQL TTL.
+          if (!respondingRef.current) {
+            respondingRef.current = true;
+            setResponding(true);
+            void respondToChallenge(challenge.challengeId, false).finally(() => {
+              onDismiss();
+            });
+          } else {
+            onDismiss();
+          }
           return 0;
         }
         return v - 1;
