@@ -1040,7 +1040,6 @@ router.post("/delete-account", async (req: Request, res: Response) => {
     }
 
     await db.transaction(async (tx) => {
-      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${playerId}, 0))`);
       await revokePlayerId(playerId, tx);
       const locked = await tx.execute(sql`
         SELECT player_id
