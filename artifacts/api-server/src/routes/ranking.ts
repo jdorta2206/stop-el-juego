@@ -578,6 +578,7 @@ router.post("/scores", scoreLimiter, async (req, res) => {
             totalScore: sql`${playerScoresTable.totalScore} + ${score}`,
             xp: sql`${playerScoresTable.xp} + ${xpGain}`,
             level: sql`GREATEST(${playerScoresTable.level}, ${newLevel})`,
+            ...(coinGain > 0 ? { coins: sql`${playerScoresTable.coins} + ${coinGain}` } : {}),
             updatedAt: new Date(),
           })
           .where(eq(playerScoresTable.playerId, playerId))
