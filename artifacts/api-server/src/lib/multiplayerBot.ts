@@ -498,7 +498,7 @@ async function performBotSubmit(
     // was the one that ended the match — otherwise humans get no XP/ranking
     // update from games the bot "finished".
     if (didFinishGame) {
-      deps.submitFinalScores(updatedPlayers, room.currentLetter ?? "A");
+      deps.submitFinalScores(updatedPlayers, room.currentLetter ?? "A", code);
     }
 
     if (nextStatus === "finished" || nextStatus === "waiting") {
