@@ -93,17 +93,18 @@ export async function sendChallenge(
 export async function respondToChallenge(
   challengeId: string,
   accepted: boolean
-): Promise<{ roomCode: string | null }> {
+): Promise<{ roomCode: string | null; ok: boolean }> {
   try {
     const res = await fetch(`${API_BASE}/api/presence/challenge/${challengeId}/respond`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ accepted }),
     });
-    if (!res.ok) return { roomCode: null };
-    return await res.json();
+    let data: any = null;
+    try { data = await res.json(); } catch {}
+    return { ok: res.ok, roomCode: typeof data?.roomCode === "string" ? data.roomCode : null };
   } catch {
-    return { roomCode: null };
+    return { roomCode: null, ok: false };
   }
 }
 
