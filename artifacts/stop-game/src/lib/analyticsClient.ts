@@ -31,7 +31,12 @@ export function trackAnalyticsEvent(eventName: string, options?: { mode?: string
       if (typeof player?.loginMethod === "string") loginMethod = player.loginMethod;
     }
     void fetch(`${window.location.origin}/api/analytics/event`, {
-      method: "POST", headers: { "Content-Type": "application/json", "X-Client-Platform": platform(), ...(isTwa() ? { "X-Client-TWA": "1" } : {}) },
+      method: "POST", headers: {
+        "Content-Type": "application/json",
+        "X-Client-Platform": platform(),
+        ...(isTwa() ? { "X-Client-TWA": "1" } : {}),
+        ...(localStorage.getItem("stop_session_token") ? { "X-Stop-Token": localStorage.getItem("stop_session_token")! } : {}),
+      },
       body: JSON.stringify({ eventName, playerId, sessionId: sessionId(), language: document.documentElement.lang || null,
         mode: options?.mode ?? null, aiDifficulty: options?.aiDifficulty ?? null,
         metadata: { ...(options?.metadata ?? {}), loginMethod } }), keepalive: true
