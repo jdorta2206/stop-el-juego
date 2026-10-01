@@ -415,7 +415,7 @@ router.post("/challenge", inviteLimiter, async (req, res) => {
 });
 
 // POST /api/presence/room-invite — invite a player to an already-existing room
-router.post("/room-invite", async (req, res) => {
+router.post("/room-invite", inviteLimiter, async (req, res) => {
   const { fromPlayerId, fromName, fromPicture, fromAvatarColor, toPlayerId, roomCode } = req.body as {
     fromPlayerId: string;
     fromName: string;
