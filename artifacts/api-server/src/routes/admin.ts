@@ -266,6 +266,32 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
     }).join("");
 
 
+    // ── Incidencias derivadas de señales reales ────────────────────────────
+    // No llamamos "error" a algo que no esté registrado como tal. Estas
+    // alertas detectan síntomas medibles que merecen investigación.
+    const incidentHealth = (await db.execute(sql\`
+      SELECT
+        COUNT(*) FILTER (WHERE event_name = 'game_start')::int AS starts,
+        COUNT(*) FILTER (WHERE event_name = 'game_complete')::int AS completes,
+        COUNT(*) FILTER (WHERE event_name = 'rewarded_ad_requested')::int AS ad_requests,
+        COUNT(*) FILTER (WHERE event_name = 'rewarded_ad_completed')::int AS ad_completes,
+        COUNT(*) FILTER (WHERE event_name = 'rewarded_ad_failed')::int AS ad_failures,
+        COUNT(DISTINCT session_id) FILTER (WHERE event_name = 'session_start')::int AS sessions
+      FROM analytics_events
+      WHERE created_at >= NOW() - INTERVAL '24 hours'
+    \`)).rows[0] as Record<string,unknown> | undefined;
+
+    const incidentRows: { level:string; title:string; detail:string }[] = [];
+    const iStarts=num(incidentHealth?.starts), iCompletes=num(incidentHealth?.completes);
+    const iAdReq=num(incidentHealth?.ad_requests), iAdOk=num(incidentHealth?.ad_completes), iAdFail=num(incidentHealth?.ad_failures);
+    const iSessions=num(incidentHealth?.sessions);
+    if (iStarts >= 10 && iCompletes / iStarts < 0.5) incidentRows.push({level:"🔴",title:"Baja finalización de partidas",detail:\`\${iCompletes}/\${iStarts} partidas terminadas en 24 h (\${((iCompletes/iStarts)*100).toFixed(0)}%).\`});
+    if (iAdReq >= 10 && iAdFail / iAdReq >= 0.2) incidentRows.push({level:"🟠",title:"Rewarded con demasiados fallos",detail:\`\${iAdFail}/\${iAdReq} solicitudes fallaron (\${((iAdFail/iAdReq)*100).toFixed(0)}%).\`});
+    if (iSessions >= 10 && iStarts / iSessions < 0.3) incidentRows.push({level:"🟠",title:"Muchas sesiones no llegan a jugar",detail:\`\${iStarts} partidas iniciadas frente a \${iSessions} sesiones (\${((iStarts/iSessions)*100).toFixed(0)}%).\`});
+    if (incidentRows.length === 0) incidentRows.push({level:"🟢",title:"Sin anomalías derivadas detectadas",detail:"No se ha cruzado ninguno de los umbrales de alerta configurados con los datos disponibles."});
+
+    const incidentHtml = incidentRows.map((x) => \`<tr><td>\${x.level}</td><td>\${esc(x.title)}</td><td>\${esc(x.detail)}</td></tr>\`).join("");
+
     // ── Crecimiento y salud del juego ─────────────────────────────────────
     const growthDaily = (await db.execute(sql\`
       SELECT d,
@@ -474,6 +500,27 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
       <tr><td>🎁 Rewarded completados</td><td>\${funnelAdCompletes}</td><td>\${adCompletionRate}</td></tr>
     </tbody>
   </table>
+
+
+  <h2>🚨 Incidencias y señales de alarma · últimas 24 h</h2>
+  <table>
+    <thead><tr><th>Estado</th><th>Señal</th><th>Qué significa</th></tr></thead>
+    <tbody>\${incidentHtml}</tbody>
+  </table>
+  <p class="sub">Estas alertas son diagnósticos automáticos basados únicamente en datos registrados. No sustituyen a un error técnico real.</p>
+
+  <h2>🧪 Telemetría que todavía debemos añadir</h2>
+  <table>
+    <thead><tr><th>Control</th><th>Situación</th></tr></thead>
+    <tbody>
+      <tr><td>JavaScript / React</td><td>⚪ Sin evento técnico dedicado todavía</td></tr>
+      <tr><td>API HTTP fallida</td><td>⚪ Sin captura global dedicada todavía</td></tr>
+      <tr><td>Reconexiones / SSE</td><td>⚪ Hay lógica de reconexión, pero falta evento analítico unificado</td></tr>
+      <tr><td>Reward concedido tras anuncio</td><td>🟡 Hay eventos de anuncio; falta una señal unificada de "reward entregado"</td></tr>
+      <tr><td>Sala atascada / espera</td><td>🟡 Se puede detectar mejor con eventos de ciclo de vida de sala</td></tr>
+    </tbody>
+  </table>
+  <p class="sub">La siguiente fase puede convertir estos cinco puntos en telemetría real para que una captura del panel permita localizar también fallos técnicos, no solo pérdidas del embudo.</p>
 
   <h2>Notificaciones</h2>
   <form method="post" action="/test/notify-mundial" onsubmit="return confirm('¿Enviar la notificación del Pack Mundial a TODOS los jugadores suscritos?');">
