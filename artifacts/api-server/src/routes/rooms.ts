@@ -204,6 +204,9 @@ const botDeps = {
   // happens to be the one that ends the match.
   submitFinalScores: (players: any[], letter: string, roomCode?: string) =>
     submitAllScoresToLeaderboard(players, letter, String(roomCode ?? "").toUpperCase()).catch(() => {}),
+  clearRoundLiveResponses: (roomCode: string) => {
+    roomLiveResponses.delete(String(roomCode).toUpperCase());
+  },
   getRoundCategories: (room: any) => {
     const code = String(room.roomCode ?? "").toUpperCase();
     const cfg = roomCategoryPacks.get(code);
