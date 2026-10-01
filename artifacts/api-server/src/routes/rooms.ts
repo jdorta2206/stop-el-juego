@@ -275,14 +275,14 @@ type QuickPhrase = { id: string; playerName: string; text: string; ts: number };
 const roomPhrases = new Map<string, { roomId: number; items: QuickPhrase[] }>();
 
 // Live typing presence — playerId → { name, ts }. Stale after 3 seconds.
-const roomTyping = new Map<string, Map<string, { name: string; ts: number }>>();
-function getTyping(code: string, excludeId?: string): { playerId: string; playerName: string }[] {
+const roomTyping = new Map<string, Map<string, { roomId: number; round: number; name: string; ts: number }>>();
+function getTyping(code: string, roomId: number, round: number, excludeId?: string): { playerId: string; playerName: string }[] {
   const m = roomTyping.get(code);
   if (!m) return [];
   const cutoff = Date.now() - 3000;
   const out: { playerId: string; playerName: string }[] = [];
   for (const [pid, info] of [...m.entries()]) {
-    if (info.ts < cutoff) { m.delete(pid); continue; }
+    if (info.roomId !== roomId || info.round !== round || info.ts < cutoff) { m.delete(pid); continue; }
     if (excludeId && pid === excludeId) continue;
     out.push({ playerId: pid, playerName: info.name });
   }
@@ -498,7 +498,7 @@ function formatRoom(room: any, cosmeticsMap?: Record<string, any>) {
     reactions: getReactions(code, room.id),
     halloweenScare: getHalloweenScareEvent(code, room.currentRound),
     phrases: getPhrases(code, room.id),
-    typing: getTyping(code),
+    typing: getTyping(code, room.id, room.currentRound ?? 0),
     // Persisted rematch survives process restarts; memory map is only a fast-path.
     rematchCode: roomRematch.get(code) ?? meta?.rematchCode ?? null,
     funVotes: getFunVotes(code, room.currentRound),
@@ -2394,7 +2394,7 @@ router.post("/:roomCode/typing", writeLimiter, async (req, res) => {
   let m = roomTyping.get(code);
   if (!m) { m = new Map(); roomTyping.set(code, m); }
   const memberName = String(roomPlayers.find((p: any) => p.playerId === playerId)?.playerName ?? "?").slice(0, 30);
-  m.set(playerId, { name: memberName, ts: Date.now() });
+  m.set(playerId, { roomId: room.id, round: room.currentRound, name: memberName, ts: Date.now() });
 
   // 🕵️ Stash live responses so /spy can peek at them. Stale after 5 s.
   if (responses && typeof responses === "object") {
