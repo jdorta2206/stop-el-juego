@@ -97,6 +97,8 @@ export const GetLeaderboardResponse = zod.object({
  * @summary Submit a player score
  */
 export const SubmitScoreBody = zod.object({
+  /** Stable client-generated ID used to make offline/retry submissions idempotent. */
+  submissionId: zod.string().min(16).max(128).optional(),
   playerId: zod.string(),
   playerName: zod.string(),
   avatarColor: zod.string().optional(),
