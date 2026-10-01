@@ -141,10 +141,10 @@ const sseClients = new Map<string, Set<SseClient>>();
 // connection to this room. Used by the stuck-sweep in /results so a player
 // who closed the tab is auto-skipped immediately instead of stalling the
 // round for the whole grace window.
-function isPlayerOnline(code: string, playerId: string): boolean {
+function isPlayerOnline(code: string, roomId: number, playerId: string): boolean {
   const set = sseClients.get(code);
   if (!set || set.size === 0) return false;
-  for (const c of set) if (c.playerId === playerId) return true;
+  for (const c of set) if (c.roomId === roomId && c.playerId === playerId) return true;
   return false;
 }
 
@@ -892,7 +892,7 @@ function finalizeRoundState(room: any, players: any[]): {
       if (playerGracePassed) {
         return { ...p, isReady: true, roundScore: 0, validAnswerCount: 0, finishedAt: Date.now() };
       }
-      if (playerPresenceArmed && !isPlayerOnline(codeUpper, p.playerId)) {
+      if (playerPresenceArmed && !isPlayerOnline(codeUpper, room.id, p.playerId)) {
         return { ...p, isReady: true, roundScore: 0, finishedAt: Date.now() };
       }
       return p;
