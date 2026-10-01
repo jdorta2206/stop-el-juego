@@ -498,7 +498,6 @@ router.get("/google/callback", async (req: Request, res: Response) => {
         const sessionToken = issuePlayerToken(res, playerId);
     res.send(await bridgePageMulti([
       ["oauth_user", user],
-      ["fb_access_token", tokenData.access_token],
       ...(sessionToken ? [[PLAYER_TOKEN_BRIDGE_KEY, sessionToken] as [string, string]] : []),
     ], returnPath, returnOrigin));
   } catch (err) {
@@ -591,6 +590,7 @@ router.get("/facebook/callback", async (req: Request, res: Response) => {
         const sessionToken = issuePlayerToken(res, playerId);
     res.send(await bridgePageMulti([
       ["oauth_user", user],
+      ["fb_access_token", tokenData.access_token],
       ...(sessionToken ? [[PLAYER_TOKEN_BRIDGE_KEY, sessionToken] as [string, string]] : []),
     ], returnPath, returnOrigin));
   } catch (err) {
