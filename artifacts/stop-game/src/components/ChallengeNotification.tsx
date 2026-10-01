@@ -42,46 +42,56 @@ export function ChallengeNotification({ challenge, onDismiss }: ChallengeNotific
     const controller = new AbortController();
     actionAbortRef.current = controller;
 
-    // Read player data once — needed for /join in both flows
+    // Read player data once — needed for /join before consuming the challenge.
     let playerData: { id: string; name: string; avatarColor: string; loginMethod?: string | null } | null = null;
     try {
       const stored = localStorage.getItem("stop_player_v2");
       if (stored) playerData = JSON.parse(stored);
     } catch { /* ignore */ }
 
-    const response = await respondToChallenge(challenge.challengeId, true);
-    if (!response.roomCode || response.roomCode.toUpperCase() !== challenge.roomCode.toUpperCase()) {
-      onDismiss();
+    if (!playerData?.id) {
+      respondingRef.current = false;
+      setResponding(false);
       return;
     }
 
-    // Always call /join so the player appears in the room lobby (both reto and room invite)
-    if (playerData?.id) {
-      try {
-        const joinResponse = await fetch(`${getApiUrl()}/api/rooms/${challenge.roomCode.toUpperCase()}/join`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", ...authHeaders() },
-          credentials: "include",
-          signal: controller.signal,
-          body: JSON.stringify({
-            playerId: playerData.id,
-            playerName: playerData.name,
-            avatarColor: playerData.avatarColor,
-            loginMethod: playerData.loginMethod ?? null,
-          }),
-        });
-        if (!joinResponse.ok || controller.signal.aborted) {
-          onDismiss();
-          return;
-        }
-      } catch {
-        onDismiss();
+    // Join first. The server only marks the challenge accepted once membership
+    // is confirmed, so a transient/full-room join failure cannot consume it.
+    try {
+      const joinResponse = await fetch(`${getApiUrl()}/api/rooms/${challenge.roomCode.toUpperCase()}/join`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        credentials: "include",
+        signal: controller.signal,
+        body: JSON.stringify({
+          playerId: playerData.id,
+          playerName: playerData.name,
+          avatarColor: playerData.avatarColor,
+          loginMethod: playerData.loginMethod ?? null,
+        }),
+      });
+      if (!joinResponse.ok || controller.signal.aborted) {
+        respondingRef.current = false;
+        setResponding(false);
         return;
       }
+    } catch {
+      respondingRef.current = false;
+      setResponding(false);
+      return;
+    }
+
+    // Only consume the invitation after /join has succeeded. The response code
+    // is authoritative because an existing room invite may have been refreshed.
+    const response = await respondToChallenge(challenge.challengeId, true);
+    if (!response.roomCode) {
+      respondingRef.current = false;
+      setResponding(false);
+      return;
     }
 
     onDismiss();
-    setLocation(`/room/${challenge.roomCode}`);
+    setLocation(`/room/${response.roomCode.toUpperCase()}`);
   };
 
   const handleDecline = async () => {
