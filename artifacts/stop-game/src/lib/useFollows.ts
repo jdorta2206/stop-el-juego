@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { getApiUrl } from "@/lib/utils";
+import { getApiUrl, authHeaders } from "@/lib/utils";
 import type { OnlinePlayer } from "@/lib/usePresence";
 
 const API_BASE = getApiUrl();
@@ -55,7 +55,7 @@ export function useFollows(
     requestRef.current = controller;
     setLoading(true);
     try {
-      const r = await fetch(`${API_BASE}/api/friends/list/${encodeURIComponent(meId)}`, { signal: controller.signal });
+      const r = await fetch(`${API_BASE}/api/friends/list/${encodeURIComponent(meId)}`, { signal: controller.signal, headers: authHeaders() });
       const data = await r.json();
       const list: FollowedFriendBase[] = data.friends ?? [];
       setRawFriends(list);
@@ -96,7 +96,7 @@ export function useFollows(
     try {
       const r = await fetch(`${API_BASE}/api/friends/follow`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({
           followerId: meId,
           followedId: target.playerId,
