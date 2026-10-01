@@ -134,8 +134,11 @@ export async function consumeAuthHandoff(): Promise<void> {
             avatarColor,
             loginMethod: user.provider || null,
             picture: user.picture ?? null,
-            fbAccessToken: values.fb_access_token || null,
+            fbAccessToken: null,
           };
+          if (values.fb_access_token) {
+            try { sessionStorage.setItem("fb_access_token", values.fb_access_token); } catch {}
+          }
           if (profile.name) localStorage.setItem(PLAYER_STORAGE_KEY, JSON.stringify(profile));
         }
       } catch {}
