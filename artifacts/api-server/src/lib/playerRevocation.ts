@@ -6,10 +6,14 @@ let revocationCacheReady = false;
 
 export async function loadRevokedPlayerIds(): Promise<void> {
   const rows = await db.execute(sql`SELECT player_id FROM revoked_player_ids`);
-  revokedPlayerIds.clear();
+  const next = new Set<string>();
   for (const row of rows.rows as Array<{ player_id: string }>) {
-    if (row.player_id) revokedPlayerIds.add(row.player_id);
+    if (row.player_id) next.add(row.player_id);
   }
+  // Swap only after the complete DB snapshot is available. This prevents a
+  // refresh from briefly exposing an empty revocation cache.
+  revokedPlayerIds.clear();
+  for (const playerId of next) revokedPlayerIds.add(playerId);
   revocationCacheReady = true;
 }
 
