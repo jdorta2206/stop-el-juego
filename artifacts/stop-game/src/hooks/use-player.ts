@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { AVATAR_COLORS, getApiUrl } from "@/lib/utils";
 
 const SESSION_TOKEN_KEY = "stop_session_token";
