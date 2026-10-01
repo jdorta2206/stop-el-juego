@@ -3251,6 +3251,18 @@ router.post("/:roomCode/stop", async (req, res) => {
       res.status(404).json({ error: "Room not found" });
       return;
     }
+    // The CAS can lose because the old room changed or because its recyclable
+    // code now belongs to a completely different room. Never return the new
+    // room's full snapshot to a caller who was only authorized in the old room.
+    if (current.id !== room.id) {
+      res.status(409).json({ error: "Room changed; please refresh" });
+      return;
+    }
+    const currentPlayers = parsePlayers(current.playersJson);
+    if (!currentPlayers.some((p: any) => p.playerId === playerId)) {
+      res.status(403).json({ error: "You are no longer in this room" });
+      return;
+    }
     res.json(formatRoom(current));
     return;
   }
