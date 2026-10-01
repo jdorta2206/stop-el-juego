@@ -12,7 +12,8 @@ export interface FBFriend {
 export async function fetchFacebookFriends(accessToken: string, signal?: AbortSignal): Promise<FBFriend[]> {
   try {
     const res = await fetch(
-      `https://graph.facebook.com/me/friends?fields=id,name,picture.type(normal)&access_token=${accessToken}&limit=50`, { signal }
+      "https://graph.facebook.com/me/friends?fields=id,name,picture.type(normal)&limit=50",
+      { signal, headers: { Authorization: `Bearer ${accessToken}` } }
     );
     if (!res.ok) return [];
     const data = await res.json();
