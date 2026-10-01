@@ -1019,7 +1019,7 @@ async function sweepStuckRooms() {
           updatedAt: new Date(),
           roomVersion: sql`${roomsTable.roomVersion} + 1`,
         })
-        .where(and(eq(roomsTable.roomCode, room.roomCode), eq(roomsTable.roomVersion, room.roomVersion)))
+        .where(and(eq(roomsTable.roomCode, room.roomCode), eq(roomsTable.id, room.id), eq(roomsTable.roomVersion, room.roomVersion)))
         .returning();
 
       if (updateResult.length === 0) continue;
@@ -1109,6 +1109,7 @@ async function sweepStuckRooms() {
         })
         .where(and(
           eq(roomsTable.roomCode, room.roomCode),
+          eq(roomsTable.id, room.id),
           eq(roomsTable.status, "bluffvoting"),
           eq(roomsTable.roomVersion, room.roomVersion),
         ))
