@@ -1253,7 +1253,7 @@ async function purgeStaleRooms() {
     dropOrphansByRoomId(roomRematch as Map<string, unknown>);
     dropOrphansByRoomId(roomFunVotes as Map<string, unknown>);
     dropOrphansByRoomId(roomHalloweenScares as Map<string, unknown>);
-    dropOrphans(halloweenScareCooldowns as Map<string, unknown>);
+    for (const key of halloweenScareCooldowns.keys()) {\n      const roomId = Number(String(key).split(":", 1)[0]);\n      if (Number.isFinite(roomId) && !Array.from(liveRoomIdsByCode.values()).includes(roomId)) halloweenScareCooldowns.delete(key);\n    }
   } catch (err) {
     console.error("[purgeStaleRooms] failed:", (err as Error).message);
   }
