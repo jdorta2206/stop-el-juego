@@ -64,8 +64,9 @@ function ChallengeButton({
   const handleClick = async () => {
     if (state !== "idle") return;
     setState("sending");
-    await onChallenge();
-    setState("waiting");
+    const sent = await onChallenge();
+    if (sent) setState("waiting");
+    else setState("idle");
   };
 
   if (state === "idle") {
@@ -186,10 +187,10 @@ function PlayerRow({
     }
   };
 
-  const handleChallenge = async () => {
-    if (!currentPlayer) return;
+  const handleChallenge = async (): Promise<boolean> => {
+    if (!currentPlayer) return false;
     const result = await sendChallenge(currentPlayer, player.playerId);
-    if (!result) return;
+    if (!result) return false;
     pendingChallengeId.current = result.challengeId;
     challengeAbortRef.current?.abort();
     if (challengePollRef.current) clearInterval(challengePollRef.current);
@@ -221,6 +222,7 @@ function PlayerRow({
       controller.abort(); clearInterval(poll); challengePollRef.current = null;
       pendingChallengeId.current = null; challengeTimeoutRef.current = null;
     }, 60000);
+    return true;
   };
 
   return (
