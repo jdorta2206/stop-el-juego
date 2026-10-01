@@ -368,6 +368,7 @@ type BotActionDeps = {
 
 async function performBotSubmit(
   roomCode: string,
+  expectedRoomId: number,
   botPlayerId: string,
   deps: BotActionDeps,
   options: { triggerStop: boolean; attempt?: number },
@@ -378,6 +379,7 @@ async function performBotSubmit(
     const rows = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, code)).limit(1);
     if (rows.length === 0) return;
     const room = rows[0];
+    if (Number(room.id) !== Number(expectedRoomId)) return;
     if (room.status !== "playing" && room.status !== "stopped") return;
 
     let players: any[];
@@ -518,7 +520,7 @@ async function performBotSubmit(
         // room dies or the round advances before the retry fires.
         const retry = setTimeout(() => {
           untrackTimer(code, retry, botPlayerId);
-          performBotSubmit(code, botPlayerId, deps, { ...options, attempt: 1 });
+          performBotSubmit(code, expectedRoomId, botPlayerId, deps, { ...options, attempt: 1 });
         }, 200 + Math.random() * 300);
         trackTimer(code, retry, botPlayerId);
       }
@@ -577,7 +579,7 @@ export function startBotTimerRecovery(deps: BotActionDeps) {
             : Math.max(0, 25_000 + (bot.playerId.charCodeAt(bot.playerId.length - 1) % 26_000) - elapsed);
           const timer = setTimeout(() => {
             untrackTimer(room.roomCode, timer, bot.playerId);
-            performBotSubmit(room.roomCode, bot.playerId, recoveryDeps!, { triggerStop: !isStopped });
+            performBotSubmit(room.roomCode, room.id, bot.playerId, recoveryDeps!, { triggerStop: !isStopped });
           }, delay);
           trackTimer(room.roomCode, timer, bot.playerId);
         }
@@ -598,6 +600,7 @@ export function startBotTimerRecovery(deps: BotActionDeps) {
 // fires the bot's submission within 2-4s instead.
 export function scheduleBotsForRound(opts: {
   roomCode: string;
+  roomId: number;
   bots: { playerId: string }[];
   letter: string;
   categories: string[];
@@ -631,7 +634,7 @@ export function scheduleBotsForRound(opts: {
     const delay = 25_000 + Math.random() * 25_000; // 25-50s
     const t = setTimeout(() => {
       untrackTimer(opts.roomCode, t, b.playerId);
-      performBotSubmit(opts.roomCode, b.playerId, opts.deps, { triggerStop: true });
+      performBotSubmit(opts.roomCode, opts.roomId, b.playerId, opts.deps, { triggerStop: true });
     }, delay);
     trackTimer(opts.roomCode, t, b.playerId);
   }
@@ -641,6 +644,7 @@ export function scheduleBotsForRound(opts: {
 // rush their submission so the round can advance.
 export function rushBotSubmits(opts: {
   roomCode: string;
+  roomId: number;
   bots: { playerId: string }[];
   deps: BotActionDeps;
 }) {
@@ -649,7 +653,7 @@ export function rushBotSubmits(opts: {
     const delay = 1_500 + Math.random() * 2_500; // 1.5-4s, mimics real player freeze
     const t = setTimeout(() => {
       untrackTimer(opts.roomCode, t, b.playerId);
-      performBotSubmit(opts.roomCode, b.playerId, opts.deps, { triggerStop: false });
+      performBotSubmit(opts.roomCode, opts.roomId, b.playerId, opts.deps, { triggerStop: false });
     }, delay);
     trackTimer(opts.roomCode, t, b.playerId);
   }
