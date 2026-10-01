@@ -422,76 +422,114 @@ async function performBotSubmit(
     const roundScore = validBotWords * 10;
 
     const finishedAt = Date.now();
-    const updatedPlayers = players.map(p => {
-      if (p.playerId !== botPlayerId) return p;
+
+    // 🔒 Multi-instance safe commit: the earlier read is only used to prepare
+    // the bot answers. The authoritative room mutation happens under a
+    // PostgreSQL row lock, so another Railway instance cannot overwrite a
+    // human submission with the stale playersJson snapshot.
+    const committed = await db.transaction(async (tx) => {
+      const lockedRows = await tx.execute(
+        sql`SELECT * FROM rooms WHERE room_code = ${code} FOR UPDATE`,
+      );
+      const lockedList = (lockedRows as any).rows ?? lockedRows;
+      if (!lockedList || lockedList.length === 0) return null;
+
+      const raw = lockedList[0];
+      const lockedStatus = raw.status;
+      if (lockedStatus !== "playing" && lockedStatus !== "stopped") return null;
+
+      let lockedPlayers: any[];
+      try {
+        lockedPlayers = JSON.parse(raw.players_json ?? raw.playersJson);
+      } catch {
+        return null;
+      }
+
+      const lockedMe = lockedPlayers.find((p: any) => p.playerId === botPlayerId);
+      if (!lockedMe || !lockedMe.isBot || lockedMe.isReady) return null;
+
+      // If another instance already advanced the round while this bot was
+      // validating its answers, never apply those answers to the new round.
+      const lockedLetter = String(raw.current_letter ?? raw.currentLetter ?? "A").toUpperCase();
+      const lockedRound = Number(raw.current_round ?? raw.currentRound ?? 0);
+      if (lockedLetter !== letter || lockedRound !== Number(room.currentRound ?? 0)) {
+        return null;
+      }
+
+      let committedStatus = lockedStatus as string;
+      let committedStopperJson = raw.stopper_json ?? raw.stopperJson;
+      if (options.triggerStop && lockedStatus === "playing") {
+        const stopTimestamp = Date.now();
+        let prevMeta: any = {};
+        try { prevMeta = committedStopperJson ? JSON.parse(committedStopperJson) : {}; } catch {}
+        committedStopperJson = JSON.stringify({
+          ...prevMeta,
+          stopper: { id: botPlayerId, name: lockedMe.playerName, stopTimestamp },
+          stopTimestamp,
+          roundStartedAt: prevMeta?.roundStartedAt ?? Date.now(),
+        });
+        committedStatus = "stopped";
+      }
+
+      const committedPlayers = lockedPlayers.map((p: any) => {
+        if (p.playerId !== botPlayerId) return p;
+        return {
+          ...p,
+          score: (p.score || 0) + roundScore,
+          roundScore,
+          isReady: true,
+          answers,
+          finishedAt,
+          wasStopper: options.triggerStop && committedStatus === "stopped",
+        };
+      });
+
+      let finalStatus = committedStatus;
+      let finalRound = lockedRound;
+      const finalLetter = lockedLetter;
+      let finalStopperJson: string | null = committedStopperJson;
+      let didFinishGame = false;
+
+      const allReady = committedPlayers.every((p: any) => p.isReady);
+      if (allReady) {
+        const bluffers = committedPlayers.filter((p: any) => p.bluffedCategories?.length > 0);
+        if (bluffers.length === 0) {
+          finalRound = lockedRound + 1;
+          if (finalRound > Number(raw.max_rounds ?? raw.maxRounds ?? 3)) {
+            finalStatus = "finished";
+            finalRound = Number(raw.max_rounds ?? raw.maxRounds ?? 3);
+            didFinishGame = true;
+          } else {
+            finalStatus = "waiting";
+          }
+          finalStopperJson = null;
+        }
+      }
+
+      const [updated] = await tx.update(roomsTable)
+        .set({
+          playersJson: JSON.stringify(committedPlayers),
+          status: finalStatus,
+          currentRound: finalRound,
+          currentLetter: finalLetter,
+          stopperJson: finalStopperJson,
+          updatedAt: new Date(),
+        })
+        .where(eq(roomsTable.roomCode, code))
+        .returning();
+
       return {
-        ...p,
-        score: (p.score || 0) + roundScore,
-        roundScore,
-        isReady: true,
-        answers,
-        finishedAt,
-        wasStopper: options.triggerStop && newStatus === "stopped",
+        row: updated,
+        players: committedPlayers,
+        letter: finalLetter,
+        status: finalStatus,
+        didFinishGame,
       };
     });
 
-    // Bot never bluffs, so if its submission completes the round and there
-    // are no human bluffers we can advance directly; otherwise just save and
-    // let the human /results handler decide the next status.
-    let nextStatus = newStatus;
-    let nextRound = room.currentRound;
-    let nextLetter = room.currentLetter;
-    let nextStopperJson: string | null = newStopperJson;
+    if (!committed) return;
 
-    let didFinishGame = false;
-    const allReady = updatedPlayers.every(p => p.isReady);
-    if (allReady) {
-      const bluffers = updatedPlayers.filter(p => p.bluffedCategories?.length > 0);
-      if (bluffers.length === 0) {
-        // Advance — mirror the rooms.ts /results advancement.
-        nextRound = (room.currentRound ?? 0) + 1;
-        if (nextRound > (room.maxRounds ?? 3)) {
-          nextStatus = "finished";
-          nextRound = room.maxRounds ?? 3;
-          didFinishGame = true;
-        } else {
-          nextStatus = "waiting";
-          // Letter will be re-rolled when host starts next round; clear meta.
-        }
-        nextStopperJson = null;
-      }
-    }
-
-    const updateResult = await db.update(roomsTable)
-      .set({
-        playersJson: JSON.stringify(updatedPlayers),
-        status: nextStatus,
-        currentRound: nextRound,
-        currentLetter: nextLetter,
-        stopperJson: nextStopperJson,
-        updatedAt: new Date(),
-      })
-      .where(and(eq(roomsTable.roomCode, code), eq(roomsTable.updatedAt, room.updatedAt)))
-      .returning();
-
-    if (updateResult.length === 0) {
-      // Lost optimistic-concurrency race against a human submit. Retry once
-      // so the bot's points aren't silently dropped just because a human
-      // submitted at the same instant. Bail after 1 retry — repeated races
-      // mean the round is being driven by humans and they'll zero the bot
-      // via the stuck-sweep, which is fine.
-      if (attempt === 0) {
-        // Track the retry timer so clearBotTimers() can cancel it if the
-        // room dies or the round advances before the retry fires.
-        const retry = setTimeout(() => {
-          untrackTimer(code, retry, botPlayerId);
-          performBotSubmit(code, botPlayerId, deps, { ...options, attempt: 1 });
-        }, 200 + Math.random() * 300);
-        trackTimer(code, retry, botPlayerId);
-      }
-      return;
-    }
-
+    const updateResult = [committed.row];
     deps.broadcast(code, deps.formatRoom(updateResult[0]));
 
     // Persist final scores to the global leaderboard when the bot's submit
