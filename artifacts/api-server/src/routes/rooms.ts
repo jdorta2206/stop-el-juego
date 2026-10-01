@@ -693,7 +693,6 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
               streakDaysJson: newStreakDaysJson,
             } : {}),
             updatedAt: new Date(),
-          roomVersion: sql`${roomsTable.roomVersion} + 1`,
           })
           .where(eq(playerScoresTable.playerId, p.playerId));
       } else {
@@ -723,7 +722,6 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
             gamesPlayed: sql`${playerScoresTable.gamesPlayed} + 1`,
             wins: sql`${playerScoresTable.wins} + ${won ? 1 : 0}`,
             updatedAt: new Date(),
-          roomVersion: sql`${roomsTable.roomVersion} + 1`,
           },
         });
       }
