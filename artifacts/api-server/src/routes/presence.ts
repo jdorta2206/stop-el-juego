@@ -221,6 +221,32 @@ router.get("/online", async (_req, res) => {
     lastSeen: Number(p.last_seen_ms),
   }));
 
+  const roomCodes = [...new Set(online.map(p => p.roomCode).filter((code): code is string => Boolean(code)))];
+  const roomMembership = new Map<string, Set<string>>();
+  if (roomCodes.length > 0) {
+    const rooms = await db.select({
+      roomCode: roomsTable.roomCode,
+      playersJson: roomsTable.playersJson,
+    }).from(roomsTable).where(inArray(roomsTable.roomCode, roomCodes));
+    for (const room of rooms) {
+      try {
+        const players = JSON.parse(room.playersJson || "[]");
+        if (Array.isArray(players)) {
+          roomMembership.set(room.roomCode, new Set(
+            players.map((p: any) => String(p?.playerId ?? "")).filter(Boolean),
+          ));
+        }
+      } catch {
+        roomMembership.set(room.roomCode, new Set());
+      }
+    }
+  }
+  for (const p of online) {
+    if (p.roomCode && !roomMembership.get(p.roomCode)?.has(p.playerId)) {
+      p.roomCode = null;
+    }
+  }
+
   const ids = online.map(p => p.playerId);
   if (ids.length > 0) {
     try {
