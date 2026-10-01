@@ -265,6 +265,102 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
       return `<tr><td>${esc(row.player_name)}</td><td>${labels[String(row.event_name)] ?? esc(row.event_name)}</td><td>${platform}</td><td>${num(row.events)}</td><td>${lastSeen}</td></tr>`;
     }).join("");
 
+
+    // ── Crecimiento y salud del juego ─────────────────────────────────────
+    const growthDaily = (await db.execute(sql\`
+      SELECT d,
+             COALESCE(regs,0)::int AS regs,
+             COALESCE(sessions,0)::int AS sessions,
+             COALESCE(games,0)::int AS games,
+             COALESCE(starts,0)::int AS starts,
+             COALESCE(completes,0)::int AS completes
+      FROM (
+        SELECT to_char((created_at AT TIME ZONE 'UTC') AT TIME ZONE 'Europe/Madrid','YYYY-MM-DD') AS d, COUNT(*)::int AS games
+        FROM game_history
+        WHERE \${NOT_BOT} AND created_at >= NOW() - INTERVAL '30 days'
+        GROUP BY 1
+      ) g
+      FULL OUTER JOIN (
+        SELECT to_char((created_at AT TIME ZONE 'UTC') AT TIME ZONE 'Europe/Madrid','YYYY-MM-DD') AS d, COUNT(*)::int AS regs
+        FROM player_scores
+        WHERE \${NOT_BOT} AND created_at >= NOW() - INTERVAL '30 days'
+        GROUP BY 1
+      ) r USING (d)
+      FULL OUTER JOIN (
+        SELECT to_char((started_at AT TIME ZONE 'UTC') AT TIME ZONE 'Europe/Madrid','YYYY-MM-DD') AS d, COUNT(*)::int AS sessions
+        FROM analytics_sessions
+        WHERE started_at >= NOW() - INTERVAL '30 days'
+        GROUP BY 1
+      ) s USING (d)
+      FULL OUTER JOIN (
+        SELECT to_char((created_at AT TIME ZONE 'UTC') AT TIME ZONE 'Europe/Madrid','YYYY-MM-DD') AS d,
+               COUNT(*) FILTER (WHERE event_name = 'game_start')::int AS starts,
+               COUNT(*) FILTER (WHERE event_name = 'game_complete')::int AS completes
+        FROM analytics_events
+        WHERE created_at >= NOW() - INTERVAL '30 days'
+          AND event_name IN ('game_start','game_complete')
+        GROUP BY 1
+      ) e USING (d)
+      ORDER BY d DESC
+    \`)).rows as Record<string, unknown>[];
+
+    const platformGrowth = (await db.execute(sql\`
+      SELECT platform,
+        COUNT(*) FILTER (WHERE started_at >= NOW() - INTERVAL '7 days')::int AS current_sessions,
+        COUNT(*) FILTER (WHERE started_at >= NOW() - INTERVAL '14 days' AND started_at < NOW() - INTERVAL '7 days')::int AS previous_sessions,
+        COUNT(DISTINCT player_id) FILTER (WHERE started_at >= NOW() - INTERVAL '7 days' AND player_id IS NOT NULL)::int AS current_players,
+        COUNT(DISTINCT player_id) FILTER (WHERE started_at >= NOW() - INTERVAL '14 days' AND started_at < NOW() - INTERVAL '7 days' AND player_id IS NOT NULL)::int AS previous_players
+      FROM analytics_sessions
+      WHERE started_at >= NOW() - INTERVAL '14 days'
+      GROUP BY platform
+      ORDER BY current_sessions DESC
+    \`)).rows as Record<string, unknown>[];
+
+    const funnelHealth = (await db.execute(sql\`
+      SELECT
+        COUNT(DISTINCT CASE WHEN event_name = 'session_start' THEN session_id END)::int AS sessions,
+        COUNT(*) FILTER (WHERE event_name = 'game_start')::int AS starts,
+        COUNT(*) FILTER (WHERE event_name = 'game_complete')::int AS completes,
+        COUNT(*) FILTER (WHERE event_name = 'rewarded_ad_requested')::int AS ad_requests,
+        COUNT(*) FILTER (WHERE event_name = 'rewarded_ad_completed')::int AS ad_completes,
+        COUNT(*) FILTER (WHERE event_name = 'rewarded_ad_failed')::int AS ad_failures
+      FROM analytics_events
+      WHERE created_at >= NOW() - INTERVAL '7 days'
+    \`)).rows[0] as Record<string, unknown> | undefined;
+
+    const pctChange = (current: number, previous: number): string => {
+      if (previous === 0) return current > 0 ? "+100%" : "0%";
+      const value = ((current - previous) / previous) * 100;
+      return \`\${value >= 0 ? "+" : ""}\${value.toFixed(0)}%\`;
+    };
+
+    const growthRows = growthDaily.map((row) => {
+      const starts = num(row.starts);
+      const completes = num(row.completes);
+      const completion = starts > 0 ? \`\${((completes / starts) * 100).toFixed(0)}%\` : "—";
+      return \`<tr><td>\${esc(row.d)}</td><td>\${num(row.regs)}</td><td>\${num(row.sessions)}</td><td>\${num(row.games)}</td><td>\${starts}</td><td>\${completes}</td><td>\${completion}</td></tr>\`;
+    }).join("");
+
+    const platformGrowthRows = platformGrowth.map((row) => {
+      const currentSessions = num(row.current_sessions);
+      const previousSessions = num(row.previous_sessions);
+      const currentPlayers = num(row.current_players);
+      const previousPlayers = num(row.previous_players);
+      const change = pctChange(currentSessions, previousSessions);
+      const trend = currentSessions > previousSessions ? "📈" : currentSessions < previousSessions ? "📉" : "➡️";
+      const platform = String(row.platform) === "android" ? "🤖 Android" : String(row.platform) === "ios" ? "🍎 iOS" : "🌐 Web";
+      return \`<tr><td>\${platform}</td><td>\${currentSessions}</td><td>\${previousSessions}</td><td>\${change} \${trend}</td><td>\${currentPlayers}</td><td>\${previousPlayers}</td></tr>\`;
+    }).join("");
+
+    const funnelSessions = num(funnelHealth?.sessions);
+    const funnelStarts = num(funnelHealth?.starts);
+    const funnelCompletes = num(funnelHealth?.completes);
+    const funnelAdRequests = num(funnelHealth?.ad_requests);
+    const funnelAdCompletes = num(funnelHealth?.ad_completes);
+    const funnelAdFailures = num(funnelHealth?.ad_failures);
+    const startRate = funnelSessions > 0 ? \`\${((funnelStarts / funnelSessions) * 100).toFixed(0)}%\` : "—";
+    const completionRate = funnelStarts > 0 ? \`\${((funnelCompletes / funnelStarts) * 100).toFixed(0)}%\` : "—";
+    const adCompletionRate = funnelAdRequests > 0 ? \`\${((funnelAdCompletes / funnelAdRequests) * 100).toFixed(0)}%\` : "—";
     const html = `<!doctype html>
 <html lang="es"><head>
 <meta charset="utf-8"/>
@@ -347,6 +443,37 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
   <h2>📺 Quién ve publicidad · últimos 7 días</h2>
   <table><thead><tr><th>Jugador</th><th>Evento</th><th>Desde</th><th>Veces</th><th>Último evento</th></tr></thead>
   <tbody>${adViewerRows || '<tr><td colspan="5">Sin eventos de publicidad.</td></tr>'}</tbody></table>
+
+
+  <h2>📈 Crecimiento · últimos 30 días</h2>
+  <div class="cards">
+    <div class="card"><div class="label">Sesiones → partidas · 7 días</div><div class="val">\${startRate}</div></div>
+    <div class="card"><div class="label">Partidas terminadas · 7 días</div><div class="val">\${completionRate}</div></div>
+    <div class="card"><div class="label">Rewarded completados</div><div class="val">\${adCompletionRate}</div></div>
+    <div class="card"><div class="label">Rewarded fallidos</div><div class="val">\${funnelAdFailures}</div></div>
+  </div>
+  <table>
+    <thead><tr><th>Día</th><th>Nuevos</th><th>Sesiones</th><th>Partidas</th><th>Iniciadas</th><th>Terminadas</th><th>Finalización</th></tr></thead>
+    <tbody>\${growthRows || '<tr><td colspan="7">Sin datos.</td></tr>'}</tbody>
+  </table>
+
+  <h2>🌍 Crecimiento por plataforma · 7 días vs 7 anteriores</h2>
+  <table>
+    <thead><tr><th>Plataforma</th><th>Sesiones 7d</th><th>Sesiones 7d anteriores</th><th>Variación</th><th>Jugadores 7d</th><th>Jugadores anteriores</th></tr></thead>
+    <tbody>\${platformGrowthRows || '<tr><td colspan="6">Sin datos de plataforma.</td></tr>'}</tbody>
+  </table>
+
+  <h2>🔎 Embudo · dónde estamos perdiendo gente · últimos 7 días</h2>
+  <table>
+    <thead><tr><th>Etapa</th><th>Personas / eventos</th><th>Conversión respecto a la anterior</th></tr></thead>
+    <tbody>
+      <tr><td>👥 Sesiones</td><td>\${funnelSessions}</td><td>100%</td></tr>
+      <tr><td>🎮 Partidas iniciadas</td><td>\${funnelStarts}</td><td>\${startRate}</td></tr>
+      <tr><td>🏁 Partidas terminadas</td><td>\${funnelCompletes}</td><td>\${completionRate}</td></tr>
+      <tr><td>📺 Rewarded solicitados</td><td>\${funnelAdRequests}</td><td>—</td></tr>
+      <tr><td>🎁 Rewarded completados</td><td>\${funnelAdCompletes}</td><td>\${adCompletionRate}</td></tr>
+    </tbody>
+  </table>
 
   <h2>Notificaciones</h2>
   <form method="post" action="/test/notify-mundial" onsubmit="return confirm('¿Enviar la notificación del Pack Mundial a TODOS los jugadores suscritos?');">
