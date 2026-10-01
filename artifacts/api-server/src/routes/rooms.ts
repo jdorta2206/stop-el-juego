@@ -2916,9 +2916,10 @@ router.post("/:roomCode/bluff-vote", writeLimiter, async (req, res) => {
       res.json(formatRoom(cur));
       return;
     }
-    // Final-score persistence is handled exactly once by
-    // applyRoundAdvanceSideEffects(), which runs after the CAS transition above.
-    // Do not submit here again: doing so would duplicate games, scores and wins.
+    // Final-score persistence and round cleanup are handled exactly once
+    // after the CAS transition. This path is a legitimate bluff-vote winner,
+    // so it must execute the same side effects as /resolve-bluffs.
+    applyRoundAdvanceSideEffects(room, resolved, newStatus);
     // 🚀 Broadcast resolution to all players (was waiting for polling — main lag in bluff phase)
     res.json(broadcastAndFormat(updated));
     return;
