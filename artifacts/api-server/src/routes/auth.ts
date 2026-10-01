@@ -770,22 +770,24 @@ router.post("/apple/callback", async (req: Request, res: Response) => {
     } catch (_) {}
 
     const playerId = `apple_${payload.sub}`;
+    const appleName = displayName.slice(0, 14) || "Apple User";
+    const hasAppleName = displayName !== "Apple User";
 
-    // Persist the Apple profile just like Google/Facebook/Instagram.
-    // Without this row, a later /api/auth/me restore kept the session cookie
-    // but returned name/avatar as null after the OAuth handoff was gone.
+    // Apple normally sends the name only on the first authorization. On later
+    // logins req.body.user is absent, so never overwrite an existing profile
+    // name with the fallback "Apple User".
     await db
       .insert(playerScoresTable)
       .values({
         playerId,
-        playerName: displayName.slice(0, 14) || "Apple User",
+        playerName: appleName,
         avatarColor: "#f9a825",
         profilePicture: null,
       })
       .onConflictDoUpdate({
         target: playerScoresTable.playerId,
         set: {
-          playerName: displayName.slice(0, 14) || "Apple User",
+          ...(hasAppleName ? { playerName: appleName } : {}),
           updatedAt: new Date(),
         },
       });
