@@ -59,7 +59,7 @@ async function tryRestoreFrom(apiBase: string): Promise<{ profile: PlayerProfile
   } catch { return { profile: null, unauthorized: false }; }
 }
 
-async function tryRestoreSession(): Promise<PlayerProfile | null> {
+async function tryRestoreSession(): Promise<{ profile: PlayerProfile | null; unauthorized: boolean }> {
   const localBase = getApiUrl();
   const restored = await tryRestoreFrom(localBase);
   if (restored.profile) return restored;
