@@ -173,24 +173,33 @@ router.post("/ping", presenceLimiter, async (req, res) => {
   }
 
   await presenceTableReady;
-  const [existingRow] = await db.execute(sql`
-    SELECT last_seen
-    FROM player_presence
-    WHERE player_id = ${playerId}
-    LIMIT 1
-  `).then((result) => result.rows as Array<{ last_seen: string | Date }>);
-
-  const lastSeenMs = existingRow ? new Date(existingRow.last_seen).getTime() : 0;
-  const wasOffline = !existingRow || lastSeenMs < Date.now() - 3 * 60 * 1000;
   const now = new Date();
+  let wasOffline = false;
 
-  await db.execute(sql`
-    INSERT INTO player_presence (player_id, room_code, last_seen)
-    VALUES (${playerId}, ${canonicalRoomCode}, ${now})
-    ON CONFLICT (player_id) DO UPDATE
-      SET room_code = EXCLUDED.room_code,
-          last_seen = EXCLUDED.last_seen
-  `);
+  // Lock the presence row while deciding whether this is a fresh connection.
+  // Without this transaction, two simultaneous pings (including pings handled
+  // by different Railway instances) could both observe an offline player and
+  // send the "friend online" notification twice.
+  await db.transaction(async (tx) => {
+    const existingRows = await tx.execute(sql`
+      SELECT last_seen
+      FROM player_presence
+      WHERE player_id = ${playerId}
+      FOR UPDATE
+    `).then((result) => result.rows as Array<{ last_seen: string | Date }>);
+
+    const existingRow = existingRows[0];
+    const lastSeenMs = existingRow ? new Date(existingRow.last_seen).getTime() : 0;
+    wasOffline = !existingRow || lastSeenMs < Date.now() - 3 * 60 * 1000;
+
+    await tx.execute(sql`
+      INSERT INTO player_presence (player_id, room_code, last_seen)
+      VALUES (${playerId}, ${canonicalRoomCode}, ${now})
+      ON CONFLICT (player_id) DO UPDATE
+        SET room_code = EXCLUDED.room_code,
+            last_seen = EXCLUDED.last_seen
+    `);
+  });
 
   presenceMap.set(playerId, {
     ...profile,
