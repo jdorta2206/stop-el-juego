@@ -1077,6 +1077,10 @@ export default function SoloGame() {
           submitToLeaderboard(finalPlayerScore, finalAi);
           if (isDailyMode) submitDailyResult(finalPlayerScore);
         }
+        // Count the completed game when the final round actually finishes,
+        // not when the player later presses "Jugar de nuevo". This preserves
+        // the every-3-games cadence even if the player leaves the RESULTS screen.
+        if (!isDailyMode) recordInterstitialGameCompleted();
       }
 
       // AI personality comment
@@ -1294,7 +1298,6 @@ export default function SoloGame() {
         return;
       }
       submittedRef.current = false;
-      if (!isDailyMode) recordInterstitialGameCompleted();
 
       // Never block the replay transition on an ad. The player must always
       // return to the lobby even if the native TWA bridge/ad fails or times out.
