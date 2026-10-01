@@ -594,7 +594,6 @@ router.post("/scores", scoreLimiter, async (req, res) => {
     ? appendStreakDay(existing[0]?.streakDaysJson, today)
     : undefined;
 
-  let replayedOfflineResponse: Record<string, unknown> | null = null;
   let player;
   if (isBonus) {
     const bonusResult = await db.transaction(async (tx) => {
