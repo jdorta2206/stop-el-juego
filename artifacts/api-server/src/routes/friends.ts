@@ -29,7 +29,12 @@ router.get("/list/:followerId", async (req, res) => {
         profilePicture: playerScoresTable.profilePicture,
         isPremium: playerScoresTable.isPremium,
       }).from(playerScoresTable).where(inArray(playerScoresTable.playerId, followedIds));
-    } catch {
+    } catch (error) {
+      // Only use the legacy projection when the database is missing one of the
+      // newer profile columns. A real DB/network failure must propagate to the
+      // outer handler instead of silently returning stale/incomplete friends.
+      const message = error instanceof Error ? error.message : String(error);
+      if (!/column .* does not exist|undefined column/i.test(message)) throw error;
       playersData = await db.select({
         playerId: playerScoresTable.playerId,
         playerName: playerScoresTable.playerName,
