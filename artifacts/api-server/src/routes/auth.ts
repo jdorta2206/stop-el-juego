@@ -193,7 +193,10 @@ function stateSecret(): string | null {
 
 const NONCE_COOKIE_OPTS = {
   httpOnly: true,
-  sameSite: "lax" as const,
+  // The OAuth callback is a cross-site navigation (including Apple's form_post),
+  // so Lax would drop the nonce before the callback and force the verifier to
+  // fail open. None keeps the nonce bound to the canonical APP_ORIGIN callback.
+  sameSite: "none" as const,
   secure: true,
   path: "/",
 };
@@ -247,8 +250,11 @@ function parseSignedState(
   return null;
 }
 
-/** Resolve the return target AND check CSRF. Enforcement is limited to the
- *  same-origin path (nonce cookie present); the cross-origin path fails open. */
+/** Resolve the return target AND check CSRF. A valid OAuth state must
+ * always be bound to the nonce cookie created by /start. The callback runs on
+ * APP_ORIGIN for every provider, so SameSite=None lets the cookie survive the
+ * provider's cross-site redirect/form_post while still binding the flow to the
+ * browser that initiated it. */
 function verifyAuthState(
   req: Request,
   res: Response,
@@ -259,39 +265,34 @@ function verifyAuthState(
 
   const signed = parseSignedState(raw);
 
-  // Same-origin path: a nonce cookie was issued for THIS flow, so we MUST see a
-  // valid signed state whose embedded nonce matches. Anything else (unsigned /
-  // legacy / malformed / stale / mismatched) is a CSRF failure — never fall back
-  // to the legacy decode here, or an attacker could downgrade to bypass the nonce.
-  if (nonceCookie) {
-    if (!signed) {
-      return { returnPath: "/", returnOrigin: APP_ORIGIN, csrfFail: true, authStartedAt: signed?.t ?? null };
-    }
-    const age = Date.now() - signed.t;
-    const fresh = age <= STATE_TTL_MS && age >= -60_000;
-    let match = false;
-    try {
-      match =
-        nonceCookie.length === signed.n.length &&
-        crypto.timingSafeEqual(Buffer.from(nonceCookie), Buffer.from(signed.n));
-    } catch {
-      match = false;
-    }
-    if (!fresh || !match) {
-      return { returnPath: signed.r, returnOrigin: signed.o, csrfFail: true, authStartedAt: signed.t };
-    }
-    return { returnPath: signed.r, returnOrigin: signed.o, csrfFail: false, authStartedAt: signed.t };
+  // No nonce means this callback was not initiated by this browser. Never
+  // accept a signed or legacy state without the browser binding: otherwise an
+  // attacker can complete OAuth for their own account and replay the callback
+  // URL to log a victim into the attacker's account (login-CSRF).
+  if (!nonceCookie || !signed) {
+    return {
+      returnPath: signed?.r ?? "/",
+      returnOrigin: signed?.o ?? APP_ORIGIN,
+      csrfFail: true,
+      authStartedAt: signed?.t ?? null,
+    };
   }
 
-  // No nonce cookie reached this host (cross-origin www/TWA, Apple form_post,
-  // legacy links, or no SESSION_SECRET configured): fail open so login works.
-  if (signed) {
-    // Trust the integrity-checked (HMAC) payload for the return target.
-    return { returnPath: signed.r, returnOrigin: signed.o, csrfFail: false, authStartedAt: signed.t };
+  const age = Date.now() - signed.t;
+  const fresh = age <= STATE_TTL_MS && age >= -60_000;
+  let match = false;
+  try {
+    match =
+      nonceCookie.length === signed.n.length &&
+      crypto.timingSafeEqual(Buffer.from(nonceCookie), Buffer.from(signed.n));
+  } catch {
+    match = false;
   }
-  // Legacy / unsigned state — preserve prior behavior.
-  const legacy = decodeAuthState(raw);
-  return { returnPath: legacy.returnPath, returnOrigin: legacy.returnOrigin, csrfFail: false, authStartedAt: null };
+  if (!fresh || !match) {
+    return { returnPath: signed.r, returnOrigin: signed.o, csrfFail: true, authStartedAt: signed.t };
+  }
+
+  return { returnPath: signed.r, returnOrigin: signed.o, csrfFail: false, authStartedAt: signed.t };
 }
 
 // ── Dedup cache: prevent double-use of OAuth codes (mobile browsers fire callback twice) ──
