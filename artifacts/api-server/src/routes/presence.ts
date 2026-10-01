@@ -563,6 +563,27 @@ router.post("/challenge/:challengeId/respond", async (req, res) => {
   }
 
   const result = await db.transaction(async (tx) => {
+    // Keep the lock order identical to /room-invite: room -> challenge.
+    // This prevents a deadlock when an invitation refresh races with acceptance.
+    const peek = await tx.execute(sql`
+      SELECT room_id
+      FROM player_challenges
+      WHERE challenge_id = ${challengeId}
+        AND created_at >= NOW() - INTERVAL '2 minutes'
+      LIMIT 1
+    `);
+    const peekRow = (peek.rows as any[])[0];
+    if (!peekRow) return { kind: "not_found" as const };
+
+    const [lockedRoom] = await tx.select({
+      id: roomsTable.id,
+      playersJson: roomsTable.playersJson,
+    })
+      .from(roomsTable)
+      .where(eq(roomsTable.id, Number(peekRow.room_id)))
+      .for("update")
+      .limit(1);
+
     const rows = await tx.execute(sql`
       SELECT challenge_id, from_player_id, from_name, from_picture, from_avatar_color,
              to_player_id, room_code, room_id, status, is_room_invite, created_at
@@ -579,22 +600,16 @@ router.post("/challenge/:challengeId/respond", async (req, res) => {
     }
     if (row.status !== "pending") return { kind: "answered" as const };
 
-    if (accepted) {
-      const [targetRoom] = await tx.select({
-        id: roomsTable.id,
-        playersJson: roomsTable.playersJson,
-      })
-        .from(roomsTable)
-        .where(eq(roomsTable.id, Number(row.room_id)))
-        .for("update")
-        .limit(1);
-      if (!targetRoom || Number(targetRoom.id) !== Number(row.room_id)) {
-        return { kind: "room_gone" as const };
-      }
+    // The challenge may have been refreshed after the initial peek. If its
+    // room changed, do not accept against the previously locked room.
+    if (!lockedRoom || Number(lockedRoom.id) !== Number(row.room_id)) {
+      return { kind: "not_joined" as const, roomCode: row.room_code as string };
+    }
 
+    if (accepted) {
       let players: any[] = [];
       try {
-        const parsed = JSON.parse(targetRoom.playersJson || "[]");
+        const parsed = JSON.parse(lockedRoom.playersJson || "[]");
         if (Array.isArray(parsed)) players = parsed;
       } catch {
         players = [];
