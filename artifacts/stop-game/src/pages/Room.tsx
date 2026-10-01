@@ -375,7 +375,7 @@ export default function Room() {
     (async () => {
       try {
         const url = `${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/draft?playerId=${encodeURIComponent(player.id)}`;
-        const r = await fetch(url);
+        const r = await fetch(url, { credentials: "include", headers: authHeaders() });
         if (!r.ok) return;
         const data = await r.json() as { responses?: Record<string, string>; round?: number; letter?: string };
         if (cancelled) return;
@@ -548,7 +548,8 @@ export default function Room() {
     lastTypingPing.current = now;
     fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/typing`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      credentials: "include",
       body: JSON.stringify({
         playerId: player.id,
         playerName: player.name ?? "?",
