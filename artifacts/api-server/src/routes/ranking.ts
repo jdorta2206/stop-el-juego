@@ -124,7 +124,7 @@ function parseAchievementCount(json: unknown): number {
 // ============================================================
 router.get("/scores", async (req, res) => {
   const query = GetLeaderboardQueryParams.safeParse(req.query);
-  const limit = query.success ? (query.data.limit ?? 20) : 20;
+  // Public leaderboard reads are intentionally bounded. Without a server-side cap,\n  // `?limit=<huge>` could force an unnecessarily large DB result and response.\n  const requestedLimit = query.success ? (query.data.limit ?? 20) : 20;\n  const limit = Math.min(100, Math.max(1, Math.floor(requestedLimit)));
 
   const rows = await db.execute(sql`
     SELECT *, RANK() OVER (ORDER BY total_score DESC) AS rank_position
