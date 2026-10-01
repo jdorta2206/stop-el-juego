@@ -76,41 +76,6 @@ async function lookupPlayerTzOffset(playerId: string): Promise<number | null> {
 
 const router: IRouter = Router();
 
-let scoreSubmissionTableReady: Promise<void> | null = null;
-
-async function ensureScoreSubmissionTable(): Promise<boolean> {
-  if (!scoreSubmissionTableReady) {
-    scoreSubmissionTableReady = db.execute(sql`
-      CREATE TABLE IF NOT EXISTS score_submission_claims (
-        submission_id text PRIMARY KEY,
-        player_id text NOT NULL,
-        created_at timestamptz NOT NULL DEFAULT NOW()
-      )
-    `).then(() => undefined).catch((err) => {
-      scoreSubmissionTableReady = null;
-      console.error("[ranking] failed to initialize score submission claims:", err);
-      throw err;
-    });
-  }
-  try { await scoreSubmissionTableReady; return true; } catch { return false; }
-}
-
-async function claimScoreSubmission(tx: any, submissionId: string, playerId: string): Promise<boolean> {
-  const inserted = await tx.execute(sql`
-    INSERT INTO score_submission_claims (submission_id, player_id)
-    VALUES (${submissionId}, ${playerId})
-    ON CONFLICT (submission_id) DO NOTHING
-    RETURNING submission_id
-  `) as unknown as { rows?: Array<{ submission_id: string }> };
-  if ((inserted.rows?.length ?? 0) > 0) return true;
-  const existing = await tx.execute(sql`
-    SELECT player_id FROM score_submission_claims
-    WHERE submission_id = ${submissionId} FOR UPDATE
-  `) as unknown as { rows?: Array<{ player_id: string }> };
-  if (existing.rows?.[0]?.player_id === playerId) return false;
-  throw new Error("SCORE_SUBMISSION_ID_REUSED");
-}
-
 const LEVEL_THRESHOLDS = [
   0, 100, 250, 450, 700, 1000, 1400, 1900, 2500, 3200,
   4000, 5000, 6200, 7600, 9200, 11000, 13000, 15500, 18500, 22000,
@@ -518,12 +483,6 @@ router.post("/scores", scoreLimiter, async (req, res) => {
     return;
   }
 
-  const submissionId = typeof body.data.submissionId === "string" ? body.data.submissionId.trim() : null;
-  if (submissionId && !(await ensureScoreSubmissionTable())) {
-    res.status(503).json({ error: "SCORE_SUBMISSION_UNAVAILABLE" });
-    return;
-  }
-
   const isBonus = bonus === true;
   // Keep the bonus claim identity outside the validation block because the
   // same value is atomically consumed inside the transaction below.
@@ -723,9 +682,51 @@ router.post("/scores", scoreLimiter, async (req, res) => {
     player = bonusResult;
   } else {
     const transactionResult = await db.transaction(async (tx) => {
-      if (submissionId && !(await claimScoreSubmission(tx, submissionId, playerId))) {
-        return { duplicate: true as const, player: null };
+      if (offlineSubmissionId) {
+        const [idempotencyInserted] = await tx
+          .insert(scoreSubmissionIdempotencyTable)
+          .values({
+            submissionId: offlineSubmissionId,
+            playerId,
+            requestHash: offlineSubmissionHash!,
+            responseJson: "{}",
+          })
+          .onConflictDoNothing()
+          .returning({ submissionId: scoreSubmissionIdempotencyTable.submissionId });
+
+        if (!idempotencyInserted) {
+          const [previous] = await tx
+            .select({
+              playerId: scoreSubmissionIdempotencyTable.playerId,
+              requestHash: scoreSubmissionIdempotencyTable.requestHash,
+              responseJson: scoreSubmissionIdempotencyTable.responseJson,
+            })
+            .from(scoreSubmissionIdempotencyTable)
+            .where(eq(scoreSubmissionIdempotencyTable.submissionId, offlineSubmissionId))
+            .limit(1);
+
+          if (!previous || previous.playerId !== playerId || previous.requestHash !== offlineSubmissionHash) {
+            throw new Error("OFFLINE_SUBMISSION_ID_REUSED");
+          }
+          if (!previous.responseJson || previous.responseJson === "{}") {
+            throw new Error("OFFLINE_SUBMISSION_RESPONSE_MISSING");
+          }
+
+          let response: Record<string, unknown>;
+          try {
+            const parsed = JSON.parse(previous.responseJson);
+            if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+              throw new Error("not an object");
+            }
+            response = parsed as Record<string, unknown>;
+          } catch {
+            throw new Error("OFFLINE_SUBMISSION_RESPONSE_INVALID");
+          }
+
+          return { duplicate: true as const, player: null, response };
+        }
       }
+
       let txPlayer;
       if (existing.length > 0) {
     const [updated] = await tx
@@ -836,10 +837,28 @@ router.post("/scores", scoreLimiter, async (req, res) => {
           .where(eq(playerScoresTable.id, collectionRow.id));
       }
 
-      return { duplicate: false as const, player: txPlayer };
+      const response = {
+        ...txPlayer,
+        rank: 0,
+        rewards: {
+          xpAwarded: xpGain,
+          coinsAwarded: coinGain,
+          happyHourActive,
+          multiplier: happyHourActive ? HAPPY_HOUR_MULTIPLIER : 1,
+        },
+      };
+
+      if (offlineSubmissionId) {
+        await tx
+          .update(scoreSubmissionIdempotencyTable)
+          .set({ responseJson: JSON.stringify(response) })
+          .where(eq(scoreSubmissionIdempotencyTable.submissionId, offlineSubmissionId));
+      }
+
+      return { duplicate: false as const, player: txPlayer, response };
     });
     if (transactionResult.duplicate) {
-      res.json({ ok: true, duplicate: true });
+      res.status(201).json(transactionResult.response);
       return;
     }
     player = transactionResult.player;
