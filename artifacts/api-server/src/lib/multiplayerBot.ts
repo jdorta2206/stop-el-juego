@@ -506,7 +506,7 @@ async function performBotSubmit(
         stopperJson: nextStopperJson,
         updatedAt: new Date(),
       })
-      .where(and(eq(roomsTable.roomCode, code), eq(roomsTable.updatedAt, room.updatedAt)))
+      .where(and(eq(roomsTable.roomCode, code), eq(roomsTable.roomVersion, room.roomVersion)))
       .returning();
 
     if (updateResult.length === 0) {
