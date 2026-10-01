@@ -882,6 +882,24 @@ router.get("/tiktok/callback", async (req: Request, res: Response) => {
     const me = meData.data?.user || meData.user || {};
 
     const playerId = `tt_${me.open_id || openId}`;
+
+    await db
+      .insert(playerScoresTable)
+      .values({
+        playerId,
+        playerName: String(me.display_name || "Tiktoker").trim().slice(0, 14) || "Tiktoker",
+        avatarColor: "#f9a825",
+        profilePicture: me.avatar_url || null,
+      })
+      .onConflictDoUpdate({
+        target: playerScoresTable.playerId,
+        set: {
+          playerName: String(me.display_name || "Tiktoker").trim().slice(0, 14) || "Tiktoker",
+          profilePicture: me.avatar_url || null,
+          updatedAt: new Date(),
+        },
+      });
+
     const user = JSON.stringify({
       id:       playerId,
       name:     me.display_name || "TikToker",
