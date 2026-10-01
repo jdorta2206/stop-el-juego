@@ -153,6 +153,7 @@ router.post("/ping", presenceLimiter, async (req, res) => {
     const [room] = await db.select({
       roomCode: roomsTable.roomCode,
       playersJson: roomsTable.playersJson,
+      stopperJson: roomsTable.stopperJson,
     }).from(roomsTable)
       .where(eq(roomsTable.roomCode, String(roomCode).trim().toUpperCase()))
       .limit(1);
@@ -232,9 +233,20 @@ router.get("/online", async (_req, res) => {
       try {
         const players = JSON.parse(room.playersJson || "[]");
         if (Array.isArray(players)) {
+          const meta = (() => {
+            try {
+              const parsed = JSON.parse(room.stopperJson || "{}");
+              return parsed && typeof parsed === "object" ? parsed : {};
+            } catch {
+              return {};
+            }
+          })();
           roomMembership.set(room.roomCode, new Set(
             players.map((p: any) => String(p?.playerId ?? "")).filter(Boolean),
           ));
+          if (meta.halloweenPreview === true) {
+            roomMembership.set(room.roomCode, new Set());
+          }
         }
       } catch {
         roomMembership.set(room.roomCode, new Set());
