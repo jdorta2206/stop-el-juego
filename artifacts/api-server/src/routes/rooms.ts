@@ -1318,10 +1318,10 @@ router.post("/:roomCode/start", async (req, res) => {
   if (rooms.length === 0) { res.status(404).json({ error: "Room not found" }); return; }
 
   const room = rooms[0];
-  // 🔐 Authorization: only the host can start / continue rounds. We accept the
-  // hostId from the body to keep this stateless (no auth session). Missing or
-  // mismatched hostId returns 403 — prevents griefers from forcing rounds.
-  if (!hostId || room.hostId !== hostId) {
+  // 🔐 Authorization: the caller must be the real host. Logged-in hosts are
+  // additionally bound to their signed session token so a leaked hostId cannot
+  // be replayed by another account.
+  if (!hostId || !verifyClaimedIdentity(req, hostId) || room.hostId !== hostId) {
     res.status(403).json({ error: "Only the host can start the game" });
     return;
   }
