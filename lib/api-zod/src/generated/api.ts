@@ -246,6 +246,7 @@ export const JoinRoomBody = zod.object({
   avatarColor: zod.string().optional(),
   picture: zod.string().nullable().optional(),
   loginMethod: zod.string().nullish(),
+  challengeId: zod.string().optional(),
 });
 
 export const JoinRoomResponse = zod.object({
