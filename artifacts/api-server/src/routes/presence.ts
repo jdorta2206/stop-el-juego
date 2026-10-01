@@ -38,6 +38,14 @@ const presenceTableReady = db.execute(sql`
   throw err;
 });
 
+function playerIdProvider(playerId: string): string | null {
+  const prefixes: Array<[string, string]> = [
+    ["google_", "google"], ["fb_", "facebook"], ["instagram_", "instagram"],
+    ["ig_", "instagram"], ["apple_", "apple"], ["tiktok_", "tiktok"], ["tt_", "tiktok"],
+  ];
+  return prefixes.find(([prefix]) => playerId.startsWith(prefix))?.[1] ?? null;
+}
+
 async function getCanonicalPresenceProfile(playerId: string) {
   const [profile] = await db.select({
     name: playerScoresTable.playerName,
@@ -235,7 +243,7 @@ router.get("/online", async (_req, res) => {
       name: profile.name,
       picture: profile.picture ?? null,
       avatarColor: profile.avatarColor ?? "#e53e3e",
-      provider: null,
+      provider: playerIdProvider(row.player_id),
       roomCode: row.room_code,
       lastSeen: new Date(row.last_seen).getTime(),
       equippedAvatar: profile.equippedAvatar ?? null,
