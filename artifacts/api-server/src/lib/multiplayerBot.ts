@@ -277,15 +277,26 @@ function untrackTimer(code: string, t: NodeJS.Timeout, botId?: string, roomId?: 
   if (set.size === 0) roomBotTimers.delete(code);
 }
 
-export function cleanupStaleBotRooms(liveRoomCodes: ReadonlySet<string>) {
+export function cleanupStaleBotRooms(liveRoomIdsByCode: ReadonlyMap<string, number>) {
   const stale = new Set<string>();
   for (const code of roomBotTimers.keys()) {
-    if (!liveRoomCodes.has(code)) stale.add(code);
+    const liveRoomId = liveRoomIdsByCode.get(code);
+    const trackedRoomId = roomBotTimerRoomIds.get(code);
+    if (liveRoomId === undefined || (trackedRoomId !== undefined && trackedRoomId !== liveRoomId)) stale.add(code);
   }
   for (const code of roomBotTimerBots.keys()) {
-    if (!liveRoomCodes.has(code)) stale.add(code);
+    const liveRoomId = liveRoomIdsByCode.get(code);
+    const trackedRoomId = roomBotTimerRoomIds.get(code);
+    if (liveRoomId === undefined || (trackedRoomId !== undefined && trackedRoomId !== liveRoomId)) stale.add(code);
   }
-  for (const code of stale) cleanupBotRoom(code);
+  for (const code of stale) {
+    const liveRoomId = liveRoomIdsByCode.get(code);
+    if (liveRoomId === undefined) {
+      cleanupBotRoom(code);
+    } else {
+      cleanupBotRoom(code, liveRoomId);
+    }
+  }
 }
 
 export function clearBotTimers(code: string) {
