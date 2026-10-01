@@ -112,6 +112,7 @@ export const SubmitScoreBody = zod.object({
     .describe(
       "When true, the score is treated as a bonus increment (e.g. from a\nrewarded video doubling). The server still adds `score` to\n`totalScore` and grants XP, but skips incrementing\n`gamesPlayed`\/`wins` and does not bump the daily streak — those\nalready counted on the original (non-bonus) submission.\n",
     ),
+  offlineSubmissionId: zod.string().min(1).max(128).optional(),
   scoreTokens: zod
     .array(zod.string())
     .optional()
