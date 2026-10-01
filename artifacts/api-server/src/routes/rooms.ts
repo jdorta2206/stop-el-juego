@@ -2104,7 +2104,7 @@ router.post("/:roomCode/leave", async (req, res) => {
     // deleted room and must not constrain a future room that reuses this code.
     lastBroadcastMarker.delete(code);
     // 🤖 Cancel pending bot timers so they don't fire against a deleted room.
-    cleanupBotRoom(code);
+    cleanupBotRoom(code, outcome.roomId);
     res.json({ ok: true, deleted: true });
     return;
   }
