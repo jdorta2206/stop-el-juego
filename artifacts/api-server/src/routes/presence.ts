@@ -153,7 +153,6 @@ router.post("/ping", presenceLimiter, async (req, res) => {
     const [room] = await db.select({
       roomCode: roomsTable.roomCode,
       playersJson: roomsTable.playersJson,
-      stopperJson: roomsTable.stopperJson,
     }).from(roomsTable)
       .where(eq(roomsTable.roomCode, String(roomCode).trim().toUpperCase()))
       .limit(1);
@@ -228,6 +227,7 @@ router.get("/online", async (_req, res) => {
     const rooms = await db.select({
       roomCode: roomsTable.roomCode,
       playersJson: roomsTable.playersJson,
+      stopperJson: roomsTable.stopperJson,
     }).from(roomsTable).where(inArray(roomsTable.roomCode, roomCodes));
     for (const room of rooms) {
       try {
