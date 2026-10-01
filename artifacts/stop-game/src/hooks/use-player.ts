@@ -163,6 +163,7 @@ export function usePlayer() {
     writeStoredPlayer(null);
     try { localStorage.removeItem("stop_auth_dismissed_v1"); } catch {}
     try { localStorage.removeItem(SESSION_TOKEN_KEY); } catch {}
+    try { sessionStorage.removeItem("fb_access_token"); } catch {}
     try { window.location.href = import.meta.env.BASE_URL || "/"; } catch { setPlayer(null); setNeedsAuth(true); }
   };
 
