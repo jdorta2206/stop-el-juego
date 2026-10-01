@@ -752,6 +752,7 @@ router.post("/scores", scoreLimiter, async (req, res) => {
           ...(effectiveWon ? [{ type: "win_game", value: 1 }] : []),
           { type: "round_score", value: score },
           ...(collectionWords.length > 0 ? [{ type: "valid_words", value: collectionWords.length }] : []),
+          ...(effectiveMode === "daily" ? [{ type: "daily_done", value: 1 }] : []),
         ]);
       }
 
