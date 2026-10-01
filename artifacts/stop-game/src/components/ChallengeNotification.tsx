@@ -58,7 +58,11 @@ export function ChallengeNotification({ challenge, onDismiss }: ChallengeNotific
     // Join first. The server only marks the challenge accepted once membership
     // is confirmed, so a transient/full-room join failure cannot consume it.
     try {
-      const joinResponse = await fetch(`${getApiUrl()}/api/rooms/${challenge.roomCode.toUpperCase()}/join`, {
+      let joinResponse: Response | null = null;
+    let joinRoomCode = challenge.roomCode.toUpperCase();
+    try {
+      for (let attempt = 0; attempt < 2; attempt++) {
+        joinResponse = await fetch(`${getApiUrl()}/api/rooms/${joinRoomCode}/join`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
         credentials: "include",
@@ -68,9 +72,17 @@ export function ChallengeNotification({ challenge, onDismiss }: ChallengeNotific
           playerName: playerData.name,
           avatarColor: playerData.avatarColor,
           loginMethod: playerData.loginMethod ?? null,
+          challengeId: challenge.challengeId,
         }),
       });
-      if (!joinResponse.ok || controller.signal.aborted) {
+        if (joinResponse.ok || controller.signal.aborted) break;
+        if (joinResponse.status !== 409) break;
+        let errorBody: any = null;
+        try { errorBody = await joinResponse.clone().json(); } catch {}
+        if (errorBody?.error !== "challenge_room_mismatch" || !errorBody.roomCode) break;
+        joinRoomCode = String(errorBody.roomCode).toUpperCase();
+      }
+      if (!joinResponse?.ok || controller.signal.aborted) {
         respondingRef.current = false;
         setResponding(false);
         return;
