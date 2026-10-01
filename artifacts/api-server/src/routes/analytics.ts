@@ -149,9 +149,11 @@ router.post("/event", presenceLimiter, async (req, res) => {
     const clean = (value: unknown, max: number): string | null => typeof value === "string" && value.trim() ? value.trim().slice(0, max) : null;
     const metadata = body.metadata && typeof body.metadata === "object" ? body.metadata : {};
     const metadataJson = JSON.stringify(metadata).slice(0, 4000);
+    const playerId = readPlayerId(req);
+    const sessionId = clean(body.sessionId, 128);
     await db.execute(sql`
       INSERT INTO analytics_events (event_name, player_id, session_id, platform, app_version, language, mode, ai_difficulty, metadata_json)
-      VALUES (${eventName}, ${clean(body.playerId, 128)}, ${clean(body.sessionId, 128)}, ${platformFromRequest(req)}, ${String(req.headers["x-client-version"] ?? "").slice(0, 32) || null}, ${clean(body.language, 16)}, ${clean(body.mode, 32)}, ${clean(body.aiDifficulty, 32)}, ${metadataJson})
+      VALUES (${eventName}, ${playerId}, ${sessionId}, ${platformFromRequest(req)}, ${String(req.headers["x-client-version"] ?? "").slice(0, 32) || null}, ${clean(body.language, 16)}, ${clean(body.mode, 32)}, ${clean(body.aiDifficulty, 32)}, ${metadataJson})
   `);
     return res.json({ ok: true });
   } catch (err) {
