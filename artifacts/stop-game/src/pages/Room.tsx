@@ -994,10 +994,7 @@ export default function Room() {
     }, 1000);
   }, [stopAllTimers, autoSubmit]);
 
-  const apiBase = (() => {
-    const env = (import.meta as any).env;
-    return env?.VITE_API_URL ?? window.location.origin;
-  })();
+  const apiBase = getApiUrl();
 
   // Cast a bluff vote (opponent calls this)
   const castBluffVote = useCallback(async (accusedPlayerId: string, category: string, vote: "lie" | "real") => {
@@ -2833,7 +2830,7 @@ function StreamerModeCard({ room, playerId }: { room: any; playerId: string }) {
   const [copied, setCopied] = useState<string | null>(null);
   const isPublic = !!room?.isPublic;
   const code = room?.roomCode;
-  const apiBase = (import.meta.env.VITE_API_BASE_URL || "") as string;
+  const apiBase = getApiUrl();
   const liveUrl = publicLink(`live/${code}`);
   const overlayUrl = publicLink(`overlay/${code}`);
 
