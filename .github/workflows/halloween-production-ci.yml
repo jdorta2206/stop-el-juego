@@ -32,6 +32,10 @@ jobs:
           version: 10.26.1
       - name: Install
         run: pnpm install --frozen-lockfile
+      - name: Typecheck
+        run: pnpm run typecheck
+      - name: Test
+        run: pnpm test
       - name: Build web
         run: pnpm --filter @workspace/stop-game build
       - name: Build API
