@@ -183,13 +183,16 @@ function broadcastRoom(code: string, roomPayload: object) {
       ? room.players.map((p: any) => p?.playerId).filter(Boolean)
       : [],
   );
+  const isHalloweenPreview = parseBluffMeta(room.stopperJson)?.halloweenPreview === true;
 
   for (const client of [...clients]) {
     try {
       // A private-room member who has since left must lose the stream immediately;
       // otherwise an already-open SSE would bypass the membership check performed
       // only during connection setup.
-      if (room.isPublic === false && !memberIds.has(client.playerId)) {
+      if ((room.isPublic === false || isHalloweenPreview) && !memberIds.has(client.playerId)) {
+        // Preview/test rooms are never public spectator targets. This also
+        // protects already-open SSE connections from legacy/tampered rows.
         client.res.end();
         clients.delete(client);
         continue;
