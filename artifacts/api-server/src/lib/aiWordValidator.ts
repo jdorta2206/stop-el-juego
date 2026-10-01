@@ -55,7 +55,7 @@ async function ensureAiQuotaTables(): Promise<boolean> {
   }
 
   try {
-    if (!(await ensureAiQuotaTables())) return { isValid: false, source: "error" };
+    await aiQuotaTablesReady;
     return true;
   } catch {
     return false;
@@ -169,7 +169,7 @@ export async function validateWordWithAi(opts: AiValidationOptions): Promise<AiV
   const client = getClient();
   if (!client) return { isValid: false, source: "no_client" };
 
-  await aiQuotaTablesReady;
+  if (!(await ensureAiQuotaTables())) return { isValid: false, source: "error" };
 
   // Cross-replica single-flight without holding a PostgreSQL connection during
 // the external OpenAI call.
