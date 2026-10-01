@@ -376,7 +376,7 @@ router.post("/challenge", async (req, res) => {
   }
 
   if (!roomCode || roomId === null) {
-    if (roomCode) await db.delete(roomsTable).where(eq(roomsTable.roomCode, roomCode)).catch(() => {});
+    if (roomId !== null) await db.delete(roomsTable).where(eq(roomsTable.id, roomId)).catch(() => {});
     return res.status(503).json({ error: "Unable to allocate challenge room" });
   }
 
@@ -394,7 +394,7 @@ router.post("/challenge", async (req, res) => {
       RETURNING challenge_id, room_code, room_id
     `);
     if ((inserted as any).rowCount === 0) {
-      await db.delete(roomsTable).where(eq(roomsTable.roomCode, roomCode)).catch(() => {});
+      if (roomId !== null) await db.delete(roomsTable).where(eq(roomsTable.id, roomId)).catch(() => {});
       const existing = await db.execute(sql`
         SELECT challenge_id, room_code
         FROM player_challenges
