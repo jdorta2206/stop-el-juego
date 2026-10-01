@@ -26,14 +26,21 @@ function readStoredPlayer(): PlayerProfile | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (parsed && typeof parsed.id === "string" && typeof parsed.name === "string" && parsed.name.trim()) {
-      return { id: parsed.id, name: parsed.name.trim().slice(0, 14), avatarColor: parsed.avatarColor || AVATAR_COLORS[0], loginMethod: parsed.loginMethod ?? null, picture: parsed.picture ?? null, fbAccessToken: parsed.fbAccessToken ?? null };
+      let fbAccessToken: string | null = null;
+      try { fbAccessToken = sessionStorage.getItem("fb_access_token"); } catch {}
+      return { id: parsed.id, name: parsed.name.trim().slice(0, 14), avatarColor: parsed.avatarColor || AVATAR_COLORS[0], loginMethod: parsed.loginMethod ?? null, picture: parsed.picture ?? null, fbAccessToken };
     }
     return null;
   } catch { return null; }
 }
 
 function writeStoredPlayer(profile: PlayerProfile | null) {
-  try { if (profile) localStorage.setItem(STORAGE_KEY, JSON.stringify(profile)); else localStorage.removeItem(STORAGE_KEY); } catch {}
+  try {
+    if (profile) {
+      const { fbAccessToken: _fbAccessToken, ...persisted } = profile;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
+    } else localStorage.removeItem(STORAGE_KEY);
+  } catch {}
   try { window.dispatchEvent(new CustomEvent(PLAYER_EVENT)); } catch {}
 }
 
@@ -109,12 +116,16 @@ export function usePlayer() {
 
   const savePlayer = (profile: PlayerProfile) => {
     const clean: PlayerProfile = { id: String(profile.id || crypto.randomUUID()), name: String(profile.name || "").trim().slice(0, 14), avatarColor: profile.avatarColor || AVATAR_COLORS[0], loginMethod: profile.loginMethod ?? null, picture: profile.picture ?? null, fbAccessToken: profile.fbAccessToken ?? null };
+    try {
+      if (clean.fbAccessToken) sessionStorage.setItem("fb_access_token", clean.fbAccessToken);
+      else sessionStorage.removeItem("fb_access_token");
+    } catch {}
     if (!clean.name) return;
     writeStoredPlayer(clean); setPlayer(clean); setNeedsAuth(false);
   };
 
   const updateProfile = (updates: Partial<PlayerProfile>) => { const current = player ?? readStoredPlayer(); if (!current) return; savePlayer({ ...current, ...updates }); };
-  const saveFbToken = (token: string) => { const current = player ?? readStoredPlayer(); if (!current) return; const updated = { ...current, fbAccessToken: token }; writeStoredPlayer(updated); setPlayer(updated); };
+  const saveFbToken = (token: string) => { const current = player ?? readStoredPlayer(); if (!current) return; try { sessionStorage.setItem("fb_access_token", token); } catch {} const updated = { ...current, fbAccessToken: token }; writeStoredPlayer(updated); setPlayer(updated); };
 
   const logout = () => {
     const origins = new Set<string>();
