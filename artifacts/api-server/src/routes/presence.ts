@@ -322,67 +322,81 @@ router.post("/challenge", inviteLimiter, async (req, res) => {
   }];
 
   let roomCode: string | null = null;
-  for (let attempt = 0; attempt < 10 && !roomCode; attempt++) {
+  let existingChallenge: { challengeId: string; roomCode: string } | null = null;
+
+  for (let attempt = 0; attempt < 10 && !roomCode && !existingChallenge; attempt++) {
     const candidate = generateRoomCode();
-    try {
-      await db.insert(roomsTable).values({
-        roomCode: candidate,
-        hostId: fromPlayerId,
-        hostName: profile.name,
-        status: "waiting",
-        currentRound: 0,
-        maxRounds: 3,
-        language: "es",
-        playersJson: JSON.stringify(players),
-        stopperJson: null,
-        isPublic: false,
-      });
-      roomCode = candidate;
-    } catch (e: unknown) {
-      const message = e instanceof Error ? e.message : String(e);
-      if (!/unique|duplicate/i.test(message) || attempt === 9) {
-        console.error("[presence/challenge] room creation failed:", message);
-        return res.status(503).json({ error: "Unable to create challenge room" });
+    const outcome = await db.transaction(async (tx) => {
+      try {
+        await tx.insert(roomsTable).values({
+          roomCode: candidate,
+          hostId: fromPlayerId,
+          hostName: profile.name,
+          status: "waiting",
+          currentRound: 0,
+          maxRounds: 3,
+          language: "es",
+          playersJson: JSON.stringify(players),
+          stopperJson: null,
+          isPublic: false,
+        });
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : String(e);
+        if (/unique|duplicate/i.test(message) && attempt < 9) return { kind: "room_collision" as const };
+        throw new Error("CHALLENGE_ROOM_CREATE_FAILED");
       }
+
+      const inserted = await tx.execute(sql`
+        INSERT INTO player_challenges
+          (challenge_id, from_player_id, from_name, from_picture, from_avatar_color,
+           to_player_id, room_code, status, is_room_invite, created_at)
+        VALUES
+          (${challengeId}, ${fromPlayerId}, ${profile.name}, ${profile.picture || null},
+           ${profile.avatarColor || "#e53e3e"}, ${toPlayerId}, ${candidate},
+           'pending', FALSE, NOW())
+        ON CONFLICT (from_player_id, to_player_id, is_room_invite) WHERE status = 'pending'
+        DO NOTHING
+        RETURNING challenge_id, room_code
+      `);
+
+      if ((inserted as any).rowCount === 0) {
+        const existing = await tx.execute(sql`
+          SELECT challenge_id, room_code
+          FROM player_challenges
+          WHERE from_player_id = ${fromPlayerId}
+            AND to_player_id = ${toPlayerId}
+            AND is_room_invite = FALSE
+            AND status = 'pending'
+          ORDER BY created_at DESC
+          LIMIT 1
+        `);
+        const winner = (existing.rows as any[])[0];
+        if (!winner) return { kind: "race_lost" as const };
+        return {
+          kind: "existing" as const,
+          challengeId: String(winner.challenge_id),
+          roomCode: String(winner.room_code),
+        };
+      }
+
+      return { kind: "created" as const, roomCode: candidate };
+    });
+
+    if (outcome.kind === "created") {
+      roomCode = outcome.roomCode;
+    } else if (outcome.kind === "existing") {
+      existingChallenge = { challengeId: outcome.challengeId, roomCode: outcome.roomCode };
+    } else if (outcome.kind === "race_lost") {
+      return res.status(409).json({ error: "Challenge creation raced; please retry" });
     }
+  }
+
+  if (existingChallenge) {
+    return res.json(existingChallenge);
   }
 
   if (!roomCode) {
-    return res.status(503).json({ error: "Unable to allocate challenge room" });
-  }
-
-  try {
-    const inserted = await db.execute(sql`
-      INSERT INTO player_challenges
-        (challenge_id, from_player_id, from_name, from_picture, from_avatar_color,
-         to_player_id, room_code, status, is_room_invite, created_at)
-      VALUES
-        (${challengeId}, ${fromPlayerId}, ${profile.name}, ${profile.picture || null},
-         ${profile.avatarColor || "#e53e3e"}, ${toPlayerId}, ${roomCode},
-         'pending', FALSE, NOW())
-      ON CONFLICT (from_player_id, to_player_id, is_room_invite) WHERE status = 'pending'
-      DO NOTHING
-      RETURNING challenge_id, room_code
-    `);
-    if ((inserted as any).rowCount === 0) {
-      await db.delete(roomsTable).where(eq(roomsTable.roomCode, roomCode)).catch(() => {});
-      const existing = await db.execute(sql`
-        SELECT challenge_id, room_code
-        FROM player_challenges
-        WHERE from_player_id = ${fromPlayerId}
-          AND to_player_id = ${toPlayerId}
-          AND is_room_invite = FALSE
-          AND status = 'pending'
-        ORDER BY created_at DESC
-        LIMIT 1
-      `);
-      const winner = (existing.rows as any[])[0];
-      if (!winner) return res.status(409).json({ error: "Challenge creation raced; please retry" });
-      return res.json({ challengeId: winner.challenge_id, roomCode: winner.room_code });
-    }
-  } catch (err) {
-    await db.delete(roomsTable).where(eq(roomsTable.roomCode, roomCode)).catch(() => {});
-    console.error("[presence/challenge] challenge persistence failed:", err);
+    console.error("[presence/challenge] unable to allocate challenge room");
     return res.status(503).json({ error: "Unable to create challenge" });
   }
 
