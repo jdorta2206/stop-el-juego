@@ -200,8 +200,8 @@ const botDeps = {
   formatRoom: (room: any) => formatRoom(room),
   // Persists final scores to the global leaderboard when the bot's submission
   // happens to be the one that ends the match.
-  submitFinalScores: (players: any[], letter: string) =>
-    submitAllScoresToLeaderboard(players, letter, code).catch(() => {}),
+  submitFinalScores: (players: any[], letter: string, roomCode?: string) =>
+    submitAllScoresToLeaderboard(players, letter, String(roomCode ?? "").toUpperCase()).catch(() => {}),
   getRoundCategories: (room: any) => {
     const code = String(room.roomCode ?? "").toUpperCase();
     const cfg = roomCategoryPacks.get(code);
