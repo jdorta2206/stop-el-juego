@@ -2,6 +2,13 @@ import { db } from "@workspace/db";
 import { playerScoresTable } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
 
+export async function withPlayerBillingLock<T>(playerId: string, fn: () => Promise<T>): Promise<T> {
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${playerId}, 0))`);
+    return fn();
+  });
+}
+
 export class StripeStorage {
   async getProduct(productId: string) {
     const result = await db.execute(
