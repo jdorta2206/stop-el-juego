@@ -133,59 +133,47 @@ router.post("/submit", async (req, res) => {
   const dailyCeiling = verified > 0 ? ceilingFromBase(verifiedBase) : absoluteCeiling("daily");
   const safeScore = Math.max(0, Math.min(Number(score) || 0, dailyCeiling));
 
-  // Only allow one submission per player per day. The unique DB constraint is
-  // the final arbiter; the upsert below makes two simultaneous first submits
-  // deterministic instead of racing SELECT → INSERT and returning a 500.
-  const existing = await db
-    .select()
-    .from(dailyResultsTable)
-    .where(
-      and(
-        eq(dailyResultsTable.playerId, playerId),
-        eq(dailyResultsTable.challengeDate, today)
-      )
-    )
-    .limit(1);
+  // The first insert atomically owns the daily_done event. A concurrent
+  // request can update the score, but can never claim the completion event.
+  const inserted = await db
+    .insert(dailyResultsTable)
+    .values({
+      playerId,
+      playerName: canonicalPlayerName,
+      avatarColor: canonicalAvatarColor || "#e53e3e",
+      challengeDate: today,
+      score: safeScore,
+      letter,
+      language: normalizedLanguage,
+    })
+    .onConflictDoNothing({
+      target: [dailyResultsTable.playerId, dailyResultsTable.challengeDate],
+    })
+    .returning({ playerId: dailyResultsTable.playerId });
 
-  if (existing.length > 0) {
-    // Update if new score is higher
-    if (safeScore > existing[0].score) {
-      await db
-        .update(dailyResultsTable)
-        .set({ score: safeScore, playerName: canonicalPlayerName, avatarColor: canonicalAvatarColor })
-        .where(
-          and(
-            eq(dailyResultsTable.playerId, playerId),
-            eq(dailyResultsTable.challengeDate, today),
-            sql`${dailyResultsTable.score} < ${safeScore}`
-          )
-        );
-    }
-    // A repeat submission for the same daily must not increment the season's
-    // daily_done mission again. The first successful insert below records it once.
-    res.json({ updated: true, alreadyPlayed: true });
+  if (inserted.length > 0) {
+    void recordAuthoritativeSeasonEvents(playerId, [{ type: "daily_done", value: 1 }]);
+    res.status(201).json({ submitted: true });
     return;
   }
 
-  await db.insert(dailyResultsTable).values({
-    playerId,
-    playerName: canonicalPlayerName,
-    avatarColor: canonicalAvatarColor || "#e53e3e",
-    challengeDate: today,
-    score: safeScore,
-    letter,
-    language: normalizedLanguage,
-  }).onConflictDoUpdate({
-    target: [dailyResultsTable.playerId, dailyResultsTable.challengeDate],
-    set: {
-      score: sql`GREATEST(${dailyResultsTable.score}, EXCLUDED.score)`,
-      playerName: sql`CASE WHEN EXCLUDED.score > ${dailyResultsTable.score} THEN ${canonicalPlayerName} ELSE ${dailyResultsTable.playerName} END`,
-      avatarColor: sql`CASE WHEN EXCLUDED.score > ${dailyResultsTable.score} THEN ${canonicalAvatarColor} ELSE ${dailyResultsTable.avatarColor} END`,
-    },
-  });
+  // Another request already created today's row. Only improve the score;
+  // never emit the daily completion event again.
+  await db
+    .update(dailyResultsTable)
+    .set({
+      score: sql`GREATEST(${dailyResultsTable.score}, ${safeScore})`,
+      playerName: sql`CASE WHEN ${dailyResultsTable.score} < ${safeScore} THEN ${canonicalPlayerName} ELSE ${dailyResultsTable.playerName} END`,
+      avatarColor: sql`CASE WHEN ${dailyResultsTable.score} < ${safeScore} THEN ${canonicalAvatarColor} ELSE ${dailyResultsTable.avatarColor} END`,
+    })
+    .where(
+      and(
+        eq(dailyResultsTable.playerId, playerId),
+        eq(dailyResultsTable.challengeDate, today),
+      ),
+    );
 
-  void recordAuthoritativeSeasonEvents(playerId, [{ type: "daily_done", value: 1 }]);
-  res.status(201).json({ submitted: true });
+  res.json({ updated: true, alreadyPlayed: true });
 });
 
 // GET /api/daily/rankings?language=es  → top 10 players for today
