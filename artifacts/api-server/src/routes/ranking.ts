@@ -599,7 +599,16 @@ router.post("/scores", scoreLimiter, async (req, res) => {
   let player;
   let duplicateSubmission = false;
   if (isBonus) {
+    let bonusAccountDeleted = false;
     const bonusResult = await db.transaction(async (tx) => {
+      const revoked = await tx.execute(sql`
+        SELECT 1 FROM revoked_player_ids WHERE player_id = ${playerId} LIMIT 1
+      `);
+      if ((revoked.rows?.length ?? 0) > 0) {
+        bonusAccountDeleted = true;
+        return null;
+      }
+
       if (submissionId) {
         const [claim] = await tx
           .insert(scoreSubmissionClaimsTable)
@@ -693,6 +702,10 @@ router.post("/scores", scoreLimiter, async (req, res) => {
       return created;
     });
 
+    if (bonusAccountDeleted) {
+      res.status(401).json({ error: "Account deleted" });
+      return;
+    }
     if (!bonusResult) {
       res.status(422).json({ error: "INVALID_BONUS_SCORE" });
       return;
@@ -709,6 +722,13 @@ router.post("/scores", scoreLimiter, async (req, res) => {
   } else {
     try {
       player = await db.transaction(async (tx) => {
+      const revoked = await tx.execute(sql`
+        SELECT 1 FROM revoked_player_ids WHERE player_id = ${playerId} LIMIT 1
+      `);
+      if ((revoked.rows?.length ?? 0) > 0) {
+        throw new Error("ACCOUNT_DELETED");
+      }
+
       if (submissionId) {
         const [claim] = await tx
           .insert(scoreSubmissionClaimsTable)
@@ -904,6 +924,10 @@ router.post("/scores", scoreLimiter, async (req, res) => {
       return txPlayer;
       });
     } catch (error) {
+      if (error instanceof Error && error.message === "ACCOUNT_DELETED") {
+        res.status(401).json({ error: "Account deleted" });
+        return;
+      }
       if (error instanceof Error && error.message === "SCORE_VOUCHER_CONFLICT") {
         res.status(422).json({ error: "INVALID_SCORE_VOUCHER" });
         return;
