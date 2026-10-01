@@ -6,7 +6,7 @@ import { roomsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { sendPushToPlayer, notifyFollowersPlayerOnline } from "../lib/pushHelper";
-import { presenceLimiter } from "../middlewares/rateLimit";
+import { presenceLimiter, inviteLimiter } from "../middlewares/rateLimit";
 import { verifyClaimedIdentity } from "../lib/playerAuth";
 
 const router: IRouter = Router();
@@ -265,7 +265,7 @@ router.get("/online", async (_req, res) => {
 });
 
 // POST /api/presence/challenge — send a challenge to another player
-router.post("/challenge", async (req, res) => {
+router.post("/challenge", inviteLimiter, async (req, res) => {
   const { fromPlayerId, fromName, fromPicture, fromAvatarColor, toPlayerId } = req.body as {
     fromPlayerId: string;
     fromName: string;
