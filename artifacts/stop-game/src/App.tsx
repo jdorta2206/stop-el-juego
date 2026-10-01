@@ -145,34 +145,9 @@ function App() {
   const [splashDone, setSplashDone] = useState(false);
   const lang = (localStorage.getItem("stop_lang") ?? "es") as string;
 
-  useEffect(() => {
-    const base = import.meta.env.BASE_URL.replace(/\/$/, "");
-    const isAtHome = () => {
-      const p = window.location.pathname.replace(base, "") || "/";
-      return p === "/" || p === "";
-    };
-    try { window.history.pushState({ stopApp: true }, ""); } catch {}
-    const onPop = () => {
-      const open = document.body.dataset.modalOpen;
-      if (open === "true") {
-        try {
-          document.body.dataset.modalOpen = "false";
-          window.dispatchEvent(new CustomEvent("stop:back"));
-          window.history.pushState({ stopApp: true }, "");
-        } catch {}
-        return;
-      }
-      if (!isAtHome()) {
-        try {
-          window.history.replaceState({ stopApp: true }, "", `${base}/`);
-          window.dispatchEvent(new PopStateEvent("popstate"));
-          window.history.pushState({ stopApp: true }, "");
-        } catch {}
-      }
-    };
-    window.addEventListener("popstate", onPop);
-    return () => window.removeEventListener("popstate", onPop);
-  }, []);
+  // Let the browser/Wouter own history navigation. Intercepting popstate here
+  // forced every Back action from a nested route back to Home.
+
 
   return (
     <QueryClientProvider client={queryClient}>
