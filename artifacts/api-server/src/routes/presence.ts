@@ -683,7 +683,7 @@ router.get("/challenge/:challengeId/status", async (req, res) => {
   const { challengeId } = req.params;
   await challengeTableReady;
   const rows = await db.execute(sql`
-    SELECT from_player_id, room_code, status, created_at
+    SELECT from_player_id, room_code, room_id, status, created_at
     FROM player_challenges
     WHERE challenge_id = ${challengeId}
       AND created_at >= NOW() - INTERVAL '2 minutes'
@@ -695,6 +695,25 @@ router.get("/challenge/:challengeId/status", async (req, res) => {
   if (!await verifyClaimedIdentity(req, row.from_player_id)) {
     return res.status(403).json({ error: "Invalid player identity" });
   }
+
+  // The challenge stores a recyclable room code, while room_id is immutable.
+  // Once accepted, never return a stale code if the original room was deleted
+  // and its code reused by another room.
+  if (row.status === "accepted") {
+    const roomRows = await db.execute(sql`
+      SELECT room_code
+      FROM rooms
+      WHERE id = ${Number(row.room_id)}
+      LIMIT 1
+    `);
+    const room = (roomRows.rows as any[])[0];
+    if (!room) return res.json({ status: "expired", roomCode: "" });
+    return res.json({
+      status: row.status,
+      roomCode: String(room.room_code).toUpperCase(),
+    });
+  }
+
   return res.json({
     status: row.status,
     roomCode: row.room_code,
