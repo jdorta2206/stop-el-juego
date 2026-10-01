@@ -81,6 +81,7 @@ async function startAnalyticsHeartbeat() {
           "X-Client-Platform": platform,
           ...(isAndroidTwa ? { "X-Client-TWA": "1" } : {}),
           ...(version ? { "X-Client-Version": version } : {}),
+          ...(localStorage.getItem("stop_session_token") ? { "X-Stop-Token": localStorage.getItem("stop_session_token")! } : {}),
         },
         body: JSON.stringify({ sessionId, playerId, loginMethod, language: document.documentElement.lang || null }),
         keepalive: true,
