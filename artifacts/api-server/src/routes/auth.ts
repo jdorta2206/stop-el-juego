@@ -561,7 +561,8 @@ router.get("/facebook/callback", async (req: Request, res: Response) => {
 
     // Fetch profile
     const meRes = await oauthFetch(
-      `https://graph.facebook.com/v26.0/me?fields=id,name,email,picture.type(large)&access_token=${tokenData.access_token}`
+      "https://graph.facebook.com/v26.0/me?fields=id,name,email,picture.type(large)",
+      { headers: { Authorization: `Bearer ${tokenData.access_token}` } },
     );
     const me = (await meRes.json()) as OAuthProfile;
 
@@ -661,7 +662,8 @@ router.get("/instagram/callback", async (req: Request, res: Response) => {
     if (!tokenData.access_token) throw new Error("No access_token from Instagram");
 
     const meRes = await oauthFetch(
-      `https://graph.instagram.com/v21.0/me?fields=id,username,profile_picture_url&access_token=${tokenData.access_token}`
+      "https://graph.instagram.com/v21.0/me?fields=id,username,profile_picture_url",
+      { headers: { Authorization: `Bearer ${tokenData.access_token}` } },
     );
     const me = (await meRes.json()) as OAuthProfile;
 
