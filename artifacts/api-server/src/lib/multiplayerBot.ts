@@ -535,11 +535,11 @@ async function performBotSubmit(
     // Persist final scores to the global leaderboard when the bot's submit
     // was the one that ended the match — otherwise humans get no XP/ranking
     // update from games the bot "finished".
-    if (didFinishGame) {
-      deps.submitFinalScores(updatedPlayers, room.currentLetter ?? "A", code);
+    if (committed.didFinishGame) {
+      deps.submitFinalScores(committed.players, committed.letter, code);
     }
 
-    if (nextStatus === "finished" || nextStatus === "waiting") {
+    if (committed.status === "finished" || committed.status === "waiting") {
       clearBotTimers(code);
     }
   } catch (err) {
