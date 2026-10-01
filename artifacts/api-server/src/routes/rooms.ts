@@ -2459,50 +2459,88 @@ router.post("/:roomCode/spy", writeLimiter, async (req, res) => {
   if (!playerId) { res.status(400).json({ error: "Missing playerId" }); return; }
   if (!await verifyClaimedIdentity(req, playerId)) { res.status(403).json({ error: "Identity verification failed" }); return; }
 
-  // Auth: caller must actually be in the room AND the round must be live
-  const rooms = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, code)).limit(1);
-  if (rooms.length === 0) { res.status(404).json({ error: "Room not found" }); return; }
-  const room = rooms[0];
-  if (room.status !== "playing") {
-    res.status(409).json({ error: "El espionaje sólo está activo durante la ronda" });
-    return;
-  }
-  const players = parsePlayers(room.playersJson);
-  if (!players.some((p: any) => p.playerId === playerId)) {
-    res.status(403).json({ error: "No estás en esta sala" });
-    return;
-  }
-
-  // Enforce per-round usage limit from the persisted round state. The old
-  // in-memory map was lost on API restart and was also raceable by two
-  // simultaneous spy requests.
   const callerPremium = await isPlayerPremium(playerId);
-
-  // Premium lookup is asynchronous. The room can advance while it is in
-  // flight, so re-read the authoritative round before consuming the spy.
-  // Otherwise a slow request could reveal a draft from the previous round.
-  const [liveRoom] = await db.select().from(roomsTable)
-    .where(eq(roomsTable.roomCode, code))
-    .limit(1);
-  if (!liveRoom || liveRoom.status !== "playing" ||
-      liveRoom.updatedAt.getTime() !== room.updatedAt.getTime()) {
-    res.status(409).json({ error: "La ronda ya no está activa" });
-    return;
-  }
-
-  const livePlayers = parsePlayers(liveRoom.playersJson);
-  if (!livePlayers.some((p: any) => p.playerId === playerId)) {
-    res.status(403).json({ error: "No estás en esta sala" });
-    return;
-  }
-
   const limit = callerPremium ? SPY_LIMIT_PREMIUM : SPY_LIMIT_FREE;
-  const liveMeta = parseBluffMeta(liveRoom.stopperJson) ?? {};
-  const persistedSpyUsage = liveMeta.spyUsage && typeof liveMeta.spyUsage === "object"
-    ? liveMeta.spyUsage as Record<string, number>
-    : {};
-  const current = Number(persistedSpyUsage[playerId] ?? 0);
-  if (current >= limit) {
+
+  // Serialize the entire usage check + candidate selection + consumption
+  // against the authoritative room row. A timestamp CAS is not sufficient:
+  // two requests can receive the same JavaScript Date millisecond and both
+  // pass the old compare-and-swap check.
+  const outcome = await db.transaction(async (tx) => {
+    const lockedRows = await tx.select().from(roomsTable)
+      .where(eq(roomsTable.roomCode, code))
+      .for("update");
+    if (lockedRows.length === 0) return { kind: "not_found" as const };
+
+    const liveRoom = lockedRows[0];
+    if (liveRoom.status !== "playing") {
+      return { kind: "not_playing" as const };
+    }
+
+    const livePlayers = parsePlayers(liveRoom.playersJson);
+    if (!livePlayers.some((p: any) => p.playerId === playerId)) {
+      return { kind: "not_member" as const };
+    }
+
+    const liveMeta = parseBluffMeta(liveRoom.stopperJson) ?? {};
+    const persistedSpyUsage = liveMeta.spyUsage && typeof liveMeta.spyUsage === "object"
+      ? liveMeta.spyUsage as Record<string, number>
+      : {};
+    const current = Number(persistedSpyUsage[playerId] ?? 0);
+    if (current >= limit) {
+      return {
+        kind: "limit" as const,
+        current,
+      };
+    }
+
+    // Only expose a rival draft that belongs to this exact round and letter.
+    const lr = roomLiveResponses.get(code);
+    if (!lr || lr.size === 0) return { kind: "empty" as const };
+
+    const cutoff = Date.now() - 5000;
+    const memberIds = new Set(livePlayers.map((p: any) => p.playerId));
+    const candidates: Array<{ pid: string; name: string; cat: string; word: string }> = [];
+    for (const [pid, info] of lr.entries()) {
+      if (pid === playerId || !memberIds.has(pid)) continue;
+      if (info.round !== liveRoom.currentRound) continue;
+      if (info.letter !== String(liveRoom.currentLetter ?? "").toUpperCase()) continue;
+      if (info.ts < cutoff) continue;
+      for (const [cat, word] of Object.entries(info.responses)) {
+        if (word && word.length > 0) candidates.push({ pid, name: info.name, cat, word });
+      }
+    }
+    if (candidates.length === 0) return { kind: "empty" as const };
+
+    const pick = candidates[Math.floor(Math.random() * candidates.length)];
+    const nextSpyUsage = { ...persistedSpyUsage, [playerId]: current + 1 };
+    const [updated] = await tx.update(roomsTable)
+      .set({
+        stopperJson: JSON.stringify({ ...liveMeta, spyUsage: nextSpyUsage }),
+        updatedAt: new Date(),
+      })
+      .where(eq(roomsTable.id, liveRoom.id))
+      .returning();
+    if (!updated) return { kind: "conflict" as const };
+
+    return {
+      kind: "ok" as const,
+      pick,
+      current,
+      usesLeft: limit - (current + 1),
+    };
+  });
+
+  if (outcome.kind === "not_found") {
+    res.status(404).json({ error: "Room not found" }); return;
+  }
+  if (outcome.kind === "not_playing") {
+    res.status(409).json({ error: "El espionaje sólo está activo durante la ronda" }); return;
+  }
+  if (outcome.kind === "not_member") {
+    res.status(403).json({ error: "No estás en esta sala" }); return;
+  }
+  if (outcome.kind === "limit") {
     res.status(429).json({
       error: callerPremium
         ? "Ya usaste tus 2 espías esta ronda"
@@ -2510,60 +2548,23 @@ router.post("/:roomCode/spy", writeLimiter, async (req, res) => {
     });
     return;
   }
+  if (outcome.kind === "empty") {
+    res.status(404).json({ error: "Tus rivales aún no escribieron nada 🤷" }); return;
+  }
+  if (outcome.kind === "conflict") {
+    res.status(409).json({ error: "La ronda cambió o el espía ya fue usado; inténtalo de nuevo" }); return;
+  }
 
-  // Find rivals with at least one fresh non-empty response
-  const lr = roomLiveResponses.get(code);
-  if (!lr || lr.size === 0) {
-    res.status(404).json({ error: "Nadie ha empezado a escribir todavía" });
-    return;
-  }
-  const cutoff = Date.now() - 5000;
-  const memberIds = new Set(livePlayers.map((p: any) => p.playerId));
-  const candidates: Array<{ pid: string; name: string; cat: string; word: string }> = [];
-  for (const [pid, info] of lr.entries()) {
-    // A player may have left while their last typing snapshot is still fresh.
-    // Never expose a departed player's draft through the spy mechanic.
-    if (pid === playerId || !memberIds.has(pid)) continue;
-    if (info.round !== liveRoom.currentRound) continue;
-    if (info.letter !== String(liveRoom.currentLetter ?? "").toUpperCase()) continue;
-    if (info.ts < cutoff) continue;
-    for (const [cat, word] of Object.entries(info.responses)) {
-      if (word && word.length > 0) candidates.push({ pid, name: info.name, cat, word });
-    }
-  }
-  if (candidates.length === 0) {
-    res.status(404).json({ error: "Tus rivales aún no escribieron nada 🤷" });
-    return;
-  }
-  const pick = candidates[Math.floor(Math.random() * candidates.length)];
-  // Atomically consume the usage in the room row. This prevents concurrent
-  // requests from both spending the same remaining spy budget.
-  const nextSpyUsage = { ...persistedSpyUsage, [playerId]: current + 1 };
-  const [spyConsumed] = await db.update(roomsTable)
-    .set({
-      stopperJson: JSON.stringify({ ...liveMeta, spyUsage: nextSpyUsage }),
-      updatedAt: new Date(),
-    })
-    .where(and(
-      eq(roomsTable.roomCode, code),
-      eq(roomsTable.status, "playing"),
-      eq(roomsTable.updatedAt, liveRoom.updatedAt),
-    ))
-    .returning();
-  if (!spyConsumed) {
-    res.status(409).json({ error: "La ronda cambió o el espía ya fue usado; inténtalo de nuevo" });
-    return;
-  }
   // Keep the in-memory map in sync as a fast path for the scoring code; the
   // persisted value remains authoritative across restarts.
   let used = roomSpyUsage.get(code);
   if (!used) { used = new Map(); roomSpyUsage.set(code, used); }
-  used.set(playerId, current + 1);
+  used.set(playerId, outcome.current + 1);
   res.json({
-    rivalName: pick.name,
-    category: pick.cat,
-    word: pick.word,
-    usesLeft: limit - (current + 1),
+    rivalName: outcome.pick.name,
+    category: outcome.pick.cat,
+    word: outcome.pick.word,
+    usesLeft: outcome.usesLeft,
     limit,
   });
 });
