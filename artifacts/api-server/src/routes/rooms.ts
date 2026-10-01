@@ -500,52 +500,23 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
     const score = Math.round(rawScore * 1.5);
     const won = winner?.playerId === p.playerId;
 
-    // 🔒 Atomic upsert: avoids the read-modify-write race that lost
-    // concurrent finishers' totals under heavy multiplayer load.
-    // Streak still needs the prior `lastPlayedDate`, so we read it once,
-    // but every counter increment is delegated to SQL in a single statement.
-    const existing = await db
-      .select({
-        lastPlayedDate: playerScoresTable.lastPlayedDate,
-        currentStreak: playerScoresTable.currentStreak,
-        longestStreak: playerScoresTable.longestStreak,
-        avatarColor: playerScoresTable.avatarColor,
-        streakDaysJson: playerScoresTable.streakDaysJson,
-      })
-      .from(playerScoresTable)
-      .where(eq(playerScoresTable.playerId, p.playerId))
-      .limit(1);
+    // 🔒 Keep leaderboard counters and game history atomic. If history insertion
+    // fails after the score update, the player would otherwise have a game counted
+    // in totals but missing from history (and a retry could compound the mismatch).
+    await db.transaction(async (tx) => {
+      const [locked] = await tx
+        .select({
+          lastPlayedDate: playerScoresTable.lastPlayedDate,
+          currentStreak: playerScoresTable.currentStreak,
+          longestStreak: playerScoresTable.longestStreak,
+          avatarColor: playerScoresTable.avatarColor,
+          streakDaysJson: playerScoresTable.streakDaysJson,
+        })
+        .from(playerScoresTable)
+        .where(eq(playerScoresTable.playerId, p.playerId))
+        .for("update");
 
-    const { newStreak, updatedToday } = calculateStreak(
-      existing[0]?.lastPlayedDate ?? null,
-      existing[0]?.currentStreak ?? 0
-    );
-    const newLongest = Math.max(existing[0]?.longestStreak ?? 0, newStreak);
-    // Append today to the rolling 30-day streak-days list using the same
-    // shared helper as the solo /ranking/scores path so the streak calendar
-    // is consistent regardless of which mode the player progressed through.
-    const newStreakDaysJson = updatedToday
-      ? appendStreakDay(existing[0]?.streakDaysJson, today)
-      : undefined;
-
-    if (existing.length > 0) {
-      // Serialize streak calculation with the row update. Without a row lock,
-      // two multiplayer games finishing concurrently could both calculate the
-      // streak from the same old lastPlayedDate and one increment would be lost.
-      await db.transaction(async (tx) => {
-        const [locked] = await tx
-          .select({
-            lastPlayedDate: playerScoresTable.lastPlayedDate,
-            currentStreak: playerScoresTable.currentStreak,
-            longestStreak: playerScoresTable.longestStreak,
-            avatarColor: playerScoresTable.avatarColor,
-            streakDaysJson: playerScoresTable.streakDaysJson,
-          })
-          .from(playerScoresTable)
-          .where(eq(playerScoresTable.playerId, p.playerId))
-          .for("update");
-
-        if (!locked) return;
+      if (locked) {
         const lockedStreak = calculateStreak(
           locked.lastPlayedDate ?? null,
           locked.currentStreak ?? 0,
@@ -571,43 +542,40 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
             updatedAt: new Date(),
           })
           .where(eq(playerScoresTable.playerId, p.playerId));
-      });
-    } else {
-      // Use INSERT … ON CONFLICT to be safe under simultaneous first-time inserts.
-      await db.insert(playerScoresTable).values({
-        playerId: p.playerId,
-        playerName: p.playerName,
-        avatarColor: p.avatarColor ?? "#e53e3e",
-        totalScore: score,
-        gamesPlayed: 1,
-        wins: won ? 1 : 0,
-        currentStreak: 1,
-        longestStreak: 1,
-        lastPlayedDate: today,
-        streakDaysJson: JSON.stringify([today]),
-      }).onConflictDoUpdate({
-        target: playerScoresTable.playerId,
-        set: {
+      } else {
+        await tx.insert(playerScoresTable).values({
+          playerId: p.playerId,
           playerName: p.playerName,
           avatarColor: p.avatarColor ?? "#e53e3e",
-          totalScore: sql`${playerScoresTable.totalScore} + ${score}`,
-          gamesPlayed: sql`${playerScoresTable.gamesPlayed} + 1`,
-          wins: sql`${playerScoresTable.wins} + ${won ? 1 : 0}`,
-          // The conflicting row was created by the concurrent submission.
-          // Preserve its already-authoritative streak (typically day 1)
-          // instead of applying this request's stale pre-insert snapshot.
-          updatedAt: new Date(),
-        },
-      });
-    }
+          totalScore: score,
+          gamesPlayed: 1,
+          wins: won ? 1 : 0,
+          currentStreak: 1,
+          longestStreak: 1,
+          lastPlayedDate: today,
+          streakDaysJson: JSON.stringify([today]),
+        }).onConflictDoUpdate({
+          target: playerScoresTable.playerId,
+          set: {
+            playerName: p.playerName,
+            avatarColor: p.avatarColor ?? "#e53e3e",
+            totalScore: sql`${playerScoresTable.totalScore} + ${score}`,
+            gamesPlayed: sql`${playerScoresTable.gamesPlayed} + 1`,
+            wins: sql`${playerScoresTable.wins} + ${won ? 1 : 0}`,
+            updatedAt: new Date(),
+          },
+        });
+      }
 
-    await db.insert(gameHistoryTable).values({
-      playerId: p.playerId,
-      score,
-      letter,
-      mode: "multiplayer",
-      won,
+      await tx.insert(gameHistoryTable).values({
+        playerId: p.playerId,
+        score,
+        letter,
+        mode: "multiplayer",
+        won,
+      });
     });
+
     void recordTrustedAnalyticsEvent({
       eventName: "game_complete",
       playerId: p.playerId,
