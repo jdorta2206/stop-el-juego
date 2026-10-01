@@ -21,6 +21,18 @@ export function isPlayerRevocationCacheReady(): boolean {
   return revocationCacheReady;
 }
 
+// Keep revocation state coherent across Railway instances. The database is the
+// source of truth; this bounded refresh closes the window where an account
+// deleted on one instance could still be accepted by another instance that
+// had an older in-memory cache.
+const REVOCATION_REFRESH_MS = 5_000;
+const revocationRefresh = setInterval(() => {
+  void loadRevokedPlayerIds().catch((err) => {
+    console.error("[playerRevocation] periodic refresh failed:", err);
+  });
+}, REVOCATION_REFRESH_MS);
+revocationRefresh.unref?.();
+
 export async function revokePlayerId(playerId: string, tx?: any): Promise<void> {
   if (!playerId) return;
   const executor = tx ?? db;
