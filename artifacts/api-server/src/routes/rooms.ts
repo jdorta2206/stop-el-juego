@@ -3890,6 +3890,7 @@ router.post("/:roomCode/bluff-vote", writeLimiter, async (req, res) => {
             categoryPack: latestMeta.categoryPack,
             customCategories: latestMeta.customCategories,
             customPackLabel: latestMeta.customPackLabel,
+            halloweenPreview: latestMeta.halloweenPreview === true,
             stopper: latestMeta.stopper,
             bluffResults: latestVotes,
           }),
