@@ -1322,16 +1322,6 @@ export default function SoloGame() {
     }
   };
 
-  // Tiny inline starter pool — gives the player a 3-letter prefix to build on.
-  // Not exhaustive: when no match, falls back to "<letter>" alone as a nudge.
-  const HINT_STARTERS: Record<string, string[]> = {
-    A: ["ALA", "ARE", "ABA", "ACA"], B: ["BAR", "BEL", "BOL"], C: ["CAR", "CAS", "COR"],
-    D: ["DAN", "DOR"], E: ["ELE", "EST"], F: ["FIL", "FOR"], G: ["GAL", "GAR"],
-    H: ["HAR", "HEL"], I: ["INE", "ITA"], J: ["JAR", "JUL"], L: ["LAR", "LEO"],
-    M: ["MAR", "MEL"], N: ["NAR", "NEL"], O: ["OLI", "ORE"], P: ["PAL", "PAR"],
-    R: ["RAM", "RIO"], S: ["SAL", "SAN"], T: ["TAR", "TOR"], V: ["VAL", "VER"],
-  };
-
   /** Pick a real valid word from the cached dictionary for the current letter/category. */
   /** Pick a real valid word for the exact round letter/category. */
   const getHintWord = async (letter: string, category: string): Promise<string> => {
@@ -2398,9 +2388,3 @@ export default function SoloGame() {
                   {t.bluff.judging_title}
                 </h2>
                 <p className="text-sm text-white/50 mt-1">{t.bluff.judging_sub}</p>
-              </motion.div>
-
-              {/* PHASE 1: Player bluff results */}
-              {judgingPhase === "player_bluffs" && (
-                <div className="w-full space-y-3">
-                  {bluffResults.length === 0 ? (
