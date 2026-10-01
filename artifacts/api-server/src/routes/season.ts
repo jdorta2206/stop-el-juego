@@ -344,10 +344,6 @@ async function applyAuthoritativeSeasonEventsInTransaction(
 ): Promise<void> {
   if (!playerId || events.length === 0) return;
 
-  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${playerId}, 0))`);
-  const revoked = await tx.execute(sql`SELECT 1 FROM revoked_player_ids WHERE player_id = ${playerId} LIMIT 1`);
-  if ((revoked as any).rows?.length) return;
-
   const today = todayUTC();
   await tx.execute(sql`
     INSERT INTO seasons (start_date, end_date, theme_json)
@@ -364,9 +360,16 @@ async function applyAuthoritativeSeasonEventsInTransaction(
   const season = seasonRows.rows?.[0];
   if (!season) return;
 
+  // Lock order must match season finalization: season -> player.
+  // Otherwise a rollover can snapshot standings while an event holds the
+  // player lock and is still waiting to enter the season lock.
   await tx.execute(sql`
     SELECT pg_advisory_xact_lock(${Number(season.id)}::bigint)
   `);
+  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${playerId}, 0))`);
+
+  const revoked = await tx.execute(sql`SELECT 1 FROM revoked_player_ids WHERE player_id = ${playerId} LIMIT 1`);
+  if ((revoked as any).rows?.length) return;
 
   const activeSeason = (await tx.execute(sql`
     SELECT 1 FROM seasons
