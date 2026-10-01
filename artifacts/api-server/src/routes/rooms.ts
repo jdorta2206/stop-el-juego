@@ -1371,7 +1371,12 @@ router.patch("/:roomCode/visibility", async (req, res) => {
     res.status(409).json({ error: "Room changed, retry" });
     return;
   }
-  res.json(formatRoom(updated));
+
+  // Visibility is part of the live room state. Broadcast the committed snapshot
+  // so existing SSE clients immediately learn about the change; broadcastRoom()
+  // also closes non-members when the room becomes private.
+  const formatted = broadcastAndFormat(updated);
+  res.json(formatted);
 });
 
 router.get("/public", async (_req, res) => {
