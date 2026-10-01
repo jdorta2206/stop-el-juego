@@ -126,11 +126,11 @@ async function generateBotAnswersLLM(
 // on rematch, so round+letter alone cannot prevent a late LLM promise from an
 // old match from populating the new match's pending answers.
 type PendingEntry = { round: number; letter: string; generation: number; answers: Record<string, string> };
-const botAnswerGeneration = new Map<string, number>();
+const botAnswerGeneration = new Map<string, { generation: number; roomId: number }>();
 let answerGenerationCounter = 0;
-function nextAnswerGeneration(code: string): number {
+function nextAnswerGeneration(code: string, roomId: number): number {
   const generation = ++answerGenerationCounter;
-  botAnswerGeneration.set(code, generation);
+  botAnswerGeneration.set(code, { generation, roomId });
   return generation;
 }
 function isCurrentAnswerGeneration(code: string, generation: number): boolean {
@@ -247,9 +247,9 @@ export function makeBotPlayer(identity: { name: string; color: string }): BotPla
 // ── Timer management ──────────────────────────────────────────────────────
 // roomCode → set of scheduled timeouts. Cleared on round advance / room end.
 const roomBotTimers = new Map<string, Set<NodeJS.Timeout>>();
-const roomBotTimerBots = new Map<string, Set<string>>();
+const roomBotTimerBots = new Map<string, Set<string>>();\nconst roomBotTimerRoomIds = new Map<string, number>();
 
-function trackTimer(code: string, t: NodeJS.Timeout, botId?: string) {
+function trackTimer(code: string, t: NodeJS.Timeout, botId?: string, roomId?: number) {\n  if (roomId !== undefined) roomBotTimerRoomIds.set(code, roomId);
   let set = roomBotTimers.get(code);
   if (!set) { set = new Set(); roomBotTimers.set(code, set); }
   set.add(t);
@@ -291,7 +291,7 @@ export function clearBotTimers(code: string) {
     for (const t of set) clearTimeout(t);
     roomBotTimers.delete(code);
   }
-  roomBotTimerBots.delete(code);
+  roomBotTimerBots.delete(code);\n  roomBotTimerRoomIds.delete(code);
   // NOTE: pending LLM answers are intentionally NOT cleared here.
   // rushBotSubmits() calls clearBotTimers to cancel the long 25-50s timers
   // when a human STOPs early — but bots still need to consume the
@@ -519,7 +519,7 @@ async function performBotSubmit(
         // Track the retry timer so clearBotTimers() can cancel it if the
         // room dies or the round advances before the retry fires.
         const retry = setTimeout(() => {
-          untrackTimer(code, retry, botPlayerId);
+          untrackTimer(code, retry, botPlayerId, expectedRoomId);
           performBotSubmit(code, expectedRoomId, botPlayerId, deps, { ...options, attempt: 1 });
         }, 200 + Math.random() * 300);
         trackTimer(code, retry, botPlayerId);
@@ -578,7 +578,7 @@ export function startBotTimerRecovery(deps: BotActionDeps) {
             ? Math.max(0, 1_500 + (bot.playerId.charCodeAt(bot.playerId.length - 1) % 2_500) - elapsed)
             : Math.max(0, 25_000 + (bot.playerId.charCodeAt(bot.playerId.length - 1) % 26_000) - elapsed);
           const timer = setTimeout(() => {
-            untrackTimer(room.roomCode, timer, bot.playerId);
+            untrackTimer(room.roomCode, timer, bot.playerId, Number(room.id));
             performBotSubmit(room.roomCode, room.id, bot.playerId, recoveryDeps!, { triggerStop: !isStopped });
           }, delay);
           trackTimer(room.roomCode, timer, bot.playerId);
@@ -613,7 +613,7 @@ export function scheduleBotsForRound(opts: {
   // tag on each pending entry is a second line of defence inside
   // getPendingAnswers.
   clearPendingAnswers(opts.roomCode);
-  const answerGeneration = nextAnswerGeneration(opts.roomCode);
+  const answerGeneration = nextAnswerGeneration(opts.roomCode, opts.roomId);
   // 🧠 Fire LLM generation in the background per bot at round start. Each
   // bot gets a DIFFERENT result because gpt-5-mini varies with temperature
   // (no caching), so the table doesn't see identical answers. If the LLM
@@ -624,7 +624,7 @@ export function scheduleBotsForRound(opts: {
   for (const b of opts.bots) {
     generateBotAnswersLLM(letter, opts.categories)
       .then(answers => {
-        if (answers && isCurrentAnswerGeneration(opts.roomCode, answerGeneration)) {
+        if (answers && isCurrentAnswerGeneration(opts.roomCode, answerGeneration, opts.roomId)) {
           setPendingAnswers(opts.roomCode, b.playerId, { round, letter, generation: answerGeneration, answers });
         }
       })
@@ -633,7 +633,7 @@ export function scheduleBotsForRound(opts: {
   for (const b of opts.bots) {
     const delay = 25_000 + Math.random() * 25_000; // 25-50s
     const t = setTimeout(() => {
-      untrackTimer(opts.roomCode, t, b.playerId);
+      untrackTimer(opts.roomCode, t, b.playerId, opts.roomId);
       performBotSubmit(opts.roomCode, opts.roomId, b.playerId, opts.deps, { triggerStop: true });
     }, delay);
     trackTimer(opts.roomCode, t, b.playerId);
