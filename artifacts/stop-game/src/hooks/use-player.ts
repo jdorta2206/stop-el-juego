@@ -55,7 +55,22 @@ async function tryRestoreFrom(apiBase: string): Promise<PlayerProfile | null> {
     if (!data?.id || !data.name) return null;
     if (data.token) { try { localStorage.setItem(SESSION_TOKEN_KEY, data.token); } catch {} }
 
-    return { id: data.id, name: String(data.name).trim().slice(0, 14), avatarColor: data.avatarColor || AVATAR_COLORS[0], loginMethod: data.loginMethod ?? null, picture: data.picture ?? null, fbAccessToken: null };
+    // /api/auth/me intentionally does not return the Facebook access token.
+    // Preserve the token already stored for this exact Facebook account so the
+    // Facebook-friends panel continues working after a page reload. Never
+    // carry a token across account changes.
+    let fbAccessToken: string | null = null;
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed?.id === data.id && data.loginMethod === "facebook" && typeof parsed.fbAccessToken === "string") {
+          fbAccessToken = parsed.fbAccessToken;
+        }
+      }
+    } catch {}
+
+    return { id: data.id, name: String(data.name).trim().slice(0, 14), avatarColor: data.avatarColor || AVATAR_COLORS[0], loginMethod: data.loginMethod ?? null, picture: data.picture ?? null, fbAccessToken };
   } catch { return null; }
 }
 
