@@ -127,7 +127,7 @@ export async function consumeAuthHandoff(): Promise<void> {
     const data = await response.json() as { items?: unknown };
     if (!Array.isArray(data.items)) return;
 
-    const allowed = new Set(["oauth_user", "stop_session_token"]);
+    const allowed = new Set(["oauth_user", "fb_access_token", "stop_session_token"]);
     const values: Record<string, string> = {};
 
     for (const item of data.items) {
