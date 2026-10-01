@@ -324,7 +324,7 @@ const SPY_LIMIT_FREE = 1;
 const SPY_LIMIT_PREMIUM = 2;
 
 // Rematch links — oldCode → newCode (in-memory, ephemeral)
-const roomRematch = new Map<string, string>();
+const roomRematch = new Map<string, { roomId: number; rematchCode: string }>();
 
 // 👏 Votos a "Jugada de la ronda" — 1 voto por ronda por jugador.
 // Key: roomCode → Map<`${round}:${voterId}`, FunVote>
@@ -521,7 +521,7 @@ function formatRoom(room: any, cosmeticsMap?: Record<string, any>) {
     phrases: getPhrases(code, room.id),
     typing: getTyping(code, room.id, room.currentRound ?? 0),
     // Persisted rematch survives process restarts; memory map is only a fast-path.
-    rematchCode: roomRematch.get(code) ?? meta?.rematchCode ?? null,
+    rematchCode: roomRematch.get(code)?.rematchCode ?? meta?.rematchCode ?? null,
     funVotes: getFunVotes(code, room.id, room.currentRound),
     createdAt: room.createdAt,
     // Internal version marker used to order SSE snapshots across concurrent
@@ -2922,11 +2922,12 @@ router.post("/:roomCode/rematch", writeLimiter, async (req, res) => {
       }
     }
 
-    roomRematch.set(oldCode, outcome.rematchCode);
+    roomRematch.set(oldCode, { roomId: outcome.oldRoom.id, rematchCode: outcome.rematchCode });
     // Auto-clear only the in-memory fast-path after 5 minutes. The authoritative
     // link remains persisted in stopperJson and is still returned after restart.
     setTimeout(() => {
-      if (roomRematch.get(oldCode) === outcome.rematchCode) roomRematch.delete(oldCode);
+      const current = roomRematch.get(oldCode);
+      if (current?.roomId === outcome.oldRoom.id && current.rematchCode === outcome.rematchCode) roomRematch.delete(oldCode);
     }, 5 * 60 * 1000);
 
     // Broadcast the persisted rematchCode to everyone still subscribed to the old room.
