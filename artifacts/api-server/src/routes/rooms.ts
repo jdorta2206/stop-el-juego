@@ -1510,7 +1510,7 @@ router.post("/", async (req, res) => {
       for (const key of halloweenScareCooldowns.keys()) {
         if (key.startsWith(roomCode + ":")) halloweenScareCooldowns.delete(key);
       }
-      lastBroadcastUpdatedAt.delete(roomCode);
+      lastBroadcastMarker.delete(roomCode);
       roomLiveResponses.delete(roomCode);
       roomSpyUsage.delete(roomCode);
       roomFunVotes.delete(roomCode);
@@ -2051,7 +2051,7 @@ router.post("/:roomCode/leave", async (req, res) => {
     }
     // Reset the per-code broadcast ordering marker as well; it belongs to the
     // deleted room and must not constrain a future room that reuses this code.
-    lastBroadcastUpdatedAt.delete(code);
+    lastBroadcastMarker.delete(code);
     // 🤖 Cancel pending bot timers so they don't fire against a deleted room.
     cleanupBotRoom(code);
     res.json({ ok: true, deleted: true });
@@ -2876,7 +2876,7 @@ router.post("/:roomCode/rematch", writeLimiter, async (req, res) => {
       for (const key of halloweenScareCooldowns.keys()) {
         if (key.startsWith(newCode + ":")) halloweenScareCooldowns.delete(key);
       }
-      lastBroadcastUpdatedAt.delete(newCode);
+      lastBroadcastMarker.delete(newCode);
       roomLiveResponses.delete(newCode);
       roomSpyUsage.delete(newCode);
       roomFunVotes.delete(newCode);
