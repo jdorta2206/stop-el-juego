@@ -294,6 +294,7 @@ function getTyping(code: string, roomId: number, round: number, excludeId?: stri
 // Round/letter are persisted in-memory with the draft so a response from a
 // previous round can never be replayed as if it belonged to the current one.
 const roomLiveResponses = new Map<string, Map<string, {
+  roomId: number;
   name: string;
   responses: Record<string, string>;
   round: number;
@@ -2412,8 +2413,9 @@ router.post("/:roomCode/typing", writeLimiter, async (req, res) => {
     const previous = lr.get(playerId);
     // Requests are throttled client-side, but network latency can reorder them.
     // Never let an older snapshot overwrite a newer one for the same player.
-    if (!previous || previous.round !== room.currentRound || previous.sessionId !== nextSessionId || nextSeq >= previous.seq) {
+    if (!previous || previous.roomId !== room.id || previous.round !== room.currentRound || previous.sessionId !== nextSessionId || nextSeq >= previous.seq) {
       lr.set(playerId, {
+        roomId: room.id,
         name: memberName,
         responses: safe,
         round: room.currentRound,
@@ -2455,7 +2457,7 @@ router.get("/:roomCode/draft", async (req, res) => {
   const entry = lr?.get(playerId);
   if (!entry) { res.json({ responses: {}, ts: 0, age: null }); return; }
   const currentLetter = String(roomRow.currentLetter ?? "").toUpperCase();
-  if (entry.round !== roomRow.currentRound || entry.letter !== currentLetter) {
+  if (entry.roomId !== roomRow.id || entry.round !== roomRow.currentRound || entry.letter !== currentLetter) {
     res.json({ responses: {}, ts: 0, age: null });
     return;
   }
@@ -2520,6 +2522,7 @@ router.post("/:roomCode/spy", writeLimiter, async (req, res) => {
     const candidates: Array<{ pid: string; name: string; cat: string; word: string }> = [];
     for (const [pid, info] of lr.entries()) {
       if (pid === playerId || !memberIds.has(pid)) continue;
+      if (info.roomId !== liveRoom.id) continue;
       if (info.round !== liveRoom.currentRound) continue;
       if (info.letter !== String(liveRoom.currentLetter ?? "").toUpperCase()) continue;
       if (info.ts < cutoff) continue;
