@@ -119,7 +119,8 @@ export async function sendRoomInvite(
   try {
     const res = await fetch(`${API_BASE}/api/presence/room-invite`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      credentials: "include",
       body: JSON.stringify({
         fromPlayerId: player.id,
         fromName: player.name,
@@ -142,7 +143,7 @@ export async function pollChallengeStatus(
   signal?: AbortSignal,
 ): Promise<{ status: "pending" | "accepted" | "declined" | "expired"; roomCode: string }> {
   try {
-    const res = await fetch(`${API_BASE}/api/presence/challenge/${challengeId}/status`, { signal });
+    const res = await fetch(`${API_BASE}/api/presence/challenge/${challengeId}/status`, { signal, headers: authHeaders(), credentials: "include" });
     if (!res.ok) return { status: "expired", roomCode: "" };
     return await res.json();
   } catch {
