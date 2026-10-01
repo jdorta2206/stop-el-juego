@@ -3803,6 +3803,7 @@ router.post("/:roomCode/bluff-vote", writeLimiter, async (req, res) => {
       })
       .where(and(
         eq(roomsTable.roomCode, roomCode.toUpperCase()),
+        eq(roomsTable.id, room.id),
         eq(roomsTable.status, "bluffvoting"),
         eq(roomsTable.roomVersion, room.roomVersion),
       ))
@@ -3832,6 +3833,7 @@ router.post("/:roomCode/bluff-vote", writeLimiter, async (req, res) => {
     .set({ stopperJson: JSON.stringify(newMeta), updatedAt: new Date(), roomVersion: sql`${roomsTable.roomVersion} + 1` })
     .where(and(
       eq(roomsTable.roomCode, roomCode.toUpperCase()),
+      eq(roomsTable.id, room.id),
       eq(roomsTable.status, "bluffvoting"),
       eq(roomsTable.roomVersion, currentRoomVersion),
     ))
@@ -3924,6 +3926,7 @@ router.post("/:roomCode/bluff-vote", writeLimiter, async (req, res) => {
         })
         .where(and(
           eq(roomsTable.roomCode, roomCode.toUpperCase()),
+          eq(roomsTable.id, current.id),
           eq(roomsTable.status, "bluffvoting"),
           eq(roomsTable.roomVersion, current.roomVersion),
         ))
@@ -3948,6 +3951,7 @@ router.post("/:roomCode/bluff-vote", writeLimiter, async (req, res) => {
       })
       .where(and(
         eq(roomsTable.roomCode, roomCode.toUpperCase()),
+        eq(roomsTable.id, current.id),
         eq(roomsTable.status, "bluffvoting"),
         eq(roomsTable.roomVersion, current.roomVersion),
       ))
@@ -4018,6 +4022,7 @@ router.post("/:roomCode/resolve-bluffs", async (req, res) => {
     })
     .where(and(
       eq(roomsTable.roomCode, roomCode.toUpperCase()),
+      eq(roomsTable.id, room.id),
       eq(roomsTable.status, "bluffvoting"),
       eq(roomsTable.roomVersion, room.roomVersion),
     ))
