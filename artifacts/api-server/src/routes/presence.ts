@@ -603,7 +603,21 @@ router.post("/challenge/:challengeId/respond", async (req, res) => {
     // The challenge may have been refreshed after the initial peek. If its
     // room changed, do not accept against the previously locked room.
     if (!lockedRoom || Number(lockedRoom.id) !== Number(row.room_id)) {
-      return { kind: "not_joined" as const, roomCode: row.room_code as string };
+      if (!accepted) {
+        const declined = await tx.execute(sql`
+          UPDATE player_challenges
+          SET status = 'declined'
+          WHERE challenge_id = ${challengeId}
+            AND status = 'pending'
+        `);
+        if ((declined as any).rowCount === 0) return { kind: "answered" as const };
+        return {
+          kind: "ok" as const,
+          toPlayerId: row.to_player_id as string,
+          roomCode: null,
+        };
+      }
+      return { kind: "room_gone" as const };
     }
 
     if (accepted) {
