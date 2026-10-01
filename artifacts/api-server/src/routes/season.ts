@@ -265,6 +265,10 @@ function parseClaimed(raw: string): { free: number[]; premium: number[] } {
 
 async function getOrCreateProgress(playerId: string, seasonId: number): Promise<ProgressRow> {
   const today = todayUTC();
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${playerId}, 0))`);
+    const revoked = await tx.execute(sql`SELECT 1 FROM revoked_player_ids WHERE player_id = ${playerId} LIMIT 1`);
+    if ((revoked as any).rows?.length) throw new Error("ACCOUNT_DELETED");
 
   // Serialize account deletion/authentication against season-progress creation.
   // A request that started before deletion must never recreate this player's
@@ -280,8 +284,8 @@ async function getOrCreateProgress(playerId: string, seasonId: number): Promise<
   // Race-safe upsert: relies on the unique index on (player_id, season_id).
   // ON CONFLICT DO NOTHING + RETURNING gives us the new row on insert OR
   // nothing on conflict — in which case we SELECT the winning row.
-  const fresh: MissionsBlob = { date: today, missions: buildMissionsForDate(today) };
-  const inserted = await db
+    const fresh: MissionsBlob = { date: today, missions: buildMissionsForDate(today) };
+    const inserted = await tx
     .insert(seasonProgressTable)
     .values({
       playerId,
@@ -293,23 +297,24 @@ async function getOrCreateProgress(playerId: string, seasonId: number): Promise<
     .onConflictDoNothing({ target: [seasonProgressTable.playerId, seasonProgressTable.seasonId] })
     .returning();
 
-  let row: ProgressRow;
-  if (inserted.length > 0) {
-    row = inserted[0];
-  } else {
-    const existing = await db
+    let row: ProgressRow;
+    if (inserted.length > 0) {
+      row = inserted[0];
+    } else {
+      const existing = await tx
       .select()
       .from(seasonProgressTable)
       .where(and(eq(seasonProgressTable.playerId, playerId), eq(seasonProgressTable.seasonId, seasonId)))
       .limit(1);
-    row = existing[0];
-  }
+      row = existing[0];
+    }
+    if (!row) throw new Error("SEASON_PROGRESS_NOT_FOUND");
 
   // Lazily roll missions over to today under the same row lock used by
   // authoritative mission progress. Without this transaction, a rollover
   // update could race a gameplay event and overwrite progress written by the
   // other request.
-  const rolledRow = await db.transaction(async (tx) => {
+    const rolledRow = await (async () => {
     const locked = (await tx.execute(sql`
       SELECT id, player_id, season_id, xp, claimed_tiers, missions_json, updated_at
       FROM season_progress
@@ -333,8 +338,9 @@ async function getOrCreateProgress(playerId: string, seasonId: number): Promise<
       current.missionsJson = JSON.stringify(rolled);
     }
     return current;
+    })();
+    return rolledRow ?? row;
   });
-  return rolledRow ?? row;
 }
 
 /**
