@@ -178,7 +178,7 @@ export function usePresence(
   }, []);
 
   const pollChallenges = useCallback(async () => {
-    if (!player || activeChallenge.current) return;
+    if (!player) return;
     challengeAbortRef.current?.abort();
     const controller = new AbortController();
     challengeAbortRef.current = controller;
@@ -187,6 +187,19 @@ export function usePresence(
       if (!res.ok) return;
       const data = await res.json();
       const challenges: IncomingChallenge[] = data.challenges || [];
+      const activeId = activeChallenge.current;
+      if (activeId) {
+        const refreshed = challenges.find((c) => c.challengeId === activeId);
+        if (refreshed) {
+          // A room invite can be refreshed in-place (same challengeId) while
+          // the notification is already visible. Keep the active notification
+          // synchronized with its authoritative roomCode/createdAt.
+          setIncomingChallenge(refreshed);
+          return;
+        }
+        activeChallenge.current = null;
+        setIncomingChallenge(null);
+      }
       if (challenges.length > 0) {
         activeChallenge.current = challenges[0].challengeId;
         setIncomingChallenge(challenges[0]);
