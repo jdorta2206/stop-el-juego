@@ -57,7 +57,7 @@ type ChallengeState = "idle" | "sending" | "waiting" | "accepted" | "declined" |
 function ChallengeButton({
   onChallenge,
 }: {
-  onChallenge: () => Promise<void>;
+  onChallenge: () => Promise<boolean>;
 }) {
   const [state, setState] = useState<ChallengeState>("idle");
 
