@@ -347,7 +347,7 @@ function pickWordsForRound(letter: string, categoryCount: number): string[] {
 type BotActionDeps = {
   broadcast: (code: string, payload: object) => void;
   formatRoom: (room: any) => any;
-  submitFinalScores: (players: any[], letter: string) => void | Promise<void>;
+  submitFinalScores: (players: any[], letter: string, roomCode?: string) => void | Promise<void>;
   getRoundCategories: (room: any) => string[];
 };
 
