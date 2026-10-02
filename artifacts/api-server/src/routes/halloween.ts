@@ -282,7 +282,7 @@ export async function recordHalloweenEventInTransaction(
   activeRoomRound?: number,
 ) {
   return await db.transaction(async (tx) =>
-    recordHalloweenEventInTransaction(
+    return await recordHalloweenEventInTransaction(
       tx,
       playerId,
       type,
@@ -544,7 +544,7 @@ export async function recordHalloweenScareEvents(
   activeRoomRound?: number,
 ) {
   return await db.transaction(async (tx) =>
-    recordHalloweenScareEventsInTransaction(
+    return await recordHalloweenScareEventsInTransaction(
       tx,
       events,
       preview,
