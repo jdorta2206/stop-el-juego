@@ -2218,7 +2218,7 @@ export default function SoloGame() {
                 })}
               </div>
 
-              <div className="fixed bottom-4 left-0 w-full px-4 z-20">
+              <div className="fixed safe-area-game-bottom left-0 w-full px-4 z-20">
                 <div className="max-w-2xl mx-auto space-y-2">
                   {/* 🕵️ ESPÍA — Robar respuesta de la IA. Free: 1 uso, Premium: 2 usos. -10 pts cada uso. */}
                   {spyUsesLeft > 0 && (
