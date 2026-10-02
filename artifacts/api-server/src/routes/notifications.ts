@@ -300,7 +300,7 @@ router.post("/send-invite", inviteLimiter, async (req, res) => {
   if (!senderPlayerId || !targetPlayerId || !fromName || !roomCode) {
     res.status(400).json({ error: "Missing fields" }); return;
   }
-  if (!verifyClaimedIdentity(req, String(senderPlayerId))) {
+  // `anonymous` is a shared subscription bucket, not a single recipient.\n  // Room invites must target one concrete player; otherwise an authorized\n  // room host could fan out an invite to every anonymous push subscriber.\n  if (String(targetPlayerId) === "anonymous") {\n    res.status(400).json({ error: "Invalid targetPlayerId" }); return;\n  }\n\n  if (!verifyClaimedIdentity(req, String(senderPlayerId))) {
     res.status(403).json({ error: "Identity verification failed" });
     return;
   }
