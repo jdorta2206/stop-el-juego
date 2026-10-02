@@ -529,11 +529,13 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
         .where(eq(playerScoresTable.playerId, p.playerId))
         .for("update");
 
+      let seasonStreak = 1;
       if (locked) {
         const lockedStreak = calculateStreak(
           locked.lastPlayedDate ?? null,
           locked.currentStreak ?? 0,
         );
+        seasonStreak = lockedStreak.newStreak;
         const lockedLongest = Math.max(locked.longestStreak ?? 0, lockedStreak.newStreak);
         const lockedDays = lockedStreak.updatedToday
           ? appendStreakDay(locked.streakDaysJson, today)
@@ -598,7 +600,7 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
           ...(won ? [{ type: "win_game", value: 1 }] : []),
           ...(rawScore > 0 ? [{ type: "round_score", value: rawScore }] : []),
           ...(validWords > 0 ? [{ type: "valid_words", value: validWords }] : []),
-          { type: "streak", value: lockedStreak.newStreak },
+          { type: "streak", value: seasonStreak },
         ]);
       }
     });
