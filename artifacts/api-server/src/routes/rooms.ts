@@ -582,13 +582,25 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
         });
       }
 
-      await tx.insert(gameHistoryTable).values({
-        playerId: p.playerId,
-        score,
-        letter,
-        mode: "multiplayer",
-        won,
-      });
+      // Durable idempotency key for room finalization. If a previous
+      // process already committed this player's result for this room, the
+      // retry must NOT increment leaderboard/streak/season a second time.
+      const historyInsert = await tx
+        .insert(gameHistoryTable)
+        .values({
+          playerId: p.playerId,
+          score,
+          letter,
+          mode: "multiplayer",
+          roomCode,
+          won,
+        })
+        .onConflictDoNothing({
+          target: [gameHistoryTable.roomCode, gameHistoryTable.playerId],
+        })
+        .returning({ id: gameHistoryTable.id });
+
+      if (historyInsert.length === 0) return;
 
       if (seasonId !== null) {
         const progress = await getOrCreateProgressTx(tx, p.playerId, seasonId);
