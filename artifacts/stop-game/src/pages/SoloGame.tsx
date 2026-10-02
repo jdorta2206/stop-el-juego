@@ -460,8 +460,9 @@ export default function SoloGame() {
     // forever once the tutorial ends.
     setAiPersonality(pickRandomPersonality({ isTutorial: tutorialNow }));
     setAiComment(null);
-    // Reset spy uses each new game (premium gets 2x)
-    setSpyUsesLeft(isPremium ? 2 : 1);
+    // Reset spy uses only for a new game. startGame() is also used by
+    // nextRound(), so resetting here would incorrectly replenish the per-game
+    // spy allowance on every round.
     setSpyReveal(null);
     // 🎲 Random mode — reroll the secret round time so each round feels different (15–55s)
     if (isRandomMode) setRandomRoundTime(15 + Math.floor(Math.random() * 41));
