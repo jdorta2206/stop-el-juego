@@ -1512,7 +1512,7 @@ router.post("/validate", async (req, res) => {
     return;
   }
 
-  const { letter, language, playerResponses: rawPlayerResponses } = body.data;
+  const { letter, language, mode, playerResponses: rawPlayerResponses } = body.data;
 
   // A round is bounded by the category pack (currently at most 12 categories).
   // The client normally sends unique categories, but this endpoint is public and
