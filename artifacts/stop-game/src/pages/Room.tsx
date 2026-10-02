@@ -2260,7 +2260,7 @@ export default function Room() {
                                     const allVotes = ((room as any)?.funVotes ?? []) as Array<{
                                       round: number; voterId: string; votedPlayerId: string; category: string; answer: string;
                                     }>;
-                                    const roundNum = currentRound > 1 ? currentRound - 1 : maxRounds;
+                                    // The reveal is still for the persisted current round. The server rejects any other round.\n                                    const roundNum = currentRound;
                                     const myVote = allVotes.find(v =>
                                       v.round === roundNum && v.voterId === player?.id);
                                     const iVotedThis =
