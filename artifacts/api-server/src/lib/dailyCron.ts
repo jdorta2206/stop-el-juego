@@ -108,7 +108,7 @@ async function sendStreakRescueNotifications() {
       WHERE ps.current_streak >= 2
         AND ps.last_played_date = ${yesterday}
       GROUP BY ps.player_id, ps.current_streak
-      LIMIT 5000
+      
     `);
 
     let sent = 0;
@@ -183,7 +183,7 @@ async function sendSeasonClaimNotifications() {
       WHERE sp.season_id = ${activeSeason.id}
         AND sp.missions_json LIKE '%"completed":true%'
       GROUP BY sp.player_id, sp.missions_json
-      LIMIT 10000
+      
     `)) as unknown as SqlResult<SeasonClaimCandidateRow>;
 
     const candidateRows = rows.rows ?? [];
@@ -292,7 +292,7 @@ async function sendPerUserDailyNotifications() {
         AND muted_until < ${now}
         AND hour_local = (((${utcMinutesOfDay}::int + tz_offset_minutes + 10080) / 60) % 24)
         AND (((${utcMinutesOfDay}::int + tz_offset_minutes + 10080) % 60) < 5)
-      LIMIT 10000
+      
     `)) as unknown as { rows?: SubscriptionWithPrefsRow[] };
 
     const candidates = rows.rows ?? [];
@@ -398,7 +398,7 @@ async function sendHappyHourNotifications() {
           AND muted_until < ${now}
           AND (((${utcMinutesOfDay}::int + tz_offset_minutes + 10080) % 1440)) >= ${slot.target}
           AND (((${utcMinutesOfDay}::int + tz_offset_minutes + 10080) % 1440)) < ${slot.target + 5}
-        LIMIT 10000
+        
       `)) as unknown as { rows?: Array<{ player_id: string; language: string }> };
 
       const candidates = rows.rows ?? [];
@@ -453,7 +453,7 @@ async function sendDailyDealsNotifications() {
         AND muted_until < ${now}
         AND (((${utcMinutesOfDay}::int + tz_offset_minutes + 10080) % 1440)) >= ${DAILY_DEALS_LOCAL_MIN}
         AND (((${utcMinutesOfDay}::int + tz_offset_minutes + 10080) % 1440)) < ${DAILY_DEALS_LOCAL_MIN + 5}
-      LIMIT 10000
+      
     `)) as unknown as { rows?: Array<{ player_id: string; language: string }> };
 
     const candidates = rows.rows ?? [];
