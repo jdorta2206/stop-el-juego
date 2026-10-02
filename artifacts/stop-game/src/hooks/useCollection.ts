@@ -88,3 +88,61 @@ function mergeMaps(a: CollectionMap, b: CollectionMap): CollectionMap {
   }
   return out;
 }
+export function useCollection(playerId?: string) {
+  const [collection, setCollection] = useState<CollectionMap>(() => {
+    migrateLegacy(playerId);
+    return loadLocal(playerId);
+  });
+  const [lastDiscovered, setLastDiscovered] = useState<CollectedWord | null>(null);
+  const syncedRef = useRef<string | null>(null);
+  const syncAbortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    migrateLegacy(playerId);
+    setCollection(loadLocal(playerId));
+    syncedRef.current = null;
+    syncAbortRef.current?.abort();
+  }, [playerId]);
+
+  useEffect(() => {
+    if (!playerId || syncedRef.current === playerId) return;
+    syncedRef.current = playerId;
+    const controller = new AbortController();
+    syncAbortRef.current = controller;
+    syncFromServer(playerId, controller.signal).then(serverMap => {
+      if (controller.signal.aborted || !Object.keys(serverMap).length) return;
+      setCollection(prev => {
+        const merged = mergeMaps(prev, serverMap);
+        if (Object.keys(merged).length !== Object.keys(prev).length) {
+          saveLocal(playerId, merged);
+          return merged;
+        }
+        return prev;
+      });
+    });
+  }, [playerId]);
+
+  useEffect(() => () => syncAbortRef.current?.abort(), [playerId]);
+
+  const recordRound = useCallback((words: Array<{ word: string; category: string }>) => {
+    if (!words.length) return;
+    const current = loadLocal(playerId);
+    const { next, added } = mergeDiscoveries(current, words);
+    if (!added.length) return;
+    saveLocal(playerId, next);
+    setCollection(next);
+
+    const ranked = [...added].sort((a, b) => {
+      const order = { legendary: 0, epic: 1, rare: 2, common: 3 };
+      return order[a.r] - order[b.r];
+    });
+    const headline = ranked[0];
+    if (headline.r !== "common") setLastDiscovered(headline);
+
+    if (playerId) saveToServer(playerId, next);
+  }, [playerId]);
+
+  const clearLastDiscovered = useCallback(() => setLastDiscovered(null), []);
+
+  return { collection, lastDiscovered, recordRound, clearLastDiscovered };
+}
