@@ -1048,32 +1048,3 @@ router.get("/scores/:playerId", async (req, res) => {
 });
 
 export default router;
-
-    LEFT JOIN player_scores ps ON gh.player_id = ps.player_id
-    WHERE gh.created_at >= date_trunc('month', NOW() AT TIME ZONE 'UTC')
-    GROUP BY gh.player_id, ps.player_name, ps.avatar_color, ps.profile_picture, ps.equipped_frame, ps.equipped_avatar, ps.equipped_title, ps.current_streak, ps.is_premium, ps.achievements_json
-    ORDER BY SUM(gh.score) DESC
-    LIMIT 100
-  `);
-
-  const players = (rows.rows as Array<Record<string, unknown>>).map((p, i) => ({
-    playerId:      p.playerId,
-    playerName:    p.playerName ?? "—",
-    avatarColor:   p.avatarColor ?? "#e53e3e",
-    totalScore:    Number(p.totalScore ?? 0),
-    gamesPlayed:   Number(p.gamesPlayed ?? 0),
-    wins:          Number(p.wins ?? 0),
-    currentStreak: Number(p.currentStreak ?? 0),
-    isPremium:     p.isPremium ?? false,
-    achievementCount: parseAchievementCount(p.achievementsJson),
-    title:         getTitle(i + 1),
-    rank:         i + 1,
-  }));
-
-  const now = new Date();
-  const nextReset = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
-
-  res.json({ players, nextReset: nextReset.toISOString() });
-});
-
-export default router;
