@@ -639,7 +639,22 @@ router.post("/scores", scoreLimiter, async (req, res) => {
           mode: mode ?? "solo",
           won: effectiveWon,
         });
-        return updated;
+      // Correct level from the post-update XP while the transaction still owns
+      // the player row lock. The pre-request `newLevel` can be stale under
+      // concurrent rewarded-score submissions.
+      const bonusLevelRows = await tx.execute(sql`
+        SELECT xp, level FROM player_scores WHERE player_id = ${playerId} FOR UPDATE
+      `) as unknown as { rows?: Array<{ xp: number; level: number }> };
+      const bonusLevelRow = bonusLevelRows.rows?.[0];
+      if (bonusLevelRow) {
+        const authoritativeLevel = calcLevel(bonusLevelRow.xp ?? 0);
+        if (authoritativeLevel > (bonusLevelRow.level ?? 1)) {
+          await tx.update(playerScoresTable)
+            .set({ level: authoritativeLevel, updatedAt: new Date() })
+            .where(eq(playerScoresTable.playerId, playerId));
+        }
+      }
+      return updated;
       }
 
       const [created] = await tx
