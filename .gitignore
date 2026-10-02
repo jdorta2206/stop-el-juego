@@ -54,3 +54,6 @@ Thumbs.db
 *.p12
 *.pem
 signing-key-info*.txt
+
+# Replit/uploaded working assets — not part of the Railway runtime
+/attached_assets/
