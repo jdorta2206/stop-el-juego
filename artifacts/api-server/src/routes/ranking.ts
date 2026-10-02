@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import crypto from "crypto";
 import { db } from "@workspace/db";
-import { playerScoresTable, gameHistoryTable, pushSubscriptionsTable, scoreBonusClaimsTable, scoreSubmissionIdempotencyTable } from "@workspace/db";
+import { playerScoresTable, gameHistoryTable, scoreBonusClaimsTable, scoreSubmissionIdempotencyTable } from "@workspace/db";
 import { eq, desc, sql } from "drizzle-orm";
 import { sendPushToPlayer } from "../lib/pushHelper";
 import { recordTrustedAnalyticsEvent } from "./analytics";
@@ -12,7 +12,7 @@ import { verifyClaimedIdentity, requirePlayerIdentity, type AuthedRequest } from
 import { verifyScoreVouchers, claimScoreVouchersTx, ceilingFromBase, absoluteCeiling } from "../lib/scoreToken";
 import { applyAuthoritativeSeasonEventsTx, getOrCreateActiveSeason, getOrCreateProgress } from "./season";
 import {
-  isHappyHourActiveForTzOffset,
+  isHappyHourActiveUtc,
   HAPPY_HOUR_MULTIPLIER,
 } from "../lib/happyHour";
 
@@ -59,20 +59,6 @@ function calcCoinGain(score: number, won: boolean, mode: string, isBonus: boolea
   return base + winBonus + modeBonus;
 }
 
-async function lookupPlayerTzOffset(playerId: string): Promise<number | null> {
-  try {
-    const rows = await db
-      .select({ tz: pushSubscriptionsTable.tzOffsetMinutes })
-      .from(pushSubscriptionsTable)
-      .where(sql`${pushSubscriptionsTable.playerId} = ${playerId}
-              AND ${pushSubscriptionsTable.enabled} = TRUE`)
-      .orderBy(desc(pushSubscriptionsTable.id))
-      .limit(1);
-    return rows[0]?.tz ?? null;
-  } catch {
-    return null;
-  }
-}
 
 const router: IRouter = Router();
 
@@ -582,9 +568,7 @@ router.post("/scores", scoreLimiter, async (req, res) => {
 
   const baseXpGain = calcXpGain(score, effectiveWon, effectiveMode);
   const baseCoinGain = calcCoinGain(score, effectiveWon, effectiveMode, isBonus);
-  const tzOffset = await lookupPlayerTzOffset(playerId);
-  const happyHourActive =
-    tzOffset !== null && isHappyHourActiveForTzOffset(tzOffset);
+  const happyHourActive = isHappyHourActiveUtc();
   const xpMultiplier = happyHourActive ? HAPPY_HOUR_MULTIPLIER : 1;
   const coinMultiplier = happyHourActive ? HAPPY_HOUR_MULTIPLIER : 1;
   const xpGain = baseXpGain * xpMultiplier;
