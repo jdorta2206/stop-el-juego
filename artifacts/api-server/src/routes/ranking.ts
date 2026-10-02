@@ -521,6 +521,9 @@ router.post("/scores", scoreLimiter, async (req, res) => {
     // Verify now, but do not burn the vouchers until the score transaction commits.
     : await verifyScoreVouchers(scoreTokens, 3);
   const { base: verifiedBase, verified, collectionWords, mode: certifiedMode, aiBase: certifiedAiBase } = verifiedVouchers;
+  const rewardClaimTokenSetHash = !isBonus && verified > 0 && Array.isArray(scoreTokens)
+    ? bonusTokenSetHash(playerId, scoreTokens)
+    : null;
   // A request that supplies vouchers must prove at least one fresh voucher.
   // Otherwise a replay of an already-consumed token set would fall through
   // to the offline absolute ceiling and could credit the same score again.
@@ -923,6 +926,15 @@ router.post("/scores", scoreLimiter, async (req, res) => {
           .where(eq(playerScoresTable.id, collectionRow.id));
       }
 
+      if (rewardClaimTokenSetHash) {
+        await tx.insert(scoreBonusClaimsTable).values({
+          tokenSetHash: rewardClaimTokenSetHash,
+          playerId,
+          maxScore: score,
+          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        }).onConflictDoNothing();
+      }
+
       if (scoreSeasonContext) {
         await applyAuthoritativeSeasonEventsTx(
           tx,
@@ -963,18 +975,6 @@ router.post("/scores", scoreLimiter, async (req, res) => {
       return;
     }
     player = transactionResult.player;
-  }
-
-  if (!isBonus && verified > 0 && scoreTokens) {
-    const tokenSetHash = bonusTokenSetHash(playerId, scoreTokens);
-    if (tokenSetHash) {
-      await db.insert(scoreBonusClaimsTable).values({
-        tokenSetHash,
-        playerId,
-        maxScore: score,
-        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
-      }).onConflictDoNothing();
-    }
   }
 
   if (overtaken.length > 0) {
