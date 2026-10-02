@@ -89,7 +89,7 @@ export function BannerAd({ className = "" }: { className?: string }) {
   return null;
 }
 
-export function RewardedAd({ onComplete, onSkip, playerId, rewardType = "points", rewardAmount = 20 }: { onComplete: (reward: number) => void; onSkip: () => void; playerId?: string; rewardType?: "points" | "hint" | "extraTime"; rewardAmount?: number }) {
+export function RewardedAd({ onComplete, onSkip, playerId, rewardType = "points", rewardAmount = 20 }: { onComplete: (reward: number, requestId?: string) => void; onSkip: () => void; playerId?: string; rewardType?: "points" | "hint" | "extraTime"; rewardAmount?: number }) {
   const [phase, setPhase] = useState<"pre" | "loading" | "error" | "done">("pre");
   const [errorDetail, setErrorDetail] = useState<string>("");
   const t = getT();
@@ -133,7 +133,7 @@ export function RewardedAd({ onComplete, onSkip, playerId, rewardType = "points"
         void trackAnalyticsEvent("powerup_used", { metadata: { powerup: placement } });
         timeoutRef.current = window.setTimeout(() => {
           timeoutRef.current = null;
-          if (mountedRef.current) onCompleteRef.current(rewardAmount);
+          if (mountedRef.current) onCompleteRef.current(rewardAmount, result.requestId);
         }, 500);
       } else {
         const detail = [
