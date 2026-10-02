@@ -50,6 +50,11 @@ export async function lookupPlayerTimezone(playerId: string): Promise<{ timeZone
     return { timeZone: null, tzOffset: null };
   }
 }
+export async function lookupPlayerTzOffset(playerId: string): Promise<number | null> {
+  const { tzOffset } = await lookupPlayerTimezone(playerId);
+  return tzOffset;
+}
+
 const router: IRouter = Router();
 
 const LEVEL_THRESHOLDS = [
