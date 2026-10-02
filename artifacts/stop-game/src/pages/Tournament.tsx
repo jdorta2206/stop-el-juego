@@ -278,7 +278,9 @@ Link: ${getInviteUrl()}`;
       try {
         await navigator.share({ title: "STOP - Torneo", text, url });
         return;
-      } catch {}
+      } catch (error) {
+        if ((error as DOMException)?.name === "AbortError") return;
+      }
     }
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
   };
