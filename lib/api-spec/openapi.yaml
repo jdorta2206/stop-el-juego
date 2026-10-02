@@ -310,6 +310,10 @@ components:
         language:
           type: string
           enum: [es, en, fr, pt]
+        mode:
+          type: string
+          enum: [solo, daily]
+          description: Validation context used to bind the signed score voucher to its purpose.
         playerName:
           type: string
         playerResponses:
