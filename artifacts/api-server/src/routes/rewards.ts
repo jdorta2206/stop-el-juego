@@ -242,6 +242,31 @@ router.post("/admob-result/:requestId/consume", requirePlayerIdentity, async (re
   }
 
   try {
+    const ownerRows = await db.execute(sql`
+      SELECT player_id, rewarded, consumed_at, placement
+      FROM admob_reward_requests
+      WHERE request_id = ${requestId}
+      LIMIT 1
+    `) as unknown as SqlResult<{
+      player_id: string;
+      rewarded: boolean;
+      consumed_at: Date | null;
+      placement: string | null;
+    }>;
+    const owner = ownerRows.rows?.[0];
+
+    if (owner && owner.player_id !== req.playerId) {
+      res.status(403).json({ error: "Reward request identity mismatch" });
+      return;
+    }
+
+    // double_points is consumed atomically with /ranking/scores so the score
+    // cannot be credited without a verified AdMob SSV reward.
+    if (owner?.placement === "double_points" && owner.rewarded && !owner.consumed_at) {
+      res.status(409).json({ error: "Double-points reward must be consumed with score" });
+      return;
+    }
+
     const updated = await db.execute(sql`
       UPDATE admob_reward_requests
       SET consumed_at = NOW()
