@@ -355,11 +355,30 @@ export default function Room() {
         retryTimeout = setTimeout(connect, delay);
       };
     }
+    // iOS/Android can suspend EventSource while the page is backgrounded
+    // without delivering an error. On resume, force a fresh SSE connection and
+    // immediately refetch the authoritative room snapshot so the game cannot
+    // remain visually stuck on a stale round.
+    const reconnectOnResume = () => {
+      if (closed) return;
+      clearTimeout(retryTimeout);
+      es?.close();
+      attempts = 0;
+      setSseActive(false);
+      void queryClient.invalidateQueries({ queryKey: getGetRoomQueryKey(code), refetchType: "active" });
+      connect();
+    };
+    const reconnectOnOnline = () => reconnectOnResume();
+
     connect();
+    document.addEventListener("visibilitychange", reconnectOnResume);
+    window.addEventListener("online", reconnectOnOnline);
 
     return () => {
       closed = true;
       clearTimeout(retryTimeout);
+      document.removeEventListener("visibilitychange", reconnectOnResume);
+      window.removeEventListener("online", reconnectOnOnline);
       es?.close();
       setSseActive(false);
     };
