@@ -200,9 +200,6 @@ export async function ensureIndexes(): Promise<void> {
     // and start every live room with a clean budget.
     `CREATE TABLE IF NOT EXISTS room_spy_usage (room_code text NOT NULL, player_id text NOT NULL, round integer NOT NULL, uses integer NOT NULL DEFAULT 0, PRIMARY KEY (room_code, player_id, round))`,
     `ALTER TABLE room_spy_usage ADD COLUMN IF NOT EXISTS room_id integer`,
-    // Legacy rows cannot be mapped safely because room_code is recyclable.
-    // Clear them only while the legacy primary key still exists; after the
-    // constraint is removed this block becomes a no-op on every later boot.
 ,
     // If a previous boot stopped after dropping the PK but before completing
     // the migration, discard only unmigrated legacy rows before SET NOT NULL.
