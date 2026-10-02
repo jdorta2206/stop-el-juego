@@ -722,25 +722,6 @@ router.post("/scores", scoreLimiter, requirePlayerIdentity, async (req: AuthedRe
       });
       return;
     }
-    // Halloween is an optional post-commit effect. The authoritative score,
-    // history, vouchers and season state are already committed before this runs.
-    // A Halloween failure must never roll back or invalidate the completed game.
-    if (certifiedMode === "solo" && Array.isArray(scoreTokens) && scoreTokens.length > 0) {
-      const halloweenEventKey = bonusTokenSetHash(playerId, scoreTokens);
-      if (halloweenEventKey) {
-        try {
-          await recordHalloweenEvent(
-            playerId,
-            "game_completed",
-            `solo:${halloweenEventKey}`,
-            isHalloweenPreviewAuthorized(req),
-          );
-        } catch (error) {
-          console.error("[halloween] Solo completion persistence failed; keeping score committed:", error);
-        }
-      }
-    }
-
   } else {
     try {
       player = await db.transaction(async (tx) => {
@@ -948,6 +929,25 @@ router.post("/scores", scoreLimiter, requirePlayerIdentity, async (req: AuthedRe
       });
       return;
     }
+    // Halloween is an optional post-commit effect. The authoritative score,
+    // history, vouchers and season state are already committed before this runs.
+    // A Halloween failure must never roll back or invalidate the completed game.
+    if (certifiedMode === "solo" && Array.isArray(scoreTokens) && scoreTokens.length > 0) {
+      const halloweenEventKey = bonusTokenSetHash(playerId, scoreTokens);
+      if (halloweenEventKey) {
+        try {
+          await recordHalloweenEvent(
+            playerId,
+            "game_completed",
+            `solo:${halloweenEventKey}`,
+            isHalloweenPreviewAuthorized(req),
+          );
+        } catch (error) {
+          console.error("[halloween] Solo completion persistence failed; keeping score committed:", error);
+        }
+      }
+    }
+
   }
 
   if (overtaken.length > 0) {
