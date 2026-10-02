@@ -133,7 +133,7 @@ router.post("/submit", async (req, res) => {
   const verifiedVouchers = await verifyScoreVouchers(scoreTokens, 1);
   const { base: verifiedBase, verified } = verifiedVouchers;
   const suppliedTokens = Array.isArray(scoreTokens) && scoreTokens.length > 0;
-  if (suppliedTokens && verified === 0) {
+  if (suppliedTokens && (verified === 0 || verifiedVouchers.mode !== "daily")) {
     res.status(422).json({ error: "INVALID_SCORE_VOUCHER" });
     return;
   }
