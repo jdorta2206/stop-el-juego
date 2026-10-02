@@ -199,7 +199,12 @@ router.post("/verify-pack", async (req: Request, res: Response) => {
       return res.status(500).json({ error: "Error al conceder los cosméticos" });
     }
 
-    await acknowledgeProduct(verified.productId, verified.purchaseToken, verified.acknowledgementState === 1);
+    const acknowledged = await acknowledgeProduct(verified.productId, verified.purchaseToken, verified.acknowledgementState === 1);
+    if (!acknowledged) {
+      // The inventory grant is idempotent, so retrying this request is safe.
+      // Do not report success while Google Play still considers the purchase unacknowledged.
+      return res.status(503).json({ error: "No se pudo confirmar la compra con Google Play" });
+    }
     console.log(`✅ Pack Mundial Play concedido a ${claimedPlayerId}`);
     return res.json({ granted: true, items: grantResult.granted, total: grantResult.total });
   } catch (error: any) {
