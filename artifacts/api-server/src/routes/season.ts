@@ -807,6 +807,18 @@ router.post("/claim-tier", requirePlayerIdentity, async (req: AuthedRequest, res
 
     // Atomic claim guard
     const claim = await db.transaction(async (tx) => {
+      // Keep the same lock order as authoritative scoring:
+      // player_scores -> season_progress. Reversing these can deadlock a
+      // concurrent score submission that already holds player_scores.
+      const playerLocked = (await tx.execute(sql`
+        SELECT inventory_json FROM player_scores
+        WHERE player_id = ${playerId} FOR UPDATE
+      `)) as unknown as SqlResult<{ inventory_json: string }>;
+      const playerRow = playerLocked.rows?.[0];
+      if (!playerRow) {
+        return { ok: false as const, error: "Player profile not found", status: 404 };
+      }
+
       const locked = (await tx.execute(sql`
         SELECT id, xp, claimed_tiers FROM season_progress WHERE id = ${progress.id} FOR UPDATE
       `)) as unknown as SqlResult<Pick<ProgressRowSql, "id" | "xp" | "claimed_tiers">>;
@@ -829,18 +841,6 @@ router.post("/claim-tier", requirePlayerIdentity, async (req: AuthedRequest, res
       // avatars/frames are appended to the inventory (de-duplicated). All
       // happens inside the SAME transaction as the claimed_tiers write so a
       // crash mid-claim leaves no half-state.
-      // Lock the player_scores row up front and hard-fail if it's missing
-      // — otherwise the UPDATE below could affect 0 rows and the claim
-      // would silently lose the reward while still being marked claimed.
-      const playerLocked = (await tx.execute(sql`
-        SELECT inventory_json FROM player_scores
-        WHERE player_id = ${playerId} FOR UPDATE
-      `)) as unknown as SqlResult<{ inventory_json: string }>;
-      const playerRow = playerLocked.rows?.[0];
-      if (!playerRow) {
-        return { ok: false as const, error: "Player profile not found", status: 404 };
-      }
-
       const reward = tierReward(tierNum)[track];
       let depositedCoins = 0;
       let depositedCosmetic: string | null = null;
