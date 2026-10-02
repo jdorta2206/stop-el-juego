@@ -6,12 +6,12 @@ import { roomsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { sendPushToPlayer, notifyFollowersPlayerOnline } from "../lib/pushHelper";
-import { presenceLimiter, inviteLimiter } from "../middlewares/rateLimit";
+import { presenceLimiter } from "../middlewares/rateLimit";
 import { verifyClaimedIdentity } from "../lib/playerAuth";
 
 const router: IRouter = Router();
 
-// In-memory presence store: playerId → presence data
+// PostgreSQL-backed presence is the shared source of truth across Railway instances.
 interface PresenceEntry {
   name: string;
   picture: string | null;
@@ -21,30 +21,24 @@ interface PresenceEntry {
   lastSeen: number;
 }
 
-const presenceMap = new Map<string, PresenceEntry>();
-// Presence is persisted so online state works correctly across Railway instances.
-// The in-memory map remains a short-lived cache, not the source of truth.
+const presenceMap = new Map<string, PresenceEntry>(); // local cache only; DB is authoritative
+
 const presenceTableReady = db.execute(sql`
   CREATE TABLE IF NOT EXISTS player_presence (
     player_id text PRIMARY KEY,
+    name text NOT NULL,
+    picture text,
+    avatar_color text NOT NULL,
+    provider text,
     room_code text,
     last_seen timestamptz NOT NULL DEFAULT NOW()
   )
 `).then(() => db.execute(sql`
-  CREATE INDEX IF NOT EXISTS player_presence_last_seen_idx
-    ON player_presence (last_seen)
+  CREATE INDEX IF NOT EXISTS player_presence_last_seen_idx ON player_presence (last_seen)
 `)).catch((err) => {
   console.error("[presence] failed to initialize presence persistence:", err);
   throw err;
 });
-
-function playerIdProvider(playerId: string): string | null {
-  const prefixes: Array<[string, string]> = [
-    ["google_", "google"], ["fb_", "facebook"], ["instagram_", "instagram"],
-    ["ig_", "instagram"], ["apple_", "apple"], ["tiktok_", "tiktok"], ["tt_", "tiktok"],
-  ];
-  return prefixes.find(([prefix]) => playerId.startsWith(prefix))?.[1] ?? null;
-}
 
 async function getCanonicalPresenceProfile(playerId: string) {
   const [profile] = await db.select({
@@ -90,6 +84,10 @@ const challengeTableReady = db.execute(sql`
     created_at timestamptz NOT NULL DEFAULT NOW()
   )
 `).then(() => db.execute(sql`
+  ALTER TABLE player_challenges ADD COLUMN IF NOT EXISTS room_id integer
+`)).then(() => db.execute(sql`
+  DELETE FROM player_challenges WHERE room_id IS NULL AND status = 'pending'
+`)).then(() => db.execute(sql`
   CREATE INDEX IF NOT EXISTS player_challenges_target_status_idx
     ON player_challenges (to_player_id, status, created_at)
  `)).then(() => db.execute(sql`
@@ -119,23 +117,75 @@ function generateRoomCode(): string {
   return code;
 }
 
-// Clean up stale entries every 2 minutes
-setInterval(() => {
-  const cutoff = Date.now() - 3 * 60 * 1000;
-  for (const [id, data] of presenceMap) {
-    if (data.lastSeen < cutoff) presenceMap.delete(id);
+// Remove expired challenge-created rooms together with their pending challenge.
+// Lock order is room -> challenge, matching /room-invite and /challenge/:id/respond.
+async function purgeStaleChallenges() {
+  const stale = await db.execute(sql`
+    SELECT challenge_id, room_id
+    FROM player_challenges
+    WHERE status = 'pending'
+      AND is_room_invite = FALSE
+      AND created_at < NOW() - INTERVAL '2 minutes'
+      AND room_id IS NOT NULL
+    LIMIT 100
+  `);
+
+  for (const candidate of (stale.rows ?? []) as any[]) {
+    try {
+      await db.transaction(async (tx) => {
+        const [room] = await tx.select({ id: roomsTable.id })
+          .from(roomsTable)
+          .where(eq(roomsTable.id, Number(candidate.room_id)))
+          .for("update")
+          .limit(1);
+
+        const rows = await tx.execute(sql`
+          SELECT status, is_room_invite, room_id
+          FROM player_challenges
+          WHERE challenge_id = ${candidate.challenge_id}
+          FOR UPDATE
+        `);
+        const challenge = (rows.rows as any[])[0];
+        if (!challenge ||
+            challenge.status !== "pending" ||
+            challenge.is_room_invite === true ||
+            Number(challenge.room_id) !== Number(candidate.room_id)) {
+          return;
+        }
+
+        if (room) {
+          await tx.delete(roomsTable).where(eq(roomsTable.id, room.id));
+        }
+        await tx.execute(sql`
+          DELETE FROM player_challenges
+          WHERE challenge_id = ${candidate.challenge_id}
+            AND status = 'pending'
+        `);
+      });
+    } catch (err) {
+      console.error("[presence] stale challenge cleanup failed:", err);
+    }
   }
-  // Presence and challenges are shared PostgreSQL state; cleanup is safe on every instance.
-  void Promise.all([
-    presenceTableReady.then(() => db.execute(sql`
-      DELETE FROM player_presence
-      WHERE last_seen < NOW() - INTERVAL '3 minutes'
-    `)),
-    challengeTableReady.then(() => db.execute(sql`
-      DELETE FROM player_challenges
-      WHERE created_at < NOW() - INTERVAL '2 minutes'
-    `)),
-  ]).catch((err) => console.error("[presence] cleanup failed:", err));
+
+  // Room invites reuse an existing room and therefore must never delete it.
+  await db.execute(sql`
+    DELETE FROM player_challenges
+    WHERE created_at < NOW() - INTERVAL '2 minutes'
+      AND (is_room_invite = TRUE OR room_id IS NULL)
+  `);
+}
+
+// Clean up stale presence/challenges every 2 minutes. Both are DB-backed,
+// so cleanup is safe and consistent across all Railway instances.
+setInterval(() => {
+  void presenceTableReady.then(() => db.execute(sql`
+    DELETE FROM player_presence WHERE last_seen < NOW() - INTERVAL '3 minutes'
+  `)).catch((err) => console.error("[presence] presence cleanup failed:", err));
+  void challengeTableReady.then(() => purgeStaleChallenges())
+    .catch((err) => console.error("[presence] challenge cleanup failed:", err));
+  for (const [id, data] of presenceMap) {
+    if (data.lastSeen < Date.now() - 3 * 60 * 1000) presenceMap.delete(id);
+  }
 }, 2 * 60 * 1000);
 
 // POST /api/presence/ping
@@ -147,7 +197,7 @@ router.post("/ping", presenceLimiter, async (req, res) => {
   };
 
   if (!playerId) return res.status(400).json({ error: "playerId required" });
-  if (!verifyClaimedIdentity(req, playerId)) {
+  if (!await verifyClaimedIdentity(req, playerId)) {
     return res.status(403).json({ error: "Invalid player identity" });
   }
 
@@ -173,38 +223,32 @@ router.post("/ping", presenceLimiter, async (req, res) => {
   }
 
   await presenceTableReady;
-  const now = new Date();
-  let wasOffline = false;
-
-  // Lock the presence row while deciding whether this is a fresh connection.
-  // Without this transaction, two simultaneous pings (including pings handled
-  // by different Railway instances) could both observe an offline player and
-  // send the "friend online" notification twice.
-  await db.transaction(async (tx) => {
-    const existingRows = await tx.execute(sql`
-      SELECT last_seen
-      FROM player_presence
-      WHERE player_id = ${playerId}
-      FOR UPDATE
-    `).then((result) => result.rows as Array<{ last_seen: string | Date }>);
-
-    const existingRow = existingRows[0];
-    const lastSeenMs = existingRow ? new Date(existingRow.last_seen).getTime() : 0;
-    wasOffline = !existingRow || lastSeenMs < Date.now() - 3 * 60 * 1000;
-
-    await tx.execute(sql`
-      INSERT INTO player_presence (player_id, room_code, last_seen)
-      VALUES (${playerId}, ${canonicalRoomCode}, ${now})
-      ON CONFLICT (player_id) DO UPDATE
-        SET room_code = EXCLUDED.room_code,
-            last_seen = EXCLUDED.last_seen
-    `);
-  });
-
+  const existingRows = await db.execute(sql`
+    SELECT last_seen
+    FROM player_presence
+    WHERE player_id = ${playerId}
+    LIMIT 1
+  `);
+  const wasOffline = (existingRows.rows as any[]).length === 0 ||
+    new Date((existingRows.rows as any[])[0].last_seen).getTime() < Date.now() - 3 * 60 * 1000;
+  const lastSeen = new Date();
+  await db.execute(sql`
+    INSERT INTO player_presence
+      (player_id, name, picture, avatar_color, provider, room_code, last_seen)
+    VALUES
+      (${playerId}, ${profile.name}, ${profile.picture}, ${profile.avatarColor}, ${profile.provider}, ${canonicalRoomCode}, ${lastSeen})
+    ON CONFLICT (player_id) DO UPDATE SET
+      name = EXCLUDED.name,
+      picture = EXCLUDED.picture,
+      avatar_color = EXCLUDED.avatar_color,
+      provider = EXCLUDED.provider,
+      room_code = EXCLUDED.room_code,
+      last_seen = EXCLUDED.last_seen
+  `);
   presenceMap.set(playerId, {
     ...profile,
     roomCode: canonicalRoomCode,
-    lastSeen: now.getTime(),
+    lastSeen: lastSeen.getTime(),
   });
 
   if (wasOffline && profile.provider && profile.provider !== "guest") {
@@ -216,56 +260,93 @@ router.post("/ping", presenceLimiter, async (req, res) => {
 
 // GET /api/presence/online
 router.get("/online", async (_req, res) => {
-  const cutoff = new Date(Date.now() - 90 * 1000);
   await presenceTableReady;
   const rows = await db.execute(sql`
-    SELECT player_id, room_code, last_seen
+    SELECT player_id, name, picture, avatar_color, provider, room_code, EXTRACT(EPOCH FROM last_seen) * 1000 AS last_seen_ms
     FROM player_presence
-    WHERE last_seen >= ${cutoff}
+    WHERE last_seen >= NOW() - INTERVAL '90 seconds'
     ORDER BY last_seen DESC
   `);
-  const presenceRows = rows.rows as Array<{
-    player_id: string;
-    room_code: string | null;
-    last_seen: string | Date;
-  }>;
+  const online = ((rows.rows as any[]) || []).map((p) => ({
+    playerId: p.player_id,
+    name: p.name,
+    picture: p.picture ?? null,
+    avatarColor: p.avatar_color,
+    provider: p.provider ?? null,
+    roomCode: p.room_code ?? null,
+    lastSeen: Number(p.last_seen_ms),
+  }));
 
-  const ids = presenceRows.map((row) => row.player_id);
-  if (ids.length === 0) return res.json({ online: [] });
+  const roomCodes = [...new Set(online.map(p => p.roomCode).filter((code): code is string => Boolean(code)))];
+  const roomMembership = new Map<string, Set<string>>();
+  if (roomCodes.length > 0) {
+    const rooms = await db.select({
+      roomCode: roomsTable.roomCode,
+      playersJson: roomsTable.playersJson,
+      stopperJson: roomsTable.stopperJson,
+      isPublic: roomsTable.isPublic,
+    }).from(roomsTable).where(inArray(roomsTable.roomCode, roomCodes));
+    for (const room of rooms) {
+      try {
+        const players = JSON.parse(room.playersJson || "[]");
+        if (Array.isArray(players)) {
+          const meta = (() => {
+            try {
+              const parsed = JSON.parse(room.stopperJson || "{}");
+              return parsed && typeof parsed === "object" ? parsed : {};
+            } catch {
+              return {};
+            }
+          })();
+          // Presence is public. Never disclose the code of a private room
+          // through this endpoint; private rooms must remain discoverable only
+          // via an explicit invitation or a code shared by the host.
+          if (room.isPublic !== true || meta.halloweenPreview === true) {
+            roomMembership.set(room.roomCode, new Set());
+          } else {
+            roomMembership.set(room.roomCode, new Set(
+              players.map((p: any) => String(p?.playerId ?? "")).filter(Boolean),
+            ));
+          }
+        }
+      } catch {
+        roomMembership.set(room.roomCode, new Set());
+      }
+    }
+  }
+  for (const p of online) {
+    if (p.roomCode && !roomMembership.get(p.roomCode)?.has(p.playerId)) {
+      p.roomCode = null;
+    }
+  }
 
-  const profiles = await db.select({
-    playerId: playerScoresTable.playerId,
-    name: playerScoresTable.playerName,
-    picture: playerScoresTable.profilePicture,
-    avatarColor: playerScoresTable.avatarColor,
-    equippedAvatar: playerScoresTable.equippedAvatar,
-    equippedFrame: playerScoresTable.equippedFrame,
-    equippedTitle: playerScoresTable.equippedTitle,
-  }).from(playerScoresTable).where(inArray(playerScoresTable.playerId, ids));
-
-  const byId = new Map(profiles.map((p) => [p.playerId, p]));
-  const online = presenceRows.flatMap((row) => {
-    const profile = byId.get(row.player_id);
-    if (!profile) return [];
-    return [{
-      playerId: row.player_id,
-      name: profile.name,
-      picture: profile.picture ?? null,
-      avatarColor: profile.avatarColor ?? "#e53e3e",
-      provider: playerIdProvider(row.player_id),
-      roomCode: row.room_code,
-      lastSeen: new Date(row.last_seen).getTime(),
-      equippedAvatar: profile.equippedAvatar ?? null,
-      equippedFrame: profile.equippedFrame ?? null,
-      equippedTitle: profile.equippedTitle ?? null,
-    }];
-  });
-
+  const ids = online.map(p => p.playerId);
+  if (ids.length > 0) {
+    try {
+      const cosmetics = await db.select({
+        playerId: playerScoresTable.playerId,
+        profilePicture: playerScoresTable.profilePicture,
+        equippedAvatar: playerScoresTable.equippedAvatar,
+        equippedFrame: playerScoresTable.equippedFrame,
+        equippedTitle: playerScoresTable.equippedTitle,
+      }).from(playerScoresTable).where(inArray(playerScoresTable.playerId, ids));
+      const byId = new Map(cosmetics.map(c => [c.playerId, c]));
+      for (const p of online) {
+        const c = byId.get(p.playerId);
+        if (c) {
+          (p as any).picture = c.profilePicture ?? p.picture ?? null;
+          (p as any).equippedAvatar = c.equippedAvatar ?? null;
+          (p as any).equippedFrame = c.equippedFrame ?? null;
+          (p as any).equippedTitle = c.equippedTitle ?? null;
+        }
+      }
+    } catch {}
+  }
   return res.json({ online });
 });
 
 // POST /api/presence/challenge — send a challenge to another player
-router.post("/challenge", inviteLimiter, async (req, res) => {
+router.post("/challenge", async (req, res) => {
   const { fromPlayerId, fromName, fromPicture, fromAvatarColor, toPlayerId } = req.body as {
     fromPlayerId: string;
     fromName: string;
@@ -277,23 +358,23 @@ router.post("/challenge", inviteLimiter, async (req, res) => {
   if (!fromPlayerId || !toPlayerId || !fromName) {
     return res.status(400).json({ error: "fromPlayerId, fromName and toPlayerId required" });
   }
-  if (!verifyClaimedIdentity(req, fromPlayerId)) {
+  if (!await verifyClaimedIdentity(req, fromPlayerId)) {
     return res.status(403).json({ error: "Invalid player identity" });
   }
 
   const profile = await getCanonicalPresenceProfile(fromPlayerId);
   if (!profile) return res.status(404).json({ error: "Player not found" });
 
-  // Check target player is online using shared PostgreSQL presence.
+  // Check target player is online
   await presenceTableReady;
   const targetRows = await db.execute(sql`
-    SELECT player_id
+    SELECT 1
     FROM player_presence
     WHERE player_id = ${toPlayerId}
       AND last_seen >= NOW() - INTERVAL '90 seconds'
     LIMIT 1
   `);
-  if ((targetRows.rows as unknown[]).length === 0) {
+  if ((targetRows.rows as any[]).length === 0) {
     return res.status(404).json({ error: "Player is not online" });
   }
 
@@ -322,81 +403,71 @@ router.post("/challenge", inviteLimiter, async (req, res) => {
   }];
 
   let roomCode: string | null = null;
-  let existingChallenge: { challengeId: string; roomCode: string } | null = null;
-
-  for (let attempt = 0; attempt < 10 && !roomCode && !existingChallenge; attempt++) {
+  let roomId: number | null = null;
+  for (let attempt = 0; attempt < 10 && !roomCode; attempt++) {
     const candidate = generateRoomCode();
-    const outcome = await db.transaction(async (tx) => {
-      try {
-        await tx.insert(roomsTable).values({
-          roomCode: candidate,
-          hostId: fromPlayerId,
-          hostName: profile.name,
-          status: "waiting",
-          currentRound: 0,
-          maxRounds: 3,
-          language: "es",
-          playersJson: JSON.stringify(players),
-          stopperJson: null,
-          isPublic: false,
-        });
-      } catch (e: unknown) {
-        const message = e instanceof Error ? e.message : String(e);
-        if (/unique|duplicate/i.test(message) && attempt < 9) return { kind: "room_collision" as const };
-        throw new Error("CHALLENGE_ROOM_CREATE_FAILED");
+    try {
+      await db.insert(roomsTable).values({
+        roomCode: candidate,
+        hostId: fromPlayerId,
+        hostName: profile.name,
+        status: "waiting",
+        currentRound: 0,
+        maxRounds: 3,
+        language: "es",
+        playersJson: JSON.stringify(players),
+        stopperJson: null,
+        isPublic: false,
+      });
+      roomCode = candidate;
+      const [createdRoom] = await db.select({ id: roomsTable.id }).from(roomsTable).where(eq(roomsTable.roomCode, candidate)).limit(1);
+      roomId = createdRoom?.id ?? null;
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e);
+      if (!/unique|duplicate/i.test(message) || attempt === 9) {
+        console.error("[presence/challenge] room creation failed:", message);
+        return res.status(503).json({ error: "Unable to create challenge room" });
       }
-
-      const inserted = await tx.execute(sql`
-        INSERT INTO player_challenges
-          (challenge_id, from_player_id, from_name, from_picture, from_avatar_color,
-           to_player_id, room_code, status, is_room_invite, created_at)
-        VALUES
-          (${challengeId}, ${fromPlayerId}, ${profile.name}, ${profile.picture || null},
-           ${profile.avatarColor || "#e53e3e"}, ${toPlayerId}, ${candidate},
-           'pending', FALSE, NOW())
-        ON CONFLICT (from_player_id, to_player_id, is_room_invite) WHERE status = 'pending'
-        DO NOTHING
-        RETURNING challenge_id, room_code
-      `);
-
-      if ((inserted as any).rowCount === 0) {
-        const existing = await tx.execute(sql`
-          SELECT challenge_id, room_code
-          FROM player_challenges
-          WHERE from_player_id = ${fromPlayerId}
-            AND to_player_id = ${toPlayerId}
-            AND is_room_invite = FALSE
-            AND status = 'pending'
-          ORDER BY created_at DESC
-          LIMIT 1
-        `);
-        const winner = (existing.rows as any[])[0];
-        if (!winner) return { kind: "race_lost" as const };
-        return {
-          kind: "existing" as const,
-          challengeId: String(winner.challenge_id),
-          roomCode: String(winner.room_code),
-        };
-      }
-
-      return { kind: "created" as const, roomCode: candidate };
-    });
-
-    if (outcome.kind === "created") {
-      roomCode = outcome.roomCode;
-    } else if (outcome.kind === "existing") {
-      existingChallenge = { challengeId: outcome.challengeId, roomCode: outcome.roomCode };
-    } else if (outcome.kind === "race_lost") {
-      return res.status(409).json({ error: "Challenge creation raced; please retry" });
     }
   }
 
-  if (existingChallenge) {
-    return res.json(existingChallenge);
+  if (!roomCode || roomId === null) {
+    if (roomId !== null) await db.delete(roomsTable).where(eq(roomsTable.id, roomId)).catch(() => {});
+    return res.status(503).json({ error: "Unable to allocate challenge room" });
   }
 
-  if (!roomCode) {
-    console.error("[presence/challenge] unable to allocate challenge room");
+  try {
+    const inserted = await db.execute(sql`
+      INSERT INTO player_challenges
+        (challenge_id, from_player_id, from_name, from_picture, from_avatar_color,
+         to_player_id, room_code, room_id, status, is_room_invite, created_at)
+      VALUES
+        (${challengeId}, ${fromPlayerId}, ${profile.name}, ${profile.picture || null},
+         ${profile.avatarColor || "#e53e3e"}, ${toPlayerId}, ${roomCode}, ${roomId},
+         'pending', FALSE, NOW())
+      ON CONFLICT (from_player_id, to_player_id, is_room_invite) WHERE status = 'pending'
+      DO NOTHING
+      RETURNING challenge_id, room_code, room_id
+    `);
+    if ((inserted as any).rowCount === 0) {
+      if (roomId !== null) await db.delete(roomsTable).where(eq(roomsTable.id, roomId)).catch(() => {});
+      const existing = await db.execute(sql`
+        SELECT challenge_id, room_code
+        FROM player_challenges
+        WHERE from_player_id = ${fromPlayerId}
+          AND to_player_id = ${toPlayerId}
+          AND is_room_invite = FALSE
+          AND status = 'pending'
+        ORDER BY created_at DESC
+        LIMIT 1
+      `);
+      const winner = (existing.rows as any[])[0];
+      if (!winner) return res.status(409).json({ error: "Challenge creation raced; please retry" });
+      return res.json({ challengeId: winner.challenge_id, roomCode: winner.room_code });
+    }
+  } catch (err) {
+    await db.delete(roomsTable).where(eq(roomsTable.id, roomId)).catch(() => {});
+    console.error("[presence/challenge] challenge persistence failed:", err);
     return res.status(503).json({ error: "Unable to create challenge" });
   }
 
@@ -415,7 +486,7 @@ router.post("/challenge", inviteLimiter, async (req, res) => {
 });
 
 // POST /api/presence/room-invite — invite a player to an already-existing room
-router.post("/room-invite", inviteLimiter, async (req, res) => {
+router.post("/room-invite", async (req, res) => {
   const { fromPlayerId, fromName, fromPicture, fromAvatarColor, toPlayerId, roomCode } = req.body as {
     fromPlayerId: string;
     fromName: string;
@@ -428,7 +499,7 @@ router.post("/room-invite", inviteLimiter, async (req, res) => {
   if (!fromPlayerId || !toPlayerId || !fromName || !roomCode) {
     return res.status(400).json({ error: "fromPlayerId, fromName, toPlayerId and roomCode required" });
   }
-  if (!verifyClaimedIdentity(req, fromPlayerId)) {
+  if (!await verifyClaimedIdentity(req, fromPlayerId)) {
     return res.status(403).json({ error: "Invalid player identity" });
   }
 
@@ -443,7 +514,7 @@ router.post("/room-invite", inviteLimiter, async (req, res) => {
   // at a room that disappears between the ownership check and INSERT.
   const result = await db.transaction(async (tx) => {
     const [room] = await tx
-      .select({ hostId: roomsTable.hostId })
+      .select({ hostId: roomsTable.hostId, roomId: roomsTable.id })
       .from(roomsTable)
       .where(eq(roomsTable.roomCode, normalizedRoomCode))
       .for("update")
@@ -459,32 +530,24 @@ router.post("/room-invite", inviteLimiter, async (req, res) => {
     const inserted = await tx.execute(sql`
       INSERT INTO player_challenges
         (challenge_id, from_player_id, from_name, from_picture, from_avatar_color,
-         to_player_id, room_code, status, is_room_invite, created_at)
+         to_player_id, room_code, room_id, status, is_room_invite, created_at)
       VALUES
         (${challengeId}, ${fromPlayerId}, ${profile.name}, ${profile.picture || null},
-         ${profile.avatarColor || "#e53e3e"}, ${toPlayerId}, ${normalizedRoomCode},
+         ${profile.avatarColor || "#e53e3e"}, ${toPlayerId}, ${normalizedRoomCode}, ${room.roomId},
          'pending', TRUE, NOW())
       ON CONFLICT (from_player_id, to_player_id, is_room_invite) WHERE status = 'pending'
-      DO NOTHING
+      DO UPDATE SET
+        from_name = EXCLUDED.from_name,
+        from_picture = EXCLUDED.from_picture,
+        from_avatar_color = EXCLUDED.from_avatar_color,
+        room_code = EXCLUDED.room_code,
+        room_id = EXCLUDED.room_id,
+        created_at = NOW()
       RETURNING challenge_id
     `);
-    if ((inserted as any).rowCount === 0) {
-      const existing = await tx.execute(sql`
-        SELECT challenge_id
-        FROM player_challenges
-        WHERE from_player_id = ${fromPlayerId}
-          AND to_player_id = ${toPlayerId}
-          AND is_room_invite = TRUE
-          AND status = 'pending'
-        ORDER BY created_at DESC
-        LIMIT 1
-      `);
-      const winner = (existing.rows as any[])[0];
-      if (!winner) return { error: "raced" as const };
-      return { challengeId: winner.challenge_id as string };
-    }
-
-    return { challengeId };
+    const persistedChallengeId = (inserted.rows as any[])[0]?.challenge_id as string | undefined;
+    if (!persistedChallengeId) return { error: "raced" as const };
+    return { challengeId: persistedChallengeId };
   });
 
   if ("error" in result) {
@@ -504,7 +567,7 @@ router.post("/room-invite", inviteLimiter, async (req, res) => {
     fr: { title: "🎮 Invitation à la salle !", body: `${profile.name} t'invite à rejoindre la salle ${normalizedRoomCode}` },
   };
   const invMsg = INVITE_MSGS[invLang] || INVITE_MSGS.es;
-  sendPushToPlayer(toPlayerId, { ...invMsg, url: `/multiplayer?room=${normalizedRoomCode}` }).catch(() => {});
+  sendPushToPlayer(toPlayerId, { ...invMsg, url: "/multiplayer" }).catch(() => {});
 
   return res.json({ ok: true, challengeId });
 });
@@ -512,17 +575,17 @@ router.post("/room-invite", inviteLimiter, async (req, res) => {
 // GET /api/presence/challenges/:playerId — get incoming pending challenges + room invites
 router.get("/challenges/:playerId", async (req, res) => {
   const { playerId } = req.params;
-  if (!verifyClaimedIdentity(req, playerId)) {
+  if (!await verifyClaimedIdentity(req, playerId)) {
     return res.status(403).json({ error: "Invalid player identity" });
   }
   await challengeTableReady;
   const rows = await db.execute(sql`
     SELECT challenge_id, from_player_id, from_name, from_picture, from_avatar_color,
-           to_player_id, room_code, status, is_room_invite, created_at
+           to_player_id, room_code, room_id, status, is_room_invite, created_at
     FROM player_challenges
     WHERE to_player_id = ${playerId}
       AND status = 'pending'
-      AND created_at >= NOW() - INTERVAL '60 seconds'
+      AND created_at >= NOW() - INTERVAL '2 minutes'
     ORDER BY created_at DESC
   `);
   const incoming = (rows.rows as any[]).map((c) => ({
@@ -546,35 +609,129 @@ router.post("/challenge/:challengeId/respond", async (req, res) => {
   const { accepted } = req.body as { accepted: boolean };
 
   await challengeTableReady;
-  const rows = await db.execute(sql`
-    SELECT challenge_id, from_player_id, from_name, from_picture, from_avatar_color,
-           to_player_id, room_code, status, is_room_invite, created_at
+
+  const identityRows = await db.execute(sql`
+    SELECT to_player_id
     FROM player_challenges
     WHERE challenge_id = ${challengeId}
       AND created_at >= NOW() - INTERVAL '2 minutes'
     LIMIT 1
   `);
-  const row = (rows.rows as any[])[0];
-  if (!row) return res.status(404).json({ error: "Challenge not found or expired" });
-
-  if (!verifyClaimedIdentity(req, row.to_player_id)) {
+  const identityRow = (identityRows.rows as any[])[0];
+  if (!identityRow) return res.status(404).json({ error: "Challenge not found or expired" });
+  if (!await verifyClaimedIdentity(req, identityRow.to_player_id)) {
     return res.status(403).json({ error: "Invalid player identity" });
   }
-  if (row.status !== "pending") {
-    return res.status(409).json({ error: "Challenge already answered" });
-  }
 
-  const nextStatus = accepted ? "accepted" : "declined";
-  const updated = await db.execute(sql`
-    UPDATE player_challenges
-    SET status = ${nextStatus}
-    WHERE challenge_id = ${challengeId}
-      AND status = 'pending'
-  `);
-  if ((updated as any).rowCount === 0) {
+  const result = await db.transaction(async (tx) => {
+    // Keep the lock order identical to /room-invite: room -> challenge.
+    // This prevents a deadlock when an invitation refresh races with acceptance.
+    const peek = await tx.execute(sql`
+      SELECT room_id
+      FROM player_challenges
+      WHERE challenge_id = ${challengeId}
+        AND created_at >= NOW() - INTERVAL '2 minutes'
+      LIMIT 1
+    `);
+    const peekRow = (peek.rows as any[])[0];
+    if (!peekRow) return { kind: "not_found" as const };
+
+    const [lockedRoom] = await tx.select({
+      id: roomsTable.id,
+      roomCode: roomsTable.roomCode,
+      playersJson: roomsTable.playersJson,
+    })
+      .from(roomsTable)
+      .where(eq(roomsTable.id, Number(peekRow.room_id)))
+      .for("update")
+      .limit(1);
+
+    const rows = await tx.execute(sql`
+      SELECT challenge_id, from_player_id, from_name, from_picture, from_avatar_color,
+             to_player_id, room_code, room_id, status, is_room_invite, created_at
+      FROM player_challenges
+      WHERE challenge_id = ${challengeId}
+        AND created_at >= NOW() - INTERVAL '2 minutes'
+      LIMIT 1
+      FOR UPDATE
+    `);
+    const row = (rows.rows as any[])[0];
+    if (!row) return { kind: "not_found" as const };
+    if (row.status === "accepted") {
+      // An accepted challenge remains in PostgreSQL until the 2-minute cleanup.
+      // The original room may meanwhile have been deleted and its 4-char code
+      // recycled. Never return a stale code from the challenge alone: the
+      // immutable room_id must still resolve to the original room.
+      if (!lockedRoom) return { kind: "room_gone" as const };
+      return { kind: "already_accepted" as const, roomCode: lockedRoom.roomCode as string };
+    }
+    if (row.status !== "pending") return { kind: "answered" as const };
+
+    // The challenge may have been refreshed after the initial peek. If its
+    // room changed, do not accept against the previously locked room.
+    if (!lockedRoom || Number(lockedRoom.id) !== Number(row.room_id)) {
+      if (!accepted) {
+        const declined = await tx.execute(sql`
+          UPDATE player_challenges
+          SET status = 'declined'
+          WHERE challenge_id = ${challengeId}
+            AND status = 'pending'
+        `);
+        if ((declined as any).rowCount === 0) return { kind: "answered" as const };
+        return {
+          kind: "ok" as const,
+          toPlayerId: row.to_player_id as string,
+          roomCode: null,
+        };
+      }
+      return { kind: "room_gone" as const };
+    }
+
+    if (accepted) {
+      let players: any[] = [];
+      try {
+        const parsed = JSON.parse(lockedRoom.playersJson || "[]");
+        if (Array.isArray(parsed)) players = parsed;
+      } catch {
+        players = [];
+      }
+      if (!players.some((p) => p?.playerId === row.to_player_id)) {
+        return { kind: "not_joined" as const, roomCode: row.room_code as string };
+      }
+    }
+
+    const nextStatus = accepted ? "accepted" : "declined";
+    const updated = await tx.execute(sql`
+      UPDATE player_challenges
+      SET status = ${nextStatus}
+      WHERE challenge_id = ${challengeId}
+        AND status = 'pending'
+    `);
+    if ((updated as any).rowCount === 0) return { kind: "answered" as const };
+
+    return {
+      kind: "ok" as const,
+      toPlayerId: row.to_player_id as string,
+      roomCode: accepted ? row.room_code as string : null,
+    };
+  });
+
+  if (result.kind === "not_found") {
+    return res.status(404).json({ error: "Challenge not found or expired" });
+  }
+  if (result.kind === "already_accepted") {
+    return res.json({ ok: true, roomCode: result.roomCode });
+  }
+  if (result.kind === "room_gone") {
+    return res.status(409).json({ error: "Challenge room no longer exists" });
+  }
+  if (result.kind === "answered") {
     return res.status(409).json({ error: "Challenge already answered" });
   }
-  return res.json({ ok: true, roomCode: accepted ? row.room_code : null });
+  if (result.kind === "not_joined") {
+    return res.status(409).json({ error: "Join the challenge room before accepting", roomCode: result.roomCode });
+  }
+  return res.json({ ok: true, roomCode: result.roomCode });
 });
 
 // GET /api/presence/challenge/:challengeId/status — poll status (for sender)
@@ -582,7 +739,7 @@ router.get("/challenge/:challengeId/status", async (req, res) => {
   const { challengeId } = req.params;
   await challengeTableReady;
   const rows = await db.execute(sql`
-    SELECT from_player_id, room_code, status, created_at
+    SELECT from_player_id, room_code, room_id, status, created_at
     FROM player_challenges
     WHERE challenge_id = ${challengeId}
       AND created_at >= NOW() - INTERVAL '2 minutes'
@@ -591,9 +748,28 @@ router.get("/challenge/:challengeId/status", async (req, res) => {
   const row = (rows.rows as any[])[0];
   if (!row) return res.json({ status: "expired" });
 
-  if (!verifyClaimedIdentity(req, row.from_player_id)) {
+  if (!await verifyClaimedIdentity(req, row.from_player_id)) {
     return res.status(403).json({ error: "Invalid player identity" });
   }
+
+  // The challenge stores a recyclable room code, while room_id is immutable.
+  // Once accepted, never return a stale code if the original room was deleted
+  // and its code reused by another room.
+  if (row.status === "accepted") {
+    const roomRows = await db.execute(sql`
+      SELECT room_code
+      FROM rooms
+      WHERE id = ${Number(row.room_id)}
+      LIMIT 1
+    `);
+    const room = (roomRows.rows as any[])[0];
+    if (!room) return res.json({ status: "expired", roomCode: "" });
+    return res.json({
+      status: row.status,
+      roomCode: String(room.room_code).toUpperCase(),
+    });
+  }
+
   return res.json({
     status: row.status,
     roomCode: row.room_code,

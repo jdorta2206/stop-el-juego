@@ -24,7 +24,7 @@ export async function requireRoomMember(
   roomCode: string,
   playerId: string,
 ): Promise<boolean> {
-  if (!playerId || !verifyClaimedIdentity(req, playerId)) return false;
+  if (!playerId || !await verifyClaimedIdentity(req, playerId)) return false;
 
   const roomRows = await db.select({ id: roomsTable.id })
     .from(roomsTable)

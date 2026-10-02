@@ -2,11 +2,12 @@ import "./lib/facebookGraphCompat";
 import { runMigrations } from "stripe-replit-sync";
 import { getStripeSync, markStripeReady } from "./stripeClient";
 import app from "./app";
-import { startDailyCron } from "./lib/dailyCron";
+import { startDailyCron, stopDailyCron } from "./lib/dailyCron";
 import { revokeFakePremium } from "./lib/permanentPremium";
 import { ensureIndexes } from "@workspace/db";
 import { loadRevokedPlayerIds } from "./lib/playerRevocation";
 import contactRouter from "./routes/contact";
+import { closeDbPool } from "@workspace/db";
 
 // Railway deployment trigger: keep the API service in sync with the frontend build.
 // The root build copies artifacts/stop-game/dist into the API public directory.
@@ -64,6 +65,24 @@ app.get('/delete-account', (req, res) => {
 
 
 
+const STRIPE_STARTUP_TIMEOUT_MS = 60_000;
+
+async function withStartupTimeout<T>(operation: Promise<T>, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      operation,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+          reject(new Error(`${label} timed out after ${STRIPE_STARTUP_TIMEOUT_MS}ms`));
+        }, STRIPE_STARTUP_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 async function initStripe(): Promise<boolean> {
   const databaseUrl = process.env["DATABASE_URL"];
   if (!databaseUrl) {
@@ -78,7 +97,7 @@ async function initStripe(): Promise<boolean> {
 
   try {
     console.log("Initializing Stripe schema...");
-    await runMigrations({ databaseUrl } as any);
+    await withStartupTimeout(runMigrations({ databaseUrl } as any), "Stripe schema migration");
     console.log("Stripe schema ready");
 
     const stripeSync = await getStripeSync();
@@ -96,14 +115,14 @@ async function initStripe(): Promise<boolean> {
     if (webhookHost) {
       console.log("Setting up managed Stripe webhook...");
       const webhookBaseUrl = `https://${webhookHost}`;
-      await stripeSync.findOrCreateManagedWebhook(
+      await withStartupTimeout(\n        stripeSync.findOrCreateManagedWebhook(
         `${webhookBaseUrl}/api/stripe/webhook`
       );
       console.log("Stripe webhook configured");
     }
 
     console.log("Syncing Stripe data...");
-    await stripeSync.syncBackfill();
+    await withStartupTimeout(stripeSync.syncBackfill(), "Stripe backfill");
     console.log("Stripe data synced");
 
     // Do not accept webhooks, or run Premium cleanup, until the local Stripe
@@ -115,6 +134,23 @@ async function initStripe(): Promise<boolean> {
     return false;
   }
 }
+
+let httpServer: ReturnType<typeof app.listen> | null = null;
+let shuttingDown = false;
+
+async function shutdown(signal: string) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`[shutdown] ${signal} received — stopping server`);
+  stopDailyCron();
+  if (httpServer) {
+    await new Promise<void>((resolve) => httpServer!.close(() => resolve()));
+  }
+  try { await closeDbPool(); } catch (error: any) { console.error("[shutdown] DB pool close failed:", error?.message ?? error); }
+}
+
+process.once("SIGTERM", () => { void shutdown("SIGTERM").finally(() => process.exit(0)); });
+process.once("SIGINT", () => { void shutdown("SIGINT").finally(() => process.exit(0)); });
 
 async function main() {
   const rawPort = process.env["PORT"];
@@ -131,7 +167,7 @@ async function main() {
 
   // Start listening immediately so the deployment platform detects the port.
   // Stripe initializes in the background — it can take several seconds.
-  app.listen(port, () => {
+  httpServer = app.listen(port, () => {
     console.log(`Server listening on port ${port}`);
   });
 

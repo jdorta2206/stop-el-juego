@@ -18,7 +18,8 @@ import crypto from "crypto";
 import { issuePlayerToken, clearPlayerToken, PLAYER_TOKEN_BRIDGE_KEY, readPlayerId, isLoggedInId } from "../lib/playerAuth";
 import { db, playerScoresTable } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
-import { revokePlayerId, markPlayerRevoked, restorePlayerId, isPlayerRevoked } from "../lib/playerRevocation";
+import { revokePlayerId, markPlayerRevoked, isPlayerRevoked } from "../lib/playerRevocation";
+import { withPlayerBillingLock } from "../stripeStorage";
 
 const router = Router();
 
@@ -174,15 +175,9 @@ function decodeAuthState(raw: string | undefined): { returnPath: string; returnO
 // SESSION_SECRET plus a timestamp (15-min TTL) and (b) bind it to the browser
 // with a single-use httpOnly nonce cookie set at /start.
 //
-// Cross-origin caveat: /start runs on the user's current origin (e.g. www via
-// Railway) but the provider always redirects to the callback on APP_ORIGIN
-// (stop-el-juego.replit.app). The Lax nonce cookie set at /start therefore only
-// reaches the callback when BOTH ran on the same origin (replit.app / dev). So
-// we ENFORCE binding only when the nonce cookie is present and FAIL OPEN when
-// it's absent (the cross-origin www path), keeping the fragile live login
-// working everywhere while still adding real CSRF protection on the
-// same-origin path. Apple (form_post → cross-site POST) never sends the Lax
-// cookie either, so it also fails open — fine, it isn't enabled.
+// /start is canonicalized onto APP_ORIGIN before the provider redirect.
+// The nonce cookie therefore belongs to the same host that receives every
+// callback, including Apple's cross-site form_post.
 const OAUTH_NONCE_COOKIE = "stop_oauth_nonce";
 const STATE_TTL_MS = 15 * 60 * 1000;
 
@@ -193,16 +188,20 @@ function stateSecret(): string | null {
 
 const NONCE_COOKIE_OPTS = {
   httpOnly: true,
-  sameSite: "lax" as const,
+  // The OAuth callback is a cross-site navigation (including Apple's form_post),
+  // so Lax would drop the nonce before the callback and force the verifier to
+  // fail open. None keeps the nonce bound to the canonical APP_ORIGIN callback.
+  sameSite: "none" as const,
   secure: true,
   path: "/",
 };
 
-/** Set a single-use nonce cookie and return a signed state carrying it. Falls
- *  back to the legacy unsigned encoding when no secret is configured. */
+/** Set a single-use nonce cookie and return a signed state carrying it.
+ *  OAuth callbacks require the signed state, so a missing SESSION_SECRET is
+ *  intentionally a configuration failure rather than a CSRF bypass. */
 function beginAuthState(res: Response, returnPath: string, returnOrigin: string): string {
   const secret = stateSecret();
-  if (!secret) return encodeAuthState(returnPath, returnOrigin);
+  if (!secret) throw new Error("SESSION_SECRET is required for OAuth state protection");
   const nonce = crypto.randomBytes(16).toString("base64url");
   res.cookie(OAUTH_NONCE_COOKIE, nonce, { ...NONCE_COOKIE_OPTS, maxAge: STATE_TTL_MS });
   const body = Buffer.from(
@@ -247,51 +246,49 @@ function parseSignedState(
   return null;
 }
 
-/** Resolve the return target AND check CSRF. Enforcement is limited to the
- *  same-origin path (nonce cookie present); the cross-origin path fails open. */
+/** Resolve the return target AND check CSRF. A valid OAuth state must
+ * always be bound to the nonce cookie created by /start. The callback runs on
+ * APP_ORIGIN for every provider, so SameSite=None lets the cookie survive the
+ * provider's cross-site redirect/form_post while still binding the flow to the
+ * browser that initiated it. */
 function verifyAuthState(
   req: Request,
   res: Response,
-): { returnPath: string; returnOrigin: string; csrfFail: boolean } {
+): { returnPath: string; returnOrigin: string; csrfFail: boolean; authStartedAt: number | null } {
   const raw = (req.query?.["state"] ?? req.body?.["state"]) as string | undefined;
   const nonceCookie = req.cookies?.[OAUTH_NONCE_COOKIE] as string | undefined;
   if (nonceCookie) res.clearCookie(OAUTH_NONCE_COOKIE, NONCE_COOKIE_OPTS);
 
   const signed = parseSignedState(raw);
 
-  // Same-origin path: a nonce cookie was issued for THIS flow, so we MUST see a
-  // valid signed state whose embedded nonce matches. Anything else (unsigned /
-  // legacy / malformed / stale / mismatched) is a CSRF failure — never fall back
-  // to the legacy decode here, or an attacker could downgrade to bypass the nonce.
-  if (nonceCookie) {
-    if (!signed) {
-      return { returnPath: "/", returnOrigin: APP_ORIGIN, csrfFail: true };
-    }
-    const age = Date.now() - signed.t;
-    const fresh = age <= STATE_TTL_MS && age >= -60_000;
-    let match = false;
-    try {
-      match =
-        nonceCookie.length === signed.n.length &&
-        crypto.timingSafeEqual(Buffer.from(nonceCookie), Buffer.from(signed.n));
-    } catch {
-      match = false;
-    }
-    if (!fresh || !match) {
-      return { returnPath: signed.r, returnOrigin: signed.o, csrfFail: true };
-    }
-    return { returnPath: signed.r, returnOrigin: signed.o, csrfFail: false };
+  // No nonce means this callback was not initiated by this browser. Never
+  // accept a signed or legacy state without the browser binding: otherwise an
+  // attacker can complete OAuth for their own account and replay the callback
+  // URL to log a victim into the attacker's account (login-CSRF).
+  if (!nonceCookie || !signed) {
+    return {
+      returnPath: signed?.r ?? "/",
+      returnOrigin: signed?.o ?? APP_ORIGIN,
+      csrfFail: true,
+      authStartedAt: signed?.t ?? null,
+    };
   }
 
-  // No nonce cookie reached this host (cross-origin www/TWA, Apple form_post,
-  // legacy links, or no SESSION_SECRET configured): fail open so login works.
-  if (signed) {
-    // Trust the integrity-checked (HMAC) payload for the return target.
-    return { returnPath: signed.r, returnOrigin: signed.o, csrfFail: false };
+  const age = Date.now() - signed.t;
+  const fresh = age <= STATE_TTL_MS && age >= -60_000;
+  let match = false;
+  try {
+    match =
+      nonceCookie.length === signed.n.length &&
+      crypto.timingSafeEqual(Buffer.from(nonceCookie), Buffer.from(signed.n));
+  } catch {
+    match = false;
   }
-  // Legacy / unsigned state — preserve prior behavior.
-  const legacy = decodeAuthState(raw);
-  return { returnPath: legacy.returnPath, returnOrigin: legacy.returnOrigin, csrfFail: false };
+  if (!fresh || !match) {
+    return { returnPath: signed.r, returnOrigin: signed.o, csrfFail: true, authStartedAt: signed.t };
+  }
+
+  return { returnPath: signed.r, returnOrigin: signed.o, csrfFail: false, authStartedAt: signed.t };
 }
 
 // ── Dedup cache: prevent double-use of OAuth codes (mobile browsers fire callback twice) ──
@@ -371,6 +368,37 @@ router.post("/handoff", async (req: Request, res: Response) => {
   }
 });
 
+async function persistOAuthProfile(
+  playerId: string,
+  playerName: string,
+  profilePicture: string | null,
+  authStartedAt: number | null,
+): Promise<void> {
+  await db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${playerId}, 0))`);
+    const revoked = await tx.execute(sql`
+      SELECT revoked_at FROM revoked_player_ids WHERE player_id = ${playerId} LIMIT 1
+    `);
+    const revokedAt = (revoked.rows?.[0] as { revoked_at?: string | Date } | undefined)?.revoked_at;
+    if (revokedAt && authStartedAt != null) {
+      const revokedMs = new Date(revokedAt).getTime();
+      if (Number.isFinite(revokedMs) && revokedMs >= authStartedAt) {
+        throw new Error("Account was deleted during OAuth login");
+      }
+    }
+    await tx.insert(playerScoresTable).values({
+      playerId,
+      playerName,
+      avatarColor: "#f9a825",
+      profilePicture,
+    }).onConflictDoUpdate({
+      target: playerScoresTable.playerId,
+      set: { playerName, profilePicture, updatedAt: new Date() },
+    });
+    await tx.execute(sql`DELETE FROM revoked_player_ids WHERE player_id = ${playerId}`);
+  });
+}
+
 // ── GOOGLE ─────────────────────────────────────────────────────────────────────
 
 router.get("/google/start", (req: Request, res: Response) => {
@@ -398,7 +426,7 @@ router.get("/google/start", (req: Request, res: Response) => {
 
 router.get("/google/callback", async (req: Request, res: Response) => {
   const code  = req.query["code"]  as string | undefined;
-  const { returnPath, returnOrigin, csrfFail } = verifyAuthState(req, res);
+  const { returnPath, returnOrigin, csrfFail, authStartedAt } = verifyAuthState(req, res);
   if (csrfFail) return res.redirect(`${APP_ORIGIN}/?auth_error=csrf`);
   const error = req.query["error"] as string | undefined;
 
@@ -431,7 +459,6 @@ router.get("/google/callback", async (req: Request, res: Response) => {
       }),
     });
     const tokenData = (await tokenRes.json()) as OAuthTokenResponse;
-    console.log("Google token response keys:", Object.keys(tokenData));
     if (tokenData.error) {
       console.error("Google token error:", tokenData.error, tokenData.error_description);
       throw new Error(`Google error: ${tokenData.error} - ${tokenData.error_description}`);
@@ -454,9 +481,11 @@ router.get("/google/callback", async (req: Request, res: Response) => {
       throw new Error("No id_token or access_token in Google response");
     }
 
-    const playerId = `google_${payload.sub}`;
+    const googleSub = typeof payload.sub === "string" ? payload.sub.trim() : "";
+    if (!googleSub) throw new Error("No sub from Google");
+    const playerId = `google_${googleSub}`;
     const googlePicture = typeof payload.picture === "string" ? payload.picture : null;
-    await db.insert(playerScoresTable).values({ playerId, playerName: String(payload.name || "Usuario").trim().slice(0, 14) || "Usuario", avatarColor: "#f9a825", profilePicture: googlePicture }).onConflictDoUpdate({ target: playerScoresTable.playerId, set: { playerName: String(payload.name || "Usuario").trim().slice(0, 14) || "Usuario", profilePicture: googlePicture, updatedAt: new Date() } });
+    await persistOAuthProfile(playerId, String(payload.name || "Usuario").trim().slice(0, 14) || "Usuario", googlePicture, authStartedAt);
 
     const user = JSON.stringify({
       id:       playerId,
@@ -466,8 +495,7 @@ router.get("/google/callback", async (req: Request, res: Response) => {
       provider: "google",
     });
 
-    await restorePlayerId(playerId);
-    const sessionToken = issuePlayerToken(res, playerId);
+        const sessionToken = issuePlayerToken(res, playerId);
     res.send(await bridgePageMulti([
       ["oauth_user", user],
       ...(sessionToken ? [[PLAYER_TOKEN_BRIDGE_KEY, sessionToken] as [string, string]] : []),
@@ -503,7 +531,7 @@ router.get("/facebook/start", (req: Request, res: Response) => {
 
 router.get("/facebook/callback", async (req: Request, res: Response) => {
   const code  = req.query["code"]  as string | undefined;
-  const { returnPath, returnOrigin, csrfFail } = verifyAuthState(req, res);
+  const { returnPath, returnOrigin, csrfFail, authStartedAt } = verifyAuthState(req, res);
   if (csrfFail) return res.redirect(`${APP_ORIGIN}/?auth_error=csrf`);
   const error = req.query["error"] as string | undefined;
 
@@ -533,11 +561,14 @@ router.get("/facebook/callback", async (req: Request, res: Response) => {
 
     // Fetch profile
     const meRes = await oauthFetch(
-      `https://graph.facebook.com/v26.0/me?fields=id,name,email,picture.type(large)&access_token=${tokenData.access_token}`
+      "https://graph.facebook.com/v26.0/me?fields=id,name,email,picture.type(large)",
+      { headers: { Authorization: `Bearer ${tokenData.access_token}` } },
     );
     const me = (await meRes.json()) as OAuthProfile;
 
-    const playerId = `fb_${me.id}`;
+    const facebookId = typeof me.id === "string" ? me.id.trim() : "";
+    if (!facebookId) throw new Error("No id from Facebook");
+    const playerId = `fb_${facebookId}`;
     const facebookName = String(me.name || "Facebook User").trim().slice(0, 14) || "Facebook User";
     const facebookPicture =
       (typeof me.picture === "object" ? me.picture.data?.url : undefined) || null;
@@ -546,22 +577,7 @@ router.get("/facebook/callback", async (req: Request, res: Response) => {
     // This is important for Android/TWA: if the browser drops the handoff URL
     // during the provider return, /api/auth/me must still be able to hydrate
     // the logged-in player instead of returning name=null and reopening AuthModal.
-    await db
-      .insert(playerScoresTable)
-      .values({
-        playerId,
-        playerName: facebookName,
-        avatarColor: "#f9a825",
-        profilePicture: facebookPicture,
-      })
-      .onConflictDoUpdate({
-        target: playerScoresTable.playerId,
-        set: {
-          playerName: facebookName,
-          profilePicture: facebookPicture,
-          updatedAt: new Date(),
-        },
-      });
+    await persistOAuthProfile(playerId, facebookName, facebookPicture, authStartedAt);
 
     const user = JSON.stringify({
       id:       playerId,
@@ -571,8 +587,7 @@ router.get("/facebook/callback", async (req: Request, res: Response) => {
       provider: "facebook",
     });
 
-    await restorePlayerId(playerId);
-    const sessionToken = issuePlayerToken(res, playerId);
+        const sessionToken = issuePlayerToken(res, playerId);
     res.send(await bridgePageMulti([
       ["oauth_user", user],
       ["fb_access_token", tokenData.access_token],
@@ -608,7 +623,7 @@ router.get("/instagram/start", (req: Request, res: Response) => {
 
 router.get("/instagram/callback", async (req: Request, res: Response) => {
   const code  = req.query["code"]  as string | undefined;
-  const { returnPath, returnOrigin, csrfFail } = verifyAuthState(req, res);
+  const { returnPath, returnOrigin, csrfFail, authStartedAt } = verifyAuthState(req, res);
   if (csrfFail) return res.redirect(`${APP_ORIGIN}/?auth_error=csrf`);
   const error = req.query["error"] as string | undefined;
 
@@ -647,11 +662,14 @@ router.get("/instagram/callback", async (req: Request, res: Response) => {
     if (!tokenData.access_token) throw new Error("No access_token from Instagram");
 
     const meRes = await oauthFetch(
-      `https://graph.instagram.com/v21.0/me?fields=id,username,profile_picture_url&access_token=${tokenData.access_token}`
+      "https://graph.instagram.com/v21.0/me?fields=id,username,profile_picture_url",
+      { headers: { Authorization: `Bearer ${tokenData.access_token}` } },
     );
     const me = (await meRes.json()) as OAuthProfile;
 
-    const playerId = `ig_${me.id}`;
+    const instagramId = typeof me.id === "string" ? me.id.trim() : "";
+    if (!instagramId) throw new Error("No id from Instagram");
+    const playerId = `ig_${instagramId}`;
     const user = JSON.stringify({
       id:       playerId,
       name:     me.username || me.name || "Usuario",
@@ -659,10 +677,9 @@ router.get("/instagram/callback", async (req: Request, res: Response) => {
       provider: "instagram",
     });
 
-    await db.insert(playerScoresTable).values({ playerId, playerName: String(me.username || me.name || "Usuario").trim().slice(0, 14) || "Usuario", avatarColor: "#f9a825", profilePicture: me.profile_picture_url || null }).onConflictDoUpdate({ target: playerScoresTable.playerId, set: { playerName: String(me.username || me.name || "Usuario").trim().slice(0, 14) || "Usuario", profilePicture: me.profile_picture_url || null, updatedAt: new Date() } });
+    await persistOAuthProfile(playerId, String(me.username || me.name || "Usuario").trim().slice(0, 14) || "Usuario", me.profile_picture_url || null, authStartedAt);
 
-    await restorePlayerId(playerId);
-    const sessionToken = issuePlayerToken(res, playerId);
+        const sessionToken = issuePlayerToken(res, playerId);
     res.send(await bridgePageMulti([
       ["oauth_user", user],
       ...(sessionToken ? [[PLAYER_TOKEN_BRIDGE_KEY, sessionToken] as [string, string]] : []),
@@ -716,7 +733,7 @@ router.get("/apple/start", (req: Request, res: Response) => {
 // Apple sends a POST (form_post response_mode)
 router.post("/apple/callback", async (req: Request, res: Response) => {
   const code  = req.body?.["code"]  as string | undefined;
-  const { returnPath, returnOrigin, csrfFail } = verifyAuthState(req, res);
+  const { returnPath, returnOrigin, csrfFail, authStartedAt } = verifyAuthState(req, res);
   if (csrfFail) return res.redirect(`${APP_ORIGIN}/?auth_error=csrf`);
   const error = req.body?.["error"] as string | undefined;
 
@@ -769,28 +786,14 @@ router.post("/apple/callback", async (req: Request, res: Response) => {
       }
     } catch (_) {}
 
-    const playerId = `apple_${payload.sub}`;
-    const appleName = displayName.slice(0, 14) || "Apple User";
-    const hasAppleName = displayName !== "Apple User";
+    const appleSub = typeof payload.sub === "string" ? payload.sub.trim() : "";
+    if (!appleSub) throw new Error("No sub from Apple");
+    const playerId = `apple_${appleSub}`;
 
-    // Apple normally sends the name only on the first authorization. On later
-    // logins req.body.user is absent, so never overwrite an existing profile
-    // name with the fallback "Apple User".
-    await db
-      .insert(playerScoresTable)
-      .values({
-        playerId,
-        playerName: appleName,
-        avatarColor: "#f9a825",
-        profilePicture: null,
-      })
-      .onConflictDoUpdate({
-        target: playerScoresTable.playerId,
-        set: {
-          ...(hasAppleName ? { playerName: appleName } : {}),
-          updatedAt: new Date(),
-        },
-      });
+    // Persist the Apple profile just like Google/Facebook/Instagram.
+    // Without this row, a later /api/auth/me restore kept the session cookie
+    // but returned name/avatar as null after the OAuth handoff was gone.
+    await persistOAuthProfile(playerId, displayName.slice(0, 14) || "Apple User", null, authStartedAt);
 
     const user = JSON.stringify({
       id:       playerId,
@@ -800,8 +803,7 @@ router.post("/apple/callback", async (req: Request, res: Response) => {
       provider: "apple",
     });
 
-    await restorePlayerId(playerId);
-    const sessionToken = issuePlayerToken(res, playerId);
+        const sessionToken = issuePlayerToken(res, playerId);
     res.send(await bridgePageMulti([
       ["oauth_user", user],
       ...(sessionToken ? [[PLAYER_TOKEN_BRIDGE_KEY, sessionToken] as [string, string]] : []),
@@ -836,7 +838,7 @@ router.get("/tiktok/start", (req: Request, res: Response) => {
 
 router.get("/tiktok/callback", async (req: Request, res: Response) => {
   const code  = req.query["code"]  as string | undefined;
-  const { returnPath, returnOrigin, csrfFail } = verifyAuthState(req, res);
+  const { returnPath, returnOrigin, csrfFail, authStartedAt } = verifyAuthState(req, res);
   if (csrfFail) return res.redirect(`${APP_ORIGIN}/?auth_error=csrf`);
   const error = req.query["error"] as string | undefined;
 
@@ -848,6 +850,9 @@ router.get("/tiktok/callback", async (req: Request, res: Response) => {
   }
   if (!TIKTOK_CLIENT_KEY || !TIKTOK_CLIENT_SECRET) {
     return res.redirect(`${APP_ORIGIN}/?auth_error=tiktok_not_configured`);
+  }
+  if (!claimCode(`tiktok_${code}`)) {
+    return res.redirect(`${returnOrigin}${returnPath}`);
   }
 
   try {
@@ -875,9 +880,6 @@ router.get("/tiktok/callback", async (req: Request, res: Response) => {
     if (!accessToken) throw new Error("No access_token from TikTok");
 
     const openId = tokenData.open_id || tokenData.data?.open_id;
-    if (typeof openId !== "string" || !openId.trim()) {
-      throw new Error("TikTok OAuth response missing open_id");
-    }
 
     const meRes = await oauthFetch(
       "https://open.tiktokapis.com/v2/user/info/?fields=open_id,display_name,avatar_url",
@@ -886,35 +888,27 @@ router.get("/tiktok/callback", async (req: Request, res: Response) => {
     const meData = (await meRes.json()) as TikTokUserResponse;
     const me = meData.data?.user || meData.user || {};
 
-    const resolvedOpenId = typeof me.open_id === "string" && me.open_id.trim() ? me.open_id : openId;
-    const playerId = `tt_${resolvedOpenId}`;
+    const resolvedOpenId = typeof me.open_id === "string" && me.open_id.trim()
+      ? me.open_id.trim()
+      : typeof openId === "string" && openId.trim()
+        ? openId.trim()
+        : "";
+    if (!resolvedOpenId) throw new Error("No open_id from TikTok");
 
-    await db
-      .insert(playerScoresTable)
-      .values({
-        playerId,
-        playerName: String(me.display_name || "Tiktoker").trim().slice(0, 14) || "Tiktoker",
-        avatarColor: "#f9a825",
-        profilePicture: me.avatar_url || null,
-      })
-      .onConflictDoUpdate({
-        target: playerScoresTable.playerId,
-        set: {
-          playerName: String(me.display_name || "Tiktoker").trim().slice(0, 14) || "Tiktoker",
-          profilePicture: me.avatar_url || null,
-          updatedAt: new Date(),
-        },
-      });
+    const playerId = `tt_${resolvedOpenId}`;
+    const tiktokName = String(me.display_name || "TikToker").trim().slice(0, 14) || "TikToker";
+    const tiktokPicture = typeof me.avatar_url === "string" ? me.avatar_url : null;
+
+    await persistOAuthProfile(playerId, tiktokName, tiktokPicture, authStartedAt);
 
     const user = JSON.stringify({
       id:       playerId,
-      name:     me.display_name || "TikToker",
-      picture:  me.avatar_url || null,
+      name:     tiktokName,
+      picture:  tiktokPicture,
       provider: "tiktok",
     });
 
-    await restorePlayerId(playerId);
-    const sessionToken = issuePlayerToken(res, playerId);
+        const sessionToken = issuePlayerToken(res, playerId);
     res.send(await bridgePageMulti([
       ["oauth_user", user],
       ...(sessionToken ? [[PLAYER_TOKEN_BRIDGE_KEY, sessionToken] as [string, string]] : []),
@@ -934,7 +928,7 @@ router.get("/tiktok/callback", async (req: Request, res: Response) => {
 // session by another year so casual players never get kicked out.
 router.get("/me", async (req: Request, res: Response) => {
   const playerId = readPlayerId(req);
-  if (!playerId || isPlayerRevoked(playerId)) {
+  if (!playerId || await isPlayerRevoked(playerId)) {
     return res.status(401).json({ error: "Not authenticated" });
   }
 
@@ -1018,6 +1012,7 @@ router.post("/delete-account", async (req: Request, res: Response) => {
   }
 
   try {
+    return await withPlayerBillingLock(playerId, async () => {
     const rows = await db.execute(sql`
       SELECT player_id, stripe_customer_id
       FROM player_scores
@@ -1207,6 +1202,7 @@ router.post("/delete-account", async (req: Request, res: Response) => {
     markPlayerRevoked(playerId);
     clearPlayerToken(res);
     return res.json({ ok: true, deleted: true });
+    });
   } catch (error) {
     console.error("[auth/delete-account] error:", error);
     return res.status(500).json({ error: "No se pudo eliminar la cuenta. Inténtalo de nuevo." });

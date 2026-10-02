@@ -116,7 +116,7 @@ router.post("/", async (req, res) => {
     hostId: string; hostName: string; name: string; size: number; isPublic?: boolean;
   };
   if (!hostId || !name) { res.status(400).json({ error: "Missing fields" }); return; }
-  if (!verifyClaimedIdentity(req, hostId)) {
+  if (!await verifyClaimedIdentity(req, hostId)) {
     res.status(403).json({ error: "Identity verification failed" }); return;
   }
   const [hostProfile] = await db.select({ playerName: playerScoresTable.playerName }).from(playerScoresTable).where(eq(playerScoresTable.playerId, hostId)).limit(1);
@@ -180,7 +180,7 @@ router.get("/:code", async (req, res) => {
 router.post("/:code/join", async (req, res) => {
   const code = req.params.code.toUpperCase();
   const { playerId } = req.body as { playerId: string };
-  if (!playerId || !verifyClaimedIdentity(req, playerId)) {
+  if (!playerId || !await verifyClaimedIdentity(req, playerId)) {
     res.status(403).json({ error: "Identity verification failed" }); return;
   }
   const [playerProfile] = await db.select({ playerName: playerScoresTable.playerName }).from(playerScoresTable).where(eq(playerScoresTable.playerId, playerId)).limit(1);
@@ -217,7 +217,7 @@ router.post("/:code/join", async (req, res) => {
 router.post("/:code/start", async (req, res) => {
   const code = req.params.code.toUpperCase();
   const { hostId } = req.body as { hostId: string };
-  if (!hostId || !verifyClaimedIdentity(req, hostId)) {
+  if (!hostId || !await verifyClaimedIdentity(req, hostId)) {
     res.status(403).json({ error: "Identity verification failed" }); return;
   }
 

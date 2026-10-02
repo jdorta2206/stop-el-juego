@@ -1,6 +1,6 @@
 import crypto from "crypto";
 import type { Request, Response, NextFunction } from "express";
-import { isPlayerRevoked, isPlayerRevocationCacheReady } from "./playerRevocation";
+import { isPlayerRevoked } from "./playerRevocation";
 
 // Session token / cookie lifetime. Kept short (30 days) to bound the blast
 // radius of a leaked token. Active players never notice expiry because
@@ -80,11 +80,11 @@ export function readPlayerId(req: Request): string | null {
 }
 
 /** Middleware: 401s unless caller has a valid signed playerId token. */
-export function requirePlayerIdentity(
+export async function requirePlayerIdentity(
   req: AuthedRequest,
   res: Response,
   next: NextFunction,
-): void {
+): Promise<void> {
   if (!getSigningSecret()) {
     res.status(503).json({ error: "Server auth not configured" });
     return;
@@ -94,11 +94,7 @@ export function requirePlayerIdentity(
     res.status(401).json({ error: "Authentication required" });
     return;
   }
-  if (!isPlayerRevocationCacheReady()) {
-    res.status(503).json({ error: "Server auth warming up" });
-    return;
-  }
-  if (isPlayerRevoked(pid)) {
+  if (await isPlayerRevoked(pid)) {
     res.status(401).json({ error: "Account deleted" });
     return;
   }
@@ -172,10 +168,10 @@ export function isAuthConfigured(): boolean {
  * Fails OPEN when auth isn't configured so a missing secret can't lock everyone
  * out of the live game. Returns true when the request may proceed.
  */
-export function verifyClaimedIdentity(
+export async function verifyClaimedIdentity(
   req: Request,
   claimedId: string | null | undefined,
-): boolean {
+): Promise<boolean> {
   if (!claimedId) return true;
   // Bot identities are server-owned and must never be accepted as guest
   // identities from an HTTP caller. Bots act through server-side bot logic;
@@ -186,7 +182,7 @@ export function verifyClaimedIdentity(
   // A deleted OAuth account must remain unusable even while an old signed token
   // is still inside its normal TTL. Revocations are loaded from the database at
   // startup and updated immediately when an account is deleted.
-  if (!isPlayerRevocationCacheReady() || isPlayerRevoked(claimedId)) return false;
+  if (await isPlayerRevoked(claimedId)) return false;
   // Logged-in identities require the signing secret so the caller can be
   // cryptographically bound to the claimed account. Failing open here would
   // turn a missing SESSION_SECRET into an IDOR on billing/account endpoints.

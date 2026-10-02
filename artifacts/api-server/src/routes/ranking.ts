@@ -1,18 +1,20 @@
 import { Router, type IRouter } from "express";
 import crypto from "crypto";
 import { db } from "@workspace/db";
-import { playerScoresTable, gameHistoryTable, pushSubscriptionsTable, scoreBonusClaimsTable, scoreSubmissionIdempotencyTable } from "@workspace/db";
+import { playerScoresTable, gameHistoryTable, pushSubscriptionsTable, scoreBonusClaimsTable, scoreSubmissionClaimsTable } from "@workspace/db";
 import { eq, desc, sql } from "drizzle-orm";
 import { sendPushToPlayer } from "../lib/pushHelper";
 import { recordTrustedAnalyticsEvent } from "./analytics";
 import { resolveCosmetic } from "../lib/inventoryCatalog";
 import { SubmitScoreBody, GetLeaderboardQueryParams } from "@workspace/api-zod";
 import { scoreLimiter } from "../middlewares/rateLimit";
-import { verifyClaimedIdentity, requirePlayerIdentity, type AuthedRequest } from "../lib/playerAuth";
-import { verifyScoreVouchers, claimScoreVouchersTx, ceilingFromBase, absoluteCeiling } from "../lib/scoreToken";
-import { applyAuthoritativeSeasonEventsTx, getOrCreateActiveSeason, getOrCreateProgress } from "./season";
+import { requirePlayerIdentity, type AuthedRequest } from "../lib/playerAuth";
+import { sumVerifiedBasePersistent, consumeScoreVoucherJtis, ceilingFromBase, absoluteCeiling } from "../lib/scoreToken";
+import { applyAuthoritativeSeasonEventsInTransaction } from "./season";
+import { recordHalloweenEvent, isHalloweenPreviewAuthorized } from "./halloween";
 import {
   isHappyHourActiveForTzOffset,
+  isHappyHourActiveForTimeZone,
   HAPPY_HOUR_MULTIPLIER,
 } from "../lib/happyHour";
 
@@ -26,32 +28,7 @@ function bonusTokenSetHash(playerId: string, tokens: unknown): string | null {
   return crypto.createHash("sha256").update(playerId + "\n" + normalized.join("\n")).digest("hex");
 }
 
-function offlineSubmissionRequestHash(input: {
-  playerId: string;
-  playerName: string;
-  avatarColor?: string;
-  score: number;
-  letter: string;
-  mode: string;
-  won?: boolean;
-  bonus?: boolean;
-  scoreTokens?: string[];
-}): string {
-  const canonical = JSON.stringify({
-    playerId: input.playerId,
-    playerName: input.playerName,
-    avatarColor: input.avatarColor ?? null,
-    score: input.score,
-    letter: input.letter,
-    mode: input.mode,
-    won: input.won ?? false,
-    bonus: input.bonus ?? false,
-    scoreTokens: Array.isArray(input.scoreTokens) ? [...input.scoreTokens].sort() : [],
-  });
-  return crypto.createHash("sha256").update(canonical).digest("hex");
-}
-
-function calcCoinGain(score: number, won: boolean, mode: string, isBonus: boolean): number {
+export function calcCoinGain(score: number, won: boolean, mode: string, isBonus: boolean): number {
   if (isBonus) return 0;
   const base = Math.max(1, Math.floor(score / 30));
   const winBonus = won ? 3 : 0;
@@ -59,21 +36,20 @@ function calcCoinGain(score: number, won: boolean, mode: string, isBonus: boolea
   return base + winBonus + modeBonus;
 }
 
-async function lookupPlayerTzOffset(playerId: string): Promise<number | null> {
+export async function lookupPlayerTimezone(playerId: string): Promise<{ timeZone: string | null; tzOffset: number | null }> {
   try {
     const rows = await db
-      .select({ tz: pushSubscriptionsTable.tzOffsetMinutes })
+      .select({ timeZone: pushSubscriptionsTable.timeZone, tz: pushSubscriptionsTable.tzOffsetMinutes })
       .from(pushSubscriptionsTable)
       .where(sql`${pushSubscriptionsTable.playerId} = ${playerId}
               AND ${pushSubscriptionsTable.enabled} = TRUE`)
-      .orderBy(desc(pushSubscriptionsTable.id))
+      .orderBy(sql`CASE WHEN ${pushSubscriptionsTable.timeZone} IS NOT NULL THEN 0 ELSE 1 END`)
       .limit(1);
-    return rows[0]?.tz ?? null;
+    return { timeZone: rows[0]?.timeZone ?? null, tzOffset: rows[0]?.tz ?? null };
   } catch {
-    return null;
+    return { timeZone: null, tzOffset: null };
   }
 }
-
 const router: IRouter = Router();
 
 const LEVEL_THRESHOLDS = [
@@ -148,12 +124,15 @@ function parseAchievementCount(json: unknown): number {
 // ============================================================
 router.get("/scores", async (req, res) => {
   const query = GetLeaderboardQueryParams.safeParse(req.query);
-  const limit = query.success ? (query.data.limit ?? 20) : 20;
+  // Public leaderboard reads are intentionally bounded. Without a server-side cap,
+  // `?limit=<huge>` could force an unnecessarily large DB result and response.
+  const requestedLimit = query.success ? (query.data.limit ?? 20) : 20;
+  const limit = Math.min(100, Math.max(1, Math.floor(requestedLimit)));
 
   const rows = await db.execute(sql`
-    SELECT *
+    SELECT *, RANK() OVER (ORDER BY total_score DESC) AS rank_position
     FROM player_scores
-    ORDER BY total_score DESC
+    ORDER BY total_score DESC, player_id ASC
     LIMIT ${limit}
   `);
 
@@ -183,7 +162,7 @@ router.get("/scores", async (req, res) => {
       title: getTitle(i + 1),
       createdAt: p.created_at,
       updatedAt: p.updated_at,
-      rank: i + 1,
+      rank: Number(p.rank_position ?? (i + 1)),
     })),
     total,
   });
@@ -207,12 +186,13 @@ router.get("/weekly", async (req, res) => {
       ps.achievements_json AS "achievementsJson",
       SUM(gh.score)       AS "totalScore",
       COUNT(*)            AS "gamesPlayed",
-      SUM(CASE WHEN gh.won THEN 1 ELSE 0 END) AS "wins"
+      SUM(CASE WHEN gh.won THEN 1 ELSE 0 END) AS "wins",
+      RANK() OVER (ORDER BY SUM(gh.score) DESC) AS "rank"
     FROM game_history gh
     LEFT JOIN player_scores ps ON gh.player_id = ps.player_id
     WHERE gh.created_at >= date_trunc('week', NOW() AT TIME ZONE 'UTC')
     GROUP BY gh.player_id, ps.player_name, ps.avatar_color, ps.profile_picture, ps.equipped_avatar, ps.equipped_frame, ps.equipped_title, ps.current_streak, ps.is_premium, ps.achievements_json
-    ORDER BY SUM(gh.score) DESC
+    ORDER BY SUM(gh.score) DESC, gh.player_id ASC
     LIMIT 100
   `);
 
@@ -230,8 +210,8 @@ router.get("/weekly", async (req, res) => {
     currentStreak: Number(p.currentStreak ?? 0),
     isPremium:     p.isPremium ?? false,
     achievementCount: parseAchievementCount(p.achievementsJson),
-    title:         getTitle(i + 1),
-    rank:          i + 1,
+    title:         getTitle(Number(p.rank ?? (i + 1))),
+    rank:          Number(p.rank ?? (i + 1)),
   }));
 
   const now = new Date();
@@ -295,7 +275,8 @@ router.get("/monthly", async (_req, res) => {
       ps.achievements_json AS "achievementsJson",
       SUM(gh.score)       AS "totalScore",
       COUNT(*)            AS "gamesPlayed",
-      SUM(CASE WHEN gh.won THEN 1 ELSE 0 END) AS "wins"
+      SUM(CASE WHEN gh.won THEN 1 ELSE 0 END) AS "wins",
+      RANK() OVER (ORDER BY SUM(gh.score) DESC) AS "rank"
     FROM game_history gh
     LEFT JOIN player_scores ps ON gh.player_id = ps.player_id
     WHERE gh.created_at >= date_trunc('month', NOW() AT TIME ZONE 'UTC')
@@ -314,8 +295,8 @@ router.get("/monthly", async (_req, res) => {
     currentStreak: Number(p.currentStreak ?? 0),
     isPremium:     p.isPremium ?? false,
     achievementCount: parseAchievementCount(p.achievementsJson),
-    title:         getTitle(i + 1),
-    rank:         i + 1,
+    title:         getTitle(Number(p.rank ?? (i + 1))),
+    rank:         Number(p.rank ?? (i + 1)),
   }));
 
   const now = new Date();
@@ -444,9 +425,6 @@ router.get("/profile/:playerId", async (req, res) => {
     currentStreak: ps.currentStreak ?? 0,
     longestStreak: ps.longestStreak ?? 0,
     isPremium: ps.isPremium ?? false,
-    xp: ps.xp ?? 0,
-    level: ps.level ?? 1,
-    coins: ps.coins ?? 0,
     globalRank,
     monthlyScore,
     modeStats,
@@ -457,33 +435,65 @@ router.get("/profile/:playerId", async (req, res) => {
 // ============================================================
 // POST /scores
 // ============================================================
-router.post("/scores", scoreLimiter, async (req, res) => {
+router.post("/scores", scoreLimiter, requirePlayerIdentity, async (req: AuthedRequest, res) => {
   const body = SubmitScoreBody.safeParse(req.body);
   if (!body.success) {
     res.status(400).json({ error: "Invalid request body" });
     return;
   }
 
-  const { playerId, playerName, avatarColor, score: rawScore, letter, mode, won, bonus, scoreTokens } = body.data;
-  const offlineSubmissionId = body.data.offlineSubmissionId;
-  const offlineSubmissionHash = offlineSubmissionId
-    ? offlineSubmissionRequestHash(body.data)
-    : null;
-  // Offline submissions must be voucher-free: the offline path is explicitly
-  // bounded by the absolute ceiling and therefore must never burn online
-  // score vouchers before the idempotency guard runs.
-  if (offlineSubmissionId && (bonus === true || (Array.isArray(scoreTokens) && scoreTokens.length > 0))) {
-    res.status(422).json({ error: "INVALID_OFFLINE_SUBMISSION" });
-    return;
-  }
+  const { playerId, playerName, avatarColor, score: rawScore, letter, mode, won, bonus, scoreTokens, submissionId } = body.data;
 
-
-  if (!verifyClaimedIdentity(req, playerId)) {
+  // Score writes are account-owned state. This endpoint is only used by the
+  // logged-in Solo client, so ownership comes from the signed session rather
+  // than a caller-controlled guest/player id.
+  if (req.playerId !== playerId) {
     res.status(403).json({ error: "Identity verification failed" });
     return;
   }
 
   const isBonus = bonus === true;
+
+  // Every authoritative client submission carries a stable ID for the logical
+  // score write. A retry must resolve to the already-accepted write rather than
+  // crediting score/XP/coins/history a second time. Legacy requests without an
+  // ID are still accepted only when they carry server vouchers (those vouchers
+  // already provide replay protection); unverified offline requests must use
+  // the idempotency key.
+  if (typeof submissionId === "string" && !/^[A-Za-z0-9._:-]{8,160}$/.test(submissionId)) {
+    res.status(400).json({ error: "INVALID_SUBMISSION_ID" });
+    return;
+  }
+  if (!submissionId && !isBonus && (!Array.isArray(scoreTokens) || scoreTokens.length === 0)) {
+    res.status(422).json({ error: "SUBMISSION_ID_REQUIRED" });
+    return;
+  }
+  if (submissionId) {
+    const [priorClaim] = await db
+      .select({ id: scoreSubmissionClaimsTable.id })
+      .from(scoreSubmissionClaimsTable)
+      .where(sql`${scoreSubmissionClaimsTable.playerId} = ${playerId}
+        AND ${scoreSubmissionClaimsTable.submissionId} = ${submissionId}
+        AND ${scoreSubmissionClaimsTable.isBonus} = ${isBonus}`)
+      .limit(1);
+    if (priorClaim) {
+      const [currentPlayer] = await db
+        .select()
+        .from(playerScoresTable)
+        .where(eq(playerScoresTable.playerId, playerId))
+        .limit(1);
+      if (!currentPlayer) {
+        res.status(409).json({ error: "SUBMISSION_ALREADY_CLAIMED" });
+        return;
+      }
+      res.status(201).json({
+        ...currentPlayer,
+        rank: 0,
+        rewards: { xpAwarded: 0, coinsAwarded: 0, happyHourActive: false, multiplier: 1 },
+      });
+      return;
+    }
+  }
   // Keep the bonus claim identity outside the validation block because the
   // same value is atomically consumed inside the transaction below.
   let bonusClaimTokenSetHash: string | null = null;
@@ -516,14 +526,12 @@ router.post("/scores", scoreLimiter, async (req, res) => {
     ? await db.select().from(playerScoresTable).where(eq(playerScoresTable.playerId, playerId)).limit(1)
     : [];
 
-  const verifiedVouchers = isBonus
-    ? { vouchers: [], base: 0, verified: 0, collectionWords: [] as Array<{ word: string; category: string }>, mode: null, aiBase: 0 }
-    // Verify now, but do not burn the vouchers until the score transaction commits.
-    : await verifyScoreVouchers(scoreTokens, 3);
-  const { base: verifiedBase, verified, collectionWords, mode: certifiedMode, aiBase: certifiedAiBase } = verifiedVouchers;
-  const rewardClaimTokenSetHash = !isBonus && verified > 0 && Array.isArray(scoreTokens)
-    ? bonusTokenSetHash(playerId, scoreTokens)
-    : null;
+  const { base: verifiedBase, verified, collectionWords, mode: certifiedMode, aiBase: certifiedAiBase, voucherJtis } = isBonus
+    ? { base: 0, verified: 0, collectionWords: [] as Array<{ word: string; category: string }>, mode: null, aiBase: 0 }
+    // /ranking/scores is the client solo leaderboard path. Keep its voucher
+    // count cap independent of the client-supplied `mode`; otherwise a caller
+    // could request `multiplayer` and raise the cap from 3 rounds to 12.
+    : await sumVerifiedBasePersistent(scoreTokens, 3);
   // A request that supplies vouchers must prove at least one fresh voucher.
   // Otherwise a replay of an already-consumed token set would fall through
   // to the offline absolute ceiling and could credit the same score again.
@@ -557,9 +565,7 @@ router.post("/scores", scoreLimiter, async (req, res) => {
   const newTotal = oldTotal + score;
 
   const today = new Date().toISOString().split("T")[0];
-  const lastPlayedDate = existing[0]?.lastPlayedDate ?? null;
-  const { newStreak, updatedToday } = calculateStreak(lastPlayedDate, existing[0]?.currentStreak ?? 0);
-  const newLongest = Math.max(existing[0]?.longestStreak ?? 0, newStreak);
+  let authoritativeStreak = existing[0]?.currentStreak ?? 0;
 
   // 🔒 For voucher-backed Solo submissions, the win/loss result must come
   // from the server-signed AI score, not from the client body. Legacy/offline
@@ -582,9 +588,10 @@ router.post("/scores", scoreLimiter, async (req, res) => {
 
   const baseXpGain = calcXpGain(score, effectiveWon, effectiveMode);
   const baseCoinGain = calcCoinGain(score, effectiveWon, effectiveMode, isBonus);
-  const tzOffset = await lookupPlayerTzOffset(playerId);
-  const happyHourActive =
-    tzOffset !== null && isHappyHourActiveForTzOffset(tzOffset);
+  const playerTimezone = await lookupPlayerTimezone(playerId);
+  const happyHourActive = playerTimezone.timeZone
+    ? isHappyHourActiveForTimeZone(playerTimezone.timeZone)
+    : playerTimezone.tzOffset !== null && isHappyHourActiveForTzOffset(playerTimezone.tzOffset);
   const xpMultiplier = happyHourActive ? HAPPY_HOUR_MULTIPLIER : 1;
   const coinMultiplier = happyHourActive ? HAPPY_HOUR_MULTIPLIER : 1;
   const xpGain = baseXpGain * xpMultiplier;
@@ -592,24 +599,36 @@ router.post("/scores", scoreLimiter, async (req, res) => {
   const newXp = (existing[0]?.xp ?? 0) + xpGain;
   const newLevel = calcLevel(newXp);
 
-  const newStreakDaysJson = (!isBonus && updatedToday)
-    ? appendStreakDay(existing[0]?.streakDaysJson, today)
-    : undefined;
-
-  // Season mission progress for a score submission is prepared before the
-  // score transaction, but the actual mission mutation is performed inside
-  // that same transaction so a rollback cannot leave season progress ahead
-  // of the credited game.
-  const scoreSeasonContext = !isBonus
-    ? await getOrCreateActiveSeason().then(async (season) => ({
-        seasonId: season.id,
-        progressId: (await getOrCreateProgress(playerId, season.id)).id,
-      }))
-    : null;
-
   let player;
+  let duplicateSubmission = false;
   if (isBonus) {
+    let bonusAccountDeleted = false;
     const bonusResult = await db.transaction(async (tx) => {
+      const revoked = await tx.execute(sql`
+        SELECT 1 FROM revoked_player_ids WHERE player_id = ${playerId} LIMIT 1
+      `);
+      if ((revoked.rows?.length ?? 0) > 0) {
+        bonusAccountDeleted = true;
+        return null;
+      }
+
+      if (submissionId) {
+        const [claim] = await tx
+          .insert(scoreSubmissionClaimsTable)
+          .values({ playerId, submissionId, isBonus: true })
+          .onConflictDoNothing()
+          .returning({ id: scoreSubmissionClaimsTable.id });
+        if (!claim) {
+          duplicateSubmission = true;
+          const [currentPlayer] = await tx
+            .select()
+            .from(playerScoresTable)
+            .where(eq(playerScoresTable.playerId, playerId))
+            .limit(1);
+          return currentPlayer ?? null;
+        }
+      }
+
       const [claimed] = await tx
         .delete(scoreBonusClaimsTable)
         .where(sql`${scoreBonusClaimsTable.tokenSetHash} = ${bonusClaimTokenSetHash} AND ${scoreBonusClaimsTable.playerId} = ${playerId}`)
@@ -628,7 +647,6 @@ router.post("/scores", scoreLimiter, async (req, res) => {
             totalScore: sql`${playerScoresTable.totalScore} + ${score}`,
             xp: sql`${playerScoresTable.xp} + ${xpGain}`,
             level: sql`GREATEST(${playerScoresTable.level}, ${newLevel})`,
-            ...(coinGain > 0 ? { coins: sql`${playerScoresTable.coins} + ${coinGain}` } : {}),
             updatedAt: new Date(),
           })
           .where(eq(playerScoresTable.playerId, playerId))
@@ -641,22 +659,7 @@ router.post("/scores", scoreLimiter, async (req, res) => {
           mode: mode ?? "solo",
           won: effectiveWon,
         });
-      // Correct level from the post-update XP while the transaction still owns
-      // the player row lock. The pre-request `newLevel` can be stale under
-      // concurrent rewarded-score submissions.
-      const bonusLevelRows = await tx.execute(sql`
-        SELECT xp, level FROM player_scores WHERE player_id = ${playerId} FOR UPDATE
-      `) as unknown as { rows?: Array<{ xp: number; level: number }> };
-      const bonusLevelRow = bonusLevelRows.rows?.[0];
-      if (bonusLevelRow) {
-        const authoritativeLevel = calcLevel(bonusLevelRow.xp ?? 0);
-        if (authoritativeLevel > (bonusLevelRow.level ?? 1)) {
-          await tx.update(playerScoresTable)
-            .set({ level: authoritativeLevel, updatedAt: new Date() })
-            .where(eq(playerScoresTable.playerId, playerId));
-        }
-      }
-      return updated;
+        return updated;
       }
 
       const [created] = await tx
@@ -699,120 +702,92 @@ router.post("/scores", scoreLimiter, async (req, res) => {
         mode: mode ?? "solo",
         won: effectiveWon,
       });
-      // Re-read after the upsert so a concurrent first-time bonus submission
-      // also ends with the level implied by the committed XP.
-      const createdLevelRows = await tx.execute(sql`
-        SELECT xp, level FROM player_scores WHERE player_id = ${playerId} FOR UPDATE
-      `) as unknown as { rows?: Array<{ xp: number; level: number }> };
-      const createdLevelRow = createdLevelRows.rows?.[0];
-      if (createdLevelRow) {
-        const authoritativeLevel = calcLevel(createdLevelRow.xp ?? 0);
-        if (authoritativeLevel > (createdLevelRow.level ?? 1)) {
-          await tx.update(playerScoresTable)
-            .set({ level: authoritativeLevel, updatedAt: new Date() })
-            .where(eq(playerScoresTable.playerId, playerId));
-        }
-      }
       return created;
     });
 
+    if (bonusAccountDeleted) {
+      res.status(401).json({ error: "Account deleted" });
+      return;
+    }
     if (!bonusResult) {
       res.status(422).json({ error: "INVALID_BONUS_SCORE" });
       return;
     }
     player = bonusResult;
+    if (duplicateSubmission) {
+      res.status(201).json({
+        ...player,
+        rank: 0,
+        rewards: { xpAwarded: 0, coinsAwarded: 0, happyHourActive: false, multiplier: 1 },
+      });
+      return;
+    }
   } else {
-    const transactionResult = await db.transaction(async (tx) => {
-      // Keep the lock order identical to season rollover:
-      // advisory Season lock -> player_scores row lock -> season_progress row.
-      // Without this, rollover could deadlock with a concurrent score submit.
-      if (scoreSeasonContext) {
-        await tx.execute(sql`SELECT pg_advisory_xact_lock(${scoreSeasonContext.seasonId}::bigint)`);
+    try {
+      player = await db.transaction(async (tx) => {
+      const revoked = await tx.execute(sql`
+        SELECT 1 FROM revoked_player_ids WHERE player_id = ${playerId} LIMIT 1
+      `);
+      if ((revoked.rows?.length ?? 0) > 0) {
+        throw new Error("ACCOUNT_DELETED");
       }
 
-      if (offlineSubmissionId) {
-        const [idempotencyInserted] = await tx
-          .insert(scoreSubmissionIdempotencyTable)
-          .values({
-            submissionId: offlineSubmissionId,
-            playerId,
-            requestHash: offlineSubmissionHash!,
-            responseJson: "{}",
-          })
+      if (submissionId) {
+        const [claim] = await tx
+          .insert(scoreSubmissionClaimsTable)
+          .values({ playerId, submissionId, isBonus: false })
           .onConflictDoNothing()
-          .returning({ submissionId: scoreSubmissionIdempotencyTable.submissionId });
-
-        if (!idempotencyInserted) {
-          const [previous] = await tx
-            .select({
-              playerId: scoreSubmissionIdempotencyTable.playerId,
-              requestHash: scoreSubmissionIdempotencyTable.requestHash,
-              responseJson: scoreSubmissionIdempotencyTable.responseJson,
-            })
-            .from(scoreSubmissionIdempotencyTable)
-            .where(eq(scoreSubmissionIdempotencyTable.submissionId, offlineSubmissionId))
+          .returning({ id: scoreSubmissionClaimsTable.id });
+        if (!claim) {
+          duplicateSubmission = true;
+          const [currentPlayer] = await tx
+            .select()
+            .from(playerScoresTable)
+            .where(eq(playerScoresTable.playerId, playerId))
             .limit(1);
-
-          if (!previous || previous.playerId !== playerId || previous.requestHash !== offlineSubmissionHash) {
-            throw new Error("OFFLINE_SUBMISSION_ID_REUSED");
-          }
-          if (!previous.responseJson || previous.responseJson === "{}") {
-            throw new Error("OFFLINE_SUBMISSION_RESPONSE_MISSING");
-          }
-
-          let response: Record<string, unknown>;
-          try {
-            const parsed = JSON.parse(previous.responseJson);
-            if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-              throw new Error("not an object");
-            }
-            response = parsed as Record<string, unknown>;
-          } catch {
-            throw new Error("OFFLINE_SUBMISSION_RESPONSE_INVALID");
-          }
-
-          return { duplicate: true as const, player: null, response };
+          return currentPlayer ?? null;
         }
       }
 
-      if (verifiedVouchers.vouchers.length > 0) {
-        const claimedVouchers = await claimScoreVouchersTx(tx, verifiedVouchers.vouchers);
-        if (!claimedVouchers) throw new Error("SCORE_VOUCHER_ALREADY_USED");
+      if (!isBonus) {
+        await applyAuthoritativeSeasonEventsInTransaction(tx, playerId, [
+          { type: "play_game", value: 1 },
+          ...(effectiveWon ? [{ type: "win_game", value: 1 }] : []),
+          { type: "round_score", value: score },
+          ...(collectionWords.length > 0 ? [{ type: "valid_words", value: collectionWords.length }] : []),
+          ...(effectiveMode === "daily" ? [{ type: "daily_done", value: 1 }] : []),
+        ]);
+      }
+
+      if (verified > 0 && voucherJtis.length > 0) {
+        await consumeScoreVoucherJtis(tx, voucherJtis);
+      }
+
+      const lockedRows = await tx
+        .select()
+        .from(playerScoresTable)
+        .where(eq(playerScoresTable.playerId, playerId))
+        .for("update");
+      const lockedExisting = lockedRows[0];
+      const lockedToday = new Date().toISOString().split("T")[0];
+      const { newStreak: lockedStreak, updatedToday: lockedUpdatedToday } = calculateStreak(
+        lockedExisting?.lastPlayedDate ?? null,
+        lockedExisting?.currentStreak ?? 0,
+      );
+      const lockedLongest = Math.max(lockedExisting?.longestStreak ?? 0, lockedStreak);
+      const lockedStreakDaysJson = lockedUpdatedToday
+        ? appendStreakDay(lockedExisting?.streakDaysJson, lockedToday)
+        : undefined;
+      authoritativeStreak = lockedStreak;
+
+      if (!isBonus) {
+        await applyAuthoritativeSeasonEventsInTransaction(tx, playerId, [
+          { type: "streak", value: lockedStreak },
+        ]);
       }
 
       let txPlayer;
-      let txNewStreak = newStreak;
-      let txUpdatedToday = updatedToday;
-      let txStreakDaysJson = newStreakDaysJson;
-
       if (existing.length > 0) {
-    // Re-read the authoritative streak under the same row lock used for the
-    // score update. The pre-transaction snapshot can be stale when two games
-    // finish concurrently for the same player.
-    const lockedStreak = await tx.execute(sql`
-      SELECT current_streak, last_played_date, streak_days_json, xp
-      FROM player_scores
-      WHERE player_id = ${playerId}
-      FOR UPDATE
-    `) as unknown as { rows?: Array<{
-      current_streak: number;
-      last_played_date: string | null;
-      streak_days_json: string;
-      xp: number;
-    }> };
-    const streakRow = lockedStreak.rows?.[0];
-    if (!streakRow) throw new Error("SCORE_PLAYER_LOCK_FAILED");
-
-    const txStreak = calculateStreak(streakRow.last_played_date, streakRow.current_streak ?? 0);
-    txNewStreak = txStreak.newStreak;
-    txUpdatedToday = txStreak.updatedToday;
-    txStreakDaysJson = txUpdatedToday
-      ? appendStreakDay(streakRow.streak_days_json, today)
-      : undefined;
-    // Recalculate level from the XP held by the locked row; the request-level
-    // snapshot can be stale when score submissions arrive concurrently.
-    const txNewLevel = calcLevel((streakRow.xp ?? 0) + xpGain);
-
     const [updated] = await tx
       .update(playerScoresTable)
       .set({
@@ -827,13 +802,13 @@ router.post("/scores", scoreLimiter, async (req, res) => {
         // Concurrency hardening: another simultaneous score submission may have
         // advanced XP/level after the snapshot above. Never allow this request
         // to overwrite a newer, higher level with a stale lower one.
-        level: sql`GREATEST(${playerScoresTable.level}, ${txNewLevel})`,
+        level: sql`GREATEST(${playerScoresTable.level}, ${newLevel})`,
         ...(coinGain > 0 ? { coins: sql`${playerScoresTable.coins} + ${coinGain}` } : {}),
-        ...(!isBonus && txUpdatedToday ? {
-          currentStreak: txNewStreak,
-          longestStreak: sql`GREATEST(${playerScoresTable.longestStreak}, ${txNewStreak})`,
-          lastPlayedDate: today,
-          streakDaysJson: txStreakDaysJson,
+        ...(!isBonus && lockedUpdatedToday ? {
+          currentStreak: lockedStreak,
+          longestStreak: lockedLongest,
+          lastPlayedDate: lockedToday,
+          streakDaysJson: lockedStreakDaysJson,
         } : {}),
         updatedAt: new Date(),
       })
@@ -874,11 +849,6 @@ router.post("/scores", scoreLimiter, async (req, res) => {
           xp: sql`${playerScoresTable.xp} + ${xpGain}`,
           level: sql`GREATEST(${playerScoresTable.level}, ${calcLevel(xpGain)})`,
           coins: sql`${playerScoresTable.coins} + ${coinGain}`,
-          ...(!isBonus ? {
-            currentStreak: sql`GREATEST(${playerScoresTable.currentStreak}, 1)`,
-            longestStreak: sql`GREATEST(${playerScoresTable.longestStreak}, 1)`,
-            lastPlayedDate: today,
-          } : {}),
           updatedAt: new Date(),
         },
       })
@@ -891,11 +861,23 @@ router.post("/scores", scoreLimiter, async (req, res) => {
         playerId,
         score,
         letter,
-        mode: mode ?? "solo",
+        mode: effectiveMode,
         won: effectiveWon,
       });
 
       // Keep voucher-backed collection words in the same transaction as the score.
+      if (!isBonus && verified > 0 && scoreTokens) {
+        const tokenSetHash = bonusTokenSetHash(playerId, scoreTokens);
+        if (tokenSetHash) {
+          await tx.insert(scoreBonusClaimsTable).values({
+            tokenSetHash,
+            playerId,
+            maxScore: score,
+            expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+          }).onConflictDoNothing();
+        }
+      }
+
       if (collectionWords.length > 0) {
         const collectionRows = await tx.execute(sql`
           SELECT id, collected_words_json
@@ -926,55 +908,46 @@ router.post("/scores", scoreLimiter, async (req, res) => {
           .where(eq(playerScoresTable.id, collectionRow.id));
       }
 
-      if (rewardClaimTokenSetHash) {
-        await tx.insert(scoreBonusClaimsTable).values({
-          tokenSetHash: rewardClaimTokenSetHash,
-          playerId,
-          maxScore: score,
-          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
-        }).onConflictDoNothing();
+      return txPlayer;
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message === "ACCOUNT_DELETED") {
+        res.status(401).json({ error: "Account deleted" });
+        return;
       }
-
-      if (scoreSeasonContext) {
-        await applyAuthoritativeSeasonEventsTx(
-          tx,
-          scoreSeasonContext.seasonId,
-          scoreSeasonContext.progressId,
-          [
-            { type: "play_game", value: 1 },
-            ...(effectiveWon ? [{ type: "win_game", value: 1 }] : []),
-            { type: "round_score", value: score },
-            { type: "streak", value: txNewStreak },
-            ...(collectionWords.length > 0 ? [{ type: "valid_words", value: collectionWords.length }] : []),
-          ],
-        );
+      if (error instanceof Error && error.message === "SCORE_VOUCHER_CONFLICT") {
+        res.status(422).json({ error: "INVALID_SCORE_VOUCHER" });
+        return;
       }
-
-      const response = {
-        ...txPlayer,
+      throw error;
+    }
+    if (duplicateSubmission) {
+      res.status(201).json({
+        ...player,
         rank: 0,
-        rewards: {
-          xpAwarded: xpGain,
-          coinsAwarded: coinGain,
-          happyHourActive,
-          multiplier: happyHourActive ? HAPPY_HOUR_MULTIPLIER : 1,
-        },
-      };
-
-      if (offlineSubmissionId) {
-        await tx
-          .update(scoreSubmissionIdempotencyTable)
-          .set({ responseJson: JSON.stringify(response) })
-          .where(eq(scoreSubmissionIdempotencyTable.submissionId, offlineSubmissionId));
-      }
-
-      return { duplicate: false as const, player: txPlayer, response };
-    });
-    if (transactionResult.duplicate) {
-      res.status(201).json(transactionResult.response);
+        rewards: { xpAwarded: 0, coinsAwarded: 0, happyHourActive: false, multiplier: 1 },
+      });
       return;
     }
-    player = transactionResult.player;
+    // Halloween is an optional post-commit effect. The authoritative score,
+    // history, vouchers and season state are already committed before this runs.
+    // A Halloween failure must never roll back or invalidate the completed game.
+    if (certifiedMode === "solo" && Array.isArray(scoreTokens) && scoreTokens.length > 0) {
+      const halloweenEventKey = bonusTokenSetHash(playerId, scoreTokens);
+      if (halloweenEventKey) {
+        try {
+          await recordHalloweenEvent(
+            playerId,
+            "game_completed",
+            `solo:${halloweenEventKey}`,
+            isHalloweenPreviewAuthorized(req),
+          );
+        } catch (error) {
+          console.error("[halloween] Solo completion persistence failed; keeping score committed:", error);
+        }
+      }
+    }
+
   }
 
   if (overtaken.length > 0) {
@@ -993,9 +966,11 @@ router.post("/scores", scoreLimiter, async (req, res) => {
     void recordTrustedAnalyticsEvent({
       eventName: "game_complete",
       playerId,
-      mode: mode ?? "solo",
+      mode: effectiveMode,
       metadata: { source: "server_score_submission" },
     }).catch((err) => console.error("[analytics] trusted game_complete failed:", err));
+
+
   }
 
   res.status(201).json({
@@ -1060,9 +1035,6 @@ router.get("/scores/:playerId", async (req, res) => {
       isPremium: ps.isPremium,
       currentStreak: ps.currentStreak,
       longestStreak: ps.longestStreak,
-      xp: ps.xp,
-      level: ps.level,
-      coins: ps.coins,
       equippedAvatar: ps.equippedAvatar,
       equippedFrame: ps.equippedFrame,
       equippedBackground: ps.equippedBackground,
@@ -1073,6 +1045,35 @@ router.get("/scores/:playerId", async (req, res) => {
     },
     recentGames,
   });
+});
+
+export default router;
+
+    LEFT JOIN player_scores ps ON gh.player_id = ps.player_id
+    WHERE gh.created_at >= date_trunc('month', NOW() AT TIME ZONE 'UTC')
+    GROUP BY gh.player_id, ps.player_name, ps.avatar_color, ps.profile_picture, ps.equipped_frame, ps.equipped_avatar, ps.equipped_title, ps.current_streak, ps.is_premium, ps.achievements_json
+    ORDER BY SUM(gh.score) DESC
+    LIMIT 100
+  `);
+
+  const players = (rows.rows as Array<Record<string, unknown>>).map((p, i) => ({
+    playerId:      p.playerId,
+    playerName:    p.playerName ?? "—",
+    avatarColor:   p.avatarColor ?? "#e53e3e",
+    totalScore:    Number(p.totalScore ?? 0),
+    gamesPlayed:   Number(p.gamesPlayed ?? 0),
+    wins:          Number(p.wins ?? 0),
+    currentStreak: Number(p.currentStreak ?? 0),
+    isPremium:     p.isPremium ?? false,
+    achievementCount: parseAchievementCount(p.achievementsJson),
+    title:         getTitle(i + 1),
+    rank:         i + 1,
+  }));
+
+  const now = new Date();
+  const nextReset = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+
+  res.json({ players, nextReset: nextReset.toISOString() });
 });
 
 export default router;

@@ -149,7 +149,8 @@ function isWordValid(
   return categoryWords.some(w => {
     const nw = normalizeWord(w);
     return nw === normalizedWord ||
-      normalizedWord.startsWith(nw);
+      normalizedWord.startsWith(nw) ||
+      nw.startsWith(normalizedWord);
   });
 }
 
@@ -238,6 +239,7 @@ export function validateRoundOffline(req: OfflineValidateRequest): OfflineValida
 const OUTBOX_KEY = "stop-score-outbox-v1";
 
 export type OutboxScorePayload = {
+  submissionId?: string;
   playerId: string;
   playerName: string;
   avatarColor?: string;
@@ -250,8 +252,6 @@ export type OutboxScorePayload = {
   // (offline) submissions since offline rounds are validated locally and get
   // no token — those fall back to the server's absolute ceiling.
   scoreTokens?: string[];
-  /** Stable id carried to the server so a lost response cannot double-credit the game. */
-  offlineSubmissionId?: string;
 };
 
 export type OutboxEntry = {
@@ -265,18 +265,7 @@ function readOutbox(): OutboxEntry[] {
     const raw = localStorage.getItem(OUTBOX_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed
-      .filter((e) => e && typeof e === "object" && e.payload)
-      .map((e) => ({
-        ...e,
-        payload: {
-          ...e.payload,
-          submissionId: typeof e.payload.offlineSubmissionId === "string" && e.payload.submissionId
-            ? e.payload.submissionId
-            : e.id,
-        },
-      }));
+    return Array.isArray(parsed) ? parsed.filter((e) => e && typeof e === "object" && e.payload) : [];
   } catch {
     return [];
   }
@@ -304,14 +293,9 @@ const withOutboxLock: OutboxLock = async <T>(work: () => Promise<T>): Promise<T>
 
 export async function enqueueScoreOutbox(payload: OutboxScorePayload): Promise<OutboxEntry> {
   const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-  const offlineSubmissionId =
-    payload.offlineSubmissionId ||
-    (typeof globalThis.crypto?.randomUUID === "function"
-      ? globalThis.crypto.randomUUID()
-      : `${id}-${Math.random().toString(36).slice(2, 10)}`);
   const entry: OutboxEntry = {
     id,
-    payload: { ...payload, offlineSubmissionId },
+    payload: { ...payload, submissionId: payload.submissionId ?? id },
     createdAt: Date.now(),
   };
   return withOutboxLock(async () => {
@@ -330,6 +314,7 @@ let flushing = false;
 
 export async function flushScoreOutbox(
   submit: (payload: OutboxScorePayload) => Promise<unknown>,
+  currentPlayerId?: string,
 ): Promise<{ flushed: number; remaining: number }> {
   if (flushing) return { flushed: 0, remaining: readOutbox().length };
   flushing = true;
@@ -339,14 +324,25 @@ export async function flushScoreOutbox(
       while (true) {
         const cur = readOutbox();
         if (cur.length === 0) break;
-        const [next, ...rest] = cur;
-        writeOutbox(rest);
+        const nextIndex = currentPlayerId
+          ? cur.findIndex((entry) => entry.payload?.playerId === currentPlayerId)
+          : 0;
+        if (nextIndex < 0) break;
+        const next = cur[nextIndex];
         try {
-          await submit(next.payload);
+          // Keep the entry durable until the server acknowledges the POST.
+          // Removing it before the await could permanently lose the score if
+          // the tab/WebView crashes between localStorage.remove and the request.
+          await submit({ ...next.payload, submissionId: next.payload.submissionId ?? next.id });
+          const after = readOutbox();
+          // Remove exactly the entry that was acknowledged. If another writer
+          // changed the queue, preserve every other entry rather than replacing
+          // the whole array with a stale snapshot.
+          writeOutbox(after.filter((entry) => entry.id !== next.id));
           flushed++;
         } catch {
-          const after = readOutbox();
-          writeOutbox([next, ...after]);
+          // Leave the entry in place for the next online retry. Keeping it
+          // durable also makes process/tab crashes safe during the await.
           break;
         }
       }

@@ -22,29 +22,19 @@ export function ChallengeNotification({ challenge, onDismiss }: ChallengeNotific
   useEffect(() => () => actionAbortRef.current?.abort(), []);
 
   useEffect(() => {
+    setCountdown(30);
     const timer = setInterval(() => {
       setCountdown((v) => {
         if (v <= 1) {
           clearInterval(timer);
-          // Expired/ignored invitations must be transitioned out of pending
-          // state; otherwise the 4s poll can surface the same challenge again
-          // during its remaining PostgreSQL TTL.
-          if (!respondingRef.current) {
-            respondingRef.current = true;
-            setResponding(true);
-            void respondToChallenge(challenge.challengeId, false).finally(() => {
-              onDismiss();
-            });
-          } else {
-            onDismiss();
-          }
+          void respondToChallenge(challenge.challengeId, false).finally(onDismiss);
           return 0;
         }
         return v - 1;
       });
     }, 1000);
     return () => clearInterval(timer);
-  }, []);
+  }, [challenge.createdAt]);
 
   const handleAccept = async () => {
     if (responding || respondingRef.current) return;
@@ -53,26 +43,65 @@ export function ChallengeNotification({ challenge, onDismiss }: ChallengeNotific
     const controller = new AbortController();
     actionAbortRef.current = controller;
 
-    // Read player data once — needed for /join in both flows
+    // Read player data once — needed for /join before consuming the challenge.
     let playerData: { id: string; name: string; avatarColor: string; loginMethod?: string | null } | null = null;
     try {
       const stored = localStorage.getItem("stop_player_v2");
       if (stored) playerData = JSON.parse(stored);
     } catch { /* ignore */ }
 
-    // Mark both challenges and room invitations as accepted before joining.
-    // Previously room invitations skipped this transition and remained pending
-    // until cleanup, allowing the same invitation to reappear.
-    const response = await respondToChallenge(challenge.challengeId, true);
-    if (!response.roomCode || response.roomCode.toUpperCase() !== challenge.roomCode.toUpperCase()) {
-      onDismiss();
+    if (!playerData?.id) {
+      respondingRef.current = false;
+      setResponding(false);
       return;
     }
 
-    // Always call /join so the player appears in the room lobby (both reto and room invite)
-    if (playerData?.id) {
-      try {
-        const joinResponse = await fetch(`${getApiUrl()}/api/rooms/${challenge.roomCode.toUpperCase()}/join`, {
+    // Join first, binding the request to the immutable challenge row. If the
+    // same pending room invite was refreshed while this notification was open,
+    // the server returns the current roomCode and we retry with that code.
+    let joinResponse: Response | null = null;
+    let joinRoomCode = challenge.roomCode.toUpperCase();
+    try {
+      for (let attempt = 0; attempt < 2; attempt++) {
+        joinResponse = await fetch(`${getApiUrl()}/api/rooms/${joinRoomCode}/join`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        credentials: "include",
+        signal: controller.signal,
+        body: JSON.stringify({
+          playerId: playerData.id,
+          playerName: playerData.name,
+          avatarColor: playerData.avatarColor,
+          loginMethod: playerData.loginMethod ?? null,
+          challengeId: challenge.challengeId,
+        }),
+      });
+        if (joinResponse.ok || controller.signal.aborted) break;
+        if (joinResponse.status !== 409) break;
+        let errorBody: any = null;
+        try { errorBody = await joinResponse.clone().json(); } catch {}
+        if (errorBody?.error !== "challenge_room_mismatch" || !errorBody.roomCode) break;
+        joinRoomCode = String(errorBody.roomCode).toUpperCase();
+      }
+      if (!joinResponse?.ok || controller.signal.aborted) {
+        respondingRef.current = false;
+        setResponding(false);
+        return;
+      }
+    } catch {
+      respondingRef.current = false;
+      setResponding(false);
+      return;
+    }
+
+    // Consume the invitation after /join. If the sender refreshed the same
+    // pending invite in the tiny gap between those requests, /respond returns
+    // the new roomCode; join that room and retry the acceptance once.
+    let response = await respondToChallenge(challenge.challengeId, true);
+    if (!response.ok && response.roomCode) {
+      const retryJoin = await fetch(
+        getApiUrl() + "/api/rooms/" + response.roomCode.toUpperCase() + "/join",
+        {
           method: "POST",
           headers: { "Content-Type": "application/json", ...authHeaders() },
           credentials: "include",
@@ -82,20 +111,22 @@ export function ChallengeNotification({ challenge, onDismiss }: ChallengeNotific
             playerName: playerData.name,
             avatarColor: playerData.avatarColor,
             loginMethod: playerData.loginMethod ?? null,
+            challengeId: challenge.challengeId,
           }),
-        });
-        if (!joinResponse.ok || controller.signal.aborted) {
-          onDismiss();
-          return;
-        }
-      } catch {
-        onDismiss();
-        return;
+        },
+      );
+      if (retryJoin.ok) {
+        response = await respondToChallenge(challenge.challengeId, true);
       }
+    }
+    if (!response.ok || !response.roomCode) {
+      respondingRef.current = false;
+      setResponding(false);
+      return;
     }
 
     onDismiss();
-    setLocation(`/room/${challenge.roomCode}`);
+    setLocation("/room/" + response.roomCode.toUpperCase());
   };
 
   const handleDecline = async () => {

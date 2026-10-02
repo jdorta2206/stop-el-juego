@@ -24,7 +24,7 @@ function parseJson<T>(value: string | null | undefined, fallback: T): T {
 // the server already has an equal-or-higher score for that mode.
 router.get("/progress/:playerId", async (req, res) => {
   const { playerId } = req.params;
-  if (!verifyClaimedIdentity(req, playerId)) {
+  if (!await verifyClaimedIdentity(req, playerId)) {
     res.status(403).json({ error: "Identity verification failed" });
     return;
   }
@@ -54,7 +54,7 @@ router.get("/progress/:playerId", async (req, res) => {
 
 router.get("/streak/calendar/:playerId", async (req, res) => {
   const { playerId } = req.params;
-  if (!verifyClaimedIdentity(req, playerId)) {
+  if (!await verifyClaimedIdentity(req, playerId)) {
     res.status(403).json({ error: "Identity verification failed" });
     return;
   }
@@ -94,7 +94,7 @@ router.get("/streak/calendar/:playerId", async (req, res) => {
 // backed by game_history for the same player and mode.
 router.post("/progress/:playerId", async (req, res) => {
   const { playerId } = req.params;
-  if (!verifyClaimedIdentity(req, playerId)) {
+  if (!await verifyClaimedIdentity(req, playerId)) {
     res.status(403).json({ error: "Identity verification failed" });
     return;
   }

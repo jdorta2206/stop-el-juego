@@ -122,9 +122,21 @@ async function generateBotAnswersLLM(
 }
 
 // roomCode → botPlayerId → { round, letter, answers } ready for the round.
-// Tagged with round+letter so a late-resolving LLM promise from a previous
-// round can never bleed into the next one (race seen in code review).
-type PendingEntry = { round: number; letter: string; answers: Record<string, string> };
+// Tagged with round+letter AND a per-room generation token. Round numbers reset
+// on rematch, so round+letter alone cannot prevent a late LLM promise from an
+// old match from populating the new match's pending answers.
+type PendingEntry = { round: number; letter: string; generation: number; roomId: number; answers: Record<string, string> };
+const botAnswerGeneration = new Map<string, { generation: number; roomId: number }>();
+let answerGenerationCounter = 0;
+function nextAnswerGeneration(code: string, roomId: number): number {
+  const generation = ++answerGenerationCounter;
+  botAnswerGeneration.set(code, { generation, roomId });
+  return generation;
+}
+function isCurrentAnswerGeneration(code: string, generation: number, roomId?: number): boolean {
+  const current = botAnswerGeneration.get(code);
+  return !!current && current.generation === generation && (roomId === undefined || current.roomId === roomId);
+}
 const botPendingAnswers = new Map<string, Map<string, PendingEntry>>();
 function setPendingAnswers(code: string, botId: string, entry: PendingEntry) {
   let m = botPendingAnswers.get(code);
@@ -138,10 +150,13 @@ function getPendingAnswers(
   if (!e) return null;
   if (e.round !== round) return null;
   if (e.letter.toUpperCase() !== letter.toUpperCase()) return null;
+  if (!isCurrentAnswerGeneration(code, e.generation, e.roomId)) return null;
   return e.answers;
 }
 function clearPendingAnswers(code: string) {
   botPendingAnswers.delete(code);
+  // Do not reset the generation: old LLM promises may still resolve after
+  // this cleanup, and room codes can eventually be reused.
 }
 
 // Strip Spanish accents so "Águila" passes the "starts with A" check, in
@@ -234,8 +249,10 @@ export function makeBotPlayer(identity: { name: string; color: string }): BotPla
 // roomCode → set of scheduled timeouts. Cleared on round advance / room end.
 const roomBotTimers = new Map<string, Set<NodeJS.Timeout>>();
 const roomBotTimerBots = new Map<string, Set<string>>();
+const roomBotTimerRoomIds = new Map<string, number>();
 
-function trackTimer(code: string, t: NodeJS.Timeout, botId?: string) {
+function trackTimer(code: string, t: NodeJS.Timeout, botId?: string, roomId?: number) {
+  if (roomId !== undefined) roomBotTimerRoomIds.set(code, roomId);
   let set = roomBotTimers.get(code);
   if (!set) { set = new Set(); roomBotTimers.set(code, set); }
   set.add(t);
@@ -246,7 +263,7 @@ function trackTimer(code: string, t: NodeJS.Timeout, botId?: string) {
   }
 }
 
-function untrackTimer(code: string, t: NodeJS.Timeout, botId?: string) {
+function untrackTimer(code: string, t: NodeJS.Timeout, botId?: string, roomId?: number) {
   const set = roomBotTimers.get(code);
   if (!set) return;
   set.delete(t);
@@ -260,15 +277,36 @@ function untrackTimer(code: string, t: NodeJS.Timeout, botId?: string) {
   if (set.size === 0) roomBotTimers.delete(code);
 }
 
-export function cleanupStaleBotRooms(liveRoomCodes: ReadonlySet<string>) {
+export function cleanupStaleBotRooms(liveRoomIdsByCode: ReadonlyMap<string, number>) {
   const stale = new Set<string>();
   for (const code of roomBotTimers.keys()) {
-    if (!liveRoomCodes.has(code)) stale.add(code);
+    const liveRoomId = liveRoomIdsByCode.get(code);
+    const trackedRoomId = roomBotTimerRoomIds.get(code);
+    if (liveRoomId === undefined || (trackedRoomId !== undefined && trackedRoomId !== liveRoomId)) stale.add(code);
   }
   for (const code of roomBotTimerBots.keys()) {
-    if (!liveRoomCodes.has(code)) stale.add(code);
+    const liveRoomId = liveRoomIdsByCode.get(code);
+    const trackedRoomId = roomBotTimerRoomIds.get(code);
+    if (liveRoomId === undefined || (trackedRoomId !== undefined && trackedRoomId !== liveRoomId)) stale.add(code);
   }
-  for (const code of stale) cleanupBotRoom(code);
+  for (const code of stale) {
+    const liveRoomId = liveRoomIdsByCode.get(code);
+    if (liveRoomId === undefined) {
+      cleanupBotRoom(code);
+    } else {
+      cleanupBotRoom(code, liveRoomId);
+    }
+  }
+  // A completed/deleted room can retain an answer-generation token even after
+  // its timers are gone. It is room-scoped state too, so remove it by immutable
+  // room ID when the code no longer belongs to that room.
+  for (const [code, generation] of botAnswerGeneration.entries()) {
+    const liveRoomId = liveRoomIdsByCode.get(code);
+    if (liveRoomId === undefined || liveRoomId !== generation.roomId) {
+      botAnswerGeneration.delete(code);
+      botPendingAnswers.delete(code);
+    }
+  }
 }
 
 export function clearBotTimers(code: string) {
@@ -278,6 +316,7 @@ export function clearBotTimers(code: string) {
     roomBotTimers.delete(code);
   }
   roomBotTimerBots.delete(code);
+  roomBotTimerRoomIds.delete(code);
   // NOTE: pending LLM answers are intentionally NOT cleared here.
   // rushBotSubmits() calls clearBotTimers to cancel the long 25-50s timers
   // when a human STOPs early — but bots still need to consume the
@@ -287,9 +326,19 @@ export function clearBotTimers(code: string) {
 }
 
 // Full cleanup — call when a room is destroyed (last player /leave delete).
-export function cleanupBotRoom(code: string) {
+export function cleanupBotRoom(code: string, expectedRoomId?: number) {
+  if (expectedRoomId !== undefined) {
+    const timerRoomId = roomBotTimerRoomIds.get(code);
+    const answerRoomId = botAnswerGeneration.get(code)?.roomId;
+    if (timerRoomId !== undefined && timerRoomId !== expectedRoomId) return;
+    if (timerRoomId === undefined && answerRoomId !== undefined && answerRoomId !== expectedRoomId) return;
+  }
   clearBotTimers(code);
   clearPendingAnswers(code);
+  const current = botAnswerGeneration.get(code);
+  if (expectedRoomId === undefined || current?.roomId === expectedRoomId) {
+    botAnswerGeneration.delete(code);
+  }
 }
 
 // ── Category resolution (server mirror of the client packs) ───────────────
@@ -347,12 +396,13 @@ function pickWordsForRound(letter: string, categoryCount: number): string[] {
 type BotActionDeps = {
   broadcast: (code: string, payload: object) => void;
   formatRoom: (room: any) => any;
-  submitFinalScores: (players: any[], letter: string, roomCode?: string, roomId?: number) => void | Promise<void>;
+  onRoundAdvanced: (room: any, players: any[], newStatus: string) => void;
   getRoundCategories: (room: any) => string[];
 };
 
 async function performBotSubmit(
   roomCode: string,
+  expectedRoomId: number,
   botPlayerId: string,
   deps: BotActionDeps,
   options: { triggerStop: boolean; attempt?: number },
@@ -363,6 +413,7 @@ async function performBotSubmit(
     const rows = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, code)).limit(1);
     if (rows.length === 0) return;
     const room = rows[0];
+    if (Number(room.id) !== Number(expectedRoomId)) return;
     if (room.status !== "playing" && room.status !== "stopped") return;
 
     let players: any[];
@@ -419,128 +470,105 @@ async function performBotSubmit(
         validBotWords++;
       }
     }
-    const roundScore = validBotWords * 10;
+    let roundScore = validBotWords * 10;
+    // Keep bot scoring aligned with the server-authoritative human STOP bonus:
+    // a bot that actually triggers STOP gets +5 only when it fills every
+    // authoritative category for the round.
+    const stopperBonusThreshold = Math.min(12, Math.max(1, sampleCats.length));
+    if (options.triggerStop && newStatus === "stopped" && validBotWords >= stopperBonusThreshold) {
+      roundScore += 5;
+    }
 
     const finishedAt = Date.now();
-
-    // 🔒 Multi-instance safe commit: the earlier read is only used to prepare
-    // the bot answers. The authoritative room mutation happens under a
-    // PostgreSQL row lock, so another Railway instance cannot overwrite a
-    // human submission with the stale playersJson snapshot.
-    const committed = await db.transaction(async (tx) => {
-      const lockedRows = await tx.execute(
-        sql`SELECT * FROM rooms WHERE room_code = ${code} FOR UPDATE`,
-      );
-      const lockedList = (lockedRows as any).rows ?? lockedRows;
-      if (!lockedList || lockedList.length === 0) return null;
-
-      const raw = lockedList[0];
-      const lockedStatus = raw.status;
-      if (lockedStatus !== "playing" && lockedStatus !== "stopped") return null;
-
-      let lockedPlayers: any[];
-      try {
-        lockedPlayers = JSON.parse(raw.players_json ?? raw.playersJson);
-      } catch {
-        return null;
-      }
-
-      const lockedMe = lockedPlayers.find((p: any) => p.playerId === botPlayerId);
-      if (!lockedMe || !lockedMe.isBot || lockedMe.isReady) return null;
-
-      // If another instance already advanced the round while this bot was
-      // validating its answers, never apply those answers to the new round.
-      const lockedLetter = String(raw.current_letter ?? raw.currentLetter ?? "A").toUpperCase();
-      const lockedRound = Number(raw.current_round ?? raw.currentRound ?? 0);
-      if (lockedLetter !== letter || lockedRound !== Number(room.currentRound ?? 0)) {
-        return null;
-      }
-
-      let committedStatus = lockedStatus as string;
-      let committedStopperJson = raw.stopper_json ?? raw.stopperJson;
-      if (options.triggerStop && lockedStatus === "playing") {
-        const stopTimestamp = Date.now();
-        let prevMeta: any = {};
-        try { prevMeta = committedStopperJson ? JSON.parse(committedStopperJson) : {}; } catch {}
-        committedStopperJson = JSON.stringify({
-          ...prevMeta,
-          stopper: { id: botPlayerId, name: lockedMe.playerName, stopTimestamp },
-          stopTimestamp,
-          roundStartedAt: prevMeta?.roundStartedAt ?? Date.now(),
-        });
-        committedStatus = "stopped";
-      }
-
-      const committedPlayers = lockedPlayers.map((p: any) => {
-        if (p.playerId !== botPlayerId) return p;
-        return {
-          ...p,
-          score: (p.score || 0) + roundScore,
-          roundScore,
-          isReady: true,
-          answers,
-          finishedAt,
-          wasStopper: options.triggerStop && committedStatus === "stopped",
-        };
-      });
-
-      let finalStatus = committedStatus;
-      let finalRound = lockedRound;
-      const finalLetter = lockedLetter;
-      let finalStopperJson: string | null = committedStopperJson;
-      let didFinishGame = false;
-
-      const allReady = committedPlayers.every((p: any) => p.isReady);
-      if (allReady) {
-        const bluffers = committedPlayers.filter((p: any) => p.bluffedCategories?.length > 0);
-        if (bluffers.length === 0) {
-          finalRound = lockedRound + 1;
-          if (finalRound > Number(raw.max_rounds ?? raw.maxRounds ?? 3)) {
-            finalStatus = "finished";
-            finalRound = Number(raw.max_rounds ?? raw.maxRounds ?? 3);
-            didFinishGame = true;
-          } else {
-            finalStatus = "waiting";
-          }
-          finalStopperJson = null;
-        }
-      }
-
-      const [updated] = await tx.update(roomsTable)
-        .set({
-          playersJson: JSON.stringify(committedPlayers),
-          status: finalStatus,
-          currentRound: finalRound,
-          currentLetter: finalLetter,
-          stopperJson: finalStopperJson,
-          updatedAt: new Date(),
-        })
-        .where(eq(roomsTable.roomCode, code))
-        .returning();
-
+    const updatedPlayers = players.map(p => {
+      if (p.playerId !== botPlayerId) return p;
       return {
-        row: updated,
-        players: committedPlayers,
-        letter: finalLetter,
-        status: finalStatus,
-        didFinishGame,
+        ...p,
+        score: (p.score || 0) + roundScore,
+        roundScore,
+        isReady: true,
+        answers,
+        finishedAt,
+        wasStopper: options.triggerStop && newStatus === "stopped",
       };
     });
 
-    if (!committed) return;
+    // Bot never bluffs, so if its submission completes the round and there
+    // are no human bluffers we can advance directly; otherwise just save and
+    // let the human /results handler decide the next status.
+    let nextStatus = newStatus;
+    let nextRound = room.currentRound;
+    let nextLetter = room.currentLetter;
+    let nextStopperJson: string | null = newStopperJson;
 
-    const updateResult = [committed.row];
+    let didFinishGame = false;
+    const allReady = updatedPlayers.every(p => p.isReady);
+    if (allReady) {
+      const bluffers = updatedPlayers.filter(p => p.bluffedCategories?.length > 0);
+      if (bluffers.length === 0) {
+        // Advance — mirror the rooms.ts /results advancement.
+        nextRound = (room.currentRound ?? 0) + 1;
+        if (nextRound > (room.maxRounds ?? 3)) {
+          nextStatus = "finished";
+          nextRound = room.maxRounds ?? 3;
+          didFinishGame = true;
+        } else {
+          nextStatus = "waiting";
+          // Letter will be re-rolled when host starts next round; clear meta.
+        }
+        // Preserve authoritative room metadata across bot-driven round transitions.
+        // A bot can be the final submitter, so this path must not erase the
+        // category pack/custom categories or Halloween preview marker before
+        // the next /start or final settlement/recovery reads them.
+        let transitionMeta: any = {};
+        try { transitionMeta = room.stopperJson ? JSON.parse(room.stopperJson) : {}; } catch {}
+        nextStopperJson = JSON.stringify({
+          categoryPack: transitionMeta?.categoryPack,
+          customCategories: transitionMeta?.customCategories,
+          customPackLabel: transitionMeta?.customPackLabel,
+          halloweenPreview: transitionMeta?.halloweenPreview === true,
+        });
+      }
+    }
+
+    const updateResult = await db.update(roomsTable)
+      .set({
+        playersJson: JSON.stringify(updatedPlayers),
+        status: nextStatus,
+        currentRound: nextRound,
+        currentLetter: nextLetter,
+        stopperJson: nextStopperJson,
+        updatedAt: new Date(),
+        roomVersion: sql`${roomsTable.roomVersion} + 1`,
+      })
+      .where(and(eq(roomsTable.roomCode, code), eq(roomsTable.roomVersion, room.roomVersion)))
+      .returning();
+
+    if (updateResult.length === 0) {
+      // Lost optimistic-concurrency race against a human submit. Retry once
+      // so the bot's points aren't silently dropped just because a human
+      // submitted at the same instant. Bail after 1 retry — repeated races
+      // mean the round is being driven by humans and they'll zero the bot
+      // via the stuck-sweep, which is fine.
+      if (attempt === 0) {
+        // Track the retry timer so clearBotTimers() can cancel it if the
+        // room dies or the round advances before the retry fires.
+        const retry = setTimeout(() => {
+          untrackTimer(code, retry, botPlayerId, expectedRoomId);
+          performBotSubmit(code, expectedRoomId, botPlayerId, deps, { ...options, attempt: 1 });
+        }, 200 + Math.random() * 300);
+        trackTimer(code, retry, botPlayerId, expectedRoomId);
+      }
+      return;
+    }
+
     deps.broadcast(code, deps.formatRoom(updateResult[0]));
 
     // Persist final scores to the global leaderboard when the bot's submit
     // was the one that ended the match — otherwise humans get no XP/ranking
     // update from games the bot "finished".
-    if (committed.didFinishGame) {
-      deps.submitFinalScores(committed.players, committed.letter, code, committed.row?.id);
-      deps.clearRoundLiveResponses?.(code);
-    }
-
-    if (committed.status === "finished" || committed.status === "waiting") {
+    if (nextStatus === "finished" || nextStatus === "waiting") {
+      deps.onRoundAdvanced(room, updatedPlayers, nextStatus);
       clearBotTimers(code);
     }
   } catch (err) {
@@ -585,10 +613,10 @@ export function startBotTimerRecovery(deps: BotActionDeps) {
             ? Math.max(0, 1_500 + (bot.playerId.charCodeAt(bot.playerId.length - 1) % 2_500) - elapsed)
             : Math.max(0, 25_000 + (bot.playerId.charCodeAt(bot.playerId.length - 1) % 26_000) - elapsed);
           const timer = setTimeout(() => {
-            untrackTimer(room.roomCode, timer, bot.playerId);
-            performBotSubmit(room.roomCode, bot.playerId, recoveryDeps!, { triggerStop: !isStopped });
+            untrackTimer(room.roomCode, timer, bot.playerId, Number(room.id));
+            performBotSubmit(room.roomCode, room.id, bot.playerId, recoveryDeps!, { triggerStop: !isStopped });
           }, delay);
-          trackTimer(room.roomCode, timer, bot.playerId);
+          trackTimer(room.roomCode, timer, bot.playerId, Number(room.id));
         }
       }
     } catch (err) {
@@ -607,6 +635,7 @@ export function startBotTimerRecovery(deps: BotActionDeps) {
 // fires the bot's submission within 2-4s instead.
 export function scheduleBotsForRound(opts: {
   roomCode: string;
+  roomId: number;
   bots: { playerId: string }[];
   letter: string;
   categories: string[];
@@ -619,6 +648,7 @@ export function scheduleBotsForRound(opts: {
   // tag on each pending entry is a second line of defence inside
   // getPendingAnswers.
   clearPendingAnswers(opts.roomCode);
+  const answerGeneration = nextAnswerGeneration(opts.roomCode, opts.roomId);
   // 🧠 Fire LLM generation in the background per bot at round start. Each
   // bot gets a DIFFERENT result because gpt-5-mini varies with temperature
   // (no caching), so the table doesn't see identical answers. If the LLM
@@ -629,17 +659,19 @@ export function scheduleBotsForRound(opts: {
   for (const b of opts.bots) {
     generateBotAnswersLLM(letter, opts.categories)
       .then(answers => {
-        if (answers) setPendingAnswers(opts.roomCode, b.playerId, { round, letter, answers });
+        if (answers && isCurrentAnswerGeneration(opts.roomCode, answerGeneration, opts.roomId)) {
+          setPendingAnswers(opts.roomCode, b.playerId, { round, letter, generation: answerGeneration, roomId: opts.roomId, answers });
+        }
       })
       .catch(() => {});
   }
   for (const b of opts.bots) {
     const delay = 25_000 + Math.random() * 25_000; // 25-50s
     const t = setTimeout(() => {
-      untrackTimer(opts.roomCode, t, b.playerId);
-      performBotSubmit(opts.roomCode, b.playerId, opts.deps, { triggerStop: true });
+      untrackTimer(opts.roomCode, t, b.playerId, opts.roomId);
+      performBotSubmit(opts.roomCode, opts.roomId, b.playerId, opts.deps, { triggerStop: true });
     }, delay);
-    trackTimer(opts.roomCode, t, b.playerId);
+    trackTimer(opts.roomCode, t, b.playerId, opts.roomId);
   }
 }
 
@@ -647,6 +679,7 @@ export function scheduleBotsForRound(opts: {
 // rush their submission so the round can advance.
 export function rushBotSubmits(opts: {
   roomCode: string;
+  roomId: number;
   bots: { playerId: string }[];
   deps: BotActionDeps;
 }) {
@@ -654,9 +687,9 @@ export function rushBotSubmits(opts: {
   for (const b of opts.bots) {
     const delay = 1_500 + Math.random() * 2_500; // 1.5-4s, mimics real player freeze
     const t = setTimeout(() => {
-      untrackTimer(opts.roomCode, t, b.playerId);
-      performBotSubmit(opts.roomCode, b.playerId, opts.deps, { triggerStop: false });
+      untrackTimer(opts.roomCode, t, b.playerId, opts.roomId);
+      performBotSubmit(opts.roomCode, opts.roomId, b.playerId, opts.deps, { triggerStop: false });
     }, delay);
-    trackTimer(opts.roomCode, t, b.playerId);
+    trackTimer(opts.roomCode, t, b.playerId, opts.roomId);
   }
 }

@@ -6,36 +6,34 @@ let revocationCacheReady = false;
 
 export async function loadRevokedPlayerIds(): Promise<void> {
   const rows = await db.execute(sql`SELECT player_id FROM revoked_player_ids`);
-  const next = new Set<string>();
-  for (const row of rows.rows as Array<{ player_id: string }>) {
-    if (row.player_id) next.add(row.player_id);
-  }
-  // Swap only after the complete DB snapshot is available. This prevents a
-  // refresh from briefly exposing an empty revocation cache.
   revokedPlayerIds.clear();
-  for (const playerId of next) revokedPlayerIds.add(playerId);
+  for (const row of rows.rows as Array<{ player_id: string }>) {
+    if (row.player_id) revokedPlayerIds.add(row.player_id);
+  }
   revocationCacheReady = true;
 }
 
-export function isPlayerRevoked(playerId: string): boolean {
-  return revokedPlayerIds.has(playerId);
+export async function isPlayerRevoked(playerId: string): Promise<boolean> {
+  if (!playerId) return false;
+  try {
+    const rows = await db.execute(sql`
+      SELECT 1 FROM revoked_player_ids WHERE player_id = ${playerId} LIMIT 1
+    `);
+    const revoked = (rows.rows as any[]).length > 0;
+    if (revoked) revokedPlayerIds.add(playerId);
+    else revokedPlayerIds.delete(playerId);
+    return revoked;
+  } catch (error) {
+    // Fail closed for authenticated identity checks: a DB error must never
+    // turn an unknown revocation state into an accepted account.
+    console.error("[playerRevocation] DB check failed:", error);
+    return true;
+  }
 }
 
 export function isPlayerRevocationCacheReady(): boolean {
   return revocationCacheReady;
 }
-
-// Keep revocation state coherent across Railway instances. The database is the
-// source of truth; this bounded refresh closes the window where an account
-// deleted on one instance could still be accepted by another instance that
-// had an older in-memory cache.
-const REVOCATION_REFRESH_MS = 5_000;
-const revocationRefresh = setInterval(() => {
-  void loadRevokedPlayerIds().catch((err) => {
-    console.error("[playerRevocation] periodic refresh failed:", err);
-  });
-}, REVOCATION_REFRESH_MS);
-revocationRefresh.unref?.();
 
 export async function revokePlayerId(playerId: string, tx?: any): Promise<void> {
   if (!playerId) return;

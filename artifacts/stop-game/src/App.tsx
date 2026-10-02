@@ -7,6 +7,8 @@ import { SplashScreen } from "@/components/SplashScreen";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { usePlayer } from "@/hooks/use-player";
 import { claimStripePack } from "@/lib/worldCupPack";
+import { flushScoreOutbox } from "@/lib/offlineGame";
+import { getApiUrl, authHeaders } from "@/lib/utils";
 import Home from "@/pages/Home";
 import SoloGame from "@/pages/SoloGame";
 import Multiplayer from "@/pages/Multiplayer";
@@ -141,19 +143,71 @@ function PackClaimHandler() {
   return null;
 }
 
+function ScoreOutboxHandler() {
+  const { player } = usePlayer();
+
+  useEffect(() => {
+    const tryFlush = () => {
+      if (typeof navigator !== "undefined" && navigator.onLine === false) return;
+      if (!player?.id) return;
+      void flushScoreOutbox(async (payload) => {
+        const response = await fetch(getApiUrl() + "/api/ranking/scores", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...authHeaders() },
+          credentials: "include",
+          body: JSON.stringify(payload),
+        });
+        if (!response.ok) throw new Error("score-sync-" + response.status);
+        return response.json();
+      }, player.id);
+    };
+
+    tryFlush();
+    window.addEventListener("online", tryFlush);
+    return () => window.removeEventListener("online", tryFlush);
+  }, [player?.id]);
+
+  return null;
+}
+
 function App() {
   const [splashDone, setSplashDone] = useState(false);
   const lang = (localStorage.getItem("stop_lang") ?? "es") as string;
 
-  // Let the browser/Wouter own history navigation. Intercepting popstate here
-  // forced every Back action from a nested route back to Home.
-
+  useEffect(() => {
+    const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+    const isAtHome = () => {
+      const p = window.location.pathname.replace(base, "") || "/";
+      return p === "/" || p === "";
+    };
+    try { window.history.pushState({ stopApp: true }, ""); } catch {}
+    const onPop = () => {
+      const open = document.body.dataset.modalOpen;
+      if (open === "true") {
+        try {
+          document.body.dataset.modalOpen = "false";
+          window.dispatchEvent(new CustomEvent("stop:back"));
+          window.history.pushState({ stopApp: true }, "");
+        } catch {}
+        return;
+      }
+      if (!isAtHome()) {
+        try {
+          window.history.replaceState({ stopApp: true }, "", `${base}/`);
+          window.dispatchEvent(new PopStateEvent("popstate"));
+          window.history.pushState({ stopApp: true }, "");
+        } catch {}
+      }
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>
       <MotionConfig reducedMotion="user">
         <ErrorBoundary>
-          <PackClaimHandler />
+          <PackClaimHandler />\n          <ScoreOutboxHandler />
           <SplashScreen onDone={() => setSplashDone(true)} lang={lang} />
           {splashDone && (
             <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>

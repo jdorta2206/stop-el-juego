@@ -1,10 +1,11 @@
 import { Router, type IRouter } from "express";
-import { stripeStorage } from "../stripeStorage";
+import { stripeStorage, withPlayerBillingLock } from "../stripeStorage";
 import { db, playerScoresTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { stripeService } from "../stripeService";
 import { getUncachableStripeClient, isStripeReady } from "../stripeClient";
 import { verifyClaimedIdentity } from "../lib/playerAuth";
+import { isPlayerRevoked } from "../lib/playerRevocation";
 import { isUserPremium } from "../lib/premiumStatus";
 import {
   WORLD_CUP_PACK_SKU,
@@ -41,7 +42,7 @@ router.get("/status", async (req, res) => {
     // 🔒 Never allow the public playerId to be used to inspect or mutate
     // another player's premium state. The endpoint self-heals isPremium below,
     // so identity verification is required before reading that account.
-    if (!verifyClaimedIdentity(req, playerId)) {
+    if (!await verifyClaimedIdentity(req, playerId)) {
       return res.status(403).json({ error: "Identity verification failed" });
     }
 
@@ -136,9 +137,14 @@ router.post("/checkout", async (req, res) => {
 
     // 🔒 A logged-in account can only check out for ITSELF — blocks anyone from
     // creating a Stripe session against another player's id (which is public).
-    if (!verifyClaimedIdentity(req, playerId)) {
+    if (!await verifyClaimedIdentity(req, playerId)) {
       return res.status(403).json({ error: "Identity verification failed" });
     }
+
+    return await withPlayerBillingLock(playerId, async () => {
+      if (await isPlayerRevoked(playerId)) {
+        return res.status(401).json({ error: "Account deleted" });
+      }
 
     // Never create another Premium subscription for an account that already
     // has Premium from either billing channel. This also covers a Stripe
@@ -181,7 +187,7 @@ router.post("/checkout", async (req, res) => {
       customerId = customer.id;
       await stripeStorage.updatePlayerStripeInfo(playerId, {
         stripeCustomerId: customerId,
-      });
+      }, { skipLock: true });
     }
 
     const session = await stripeService.createCheckoutSession(
@@ -197,6 +203,7 @@ router.post("/checkout", async (req, res) => {
     );
 
     return res.json({ url: session.url });
+    });
   } catch (err: any) {
     console.error("stripe/checkout error:", err.message);
     return res.status(500).json({ error: "Internal server error" });
@@ -221,9 +228,14 @@ router.post("/checkout-pack", async (req, res) => {
       return res.status(400).json({ error: "Unknown pack" });
     }
     // 🔒 A logged-in account can only check out for ITSELF.
-    if (!verifyClaimedIdentity(req, playerId)) {
+    if (!await verifyClaimedIdentity(req, playerId)) {
       return res.status(403).json({ error: "Identity verification failed" });
     }
+
+    return await withPlayerBillingLock(playerId, async () => {
+      if (await isPlayerRevoked(playerId)) {
+        return res.status(401).json({ error: "Account deleted" });
+      }
 
     const player = await stripeStorage.getPlayer(playerId);
 
@@ -291,7 +303,7 @@ router.post("/checkout-pack", async (req, res) => {
       validCustomerId = customerId;
       await stripeStorage.updatePlayerStripeInfo(playerId, {
         stripeCustomerId: customerId,
-      });
+      }, { skipLock: true });
       console.log(`Created new customer ${customerId} for player ${playerId}`);
     }
 
@@ -309,6 +321,7 @@ router.post("/checkout-pack", async (req, res) => {
     );
 
     return res.json({ url: session.url });
+    });
   } catch (err: any) {
     console.error("stripe/checkout-pack error:", err.message);
     return res.status(500).json({ error: "Internal server error" });
@@ -327,7 +340,7 @@ router.post("/claim-pack", async (req, res) => {
       sessionId?: string;
     };
     if (!playerId) return res.status(400).json({ error: "playerId required" });
-    if (!verifyClaimedIdentity(req, playerId)) {
+    if (!await verifyClaimedIdentity(req, playerId)) {
       return res.status(403).json({ error: "Identity verification failed" });
     }
 
@@ -385,7 +398,7 @@ router.post("/portal", async (req, res) => {
     if (!playerId) return res.status(400).json({ error: "playerId required" });
     // 🔒 Critical IDOR fix: only the authenticated owner can open the billing
     // portal for their id — otherwise anyone could cancel another user's sub.
-    if (!verifyClaimedIdentity(req, playerId)) {
+    if (!await verifyClaimedIdentity(req, playerId)) {
       return res.status(403).json({ error: "Identity verification failed" });
     }
 

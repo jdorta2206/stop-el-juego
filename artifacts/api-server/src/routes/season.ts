@@ -172,7 +172,7 @@ export async function finalizePreviousSeason(currentSeasonId: number, today: str
   }
 }
 
-export async function getOrCreateActiveSeason() {
+async function getOrCreateActiveSeason() {
   const today = todayUTC();
 
   const existing = await db
@@ -265,19 +265,18 @@ function parseClaimed(raw: string): { free: number[]; premium: number[] } {
   }
 }
 
-export async function getOrCreateProgressTx(
-  tx: any,
-  playerId: string,
-  seasonId: number,
-): Promise<ProgressRow> {
+async function getOrCreateProgress(playerId: string, seasonId: number): Promise<ProgressRow> {
   const today = todayUTC();
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${playerId}, 0))`);
+    const revoked = await tx.execute(sql`SELECT 1 FROM revoked_player_ids WHERE player_id = ${playerId} LIMIT 1`);
+    if ((revoked as any).rows?.length) throw new Error("ACCOUNT_DELETED");
 
-  // Race-safe upsert on the unique (player_id, season_id) key. The whole
-  // get/create + daily-mission rollover stays on the caller's transaction
-  // connection so authoritative game scoring can commit atomically with
-  // season progress.
-  const fresh: MissionsBlob = { date: today, missions: buildMissionsForDate(today) };
-  const inserted = await tx
+  // Race-safe upsert: relies on the unique index on (player_id, season_id).
+  // ON CONFLICT DO NOTHING + RETURNING gives us the new row on insert OR
+  // nothing on conflict — in which case we SELECT the winning row.
+    const fresh: MissionsBlob = { date: today, missions: buildMissionsForDate(today) };
+    const inserted = await tx
     .insert(seasonProgressTable)
     .values({
       playerId,
@@ -289,90 +288,123 @@ export async function getOrCreateProgressTx(
     .onConflictDoNothing({ target: [seasonProgressTable.playerId, seasonProgressTable.seasonId] })
     .returning();
 
-  let row: ProgressRow;
-  if (inserted.length > 0) {
-    row = inserted[0];
-  } else {
-    const existing = await tx
+    let row: ProgressRow;
+    if (inserted.length > 0) {
+      row = inserted[0];
+    } else {
+      const existing = await tx
       .select()
       .from(seasonProgressTable)
-      .where(and(
-        eq(seasonProgressTable.playerId, playerId),
-        eq(seasonProgressTable.seasonId, seasonId),
-      ))
+      .where(and(eq(seasonProgressTable.playerId, playerId), eq(seasonProgressTable.seasonId, seasonId)))
       .limit(1);
-    if (existing.length === 0) {
-      throw new Error("season progress row disappeared after conflict");
+      row = existing[0];
     }
-    row = existing[0];
-  }
+    if (!row) throw new Error("SEASON_PROGRESS_NOT_FOUND");
 
-  const locked = (await tx.execute(sql\`
-    SELECT id, player_id, season_id, xp, claimed_tiers, missions_json, updated_at
-    FROM season_progress
-    WHERE id = \${row.id}
-    FOR UPDATE
-  \`)) as unknown as SqlResult<ProgressRow>;
-  const current = locked.rows?.[0];
-  if (!current) throw new Error("season progress row not found after upsert");
+  // Lazily roll missions over to today under the same row lock used by
+  // authoritative mission progress. Without this transaction, a rollover
+  // update could race a gameplay event and overwrite progress written by the
+  // other request.
+    const rolledRow = await (async () => {
+    const locked = (await tx.execute(sql`
+      SELECT id, player_id, season_id, xp, claimed_tiers, missions_json, updated_at
+      FROM season_progress
+      WHERE id = ${row.id}
+      FOR UPDATE
+    `)) as unknown as SqlResult<ProgressRow>;
+    const current = locked.rows?.[0];
+    if (!current) return null;
 
-  const currentDate = (() => {
-    try { return JSON.parse(current.missionsJson || "{}")?.date; }
-    catch { return undefined; }
-  })();
+    const currentDate = (() => {
+      try { return JSON.parse(current.missionsJson || "{}")?.date; }
+      catch { return undefined; }
+    })();
 
-  if (currentDate !== today) {
-    const rolled: MissionsBlob = { date: today, missions: buildMissionsForDate(today) };
-    await tx
-      .update(seasonProgressTable)
-      .set({ missionsJson: JSON.stringify(rolled), updatedAt: new Date() })
-      .where(eq(seasonProgressTable.id, row.id));
-    current.missionsJson = JSON.stringify(rolled);
-  }
-
-  return current;
-}
-
-export async function getOrCreateProgress(playerId: string, seasonId: number): Promise<ProgressRow> {
-  return db.transaction(async (tx) => getOrCreateProgressTx(tx, playerId, seasonId));
+    if (currentDate !== today) {
+      const rolled: MissionsBlob = { date: today, missions: buildMissionsForDate(today) };
+      await tx
+        .update(seasonProgressTable)
+        .set({ missionsJson: JSON.stringify(rolled), updatedAt: new Date() })
+        .where(eq(seasonProgressTable.id, row.id));
+      current.missionsJson = JSON.stringify(rolled);
+    }
+    return current;
+    })();
+    return rolledRow ?? row;
+  });
 }
 
 /**
  * Records season progress only from server-authoritative gameplay results.
  * The public /event endpoint must never accept client-supplied progress values.
  */
-export async function applyAuthoritativeSeasonEventsTx(
+async function applyAuthoritativeSeasonEventsInTransaction(
   tx: any,
-  seasonId: number,
-  progressId: number,
+  playerId: string,
   events: Array<{ type: "win_game" | "play_game" | "round_score" | "streak" | "valid_words" | "daily_done"; value?: number }>,
+  eventKey?: string,
 ): Promise<void> {
-  if (!events.length) return;
-
-  // Serialize authoritative events with season finalization at rollover.
-  await tx.execute(sql`SELECT pg_advisory_xact_lock(${seasonId}::bigint)`);
+  if (!playerId || events.length === 0) return;
 
   const today = todayUTC();
+  await tx.execute(sql`
+    INSERT INTO seasons (start_date, end_date, theme_json)
+    VALUES (${today}, ${addDays(today, SEASON_LENGTH_DAYS - 1)}, ${JSON.stringify(themeForStartDate(today))})
+    ON CONFLICT (start_date) DO NOTHING
+  `);
+
+  const seasonRows = (await tx.execute(sql`
+    SELECT id FROM seasons
+    WHERE start_date <= ${today} AND end_date >= ${today}
+    ORDER BY id DESC
+    LIMIT 1
+  `)) as unknown as SqlResult<{ id: number }>;
+  const season = seasonRows.rows?.[0];
+  if (!season) return;
+
+  // Lock order must match season finalization: season -> player.
+  // Otherwise a rollover can snapshot standings while an event holds the
+  // player lock and is still waiting to enter the season lock.
+  await tx.execute(sql`
+    SELECT pg_advisory_xact_lock(${Number(season.id)}::bigint)
+  `);
+  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${playerId}, 0))`);
+
+  const revoked = await tx.execute(sql`SELECT 1 FROM revoked_player_ids WHERE player_id = ${playerId} LIMIT 1`);
+  if ((revoked as any).rows?.length) return;
+
   const activeSeason = (await tx.execute(sql`
     SELECT 1 FROM seasons
-    WHERE id = ${seasonId} AND end_date >= ${today}
+    WHERE id = ${Number(season.id)} AND end_date >= ${todayUTC()}
     LIMIT 1
   `)) as unknown as SqlResult<{ "?column?": number }>;
-  if ((activeSeason.rows?.length ?? 0) === 0) {
-    // An authoritative result must never commit without its season event.
-    // Throw so the caller's transaction rolls back the idempotency claim and
-    // leaderboard changes; recovery can then retry against the new season.
-    throw new Error(`Season ${seasonId} is no longer active`);
-  }
+  if ((activeSeason.rows?.length ?? 0) === 0) return;
 
-  const locked = (await tx.execute(sql`
+  const fresh: MissionsBlob = { date: today, missions: buildMissionsForDate(today) };
+  await tx.execute(sql`
+    INSERT INTO season_progress (player_id, season_id, xp, claimed_tiers, missions_json)
+    VALUES (${playerId}, ${Number(season.id)}, 0, '{"free":[],"premium":[]}', ${JSON.stringify(fresh)})
+    ON CONFLICT (player_id, season_id) DO NOTHING
+  `);
+
+  const progressRows = (await tx.execute(sql`
     SELECT id, missions_json
     FROM season_progress
-    WHERE id = ${progressId}
+    WHERE player_id = ${playerId} AND season_id = ${Number(season.id)}
     FOR UPDATE
-  `)) as unknown as SqlResult<Pick<ProgressRowSql, "id" | "missions_json">>;
-  const row = locked.rows?.[0];
+  `)) as unknown as SqlResult<{ id: number; missions_json: string }>;
+  const row = progressRows.rows?.[0];
   if (!row) return;
+
+  if (eventKey) {
+    const claim = await tx.execute(sql`
+      INSERT INTO season_event_claims (season_id, player_id, event_key)
+      VALUES (${Number(season.id)}, ${playerId}, ${eventKey})
+      ON CONFLICT (season_id, player_id, event_key) DO NOTHING
+      RETURNING event_key
+    `);
+    if ((claim.rows?.length ?? 0) === 0) return;
+  }
 
   const blob = parseMissions(row.missions_json, today);
   let mutated = false;
@@ -403,35 +435,29 @@ export async function applyAuthoritativeSeasonEventsTx(
   if (mutated) {
     await tx.update(seasonProgressTable)
       .set({ missionsJson: JSON.stringify(blob), updatedAt: new Date() })
-      .where(eq(seasonProgressTable.id, progressId));
+      .where(eq(seasonProgressTable.id, row.id));
   }
 }
 
-/**
- * Records season progress only from server-authoritative gameplay results.
- * The public /event endpoint must never accept client-supplied progress values.
- *
- * Non-score callers use this wrapper. Score submissions use
- * applyAuthoritativeSeasonEventsTx so season progress commits atomically with
- * the score and its offline idempotency receipt.
- */
 export async function recordAuthoritativeSeasonEvents(
   playerId: string,
   events: Array<{ type: "win_game" | "play_game" | "round_score" | "streak" | "valid_words" | "daily_done"; value?: number }>,
-): Promise<void> {
-  if (!playerId || events.length === 0) return;
+  eventKey?: string,
+ ): Promise<boolean> {
+  if (!playerId || events.length === 0) return true;
   try {
-    const season = await getOrCreateActiveSeason();
-    const progress = await getOrCreateProgress(playerId, season.id);
-
     await db.transaction(async (tx) => {
-      await applyAuthoritativeSeasonEventsTx(tx, season.id, progress.id, events);
+      await applyAuthoritativeSeasonEventsInTransaction(tx, playerId, events, eventKey);
     });
+    return true;
   } catch (e: unknown) {
     // Season progression is auxiliary and must never make a valid game result fail.
     console.error("[season/authoritative-event] error:", e instanceof Error ? e.message : String(e));
+    return false;
   }
 }
+
+export { applyAuthoritativeSeasonEventsInTransaction };
 
 // ── Routes ─────────────────────────────────────────────────────────────────
 
@@ -721,6 +747,20 @@ router.post("/claim-mission", requirePlayerIdentity, async (req: AuthedRequest, 
 
     // Atomic claim guard: lock row, re-check claimed flag, update inside the same tx.
     const claim = await db.transaction(async (tx) => {
+      // Serialize claims with season rollover using the same lock order as
+      // finalization: season -> player/progress. Re-check the season inside
+      // the transaction so a request that crossed the UTC rollover boundary
+      // cannot claim a mission from an ended season.
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(${Number(season.id)}::bigint)`);
+      const activeSeason = (await tx.execute(sql`
+        SELECT 1 FROM seasons
+        WHERE id = ${Number(season.id)} AND start_date <= ${today} AND end_date >= ${today}
+        LIMIT 1
+      `)) as unknown as SqlResult<{ "?column?": number }>;
+      if ((activeSeason.rows?.length ?? 0) === 0) {
+        return { ok: false as const, error: "Season is no longer active", status: 409 };
+      }
+
       const locked = (await tx.execute(sql`
         SELECT id, xp, missions_json FROM season_progress WHERE id = ${progress.id} FOR UPDATE
       `)) as unknown as SqlResult<Pick<ProgressRowSql, "id" | "xp" | "missions_json">>;
@@ -814,16 +854,16 @@ router.post("/claim-tier", requirePlayerIdentity, async (req: AuthedRequest, res
 
     // Atomic claim guard
     const claim = await db.transaction(async (tx) => {
-      // Keep the same lock order as authoritative scoring:
-      // player_scores -> season_progress. Reversing these can deadlock a
-      // concurrent score submission that already holds player_scores.
-      const playerLocked = (await tx.execute(sql`
-        SELECT inventory_json FROM player_scores
-        WHERE player_id = ${playerId} FOR UPDATE
-      `)) as unknown as SqlResult<{ inventory_json: string }>;
-      const playerRow = playerLocked.rows?.[0];
-      if (!playerRow) {
-        return { ok: false as const, error: "Player profile not found", status: 404 };
+      // Keep the same season -> player lock order used by rollover/finalization
+      // and re-check activity inside the transaction before granting a tier.
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(${Number(season.id)}::bigint)`);
+      const activeSeason = (await tx.execute(sql`
+        SELECT 1 FROM seasons
+        WHERE id = ${Number(season.id)} AND start_date <= ${todayUTC()} AND end_date >= ${todayUTC()}
+        LIMIT 1
+      `)) as unknown as SqlResult<{ "?column?": number }>;
+      if ((activeSeason.rows?.length ?? 0) === 0) {
+        return { ok: false as const, error: "Season is no longer active", status: 409 };
       }
 
       const locked = (await tx.execute(sql`
@@ -848,6 +888,18 @@ router.post("/claim-tier", requirePlayerIdentity, async (req: AuthedRequest, res
       // avatars/frames are appended to the inventory (de-duplicated). All
       // happens inside the SAME transaction as the claimed_tiers write so a
       // crash mid-claim leaves no half-state.
+      // Lock the player_scores row up front and hard-fail if it's missing
+      // — otherwise the UPDATE below could affect 0 rows and the claim
+      // would silently lose the reward while still being marked claimed.
+      const playerLocked = (await tx.execute(sql`
+        SELECT inventory_json FROM player_scores
+        WHERE player_id = ${playerId} FOR UPDATE
+      `)) as unknown as SqlResult<{ inventory_json: string }>;
+      const playerRow = playerLocked.rows?.[0];
+      if (!playerRow) {
+        return { ok: false as const, error: "Player profile not found", status: 404 };
+      }
+
       const reward = tierReward(tierNum)[track];
       let depositedCoins = 0;
       let depositedCosmetic: string | null = null;

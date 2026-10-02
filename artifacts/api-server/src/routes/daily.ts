@@ -2,8 +2,8 @@ import { Router, type IRouter } from "express";
 import { db, dailyResultsTable, playerScoresTable } from "@workspace/db";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { verifyClaimedIdentity } from "../lib/playerAuth";
-import { verifyScoreVouchers, claimScoreVouchersTx, ceilingFromBase, absoluteCeiling } from "../lib/scoreToken";
-import { applyAuthoritativeSeasonEventsTx, getOrCreateActiveSeason, getOrCreateProgress } from "./season";
+import { sumVerifiedBasePersistent, consumeScoreVoucherJtis, ceilingFromBase, absoluteCeiling } from "../lib/scoreToken";
+import { recordAuthoritativeSeasonEvents } from "./season";
 
 const router: IRouter = Router();
 
@@ -46,7 +46,8 @@ function getDailyChallenge(dateStr: string, language: string) {
 
 // GET /api/daily?language=es  → today's challenge (letter + categories)
 router.get("/", (req, res) => {
-  const language = (req.query.language as string) || "es";
+  const requestedLanguage = typeof req.query.language === "string" ? req.query.language.trim().toLowerCase() : "es";
+  const language = ["es", "en", "pt", "fr"].includes(requestedLanguage) ? requestedLanguage : "es";
   const today = getTodayUTC();
   const challenge = getDailyChallenge(today, language);
   res.json(challenge);
@@ -59,7 +60,7 @@ router.get("/status", async (req, res) => {
     res.status(400).json({ error: "Invalid daily status request" });
     return;
   }
-  if (!verifyClaimedIdentity(req, playerId)) {
+  if (!await verifyClaimedIdentity(req, playerId)) {
     res.status(403).json({ error: "Identity verification failed" });
     return;
   }
@@ -77,13 +78,13 @@ router.get("/status", async (req, res) => {
 
 // POST /api/daily/submit  → save a player's score for today
 router.post("/submit", async (req, res) => {
-  const { playerId, playerName, score, letter, language, categories, scoreTokens } = req.body;
+  const { playerId, playerName, score, letter, language, scoreTokens } = req.body;
   if (!playerId || !playerName || score == null || !letter) {
     res.status(400).json({ error: "Missing required fields" });
     return;
   }
   // 🔒 Only the authenticated owner may submit a daily score for a logged-in id.
-  if (!verifyClaimedIdentity(req, playerId)) {
+  if (!await verifyClaimedIdentity(req, playerId)) {
     res.status(403).json({ error: "Identity verification failed" });
     return;
   }
@@ -120,35 +121,57 @@ router.post("/submit", async (req, res) => {
     return;
   }
 
-  const submittedCategories = Array.isArray(categories) ? categories.map((c) => String(c).trim()) : [];
-  if (submittedCategories.length !== expectedChallenge.categories.length || submittedCategories.some((c, i) => c !== expectedChallenge.categories[i])) {
-    res.status(422).json({ error: "Invalid daily challenge categories" });
-    return;
-  }
-
   // 🔒 Anti-cheat clamp — same scheme as the global leaderboard: clamp the
   // posted score to a ceiling derived from the verified round voucher(s), or a
   // flat absolute ceiling when none are present (offline play). Never reject,
   // only clamp, so a legit daily score is never lost.
-  const verifiedVouchers = await verifyScoreVouchers(scoreTokens, 1);
-  const { base: verifiedBase, verified } = verifiedVouchers;
+  const { base: verifiedBase, verified, voucherJtis } = await sumVerifiedBasePersistent(scoreTokens, 1);
   const suppliedTokens = Array.isArray(scoreTokens) && scoreTokens.length > 0;
-  if (suppliedTokens && (verified === 0 || verifiedVouchers.mode !== "daily")) {
+  if (suppliedTokens && verified === 0) {
     res.status(422).json({ error: "INVALID_SCORE_VOUCHER" });
     return;
   }
   const dailyCeiling = verified > 0 ? ceilingFromBase(verifiedBase) : absoluteCeiling("daily");
   const safeScore = Math.max(0, Math.min(Number(score) || 0, dailyCeiling));
 
-  // The daily result and its authoritative season mission update must commit
-  // in the same transaction. Otherwise a process crash after the daily INSERT
-  // but before the async season event can permanently lose daily_done progress.
-  const season = await getOrCreateActiveSeason();
-  const seasonProgress = await getOrCreateProgress(playerId, season.id);
-  const submitted = await db.transaction(async (tx) => {
-    const inserted = await tx
-      .insert(dailyResultsTable)
-      .values({
+  // Only allow one submission per player per day. Voucher consumption and
+  // the daily write share one transaction so a failed write cannot burn a valid
+  // voucher and leave the player unable to retry.
+  let alreadyPlayed = false;
+  let submitted = false;
+  try {
+    await db.transaction(async (tx) => {
+      const existing = await tx
+        .select()
+        .from(dailyResultsTable)
+        .where(and(
+          eq(dailyResultsTable.playerId, playerId),
+          eq(dailyResultsTable.challengeDate, today),
+        ))
+        .limit(1);
+
+      if (existing.length > 0) {
+        alreadyPlayed = true;
+        if (safeScore <= existing[0].score) return;
+
+        if (verified > 0 && voucherJtis.length > 0) {
+          await consumeScoreVoucherJtis(tx, voucherJtis);
+        }
+
+        await tx.update(dailyResultsTable)
+          .set({ score: safeScore, playerName: canonicalPlayerName, avatarColor: canonicalAvatarColor })
+          .where(and(
+            eq(dailyResultsTable.playerId, playerId),
+            eq(dailyResultsTable.challengeDate, today),
+            sql`${dailyResultsTable.score} < ${safeScore}`,
+          ));
+        return;
+      }
+
+      if (verified > 0 && voucherJtis.length > 0) {
+        await consumeScoreVoucherJtis(tx, voucherJtis);
+      }
+      await tx.insert(dailyResultsTable).values({
         playerId,
         playerName: canonicalPlayerName,
         avatarColor: canonicalAvatarColor || "#e53e3e",
@@ -156,70 +179,51 @@ router.post("/submit", async (req, res) => {
         score: safeScore,
         letter,
         language: normalizedLanguage,
-      })
-      .onConflictDoNothing({
+      }).onConflictDoUpdate({
         target: [dailyResultsTable.playerId, dailyResultsTable.challengeDate],
-      })
-      .returning({ playerId: dailyResultsTable.playerId });
-
-    if (inserted.length > 0) {
-      if (verifiedVouchers.vouchers.length > 0) {
-        const claimedVouchers = await claimScoreVouchersTx(tx, verifiedVouchers.vouchers);
-        if (!claimedVouchers) throw new Error("SCORE_VOUCHER_ALREADY_USED");
-      }
-      await applyAuthoritativeSeasonEventsTx(
-        tx,
-        season.id,
-        seasonProgress.id,
-        [{ type: "daily_done", value: 1 }],
-      );
-      return true;
+        set: {
+          score: sql`GREATEST(${dailyResultsTable.score}, EXCLUDED.score)`,
+          playerName: sql`CASE WHEN EXCLUDED.score > ${dailyResultsTable.score} THEN ${canonicalPlayerName} ELSE ${dailyResultsTable.playerName} END`,
+          avatarColor: sql`CASE WHEN EXCLUDED.score > ${dailyResultsTable.score} THEN ${canonicalAvatarColor} ELSE ${dailyResultsTable.avatarColor} END`,
+        },
+      });
+      submitted = true;
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message === "SCORE_VOUCHER_CONFLICT") {
+      res.status(422).json({ error: "INVALID_SCORE_VOUCHER" });
+      return;
     }
-
-    // Another request already created today's row. Only improve the score;
-    // re-applying daily_done is harmless because the mission is capped at 1,
-    // and repairs a previous response that predated this transactional path.
-    const improved = await tx
-      .update(dailyResultsTable)
-      .set({
-        score: sql`GREATEST(${dailyResultsTable.score}, ${safeScore})`,
-        playerName: sql`CASE WHEN ${dailyResultsTable.score} < ${safeScore} THEN ${canonicalPlayerName} ELSE ${dailyResultsTable.playerName} END`,
-        avatarColor: sql`CASE WHEN ${dailyResultsTable.score} < ${safeScore} THEN ${canonicalAvatarColor} ELSE ${dailyResultsTable.avatarColor} END`,
-      })
-      .where(
-        and(
-          eq(dailyResultsTable.playerId, playerId),
-          eq(dailyResultsTable.challengeDate, today),
-          sql`${dailyResultsTable.score} < ${safeScore}`,
-        ),
-      )
-      .returning({ playerId: dailyResultsTable.playerId });
-
-    if (improved.length > 0 && verifiedVouchers.vouchers.length > 0) {
-      const claimedVouchers = await claimScoreVouchersTx(tx, verifiedVouchers.vouchers);
-      if (!claimedVouchers) throw new Error("SCORE_VOUCHER_ALREADY_USED");
-    }
-    await applyAuthoritativeSeasonEventsTx(
-      tx,
-      season.id,
-      seasonProgress.id,
-      [{ type: "daily_done", value: 1 }],
-    );
-    return false;
-  });
+    throw error;
+  }
 
   if (submitted) {
-    res.status(201).json({ submitted: true });
-    return;
-  });
+    void recordAuthoritativeSeasonEvents(
+      playerId,
+      [{ type: "daily_done", value: 1 }],
+      `daily:${today}`,
+    );
+  }
+  res.status(submitted ? 201 : 200).json({ submitted, alreadyPlayed });
+});
 
 // GET /api/daily/rankings?language=es  → top 10 players for today
 router.get("/rankings", async (req, res) => {
-  const language = (req.query.language as string) || "es";
+  const requestedLanguage = typeof req.query.language === "string" ? req.query.language.trim().toLowerCase() : "es";
+  const language = ["es", "en", "pt", "fr"].includes(requestedLanguage) ? requestedLanguage : "es";
   const today = getTodayUTC();
 
   const results = await db
-    .select()
+    .select({
+      id: dailyResultsTable.id,
+      playerName: dailyResultsTable.playerName,
+      avatarColor: dailyResultsTable.avatarColor,
+      challengeDate: dailyResultsTable.challengeDate,
+      score: dailyResultsTable.score,
+      letter: dailyResultsTable.letter,
+      language: dailyResultsTable.language,
+      rank: sql<number>`RANK() OVER (ORDER BY ${dailyResultsTable.score} DESC)`,
+    })
     .from(dailyResultsTable)
     .where(
       and(
@@ -230,7 +234,7 @@ router.get("/rankings", async (req, res) => {
     .orderBy(desc(dailyResultsTable.score))
     .limit(10);
 
-  res.json({ date: today, rankings: results.map((r, i) => ({ ...r, rank: i + 1 })) });
+  res.json({ date: today, rankings: results });
 });
 
 export default router;
