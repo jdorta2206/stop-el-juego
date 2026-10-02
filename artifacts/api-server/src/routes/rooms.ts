@@ -517,6 +517,13 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
     // 🔒 Durable idempotency claim MUST happen before any counter update.
     // A duplicate retry exits here without touching leaderboard/streak/season.
     await db.transaction(async (tx) => {
+      // Keep the lock order identical to season rollover:
+      // advisory Season lock -> player_scores row lock -> season_progress row.
+      // This prevents a rollover/scoring deadlock at the season boundary.
+      if (seasonId !== null) {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(${seasonId}::bigint)`);
+      }
+
       // Durable idempotency key for room finalization. If a previous
       // process already committed this player's result for this room, the
       // retry must NOT increment leaderboard/streak/season a second time.
@@ -605,8 +612,8 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
 
       if (seasonId !== null) {
         try {
-          // Season is auxiliary: use a savepoint so a transient Season failure
-          // cannot roll back the already-valid leaderboard/history result.
+          // Season is part of the authoritative result. A failure must roll back
+          // history + leaderboard together so recovery can retry the whole result.
           await tx.transaction(async (seasonTx) => {
             const progress = await getOrCreateProgressTx(seasonTx, p.playerId, seasonId);
             const validWords = Number.isFinite(p.validAnswerCount)
