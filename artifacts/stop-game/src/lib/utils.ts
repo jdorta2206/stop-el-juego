@@ -86,8 +86,11 @@ export function shareText(text: string, url: string) {
     instagram: `https://www.instagram.com/`,
     twitter: `https://twitter.com/intent/tweet?text=${encodedText}&url=${encodedUrl}`,
     native: () => {
-      if (navigator.share) navigator.share({ title: "STOP - El Juego", text, url });
-      else navigator.clipboard.writeText(`${text} ${url}`);
+      if (navigator.share) {
+        void navigator.share({ title: "STOP - El Juego", text, url }).catch(() => {});
+      } else {
+        void navigator.clipboard.writeText(`${text} ${url}`).catch(() => {});
+      }
     },
   };
 }
