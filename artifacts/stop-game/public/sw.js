@@ -8,7 +8,7 @@ self.addEventListener("install", (e) => {
     Promise.all([
       caches.open(CACHE).then((c) => Promise.all(STATIC.map((url) => fetch(url, { cache: "no-store" }).then((res) => (res.ok ? c.put(url, res) : null)).catch(() => null)))),
       caches.open(DATA_CACHE).then((c) => fetch(OFFLINE_BUNDLE_PATH, { cache: "no-store" }).then((res) => (res.ok ? c.put(OFFLINE_BUNDLE_PATH, res) : null)).catch(() => null)),
-    ]).then(() => self.skipWaiting())
+    ])
   );
 });
 
