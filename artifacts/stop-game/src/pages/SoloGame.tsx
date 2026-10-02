@@ -1265,7 +1265,7 @@ export default function SoloGame() {
     // record. Logged-in players are marked locally only after the server
     // confirms the score was accepted.
     if (!player || player.loginMethod === "guest") {
-      localStorage.setItem(`stop_daily_${getTodayStr()}`, String(finalScore));
+      try { localStorage.setItem(`stop_daily_${getTodayStr()}`, String(finalScore)); } catch {}
       return;
     }
     fetch(`${getApiUrl()}/api/daily/submit`, {
@@ -1284,7 +1284,7 @@ export default function SoloGame() {
     })
       .then((response) => {
         if (!response.ok) throw new Error(`daily-submit-${response.status}`);
-        localStorage.setItem(`stop_daily_${getTodayStr()}`, String(finalScore));
+        try { localStorage.setItem(`stop_daily_${getTodayStr()}`, String(finalScore)); } catch {}
       })
       .catch(() => {
         // Never mark a logged-in daily as completed locally when the server
