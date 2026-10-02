@@ -62,6 +62,46 @@ app.use(cors({
   credentials: true,
 }));
 app.use(cookieParser());
+
+// CSRF protection for cookie-authenticated state changes. The session cookie
+// is SameSite=None because the TWA/canonical web origins are cross-origin, so
+// SameSite alone cannot protect POST/PUT/PATCH/DELETE requests. Browser
+// cross-site form submissions can bypass CORS, therefore require an allowed
+// Origin/Referer whenever the auth cookie is actually present. Clients that
+// authenticate with x-stop-token and do not send the cookie remain unaffected.
+app.use((req, res, next) => {
+  if (!["POST", "PUT", "PATCH", "DELETE"].includes(req.method)) {
+    next();
+    return;
+  }
+
+  const cookieToken = req.cookies?.["stop_pt"];
+  if (!cookieToken) {
+    next();
+    return;
+  }
+
+  const origin = req.headers.origin;
+  if (origin && CORS_ALLOWLIST.has(origin)) {
+    next();
+    return;
+  }
+
+  const referer = req.headers.referer;
+  if (referer) {
+    try {
+      if (CORS_ALLOWLIST.has(new URL(referer).origin)) {
+        next();
+        return;
+      }
+    } catch {
+      // Malformed/untrusted Referer: reject below.
+    }
+  }
+
+  res.status(403).json({ error: "CSRF validation failed" });
+});
+
 app.use(express.json({ limit: "256kb" }));
 app.use(express.urlencoded({ extended: true, limit: "64kb" }));
 app.use("/api", generalLimiter);
