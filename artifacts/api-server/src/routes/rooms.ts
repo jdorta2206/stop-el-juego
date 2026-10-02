@@ -2152,7 +2152,7 @@ router.post("/:roomCode/leave", async (req, res) => {
     };
     if (newHostId) {
       setPayload.hostId = newHostId;
-      setPayload.hostName = nextHuman.playerName ?? "";
+      setPayload.hostName = newHostName;
     }
 
     const updated = await tx
