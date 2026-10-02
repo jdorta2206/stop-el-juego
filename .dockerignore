@@ -14,3 +14,13 @@ npm-debug.log*
 pnpm-debug.log*
 yarn-debug.log*
 .DS_Store
+.agents
+attached_assets
+android
+android-generated
+.github
+*.aab
+*.apk
+*.mp4
+*.mov
+*.zip
