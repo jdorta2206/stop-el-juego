@@ -603,17 +603,25 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
       if (historyInsert.length === 0) return;
 
       if (seasonId !== null) {
-        const progress = await getOrCreateProgressTx(tx, p.playerId, seasonId);
-        const validWords = Number.isFinite(p.validAnswerCount)
-          ? Math.max(0, Math.floor(p.validAnswerCount))
-          : 0;
-        await applyAuthoritativeSeasonEventsTx(tx, seasonId, progress.id, [
-          { type: "play_game", value: 1 },
-          ...(won ? [{ type: "win_game", value: 1 }] : []),
-          ...(rawScore > 0 ? [{ type: "round_score", value: rawScore }] : []),
-          ...(validWords > 0 ? [{ type: "valid_words", value: validWords }] : []),
-          { type: "streak", value: seasonStreak },
-        ]);
+        try {
+          // Season is auxiliary: use a savepoint so a transient Season failure
+          // cannot roll back the already-valid leaderboard/history result.
+          await tx.transaction(async (seasonTx) => {
+            const progress = await getOrCreateProgressTx(seasonTx, p.playerId, seasonId);
+            const validWords = Number.isFinite(p.validAnswerCount)
+              ? Math.max(0, Math.floor(p.validAnswerCount))
+              : 0;
+            await applyAuthoritativeSeasonEventsTx(seasonTx, seasonId, progress.id, [
+              { type: "play_game", value: 1 },
+              ...(won ? [{ type: "win_game", value: 1 }] : []),
+              ...(rawScore > 0 ? [{ type: "round_score", value: rawScore }] : []),
+              ...(validWords > 0 ? [{ type: "valid_words", value: validWords }] : []),
+              { type: "streak", value: seasonStreak },
+            ]);
+          });
+        } catch (err) {
+          console.error("[rooms] season progress failed; score/history kept:", err);
+        }
       }
     });
 
