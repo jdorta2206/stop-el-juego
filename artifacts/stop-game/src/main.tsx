@@ -117,12 +117,16 @@ if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("/sw.js")
       .then((registration) => {
+        // Reload only after the user has explicitly chosen "Actualizar".
+        // This prevents a background deployment from interrupting a live match.
+        navigator.serviceWorker.addEventListener("controllerchange", () => {
+          window.location.reload();
+        }, { once: true });
         setInterval(() => registration.update(), 60_000);
 
         const notifyUpdate = (worker: ServiceWorker) => {
-          worker.addEventListener("statechange", () => {
-            if (worker.state === "activated") window.location.reload();
-          });
+          // Never reload an active game just because a new service worker was
+          // installed. The player explicitly chooses when to apply the update.
           showUpdateBanner(() => worker.postMessage({ type: "SKIP_WAITING" }));
         };
 
