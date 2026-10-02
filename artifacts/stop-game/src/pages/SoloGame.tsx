@@ -134,7 +134,7 @@ export default function SoloGame() {
   // selected pack is a custom one — startGame() is deferred until the
   // packs hook finishes loading so the pack actually resolves.
   const pendingAutoStartRef = useRef(false);
-  const packId = getSafePackId(getSelectedPackId(), isPremium, customPacks);
+  const packId = getSafePackId(getSelectedPackId(), isPremium, customPacks, lang);
   const activePack = getPackById(packId, customPacks);
   const packCats = () => packId === "classic" ? getCategories() : getPackCategories(packId, getCurrentLang(), customPacks);
   const [categories, setCategories] = useState<string[]>(() => applyHalloweenCategory(packCats(), lang, { enabled: !packId.startsWith("custom:") }));
