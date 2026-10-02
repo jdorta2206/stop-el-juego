@@ -106,6 +106,12 @@ async function bootstrapApp() {
   );
 
   if (typeof window !== "undefined") {
+    requestAnimationFrame(() => {
+      const splash = document.getElementById("html-splash");
+      if (!splash) return;
+      splash.classList.add("fade-out");
+      window.setTimeout(() => splash.remove(), 400);
+    });
     setTimeout(() => { ensureOfflineBundle(); }, 1500);
   }
 }
