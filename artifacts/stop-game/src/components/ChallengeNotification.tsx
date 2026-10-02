@@ -103,9 +103,7 @@ export function ChallengeNotification({ challenge, onDismiss }: ChallengeNotific
     actionAbortRef.current?.abort();
     respondingRef.current = true;
     setResponding(true);
-    if (!isRoomInvite) {
-      await respondToChallenge(challenge.challengeId, false);
-    }
+    await respondToChallenge(challenge.challengeId, false);
     onDismiss();
   };
 
