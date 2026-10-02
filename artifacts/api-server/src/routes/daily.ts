@@ -77,7 +77,7 @@ router.get("/status", async (req, res) => {
 
 // POST /api/daily/submit  → save a player's score for today
 router.post("/submit", async (req, res) => {
-  const { playerId, playerName, score, letter, language, scoreTokens } = req.body;
+  const { playerId, playerName, score, letter, language, categories, scoreTokens } = req.body;
   if (!playerId || !playerName || score == null || !letter) {
     res.status(400).json({ error: "Missing required fields" });
     return;
@@ -117,6 +117,12 @@ router.post("/submit", async (req, res) => {
   const expectedChallenge = getDailyChallenge(today, normalizedLanguage);
   if (typeof letter !== "string" || letter.trim().toUpperCase() !== expectedChallenge.letter) {
     res.status(422).json({ error: "Invalid daily challenge letter" });
+    return;
+  }
+
+  const submittedCategories = Array.isArray(categories) ? categories.map((c) => String(c).trim()) : [];
+  if (submittedCategories.length !== expectedChallenge.categories.length || submittedCategories.some((c, i) => c !== expectedChallenge.categories[i])) {
+    res.status(422).json({ error: "Invalid daily challenge categories" });
     return;
   }
 
