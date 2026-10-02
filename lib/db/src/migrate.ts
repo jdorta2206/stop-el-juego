@@ -128,14 +128,14 @@ export async function ensureIndexes(): Promise<void> {
   try {
     await client.query("BEGIN");
     try {
-      const claimed = await client.query(sql`
+      const claimed = await client.query(`
         INSERT INTO halloween_migration_state (migration_key)
         VALUES ('legacy_event_claims_v1')
         ON CONFLICT (migration_key) DO NOTHING
         RETURNING migration_key
       `);
       if ((claimed.rows?.length ?? 0) > 0) {
-        const legacy = await client.query(sql`
+        const legacy = await client.query(`
           SELECT event_year, player_id, event_keys_json
           FROM halloween_progress
           WHERE event_keys_json IS NOT NULL AND event_keys_json <> '[]'
@@ -151,11 +151,13 @@ export async function ensureIndexes(): Promise<void> {
 
           for (const key of keys) {
             if (typeof key !== "string" || !key) continue;
-            await client.query(sql`
-              INSERT INTO halloween_event_claims (event_year, player_id, event_key)
-              VALUES (${row.event_year}, ${row.player_id}, ${key})
-              ON CONFLICT (event_year, player_id, event_key) DO NOTHING
-            `);
+            await client.query(
+              `INSERT INTO halloween_event_claims (event_year, player_id, event_key)
+               VALUES ($1, $2, $3)
+               ON CONFLICT (event_year, player_id, event_key) DO NOTHING`,
+              [row.event_year, row.player_id, key],
+            );
+          }
           }
         }
       }
