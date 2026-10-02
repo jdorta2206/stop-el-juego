@@ -121,6 +121,9 @@ export default function Tournament() {
   useEffect(() => {
     const onFocus = () => {
       if (resumeTournamentRef.current) {
+        // Read the latest status from the current render. The previous []
+        // dependency captured the initial null tournament and could send an
+        // already-active tournament back to the lobby after native sharing.
         setView(tournament?.status === "active" ? "bracket" : "lobby");
         resumeTournamentRef.current = null;
       }
@@ -131,7 +134,7 @@ export default function Tournament() {
       window.removeEventListener("focus", onFocus);
       window.removeEventListener("visibilitychange", onFocus);
     };
-  }, []);
+  }, [tournament?.status]);
 
   const createTournament = async () => {
     if (!player || !tName.trim() || tournamentActionInFlightRef.current) return;
