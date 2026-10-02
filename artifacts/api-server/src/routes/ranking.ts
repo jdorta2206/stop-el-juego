@@ -9,7 +9,7 @@ import { resolveCosmetic } from "../lib/inventoryCatalog";
 import { SubmitScoreBody, GetLeaderboardQueryParams } from "@workspace/api-zod";
 import { scoreLimiter } from "../middlewares/rateLimit";
 import { verifyClaimedIdentity, requirePlayerIdentity, type AuthedRequest } from "../lib/playerAuth";
-import { sumVerifiedBasePersistent, ceilingFromBase, absoluteCeiling } from "../lib/scoreToken";
+import { verifyScoreVouchers, claimScoreVouchersTx, ceilingFromBase, absoluteCeiling } from "../lib/scoreToken";
 import { applyAuthoritativeSeasonEventsTx, getOrCreateActiveSeason, getOrCreateProgress } from "./season";
 import {
   isHappyHourActiveForTzOffset,
@@ -516,12 +516,11 @@ router.post("/scores", scoreLimiter, async (req, res) => {
     ? await db.select().from(playerScoresTable).where(eq(playerScoresTable.playerId, playerId)).limit(1)
     : [];
 
-  const { base: verifiedBase, verified, collectionWords, mode: certifiedMode, aiBase: certifiedAiBase } = isBonus
-    ? { base: 0, verified: 0, collectionWords: [] as Array<{ word: string; category: string }>, mode: null, aiBase: 0 }
-    // /ranking/scores is the client solo leaderboard path. Keep its voucher
-    // count cap independent of the client-supplied `mode`; otherwise a caller
-    // could request `multiplayer` and raise the cap from 3 rounds to 12.
-    : await sumVerifiedBasePersistent(scoreTokens, 3);
+  const verifiedVouchers = isBonus
+    ? { vouchers: [], base: 0, verified: 0, collectionWords: [] as Array<{ word: string; category: string }>, mode: null, aiBase: 0 }
+    // Verify now, but do not burn the vouchers until the score transaction commits.
+    : await verifyScoreVouchers(scoreTokens, 3);
+  const { base: verifiedBase, verified, collectionWords, mode: certifiedMode, aiBase: certifiedAiBase } = verifiedVouchers;
   // A request that supplies vouchers must prove at least one fresh voucher.
   // Otherwise a replay of an already-consumed token set would fall through
   // to the offline absolute ceiling and could credit the same score again.
@@ -726,6 +725,11 @@ router.post("/scores", scoreLimiter, async (req, res) => {
       // Without this, rollover could deadlock with a concurrent score submit.
       if (scoreSeasonContext) {
         await tx.execute(sql`SELECT pg_advisory_xact_lock(${scoreSeasonContext.seasonId}::bigint)`);
+      }
+
+      if (verifiedVouchers.vouchers.length > 0) {
+        const claimedVouchers = await claimScoreVouchersTx(tx, verifiedVouchers.vouchers);
+        if (!claimedVouchers) throw new Error("SCORE_VOUCHER_ALREADY_USED");
       }
 
       if (offlineSubmissionId) {
