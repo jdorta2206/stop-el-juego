@@ -1208,13 +1208,6 @@ router.post("/", async (req, res) => {
   for (let attempt = 0; attempt < 8; attempt++) {
     roomCode = generateRoomCode();
 
-    // Defensive: room codes are recycled. Clear only the candidate code that
-    // this creation attempt is actually going to use.
-    roomCategoryPacks.delete(roomCode);
-    roomReactions.delete(roomCode);
-    roomPhrases.delete(roomCode);
-    roomTyping.delete(roomCode);
-
     try {
       const inserted = await db.insert(roomsTable).values({
         roomCode,
@@ -1232,6 +1225,15 @@ router.post("/", async (req, res) => {
       }).returning();
 
       room = inserted[0];
+
+      // The INSERT succeeded, so this code now belongs to the new room.
+      // Clear any stale in-memory state left behind by a previous room that
+      // used the recycled code. Never do this before INSERT: a collision
+      // means the candidate still belongs to another live room.
+      roomCategoryPacks.delete(roomCode);
+      roomReactions.delete(roomCode);
+      roomPhrases.delete(roomCode);
+      roomTyping.delete(roomCode);
       break;
     } catch (error: any) {
       // PostgreSQL unique_violation: another concurrent creator won this code.
