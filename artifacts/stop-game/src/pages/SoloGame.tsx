@@ -1217,6 +1217,7 @@ export default function SoloGame() {
         score: finalScore,
         letter: dailyLetter || currentLetter,
         language: getCurrentLang(),
+        categories: dailyCategories,
         scoreTokens: scoreTokensRef.current,
       }),
     })
