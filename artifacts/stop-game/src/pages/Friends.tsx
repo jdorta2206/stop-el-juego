@@ -404,7 +404,9 @@ function InviteSection({ player }: { player: PlayerProfile }) {
     if (navigator.share) {
       try {
         await navigator.share({ title: "STOP El Juego", text: shareMsg, url: PLAY_STORE_URL });
-      } catch { /* cancelled */ }
+      } catch (error) {
+        if ((error as DOMException)?.name === "AbortError") return;
+      }
     } else {
       copyLink();
     }
