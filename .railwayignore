@@ -1,0 +1,18 @@
+# Railway only needs the production monorepo sources used by Dockerfile/build:railway.
+# Keep large development/release artifacts out of Railway source snapshots.
+.git
+.github
+.agents
+attached_assets
+android
+android-generated
+replit.md
+README.md
+ASO_PLAY_STORE.md
+GOOGLE_PLAY_BILLING_SETUP.md
+RAILWAY_DEPLOY_TRIGGER.md
+*.aab
+*.apk
+*.mp4
+*.mov
+*.zip
