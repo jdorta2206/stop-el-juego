@@ -639,14 +639,15 @@ function finalizeRoundState(room: any, players: any[]): {
     // Only treat "offline" as fatal AFTER the presence buffer: a one-second
     // SSE blip on a 4G network shouldn't zero a player whose /results is
     // already on the wire.
-    const presenceArmed = sinceStop > PRESENCE_GRACE_MS;
     return players.map((p: any) => {
       if (p.isReady) return p;
+      // A disconnected SSE stream is NOT proof that the player's /results
+      // request is lost. HTTP and SSE can fail independently (mobile
+      // backgrounding, proxy reconnects, transient network changes). Do not
+      // zero a player before the full submit grace window, or a valid result
+      // still in flight can arrive after the round has already advanced.
       if (gracePassed) {
         return { ...p, isReady: true, roundScore: 0, validAnswerCount: 0, finishedAt: Date.now() };
-      }
-      if (presenceArmed && !isPlayerOnline(codeUpper, p.playerId)) {
-        return { ...p, isReady: true, roundScore: 0, finishedAt: Date.now() };
       }
       return p;
     });
