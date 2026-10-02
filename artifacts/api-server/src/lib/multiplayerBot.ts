@@ -650,6 +650,7 @@ export function scheduleBotsForRound(opts: {
   categories: string[];
   deps: BotActionDeps;
   round: number;
+  roundDurationMs: number;
 }) {
   clearBotTimers(opts.roomCode);
   // Wipe any leftover LLM answers from a previous round so a late-resolving
