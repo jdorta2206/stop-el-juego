@@ -15,6 +15,8 @@ export interface ValidateRoundRequest {
    */
   letter: string;
   language: ValidateRoundRequestLanguage;
+  /** Validation context used to bind the signed score voucher to its purpose. */
+  mode?: "solo" | "daily";
   playerName?: string;
   playerResponses: CategoryResponse[];
 }
