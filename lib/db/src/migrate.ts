@@ -22,7 +22,6 @@ export async function ensureIndexes(): Promise<void> {
     // Remove both legacy code-based indexes; keeping v2 would reintroduce
     // false conflicts when a room code is reused for a later game.
     `DROP INDEX IF EXISTS game_history_room_player_uidx_v2`,
-    `DROP INDEX IF EXISTS game_history_room_player_player_uidx`,
     `DROP INDEX IF EXISTS game_history_room_player_uidx`,
     `CREATE UNIQUE INDEX IF NOT EXISTS game_history_room_player_uidx_v3 ON game_history (room_id, player_id)`,
 
