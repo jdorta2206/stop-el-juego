@@ -3256,42 +3256,47 @@ router.post("/:roomCode/stop", async (req, res) => {
     return stopped;
   });
 
-  // Halloween is deliberately persisted only after the authoritative STOP
-  // transaction has committed. A Halloween DB failure must never roll back STOP.
-  const stopMeta = parseBluffMeta(room.stopperJson) ?? {};
-  const stopPack = getRoomPack(roomCode.toUpperCase(), room.id)?.pack ?? stopMeta.categoryPack ?? "standard";
-  if (halloweenEventAllowed(req) && stopPack !== "custom") {
-    const scareKey = `stop:${roomCode.toUpperCase()}:${room.currentRound ?? 0}:${stopper.stopTimestamp}`;
-    const stopScareEvents = [
-      ...(roomPlayers.find((p: any) => p.playerId === playerId && p.loginMethod !== "guest")
-        ? [{ playerId, type: "scare_provoked" as const, eventKey: `provoked:${scareKey}` }]
-        : []),
-      ...roomPlayers.filter((p: any) => p.playerId && p.playerId !== playerId && !p.isBot && p.loginMethod !== "guest").map((p: any) => ({
-        playerId: p.playerId,
-        type: "scare_received" as const,
-        eventKey: `received:${scareKey}:${p.playerId}`,
-      })),
-    ];
-    if (stopScareEvents.length > 0) {
-      try {
-        await db.transaction(async (tx) => {
-          await recordHalloweenScareEventsInTransaction(
-            tx,
-            stopScareEvents,
-            isHalloweenPreviewAuthorized(req),
-            updated.id,
-            "stopped",
-            room.currentRound,
-          );
-        });
-      } catch (error) {
-        console.error("[rooms/halloween-scare] STOP event persistence failed; keeping STOP committed:", error);
+  try {
+    // Halloween is deliberately persisted only after the authoritative STOP
+    // transaction has committed. A Halloween DB failure must never roll back STOP.
+    const stopMeta = parseBluffMeta(room.stopperJson) ?? {};
+    const stopPack = getRoomPack(roomCode.toUpperCase(), room.id)?.pack ?? stopMeta.categoryPack ?? "standard";
+    if (halloweenEventAllowed(req) && stopPack !== "custom") {
+      const scareKey = `stop:${roomCode.toUpperCase()}:${room.currentRound ?? 0}:${stopper.stopTimestamp}`;
+      const stopScareEvents = [
+        ...(roomPlayers.find((p: any) => p.playerId === playerId && p.loginMethod !== "guest")
+          ? [{ playerId, type: "scare_provoked" as const, eventKey: `provoked:${scareKey}` }]
+          : []),
+        ...roomPlayers.filter((p: any) => p.playerId && p.playerId !== playerId && !p.isBot && p.loginMethod !== "guest").map((p: any) => ({
+          playerId: p.playerId,
+          type: "scare_received" as const,
+          eventKey: `received:${scareKey}:${p.playerId}`,
+        })),
+      ];
+      if (stopScareEvents.length > 0) {
+        try {
+          await db.transaction(async (tx) => {
+            await recordHalloweenScareEventsInTransaction(
+              tx,
+              stopScareEvents,
+              isHalloweenPreviewAuthorized(req),
+              updated.id,
+              "stopped",
+              room.currentRound,
+            );
+          });
+        } catch (error) {
+          console.error("[rooms/halloween-scare] STOP event persistence failed; keeping STOP committed:", error);
+        }
       }
     }
+  
+    // STOP is already committed. Halloween persistence is best-effort and
+    // cannot alter the authoritative game result.
+    } catch (error) {
+    console.error("[rooms/halloween-scare] post-STOP Halloween processing failed; keeping STOP committed:", error);
   }
 
-  // STOP is already committed. Halloween persistence is best-effort and
-  // cannot alter the authoritative game result.
   res.json(broadcastAndFormat(updated));
 
   // 🤖 If bots are in this room and haven't submitted yet, rush them so the
