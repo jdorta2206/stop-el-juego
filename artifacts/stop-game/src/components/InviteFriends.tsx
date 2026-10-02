@@ -127,8 +127,8 @@ export function InviteFriends({ player, onClose }: InviteFriendsProps) {
         text: `¡${player.name} te invita a jugar a STOP!`,
         url,
       });
-    } catch {
-      handleCopy();
+    } catch (error) {
+      if ((error as DOMException)?.name !== "AbortError") handleCopy();
     }
   };
 
