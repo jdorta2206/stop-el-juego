@@ -15,6 +15,8 @@ export async function ensureIndexes(): Promise<void> {
   const stmts = [
     `CREATE INDEX IF NOT EXISTS player_scores_total_score_desc_idx ON player_scores (total_score DESC)`,
     `CREATE INDEX IF NOT EXISTS player_scores_xp_desc_idx ON player_scores (xp DESC)`,
+    `ALTER TABLE game_history ADD COLUMN IF NOT EXISTS room_code text`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS game_history_room_player_uidx ON game_history (room_code, player_id) WHERE room_code IS NOT NULL`,
     `CREATE INDEX IF NOT EXISTS game_history_created_at_idx ON game_history (created_at)`,
     `CREATE INDEX IF NOT EXISTS game_history_player_id_created_at_desc_idx ON game_history (player_id, created_at DESC)`,
     `CREATE INDEX IF NOT EXISTS game_history_player_id_score_desc_idx ON game_history (player_id, score DESC)`,
