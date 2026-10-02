@@ -228,7 +228,7 @@ router.get("/admob-result/:requestId", async (req, res) => {
   }
 });
 
-router.post("/admob-result/:requestId/consume", async (req, res) => {
+router.post("/admob-result/:requestId/consume", requirePlayerIdentity, async (req: AuthedRequest, res) => {
   if (!indexesReady()) {
     res.setHeader("Retry-After", "2");
     res.status(503).json({ error: "Server warming up", ready: false });
@@ -242,13 +242,33 @@ router.post("/admob-result/:requestId/consume", async (req, res) => {
   }
 
   try {
-    await db.execute(sql`
+    const updated = await db.execute(sql`
       UPDATE admob_reward_requests
       SET consumed_at = NOW()
       WHERE request_id = ${requestId}
+        AND player_id = ${req.playerId!}
         AND rewarded = true
         AND consumed_at IS NULL
     `);
+
+    if (Number((updated as { rowCount?: number }).rowCount ?? 0) === 0) {
+      const owner = await db.execute(sql`
+        SELECT player_id, rewarded, consumed_at
+        FROM admob_reward_requests
+        WHERE request_id = ${requestId}
+        LIMIT 1
+      `) as unknown as SqlResult<{
+        player_id: string;
+        rewarded: boolean;
+        consumed_at: Date | null;
+      }>;
+      const row = owner.rows?.[0];
+      if (row && row.player_id !== req.playerId) {
+        res.status(403).json({ error: "Reward request identity mismatch" });
+        return;
+      }
+    }
+
     res.status(204).end();
   } catch (error) {
     console.error(
