@@ -818,7 +818,7 @@ async function recoverFinishedRoomScoring() {
     const players = parsePlayers(room.playersJson);
     const needsRecovery = players.some((p: any) =>
       p && !p.isBot && p.loginMethod !== "guest" &&
-      p.playerId && !finalized.has(\`\${room.roomCode}:\${p.playerId}\`),
+      p.playerId && !finalized.has(\`\${room.roomId}:\${p.playerId}\`),
     );
     if (!needsRecovery) continue;
 
