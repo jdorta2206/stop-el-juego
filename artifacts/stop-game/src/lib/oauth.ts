@@ -86,12 +86,23 @@ export async function consumeAuthHandoff(): Promise<void> {
       (import.meta as { env?: { VITE_API_URL?: string } }).env?.VITE_API_URL ??
       window.location.origin;
 
-    const response = await fetch(`${apiBase}/api/auth/handoff`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ code }),
-    });
+    // OAuth handoff must never be allowed to block the entire React bootstrap.
+    // A stale/expired browser request or a temporarily unreachable API used to
+    // leave the page before createRoot(), producing a blank screen.
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 5000);
+    let response: Response;
+    try {
+      response = await fetch(`${apiBase}/api/auth/handoff`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ code }),
+        signal: controller.signal,
+      });
+    } finally {
+      window.clearTimeout(timeout);
+    }
     if (!response.ok) return;
 
     const data = await response.json() as { items?: unknown };
