@@ -17,7 +17,6 @@ export async function ensureIndexes(): Promise<void> {
     `CREATE INDEX IF NOT EXISTS player_scores_xp_desc_idx ON player_scores (xp DESC)`,
     `ALTER TABLE game_history ADD COLUMN IF NOT EXISTS room_code text`,
     `ALTER TABLE game_history ADD COLUMN IF NOT EXISTS room_id integer`,
-    `UPDATE game_history gh SET room_id = r.id FROM rooms r WHERE gh.room_id IS NULL AND gh.room_code IS NOT NULL AND gh.room_code = r.room_code`,
     `CREATE UNIQUE INDEX IF NOT EXISTS game_history_room_player_uidx_v3 ON game_history (room_id, player_id)`,
     `DROP INDEX IF EXISTS game_history_room_player_uidx_v2`,
     `DROP INDEX IF EXISTS game_history_room_player_uidx`,
