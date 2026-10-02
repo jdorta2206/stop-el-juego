@@ -143,7 +143,14 @@ function PackClaimHandler() {
 
 function App() {
   const [splashDone, setSplashDone] = useState(false);
-  const lang = (localStorage.getItem("stop_lang") ?? "es") as string;
+  // Storage can throw (e.g. blocked/private browser contexts). This runs
+  // before ErrorBoundary mounts, so never let storage access prevent boot.
+  let lang = "es";
+  try {
+    lang = localStorage.getItem("stop_lang") ?? "es";
+  } catch {
+    // Keep the default language; storage is optional for app startup.
+  }
 
   // Let the browser/Wouter own history navigation. Intercepting popstate here
   // forced every Back action from a nested route back to Home.
