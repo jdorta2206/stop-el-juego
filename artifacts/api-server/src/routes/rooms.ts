@@ -860,7 +860,14 @@ async function sweepStuckRooms() {
           stopperJson: newStopperJson,
           updatedAt: new Date(),
         })
-        .where(and(eq(roomsTable.roomCode, room.roomCode), eq(roomsTable.updatedAt, room.updatedAt)))
+        .where(and(
+          eq(roomsTable.roomCode, room.roomCode),
+          eq(roomsTable.status, room.status),
+          eq(roomsTable.currentRound, room.currentRound),
+          eq(roomsTable.currentLetter, room.currentLetter),
+          eq(roomsTable.playersJson, room.playersJson),
+          eq(roomsTable.stopperJson, room.stopperJson),
+        ))
         .returning();
 
       if (updateResult.length === 0) continue;
@@ -1918,7 +1925,13 @@ router.post("/:roomCode/use-card", async (req, res) => {
 
     const [updated] = await db.update(roomsTable)
       .set({ playersJson: JSON.stringify(updatedPlayers), updatedAt: new Date() })
-      .where(and(eq(roomsTable.roomCode, code), eq(roomsTable.updatedAt, room.updatedAt)))
+      .where(and(
+      eq(roomsTable.roomCode, code),
+      eq(roomsTable.status, room.status),
+      eq(roomsTable.currentRound, room.currentRound),
+      eq(roomsTable.currentLetter, room.currentLetter),
+      eq(roomsTable.playersJson, room.playersJson),
+    ))
       .returning();
 
     if (!updated) continue; // someone else wrote first — retry with fresh state
