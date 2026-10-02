@@ -2207,9 +2207,9 @@ router.post("/:roomCode/spy", writeLimiter, async (req, res) => {
   // Atomically consume one use only after a valid target exists. The round is
   // part of the key, so advancing the room automatically starts a fresh budget.
   const consumed = await db.execute(sql`
-    INSERT INTO room_spy_usage (room_code, player_id, round, uses)
-    VALUES (${code}, ${playerId}, ${round}, 1)
-    ON CONFLICT (room_code, player_id, round) DO UPDATE
+    INSERT INTO room_spy_usage (room_id, room_code, player_id, round, uses)
+    VALUES (${liveRoom.id}, ${code}, ${playerId}, ${round}, 1)
+    ON CONFLICT (room_id, player_id, round) DO UPDATE
       SET uses = room_spy_usage.uses + 1
       WHERE room_spy_usage.uses < ${limit}
     RETURNING uses
@@ -2768,9 +2768,19 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
     cappedRoundScore += 5;
   }
 
-  // 🕵️ Authoritative spy penalty: -10 pts if the server registered a spy use this round
-  const spies = roomSpyUsage.get(roomCode.toUpperCase());
-  if (spies?.has(playerId)) {
+  // 🕵️ Authoritative spy penalty: apply the persisted usage for THIS
+  // concrete room instance and round. The in-memory map was retired when
+  // spy usage became PostgreSQL-backed, so reading it here silently skipped
+  // the penalty on every Railway replica.
+  const spyUsageRows = await db.execute(sql`
+    SELECT uses
+    FROM room_spy_usage
+    WHERE room_id = ${room.id}
+      AND player_id = ${playerId}
+      AND round = ${Number(room.currentRound ?? 0)}
+    LIMIT 1
+  `) as unknown as { rows?: Array<{ uses: number }> };
+  if (Number(spyUsageRows.rows?.[0]?.uses ?? 0) > 0) {
     cappedRoundScore = Math.max(0, cappedRoundScore - 10);
   }
 
