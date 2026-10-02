@@ -232,3 +232,23 @@
     @apply bg-white/30 rounded-full hover:bg-white/50 transition-colors;
   }
 }
+
+
+/* iOS/Android safe-area + modern viewport hardening. Keep fixed UI clear of
+   notches/home indicators without changing desktop layout. */
+@supports (padding: env(safe-area-inset-bottom)) {
+  .safe-area-pb {
+    padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+  }
+  .safe-area-pt {
+    padding-top: max(0.75rem, env(safe-area-inset-top));
+  }
+}
+
+/* Tailwind's min-h-screen is 100vh on some builds. Small-screen viewport units
+   avoid the iOS Safari URL-bar jump while preserving normal page scrolling. */
+@supports (height: 100svh) {
+  .min-h-screen {
+    min-height: 100svh;
+  }
+}
