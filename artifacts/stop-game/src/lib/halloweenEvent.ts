@@ -1,5 +1,8 @@
 import { pickHalloweenScareVisual } from "@/lib/halloweenScareAssets";
 
+export const HALLOWEEN_START = "2026-10-15T00:00:00";
+export const HALLOWEEN_END = "2026-11-03T00:00:00";
+
 export const HALLOWEEN_START_MONTH = 9;
 export const HALLOWEEN_START_DAY = 15;
 export const HALLOWEEN_END_MONTH = 10;
