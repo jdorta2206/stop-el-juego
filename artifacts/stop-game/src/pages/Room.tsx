@@ -326,11 +326,25 @@ export default function Room() {
         retryTimeout = setTimeout(connect, delay);
       };
     }
+
+    // 📱 Mobile/iOS: browsers may suspend an SSE connection while the app
+    // is backgrounded without firing onerror. Reconnect explicitly on resume
+    // so a round change that happened while suspended cannot leave this client stale.
+    const onVisibilityResume = () => {
+      if (document.visibilityState !== "visible" || closed) return;
+      clearTimeout(retryTimeout);
+      es?.close();
+      queryClient.invalidateQueries({ queryKey: getGetRoomQueryKey(code) });
+      connect();
+    };
+    document.addEventListener("visibilitychange", onVisibilityResume);
+
     connect();
 
     return () => {
       closed = true;
       clearTimeout(retryTimeout);
+      document.removeEventListener("visibilitychange", onVisibilityResume);
       es?.close();
       setSseActive(false);
     };
