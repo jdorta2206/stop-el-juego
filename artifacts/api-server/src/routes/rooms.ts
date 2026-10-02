@@ -1403,113 +1403,124 @@ router.post("/:roomCode/join", roomJoinLimiter, async (req, res) => {
 
 // POST /rooms/:roomCode/start — host starts / continues the game
 router.post("/:roomCode/start", async (req, res) => {
-  const roomCode = paramStr(req.params.roomCode);
+  const roomCode = paramStr(req.params.roomCode).toUpperCase();
   const { hostId } = (req.body ?? {}) as { hostId?: string };
-  const rooms = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, roomCode.toUpperCase())).limit(1);
-  if (rooms.length === 0) { res.status(404).json({ error: "Room not found" }); return; }
 
-  const room = rooms[0];
-  // 🔐 Authorization: the caller must be the real host. Logged-in hosts are
-  // additionally bound to their signed session token so a leaked hostId cannot
-  // be replayed by another account.
-  if (!hostId || !verifyClaimedIdentity(req, hostId) || room.hostId !== hostId) {
+  type StartOutcome =
+    | { kind: "notFound" }
+    | { kind: "forbidden" }
+    | { kind: "playing"; row: any }
+    | { kind: "finished" }
+    | { kind: "started"; row: any; resetPlayers: any[]; startMeta: any };
+
+  // Serialize start against join/leave/add-bot. The locked row is the only
+  // source of truth, so a concurrent lobby mutation cannot be overwritten by
+  // a stale playersJson snapshot.
+  const outcome: StartOutcome = await db.transaction(async (tx) => {
+    const rows = await tx.execute(
+      sql\`SELECT * FROM rooms WHERE room_code = \${roomCode} FOR UPDATE\`,
+    );
+    const list = (rows as any).rows ?? rows;
+    if (!list || list.length === 0) return { kind: "notFound" } as const;
+
+    const raw = list[0];
+    const rawHostId = raw.host_id ?? raw.hostId;
+    if (!hostId || !verifyClaimedIdentity(req, hostId) || rawHostId !== hostId) {
+      return { kind: "forbidden" } as const;
+    }
+
+    const status = raw.status;
+    const currentRoom = {
+      ...raw,
+      hostId: raw.host_id ?? raw.hostId,
+      hostName: raw.host_name ?? raw.hostName,
+      playersJson: raw.players_json ?? raw.playersJson,
+      currentRound: raw.current_round ?? raw.currentRound,
+      maxRounds: raw.max_rounds ?? raw.maxRounds,
+      stopperJson: raw.stopper_json ?? raw.stopperJson,
+      currentLetter: raw.current_letter ?? raw.currentLetter,
+      gameMode: raw.game_mode ?? raw.gameMode,
+    };
+
+    if (status === "playing" || status === "stopped") {
+      return { kind: "playing", row: currentRoom } as const;
+    }
+    if (status === "finished") {
+      return { kind: "finished" } as const;
+    }
+
+    const players = parsePlayers(currentRoom.playersJson);
+    const newRound = currentRoom.currentRound === 0 ? 1 : currentRoom.currentRound;
+    const MP_CARDS = ["lightning", "shield", "sabotage", "double_or_nothing", "steal"] as const;
+    const resetPlayers = players.map((p: any) => ({
+      ...p,
+      isReady: false,
+      roundScore: 0,
+      validAnswerCount: 0,
+      finishedAt: undefined,
+      powerCard: newRound === 1
+        ? MP_CARDS[Math.floor(Math.random() * MP_CARDS.length)]
+        : (p.powerCard ?? null),
+      powerCardUsed: newRound === 1 ? false : (p.powerCardUsed ?? false),
+      bluffImmune: false,
+    }));
+
+    const newLetter = randomLetter();
+    const startSourceMeta = parseBluffMeta(currentRoom.stopperJson) ?? {};
+    const startMeta = {
+      categoryPack: startSourceMeta.categoryPack,
+      customCategories: startSourceMeta.customCategories,
+      customPackLabel: startSourceMeta.customPackLabel,
+      roundStartedAt: Date.now(),
+    };
+
+    const [updated] = await tx.update(roomsTable)
+      .set({
+        status: "playing",
+        currentRound: newRound,
+        currentLetter: newLetter,
+        playersJson: JSON.stringify(resetPlayers),
+        stopperJson: JSON.stringify(startMeta),
+        updatedAt: new Date(),
+      })
+      .where(eq(roomsTable.roomCode, roomCode))
+      .returning();
+
+    return { kind: "started", row: updated, resetPlayers, startMeta } as const;
+  });
+
+  if (outcome.kind === "notFound") {
+    res.status(404).json({ error: "Room not found" });
+    return;
+  }
+  if (outcome.kind === "forbidden") {
     res.status(403).json({ error: "Only the host can start the game" });
     return;
   }
-  // 🔒 Bind a logged-in host to its real identity (guests pass through).
-  if (!verifyClaimedIdentity(req, hostId)) {
-    res.status(403).json({ error: "Identity verification failed" }); return;
-  }
-  // 🔁 Idempotency: /start is only valid from the lobby ("waiting") state.
-  // While "playing" or "stopped", a duplicate /start (host double-tap, retry
-  // after a flaky network) must NOT re-randomize the letter, wipe scores, or
-  // reset finishedAt timestamps. We just echo the current state back.
-  // "finished" rooms cannot be restarted — players use the rematch flow.
-  if (room.status === "playing" || room.status === "stopped") {
-    res.json(broadcastAndFormat(room));
+  if (outcome.kind === "playing") {
+    res.json(broadcastAndFormat(outcome.row));
     return;
   }
-  if (room.status === "finished") {
+  if (outcome.kind === "finished") {
     res.status(409).json({ error: "Match already finished — use rematch" });
     return;
   }
-  const players = parsePlayers(room.playersJson);
 
-  const newRound = room.currentRound === 0 ? 1 : room.currentRound;
-  const MP_CARDS = ["lightning", "shield", "sabotage", "double_or_nothing", "steal"] as const;
+  // 🚀 Push the authoritative transition to every player immediately.
+  res.json(broadcastAndFormat(outcome.row));
 
-  // Reset all ready flags, round scores AND finishedAt; assign power cards on round 1 only
-  const resetPlayers = players.map((p: any) => ({
-    ...p,
-    isReady: false,
-    roundScore: 0,
-    validAnswerCount: 0,
-    finishedAt: undefined,
-    // Assign 1 random card at game start (round 1); keep it for subsequent rounds until used
-    powerCard: newRound === 1
-      ? MP_CARDS[Math.floor(Math.random() * MP_CARDS.length)]
-      : (p.powerCard ?? null),
-    powerCardUsed: newRound === 1 ? false : (p.powerCardUsed ?? false),
-    bluffImmune: false,
-  }));
-
-  // ⏱️ Stamp the authoritative round-start timestamp so every client computes
-  // the same deadline regardless of when their poll/SSE picks up the change.
-  const newLetter = randomLetter();
-  const startSourceMeta = parseBluffMeta(room.stopperJson) ?? {};
-  const startMeta = {
-    categoryPack: startSourceMeta.categoryPack,
-    customCategories: startSourceMeta.customCategories,
-    customPackLabel: startSourceMeta.customPackLabel,
-    roundStartedAt: Date.now(),
-  };
-  // 🔒 Atomic transition: only flip to "playing" if the row is STILL in
-  // "waiting". If two requests race past the early guard above (host
-  // double-tap from two devices), only one update will succeed; the other
-  // returns 0 rows and we echo back the post-race state.
-  const updateResult = await db.update(roomsTable)
-    .set({
-      status: "playing",
-      currentRound: newRound,
-      currentLetter: newLetter,
-      playersJson: JSON.stringify(resetPlayers),
-      stopperJson: JSON.stringify(startMeta),
-      updatedAt: new Date(),
-    })
-    .where(and(
-      eq(roomsTable.roomCode, roomCode.toUpperCase()),
-      eq(roomsTable.status, "waiting"),
-      eq(roomsTable.updatedAt, room.updatedAt),
-    ))
-    .returning();
-
-  if (updateResult.length === 0) {
-    // Lost the race — read the winner's state and return it.
-    const [latest] = await db.select().from(roomsTable)
-      .where(eq(roomsTable.roomCode, roomCode.toUpperCase())).limit(1);
-    res.json(broadcastAndFormat(latest ?? room));
-    return;
-  }
-
-  // 🚀 Empuja el cambio a TODOS los jugadores por SSE de inmediato
-  // (antes solo el host recibía la respuesta y los demás esperaban polling).
-  res.json(broadcastAndFormat(updateResult[0]));
-
-  // 🤖 Schedule bot STOPs/submits for this round. Done after the broadcast
-  // so humans see the round start immediately, then bots act on their own
-  // realistic delay (25-50s).
-  const botsInRoom = resetPlayers.filter((p: any) => p.isBot);
+  // 🤖 Schedule bot STOPs/submits after the room transition commits.
+  const botsInRoom = outcome.resetPlayers.filter((p: any) => p.isBot);
   if (botsInRoom.length > 0) {
-    const updatedRoom = updateResult[0];
-    const packCfg = roomCategoryPacks.get(roomCode.toUpperCase());
-    const pack = packCfg?.pack ?? startSourceMeta.categoryPack ?? "standard";
+    const packCfg = roomCategoryPacks.get(roomCode);
+    const pack = packCfg?.pack ?? outcome.startMeta.categoryPack ?? "standard";
     const customCategories = packCfg?.customCategories
-      ?? (Array.isArray(startSourceMeta.customCategories) ? startSourceMeta.customCategories : undefined);
-    const letterForRound = (updatedRoom.currentLetter ?? "A").toUpperCase();
-    const roundForRound = updatedRoom.currentRound ?? newRound;
+      ?? (Array.isArray(outcome.startMeta.customCategories) ? outcome.startMeta.customCategories : undefined);
+    const letterForRound = (outcome.row.currentLetter ?? "A").toUpperCase();
+    const roundForRound = outcome.row.currentRound ?? 1;
     const categories = resolveCategoriesForRound(pack, letterForRound, roundForRound, customCategories);
     scheduleBotsForRound({
-      roomCode: roomCode.toUpperCase(),
+      roomCode,
       bots: botsInRoom.map((b: any) => ({ playerId: b.playerId })),
       letter: letterForRound,
       categories,
@@ -1519,7 +1530,6 @@ router.post("/:roomCode/start", async (req, res) => {
   }
 });
 
-// POST /rooms/:roomCode/add-bot — host-only, adds a CPU player to the lobby
 router.post("/:roomCode/add-bot", async (req, res) => {
   const roomCode = paramStr(req.params.roomCode);
   const { hostId } = (req.body ?? {}) as { hostId?: string };
