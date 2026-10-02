@@ -53,7 +53,7 @@ export const gameHistoryTable = pgTable("game_history", {
   won: boolean("won").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (t) => ({
-  roomPlayerUnique: uniqueIndex("game_history_room_player_uidx").on(t.roomCode, t.playerId),
+  roomPlayerUnique: uniqueIndex("game_history_room_player_uidx_v2").on(t.roomCode, t.playerId),
 }));
 
 export const insertGameHistorySchema = createInsertSchema(gameHistoryTable).omit({ id: true, createdAt: true });
