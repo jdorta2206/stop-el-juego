@@ -162,15 +162,8 @@ router.post("/event", presenceLimiter, async (req, res) => {
   }
 });
 
-router.get("/summary", async (_req, res) => {
-  try {
-    await analyticsTablesReady;
-    const rows = await db.execute(sql`SELECT platform, COUNT(*)::int AS active FROM analytics_sessions WHERE last_seen >= NOW() - INTERVAL '90 seconds' GROUP BY platform ORDER BY platform`);
-    return res.json({ platforms: rows.rows });
-  } catch (err) {
-    console.error("[analytics] summary failed:", err);
-    return res.status(500).json({ error: "Analytics unavailable" });
-  }
-});
+// The live summary is intentionally kept inside /admin/analytics, which is
+// protected by the admin Basic Auth middleware. Do not expose active-user
+// counts through the public analytics API.
 
 export default router;
