@@ -25,7 +25,21 @@ const PackInputSchema = z.object({
   language: z.enum(["es", "en", "pt", "fr"]).default("es"),
   categories: z
     .array(z.string().trim().min(1).max(30))
-    .length(CATEGORIES_PER_PACK),
+    .length(CATEGORIES_PER_PACK)
+    .superRefine((categories, ctx) => {
+      const seen = new Set<string>();
+      categories.forEach((category, index) => {
+        const key = category.normalize("NFKC").trim().toLocaleLowerCase();
+        if (seen.has(key)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [index],
+            message: "Categories must be unique",
+          });
+        }
+        seen.add(key);
+      });
+    }),
 });
 
 function packRowToApi(row: typeof customCategoryPacksTable.$inferSelect) {
