@@ -450,7 +450,7 @@ router.post("/scores", scoreLimiter, async (req, res) => {
     return;
   }
 
-  const { playerId, playerName, avatarColor, score: rawScore, letter, mode, won, bonus, scoreTokens } = body.data;
+  const { playerId, playerName, avatarColor, score: rawScore, letter, mode, won, bonus, rewardRequestId, scoreTokens } = body.data;
   const offlineSubmissionId = body.data.offlineSubmissionId;
   const offlineSubmissionHash = offlineSubmissionId
     ? offlineSubmissionRequestHash(body.data)
@@ -481,6 +481,10 @@ router.post("/scores", scoreLimiter, async (req, res) => {
       res.status(422).json({ error: "INVALID_BONUS_MODE" });
       return;
     }
+    if (!rewardRequestId) {
+      res.status(422).json({ error: "BONUS_AD_PROOF_REQUIRED" });
+      return;
+    }
     bonusClaimTokenSetHash = bonusTokenSetHash(playerId, scoreTokens);
     if (!bonusClaimTokenSetHash) {
       res.status(422).json({ error: "BONUS_PROOF_REQUIRED" });
@@ -507,7 +511,7 @@ router.post("/scores", scoreLimiter, async (req, res) => {
     // Verify now, but do not burn the vouchers until the score transaction commits.
     : await verifyScoreVouchers(scoreTokens, 3);
   const { base: verifiedBase, verified, collectionWords, mode: certifiedMode, aiBase: certifiedAiBase } = verifiedVouchers;
-  const rewardClaimTokenSetHash = !isBonus && verified > 0 && Array.isArray(scoreTokens)
+  const rewardClaimTokenSetHash = !isBonus && mode === "solo" && certifiedMode === "solo" && verified > 0 && Array.isArray(scoreTokens)
     ? bonusTokenSetHash(playerId, scoreTokens)
     : null;
   // A request that supplies vouchers must prove at least one fresh voucher.
@@ -594,6 +598,26 @@ router.post("/scores", scoreLimiter, async (req, res) => {
   let player;
   if (isBonus) {
     const bonusResult = await db.transaction(async (tx) => {
+      const adRows = await tx.execute(sql`
+        SELECT request_id, player_id, rewarded, placement, consumed_at, created_at
+        FROM admob_reward_requests
+        WHERE request_id = ${rewardRequestId}
+          AND player_id = ${playerId}
+          AND rewarded = true
+          AND consumed_at IS NULL
+          AND placement = 'double_points'
+          AND created_at >= NOW() - INTERVAL '10 minutes'
+        FOR UPDATE
+      `) as unknown as { rows?: Array<{
+        request_id: string;
+        player_id: string;
+        rewarded: boolean;
+        placement: string;
+        consumed_at: Date | null;
+        created_at: Date;
+      }> };
+      if (!adRows.rows?.[0]) return null;
+
       const [claimed] = await tx
         .delete(scoreBonusClaimsTable)
         .where(sql`${scoreBonusClaimsTable.tokenSetHash} = ${bonusClaimTokenSetHash} AND ${scoreBonusClaimsTable.playerId} = ${playerId}`)
@@ -603,6 +627,14 @@ router.post("/scores", scoreLimiter, async (req, res) => {
         });
       if (!claimed || rawScore <= 0 || rawScore > claimed.maxScore) return null;
 
+      await tx.execute(sql`
+        UPDATE admob_reward_requests
+        SET consumed_at = NOW()
+        WHERE request_id = ${rewardRequestId}
+          AND player_id = ${playerId}
+          AND rewarded = true
+          AND consumed_at IS NULL
+      `);
       if (existing.length > 0) {
         const [updated] = await tx
           .update(playerScoresTable)
