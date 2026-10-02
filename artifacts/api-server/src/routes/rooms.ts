@@ -818,7 +818,7 @@ async function recoverFinishedRoomScoring() {
     const players = parsePlayers(room.playersJson);
     const needsRecovery = players.some((p: any) =>
       p && !p.isBot && p.loginMethod !== "guest" &&
-      p.playerId && !finalized.has(\`\${room.roomId}:\${p.playerId}\`),
+      p.playerId && !finalized.has(`${room.roomId}:${p.playerId}`),
     );
     if (!needsRecovery) continue;
 
@@ -1454,7 +1454,7 @@ router.post("/:roomCode/start", async (req, res) => {
   // a stale playersJson snapshot.
   const outcome: StartOutcome = await db.transaction(async (tx) => {
     const rows = await tx.execute(
-      sql\`SELECT * FROM rooms WHERE room_code = \${roomCode} FOR UPDATE\`,
+      sql`SELECT * FROM rooms WHERE room_code = ${roomCode} FOR UPDATE`,
     );
     const list = (rows as any).rows ?? rows;
     if (!list || list.length === 0) return { kind: "notFound" } as const;
