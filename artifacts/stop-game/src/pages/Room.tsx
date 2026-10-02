@@ -1840,7 +1840,7 @@ export default function Room() {
             </div>
 
             {/* Emoji reactions bar + STOP button */}
-            <div className="fixed bottom-4 left-0 w-full px-4 z-20 flex flex-col gap-2">
+            <div className="fixed safe-area-game-bottom left-0 w-full px-4 z-20 flex flex-col gap-2">
               <div className="max-w-2xl mx-auto w-full flex items-center justify-center gap-2">
                 {["🔥", "❤️", "😂", "👑", "🎯", "😤", "💪", "🤯"].map(emoji => (
                   <motion.button
