@@ -11,7 +11,7 @@ import { scoreLimiter } from "../middlewares/rateLimit";
 import { requirePlayerIdentity, type AuthedRequest } from "../lib/playerAuth";
 import { sumVerifiedBasePersistent, consumeScoreVoucherJtis, ceilingFromBase, absoluteCeiling } from "../lib/scoreToken";
 import { applyAuthoritativeSeasonEventsInTransaction } from "./season";
-import { recordHalloweenEventInTransaction, isHalloweenPreviewAuthorized } from "./halloween";
+import { recordHalloweenEvent, isHalloweenPreviewAuthorized } from "./halloween";
 import {
   isHappyHourActiveForTzOffset,
   isHappyHourActiveForTimeZone,
@@ -722,6 +722,25 @@ router.post("/scores", scoreLimiter, requirePlayerIdentity, async (req: AuthedRe
       });
       return;
     }
+    // Halloween is an optional post-commit effect. The authoritative score,
+    // history, vouchers and season state are already committed before this runs.
+    // A Halloween failure must never roll back or invalidate the completed game.
+    if (certifiedMode === "solo" && Array.isArray(scoreTokens) && scoreTokens.length > 0) {
+      const halloweenEventKey = bonusTokenSetHash(playerId, scoreTokens);
+      if (halloweenEventKey) {
+        try {
+          await recordHalloweenEvent(
+            playerId,
+            "game_completed",
+            `solo:${halloweenEventKey}`,
+            isHalloweenPreviewAuthorized(req),
+          );
+        } catch (error) {
+          console.error("[halloween] Solo completion persistence failed; keeping score committed:", error);
+        }
+      }
+    }
+
   } else {
     try {
       player = await db.transaction(async (tx) => {
@@ -864,23 +883,6 @@ router.post("/scores", scoreLimiter, requirePlayerIdentity, async (req: AuthedRe
         mode: effectiveMode,
         won: effectiveWon,
       });
-
-      // Halloween Solo completion is part of the same transaction as the
-      // score/history mutation. If the transaction rolls back, Halloween progress
-      // rolls back too; if it commits, the completion cannot be lost in a process
-      // crash between two independent transactions.
-      if (certifiedMode === "solo" && Array.isArray(scoreTokens) && scoreTokens.length > 0) {
-        const halloweenEventKey = bonusTokenSetHash(playerId, scoreTokens);
-        if (halloweenEventKey) {
-          await recordHalloweenEventInTransaction(
-            tx,
-            playerId,
-            "game_completed",
-            `solo:${halloweenEventKey}`,
-            isHalloweenPreviewAuthorized(req),
-          );
-        }
-      }
 
       // Keep voucher-backed collection words in the same transaction as the score.
       if (!isBonus && verified > 0 && scoreTokens) {
