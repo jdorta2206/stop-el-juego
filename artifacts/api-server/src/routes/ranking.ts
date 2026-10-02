@@ -692,6 +692,13 @@ router.post("/scores", scoreLimiter, async (req, res) => {
     player = bonusResult;
   } else {
     const transactionResult = await db.transaction(async (tx) => {
+      // Keep the lock order identical to season rollover:
+      // advisory Season lock -> player_scores row lock -> season_progress row.
+      // Without this, rollover could deadlock with a concurrent score submit.
+      if (scoreSeasonContext) {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(${scoreSeasonContext.seasonId}::bigint)`);
+      }
+
       if (offlineSubmissionId) {
         const [idempotencyInserted] = await tx
           .insert(scoreSubmissionIdempotencyTable)
