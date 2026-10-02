@@ -88,19 +88,12 @@ export async function ensureIndexes(): Promise<void> {
     `CREATE TABLE IF NOT EXISTS score_voucher_uses (jti text PRIMARY KEY, expires_at timestamp NOT NULL, used_at timestamp NOT NULL DEFAULT NOW())`,
     `CREATE TABLE IF NOT EXISTS push_notification_throttles (throttle_key text PRIMARY KEY, claimed_at timestamp NOT NULL DEFAULT NOW())`,
     // Spy usage belongs to a concrete room instance, not its recyclable
-    // 6-character code. Usage is ephemeral, so legacy rows cannot be safely
-    // mapped after a code is recycled; discard them during this schema upgrade
-    // and start every live room with a clean budget.
+    // 6-character code. Legacy rows cannot be mapped safely after a code
+    // recycle, so remove the old primary key and discard only rows without
+    // the new room_id. This is idempotent after the first upgraded boot.
     `CREATE TABLE IF NOT EXISTS room_spy_usage (room_code text NOT NULL, player_id text NOT NULL, round integer NOT NULL, uses integer NOT NULL DEFAULT 0, PRIMARY KEY (room_code, player_id, round))`,
     `ALTER TABLE room_spy_usage ADD COLUMN IF NOT EXISTS room_id integer`,
-,
-    // Legacy rows cannot be mapped safely because room_code is recyclable.
-    // Drop the old key on the first upgraded boot; IF EXISTS makes it a no-op
-    // thereafter. Any unmigrated legacy rows have NULL room_id and are removed
-    // before the new NOT NULL invariant is enforced.
     `ALTER TABLE room_spy_usage DROP CONSTRAINT IF EXISTS room_spy_usage_pkey`,
-    `DELETE FROM room_spy_usage WHERE room_id IS NULL`,
-    `ALTER TABLE room_spy_usage ALTER COLUMN room_id SET NOT NULL`,
     `DELETE FROM room_spy_usage WHERE room_id IS NULL`,
     `ALTER TABLE room_spy_usage ALTER COLUMN room_id SET NOT NULL`,
     `CREATE UNIQUE INDEX IF NOT EXISTS room_spy_usage_room_player_round_uidx ON room_spy_usage (room_id, player_id, round)`,
