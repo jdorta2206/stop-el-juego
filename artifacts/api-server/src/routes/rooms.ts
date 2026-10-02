@@ -3253,67 +3253,42 @@ router.post("/:roomCode/stop", async (req, res) => {
 
     if (!stopped) return null;
 
-    const stopMeta = parseBluffMeta(room.stopperJson) ?? {};
-    const stopPack = getRoomPack(roomCode.toUpperCase(), room.id)?.pack ?? stopMeta.categoryPack ?? "standard";
-    // Halloween is an optional event layer: a persistence failure must never
-    // roll back the authoritative STOP transition. If the event write fails,
-    // the round remains stopped and the normal game flow continues.
-    if (halloweenEventAllowed(req) && stopPack !== "custom") {
-      const scareKey = `stop:${roomCode.toUpperCase()}:${room.currentRound ?? 0}:${stopper.stopTimestamp}`;
-      const stopScareEvents = [
-        ...(roomPlayers.find((p: any) => p.playerId === playerId && p.loginMethod !== "guest")
-          ? [{ playerId, type: "scare_provoked" as const, eventKey: `provoked:${scareKey}` }]
-          : []),
-        ...roomPlayers.filter((p: any) => p.playerId && p.playerId !== playerId && !p.isBot && p.loginMethod !== "guest").map((p: any) => ({
-          playerId: p.playerId,
-          type: "scare_received" as const,
-          eventKey: `received:${scareKey}:${p.playerId}`,
-        })),
-      ];
-      if (stopScareEvents.length > 0) {
-        try {
+  // Halloween is deliberately persisted only after the authoritative STOP
+  // transaction has committed. A Halloween DB failure must never roll back STOP.
+  const stopMeta = parseBluffMeta(room.stopperJson) ?? {};
+  const stopPack = getRoomPack(roomCode.toUpperCase(), room.id)?.pack ?? stopMeta.categoryPack ?? "standard";
+  if (halloweenEventAllowed(req) && stopPack !== "custom") {
+    const scareKey = `stop:${roomCode.toUpperCase()}:${room.currentRound ?? 0}:${stopper.stopTimestamp}`;
+    const stopScareEvents = [
+      ...(roomPlayers.find((p: any) => p.playerId === playerId && p.loginMethod !== "guest")
+        ? [{ playerId, type: "scare_provoked" as const, eventKey: `provoked:${scareKey}` }]
+        : []),
+      ...roomPlayers.filter((p: any) => p.playerId && p.playerId !== playerId && !p.isBot && p.loginMethod !== "guest").map((p: any) => ({
+        playerId: p.playerId,
+        type: "scare_received" as const,
+        eventKey: `received:${scareKey}:${p.playerId}`,
+      })),
+    ];
+    if (stopScareEvents.length > 0) {
+      try {
+        await db.transaction(async (tx) => {
           await recordHalloweenScareEventsInTransaction(
             tx,
             stopScareEvents,
             isHalloweenPreviewAuthorized(req),
-            stopped.id,
+            updated.id,
             "stopped",
             room.currentRound,
           );
-        } catch (error) {
-          console.error("[rooms/halloween-scare] STOP event persistence failed; keeping STOP committed:", error);
-        }
+        });
+      } catch (error) {
+        console.error("[rooms/halloween-scare] STOP event persistence failed; keeping STOP committed:", error);
       }
     }
-
-    return stopped;
-  });
-
-  if (!updated) {
-    const [current] = await db.select().from(roomsTable)
-      .where(eq(roomsTable.roomCode, roomCode.toUpperCase()))
-      .limit(1);
-    if (!current) {
-      res.status(404).json({ error: "Room not found" });
-      return;
-    }
-    // The CAS can lose because the old room changed or because its recyclable
-    // code now belongs to a completely different room. Never return the new
-    // room's full snapshot to a caller who was only authorized in the old room.
-    if (current.id !== room.id) {
-      res.status(409).json({ error: "Room changed; please refresh" });
-      return;
-    }
-    const currentPlayers = parsePlayers(current.playersJson);
-    if (!currentPlayers.some((p: any) => p.playerId === playerId)) {
-      res.status(403).json({ error: "You are no longer in this room" });
-      return;
-    }
-    res.json(formatRoom(current));
-    return;
   }
-  // The STOP response is sent only after the atomic STOP/Halloween transaction
-  // has committed, before bot-driven round advancement can begin.
+
+  // STOP is already committed. Halloween persistence is best-effort and
+  // cannot alter the authoritative game result.
   res.json(broadcastAndFormat(updated));
 
   // 🤖 If bots are in this room and haven't submitted yet, rush them so the
