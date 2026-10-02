@@ -55,7 +55,7 @@ export function useFollows(
     requestRef.current = controller;
     setLoading(true);
     try {
-      const r = await fetch(`${API_BASE}/api/friends/list/${encodeURIComponent(meId)}`, { signal: controller.signal, headers: authHeaders() });
+      const r = await fetch(`${API_BASE}/api/friends/list/${encodeURIComponent(meId)}`, { signal: controller.signal, credentials: "include", headers: authHeaders() });
       const data = await r.json();
       const list: FollowedFriendBase[] = data.friends ?? [];
       setRawFriends(list);
