@@ -30,7 +30,22 @@ export default function Multiplayer() {
   const { t } = useT();
   const [roomCode, setRoomCode] = useState(() => {
     const params = new URLSearchParams(window.location.search);
-    return (params.get("room") || "").toUpperCase();
+    const directCode = params.get("room") || "";
+    if (directCode) return directCode.toUpperCase();
+
+    // PWA Share Target: accept STOP room links or the room-code text produced
+    // by the native share action. Shared title/text/url must not be discarded.
+    const sharedUrl = params.get("url") || "";
+    const sharedText = params.get("text") || "";
+    const sources = [sharedUrl, sharedText];
+    for (const source of sources) {
+      const roomPath = source.match(/(?:^|\\/)room\\/([A-Za-z0-9]{4,6})(?:[/?#]|$)/i);
+      if (roomPath?.[1]) return roomPath[1].toUpperCase();
+
+      const roomText = source.match(/(?:c[oó]digo)\\s*[:#-]\\s*([A-Za-z0-9]{4,6})\\b/i);
+      if (roomText?.[1]) return roomText[1].toUpperCase();
+    }
+    return "";
   });
   const [error, setError] = useState("");
   const [showInvite, setShowInvite] = useState(false);
