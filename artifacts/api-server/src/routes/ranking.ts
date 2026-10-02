@@ -754,7 +754,7 @@ router.post("/scores", scoreLimiter, async (req, res) => {
     // score update. The pre-transaction snapshot can be stale when two games
     // finish concurrently for the same player.
     const lockedStreak = await tx.execute(sql`
-      SELECT current_streak, last_played_date, streak_days_json
+      SELECT current_streak, last_played_date, streak_days_json, xp
       FROM player_scores
       WHERE player_id = ${playerId}
       FOR UPDATE
@@ -762,6 +762,7 @@ router.post("/scores", scoreLimiter, async (req, res) => {
       current_streak: number;
       last_played_date: string | null;
       streak_days_json: string;
+      xp: number;
     }> };
     const streakRow = lockedStreak.rows?.[0];
     if (!streakRow) throw new Error("SCORE_PLAYER_LOCK_FAILED");
@@ -772,6 +773,9 @@ router.post("/scores", scoreLimiter, async (req, res) => {
     txStreakDaysJson = txUpdatedToday
       ? appendStreakDay(streakRow.streak_days_json, today)
       : undefined;
+    // Recalculate level from the XP held by the locked row; the request-level
+    // snapshot can be stale when score submissions arrive concurrently.
+    const txNewLevel = calcLevel((streakRow.xp ?? 0) + xpGain);
 
     const [updated] = await tx
       .update(playerScoresTable)
@@ -787,7 +791,7 @@ router.post("/scores", scoreLimiter, async (req, res) => {
         // Concurrency hardening: another simultaneous score submission may have
         // advanced XP/level after the snapshot above. Never allow this request
         // to overwrite a newer, higher level with a stale lower one.
-        level: sql`GREATEST(${playerScoresTable.level}, ${newLevel})`,
+        level: sql`GREATEST(${playerScoresTable.level}, ${txNewLevel})`,
         ...(coinGain > 0 ? { coins: sql`${playerScoresTable.coins} + ${coinGain}` } : {}),
         ...(!isBonus && txUpdatedToday ? {
           currentStreak: txNewStreak,
