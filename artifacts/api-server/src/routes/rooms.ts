@@ -1075,7 +1075,7 @@ router.patch("/:roomCode/visibility", async (req, res) => {
     .where(and(
       eq(roomsTable.roomCode, roomCode),
       eq(roomsTable.hostId, hostId),
-      eq(roomsTable.updatedAt, rows[0].updatedAt),
+      
     ))
     .returning();
   if (!updated) {
@@ -1841,7 +1841,7 @@ router.post("/:roomCode/category-pack", async (req, res) => {
     .where(and(
       eq(roomsTable.roomCode, code),
       eq(roomsTable.status, "waiting"),
-      eq(roomsTable.updatedAt, rooms[0].updatedAt),
+      
       eq(roomsTable.hostId, hostId),
     ))
     .returning();
@@ -2538,7 +2538,7 @@ router.post("/:roomCode/stop", async (req, res) => {
     .where(and(
       eq(roomsTable.roomCode, roomCode.toUpperCase()),
       eq(roomsTable.status, "playing"),
-      eq(roomsTable.updatedAt, room.updatedAt),
+      eq(roomsTable.status, room.status), eq(roomsTable.currentRound, room.currentRound), eq(roomsTable.currentLetter, room.currentLetter), eq(roomsTable.playersJson, room.playersJson),
     ))
     .returning();
 
@@ -2817,7 +2817,7 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
       })
       .where(and(
         eq(roomsTable.roomCode, roomCode.toUpperCase()),
-        eq(roomsTable.updatedAt, authoritativeRoom.updatedAt),
+        eq(roomsTable.status, authoritativeRoom.status), eq(roomsTable.currentRound, authoritativeRoom.currentRound), eq(roomsTable.currentLetter, authoritativeRoom.currentLetter), eq(roomsTable.playersJson, authoritativeRoom.playersJson),
       ))
       .returning();
 
@@ -3016,7 +3016,7 @@ router.post("/:roomCode/bluff-vote", writeLimiter, async (req, res) => {
     .where(and(
       eq(roomsTable.roomCode, roomCode.toUpperCase()),
       eq(roomsTable.status, "bluffvoting"),
-      eq(roomsTable.updatedAt, currentUpdatedAt),
+      eq(roomsTable.stopperJson, room.stopperJson),
     ))
     .returning();
 
@@ -3062,7 +3062,7 @@ router.post("/:roomCode/bluff-vote", writeLimiter, async (req, res) => {
       .where(and(
         eq(roomsTable.roomCode, roomCode.toUpperCase()),
         eq(roomsTable.status, "bluffvoting"),
-        eq(roomsTable.updatedAt, current.updatedAt),
+        eq(roomsTable.stopperJson, current.stopperJson),
       ))
       .returning();
 
