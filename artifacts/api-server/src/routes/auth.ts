@@ -693,6 +693,44 @@ router.get("/instagram/callback", async (req: Request, res: Response) => {
 // ── APPLE ─────────────────────────────────────────────────────────────────────
 // Requires: APPLE_CLIENT_ID (Service ID), APPLE_TEAM_ID, APPLE_KEY_ID, APPLE_PRIVATE_KEY (.p8 content)
 
+interface AppleJwk {
+  kid?: string;
+  kty?: string;
+  alg?: string;
+  use?: string;
+  x5c?: string[];
+}
+
+async function verifyAppleIdToken(idToken: string, clientId: string): Promise<Record<string, unknown>> {
+  const parts = idToken.split(".");
+  if (parts.length !== 3) throw new Error("Invalid Apple id_token");
+  let header: { kid?: string; alg?: string };
+  try {
+    header = JSON.parse(Buffer.from(parts[0], "base64url").toString()) as { kid?: string; alg?: string };
+  } catch {
+    throw new Error("Invalid Apple id_token header");
+  }
+  if (header.alg !== "RS256" || !header.kid) throw new Error("Unsupported Apple id_token");
+
+  const keysRes = await oauthFetch("https://appleid.apple.com/auth/keys", {
+    headers: { Accept: "application/json" },
+  });
+  if (!keysRes.ok) throw new Error(`Apple JWKS HTTP ${keysRes.status}`);
+  const keysData = (await keysRes.json()) as { keys?: AppleJwk[] };
+  const jwk = keysData.keys?.find((key) => key.kid === header.kid && key.kty === "RSA" && Array.isArray(key.x5c) && key.x5c.length > 0);
+  if (!jwk?.x5c?.[0]) throw new Error("Apple signing key not found");
+
+  const certPem = `-----BEGIN CERTIFICATE-----\n${jwk.x5c[0].match(/.{1,64}/g)?.join("\n") ?? ""}\n-----END CERTIFICATE-----`;
+  const publicKey = crypto.createPublicKey(certPem);
+  const payload = jwt.verify(idToken, publicKey, {
+    algorithms: ["RS256"],
+    issuer: "https://appleid.apple.com",
+    audience: clientId,
+  });
+  if (typeof payload !== "object" || payload === null) throw new Error("Invalid Apple id_token payload");
+  return payload as Record<string, unknown>;
+}
+
 function makeAppleClientSecret(): string {
   const privateKey = (process.env["APPLE_PRIVATE_KEY"] || "").replace(/\\n/g, "\n");
   const teamId     = process.env["APPLE_TEAM_ID"]!;
@@ -769,10 +807,9 @@ router.post("/apple/callback", async (req: Request, res: Response) => {
     if (tokenData.error) throw new Error(`Apple error: ${tokenData.error}`);
     if (!tokenData.id_token) throw new Error("No id_token from Apple");
 
-    // Decode the id_token (Apple's JWT) — no need to verify signature here, we trust Apple
-    const payload = JSON.parse(
-      Buffer.from(tokenData.id_token.split(".")[1], "base64url").toString()
-    );
+    // Apple id_tokens are bearer assertions: verify the signature, issuer and
+    // audience before trusting any identity claims from the payload.
+    const payload = await verifyAppleIdToken(tokenData.id_token, APPLE_CLIENT_ID);
 
     // Apple only sends name on first login (via req.body.user JSON string)
     let displayName = "Apple User";
