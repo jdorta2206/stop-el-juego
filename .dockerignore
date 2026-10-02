@@ -1,0 +1,16 @@
+# Keep Railway Docker builds small and deterministic.
+.git
+.git/**
+node_modules
+**/node_modules
+**/dist
+**/build
+**/.vite
+**/.cache
+**/.turbo
+**/coverage
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+.DS_Store
