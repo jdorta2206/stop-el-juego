@@ -263,14 +263,19 @@ function parseClaimed(raw: string): { free: number[]; premium: number[] } {
   }
 }
 
-export async function getOrCreateProgress(playerId: string, seasonId: number): Promise<ProgressRow> {
+export async function getOrCreateProgressTx(
+  tx: any,
+  playerId: string,
+  seasonId: number,
+): Promise<ProgressRow> {
   const today = todayUTC();
 
-  // Race-safe upsert: relies on the unique index on (player_id, season_id).
-  // ON CONFLICT DO NOTHING + RETURNING gives us the new row on insert OR
-  // nothing on conflict — in which case we SELECT the winning row.
+  // Race-safe upsert on the unique (player_id, season_id) key. The whole
+  // get/create + daily-mission rollover stays on the caller's transaction
+  // connection so authoritative game scoring can commit atomically with
+  // season progress.
   const fresh: MissionsBlob = { date: today, missions: buildMissionsForDate(today) };
-  const inserted = await db
+  const inserted = await tx
     .insert(seasonProgressTable)
     .values({
       playerId,
@@ -286,44 +291,48 @@ export async function getOrCreateProgress(playerId: string, seasonId: number): P
   if (inserted.length > 0) {
     row = inserted[0];
   } else {
-    const existing = await db
+    const existing = await tx
       .select()
       .from(seasonProgressTable)
-      .where(and(eq(seasonProgressTable.playerId, playerId), eq(seasonProgressTable.seasonId, seasonId)))
+      .where(and(
+        eq(seasonProgressTable.playerId, playerId),
+        eq(seasonProgressTable.seasonId, seasonId),
+      ))
       .limit(1);
+    if (existing.length === 0) {
+      throw new Error("season progress row disappeared after conflict");
+    }
     row = existing[0];
   }
 
-  // Lazily roll missions over to today under the same row lock used by
-  // authoritative mission progress. Without this transaction, a rollover
-  // update could race a gameplay event and overwrite progress written by the
-  // other request.
-  const rolledRow = await db.transaction(async (tx) => {
-    const locked = (await tx.execute(sql`
-      SELECT id, player_id, season_id, xp, claimed_tiers, missions_json, updated_at
-      FROM season_progress
-      WHERE id = ${row.id}
-      FOR UPDATE
-    `)) as unknown as SqlResult<ProgressRow>;
-    const current = locked.rows?.[0];
-    if (!current) return null;
+  const locked = (await tx.execute(sql\`
+    SELECT id, player_id, season_id, xp, claimed_tiers, missions_json, updated_at
+    FROM season_progress
+    WHERE id = \${row.id}
+    FOR UPDATE
+  \`)) as unknown as SqlResult<ProgressRow>;
+  const current = locked.rows?.[0];
+  if (!current) throw new Error("season progress row not found after upsert");
 
-    const currentDate = (() => {
-      try { return JSON.parse(current.missionsJson || "{}")?.date; }
-      catch { return undefined; }
-    })();
+  const currentDate = (() => {
+    try { return JSON.parse(current.missionsJson || "{}")?.date; }
+    catch { return undefined; }
+  })();
 
-    if (currentDate !== today) {
-      const rolled: MissionsBlob = { date: today, missions: buildMissionsForDate(today) };
-      await tx
-        .update(seasonProgressTable)
-        .set({ missionsJson: JSON.stringify(rolled), updatedAt: new Date() })
-        .where(eq(seasonProgressTable.id, row.id));
-      current.missionsJson = JSON.stringify(rolled);
-    }
-    return current;
-  });
-  return rolledRow ?? row;
+  if (currentDate !== today) {
+    const rolled: MissionsBlob = { date: today, missions: buildMissionsForDate(today) };
+    await tx
+      .update(seasonProgressTable)
+      .set({ missionsJson: JSON.stringify(rolled), updatedAt: new Date() })
+      .where(eq(seasonProgressTable.id, row.id));
+    current.missionsJson = JSON.stringify(rolled);
+  }
+
+  return current;
+}
+
+export async function getOrCreateProgress(playerId: string, seasonId: number): Promise<ProgressRow> {
+  return db.transaction(async (tx) => getOrCreateProgressTx(tx, playerId, seasonId));
 }
 
 /**
