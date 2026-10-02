@@ -3233,9 +3233,8 @@ router.post("/:roomCode/stop", async (req, res) => {
     roundStartedAt: prevMeta.roundStartedAt ?? Date.now(),
   };
 
-  // 🔒 Atomically transition PLAYING → STOPPED and persist the trusted Halloween
-  // scare events. Keeping these in one transaction prevents /results from
-  // advancing the round between the STOP write and Halloween persistence.
+  // 🔒 Atomically transition PLAYING → STOPPED. Halloween is best-effort and
+  // must never be able to roll back the authoritative game transition.
   const updated = await db.transaction(async (tx) => {
     const [stopped] = await tx.update(roomsTable)
       .set({
@@ -3256,6 +3255,9 @@ router.post("/:roomCode/stop", async (req, res) => {
 
     const stopMeta = parseBluffMeta(room.stopperJson) ?? {};
     const stopPack = getRoomPack(roomCode.toUpperCase(), room.id)?.pack ?? stopMeta.categoryPack ?? "standard";
+    // Halloween is an optional event layer: a persistence failure must never
+    // roll back the authoritative STOP transition. If the event write fails,
+    // the round remains stopped and the normal game flow continues.
     if (halloweenEventAllowed(req) && stopPack !== "custom") {
       const scareKey = `stop:${roomCode.toUpperCase()}:${room.currentRound ?? 0}:${stopper.stopTimestamp}`;
       const stopScareEvents = [
@@ -3269,14 +3271,18 @@ router.post("/:roomCode/stop", async (req, res) => {
         })),
       ];
       if (stopScareEvents.length > 0) {
-        await recordHalloweenScareEventsInTransaction(
-          tx,
-          stopScareEvents,
-          isHalloweenPreviewAuthorized(req),
-          stopped.id,
-          "stopped",
-          room.currentRound,
-        );
+        try {
+          await recordHalloweenScareEventsInTransaction(
+            tx,
+            stopScareEvents,
+            isHalloweenPreviewAuthorized(req),
+            stopped.id,
+            "stopped",
+            room.currentRound,
+          );
+        } catch (error) {
+          console.error("[rooms/halloween-scare] STOP event persistence failed; keeping STOP committed:", error);
+        }
       }
     }
 
