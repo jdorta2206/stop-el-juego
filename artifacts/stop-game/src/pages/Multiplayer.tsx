@@ -39,10 +39,10 @@ export default function Multiplayer() {
     const sharedText = params.get("text") || "";
     const sources = [sharedUrl, sharedText];
     for (const source of sources) {
-      const roomPath = source.match(/(?:^|\\/)room\\/([A-Za-z0-9]{4,6})(?:[/?#]|$)/i);
+      const roomPath = source.match(/(?:^|\/)room\/([A-Za-z0-9]{4,6})(?:[/?#]|$)/i);
       if (roomPath?.[1]) return roomPath[1].toUpperCase();
 
-      const roomText = source.match(/(?:c[oó]digo)\\s*[:#-]\\s*([A-Za-z0-9]{4,6})\\b/i);
+      const roomText = source.match(/(?:c[oó]digo)\s*[:#-]\s*([A-Za-z0-9]{4,6})\b/i);
       if (roomText?.[1]) return roomText[1].toUpperCase();
     }
     return "";
