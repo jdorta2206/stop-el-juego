@@ -783,7 +783,7 @@ async function recoverFinishedRoomScoring() {
     .from(roomsTable)
     .where(eq(roomsTable.status, "finished"))
     .orderBy(roomsTable.updatedAt)
-    .limit(20);
+    .limit(200);
 
   if (finished.length === 0) return;
 
@@ -810,8 +810,10 @@ async function recoverFinishedRoomScoring() {
     );
     if (!needsRecovery) continue;
 
-    // The history uniqueness key makes this safe across multiple Railway
-    // instances and across a crash/retry boundary.
+    // Keep a generous bounded recovery batch: finished rooms can remain for
+    // up to 6h, and already-finalized rooms must not crowd out a later room
+    // whose scoring failed during the original request. The history uniqueness
+    // key makes retries safe across multiple Railway instances and crashes.
     await submitAllScoresToLeaderboard(
       players,
       room.currentLetter || "A",
