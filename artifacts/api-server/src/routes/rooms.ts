@@ -3022,7 +3022,6 @@ router.post("/:roomCode/bluff-vote", writeLimiter, async (req, res) => {
   // vote at nearly the same time; without a CAS, their read-modify-write
   // operations could overwrite each other's votes and leave the bluff phase
   // waiting until the deadline.
-  const currentUpdatedAt = room.updatedAt;
   const newMeta = { ...meta, bluffVotes };
   const [updated] = await db.update(roomsTable)
     .set({ stopperJson: JSON.stringify(newMeta), updatedAt: new Date() })
