@@ -925,7 +925,13 @@ async function sweepStuckRooms() {
         }),
           updatedAt: new Date(),
         })
-        .where(and(eq(roomsTable.roomCode, room.roomCode), eq(roomsTable.status, "bluffvoting")))
+        .where(and(
+          eq(roomsTable.roomCode, room.roomCode),
+          eq(roomsTable.status, "bluffvoting"),
+          eq(roomsTable.currentRound, room.currentRound),
+          eq(roomsTable.currentLetter, room.currentLetter),
+          eq(roomsTable.stopperJson, room.stopperJson),
+        ))
         .returning();
       if (!updated) continue;
       // Reuse the same one-shot round-transition cleanup as the normal
@@ -3021,7 +3027,13 @@ router.post("/:roomCode/bluff-vote", writeLimiter, async (req, res) => {
         stopperJson: JSON.stringify({ stopper: meta.stopper, bluffResults: bluffVotes }),
         updatedAt: new Date(),
       })
-      .where(and(eq(roomsTable.roomCode, roomCode.toUpperCase()), eq(roomsTable.status, "bluffvoting")))
+      .where(and(
+      eq(roomsTable.roomCode, roomCode.toUpperCase()),
+      eq(roomsTable.status, "bluffvoting"),
+      eq(roomsTable.currentRound, room.currentRound),
+      eq(roomsTable.currentLetter, room.currentLetter),
+      eq(roomsTable.stopperJson, room.stopperJson),
+    ))
       .returning();
     if (!updated) {
       // Someone else already resolved this round — return current state, no submit.
@@ -3151,7 +3163,13 @@ router.post("/:roomCode/resolve-bluffs", async (req, res) => {
       stopperJson: JSON.stringify({ stopper: meta.stopper, bluffResults: bluffVotes }),
       updatedAt: new Date(),
     })
-    .where(and(eq(roomsTable.roomCode, roomCode.toUpperCase()), eq(roomsTable.status, "bluffvoting")))
+    .where(and(
+      eq(roomsTable.roomCode, roomCode.toUpperCase()),
+      eq(roomsTable.status, "bluffvoting"),
+      eq(roomsTable.currentRound, room.currentRound),
+      eq(roomsTable.currentLetter, room.currentLetter),
+      eq(roomsTable.stopperJson, room.stopperJson),
+    ))
     .returning();
   if (!updated) {
     const [cur] = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, roomCode.toUpperCase())).limit(1);
