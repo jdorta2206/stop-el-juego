@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import type { PlayerProfile } from "@/hooks/use-player";
-import { getApiUrl, authHeaders } from "@/lib/utils";
+import { getApiUrl } from "@/lib/utils";
 
 const API_BASE = getApiUrl();
 const PING_INTERVAL = 30_000; // 30 seconds
@@ -35,7 +35,7 @@ async function ping(player: PlayerProfile, roomCode?: string | null, language?: 
   try {
     await fetch(`${API_BASE}/api/presence/ping`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", ...authHeaders() },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         playerId: player.id,
         name: player.name,
@@ -72,8 +72,7 @@ export async function sendChallenge(
   try {
     const res = await fetch(`${API_BASE}/api/presence/challenge`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", ...authHeaders() },
-      credentials: "include",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         fromPlayerId: player.id,
         fromName: player.name,
@@ -94,18 +93,18 @@ export async function sendChallenge(
 export async function respondToChallenge(
   challengeId: string,
   accepted: boolean
-): Promise<{ roomCode: string | null }> {
+): Promise<{ roomCode: string | null; ok: boolean }> {
   try {
     const res = await fetch(`${API_BASE}/api/presence/challenge/${challengeId}/respond`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", ...authHeaders() },
-      credentials: "include",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ accepted }),
     });
-    if (!res.ok) return { roomCode: null };
-    return await res.json();
+    let data: any = null;
+    try { data = await res.json(); } catch {}
+    return { ok: res.ok, roomCode: typeof data?.roomCode === "string" ? data.roomCode : null };
   } catch {
-    return { roomCode: null };
+    return { roomCode: null, ok: false };
   }
 }
 
@@ -119,8 +118,7 @@ export async function sendRoomInvite(
   try {
     const res = await fetch(`${API_BASE}/api/presence/room-invite`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", ...authHeaders() },
-      credentials: "include",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         fromPlayerId: player.id,
         fromName: player.name,
@@ -143,7 +141,7 @@ export async function pollChallengeStatus(
   signal?: AbortSignal,
 ): Promise<{ status: "pending" | "accepted" | "declined" | "expired"; roomCode: string }> {
   try {
-    const res = await fetch(`${API_BASE}/api/presence/challenge/${challengeId}/status`, { signal, headers: authHeaders(), credentials: "include" });
+    const res = await fetch(`${API_BASE}/api/presence/challenge/${challengeId}/status`, { signal });
     if (!res.ok) return { status: "expired", roomCode: "" };
     return await res.json();
   } catch {
@@ -180,15 +178,28 @@ export function usePresence(
   }, []);
 
   const pollChallenges = useCallback(async () => {
-    if (!player || activeChallenge.current) return;
+    if (!player) return;
     challengeAbortRef.current?.abort();
     const controller = new AbortController();
     challengeAbortRef.current = controller;
     try {
-      const res = await fetch(`${API_BASE}/api/presence/challenges/${player.id}`, { signal: controller.signal, headers: authHeaders() });
+      const res = await fetch(`${API_BASE}/api/presence/challenges/${player.id}`, { signal: controller.signal });
       if (!res.ok) return;
       const data = await res.json();
       const challenges: IncomingChallenge[] = data.challenges || [];
+      const activeId = activeChallenge.current;
+      if (activeId) {
+        const refreshed = challenges.find((c) => c.challengeId === activeId);
+        if (refreshed) {
+          // A room invite can be refreshed in-place (same challengeId) while
+          // the notification is already visible. Keep the active notification
+          // synchronized with its authoritative roomCode/createdAt.
+          setIncomingChallenge(refreshed);
+          return;
+        }
+        activeChallenge.current = null;
+        setIncomingChallenge(null);
+      }
       if (challenges.length > 0) {
         activeChallenge.current = challenges[0].challengeId;
         setIncomingChallenge(challenges[0]);

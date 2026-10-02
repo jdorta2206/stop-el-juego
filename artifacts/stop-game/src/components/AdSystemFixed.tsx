@@ -103,6 +103,10 @@ export function RewardedAd({ onComplete, onSkip, playerId, rewardType = "points"
     mountedRef.current = false;
     if (timeoutRef.current !== null) window.clearTimeout(timeoutRef.current);
     timeoutRef.current = null;
+    // Defensive cleanup: if the rewarded overlay is unmounted while the
+    // native activity is opening/closing, never leave the game globally paused.
+    resumeGameTimer();
+    window.dispatchEvent(new Event(GAME_TIMER_RESUME_EVENT));
   }, []);
   const labels = { points: `+${rewardAmount} pts`, hint: t.ads.reward, extraTime: "+30s" };
   const icons = { points: <Star className="w-8 h-8 text-[#f9a825]" />, hint: <Zap className="w-8 h-8 text-[#f9a825]" />, extraTime: <Gift className="w-8 h-8 text-[#f9a825]" /> };

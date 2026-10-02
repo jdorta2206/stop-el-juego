@@ -202,7 +202,10 @@ router.get("/admob-result/:requestId", async (req, res) => {
 
     const ageMs = Date.now() - new Date(row.created_at).getTime();
 
-    if (ageMs >= 45_000) {
+    // Keep pending requests alive for the same window the web client polls.
+    // AdMob SSV can legitimately arrive well after the ad UI has been dismissed;
+    // expiring at 45s could consume a still-valid reward before its signed SSV.
+    if (ageMs >= 120_000) {
       const updated = await db.execute(sql`
         UPDATE admob_reward_requests
         SET consumed_at = NOW()

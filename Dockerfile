@@ -6,7 +6,8 @@ RUN npm install -g pnpm@10.26.1
 WORKDIR /app
 
 COPY . .
-RUN pnpm install --no-frozen-lockfile
+RUN pnpm install --frozen-lockfile
+RUN pnpm run typecheck
 RUN pnpm run build:railway
 
 FROM node:20-slim

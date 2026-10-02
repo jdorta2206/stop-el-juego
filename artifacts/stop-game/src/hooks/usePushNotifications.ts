@@ -6,13 +6,6 @@ const VAPID_PUBLIC =
   import.meta.env.VITE_VAPID_PUBLIC_KEY ||
   "BOwVNL3sEONgyFulirkX5dzwQo662jY2_C846OSMrTSfiz4GFwEsl3_1NY3x_GqJIco8P7Ls85u56IRC3Y8Bj2c";
 const DISABLED_KEY = "stop_push_notifications_disabled";
-const TOKEN_KEY = "stop_session_token";
-
-function authHeaders(): Record<string, string> {
-  if (typeof window === "undefined") return {};
-  const token = window.localStorage?.getItem(TOKEN_KEY) || window.sessionStorage?.getItem(TOKEN_KEY);
-  return token ? { "X-Stop-Token": token } : {};
-}
 
 function urlB64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
@@ -64,17 +57,19 @@ export function usePushNotifications(playerId: string | undefined, language: str
 
         if (perm === "granted" && !cancelled && currentPlayerIdRef.current === playerId) {
           const tzOffsetMinutes = -new Date().getTimezoneOffset();
+          const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
           try {
             if (currentPlayerIdRef.current !== playerId) return;
             const res = await fetch(`${API_BASE}/api/notifications/subscribe`, {
               method: "POST",
-              headers: { "Content-Type": "application/json", ...authHeaders() },
+              headers: { "Content-Type": "application/json" },
               signal: controller.signal,
               body: JSON.stringify({
                 playerId: playerId || "anonymous",
                 subscription: sub.toJSON(),
                 language,
                 tzOffsetMinutes,
+                timeZone,
                 origin: window.location.origin,
               }),
             });
@@ -111,15 +106,17 @@ export function usePushNotifications(playerId: string | undefined, language: str
       });
 
       const tzOffsetMinutes = -new Date().getTimezoneOffset();
+      const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
       const res = await fetch(`${API_BASE}/api/notifications/subscribe`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...authHeaders() },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           playerId: playerId || "anonymous",
           subscription: sub.toJSON(),
           language,
           hourLocal: 20,
           tzOffsetMinutes,
+          timeZone,
           origin: typeof window !== "undefined" ? window.location.origin : undefined,
         }),
       });
@@ -149,7 +146,7 @@ export function usePushNotifications(playerId: string | undefined, language: str
       if (!sub) return null;
       const res = await fetch(
         `${API_BASE}/api/notifications/preferences?endpoint=${encodeURIComponent(sub.endpoint)}&playerId=${encodeURIComponent(playerId || "anonymous")}`,
-        { signal: controller.signal, headers: authHeaders() },
+        { signal: controller.signal },
       );
       if (!res.ok || controller.signal.aborted || currentPlayerIdRef.current !== playerId) return null;
       return await res.json();
@@ -170,7 +167,7 @@ export function usePushNotifications(playerId: string | undefined, language: str
       if (currentPlayerIdRef.current !== playerId) return false;
       const res = await fetch(`${API_BASE}/api/notifications/preferences`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json", ...authHeaders() },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ endpoint: sub.endpoint, playerId: playerId || "anonymous", ...patch }),
       });
       return res.ok;
@@ -190,7 +187,7 @@ export function usePushNotifications(playerId: string | undefined, language: str
         try {
           await fetch(`${API_BASE}/api/notifications/unsubscribe`, {
             method: "DELETE",
-            headers: { "Content-Type": "application/json", ...authHeaders() },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ endpoint: sub.endpoint, playerId: playerId || "anonymous" }),
           });
         } catch (e) {

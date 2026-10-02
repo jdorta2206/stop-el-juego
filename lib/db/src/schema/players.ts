@@ -47,16 +47,27 @@ export const gameHistoryTable = pgTable("game_history", {
   score: integer("score").notNull().default(0),
   letter: text("letter").notNull(),
   mode: text("mode").notNull().default("solo"),
-  // Non-null only for multiplayer room results. roomId identifies the
-  // concrete room instance, so recycling a 6-character room code can never
-  // collide with an older game's idempotency key.
-  roomCode: text("room_code"),
-  roomId: integer("room_id"),
   won: boolean("won").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const scoreSubmissionClaimsTable = pgTable("score_submission_claims", {
+  id: serial("id").primaryKey(),
+  playerId: text("player_id").notNull(),
+  submissionId: text("submission_id").notNull(),
+  isBonus: boolean("is_bonus").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (t) => ({
-  roomPlayerUnique: uniqueIndex("game_history_room_player_uidx_v3").on(t.roomId, t.playerId),
+  playerSubmissionUnique: uniqueIndex("score_submission_claims_player_submission_uidx").on(
+    t.playerId,
+    t.submissionId,
+    t.isBonus,
+  ),
 }));
+
+export const insertScoreSubmissionClaimSchema = createInsertSchema(scoreSubmissionClaimsTable).omit({ id: true, createdAt: true });
+export type InsertScoreSubmissionClaim = z.infer<typeof insertScoreSubmissionClaimSchema>;
+export type ScoreSubmissionClaim = typeof scoreSubmissionClaimsTable.$inferSelect;
 
 export const insertGameHistorySchema = createInsertSchema(gameHistoryTable).omit({ id: true, createdAt: true });
 export type InsertGameHistory = z.infer<typeof insertGameHistorySchema>;
@@ -81,6 +92,7 @@ export const roomsTable = pgTable("rooms", {
   tournamentMatchId: text("tournament_match_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  roomVersion: bigint("room_version", { mode: "number" }).notNull().default(0),
 });
 
 export const insertRoomSchema = createInsertSchema(roomsTable).omit({ id: true, createdAt: true, updatedAt: true });
@@ -168,6 +180,7 @@ export const pushSubscriptionsTable = pgTable("push_subscriptions", {
   enabled: boolean("enabled").notNull().default(true),
   hourLocal: integer("hour_local").notNull().default(20),
   tzOffsetMinutes: integer("tz_offset_minutes").notNull().default(0),
+  timeZone: text("time_zone"),
   mutedUntil: bigint("muted_until", { mode: "number" }).notNull().default(0),
   origin: text("origin"),
   createdAt: timestamp("created_at").defaultNow().notNull(),

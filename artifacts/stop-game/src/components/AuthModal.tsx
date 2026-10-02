@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { AVATAR_COLORS } from "@/lib/utils";
+import { AVATAR_COLORS, getApiUrl } from "@/lib/utils";
 import type { PlayerProfile } from "@/hooks/use-player";
 import { Mail, User, Palette, AlertCircle } from "lucide-react";
 import {
@@ -69,7 +69,7 @@ export function AuthModal({ onSave, initial, onDismiss }: AuthModalProps) {
     setError(null);
     setStep("profile");
 
-    const apiBase = (import.meta as any).env?.VITE_API_URL ?? window.location.origin;
+    const apiBase = getApiUrl();
     statsAbortRef.current?.abort();
     const controller = new AbortController();
     statsAbortRef.current = controller;

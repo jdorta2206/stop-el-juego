@@ -36,7 +36,12 @@ import { useToast } from "@/hooks/use-toast";
 import { useReviewPrompt, recordGamePlayed } from "@/hooks/useReviewPrompt";
 import { ReviewPromptCard } from "@/components/ReviewPromptCard";
 import { maybeShowInterstitial, recordInterstitialGameCompleted } from "@/lib/interstitialAd";
-import { applyHalloweenCategory, getHalloweenScare, isHalloweenActive } from "@/lib/halloweenEvent";
+import { applyHalloweenCategory, getHalloweenScare, getHalloweenScareById, isHalloweenActive, isHalloweenPreview, isHalloweenModeEnabled } from "@/lib/halloweenEvent";
+import { HalloweenAmbience } from "@/components/HalloweenAmbience";
+import { HalloweenScareOverlay } from "@/components/HalloweenScare";
+import { getHalloweenReducedEffects } from "@/lib/halloweenAccessibility";
+import { preloadHalloweenScareAssets } from "@/lib/halloweenScareAssets";
+import { preloadHalloweenScareAudio } from "@/lib/halloweenScareAudio";
 
 const ROUND_TIME = 60;
 
@@ -104,7 +109,7 @@ function calcScore(responses: Record<string, string>, letter: string): number {
   const normLetter = normalizeForScore(letter);
   for (const val of Object.values(responses)) {
     const norm = normalizeForScore(val);
-    if (norm.length >= 2 && norm.startsWith(normLetter) && !usedNorm.has(norm)) {
+    if (norm.length >= 3 && norm.startsWith(normLetter) && !usedNorm.has(norm)) {
       score += 10;
       usedNorm.add(norm);
     }
@@ -116,6 +121,12 @@ function calcScore(responses: Record<string, string>, letter: string): number {
 type LocalPhase = "lobby" | "spinning" | "playing" | "freeze" | "submitted" | "bluffvoting" | "bluff_results" | "between_rounds" | "finished";
 
 export default function Room() {
+  useEffect(() => {
+    if (!isHalloweenActive() || !isHalloweenModeEnabled()) return;
+    void preloadHalloweenScareAssets();
+    preloadHalloweenScareAudio();
+  }, []);
+
   const { id: roomCode } = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
 
@@ -147,6 +158,7 @@ export default function Room() {
   const [copied, setCopied] = useState(false);
   const [isStopping, setIsStopping] = useState(false);
   const [muted, setMuted] = useState(false);
+  const [reducedHalloweenEffects, setReducedHalloweenEffects] = useState(() => getHalloweenReducedEffects());
   const [revealedCount, setRevealedCount] = useState(0);
   const [showShareModal, setShowShareModal] = useState(false);
   const [showClipModal, setShowClipModal] = useState(false);
@@ -176,6 +188,8 @@ export default function Room() {
   const [rematchLoading, setRematchLoading] = useState(false);
   const interstitialCountedRoomRef = useRef<string>("");
   const lastTypingPing = useRef(0);
+  const typingSeq = useRef(0);
+  const typingSessionId = useRef(`${Date.now()}-${Math.random().toString(36).slice(2)}`);
   const [categoryPack, setCategoryPack] = useState<"standard" | "crazy" | "mix" | "custom">("standard");
   // When a Premium host picks one of their own custom packs, the categories
   // travel via the room state (`customCategories`) so every player — including
@@ -200,6 +214,10 @@ export default function Room() {
     uiTimeoutsRef.current.clear();
   }, []);
   const halloweenScareHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const seenHalloweenEventRef = useRef<string | null>(null);
+  const previousRoomStatusRef = useRef<string>("");
+  const manualScareBusyRef = useRef(false);
+  const [halloweenScareCooldownUntil, setHalloweenScareCooldownUntil] = useState(0);
   const CRAZY_CATEGORIES_ES = [
     "Excusa para llegar tarde", "Película que finges haber visto", "Animal que querrías de mascota",
     "Cosa que no debes decir en una cita", "Superhéroe inventado", "Profesión del futuro",
@@ -239,6 +257,10 @@ export default function Room() {
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const freezeTimerRef = useRef<NodeJS.Timeout | null>(null);
   const hasSubmittedRef = useRef(false);
+  // Prevent overlapping submission/retry requests while keeping hasSubmittedRef
+  // reserved for the authoritative server acknowledgement.
+  const submitInFlightRef = useRef(false);
+  const submitRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Synchronous flag: true once freeze has started (avoids double-freeze from stale phase closure)
   const isFreezingRef = useRef(false);
   // Track whether we've intentionally left so cleanup doesn't double-fire
@@ -250,12 +272,9 @@ export default function Room() {
   const submitMutation = useSubmitRoomResults();
   const queryClient = useQueryClient();
 
-  // SSE is process-local on Railway. Keep a short DB poll even while SSE
-  // is connected so a mutation handled by another instance reaches this client
-  // promptly instead of waiting up to 30s. SSE still provides the immediate path
-  // on the instance that handled the mutation.
+  // When SSE is active it pushes updates in real-time — polling is just a safety fallback
   const pollingInterval = sseActive
-    ? 5_000
+    ? 30_000
     : phase === "bluffvoting"                                          ? 800
     : phase === "playing" || phase === "freeze" || phase === "submitted" ? 1200
     : /* lobby / between_rounds / finished / spinning */                  1500;
@@ -272,6 +291,11 @@ export default function Room() {
       queryFn: async ({ signal }) => {
         const incoming = await getRoom(roomCode || "", { signal, ...(player?.id ? { headers: { "x-viewer-id": player.id } } : {}) });
         const current = queryClient.getQueryData<any>(roomQueryKey);
+        const incomingVersion = Number((incoming as any)?.roomVersion);
+        const currentVersion = Number(current?.roomVersion);
+        if (Number.isFinite(incomingVersion) && Number.isFinite(currentVersion)) {
+          return incomingVersion < currentVersion ? current : incoming;
+        }
         const incomingMs = new Date((incoming as any)?.updatedAt ?? 0).getTime();
         const currentMs = new Date(current?.updatedAt ?? 0).getTime();
         return Number.isFinite(incomingMs) && Number.isFinite(currentMs) && incomingMs < currentMs
@@ -308,6 +332,11 @@ export default function Room() {
         try {
           const data = JSON.parse(e.data);
           queryClient.setQueryData(getGetRoomQueryKey(code), (current: any) => {
+            const incomingVersion = Number(data?.roomVersion);
+            const currentVersion = Number(current?.roomVersion);
+            if (Number.isFinite(incomingVersion) && Number.isFinite(currentVersion)) {
+              return incomingVersion < currentVersion ? current : data;
+            }
             const incomingMs = new Date(data?.updatedAt ?? 0).getTime();
             const currentMs = new Date(current?.updatedAt ?? 0).getTime();
             return Number.isFinite(incomingMs) && Number.isFinite(currentMs) && incomingMs < currentMs
@@ -375,7 +404,7 @@ export default function Room() {
     (async () => {
       try {
         const url = `${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/draft?playerId=${encodeURIComponent(player.id)}`;
-        const r = await fetch(url, { credentials: "include", headers: authHeaders() });
+        const r = await fetch(url);
         if (!r.ok) return;
         const data = await r.json() as { responses?: Record<string, string>; round?: number; letter?: string };
         if (cancelled) return;
@@ -488,6 +517,7 @@ export default function Room() {
   const reviewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => {
     if (reviewTimerRef.current) clearTimeout(reviewTimerRef.current);
+    if (submitRetryTimerRef.current) clearTimeout(submitRetryTimerRef.current);
   }, []);
   const { toast } = useToast();
   const prevHostIdRef = useRef<string | null>(null);
@@ -541,20 +571,22 @@ export default function Room() {
 
   // Throttled "I'm typing" ping — fires at most once every 1.5s while typing.
   // Also sends a snapshot of current responses so /spy can peek at what rivals wrote.
-  const pingTyping = useCallback(() => {
+  const pingTyping = useCallback((snapshot?: Record<string, string>) => {
     if (!player?.id || !roomCode) return;
     const now = Date.now();
     if (now - lastTypingPing.current < 1500) return;
     lastTypingPing.current = now;
+    const seq = ++typingSeq.current;
     fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/typing`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", ...authHeaders() },
-      credentials: "include",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         playerId: player.id,
         playerName: player.name ?? "?",
-        responses: { ...responsesRef.current },
+        responses: snapshot ? { ...snapshot } : { ...responsesRef.current },
         round: (room as any)?.currentRound,
+        seq,
+        sessionId: typingSessionId.current,
       }),
     }).catch(() => {});
   }, [player?.id, player?.name, roomCode, (room as any)?.currentRound]);
@@ -570,7 +602,7 @@ export default function Room() {
       const res = await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/add-bot`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify({ hostId: player.id }),
+        body: JSON.stringify({ hostId: player.id, roomId: room?.id }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -611,43 +643,98 @@ export default function Room() {
       for (let i = 0; i < key.length; i++) seed = (Math.imul(seed, 31) + key.charCodeAt(i)) >>> 0;
       const halloweenSeed = (seed % 100000) / 100000;
       setRoundCategories(applyHalloweenCategory(base, getCurrentLang(), {
-        enabled: categoryPack === "standard",
+        enabled: categoryPack === "standard" && isHalloweenActive(),
+        respectMode: true,
         seed: halloweenSeed,
       }));
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, currentLetter, currentRound, categoryPack, activeCustomCategories]);
 
-  // 🎃 Halloween multiplayer scare: deterministic per room/round so every
-  // player gets the same scare at roughly the same moment. It is cosmetic only
-  // and never runs for custom/crazy/mix packs or non-Halloween dates.
+  // 🎃 Halloween multiplayer scares. Automatic scares are local and cosmetic;
+  // STOP/manual scares are synchronized by the room server.
   useEffect(() => {
     if (halloweenScareTimerRef.current) clearTimeout(halloweenScareTimerRef.current);
     if (halloweenScareHideTimerRef.current) clearTimeout(halloweenScareHideTimerRef.current);
     setHalloweenScare(null);
-
-    if (!isHalloweenActive() || phase !== "playing" || categoryPack !== "standard" || !roomCode || !currentLetter || !currentRound) return;
-
-    const key = `halloween-scare|${roomCode.toUpperCase()}|${currentRound}|${currentLetter}`;
+    if (!isHalloweenActive() || !isHalloweenModeEnabled() || phase !== "playing" || categoryPack !== "standard" || !roomCode || !currentLetter || !currentRound) return;
+    const key = `halloween-ambient|${roomCode.toUpperCase()}|${currentRound}|${currentLetter}`;
     let hash = 2166136261 >>> 0;
-    for (let i = 0; i < key.length; i++) {
-      hash ^= key.charCodeAt(i);
-      hash = Math.imul(hash, 16777619);
-    }
-    const seed = (hash >>> 0) / 4294967296;
-    const scare = getHalloweenScare(getCurrentLang(), seed);
-    const delay = 12000 + ((hash >>> 8) % 11000);
-
-    halloweenScareTimerRef.current = setTimeout(() => {
-      setHalloweenScare(scare);
-      halloweenScareHideTimerRef.current = setTimeout(() => setHalloweenScare(null), 2600);
+    for (let i = 0; i < key.length; i++) { hash ^= key.charCodeAt(i); hash = Math.imul(hash, 16777619); }
+    if ((hash % 100) >= 48) return;
+    const preview = isHalloweenPreview();
+    const minDelay = preview ? 5000 : 10000;
+    const maxDelay = preview ? 12000 : 42000;
+    const delay = minDelay + ((hash >>> 8) % Math.max(1, maxDelay - minDelay));
+    halloweenScareTimerRef.current = window.setTimeout(() => {
+      halloweenScareTimerRef.current = null;
+      if (phase !== "playing") return;
+      setHalloweenScare(getHalloweenScare(getCurrentLang()));
+      halloweenScareHideTimerRef.current = window.setTimeout(() => setHalloweenScare(null), 1550);
     }, delay);
-
     return () => {
       if (halloweenScareTimerRef.current) clearTimeout(halloweenScareTimerRef.current);
       if (halloweenScareHideTimerRef.current) clearTimeout(halloweenScareHideTimerRef.current);
     };
   }, [phase, categoryPack, roomCode, currentLetter, currentRound]);
+
+  // First STOP of a round scares everyone except the player who pressed STOP.
+  useEffect(() => {
+    const status = String((room as any)?.status ?? "");
+    const stopper = (room as any)?.stopper as { id?: string; stopTimestamp?: number } | null;
+    const wasPlaying = previousRoomStatusRef.current === "playing";
+    previousRoomStatusRef.current = status;
+    if (!stopper?.stopTimestamp || stopper.id === player?.id) return;
+    if (!isHalloweenActive() || !isHalloweenModeEnabled()) return;
+
+    // The stopped snapshot can be skipped by polling/SSE when bots or the
+    // last result advances the round quickly. A new stopTimestamp observed
+    // immediately after a playing snapshot is still the authoritative STOP.
+    // Do not scare players who join after the stop: on first observation,
+    // only accept it when the room is actually in the stopped transition.
+    const eventKey = `stop:${currentRound}:${stopper.stopTimestamp}`;
+    if (seenHalloweenEventRef.current === eventKey) return;
+    const isNewStopAfterPlaying = wasPlaying && status !== "playing";
+    if (status !== "stopped" && !isNewStopAfterPlaying) return;
+
+    seenHalloweenEventRef.current = eventKey;
+    setHalloweenScare(getHalloweenScare(getCurrentLang(), (stopper.stopTimestamp % 100000) / 100000));
+    halloweenScareHideTimerRef.current = window.setTimeout(() => setHalloweenScare(null), 1550);
+  }, [(room as any)?.status, (room as any)?.stopper?.stopTimestamp, currentRound, player?.id]);
+
+  // Server-broadcast manual scare. Only the sender is excluded locally.
+  useEffect(() => {
+    const event = (room as any)?.halloweenScare as { id?: string; playerId?: string; scareId?: string; round?: number } | null;
+    if (!event?.id || event.round !== currentRound || !isHalloweenActive() || !isHalloweenModeEnabled() || event.playerId === player?.id) return;
+    if (seenHalloweenEventRef.current === event.id) return;
+    seenHalloweenEventRef.current = event.id;
+    if (!isHalloweenModeEnabled()) return;
+    if (halloweenScareTimerRef.current) clearTimeout(halloweenScareTimerRef.current);
+    setHalloweenScare(getHalloweenScareById(getCurrentLang(), (event.scareId as any) ?? "clown"));
+    halloweenScareHideTimerRef.current = window.setTimeout(() => setHalloweenScare(null), 1550);
+  }, [(room as any)?.halloweenScare?.id, (room as any)?.halloweenScare?.round, currentRound, player?.id]);
+
+  const sendHalloweenScare = useCallback(async () => {
+    if (!player?.id || !roomCode || !isHalloweenActive() || !isHalloweenModeEnabled() || phase !== "playing" || manualScareBusyRef.current || Date.now() < halloweenScareCooldownUntil) return;
+    manualScareBusyRef.current = true;
+    try {
+      const response = await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/halloween-scare`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders(), ...(isHalloweenPreview() ? { "x-halloween-preview": "1" } : {}) },
+        body: JSON.stringify({ playerId: player.id, playerName: player.name }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (response.ok) {
+        const ms = Number(data.cooldownMs ?? 18000);
+        setHalloweenScareCooldownUntil(Date.now() + ms);
+        window.setTimeout(() => setHalloweenScareCooldownUntil(0), ms + 50);
+      } else if (response.status === 429) {
+        const ms = Number(data.retryAfterMs ?? 5000);
+        setHalloweenScareCooldownUntil(Date.now() + ms);
+        window.setTimeout(() => setHalloweenScareCooldownUntil(0), ms + 50);
+      }
+    } catch {} finally { manualScareBusyRef.current = false; }
+  }, [player, roomCode, phase, halloweenScareCooldownUntil]);
 
   // Track the `creator` achievement: any multiplayer round actually played
   // with a custom pack unlocks it. We fire once per `roomCode` to avoid
@@ -686,8 +773,7 @@ export default function Room() {
     try {
       await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/react`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...authHeaders() },
-        credentials: "include",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ emoji, playerId: player.id, playerName: player.name }),
       });
     } catch {}
@@ -713,8 +799,7 @@ export default function Room() {
     try {
       await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/phrase`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...authHeaders() },
-        credentials: "include",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ playerId: player.id, playerName: player.name, phraseIndex }),
       });
     } catch {}
@@ -730,7 +815,7 @@ export default function Room() {
       const res = await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/category-pack`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify({ hostId: player.id, pack, ...(extras ?? {}) }),
+        body: JSON.stringify({ hostId: player.id, roomId: room?.id, pack, ...(extras ?? {}) }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -745,8 +830,8 @@ export default function Room() {
   }, []);
 
   const submitResults = useCallback(async (score: number, isStopper = false) => {
-    if (hasSubmittedRef.current || !player || !roomCode) return;
-    hasSubmittedRef.current = true;
+    if (hasSubmittedRef.current || submitInFlightRef.current || !player || !roomCode) return;
+    submitInFlightRef.current = true;
     sound.playCorrect();
     haptic.submit();
     setPhase("submitted");
@@ -776,6 +861,12 @@ export default function Room() {
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
         await submitMutation.mutateAsync(payload);
+        hasSubmittedRef.current = true;
+        submitInFlightRef.current = false;
+        if (submitRetryTimerRef.current) {
+          clearTimeout(submitRetryTimerRef.current);
+          submitRetryTimerRef.current = null;
+        }
         return;
       } catch (e) {
         console.error(`submit error (attempt ${attempt}/3):`, e);
@@ -784,7 +875,24 @@ export default function Room() {
         }
       }
     }
-  }, [player, roomCode, currentLetter]);
+
+    submitInFlightRef.current = false;
+    // A failed network request must not permanently lock the client in
+    // "Enviando…". Keep the exact payload and retry while the server is still
+    // on this round. The server-side /results endpoint is idempotent, so a
+    // response lost after a successful commit is safe to retry as well.
+    const retryRound = roomRef.current?.currentRound;
+    const retryStatus = roomRef.current?.status;
+    if (retryRound === currentRound &&
+        (retryStatus === "playing" || retryStatus === "stopped" || retryStatus === "finished")) {
+      submitRetryTimerRef.current = setTimeout(() => {
+        submitRetryTimerRef.current = null;
+        if (roomRef.current?.currentRound === retryRound && !hasSubmittedRef.current) {
+          void submitResults(score, isStopper);
+        }
+      }, 2500);
+    }
+  }, [player, roomCode, currentLetter, currentRound]);
 
   const autoSubmit = useCallback((asStopper = false) => {
     // Snapshot current responses before clearing for the bluff words map
@@ -835,7 +943,15 @@ export default function Room() {
       const r = roomRef.current as any;
       const roundEndsAt: number | null = typeof r?.roundEndsAt === "number" ? r.roundEndsAt : null;
       if (!roundEndsAt) return fallbackDuration;
-      const localDeadline = roundEndsAt + clockSkew;
+      const me = Array.isArray(r?.players)
+        ? r.players.find((p: any) => p?.playerId === player?.id)
+        : null;
+      const lightningUsedThisRound =
+        me?.powerCard === "lightning" &&
+        me?.powerCardUsed === true &&
+        me?.powerCardUsedRound === currentRound;
+      const localDeadline =
+        roundEndsAt + (lightningUsedThisRound ? 15_000 : 0) + clockSkew;
       return Math.max(0, Math.ceil((localDeadline - Date.now()) / 1000));
     };
 
@@ -857,7 +973,7 @@ export default function Room() {
         autoSubmit(false);
       }
     }, 250) as unknown as ReturnType<typeof setInterval>;
-  }, [stopAllTimers, autoSubmit, roundDurationFor, currentRound, currentLetter]);
+  }, [stopAllTimers, autoSubmit, roundDurationFor, currentRound, currentLetter, player?.id]);
 
   // Start freeze countdown (when STOP is called by someone).
   // isFreezingRef is set SYNCHRONOUSLY so the polling effect can check it
@@ -878,10 +994,7 @@ export default function Room() {
     }, 1000);
   }, [stopAllTimers, autoSubmit]);
 
-  const apiBase = (() => {
-    const env = (import.meta as any).env;
-    return env?.VITE_API_URL ?? window.location.origin;
-  })();
+  const apiBase = getApiUrl();
 
   // Cast a bluff vote (opponent calls this)
   const castBluffVote = useCallback(async (accusedPlayerId: string, category: string, vote: "lie" | "real") => {
@@ -1036,7 +1149,7 @@ export default function Room() {
         const reportMatch = () => {
           fetch(`${getApiUrl()}/api/tournaments/${tournamentCtx.code}/match-result`, {
             method: "POST",
-            headers: { "Content-Type": "application/json", ...authHeaders() },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ matchId: tournamentCtx.matchId, winnerId: winner.playerId, winnerName: winner.playerName }),
             credentials: "include",
           }).catch(() => {});
@@ -1827,7 +1940,7 @@ export default function Room() {
                         const wasEmpty = !(responses[cat]?.trim());
                         const nowFilled = !!next.trim();
                         setResponses(r => ({ ...r, [cat]: next }));
-                        pingTyping();
+                        pingTyping({ ...responsesRef.current, [cat]: next });
                         if (wasEmpty && nowFilled) haptic.select();
                         if (showMpCoachmark) dismissMpCoachmark();
                       }}
@@ -1860,6 +1973,13 @@ export default function Room() {
                   💬
                 </motion.button>
               </div>
+              {isHalloweenActive() && isHalloweenModeEnabled() && categoryPack === "standard" && phase === "playing" && (
+                <motion.button type="button" whileTap={{ scale: 0.96 }} onClick={sendHalloweenScare} disabled={Date.now() < halloweenScareCooldownUntil}
+                  className="w-full py-2.5 rounded-full font-black text-base tracking-wide border-2 transition-all disabled:opacity-45"
+                  style={{ background: "linear-gradient(135deg, rgba(127,29,29,.95), rgba(20,8,12,.98))", borderColor: "rgba(248,113,113,.7)", color: "white", boxShadow: "0 0 22px rgba(220,38,38,.28)" }}>
+                  {Date.now() < halloweenScareCooldownUntil ? "👻 SUSTO · espera..." : "👻 ¡DAR UN SUSTO!"}
+                </motion.button>
+              )}
               <div className="max-w-2xl mx-auto w-full flex flex-col gap-2">
                 {/* 🕵️ ESPÍA — peek at a rival's in-progress answer */}
                 <button
@@ -1872,8 +1992,7 @@ export default function Room() {
                     try {
                       const r = await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/spy`, {
                         method: "POST",
-                        headers: { "Content-Type": "application/json", ...authHeaders() },
-                        credentials: "include",
+                        headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({ playerId: player.id }),
                       });
                       if (!r.ok) {
@@ -2262,8 +2381,7 @@ export default function Room() {
                                           try {
                                             await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/funvote`, {
                                               method: "POST",
-                                              headers: { "Content-Type": "application/json", ...authHeaders() },
-                                              credentials: "include",
+                                              headers: { "Content-Type": "application/json" },
                                               body: JSON.stringify({
                                                 playerId: player.id,
                                                 votedPlayerId: p.playerId,
@@ -2343,7 +2461,19 @@ export default function Room() {
 
         {/* ── FINISHED ── */}
         {phase === "finished" && (() => {
-          const sorted = [...players].sort((a: any, b: any) => (b.score || 0) - (a.score || 0));
+          const sorted = [...players].sort((a: any, b: any) => {
+            const ds = (b.score || 0) - (a.score || 0);
+            if (ds !== 0) return ds;
+            // Keep the final UI identical to the authoritative server winner:
+            // stopper → finishedAt → playerId.
+            const sa = a.wasStopper ? 1 : 0;
+            const sb = b.wasStopper ? 1 : 0;
+            if (sa !== sb) return sb - sa;
+            const fa = typeof a.finishedAt === "number" ? a.finishedAt : Number.MAX_SAFE_INTEGER;
+            const fb = typeof b.finishedAt === "number" ? b.finishedAt : Number.MAX_SAFE_INTEGER;
+            if (fa !== fb) return fa - fb;
+            return String(a.playerId || "").localeCompare(String(b.playerId || ""));
+          });
           const myIdx = sorted.findIndex((p: any) => p.playerId === player?.id);
           const myPos = myIdx >= 0 ? myIdx + 1 : null;
           const total = sorted.length;
@@ -2678,29 +2808,9 @@ export default function Room() {
         })()}
 
       </AnimatePresence>
+      <HalloweenAmbience active={isHalloweenActive() && isHalloweenModeEnabled() && phase === "playing" && categoryPack === "standard"} muted={muted} heavy={!!halloweenScare} />
       <AnimatePresence>
-        {halloweenScare && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.72, rotate: -4 }}
-            animate={{ opacity: 1, scale: [1, 1.04, 1], rotate: [0, 2, -1, 0] }}
-            exit={{ opacity: 0, scale: 1.12 }}
-            transition={{ duration: 0.45 }}
-            onClick={() => setHalloweenScare(null)}
-            className="fixed inset-0 z-[120] flex items-center justify-center p-6 cursor-pointer"
-            style={{ background: "rgba(0,0,0,0.76)", backdropFilter: "blur(3px)" }}
-            role="alert"
-            aria-live="assertive"
-          >
-            <div className="text-center select-none">
-              <motion.div animate={{ scale: [1, 1.18, 1] }} transition={{ duration: 0.7, repeat: 2 }} className="text-[7rem] sm:text-[10rem] leading-none drop-shadow-[0_0_35px_rgba(168,85,247,0.7)]">
-                {halloweenScare.emoji}
-              </motion.div>
-              <p className="mt-5 text-3xl sm:text-5xl font-black text-white tracking-tight">{halloweenScare.title}</p>
-              <p className="mt-2 text-sm sm:text-lg font-bold text-white/70">{halloweenScare.text}</p>
-              <p className="mt-6 text-[10px] uppercase tracking-[0.25em] text-white/35">Halloween 2026</p>
-            </div>
-          </motion.div>
-        )}
+        {halloweenScare && <HalloweenScareOverlay scare={halloweenScare} muted={muted} reducedEffects={reducedHalloweenEffects} onDone={() => setHalloweenScare(null)} />}
       </AnimatePresence>
       <ReviewPromptCard
         open={reviewPrompt.open}
@@ -2718,15 +2828,9 @@ export default function Room() {
 function StreamerModeCard({ room, playerId }: { room: any; playerId: string }) {
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
-  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => () => {
-    if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
-    copiedTimerRef.current = null;
-  }, []);
   const isPublic = !!room?.isPublic;
   const code = room?.roomCode;
-  const apiBase = (import.meta.env.VITE_API_BASE_URL || "") as string;
+  const apiBase = getApiUrl();
   const liveUrl = publicLink(`live/${code}`);
   const overlayUrl = publicLink(`overlay/${code}`);
 
@@ -2737,7 +2841,7 @@ function StreamerModeCard({ room, playerId }: { room: any; playerId: string }) {
       await fetch(`${apiBase}/api/rooms/${encodeURIComponent(code)}/visibility`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify({ hostId: playerId, isPublic: !isPublic }),
+        body: JSON.stringify({ hostId: playerId, roomId: room?.id, isPublic: !isPublic }),
       });
     } finally {
       setBusy(false);
@@ -2747,11 +2851,7 @@ function StreamerModeCard({ room, playerId }: { room: any; playerId: string }) {
   const copy = (url: string, key: string) => {
     navigator.clipboard.writeText(url).catch(() => {});
     setCopied(key);
-    if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
-    copiedTimerRef.current = setTimeout(() => {
-      copiedTimerRef.current = null;
-      setCopied(null);
-    }, 1500);
+    scheduleUiTimeout(() => setCopied(null), 1500);
   };
 
   return (

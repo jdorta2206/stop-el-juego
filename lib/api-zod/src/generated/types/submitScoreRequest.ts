@@ -7,6 +7,8 @@
  */
 
 export interface SubmitScoreRequest {
+  /** Stable idempotency key for one logical score submission. */
+  submissionId?: string;
   playerId: string;
   playerName: string;
   avatarColor?: string;
@@ -28,6 +30,4 @@ this is the anti-cheat guard. Omitted for offline submissions,
 which fall back to a flat absolute ceiling.
  */
   scoreTokens?: string[];
-  /** Stable client-generated identifier for an offline game. Reused on every sync retry. */
-  offlineSubmissionId?: string;
 }

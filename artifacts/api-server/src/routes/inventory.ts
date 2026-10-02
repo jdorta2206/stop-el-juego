@@ -1,18 +1,15 @@
 import { Router, type IRouter } from "express";
 import { db, playerScoresTable, indexesReady } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
-import { requirePlayerIdentity, type AuthedRequest } from "../lib/playerAuth";
+import { requirePlayerIdentity, verifyClaimedIdentity, type AuthedRequest } from "../lib/playerAuth";
 import { resolveCosmetic, shopItem, SHOP_ITEMS } from "../lib/inventoryCatalog";
 import { computeTitleStats, evaluateTitles, isTitleUnlocked } from "../lib/titleCatalog";
 import { getWeeklyShop, dealPriceFor, isWeeklyShopItem } from "../lib/dailyShop";
+import { isHalloweenPreviewAuthorized, getHalloweenEventYear } from "./halloween";
 
 const HALLOWEEN_SHOP_MARKER = "_halloween_";
-const HALLOWEEN_START_MS = Date.parse("2026-10-15T00:00:00Z");
-const HALLOWEEN_END_MS = Date.parse("2026-11-03T00:00:00Z");
-
-function isHalloweenActive(now: Date = new Date()): boolean {
-  const ms = now.getTime();
-  return ms >= HALLOWEEN_START_MS && ms < HALLOWEEN_END_MS;
+function isHalloweenActive(now: Date = new Date(), preview = false): boolean {
+  return getHalloweenEventYear(now, preview) !== null;
 }
 
 function isHalloweenShopItem(itemId: string): boolean {
@@ -45,6 +42,18 @@ interface OwnedInventory {
 }
 
 const router: IRouter = Router();
+
+async function requireInventoryIdentity(req: AuthedRequest, res: any, next: any): Promise<void> {
+  if (req.headers["x-halloween-preview"] === "1") {
+    const claimedId = String(req.headers["x-halloween-player-id"] ?? "").trim();
+    if (claimedId && await verifyClaimedIdentity(req, claimedId)) {
+      req.playerId = claimedId;
+      next();
+      return;
+    }
+  }
+  requirePlayerIdentity(req, res, next);
+}
 
 router.use((_req, res, next) => {
   if (!indexesReady()) {
@@ -80,7 +89,7 @@ async function loadInventoryRow(playerId: string): Promise<InventoryRow | null> 
 
 // GET /api/inventory → coin balance, owned cosmetics (with metadata),
 // equipped selection, and the shop catalog. One round-trip for the UI.
-router.get("/", requirePlayerIdentity, async (req: AuthedRequest, res) => {
+router.get("/", requireInventoryIdentity, async (req: AuthedRequest, res) => {
   const playerId = req.playerId!;
   try {
     const row = await loadInventoryRow(playerId);
@@ -118,7 +127,7 @@ router.get("/", requirePlayerIdentity, async (req: AuthedRequest, res) => {
 
 // POST /api/inventory/equip { kind, value } → equip an owned cosmetic.
 // `value` may be `null` to unequip. Server validates ownership.
-router.post("/equip", requirePlayerIdentity, async (req: AuthedRequest, res) => {
+router.post("/equip", requireInventoryIdentity, async (req: AuthedRequest, res) => {
   const playerId = req.playerId!;
   const { kind, value } = (req.body ?? {}) as { kind?: string; value?: string | null };
   if (kind !== "avatar" && kind !== "frame" && kind !== "title" && kind !== "background") {
@@ -197,7 +206,7 @@ router.post("/equip", requirePlayerIdentity, async (req: AuthedRequest, res) => 
 // POST /api/inventory/buy { itemId } → spend coins to buy a shop cosmetic.
 // Atomic: locks the row, re-checks balance and ownership inside the tx so
 // concurrent purchases can't double-spend or duplicate items.
-router.post("/buy", requirePlayerIdentity, async (req: AuthedRequest, res) => {
+router.post("/buy", requireInventoryIdentity, async (req: AuthedRequest, res) => {
   const playerId = req.playerId!;
   const { itemId } = (req.body ?? {}) as { itemId?: string };
   if (!itemId) { res.status(400).json({ error: "Missing itemId" }); return; }
@@ -205,8 +214,9 @@ router.post("/buy", requirePlayerIdentity, async (req: AuthedRequest, res) => {
   const item = shopItem(itemId);
   if (!item) { res.status(400).json({ error: "Unknown shop item" }); return; }
   const halloweenItem = isHalloweenShopItem(itemId);
+  const preview = isHalloweenPreviewAuthorized(req);
   if (halloweenItem) {
-    if (!isHalloweenActive()) {
+    if (!isHalloweenActive(new Date(), preview)) {
       res.status(400).json({ error: "Halloween event is not active" });
       return;
     }

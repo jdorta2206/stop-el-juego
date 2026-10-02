@@ -33,6 +33,21 @@ function localMinutesOfDay(tzOffsetMinutes: number, nowMs: number): number {
   return ((utcMin + tzOffsetMinutes) % 1440 + 1440) % 1440;
 }
 
+export function isHappyHourActiveForTimeZone(
+  timeZone: string,
+  nowMs: number = Date.now(),
+): boolean {
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone, hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+    }).formatToParts(new Date(nowMs));
+    const hour = Number(parts.find((p) => p.type === "hour")?.value);
+    const minute = Number(parts.find((p) => p.type === "minute")?.value);
+    if (!Number.isFinite(hour) || !Number.isFinite(minute)) return false;
+    const localMinutes = hour * 60 + minute;
+    return localMinutes >= HAPPY_HOUR_START_LOCAL_MIN && localMinutes < HAPPY_HOUR_END_LOCAL_MIN;
+  } catch { return false; }
+}
 export function isHappyHourActiveForTzOffset(
   tzOffsetMinutes: number,
   nowMs: number = Date.now(),

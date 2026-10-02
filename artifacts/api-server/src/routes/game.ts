@@ -1332,6 +1332,32 @@ const NEVER_VALID_WORDS = new Set([
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 // `normalizeWord` and `isSafeInput` live in ../lib/wordRules (pure, unit-tested).
 
+export const HALLOWEEN_CATEGORY_ALIASES: Record<string, string> = {
+  [normalizeWord("Disfraz de miedo")]: "Objeto",
+  [normalizeWord("Monstruo")]: "Animal",
+  [normalizeWord("Película de terror")]: "Película",
+  [normalizeWord("Cosa de una casa encantada")]: "Objeto",
+  [normalizeWord("Criatura sobrenatural")]: "Animal",
+  [normalizeWord("Scary costume")]: "Object",
+  [normalizeWord("Monster")]: "Animal",
+  [normalizeWord("Horror movie")]: "Movie",
+  [normalizeWord("Haunted house item")]: "Object",
+  [normalizeWord("Supernatural creature")]: "Animal",
+  [normalizeWord("Fantasia assustadora")]: "Objeto",
+  [normalizeWord("Monstro")]: "Animal",
+  [normalizeWord("Filme de terror")]: "Filme",
+  [normalizeWord("Coisa de uma casa assombrada")]: "Objeto",
+  [normalizeWord("Déguisement effrayant")]: "Objet",
+  [normalizeWord("Monstre")]: "Animal",
+  [normalizeWord("Film d'horreur")]: "Film",
+  [normalizeWord("Objet d'une maison hantée")]: "Objet",
+  [normalizeWord("Créature surnaturelle")]: "Animal",
+};
+
+function canonicalCategoryForValidation(category: string): string {
+  return HALLOWEEN_CATEGORY_ALIASES[normalizeWord(category)] ?? category;
+}
+
 function findCategoryWords(langDict: Record<string, string[]>, category: string): string[] {
   const norm = normalizeWord(category);
   // 1) Exact match wins
@@ -1366,7 +1392,8 @@ export async function isWordValidAsync(
   playerId: string | null,
 ): Promise<boolean> {
   // Fast path: existing synchronous validator handles 99% of cases.
-  if (isWordValid(word, letter, category, language)) return true;
+  const validationCategory = canonicalCategoryForValidation(category);
+  if (isWordValid(word, letter, validationCategory, language)) return true;
 
   // Only attempt AI fallback if the word at least passed the basic gates
   // (safe input, correct first letter, min length). If the static check
@@ -1381,7 +1408,7 @@ export async function isWordValidAsync(
 
   // Skip AI for open categories — they already accept any well-formed word,
   // so a static "no" means the word failed safety/length, not membership.
-  const normCategory = normalizeWord(category);
+  const normCategory = normalizeWord(validationCategory);
   if (OPEN_CATEGORIES.has(normCategory)) return false;
 
   const result = await validateWordWithAi({
@@ -1406,7 +1433,8 @@ function isWordValid(word: string, letter: string, category: string, language = 
   // Reject words that are never valid in any STOP category (spatial/directional words)
   if (NEVER_VALID_WORDS.has(normalizedWord)) return false;
 
-  const normCategory = normalizeWord(category);
+  const validationCategory = canonicalCategoryForValidation(category);
+  const normCategory = normalizeWord(validationCategory);
 
   // Open categories: any word is valid IF it has at least 3 chars.
   // (Min-2 is kept globally only for closed categories like Animal where "ñu" is valid.)
@@ -1415,9 +1443,9 @@ function isWordValid(word: string, letter: string, category: string, language = 
   // Strict mode: every other category requires the word to be in the dictionary.
   // Try the player's language first, then fall back to Spanish (the canonical dict).
   const primaryDict = DICTIONARY[language] || DICTIONARY["es"];
-  let categoryWords = findCategoryWords(primaryDict, category);
+  let categoryWords = findCategoryWords(primaryDict, validationCategory);
   if (categoryWords.length === 0 && language !== "es") {
-    categoryWords = findCategoryWords(DICTIONARY["es"], category);
+    categoryWords = findCategoryWords(DICTIONARY["es"], validationCategory);
   }
 
   // No dictionary at all → accept any word ≥ 3 chars (defensive fallback)
@@ -1427,15 +1455,17 @@ function isWordValid(word: string, letter: string, category: string, language = 
   return categoryWords.some(w => {
     const nw = normalizeWord(w);
     return nw === normalizedWord ||
-      normalizedWord.startsWith(nw);     // e.g. "rosado" starts with "rosa" ✓
+      normalizedWord.startsWith(nw) ||   // e.g. "rosado" starts with "rosa" ✓
+      nw.startsWith(normalizedWord);     // e.g. "ro" prefix of "rojo" ✓
   });
 }
 
 function getAiWord(letter: string, category: string, language = "es"): string {
   const langDict = DICTIONARY[language] || DICTIONARY["es"];
-  let categoryWords = findCategoryWords(langDict, category);
+  const validationCategory = canonicalCategoryForValidation(category);
+  let categoryWords = findCategoryWords(langDict, validationCategory);
   if (categoryWords.length === 0 && language !== "es") {
-    categoryWords = findCategoryWords(DICTIONARY["es"], category);
+    categoryWords = findCategoryWords(DICTIONARY["es"], validationCategory);
   }
   const normalizedLetter = normalizeWord(letter);
 
@@ -1517,18 +1547,20 @@ router.post("/validate", async (req, res) => {
   let aiTotalScore = 0;
   const validatedCollectionWords: Array<{ word: string; category: string }> = [];
 
-  // Validate categories concurrently. AI fallback calls can take up to 12s each;
-  // doing them serially would make one slow round take the sum of all timeouts.
-  const roundEvaluations = await Promise.all(playerResponses.map(async (pr) => {
+  // Validate independent categories concurrently so a slow AI fallback in one
+  // category cannot serialize the entire round.
+  const validatedRounds = await Promise.all(playerResponses.map(async (pr) => {
     const playerWord = pr.word?.trim() || "";
     const aiWord = getAiWord(letter, pr.category, language);
     const normPlayerWord = normalizeWord(playerWord);
-    const isPlayerWordValid = await isWordValidAsync(
-      playerWord, letter, pr.category, language, playerId,
-    );
-    const isAiWordValid = aiWord.length > 0 &&
-      isWordValid(aiWord, letter, pr.category, language);
+    const isPlayerWordValid = await isWordValidAsync(playerWord, letter, pr.category, language, playerId);
+    const isAiWordValid = aiWord.length > 0 && isWordValid(aiWord, letter, pr.category, language);
+    return { pr, playerWord, aiWord, normPlayerWord, isPlayerWordValid, isAiWordValid };
+  }));
 
+  for (const { pr, playerWord, aiWord, normPlayerWord, isPlayerWordValid, isAiWordValid } of validatedRounds) {
+    // "Repetida" only means the player and the AI wrote the exact same word in the same category
+    // (handled below by giving 5pts each). Using the same word in different categories is allowed.
     let playerScore = 0;
     let aiScore = 0;
 
@@ -1547,40 +1579,20 @@ router.post("/validate", async (req, res) => {
       }
     } else if (isPlayerWordValid) {
       playerScore = 10;
+      aiScore = 0;
     } else if (isAiWordValid) {
+      playerScore = 0;
       aiScore = 10;
     }
 
-    const formattedAiWord = aiWord
-      ? aiWord.charAt(0).toUpperCase() + aiWord.slice(1)
-      : "";
-
-    return {
-      category: pr.category,
-      playerWord,
-      aiWord: formattedAiWord,
-      isPlayerWordValid,
-      isAiWordValid,
-      playerScore,
-      aiScore,
+    const formattedAiWord = aiWord ? aiWord.charAt(0).toUpperCase() + aiWord.slice(1) : "";
+    results[pr.category] = {
+      player: { response: playerWord, isValid: isPlayerWordValid, score: playerScore },
+      ai: { response: formattedAiWord, isValid: isAiWordValid, score: aiScore },
     };
-  }));
 
-  for (const evaluation of roundEvaluations) {
-    results[evaluation.category] = {
-      player: {
-        response: evaluation.playerWord,
-        isValid: evaluation.isPlayerWordValid,
-        score: evaluation.playerScore,
-      },
-      ai: {
-        response: evaluation.aiWord,
-        isValid: evaluation.isAiWordValid,
-        score: evaluation.aiScore,
-      },
-    };
-    playerTotalScore += evaluation.playerScore;
-    aiTotalScore += evaluation.aiScore;
+    playerTotalScore += playerScore;
+    aiTotalScore += aiScore;
   }
 
   // 🔒 Anti-cheat: hand back a signed, single-use voucher attesting the

@@ -19,7 +19,7 @@ import rewardsRouter from "./rewards";
 import playBillingRouter from "./playBilling";
 import customPacksRouter from "./customPacks";
 import guestStatsRouter from "./guestStats";
-import contactRouter from "./contact";
+import halloweenRouter from "./halloween";
 import { indexesReady } from "@workspace/db";
 
 const router: IRouter = Router();
@@ -55,6 +55,6 @@ router.use("/rewards", rewardsRouter);
 router.use("/billing/play", playBillingRouter);
 router.use("/custom-packs", customPacksRouter);
 router.use("/guest-stats", guestStatsRouter);
-router.use("/contact", contactRouter);
+router.use("/halloween", halloweenRouter);
 
 export default router;

@@ -128,7 +128,7 @@ router.get("/status", async (req: Request, res: Response) => {
   try {
     const playerId = String(req.query.playerId || "").trim();
     if (!playerId) return res.status(400).json({ error: "playerId required" });
-    if (!verifyClaimedIdentity(req, playerId)) {
+    if (!await verifyClaimedIdentity(req, playerId)) {
       return res.status(403).json({ error: "Identidad del jugador no válida" });
     }
     const isPremium = await isUserPremium(playerId);
@@ -148,7 +148,7 @@ router.post("/verify", async (req: Request, res: Response) => {
     const { playerId, productId, purchaseToken } = req.body;
     if (!playerId || !productId || !purchaseToken) return res.status(400).json({ error: "Faltan campos obligatorios" });
     const claimedPlayerId = String(playerId);
-    if (!verifyClaimedIdentity(req, claimedPlayerId)) return res.status(403).json({ error: "Identidad del jugador no válida" });
+    if (!await verifyClaimedIdentity(req, claimedPlayerId)) return res.status(403).json({ error: "Identidad del jugador no válida" });
 
     const requestedProductId = String(productId).trim();
     if (requestedProductId !== "premium_monthly") {
@@ -183,7 +183,7 @@ router.post("/verify-pack", async (req: Request, res: Response) => {
     const { playerId, productId, purchaseToken } = req.body;
     if (!playerId || !productId || !purchaseToken) return res.status(400).json({ error: "Faltan campos obligatorios" });
     const claimedPlayerId = String(playerId);
-    if (!verifyClaimedIdentity(req, claimedPlayerId)) return res.status(403).json({ error: "Identidad del jugador no válida" });
+    if (!await verifyClaimedIdentity(req, claimedPlayerId)) return res.status(403).json({ error: "Identidad del jugador no válida" });
     if (productId !== WORLD_CUP_PACK_SKU) return res.status(400).json({ error: "Producto no válido" });
 
     const verified = await verifyProductPurchase(String(productId), String(purchaseToken));

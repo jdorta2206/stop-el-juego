@@ -8,6 +8,13 @@ const excludeReplitOrigin = or(
   not(like(pushSubscriptionsTable.origin, '%replit.app%')),
 );
 
+function enabledAndUnmuted() {
+  return and(
+    eq(pushSubscriptionsTable.enabled, true),
+    sql`COALESCE(${pushSubscriptionsTable.mutedUntil}, 0) <= ${Date.now()}`,
+  );
+}
+
 const VAPID_PUBLIC  = process.env.VAPID_PUBLIC_KEY  || "";
 const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY || "";
 const VAPID_EMAIL   = process.env.VAPID_EMAIL       || "mailto:dorynex@stopjuegodepalabras.com";
@@ -29,51 +36,11 @@ export interface PushPayload {
 // the old schedule could produce several reminders in the same day (daily,
 // Happy Hour x3, shop deals, streak rescue, season claims, ranking, etc.).
 // Keep important game events, while throttling promotional/repetitive pushes.
+const promotionalLastSentAt = new Map<string, number>();
+const playerLastSentAt = new Map<string, number>();
 const PROMOTIONAL_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 const GENERAL_COOLDOWN_MS = 60 * 60 * 1000;
 const RANK_COOLDOWN_MS = 6 * 60 * 60 * 1000;
-const FRIEND_ONLINE_COOLDOWN_MS = 30 * 60 * 1000;
-
-function throttleKey(playerId: string, kind: string): string {
-  return `push:${playerId}:${kind}`;
-}
-
-async function claimNotificationThrottle(
-  playerId: string,
-  kind: "daily" | "rank" | "invite" | "friend" | "promo" | "other",
-  cooldownMs: number,
-): Promise<boolean> {
-  if (!playerId || playerId === "anonymous" || kind === "daily" || kind === "invite") return true;
-  const cutoff = new Date(Date.now() - cooldownMs);
-  const key = throttleKey(playerId, kind);
-  const result = await db.execute(sql`
-    INSERT INTO push_notification_throttles (throttle_key, claimed_at)
-    VALUES (${key}, NOW())
-    ON CONFLICT (throttle_key) DO UPDATE
-      SET claimed_at = NOW()
-      WHERE push_notification_throttles.claimed_at < ${cutoff}
-    RETURNING throttle_key
-  `);
-  return result.rows.length > 0;
-}
-
-async function rollbackNotificationThrottle(
-  playerId: string,
-  kind: "daily" | "rank" | "invite" | "friend" | "promo" | "other",
-): Promise<void> {
-  if (!playerId || playerId === "anonymous" || kind === "daily" || kind === "invite") return;
-  await db.execute(sql`
-    DELETE FROM push_notification_throttles
-    WHERE throttle_key = ${throttleKey(playerId, kind)}
-  `).catch(() => {});
-}
-
-function notificationCooldownMs(kind: ReturnType<typeof notificationKind>): number {
-  if (kind === "promo") return PROMOTIONAL_COOLDOWN_MS;
-  if (kind === "rank") return RANK_COOLDOWN_MS;
-  if (kind === "friend") return FRIEND_ONLINE_COOLDOWN_MS;
-  return GENERAL_COOLDOWN_MS;
-}
 
 function notificationKind(payload: PushPayload): "daily" | "rank" | "invite" | "friend" | "promo" | "other" {
   const text = `${payload.title} ${payload.body}`.toLowerCase();
@@ -83,6 +50,57 @@ function notificationKind(payload: PushPayload): "daily" | "rank" | "invite" | "
   if (/amigo conectado|friend online|amigo online|ami connecté/.test(text)) return "friend";
   if (/happy hour|ofertas hoy|new deals|novas ofertas|nouvelles offres|misiones listas|missions ready|missões prontas|missions prêtes/.test(text)) return "promo";
   return "other";
+}
+
+function allowNotification(playerId: string, payload: PushPayload): boolean {
+  // Anonymous broadcast subscriptions are intentionally not throttled here:
+  // they have no stable identity and must still receive the daily challenge.
+  if (!playerId || playerId === "anonymous") return true;
+
+  const now = Date.now();
+  const kind = notificationKind(payload);
+  const key = `${playerId}:${kind}`;
+
+  if (kind === "promo") {
+    const last = promotionalLastSentAt.get(key) || 0;
+    if (now - last < PROMOTIONAL_COOLDOWN_MS) return false;
+    promotionalLastSentAt.set(key, now);
+    return true;
+  }
+
+  if (kind === "rank") {
+    const last = playerLastSentAt.get(key) || 0;
+    if (now - last < RANK_COOLDOWN_MS) return false;
+    playerLastSentAt.set(key, now);
+    return true;
+  }
+
+  if (kind === "daily" || kind === "invite" || kind === "friend") return true;
+
+  const last = playerLastSentAt.get(playerId) || 0;
+  if (now - last < GENERAL_COOLDOWN_MS) return false;
+  playerLastSentAt.set(playerId, now);
+  return true;
+}
+
+function rollbackNotificationThrottle(playerId: string, payload: PushPayload) {
+  if (!playerId || playerId === "anonymous") return;
+  const kind = notificationKind(payload);
+  if (kind === "daily" || kind === "invite" || kind === "friend") return;
+  if (kind === "promo") promotionalLastSentAt.delete(`${playerId}:${kind}`);
+  else if (kind === "rank") playerLastSentAt.delete(`${playerId}:${kind}`);
+  else playerLastSentAt.delete(playerId);
+}
+
+function cleanupNotificationThrottleMaps() {
+  const cutoff = Date.now() - PROMOTIONAL_COOLDOWN_MS;
+  for (const [key, ts] of promotionalLastSentAt) {
+    if (ts < cutoff) promotionalLastSentAt.delete(key);
+  }
+  const generalCutoff = Date.now() - RANK_COOLDOWN_MS;
+  for (const [key, ts] of playerLastSentAt) {
+    if (ts < generalCutoff) playerLastSentAt.delete(key);
+  }
 }
 
 async function cleanStaleEndpoint(row: Pick<PushRow, "endpoint" | "p256dh" | "auth" | "playerId">) {
@@ -120,21 +138,23 @@ function dedupeByPlayer(rows: PushRow[]): PushRow[] {
 
 export async function sendPushToPlayer(playerId: string, payload: PushPayload): Promise<number> {
   if (!VAPID_PUBLIC || !VAPID_PRIVATE) return 0;
-  const kind = notificationKind(payload);
-  const claimed = await claimNotificationThrottle(playerId, kind, notificationCooldownMs(kind));
-  if (!claimed) {
-    console.log(`[push] throttled player=${playerId} kind=${kind} title=${payload.title}`);
+  if (!allowNotification(playerId, payload)) {
+    console.log(`[push] throttled player=${playerId} kind=${notificationKind(payload)} title=${payload.title}`);
     return 0;
   }
 
   let rows: PushRow[];
   try {
     rows = await db.select().from(pushSubscriptionsTable)
-      .where(and(eq(pushSubscriptionsTable.playerId, playerId), excludeReplitOrigin));
+      .where(and(
+        eq(pushSubscriptionsTable.playerId, playerId),
+        excludeReplitOrigin,
+        enabledAndUnmuted(),
+      ));
   } catch (error) {
     // A database read failure happens after the in-memory throttle is claimed.
     // Release that claim so a transient outage does not suppress later pushes.
-    await rollbackNotificationThrottle(playerId, kind);
+    rollbackNotificationThrottle(playerId, payload);
     throw error;
   }
 
@@ -168,7 +188,7 @@ export async function sendPushToPlayer(playerId: string, payload: PushPayload): 
 
   // A failed delivery must not consume the cooldown: otherwise a transient
   // webpush/provider failure can suppress the player's next valid notification.
-  if (sent === 0) await rollbackNotificationThrottle(playerId, kind);
+  if (sent === 0) rollbackNotificationThrottle(playerId, payload);
 
   return sent;
 }
@@ -181,8 +201,8 @@ export async function sendPushToAllSubscribers(
 
   const rows = language
     ? await db.select().from(pushSubscriptionsTable)
-        .where(and(eq(pushSubscriptionsTable.language, language), excludeReplitOrigin))
-    : await db.select().from(pushSubscriptionsTable).where(excludeReplitOrigin);
+        .where(and(eq(pushSubscriptionsTable.language, language), excludeReplitOrigin, enabledAndUnmuted()))
+    : await db.select().from(pushSubscriptionsTable).where(and(excludeReplitOrigin, enabledAndUnmuted()));
 
   const picked = dedupeByPlayer(rows);
   let sent = 0, failed = 0;
@@ -223,7 +243,7 @@ export async function sendLocalizedBroadcast(
   const fallback = payloadByLang[fallbackLang];
   if (!fallback) return { sent: 0, failed: 0, removed: 0 };
 
-  const rows = await db.select().from(pushSubscriptionsTable).where(excludeReplitOrigin);
+  const rows = await db.select().from(pushSubscriptionsTable).where(and(excludeReplitOrigin, enabledAndUnmuted()));
   const picked = dedupeByPlayer(rows);
 
   let sent = 0, failed = 0;
@@ -257,6 +277,10 @@ export async function sendLocalizedBroadcast(
   return { sent, failed, removed: toDelete.length };
 }
 
+const friendOnlineNotifiedAt = new Map<string, number>();
+const friendOnlineInFlight = new Set<string>();
+const FRIEND_ONLINE_COOLDOWN_MS = 30 * 60 * 1000;
+
 export async function notifyFollowersPlayerOnline(
   playerId: string,
   playerName: string,
@@ -270,21 +294,53 @@ export async function notifyFollowersPlayerOnline(
 
     if (followers.length === 0) return;
 
+    const now = Date.now();
     const MSGS: Record<string, PushPayload> = {
       es: { title: "🟢 ¡Amigo conectado!", body: `${playerName} está jugando ahora. ¡Reta a partida!`, url: "/multiplayer" },
       en: { title: "🟢 Friend online!", body: `${playerName} is playing now. Challenge them!`, url: "/multiplayer" },
       pt: { title: "🟢 Amigo online!", body: `${playerName} está jogando agora. Desafia-o!`, url: "/multiplayer" },
       fr: { title: "🟢 Ami connecté !", body: `${playerName} joue maintenant. Lance-lui un défi !`, url: "/multiplayer" },
     };
-    const msg = MSGS[language] || MSGS.es;
-
     await Promise.allSettled(followers.map(async (follower) => {
+      const dedupeKey = `${follower.followerId}:${playerId}`;
+      const lastNotified = friendOnlineNotifiedAt.get(dedupeKey) || 0;
+      if (now - lastNotified < FRIEND_ONLINE_COOLDOWN_MS) return;
+
+      // Two simultaneous presence events can otherwise both observe the old
+      // timestamp before either async push completes. Claim the pair while the
+      // delivery is in flight, and release the claim if delivery fails.
+      if (friendOnlineInFlight.has(dedupeKey)) return;
+      friendOnlineInFlight.add(dedupeKey);
       try {
-        // sendPushToPlayer performs the durable PostgreSQL claim. Keeping the
-        // claim in one place prevents a double-claim on the same notification.
-        await sendPushToPlayer(follower.followerId, msg);
-      } catch {
-        // sendPushToPlayer rolls back its claim when delivery fails.
+        const subscriptions = await db.select().from(pushSubscriptionsTable).where(and(
+          eq(pushSubscriptionsTable.playerId, follower.followerId),
+          excludeReplitOrigin,
+          enabledAndUnmuted(),
+        ));
+        let sent = 0;
+        for (const row of subscriptions) {
+          const msg = MSGS[row.language] || MSGS.es;
+          try {
+            await webpush.sendNotification(
+              { endpoint: row.endpoint, keys: { p256dh: row.p256dh, auth: row.auth } },
+              JSON.stringify({
+                ...msg,
+                icon: "/images/icon-192.png",
+                badge: "/images/badge-96.png",
+              }),
+            );
+            sent++;
+          } catch (e: any) {
+            if (e?.statusCode === 410 || e?.statusCode === 404 || e?.statusCode === 403) {
+              await cleanStaleEndpoint(row);
+            } else {
+              console.error(`[push] friend-online failed status=${e?.statusCode ?? "unknown"} follower=${follower.followerId}`);
+            }
+          }
+        }
+        if (sent > 0) friendOnlineNotifiedAt.set(dedupeKey, now);
+      } finally {
+        friendOnlineInFlight.delete(dedupeKey);
       }
     }));
   } catch (e) {
@@ -292,3 +348,10 @@ export async function notifyFollowersPlayerOnline(
   }
 }
 
+setInterval(() => {
+  cleanupNotificationThrottleMaps();
+  const cutoff = Date.now() - FRIEND_ONLINE_COOLDOWN_MS;
+  for (const [key, ts] of friendOnlineNotifiedAt) {
+    if (ts < cutoff) friendOnlineNotifiedAt.delete(key);
+  }
+}, 60 * 60 * 1000);

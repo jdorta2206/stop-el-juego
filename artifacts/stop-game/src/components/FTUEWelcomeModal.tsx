@@ -72,7 +72,7 @@ export function FTUEWelcomeModal({ open, onClose }: FTUEWelcomeModalProps) {
               </div>
             </div>
 
-            <Link href="/solo?mode=quick&auto=1&ftue=1">
+            <Link href="/solo?auto=1&ftue=1">
               <motion.button
                 whileHover={{ scale: 1.03 }}
                 whileTap={{ scale: 0.97 }}

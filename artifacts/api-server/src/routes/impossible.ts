@@ -51,7 +51,7 @@ router.get("/", async (req, res) => {
 // Has this player already attempted today? Returns their attempt if so.
 router.get("/me/:playerId", async (req, res) => {
   const playerId = req.params.playerId;
-  if (!verifyClaimedIdentity(req, playerId)) {
+  if (!await verifyClaimedIdentity(req, playerId)) {
     res.status(403).json({ error: "PLAYER_ID_MISMATCH" });
     return;
   }
@@ -84,7 +84,7 @@ router.post("/submit", async (req, res) => {
   if (!language) {
     res.status(400).json({ error: "Unsupported language" }); return;
   }
-  if (!verifyClaimedIdentity(req, String(playerId))) {
+  if (!await verifyClaimedIdentity(req, String(playerId))) {
     res.status(403).json({ error: "PLAYER_ID_MISMATCH" });
     return;
   }

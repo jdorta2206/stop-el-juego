@@ -97,8 +97,7 @@ export const GetLeaderboardResponse = zod.object({
  * @summary Submit a player score
  */
 export const SubmitScoreBody = zod.object({
-  /** Stable client-generated ID used to make offline/retry submissions idempotent. */
-  submissionId: zod.string().min(16).max(128).optional(),
+  submissionId: zod.string().min(8).max(160).regex(/^[A-Za-z0-9._:-]+$/).optional(),
   playerId: zod.string(),
   playerName: zod.string(),
   avatarColor: zod.string().optional(),
@@ -112,7 +111,6 @@ export const SubmitScoreBody = zod.object({
     .describe(
       "When true, the score is treated as a bonus increment (e.g. from a\nrewarded video doubling). The server still adds `score` to\n`totalScore` and grants XP, but skips incrementing\n`gamesPlayed`\/`wins` and does not bump the daily streak — those\nalready counted on the original (non-bonus) submission.\n",
     ),
-  offlineSubmissionId: zod.string().min(1).max(128).optional(),
   scoreTokens: zod
     .array(zod.string())
     .optional()
@@ -147,6 +145,7 @@ export const GetPlayerStatsResponse = zod.object({
     bestScore: zod.number().optional(),
     createdAt: zod.date().optional(),
     updatedAt: zod.date().optional(),
+    roomVersion: zod.number().optional(),
   }),
   recentGames: zod.array(
     zod.object({
@@ -188,6 +187,8 @@ export const GetStreakCalendarResponse = zod.object({
 export const createRoomBodyMaxRoundsDefault = 3;
 export const createRoomBodyLanguageDefault = `es`;
 export const createRoomBodyIsPublicDefault = false;
+export const createRoomBodyGameModeDefault = "classic" as const;
+export const createRoomBodyMaxPlayersDefault = 8;
 
 export const CreateRoomBody = zod.object({
   hostId: zod.string(),
@@ -198,6 +199,8 @@ export const CreateRoomBody = zod.object({
   language: zod.string().default(createRoomBodyLanguageDefault),
   loginMethod: zod.string().nullish(),
   isPublic: zod.boolean().default(createRoomBodyIsPublicDefault),
+  gameMode: zod.enum(["classic", "blitz", "challenge", "random"]).default(createRoomBodyGameModeDefault),
+  maxPlayers: zod.number().int().min(1).max(8).default(createRoomBodyMaxPlayersDefault),
 });
 
 /**
@@ -226,6 +229,7 @@ export const GetRoomResponse = zod.object({
       isReady: zod.boolean(),
     }),
   ),
+  roomVersion: zod.number().optional(),
   createdAt: zod.date().optional(),
 });
 
@@ -242,6 +246,7 @@ export const JoinRoomBody = zod.object({
   avatarColor: zod.string().optional(),
   picture: zod.string().nullable().optional(),
   loginMethod: zod.string().nullish(),
+  challengeId: zod.string().optional(),
 });
 
 export const JoinRoomResponse = zod.object({

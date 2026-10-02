@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { db } from "./index";
+import { db, pool } from "./index";
 
 /**
  * Creates all critical indexes idempotently. Safe to call on every boot.
@@ -12,24 +12,22 @@ export function indexesReady(): boolean {
 }
 
 export async function ensureIndexes(): Promise<void> {
-  const stmts = [
+  const client = await pool.connect();
+  const lockKey = "stop:ensure-indexes:v1";
+  try {
+    await client.query(`SELECT pg_advisory_lock(hashtext($1))`, [lockKey]);
+    const stmts = [
     `CREATE INDEX IF NOT EXISTS player_scores_total_score_desc_idx ON player_scores (total_score DESC)`,
     `CREATE INDEX IF NOT EXISTS player_scores_xp_desc_idx ON player_scores (xp DESC)`,
-    `ALTER TABLE game_history ADD COLUMN IF NOT EXISTS room_code text`,
-    `ALTER TABLE game_history ADD COLUMN IF NOT EXISTS room_id integer`,
-    // v3 is the authoritative idempotency key: room_id identifies the
-    // concrete room instance, so recycled room codes cannot collide.
-    // Remove both legacy code-based indexes; keeping v2 would reintroduce
-    // false conflicts when a room code is reused for a later game.
-    `DROP INDEX IF EXISTS game_history_room_player_uidx_v2`,
-    `DROP INDEX IF EXISTS game_history_room_player_uidx`,
-    `CREATE UNIQUE INDEX IF NOT EXISTS game_history_room_player_uidx_v3 ON game_history (room_id, player_id)`,
-
     `CREATE INDEX IF NOT EXISTS game_history_created_at_idx ON game_history (created_at)`,
     `CREATE INDEX IF NOT EXISTS game_history_player_id_created_at_desc_idx ON game_history (player_id, created_at DESC)`,
     `CREATE INDEX IF NOT EXISTS game_history_player_id_score_desc_idx ON game_history (player_id, score DESC)`,
     `CREATE INDEX IF NOT EXISTS rooms_is_public_status_created_at_idx ON rooms (is_public, status, created_at)`,
     `CREATE INDEX IF NOT EXISTS rooms_status_updated_at_idx ON rooms (status, updated_at)`,
+    `ALTER TABLE rooms ADD COLUMN IF NOT EXISTS room_version bigint NOT NULL DEFAULT 0`,
+    `CREATE OR REPLACE FUNCTION stop_rooms_bump_version() RETURNS trigger AS $stop_rooms$ BEGIN IF NEW.updated_at <= OLD.updated_at THEN NEW.updated_at := OLD.updated_at + interval '1 millisecond'; END IF; NEW.room_version := OLD.room_version + 1; RETURN NEW; END; $stop_rooms$ LANGUAGE plpgsql`,
+    `DROP TRIGGER IF EXISTS rooms_bump_version_trigger ON rooms`,
+    `CREATE TRIGGER rooms_bump_version_trigger BEFORE UPDATE ON rooms FOR EACH ROW EXECUTE FUNCTION stop_rooms_bump_version()`,
     `ALTER TABLE rooms ADD COLUMN IF NOT EXISTS tournament_id integer`,
     `ALTER TABLE rooms ADD COLUMN IF NOT EXISTS tournament_match_id text`,
     `CREATE UNIQUE INDEX IF NOT EXISTS rooms_tournament_match_uidx ON rooms (tournament_id, tournament_match_id) WHERE tournament_id IS NOT NULL AND tournament_match_id IS NOT NULL`,
@@ -39,6 +37,7 @@ export async function ensureIndexes(): Promise<void> {
     `ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS enabled boolean NOT NULL DEFAULT TRUE`,
     `ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS hour_local integer NOT NULL DEFAULT 20`,
     `ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS tz_offset_minutes integer NOT NULL DEFAULT 0`,
+    `ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS time_zone text`,
     `ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS muted_until bigint NOT NULL DEFAULT 0`,
     `ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS origin text`,
     `CREATE INDEX IF NOT EXISTS tournaments_is_public_status_created_at_desc_idx ON tournaments (is_public, status, created_at DESC)`,
@@ -67,6 +66,7 @@ export async function ensureIndexes(): Promise<void> {
          AND (a.score < b.score OR (a.score = b.score AND a.id < b.id))`,
     `CREATE UNIQUE INDEX IF NOT EXISTS daily_results_player_date_uidx
        ON daily_results (player_id, challenge_date)`,
+    `CREATE TABLE IF NOT EXISTS multiplayer_settlement_claims (room_id integer NOT NULL, player_id text NOT NULL, created_at timestamp NOT NULL DEFAULT NOW(), PRIMARY KEY (room_id, player_id))`,
     `CREATE TABLE IF NOT EXISTS cron_locks (lock_key text PRIMARY KEY, last_run_date text NOT NULL, updated_at timestamp NOT NULL DEFAULT NOW())`,
     `CREATE TABLE IF NOT EXISTS revoked_player_ids (player_id text PRIMARY KEY, revoked_at timestamp NOT NULL DEFAULT NOW())`,
     `CREATE INDEX IF NOT EXISTS revoked_player_ids_revoked_at_idx ON revoked_player_ids (revoked_at)`,
@@ -79,6 +79,7 @@ export async function ensureIndexes(): Promise<void> {
     `CREATE INDEX IF NOT EXISTS seasons_dates_idx ON seasons (start_date, end_date)`,
     `CREATE UNIQUE INDEX IF NOT EXISTS seasons_start_date_uidx ON seasons (start_date)`,
     `CREATE UNIQUE INDEX IF NOT EXISTS season_progress_player_season_uidx ON season_progress (player_id, season_id)`,
+    `CREATE TABLE IF NOT EXISTS season_event_claims (season_id integer NOT NULL, player_id text NOT NULL, event_key text NOT NULL, created_at timestamp NOT NULL DEFAULT NOW(), PRIMARY KEY (season_id, player_id, event_key))`,
     `CREATE INDEX IF NOT EXISTS season_progress_season_xp_desc_idx ON season_progress (season_id, xp DESC)`,
     `CREATE TABLE IF NOT EXISTS play_subscriptions (id serial PRIMARY KEY, player_id text NOT NULL, product_id text NOT NULL, purchase_token text NOT NULL UNIQUE, order_id text, state text NOT NULL DEFAULT 'ACTIVE', expiry_time_ms bigint NOT NULL DEFAULT 0, start_time_ms bigint NOT NULL DEFAULT 0, raw_json text NOT NULL DEFAULT '{}', created_at timestamp NOT NULL DEFAULT NOW(), updated_at timestamp NOT NULL DEFAULT NOW())`,
     `CREATE TABLE IF NOT EXISTS play_product_purchases (id serial PRIMARY KEY, player_id text NOT NULL, product_id text NOT NULL, purchase_token text NOT NULL UNIQUE, order_id text, purchase_state bigint NOT NULL DEFAULT 0, raw_json text NOT NULL DEFAULT '{}', created_at timestamp NOT NULL DEFAULT NOW(), updated_at timestamp NOT NULL DEFAULT NOW())`,
@@ -86,21 +87,8 @@ export async function ensureIndexes(): Promise<void> {
     `CREATE INDEX IF NOT EXISTS play_subscriptions_player_id_idx ON play_subscriptions (player_id)`,
     `CREATE INDEX IF NOT EXISTS play_subscriptions_player_state_expiry_idx ON play_subscriptions (player_id, state, expiry_time_ms)`,
     `CREATE TABLE IF NOT EXISTS score_voucher_uses (jti text PRIMARY KEY, expires_at timestamp NOT NULL, used_at timestamp NOT NULL DEFAULT NOW())`,
-    `CREATE TABLE IF NOT EXISTS push_notification_throttles (throttle_key text PRIMARY KEY, claimed_at timestamp NOT NULL DEFAULT NOW())`,
-    // Spy usage belongs to a concrete room instance, not its recyclable
-    // 6-character code. Legacy rows cannot be mapped safely after a code
-    // recycle, so remove the old primary key and discard only rows without
-    // the new room_id. This is idempotent after the first upgraded boot.
-    `CREATE TABLE IF NOT EXISTS room_spy_usage (room_code text NOT NULL, player_id text NOT NULL, round integer NOT NULL, uses integer NOT NULL DEFAULT 0, PRIMARY KEY (room_code, player_id, round))`,
-    `ALTER TABLE room_spy_usage ADD COLUMN IF NOT EXISTS room_id integer`,
-    `ALTER TABLE room_spy_usage DROP CONSTRAINT IF EXISTS room_spy_usage_pkey`,
-    `DELETE FROM room_spy_usage WHERE room_id IS NULL`,
-    `ALTER TABLE room_spy_usage ALTER COLUMN room_id SET NOT NULL`,
-    `CREATE UNIQUE INDEX IF NOT EXISTS room_spy_usage_room_player_round_uidx ON room_spy_usage (room_id, player_id, round)`,
-    `CREATE INDEX IF NOT EXISTS room_spy_usage_round_idx ON room_spy_usage (room_id, round)`,
-    `CREATE INDEX IF NOT EXISTS push_notification_throttles_claimed_at_idx ON push_notification_throttles (claimed_at)`,
-    `CREATE TABLE IF NOT EXISTS score_submission_idempotency (submission_id text PRIMARY KEY, player_id text NOT NULL, request_hash text NOT NULL, response_json text NOT NULL, created_at timestamp NOT NULL DEFAULT NOW())`,
-    `CREATE INDEX IF NOT EXISTS score_submission_idempotency_player_id_idx ON score_submission_idempotency (player_id)`,
+    `CREATE TABLE IF NOT EXISTS score_submission_claims (id serial PRIMARY KEY, player_id text NOT NULL, submission_id text NOT NULL, is_bonus boolean NOT NULL DEFAULT FALSE, created_at timestamp NOT NULL DEFAULT NOW())`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS score_submission_claims_player_submission_uidx ON score_submission_claims (player_id, submission_id, is_bonus)`,
     `CREATE TABLE IF NOT EXISTS score_bonus_claims (token_set_hash text PRIMARY KEY, player_id text NOT NULL, max_score integer NOT NULL, expires_at timestamp NOT NULL, created_at timestamp NOT NULL DEFAULT NOW())`,
     `CREATE INDEX IF NOT EXISTS score_bonus_claims_player_id_idx ON score_bonus_claims (player_id)`,
     `CREATE INDEX IF NOT EXISTS score_bonus_claims_expires_at_idx ON score_bonus_claims (expires_at)`,
@@ -112,11 +100,19 @@ export async function ensureIndexes(): Promise<void> {
     `CREATE TABLE IF NOT EXISTS impossible_results (id serial PRIMARY KEY, player_id text NOT NULL, player_name text NOT NULL, challenge_date text NOT NULL, language text NOT NULL DEFAULT 'es', letter text NOT NULL, category text NOT NULL, attempted_word text NOT NULL DEFAULT '', won boolean NOT NULL DEFAULT false, time_ms integer NOT NULL DEFAULT 60000, created_at timestamp NOT NULL DEFAULT NOW())`,
     `CREATE UNIQUE INDEX IF NOT EXISTS impossible_results_player_date_lang_uniq ON impossible_results (player_id, challenge_date, language)`,
     `CREATE INDEX IF NOT EXISTS impossible_results_date_lang_idx ON impossible_results (challenge_date, language)`,
+    `CREATE TABLE IF NOT EXISTS halloween_progress (id serial PRIMARY KEY, player_id text NOT NULL, event_year integer NOT NULL, games_completed integer NOT NULL DEFAULT 0, scares_received integer NOT NULL DEFAULT 0, scares_provoked integer NOT NULL DEFAULT 0, coins_earned integer NOT NULL DEFAULT 0, rewards_json text NOT NULL DEFAULT '[]', event_keys_json text NOT NULL DEFAULT '[]', updated_at timestamp NOT NULL DEFAULT NOW())`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS halloween_progress_player_year_uidx ON halloween_progress (player_id, event_year)`,
+    `CREATE INDEX IF NOT EXISTS halloween_progress_year_games_idx ON halloween_progress (event_year, games_completed DESC)`,
+    `CREATE TABLE IF NOT EXISTS halloween_event_claims (event_year integer NOT NULL, player_id text NOT NULL, event_key text NOT NULL, created_at timestamp NOT NULL DEFAULT NOW(), PRIMARY KEY (event_year, player_id, event_key))`,
+    `CREATE TABLE IF NOT EXISTS multiplayer_settlement_aux_claims (room_id integer NOT NULL, player_id text NOT NULL, effect text NOT NULL, created_at timestamp NOT NULL DEFAULT NOW(), PRIMARY KEY (room_id, player_id, effect))`,
+    `CREATE TABLE IF NOT EXISTS halloween_scare_cooldowns (room_id integer NOT NULL, player_id text NOT NULL, available_at timestamp with time zone NOT NULL, updated_at timestamp with time zone NOT NULL DEFAULT NOW(), PRIMARY KEY (room_id, player_id))`,
+    `CREATE TABLE IF NOT EXISTS halloween_migration_state (migration_key text PRIMARY KEY, completed_at timestamp NOT NULL DEFAULT NOW())`,
+
   ];
 
   for (const stmt of stmts) {
     try {
-      await db.execute(sql.raw(stmt));
+      await client.query(stmt);
     } catch (err: any) {
       // Every bootstrap statement is already idempotent via IF NOT EXISTS.
       // Never hide an "already exists" error here: it can indicate a real
@@ -127,6 +123,60 @@ export async function ensureIndexes(): Promise<void> {
       throw err;
     }
   }
+  // Backfill legacy Halloween claims exactly once. The marker and all imported
+  // claims commit together, so a crash rolls the marker back and the next boot retries.
+  try {
+    await client.query("BEGIN");
+    try {
+      const claimed = await client.query(sql`
+        INSERT INTO halloween_migration_state (migration_key)
+        VALUES ('legacy_event_claims_v1')
+        ON CONFLICT (migration_key) DO NOTHING
+        RETURNING migration_key
+      `);
+      if ((claimed.rows?.length ?? 0) > 0) {
+        const legacy = await client.query(sql`
+          SELECT event_year, player_id, event_keys_json
+          FROM halloween_progress
+          WHERE event_keys_json IS NOT NULL AND event_keys_json <> '[]'
+        `);
+        for (const row of (legacy.rows ?? []) as Array<{ event_year: number; player_id: string; event_keys_json: string }>) {
+          let keys: unknown;
+          try {
+            keys = JSON.parse(row.event_keys_json);
+          } catch {
+            continue;
+          }
+          if (!Array.isArray(keys)) continue;
+
+          for (const key of keys) {
+            if (typeof key !== "string" || !key) continue;
+            await client.query(sql`
+              INSERT INTO halloween_event_claims (event_year, player_id, event_key)
+              VALUES (${row.event_year}, ${row.player_id}, ${key})
+              ON CONFLICT (event_year, player_id, event_key) DO NOTHING
+            `);
+          }
+        }
+      }
+      await client.query("COMMIT");
+    } catch (err) {
+      await client.query("ROLLBACK");
+      throw err;
+    }
+  } catch (err: any) {
+    console.error("[ensureIndexes] Halloween claim backfill failed:", err?.message ?? err);
+    _indexesReady = false;
+    throw err;
+  }
+
   _indexesReady = true;
   console.log("[ensureIndexes] All indexes verified");
+  } finally {
+    try {
+      await client.query(`SELECT pg_advisory_unlock(hashtext($1))`, [lockKey]);
+    } finally {
+      client.release();
+    }
+  }
 }

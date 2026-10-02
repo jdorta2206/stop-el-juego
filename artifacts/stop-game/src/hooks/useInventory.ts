@@ -3,6 +3,7 @@ import { getApiUrl } from "@/lib/utils";
 
 const API = getApiUrl();
 const TOKEN_KEY = "stop_session_token";
+const PREVIEW_HEADERS = import.meta.env.VITE_HALLOWEEN_PREVIEW === "true" ? { "x-halloween-preview": "1" } : {};
 
 function authHeaders(): Record<string, string> {
   if (typeof window === "undefined") return {};
@@ -73,7 +74,7 @@ export function useInventory(playerId?: string | null) {
     try {
       const res = await fetch(`${API}/api/inventory`, {
         credentials: "include",
-        headers: authHeaders(),
+        headers: { ...authHeaders(), ...(import.meta.env.VITE_HALLOWEEN_PREVIEW === "true" ? { "x-halloween-player-id": playerId } : {}), ...PREVIEW_HEADERS },
         signal: controller.signal,
       });
       if (res.ok && !controller.signal.aborted) setData(await res.json());

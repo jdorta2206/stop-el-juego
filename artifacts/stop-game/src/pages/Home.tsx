@@ -25,8 +25,12 @@ import { useCustomPacks } from "@/lib/useCustomPacks";
 import { BannerAd } from "@/components/AdSystem";
 import { PLAY_STORE_URL } from "@/lib/playReview";
 import { HalloweenBanner } from "@/components/HalloweenBanner";
+import { HALLOWEEN_START, isHalloweenActive, isHalloweenModeEnabled, setHalloweenModeEnabled } from "@/lib/halloweenEvent";
+import { useHalloweenProgress } from "@/hooks/useHalloweenProgress";
+import { HalloweenHomeAtmosphere } from "@/components/HalloweenHomeAtmosphere";
 
 const LOGO_URL = `${import.meta.env.BASE_URL}images/stop-logo.png`;
+const HALLOWEEN_PREVIEW = import.meta.env.VITE_HALLOWEEN_PREVIEW === "true";
 
 export default function Home() {
   const { player } = usePlayer();
@@ -67,6 +71,29 @@ export default function Home() {
 
   const ftue = useFTUE();
   const [showFTUEWelcome, setShowFTUEWelcome] = useState(false);
+  const [halloweenModeEnabled, setHalloweenModeEnabledState] = useState(() => HALLOWEEN_PREVIEW ? true : isHalloweenModeEnabled());
+  const [halloweenAudioStarted, setHalloweenAudioStarted] = useState(false);
+
+  useEffect(() => {
+    const onHalloweenAudioStarted = () => setHalloweenAudioStarted(true);
+    window.addEventListener("halloween:audio-started", onHalloweenAudioStarted);
+    return () => window.removeEventListener("halloween:audio-started", onHalloweenAudioStarted);
+  }, []);
+  const [showHalloweenAnnouncement, setShowHalloweenAnnouncement] = useState(false);
+  const [halloweenDaysUntilStart, setHalloweenDaysUntilStart] = useState(() =>
+    Math.max(0, Math.ceil((new Date(HALLOWEEN_START).getTime() - Date.now()) / 86_400_000)),
+  );
+  const { data: halloweenProgressData } = useHalloweenProgress(player?.id);
+
+  // Pre-event countdown: this is informational only and never gates gameplay.
+  useEffect(() => {
+    const update = () => setHalloweenDaysUntilStart(
+      Math.max(0, Math.ceil((new Date(HALLOWEEN_START).getTime() - Date.now()) / 86_400_000)),
+    );
+    update();
+    const timer = window.setInterval(update, 60 * 60 * 1000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   // Open the FTUE welcome modal once on first ever visit (after a tiny delay
   // so the home page can render its hero animation first).
@@ -125,6 +152,52 @@ export default function Home() {
 
   return (
     <Layout>
+      <HalloweenHomeAtmosphere active={isHalloweenActive()} enabled={halloweenModeEnabled} />
+      {!isHalloweenActive() && halloweenDaysUntilStart > 0 && (
+        <div className="mx-auto mb-4 w-full max-w-2xl px-4" role="status" aria-live="polite">
+          <div
+            className="rounded-2xl px-4 py-3 text-center shadow-lg"
+            style={{
+              background: "linear-gradient(135deg, rgba(60,10,20,.94), rgba(20,8,15,.96))",
+              border: "1px solid rgba(248,113,113,.35)",
+            }}
+          >
+            <p className="text-orange-300 text-[10px] font-black uppercase tracking-[0.2em]">🎃 Próximo evento especial</p>
+            <p className="text-white font-black text-base mt-1">
+              Halloween comienza dentro de {halloweenDaysUntilStart} {halloweenDaysUntilStart === 1 ? "día" : "días"}
+            </p>
+            <p className="text-white/55 text-[11px] mt-1">15 de octubre · Sustos, ambientación de terror y recompensas especiales</p>
+          </div>
+        </div>
+      )}
+
+      {showHalloweenAnnouncement && isHalloweenActive() && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 px-4 backdrop-blur-sm">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            className="w-full max-w-sm rounded-3xl p-6 text-center shadow-2xl"
+            style={{ background: "linear-gradient(145deg, #18070b, #3b1010 55%, #160817)", border: "2px solid rgba(248,113,113,.55)" }}
+          >
+            <div className="text-5xl mb-3">🎃</div>
+            <p className="text-orange-300 text-xs font-black uppercase tracking-[0.2em]">Nuevo evento</p>
+            <h2 className="text-white text-3xl font-black mt-1">HALLOWEEN</h2>
+            <p className="text-white/75 text-sm mt-3">Sustos, ambientación de terror y recompensas especiales.</p>
+            <p className="text-red-300 text-xs font-bold mt-2">15 de octubre → 2 de noviembre</p>
+            <button
+              type="button"
+              onClick={() => {
+                try { localStorage.setItem("stop_halloween_announcement_" + new Date().getUTCFullYear(), "1"); } catch {}
+                setShowHalloweenAnnouncement(false);
+              }}
+              className="mt-5 w-full rounded-2xl bg-red-700 px-5 py-3 text-sm font-black text-white shadow-lg active:scale-95"
+            >
+              ¡ENTRAR AL EVENTO! 🎃
+            </button>
+          </motion.div>
+        </div>
+      )}
+
       <FTUEWelcomeModal
         open={showFTUEWelcome}
         onClose={() => {
@@ -145,6 +218,50 @@ export default function Home() {
 
       <div className="flex-1 flex flex-col items-center justify-center max-w-md mx-auto w-full space-y-7 py-6">
         <HalloweenBanner />
+
+        {isHalloweenActive() && (
+          <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="w-full rounded-2xl px-4 py-3"
+            style={{ background: halloweenModeEnabled ? "linear-gradient(135deg, rgba(127,29,29,.32), rgba(20,8,12,.72))" : "rgba(0,0,0,.24)", border: halloweenModeEnabled ? "2px solid rgba(220,38,38,.48)" : "1.5px solid rgba(255,255,255,.14)" }}>
+            <div className="flex items-center gap-3">
+              <div className="text-2xl flex-shrink-0">{halloweenModeEnabled ? "🎃" : "🕯️"}</div>
+              <div className="flex-1 min-w-0">
+                <p className="text-white font-black text-sm">Modo Halloween</p>
+                <p className="text-white/55 text-[11px] leading-tight">{halloweenModeEnabled ? "Sustos, música y ambientación activados" : "STOP clásico: sin sustos ni música Halloween"}</p>
+                {halloweenModeEnabled && !halloweenAudioStarted && (
+                  <button
+                    type="button"
+                    onClick={() => window.dispatchEvent(new Event("halloween:activate-audio"))}
+                    className="mt-2 rounded-lg border border-red-300/40 bg-black/35 px-2.5 py-1 text-[10px] font-black text-white/90"
+                  >
+                    🔊 Activar música de terror
+                  </button>
+                )}
+              </div>
+              <button type="button" aria-pressed={halloweenModeEnabled} onClick={() => { const next=!halloweenModeEnabled; setHalloweenModeEnabled(next); setHalloweenModeEnabledState(next); if (!next) setHalloweenAudioStarted(false); }} className="relative w-14 h-8 min-w-[3.5rem] rounded-full transition-colors flex-shrink-0 overflow-hidden" style={{ background: halloweenModeEnabled ? "#991b1b" : "rgba(255,255,255,.18)", border:"1px solid rgba(255,255,255,.2)" }}>
+                <span className="absolute top-1 w-6 h-6 rounded-full bg-white shadow-md transition-transform" style={{ transform: halloweenModeEnabled ? "translateX(27px)" : "translateX(3px)" }} />
+              </button>
+            </div>
+          </motion.div>
+        )}
+
+        {isHalloweenActive() && halloweenProgressData?.progress && (
+          <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+            className="w-full rounded-2xl px-4 py-3"
+            style={{ background: "linear-gradient(135deg, rgba(20,8,12,.88), rgba(67,20,7,.62))", border: "1.5px solid rgba(248,113,113,.32)" }}>
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <p className="text-white font-black text-sm">🎃 Progreso Halloween</p>
+                <p className="text-white/50 text-[10px]">Edición {halloweenProgressData.year}</p>
+              </div>
+              <span className="text-amber-300 font-black text-xs">🪙 {halloweenProgressData.progress.coinsEarned}</span>
+            </div>
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div className="rounded-xl bg-white/5 py-2"><p className="text-white font-black">{halloweenProgressData.progress.gamesCompleted}</p><p className="text-white/45 text-[9px] uppercase">Partidas</p></div>
+              <div className="rounded-xl bg-white/5 py-2"><p className="text-white font-black">{halloweenProgressData.progress.scaresReceived}</p><p className="text-white/45 text-[9px] uppercase">Sustos</p></div>
+              <div className="rounded-xl bg-white/5 py-2"><p className="text-white font-black">{halloweenProgressData.progress.scaresProvoked}</p><p className="text-white/45 text-[9px] uppercase">Provocados</p></div>
+            </div>
+          </motion.div>
+        )}
 
         {/* Invite welcome banner */}
         <AnimatePresence>
@@ -988,8 +1105,7 @@ function LiveRoomsSection() {
         abortRef.current?.abort();
         const controller = new AbortController();
         abortRef.current = controller;
-        const apiBase = (import.meta.env.VITE_API_BASE_URL || "") as string;
-        const r = await fetch(`${apiBase}/api/rooms/live`, { signal: controller.signal });
+        const r = await fetch(`${getApiUrl()}/api/rooms/live`, { signal: controller.signal });
         if (!r.ok) return;
         const data = await r.json();
         if (!stop && !controller.signal.aborted) setRooms(data.rooms ?? []);

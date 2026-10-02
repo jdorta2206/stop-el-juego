@@ -19,13 +19,33 @@ const PLAYER_STORAGE_KEY = "stop_player_v2";
 const SESSION_TOKEN_KEY = "stop_session_token";
 const AVATAR_COLORS = ["#f9a825", "#42a5f5", "#66bb6a", "#ab47bc", "#ef5350", "#26a69a"];
 
+function getApiBase(): string {
+  const configured = (import.meta as { env?: { VITE_API_URL?: string } }).env?.VITE_API_URL?.trim();
+  if (!configured) return window.location.origin;
+  try {
+    const url = new URL(configured, window.location.origin);
+    if (/\.replit\.(app|dev)$/i.test(url.hostname)) return window.location.origin;
+    return url.origin;
+  } catch {
+    return window.location.origin;
+  }
+}
+
 function startOAuth(provider: "google" | "facebook" | "instagram" | "tiktok" | "apple") {
   const returnPath = window.location.pathname + window.location.search;
-  try { sessionStorage.setItem("oauth_return", returnPath); } catch {}
-  const apiBase = (import.meta as { env?: { VITE_API_URL?: string } }).env?.VITE_API_URL ?? window.location.origin;
+  const handoffNonce = crypto.randomUUID();
+  try {
+    sessionStorage.setItem("oauth_return", returnPath);
+    sessionStorage.setItem("oauth_handoff_nonce", handoffNonce);
+  } catch {}
+  const returnUrl = new URL(returnPath, window.location.origin);
+  returnUrl.searchParams.set("oauth_handoff_nonce", handoffNonce);
+  const returnPathWithNonce =
+    returnUrl.pathname + (returnUrl.search ? returnUrl.search : "");
+  const apiBase = getApiBase();
   const origin = window.location.origin;
   const url = new URL(`${apiBase}/api/auth/${provider}/start`);
-  url.searchParams.set("return", returnPath);
+  url.searchParams.set("return", returnPathWithNonce);
   url.searchParams.set("origin", origin);
   window.location.href = url.toString();
 }
@@ -73,18 +93,28 @@ export async function consumeAuthHandoff(): Promise<void> {
     const code = hashHandoff || queryHandoff;
     if (!code) return;
 
-    // Remove the opaque one-time code from the address bar before making the
+    // Bind the bearer handoff to the browser session that initiated OAuth.
+    // Without this check, a valid handoff URL could be forwarded to another
+    // user and silently sign that browser into the attacker's account.
+    const handoffNonce = params.get("oauth_handoff_nonce");
+    let expectedNonce: string | null = null;
+    try { expectedNonce = sessionStorage.getItem("oauth_handoff_nonce"); } catch {}
+    if (!handoffNonce || !expectedNonce || handoffNonce !== expectedNonce) return;
+
+    // Remove the opaque one-time code and browser-binding nonce from the address bar
+    // before making the redemption request.
     // redemption request. The code itself carries no credentials and expires
     // after two minutes; the actual session/provider tokens stay server-side.
     params.delete("stopauth");
+    params.delete("oauth_handoff_nonce");
     hashParams.delete("stopauth");
+    hashParams.delete("oauth_handoff_nonce");
+    try { sessionStorage.removeItem("oauth_handoff_nonce"); } catch {}
     const hash = hashParams.toString();
     const query = params.toString();
     window.history.replaceState({}, "", `${window.location.pathname}${query ? `?${query}` : ""}${hash ? `#${hash}` : ""}`);
 
-    const apiBase =
-      (import.meta as { env?: { VITE_API_URL?: string } }).env?.VITE_API_URL ??
-      window.location.origin;
+    const apiBase = getApiBase();
 
     const response = await fetch(`${apiBase}/api/auth/handoff`, {
       method: "POST",
@@ -107,10 +137,7 @@ export async function consumeAuthHandoff(): Promise<void> {
       values[key] = value;
       try {
         if (key === "stop_session_token") localStorage.setItem(SESSION_TOKEN_KEY, value);
-        else {
-          sessionStorage.setItem(key, value);
-          localStorage.setItem(key, value);
-        }
+        else sessionStorage.setItem(key, value);
       } catch {}
     }
 
@@ -127,7 +154,7 @@ export async function consumeAuthHandoff(): Promise<void> {
             avatarColor,
             loginMethod: user.provider || null,
             picture: user.picture ?? null,
-            fbAccessToken: values.fb_access_token || null,
+            fbAccessToken: null,
           };
           if (profile.name) localStorage.setItem(PLAYER_STORAGE_KEY, JSON.stringify(profile));
         }
@@ -162,7 +189,6 @@ export function checkOAuthReturn(): OAuthUser | null {
 export function consumeFacebookAccessToken(): string | null {
   let token: string | null = null;
   try { token = sessionStorage.getItem("fb_access_token"); } catch {}
-  if (!token) { try { token = localStorage.getItem("fb_access_token"); } catch {} }
   if (token) {
     try { sessionStorage.removeItem("fb_access_token"); } catch {}
     try { localStorage.removeItem("fb_access_token"); } catch {}

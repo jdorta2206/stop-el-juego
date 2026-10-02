@@ -89,6 +89,8 @@ export interface GameHistory {
   letter: string;
   mode: string;
   createdAt?: string;
+  updatedAt?: string;
+  roomVersion?: number;
 }
 
 export interface PlayerStats {
@@ -97,6 +99,8 @@ export interface PlayerStats {
 }
 
 export interface SubmitScoreRequest {
+  /** Stable idempotency key for one logical score submission. */
+  submissionId?: string;
   playerId: string;
   playerName: string;
   avatarColor?: string;
@@ -118,8 +122,6 @@ this is the anti-cheat guard. Omitted for offline submissions,
 which fall back to a flat absolute ceiling.
  */
   scoreTokens?: string[];
-  /** Stable client-generated identifier for an offline game. Reused on every sync retry. */
-  offlineSubmissionId?: string;
 }
 
 export interface StreakCalendarDay {
@@ -172,6 +174,7 @@ export interface Room {
   language: string;
   players: RoomPlayer[];
   createdAt?: string;
+  roomVersion?: number;
 }
 
 export interface CreateRoomRequest {
@@ -183,6 +186,8 @@ export interface CreateRoomRequest {
   language?: string;
   loginMethod?: string | null;
   isPublic?: boolean;
+  gameMode?: "classic" | "blitz" | "challenge" | "random";
+  maxPlayers?: number;
 }
 
 export interface JoinRoomRequest {

@@ -94,6 +94,17 @@ async function claimDailyLock(today: string, key: string = CRON_KEY): Promise<bo
  *   - last_played_date is exactly yesterday (UTC) — they haven't played today yet
  * Looks up each player's preferred language from their first push subscription.
  */
+// Per-recipient claim for scheduled pushes. A failed delivery releases only
+// that player's claim so a later cron tick can retry without resending to players
+// who already received the notification.
+async function claimPlayerNotification(today: string, key: string, playerId: string): Promise<boolean> {
+  return claimDailyLock(today, key + "_" + playerId);
+}
+
+async function releasePlayerNotification(today: string, key: string, playerId: string): Promise<void> {
+  await releaseDailyLock(today, key + "_" + playerId);
+}
+
 async function sendStreakRescueNotifications() {
   try {
     const today = new Date().toISOString().slice(0, 10);
@@ -114,14 +125,22 @@ async function sendStreakRescueNotifications() {
     let sent = 0;
     for (const row of rows.rows as Array<{ player_id: string; current_streak: number; language: string }>) {
       const lang = STREAK_RESCUE_MSGS[row.language] ? row.language : "es";
-      const msg = STREAK_RESCUE_MSGS[lang](row.current_streak);
-      const n = await sendPushToPlayer(row.player_id, {
-        ...msg,
-        icon: "/images/icon-192.png",
-        badge: "/images/badge-96.png",
-        url: "/solo?mode=quick&auto=1",
-      });
-      sent += n;
+      const claimKey = "streak_rescue_player";
+      if (!await claimPlayerNotification(today, claimKey, row.player_id)) continue;
+      try {
+        const msg = STREAK_RESCUE_MSGS[lang](row.current_streak);
+        const n = await sendPushToPlayer(row.player_id, {
+          ...msg,
+          icon: "/images/icon-192.png",
+          badge: "/images/badge-96.png",
+          url: "/solo?mode=quick&auto=1",
+        });
+        sent += n;
+        if (n === 0) await releasePlayerNotification(today, claimKey, row.player_id);
+      } catch (error) {
+        await releasePlayerNotification(today, claimKey, row.player_id);
+        console.error("[streakRescueCron] player notification failed:", error);
+      }
     }
     console.log(`[streakRescueCron] Notifications sent: ${sent} (candidates: ${rows.rows.length}, date: ${today})`);
   } catch (e) {
@@ -208,14 +227,22 @@ async function sendSeasonClaimNotifications() {
       candidates++;
 
       const lang = SEASON_CLAIM_MSGS[row.language] ? row.language : "es";
-      const msg = SEASON_CLAIM_MSGS[lang];
-      const n = await sendPushToPlayer(row.player_id, {
-        ...msg,
-        icon: "/images/icon-192.png",
-        badge: "/images/badge-96.png",
-        url: "/season",
-      });
-      sent += n;
+      const claimKey = "season_claim_player";
+      if (!await claimPlayerNotification(today, claimKey, row.player_id)) continue;
+      try {
+        const msg = SEASON_CLAIM_MSGS[lang];
+        const n = await sendPushToPlayer(row.player_id, {
+          ...msg,
+          icon: "/images/icon-192.png",
+          badge: "/images/badge-96.png",
+          url: "/season",
+        });
+        sent += n;
+        if (n === 0) await releasePlayerNotification(today, claimKey, row.player_id);
+      } catch (error) {
+        await releasePlayerNotification(today, claimKey, row.player_id);
+        console.error("[seasonClaimCron] player notification failed:", error);
+      }
     }
     console.log(
       `[seasonClaimCron] Notifications sent: ${sent} (eligible: ${candidates}, scanned: ${candidateRows.length}, season: ${activeSeason.id}, date: ${today})`,
@@ -290,40 +317,47 @@ async function sendPerUserDailyNotifications() {
       FROM push_subscriptions
       WHERE enabled = TRUE
         AND muted_until < ${now}
-        AND hour_local = (((${utcMinutesOfDay}::int + tz_offset_minutes + 10080) / 60) % 24)
-        AND (((${utcMinutesOfDay}::int + tz_offset_minutes + 10080) % 60) < 5)
+        AND hour_local = CASE
+          WHEN NULLIF(time_zone, '') IS NOT NULL
+            THEN EXTRACT(HOUR FROM (NOW() AT TIME ZONE time_zone))::int
+          ELSE (((${utcMinutesOfDay}::int + tz_offset_minutes + 10080) / 60) % 24)
+        END
+        AND CASE
+          WHEN NULLIF(time_zone, '') IS NOT NULL
+            THEN EXTRACT(MINUTE FROM (NOW() AT TIME ZONE time_zone))::int
+          ELSE ((${utcMinutesOfDay}::int + tz_offset_minutes + 10080) % 60)
+        END < 5
       LIMIT 10000
     `)) as unknown as { rows?: SubscriptionWithPrefsRow[] };
 
     const candidates = rows.rows ?? [];
     if (candidates.length === 0) return;
 
-    // One cluster-wide claim per UTC 5-minute bucket. Every player whose
-    // local reminder time falls in this window is processed by the single
-    // instance that wins the claim; otherwise two Railway instances could
-    // send the same reminder concurrently.
     const today = utcNow.toISOString().slice(0, 10);
-    const utcBucket = Math.floor(utcMinutesOfDay / 5);
-    const claimed = await claimDailyLock(today, `daily_${today}_${utcBucket}`);
-    if (!claimed) return;
-
-    // Dedup per (player, lang) — a player may have multiple endpoints
-    // (e.g. phone + desktop). sendPushToPlayer hits every endpoint
-    // already, so we send the message once per player_id here.
+    // Claim independently per player: concurrent cron instances cannot both
+    // deliver, while a failed delivery can release its own claim for retry.
     const seen = new Set<string>();
     let sent = 0;
     for (const row of candidates) {
       if (seen.has(row.player_id)) continue;
       seen.add(row.player_id);
-      const lang = DAILY_VARIANTS[row.language] ? row.language : "es";
-      const msg = variantForToday(lang);
-      const n = await sendPushToPlayer(row.player_id, {
-        ...msg,
-        icon: "/images/icon-192.png",
-        badge: "/images/badge-96.png",
-        url: "/reto",
-      });
-      sent += n;
+      const claimKey = "daily_player";
+      if (!await claimPlayerNotification(today, claimKey, row.player_id)) continue;
+      try {
+        const lang = DAILY_VARIANTS[row.language] ? row.language : "es";
+        const msg = variantForToday(lang);
+        const n = await sendPushToPlayer(row.player_id, {
+          ...msg,
+          icon: "/images/icon-192.png",
+          badge: "/images/badge-96.png",
+          url: "/reto",
+        });
+        sent += n;
+        if (n === 0) await releasePlayerNotification(today, claimKey, row.player_id);
+      } catch (error) {
+        await releasePlayerNotification(today, claimKey, row.player_id);
+        console.error("[dailyCron] daily notification failed:", error);
+      }
     }
     console.log(`[dailyCron] Per-user daily sent: ${sent} (candidates: ${candidates.length})`);
   } catch (e) {
@@ -380,49 +414,51 @@ async function sendHappyHourNotifications() {
       { key: "last", target: HAPPY_HOUR_LAST_LOCAL_MIN, url: "/solo?mode=quick&auto=1" },
     ];
 
-    // Multi-instance idempotency: each (slot, UTC-5min-bucket) is claimed at
-    // most once across the cluster. A given tz cohort falls inside exactly
-    // one UTC bucket per day per slot, so locking by bucket guarantees one
-    // notification per player per slot per day, while still allowing
-    // different tz cohorts (different buckets) to fire on the same day.
+    // Per-player claims provide cluster-wide idempotency for each slot while
+    // allowing failed deliveries to be retried on the next cron tick.
     const today = utcNow.toISOString().slice(0, 10);
-    const utcBucket = Math.floor(utcMinutesOfDay / 5);
 
     for (const slot of slots) {
-      const lockKey = `hh_${slot.key}_${today}_${utcBucket}`;
 
       const rows = (await db.execute(sql`
         SELECT player_id, language
         FROM push_subscriptions
         WHERE enabled = TRUE
           AND muted_until < ${now}
-          AND (((${utcMinutesOfDay}::int + tz_offset_minutes + 10080) % 1440)) >= ${slot.target}
-          AND (((${utcMinutesOfDay}::int + tz_offset_minutes + 10080) % 1440)) < ${slot.target + 5}
+          AND (CASE WHEN NULLIF(time_zone, '') IS NOT NULL
+            THEN (EXTRACT(HOUR FROM (NOW() AT TIME ZONE time_zone))::int * 60 + EXTRACT(MINUTE FROM (NOW() AT TIME ZONE time_zone))::int)
+            ELSE (((${utcMinutesOfDay}::int + tz_offset_minutes + 10080) % 1440)) END) >= ${slot.target}
+          AND (CASE WHEN NULLIF(time_zone, '') IS NOT NULL
+            THEN (EXTRACT(HOUR FROM (NOW() AT TIME ZONE time_zone))::int * 60 + EXTRACT(MINUTE FROM (NOW() AT TIME ZONE time_zone))::int)
+            ELSE (((${utcMinutesOfDay}::int + tz_offset_minutes + 10080) % 1440)) END) < ${slot.target + 5}
         LIMIT 10000
       `)) as unknown as { rows?: Array<{ player_id: string; language: string }> };
 
       const candidates = rows.rows ?? [];
       if (candidates.length === 0) continue;
 
-      // Claim only after the candidate query succeeds. A transient DB failure
-      // must not consume the bucket and suppress a later retry.
-      const claimed = await claimDailyLock(today, lockKey);
-      if (!claimed) continue;
-
       const seen = new Set<string>();
       let sent = 0;
       for (const row of candidates) {
         if (seen.has(row.player_id)) continue;
         seen.add(row.player_id);
-        const lang = HAPPY_HOUR_MSGS[slot.key][row.language] ? row.language : "es";
-        const msg = HAPPY_HOUR_MSGS[slot.key][lang];
-        const n = await sendPushToPlayer(row.player_id, {
-          ...msg,
-          icon: "/images/icon-192.png",
-          badge: "/images/badge-96.png",
-          url: slot.url,
-        });
-        sent += n;
+        const claimKey = "hh_" + slot.key;
+        if (!await claimPlayerNotification(today, claimKey, row.player_id)) continue;
+        try {
+          const lang = HAPPY_HOUR_MSGS[slot.key][row.language] ? row.language : "es";
+          const msg = HAPPY_HOUR_MSGS[slot.key][lang];
+          const n = await sendPushToPlayer(row.player_id, {
+            ...msg,
+            icon: "/images/icon-192.png",
+            badge: "/images/badge-96.png",
+            url: slot.url,
+          });
+          sent += n;
+          if (n === 0) await releasePlayerNotification(today, claimKey, row.player_id);
+        } catch (error) {
+          await releasePlayerNotification(today, claimKey, row.player_id);
+          console.error("[happyHourCron] notification failed:", error);
+        }
       }
       console.log(`[happyHourCron] slot=${slot.key} sent=${sent} candidates=${candidates.length}`);
     }
@@ -444,25 +480,22 @@ async function sendDailyDealsNotifications() {
     const utcNow = new Date(now);
     const utcMinutesOfDay = utcNow.getUTCHours() * 60 + utcNow.getUTCMinutes();
     const today = utcNow.toISOString().slice(0, 10);
-    const utcBucket = Math.floor(utcMinutesOfDay / 5);
-
     const rows = (await db.execute(sql`
       SELECT player_id, language
       FROM push_subscriptions
       WHERE enabled = TRUE
         AND muted_until < ${now}
-        AND (((${utcMinutesOfDay}::int + tz_offset_minutes + 10080) % 1440)) >= ${DAILY_DEALS_LOCAL_MIN}
-        AND (((${utcMinutesOfDay}::int + tz_offset_minutes + 10080) % 1440)) < ${DAILY_DEALS_LOCAL_MIN + 5}
+        AND (CASE WHEN NULLIF(time_zone, '') IS NOT NULL
+          THEN (EXTRACT(HOUR FROM (NOW() AT TIME ZONE time_zone))::int * 60 + EXTRACT(MINUTE FROM (NOW() AT TIME ZONE time_zone))::int)
+          ELSE (((${utcMinutesOfDay}::int + tz_offset_minutes + 10080) % 1440)) END) >= ${DAILY_DEALS_LOCAL_MIN}
+        AND (CASE WHEN NULLIF(time_zone, '') IS NOT NULL
+          THEN (EXTRACT(HOUR FROM (NOW() AT TIME ZONE time_zone))::int * 60 + EXTRACT(MINUTE FROM (NOW() AT TIME ZONE time_zone))::int)
+          ELSE (((${utcMinutesOfDay}::int + tz_offset_minutes + 10080) % 1440)) END) < ${DAILY_DEALS_LOCAL_MIN + 5}
       LIMIT 10000
     `)) as unknown as { rows?: Array<{ player_id: string; language: string }> };
 
     const candidates = rows.rows ?? [];
     if (candidates.length === 0) return;
-
-    // Claim only after the candidate query succeeds. A transient DB failure
-    // must not consume the bucket and suppress a later retry.
-    const claimed = await claimDailyLock(today, `deals_${today}_${utcBucket}`);
-    if (!claimed) return;
 
     const maxDiscount = Math.max(0, ...getDailyDeals(utcNow).deals.map((d) => d.discountPct));
 
@@ -471,15 +504,23 @@ async function sendDailyDealsNotifications() {
     for (const row of candidates) {
       if (seen.has(row.player_id)) continue;
       seen.add(row.player_id);
-      const lang = DEALS_MSGS[row.language] ? row.language : "es";
-      const msg = DEALS_MSGS[lang](maxDiscount);
-      const n = await sendPushToPlayer(row.player_id, {
-        ...msg,
-        icon: "/images/icon-192.png",
-        badge: "/images/badge-96.png",
-        url: `/player/${row.player_id}#tienda`,
-      });
-      sent += n;
+      const claimKey = "deals_player";
+      if (!await claimPlayerNotification(today, claimKey, row.player_id)) continue;
+      try {
+        const lang = DEALS_MSGS[row.language] ? row.language : "es";
+        const msg = DEALS_MSGS[lang](maxDiscount);
+        const n = await sendPushToPlayer(row.player_id, {
+          ...msg,
+          icon: "/images/icon-192.png",
+          badge: "/images/badge-96.png",
+          url: `/player/${row.player_id}#tienda`,
+        });
+        sent += n;
+        if (n === 0) await releasePlayerNotification(today, claimKey, row.player_id);
+      } catch (error) {
+        await releasePlayerNotification(today, claimKey, row.player_id);
+        console.error("[dailyDealsCron] player notification failed:", error);
+      }
     }
     console.log(`[dailyDealsCron] sent=${sent} candidates=${candidates.length} maxDiscount=${maxDiscount}`);
   } catch (e) {
@@ -487,10 +528,13 @@ async function sendDailyDealsNotifications() {
   }
 }
 
+let dailyCronTimer: ReturnType<typeof setInterval> | null = null;
+
 export function startDailyCron() {
+  if (dailyCronTimer) return;
   // Check every 5 minutes if it's time to send notifications.
   // Both fires use a per-key DB lock so only ONE instance sends across the cluster.
-  setInterval(async () => {
+  dailyCronTimer = setInterval(async () => {
     const now = new Date();
     const utcHour = now.getUTCHours();
     const utcMinute = now.getUTCMinutes();
@@ -511,7 +555,7 @@ export function startDailyCron() {
 
     // Daily-deals nudge — timezone-aware, once per player per day at ~10:00
     // local. Tells them fresh shop discounts are live (they reset 00:00 UTC).
-    // Same per-tz bucket-lock as Happy Hour so it never double-sends.
+    // Per-player claims prevent duplicate sends across cron instances.
     await sendDailyDealsNotifications();
 
     // 19:00–19:05 UTC → streak rescue. 19:00 UTC was chosen because it
@@ -522,11 +566,9 @@ export function startDailyCron() {
     // preferences/timezone column yet; if/when one is added, gate the
     // SELECT in sendStreakRescueNotifications() on it.
     if (utcHour === 19 && utcMinute < 5) {
-      const claimed = await claimDailyLock(today, STREAK_RESCUE_KEY);
-      if (claimed) {
-        console.log(`[streakRescueCron] Lock claimed for ${today} — sending streak rescue`);
-        await sendStreakRescueNotifications();
-      }
+      // Per-player claims inside the job provide cluster-wide idempotency and
+      // allow failed recipients to retry without blocking the whole batch.
+      await sendStreakRescueNotifications();
     }
 
     // 08:00–08:05 UTC → season rollover. Idempotent: only opens a new season
@@ -545,15 +587,20 @@ export function startDailyCron() {
     // hours for every supported locale (es/fr 22-23h CET, pt 18h BRT,
     // en spans US afternoon to EU late evening).
     if (utcHour === 21 && utcMinute < 5) {
-      const claimed = await claimDailyLock(today, SEASON_CLAIM_KEY);
-      if (claimed) {
-        console.log(`[seasonClaimCron] Lock claimed for ${today} — sending claim reminders`);
-        await sendSeasonClaimNotifications();
-      }
+      // Per-player claims inside the job provide cluster-wide idempotency and
+      // allow failed recipients to retry without blocking the whole batch.
+      await sendSeasonClaimNotifications();
     }
   }, 5 * 60 * 1000);
 
   console.log("[dailyCron] Crons started — per-user daily, happy hour, daily deals ~10:00 local, streak rescue 19:00 UTC, season rollover 08:00 UTC, season claim 21:00 UTC");
+}
+
+export function stopDailyCron() {
+  if (!dailyCronTimer) return;
+  clearInterval(dailyCronTimer);
+  dailyCronTimer = null;
+  console.log("[dailyCron] Crons stopped");
 }
 
 /**
