@@ -6,7 +6,7 @@ const RESULT_BASE = "/api/rewards/admob-result";
 const RESULT_TIMEOUT_MS = 120_000;
 
 type RewardedPlacement = "extra_time" | "hint" | "double_points" | "skip_round" | "extra_pack";
-type RewardResult = { rewarded: boolean; source: "admob" | "client" | "skipped" | "error"; errorCode?: number; errorDomain?: string; errorMessage?: string };
+type RewardResult = { rewarded: boolean; source: "admob" | "client" | "skipped" | "error"; requestId?: string; errorCode?: number; errorDomain?: string; errorMessage?: string };
 
 let initialized = false;
 let pendingPlayerId = "guest";
@@ -56,7 +56,7 @@ async function readResult(requestId: string): Promise<RewardResult | null> {
     const data = await response.json();
     if (data?.ready !== true) return null;
     return data.rewarded === true
-      ? { rewarded: true, source: data.source === "client" ? "client" : "admob" }
+      ? { rewarded: true, source: data.source === "client" ? "client" : "admob", requestId }
       : { rewarded: false, source: "skipped" };
   } catch {
     return null;
@@ -114,7 +114,7 @@ export async function requestRewardedAd(placement: RewardedPlacement): Promise<R
       if (deadlineTimer !== null) window.clearTimeout(deadlineTimer);
       document.removeEventListener("visibilitychange", checkNow);
       window.removeEventListener("focus", checkNow);
-      if (result.rewarded) void acknowledgeRewardResult(requestId);
+      if (result.rewarded && placement !== "double_points") void acknowledgeRewardResult(requestId);
       resolve(result);
     };
 
