@@ -148,7 +148,7 @@ export function Layout({ children }: { children: ReactNode }) {
       </AnimatePresence>
 
       {/* Header */}
-      <header className="w-full px-4 py-3 flex items-center justify-between z-50 max-w-5xl mx-auto w-full">
+      <header className="w-full px-4 py-3 flex items-center justify-between z-50 max-w-5xl mx-auto w-full safe-area-pt">
         <Link href="/">
           <motion.img
             src={LOGO_URL}
