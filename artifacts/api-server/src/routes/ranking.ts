@@ -697,6 +697,20 @@ router.post("/scores", scoreLimiter, async (req, res) => {
         mode: mode ?? "solo",
         won: effectiveWon,
       });
+      // Re-read after the upsert so a concurrent first-time bonus submission
+      // also ends with the level implied by the committed XP.
+      const createdLevelRows = await tx.execute(sql`
+        SELECT xp, level FROM player_scores WHERE player_id = ${playerId} FOR UPDATE
+      `) as unknown as { rows?: Array<{ xp: number; level: number }> };
+      const createdLevelRow = createdLevelRows.rows?.[0];
+      if (createdLevelRow) {
+        const authoritativeLevel = calcLevel(createdLevelRow.xp ?? 0);
+        if (authoritativeLevel > (createdLevelRow.level ?? 1)) {
+          await tx.update(playerScoresTable)
+            .set({ level: authoritativeLevel, updatedAt: new Date() })
+            .where(eq(playerScoresTable.playerId, playerId));
+        }
+      }
       return created;
     });
 
