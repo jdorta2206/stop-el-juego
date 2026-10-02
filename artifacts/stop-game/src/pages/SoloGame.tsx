@@ -1,5 +1,4 @@
 import { trackAnalyticsEvent } from "@/lib/analyticsClient";
-import { hasAndroidAppReferrer } from "@/lib/playBilling";
 import { useState, useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
@@ -67,26 +66,9 @@ const CHAOS_ROUND_TIME = 45;
 const MAX_ROUNDS = 3;
 const EASY_LETTERS = ["A", "C", "E", "I", "L", "M", "P", "R", "S", "T"];
 // Google has suspended the AdMob account through 31 Oct 2026. Advertising
-// must stay fail-closed everywhere until the suspension is resolved; the game
-// itself must never depend on an ad provider being available.
+// stays fail-closed everywhere until the suspension is resolved. The game
+// itself never depends on an ad provider being available.
 const REWARDED_ADS_DISABLED = true;
-/*
-  Previous logic deliberately allowed the native TWA to bypass the production
-  disable flag. That could still launch AdMob while the account is suspended.
-*/
-if (false) {
-    const params = new URLSearchParams(window.location.search);
-    const twaByReferrer = document.referrer.startsWith("android-app://app.replit.stop_el_juego.twa");
-    const twaBySource = params.get("source") === "googleplay-twa" || params.get("source") === "twa";
-    const androidStandalone = /Android/i.test(navigator.userAgent || "") &&
-      (window.matchMedia?.("(display-mode: standalone)").matches === true ||
-       window.matchMedia?.("(display-mode: fullscreen)").matches === true);
-    return !(twaByReferrer || twaBySource || androidStandalone || hasAndroidAppReferrer());
-  } catch {
-    return true;
-  }
-})();
-
 function getCrazyCategory(t: any): string | null {
   if (!t.crazyCategories || t.crazyCategories.length === 0) return null;
   if (Math.random() > 0.3) return null; // 30% chance
