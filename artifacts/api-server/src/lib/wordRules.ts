@@ -4,19 +4,22 @@
 // effects.
 
 /**
- * Normalize a player's answer for comparison: lowercase, trim, strip accents
- * and non-letters, collapse whitespace. Ñ/ñ is protected with a placeholder
- * BEFORE NFD decomposition — otherwise "ñ" → "n" + combining-tilde → "n",
- * which would make it indistinguishable from a plain N.
+ * Normalize a player's answer for comparison: lowercase, trim, expand common
+ * Latin ligatures, strip accents and non-letters, collapse whitespace. Ñ/ñ is
+ * protected with a placeholder BEFORE NFD decomposition — otherwise "ñ" → "n"
+ * + combining-tilde → "n", which would make it indistinguishable from a plain N.
  */
 export function normalizeWord(word: string): string {
   return word.toLowerCase().trim()
-    .replace(/ñ/g, "~")               // protect ñ from NFD
+    .replace(/œ/g, "oe")
+    .replace(/æ/g, "ae")
+    .replace(/ß/g, "ss")
+    .replace(/ñ/g, "~")
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")  // strip other accent marks
-    .replace(/[^a-z~\s]/g, "")        // strip numbers, emojis, symbols
-    .replace(/\s+/g, " ")             // collapse multiple spaces into one
-    .replace(/~/g, "ñ")               // restore ñ
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z~\s]/g, "")
+    .replace(/\s+/g, " ")
+    .replace(/~/g, "ñ")
     .trim();
 }
 
@@ -24,8 +27,7 @@ export function normalizeWord(word: string): string {
 export function isSafeInput(word: string): boolean {
   if (!word || word.trim().length === 0) return false;
   if (word.length > 60) return false;
-  if (!/[a-záéíóúàèìòùäëïöüñ]/i.test(word)) return false;
-  // Reject keyboard-mashing: 4+ consecutive identical characters (e.g. "aaaa", "bbbbb")
+  if (!/[a-záéíóúàèìòùäëïöüñœæß]/i.test(word)) return false;
   if (/(.)\1{3,}/.test(word.toLowerCase())) return false;
   return true;
 }
