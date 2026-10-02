@@ -87,8 +87,15 @@ export async function ensureIndexes(): Promise<void> {
     `CREATE INDEX IF NOT EXISTS play_subscriptions_player_state_expiry_idx ON play_subscriptions (player_id, state, expiry_time_ms)`,
     `CREATE TABLE IF NOT EXISTS score_voucher_uses (jti text PRIMARY KEY, expires_at timestamp NOT NULL, used_at timestamp NOT NULL DEFAULT NOW())`,
     `CREATE TABLE IF NOT EXISTS push_notification_throttles (throttle_key text PRIMARY KEY, claimed_at timestamp NOT NULL DEFAULT NOW())`,
+    // Spy usage belongs to a concrete room instance, not its recyclable
+    // 6-character code. Migrate the legacy key so a reused code cannot inherit
+    // an old player's spy budget.
     `CREATE TABLE IF NOT EXISTS room_spy_usage (room_code text NOT NULL, player_id text NOT NULL, round integer NOT NULL, uses integer NOT NULL DEFAULT 0, PRIMARY KEY (room_code, player_id, round))`,
-    `CREATE INDEX IF NOT EXISTS room_spy_usage_round_idx ON room_spy_usage (room_code, round)`,
+    `ALTER TABLE room_spy_usage ADD COLUMN IF NOT EXISTS room_id integer`,
+    `UPDATE room_spy_usage s SET room_id = r.id FROM rooms r WHERE s.room_id IS NULL AND r.room_code = s.room_code`,
+    `ALTER TABLE room_spy_usage DROP CONSTRAINT IF EXISTS room_spy_usage_pkey`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS room_spy_usage_room_player_round_uidx ON room_spy_usage (room_id, player_id, round)`,
+    `CREATE INDEX IF NOT EXISTS room_spy_usage_round_idx ON room_spy_usage (room_id, round)`,
     `CREATE INDEX IF NOT EXISTS push_notification_throttles_claimed_at_idx ON push_notification_throttles (claimed_at)`,
     `CREATE TABLE IF NOT EXISTS score_submission_idempotency (submission_id text PRIMARY KEY, player_id text NOT NULL, request_hash text NOT NULL, response_json text NOT NULL, created_at timestamp NOT NULL DEFAULT NOW())`,
     `CREATE INDEX IF NOT EXISTS score_submission_idempotency_player_id_idx ON score_submission_idempotency (player_id)`,
