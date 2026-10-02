@@ -727,11 +727,6 @@ router.post("/scores", scoreLimiter, async (req, res) => {
         await tx.execute(sql`SELECT pg_advisory_xact_lock(${scoreSeasonContext.seasonId}::bigint)`);
       }
 
-      if (verifiedVouchers.vouchers.length > 0) {
-        const claimedVouchers = await claimScoreVouchersTx(tx, verifiedVouchers.vouchers);
-        if (!claimedVouchers) throw new Error("SCORE_VOUCHER_ALREADY_USED");
-      }
-
       if (offlineSubmissionId) {
         const [idempotencyInserted] = await tx
           .insert(scoreSubmissionIdempotencyTable)
@@ -775,6 +770,11 @@ router.post("/scores", scoreLimiter, async (req, res) => {
 
           return { duplicate: true as const, player: null, response };
         }
+      }
+
+      if (verifiedVouchers.vouchers.length > 0) {
+        const claimedVouchers = await claimScoreVouchersTx(tx, verifiedVouchers.vouchers);
+        if (!claimedVouchers) throw new Error("SCORE_VOUCHER_ALREADY_USED");
       }
 
       let txPlayer;
