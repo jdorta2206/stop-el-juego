@@ -1216,13 +1216,19 @@ export default function SoloGame() {
           setTimeout(() => toast({ title: hhMsg }), 1200);
         }
       },
-      onError: async () => {
-        // 📡 Sin conexión: aparcamos la puntuación en la outbox para
-        // reenviarla cuando vuelva la red (evento `online` o próximo
-        // arranque). Sólo lo hacemos cuando el navegador reporta offline,
-        // para evitar duplicar puntuaciones cuando es un error de servidor
-        // que en realidad sí pudo persistir.
-        if (typeof navigator !== "undefined" && navigator.onLine === false) {
+      onError: async (error: any) => {
+        // 📡 Red inestable: en móvil/WebView navigator.onLine puede seguir
+        // diciendo "online" aunque el POST haya fallado. El submissionId es
+        // idempotente en el servidor, así que los fallos de transporte y 5xx
+        // pueden reintentarse sin riesgo de pagar dos veces.
+        const status = Number(error?.status ?? 0);
+        const retryableNetworkError =
+          (typeof navigator !== "undefined" && navigator.onLine === false) ||
+          error instanceof TypeError ||
+          status === 408 ||
+          status === 429 ||
+          status >= 500;
+        if (retryableNetworkError) {
           await enqueueScoreOutbox({
             submissionId: `${gameSubmissionIdRef.current ?? createSubmissionId()}${isBonus ? ":bonus" : ""}`,
             playerId: player.id,
