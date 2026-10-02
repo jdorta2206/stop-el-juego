@@ -106,6 +106,7 @@ export const SubmitScoreBody = zod.object({
   letter: zod.string(),
   mode: zod.string(),
   won: zod.boolean().optional(),
+  rewardRequestId: zod.string().min(20).max(128).optional(),
   bonus: zod
     .boolean()
     .optional()
