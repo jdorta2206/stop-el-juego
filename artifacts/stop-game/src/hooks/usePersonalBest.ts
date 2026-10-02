@@ -1,3 +1,33 @@
+import { useState, useCallback, useEffect, useRef } from "react";
+import { getApiUrl, authHeaders } from "@/lib/utils";
+
+type GameMode = "normal" | "quick" | "chaos" | "daily" | "random";
+type BestScores = Partial<Record<GameMode, number>>;
+
+const storageKey = (playerId?: string) =>
+  `stop_best_score_v2:${playerId || "guest"}`;
+
+async function syncBestsFromServer(playerId: string, signal?: AbortSignal): Promise<BestScores> {
+  try {
+    const r = await fetch(`${getApiUrl()}/api/ranking/progress/${playerId}`, { signal });
+    if (!r.ok) return {};
+    const data = await r.json();
+    return (data.personalBests && typeof data.personalBests === "object") ? data.personalBests : {};
+  } catch { return {}; }
+}
+
+async function saveBestsToServer(playerId: string, personalBests: BestScores) {
+  try {
+    await fetch(`${getApiUrl()}/api/ranking/progress/${playerId}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      body: JSON.stringify({ personalBests }),
+    });
+  } catch {}
+}
+
+export function usePersonalBest(mode: GameMode, playerId?: string) {
+  const [bests, setBests] = useState<BestScores>(() => {
     try { return JSON.parse(localStorage.getItem(storageKey(playerId)) || "{}"); }
     catch { return {}; }
   });
