@@ -17,11 +17,15 @@ export async function ensureIndexes(): Promise<void> {
     `CREATE INDEX IF NOT EXISTS player_scores_xp_desc_idx ON player_scores (xp DESC)`,
     `ALTER TABLE game_history ADD COLUMN IF NOT EXISTS room_code text`,
     `ALTER TABLE game_history ADD COLUMN IF NOT EXISTS room_id integer`,
-    `CREATE UNIQUE INDEX IF NOT EXISTS game_history_room_player_uidx_v3 ON game_history (room_id, player_id)`,
+    // v3 is the authoritative idempotency key: room_id identifies the
+    // concrete room instance, so recycled room codes cannot collide.
+    // Remove both legacy code-based indexes; keeping v2 would reintroduce
+    // false conflicts when a room code is reused for a later game.
     `DROP INDEX IF EXISTS game_history_room_player_uidx_v2`,
+    `DROP INDEX IF EXISTS game_history_room_player_player_uidx`,
     `DROP INDEX IF EXISTS game_history_room_player_uidx`,
-    `CREATE UNIQUE INDEX IF NOT EXISTS game_history_room_player_uidx_v2 ON game_history (room_code, player_id)`,
-    `DROP INDEX IF EXISTS game_history_room_player_uidx`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS game_history_room_player_uidx_v3 ON game_history (room_id, player_id)`,
+
     `CREATE INDEX IF NOT EXISTS game_history_created_at_idx ON game_history (created_at)`,
     `CREATE INDEX IF NOT EXISTS game_history_player_id_created_at_desc_idx ON game_history (player_id, created_at DESC)`,
     `CREATE INDEX IF NOT EXISTS game_history_player_id_score_desc_idx ON game_history (player_id, score DESC)`,
