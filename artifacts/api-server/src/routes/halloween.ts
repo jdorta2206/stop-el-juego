@@ -135,7 +135,7 @@ export async function recordHalloweenEventInTransaction(
   activeRoomStatus?: "playing" | "stopped",
   activeRoomRound?: number,
 ) {
-  const year = getEventYear(new Date(), preview);
+  const year = getHalloweenEventYear(new Date(), preview);
   if (year === null) return null;
   if (!playerId || !eventKey || eventKey.length > 160) return null;
       if (activeRoomId !== undefined) {
@@ -309,7 +309,7 @@ export async function recordHalloweenScareEventsInTransaction(
   activeRoomRound?: number,
   beforeEvents?: (tx: any) => Promise<void>,
 ) {
-  const year = getEventYear(new Date(), preview);
+  const year = getHalloweenEventYear(new Date(), preview);
   if (year === null || events.length === 0) return [];
   if (activeRoomId === undefined) return [];
 
@@ -452,7 +452,7 @@ export async function recordHalloweenScareEventsWithCooldown(
   roomRound: number,
   playerId: string,
 ) {
-  const year = getEventYear(new Date(), preview);
+  const year = getHalloweenEventYear(new Date(), preview);
   if (year === null) return { recorded: [], cooldownMs: 0, ended: false, cooldownClaimed: false, cooldownUntil: null };
 
   return await db.transaction(async (tx) => {
