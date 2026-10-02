@@ -105,7 +105,16 @@ async function bootstrapApp() {
     </HelmetProvider>
   );
 
+  // The static HTML splash sits above #root (z-index 99999). It must be
+  // dismissed after React mounts; otherwise a successful boot can still look
+  // like a blank app forever.
   if (typeof window !== "undefined") {
+    requestAnimationFrame(() => {
+      const splash = document.getElementById("html-splash");
+      if (!splash) return;
+      splash.classList.add("fade-out");
+      window.setTimeout(() => splash.remove(), 400);
+    });
     setTimeout(() => { ensureOfflineBundle(); }, 1500);
   }
 }
