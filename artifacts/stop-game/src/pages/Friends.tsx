@@ -197,7 +197,7 @@ function FriendCard({
                 color: copied ? "#4ade80" : "#f9a825",
               }}
             >
-              {copied ? <><Check size={12} />Copiado</> : <><Copy size={12} />Unirse</>}
+              {copied ? <><Check size={12} />Copiado</> : <><Copy size={12} />Copiar</>}
             </button>
           ) : (
             <ChallengeBtn onChallenge={handleChallenge} />
@@ -360,7 +360,7 @@ function OnlinePlayerCard({
                 color: copied ? "#4ade80" : "#f9a825",
               }}
             >
-              {copied ? <><Check size={11} />Copiado</> : <><Copy size={11} />Unirse</>}
+              {copied ? <><Check size={11} />Copiado</> : <><Copy size={11} />Copiar</>}
             </button>
           ) : (
             <ChallengeBtn onChallenge={handleChallenge} />
