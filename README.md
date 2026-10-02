@@ -102,3 +102,5 @@ origin they came from, carrying the session handoff in the URL hash (storage is
 per-origin). The `state` parameter is HMAC-signed (with `SESSION_SECRET`) and, on
 the same-origin path, bound to a single-use httpOnly nonce cookie for CSRF
 protection.
+
+<!-- Railway production redeploy trigger for master -->
