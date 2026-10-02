@@ -503,15 +503,15 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
     const score = Math.round(rawScore * 1.5);
     const won = winner?.playerId === p.playerId;
 
-    // Season lookup is intentionally best-effort before the score transaction.
-    // The game result must still persist if the auxiliary season subsystem is
-    // temporarily unavailable; when available, progress is created on the SAME
-    // transaction connection as leaderboard + history.
+    // Season progress is part of the authoritative result. If its lookup fails,
+    // do NOT commit history/leaderboard alone: that would permanently mark this
+    // room/player as finalized and prevent crash recovery from retrying Season.
     let seasonId: number | null = null;
     try {
       seasonId = (await getOrCreateActiveSeason()).id;
     } catch (err) {
-      console.error("[rooms] active season lookup failed:", err);
+      console.error("[rooms] active season lookup failed; retrying full result:", err);
+      throw err;
     }
 
     // 🔒 Durable idempotency claim MUST happen before any counter update.
@@ -620,7 +620,8 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
             ]);
           });
         } catch (err) {
-          console.error("[rooms] season progress failed; score/history kept:", err);
+          console.error("[rooms] season progress failed; rolling back full result for retry:", err);
+          throw err;
         }
       }
     });
