@@ -219,10 +219,13 @@ router.get("/online", async (_req, res) => {
   const cutoff = new Date(Date.now() - 90 * 1000);
   await presenceTableReady;
   const rows = await db.execute(sql`
-    SELECT player_id, room_code, last_seen
-    FROM player_presence
-    WHERE last_seen >= ${cutoff}
-    ORDER BY last_seen DESC
+    SELECT pp.player_id,
+           CASE WHEN r.is_public = TRUE THEN pp.room_code ELSE NULL END AS room_code,
+           pp.last_seen
+    FROM player_presence pp
+    LEFT JOIN rooms r ON r.room_code = pp.room_code
+    WHERE pp.last_seen >= ${cutoff}
+    ORDER BY pp.last_seen DESC
   `);
   const presenceRows = rows.rows as Array<{
     player_id: string;
