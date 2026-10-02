@@ -558,6 +558,10 @@ router.post("/scores", scoreLimiter, requirePlayerIdentity, async (req: AuthedRe
   const score = certifiedMode === "multiplayer" ? Math.round(cappedRaw * 1.5) : cappedRaw;
   // 🔒 Rewards must use the same authoritative mode as the score. Never let
   // the request body select the multiplayer XP/coin rules for a Solo voucher.
+  if (!isBonus && verified > 0 && certifiedMode !== "solo") {
+    res.status(422).json({ error: "INVALID_SCORE_VOUCHER_MODE" });
+    return;
+  }
   const effectiveMode = certifiedMode ?? "solo";
 
   const existing = await db
