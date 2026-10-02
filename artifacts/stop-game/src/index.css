@@ -47,7 +47,11 @@
       radial-gradient(circle at 100% 0%, hsla(48, 96%, 57%, 0.15) 0%, transparent 50%),
       radial-gradient(circle at 0% 100%, hsla(222, 47%, 11%, 0.2) 0%, transparent 50%);
     background-attachment: fixed;
-    min-height: 100vh;\n    min-height: 100dvh;\n    padding-left: env(safe-area-inset-left);\n    padding-right: env(safe-area-inset-right);\n    padding-bottom: env(safe-area-inset-bottom);
+    min-height: 100vh;
+    min-height: 100dvh;
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+    padding-bottom: env(safe-area-inset-bottom);
   }
 
   h1, h2, h3, h4, h5, h6 {
