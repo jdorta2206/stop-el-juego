@@ -221,6 +221,7 @@ async function saveToServer(
     await fetch(`${getApiUrl()}/api/ranking/progress/${playerId}`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...authHeaders() },
+      credentials: "include",
       body: JSON.stringify({ achievements, stats }),
     });
   } catch {}
