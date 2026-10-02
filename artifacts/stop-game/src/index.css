@@ -232,6 +232,11 @@
     @apply bg-white/30 rounded-full hover:bg-white/50 transition-colors;
   }
 }
+/* Game controls sit above the persistent bottom navigation on mobile/iOS. */
+.safe-area-game-bottom {
+  bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
+}
+
 /* iOS/Android safe-area hardening for fixed mobile UI. */
 @supports (padding: env(safe-area-inset-bottom)) {
   .safe-area-pb {
