@@ -211,7 +211,10 @@ router.post("/submit", async (req, res) => {
   if (submitted) {
     res.status(201).json({ submitted: true });
     return;
-  });
+  }
+
+  res.json({ submitted: false });
+});
 
 // GET /api/daily/rankings?language=es  → top 10 players for today
 router.get("/rankings", async (req, res) => {
