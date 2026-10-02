@@ -852,7 +852,11 @@ async function sweepStuckRooms() {
     const stuck = await db.select().from(roomsTable)
       .where(or(eq(roomsTable.status, "stopped"), eq(roomsTable.status, "playing")));
     for (const room of stuck) {
-      const endTs = roundEndTimestamp(room);
+      const sweepMeta = parseBluffMeta(room.stopperJson);
+      const sweepStopTimestamp = Number(sweepMeta?.stopTimestamp ?? sweepMeta?.stopper?.stopTimestamp);
+      const endTs = room.status === "stopped" && Number.isFinite(sweepStopTimestamp)
+        ? sweepStopTimestamp
+        : roundEndTimestamp(room);
       // Before the grace window elapses the normal /results path still advances
       // the round; only step in once it has fully passed. A fresh/in-progress
       // "playing" round has its deadline in the future, so it's skipped here.
