@@ -1547,19 +1547,20 @@ router.post("/validate", async (req, res) => {
   let aiTotalScore = 0;
   const validatedCollectionWords: Array<{ word: string; category: string }> = [];
 
-  for (const pr of playerResponses) {
+  // Validate independent categories concurrently so a slow AI fallback in one
+  // category cannot serialize the entire round.
+  const validatedRounds = await Promise.all(playerResponses.map(async (pr) => {
     const playerWord = pr.word?.trim() || "";
     const aiWord = getAiWord(letter, pr.category, language);
-
     const normPlayerWord = normalizeWord(playerWord);
+    const isPlayerWordValid = await isWordValidAsync(playerWord, letter, pr.category, language, playerId);
+    const isAiWordValid = aiWord.length > 0 && isWordValid(aiWord, letter, pr.category, language);
+    return { pr, playerWord, aiWord, normPlayerWord, isPlayerWordValid, isAiWordValid };
+  }));
 
+  for (const { pr, playerWord, aiWord, normPlayerWord, isPlayerWordValid, isAiWordValid } of validatedRounds) {
     // "Repetida" only means the player and the AI wrote the exact same word in the same category
     // (handled below by giving 5pts each). Using the same word in different categories is allowed.
-    // Player word: try dict first, AI fallback if not found (network/cache).
-    const isPlayerWordValid = await isWordValidAsync(playerWord, letter, pr.category, language, playerId);
-    // AI word comes from our own dictionary, so it never needs the AI fallback.
-    const isAiWordValid = aiWord.length > 0 && isWordValid(aiWord, letter, pr.category, language);
-
     let playerScore = 0;
     let aiScore = 0;
 
