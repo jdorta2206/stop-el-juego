@@ -158,9 +158,12 @@ export function ShareResultsModal({
       try {
         await navigator.share({ title: "STOP - El Juego", text: shareMessage, url });
         fireShared();
-      } catch {}
+      } catch (error) {
+        // Cancelling the native share must not copy or count as a share.
+        if ((error as DOMException)?.name === "AbortError") return;
+      }
     } else {
-      handleCopy();
+      await handleCopy();
     }
   };
 
