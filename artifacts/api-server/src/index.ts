@@ -115,8 +115,11 @@ async function initStripe(): Promise<boolean> {
     if (webhookHost) {
       console.log("Setting up managed Stripe webhook...");
       const webhookBaseUrl = `https://${webhookHost}`;
-      await withStartupTimeout(\n        stripeSync.findOrCreateManagedWebhook(
-        `${webhookBaseUrl}/api/stripe/webhook`
+      await withStartupTimeout(
+        stripeSync.findOrCreateManagedWebhook(
+          `${webhookBaseUrl}/api/stripe/webhook`
+        ),
+        "Stripe webhook setup"
       );
       console.log("Stripe webhook configured");
     }
