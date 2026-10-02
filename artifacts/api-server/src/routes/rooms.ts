@@ -202,8 +202,8 @@ const botDeps = {
   formatRoom: (room: any) => formatRoom(room),
   // Persists final scores to the global leaderboard when the bot's submission
   // happens to be the one that ends the match.
-  submitFinalScores: (players: any[], letter: string, roomCode?: string) =>
-    submitAllScoresToLeaderboard(players, letter, String(roomCode ?? "").toUpperCase()).catch(() => {}),
+  submitFinalScores: (players: any[], letter: string, roomCode?: string, roomId?: number) =>
+    submitAllScoresToLeaderboard(players, letter, String(roomCode ?? "").toUpperCase(), Number(roomId)).catch(() => {}),
   clearRoundLiveResponses: (roomCode: string) => {
     roomLiveResponses.delete(String(roomCode).toUpperCase());
   },
@@ -473,7 +473,7 @@ function resolveBluffs(players: any[], bluffVotes: Record<string, any>): any[] {
 }
 
 // Auto-submit all non-guest players' scores to the global leaderboard when the game ends
-async function submitAllScoresToLeaderboard(players: any[], letter: string, roomCode: string) {
+async function submitAllScoresToLeaderboard(players: any[], letter: string, roomCode: string, roomId: number) {
   // ⚖️ Deterministic tie-breaker — must match the client's winner display:
   //   1) higher final score
   //   2) was the stopper in the LAST round (rewards the player who triggered STOP)
@@ -528,10 +528,11 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
           letter,
           mode: "multiplayer",
           roomCode,
+          roomId,
           won,
         })
         .onConflictDoNothing({
-          target: [gameHistoryTable.roomCode, gameHistoryTable.playerId],
+          target: [gameHistoryTable.roomId, gameHistoryTable.playerId],
         })
         .returning({ id: gameHistoryTable.id });
       if (historyInsert.length === 0) return;
@@ -762,7 +763,7 @@ function applyRoundAdvanceSideEffects(room: any, sweptPlayers: any[], newStatus:
   }
   if (newStatus === "finished") {
     // 🏆 Persist final scores to the global leaderboard exactly once.
-    submitAllScoresToLeaderboard(sweptPlayers, room.currentLetter || "A", room.roomCode).catch(() => {});
+    submitAllScoresToLeaderboard(sweptPlayers, room.currentLetter || "A", room.roomCode, room.id).catch(() => {});
   }
 }
 
@@ -776,6 +777,7 @@ async function recoverFinishedRoomScoring() {
   const finished = await db
     .select({
       roomCode: roomsTable.roomCode,
+      roomId: roomsTable.id,
       playersJson: roomsTable.playersJson,
       currentLetter: roomsTable.currentLetter,
       updatedAt: roomsTable.updatedAt,
@@ -790,11 +792,11 @@ async function recoverFinishedRoomScoring() {
   const codes = finished.map((r) => r.roomCode);
   const historyRows = await db
     .select({
-      roomCode: gameHistoryTable.roomCode,
+      roomId: gameHistoryTable.roomId,
       playerId: gameHistoryTable.playerId,
     })
     .from(gameHistoryTable)
-    .where(inArray(gameHistoryTable.roomCode, codes));
+    .where(inArray(gameHistoryTable.roomId, finished.map((r) => r.roomId)));
 
   const finalized = new Set(
     historyRows
@@ -818,6 +820,7 @@ async function recoverFinishedRoomScoring() {
       players,
       room.currentLetter || "A",
       room.roomCode,
+      room.roomId,
     );
   }
 }
