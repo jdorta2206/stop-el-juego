@@ -159,10 +159,7 @@ export function getWeeklyShop(now: Date = new Date()): WeeklyShop {
 
 /** Effective price for the current weekly storefront, or null if not discounted. */
 export function dealPriceFor(itemId: string, now: Date = new Date()): number | null {
-  const weekly = getWeeklyShop(now).deals.find((deal) => deal.id === itemId);
-  if (weekly) return weekly.price;
-  // Keep legacy callers safe: an item can still have a daily offer outside the weekly deals.
-  return getDailyDeals(now).deals.find((deal) => deal.id === itemId)?.price ?? null;
+  return getWeeklyShop(now).deals.find((deal) => deal.id === itemId)?.price ?? null;
 }
 
 export function isWeeklyShopItem(itemId: string, now: Date = new Date()): boolean {
