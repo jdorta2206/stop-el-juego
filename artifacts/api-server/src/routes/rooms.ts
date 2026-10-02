@@ -1482,6 +1482,12 @@ router.post("/:roomCode/start", async (req, res) => {
       roundScore: 0,
       validAnswerCount: 0,
       finishedAt: undefined,
+      // Per-round result flags must never leak into the next round.
+      wasStopper: false,
+      bluffedCategories: [],
+      bluffedWords: {},
+      bluffResults: [],
+      answers: {},
       powerCard: newRound === 1
         ? MP_CARDS[Math.floor(Math.random() * MP_CARDS.length)]
         : (p.powerCard ?? null),
