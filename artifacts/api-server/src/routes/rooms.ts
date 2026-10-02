@@ -2411,7 +2411,9 @@ router.post("/:roomCode/rematch", writeLimiter, async (req, res) => {
           language: oldRoom.language,
           playersJson: JSON.stringify(players),
           stopperJson: JSON.stringify(rematchPackMeta),
-          isPublic: false,
+          // Preserve the finished room visibility so a public/streamer rematch
+          // remains discoverable as a public room instead of silently becoming private.
+          isPublic: oldRoom.isPublic ?? false,
         }).onConflictDoNothing({ target: roomsTable.roomCode }).returning({ roomCode: roomsTable.roomCode });
         if (inserted.length > 0) newCode = inserted[0].roomCode;
       }
