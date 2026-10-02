@@ -384,46 +384,64 @@ export async function upsertPlaySubscription(
     return { ownershipMismatch: true };
   }
 
-  // Same insert-if-absent/read-owner pattern as one-time products. It makes
-  // token ownership atomic from the caller's perspective under concurrent
-  // verification by different player identities.
-  await db
-    .insert(playSubscriptionsTable)
-    .values({
-      playerId,
-      productId: v.productId,
-      purchaseToken: v.purchaseToken,
-      orderId: v.orderId ?? null,
-      state: v.state,
-      expiryTimeMs: v.expiryTimeMs,
-      startTimeMs: v.startTimeMs,
-      rawJson: JSON.stringify(v.raw),
-      updatedAt: new Date(v.observedAtMs),
-    })
-    .onConflictDoNothing({ target: playSubscriptionsTable.purchaseToken });
+  // Serialize billing verification with account deletion. delete-account locks
+  // the same player row after inserting the revocation marker. If deletion won
+  // the race, this verification must not recreate a durable Premium entitlement.
+  return db.transaction(async (tx) => {
+    const locked = await tx.execute(sql`
+      SELECT player_id
+      FROM player_scores
+      WHERE player_id = ${playerId}
+      FOR UPDATE
+    `);
+    if (!(locked.rows?.length ?? 0)) return { ownershipMismatch: true };
 
-  const owner = await db
-    .select({ playerId: playSubscriptionsTable.playerId })
-    .from(playSubscriptionsTable)
-    .where(eq(playSubscriptionsTable.purchaseToken, v.purchaseToken))
-    .limit(1);
-  if (!owner[0] || owner[0].playerId !== playerId) {
-    return { ownershipMismatch: true };
-  }
+    const revoked = await tx.execute(sql`
+      SELECT 1
+      FROM revoked_player_ids
+      WHERE player_id = ${playerId}
+      LIMIT 1
+    `);
+    if (revoked.rows?.length) return { ownershipMismatch: true };
 
-  await db
-    .update(playSubscriptionsTable)
-    .set({
-      productId: v.productId,
-      orderId: v.orderId ?? null,
-      state: v.state,
-      expiryTimeMs: v.expiryTimeMs,
-      startTimeMs: v.startTimeMs,
-      rawJson: JSON.stringify(v.raw),
-      updatedAt: new Date(v.observedAtMs),
-    })
-    .where(sql`${eq(playSubscriptionsTable.purchaseToken, v.purchaseToken)} AND (${playSubscriptionsTable.updatedAt} IS NULL OR ${playSubscriptionsTable.updatedAt} <= ${new Date(v.observedAtMs)})`);
-  return { ownershipMismatch: false };
+    await tx
+      .insert(playSubscriptionsTable)
+      .values({
+        playerId,
+        productId: v.productId,
+        purchaseToken: v.purchaseToken,
+        orderId: v.orderId ?? null,
+        state: v.state,
+        expiryTimeMs: v.expiryTimeMs,
+        startTimeMs: v.startTimeMs,
+        rawJson: JSON.stringify(v.raw),
+        updatedAt: new Date(v.observedAtMs),
+      })
+      .onConflictDoNothing({ target: playSubscriptionsTable.purchaseToken });
+
+    const owner = await tx
+      .select({ playerId: playSubscriptionsTable.playerId })
+      .from(playSubscriptionsTable)
+      .where(eq(playSubscriptionsTable.purchaseToken, v.purchaseToken))
+      .limit(1);
+    if (!owner[0] || owner[0].playerId !== playerId) {
+      return { ownershipMismatch: true };
+    }
+
+    await tx
+      .update(playSubscriptionsTable)
+      .set({
+        productId: v.productId,
+        orderId: v.orderId ?? null,
+        state: v.state,
+        expiryTimeMs: v.expiryTimeMs,
+        startTimeMs: v.startTimeMs,
+        rawJson: JSON.stringify(v.raw),
+        updatedAt: new Date(v.observedAtMs),
+      })
+      .where(sql`${eq(playSubscriptionsTable.purchaseToken, v.purchaseToken)} AND (${playSubscriptionsTable.updatedAt} IS NULL OR ${playSubscriptionsTable.updatedAt} <= ${new Date(v.observedAtMs)})`);
+    return { ownershipMismatch: false };
+  });
 }
 
 // Used by the RTDN webhook when we don't yet know the playerId (the
