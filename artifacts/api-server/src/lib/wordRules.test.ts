@@ -7,6 +7,12 @@ describe("normalizeWord", () => {
     expect(normalizeWord("GATO")).toBe("gato");
   });
 
+  it("expands Latin ligatures consistently", () => {
+    expect(normalizeWord("œuf")).toBe("oeuf");
+    expect(normalizeWord("Æsir")).toBe("aesir");
+    expect(normalizeWord("straße")).toBe("strasse");
+  });
+
   it("strips accents but keeps the base letter", () => {
     expect(normalizeWord("Camión")).toBe("camion");
     expect(normalizeWord("árbol")).toBe("arbol");
