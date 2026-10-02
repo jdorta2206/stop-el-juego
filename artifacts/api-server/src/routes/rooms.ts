@@ -1621,6 +1621,12 @@ router.post("/:roomCode/leave", async (req, res) => {
     const leaving = players.find((p: any) => p.playerId === playerId);
     if (!leaving) return { kind: "noop" } as const;
 
+    // A finished room is the durable match snapshot used by final-score
+    // recovery and rematch. Do not delete or rewrite its roster when a player
+    // navigates away; otherwise a crash between "finished" and scoring could
+    // erase the only persisted source needed for recovery.
+    if (status === "finished") return { kind: "noop" } as const;
+
     // 👑 Mid-game leave: the player must actually be removed from the roster.
     // Keep every remaining player's score/answers untouched. If the host leaves,
     // migrate the host badge and authoritative host fields in the same locked
