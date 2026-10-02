@@ -2548,6 +2548,15 @@ router.post("/:roomCode/stop", async (req, res) => {
     return;
   }
 
+  // The server deadline is authoritative. Once the natural round timer has
+  // expired, a late client must not be able to become the stopper and claim
+  // the +5 speed bonus. The normal /results/sweeper path handles the timeout.
+  const stopDeadline = roundEndTimestamp(room);
+  if (stopDeadline && Date.now() >= stopDeadline) {
+    res.status(409).json({ error: "Round has already ended" });
+    return;
+  }
+
   const memberName = String(roomPlayers.find((p: any) => p.playerId === playerId)?.playerName ?? "?").slice(0, 30);
   const stopper = { id: playerId, name: memberName, stopTimestamp: Date.now() };
 
