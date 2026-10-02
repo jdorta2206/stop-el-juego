@@ -30,7 +30,12 @@ function loadStreak(playerId?: string): StreakData {
 }
 
 function saveStreak(playerId: string | undefined, data: StreakData) {
-  localStorage.setItem(storageKey(playerId), JSON.stringify(data));
+  try {
+    localStorage.setItem(storageKey(playerId), JSON.stringify(data));
+  } catch {
+    // Storage may be unavailable (e.g. Safari private/restricted mode).
+    // Streak state remains valid in React memory for the current session.
+  }
 }
 
 export function useStreak(playerId?: string) {
