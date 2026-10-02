@@ -447,7 +447,7 @@ export default function SoloGame() {
   // total. Reset per new game (where totalScore resets to 0), not per round.
   const scoreTokensRef = useRef<string[]>([]);
 
-  const startGame = () => {
+  const startGame = (newGame = true) => {
     if (halloweenScareTimerRef.current) clearTimeout(halloweenScareTimerRef.current);
     setHalloweenScare(null);
     void trackAnalyticsEvent("game_start", { metadata: { mode: isDailyMode ? "daily" : "solo" } });
@@ -460,9 +460,9 @@ export default function SoloGame() {
     // forever once the tutorial ends.
     setAiPersonality(pickRandomPersonality({ isTutorial: tutorialNow }));
     setAiComment(null);
-    // Reset spy uses only for a new game. startGame() is also used by
-    // nextRound(), so resetting here would incorrectly replenish the per-game
-    // spy allowance on every round.
+    // Spy allowance is per game, not per round. startGame(false) is used by
+    // nextRound(), so only replenish it when a genuinely new game begins.
+    if (newGame) setSpyUsesLeft(isPremium ? 2 : 1);
     setSpyReveal(null);
     // 🎲 Random mode — reroll the secret round time so each round feels different (15–55s)
     if (isRandomMode) setRandomRoundTime(15 + Math.floor(Math.random() * 41));
@@ -1283,7 +1283,7 @@ export default function SoloGame() {
       void maybeShowInterstitial(isPremium || premiumLoading);
     } else {
       setRound(r => r + 1);
-      startGame();
+      startGame(false);
     }
   };
 
