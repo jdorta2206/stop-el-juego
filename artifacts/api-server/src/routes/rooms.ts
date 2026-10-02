@@ -805,9 +805,7 @@ async function recoverFinishedRoomScoring() {
     .where(inArray(gameHistoryTable.roomId, finished.map((r) => r.roomId)));
 
   const finalized = new Set(
-    historyRows
-      .filter((r) => r.roomCode)
-      .map((r) => \`\${r.roomCode}:\${r.playerId}\`),
+    historyRows.map((r) => `${r.roomId}:${r.playerId}`),
   );
 
   for (const room of finished) {
