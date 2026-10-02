@@ -141,8 +141,16 @@ export default function Impossible() {
       pct !== null && s ? `📊 ${pct}% ${t.impossible.success} (${s.wins}/${s.attempts})` : "",
       url,
     ].filter(Boolean).join("\n");
-    await shareText(txt, t.impossible.title);
-    recordExternalStat(player?.id, { timesShared: 1 });
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: t.impossible.title, text: txt, url });
+      } else {
+        await navigator.clipboard.writeText(`${txt} ${url}`);
+      }
+      recordExternalStat(player?.id, { timesShared: 1 });
+    } catch {
+      // User cancellation or an unavailable share target is not a share.
+    }
   };
 
   const won = !!(outcome?.won || myAttempt?.won);
