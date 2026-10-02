@@ -85,6 +85,7 @@ export async function finalizePreviousSeason(currentSeasonId: number, today: str
       // snapshot had already been taken.
       const client = await pool.connect();
       let processed = 0;
+      let standingsCount = 0;
       try {
         await client.query("BEGIN");
         await client.query("SELECT pg_advisory_xact_lock($1::bigint)", [prevId]);
@@ -103,6 +104,7 @@ export async function finalizePreviousSeason(currentSeasonId: number, today: str
            ORDER BY xp DESC, id ASC`,
           [prevId],
         );
+        standingsCount = standings.rows.length;
 
         for (const r of standings.rows) {
           const rank = Number(r.rank);
@@ -162,7 +164,7 @@ export async function finalizePreviousSeason(currentSeasonId: number, today: str
       }
 
       console.log(
-        `[finalizePreviousSeason] Finalized season ${prevId} (${processed}/${standings.rows.length} players)`,
+        `[finalizePreviousSeason] Finalized season ${prevId} (${processed}/${standingsCount} players)`,
       );
     }
   } catch (e: unknown) {
