@@ -99,11 +99,11 @@ export const GetLeaderboardResponse = zod.object({
 export const SubmitScoreBody = zod.object({
   submissionId: zod.string().min(8).max(160).regex(/^[A-Za-z0-9._:-]+$/).optional(),
   playerId: zod.string(),
-  playerName: zod.string(),
-  avatarColor: zod.string().optional(),
+  playerName: zod.string().min(1).max(80),
+  avatarColor: zod.string().max(32).optional(),
   score: zod.number(),
-  letter: zod.string(),
-  mode: zod.string(),
+  letter: zod.string().min(1).max(1),
+  mode: zod.string().max(32),
   won: zod.boolean().optional(),
   bonus: zod
     .boolean()
