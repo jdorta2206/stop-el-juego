@@ -117,7 +117,11 @@ router.post("/submit", async (req, res) => {
   }
 
   const combo = getImpossibleCombo(today, language);
-  // Bound the submitted word before it reaches the AI validator and database.\n  // Impossible mode is public-facing and this endpoint must not accept arbitrarily\n  // large strings as an AI prompt or cache key.\n  const trimmed = String(word).trim().slice(0, 100);\n  let won = false;\n
+  // Bound the submitted word before it reaches the AI validator and database.
+  // Impossible mode is public-facing and must not accept arbitrarily large
+  // strings as an AI prompt or cache key.
+  const trimmed = String(word).trim().slice(0, 100);
+  let won = false;\n
   if (!surrendered && trimmed.length >= 2) {
     const normalize = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
     const startsRight = normalize(trimmed).startsWith(normalize(combo.letter));
