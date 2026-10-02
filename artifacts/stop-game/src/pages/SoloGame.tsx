@@ -1082,7 +1082,7 @@ export default function SoloGame() {
     }
   }, [gameState, results]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const submitToLeaderboard = (finalScore: number, finalAiScore: number, opts?: { bonus?: boolean }) => {
+  const submitToLeaderboard = (finalScore: number, finalAiScore: number, opts?: { bonus?: boolean; rewardRequestId?: string }) => {
     if (!player || player.loginMethod === "guest") return;
     if (finalScore <= 0) return;
     const won = finalScore > finalAiScore;
@@ -1097,6 +1097,7 @@ export default function SoloGame() {
         mode: isDailyMode ? "daily" : "solo",
         won,
         bonus: isBonus,
+        rewardRequestId: opts?.rewardRequestId,
         scoreTokens: scoreTokensRef.current,
       }
     }, {
@@ -1360,7 +1361,7 @@ export default function SoloGame() {
     return "";
   };
 
-  const handleRewardedComplete = async (reward: number) => {
+  const handleRewardedComplete = async (reward: number, rewardRequestId?: string) => {
     // The rewarded component keeps the game paused while the native ad is
     // actually on screen. Only resume after the reward result is confirmed.
     resumeGameTimer();
@@ -1384,7 +1385,8 @@ export default function SoloGame() {
       // the server must not consume the round vouchers a second time.
       const bonus = Math.max(0, totalScore);
       if (bonus > 0) {
-        submitToLeaderboard(bonus, aiTotalScore, { bonus: true });
+        if (!rewardRequestId) return;
+        submitToLeaderboard(bonus, aiTotalScore, { bonus: true, rewardRequestId });
         setTotalScore(prev => prev + bonus);
         setDoubleUsed(true);
       }
