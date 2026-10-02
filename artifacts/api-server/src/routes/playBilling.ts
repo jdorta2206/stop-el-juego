@@ -193,18 +193,21 @@ router.post("/verify-pack", async (req: Request, res: Response) => {
     const ownership = await recordProductPurchase(claimedPlayerId, verified);
     if (ownership.ownershipMismatch) return res.status(403).json({ error: "Compra ya vinculada a otro jugador" });
 
+    // Acknowledge the purchase before granting the entitlement. If Google Play
+    // cannot acknowledge it, do not grant cosmetics and return 503 so the
+    // client can retry. This prevents an unacknowledged purchase from leaving
+    // a durable entitlement if Google later auto-refunds it.
+    const acknowledged = await acknowledgeProduct(verified.productId, verified.purchaseToken, verified.acknowledgementState === 1);
+    if (!acknowledged) {
+      return res.status(503).json({ error: "No se pudo confirmar la compra con Google Play" });
+    }
+
     const grantResult = await grantWorldCupPack(claimedPlayerId);
     if (!grantResult.ok) {
       console.error("❌ Error al conceder el pack:", grantResult.error);
       return res.status(500).json({ error: "Error al conceder los cosméticos" });
     }
 
-    const acknowledged = await acknowledgeProduct(verified.productId, verified.purchaseToken, verified.acknowledgementState === 1);
-    if (!acknowledged) {
-      // The inventory grant is idempotent, so retrying this request is safe.
-      // Do not report success while Google Play still considers the purchase unacknowledged.
-      return res.status(503).json({ error: "No se pudo confirmar la compra con Google Play" });
-    }
     console.log(`✅ Pack Mundial Play concedido a ${claimedPlayerId}`);
     return res.json({ granted: true, items: grantResult.granted, total: grantResult.total });
   } catch (error: any) {
