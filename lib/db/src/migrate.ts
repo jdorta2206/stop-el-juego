@@ -93,116 +93,14 @@ export async function ensureIndexes(): Promise<void> {
     // and start every live room with a clean budget.
     `CREATE TABLE IF NOT EXISTS room_spy_usage (room_code text NOT NULL, player_id text NOT NULL, round integer NOT NULL, uses integer NOT NULL DEFAULT 0, PRIMARY KEY (room_code, player_id, round))`,
     `ALTER TABLE room_spy_usage ADD COLUMN IF NOT EXISTS room_id integer`,
-    // Legacy rows cannot be mapped safely because room_code is recyclable.
-    // Clear them only while the legacy primary key still exists; after the
-    // constraint is removed this block becomes a no-op on every later boot.
-    `DO $do$ BEGIN
-       IF EXISTS (
-         SELECT 1 FROM pg_constraint
-         WHERE conname = 'room_spy_usage_pkey'
-           AND conrelid = 'room_spy_usage'::regclass
-       ) THEN
-         DELETE FROM room_spy_usage;
-         ALTER TABLE room_spy_usage DROP CONSTRAINT room_spy_usage_pkey;
-       END IF;
-    END $doimport { sql } from "drizzle-orm";
-import { db } from "./index";
-
-/**
- * Creates all critical indexes idempotently. Safe to call on every boot.
- * These indexes are required for the app to handle thousands of concurrent
- * players without timing out on ranking, leaderboard and room queries.
- */
-let _indexesReady = false;
-export function indexesReady(): boolean {
-  return _indexesReady;
-}
-
-export async function ensureIndexes(): Promise<void> {
-  const stmts = [
-    `CREATE INDEX IF NOT EXISTS player_scores_total_score_desc_idx ON player_scores (total_score DESC)`,
-    `CREATE INDEX IF NOT EXISTS player_scores_xp_desc_idx ON player_scores (xp DESC)`,
-    `ALTER TABLE game_history ADD COLUMN IF NOT EXISTS room_code text`,
-    `ALTER TABLE game_history ADD COLUMN IF NOT EXISTS room_id integer`,
-    // v3 is the authoritative idempotency key: room_id identifies the
-    // concrete room instance, so recycled room codes cannot collide.
-    // Remove both legacy code-based indexes; keeping v2 would reintroduce
-    // false conflicts when a room code is reused for a later game.
-    `DROP INDEX IF EXISTS game_history_room_player_uidx_v2`,
-    `DROP INDEX IF EXISTS game_history_room_player_uidx`,
-    `CREATE UNIQUE INDEX IF NOT EXISTS game_history_room_player_uidx_v3 ON game_history (room_id, player_id)`,
-
-    `CREATE INDEX IF NOT EXISTS game_history_created_at_idx ON game_history (created_at)`,
-    `CREATE INDEX IF NOT EXISTS game_history_player_id_created_at_desc_idx ON game_history (player_id, created_at DESC)`,
-    `CREATE INDEX IF NOT EXISTS game_history_player_id_score_desc_idx ON game_history (player_id, score DESC)`,
-    `CREATE INDEX IF NOT EXISTS rooms_is_public_status_created_at_idx ON rooms (is_public, status, created_at)`,
-    `CREATE INDEX IF NOT EXISTS rooms_status_updated_at_idx ON rooms (status, updated_at)`,
-    `ALTER TABLE rooms ADD COLUMN IF NOT EXISTS tournament_id integer`,
-    `ALTER TABLE rooms ADD COLUMN IF NOT EXISTS tournament_match_id text`,
-    `CREATE UNIQUE INDEX IF NOT EXISTS rooms_tournament_match_uidx ON rooms (tournament_id, tournament_match_id) WHERE tournament_id IS NOT NULL AND tournament_match_id IS NOT NULL`,
-    `CREATE UNIQUE INDEX IF NOT EXISTS follows_follower_followed_uidx ON follows (follower_id, followed_id)`,
-    `CREATE INDEX IF NOT EXISTS follows_followed_id_idx ON follows (followed_id)`,
-    `CREATE INDEX IF NOT EXISTS push_subscriptions_player_id_idx ON push_subscriptions (player_id)`,
-    `ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS enabled boolean NOT NULL DEFAULT TRUE`,
-    `ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS hour_local integer NOT NULL DEFAULT 20`,
-    `ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS tz_offset_minutes integer NOT NULL DEFAULT 0`,
-    `ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS muted_until bigint NOT NULL DEFAULT 0`,
-    `ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS origin text`,
-    `CREATE INDEX IF NOT EXISTS tournaments_is_public_status_created_at_desc_idx ON tournaments (is_public, status, created_at DESC)`,
-    `ALTER TABLE player_scores ADD COLUMN IF NOT EXISTS streak_days_json text NOT NULL DEFAULT '[]'`,
-    `ALTER TABLE player_scores ADD COLUMN IF NOT EXISTS coins integer NOT NULL DEFAULT 0`,
-    `ALTER TABLE player_scores ADD COLUMN IF NOT EXISTS inventory_json text NOT NULL DEFAULT '{"avatars":[],"frames":[]}'`,
-    `ALTER TABLE player_scores ADD COLUMN IF NOT EXISTS profile_picture text`,
-    `ALTER TABLE player_scores ADD COLUMN IF NOT EXISTS equipped_avatar text`,
-    `ALTER TABLE player_scores ADD COLUMN IF NOT EXISTS equipped_frame text`,
-    `ALTER TABLE player_scores ADD COLUMN IF NOT EXISTS equipped_background text`,
-    `ALTER TABLE player_scores ADD COLUMN IF NOT EXISTS equipped_title text`,
-    `ALTER TABLE player_scores ADD COLUMN IF NOT EXISTS prestige_claims_json text NOT NULL DEFAULT '[]'`,
-    `ALTER TABLE player_scores ADD COLUMN IF NOT EXISTS collection_claims_json text NOT NULL DEFAULT '[]'`,
-    `ALTER TABLE player_scores ADD COLUMN IF NOT EXISTS notified_final_season_id integer`,
-    `CREATE TABLE IF NOT EXISTS season_finals (id serial PRIMARY KEY, season_id integer NOT NULL, player_id text NOT NULL, final_rank integer NOT NULL, final_xp integer NOT NULL, total_players integer NOT NULL, awarded_cosmetic text, created_at timestamp NOT NULL DEFAULT NOW())`,
-    `CREATE UNIQUE INDEX IF NOT EXISTS season_finals_season_player_uidx ON season_finals (season_id, player_id)`,
-    `CREATE INDEX IF NOT EXISTS season_finals_player_id_idx ON season_finals (player_id)`,
-    `CREATE INDEX IF NOT EXISTS daily_results_date_score_desc_idx ON daily_results (challenge_date, score DESC)`,
-    `CREATE INDEX IF NOT EXISTS daily_results_player_date_idx ON daily_results (player_id, challenge_date)`,
-    // A plain SELECT-then-INSERT is vulnerable to two concurrent submissions.
-    // Remove any legacy duplicates first, keeping the highest score, then enforce
-    // the intended one-result-per-player-per-day invariant at the DB level.
-    `DELETE FROM daily_results a USING daily_results b
-       WHERE a.player_id = b.player_id
-         AND a.challenge_date = b.challenge_date
-         AND (a.score < b.score OR (a.score = b.score AND a.id < b.id))`,
-    `CREATE UNIQUE INDEX IF NOT EXISTS daily_results_player_date_uidx
-       ON daily_results (player_id, challenge_date)`,
-    `CREATE TABLE IF NOT EXISTS cron_locks (lock_key text PRIMARY KEY, last_run_date text NOT NULL, updated_at timestamp NOT NULL DEFAULT NOW())`,
-    `CREATE TABLE IF NOT EXISTS revoked_player_ids (player_id text PRIMARY KEY, revoked_at timestamp NOT NULL DEFAULT NOW())`,
-    `CREATE INDEX IF NOT EXISTS revoked_player_ids_revoked_at_idx ON revoked_player_ids (revoked_at)`,
-    `CREATE TABLE IF NOT EXISTS api_rate_limits (bucket_key text PRIMARY KEY, window_start timestamp NOT NULL, hits integer NOT NULL DEFAULT 0)`,
-    `CREATE TABLE IF NOT EXISTS ai_word_validation_claims (cache_key text PRIMARY KEY, claimed_at timestamp NOT NULL DEFAULT NOW())`,
-    `CREATE TABLE IF NOT EXISTS ai_word_validation_daily_quota (quota_date date NOT NULL, scope text NOT NULL, used integer NOT NULL DEFAULT 0, PRIMARY KEY (quota_date, scope))`,
-    `CREATE TABLE IF NOT EXISTS guest_stats (day text PRIMARY KEY, games integer NOT NULL DEFAULT 0, conversions integer NOT NULL DEFAULT 0)`,
-    `CREATE TABLE IF NOT EXISTS seasons (id serial PRIMARY KEY, start_date text NOT NULL, end_date text NOT NULL, theme_json text NOT NULL DEFAULT '{}', created_at timestamp NOT NULL DEFAULT NOW())`,
-    `CREATE TABLE IF NOT EXISTS season_progress (id serial PRIMARY KEY, player_id text NOT NULL, season_id integer NOT NULL, xp integer NOT NULL DEFAULT 0, claimed_tiers text NOT NULL DEFAULT '{"free":[],"premium":[]}', missions_json text NOT NULL DEFAULT '{}', updated_at timestamp NOT NULL DEFAULT NOW())`,
-    `CREATE INDEX IF NOT EXISTS seasons_dates_idx ON seasons (start_date, end_date)`,
-    `CREATE UNIQUE INDEX IF NOT EXISTS seasons_start_date_uidx ON seasons (start_date)`,
-    `CREATE UNIQUE INDEX IF NOT EXISTS season_progress_player_season_uidx ON season_progress (player_id, season_id)`,
-    `CREATE INDEX IF NOT EXISTS season_progress_season_xp_desc_idx ON season_progress (season_id, xp DESC)`,
-    `CREATE TABLE IF NOT EXISTS play_subscriptions (id serial PRIMARY KEY, player_id text NOT NULL, product_id text NOT NULL, purchase_token text NOT NULL UNIQUE, order_id text, state text NOT NULL DEFAULT 'ACTIVE', expiry_time_ms bigint NOT NULL DEFAULT 0, start_time_ms bigint NOT NULL DEFAULT 0, raw_json text NOT NULL DEFAULT '{}', created_at timestamp NOT NULL DEFAULT NOW(), updated_at timestamp NOT NULL DEFAULT NOW())`,
-    `CREATE TABLE IF NOT EXISTS play_product_purchases (id serial PRIMARY KEY, player_id text NOT NULL, product_id text NOT NULL, purchase_token text NOT NULL UNIQUE, order_id text, purchase_state bigint NOT NULL DEFAULT 0, raw_json text NOT NULL DEFAULT '{}', created_at timestamp NOT NULL DEFAULT NOW(), updated_at timestamp NOT NULL DEFAULT NOW())`,
-    `CREATE INDEX IF NOT EXISTS play_product_purchases_player_id_idx ON play_product_purchases (player_id)`,
-    `CREATE INDEX IF NOT EXISTS play_subscriptions_player_id_idx ON play_subscriptions (player_id)`,
-    `CREATE INDEX IF NOT EXISTS play_subscriptions_player_state_expiry_idx ON play_subscriptions (player_id, state, expiry_time_ms)`,
-    `CREATE TABLE IF NOT EXISTS score_voucher_uses (jti text PRIMARY KEY, expires_at timestamp NOT NULL, used_at timestamp NOT NULL DEFAULT NOW())`,
-    `CREATE TABLE IF NOT EXISTS push_notification_throttles (throttle_key text PRIMARY KEY, claimed_at timestamp NOT NULL DEFAULT NOW())`,
-    // Spy usage belongs to a concrete room instance, not its recyclable
-    // 6-character code. Usage is ephemeral, so legacy rows cannot be safely
-    // mapped after a code is recycled; discard them during this schema upgrade
-    // and start every live room with a clean budget.
-    `CREATE TABLE IF NOT EXISTS room_spy_usage (room_code text NOT NULL, player_id text NOT NULL, round integer NOT NULL, uses integer NOT NULL DEFAULT 0, PRIMARY KEY (room_code, player_id, round))`,
-    `ALTER TABLE room_spy_usage ADD COLUMN IF NOT EXISTS room_id integer`,
 ,
-    // If a previous boot stopped after dropping the PK but before completing
-    // the migration, discard only unmigrated legacy rows before SET NOT NULL.
+    // Legacy rows cannot be mapped safely because room_code is recyclable.
+    // Drop the old key on the first upgraded boot; IF EXISTS makes it a no-op
+    // thereafter. Any unmigrated legacy rows have NULL room_id and are removed
+    // before the new NOT NULL invariant is enforced.
+    `ALTER TABLE room_spy_usage DROP CONSTRAINT IF EXISTS room_spy_usage_pkey`,
+    `DELETE FROM room_spy_usage WHERE room_id IS NULL`,
+    `ALTER TABLE room_spy_usage ALTER COLUMN room_id SET NOT NULL`,
     `DELETE FROM room_spy_usage WHERE room_id IS NULL`,
     `ALTER TABLE room_spy_usage ALTER COLUMN room_id SET NOT NULL`,
     `CREATE UNIQUE INDEX IF NOT EXISTS room_spy_usage_room_player_round_uidx ON room_spy_usage (room_id, player_id, round)`,
