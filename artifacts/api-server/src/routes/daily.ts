@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import { db, dailyResultsTable, playerScoresTable } from "@workspace/db";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { verifyClaimedIdentity } from "../lib/playerAuth";
-import { sumVerifiedBasePersistent, ceilingFromBase, absoluteCeiling } from "../lib/scoreToken";
+import { verifyScoreVouchers, claimScoreVouchersTx, ceilingFromBase, absoluteCeiling } from "../lib/scoreToken";
 import { applyAuthoritativeSeasonEventsTx, getOrCreateActiveSeason, getOrCreateProgress } from "./season";
 
 const router: IRouter = Router();
@@ -124,7 +124,8 @@ router.post("/submit", async (req, res) => {
   // posted score to a ceiling derived from the verified round voucher(s), or a
   // flat absolute ceiling when none are present (offline play). Never reject,
   // only clamp, so a legit daily score is never lost.
-  const { base: verifiedBase, verified } = await sumVerifiedBasePersistent(scoreTokens, 1);
+  const verifiedVouchers = await verifyScoreVouchers(scoreTokens, 1);
+  const { base: verifiedBase, verified } = verifiedVouchers;
   const suppliedTokens = Array.isArray(scoreTokens) && scoreTokens.length > 0;
   if (suppliedTokens && verified === 0) {
     res.status(422).json({ error: "INVALID_SCORE_VOUCHER" });
@@ -139,6 +140,10 @@ router.post("/submit", async (req, res) => {
   const season = await getOrCreateActiveSeason();
   const seasonProgress = await getOrCreateProgress(playerId, season.id);
   const submitted = await db.transaction(async (tx) => {
+    if (verifiedVouchers.vouchers.length > 0) {
+      const claimedVouchers = await claimScoreVouchersTx(tx, verifiedVouchers.vouchers);
+      if (!claimedVouchers) throw new Error("SCORE_VOUCHER_ALREADY_USED");
+    }
     const inserted = await tx
       .insert(dailyResultsTable)
       .values({
