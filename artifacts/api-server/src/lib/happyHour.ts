@@ -1,11 +1,14 @@
 /**
- * Happy Hour — daily 21:00-22:00 local-time event.
+ * Happy Hour — daily 21:00-22:00 UTC reward window.
+ *
+ * Reward eligibility is deliberately server-time based. Client-supplied
+ * timezone data is suitable for notification scheduling/display only and must
+ * never decide an XP/coin multiplier.
  *
  * Mechanics:
- *  - During the active window, every score submission grants x2 XP and x2
- *    coins for that player. Server is the source of truth — clients can't
- *    fake their local time.
- *  - Three timezone-aware push notifications fire per day per player:
+ *  - During the active UTC window, every score submission grants x2 XP and x2
+ *    coins. The server clock is the sole authority.
+ *  - Three timezone-aware push notifications may still fire per day per player:
  *      pre  (20:45 local)  → "starts in 15 min"
  *      live (21:00 local)  → "ACTIVE now"
  *      last (21:50 local)  → "10 min left"
@@ -20,6 +23,13 @@ export const HAPPY_HOUR_DURATION_MIN = 60;
 export const HAPPY_HOUR_END_LOCAL_MIN =
   HAPPY_HOUR_START_LOCAL_MIN + HAPPY_HOUR_DURATION_MIN;
 export const HAPPY_HOUR_MULTIPLIER = 2;
+
+/** Server-authoritative reward window. Never derive reward eligibility from client timezone data. */
+export function isHappyHourActiveUtc(nowMs: number = Date.now()): boolean {
+  const d = new Date(nowMs);
+  const utcMinutes = d.getUTCHours() * 60 + d.getUTCMinutes();
+  return utcMinutes >= HAPPY_HOUR_START_LOCAL_MIN && utcMinutes < HAPPY_HOUR_END_LOCAL_MIN;
+}
 
 /** Pre/live/last-call local minutes-of-day for the cron to match against. */
 export const HAPPY_HOUR_PRE_LOCAL_MIN = HAPPY_HOUR_START_LOCAL_MIN - 15;  // 20:45
