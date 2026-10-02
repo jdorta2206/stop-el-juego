@@ -87,6 +87,9 @@ export async function ensureOfflineBundle(): Promise<OfflineBundle | null> {
 
 function normalizeWord(word: string): string {
   return word.toLowerCase().trim()
+    .replace(/œ/g, "oe")
+    .replace(/æ/g, "ae")
+    .replace(/ß/g, "ss")
     .replace(/ñ/g, "~")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
@@ -99,7 +102,7 @@ function normalizeWord(word: string): string {
 function isSafeInput(word: string): boolean {
   if (!word || word.trim().length === 0) return false;
   if (word.length > 60) return false;
-  if (!/[a-záéíóúàèìòùäëïöüñ]/i.test(word)) return false;
+  if (!/[a-záéíóúàèìòùäëïöüñœæß]/i.test(word)) return false;
   if (/(.)\1{3,}/.test(word.toLowerCase())) return false;
   return true;
 }
