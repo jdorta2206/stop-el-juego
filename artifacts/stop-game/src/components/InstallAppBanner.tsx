@@ -39,7 +39,8 @@ export function InstallAppBanner() {
 
   useEffect(() => {
     if (isInstalled || isStandalone()) return;
-    const dismissedAt = Number(localStorage.getItem(DISMISS_KEY) || 0);
+    let dismissedAt = 0;
+    try { dismissedAt = Number(localStorage.getItem(DISMISS_KEY) || 0); } catch {}
     if (dismissedAt && Date.now() - dismissedAt < COOLDOWN_MS) return;
     const eligible = (platform === "android" && canInstall) || platform === "ios";
     if (!eligible) return;
@@ -49,7 +50,7 @@ export function InstallAppBanner() {
 
   const dismiss = () => {
     setVisible(false);
-    localStorage.setItem(DISMISS_KEY, String(Date.now()));
+    try { localStorage.setItem(DISMISS_KEY, String(Date.now())); } catch {}
   };
 
   const handleInstall = async () => {
