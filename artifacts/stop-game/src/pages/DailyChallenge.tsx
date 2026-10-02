@@ -18,6 +18,7 @@ interface DailyChallenge {
 
 interface DailyRanking {
   rank: number;
+  playerId: string;
   playerName: string;
   avatarColor: string;
   score: number;
@@ -127,7 +128,7 @@ export default function DailyChallenge() {
   }
 
   const myRank = player
-    ? rankings.findIndex(r => r.playerName === player.name) + 1
+    ? rankings.findIndex(r => r.playerId === player.id) + 1
     : 0;
 
   return (
@@ -251,7 +252,7 @@ export default function DailyChallenge() {
           )}
 
           {playedToday && rankings.map((r, i) => {
-            const isMe = player && r.playerName === player.name;
+            const isMe = player && r.playerId === player.id;
             return (
               <motion.div
                 key={i}
