@@ -358,7 +358,12 @@ export async function applyAuthoritativeSeasonEventsTx(
     WHERE id = ${seasonId} AND end_date >= ${today}
     LIMIT 1
   `)) as unknown as SqlResult<{ "?column?": number }>;
-  if ((activeSeason.rows?.length ?? 0) === 0) return;
+  if ((activeSeason.rows?.length ?? 0) === 0) {
+    // An authoritative result must never commit without its season event.
+    // Throw so the caller's transaction rolls back the idempotency claim and
+    // leaderboard changes; recovery can then retry against the new season.
+    throw new Error(`Season ${'${'}seasonId} is no longer active`);
+  }
 
   const locked = (await tx.execute(sql`
     SELECT id, missions_json
