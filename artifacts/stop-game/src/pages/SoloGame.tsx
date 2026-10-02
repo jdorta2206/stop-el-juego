@@ -430,6 +430,10 @@ export default function SoloGame() {
   const submitScoreMutation = useSubmitScore();
   const queryClient = useQueryClient();
   const timerRef = useRef<NodeJS.Timeout>(null);
+  // Absolute round deadline: mobile Safari/WebView can suspend setInterval while
+  // backgrounded, so the remaining time must be derived from wall-clock time.
+  const roundDeadlineRef = useRef<number | null>(null);
+  const rewardedPauseStartedAtRef = useRef<number | null>(null);
   const stopTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hiddenRevealTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Guards to prevent handleStop / results-accumulation from firing more than once per round
@@ -550,6 +554,8 @@ export default function SoloGame() {
 
     setGameState("PLAYING");
     setTimeLeft(roundTime);
+    roundDeadlineRef.current = Date.now() + roundTime * 1000;
+    rewardedPauseStartedAtRef.current = null;
     setRewardedUsed(false);
     setHintUsed(false);
     setHintReveal(null);
@@ -565,23 +571,23 @@ export default function SoloGame() {
 
     timerRef.current = setInterval(() => {
       if (gameTimerPausedRef.current || isGameTimerPaused()) return;
-      setTimeLeft(prev => {
-        if (prev <= 1) {
-          // Clear the interval immediately (synchronously) so this branch never fires twice
-          if (timerRef.current) {
-            clearInterval(timerRef.current);
-            timerRef.current = null;
-          }
-          // Schedule handleStop outside the state-setter (safe async trigger)
-          stopTimeoutRef.current = setTimeout(() => {
-            stopTimeoutRef.current = null;
-            void handleStop();
-          }, 0);
-          return 0;
+      const deadline = roundDeadlineRef.current;
+      if (deadline == null) return;
+      const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+      setTimeLeft(remaining);
+      if (remaining <= 0) {
+        // Clear the interval immediately so this branch cannot fire twice.
+        if (timerRef.current) {
+          clearInterval(timerRef.current);
+          timerRef.current = null;
         }
-        return prev - 1;
-      });
-    }, 1000);
+        // Schedule handleStop outside the interval callback.
+        stopTimeoutRef.current = setTimeout(() => {
+          stopTimeoutRef.current = null;
+          void handleStop();
+        }, 0);
+      }
+    }, 250);
   };
 
   const toggleBluff = (category: string) => {
@@ -616,8 +622,21 @@ export default function SoloGame() {
   // countdown cannot continue even if the shared module is duplicated by the
   // bundler or the ad component lives in another chunk.
   useEffect(() => {
-    const pause = () => { gameTimerPausedRef.current = true; };
-    const resume = () => { gameTimerPausedRef.current = false; };
+    const pause = () => {
+      gameTimerPausedRef.current = true;
+      rewardedPauseStartedAtRef.current = Date.now();
+    };
+    const resume = () => {
+      const pausedAt = rewardedPauseStartedAtRef.current;
+      if (pausedAt != null && roundDeadlineRef.current != null) {
+        // Rewarded ads intentionally pause the round; extend the deadline by
+        // the exact paused duration. Normal backgrounding does not set this flag
+        // and therefore still consumes real elapsed round time.
+        roundDeadlineRef.current += Math.max(0, Date.now() - pausedAt);
+      }
+      rewardedPauseStartedAtRef.current = null;
+      gameTimerPausedRef.current = false;
+    };
     window.addEventListener("stop:rewarded-ad-pause", pause);
     window.addEventListener("stop:rewarded-ad-resume", resume);
     return () => {
@@ -640,6 +659,8 @@ export default function SoloGame() {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
       timerRef.current = null;
+      roundDeadlineRef.current = null;
+      rewardedPauseStartedAtRef.current = null;
       if (stopTimeoutRef.current) clearTimeout(stopTimeoutRef.current);
       stopTimeoutRef.current = null;
       if (hiddenRevealTimeoutRef.current) clearTimeout(hiddenRevealTimeoutRef.current);
