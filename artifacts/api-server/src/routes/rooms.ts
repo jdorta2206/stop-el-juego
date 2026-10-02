@@ -789,7 +789,6 @@ async function recoverFinishedRoomScoring() {
 
   if (finished.length === 0) return;
 
-  const codes = finished.map((r) => r.roomCode);
   const historyRows = await db
     .select({
       roomId: gameHistoryTable.roomId,
