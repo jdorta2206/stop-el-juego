@@ -14,7 +14,7 @@ type Platform = "android" | "ios" | "other";
 function detectPlatform(): Platform {
   if (typeof navigator === "undefined") return "other";
   const ua = navigator.userAgent || "";
-  const isIOS = /iPad|iPhone|iPod/.test(ua) && !(window as any).MSStream;
+  const isIPadOSDesktopUA = /Macintosh/.test(ua) && typeof navigator !== "undefined" && navigator.maxTouchPoints > 1;\n  const isIOS = (/iPad|iPhone|iPod/.test(ua) || isIPadOSDesktopUA) && !(window as any).MSStream;
   if (isIOS) {
     const isSafari = /Safari/.test(ua) && !/CriOS|FxiOS|EdgiOS|OPiOS/.test(ua);
     return isSafari ? "ios" : "other";
