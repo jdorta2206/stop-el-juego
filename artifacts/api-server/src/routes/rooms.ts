@@ -1016,7 +1016,9 @@ g[SWEEP_TIMER_KEY] = setInterval(() => { sweepStuckRooms().catch(() => {}); }, 3
 // Sanitize a formatted room for public spectator/overlay views.
 // Hide individual players' answers while a round is in progress to prevent cheating.
 function sanitizeRoomForSpectator(room: any) {
-  if (room.status === "playing" || room.status === "stopping") {
+  // Answers must stay hidden for the entire unresolved round, including
+  // reveal/bluff-vote phases where playersJson may already contain them.
+  if (room.status === "playing" || room.status === "stopping" || room.status === "revealing" || room.status === "bluffvoting") {
     return {
       ...room,
       players: (room.players ?? []).map((p: any) => ({
