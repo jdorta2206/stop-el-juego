@@ -1036,7 +1036,7 @@ export default function Room() {
         const reportMatch = () => {
           fetch(`${getApiUrl()}/api/tournaments/${tournamentCtx.code}/match-result`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json", ...authHeaders() },
             body: JSON.stringify({ matchId: tournamentCtx.matchId, winnerId: winner.playerId, winnerName: winner.playerName }),
             credentials: "include",
           }).catch(() => {});
