@@ -93,8 +93,22 @@ export async function ensureIndexes(): Promise<void> {
     // and start every live room with a clean budget.
     `CREATE TABLE IF NOT EXISTS room_spy_usage (room_code text NOT NULL, player_id text NOT NULL, round integer NOT NULL, uses integer NOT NULL DEFAULT 0, PRIMARY KEY (room_code, player_id, round))`,
     `ALTER TABLE room_spy_usage ADD COLUMN IF NOT EXISTS room_id integer`,
-    `DELETE FROM room_spy_usage`,
-    `ALTER TABLE room_spy_usage DROP CONSTRAINT IF EXISTS room_spy_usage_pkey`,
+    // Legacy rows cannot be mapped safely because room_code is recyclable.
+    // Clear them only while the legacy primary key still exists; after the
+    // constraint is removed this block becomes a no-op on every later boot.
+    `DO $ BEGIN
+       IF EXISTS (
+         SELECT 1 FROM pg_constraint
+         WHERE conname = 'room_spy_usage_pkey'
+           AND conrelid = 'room_spy_usage'::regclass
+       ) THEN
+         DELETE FROM room_spy_usage;
+         ALTER TABLE room_spy_usage DROP CONSTRAINT room_spy_usage_pkey;
+       END IF;
+    END $`,
+    // If a previous boot stopped after dropping the PK but before completing
+    // the migration, discard only unmigrated legacy rows before SET NOT NULL.
+    `DELETE FROM room_spy_usage WHERE room_id IS NULL`,
     `ALTER TABLE room_spy_usage ALTER COLUMN room_id SET NOT NULL`,
     `CREATE UNIQUE INDEX IF NOT EXISTS room_spy_usage_room_player_round_uidx ON room_spy_usage (room_id, player_id, round)`,
     `CREATE INDEX IF NOT EXISTS room_spy_usage_round_idx ON room_spy_usage (room_id, round)`,
