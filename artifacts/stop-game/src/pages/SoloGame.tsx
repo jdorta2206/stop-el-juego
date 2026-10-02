@@ -539,7 +539,7 @@ export default function SoloGame() {
     };
   }, [responses, gameState, round, lang, halloweenScare, isDailyMode, isQuickMode, isChaosMode, isRandomMode]);
 
-  const startGame = () => {
+  const startGame = (newGame = true) => {
     if (!gameSubmissionIdRef.current) gameSubmissionIdRef.current = createSubmissionId();
     if (halloweenScareTimerRef.current) clearTimeout(halloweenScareTimerRef.current);
     if (halloweenAnswerScareTimerRef.current) clearTimeout(halloweenAnswerScareTimerRef.current);
@@ -556,8 +556,8 @@ export default function SoloGame() {
     // forever once the tutorial ends.
     setAiPersonality(pickRandomPersonality({ isTutorial: tutorialNow }));
     setAiComment(null);
-    // Reset spy uses each new game (premium gets 2x)
-    setSpyUsesLeft(isPremium ? 2 : 1);
+    // Reset spy uses only when a completely new game starts; the allowance persists across rounds.
+    if (newGame) setSpyUsesLeft(isPremium ? 2 : 1);
     setSpyReveal(null);
     // 🎲 Random mode — reroll the secret round time so each round feels different (15–55s)
     if (isRandomMode) setRandomRoundTime(15 + Math.floor(Math.random() * 41));
@@ -1321,7 +1321,7 @@ export default function SoloGame() {
       void maybeShowInterstitial(isPremium || premiumLoading);
     } else {
       setRound(r => r + 1);
-      startGame();
+      startGame(false);
     }
   };
 
