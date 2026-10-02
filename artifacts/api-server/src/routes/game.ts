@@ -1519,18 +1519,15 @@ router.post("/validate", async (req, res) => {
 
   // Validate categories concurrently. AI fallback calls can take up to 12s each;
   // doing them serially would make one slow round take the sum of all timeouts.
-  // Each category still gets the exact same validator and result, but independent
-  // categories no longer block one another.
   const roundEvaluations = await Promise.all(playerResponses.map(async (pr) => {
     const playerWord = pr.word?.trim() || "";
     const aiWord = getAiWord(letter, pr.category, language);
     const normPlayerWord = normalizeWord(playerWord);
-
-    // "Repetida" only means the player and the AI wrote the exact same word in the same category
-    // (handled below by giving 5pts each). Using the same word in different categories is allowed.
-    const isPlayerWordValid = await isWordValidAsync(playerWord, letter, pr.category, language, playerId);
-    // AI word comes from our own dictionary, so it never needs the AI fallback.
-    const isAiWordValid = aiWord.length > 0 && isWordValid(aiWord, letter, pr.category, language);
+    const isPlayerWordValid = await isWordValidAsync(
+      playerWord, letter, pr.category, language, playerId,
+    );
+    const isAiWordValid = aiWord.length > 0 &&
+      isWordValid(aiWord, letter, pr.category, language);
 
     let playerScore = 0;
     let aiScore = 0;
@@ -1550,20 +1547,40 @@ router.post("/validate", async (req, res) => {
       }
     } else if (isPlayerWordValid) {
       playerScore = 10;
-      aiScore = 0;
     } else if (isAiWordValid) {
-      playerScore = 0;
       aiScore = 10;
     }
 
-    const formattedAiWord = aiWord ? aiWord.charAt(0).toUpperCase() + aiWord.slice(1) : "";
-    results[pr.category] = {
-      player: { response: playerWord, isValid: isPlayerWordValid, score: playerScore },
-      ai: { response: formattedAiWord, isValid: isAiWordValid, score: aiScore },
-    };
+    const formattedAiWord = aiWord
+      ? aiWord.charAt(0).toUpperCase() + aiWord.slice(1)
+      : "";
 
-    playerTotalScore += playerScore;
-    aiTotalScore += aiScore;
+    return {
+      category: pr.category,
+      playerWord,
+      aiWord: formattedAiWord,
+      isPlayerWordValid,
+      isAiWordValid,
+      playerScore,
+      aiScore,
+    };
+  }));
+
+  for (const evaluation of roundEvaluations) {
+    results[evaluation.category] = {
+      player: {
+        response: evaluation.playerWord,
+        isValid: evaluation.isPlayerWordValid,
+        score: evaluation.playerScore,
+      },
+      ai: {
+        response: evaluation.aiWord,
+        isValid: evaluation.isAiWordValid,
+        score: evaluation.aiScore,
+      },
+    };
+    playerTotalScore += evaluation.playerScore;
+    aiTotalScore += evaluation.aiScore;
   }
 
   // 🔒 Anti-cheat: hand back a signed, single-use voucher attesting the
