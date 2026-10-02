@@ -163,8 +163,18 @@ function ScoreOutboxHandler() {
     };
 
     tryFlush();
+    const onVisible = () => {
+      if (document.visibilityState === "visible") tryFlush();
+    };
+    const onPageShow = () => tryFlush();
     window.addEventListener("online", tryFlush);
-    return () => window.removeEventListener("online", tryFlush);
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("pageshow", onPageShow);
+    return () => {
+      window.removeEventListener("online", tryFlush);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("pageshow", onPageShow);
+    };
   }, [player?.id]);
 
   return null;
