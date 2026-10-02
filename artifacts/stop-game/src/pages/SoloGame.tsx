@@ -777,6 +777,7 @@ export default function SoloGame() {
           data: {
             letter,
             language: getCurrentLang() as import("@workspace/api-client-react").ValidateRoundRequestLanguage,
+            mode: isDailyMode ? "daily" : "solo",
             playerName: player?.name,
             playerResponses: formattedResponses,
           }
