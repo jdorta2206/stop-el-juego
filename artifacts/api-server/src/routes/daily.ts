@@ -140,10 +140,6 @@ router.post("/submit", async (req, res) => {
   const season = await getOrCreateActiveSeason();
   const seasonProgress = await getOrCreateProgress(playerId, season.id);
   const submitted = await db.transaction(async (tx) => {
-    if (verifiedVouchers.vouchers.length > 0) {
-      const claimedVouchers = await claimScoreVouchersTx(tx, verifiedVouchers.vouchers);
-      if (!claimedVouchers) throw new Error("SCORE_VOUCHER_ALREADY_USED");
-    }
     const inserted = await tx
       .insert(dailyResultsTable)
       .values({
@@ -161,6 +157,10 @@ router.post("/submit", async (req, res) => {
       .returning({ playerId: dailyResultsTable.playerId });
 
     if (inserted.length > 0) {
+      if (verifiedVouchers.vouchers.length > 0) {
+        const claimedVouchers = await claimScoreVouchersTx(tx, verifiedVouchers.vouchers);
+        if (!claimedVouchers) throw new Error("SCORE_VOUCHER_ALREADY_USED");
+      }
       await applyAuthoritativeSeasonEventsTx(
         tx,
         season.id,
@@ -173,7 +173,7 @@ router.post("/submit", async (req, res) => {
     // Another request already created today's row. Only improve the score;
     // re-applying daily_done is harmless because the mission is capped at 1,
     // and repairs a previous response that predated this transactional path.
-    await tx
+    const improved = await tx
       .update(dailyResultsTable)
       .set({
         score: sql`GREATEST(${dailyResultsTable.score}, ${safeScore})`,
@@ -184,8 +184,15 @@ router.post("/submit", async (req, res) => {
         and(
           eq(dailyResultsTable.playerId, playerId),
           eq(dailyResultsTable.challengeDate, today),
+          sql`${dailyResultsTable.score} < ${safeScore}`,
         ),
-      );
+      )
+      .returning({ playerId: dailyResultsTable.playerId });
+
+    if (improved.length > 0 && verifiedVouchers.vouchers.length > 0) {
+      const claimedVouchers = await claimScoreVouchersTx(tx, verifiedVouchers.vouchers);
+      if (!claimedVouchers) throw new Error("SCORE_VOUCHER_ALREADY_USED");
+    }
     await applyAuthoritativeSeasonEventsTx(
       tx,
       season.id,
