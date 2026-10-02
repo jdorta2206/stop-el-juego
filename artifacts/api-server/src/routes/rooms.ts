@@ -3253,6 +3253,9 @@ router.post("/:roomCode/stop", async (req, res) => {
 
     if (!stopped) return null;
 
+    return stopped;
+  });
+
   // Halloween is deliberately persisted only after the authoritative STOP
   // transaction has committed. A Halloween DB failure must never roll back STOP.
   const stopMeta = parseBluffMeta(room.stopperJson) ?? {};
