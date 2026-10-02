@@ -33,6 +33,25 @@ const LLM_MODEL = "gpt-5-mini";
 // headroom and matches the budget shape used by aiWordValidator.ts.
 const LLM_GLOBAL_DAILY_LIMIT = 500;
 
+// Keep bot timers strictly inside the server-authoritative round window.
+const ROUND_TIME_DEFAULT_SECS = 60;
+const RANDOM_MIN_SECS = 15;
+const RANDOM_MAX_SECS = 55;
+function randomRoundDurationSecs(roomCode: string, round: number, letter: string): number {
+  const seed = `${roomCode}|${round}|${letter}`;
+  let hash = 2166136261;
+  for (let i = 0; i < seed.length; i++) {
+    hash ^= seed.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return RANDOM_MIN_SECS + (Math.abs(hash) % (RANDOM_MAX_SECS - RANDOM_MIN_SECS + 1));
+}
+function roundDurationSecsForRoom(room: any): number {
+  if (room.gameMode === "blitz") return 30;
+  if (room.gameMode === "random") return randomRoundDurationSecs(room.roomCode, room.currentRound ?? 1, room.currentLetter ?? "A");
+  return ROUND_TIME_DEFAULT_SECS;
+}
+
 const llmQuotaReady = db.execute(sql`
   CREATE TABLE IF NOT EXISTS bot_llm_daily_quota (
     quota_date date PRIMARY KEY,
@@ -456,6 +475,21 @@ async function performBotSubmit(
         return null;
       }
 
+      const lockedRoundDurationMs = roundDurationSecsForRoom({
+        roomCode: code,
+        gameMode: raw.game_mode ?? raw.gameMode,
+        currentRound: lockedRound,
+        currentLetter: lockedLetter,
+      }) * 1000;
+      const lockedMeta = (() => {
+        try { return raw.stopper_json ? JSON.parse(raw.stopper_json) : (raw.stopperJson ? JSON.parse(raw.stopperJson) : {}); }
+        catch { return {}; }
+      })();
+      const roundStartedAt = Number(lockedMeta?.roundStartedAt);
+      if (options.triggerStop && lockedStatus === "playing" && Number.isFinite(roundStartedAt) && Date.now() >= roundStartedAt + lockedRoundDurationMs) {
+        return null;
+      }
+
       let committedStatus = lockedStatus as string;
       let committedStopperJson = raw.stopper_json ?? raw.stopperJson;
       if (options.triggerStop && lockedStatus === "playing") {
@@ -581,9 +615,13 @@ export function startBotTimerRecovery(deps: BotActionDeps) {
         const scheduledBots = roomBotTimerBots.get(room.roomCode) ?? new Set<string>();
         for (const bot of bots) {
           if (scheduledBots.has(bot.playerId)) continue;
+          const roundDurationMs = roundDurationSecsForRoom(room) * 1000;
+          const maxPlayingDelay = Math.max(1_000, roundDurationMs - 2_000);
+          const minPlayingDelay = Math.min(maxPlayingDelay, Math.max(1_000, roundDurationMs * 0.55));
+          const plannedPlayingDelay = minPlayingDelay + (bot.playerId.charCodeAt(bot.playerId.length - 1) % Math.max(1, Math.floor(maxPlayingDelay - minPlayingDelay + 1)));
           const delay = isStopped
             ? Math.max(0, 1_500 + (bot.playerId.charCodeAt(bot.playerId.length - 1) % 2_500) - elapsed)
-            : Math.max(0, 25_000 + (bot.playerId.charCodeAt(bot.playerId.length - 1) % 26_000) - elapsed);
+            : Math.max(0, plannedPlayingDelay - elapsed);
           const timer = setTimeout(() => {
             untrackTimer(room.roomCode, timer, bot.playerId);
             performBotSubmit(room.roomCode, bot.playerId, recoveryDeps!, { triggerStop: !isStopped });
@@ -633,8 +671,11 @@ export function scheduleBotsForRound(opts: {
       })
       .catch(() => {});
   }
+  const durationMs = opts.roundDurationMs;
+  const maxDelayMs = Math.max(1_000, durationMs - 2_000);
+  const minDelayMs = Math.min(maxDelayMs, Math.max(1_000, durationMs * 0.55));
   for (const b of opts.bots) {
-    const delay = 25_000 + Math.random() * 25_000; // 25-50s
+    const delay = minDelayMs + Math.random() * Math.max(0, maxDelayMs - minDelayMs);
     const t = setTimeout(() => {
       untrackTimer(opts.roomCode, t, b.playerId);
       performBotSubmit(opts.roomCode, b.playerId, opts.deps, { triggerStop: true });
