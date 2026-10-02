@@ -1484,13 +1484,13 @@ router.post("/validate", async (req, res) => {
 
   const { letter, language, playerResponses: rawPlayerResponses } = body.data;
 
-  // A round is bounded by the category pack (currently at most 12 categories).
-  // The client normally sends unique categories, but this endpoint is public and
-  // must not let a caller duplicate a category to multiply the server-computed
-  // score voucher or trigger unbounded AI validation work.
-  const MAX_ROUND_CATEGORIES = 12;
-  if (rawPlayerResponses.length > MAX_ROUND_CATEGORIES) {
-    res.status(400).json({ error: "Too many categories" });
+  // Every built-in and custom solo pack is server/UI-defined as exactly
+  // seven categories. The voucher ceiling is derived from the number of
+  // validated categories, so accepting an attacker-supplied larger list would
+  // let the client mint a voucher for more score than a real round can contain.
+  const CATEGORIES_PER_ROUND = 7;
+  if (rawPlayerResponses.length !== CATEGORIES_PER_ROUND) {
+    res.status(400).json({ error: "Invalid category count" });
     return;
   }
   const seenCategories = new Set<string>();
@@ -1500,6 +1500,10 @@ router.post("/validate", async (req, res) => {
     seenCategories.add(key);
     return true;
   });
+  if (playerResponses.length !== CATEGORIES_PER_ROUND) {
+    res.status(400).json({ error: "Duplicate or invalid categories" });
+    return;
+  }
   // Best-effort player id from common header conventions used elsewhere in
   // the codebase. Used only to apply the per-player AI-call quota; absence
   // is fine, the global daily cap still protects against runaway cost.
