@@ -982,7 +982,6 @@ async function purgeStaleRooms() {
     dropOrphans(roomTyping as Map<string, unknown>);
     dropOrphans(roomCategoryPacks as Map<string, unknown>);
     dropOrphans(roomLiveResponses as Map<string, unknown>);
-    dropOrphans(roomSpyUsage as Map<string, unknown>);
     dropOrphans(roomRematch as Map<string, unknown>);
     dropOrphans(roomFunVotes as Map<string, unknown>);
   } catch (err) {
@@ -1731,7 +1730,6 @@ router.post("/:roomCode/leave", async (req, res) => {
   if (outcome.kind === "deleted") {
     roomTyping.delete(code);
     roomLiveResponses.delete(code);
-    roomSpyUsage.delete(code);
     roomRematch.delete(code);
     roomFunVotes.delete(code);
     roomReactions.delete(code);
