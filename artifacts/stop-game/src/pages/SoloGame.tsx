@@ -641,6 +641,8 @@ export default function SoloGame() {
 
     setGameState("PLAYING");
     setTimeLeft(roundTime);
+    roundDeadlineRef.current = Date.now() + roundTime * 1000;
+    rewardedPauseStartedRef.current = null;
     setRewardedUsed(false);
     setHintUsed(false);
     setHintReveal(null);
@@ -654,25 +656,33 @@ export default function SoloGame() {
       }, 400);
     }
 
-    timerRef.current = setInterval(() => {
+    const tick = () => {
       if (gameTimerPausedRef.current || isGameTimerPaused()) return;
-      setTimeLeft(prev => {
-        if (prev <= 1) {
-          // Clear the interval immediately (synchronously) so this branch never fires twice
-          if (timerRef.current) {
-            clearInterval(timerRef.current);
-            timerRef.current = null;
-          }
-          // Schedule handleStop outside the state-setter (safe async trigger)
-          stopTimeoutRef.current = setTimeout(() => {
-            stopTimeoutRef.current = null;
-            void handleStop();
-          }, 0);
-          return 0;
+      const deadline = roundDeadlineRef.current;
+      if (deadline === null) return;
+
+      const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+      setTimeLeft(remaining);
+
+      if (remaining <= 0) {
+        // Clear the interval immediately so the expiry branch cannot fire twice.
+        if (timerRef.current) {
+          clearInterval(timerRef.current);
+          timerRef.current = null;
         }
-        return prev - 1;
-      });
-    }, 1000);
+        roundDeadlineRef.current = null;
+        // Schedule handleStop outside React state updates.
+        stopTimeoutRef.current = setTimeout(() => {
+          stopTimeoutRef.current = null;
+          void handleStop();
+        }, 0);
+      }
+    };
+
+    // Tick immediately and then keep a lightweight UI refresh. The deadline,
+    // not the interval cadence, is authoritative when the page is backgrounded.
+    tick();
+    timerRef.current = setInterval(tick, 250);
   };
 
   const toggleBluff = (category: string) => {
@@ -707,8 +717,18 @@ export default function SoloGame() {
   // countdown cannot continue even if the shared module is duplicated by the
   // bundler or the ad component lives in another chunk.
   useEffect(() => {
-    const pause = () => { gameTimerPausedRef.current = true; };
-    const resume = () => { gameTimerPausedRef.current = false; };
+    const pause = () => {
+      gameTimerPausedRef.current = true;
+      rewardedPauseStartedRef.current = Date.now();
+    };
+    const resume = () => {
+      const started = rewardedPauseStartedRef.current;
+      if (started !== null && roundDeadlineRef.current !== null) {
+        roundDeadlineRef.current += Math.max(0, Date.now() - started);
+      }
+      rewardedPauseStartedRef.current = null;
+      gameTimerPausedRef.current = false;
+    };
     window.addEventListener("stop:rewarded-ad-pause", pause);
     window.addEventListener("stop:rewarded-ad-resume", resume);
     return () => {
@@ -731,6 +751,8 @@ export default function SoloGame() {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
       timerRef.current = null;
+      roundDeadlineRef.current = null;
+      rewardedPauseStartedRef.current = null;
       if (stopTimeoutRef.current) clearTimeout(stopTimeoutRef.current);
       stopTimeoutRef.current = null;
       if (hiddenRevealTimeoutRef.current) clearTimeout(hiddenRevealTimeoutRef.current);
