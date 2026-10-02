@@ -3024,7 +3024,13 @@ router.post("/:roomCode/bluff-vote", writeLimiter, async (req, res) => {
         currentRound: isGameOver ? room.maxRounds : newRound,
         currentLetter: isGameOver ? room.currentLetter : randomLetter(),
         status: newStatus,
-        stopperJson: JSON.stringify({ stopper: meta.stopper, bluffResults: bluffVotes }),
+        stopperJson: JSON.stringify({
+          categoryPack: meta.categoryPack,
+          customCategories: meta.customCategories,
+          customPackLabel: meta.customPackLabel,
+          stopper: meta.stopper,
+          bluffResults: bluffVotes,
+        }),
         updatedAt: new Date(),
       })
       .where(and(
@@ -3160,7 +3166,13 @@ router.post("/:roomCode/resolve-bluffs", async (req, res) => {
       currentRound: isGameOver ? room.maxRounds : newRound,
       currentLetter: isGameOver ? room.currentLetter : randomLetter(),
       status: newStatus,
-      stopperJson: JSON.stringify({ stopper: meta.stopper, bluffResults: bluffVotes }),
+      stopperJson: JSON.stringify({
+          categoryPack: meta.categoryPack,
+          customCategories: meta.customCategories,
+          customPackLabel: meta.customPackLabel,
+          stopper: meta.stopper,
+          bluffResults: bluffVotes,
+        }),
       updatedAt: new Date(),
     })
     .where(and(
