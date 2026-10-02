@@ -47,6 +47,9 @@ export const gameHistoryTable = pgTable("game_history", {
   score: integer("score").notNull().default(0),
   letter: text("letter").notNull(),
   mode: text("mode").notNull().default("solo"),
+  // Non-null only for multiplayer room results. Makes final scoring idempotent
+  // across retries/recovery while preserving existing solo history rows.
+  roomCode: text("room_code"),
   won: boolean("won").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
