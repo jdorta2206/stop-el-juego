@@ -66,12 +66,15 @@ const SPEED_ROUND_TIME = 20;
 const CHAOS_ROUND_TIME = 45;
 const MAX_ROUNDS = 3;
 const EASY_LETTERS = ["A", "C", "E", "I", "L", "M", "P", "R", "S", "T"];
-const REWARDED_ADS_DISABLED = (() => {
-  if (new URLSearchParams(window.location.search).get("rewardedAds") === "1") return false;
-  if (import.meta.env.VITE_REWARDED_ADS_DISABLED !== "1") return false;
-  // Keep rewarded ads disabled on normal web browsers, but allow the native
-  // Google Play TWA to use the real AdMob RewardedAdActivity.
-  try {
+// Google has suspended the AdMob account through 31 Oct 2026. Advertising
+// must stay fail-closed everywhere until the suspension is resolved; the game
+// itself must never depend on an ad provider being available.
+const REWARDED_ADS_DISABLED = true;
+/*
+  Previous logic deliberately allowed the native TWA to bypass the production
+  disable flag. That could still launch AdMob while the account is suspended.
+*/
+if (false) {
     const params = new URLSearchParams(window.location.search);
     const twaByReferrer = document.referrer.startsWith("android-app://app.replit.stop_el_juego.twa");
     const twaBySource = params.get("source") === "googleplay-twa" || params.get("source") === "twa";
