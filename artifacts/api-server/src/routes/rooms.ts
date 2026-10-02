@@ -671,7 +671,13 @@ function finalizeRoundState(room: any, players: any[]): {
   newStopperJson: string | null;
 } {
   const codeUpper = (room.roomCode as string).toUpperCase();
-  const endTs = roundEndTimestamp(room);
+  // After STOP, the submit grace window starts at the actual STOP timestamp,
+  // not at the original natural round deadline.
+  const stopMeta = parseBluffMeta(room.stopperJson);
+  const stopTimestamp = Number(stopMeta?.stopTimestamp ?? stopMeta?.stopper?.stopTimestamp);
+  const endTs = room.status === "stopped" && Number.isFinite(stopTimestamp)
+    ? stopTimestamp
+    : roundEndTimestamp(room);
 
   const sweptPlayers = (() => {
     if (!endTs) return players;
