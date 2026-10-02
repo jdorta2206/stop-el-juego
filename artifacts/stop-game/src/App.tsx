@@ -42,7 +42,7 @@ const Contact = lazy(() => import("@/pages/Contact"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
-    queries: { retry: false, refetchOnWindowFocus: false },
+    queries: { retry: false, refetchOnWindowFocus: true, refetchOnReconnect: true },
   },
 });
 
