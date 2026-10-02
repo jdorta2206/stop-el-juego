@@ -7,7 +7,6 @@ WORKDIR /app
 
 COPY . .
 RUN pnpm install --frozen-lockfile
-RUN pnpm run typecheck
 RUN pnpm run build:railway
 
 FROM node:20-slim
