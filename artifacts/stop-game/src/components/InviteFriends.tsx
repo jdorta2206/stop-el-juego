@@ -117,7 +117,7 @@ export function InviteFriends({ player, onClose }: InviteFriendsProps) {
   const handleContactSMS = (contact: ContactItem) => {
     const phone = (contact.tel?.[0] || "").replace(/\D/g, "");
     if (!phone) return;
-    window.location.href = `sms:${phone}&body=${encodeURIComponent(waMsg)}`;
+    window.location.href = `sms:${phone}?body=${encodeURIComponent(waMsg)}`;
   };
 
   const handleNativeShare = async () => {
