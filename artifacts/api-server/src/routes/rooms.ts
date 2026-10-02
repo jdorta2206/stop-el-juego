@@ -2543,76 +2543,67 @@ router.post("/:roomCode/stop", async (req, res) => {
     res.status(403).json({ error: "Identity verification failed" }); return;
   }
 
-  const rooms = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, roomCode.toUpperCase())).limit(1);
-  if (rooms.length === 0) { res.status(404).json({ error: "Room not found" }); return; }
+  const outcome = await db.transaction(async (tx) => {
+    const lockedRows = await tx.execute(sql`SELECT * FROM rooms WHERE room_code = ${roomCode.toUpperCase()} FOR UPDATE`);
+    const locked = ((lockedRows as any).rows ?? lockedRows)[0];
+    if (!locked) return { kind: "missing" as const };
 
-  const room = rooms[0];
+    const room = locked as any;
+    const roomPlayers = parsePlayers(room.players_json ?? room.playersJson);
+    const member = roomPlayers.find((p: any) => p.playerId === playerId);
+    if (!member) return { kind: "forbidden" as const };
+    if (room.status !== "playing") return { kind: "current" as const, room };
 
-  // 🔐 Authorization: caller must actually be in the room. Without this, any
-  // process knowing the room code could remotely freeze the round for griefing.
-  const roomPlayers = parsePlayers(room.playersJson);
-  const isMember = roomPlayers.some((p: any) => p.playerId === playerId);
-  if (!isMember) {
+    // Re-read the authoritative deadline while holding the row lock. This
+    // closes the race where the pre-lock deadline check could pass and the
+    // round could expire before the UPDATE.
+    const stopDeadline = roundEndTimestamp(room);
+    if (stopDeadline && Date.now() >= stopDeadline) return { kind: "expired" as const };
+
+    const stopper = { id: playerId, name: String(member.playerName ?? "?").slice(0, 30), stopTimestamp: Date.now() };
+    const prevMeta = parseBluffMeta(room.stopper_json ?? room.stopperJson) ?? {};
+    const newMeta = {
+      ...prevMeta,
+      stopper,
+      stopTimestamp: stopper.stopTimestamp,
+      roundStartedAt: prevMeta?.roundStartedAt ?? Date.now(),
+    };
+
+    const [updated] = await tx.update(roomsTable)
+      .set({
+        status: "stopped",
+        stopperJson: JSON.stringify(newMeta),
+        updatedAt: new Date(),
+      })
+      .where(and(
+        eq(roomsTable.roomCode, roomCode.toUpperCase()),
+        eq(roomsTable.status, "playing"),
+      ))
+      .returning();
+
+    return updated
+      ? { kind: "updated" as const, room: updated }
+      : { kind: "current" as const, room };
+  });
+
+  if (outcome.kind === "missing") {
+    res.status(404).json({ error: "Room not found" });
+    return;
+  }
+  if (outcome.kind === "forbidden") {
     res.status(403).json({ error: "Only players in the room can call STOP" });
     return;
   }
-
-  // Only stop if currently playing (ignore duplicate stops)
-  if (room.status !== "playing") {
-    res.json(formatRoom(room));
-    return;
-  }
-
-  // The server deadline is authoritative. Once the natural round timer has
-  // expired, a late client must not be able to become the stopper and claim
-  // the +5 speed bonus. The normal /results/sweeper path handles the timeout.
-  const stopDeadline = roundEndTimestamp(room);
-  if (stopDeadline && Date.now() >= stopDeadline) {
+  if (outcome.kind === "expired") {
     res.status(409).json({ error: "Round has already ended" });
     return;
   }
-
-  const memberName = String(roomPlayers.find((p: any) => p.playerId === playerId)?.playerName ?? "?").slice(0, 30);
-  const stopper = { id: playerId, name: memberName, stopTimestamp: Date.now() };
-
-  // Preserve the authoritative round-start timestamp so clients keep seeing
-  // a consistent deadline through STOP → freeze → submit transitions.
-  const prevMeta = parseBluffMeta(room.stopperJson) ?? {};
-  const newMeta = {
-    ...prevMeta,
-    stopper,
-    stopTimestamp: stopper.stopTimestamp,
-    roundStartedAt: prevMeta.roundStartedAt ?? Date.now(),
-  };
-
-  // CAS the transition on the exact room version we inspected. Without this,
-  // concurrent STOP/RESULTS requests could overwrite a newer playersJson or
-  // replace the authoritative stopper with a stale read.
-  const [updated] = await db.update(roomsTable)
-    .set({
-      status: "stopped",
-      stopperJson: JSON.stringify(newMeta),
-      updatedAt: new Date(),
-    })
-    .where(and(
-      eq(roomsTable.roomCode, roomCode.toUpperCase()),
-      eq(roomsTable.status, "playing"),
-      eq(roomsTable.status, room.status), eq(roomsTable.currentRound, room.currentRound), eq(roomsTable.currentLetter, room.currentLetter), eq(roomsTable.playersJson, room.playersJson),
-    ))
-    .returning();
-
-  if (!updated) {
-    const [current] = await db.select().from(roomsTable)
-      .where(eq(roomsTable.roomCode, roomCode.toUpperCase()))
-      .limit(1);
-    if (!current) {
-      res.status(404).json({ error: "Room not found" });
-      return;
-    }
-    res.json(formatRoom(current));
+  if (outcome.kind === "current") {
+    res.json(formatRoom(outcome.room));
     return;
   }
 
+  const updated = outcome.room;
   res.json(broadcastAndFormat(updated));
 
   // 🤖 If bots are in this room and haven't submitted yet, rush them so the
