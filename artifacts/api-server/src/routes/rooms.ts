@@ -757,6 +757,60 @@ function applyRoundAdvanceSideEffects(room: any, sweptPlayers: any[], newStatus:
   }
 }
 
+let lastFinishedScoreRecoveryAt = 0;
+
+async function recoverFinishedRoomScoring() {
+  const now = Date.now();
+  if (now - lastFinishedScoreRecoveryAt < 30_000) return;
+  lastFinishedScoreRecoveryAt = now;
+
+  const finished = await db
+    .select({
+      roomCode: roomsTable.roomCode,
+      playersJson: roomsTable.playersJson,
+      currentLetter: roomsTable.currentLetter,
+      updatedAt: roomsTable.updatedAt,
+    })
+    .from(roomsTable)
+    .where(eq(roomsTable.status, "finished"))
+    .orderBy(roomsTable.updatedAt)
+    .limit(20);
+
+  if (finished.length === 0) return;
+
+  const codes = finished.map((r) => r.roomCode);
+  const historyRows = await db
+    .select({
+      roomCode: gameHistoryTable.roomCode,
+      playerId: gameHistoryTable.playerId,
+    })
+    .from(gameHistoryTable)
+    .where(inArray(gameHistoryTable.roomCode, codes));
+
+  const finalized = new Set(
+    historyRows
+      .filter((r) => r.roomCode)
+      .map((r) => \`\${r.roomCode}:\${r.playerId}\`),
+  );
+
+  for (const room of finished) {
+    const players = parsePlayers(room.playersJson);
+    const needsRecovery = players.some((p: any) =>
+      p && !p.isBot && p.loginMethod !== "guest" &&
+      p.playerId && !finalized.has(\`\${room.roomCode}:\${p.playerId}\`),
+    );
+    if (!needsRecovery) continue;
+
+    // The history uniqueness key makes this safe across multiple Railway
+    // instances and across a crash/retry boundary.
+    await submitAllScoresToLeaderboard(
+      players,
+      room.currentLetter || "A",
+      room.roomCode,
+    );
+  }
+}
+
 // 🚑 Background failsafe: advance rounds stuck in "stopped" past the submit
 // grace window even when NO further /results POST arrives. Without this a
 // round deadlocks forever if the last pending player's submission never
@@ -764,6 +818,11 @@ function applyRoundAdvanceSideEffects(room: any, sweptPlayers: any[], newStatus:
 // fires for them, and there's no other player left to trigger it).
 async function sweepStuckRooms() {
   try {
+    // Crash recovery: a room can be persisted as "finished" immediately
+    // before the process dies, so replay final scoring before handling new
+    // stuck rounds. The scoring function is durable/idempotent per room/player.
+    await recoverFinishedRoomScoring();
+
     // Scan BOTH "stopped" (someone pressed STOP) and "playing" (the round timer
     // ran out with no STOP) — either can deadlock if a submission is lost.
     const stuck = await db.select().from(roomsTable)
