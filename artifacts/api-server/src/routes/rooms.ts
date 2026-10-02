@@ -5,7 +5,7 @@ import { eq, and, or, lt, inArray, sql } from "drizzle-orm";
 import { CreateRoomBody, JoinRoomBody, SubmitRoomResultsBody } from "@workspace/api-zod";
 import { calculateStreak, appendStreakDay } from "./ranking";
 import { recordTrustedAnalyticsEvent } from "./analytics";
-import { applyAuthoritativeSeasonEventsTx, getOrCreateActiveSeason, getOrCreateProgress } from "./season";
+import { applyAuthoritativeSeasonEventsTx, getOrCreateActiveSeason, getOrCreateProgressTx } from "./season";
 import { isWordValidAsync } from "./game";
 import { writeLimiter, roomJoinLimiter } from "../middlewares/rateLimit";
 import { verifyClaimedIdentity, verifyPlayerToken, readPlayerId, isLoggedInId, isAuthConfigured } from "../lib/playerAuth";
@@ -503,9 +503,19 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
     const score = Math.round(rawScore * 1.5);
     const won = winner?.playerId === p.playerId;
 
-    // 🔒 Keep leaderboard counters and game history atomic. If history insertion
-    // fails after the score update, the player would otherwise have a game counted
-    // in totals but missing from history (and a retry could compound the mismatch).
+    // Season lookup is intentionally best-effort before the score transaction.
+    // The game result must still persist if the auxiliary season subsystem is
+    // temporarily unavailable; when available, progress is created on the SAME
+    // transaction connection as leaderboard + history.
+    let seasonId: number | null = null;
+    try {
+      seasonId = (await getOrCreateActiveSeason()).id;
+    } catch (err) {
+      console.error("[rooms] active season lookup failed:", err);
+    }
+
+    // 🔒 Keep leaderboard counters, game history and season progression atomic.
+    // If any of these writes fails, the whole player result rolls back.
     await db.transaction(async (tx) => {
       const [locked] = await tx
         .select({
@@ -577,6 +587,20 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
         mode: "multiplayer",
         won,
       });
+
+      if (seasonId !== null) {
+        const progress = await getOrCreateProgressTx(tx, p.playerId, seasonId);
+        const validWords = Number.isFinite(p.validAnswerCount)
+          ? Math.max(0, Math.floor(p.validAnswerCount))
+          : 0;
+        await applyAuthoritativeSeasonEventsTx(tx, seasonId, progress.id, [
+          { type: "play_game", value: 1 },
+          ...(won ? [{ type: "win_game", value: 1 }] : []),
+          ...(rawScore > 0 ? [{ type: "round_score", value: rawScore }] : []),
+          ...(validWords > 0 ? [{ type: "valid_words", value: validWords }] : []),
+          { type: "streak", value: lockedStreak.newStreak },
+        ]);
+      }
     });
 
     void recordTrustedAnalyticsEvent({
@@ -585,20 +609,6 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
       mode: "multiplayer",
       metadata: { source: "server_room_result", roomCode },
     }).catch((err) => console.error("[analytics] trusted multiplayer game_complete failed:", err));
-    // Season Pass progression is server-authoritative and commits in the
-    // SAME transaction as the leaderboard + game history. This prevents a
-    // process crash between score persistence and the old fire-and-forget
-    // season update from permanently losing mission progress.
-    const validWords = Number.isFinite(p.validAnswerCount) ? Math.max(0, Math.floor(p.validAnswerCount)) : 0;
-    const season = await getOrCreateActiveSeason();
-    const progress = await getOrCreateProgress(p.playerId, season.id);
-    await applyAuthoritativeSeasonEventsTx(tx, season.id, progress.id, [
-      { type: "play_game", value: 1 },
-      ...(won ? [{ type: "win_game", value: 1 }] : []),
-      ...(rawScore > 0 ? [{ type: "round_score", value: rawScore }] : []),
-      ...(validWords > 0 ? [{ type: "valid_words", value: validWords }] : []),
-      { type: "streak", value: newStreak },
-    ]);
   }));
 }
 
