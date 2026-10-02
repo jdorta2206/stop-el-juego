@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { getApiUrl } from "@/lib/utils";
 
 const API = getApiUrl();
@@ -103,28 +103,35 @@ export function useSeason(playerId?: string | null) {
   const [season, setSeason] = useState<SeasonInfo | null>(null);
   const [progress, setProgress] = useState<SeasonProgress | null>(null);
   const [loading, setLoading] = useState(false);
+  const requestRef = useRef<AbortController | null>(null);
 
   const refresh = useCallback(async () => {
+    requestRef.current?.abort();
+    const controller = new AbortController();
+    requestRef.current = controller;
     setLoading(true);
     try {
       const [s, p] = await Promise.all([
-        fetch(`${API}/api/season/current`).then((r) => (r.ok ? r.json() : null)),
+        fetch(`${API}/api/season/current`, { signal: controller.signal }).then((r) => (r.ok ? r.json() : null)),
         playerId
           ? fetch(`${API}/api/season/progress`, {
               credentials: "include",
               headers: authHeaders(),
+              signal: controller.signal,
             }).then((r) => (r.ok ? r.json() : null))
           : Promise.resolve(null),
       ]);
       if (s) setSeason(s);
       if (p) setProgress(p);
-    } catch {
-      /* ignore */
+    } catch (error) {
+      if (controller.signal.aborted) return;
     } finally {
-      setLoading(false);
+      if (!controller.signal.aborted) setLoading(false);
+      if (requestRef.current === controller) requestRef.current = null;
     }
   }, [playerId]);
 
+  useEffect(() => () => { requestRef.current?.abort(); }, [playerId]);
   useEffect(() => { refresh(); }, [refresh]);
 
   const claimMission = useCallback(async (missionId: string) => {
@@ -182,9 +189,13 @@ export function useSeason(playerId?: string | null) {
 export function useSeasonLeaderboard(seasonId?: number | null, enabled: boolean = true) {
   const [data, setData] = useState<Leaderboard | null>(null);
   const [loading, setLoading] = useState(false);
+  const leaderboardAbortRef = useRef<AbortController | null>(null);
 
   const refresh = useCallback(async () => {
+    leaderboardAbortRef.current?.abort();
     if (!enabled) return;
+    const controller = new AbortController();
+    leaderboardAbortRef.current = controller;
     setLoading(true);
     try {
       const url = new URL(`${API}/api/season/leaderboard`);
@@ -192,16 +203,23 @@ export function useSeasonLeaderboard(seasonId?: number | null, enabled: boolean 
       const r = await fetch(url.toString(), {
         credentials: "include",
         headers: authHeaders(),
+        signal: controller.signal,
       });
-      if (r.ok) setData(await r.json());
+      if (r.ok && !controller.signal.aborted) setData(await r.json());
     } catch {
       /* ignore */
     } finally {
-      setLoading(false);
+      if (leaderboardAbortRef.current === controller) {
+        leaderboardAbortRef.current = null;
+        setLoading(false);
+      }
     }
   }, [seasonId, enabled]);
 
-  useEffect(() => { refresh(); }, [refresh]);
+  useEffect(() => {
+    void refresh();
+    return () => leaderboardAbortRef.current?.abort();
+  }, [refresh]);
 
   return { data, loading, refresh };
 }
@@ -211,20 +229,17 @@ export function useSeasonLeaderboard(seasonId?: number | null, enabled: boolean 
  * No-op for guests. Authenticated via httpOnly cookie (or X-Stop-Token header
  * fallback); the server returns 401 silently if neither is present.
  */
+/**
+ * Deprecated compatibility helper.
+ * Season progress is now recorded exclusively from server-authoritative
+ * gameplay results (score submission, multiplayer finalization and Daily).
+ * Keeping this function as a no-op prevents legacy callers from generating
+ * expected-but-noisy 410 requests against the closed client event endpoint.
+ */
 export async function reportSeasonEvent(
-  playerId: string | null | undefined,
-  type: "win_game" | "play_game" | "round_score" | "streak" | "valid_words" | "daily_done",
-  value?: number,
+  _playerId: string | null | undefined,
+  _type: "win_game" | "play_game" | "round_score" | "streak" | "valid_words" | "daily_done",
+  _value?: number,
 ): Promise<void> {
-  if (!playerId) return;
-  try {
-    await fetch(`${API}/api/season/event`, {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json", ...authHeaders() },
-      body: JSON.stringify({ type, value }),
-    });
-  } catch {
-    /* ignore */
-  }
+  return;
 }

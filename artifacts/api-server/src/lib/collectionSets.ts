@@ -62,6 +62,17 @@ export function computeCollectionStats(raw: string | null | undefined): Collecti
     const map = JSON.parse(raw || "{}") as Record<string, StoredWord>;
     for (const key of Object.keys(map)) {
       const w = map[key];
+
+      // The authoritative score flow stores collected words as
+      // { [word]: category }. Accept that persisted format directly.
+      // Older/future richer entries may use { cat, r } metadata.
+      if (typeof w === "string") {
+        total++;
+        const cat = w.trim().toLowerCase();
+        if (cat) cats.add(cat);
+        continue;
+      }
+
       if (!w || typeof w !== "object") continue;
       total++;
       const r = w.r;

@@ -15,6 +15,16 @@ export async function ensureIndexes(): Promise<void> {
   const stmts = [
     `CREATE INDEX IF NOT EXISTS player_scores_total_score_desc_idx ON player_scores (total_score DESC)`,
     `CREATE INDEX IF NOT EXISTS player_scores_xp_desc_idx ON player_scores (xp DESC)`,
+    `ALTER TABLE game_history ADD COLUMN IF NOT EXISTS room_code text`,
+    `ALTER TABLE game_history ADD COLUMN IF NOT EXISTS room_id integer`,
+    // v3 is the authoritative idempotency key: room_id identifies the
+    // concrete room instance, so recycled room codes cannot collide.
+    // Remove both legacy code-based indexes; keeping v2 would reintroduce
+    // false conflicts when a room code is reused for a later game.
+    `DROP INDEX IF EXISTS game_history_room_player_uidx_v2`,
+    `DROP INDEX IF EXISTS game_history_room_player_uidx`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS game_history_room_player_uidx_v3 ON game_history (room_id, player_id)`,
+
     `CREATE INDEX IF NOT EXISTS game_history_created_at_idx ON game_history (created_at)`,
     `CREATE INDEX IF NOT EXISTS game_history_player_id_created_at_desc_idx ON game_history (player_id, created_at DESC)`,
     `CREATE INDEX IF NOT EXISTS game_history_player_id_score_desc_idx ON game_history (player_id, score DESC)`,
@@ -58,6 +68,11 @@ export async function ensureIndexes(): Promise<void> {
     `CREATE UNIQUE INDEX IF NOT EXISTS daily_results_player_date_uidx
        ON daily_results (player_id, challenge_date)`,
     `CREATE TABLE IF NOT EXISTS cron_locks (lock_key text PRIMARY KEY, last_run_date text NOT NULL, updated_at timestamp NOT NULL DEFAULT NOW())`,
+    `CREATE TABLE IF NOT EXISTS revoked_player_ids (player_id text PRIMARY KEY, revoked_at timestamp NOT NULL DEFAULT NOW())`,
+    `CREATE INDEX IF NOT EXISTS revoked_player_ids_revoked_at_idx ON revoked_player_ids (revoked_at)`,
+    `CREATE TABLE IF NOT EXISTS api_rate_limits (bucket_key text PRIMARY KEY, window_start timestamp NOT NULL, hits integer NOT NULL DEFAULT 0)`,
+    `CREATE TABLE IF NOT EXISTS ai_word_validation_claims (cache_key text PRIMARY KEY, claimed_at timestamp NOT NULL DEFAULT NOW())`,
+    `CREATE TABLE IF NOT EXISTS ai_word_validation_daily_quota (quota_date date NOT NULL, scope text NOT NULL, used integer NOT NULL DEFAULT 0, PRIMARY KEY (quota_date, scope))`,
     `CREATE TABLE IF NOT EXISTS guest_stats (day text PRIMARY KEY, games integer NOT NULL DEFAULT 0, conversions integer NOT NULL DEFAULT 0)`,
     `CREATE TABLE IF NOT EXISTS seasons (id serial PRIMARY KEY, start_date text NOT NULL, end_date text NOT NULL, theme_json text NOT NULL DEFAULT '{}', created_at timestamp NOT NULL DEFAULT NOW())`,
     `CREATE TABLE IF NOT EXISTS season_progress (id serial PRIMARY KEY, player_id text NOT NULL, season_id integer NOT NULL, xp integer NOT NULL DEFAULT 0, claimed_tiers text NOT NULL DEFAULT '{"free":[],"premium":[]}', missions_json text NOT NULL DEFAULT '{}', updated_at timestamp NOT NULL DEFAULT NOW())`,
@@ -66,9 +81,26 @@ export async function ensureIndexes(): Promise<void> {
     `CREATE UNIQUE INDEX IF NOT EXISTS season_progress_player_season_uidx ON season_progress (player_id, season_id)`,
     `CREATE INDEX IF NOT EXISTS season_progress_season_xp_desc_idx ON season_progress (season_id, xp DESC)`,
     `CREATE TABLE IF NOT EXISTS play_subscriptions (id serial PRIMARY KEY, player_id text NOT NULL, product_id text NOT NULL, purchase_token text NOT NULL UNIQUE, order_id text, state text NOT NULL DEFAULT 'ACTIVE', expiry_time_ms bigint NOT NULL DEFAULT 0, start_time_ms bigint NOT NULL DEFAULT 0, raw_json text NOT NULL DEFAULT '{}', created_at timestamp NOT NULL DEFAULT NOW(), updated_at timestamp NOT NULL DEFAULT NOW())`,
+    `CREATE TABLE IF NOT EXISTS play_product_purchases (id serial PRIMARY KEY, player_id text NOT NULL, product_id text NOT NULL, purchase_token text NOT NULL UNIQUE, order_id text, purchase_state bigint NOT NULL DEFAULT 0, raw_json text NOT NULL DEFAULT '{}', created_at timestamp NOT NULL DEFAULT NOW(), updated_at timestamp NOT NULL DEFAULT NOW())`,
+    `CREATE INDEX IF NOT EXISTS play_product_purchases_player_id_idx ON play_product_purchases (player_id)`,
     `CREATE INDEX IF NOT EXISTS play_subscriptions_player_id_idx ON play_subscriptions (player_id)`,
     `CREATE INDEX IF NOT EXISTS play_subscriptions_player_state_expiry_idx ON play_subscriptions (player_id, state, expiry_time_ms)`,
     `CREATE TABLE IF NOT EXISTS score_voucher_uses (jti text PRIMARY KEY, expires_at timestamp NOT NULL, used_at timestamp NOT NULL DEFAULT NOW())`,
+    `CREATE TABLE IF NOT EXISTS push_notification_throttles (throttle_key text PRIMARY KEY, claimed_at timestamp NOT NULL DEFAULT NOW())`,
+    // Spy usage belongs to a concrete room instance, not its recyclable
+    // 6-character code. Legacy rows cannot be mapped safely after a code
+    // recycle, so remove the old primary key and discard only rows without
+    // the new room_id. This is idempotent after the first upgraded boot.
+    `CREATE TABLE IF NOT EXISTS room_spy_usage (room_code text NOT NULL, player_id text NOT NULL, round integer NOT NULL, uses integer NOT NULL DEFAULT 0, PRIMARY KEY (room_code, player_id, round))`,
+    `ALTER TABLE room_spy_usage ADD COLUMN IF NOT EXISTS room_id integer`,
+    `ALTER TABLE room_spy_usage DROP CONSTRAINT IF EXISTS room_spy_usage_pkey`,
+    `DELETE FROM room_spy_usage WHERE room_id IS NULL`,
+    `ALTER TABLE room_spy_usage ALTER COLUMN room_id SET NOT NULL`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS room_spy_usage_room_player_round_uidx ON room_spy_usage (room_id, player_id, round)`,
+    `CREATE INDEX IF NOT EXISTS room_spy_usage_round_idx ON room_spy_usage (room_id, round)`,
+    `CREATE INDEX IF NOT EXISTS push_notification_throttles_claimed_at_idx ON push_notification_throttles (claimed_at)`,
+    `CREATE TABLE IF NOT EXISTS score_submission_idempotency (submission_id text PRIMARY KEY, player_id text NOT NULL, request_hash text NOT NULL, response_json text NOT NULL, created_at timestamp NOT NULL DEFAULT NOW())`,
+    `CREATE INDEX IF NOT EXISTS score_submission_idempotency_player_id_idx ON score_submission_idempotency (player_id)`,
     `CREATE TABLE IF NOT EXISTS score_bonus_claims (token_set_hash text PRIMARY KEY, player_id text NOT NULL, max_score integer NOT NULL, expires_at timestamp NOT NULL, created_at timestamp NOT NULL DEFAULT NOW())`,
     `CREATE INDEX IF NOT EXISTS score_bonus_claims_player_id_idx ON score_bonus_claims (player_id)`,
     `CREATE INDEX IF NOT EXISTS score_bonus_claims_expires_at_idx ON score_bonus_claims (expires_at)`,
@@ -86,9 +118,13 @@ export async function ensureIndexes(): Promise<void> {
     try {
       await db.execute(sql.raw(stmt));
     } catch (err: any) {
-      if (!/already exists/i.test(err?.message ?? "")) {
-        console.error("[ensureIndexes] failed:", err?.message ?? err);
-      }
+      // Every bootstrap statement is already idempotent via IF NOT EXISTS.
+      // Never hide an "already exists" error here: it can indicate a real
+      // schema conflict (for example, an existing index with the wrong
+      // definition) that must keep the API in a non-ready state.
+      console.error("[ensureIndexes] failed:", err?.message ?? err);
+      _indexesReady = false;
+      throw err;
     }
   }
   _indexesReady = true;

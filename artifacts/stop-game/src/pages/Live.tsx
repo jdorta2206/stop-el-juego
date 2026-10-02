@@ -20,23 +20,29 @@ export default function Live() {
   const code = params.code?.toUpperCase();
   const [room, setRoom] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
+  const [networkError, setNetworkError] = useState(false);
 
   useEffect(() => {
     if (!code) return;
     let stop = false;
+    let activeController: AbortController | null = null;
     const fetchOnce = async () => {
+      activeController?.abort();
+      const controller = new AbortController();
+      activeController = controller;
       try {
-        const r = await fetch(`${API}/api/rooms/${encodeURIComponent(code)}/spectate`);
+        const r = await fetch(`${API}/api/rooms/${encodeURIComponent(code)}/spectate`, { signal: controller.signal });
         if (r.status === 404) { setError("Sala no encontrada"); return; }
         if (r.status === 403) { setError("Esta sala no es pública"); return; }
-        if (!r.ok) return;
+        if (!r.ok) { if (!stop) setNetworkError(true); return; }
         const data = await r.json();
-        if (!stop) { setRoom(data); setError(null); }
-      } catch { /* ignore */ }
+        if (!stop) { setRoom(data); setError(null); setNetworkError(false); }
+      } catch { if (!stop && !controller.signal.aborted) setNetworkError(true); }
+      finally { if (activeController === controller) activeController = null; }
     };
     fetchOnce();
     const id = setInterval(fetchOnce, 2000);
-    return () => { stop = true; clearInterval(id); };
+    return () => { stop = true; clearInterval(id); activeController?.abort(); };
   }, [code]);
 
   if (error) {
@@ -47,6 +53,12 @@ export default function Live() {
           <Link href="/"><Button>Volver al inicio</Button></Link>
         </div>
       </PageShell>
+    );
+  }
+
+  if (!room && networkError) {
+    return (
+      <PageShell><div className="flex flex-col items-center gap-4 p-8 text-center"><p className="text-white/80 font-bold">No se pudo conectar con la sala</p><Button onClick={() => window.location.reload()}>Reintentar</Button></div></PageShell>
     );
   }
 

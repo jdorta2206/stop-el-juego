@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import type { PlayerProfile } from "@/hooks/use-player";
-import { getApiUrl } from "@/lib/utils";
+import { getApiUrl, authHeaders } from "@/lib/utils";
 
 const API_BASE = getApiUrl();
 const PING_INTERVAL = 30_000; // 30 seconds
@@ -35,7 +35,7 @@ async function ping(player: PlayerProfile, roomCode?: string | null, language?: 
   try {
     await fetch(`${API_BASE}/api/presence/ping`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify({
         playerId: player.id,
         name: player.name,
@@ -52,9 +52,9 @@ async function ping(player: PlayerProfile, roomCode?: string | null, language?: 
 }
 
 // Fetch current online players
-export async function fetchOnlinePlayers(): Promise<OnlinePlayer[]> {
+export async function fetchOnlinePlayers(signal?: AbortSignal): Promise<OnlinePlayer[]> {
   try {
-    const res = await fetch(`${API_BASE}/api/presence/online`);
+    const res = await fetch(`${API_BASE}/api/presence/online`, { signal });
     if (!res.ok) return [];
     const data = await res.json();
     return data.online || [];
@@ -72,7 +72,8 @@ export async function sendChallenge(
   try {
     const res = await fetch(`${API_BASE}/api/presence/challenge`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      credentials: "include",
       body: JSON.stringify({
         fromPlayerId: player.id,
         fromName: player.name,
@@ -97,7 +98,8 @@ export async function respondToChallenge(
   try {
     const res = await fetch(`${API_BASE}/api/presence/challenge/${challengeId}/respond`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      credentials: "include",
       body: JSON.stringify({ accepted }),
     });
     if (!res.ok) return { roomCode: null };
@@ -117,7 +119,8 @@ export async function sendRoomInvite(
   try {
     const res = await fetch(`${API_BASE}/api/presence/room-invite`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      credentials: "include",
       body: JSON.stringify({
         fromPlayerId: player.id,
         fromName: player.name,
@@ -136,10 +139,11 @@ export async function sendRoomInvite(
 
 // Poll the status of a sent challenge
 export async function pollChallengeStatus(
-  challengeId: string
+  challengeId: string,
+  signal?: AbortSignal,
 ): Promise<{ status: "pending" | "accepted" | "declined" | "expired"; roomCode: string }> {
   try {
-    const res = await fetch(`${API_BASE}/api/presence/challenge/${challengeId}/status`);
+    const res = await fetch(`${API_BASE}/api/presence/challenge/${challengeId}/status`, { signal, headers: authHeaders(), credentials: "include" });
     if (!res.ok) return { status: "expired", roomCode: "" };
     return await res.json();
   } catch {
@@ -158,16 +162,30 @@ export function usePresence(
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const challengePollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const activeChallenge = useRef<string | null>(null); // track if we're already showing one
+  const refreshAbortRef = useRef<AbortController | null>(null);
+  const challengeAbortRef = useRef<AbortController | null>(null);
 
   const refresh = useCallback(async () => {
-    const players = await fetchOnlinePlayers();
-    setOnlinePlayers(players);
+    refreshAbortRef.current?.abort();
+    const controller = new AbortController();
+    refreshAbortRef.current = controller;
+    try {
+      const players = await fetchOnlinePlayers(controller.signal);
+      if (!controller.signal.aborted) setOnlinePlayers(players);
+    } catch {
+      // Abort is expected when a newer refresh supersedes this one.
+    } finally {
+      if (refreshAbortRef.current === controller) refreshAbortRef.current = null;
+    }
   }, []);
 
   const pollChallenges = useCallback(async () => {
     if (!player || activeChallenge.current) return;
+    challengeAbortRef.current?.abort();
+    const controller = new AbortController();
+    challengeAbortRef.current = controller;
     try {
-      const res = await fetch(`${API_BASE}/api/presence/challenges/${player.id}`);
+      const res = await fetch(`${API_BASE}/api/presence/challenges/${player.id}`, { signal: controller.signal, headers: authHeaders() });
       if (!res.ok) return;
       const data = await res.json();
       const challenges: IncomingChallenge[] = data.challenges || [];
@@ -176,12 +194,15 @@ export function usePresence(
         setIncomingChallenge(challenges[0]);
       }
     } catch {
-      // silent
+      // Abort is expected when a newer poll supersedes this one.
+    } finally {
+      if (challengeAbortRef.current === controller) challengeAbortRef.current = null;
     }
   }, [player?.id]);
 
   const dismissChallenge = useCallback(() => {
     activeChallenge.current = null;
+    challengeAbortRef.current?.abort();
     setIncomingChallenge(null);
   }, []);
 
@@ -204,6 +225,8 @@ export function usePresence(
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
       if (challengePollRef.current) clearInterval(challengePollRef.current);
+      refreshAbortRef.current?.abort();
+      challengeAbortRef.current?.abort();
     };
   }, [player?.id, roomCode, language]);
 

@@ -1,7 +1,9 @@
 import { Router, type IRouter } from "express";
 import { stripeStorage } from "../stripeStorage";
+import { db, playerScoresTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
 import { stripeService } from "../stripeService";
-import { getUncachableStripeClient } from "../stripeClient";
+import { getUncachableStripeClient, isStripeReady } from "../stripeClient";
 import { verifyClaimedIdentity } from "../lib/playerAuth";
 import { isUserPremium } from "../lib/premiumStatus";
 import {
@@ -10,9 +12,21 @@ import {
   WORLD_CUP_PACK_CURRENCY,
   WORLD_CUP_PACK_NAME,
   grantWorldCupPack,
+  worldCupPackItemIds,
 } from "../lib/worldCupPack";
 
 const router: IRouter = Router();
+
+// Stripe schema/sync initialization runs after the main DB bootstrap. Do not
+// expose billing endpoints until both are ready; otherwise a startup failure
+// could turn into misleading 500s or queries against missing stripe.* tables.
+router.use((_req, res, next) => {
+  if (!isStripeReady()) {
+    res.setHeader("Retry-After", "5");
+    return res.status(503).json({ error: "Stripe is still initializing" });
+  }
+  next();
+});
 
 const APP_ORIGIN =
   process.env["APP_ORIGIN"] ||
@@ -106,19 +120,63 @@ router.post("/checkout", async (req, res) => {
     if (!playerId || !priceId) {
       return res.status(400).json({ error: "playerId and priceId required" });
     }
+
+    // 🔒 The browser must never choose which Stripe recurring product is sold.
+    // Keep the Premium price id server-side so another active recurring price
+    // (for example an internal/test product) cannot be purchased through this
+    // endpoint and potentially receive the Premium entitlement.
+    const premiumPriceId = process.env["STRIPE_PREMIUM_PRICE_ID"]?.trim();
+    if (!premiumPriceId) {
+      console.error("[stripe/checkout] STRIPE_PREMIUM_PRICE_ID is not configured");
+      return res.status(503).json({ error: "Premium checkout is not configured" });
+    }
+    if (priceId !== premiumPriceId) {
+      return res.status(400).json({ error: "Invalid Premium price" });
+    }
+
     // 🔒 A logged-in account can only check out for ITSELF — blocks anyone from
     // creating a Stripe session against another player's id (which is public).
     if (!verifyClaimedIdentity(req, playerId)) {
       return res.status(403).json({ error: "Identity verification failed" });
     }
 
-    let player = await stripeStorage.getPlayer(playerId);
+    // Never create another Premium subscription for an account that already
+    // has Premium from either billing channel. This also covers a Stripe
+    // subscription that has just become active/trialing but whose cached
+    // player_scores.isPremium flag is stale.
+    if (await isUserPremium(playerId)) {
+      return res.status(409).json({ error: "Premium subscription already active" });
+    }
+
+    const player = await stripeStorage.getPlayer(playerId);
+
     let customerId = player?.stripeCustomerId || null;
+
+    // Stripe customers can be deleted outside this application. Never send a
+    // stale customer id to Checkout: recover the account exactly as the pack
+    // checkout flow does, then persist the replacement id.
+    let customerRecoveryKey = `stripe-customer:${playerId}`;
+    if (customerId) {
+      try {
+        const stripe = await getUncachableStripeClient();
+        const customer = await stripe.customers.retrieve(customerId);
+        if (customer.deleted) {
+          customerRecoveryKey = `stripe-customer:${playerId}:recovery:${customerId}`;
+          customerId = null;
+        }
+      } catch (error: any) {
+        const invalidCustomerId = customerId;
+        console.warn(`[stripe/checkout] invalid customer ${invalidCustomerId}: ${error.message}`);
+        customerRecoveryKey = `stripe-customer:${playerId}:recovery:${invalidCustomerId}`;
+        customerId = null;
+      }
+    }
 
     if (!customerId) {
       const customer = await stripeService.createCustomer(
         email || `${playerId}@stop-game.app`,
-        playerId
+        playerId,
+        customerRecoveryKey
       );
       customerId = customer.id;
       await stripeStorage.updatePlayerStripeInfo(playerId, {
@@ -130,7 +188,12 @@ router.post("/checkout", async (req, res) => {
       customerId,
       priceId,
       `${APP_ORIGIN}/?premium=success`,
-      `${APP_ORIGIN}/?premium=cancel`
+      `${APP_ORIGIN}/?premium=cancel`,
+      // Keep one idempotency key for this player/price so repeated
+      // clicks or concurrent requests cannot create multiple Checkout
+      // Sessions/subscriptions. Stripe expires idempotency keys naturally;
+      // the live Premium check above prevents reuse once entitlement exists.
+      `premium-checkout:${playerId}:${priceId}`
     );
 
     return res.json({ url: session.url });
@@ -163,12 +226,40 @@ router.post("/checkout-pack", async (req, res) => {
     }
 
     const player = await stripeStorage.getPlayer(playerId);
+
+    // The World Cup pack is a one-time bundle. Enforce ownership server-side,
+    // not only in the UI, so a direct/replayed API call cannot create another
+    // paid Checkout session after the player already owns every pack item.
+    const scoreRows = await db
+      .select({ inventoryJson: playerScoresTable.inventoryJson })
+      .from(playerScoresTable)
+      .where(eq(playerScoresTable.playerId, playerId))
+      .limit(1);
+    const rawInventory = scoreRows[0]?.inventoryJson ?? "{}";
+    let ownedIds = new Set<string>();
+    try {
+      const parsed = JSON.parse(rawInventory) as Record<string, unknown>;
+      ownedIds = new Set([
+        ...(Array.isArray(parsed.avatars) ? parsed.avatars.filter((v): v is string => typeof v === "string") : []),
+        ...(Array.isArray(parsed.frames) ? parsed.frames.filter((v): v is string => typeof v === "string") : []),
+        ...(Array.isArray(parsed.backgrounds) ? parsed.backgrounds.filter((v): v is string => typeof v === "string") : []),
+      ]);
+    } catch {
+      // Corrupt inventory cannot prove ownership; allow checkout and let the
+      // idempotent grant repair the inventory after a genuine payment.
+    }
+    const packItemIds = worldCupPackItemIds();
+    if (packItemIds.length > 0 && packItemIds.every((id) => ownedIds.has(id))) {
+      return res.status(409).json({ error: "World Cup pack already owned" });
+    }
+
     let customerId = player?.stripeCustomerId || null;
     
     // ============================================================
     // VALIDAR QUE EL CUSTOMER EXISTA EN STRIPE
     // ============================================================
     let validCustomerId: string | undefined;
+    let customerRecoveryKey = `stripe-customer:${playerId}`;
     if (customerId) {
       try {
         const stripe = await getUncachableStripeClient();
@@ -178,10 +269,13 @@ router.post("/checkout-pack", async (req, res) => {
           console.log(`Customer ${customerId} validated successfully`);
         } else {
           console.warn(`Customer ${customerId} is deleted, will create new one`);
+          customerRecoveryKey = `stripe-customer:${playerId}:recovery:${customerId}`;
           customerId = null;
         }
       } catch (error: any) {
-        console.warn(`Invalid Stripe customer ${customerId}: ${error.message}. Creating new customer.`);
+        const invalidCustomerId = customerId;
+        console.warn(`Invalid Stripe customer ${invalidCustomerId}: ${error.message}. Creating new customer.`);
+        customerRecoveryKey = `stripe-customer:${playerId}:recovery:${invalidCustomerId}`;
         customerId = null;
       }
     }
@@ -190,7 +284,8 @@ router.post("/checkout-pack", async (req, res) => {
     if (!customerId) {
       const customer = await stripeService.createCustomer(
         email || `${playerId}@stop-game.app`,
-        playerId
+        playerId,
+        customerRecoveryKey
       );
       customerId = customer.id;
       validCustomerId = customerId;
@@ -209,7 +304,8 @@ router.post("/checkout-pack", async (req, res) => {
         metadata: { playerId, sku },
       },
       `${APP_ORIGIN}/?pack=success&session_id={CHECKOUT_SESSION_ID}`,
-      `${APP_ORIGIN}/?pack=cancel`
+      `${APP_ORIGIN}/?pack=cancel`,
+      `pack-checkout:${playerId}:${sku}`
     );
 
     return res.json({ url: session.url });

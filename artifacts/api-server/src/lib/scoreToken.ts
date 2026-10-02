@@ -57,6 +57,7 @@ export function issueScoreToken(
   base: number,
   collectionWords: Array<{ word: string; category: string }> = [],
   mode: ScoreVoucherMode = "solo",
+  aiBase = 0,
 ): string | null {
   const secret = getSigningSecret();
   if (!secret) return null;
@@ -73,8 +74,9 @@ export function issueScoreToken(
     .filter((entry) => entry.word.length > 0 && entry.category.length > 0);
   const safeMode: ScoreVoucherMode =
     mode === "daily" || mode === "multiplayer" ? mode : "solo";
+  const safeAiBase = Math.max(0, Math.min(100_000, Math.floor(aiBase)));
   const collectionData = Buffer.from(JSON.stringify(safeCollectionWords), "utf8").toString("base64url");
-  const payload = `${safeBase}.${KIND_ROUND}.${exp}.${jti}.${safeMode}.${collectionData}`;
+  const payload = `${safeBase}.${KIND_ROUND}.${exp}.${jti}.${safeMode}.${safeAiBase}.${collectionData}`;
   return `${payload}.${sign(secret, payload)}`;
 }
 
@@ -83,6 +85,7 @@ type VerifiedVoucher = {
   exp: number;
   jti: string;
   mode: ScoreVoucherMode | null;
+  aiBase: number | null;
   collectionWords: Array<{ word: string; category: string }>;
 };
 
@@ -93,21 +96,25 @@ function parseVerifiedVoucher(
 ): VerifiedVoucher | null {
   if (typeof token !== "string" || token.length > MAX_TOKEN_LENGTH) return null;
   const parts = token.split(".");
-  if (parts.length !== 5 && parts.length !== 6 && parts.length !== 7) return null;
+  if (parts.length !== 5 && parts.length !== 6 && parts.length !== 7 && parts.length !== 8) return null;
 
   const [baseStr, kind, expStr, jti] = parts;
-  const mode = parts.length === 7
+  const mode = parts.length >= 7
     ? (parts[4] === "daily" || parts[4] === "multiplayer" || parts[4] === "solo" ? parts[4] : null)
     : null;
-  const collectionData = parts.length === 7 ? parts[5] : parts.length === 6 ? parts[4] : "";
-  const sig = parts.length === 7 ? parts[6] : parts.length === 6 ? parts[5] : parts[4];
+  const hasAiBase = parts.length === 8;
+  const aiBaseStr = hasAiBase ? parts[5] : "0";
+  const collectionData = hasAiBase ? parts[6] : parts.length === 7 ? parts[5] : parts.length === 6 ? parts[4] : "";
+  const sig = hasAiBase ? parts[7] : parts.length === 7 ? parts[6] : parts.length === 6 ? parts[5] : parts[4];
   if (kind !== KIND_ROUND || !jti || !sig) return null;
 
-  const payload = parts.length === 7
-    ? `${baseStr}.${kind}.${expStr}.${jti}.${parts[4]}.${collectionData}`
-    : parts.length === 6
-      ? `${baseStr}.${kind}.${expStr}.${jti}.${collectionData}`
-      : `${baseStr}.${kind}.${expStr}.${jti}`;
+  const payload = hasAiBase
+    ? `${baseStr}.${kind}.${expStr}.${jti}.${parts[4]}.${aiBaseStr}.${collectionData}`
+    : parts.length === 7
+      ? `${baseStr}.${kind}.${expStr}.${jti}.${parts[4]}.${collectionData}`
+      : parts.length === 6
+        ? `${baseStr}.${kind}.${expStr}.${jti}.${collectionData}`
+        : `${baseStr}.${kind}.${expStr}.${jti}`;
   const expected = sign(secret, payload);
 
   try {
@@ -120,8 +127,10 @@ function parseVerifiedVoucher(
 
   const exp = Number(expStr);
   const b = Number(baseStr);
+  const aiBase = hasAiBase ? Number(aiBaseStr) : null;
   if (!Number.isSafeInteger(exp) || exp <= now) return null;
   if (!Number.isFinite(b) || !Number.isSafeInteger(b) || b < 0 || b > 100_000) return null;
+  if (aiBase !== null && (!Number.isFinite(aiBase) || !Number.isSafeInteger(aiBase) || aiBase < 0 || aiBase > 100_000)) return null;
 
   let collectionWords: Array<{ word: string; category: string }> = [];
   if (collectionData) {
@@ -142,7 +151,7 @@ function parseVerifiedVoucher(
     }
   }
 
-  return { base: b, exp, jti, mode, collectionWords };
+  return { base: b, exp, jti, mode, aiBase, collectionWords };
 }
 
 /** Legacy in-process helper retained for tests. */
@@ -182,6 +191,86 @@ export function sumVerifiedBase(
  * fail closed. All valid vouchers in the bounded batch are burned, while only
  * the highest maxTokens bases contribute to the score ceiling.
  */
+export type VerifiedScoreVoucher = {
+  base: number;
+  jti: string;
+  expiresAt: Date;
+  mode: ScoreVoucherMode | null;
+  aiBase: number | null;
+  collectionWords: Array<{ word: string; category: string }>;
+};
+
+export async function verifyScoreVouchers(
+  tokens: unknown,
+  maxTokens = Number.POSITIVE_INFINITY,
+): Promise<{
+  vouchers: VerifiedScoreVoucher[];
+  base: number;
+  verified: number;
+  collectionWords: Array<{ word: string; category: string }>;
+  mode: ScoreVoucherMode | null;
+  aiBase: number | null;
+}> {
+  if (!Array.isArray(tokens) || tokens.length === 0 || tokens.length > MAX_TOKEN_BATCH) {
+    return { vouchers: [], base: 0, verified: 0, collectionWords: [], mode: null, aiBase: 0 };
+  }
+  const secret = getSigningSecret();
+  if (!secret) return { vouchers: [], base: 0, verified: 0, collectionWords: [], mode: null, aiBase: 0 };
+
+  const now = Date.now();
+  const cap = Number.isFinite(maxTokens) ? Math.max(0, Math.floor(maxTokens)) : tokens.length;
+  if (cap === 0) return { vouchers: [], base: 0, verified: 0, collectionWords: [], mode: null, aiBase: 0 };
+
+  const candidates: VerifiedScoreVoucher[] = [];
+  for (const token of tokens) {
+    const voucher = parseVerifiedVoucher(token, secret, now);
+    if (!voucher) continue;
+    candidates.push({
+      base: voucher.base,
+      jti: voucher.jti,
+      expiresAt: new Date(voucher.exp),
+      mode: voucher.mode,
+      aiBase: voucher.aiBase,
+      collectionWords: voucher.collectionWords,
+    });
+  }
+
+  candidates.sort((a, b) => b.base - a.base);
+  const counted = candidates.slice(0, cap);
+  const certifiedModes = new Set(counted.map((entry) => entry.mode).filter(Boolean));
+  const mode = certifiedModes.size === 1 ? (Array.from(certifiedModes)[0] as ScoreVoucherMode) : null;
+  return {
+    vouchers: counted,
+    base: counted.reduce((sum, entry) => sum + entry.base, 0),
+    verified: counted.length,
+    collectionWords: counted.flatMap((entry) => entry.collectionWords),
+    mode,
+    aiBase: counted.every((entry) => entry.aiBase !== null)
+      ? counted.reduce((sum, entry) => sum + (entry.aiBase ?? 0), 0)
+      : null,
+  };
+}
+
+export async function claimScoreVouchersTx(
+  tx: any,
+  vouchers: VerifiedScoreVoucher[],
+): Promise<boolean> {
+  for (const voucher of vouchers) {
+    const claimed = await tx
+      .insert(scoreVoucherUsesTable)
+      .values({ jti: voucher.jti, expiresAt: voucher.expiresAt })
+      .onConflictDoNothing()
+      .returning({ jti: scoreVoucherUsesTable.jti });
+    if (claimed.length === 0) return false;
+  }
+  return true;
+}
+
+/**
+ * Legacy convenience wrapper. New authoritative score paths should call
+ * verifyScoreVouchers before their transaction and claimScoreVouchersTx inside
+ * the transaction that credits the score.
+ */
 export async function sumVerifiedBasePersistent(
   tokens: unknown,
   maxTokens = Number.POSITIVE_INFINITY,
@@ -190,57 +279,15 @@ export async function sumVerifiedBasePersistent(
   verified: number;
   collectionWords: Array<{ word: string; category: string }>;
   mode: ScoreVoucherMode | null;
+  aiBase: number | null;
 }> {
-  if (!Array.isArray(tokens) || tokens.length === 0 || tokens.length > MAX_TOKEN_BATCH) {
-    return { base: 0, verified: 0, collectionWords: [], mode: null };
+  const verified = await verifyScoreVouchers(tokens, maxTokens);
+  if (verified.vouchers.length === 0) return verified;
+  const claimed = await db.transaction(async (tx) => claimScoreVouchersTx(tx, verified.vouchers));
+  if (!claimed) {
+    return { base: 0, verified: 0, collectionWords: [], mode: null, aiBase: 0 };
   }
-  const secret = getSigningSecret();
-  if (!secret) return { base: 0, verified: 0, collectionWords: [], mode: null };
-
-  const now = Date.now();
-  const cap = Number.isFinite(maxTokens) ? Math.max(0, Math.floor(maxTokens)) : tokens.length;
-  if (cap === 0) return { base: 0, verified: 0, collectionWords: [], mode: null };
-
-  await db
-    .delete(scoreVoucherUsesTable)
-    .where(lt(scoreVoucherUsesTable.expiresAt, new Date(now)));
-
-  const validBases: Array<{
-    base: number;
-    mode: ScoreVoucherMode | null;
-    collectionWords: Array<{ word: string; category: string }>;
-  }> = [];
-
-  for (const token of tokens) {
-    const voucher = parseVerifiedVoucher(token, secret, now);
-    if (!voucher) continue;
-
-    const claimed = await db
-      .insert(scoreVoucherUsesTable)
-      .values({ jti: voucher.jti, expiresAt: new Date(voucher.exp) })
-      .onConflictDoNothing()
-      .returning({ jti: scoreVoucherUsesTable.jti });
-
-    if (claimed.length > 0) {
-      validBases.push({
-        base: voucher.base,
-        mode: voucher.mode,
-        collectionWords: voucher.collectionWords,
-      });
-    }
-  }
-
-  validBases.sort((a, b) => b.base - a.base);
-  const counted = validBases.slice(0, cap);
-
-  const certifiedModes = new Set(counted.map((entry) => entry.mode).filter(Boolean));
-  const mode = certifiedModes.size === 1 ? (Array.from(certifiedModes)[0] as ScoreVoucherMode) : null;
-  return {
-    base: counted.reduce((sum, entry) => sum + entry.base, 0),
-    verified: counted.length,
-    collectionWords: counted.flatMap((entry) => entry.collectionWords),
-    mode,
-  };
+  return verified;
 }
 
 export function ceilingFromBase(base: number): number {

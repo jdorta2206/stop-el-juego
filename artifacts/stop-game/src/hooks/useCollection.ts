@@ -25,24 +25,21 @@ function saveLocal(playerId: string | undefined, c: CollectionMap) {
   try { localStorage.setItem(localKey(playerId), JSON.stringify(c)); } catch {}
 }
 
-// One-time migration: if the player has a legacy unscoped cache and no
-// scoped cache yet, move it under their key. Idempotent.
-function migrateLegacy(playerId?: string) {
-  if (!playerId) return;
-  try {
-    const scopedKey = localKey(playerId);
-    if (localStorage.getItem(scopedKey)) return;
-    const legacy = localStorage.getItem(LEGACY_KEY);
-    if (!legacy) return;
-    localStorage.setItem(scopedKey, legacy);
-    localStorage.removeItem(LEGACY_KEY);
-  } catch {}
-}
+// The legacy collection key was not scoped to an account. Never migrate it
+// into an authenticated player's namespace: on a shared device it may belong
+// to a different account (or to a previous guest), which would contaminate the
+// new account and could later be synced back to the server. Server data is the
+// authoritative recovery path for authenticated players. Keep the legacy key
+// untouched so an explicit, future migration can be handled safely.
 
-async function syncFromServer(playerId: string): Promise<CollectionMap> {
+async function syncFromServer(playerId: string, signal?: AbortSignal): Promise<CollectionMap> {
   if (playerId.startsWith("guest_")) return {};
   try {
-    const r = await fetch(`${getApiUrl()}/api/ranking/progress/${playerId}`);
+    const r = await fetch(`${getApiUrl()}/api/ranking/progress/${playerId}`, {
+      credentials: "include",
+      headers: authHeaders(),
+      signal,
+    });
     if (!r.ok) return {};
     const data = await r.json();
     return data.collectedWords && typeof data.collectedWords === "object"
@@ -57,6 +54,7 @@ async function saveToServer(playerId: string, collected: CollectionMap) {
     await fetch(`${getApiUrl()}/api/ranking/progress/${playerId}`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...authHeaders() },
+      credentials: "include",
       body: JSON.stringify({ collectedWords: collected }),
     });
   } catch {}
@@ -72,27 +70,30 @@ function mergeMaps(a: CollectionMap, b: CollectionMap): CollectionMap {
 
 export function useCollection(playerId?: string) {
   const [collection, setCollection] = useState<CollectionMap>(() => {
-    migrateLegacy(playerId);
     return loadLocal(playerId);
   });
   const [lastDiscovered, setLastDiscovered] = useState<CollectedWord | null>(null);
   const syncedRef = useRef<string | null>(null);
+  const syncAbortRef = useRef<AbortController | null>(null);
 
   // When the player changes (login / account switch), reload from the
   // correct scoped cache so we never carry another player's words over.
   useEffect(() => {
-    migrateLegacy(playerId);
     setCollection(loadLocal(playerId));
     syncedRef.current = null;
+    syncAbortRef.current?.abort();
   }, [playerId]);
 
   // Server → local merge on mount (per-player; re-runs on account switch).
   useEffect(() => {
     if (!playerId || syncedRef.current === playerId) return;
     syncedRef.current = playerId;
-    syncFromServer(playerId).then(serverMap => {
-      if (!Object.keys(serverMap).length) return;
+    const controller = new AbortController();
+    syncAbortRef.current = controller;
+    syncFromServer(playerId, controller.signal).then(serverMap => {
+      if (controller.signal.aborted || !Object.keys(serverMap).length) return;
       setCollection(prev => {
+        if (controller.signal.aborted || syncAbortRef.current !== controller) return prev;
         const merged = mergeMaps(prev, serverMap);
         if (Object.keys(merged).length !== Object.keys(prev).length) {
           saveLocal(playerId, merged);
@@ -102,6 +103,8 @@ export function useCollection(playerId?: string) {
       });
     });
   }, [playerId]);
+
+  useEffect(() => () => syncAbortRef.current?.abort(), [playerId]);
 
   /** Call after a round with the valid words. Persists locally + on the
    * server. If at least one NEW word was rare/epic/legendary, surfaces it

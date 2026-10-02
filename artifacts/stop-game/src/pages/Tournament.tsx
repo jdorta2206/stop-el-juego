@@ -4,7 +4,7 @@ import { useLocation, useRoute } from "wouter";
 import { usePlayer } from "@/hooks/use-player";
 import { usePresence, sendChallenge, type OnlinePlayer } from "@/lib/usePresence";
 import { useFollows } from "@/lib/useFollows";
-import { getApiUrl, publicLink } from "@/lib/utils";
+import { getApiUrl, publicLink, authHeaders } from "@/lib/utils";
 import {
   Trophy, Users, Play, Copy, Check, ChevronRight,
   Swords, Crown, ArrowLeft, Loader2, Plus, LogIn, Share2, MessageCircle, Send
@@ -42,7 +42,7 @@ const API = getApiUrl();
 
 async function apiFetch(path: string, opts?: RequestInit) {
   const r = await fetch(`${API}/api/tournaments${path}`, {
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...authHeaders() },
     ...opts,
   });
   return r.json();
@@ -70,11 +70,22 @@ export default function Tournament() {
   const [autoJoinTried, setAutoJoinTried] = useState(false);
   const redirectedMatchRef = useRef<string | null>(null);
   const resumeTournamentRef = useRef<string | null>(null);
+  const pollAbortRef = useRef<AbortController | null>(null);
+  const inviteInFlightRef = useRef<Set<string>>(new Set());
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    copiedTimerRef.current = null;
+  }, []);
+  const tournamentActionInFlightRef = useRef(false);
 
   const poll = useCallback(async () => {
     if (!tournament || !player) return;
+    pollAbortRef.current?.abort();
+    const controller = new AbortController();
+    pollAbortRef.current = controller;
     try {
-      const data: Tournament = await apiFetch(`/${tournament.code}`);
+      const data: Tournament = await apiFetch(`/${tournament.code}`, { signal: controller.signal });
       setTournament(data);
       if (data.status === "active" && view !== "bracket") setView("bracket");
 
@@ -91,13 +102,20 @@ export default function Tournament() {
           navigate(`/room/${myMatch.roomCode}?torneo=${data.code}&match=${myMatch.id}`);
         }
       }
-    } catch {}
+    } catch (error) {
+      if (!controller.signal.aborted) return;
+    } finally {
+      if (pollAbortRef.current === controller) pollAbortRef.current = null;
+    }
   }, [tournament, player, view, navigate]);
 
   useEffect(() => {
     if (!tournament) return;
     const id = setInterval(poll, 2500);
-    return () => clearInterval(id);
+    return () => {
+      clearInterval(id);
+      pollAbortRef.current?.abort();
+    };
   }, [poll, tournament]);
 
   useEffect(() => {
@@ -116,7 +134,8 @@ export default function Tournament() {
   }, []);
 
   const createTournament = async () => {
-    if (!player || !tName.trim()) return;
+    if (!player || !tName.trim() || tournamentActionInFlightRef.current) return;
+    tournamentActionInFlightRef.current = true;
     setLoading(true); setError("");
     try {
       const data: Tournament = await apiFetch("/", {
@@ -126,22 +145,23 @@ export default function Tournament() {
       setTournament(data);
       setView("lobby");
     } catch { setError("Error al crear torneo"); }
-    setLoading(false);
+    finally { tournamentActionInFlightRef.current = false; setLoading(false); }
   };
 
   const joinByCode = useCallback(async (code: string) => {
-    if (!player || !code) return;
+    if (!player || !code || tournamentActionInFlightRef.current) return;
+    tournamentActionInFlightRef.current = true;
     setLoading(true); setError("");
     try {
       const data: any = await apiFetch(`/${code.toUpperCase()}/join`, {
         method: "POST",
         body: JSON.stringify({ playerId: player.id, playerName: player.name }),
       });
-      if (data.error) { setError(data.error); setLoading(false); return; }
+      if (data.error) { setError(data.error); return; }
       setTournament(data);
       setView(data.status === "active" ? "bracket" : "lobby");
     } catch { setError("Código de torneo inválido"); }
-    setLoading(false);
+    finally { tournamentActionInFlightRef.current = false; setLoading(false); }
   }, [player]);
 
   // Auto-join when arriving via /torneo/:code link
@@ -156,15 +176,33 @@ export default function Tournament() {
   useEffect(() => {
     if (view !== "join" && view !== "home") return;
     let cancelled = false;
+    let controller: AbortController | null = null;
+    let loading = false;
+
     const load = async () => {
+      if (loading || cancelled) return;
+      loading = true;
+      controller?.abort();
+      controller = new AbortController();
       try {
-        const data = await apiFetch("/public");
-        if (!cancelled && Array.isArray(data)) setPublicList(data);
+        const data = await apiFetch("/public", { signal: controller.signal });
+        if (!cancelled && !controller.signal.aborted && Array.isArray(data)) {
+          setPublicList(data);
+        }
       } catch {}
+      finally {
+        loading = false;
+      }
     };
-    load();
-    const id = setInterval(load, 8000);
-    return () => { cancelled = true; clearInterval(id); };
+
+    void load();
+    const id = setInterval(() => { void load(); }, 8000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+      controller?.abort();
+      controller = null;
+    };
   }, [view]);
 
   const joinTournament = async () => {
@@ -173,23 +211,24 @@ export default function Tournament() {
   };
 
   const startTournament = async () => {
-    if (!tournament || !player) return;
+    if (!tournament || !player || tournamentActionInFlightRef.current) return;
+    tournamentActionInFlightRef.current = true;
     setLoading(true); setError("");
     try {
       const data: any = await apiFetch(`/${tournament.code}/start`, {
         method: "POST",
         body: JSON.stringify({ hostId: player.id }),
       });
-      if (data.error) { setError(data.error); setLoading(false); return; }
+      if (data.error) { setError(data.error); return; }
       setTournament(data);
       setView("bracket");
     } catch { setError("Error al iniciar torneo"); }
-    setLoading(false);
+    finally { tournamentActionInFlightRef.current = false; setLoading(false); }
   };
 
   const startMatch = async (match: Match) => {
-    if (!tournament || !player) return;
-    // The server creates the authoritative room and links it to this match.
+    if (!tournament || !player || tournamentActionInFlightRef.current) return;
+    tournamentActionInFlightRef.current = true;
     try {
       const response = await apiFetch(`/${tournament.code}/start-match`, {
         method: "POST",
@@ -198,14 +237,20 @@ export default function Tournament() {
       const roomCode: string | undefined = response?.roomCode;
       if (!roomCode) return;
       navigate(`/room/${roomCode}?torneo=${tournament.code}&match=${match.id}`);
-    } catch {}
+    } catch {} finally {
+      tournamentActionInFlightRef.current = false;
+    }
   };
 
   const copyCode = () => {
     if (!tournament) return;
     navigator.clipboard.writeText(tournament.code);
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    copiedTimerRef.current = setTimeout(() => {
+      copiedTimerRef.current = null;
+      setCopied(false);
+    }, 2000);
   };
 
   const getInviteUrl = () => {
@@ -215,7 +260,10 @@ export default function Tournament() {
 
   const getInviteText = () => {
     if (!tournament) return "";
-    return `¡Únete a mi torneo STOP! 🎮\nTorneo: ${tournament.name}\nCódigo: ${tournament.code}\nLink: ${getInviteUrl()}`;
+    return `¡Únete a mi torneo STOP! 🎮
+Torneo: ${tournament.name}
+Código: ${tournament.code}
+Link: ${getInviteUrl()}`;
   };
 
   const shareTournament = async () => {
@@ -233,15 +281,22 @@ export default function Tournament() {
   };
 
   const inviteToTournament = async (targetId: string, targetName: string) => {
-    if (!tournament || !player) return;
+    if (!tournament || !player || invitedIds.has(targetId) || inviteInFlightRef.current.has(targetId)) return;
+    inviteInFlightRef.current.add(targetId);
     const roomCode = tournament.code;
     const online = onlinePlayers.find(p => p.playerId === targetId);
-    if (online) {
-      await sendChallenge(player, targetId, "es");
-    }
-    setInvitedIds(prev => new Set([...prev, targetId]));
-    if (!online) {
-      window.open(`https://wa.me/?text=${encodeURIComponent(`¡${player.name} te invita al torneo STOP! 🎮\n${tournament.name}\nCódigo: ${roomCode}`)}`, "_blank");
+    try {
+      if (online) {
+        const result = await sendChallenge(player, targetId, "es");
+        if (!result) return;
+      } else {
+        window.open(`https://wa.me/?text=${encodeURIComponent(`¡${player.name} te invita al torneo STOP! 🎮
+${tournament.name}
+Código: ${roomCode}`)}`, "_blank");
+      }
+      setInvitedIds(prev => new Set([...prev, targetId]));
+    } finally {
+      inviteInFlightRef.current.delete(targetId);
     }
   };
 

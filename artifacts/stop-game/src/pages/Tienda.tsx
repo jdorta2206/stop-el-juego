@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { usePlayer } from "@/hooks/use-player";
 import { useInventory } from "@/hooks/useInventory";
+import { usePremium } from "@/lib/usePremium";
+import { PremiumModal } from "@/components/PremiumModal";
 import { Layout } from "@/components/Layout";
 import { CosmeticShop } from "@/components/CosmeticShop";
 import { Button } from "@/components/ui";
@@ -10,6 +12,7 @@ import { ShoppingBag, Crown } from "lucide-react";
 export default function Tienda() {
   const { player } = usePlayer();
   const { inventory } = useInventory(player?.id || null);
+  const { isPremium } = usePremium(player?.id);
   const [, setLocation] = useLocation();
   const [showPremiumModal, setShowPremiumModal] = useState(false);
 
@@ -53,6 +56,16 @@ export default function Tienda() {
           </Button>
         </div>
       </div>
+
+      {showPremiumModal && (
+        <PremiumModal
+          open={showPremiumModal}
+          onClose={() => setShowPremiumModal(false)}
+          playerId={player.id}
+          playerName={player.name}
+          isPremium={isPremium}
+        />
+      )}
     </Layout>
   );
 }

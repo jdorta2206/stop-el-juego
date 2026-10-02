@@ -64,22 +64,43 @@ function decodeHandoffPayload(encoded: string): [string, string][] | null {
  * into the DESTINATION origin before React starts, so the login never depends
  * on cross-origin cookies or sessionStorage surviving the OAuth round-trip.
  */
-export function consumeAuthHandoff(): void {
+export async function consumeAuthHandoff(): Promise<void> {
   try {
     const params = new URLSearchParams(window.location.search);
     const queryHandoff = params.get("stopauth");
     const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
     const hashHandoff = hashParams.get("stopauth");
-    const encoded = hashHandoff || queryHandoff;
-    if (!encoded) return;
+    const code = hashHandoff || queryHandoff;
+    if (!code) return;
 
-    const items = decodeHandoffPayload(encoded);
-    if (!items) return;
+    // Remove the opaque one-time code from the address bar before making the
+    // redemption request. The code itself carries no credentials and expires
+    // after two minutes; the actual session/provider tokens stay server-side.
+    params.delete("stopauth");
+    hashParams.delete("stopauth");
+    const hash = hashParams.toString();
+    const query = params.toString();
+    window.history.replaceState({}, "", `${window.location.pathname}${query ? `?${query}` : ""}${hash ? `#${hash}` : ""}`);
+
+    const apiBase =
+      (import.meta as { env?: { VITE_API_URL?: string } }).env?.VITE_API_URL ??
+      window.location.origin;
+
+    const response = await fetch(`${apiBase}/api/auth/handoff`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ code }),
+    });
+    if (!response.ok) return;
+
+    const data = await response.json() as { items?: unknown };
+    if (!Array.isArray(data.items)) return;
 
     const allowed = new Set(["oauth_user", "fb_access_token", "stop_session_token"]);
     const values: Record<string, string> = {};
 
-    for (const item of items) {
+    for (const item of data.items) {
       if (!Array.isArray(item) || item.length !== 2) continue;
       const [key, value] = item;
       if (!allowed.has(key) || typeof value !== "string" || !value) continue;
@@ -93,8 +114,6 @@ export function consumeAuthHandoff(): void {
       } catch {}
     }
 
-    // Bootstrap the visible player synchronously. usePlayer() reads this value
-    // during its first render, so the OAuth return cannot race the auth modal.
     if (values.oauth_user) {
       try {
         const user = JSON.parse(values.oauth_user) as OAuthUser;
@@ -114,14 +133,6 @@ export function consumeAuthHandoff(): void {
         }
       } catch {}
     }
-
-    // Remove BOTH possible handoff locations so the session token does not
-    // remain in the address bar/history after it has been consumed.
-    params.delete("stopauth");
-    hashParams.delete("stopauth");
-    const hash = hashParams.toString();
-    const query = params.toString();
-    window.history.replaceState({}, "", `${window.location.pathname}${query ? `?${query}` : ""}${hash ? `#${hash}` : ""}`);
   } catch {}
 }
 

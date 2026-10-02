@@ -55,7 +55,11 @@ async function startAnalyticsHeartbeat() {
     sessionId = `${platform}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
   }
 
-  const ping = () => {
+  let pingInFlight = false;
+
+  const ping = async () => {
+    if (pingInFlight) return;
+    pingInFlight = true;
     try {
       const version = getInstalledAppVersion();
       let playerId: string | null = null;
@@ -70,19 +74,22 @@ async function startAnalyticsHeartbeat() {
       } catch {
         // Analytics identity is optional and must never affect gameplay.
       }
-      void fetch(`${window.location.origin}/api/analytics/heartbeat`, {
+      await fetch(`${window.location.origin}/api/analytics/heartbeat`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "X-Client-Platform": platform,
           ...(isAndroidTwa ? { "X-Client-TWA": "1" } : {}),
           ...(version ? { "X-Client-Version": version } : {}),
+          ...(localStorage.getItem("stop_session_token") ? { "X-Stop-Token": localStorage.getItem("stop_session_token")! } : {}),
         },
         body: JSON.stringify({ sessionId, playerId, loginMethod, language: document.documentElement.lang || null }),
         keepalive: true,
       }).catch(() => {});
     } catch {
       // Analytics must never interfere with gameplay.
+    } finally {
+      pingInFlight = false;
     }
   };
 
@@ -90,18 +97,21 @@ async function startAnalyticsHeartbeat() {
   window.setInterval(ping, 30_000);
 }
 
-void startAnalyticsHeartbeat();
-consumeAuthHandoff();
+async function bootstrapApp() {
+  await consumeAuthHandoff();
+  createRoot(document.getElementById("root")!).render(
+    <HelmetProvider>
+      <App />
+    </HelmetProvider>
+  );
 
-createRoot(document.getElementById("root")!).render(
-  <HelmetProvider>
-    <App />
-  </HelmetProvider>
-);
-
-if (typeof window !== "undefined") {
-  setTimeout(() => { ensureOfflineBundle(); }, 1500);
+  if (typeof window !== "undefined") {
+    setTimeout(() => { ensureOfflineBundle(); }, 1500);
+  }
 }
+
+void startAnalyticsHeartbeat();
+void bootstrapApp();
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {

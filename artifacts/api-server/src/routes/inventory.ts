@@ -167,21 +167,24 @@ router.post("/equip", requirePlayerIdentity, async (req: AuthedRequest, res) => 
         .set({ equippedTitle: finalValue, updatedAt: new Date() })
         .where(eq(playerScoresTable.playerId, playerId));
     } else {
-      // Backgrounds live inside inventory_json (no dedicated column) so the
-      // feature needs no DB migration. Atomic read-modify-write under a row
-      // lock so a concurrent /buy or reward claim (which also rewrite
-      // inventory_json) can't clobber the owned arrays (lost-update race).
+      // Background ownership lives in inventory_json, while room/friends/ranking
+      // payloads read the dedicated equipped_background column. Keep both
+      // representations synchronized under the same row lock.
       await db.transaction(async (tx) => {
-        const locked = (await tx.execute(sql`
-          SELECT inventory_json FROM player_scores WHERE player_id = ${playerId} FOR UPDATE
-        `)) as unknown as SqlResult<{ inventory_json: string }>;
+        const locked = await tx.execute(sql`
+          SELECT id, inventory_json FROM player_scores WHERE player_id = ${playerId} FOR UPDATE
+        `) as unknown as SqlResult<{ id: number; inventory_json: string }>;
         const lockedRow = locked.rows?.[0];
         if (!lockedRow) return;
         const inv = parseInventory(lockedRow.inventory_json);
         inv.equippedBackground = finalValue;
         await tx.update(playerScoresTable)
-          .set({ inventoryJson: JSON.stringify(inv), updatedAt: new Date() })
-          .where(eq(playerScoresTable.playerId, playerId));
+          .set({
+            inventoryJson: JSON.stringify(inv),
+            equippedBackground: finalValue,
+            updatedAt: new Date(),
+          })
+          .where(eq(playerScoresTable.id, lockedRow.id));
       });
     }
     res.json({ ok: true, kind, value: finalValue });

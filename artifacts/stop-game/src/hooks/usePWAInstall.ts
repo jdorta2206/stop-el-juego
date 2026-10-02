@@ -28,12 +28,16 @@ export function usePWAInstall() {
     window.addEventListener("beforeinstallprompt", handler);
 
     // Detect install completion
-    window.addEventListener("appinstalled", () => {
+    const handleInstalled = () => {
       setIsInstalled(true);
       setInstallPrompt(null);
-    });
+    };
+    window.addEventListener("appinstalled", handleInstalled);
 
-    return () => window.removeEventListener("beforeinstallprompt", handler);
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handler);
+      window.removeEventListener("appinstalled", handleInstalled);
+    };
   }, []);
 
   const triggerInstall = useCallback(async (): Promise<"accepted" | "dismissed" | "unavailable"> => {

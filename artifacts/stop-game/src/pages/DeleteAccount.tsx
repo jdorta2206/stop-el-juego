@@ -4,18 +4,48 @@ export default function DeleteAccount() {
   const [email, setEmail] = useState("");
   const [reason, setReason] = useState("");
   const [sent, setSent] = useState(false);
+  const [deleted, setDeleted] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const subject = encodeURIComponent("Eliminar mis datos — STOP! Juego de Palabras");
-    const body = encodeURIComponent(
-      `Hola,\n\nQuiero eliminar mi cuenta y todos mis datos del juego STOP.\n\n` +
-      `Email / nombre de usuario: ${email}\n\n` +
-      `Motivo (opcional): ${reason}\n\n` +
-      `Confirmo que entiendo que esta acción es irreversible.\n\nGracias.`
-    );
-    window.location.href = `mailto:dorynex@stopjuegodepalabras.com?subject=${subject}&body=${body}`;
-    setSent(true);
+    setErrorMsg("");
+
+    const token = window.localStorage.getItem("stop_session_token");
+
+    if (!token) {
+      const subject = encodeURIComponent("Solicitud de eliminación de cuenta — STOP");
+      const body = encodeURIComponent(
+        `Hola,\n\nQuiero solicitar la eliminación de mi cuenta y mis datos de STOP.\n\nEmail / nombre de usuario: ${email}\n\nMotivo (opcional): ${reason}\n\nGracias.`
+      );
+      window.location.href = `mailto:dorynex@stopjuegodepalabras.com?subject=${subject}&body=${body}`;
+      setSent(true);
+      return;
+    }
+
+    if (!window.confirm("Esta acción eliminará tu cuenta y los datos asociados de forma permanente. ¿Quieres continuar?")) {
+      return;
+    }
+
+    setSent(false);
+    try {
+      const res = await fetch("/api/auth/delete-account", {
+        method: "POST",
+        credentials: "include",
+        headers: { "X-Stop-Token": token },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data?.deleted !== true) {
+        throw new Error(data?.error || "No se pudo eliminar la cuenta.");
+      }
+      window.localStorage.removeItem("stop_session_token");
+      window.localStorage.removeItem("stop_player_v2");
+      window.localStorage.removeItem("oauth_user");
+      window.localStorage.removeItem("stopauth");
+      setDeleted(true);
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : "No se pudo eliminar la cuenta. Inténtalo de nuevo.");
+    }
   };
 
   return (
@@ -84,15 +114,18 @@ export default function DeleteAccount() {
             📧 Solicitud de eliminación
           </h3>
 
-          {sent ? (
-            <div className="text-white/80">
-              <p className="font-semibold mb-2">✅ Tu solicitud está lista para enviar.</p>
+          {deleted ? (
+            <div className="text-green-300">
+              <p className="font-semibold mb-2">✅ Tu cuenta ha sido eliminada.</p>
               <p className="text-sm text-white/60">
-                Si tu app de correo no se abrió automáticamente, copia esta dirección y mándanos un email manualmente:
-                <br />
-                <a href="mailto:dorynex@stopjuegodepalabras.com" className="text-[hsl(48,96%,57%)] underline">
-                  dorynex@stopjuegodepalabras.com
-                </a>
+                Los datos asociados que no debemos conservar ya no están vinculados a tu cuenta.
+              </p>
+            </div>
+          ) : sent ? (
+            <div className="text-white/80">
+              <p className="font-semibold mb-2">📨 Solicitud manual preparada.</p>
+              <p className="text-sm text-white/60">
+                Se ha abierto tu aplicación de correo. La cuenta no se considera eliminada hasta que la solicitud sea verificada y procesada.
               </p>
               <button
                 onClick={() => setSent(false)}
@@ -103,6 +136,11 @@ export default function DeleteAccount() {
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
+              {errorMsg && (
+                <div className="rounded-lg bg-red-500/10 border border-red-500/30 p-3 text-sm text-red-200">
+                  ⚠️ {errorMsg}
+                </div>
+              )}
               <div>
                 <label htmlFor="email" className="block text-sm font-semibold text-white/80 mb-1">
                   Tu email o nombre de usuario *

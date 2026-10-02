@@ -139,6 +139,7 @@ export function Roulette({ onSpinComplete, isSpinning, targetLetter, muted = fal
     };
     tickIntervalRef.current = setTimeout(doTick, 16);
 
+    let cancelled = false;
     controls.start({
       rotate: totalRotation,
       transition: {
@@ -146,17 +147,24 @@ export function Roulette({ onSpinComplete, isSpinning, targetLetter, muted = fal
         ease: [0.05, 0.4, 0.2, 1.0],
       }
     }).then(() => {
+      if (cancelled) return;
       if (tickIntervalRef.current) clearTimeout(tickIntervalRef.current);
       if (!muted) playWinSound(audioCtx);
       setDisplayLetter(targetLetter);
-      setTimeout(() => {
+      completeTimeoutRef.current = setTimeout(() => {
+        completeTimeoutRef.current = null;
+        if (cancelled) return;
         setIsAnimating(false);
         onSpinComplete(targetLetter);
       }, 350);
-    });
+    }).catch(() => {});
 
     return () => {
+      cancelled = true;
       if (tickIntervalRef.current) clearTimeout(tickIntervalRef.current);
+      if (completeTimeoutRef.current) clearTimeout(completeTimeoutRef.current);
+      completeTimeoutRef.current = null;
+      controls.stop();
     };
   }, [isSpinning, targetLetter]);
 

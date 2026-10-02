@@ -28,6 +28,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+        "503":
+          description: Service starting; database schema is not ready
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
 
   /game/validate:
     post:
@@ -442,6 +448,10 @@ components:
             `totalScore` and grants XP, but skips incrementing
             `gamesPlayed`/`wins` and does not bump the daily streak — those
             already counted on the original (non-bonus) submission.
+        offlineSubmissionId:
+          type: string
+          maxLength: 128
+          description: Stable client-generated identifier for one offline game, reused for every synchronization retry.
         scoreTokens:
           type: array
           items:

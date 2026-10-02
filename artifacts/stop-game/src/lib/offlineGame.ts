@@ -149,8 +149,7 @@ function isWordValid(
   return categoryWords.some(w => {
     const nw = normalizeWord(w);
     return nw === normalizedWord ||
-      normalizedWord.startsWith(nw) ||
-      nw.startsWith(normalizedWord);
+      normalizedWord.startsWith(nw);
   });
 }
 
@@ -251,6 +250,8 @@ export type OutboxScorePayload = {
   // (offline) submissions since offline rounds are validated locally and get
   // no token — those fall back to the server's absolute ceiling.
   scoreTokens?: string[];
+  /** Stable id carried to the server so a lost response cannot double-credit the game. */
+  offlineSubmissionId?: string;
 };
 
 export type OutboxEntry = {
@@ -264,7 +265,18 @@ function readOutbox(): OutboxEntry[] {
     const raw = localStorage.getItem(OUTBOX_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.filter((e) => e && typeof e === "object" && e.payload) : [];
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((e) => e && typeof e === "object" && e.payload)
+      .map((e) => ({
+        ...e,
+        payload: {
+          ...e.payload,
+          submissionId: typeof e.payload.offlineSubmissionId === "string" && e.payload.submissionId
+            ? e.payload.submissionId
+            : e.id,
+        },
+      }));
   } catch {
     return [];
   }
@@ -279,13 +291,35 @@ function writeOutbox(entries: OutboxEntry[]) {
   }
 }
 
-export function enqueueScoreOutbox(payload: OutboxScorePayload): OutboxEntry {
+export type OutboxLock = <T>(work: () => Promise<T>) => Promise<T>;
+
+const withOutboxLock: OutboxLock = async <T>(work: () => Promise<T>): Promise<T> => {
+  if (typeof navigator !== "undefined" && "locks" in navigator && navigator.locks?.request) {
+    return navigator.locks.request("stop-score-outbox", { mode: "exclusive" }, work);
+  }
+  // Single-tab fallback for older browsers. Modern supported clients use the
+  // cross-tab Web Locks API, which is the required path for shared storage.
+  return work();
+}
+
+export async function enqueueScoreOutbox(payload: OutboxScorePayload): Promise<OutboxEntry> {
   const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-  const entry: OutboxEntry = { id, payload, createdAt: Date.now() };
-  const cur = readOutbox();
-  cur.push(entry);
-  writeOutbox(cur);
-  return entry;
+  const offlineSubmissionId =
+    payload.offlineSubmissionId ||
+    (typeof globalThis.crypto?.randomUUID === "function"
+      ? globalThis.crypto.randomUUID()
+      : `${id}-${Math.random().toString(36).slice(2, 10)}`);
+  const entry: OutboxEntry = {
+    id,
+    payload: { ...payload, offlineSubmissionId },
+    createdAt: Date.now(),
+  };
+  return withOutboxLock(async () => {
+    const cur = readOutbox();
+    cur.push(entry);
+    writeOutbox(cur);
+    return entry;
+  });
 }
 
 export function getScoreOutboxSize(): number {
@@ -299,30 +333,26 @@ export async function flushScoreOutbox(
 ): Promise<{ flushed: number; remaining: number }> {
   if (flushing) return { flushed: 0, remaining: readOutbox().length };
   flushing = true;
-  let flushed = 0;
   try {
-    // Each iteration claims and removes the head entry BEFORE sending so a
-    // second concurrent flush can't pick up the same item and create a
-    // duplicate score on the server.
-    while (true) {
-      const cur = readOutbox();
-      if (cur.length === 0) break;
-      const [next, ...rest] = cur;
-      writeOutbox(rest);
-      try {
-        await submit(next.payload);
-        flushed++;
-      } catch {
-        // Likely still offline / server unreachable — restore the entry at
-        // the head and stop retrying for this round. Other queued entries
-        // would presumably fail too.
-        const after = readOutbox();
-        writeOutbox([next, ...after]);
-        break;
+    return await withOutboxLock(async () => {
+      let flushed = 0;
+      while (true) {
+        const cur = readOutbox();
+        if (cur.length === 0) break;
+        const [next, ...rest] = cur;
+        writeOutbox(rest);
+        try {
+          await submit(next.payload);
+          flushed++;
+        } catch {
+          const after = readOutbox();
+          writeOutbox([next, ...after]);
+          break;
+        }
       }
-    }
+      return { flushed, remaining: readOutbox().length };
+    });
   } finally {
     flushing = false;
   }
-  return { flushed, remaining: readOutbox().length };
 }

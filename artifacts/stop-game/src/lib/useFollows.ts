@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
-import { getApiUrl } from "@/lib/utils";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { getApiUrl, authHeaders } from "@/lib/utils";
 import type { OnlinePlayer } from "@/lib/usePresence";
 
 const API_BASE = getApiUrl();
@@ -42,24 +42,29 @@ export function useFollows(
   const [rawFriends, setRawFriends] = useState<FollowedFriendBase[]>([]);
   const [followedIds, setFollowedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
+  const requestRef = useRef<AbortController | null>(null);
 
   const refresh = useCallback(async () => {
+    requestRef.current?.abort();
     if (!meId) {
       setRawFriends([]);
       setFollowedIds(new Set());
       return;
     }
+    const controller = new AbortController();
+    requestRef.current = controller;
     setLoading(true);
     try {
-      const r = await fetch(`${API_BASE}/api/friends/list/${encodeURIComponent(meId)}`);
+      const r = await fetch(`${API_BASE}/api/friends/list/${encodeURIComponent(meId)}`, { signal: controller.signal, credentials: "include", headers: authHeaders() });
       const data = await r.json();
       const list: FollowedFriendBase[] = data.friends ?? [];
       setRawFriends(list);
       setFollowedIds(new Set(list.map((f) => f.followedId)));
     } catch {
-      /* ignore */
+      if (controller.signal.aborted) return;
     } finally {
-      setLoading(false);
+      if (!controller.signal.aborted) setLoading(false);
+      if (requestRef.current === controller) requestRef.current = null;
     }
   }, [meId]);
 
@@ -91,7 +96,8 @@ export function useFollows(
     try {
       const r = await fetch(`${API_BASE}/api/friends/follow`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        credentials: "include",
         body: JSON.stringify({
           followerId: meId,
           followedId: target.playerId,
@@ -113,7 +119,8 @@ export function useFollows(
     try {
       const r = await fetch(`${API_BASE}/api/friends/unfollow`, {
         method: "DELETE",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        credentials: "include",
         body: JSON.stringify({ followerId: meId, followedId: targetId }),
       });
       if (!r.ok) return false;
@@ -140,19 +147,22 @@ export function useFriendsOnline(
   useEffect(() => {
     if (!meId || friends.length === 0) { setOnline([]); return; }
     let cancelled = false;
+    const controller = new AbortController();
+
     const fetchOnline = async () => {
       try {
-        const r = await fetch(`${API_BASE}/api/presence/online`);
+        const r = await fetch(`${API_BASE}/api/presence/online`, { signal: controller.signal });
         const data = await r.json();
         const all: OnlineFriend[] = data.online ?? [];
         const friendIds = new Set(friends.map((f) => f.followedId));
         const mine = all.filter((p) => friendIds.has(p.playerId) && p.playerId !== meId);
-        if (!cancelled) setOnline(mine);
+        if (!cancelled && !controller.signal.aborted) setOnline(mine);
       } catch { /* ignore */ }
     };
-    fetchOnline();
+
+    void fetchOnline();
     const id = setInterval(fetchOnline, 20000);
-    return () => { cancelled = true; clearInterval(id); };
+    return () => { cancelled = true; controller.abort(); clearInterval(id); };
   }, [meId, friends]);
 
   return online;

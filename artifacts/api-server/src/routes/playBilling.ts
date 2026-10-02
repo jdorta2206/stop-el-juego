@@ -2,6 +2,7 @@ import { Router, Request, Response } from "express";
 import { grantWorldCupPack, WORLD_CUP_PACK_SKU } from "../lib/worldCupPack";
 import { verifyClaimedIdentity } from "../lib/playerAuth";
 import { isUserPremium } from "../lib/premiumStatus";
+import { stripeStorage } from "../stripeStorage";
 import { verifyPubSubJwt } from "../lib/pubsubAuth";
 import {
   acknowledgeProduct,
@@ -81,6 +82,27 @@ router.post("/webhook", async (req: Request, res: Response) => {
     }
 
     const updated = await updatePlaySubscriptionByToken(verified);
+    if (!updated.playerId) {
+      // The RTDN can legitimately arrive before the client has completed
+      // /verify and bound the purchase token to a player. Do not acknowledge
+      // the Pub/Sub delivery in that state: retry it so the later /verify can
+      // establish ownership and the same RTDN can then apply the transition.
+      console.warn("[playBilling] RTDN token is not linked to a player yet; requesting retry");
+      return res.status(503).json({ error: "Purchase token not linked yet" });
+    }
+
+    // Retry acknowledgement from RTDN when the client-side /verify could not acknowledge the purchase.
+    const acknowledged = await acknowledgeSubscription(
+      verified.productId,
+      verified.purchaseToken,
+      verified.acknowledgementState === 1,
+    );
+    if (!acknowledged) {
+      // Keep the Pub/Sub delivery unacknowledged so a transient Google API
+      // failure gets retried instead of risking an unacknowledged purchase
+      // being refunded after Google's acknowledgement deadline.
+      return res.status(503).json({ error: "Subscription acknowledgement failed" });
+    }
     console.log(
       "[playBilling] RTDN processed",
       JSON.stringify({
@@ -110,6 +132,10 @@ router.get("/status", async (req: Request, res: Response) => {
       return res.status(403).json({ error: "Identidad del jugador no válida" });
     }
     const isPremium = await isUserPremium(playerId);
+    // Keep the legacy cached mirror synchronized with the live unified
+    // entitlement so rankings/rooms do not display stale Premium state after
+    // a Play renewal, restore, cancellation, or expiry.
+    await stripeStorage.updatePlayerStripeInfo(playerId, { isPremium });
     return res.json({ isPremium });
   } catch (error: any) {
     console.error("❌ Error en /status Play Billing:", error.message);
@@ -124,14 +150,26 @@ router.post("/verify", async (req: Request, res: Response) => {
     const claimedPlayerId = String(playerId);
     if (!verifyClaimedIdentity(req, claimedPlayerId)) return res.status(403).json({ error: "Identidad del jugador no válida" });
 
-    const verified = await verifyPurchase(String(productId), String(purchaseToken));
+    const requestedProductId = String(productId).trim();
+    if (requestedProductId !== "premium_monthly") {
+      return res.status(400).json({ error: "Producto de suscripción no válido" });
+    }
+
+    const verified = await verifyPurchase(requestedProductId, String(purchaseToken));
     if ("error" in verified) return res.status(verified.status).json({ error: verified.error });
     if (!verified.isEntitled) return res.status(400).json({ error: "Suscripción no válida o no activa" });
 
     const ownership = await upsertPlaySubscription(claimedPlayerId, verified);
     if (ownership.ownershipMismatch) return res.status(403).json({ error: "Esta compra ya está vinculada a otro jugador" });
 
-    await acknowledgeSubscription(verified.productId, verified.purchaseToken, verified.acknowledgementState === 1);
+    const acknowledged = await acknowledgeSubscription(
+      verified.productId,
+      verified.purchaseToken,
+      verified.acknowledgementState === 1,
+    );
+    if (!acknowledged) {
+      return res.status(503).json({ error: "No se pudo confirmar la compra con Google Play" });
+    }
     console.log(`✅ Premium Play verificado para ${claimedPlayerId}`);
     return res.json({ isPremium: true });
   } catch (error: any) {

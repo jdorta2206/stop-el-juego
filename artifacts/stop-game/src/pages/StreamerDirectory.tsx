@@ -25,18 +25,24 @@ export default function StreamerDirectory() {
   const { t, lang } = useT();
   const [rooms, setRooms] = useState<LiveRoom[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     let stop = false;
+    let activeController: AbortController | null = null;
     const fetchOnce = () => {
-      fetch(`${API}/api/rooms/live`)
+      activeController?.abort();
+      const controller = new AbortController();
+      activeController = controller;
+      fetch(`${API}/api/rooms/live`, { signal: controller.signal })
         .then(r => r.json())
-        .then(d => { if (!stop) { setRooms(d.rooms || []); setLoaded(true); } })
-        .catch(() => { if (!stop) setLoaded(true); });
+        .then(d => { if (!stop) { setRooms(Array.isArray(d.rooms) ? d.rooms : []); setLoaded(true); setLoadError(false); } })
+        .catch(() => { if (!stop && !controller.signal.aborted) { setLoaded(true); setLoadError(true); } })
+        .finally(() => { if (activeController === controller) activeController = null; });
     };
     fetchOnce();
     const id = setInterval(fetchOnce, 5000);
-    return () => { stop = true; clearInterval(id); };
+    return () => { stop = true; clearInterval(id); activeController?.abort(); };
   }, []);
 
   // Filter to same language by default — viewers want rooms they understand.
@@ -71,7 +77,11 @@ export default function StreamerDirectory() {
           </div>
         )}
 
-        {loaded && rooms.length === 0 && (
+        {loaded && loadError && (
+          <div className="text-center py-16 px-4 space-y-3"><Radio className="w-16 h-16 mx-auto text-white/20" /><p className="text-white/70 font-bold">No se pudo cargar las salas en directo</p><button onClick={() => window.location.reload()} className="mt-3 px-6 py-3 rounded-2xl font-black bg-white/10 text-white">Reintentar</button></div>
+        )}
+
+        {loaded && !loadError && rooms.length === 0 && (
           <div className="text-center py-16 px-4 space-y-3">
             <Radio className="w-16 h-16 mx-auto text-white/20" />
             <p className="text-white/70 font-bold">{(t as any).streamer?.empty ?? "Nadie está en directo ahora mismo"}</p>

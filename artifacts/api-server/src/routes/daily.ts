@@ -1,8 +1,9 @@
 import { Router, type IRouter } from "express";
-import { db, dailyResultsTable } from "@workspace/db";
+import { db, dailyResultsTable, playerScoresTable } from "@workspace/db";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { verifyClaimedIdentity } from "../lib/playerAuth";
-import { sumVerifiedBasePersistent, ceilingFromBase, absoluteCeiling } from "../lib/scoreToken";
+import { verifyScoreVouchers, claimScoreVouchersTx, ceilingFromBase, absoluteCeiling } from "../lib/scoreToken";
+import { applyAuthoritativeSeasonEventsTx, getOrCreateActiveSeason, getOrCreateProgress } from "./season";
 
 const router: IRouter = Router();
 
@@ -51,9 +52,32 @@ router.get("/", (req, res) => {
   res.json(challenge);
 });
 
+// GET /api/daily/status?playerId=...&language=es → authoritative completion state
+router.get("/status", async (req, res) => {
+  const playerId = typeof req.query.playerId === "string" ? req.query.playerId.trim() : "";
+  if (!playerId) {
+    res.status(400).json({ error: "Invalid daily status request" });
+    return;
+  }
+  if (!verifyClaimedIdentity(req, playerId)) {
+    res.status(403).json({ error: "Identity verification failed" });
+    return;
+  }
+  const today = getTodayUTC();
+  const rows = await db
+    .select({ score: dailyResultsTable.score })
+    .from(dailyResultsTable)
+    .where(and(
+      eq(dailyResultsTable.playerId, playerId),
+      eq(dailyResultsTable.challengeDate, today),
+    ))
+    .limit(1);
+  res.json({ played: rows.length > 0, score: rows[0]?.score ?? null, date: today });
+});
+
 // POST /api/daily/submit  → save a player's score for today
 router.post("/submit", async (req, res) => {
-  const { playerId, playerName, avatarColor, score, letter, language, scoreTokens } = req.body;
+  const { playerId, playerName, score, letter, language, categories, scoreTokens } = req.body;
   if (!playerId || !playerName || score == null || !letter) {
     res.status(400).json({ error: "Missing required fields" });
     return;
@@ -63,6 +87,21 @@ router.post("/submit", async (req, res) => {
     res.status(403).json({ error: "Identity verification failed" });
     return;
   }
+
+  const [canonicalPlayer] = await db
+    .select({
+      playerName: playerScoresTable.playerName,
+      avatarColor: playerScoresTable.avatarColor,
+    })
+    .from(playerScoresTable)
+    .where(eq(playerScoresTable.playerId, playerId))
+    .limit(1);
+  if (!canonicalPlayer) {
+    res.status(404).json({ error: "Player not found" });
+    return;
+  }
+  const canonicalPlayerName = canonicalPlayer.playerName;
+  const canonicalAvatarColor = canonicalPlayer.avatarColor;
 
   // 🔒 Bind the submission to the server-generated challenge. A client must not
   // be able to submit a score under a different letter/language for today's
@@ -81,64 +120,98 @@ router.post("/submit", async (req, res) => {
     return;
   }
 
+  const submittedCategories = Array.isArray(categories) ? categories.map((c) => String(c).trim()) : [];
+  if (submittedCategories.length !== expectedChallenge.categories.length || submittedCategories.some((c, i) => c !== expectedChallenge.categories[i])) {
+    res.status(422).json({ error: "Invalid daily challenge categories" });
+    return;
+  }
+
   // 🔒 Anti-cheat clamp — same scheme as the global leaderboard: clamp the
   // posted score to a ceiling derived from the verified round voucher(s), or a
   // flat absolute ceiling when none are present (offline play). Never reject,
   // only clamp, so a legit daily score is never lost.
-  const { base: verifiedBase, verified } = await sumVerifiedBasePersistent(scoreTokens, 1);
+  const verifiedVouchers = await verifyScoreVouchers(scoreTokens, 1);
+  const { base: verifiedBase, verified } = verifiedVouchers;
+  const suppliedTokens = Array.isArray(scoreTokens) && scoreTokens.length > 0;
+  if (suppliedTokens && (verified === 0 || verifiedVouchers.mode !== "daily")) {
+    res.status(422).json({ error: "INVALID_SCORE_VOUCHER" });
+    return;
+  }
   const dailyCeiling = verified > 0 ? ceilingFromBase(verifiedBase) : absoluteCeiling("daily");
   const safeScore = Math.max(0, Math.min(Number(score) || 0, dailyCeiling));
 
-  // Only allow one submission per player per day. The unique DB constraint is
-  // the final arbiter; the upsert below makes two simultaneous first submits
-  // deterministic instead of racing SELECT → INSERT and returning a 500.
-  const existing = await db
-    .select()
-    .from(dailyResultsTable)
-    .where(
-      and(
-        eq(dailyResultsTable.playerId, playerId),
-        eq(dailyResultsTable.challengeDate, today)
-      )
-    )
-    .limit(1);
+  // The daily result and its authoritative season mission update must commit
+  // in the same transaction. Otherwise a process crash after the daily INSERT
+  // but before the async season event can permanently lose daily_done progress.
+  const season = await getOrCreateActiveSeason();
+  const seasonProgress = await getOrCreateProgress(playerId, season.id);
+  const submitted = await db.transaction(async (tx) => {
+    const inserted = await tx
+      .insert(dailyResultsTable)
+      .values({
+        playerId,
+        playerName: canonicalPlayerName,
+        avatarColor: canonicalAvatarColor || "#e53e3e",
+        challengeDate: today,
+        score: safeScore,
+        letter,
+        language: normalizedLanguage,
+      })
+      .onConflictDoNothing({
+        target: [dailyResultsTable.playerId, dailyResultsTable.challengeDate],
+      })
+      .returning({ playerId: dailyResultsTable.playerId });
 
-  if (existing.length > 0) {
-    // Update if new score is higher
-    if (safeScore > existing[0].score) {
-      await db
-        .update(dailyResultsTable)
-        .set({ score: safeScore, playerName, avatarColor: avatarColor || existing[0].avatarColor })
-        .where(
-          and(
-            eq(dailyResultsTable.playerId, playerId),
-            eq(dailyResultsTable.challengeDate, today)
-          )
-        );
+    if (inserted.length > 0) {
+      if (verifiedVouchers.vouchers.length > 0) {
+        const claimedVouchers = await claimScoreVouchersTx(tx, verifiedVouchers.vouchers);
+        if (!claimedVouchers) throw new Error("SCORE_VOUCHER_ALREADY_USED");
+      }
+      await applyAuthoritativeSeasonEventsTx(
+        tx,
+        season.id,
+        seasonProgress.id,
+        [{ type: "daily_done", value: 1 }],
+      );
+      return true;
     }
-    res.json({ updated: true, alreadyPlayed: true });
-    return;
-  }
 
-  await db.insert(dailyResultsTable).values({
-    playerId,
-    playerName,
-    avatarColor: avatarColor || "#e53e3e",
-    challengeDate: today,
-    score: safeScore,
-    letter,
-    language: normalizedLanguage,
-  }).onConflictDoUpdate({
-    target: [dailyResultsTable.playerId, dailyResultsTable.challengeDate],
-    set: {
-      score: sql`GREATEST(${dailyResultsTable.score}, EXCLUDED.score)`,
-      playerName: sql`CASE WHEN EXCLUDED.score > ${dailyResultsTable.score} THEN EXCLUDED.player_name ELSE ${dailyResultsTable.playerName} END`,
-      avatarColor: sql`CASE WHEN EXCLUDED.score > ${dailyResultsTable.score} THEN EXCLUDED.avatar_color ELSE ${dailyResultsTable.avatarColor} END`,
-    },
+    // Another request already created today's row. Only improve the score;
+    // re-applying daily_done is harmless because the mission is capped at 1,
+    // and repairs a previous response that predated this transactional path.
+    const improved = await tx
+      .update(dailyResultsTable)
+      .set({
+        score: sql`GREATEST(${dailyResultsTable.score}, ${safeScore})`,
+        playerName: sql`CASE WHEN ${dailyResultsTable.score} < ${safeScore} THEN ${canonicalPlayerName} ELSE ${dailyResultsTable.playerName} END`,
+        avatarColor: sql`CASE WHEN ${dailyResultsTable.score} < ${safeScore} THEN ${canonicalAvatarColor} ELSE ${dailyResultsTable.avatarColor} END`,
+      })
+      .where(
+        and(
+          eq(dailyResultsTable.playerId, playerId),
+          eq(dailyResultsTable.challengeDate, today),
+          sql`${dailyResultsTable.score} < ${safeScore}`,
+        ),
+      )
+      .returning({ playerId: dailyResultsTable.playerId });
+
+    if (improved.length > 0 && verifiedVouchers.vouchers.length > 0) {
+      const claimedVouchers = await claimScoreVouchersTx(tx, verifiedVouchers.vouchers);
+      if (!claimedVouchers) throw new Error("SCORE_VOUCHER_ALREADY_USED");
+    }
+    await applyAuthoritativeSeasonEventsTx(
+      tx,
+      season.id,
+      seasonProgress.id,
+      [{ type: "daily_done", value: 1 }],
+    );
+    return false;
   });
 
-  res.status(201).json({ submitted: true });
-});
+  if (submitted) {
+    res.status(201).json({ submitted: true });
+    return;
+  });
 
 // GET /api/daily/rankings?language=es  → top 10 players for today
 router.get("/rankings", async (req, res) => {

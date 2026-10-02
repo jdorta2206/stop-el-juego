@@ -134,7 +134,7 @@ export default function SoloGame() {
   // selected pack is a custom one — startGame() is deferred until the
   // packs hook finishes loading so the pack actually resolves.
   const pendingAutoStartRef = useRef(false);
-  const packId = getSafePackId(getSelectedPackId(), isPremium, customPacks);
+  const packId = getSafePackId(getSelectedPackId(), isPremium, customPacks, lang);
   const activePack = getPackById(packId, customPacks);
   const packCats = () => packId === "classic" ? getCategories() : getPackCategories(packId, getCurrentLang(), customPacks);
   const [categories, setCategories] = useState<string[]>(() => applyHalloweenCategory(packCats(), lang, { enabled: !packId.startsWith("custom:") }));
@@ -430,6 +430,8 @@ export default function SoloGame() {
   const submitScoreMutation = useSubmitScore();
   const queryClient = useQueryClient();
   const timerRef = useRef<NodeJS.Timeout>(null);
+  const stopTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hiddenRevealTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Guards to prevent handleStop / results-accumulation from firing more than once per round
   const stoppedRef = useRef(false);
   const resultsAppliedRef = useRef(false);
@@ -445,7 +447,7 @@ export default function SoloGame() {
   // total. Reset per new game (where totalScore resets to 0), not per round.
   const scoreTokensRef = useRef<string[]>([]);
 
-  const startGame = () => {
+  const startGame = (newGame = true) => {
     if (halloweenScareTimerRef.current) clearTimeout(halloweenScareTimerRef.current);
     setHalloweenScare(null);
     void trackAnalyticsEvent("game_start", { metadata: { mode: isDailyMode ? "daily" : "solo" } });
@@ -458,8 +460,9 @@ export default function SoloGame() {
     // forever once the tutorial ends.
     setAiPersonality(pickRandomPersonality({ isTutorial: tutorialNow }));
     setAiComment(null);
-    // Reset spy uses each new game (premium gets 2x)
-    setSpyUsesLeft(isPremium ? 2 : 1);
+    // Spy allowance is per game, not per round. startGame(false) is used by
+    // nextRound(), so only replenish it when a genuinely new game begins.
+    if (newGame) setSpyUsesLeft(isPremium ? 2 : 1);
     setSpyReveal(null);
     // 🎲 Random mode — reroll the secret round time so each round feels different (15–55s)
     if (isRandomMode) setRandomRoundTime(15 + Math.floor(Math.random() * 41));
@@ -552,7 +555,13 @@ export default function SoloGame() {
     setHintReveal(null);
     setSpyUsesThisRound(0);
     sound.playRoundStart();
-    if (randomEvent === "hidden_category") setTimeout(() => sound.playHiddenReveal(), 400);
+    if (hiddenRevealTimeoutRef.current) clearTimeout(hiddenRevealTimeoutRef.current);
+    if (randomEvent === "hidden_category") {
+      hiddenRevealTimeoutRef.current = setTimeout(() => {
+        hiddenRevealTimeoutRef.current = null;
+        sound.playHiddenReveal();
+      }, 400);
+    }
 
     timerRef.current = setInterval(() => {
       if (gameTimerPausedRef.current || isGameTimerPaused()) return;
@@ -564,7 +573,10 @@ export default function SoloGame() {
             timerRef.current = null;
           }
           // Schedule handleStop outside the state-setter (safe async trigger)
-          setTimeout(handleStop, 0);
+          stopTimeoutRef.current = setTimeout(() => {
+            stopTimeoutRef.current = null;
+            void handleStop();
+          }, 0);
           return 0;
         }
         return prev - 1;
@@ -623,10 +635,17 @@ export default function SoloGame() {
     }
   };
 
-  // Cleanup card reveal timer on unmount
+  // Cleanup round timers on unmount
   useEffect(() => {
     return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+      timerRef.current = null;
+      if (stopTimeoutRef.current) clearTimeout(stopTimeoutRef.current);
+      stopTimeoutRef.current = null;
+      if (hiddenRevealTimeoutRef.current) clearTimeout(hiddenRevealTimeoutRef.current);
+      hiddenRevealTimeoutRef.current = null;
       if (cardRevealTimer.current) clearTimeout(cardRevealTimer.current);
+      cardRevealTimer.current = null;
     };
   }, []);
 
@@ -1090,14 +1109,14 @@ export default function SoloGame() {
           setTimeout(() => toast({ title: hhMsg }), 1200);
         }
       },
-      onError: () => {
+      onError: async () => {
         // 📡 Sin conexión: aparcamos la puntuación en la outbox para
         // reenviarla cuando vuelva la red (evento `online` o próximo
         // arranque). Sólo lo hacemos cuando el navegador reporta offline,
         // para evitar duplicar puntuaciones cuando es un error de servidor
         // que en realidad sí pudo persistir.
         if (typeof navigator !== "undefined" && navigator.onLine === false) {
-          enqueueScoreOutbox({
+          await enqueueScoreOutbox({
             playerId: player.id,
             playerName: player.name,
             avatarColor: player.avatarColor,
@@ -1181,11 +1200,13 @@ export default function SoloGame() {
   }, [gameState, round, maxRounds, totalScore, aiTotalScore, isDailyMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const submitDailyResult = (finalScore: number) => {
-    // Always save daily score locally (works for guests too)
-    localStorage.setItem(`stop_daily_${getTodayStr()}`, String(finalScore));
-
-    // Save to server if logged in
-    if (!player || player.loginMethod === "guest") return;
+    // Guests have no server daily result, so local storage is their completion
+    // record. Logged-in players are marked locally only after the server
+    // confirms the score was accepted.
+    if (!player || player.loginMethod === "guest") {
+      localStorage.setItem(`stop_daily_${getTodayStr()}`, String(finalScore));
+      return;
+    }
     fetch(`${getApiUrl()}/api/daily/submit`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...authHeaders() },
@@ -1197,9 +1218,18 @@ export default function SoloGame() {
         score: finalScore,
         letter: dailyLetter || currentLetter,
         language: getCurrentLang(),
+        categories: dailyCategories,
         scoreTokens: scoreTokensRef.current,
       }),
-    }).catch(() => {});
+    })
+      .then((response) => {
+        if (!response.ok) throw new Error(`daily-submit-${response.status}`);
+        localStorage.setItem(`stop_daily_${getTodayStr()}`, String(finalScore));
+      })
+      .catch(() => {
+        // Never mark a logged-in daily as completed locally when the server
+        // rejected or failed to persist the result.
+      });
   };
 
   const nextRound = async () => {
@@ -1253,7 +1283,7 @@ export default function SoloGame() {
       void maybeShowInterstitial(isPremium || premiumLoading);
     } else {
       setRound(r => r + 1);
-      startGame();
+      startGame(false);
     }
   };
 

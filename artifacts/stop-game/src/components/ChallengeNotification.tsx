@@ -1,9 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Swords, X, Check, DoorOpen } from "lucide-react";
 import { respondToChallenge, type IncomingChallenge } from "@/lib/usePresence";
 import { useLocation } from "wouter";
-import { authHeaders } from "@/lib/utils";
+import { authHeaders, getApiUrl } from "@/lib/utils";
 
 interface ChallengeNotificationProps {
   challenge: IncomingChallenge;
@@ -14,15 +14,30 @@ export function ChallengeNotification({ challenge, onDismiss }: ChallengeNotific
   const [, setLocation] = useLocation();
   const [countdown, setCountdown] = useState(30);
   const [responding, setResponding] = useState(false);
+  const respondingRef = useRef(false);
+  const actionAbortRef = useRef<AbortController | null>(null);
 
   const isRoomInvite = !!challenge.isRoomInvite;
+
+  useEffect(() => () => actionAbortRef.current?.abort(), []);
 
   useEffect(() => {
     const timer = setInterval(() => {
       setCountdown((v) => {
         if (v <= 1) {
           clearInterval(timer);
-          onDismiss();
+          // Expired/ignored invitations must be transitioned out of pending
+          // state; otherwise the 4s poll can surface the same challenge again
+          // during its remaining PostgreSQL TTL.
+          if (!respondingRef.current) {
+            respondingRef.current = true;
+            setResponding(true);
+            void respondToChallenge(challenge.challengeId, false).finally(() => {
+              onDismiss();
+            });
+          } else {
+            onDismiss();
+          }
           return 0;
         }
         return v - 1;
@@ -32,7 +47,11 @@ export function ChallengeNotification({ challenge, onDismiss }: ChallengeNotific
   }, []);
 
   const handleAccept = async () => {
+    if (responding || respondingRef.current) return;
+    respondingRef.current = true;
     setResponding(true);
+    const controller = new AbortController();
+    actionAbortRef.current = controller;
 
     // Read player data once — needed for /join in both flows
     let playerData: { id: string; name: string; avatarColor: string; loginMethod?: string | null } | null = null;
@@ -41,18 +60,23 @@ export function ChallengeNotification({ challenge, onDismiss }: ChallengeNotific
       if (stored) playerData = JSON.parse(stored);
     } catch { /* ignore */ }
 
-    if (!isRoomInvite) {
-      await respondToChallenge(challenge.challengeId, true);
+    // Mark both challenges and room invitations as accepted before joining.
+    // Previously room invitations skipped this transition and remained pending
+    // until cleanup, allowing the same invitation to reappear.
+    const response = await respondToChallenge(challenge.challengeId, true);
+    if (!response.roomCode || response.roomCode.toUpperCase() !== challenge.roomCode.toUpperCase()) {
+      onDismiss();
+      return;
     }
 
     // Always call /join so the player appears in the room lobby (both reto and room invite)
     if (playerData?.id) {
       try {
-        const apiBase = (import.meta as any).env?.VITE_API_URL ?? window.location.origin;
-        await fetch(`${apiBase}/api/rooms/${challenge.roomCode.toUpperCase()}/join`, {
+        const joinResponse = await fetch(`${getApiUrl()}/api/rooms/${challenge.roomCode.toUpperCase()}/join`, {
           method: "POST",
           headers: { "Content-Type": "application/json", ...authHeaders() },
           credentials: "include",
+          signal: controller.signal,
           body: JSON.stringify({
             playerId: playerData.id,
             playerName: playerData.name,
@@ -60,7 +84,14 @@ export function ChallengeNotification({ challenge, onDismiss }: ChallengeNotific
             loginMethod: playerData.loginMethod ?? null,
           }),
         });
-      } catch { /* silently proceed even if join fails */ }
+        if (!joinResponse.ok || controller.signal.aborted) {
+          onDismiss();
+          return;
+        }
+      } catch {
+        onDismiss();
+        return;
+      }
     }
 
     onDismiss();
@@ -68,10 +99,11 @@ export function ChallengeNotification({ challenge, onDismiss }: ChallengeNotific
   };
 
   const handleDecline = async () => {
+    if (responding || respondingRef.current) return;
+    actionAbortRef.current?.abort();
+    respondingRef.current = true;
     setResponding(true);
-    if (!isRoomInvite) {
-      await respondToChallenge(challenge.challengeId, false);
-    }
+    await respondToChallenge(challenge.challengeId, false);
     onDismiss();
   };
 

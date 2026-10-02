@@ -1,10 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link } from "wouter";
 import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui";
 import { Play, Users, Trophy, Share2, Facebook, Instagram, Crown, Swords, BookOpen, Flame, Calendar, Zap, Star, Medal } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { shareText } from "@/lib/utils";
+import { shareText, getApiUrl, authHeaders } from "@/lib/utils";
 import { PremiumModal } from "@/components/PremiumModal";
 import { usePremium } from "@/lib/usePremium";
 import { useFollows, useFriendsOnline } from "@/lib/useFollows";
@@ -33,21 +33,38 @@ export default function Home() {
   const { isPremium } = usePremium(player?.id);
   const { friends } = useFollows(player?.id);
   const friendsOnline = useFriendsOnline(player?.id, friends);
-  const { t } = useT();
+  const { t, lang } = useT();
   const { streak, playedToday } = useDisplayStreak();
   const streakAtRisk = streak.current > 0 && !playedToday;
   const { unlocked, newlyUnlocked, clearNewlyUnlocked, checkStreakMilestone } = useAchievements(player?.id);
   const [showStreakCalendar, setShowStreakCalendar] = useState(false);
   // Whether today's daily challenge was already played (same localStorage key
   // the DailyChallenge page uses), so the banner reflects the player's state.
-  const [dailyDone] = useState(() => {
-    try {
-      const today = new Date().toISOString().slice(0, 10);
-      return !!localStorage.getItem(`stop_daily_${today}`);
-    } catch {
-      return false;
+  const [dailyDone, setDailyDone] = useState(false);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const today = new Date().toISOString().slice(0, 10);
+    const localPlayed = (() => {
+      try { return !!localStorage.getItem(`stop_daily_${today}`); } catch { return false; }
+    })();
+
+    if (!player || player.loginMethod === "guest") {
+      setDailyDone(localPlayed);
+      return;
     }
-  });
+
+    fetch(`${getApiUrl()}/api/daily/status?playerId=${encodeURIComponent(player.id)}&language=${encodeURIComponent(lang)}`, {
+      headers: { ...authHeaders() },
+      credentials: "include",
+      signal: controller.signal,
+    })
+      .then(r => r.ok ? r.json() : Promise.reject(new Error("daily-status")))
+      .then(d => { if (!controller.signal.aborted) setDailyDone(!!d.played); })
+      .catch(() => { if (!controller.signal.aborted) setDailyDone(false); });
+    return () => controller.abort();
+  }, [player?.id, player?.loginMethod, lang]);
+
   const ftue = useFTUE();
   const [showFTUEWelcome, setShowFTUEWelcome] = useState(false);
 
@@ -963,20 +980,24 @@ export default function Home() {
 // 🔴 LiveRoomsSection — public spectator-friendly rooms currently in play
 function LiveRoomsSection() {
   const [rooms, setRooms] = useState<any[]>([]);
+  const abortRef = useRef<AbortController | null>(null);
   useEffect(() => {
     let stop = false;
     const fetchRooms = async () => {
       try {
+        abortRef.current?.abort();
+        const controller = new AbortController();
+        abortRef.current = controller;
         const apiBase = (import.meta.env.VITE_API_BASE_URL || "") as string;
-        const r = await fetch(`${apiBase}/api/rooms/live`);
+        const r = await fetch(`${apiBase}/api/rooms/live`, { signal: controller.signal });
         if (!r.ok) return;
         const data = await r.json();
-        if (!stop) setRooms(data.rooms ?? []);
+        if (!stop && !controller.signal.aborted) setRooms(data.rooms ?? []);
       } catch { /* ignore */ }
     };
     fetchRooms();
     const id = setInterval(fetchRooms, 30000);
-    return () => { stop = true; clearInterval(id); };
+    return () => { stop = true; clearInterval(id); abortRef.current?.abort(); };
   }, []);
 
   if (rooms.length === 0) return null;

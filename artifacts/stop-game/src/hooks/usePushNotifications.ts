@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { getApiUrl } from "@/lib/utils";
 
 const API_BASE = getApiUrl();
@@ -6,6 +6,13 @@ const VAPID_PUBLIC =
   import.meta.env.VITE_VAPID_PUBLIC_KEY ||
   "BOwVNL3sEONgyFulirkX5dzwQo662jY2_C846OSMrTSfiz4GFwEsl3_1NY3x_GqJIco8P7Ls85u56IRC3Y8Bj2c";
 const DISABLED_KEY = "stop_push_notifications_disabled";
+const TOKEN_KEY = "stop_session_token";
+
+function authHeaders(): Record<string, string> {
+  if (typeof window === "undefined") return {};
+  const token = window.localStorage?.getItem(TOKEN_KEY) || window.sessionStorage?.getItem(TOKEN_KEY);
+  return token ? { "X-Stop-Token": token } : {};
+}
 
 function urlB64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
@@ -20,10 +27,14 @@ export function usePushNotifications(playerId: string | undefined, language: str
   const [permission, setPermission] = useState<NotifPermission>("default");
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [loading, setLoading] = useState(false);
+  const currentPlayerIdRef = useRef(playerId);
+  const preferencesAbortRef = useRef<AbortController | null>(null);
+  currentPlayerIdRef.current = playerId;
 
   useEffect(() => {
     let cancelled = false;
 
+    const controller = new AbortController();
     const initialise = async () => {
       try {
         if (!("Notification" in window) || !("serviceWorker" in navigator)) {
@@ -51,12 +62,14 @@ export function usePushNotifications(playerId: string | undefined, language: str
           return;
         }
 
-        if (perm === "granted") {
+        if (perm === "granted" && !cancelled && currentPlayerIdRef.current === playerId) {
           const tzOffsetMinutes = -new Date().getTimezoneOffset();
           try {
+            if (currentPlayerIdRef.current !== playerId) return;
             const res = await fetch(`${API_BASE}/api/notifications/subscribe`, {
               method: "POST",
-              headers: { "Content-Type": "application/json" },
+              headers: { "Content-Type": "application/json", ...authHeaders() },
+              signal: controller.signal,
               body: JSON.stringify({
                 playerId: playerId || "anonymous",
                 subscription: sub.toJSON(),
@@ -76,7 +89,7 @@ export function usePushNotifications(playerId: string | undefined, language: str
     };
 
     void initialise();
-    return () => { cancelled = true; };
+    return () => { cancelled = true; controller.abort(); };
   }, [playerId, language]);
 
   const subscribe = useCallback(async () => {
@@ -91,6 +104,7 @@ export function usePushNotifications(playerId: string | undefined, language: str
       try { localStorage.removeItem(DISABLED_KEY); } catch {}
 
       const existing = await reg.pushManager.getSubscription();
+      if (currentPlayerIdRef.current !== playerId) return false;
       const sub = existing || await reg.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlB64ToUint8Array(VAPID_PUBLIC),
@@ -99,7 +113,7 @@ export function usePushNotifications(playerId: string | undefined, language: str
       const tzOffsetMinutes = -new Date().getTimezoneOffset();
       const res = await fetch(`${API_BASE}/api/notifications/subscribe`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({
           playerId: playerId || "anonymous",
           subscription: sub.toJSON(),
@@ -111,6 +125,7 @@ export function usePushNotifications(playerId: string | undefined, language: str
       });
 
       if (!res.ok) throw new Error(`subscription HTTP ${res.status}`);
+      if (currentPlayerIdRef.current !== playerId) return false;
       setIsSubscribed(true);
       return true;
     } catch (e) {
@@ -125,17 +140,24 @@ export function usePushNotifications(playerId: string | undefined, language: str
     enabled: boolean; hourLocal: number; mutedUntil: number; tzOffsetMinutes: number;
   } | null> => {
     if (!("serviceWorker" in navigator)) return null;
+    preferencesAbortRef.current?.abort();
+    const controller = new AbortController();
+    preferencesAbortRef.current = controller;
     try {
       const reg = await navigator.serviceWorker.ready;
       const sub = await reg.pushManager.getSubscription();
       if (!sub) return null;
       const res = await fetch(
         `${API_BASE}/api/notifications/preferences?endpoint=${encodeURIComponent(sub.endpoint)}&playerId=${encodeURIComponent(playerId || "anonymous")}`,
+        { signal: controller.signal, headers: authHeaders() },
       );
-      if (!res.ok) return null;
+      if (!res.ok || controller.signal.aborted || currentPlayerIdRef.current !== playerId) return null;
       return await res.json();
     } catch { return null; }
-  }, []);
+    finally {
+      if (preferencesAbortRef.current === controller) preferencesAbortRef.current = null;
+    }
+  }, [playerId]);
 
   const updatePreferences = useCallback(async (patch: {
     enabled?: boolean; hourLocal?: number; muteDays?: number;
@@ -145,14 +167,15 @@ export function usePushNotifications(playerId: string | undefined, language: str
       const reg = await navigator.serviceWorker.ready;
       const sub = await reg.pushManager.getSubscription();
       if (!sub) return false;
+      if (currentPlayerIdRef.current !== playerId) return false;
       const res = await fetch(`${API_BASE}/api/notifications/preferences`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ endpoint: sub.endpoint, playerId: playerId || "anonymous", ...patch }),
       });
       return res.ok;
     } catch { return false; }
-  }, []);
+  }, [playerId]);
 
   const unsubscribe = useCallback(async () => {
     if (!("serviceWorker" in navigator)) return;
@@ -163,10 +186,11 @@ export function usePushNotifications(playerId: string | undefined, language: str
       try { localStorage.setItem(DISABLED_KEY, "1"); } catch {}
 
       if (sub) {
+        if (currentPlayerIdRef.current !== playerId) return;
         try {
           await fetch(`${API_BASE}/api/notifications/unsubscribe`, {
             method: "DELETE",
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json", ...authHeaders() },
             body: JSON.stringify({ endpoint: sub.endpoint, playerId: playerId || "anonymous" }),
           });
         } catch (e) {
@@ -180,7 +204,9 @@ export function usePushNotifications(playerId: string | undefined, language: str
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [playerId]);
+
+  useEffect(() => () => preferencesAbortRef.current?.abort(), [playerId]);
 
   const isSupported = "Notification" in window && "serviceWorker" in navigator && !!VAPID_PUBLIC;
 

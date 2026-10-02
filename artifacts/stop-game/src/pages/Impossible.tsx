@@ -25,25 +25,28 @@ export default function Impossible() {
   const [outcome, setOutcome] = useState<{ won: boolean; word: string; timeMs: number; stats: { attempts: number; wins: number } } | null>(null);
   const startedAt = useRef<number>(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const focusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const submitAbortRef = useRef<AbortController | null>(null);
 
   // Load combo + my prior attempt.
   useEffect(() => {
-    let stop = false;
-    fetch(`${API}/api/impossible?language=${lang}`)
+    const controller = new AbortController();
+    const signal = controller.signal;
+    fetch(`${API}/api/impossible?language=${lang}`, { signal })
       .then(r => r.json())
-      .then(d => { if (!stop) setCombo(d); })
+      .then(d => { if (!signal.aborted) setCombo(d); })
       .catch(() => {});
     if (player?.id) {
-      fetch(`${API}/api/impossible/me/${encodeURIComponent(player.id)}?language=${lang}`)
+      fetch(`${API}/api/impossible/me/${encodeURIComponent(player.id)}?language=${lang}`, { signal })
         .then(r => r.json())
         .then((d: Result) => {
-          if (stop || !d.played || !d.result) return;
+          if (signal.aborted || !d.played || !d.result) return;
           setMyAttempt(d.result);
           setPhase("done");
         })
         .catch(() => {});
     }
-    return () => { stop = true; };
+    return () => controller.abort();
   }, [lang, player?.id]);
 
   // Timer.
@@ -58,52 +61,62 @@ export default function Impossible() {
       }
     }, 100);
     return () => clearInterval(id);
-  }, [phase]);
+  }, [phase, player?.id, lang, combo?.letter, combo?.category]);
 
   const start = useCallback(() => {
     startedAt.current = Date.now();
     setRemaining(ROUND_MS);
     setPhase("playing");
-    setTimeout(() => inputRef.current?.focus(), 50);
+    if (focusTimeoutRef.current) clearTimeout(focusTimeoutRef.current);
+    focusTimeoutRef.current = setTimeout(() => {
+      focusTimeoutRef.current = null;
+      inputRef.current?.focus();
+    }, 50);
   }, []);
 
   const submit = useCallback(async (w: string, surrendered: boolean) => {
-    if (!player) return;
-    if (phase !== "playing") return;
+    if (!player || phase !== "playing") return;
+    submitAbortRef.current?.abort();
+    const controller = new AbortController();
+    submitAbortRef.current = controller;
     setPhase("submitting");
     const timeMs = Math.min(ROUND_MS, Date.now() - startedAt.current);
+    const timeoutId = window.setTimeout(() => controller.abort(), 15000);
     try {
-      const r = await fetch(`${API}/api/impossible/submit`, {
+      const r = await fetch(API + "/api/impossible/submit", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        credentials: "include",
         body: JSON.stringify({
-          playerId: player.id,
-          playerName: player.name,
-          language: lang,
-          word: w,
-          timeMs,
-          surrendered,
+          playerId: player.id, playerName: player.name, language: lang,
+          word: w, timeMs, surrendered,
         }),
+        signal: controller.signal,
       });
       const data = await r.json();
+      if (!r.ok) throw new Error("impossible-submit-" + r.status);
+      if (controller.signal.aborted) return;
       if (data.alreadyPlayed && data.result) {
         setMyAttempt(data.result);
       } else {
         setOutcome({ won: !!data.won, word: data.word ?? w, timeMs, stats: data.stats });
-        setMyAttempt({
-          letter: combo?.letter ?? "?",
-          category: combo?.category ?? "",
-          attemptedWord: data.word ?? w,
-          won: !!data.won,
-          timeMs,
-        });
+        setMyAttempt({ letter: combo?.letter ?? "?", category: combo?.category ?? "", attemptedWord: data.word ?? w, won: !!data.won, timeMs });
       }
       setPhase("done");
     } catch {
-      setPhase("playing");
+      if (!controller.signal.aborted) setPhase("playing");
+    } finally {
+      window.clearTimeout(timeoutId);
+      if (submitAbortRef.current === controller) submitAbortRef.current = null;
     }
   }, [player, phase, lang, combo]);
 
+  useEffect(() => () => {
+    submitAbortRef.current?.abort();
+    submitAbortRef.current = null;
+    if (focusTimeoutRef.current) clearTimeout(focusTimeoutRef.current);
+    focusTimeoutRef.current = null;
+  }, [player?.id, lang]);
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const w = word.trim();

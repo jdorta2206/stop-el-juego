@@ -15,6 +15,7 @@ export function usePaymentChannel() {
 
   useEffect(() => {
     let cancelled = false;
+    let timeoutId: number | null = null;
     const startedAt = Date.now();
 
     const resolve = () => {
@@ -32,7 +33,7 @@ export function usePaymentChannel() {
       // Give a genuine Android TWA a short opportunity to expose its runtime
       // signals before falling back to ordinary web/Stripe.
       if (Date.now() - startedAt < 3000) {
-        window.setTimeout(resolve, 100);
+        timeoutId = window.setTimeout(resolve, 100);
       } else {
         setChannel(detectPaymentChannel());
       }
@@ -41,6 +42,7 @@ export function usePaymentChannel() {
     resolve();
     return () => {
       cancelled = true;
+      if (timeoutId !== null) window.clearTimeout(timeoutId);
     };
   }, []);
 

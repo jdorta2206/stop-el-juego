@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { AVATAR_COLORS } from "@/lib/utils";
 import type { PlayerProfile } from "@/hooks/use-player";
@@ -38,6 +38,15 @@ export function AuthModal({ onSave, initial, onDismiss }: AuthModalProps) {
   const [fbToken, setFbToken] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [existingStats, setExistingStats] = useState<{ totalScore: number; gamesPlayed: number } | null>(null);
+  const mountedRef = useRef(true);
+  const statsAbortRef = useRef<AbortController | null>(null);
+  const welcomeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => {
+    mountedRef.current = false;
+    statsAbortRef.current?.abort();
+    if (welcomeTimerRef.current) clearTimeout(welcomeTimerRef.current);
+  }, []);
 
   useEffect(() => {
     try {
@@ -61,9 +70,13 @@ export function AuthModal({ onSave, initial, onDismiss }: AuthModalProps) {
     setStep("profile");
 
     const apiBase = (import.meta as any).env?.VITE_API_URL ?? window.location.origin;
-    fetch(`${apiBase}/api/ranking/scores/${encodeURIComponent(oauthUser.id)}`)
+    statsAbortRef.current?.abort();
+    const controller = new AbortController();
+    statsAbortRef.current = controller;
+    fetch(`${apiBase}/api/ranking/scores/${encodeURIComponent(oauthUser.id)}`, { signal: controller.signal })
       .then(r => r.ok ? r.json() : null)
       .then(data => {
+        if (!mountedRef.current || controller.signal.aborted) return;
         if (data?.score?.gamesPlayed > 0) {
           const stats = { totalScore: data.score.totalScore, gamesPlayed: data.score.gamesPlayed };
           setExistingStats(stats);
@@ -77,7 +90,10 @@ export function AuthModal({ onSave, initial, onDismiss }: AuthModalProps) {
             picture: oauthUser.picture || null,
             fbAccessToken: fbAccessToken,
           } as any;
-          setTimeout(() => onSave(profile), 2000);
+          if (welcomeTimerRef.current) clearTimeout(welcomeTimerRef.current);
+          welcomeTimerRef.current = setTimeout(() => {
+            if (mountedRef.current && !controller.signal.aborted) onSave(profile);
+          }, 2000);
         }
       })
       .catch(() => {});

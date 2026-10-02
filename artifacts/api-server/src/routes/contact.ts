@@ -1,39 +1,58 @@
-import { Router, Request, Response } from "express";
+import { Router, type Request, type Response } from "express";
+import { db } from "@workspace/db";
+import { sql } from "drizzle-orm";
+import { contactLimiter } from "../middlewares/rateLimit";
 
 const router = Router();
 
-// 📬 Endpoint para recibir mensajes de contacto
-router.post("/", async (req: Request, res: Response) => {
-  try {
-    const { name, email, message } = req.body;
+let contactTableReady: Promise<void> | null = null;
 
-    // Validar campos obligatorios
+function ensureContactTable(): Promise<void> {
+  if (!contactTableReady) {
+    contactTableReady = db.execute(sql`
+      CREATE TABLE IF NOT EXISTS contact_messages (
+        id bigserial PRIMARY KEY,
+        name text NOT NULL,
+        email text NOT NULL,
+        message text NOT NULL,
+        created_at timestamptz NOT NULL DEFAULT NOW()
+      )
+    `).then(() => undefined).catch((error) => {
+      console.error("[contact] failed to initialize contact_messages:", error);
+      // A transient DB failure must not permanently poison the initializer.
+      contactTableReady = null;
+      throw error;
+    });
+  }
+  return contactTableReady;
+}
+
+router.post("/", contactLimiter, async (req: Request, res: Response) => {
+  try {
+    const name = typeof req.body?.name === "string" ? req.body.name.trim() : "";
+    const email = typeof req.body?.email === "string" ? req.body.email.trim() : "";
+    const message = typeof req.body?.message === "string" ? req.body.message.trim() : "";
+
     if (!name || !email || !message) {
       return res.status(400).json({ error: "Faltan campos obligatorios" });
     }
+    if (name.length > 120 || email.length > 320 || message.length > 5000) {
+      return res.status(400).json({ error: "El mensaje supera el límite permitido" });
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ error: "Correo electrónico no válido" });
+    }
 
-    // Aquí puedes hacer lo que quieras con los datos:
-    // 1. Guardarlos en una base de datos
-    // 2. Enviar un correo electrónico con nodemailer
-    // 3. Enviar una notificación a Slack/Discord/Telegram
-    // 4. Guardar en un archivo de logs (temporal)
+    await ensureContactTable();
+    await db.execute(sql`
+      INSERT INTO contact_messages (name, email, message)
+      VALUES (${name}, ${email}, ${message})
+    `);
 
-    // Ejemplo: solo los mostramos por consola (mientras pruebas)
-    console.log(`📩 Nuevo mensaje de contacto:`);
-    console.log(`  Nombre: ${name}`);
-    console.log(`  Email: ${email}`);
-    console.log(`  Mensaje: ${message}`);
-
-    // Podrías guardarlos en la base de datos si tienes una tabla de contactos
-    // await db.insert(contactsTable).values({ name, email, message, createdAt: new Date() });
-
-    // También podrías enviar un correo con Nodemailer (ver opción más abajo)
-
-    // Respuesta de éxito
-    res.status(200).json({ ok: true, message: "Mensaje enviado correctamente" });
+    return res.status(201).json({ ok: true, message: "Mensaje recibido correctamente" });
   } catch (error) {
     console.error("Error en /api/contact:", error);
-    res.status(500).json({ error: "Error interno del servidor" });
+    return res.status(500).json({ error: "No se pudo guardar el mensaje. Inténtalo de nuevo." });
   }
 });
 

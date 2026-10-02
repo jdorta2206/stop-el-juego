@@ -1,9 +1,18 @@
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
 import { timingSafeEqual } from "crypto";
-import { db } from "@workspace/db";
+import { db, indexesReady } from "@workspace/db";
 import { sql } from "drizzle-orm";
+import { authLimiter } from "../middlewares/rateLimit";
 
 const router: IRouter = Router();
+
+router.use((_req, res, next) => {
+  if (!indexesReady()) {
+    res.setHeader("Retry-After", "2");
+    return res.status(503).json({ error: "Server warming up", ready: false });
+  }
+  next();
+});
 
 function safeEqual(a: string, b: string): boolean {
   const aa = Buffer.from(a, "utf8");
@@ -35,7 +44,7 @@ function esc(value: unknown): string {
   return String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-router.get("/", basicAuth, async (_req, res) => {
+router.get("/", authLimiter, basicAuth, async (_req, res) => {
   try {
     const online = await db.execute(sql`
       SELECT platform, COUNT(*)::int AS active
@@ -49,7 +58,7 @@ router.get("/", basicAuth, async (_req, res) => {
       SELECT platform,
              COUNT(*) FILTER (WHERE event_name = 'session_start')::int AS sessions,
              COUNT(*) FILTER (WHERE event_name = 'game_start')::int AS games_started,
-             COUNT(*) FILTER (WHERE event_name = 'game_complete')::int AS games_completed,
+             COUNT(*) FILTER (WHERE event_name = 'game_complete' AND trusted = TRUE)::int AS games_completed,
              COUNT(*) FILTER (WHERE event_name IN ('ad_impression','rewarded_ad_completed'))::int AS ad_impressions
       FROM analytics_events
       WHERE created_at >= date_trunc('day', NOW() AT TIME ZONE 'Europe/Madrid') AT TIME ZONE 'Europe/Madrid'
@@ -96,7 +105,8 @@ router.get("/", basicAuth, async (_req, res) => {
     const powerups = await db.execute(sql`
       SELECT event_name, COUNT(*)::int AS total
       FROM analytics_events
-      WHERE created_at >= NOW() - INTERVAL '7 days'
+      WHERE trusted = TRUE
+        AND created_at >= NOW() - INTERVAL '7 days'
         AND event_name IN ('rewarded_ad_requested','rewarded_ad_completed','rewarded_ad_failed','powerup_used','game_start','game_complete')
       GROUP BY event_name
       ORDER BY CASE event_name

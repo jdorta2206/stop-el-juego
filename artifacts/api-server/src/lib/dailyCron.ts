@@ -55,6 +55,20 @@ const STREAK_RESCUE_MSGS: Record<string, (streak: number) => { title: string; bo
  * Returns true only on the FIRST instance to insert/update for this date.
  * Any subsequent instance (or restart) for the same date returns false.
  */
+async function releaseDailyLock(today: string, key: string): Promise<void> {
+  try {
+    // Only release the exact claim made for this date. This lets a later
+    // cron tick retry after a failed side-effect without touching a newer
+    // day lock.
+    await db.execute(sql`
+      DELETE FROM cron_locks
+      WHERE lock_key = ${key} AND last_run_date = ${today}
+    `);
+  } catch (e) {
+    console.error("[dailyCron] lock release error:", e);
+  }
+}
+
 async function claimDailyLock(today: string, key: string = CRON_KEY): Promise<boolean> {
   try {
     // Insert if missing → claim. Else only update if the existing date is older → claim.
@@ -284,6 +298,15 @@ async function sendPerUserDailyNotifications() {
     const candidates = rows.rows ?? [];
     if (candidates.length === 0) return;
 
+    // One cluster-wide claim per UTC 5-minute bucket. Every player whose
+    // local reminder time falls in this window is processed by the single
+    // instance that wins the claim; otherwise two Railway instances could
+    // send the same reminder concurrently.
+    const today = utcNow.toISOString().slice(0, 10);
+    const utcBucket = Math.floor(utcMinutesOfDay / 5);
+    const claimed = await claimDailyLock(today, `daily_${today}_${utcBucket}`);
+    if (!claimed) return;
+
     // Dedup per (player, lang) — a player may have multiple endpoints
     // (e.g. phone + desktop). sendPushToPlayer hits every endpoint
     // already, so we send the message once per player_id here.
@@ -367,10 +390,6 @@ async function sendHappyHourNotifications() {
 
     for (const slot of slots) {
       const lockKey = `hh_${slot.key}_${today}_${utcBucket}`;
-      const claimed = await claimDailyLock(today, lockKey);
-      if (!claimed) {
-        continue; // another instance already handled this slot+bucket
-      }
 
       const rows = (await db.execute(sql`
         SELECT player_id, language
@@ -384,6 +403,11 @@ async function sendHappyHourNotifications() {
 
       const candidates = rows.rows ?? [];
       if (candidates.length === 0) continue;
+
+      // Claim only after the candidate query succeeds. A transient DB failure
+      // must not consume the bucket and suppress a later retry.
+      const claimed = await claimDailyLock(today, lockKey);
+      if (!claimed) continue;
 
       const seen = new Set<string>();
       let sent = 0;
@@ -422,9 +446,6 @@ async function sendDailyDealsNotifications() {
     const today = utcNow.toISOString().slice(0, 10);
     const utcBucket = Math.floor(utcMinutesOfDay / 5);
 
-    const claimed = await claimDailyLock(today, `deals_${today}_${utcBucket}`);
-    if (!claimed) return; // another instance owns this bucket
-
     const rows = (await db.execute(sql`
       SELECT player_id, language
       FROM push_subscriptions
@@ -437,6 +458,11 @@ async function sendDailyDealsNotifications() {
 
     const candidates = rows.rows ?? [];
     if (candidates.length === 0) return;
+
+    // Claim only after the candidate query succeeds. A transient DB failure
+    // must not consume the bucket and suppress a later retry.
+    const claimed = await claimDailyLock(today, `deals_${today}_${utcBucket}`);
+    if (!claimed) return;
 
     const maxDiscount = Math.max(0, ...getDailyDeals(utcNow).deals.map((d) => d.discountPct));
 
@@ -569,5 +595,9 @@ async function rolloverSeasonIfNeeded(today: string) {
     }
   } catch (e: any) {
     console.error("[seasonRollover] Error:", e?.message ?? e);
+    // The lock is claimed before this operation. If creation/finalization
+    // fails, release it so a later tick can retry instead of losing the
+    // entire day rollover window.
+    await releaseDailyLock(today, SEASON_ROLLOVER_KEY);
   }
 }

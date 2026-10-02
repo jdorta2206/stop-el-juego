@@ -68,100 +68,111 @@ function addDays(dateStr: string, days: number): string {
  */
 export async function finalizePreviousSeason(currentSeasonId: number, today: string): Promise<void> {
   try {
-    // Find the most recent season that ended strictly before today AND is
-    // not the freshly-opened one. We process at most one prior season per
-    // call; older un-finalized seasons would be picked up the next time
-    // rollover happens.
-    const prevRows = (await db.execute(sql`
+    // Finalize every ended season, not just the immediately preceding one.
+    // This matters after downtime: several season periods may have elapsed
+    // before the next request/cron creates or discovers the current season.
+    const endedRows = (await db.execute(sql`
       SELECT id FROM seasons
       WHERE end_date < ${today} AND id <> ${currentSeasonId}
-      ORDER BY id DESC LIMIT 1
+      ORDER BY id ASC
     `)) as unknown as SqlResult<{ id: number }>;
-    const prevId = prevRows.rows?.[0]?.id;
-    if (!prevId) return;
 
-    const standings = (await db.execute(sql`
-      SELECT player_id, xp,
-             ROW_NUMBER() OVER (ORDER BY xp DESC, id ASC) AS rank,
-             COUNT(*) OVER () AS total
-      FROM season_progress
-      WHERE season_id = ${prevId}
-    `)) as unknown as SqlResult<{ player_id: string; xp: number; rank: number | string; total: number | string }>;
-
-    const rows = standings.rows ?? [];
-    if (rows.length === 0) return;
-
-    // We deliberately do NOT short-circuit if some finals rows already
-    // exist — a previous run may have failed mid-loop. Each per-player
-    // step is fully idempotent: the finals INSERT relies on the unique
-    // (season_id, player_id) index, and the inventory UPDATE happens
-    // inside a transaction with FOR UPDATE so concurrent writers (tier
-    // claims, shop purchases) cannot clobber the JSON blob.
-    let processed = 0;
-    for (const r of rows) {
-      const rank = Number(r.rank);
-      const total = Number(r.total);
-      const cosmetic = rank <= 3 ? championFrameId(prevId, rank as 1 | 2 | 3) : null;
-
+    for (const season of endedRows.rows ?? []) {
+      const prevId = Number(season.id);
+      // Finalization and authoritative season events share one transaction-level
+      // advisory lock. This closes the midnight race where an event that started
+      // before rollover could otherwise update the old season after its standings
+      // snapshot had already been taken.
       const client = await pool.connect();
+      let processed = 0;
+      let standingsCount = 0;
       try {
         await client.query("BEGIN");
-        await client.query(
-          `INSERT INTO season_finals
-             (season_id, player_id, final_rank, final_xp, total_players, awarded_cosmetic)
-           VALUES ($1, $2, $3, $4, $5, $6)
-           ON CONFLICT (season_id, player_id) DO NOTHING`,
-          [prevId, r.player_id, rank, r.xp, total, cosmetic],
-        );
+        await client.query("SELECT pg_advisory_xact_lock($1::bigint)", [prevId]);
 
-        if (cosmetic) {
-          // Lock the player_scores row so concurrent inventory writers
-          // serialize behind us.
-          const invRes = await client.query<{ inventory_json: string }>(
-            `SELECT inventory_json FROM player_scores
-             WHERE player_id = $1 FOR UPDATE`,
-            [r.player_id],
+        const standings = await client.query<{
+          player_id: string;
+          xp: number;
+          rank: number | string;
+          total: number | string;
+        }>(
+          `SELECT player_id, xp,
+                  ROW_NUMBER() OVER (ORDER BY xp DESC, id ASC) AS rank,
+                  COUNT(*) OVER () AS total
+           FROM season_progress
+           WHERE season_id = $1
+           ORDER BY xp DESC, id ASC`,
+          [prevId],
+        );
+        standingsCount = standings.rows.length;
+
+        for (const r of standings.rows) {
+          const rank = Number(r.rank);
+          const total = Number(r.total);
+          const cosmetic = rank <= 3 ? championFrameId(prevId, rank as 1 | 2 | 3) : null;
+
+          await client.query(
+            `INSERT INTO season_finals
+               (season_id, player_id, final_rank, final_xp, total_players, awarded_cosmetic)
+             VALUES ($1, $2, $3, $4, $5, $6)
+             ON CONFLICT (season_id, player_id) DO NOTHING`,
+            [prevId, r.player_id, rank, r.xp, total, cosmetic],
           );
-          if (invRes.rows.length > 0) {
-            const raw = invRes.rows[0].inventory_json;
-            const inv: { avatars: string[]; frames: string[] } = { avatars: [], frames: [] };
-            try {
-              const parsed = JSON.parse(raw || "{}");
-              if (Array.isArray(parsed.avatars)) inv.avatars = parsed.avatars;
-              if (Array.isArray(parsed.frames)) inv.frames = parsed.frames;
-            } catch { /* keep defaults */ }
-            if (!inv.frames.includes(cosmetic)) {
-              inv.frames.push(cosmetic);
-              await client.query(
-                `UPDATE player_scores
-                 SET inventory_json = $1, updated_at = NOW()
-                 WHERE player_id = $2`,
-                [JSON.stringify(inv), r.player_id],
-              );
+
+          if (cosmetic) {
+            const invRes = await client.query<{ inventory_json: string }>(
+              `SELECT inventory_json FROM player_scores
+               WHERE player_id = $1 FOR UPDATE`,
+              [r.player_id],
+            );
+            if (invRes.rows.length > 0) {
+              const raw = invRes.rows[0].inventory_json;
+              const inv: Record<string, unknown> = { avatars: [], frames: [] };
+              try {
+                const parsed = JSON.parse(raw || "{}");
+                if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+                  Object.assign(inv, parsed);
+                }
+                if (!Array.isArray(inv.avatars)) inv.avatars = [];
+                if (!Array.isArray(inv.frames)) inv.frames = [];
+              } catch { /* keep defaults */ }
+
+              const frames = inv.frames as string[];
+              if (!frames.includes(cosmetic)) {
+                frames.push(cosmetic);
+                await client.query(
+                  `UPDATE player_scores
+                   SET inventory_json = $1, updated_at = NOW()
+                   WHERE player_id = $2`,
+                  [JSON.stringify(inv), r.player_id],
+                );
+              }
             }
           }
+          processed++;
         }
 
         await client.query("COMMIT");
-        processed++;
       } catch (txErr) {
         await client.query("ROLLBACK").catch(() => {});
-        // Log per-player failures but keep going — finalize is resumable.
         console.error(
-          `[finalizePreviousSeason] player ${r.player_id} failed:`,
+          `[finalizePreviousSeason] season ${prevId} failed:`,
           txErr instanceof Error ? txErr.message : String(txErr),
         );
       } finally {
         client.release();
       }
+
+      console.log(
+        `[finalizePreviousSeason] Finalized season ${prevId} (${processed}/${standingsCount} players)`,
+      );
     }
-    console.log(`[finalizePreviousSeason] Finalized season ${prevId} (${processed}/${rows.length} players)`);
   } catch (e: unknown) {
     console.error("[finalizePreviousSeason] error:", e instanceof Error ? e.message : String(e));
   }
 }
 
-async function getOrCreateActiveSeason() {
+export async function getOrCreateActiveSeason() {
   const today = todayUTC();
 
   const existing = await db
@@ -171,7 +182,34 @@ async function getOrCreateActiveSeason() {
     .orderBy(desc(seasonsTable.id))
     .limit(1);
 
-  if (existing.length > 0) return existing[0];
+  if (existing.length > 0) {
+    // Recovery path: a previous process may have created this season and
+    // crashed before finalizing ended seasons. Re-check whether any ended
+    // season still has progress rows without a corresponding final snapshot.
+    // This is a cheap existence query and keeps finalization recoverable after
+    // a crash instead of depending on the original rollover request.
+    const incomplete = await db.execute(sql`
+      SELECT 1
+      FROM seasons s
+      WHERE s.end_date < ${today}
+        AND EXISTS (
+          SELECT 1
+          FROM season_progress sp
+          WHERE sp.season_id = s.id
+            AND NOT EXISTS (
+              SELECT 1
+              FROM season_finals sf
+              WHERE sf.season_id = sp.season_id
+                AND sf.player_id = sp.player_id
+            )
+        )
+      LIMIT 1
+    `);
+    if ((incomplete as any).rows?.length > 0) {
+      void finalizePreviousSeason(existing[0].id, today);
+    }
+    return existing[0];
+  }
 
   // Race-safe insert: a partial unique index on `start_date` (added in
   // ensureIndexes) lets concurrent first-hit/rollover requests collapse to a
@@ -227,14 +265,19 @@ function parseClaimed(raw: string): { free: number[]; premium: number[] } {
   }
 }
 
-async function getOrCreateProgress(playerId: string, seasonId: number): Promise<ProgressRow> {
+export async function getOrCreateProgressTx(
+  tx: any,
+  playerId: string,
+  seasonId: number,
+): Promise<ProgressRow> {
   const today = todayUTC();
 
-  // Race-safe upsert: relies on the unique index on (player_id, season_id).
-  // ON CONFLICT DO NOTHING + RETURNING gives us the new row on insert OR
-  // nothing on conflict — in which case we SELECT the winning row.
+  // Race-safe upsert on the unique (player_id, season_id) key. The whole
+  // get/create + daily-mission rollover stays on the caller's transaction
+  // connection so authoritative game scoring can commit atomically with
+  // season progress.
   const fresh: MissionsBlob = { date: today, missions: buildMissionsForDate(today) };
-  const inserted = await db
+  const inserted = await tx
     .insert(seasonProgressTable)
     .values({
       playerId,
@@ -250,28 +293,144 @@ async function getOrCreateProgress(playerId: string, seasonId: number): Promise<
   if (inserted.length > 0) {
     row = inserted[0];
   } else {
-    const existing = await db
+    const existing = await tx
       .select()
       .from(seasonProgressTable)
-      .where(and(eq(seasonProgressTable.playerId, playerId), eq(seasonProgressTable.seasonId, seasonId)))
+      .where(and(
+        eq(seasonProgressTable.playerId, playerId),
+        eq(seasonProgressTable.seasonId, seasonId),
+      ))
       .limit(1);
+    if (existing.length === 0) {
+      throw new Error("season progress row disappeared after conflict");
+    }
     row = existing[0];
   }
 
-  // Lazily roll missions over to today.
+  const locked = (await tx.execute(sql\`
+    SELECT id, player_id, season_id, xp, claimed_tiers, missions_json, updated_at
+    FROM season_progress
+    WHERE id = \${row.id}
+    FOR UPDATE
+  \`)) as unknown as SqlResult<ProgressRow>;
+  const current = locked.rows?.[0];
+  if (!current) throw new Error("season progress row not found after upsert");
+
   const currentDate = (() => {
-    try { return JSON.parse(row.missionsJson || "{}")?.date; }
+    try { return JSON.parse(current.missionsJson || "{}")?.date; }
     catch { return undefined; }
   })();
+
   if (currentDate !== today) {
     const rolled: MissionsBlob = { date: today, missions: buildMissionsForDate(today) };
-    await db
+    await tx
       .update(seasonProgressTable)
       .set({ missionsJson: JSON.stringify(rolled), updatedAt: new Date() })
       .where(eq(seasonProgressTable.id, row.id));
-    row.missionsJson = JSON.stringify(rolled);
+    current.missionsJson = JSON.stringify(rolled);
   }
-  return row;
+
+  return current;
+}
+
+export async function getOrCreateProgress(playerId: string, seasonId: number): Promise<ProgressRow> {
+  return db.transaction(async (tx) => getOrCreateProgressTx(tx, playerId, seasonId));
+}
+
+/**
+ * Records season progress only from server-authoritative gameplay results.
+ * The public /event endpoint must never accept client-supplied progress values.
+ */
+export async function applyAuthoritativeSeasonEventsTx(
+  tx: any,
+  seasonId: number,
+  progressId: number,
+  events: Array<{ type: "win_game" | "play_game" | "round_score" | "streak" | "valid_words" | "daily_done"; value?: number }>,
+): Promise<void> {
+  if (!events.length) return;
+
+  // Serialize authoritative events with season finalization at rollover.
+  await tx.execute(sql`SELECT pg_advisory_xact_lock(${seasonId}::bigint)`);
+
+  const today = todayUTC();
+  const activeSeason = (await tx.execute(sql`
+    SELECT 1 FROM seasons
+    WHERE id = ${seasonId} AND end_date >= ${today}
+    LIMIT 1
+  `)) as unknown as SqlResult<{ "?column?": number }>;
+  if ((activeSeason.rows?.length ?? 0) === 0) {
+    // An authoritative result must never commit without its season event.
+    // Throw so the caller's transaction rolls back the idempotency claim and
+    // leaderboard changes; recovery can then retry against the new season.
+    throw new Error(`Season ${seasonId} is no longer active`);
+  }
+
+  const locked = (await tx.execute(sql`
+    SELECT id, missions_json
+    FROM season_progress
+    WHERE id = ${progressId}
+    FOR UPDATE
+  `)) as unknown as SqlResult<Pick<ProgressRowSql, "id" | "missions_json">>;
+  const row = locked.rows?.[0];
+  if (!row) return;
+
+  const blob = parseMissions(row.missions_json, today);
+  let mutated = false;
+
+  for (const event of events) {
+    const value = Number.isFinite(event.value) && Number(event.value) > 0
+      ? Math.floor(Number(event.value))
+      : 1;
+
+    for (const m of blob.missions) {
+      if (m.type !== event.type || m.claimed) continue;
+      if (m.type === "round_score" || m.type === "streak") {
+        if (value > m.progress) {
+          m.progress = Math.min(value, m.target);
+          mutated = true;
+        }
+      } else {
+        const next = Math.min(m.progress + value, m.target);
+        if (next !== m.progress) {
+          m.progress = next;
+          mutated = true;
+        }
+      }
+      if (m.progress >= m.target) m.completed = true;
+    }
+  }
+
+  if (mutated) {
+    await tx.update(seasonProgressTable)
+      .set({ missionsJson: JSON.stringify(blob), updatedAt: new Date() })
+      .where(eq(seasonProgressTable.id, progressId));
+  }
+}
+
+/**
+ * Records season progress only from server-authoritative gameplay results.
+ * The public /event endpoint must never accept client-supplied progress values.
+ *
+ * Non-score callers use this wrapper. Score submissions use
+ * applyAuthoritativeSeasonEventsTx so season progress commits atomically with
+ * the score and its offline idempotency receipt.
+ */
+export async function recordAuthoritativeSeasonEvents(
+  playerId: string,
+  events: Array<{ type: "win_game" | "play_game" | "round_score" | "streak" | "valid_words" | "daily_done"; value?: number }>,
+): Promise<void> {
+  if (!playerId || events.length === 0) return;
+  try {
+    const season = await getOrCreateActiveSeason();
+    const progress = await getOrCreateProgress(playerId, season.id);
+
+    await db.transaction(async (tx) => {
+      await applyAuthoritativeSeasonEventsTx(tx, season.id, progress.id, events);
+    });
+  } catch (e: unknown) {
+    // Season progression is auxiliary and must never make a valid game result fail.
+    console.error("[season/authoritative-event] error:", e instanceof Error ? e.message : String(e));
+  }
 }
 
 // ── Routes ─────────────────────────────────────────────────────────────────
@@ -530,68 +689,12 @@ router.post("/ack-final", requirePlayerIdentity, async (req: AuthedRequest, res)
   }
 });
 
-// POST /api/season/event { type, value? }  (auth required)
-// Increments mission progress for any matching mission. XP is granted on /claim-mission.
-router.post("/event", requirePlayerIdentity, async (req: AuthedRequest, res) => {
-  const playerId = req.playerId!;
-  const { type, value } = (req.body ?? {}) as { type?: string; value?: number };
-  if (!type) {
-    res.status(400).json({ error: "Missing type" });
-    return;
-  }
-  const v = typeof value === "number" && value > 0 ? value : 1;
-
-  try {
-    const season = await getOrCreateActiveSeason();
-    const progress = await getOrCreateProgress(playerId, season.id);
-    const today = todayUTC();
-
-    // Atomic: serialize against concurrent /event and /claim-mission for this row
-    const result = await db.transaction(async (tx) => {
-      const locked = (await tx.execute(sql`
-        SELECT id, missions_json FROM season_progress WHERE id = ${progress.id} FOR UPDATE
-      `)) as unknown as SqlResult<Pick<ProgressRowSql, "id" | "missions_json">>;
-      const row = locked.rows?.[0];
-      if (!row) return null;
-      const blob = parseMissions(row.missions_json, today);
-
-      let mutated = false;
-      for (const m of blob.missions) {
-        if (m.type !== type || m.claimed) continue;
-        if (m.type === "round_score" || m.type === "streak") {
-          if (v > m.progress) {
-            m.progress = Math.min(v, m.target);
-            mutated = true;
-          }
-        } else {
-          m.progress = Math.min(m.progress + v, m.target);
-          mutated = true;
-        }
-        if (m.progress >= m.target) m.completed = true;
-      }
-      if (mutated) {
-        await tx
-          .update(seasonProgressTable)
-          .set({ missionsJson: JSON.stringify(blob), updatedAt: new Date() })
-          .where(eq(seasonProgressTable.id, progress.id));
-      }
-      return blob;
-    });
-
-    if (!result) {
-      res.status(404).json({ error: "Progress row not found" });
-      return;
-    }
-
-    res.json({
-      ok: true,
-      missions: result.missions,
-      hasUnclaimedMissions: result.missions.some((m) => m.completed && !m.claimed),
-    });
-  } catch (e: unknown) {
-    console.error("[season/event] error:", e instanceof Error ? e.message : String(e));
-    res.status(500).json({ error: "Failed to record event" });
-  }
+// POST /api/season/event
+// Deprecated: mission progress is now recorded only by server-authoritative
+// gameplay endpoints. Keeping this route closed prevents forged type/value
+// submissions from granting season progress.
+router.post("/event", requirePlayerIdentity, async (_req: AuthedRequest, res) => {
+  res.status(410).json({ error: "Season events are server-authoritative" });
 });
 
 // POST /api/season/claim-mission { missionId }  (auth required)
@@ -711,6 +814,18 @@ router.post("/claim-tier", requirePlayerIdentity, async (req: AuthedRequest, res
 
     // Atomic claim guard
     const claim = await db.transaction(async (tx) => {
+      // Keep the same lock order as authoritative scoring:
+      // player_scores -> season_progress. Reversing these can deadlock a
+      // concurrent score submission that already holds player_scores.
+      const playerLocked = (await tx.execute(sql`
+        SELECT inventory_json FROM player_scores
+        WHERE player_id = ${playerId} FOR UPDATE
+      `)) as unknown as SqlResult<{ inventory_json: string }>;
+      const playerRow = playerLocked.rows?.[0];
+      if (!playerRow) {
+        return { ok: false as const, error: "Player profile not found", status: 404 };
+      }
+
       const locked = (await tx.execute(sql`
         SELECT id, xp, claimed_tiers FROM season_progress WHERE id = ${progress.id} FOR UPDATE
       `)) as unknown as SqlResult<Pick<ProgressRowSql, "id" | "xp" | "claimed_tiers">>;
@@ -733,18 +848,6 @@ router.post("/claim-tier", requirePlayerIdentity, async (req: AuthedRequest, res
       // avatars/frames are appended to the inventory (de-duplicated). All
       // happens inside the SAME transaction as the claimed_tiers write so a
       // crash mid-claim leaves no half-state.
-      // Lock the player_scores row up front and hard-fail if it's missing
-      // — otherwise the UPDATE below could affect 0 rows and the claim
-      // would silently lose the reward while still being marked claimed.
-      const playerLocked = (await tx.execute(sql`
-        SELECT inventory_json FROM player_scores
-        WHERE player_id = ${playerId} FOR UPDATE
-      `)) as unknown as SqlResult<{ inventory_json: string }>;
-      const playerRow = playerLocked.rows?.[0];
-      if (!playerRow) {
-        return { ok: false as const, error: "Player profile not found", status: 404 };
-      }
-
       const reward = tierReward(tierNum)[track];
       let depositedCoins = 0;
       let depositedCosmetic: string | null = null;
@@ -756,11 +859,13 @@ router.post("/claim-tier", requirePlayerIdentity, async (req: AuthedRequest, res
         `);
         depositedCoins = reward.value;
       } else if ((reward.kind === "avatar" || reward.kind === "frame") && typeof reward.value === "string") {
-        let inv: { avatars: string[]; frames: string[] } = { avatars: [], frames: [] };
+        let inv: { avatars: string[]; frames: string[]; backgrounds: string[]; equippedBackground: string | null } = { avatars: [], frames: [], backgrounds: [], equippedBackground: null };
         try {
           const parsed = JSON.parse(playerRow.inventory_json || "{}");
           if (Array.isArray(parsed.avatars)) inv.avatars = parsed.avatars;
           if (Array.isArray(parsed.frames)) inv.frames = parsed.frames;
+          if (Array.isArray(parsed.backgrounds)) inv.backgrounds = parsed.backgrounds;
+          if (typeof parsed.equippedBackground === "string") inv.equippedBackground = parsed.equippedBackground;
         } catch { /* keep defaults */ }
         const bucket = reward.kind === "avatar" ? inv.avatars : inv.frames;
         if (!bucket.includes(reward.value)) bucket.push(reward.value);

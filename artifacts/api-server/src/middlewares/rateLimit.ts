@@ -1,82 +1,104 @@
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import type { Request } from "express";
+import { db, indexesReady } from "@workspace/db";
+import { sql } from "drizzle-orm";
+import { readPlayerId } from "../lib/playerAuth";
 
-// Compose key from playerId (body/query) + IP. Falls back to IP only.
-// IPv6-safe via `ipKeyGenerator` helper from express-rate-limit.
+interface RateLimitStore {
+  increment: (key: string) => Promise<{ totalHits: number; resetTime: Date }>;
+  decrement: (key: string) => Promise<void>;
+  resetKey: (key: string) => Promise<void>;
+}
+
+class PgRateLimitStore implements RateLimitStore {
+  private readonly prefix: string;
+  private readonly windowMs: number;
+  private cleanupTimer: ReturnType<typeof setInterval>;
+
+  constructor(prefix: string, windowMs: number) {
+    this.prefix = prefix;
+    this.windowMs = windowMs;
+    this.cleanupTimer = setInterval(() => {
+      if (!indexesReady()) return;
+      void db.execute(sql\`
+        DELETE FROM api_rate_limits
+        WHERE bucket_key LIKE \${this.prefix + ":%"}
+          AND window_start < NOW() - (\${this.windowMs}::double precision * interval '1 millisecond')
+      \`).catch((err) => console.error("[rate-limit] cleanup failed:", err));
+    }, Math.max(windowMs, 60_000));
+    this.cleanupTimer.unref?.();
+  }
+
+  async increment(key: string) {
+    const bucketKey = \`\${this.prefix}:\${key}\`;
+    const result = await db.execute(sql\`
+      INSERT INTO api_rate_limits (bucket_key, window_start, hits)
+      VALUES (\${bucketKey}, NOW(), 1)
+      ON CONFLICT (bucket_key) DO UPDATE
+      SET
+        hits = CASE
+          WHEN api_rate_limits.window_start <= NOW() -
+            (\${this.windowMs}::double precision * interval '1 millisecond')
+          THEN 1
+          ELSE api_rate_limits.hits + 1
+        END,
+        window_start = CASE
+          WHEN api_rate_limits.window_start <= NOW() -
+            (\${this.windowMs}::double precision * interval '1 millisecond')
+          THEN NOW()
+          ELSE api_rate_limits.window_start
+        END
+      RETURNING hits, window_start
+    \`);
+    const row = result.rows[0] as { hits: number | string; window_start: string | Date };
+    const windowStart = new Date(row.window_start);
+    return { totalHits: Number(row.hits), resetTime: new Date(windowStart.getTime() + this.windowMs) };
+  }
+
+  async decrement(key: string) {
+    await db.execute(sql\`
+      UPDATE api_rate_limits SET hits = GREATEST(0, hits - 1)
+      WHERE bucket_key = \${this.prefix + ":" + key}
+    \`);
+  }
+
+  async resetKey(key: string) {
+    await db.execute(sql\`
+      DELETE FROM api_rate_limits WHERE bucket_key = \${this.prefix + ":" + key}
+    \`);
+  }
+}
+
 function playerKey(req: Request): string {
-  const pid =
-    (req.body && (req.body as any).playerId) ||
-    (req.query && (req.query as any).playerId) ||
-    "";
-  return `${pid || "anon"}|${ipKeyGenerator(req.ip ?? "")}`;
+  // Never trust a client-supplied playerId for throttling: it can be rotated
+  // on every request to bypass score/write limits. Prefer the cryptographically
+  // verified session identity; guests have no token, so fall back to IP.
+  const pid = readPlayerId(req);
+  return pid ? `player:${pid}` : `ip:${ipKeyGenerator(req.ip ?? "")}`;
 }
 
 const baseOpts = {
   standardHeaders: "draft-7" as const,
   legacyHeaders: false,
-  // Skip when behind a healthy LB during health checks
-  skip: (req: Request) => req.path === "/health",
+  // The limiter itself uses the api_rate_limits table, which is created during\n  // startup. Do not query that table before schema bootstrap has completed;\n  // the global API readiness gate will return 503 for non-health routes.\n  skip: (req: Request) => req.path === "/healthz" || !indexesReady(),
   message: { error: "Too many requests, slow down a bit ⏳" },
 };
 
-// Generic API limiter — broad protection (e.g. ranking, room reads).
-// 240 req / min / key (room polling at 0.6/s plus headroom for SSE actions).
-export const generalLimiter = rateLimit({
-  ...baseOpts,
-  windowMs: 60_000,
-  limit: 240,
-  keyGenerator: playerKey,
-});
+function limiter(prefix: string, windowMs: number, limit: number, keyGenerator: (req: Request) => string) {
+  return rateLimit({
+    ...baseOpts,
+    windowMs,
+    limit,
+    keyGenerator,
+    store: new PgRateLimitStore(prefix, windowMs),
+  });
+}
 
-// Hot-path write limiter for room actions (results, vote, react, typing, spy).
-// 120 req / min / key — enough for active gameplay, blocks brute-force scripts.
-export const writeLimiter = rateLimit({
-  ...baseOpts,
-  windowMs: 60_000,
-  limit: 120,
-  keyGenerator: playerKey,
-});
-
-// Aggressive limiter for "expensive" endpoints (presence ping, typing pings).
-// 60 req / min / key — 1 per second sustained.
-export const presenceLimiter = rateLimit({
-  ...baseOpts,
-  windowMs: 60_000,
-  limit: 90,
-  keyGenerator: playerKey,
-});
-
-// Auth limiter — 20 attempts / 5 min / IP. Blocks credential stuffing.
-export const authLimiter = rateLimit({
-  ...baseOpts,
-  windowMs: 5 * 60_000,
-  limit: 20,
-  keyGenerator: (req) => ipKeyGenerator(req.ip ?? ""),
-});
-
-// Score-submit limiter — 30 req / 5 min / playerId. Blocks score spam.
-export const scoreLimiter = rateLimit({
-  ...baseOpts,
-  windowMs: 5 * 60_000,
-  limit: 30,
-  keyGenerator: playerKey,
-});
-
-// Invite/notification limiter — 20 push invites / 5 min / IP. The send-invite
-// endpoint triggers a real push to another player, so it must be throttled to
-// prevent using it as a notification-spam relay.
-export const inviteLimiter = rateLimit({
-  ...baseOpts,
-  windowMs: 5 * 60_000,
-  limit: 20,
-  keyGenerator: (req) => ipKeyGenerator(req.ip ?? ""),
-});
-
-// Room-join limiter — keyed by IP, not playerId. Guests can choose arbitrary
-// UUIDs, so a playerId-based key could be rotated to bypass room-code enumeration.
-export const roomJoinLimiter = rateLimit({
-  ...baseOpts,
-  windowMs: 60_000,
-  limit: 60,
-  keyGenerator: (req) => ipKeyGenerator(req.ip ?? ""),
-});
+export const generalLimiter = limiter("general", 60_000, 240, playerKey);
+export const writeLimiter = limiter("write", 60_000, 120, playerKey);
+export const presenceLimiter = limiter("presence", 60_000, 90, playerKey);
+export const authLimiter = limiter("auth", 5 * 60_000, 20, (req) => ipKeyGenerator(req.ip ?? ""));
+export const scoreLimiter = limiter("score", 5 * 60_000, 30, playerKey);
+export const inviteLimiter = limiter("invite", 5 * 60_000, 20, (req) => ipKeyGenerator(req.ip ?? ""));
+export const contactLimiter = limiter("contact", 10 * 60_000, 5, (req) => ipKeyGenerator(req.ip ?? ""));
+export const roomJoinLimiter = limiter("room-join", 60_000, 60, (req) => ipKeyGenerator(req.ip ?? ""));

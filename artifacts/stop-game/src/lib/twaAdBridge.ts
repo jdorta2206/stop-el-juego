@@ -63,6 +63,20 @@ async function readResult(requestId: string): Promise<RewardResult | null> {
   }
 }
 
+async function acknowledgeRewardResult(requestId: string): Promise<void> {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const response = await fetch(`${RESULT_BASE}/${encodeURIComponent(requestId)}/consume`, {
+        method: "POST",
+        credentials: "include",
+        cache: "no-store",
+      });
+      if (response.ok) return;
+    } catch {}
+    await new Promise((resolve) => window.setTimeout(resolve, 500 * (attempt + 1)));
+  }
+}
+
 export async function requestRewardedAd(placement: RewardedPlacement): Promise<RewardResult> {
   installResumeListener();
   if (typeof window === "undefined") return { rewarded: false, source: "error", errorMessage: "Window unavailable" };
@@ -74,16 +88,22 @@ export async function requestRewardedAd(placement: RewardedPlacement): Promise<R
 
   return new Promise<RewardResult>((resolve) => {
     let finished = false;
+    let checkInFlight = false;
     const startedAt = Date.now();
     let timer: number | null = null;
     let deadlineTimer: number | null = null;
 
     const checkNow = async () => {
-      if (finished) return;
-      const result = await readResult(requestId);
-      if (result) finish(result);
-      else if (Date.now() - startedAt >= RESULT_TIMEOUT_MS) {
-        finish({ rewarded: false, source: "error", errorMessage: "Native rewarded ad request timed out" });
+      if (finished || checkInFlight) return;
+      checkInFlight = true;
+      try {
+        const result = await readResult(requestId);
+        if (result) finish(result);
+        else if (Date.now() - startedAt >= RESULT_TIMEOUT_MS) {
+          finish({ rewarded: false, source: "error", errorMessage: "Native rewarded ad request timed out" });
+        }
+      } finally {
+        checkInFlight = false;
       }
     };
 
@@ -94,6 +114,7 @@ export async function requestRewardedAd(placement: RewardedPlacement): Promise<R
       if (deadlineTimer !== null) window.clearTimeout(deadlineTimer);
       document.removeEventListener("visibilitychange", checkNow);
       window.removeEventListener("focus", checkNow);
+      if (result.rewarded) void acknowledgeRewardResult(requestId);
       resolve(result);
     };
 

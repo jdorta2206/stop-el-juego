@@ -10,7 +10,7 @@ import { usePremium } from "@/lib/usePremium";
 import { useFollows } from "@/lib/useFollows";
 import { FollowButton } from "@/components/FollowButton";
 import { Button, Card, Input, Progress } from "@/components/ui";
-import { useGetRoom, useSubmitRoomResults, getGetRoomQueryKey } from "@workspace/api-client-react";
+import { useGetRoom, getRoom, useSubmitRoomResults, getGetRoomQueryKey } from "@workspace/api-client-react";
 import { usePlayer } from "@/hooks/use-player";
 import { Share2, Play, ArrowLeft, Trophy, CheckCircle2, Circle, Volume2, VolumeX, Layers } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -186,6 +186,19 @@ export default function Room() {
   const [roundCategories, setRoundCategories] = useState<string[]>(CATEGORIES_ES);
   const [halloweenScare, setHalloweenScare] = useState<ReturnType<typeof getHalloweenScare> | null>(null);
   const halloweenScareTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const uiTimeoutsRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
+  const scheduleUiTimeout = useCallback((fn: () => void, delay: number) => {
+    const id = setTimeout(() => {
+      uiTimeoutsRef.current.delete(id);
+      fn();
+    }, delay);
+    uiTimeoutsRef.current.add(id);
+    return id;
+  }, []);
+  useEffect(() => () => {
+    for (const id of uiTimeoutsRef.current) clearTimeout(id);
+    uiTimeoutsRef.current.clear();
+  }, []);
   const halloweenScareHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const CRAZY_CATEGORIES_ES = [
     "Excusa para llegar tarde", "Película que finges haber visto", "Animal que querrías de mascota",
@@ -237,16 +250,35 @@ export default function Room() {
   const submitMutation = useSubmitRoomResults();
   const queryClient = useQueryClient();
 
-  // When SSE is active it pushes updates in real-time — polling is just a safety fallback
+  // SSE is process-local on Railway. Keep a short DB poll even while SSE
+  // is connected so a mutation handled by another instance reaches this client
+  // promptly instead of waiting up to 30s. SSE still provides the immediate path
+  // on the instance that handled the mutation.
   const pollingInterval = sseActive
-    ? 30_000
+    ? 5_000
     : phase === "bluffvoting"                                          ? 800
     : phase === "playing" || phase === "freeze" || phase === "submitted" ? 1200
     : /* lobby / between_rounds / finished / spinning */                  1500;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const roomQueryKey = getGetRoomQueryKey(roomCode || "");
   const { data: room, error } = useGetRoom(roomCode || "", {
-    query: { refetchInterval: pollingInterval, enabled: !!roomCode } as any,
+    query: {
+      refetchInterval: pollingInterval,
+      enabled: !!roomCode,
+      // A polling request can have started before a newer SSE snapshot arrived.
+      // If that older HTTP response finishes afterwards, never let React Query
+      // roll the room state backwards.
+      queryFn: async ({ signal }) => {
+        const incoming = await getRoom(roomCode || "", { signal, ...(player?.id ? { headers: { "x-viewer-id": player.id } } : {}) });
+        const current = queryClient.getQueryData<any>(roomQueryKey);
+        const incomingMs = new Date((incoming as any)?.updatedAt ?? 0).getTime();
+        const currentMs = new Date(current?.updatedAt ?? 0).getTime();
+        return Number.isFinite(incomingMs) && Number.isFinite(currentMs) && incomingMs < currentMs
+          ? current
+          : incoming;
+      },
+    } as any,
     // 🔑 Prove membership so private rooms return the full roster. Logged-in
     // users are identified by their global x-stop-token; guests have no token,
     // so we assert their own id via x-viewer-id (not a secret to them).
@@ -275,7 +307,13 @@ export default function Room() {
       es.onmessage = (e) => {
         try {
           const data = JSON.parse(e.data);
-          queryClient.setQueryData(getGetRoomQueryKey(code), data);
+          queryClient.setQueryData(getGetRoomQueryKey(code), (current: any) => {
+            const incomingMs = new Date(data?.updatedAt ?? 0).getTime();
+            const currentMs = new Date(current?.updatedAt ?? 0).getTime();
+            return Number.isFinite(incomingMs) && Number.isFinite(currentMs) && incomingMs < currentMs
+              ? current
+              : data;
+          });
         } catch {}
       };
       es.onerror = () => {
@@ -337,7 +375,7 @@ export default function Room() {
     (async () => {
       try {
         const url = `${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/draft?playerId=${encodeURIComponent(player.id)}`;
-        const r = await fetch(url);
+        const r = await fetch(url, { credentials: "include", headers: authHeaders() });
         if (!r.ok) return;
         const data = await r.json() as { responses?: Record<string, string>; round?: number; letter?: string };
         if (cancelled) return;
@@ -510,14 +548,16 @@ export default function Room() {
     lastTypingPing.current = now;
     fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/typing`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      credentials: "include",
       body: JSON.stringify({
         playerId: player.id,
         playerName: player.name ?? "?",
         responses: { ...responsesRef.current },
+        round: (room as any)?.currentRound,
       }),
     }).catch(() => {});
-  }, [player?.id, player?.name, roomCode]);
+  }, [player?.id, player?.name, roomCode, (room as any)?.currentRound]);
 
   // 🤖 Add a bot opponent (host only, lobby only). Cold-start killer:
   // if nobody's online, the host can fill the room with CPU players that
@@ -546,7 +586,7 @@ export default function Room() {
   // Trigger Revancha — first caller creates the new room, others piggyback on the broadcast
   const handleRematch = useCallback(async () => {
     if (rematchLoading) return;
-    if (rematchCode) { setLocation(`/sala/${rematchCode}`); return; }
+    if (rematchCode) { setLocation(`/room/${rematchCode}`); return; }
     if (!player?.id || !roomCode) return;
     setRematchLoading(true);
     try {
@@ -556,7 +596,7 @@ export default function Room() {
         body: JSON.stringify({ playerId: player.id, playerName: player.name ?? "?", avatarColor: (player as any).avatarColor }),
       });
       const j = await r.json();
-      if (j.rematchCode) { setRematchCode(j.rematchCode); setLocation(`/sala/${j.rematchCode}`); }
+      if (j.rematchCode) { setRematchCode(j.rematchCode); setLocation(`/room/${j.rematchCode}`); }
     } catch {} finally { setRematchLoading(false); }
   }, [rematchCode, rematchLoading, player, roomCode, setLocation, meIsPremium]);
 
@@ -635,18 +675,19 @@ export default function Room() {
     newOnes.forEach(r => seenReactionIds.current.add(r.id));
     setFloatingReactions(prev => [...prev, ...newOnes]);
     newOnes.forEach(r => {
-      setTimeout(() => {
+      scheduleUiTimeout(() => {
         setFloatingReactions(prev => prev.filter(x => x.id !== r.id));
       }, 3200);
     });
-  }, [(room as any)?.reactions]);
+  }, [(room as any)?.reactions, scheduleUiTimeout]);
 
   const sendReaction = useCallback(async (emoji: string) => {
     if (!player || !roomCode) return;
     try {
       await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/react`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        credentials: "include",
         body: JSON.stringify({ emoji, playerId: player.id, playerName: player.name }),
       });
     } catch {}
@@ -660,11 +701,11 @@ export default function Room() {
     newOnes.forEach(p => seenPhraseIds.current.add(p.id));
     setVisiblePhrases(prev => [...prev, ...newOnes].slice(-5));
     newOnes.forEach(p => {
-      setTimeout(() => {
+      scheduleUiTimeout(() => {
         setVisiblePhrases(prev => prev.filter(x => x.id !== p.id));
       }, 6000);
     });
-  }, [(room as any)?.phrases]);
+  }, [(room as any)?.phrases, scheduleUiTimeout]);
 
   const sendQuickPhrase = useCallback(async (phraseIndex: number) => {
     if (!player || !roomCode) return;
@@ -672,7 +713,8 @@ export default function Room() {
     try {
       await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/phrase`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        credentials: "include",
         body: JSON.stringify({ playerId: player.id, playerName: player.name, phraseIndex }),
       });
     } catch {}
@@ -994,7 +1036,7 @@ export default function Room() {
         const reportMatch = () => {
           fetch(`${getApiUrl()}/api/tournaments/${tournamentCtx.code}/match-result`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json", ...authHeaders() },
             body: JSON.stringify({ matchId: tournamentCtx.matchId, winnerId: winner.playerId, winnerName: winner.playerName }),
             credentials: "include",
           }).catch(() => {});
@@ -1102,7 +1144,7 @@ export default function Room() {
     sound.playStop();
     haptic.stopHit();
     setStopFlash(true);
-    setTimeout(() => setStopFlash(false), 220);
+    scheduleUiTimeout(() => setStopFlash(false), 220);
     setIsStopping(true);
     try {
       await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/stop`, {
@@ -1158,7 +1200,7 @@ export default function Room() {
     } else {
       navigator.clipboard.writeText(text);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2500);
+      scheduleUiTimeout(() => setCopied(false), 2500);
     }
   };
 
@@ -1830,23 +1872,24 @@ export default function Room() {
                     try {
                       const r = await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/spy`, {
                         method: "POST",
-                        headers: { "Content-Type": "application/json" },
+                        headers: { "Content-Type": "application/json", ...authHeaders() },
+                        credentials: "include",
                         body: JSON.stringify({ playerId: player.id }),
                       });
                       if (!r.ok) {
                         const j = await r.json().catch(() => ({}));
                         setSpyError(j.error || "No se pudo espiar 🤷");
-                        setTimeout(() => setSpyError(null), 2200);
+                        scheduleUiTimeout(() => setSpyError(null), 2200);
                       } else {
                         const data = await r.json();
                         if (typeof data.usesLeft === "number") setSpyUsesLeft(data.usesLeft);
                         if (typeof data.limit === "number") setSpyLimit(data.limit);
                         setSpyReveal(data);
-                        setTimeout(() => setSpyReveal(null), 5000);
+                        scheduleUiTimeout(() => setSpyReveal(null), 5000);
                       }
                     } catch {
                       setSpyError("Sin conexión 📡");
-                      setTimeout(() => setSpyError(null), 2200);
+                      scheduleUiTimeout(() => setSpyError(null), 2200);
                     } finally {
                       setSpyLoading(false);
                     }
@@ -2219,7 +2262,8 @@ export default function Room() {
                                           try {
                                             await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/funvote`, {
                                               method: "POST",
-                                              headers: { "Content-Type": "application/json" },
+                                              headers: { "Content-Type": "application/json", ...authHeaders() },
+                                              credentials: "include",
                                               body: JSON.stringify({
                                                 playerId: player.id,
                                                 votedPlayerId: p.playerId,
@@ -2586,7 +2630,7 @@ export default function Room() {
             {tournamentCtx && (
               <motion.button
                 whileTap={{ scale: 0.97 }}
-                onClick={() => setLocation("/torneo")}
+                onClick={() => tournamentCtx?.code && setLocation(`/torneo/${tournamentCtx.code}`)}
                 className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-black text-sm"
                 style={{ background: "linear-gradient(135deg, rgba(245,158,11,0.2), rgba(220,38,38,0.2))", border: "1.5px solid rgba(245,158,11,0.4)", color: "#f59e0b" }}
               >
@@ -2674,6 +2718,12 @@ export default function Room() {
 function StreamerModeCard({ room, playerId }: { room: any; playerId: string }) {
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => {
+    if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    copiedTimerRef.current = null;
+  }, []);
   const isPublic = !!room?.isPublic;
   const code = room?.roomCode;
   const apiBase = (import.meta.env.VITE_API_BASE_URL || "") as string;
@@ -2697,7 +2747,11 @@ function StreamerModeCard({ room, playerId }: { room: any; playerId: string }) {
   const copy = (url: string, key: string) => {
     navigator.clipboard.writeText(url).catch(() => {});
     setCopied(key);
-    setTimeout(() => setCopied(null), 1500);
+    if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    copiedTimerRef.current = setTimeout(() => {
+      copiedTimerRef.current = null;
+      setCopied(null);
+    }, 1500);
   };
 
   return (

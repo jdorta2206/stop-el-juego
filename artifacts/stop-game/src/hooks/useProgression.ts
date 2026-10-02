@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { getApiUrl } from "@/lib/utils";
 
 const XP_KEY = "stop_xp_v2";
@@ -89,13 +89,18 @@ export function useProgression(playerId?: string) {
     }
   }, [playerId]);
 
+  const syncAbortRef = useRef<AbortController | null>(null);
+
   const [levelUpInfo, setLevelUpInfo] = useState<{ from: number; to: number } | null>(null);
 
   // ── Sync from server on mount (server is source of truth) ──────────────
   useEffect(() => {
     if (!playerId || playerId.startsWith("guest_")) return;
     const API = getApiUrl();
-    fetch(`${API}/api/ranking/profile/${playerId}`)
+    syncAbortRef.current?.abort();
+    const controller = new AbortController();
+    syncAbortRef.current = controller;
+    fetch(`${API}/api/ranking/profile/${playerId}`, { signal: controller.signal })
       .then(r => r.ok ? r.json() : null)
       .then((data: { xp?: number } | null) => {
         // Always trust the server as the source of truth. Previously we only
@@ -111,6 +116,8 @@ export function useProgression(playerId?: string) {
       })
       .catch(() => {});
   }, [playerId]);
+
+  useEffect(() => () => syncAbortRef.current?.abort(), [playerId]);
 
   const level = calcLevel(xp);
   const currentLevelXp = xpForLevel(level);

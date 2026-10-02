@@ -138,6 +138,7 @@ export interface CustomPackLike {
   icon: string;
   color: string;
   categories: string[];
+  language?: string;
 }
 
 // Storage encoding: built-in IDs are stored as-is ("classic"); custom packs
@@ -217,10 +218,16 @@ export function getSafePackId(
   packId: string,
   isPremium: boolean,
   customPacks: CustomPackLike[] = [],
+  language?: string,
 ): string {
   // Non-premium users can never select a custom pack (server would also
   // reject the read, but this avoids a flicker).
   if (isCustomId(packId) && !isPremium) return "classic";
+  if (isCustomId(packId) && language) {
+    const customId = parseCustomId(packId);
+    const found = customId === null ? undefined : customPacks.find((p) => p.id === customId);
+    if (found?.language && found.language !== language) return "classic";
+  }
   const pack = getPackById(packId, customPacks);
   if (pack.premium && !isPremium) return "classic";
   // Custom id that doesn't resolve (deleted) — drop back to classic.

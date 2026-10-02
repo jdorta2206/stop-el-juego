@@ -4,16 +4,22 @@ import { roomsTable, playerScoresTable, gameHistoryTable } from "@workspace/db";
 import { eq, and, or, lt, inArray, sql } from "drizzle-orm";
 import { CreateRoomBody, JoinRoomBody, SubmitRoomResultsBody } from "@workspace/api-zod";
 import { calculateStreak, appendStreakDay } from "./ranking";
+import { recordTrustedAnalyticsEvent } from "./analytics";
+import { applyAuthoritativeSeasonEventsTx, getOrCreateActiveSeason, getOrCreateProgressTx } from "./season";
 import { isWordValidAsync } from "./game";
 import { writeLimiter, roomJoinLimiter } from "../middlewares/rateLimit";
 import { verifyClaimedIdentity, verifyPlayerToken, readPlayerId, isLoggedInId, isAuthConfigured } from "../lib/playerAuth";
+import { isUserPremium } from "../lib/premiumStatus";
+import { stripeStorage } from "../stripeStorage";
 import {
   pickBotIdentity,
   makeBotPlayer,
   scheduleBotsForRound,
   resolveCategoriesForRound,
   rushBotSubmits,
-  clearBotTimers,
+  cleanupBotRoom,
+  cleanupStaleBotRooms,
+  startBotTimerRecovery,
 } from "../lib/multiplayerBot";
 
 const router: IRouter = Router();
@@ -77,16 +83,14 @@ function paramStr(value: unknown): string {
   return String(value ?? "");
 }
 
-// Server-validated premium lookup: reads isPremium from the player_scores table.
-// Cosmetic-grade: a guest spoofing another playerId would also need to spoof their identity end-to-end.
+// Server-validated premium lookup from the unified live entitlement.
+// The legacy player_scores flag is only a cache and may lag behind Play/Stripe.
 async function isPlayerPremium(playerId: string | null | undefined): Promise<boolean> {
   if (!playerId) return false;
   try {
-    const rows = await db.select({ isPremium: playerScoresTable.isPremium })
-      .from(playerScoresTable)
-      .where(eq(playerScoresTable.playerId, playerId))
-      .limit(1);
-    return rows[0]?.isPremium === true;
+    const premium = await isUserPremium(playerId);
+    void stripeStorage.updatePlayerStripeInfo(playerId, { isPremium: premium }).catch(() => {});
+    return premium;
   } catch {
     return false;
   }
@@ -114,19 +118,79 @@ function isPlayerOnline(code: string, playerId: string): boolean {
 const SUBMIT_GRACE_MS = 15_000;
 const PRESENCE_GRACE_MS = 4_000;
 
+// Last DB version emitted to this process's SSE clients. A request may commit
+// an older snapshot and only reach this function after a newer request has
+// already broadcast its update; never let that stale snapshot roll clients back.
+const lastBroadcastUpdatedAt = new Map<string, number>();
+
 function broadcastRoom(code: string, roomPayload: object) {
+  const room = roomPayload as any;
+  const updatedAtMs = room?.updatedAt instanceof Date
+    ? room.updatedAt.getTime()
+    : new Date(room?.updatedAt ?? 0).getTime();
+
+  // All broadcast paths, including bot broadcasts, pass through here. Never
+  // emit an older persisted room version after a newer one was already sent.
+  const lastMs = lastBroadcastUpdatedAt.get(code);
+  if (Number.isFinite(updatedAtMs) && lastMs !== undefined && updatedAtMs < lastMs) {
+    return;
+  }
+  if (Number.isFinite(updatedAtMs)) {
+    lastBroadcastUpdatedAt.set(code, updatedAtMs);
+  }
+
   const clients = sseClients.get(code);
   if (!clients || clients.size === 0) return;
-  const data = `data: ${JSON.stringify(roomPayload)}\n\n`;
+  const memberIds = new Set(
+    Array.isArray(room.players)
+      ? room.players.map((p: any) => p?.playerId).filter(Boolean)
+      : [],
+  );
+
   for (const client of [...clients]) {
-    try { client.res.write(data); } catch { clients.delete(client); }
+    try {
+      // A private-room member who has since left must lose the stream immediately;
+      // otherwise an already-open SSE would bypass the membership check performed
+      // only during connection setup.
+      if (room.isPublic === false && !memberIds.has(client.playerId)) {
+        client.res.end();
+        clients.delete(client);
+        continue;
+      }
+
+      // Public rooms are discoverable, but non-members must receive the same
+      // sanitized view as /spectate rather than the full in-round answers.
+      const payload = room.isPublic === true && !memberIds.has(client.playerId)
+        ? sanitizeRoomForSpectator(room)
+        : room;
+      client.res.write(`data: ${JSON.stringify(payload)}\n\n`);
+    } catch {
+      clients.delete(client);
+    }
   }
+  if (clients.size === 0) sseClients.delete(code);
 }
 
 // Format room AND broadcast to SSE clients at the same time
 function broadcastAndFormat(room: any) {
   const formatted = formatRoom(room);
-  broadcastRoom(formatted.roomCode as string, formatted);
+  const code = formatted.roomCode as string;
+  const updatedAtMs = room?.updatedAt instanceof Date
+    ? room.updatedAt.getTime()
+    : new Date(room?.updatedAt ?? 0).getTime();
+
+  // updatedAt is the persisted room version. If a newer snapshot was already
+  // emitted, this request lost the broadcast race and must not overwrite the
+  // SSE clients with stale state.
+  const lastMs = lastBroadcastUpdatedAt.get(code);
+  if (Number.isFinite(updatedAtMs) && lastMs !== undefined && updatedAtMs < lastMs) {
+    return formatted;
+  }
+  if (Number.isFinite(updatedAtMs)) {
+    lastBroadcastUpdatedAt.set(code, updatedAtMs);
+  }
+
+  broadcastRoom(code, formatted);
   return formatted;
 }
 
@@ -138,9 +202,30 @@ const botDeps = {
   formatRoom: (room: any) => formatRoom(room),
   // Persists final scores to the global leaderboard when the bot's submission
   // happens to be the one that ends the match.
-  submitFinalScores: (players: any[], letter: string) =>
-    submitAllScoresToLeaderboard(players, letter).catch(() => {}),
+  submitFinalScores: (players: any[], letter: string, roomCode?: string, roomId?: number) =>
+    submitAllScoresToLeaderboard(players, letter, String(roomCode ?? "").toUpperCase(), Number(roomId)).catch(() => {}),
+  clearRoundLiveResponses: (roomCode: string) => {
+    roomLiveResponses.delete(String(roomCode).toUpperCase());
+  },
+  getRoundCategories: (room: any) => {
+    const code = String(room.roomCode ?? "").toUpperCase();
+    const cfg = roomCategoryPacks.get(code);
+    const persistedMeta = parseBluffMeta(room.stopperJson) ?? {};
+    const persistedPack = typeof persistedMeta.categoryPack === "string" ? persistedMeta.categoryPack : "standard";
+    const persistedCategories = Array.isArray(persistedMeta.customCategories)
+      ? persistedMeta.customCategories
+      : undefined;
+    return resolveCategoriesForRound(
+      cfg?.pack ?? persistedPack,
+      room.currentLetter ?? "A",
+      room.currentRound ?? 1,
+      cfg?.customCategories ?? persistedCategories,
+    );
+  },
 };
+
+// Reconstruct bot round timers after API restarts or on another Railway instance.
+startBotTimerRecovery(botDeps);
 
 // ── In-memory stores (ephemeral, no DB needed) ─────────────────────────────
 type Reaction = { id: string; emoji: string; playerName: string; ts: number };
@@ -176,9 +261,8 @@ function getTyping(code: string, excludeId?: string): { playerId: string; player
 // 🕵️ Live in-progress responses (for spy/peek mechanic). Stale after 5s.
 // playerId → { name, responses: { category: word }, ts }
 const roomLiveResponses = new Map<string, Map<string, { name: string; responses: Record<string, string>; ts: number }>>();
-// roomCode → map of playerId → spy uses this round.
+// Spy usage is persisted in PostgreSQL, keyed by room/player/round.
 // Free players: 1 use/round. Premium players: 2 uses/round.
-const roomSpyUsage = new Map<string, Map<string, number>>();
 const SPY_LIMIT_FREE = 1;
 const SPY_LIMIT_PREMIUM = 2;
 
@@ -286,6 +370,13 @@ async function fetchCosmeticsForPlayers(playerIds: string[]): Promise<Record<str
 function formatRoom(room: any, cosmeticsMap?: Record<string, any>) {
   const meta = parseBluffMeta(room.stopperJson);
   const code = room.roomCode as string;
+  const persistedPack = meta?.categoryPack;
+  const persistedCustomCategories = Array.isArray(meta?.customCategories)
+    ? meta.customCategories
+    : null;
+  const persistedCustomLabel = typeof meta?.customPackLabel === "string"
+    ? meta.customPackLabel
+    : null;
   const durationSecs = roundDurationSecs(room);
   const startedAtRaw = meta?.roundStartedAt;
   const roundStartedAt = typeof startedAtRaw === "number" ? startedAtRaw : null;
@@ -315,9 +406,9 @@ function formatRoom(room: any, cosmeticsMap?: Record<string, any>) {
     maxRounds: room.maxRounds,
     maxPlayers: room.maxPlayers ?? 8,
     gameMode: room.gameMode ?? "classic",
-    categoryPack: (roomCategoryPacks.get(code)?.pack) ?? "standard",
-    customCategories: roomCategoryPacks.get(code)?.customCategories ?? null,
-    customPackLabel: roomCategoryPacks.get(code)?.customLabel ?? null,
+    categoryPack: roomCategoryPacks.get(code)?.pack ?? persistedPack ?? "standard",
+    customCategories: roomCategoryPacks.get(code)?.customCategories ?? persistedCustomCategories,
+    customPackLabel: roomCategoryPacks.get(code)?.customLabel ?? persistedCustomLabel,
     language: room.language,
     isPublic: room.isPublic ?? false,
     players,
@@ -335,6 +426,9 @@ function formatRoom(room: any, cosmeticsMap?: Record<string, any>) {
     rematchCode: roomRematch.get(code) ?? meta?.rematchCode ?? null,
     funVotes: getFunVotes(code),
     createdAt: room.createdAt,
+    // Internal version marker used to order SSE snapshots across concurrent
+    // request/bot completions. Harmless to clients and not user-controlled.
+    updatedAt: room.updatedAt,
   };
 }
 
@@ -379,13 +473,14 @@ function resolveBluffs(players: any[], bluffVotes: Record<string, any>): any[] {
 }
 
 // Auto-submit all non-guest players' scores to the global leaderboard when the game ends
-async function submitAllScoresToLeaderboard(players: any[], letter: string) {
+async function submitAllScoresToLeaderboard(players: any[], letter: string, roomCode: string, roomId: number) {
   // ⚖️ Deterministic tie-breaker — must match the client's winner display:
   //   1) higher final score
   //   2) was the stopper in the LAST round (rewards the player who triggered STOP)
   //   3) earlier finishedAt timestamp (faster typer wins ties)
   //   4) playerId (stable, alphabetical) so we never produce duplicate winners
-  const sorted = [...players].sort((a, b) => {
+  const leaderboardPlayers = players.filter((p: any) => p && !p.isBot);
+  const sorted = [...leaderboardPlayers].sort((a, b) => {
     const ds = (b.score || 0) - (a.score || 0);
     if (ds !== 0) return ds;
     const sa = a.wasStopper ? 1 : 0;
@@ -399,7 +494,7 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string) {
   const winner = sorted[0];
   const today = new Date().toISOString().split("T")[0];
 
-  await Promise.allSettled(players.map(async (p: any) => {
+  await Promise.allSettled(leaderboardPlayers.map(async (p: any) => {
     // Skip guests and players with 0 or no score
     if (!p.playerId || p.loginMethod === "guest") return;
 
@@ -408,83 +503,143 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string) {
     const score = Math.round(rawScore * 1.5);
     const won = winner?.playerId === p.playerId;
 
-    // 🔒 Atomic upsert: avoids the read-modify-write race that lost
-    // concurrent finishers' totals under heavy multiplayer load.
-    // Streak still needs the prior `lastPlayedDate`, so we read it once,
-    // but every counter increment is delegated to SQL in a single statement.
-    const existing = await db
-      .select({
-        lastPlayedDate: playerScoresTable.lastPlayedDate,
-        currentStreak: playerScoresTable.currentStreak,
-        longestStreak: playerScoresTable.longestStreak,
-        avatarColor: playerScoresTable.avatarColor,
-        streakDaysJson: playerScoresTable.streakDaysJson,
-      })
-      .from(playerScoresTable)
-      .where(eq(playerScoresTable.playerId, p.playerId))
-      .limit(1);
-
-    const { newStreak, updatedToday } = calculateStreak(
-      existing[0]?.lastPlayedDate ?? null,
-      existing[0]?.currentStreak ?? 0
-    );
-    const newLongest = Math.max(existing[0]?.longestStreak ?? 0, newStreak);
-    // Append today to the rolling 30-day streak-days list using the same
-    // shared helper as the solo /ranking/scores path so the streak calendar
-    // is consistent regardless of which mode the player progressed through.
-    const newStreakDaysJson = updatedToday
-      ? appendStreakDay(existing[0]?.streakDaysJson, today)
-      : undefined;
-
-    if (existing.length > 0) {
-      await db.update(playerScoresTable)
-        .set({
-          playerName: p.playerName,
-          avatarColor: p.avatarColor ?? existing[0].avatarColor,
-          totalScore: sql`${playerScoresTable.totalScore} + ${score}`,
-          gamesPlayed: sql`${playerScoresTable.gamesPlayed} + 1`,
-          wins: sql`${playerScoresTable.wins} + ${won ? 1 : 0}`,
-          ...(updatedToday ? {
-            currentStreak: newStreak,
-            longestStreak: newLongest,
-            lastPlayedDate: today,
-            streakDaysJson: newStreakDaysJson,
-          } : {}),
-          updatedAt: new Date(),
-        })
-        .where(eq(playerScoresTable.playerId, p.playerId));
-    } else {
-      // Use INSERT … ON CONFLICT to be safe under simultaneous first-time inserts.
-      await db.insert(playerScoresTable).values({
-        playerId: p.playerId,
-        playerName: p.playerName,
-        avatarColor: p.avatarColor ?? "#e53e3e",
-        totalScore: score,
-        gamesPlayed: 1,
-        wins: won ? 1 : 0,
-        currentStreak: 1,
-        longestStreak: 1,
-        lastPlayedDate: today,
-        streakDaysJson: JSON.stringify([today]),
-      }).onConflictDoUpdate({
-        target: playerScoresTable.playerId,
-        set: {
-          playerName: p.playerName,
-          totalScore: sql`${playerScoresTable.totalScore} + ${score}`,
-          gamesPlayed: sql`${playerScoresTable.gamesPlayed} + 1`,
-          wins: sql`${playerScoresTable.wins} + ${won ? 1 : 0}`,
-          updatedAt: new Date(),
-        },
-      });
+    // Season progress is part of the authoritative result. If its lookup fails,
+    // do NOT commit history/leaderboard alone: that would permanently mark this
+    // room/player as finalized and prevent crash recovery from retrying Season.
+    let seasonId: number | null = null;
+    try {
+      seasonId = (await getOrCreateActiveSeason()).id;
+    } catch (err) {
+      console.error("[rooms] active season lookup failed; retrying full result:", err);
+      throw err;
     }
 
-    await db.insert(gameHistoryTable).values({
-      playerId: p.playerId,
-      score,
-      letter,
-      mode: "multiplayer",
-      won,
+    // 🔒 Durable idempotency claim MUST happen before any counter update.
+    // A duplicate retry exits here without touching leaderboard/streak/season.
+    await db.transaction(async (tx) => {
+      // Keep the lock order identical to season rollover:
+      // advisory Season lock -> player_scores row lock -> season_progress row.
+      // This prevents a rollover/scoring deadlock at the season boundary.
+      if (seasonId !== null) {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(${seasonId}::bigint)`);
+      }
+
+      // Durable idempotency key for room finalization. If a previous
+      // process already committed this player's result for this room, the
+      // retry must NOT increment leaderboard/streak/season a second time.
+      const historyInsert = await tx
+        .insert(gameHistoryTable)
+        .values({
+          playerId: p.playerId,
+          score,
+          letter,
+          mode: "multiplayer",
+          roomCode,
+          roomId,
+          won,
+        })
+        .onConflictDoNothing({
+          target: [gameHistoryTable.roomId, gameHistoryTable.playerId],
+        })
+        .returning({ id: gameHistoryTable.id });
+      if (historyInsert.length === 0) return;
+
+      const [locked] = await tx
+        .select({
+          lastPlayedDate: playerScoresTable.lastPlayedDate,
+          currentStreak: playerScoresTable.currentStreak,
+          longestStreak: playerScoresTable.longestStreak,
+          avatarColor: playerScoresTable.avatarColor,
+          streakDaysJson: playerScoresTable.streakDaysJson,
+        })
+        .from(playerScoresTable)
+        .where(eq(playerScoresTable.playerId, p.playerId))
+        .for("update");
+
+      let seasonStreak = 1;
+      if (locked) {
+        const lockedStreak = calculateStreak(
+          locked.lastPlayedDate ?? null,
+          locked.currentStreak ?? 0,
+        );
+        seasonStreak = lockedStreak.newStreak;
+        const lockedLongest = Math.max(locked.longestStreak ?? 0, lockedStreak.newStreak);
+        const lockedDays = lockedStreak.updatedToday
+          ? appendStreakDay(locked.streakDaysJson, today)
+          : undefined;
+
+        await tx.update(playerScoresTable)
+          .set({
+            playerName: p.playerName,
+            avatarColor: p.avatarColor ?? locked.avatarColor,
+            totalScore: sql`${playerScoresTable.totalScore} + ${score}`,
+            gamesPlayed: sql`${playerScoresTable.gamesPlayed} + 1`,
+            wins: sql`${playerScoresTable.wins} + ${won ? 1 : 0}`,
+            ...(lockedStreak.updatedToday ? {
+              currentStreak: lockedStreak.newStreak,
+              longestStreak: lockedLongest,
+              lastPlayedDate: today,
+              streakDaysJson: lockedDays,
+            } : {}),
+            updatedAt: new Date(),
+          })
+          .where(eq(playerScoresTable.playerId, p.playerId));
+      } else {
+        await tx.insert(playerScoresTable).values({
+          playerId: p.playerId,
+          playerName: p.playerName,
+          avatarColor: p.avatarColor ?? "#e53e3e",
+          totalScore: score,
+          gamesPlayed: 1,
+          wins: won ? 1 : 0,
+          currentStreak: 1,
+          longestStreak: 1,
+          lastPlayedDate: today,
+          streakDaysJson: JSON.stringify([today]),
+        }).onConflictDoUpdate({
+          target: playerScoresTable.playerId,
+          set: {
+            playerName: p.playerName,
+            avatarColor: p.avatarColor ?? "#e53e3e",
+            totalScore: sql`${playerScoresTable.totalScore} + ${score}`,
+            gamesPlayed: sql`${playerScoresTable.gamesPlayed} + 1`,
+            wins: sql`${playerScoresTable.wins} + ${won ? 1 : 0}`,
+            updatedAt: new Date(),
+          },
+        });
+      }
+
+
+      if (seasonId !== null) {
+        try {
+          // Season is part of the authoritative result. A failure must roll back
+          // history + leaderboard together so recovery can retry the whole result.
+          await tx.transaction(async (seasonTx) => {
+            const progress = await getOrCreateProgressTx(seasonTx, p.playerId, seasonId);
+            const validWords = Number.isFinite(p.validAnswerCount)
+              ? Math.max(0, Math.floor(p.validAnswerCount))
+              : 0;
+            await applyAuthoritativeSeasonEventsTx(seasonTx, seasonId, progress.id, [
+              { type: "play_game", value: 1 },
+              ...(won ? [{ type: "win_game", value: 1 }] : []),
+              ...(rawScore > 0 ? [{ type: "round_score", value: rawScore }] : []),
+              ...(validWords > 0 ? [{ type: "valid_words", value: validWords }] : []),
+              { type: "streak", value: seasonStreak },
+            ]);
+          });
+        } catch (err) {
+          console.error("[rooms] season progress failed; rolling back full result for retry:", err);
+          throw err;
+        }
+      }
     });
+
+    void recordTrustedAnalyticsEvent({
+      eventName: "game_complete",
+      playerId: p.playerId,
+      mode: "multiplayer",
+      metadata: { source: "server_room_result", roomCode },
+    }).catch((err) => console.error("[analytics] trusted multiplayer game_complete failed:", err));
   }));
 }
 
@@ -525,14 +680,15 @@ function finalizeRoundState(room: any, players: any[]): {
     // Only treat "offline" as fatal AFTER the presence buffer: a one-second
     // SSE blip on a 4G network shouldn't zero a player whose /results is
     // already on the wire.
-    const presenceArmed = sinceStop > PRESENCE_GRACE_MS;
     return players.map((p: any) => {
       if (p.isReady) return p;
+      // A disconnected SSE stream is NOT proof that the player's /results
+      // request is lost. HTTP and SSE can fail independently (mobile
+      // backgrounding, proxy reconnects, transient network changes). Do not
+      // zero a player before the full submit grace window, or a valid result
+      // still in flight can arrive after the round has already advanced.
       if (gracePassed) {
-        return { ...p, isReady: true, roundScore: 0, finishedAt: Date.now() };
-      }
-      if (presenceArmed && !isPlayerOnline(codeUpper, p.playerId)) {
-        return { ...p, isReady: true, roundScore: 0, finishedAt: Date.now() };
+        return { ...p, isReady: true, roundScore: 0, validAnswerCount: 0, finishedAt: Date.now() };
       }
       return p;
     });
@@ -562,6 +718,9 @@ function finalizeRoundState(room: any, players: any[]): {
       }
       const existingMeta = parseBluffMeta(room.stopperJson);
       newStopperJson = JSON.stringify({
+        categoryPack: existingMeta?.categoryPack,
+        customCategories: existingMeta?.customCategories,
+        customPackLabel: existingMeta?.customPackLabel,
         stopper: existingMeta?.stopper ?? existingMeta,
         bluffVotes,
         bluffDeadline,
@@ -581,7 +740,12 @@ function finalizeRoundState(room: any, players: any[]): {
       // 🧹 Clear stopperJson so the next /start gets a fresh roundStartedAt
       // (otherwise the old timestamp lingers and the next round's deadline
       // would start in the past on slow clients).
-      newStopperJson = null;
+      const transitionMeta = parseBluffMeta(room.stopperJson) ?? {};
+      newStopperJson = JSON.stringify({
+        categoryPack: transitionMeta.categoryPack,
+        customCategories: transitionMeta.customCategories,
+        customPackLabel: transitionMeta.customPackLabel,
+      });
       // NOTE: side effects (leaderboard submit on game-over, spy/live map
       // cleanup) are intentionally NOT done here. They run in the CALLER via
       // applyRoundAdvanceSideEffects() and ONLY after the optimistic-concurrency
@@ -600,13 +764,68 @@ function finalizeRoundState(room: any, players: any[]): {
 function applyRoundAdvanceSideEffects(room: any, sweptPlayers: any[], newStatus: string) {
   if (newStatus === "waiting" || newStatus === "finished") {
     const codeUpper = (room.roomCode as string).toUpperCase();
-    // 🕵️ Reset spy budgets and stale live responses for the new round.
-    roomSpyUsage.delete(codeUpper);
+    // 🕵️ Stale live responses reset for the new round. Spy budgets are
+    // automatically scoped by the persisted room/player/round key.
     roomLiveResponses.delete(codeUpper);
   }
   if (newStatus === "finished") {
     // 🏆 Persist final scores to the global leaderboard exactly once.
-    submitAllScoresToLeaderboard(sweptPlayers, room.currentLetter || "A").catch(() => {});
+    submitAllScoresToLeaderboard(sweptPlayers, room.currentLetter || "A", room.roomCode, room.id).catch(() => {});
+  }
+}
+
+let lastFinishedScoreRecoveryAt = 0;
+
+async function recoverFinishedRoomScoring() {
+  const now = Date.now();
+  if (now - lastFinishedScoreRecoveryAt < 30_000) return;
+  lastFinishedScoreRecoveryAt = now;
+
+  const finished = await db
+    .select({
+      roomCode: roomsTable.roomCode,
+      roomId: roomsTable.id,
+      playersJson: roomsTable.playersJson,
+      currentLetter: roomsTable.currentLetter,
+      updatedAt: roomsTable.updatedAt,
+    })
+    .from(roomsTable)
+    .where(eq(roomsTable.status, "finished"))
+    .orderBy(roomsTable.updatedAt)
+    .limit(200);
+
+  if (finished.length === 0) return;
+
+  const historyRows = await db
+    .select({
+      roomId: gameHistoryTable.roomId,
+      playerId: gameHistoryTable.playerId,
+    })
+    .from(gameHistoryTable)
+    .where(inArray(gameHistoryTable.roomId, finished.map((r) => r.roomId)));
+
+  const finalized = new Set(
+    historyRows.map((r) => `${r.roomId}:${r.playerId}`),
+  );
+
+  for (const room of finished) {
+    const players = parsePlayers(room.playersJson);
+    const needsRecovery = players.some((p: any) =>
+      p && !p.isBot && p.loginMethod !== "guest" &&
+      p.playerId && !finalized.has(\`\${room.roomCode}:\${p.playerId}\`),
+    );
+    if (!needsRecovery) continue;
+
+    // Keep a generous bounded recovery batch: finished rooms can remain for
+    // up to 6h, and already-finalized rooms must not crowd out a later room
+    // whose scoring failed during the original request. The history uniqueness
+    // key makes retries safe across multiple Railway instances and crashes.
+    await submitAllScoresToLeaderboard(
+      players,
+      room.currentLetter || "A",
+      room.roomCode,
+      room.roomId,
+    );
   }
 }
 
@@ -617,6 +836,11 @@ function applyRoundAdvanceSideEffects(room: any, sweptPlayers: any[], newStatus:
 // fires for them, and there's no other player left to trigger it).
 async function sweepStuckRooms() {
   try {
+    // Crash recovery: a room can be persisted as "finished" immediately
+    // before the process dies, so replay final scoring before handling new
+    // stuck rounds. The scoring function is durable/idempotent per room/player.
+    await recoverFinishedRoomScoring();
+
     // Scan BOTH "stopped" (someone pressed STOP) and "playing" (the round timer
     // ran out with no STOP) — either can deadlock if a submission is lost.
     const stuck = await db.select().from(roomsTable)
@@ -646,7 +870,14 @@ async function sweepStuckRooms() {
           stopperJson: newStopperJson,
           updatedAt: new Date(),
         })
-        .where(and(eq(roomsTable.roomCode, room.roomCode), eq(roomsTable.updatedAt, room.updatedAt)))
+        .where(and(
+          eq(roomsTable.roomCode, room.roomCode),
+          eq(roomsTable.status, room.status),
+          eq(roomsTable.currentRound, room.currentRound),
+          eq(roomsTable.currentLetter, room.currentLetter),
+          eq(roomsTable.playersJson, room.playersJson),
+          eq(roomsTable.stopperJson, room.stopperJson),
+        ))
         .returning();
 
       if (updateResult.length === 0) continue;
@@ -683,15 +914,27 @@ async function sweepStuckRooms() {
           currentRound: isGameOver ? room.maxRounds : newRound,
           currentLetter: isGameOver ? room.currentLetter : randomLetter(),
           status: newStatus,
-          stopperJson: JSON.stringify({ stopper: meta.stopper, bluffResults: bluffVotes }),
+          stopperJson: JSON.stringify({
+          categoryPack: meta.categoryPack,
+          customCategories: meta.customCategories,
+          customPackLabel: meta.customPackLabel,
+          stopper: meta.stopper,
+          bluffResults: bluffVotes,
+        }),
           updatedAt: new Date(),
         })
-        .where(and(eq(roomsTable.roomCode, room.roomCode), eq(roomsTable.status, "bluffvoting")))
+        .where(and(
+          eq(roomsTable.roomCode, room.roomCode),
+          eq(roomsTable.status, "bluffvoting"),
+          eq(roomsTable.currentRound, room.currentRound),
+          eq(roomsTable.currentLetter, room.currentLetter),
+          eq(roomsTable.stopperJson, room.stopperJson),
+        ))
         .returning();
       if (!updated) continue;
-      if (isGameOver) {
-        submitAllScoresToLeaderboard(resolved, room.currentLetter || "A").catch(() => {});
-      }
+      // Reuse the same one-shot round-transition cleanup as the normal
+      // resolution paths so spy/live state cannot leak into the next round.
+      applyRoundAdvanceSideEffects(room, resolved, newStatus);
       broadcastAndFormat(updated);
     }
   } catch (err) {
@@ -705,14 +948,6 @@ async function sweepStuckRooms() {
 //   so abandoned games don't accumulate as DB garbage and slow down public listings.
 async function purgeStaleRooms() {
   try {
-    // 🧪 Test-only Halloween rooms must never leak into the normal public
-    // multiplayer browser. They were created during event QA with the
-    // explicit "Halloween Host" test name; remove them at boot/cleanup and
-    // keep them out of public listings as a defensive second layer.
-    await db.delete(roomsTable).where(
-      eq(roomsTable.hostName, "Halloween Host")
-    );
-
     const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
     const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000);
     await db.delete(roomsTable).where(
@@ -744,12 +979,13 @@ async function purgeStaleRooms() {
       if (set) for (const c of set) { try { c.res.end(); } catch { /* already closed */ } }
       sseClients.delete(code);
     }
+    // Bot state must be cleaned for every room removed by this purge.
+    cleanupStaleBotRooms(liveCodesSet);
     dropOrphans(roomReactions as Map<string, unknown>);
     dropOrphans(roomPhrases as Map<string, unknown>);
     dropOrphans(roomTyping as Map<string, unknown>);
     dropOrphans(roomCategoryPacks as Map<string, unknown>);
     dropOrphans(roomLiveResponses as Map<string, unknown>);
-    dropOrphans(roomSpyUsage as Map<string, unknown>);
     dropOrphans(roomRematch as Map<string, unknown>);
     dropOrphans(roomFunVotes as Map<string, unknown>);
   } catch (err) {
@@ -780,7 +1016,9 @@ g[SWEEP_TIMER_KEY] = setInterval(() => { sweepStuckRooms().catch(() => {}); }, 3
 // Sanitize a formatted room for public spectator/overlay views.
 // Hide individual players' answers while a round is in progress to prevent cheating.
 function sanitizeRoomForSpectator(room: any) {
-  if (room.status === "playing" || room.status === "stopping") {
+  // Answers must stay hidden for the entire unresolved round, including
+  // reveal/bluff-vote phases where playersJson may already contain them.
+  if (room.status === "playing" || room.status === "stopping" || room.status === "revealing" || room.status === "bluffvoting") {
     return {
       ...room,
       players: (room.players ?? []).map((p: any) => ({
@@ -857,9 +1095,19 @@ router.patch("/:roomCode/visibility", async (req, res) => {
   if (!rows.length) { res.status(404).json({ error: "Room not found" }); return; }
   if (rows[0].hostId !== hostId) { res.status(403).json({ error: "Only host can change visibility" }); return; }
   const [updated] = await db.update(roomsTable)
-    .set({ isPublic })
-    .where(eq(roomsTable.roomCode, roomCode))
+    .set({ isPublic, updatedAt: new Date() })
+    .where(and(
+      eq(roomsTable.roomCode, roomCode),
+      eq(roomsTable.hostId, hostId),
+      
+    ))
     .returning();
+  if (!updated) {
+    // Host migration or another room write won between the authorization read
+    // and this update. Never let the former host modify the new host's room.
+    res.status(409).json({ error: "Room changed, retry" });
+    return;
+  }
   res.json(formatRoom(updated));
 });
 
@@ -905,28 +1153,49 @@ router.post("/", async (req, res) => {
   const gameMode = (body.data as any).gameMode ?? "classic";
   const maxPlayers = (body.data as any).maxPlayers ?? 8;
 
+  const [canonicalHost] = await db
+    .select({
+      playerName: playerScoresTable.playerName,
+      avatarColor: playerScoresTable.avatarColor,
+      profilePicture: playerScoresTable.profilePicture,
+    })
+    .from(playerScoresTable)
+    .where(eq(playerScoresTable.playerId, hostId))
+    .limit(1);
+
+  const isGuestHost = !canonicalHost;
+  const effectiveHostName = isGuestHost ? hostName : canonicalHost.playerName;
+  const effectiveAvatarColor = isGuestHost ? (avatarColor ?? "#e53e3e") : canonicalHost.avatarColor;
+  const effectivePicture = isGuestHost
+    ? (typeof picture === "string" ? picture.slice(0, 1000) : null)
+    : canonicalHost.profilePicture;
+  const effectiveLoginMethod = isGuestHost
+    ? "guest"
+    : hostId.startsWith("google_") ? "google"
+    : hostId.startsWith("fb_") ? "facebook"
+    : hostId.startsWith("ig_") || hostId.startsWith("instagram_") ? "instagram"
+    : hostId.startsWith("tt_") || hostId.startsWith("tiktok_") ? "tiktok"
+    : hostId.startsWith("apple_") ? "apple"
+    : "account";
+
   // 🧪 Halloween QA rooms are internal test rooms. Never publish one into
   // the normal public-room browser, even if a test client accidentally sends
   // isPublic=true.
-  const isHalloweenTestRoom = String(hostName ?? "").trim().toLowerCase() === "halloween host";
+  const isHalloweenTestRoom = String(effectiveHostName ?? "").trim().toLowerCase() === "halloween host";
   const safeIsPublic = isHalloweenTestRoom ? false : (isPublic ?? false);
 
-  let roomCode = generateRoomCode();
-  for (let i = 0; i < 5; i++) {
-    const existing = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, roomCode)).limit(1);
-    if (existing.length === 0) break;
-    roomCode = generateRoomCode();
-  }
-
-  // Look up premium status from DB (server-validated, can't be faked by client)
+  // The code check and the INSERT are separated by asynchronous work, so the
+  // check alone cannot reserve a code. The DB unique constraint is the final
+  // arbiter; retry on a collision instead of turning a rare concurrent create
+  // into a 500.
   const hostPremium = await isPlayerPremium(hostId);
 
   const players = [{
     playerId: hostId,
-    playerName: hostName,
-    avatarColor: avatarColor ?? "#e53e3e",
-    picture: typeof picture === "string" ? picture.slice(0, 1000) : null,
-    loginMethod: loginMethod ?? null,
+    playerName: effectiveHostName,
+    avatarColor: effectiveAvatarColor,
+    picture: effectivePicture,
+    loginMethod: effectiveLoginMethod,
     isPremium: hostPremium,
     score: 0,
     roundScore: 0,
@@ -934,29 +1203,47 @@ router.post("/", async (req, res) => {
     isReady: false,
   }];
 
-  // Defensive: room codes are recycled (6-char alphanumeric, collision-checked
-  // against DB but not against in-memory state). Clear any leftover ephemeral
-  // state for this code so a new host can't inherit a previous host's custom
-  // pack or transient reactions/typing.
-  roomCategoryPacks.delete(roomCode);
-  roomReactions.delete(roomCode);
-  roomPhrases.delete(roomCode);
-  roomTyping.delete(roomCode);
+  let room: typeof roomsTable.$inferSelect | undefined;
+  let roomCode = "";
+  for (let attempt = 0; attempt < 8; attempt++) {
+    roomCode = generateRoomCode();
 
-  const [room] = await db.insert(roomsTable).values({
-    roomCode,
-    hostId,
-    hostName: hostName ?? "",
-    status: "waiting",
-    currentRound: 0,
-    maxRounds: maxRounds ?? 3,
-    maxPlayers,
-    gameMode,
-    language: language ?? "es",
-    playersJson: JSON.stringify(players),
-    stopperJson: null,
-    isPublic: safeIsPublic,
-  }).returning();
+    // Defensive: room codes are recycled. Clear only the candidate code that
+    // this creation attempt is actually going to use.
+    roomCategoryPacks.delete(roomCode);
+    roomReactions.delete(roomCode);
+    roomPhrases.delete(roomCode);
+    roomTyping.delete(roomCode);
+
+    try {
+      const inserted = await db.insert(roomsTable).values({
+        roomCode,
+        hostId,
+        hostName: effectiveHostName ?? "",
+        status: "waiting",
+        currentRound: 0,
+        maxRounds: maxRounds ?? 3,
+        maxPlayers,
+        gameMode,
+        language: language ?? "es",
+        playersJson: JSON.stringify(players),
+        stopperJson: null,
+        isPublic: safeIsPublic,
+      }).returning();
+
+      room = inserted[0];
+      break;
+    } catch (error: any) {
+      // PostgreSQL unique_violation: another concurrent creator won this code.
+      // Any other DB error is genuine and must not be hidden as a collision.
+      if (error?.code !== "23505") throw error;
+    }
+  }
+
+  if (!room) {
+    res.status(503).json({ error: "Could not allocate a unique room code" });
+    return;
+  }
 
   res.status(201).json(formatRoom(room));
 });
@@ -976,33 +1263,25 @@ router.get("/:roomCode", async (req, res) => {
 
   const full = formatRoom(room, cosmeticsMap);
 
-  // 🔒 Private-room privacy. Public (streamer-mode) rooms are spectatable by
-  // design, so they keep returning the full payload. For a PRIVATE room we only
-  // hand the full roster (every player's id/name/score/answers + hostId) to
-  // people who are actually in it; a stranger who merely knows the code gets a
-  // minimal preview. This closes the info leak AND removes the main way an
-  // attacker learned a guest's id (from this very response) to impersonate them.
-  if (full.isPublic !== true) {
-    // Identity resolution. A cryptographically verified token (logged-in users
-    // send x-stop-token / cookie globally) is always trusted. A *self-asserted*
-    // id (?viewerId= or x-viewer-id header) is only trusted when it is a GUEST
-    // id: guest ids aren't discoverable once this gate hides the roster, so they
-    // act as a weak bearer secret. A LOGGED-IN id must NOT be self-assertable —
-    // those ids are public (e.g. the leaderboard), so trusting an unverified
-    // logged-in assertion would let a stranger read any private room that
-    // contains a known account. Logged-in membership therefore requires a real
-    // token match (mirrors verifyClaimedIdentity); no downgrade to assertion.
-    const verified = readPlayerId(req);
-    const asserted =
-      paramStr(req.query["viewerId"]) || paramStr(req.headers["x-viewer-id"]);
-    const viewerId = verified || (asserted && !isLoggedInId(asserted) ? asserted : "");
-    const isMember =
-      !!viewerId &&
-      (full.hostId === viewerId || players.some((p) => p?.playerId === viewerId));
-    if (!isMember) {
+  // 🔒 A full room payload is allowed only to an actual room member.
+  // Public rooms are intentionally discoverable/spectatable, but strangers
+  // must receive the same sanitized view used by the spectator endpoint so
+  // in-round answers are never exposed through this generic route.
+  const verified = readPlayerId(req);
+  const asserted =
+    paramStr(req.query["viewerId"]) || paramStr(req.headers["x-viewer-id"]);
+  const viewerId = verified || (asserted && !isLoggedInId(asserted) ? asserted : "");
+  const isMember =
+    !!viewerId &&
+    (full.hostId === viewerId || players.some((p) => p?.playerId === viewerId));
+
+  if (!isMember) {
+    if (full.isPublic === true) {
+      res.json(sanitizeRoomForSpectator(full));
+    } else {
       res.json(sanitizedRoomPreview(full));
-      return;
     }
+    return;
   }
 
   res.json(full);
@@ -1021,8 +1300,38 @@ router.post("/:roomCode/join", roomJoinLimiter, async (req, res) => {
     res.status(403).json({ error: "Identity verification failed" }); return;
   }
   const joinerPremium = await isPlayerPremium(playerId);
+  const [canonicalProfile] = await db
+    .select({
+      playerName: playerScoresTable.playerName,
+      avatarColor: playerScoresTable.avatarColor,
+      profilePicture: playerScoresTable.profilePicture,
+    })
+    .from(playerScoresTable)
+    .where(eq(playerScoresTable.playerId, playerId))
+    .limit(1);
 
-  const myNorm = normalizePlayerName(playerName);
+  // Authenticated accounts keep their canonical profile identity. Guests may
+  // still choose a room display name because they have no persistent profile.
+  const isGuestIdentity = !canonicalProfile;
+  const effectiveLoginMethod = isGuestIdentity
+    ? "guest"
+    : playerId.startsWith("google_") ? "google"
+    : playerId.startsWith("fb_") ? "facebook"
+    : playerId.startsWith("ig_") || playerId.startsWith("instagram_") ? "instagram"
+    : playerId.startsWith("tt_") || playerId.startsWith("tiktok_") ? "tiktok"
+    : playerId.startsWith("apple_") ? "apple"
+    : "account";
+  const effectivePlayerName = !isGuestIdentity && canonicalProfile
+    ? canonicalProfile.playerName
+    : playerName;
+  const effectiveAvatarColor = !isGuestIdentity && canonicalProfile
+    ? canonicalProfile.avatarColor
+    : (avatarColor ?? "#3182ce");
+  const effectivePicture = !isGuestIdentity && canonicalProfile
+    ? canonicalProfile.profilePicture
+    : (typeof picture === "string" ? picture.slice(0, 1000) : null);
+
+  const myNorm = normalizePlayerName(effectivePlayerName);
   if (myNorm.length === 0) {
     res.status(400).json({ error: "Name cannot be empty" });
     return;
@@ -1068,10 +1377,10 @@ router.post("/:roomCode/join", roomJoinLimiter, async (req, res) => {
       if (players.length >= maxPlayers) return { kind: "full" } as const;
       players.push({
         playerId,
-        playerName,
-        avatarColor: avatarColor ?? "#3182ce",
-        picture: typeof picture === "string" ? picture.slice(0, 1000) : null,
-        loginMethod: loginMethod ?? null,
+        playerName: effectivePlayerName,
+        avatarColor: effectiveAvatarColor,
+        picture: effectivePicture,
+        loginMethod: effectiveLoginMethod,
         isPremium: joinerPremium,
         score: 0,
         roundScore: 0,
@@ -1118,103 +1427,124 @@ router.post("/:roomCode/join", roomJoinLimiter, async (req, res) => {
 
 // POST /rooms/:roomCode/start — host starts / continues the game
 router.post("/:roomCode/start", async (req, res) => {
-  const roomCode = paramStr(req.params.roomCode);
+  const roomCode = paramStr(req.params.roomCode).toUpperCase();
   const { hostId } = (req.body ?? {}) as { hostId?: string };
-  const rooms = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, roomCode.toUpperCase())).limit(1);
-  if (rooms.length === 0) { res.status(404).json({ error: "Room not found" }); return; }
 
-  const room = rooms[0];
-  // 🔐 Authorization: only the host can start / continue rounds. We accept the
-  // hostId from the body to keep this stateless (no auth session). Missing or
-  // mismatched hostId returns 403 — prevents griefers from forcing rounds.
-  if (!hostId || room.hostId !== hostId) {
+  type StartOutcome =
+    | { kind: "notFound" }
+    | { kind: "forbidden" }
+    | { kind: "playing"; row: any }
+    | { kind: "finished" }
+    | { kind: "started"; row: any; resetPlayers: any[]; startMeta: any };
+
+  // Serialize start against join/leave/add-bot. The locked row is the only
+  // source of truth, so a concurrent lobby mutation cannot be overwritten by
+  // a stale playersJson snapshot.
+  const outcome: StartOutcome = await db.transaction(async (tx) => {
+    const rows = await tx.execute(
+      sql\`SELECT * FROM rooms WHERE room_code = \${roomCode} FOR UPDATE\`,
+    );
+    const list = (rows as any).rows ?? rows;
+    if (!list || list.length === 0) return { kind: "notFound" } as const;
+
+    const raw = list[0];
+    const rawHostId = raw.host_id ?? raw.hostId;
+    if (!hostId || !verifyClaimedIdentity(req, hostId) || rawHostId !== hostId) {
+      return { kind: "forbidden" } as const;
+    }
+
+    const status = raw.status;
+    const currentRoom = {
+      ...raw,
+      hostId: raw.host_id ?? raw.hostId,
+      hostName: raw.host_name ?? raw.hostName,
+      playersJson: raw.players_json ?? raw.playersJson,
+      currentRound: raw.current_round ?? raw.currentRound,
+      maxRounds: raw.max_rounds ?? raw.maxRounds,
+      stopperJson: raw.stopper_json ?? raw.stopperJson,
+      currentLetter: raw.current_letter ?? raw.currentLetter,
+      gameMode: raw.game_mode ?? raw.gameMode,
+    };
+
+    if (status === "playing" || status === "stopped") {
+      return { kind: "playing", row: currentRoom } as const;
+    }
+    if (status === "finished") {
+      return { kind: "finished" } as const;
+    }
+
+    const players = parsePlayers(currentRoom.playersJson);
+    const newRound = currentRoom.currentRound === 0 ? 1 : currentRoom.currentRound;
+    const MP_CARDS = ["lightning", "shield", "sabotage", "double_or_nothing", "steal"] as const;
+    const resetPlayers = players.map((p: any) => ({
+      ...p,
+      isReady: false,
+      roundScore: 0,
+      validAnswerCount: 0,
+      finishedAt: undefined,
+      powerCard: newRound === 1
+        ? MP_CARDS[Math.floor(Math.random() * MP_CARDS.length)]
+        : (p.powerCard ?? null),
+      powerCardUsed: newRound === 1 ? false : (p.powerCardUsed ?? false),
+      bluffImmune: false,
+    }));
+
+    const newLetter = randomLetter();
+    const startSourceMeta = parseBluffMeta(currentRoom.stopperJson) ?? {};
+    const startMeta = {
+      categoryPack: startSourceMeta.categoryPack,
+      customCategories: startSourceMeta.customCategories,
+      customPackLabel: startSourceMeta.customPackLabel,
+      roundStartedAt: Date.now(),
+    };
+
+    const [updated] = await tx.update(roomsTable)
+      .set({
+        status: "playing",
+        currentRound: newRound,
+        currentLetter: newLetter,
+        playersJson: JSON.stringify(resetPlayers),
+        stopperJson: JSON.stringify(startMeta),
+        updatedAt: new Date(),
+      })
+      .where(eq(roomsTable.roomCode, roomCode))
+      .returning();
+
+    return { kind: "started", row: updated, resetPlayers, startMeta } as const;
+  });
+
+  if (outcome.kind === "notFound") {
+    res.status(404).json({ error: "Room not found" });
+    return;
+  }
+  if (outcome.kind === "forbidden") {
     res.status(403).json({ error: "Only the host can start the game" });
     return;
   }
-  // 🔒 Bind a logged-in host to its real identity (guests pass through).
-  if (!verifyClaimedIdentity(req, hostId)) {
-    res.status(403).json({ error: "Identity verification failed" }); return;
-  }
-  // 🔁 Idempotency: /start is only valid from the lobby ("waiting") state.
-  // While "playing" or "stopped", a duplicate /start (host double-tap, retry
-  // after a flaky network) must NOT re-randomize the letter, wipe scores, or
-  // reset finishedAt timestamps. We just echo the current state back.
-  // "finished" rooms cannot be restarted — players use the rematch flow.
-  if (room.status === "playing" || room.status === "stopped") {
-    res.json(broadcastAndFormat(room));
+  if (outcome.kind === "playing") {
+    res.json(broadcastAndFormat(outcome.row));
     return;
   }
-  if (room.status === "finished") {
+  if (outcome.kind === "finished") {
     res.status(409).json({ error: "Match already finished — use rematch" });
     return;
   }
-  const players = parsePlayers(room.playersJson);
 
-  const newRound = room.currentRound === 0 ? 1 : room.currentRound;
-  const MP_CARDS = ["lightning", "shield", "sabotage", "double_or_nothing", "steal"] as const;
+  // 🚀 Push the authoritative transition to every player immediately.
+  res.json(broadcastAndFormat(outcome.row));
 
-  // Reset all ready flags, round scores AND finishedAt; assign power cards on round 1 only
-  const resetPlayers = players.map((p: any) => ({
-    ...p,
-    isReady: false,
-    roundScore: 0,
-    finishedAt: undefined,
-    // Assign 1 random card at game start (round 1); keep it for subsequent rounds until used
-    powerCard: newRound === 1
-      ? MP_CARDS[Math.floor(Math.random() * MP_CARDS.length)]
-      : (p.powerCard ?? null),
-    powerCardUsed: newRound === 1 ? false : (p.powerCardUsed ?? false),
-    bluffImmune: false,
-  }));
-
-  // ⏱️ Stamp the authoritative round-start timestamp so every client computes
-  // the same deadline regardless of when their poll/SSE picks up the change.
-  const newLetter = randomLetter();
-  const startMeta = { roundStartedAt: Date.now() };
-  // 🔒 Atomic transition: only flip to "playing" if the row is STILL in
-  // "waiting". If two requests race past the early guard above (host
-  // double-tap from two devices), only one update will succeed; the other
-  // returns 0 rows and we echo back the post-race state.
-  const updateResult = await db.update(roomsTable)
-    .set({
-      status: "playing",
-      currentRound: newRound,
-      currentLetter: newLetter,
-      playersJson: JSON.stringify(resetPlayers),
-      stopperJson: JSON.stringify(startMeta),
-      updatedAt: new Date(),
-    })
-    .where(and(
-      eq(roomsTable.roomCode, roomCode.toUpperCase()),
-      eq(roomsTable.status, "waiting"),
-    ))
-    .returning();
-
-  if (updateResult.length === 0) {
-    // Lost the race — read the winner's state and return it.
-    const [latest] = await db.select().from(roomsTable)
-      .where(eq(roomsTable.roomCode, roomCode.toUpperCase())).limit(1);
-    res.json(broadcastAndFormat(latest ?? room));
-    return;
-  }
-
-  // 🚀 Empuja el cambio a TODOS los jugadores por SSE de inmediato
-  // (antes solo el host recibía la respuesta y los demás esperaban polling).
-  res.json(broadcastAndFormat(updateResult[0]));
-
-  // 🤖 Schedule bot STOPs/submits for this round. Done after the broadcast
-  // so humans see the round start immediately, then bots act on their own
-  // realistic delay (25-50s).
-  const botsInRoom = resetPlayers.filter((p: any) => p.isBot);
+  // 🤖 Schedule bot STOPs/submits after the room transition commits.
+  const botsInRoom = outcome.resetPlayers.filter((p: any) => p.isBot);
   if (botsInRoom.length > 0) {
-    const updatedRoom = updateResult[0];
-    const packCfg = roomCategoryPacks.get(roomCode.toUpperCase());
-    const pack = packCfg?.pack ?? "standard";
-    const letterForRound = (updatedRoom.currentLetter ?? "A").toUpperCase();
-    const roundForRound = updatedRoom.currentRound ?? newRound;
-    const categories = resolveCategoriesForRound(pack, letterForRound, roundForRound, packCfg?.customCategories);
+    const packCfg = roomCategoryPacks.get(roomCode);
+    const pack = packCfg?.pack ?? outcome.startMeta.categoryPack ?? "standard";
+    const customCategories = packCfg?.customCategories
+      ?? (Array.isArray(outcome.startMeta.customCategories) ? outcome.startMeta.customCategories : undefined);
+    const letterForRound = (outcome.row.currentLetter ?? "A").toUpperCase();
+    const roundForRound = outcome.row.currentRound ?? 1;
+    const categories = resolveCategoriesForRound(pack, letterForRound, roundForRound, customCategories);
     scheduleBotsForRound({
-      roomCode: roomCode.toUpperCase(),
+      roomCode,
       bots: botsInRoom.map((b: any) => ({ playerId: b.playerId })),
       letter: letterForRound,
       categories,
@@ -1224,7 +1554,6 @@ router.post("/:roomCode/start", async (req, res) => {
   }
 });
 
-// POST /rooms/:roomCode/add-bot — host-only, adds a CPU player to the lobby
 router.post("/:roomCode/add-bot", async (req, res) => {
   const roomCode = paramStr(req.params.roomCode);
   const { hostId } = (req.body ?? {}) as { hostId?: string };
@@ -1326,35 +1655,48 @@ router.post("/:roomCode/leave", async (req, res) => {
     const leaving = players.find((p: any) => p.playerId === playerId);
     if (!leaving) return { kind: "noop" } as const;
 
-    // 👑 Mid-game host migration: if the host leaves while a round is in
-    // flight, we can't safely rewrite `playersJson` (would desync scores),
-    // but we MUST move the host badge to someone else — otherwise the room
-    // becomes a zombie that nobody can restart, rematch, or close. We do a
-    // minimal mutation: only `hostId`/`hostName` change, and we flip the
-    // `isHost` flag inside playersJson without touching scores or answers.
+    // A finished room is the durable match snapshot used by final-score
+    // recovery and rematch. Do not delete or rewrite its roster when a player
+    // navigates away; otherwise a crash between "finished" and scoring could
+    // erase the only persisted source needed for recovery.
+    if (status === "finished") return { kind: "noop" } as const;
+
+    // 👑 Mid-game leave: the player must actually be removed from the roster.
+    // Keep every remaining player's score/answers untouched. If the host leaves,
+    // migrate the host badge and authoritative host fields in the same locked
+    // transaction so no concurrent join/leave can create a ghost member or a
+    // room with no usable host.
+    const remaining = players.filter((p: any) => p.playerId !== playerId);
+
     if (status !== "waiting") {
-      if (!leaving.isHost) return { kind: "noop" } as const;
-      const others = players.filter((p: any) => p.playerId !== playerId);
-      if (others.length === 0) return { kind: "noop" } as const;
-      const newHost = others[0];
-      const migrated = players.map((p: any) => ({
-        ...p,
-        isHost: p.playerId === newHost.playerId,
-      }));
+      if (remaining.length === 0) {
+        await tx.delete(roomsTable).where(eq(roomsTable.roomCode, code));
+        return { kind: "deleted" } as const;
+      }
+
+      let newHostId: string | null = null;
+      if (leaving.isHost) {
+        remaining.forEach((p: any, idx: number) => { p.isHost = idx === 0; });
+        newHostId = remaining[0].playerId;
+      }
+
+      const setPayload: Record<string, unknown> = {
+        playersJson: JSON.stringify(remaining),
+        updatedAt: new Date(),
+      };
+      if (newHostId) {
+        setPayload.hostId = newHostId;
+        setPayload.hostName = remaining[0].playerName ?? "";
+      }
+
       const updated = await tx
         .update(roomsTable)
-        .set({
-          playersJson: JSON.stringify(migrated),
-          hostId: newHost.playerId,
-          hostName: newHost.playerName ?? "",
-          updatedAt: new Date(),
-        } as any)
+        .set(setPayload as any)
         .where(eq(roomsTable.roomCode, code))
         .returning();
-      return { kind: "updated", row: updated[0], newHostId: newHost.playerId } as const;
-    }
 
-    const remaining = players.filter((p: any) => p.playerId !== playerId);
+      return { kind: "updated", row: updated[0], newHostId } as const;
+    }
 
     // Empty lobby → delete the row and free ephemeral state.
     if (remaining.length === 0) {
@@ -1394,14 +1736,24 @@ router.post("/:roomCode/leave", async (req, res) => {
   if (outcome.kind === "deleted") {
     roomTyping.delete(code);
     roomLiveResponses.delete(code);
-    roomSpyUsage.delete(code);
     roomRematch.delete(code);
     roomFunVotes.delete(code);
     roomReactions.delete(code);
     roomPhrases.delete(code);
     roomCategoryPacks.delete(code);
+    // The room code can be recycled. Close and discard every SSE connection
+    // still registered under the deleted code so clients from the old room
+    // can never receive snapshots from a newly created room with the same code.
+    const staleSse = sseClients.get(code);
+    if (staleSse) {
+      for (const client of staleSse) { try { client.res.end(); } catch {} }
+      sseClients.delete(code);
+    }
+    // Reset the per-code broadcast ordering marker as well; it belongs to the
+    // deleted room and must not constrain a future room that reuses this code.
+    lastBroadcastUpdatedAt.delete(code);
     // 🤖 Cancel pending bot timers so they don't fire against a deleted room.
-    clearBotTimers(code);
+    cleanupBotRoom(code);
     res.json({ ok: true, deleted: true });
     return;
   }
@@ -1442,7 +1794,8 @@ router.post("/:roomCode/react", writeLimiter, async (req, res) => {
   }
   if (!VALID_REACTIONS.includes(emoji)) { res.status(400).json({ error: "Invalid emoji" }); return; }
   const list = roomReactions.get(code) ?? [];
-  list.push({ id: Math.random().toString(36).slice(2), emoji, playerName: playerName ?? "?", ts: Date.now() });
+  const memberName = String(roomPlayers.find((p: any) => p.playerId === playerId)?.playerName ?? "?").slice(0, 30);
+  list.push({ id: Math.random().toString(36).slice(2), emoji, playerName: memberName, ts: Date.now() });
   roomReactions.set(code, list.slice(-40));
   // 🚀 Push reactions to all clients immediately (otherwise wait up to 1.5s)
   try {
@@ -1479,6 +1832,7 @@ router.post("/:roomCode/category-pack", async (req, res) => {
   }
   if (!["standard", "crazy", "mix", "custom"].includes(pack)) { res.status(400).json({ error: "Invalid pack" }); return; }
 
+  let selectedPack: RoomPackConfig;
   if (pack === "custom") {
     // Gate behind premium server-side — client UI hides it but never trust the client.
     const hostPremium = await isPlayerPremium(hostId);
@@ -1490,12 +1844,41 @@ router.post("/:roomCode/category-pack", async (req, res) => {
       .slice(0, 12);
     if (clean.length < 3) { res.status(400).json({ error: "Need at least 3 categories" }); return; }
     const label = (typeof body.customLabel === "string" ? body.customLabel.trim() : "").slice(0, 40) || "Personalizado";
-    roomCategoryPacks.set(code, { pack: "custom", customCategories: clean, customLabel: label });
+    selectedPack = { pack: "custom", customCategories: clean, customLabel: label };
   } else {
-    roomCategoryPacks.set(code, { pack });
+    selectedPack = { pack };
   }
+
+  // Revalidate after the asynchronous Premium lookup. /start may have won
+  // the race while isPlayerPremium() was in flight; never mutate a game that
+  // has already left the waiting state.
+  const currentMeta = parseBluffMeta(rooms[0].stopperJson) ?? {};
+  const packMeta = {
+    ...currentMeta,
+    categoryPack: pack,
+    customCategories: pack === "custom" ? (selectedPack.customCategories ?? null) : null,
+    customPackLabel: pack === "custom" ? (selectedPack.customLabel ?? null) : null,
+  };
+  const [updatedPackRoom] = await db.update(roomsTable)
+    .set({ stopperJson: JSON.stringify(packMeta), updatedAt: new Date() })
+    .where(and(
+      eq(roomsTable.roomCode, code),
+      eq(roomsTable.status, "waiting"),
+      
+      eq(roomsTable.hostId, hostId),
+    ))
+    .returning();
+
+  if (!updatedPackRoom) {
+    res.status(409).json({ error: "Room is no longer waiting" });
+    return;
+  }
+
+  // Update the process-local fast path only after the persisted CAS succeeds.
+  roomCategoryPacks.set(code, selectedPack);
+
   // 🚀 Notify all players the host changed the category pack
-  try { broadcastAndFormat(rooms[0]); } catch {}
+  try { broadcastAndFormat(updatedPackRoom); } catch {}
   res.json({ ok: true, categoryPack: pack });
 });
 
@@ -1558,7 +1941,13 @@ router.post("/:roomCode/use-card", async (req, res) => {
 
     const [updated] = await db.update(roomsTable)
       .set({ playersJson: JSON.stringify(updatedPlayers), updatedAt: new Date() })
-      .where(and(eq(roomsTable.roomCode, code), eq(roomsTable.updatedAt, room.updatedAt)))
+      .where(and(
+      eq(roomsTable.roomCode, code),
+      eq(roomsTable.status, room.status),
+      eq(roomsTable.currentRound, room.currentRound),
+      eq(roomsTable.currentLetter, room.currentLetter),
+      eq(roomsTable.playersJson, room.playersJson),
+    ))
       .returning();
 
     if (!updated) continue; // someone else wrote first — retry with fresh state
@@ -1619,16 +2008,30 @@ router.get("/:roomCode/events", async (req, res) => {
   res.setHeader("X-Accel-Buffering", "no");
   res.flushHeaders?.();
 
-  // Send current state immediately (con cosméticos)
-  const players = parsePlayers(roomRow.playersJson);
-  const playerIds = players.map((p: any) => p.playerId).filter(Boolean);
-  const cosmeticsMap = await fetchCosmeticsForPlayers(playerIds);
-  const initialPayload = formatRoom(roomRow, cosmeticsMap);
-  res.write(`data: ${JSON.stringify(initialPayload)}\n\n`);
-
+  // Register the client before loading the initial snapshot. Otherwise an update
+  // can commit/broadcast between the authorization read and registration and be
+  // missed forever by this subscriber.
   const client: SseClient = { res, playerId };
   if (!sseClients.has(code)) sseClients.set(code, new Set());
   sseClients.get(code)!.add(client);
+
+  // Load the latest persisted state only after the client is subscribed.
+  // broadcastRoom() applies the same monotonic updatedAt guard as every other
+  // SSE path, so a concurrent newer broadcast cannot be rolled back by this
+  // initial snapshot.
+  const [latestRoomRow] = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, code)).limit(1);
+  if (!latestRoomRow) {
+    sseClients.get(code)?.delete(client);
+    if (sseClients.get(code)?.size === 0) sseClients.delete(code);
+    res.end();
+    return;
+  }
+
+  const latestPlayers = parsePlayers(latestRoomRow.playersJson);
+  const latestPlayerIds = latestPlayers.map((p: any) => p.playerId).filter(Boolean);
+  const cosmeticsMap = await fetchCosmeticsForPlayers(latestPlayerIds);
+  const initialPayload = formatRoom(latestRoomRow, cosmeticsMap);
+  broadcastRoom(code, initialPayload);
 
   // Heartbeat every 25s to keep connection alive
   const heartbeat = setInterval(() => {
@@ -1650,17 +2053,37 @@ router.get("/:roomCode/events", async (req, res) => {
 // Throttled by the client to once every ~1.5s. Stale entries auto-expire after 3s.
 router.post("/:roomCode/typing", writeLimiter, async (req, res) => {
   const code = paramStr(req.params.roomCode).toUpperCase();
-  const { playerId, playerName, responses } = req.body as {
+  const { playerId, playerName, responses, round } = req.body as {
     playerId: string;
     playerName: string;
     responses?: Record<string, string>;
+    round?: number;
   };
   if (!playerId) { res.status(400).json({ error: "Missing playerId" }); return; }
   if (!verifyClaimedIdentity(req, playerId)) { res.status(403).json({ error: "Identity verification failed" }); return; }
 
+  // Typing presence and live drafts are room-scoped state. A valid identity
+  // must also be a current member, otherwise an outsider could inject fake
+  // presence/responses and pollute the spy mechanic for the room.
+  const [room] = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, code)).limit(1);
+  if (!room) { res.status(404).json({ error: "Room not found" }); return; }
+  const roomPlayers = parsePlayers(room.playersJson);
+  if (!roomPlayers.some((p: any) => p.playerId === playerId)) {
+    res.status(403).json({ error: "Only players in the room can send typing updates" }); return;
+  }
+
+  // Bind each typing snapshot to the round it was captured in. A delayed
+  // request from the previous round must never repopulate the live-draft map
+  // after the room has already advanced.
+  if (!Number.isInteger(round) || round !== room.currentRound || room.status !== "playing") {
+    res.status(409).json({ error: "Typing update belongs to an inactive round" });
+    return;
+  }
+
   let m = roomTyping.get(code);
   if (!m) { m = new Map(); roomTyping.set(code, m); }
-  m.set(playerId, { name: String(playerName ?? "?").slice(0, 30), ts: Date.now() });
+  const memberName = String(roomPlayers.find((p: any) => p.playerId === playerId)?.playerName ?? "?").slice(0, 30);
+  m.set(playerId, { name: memberName, ts: Date.now() });
 
   // 🕵️ Stash live responses so /spy can peek at them. Stale after 5 s.
   if (responses && typeof responses === "object") {
@@ -1673,7 +2096,7 @@ router.post("/:roomCode/typing", writeLimiter, async (req, res) => {
         safe[String(k).slice(0, 60)] = v.trim().slice(0, 80);
       }
     }
-    lr.set(playerId, { name: String(playerName ?? "?").slice(0, 30), responses: safe, ts: Date.now() });
+    lr.set(playerId, { name: memberName, responses: safe, ts: Date.now() });
   }
 
   // Lightweight broadcast — re-fetch room and broadcast formatted state
@@ -1736,20 +2159,30 @@ router.post("/:roomCode/spy", writeLimiter, async (req, res) => {
     return;
   }
 
-  // Enforce per-round usage limit (premium gets 2x)
-  let used = roomSpyUsage.get(code);
-  if (!used) { used = new Map(); roomSpyUsage.set(code, used); }
+  // Enforce per-round usage limit in PostgreSQL so concurrent requests and
+  // multiple Railway replicas cannot reset/bypass the spy budget.
   const callerPremium = await isPlayerPremium(playerId);
-  const limit = callerPremium ? SPY_LIMIT_PREMIUM : SPY_LIMIT_FREE;
-  const current = used.get(playerId) ?? 0;
-  if (current >= limit) {
-    res.status(429).json({
-      error: callerPremium
-        ? "Ya usaste tus 2 espías esta ronda"
-        : "Ya espiaste esta ronda. Hazte Premium para 2 usos por ronda.",
-    });
+
+  // Premium lookup is asynchronous. The room can advance while it is in
+  // flight, so re-read the authoritative round before consuming the spy.
+  // Otherwise a slow request could reveal a draft from the previous round.
+  const [liveRoom] = await db.select().from(roomsTable)
+    .where(eq(roomsTable.roomCode, code))
+    .limit(1);
+  if (!liveRoom || liveRoom.status !== "playing" ||
+      liveRoom.updatedAt.getTime() !== room.updatedAt.getTime()) {
+    res.status(409).json({ error: "La ronda ya no está activa" });
     return;
   }
+
+  const livePlayers = parsePlayers(liveRoom.playersJson);
+  if (!livePlayers.some((p: any) => p.playerId === playerId)) {
+    res.status(403).json({ error: "No estás en esta sala" });
+    return;
+  }
+
+  const limit = callerPremium ? SPY_LIMIT_PREMIUM : SPY_LIMIT_FREE;
+  const round = Number(liveRoom.currentRound ?? 0);
 
   // Find rivals with at least one fresh non-empty response
   const lr = roomLiveResponses.get(code);
@@ -1758,9 +2191,12 @@ router.post("/:roomCode/spy", writeLimiter, async (req, res) => {
     return;
   }
   const cutoff = Date.now() - 5000;
+  const memberIds = new Set(livePlayers.map((p: any) => p.playerId));
   const candidates: Array<{ pid: string; name: string; cat: string; word: string }> = [];
   for (const [pid, info] of lr.entries()) {
-    if (pid === playerId) continue;
+    // A player may have left while their last typing snapshot is still fresh.
+    // Never expose a departed player's draft through the spy mechanic.
+    if (pid === playerId || !memberIds.has(pid)) continue;
     if (info.ts < cutoff) continue;
     for (const [cat, word] of Object.entries(info.responses)) {
       if (word && word.length > 0) candidates.push({ pid, name: info.name, cat, word });
@@ -1771,12 +2207,33 @@ router.post("/:roomCode/spy", writeLimiter, async (req, res) => {
     return;
   }
   const pick = candidates[Math.floor(Math.random() * candidates.length)];
-  used.set(playerId, current + 1);
+
+  // Atomically consume one use only after a valid target exists. The round is
+  // part of the key, so advancing the room automatically starts a fresh budget.
+  const consumed = await db.execute(sql`
+    INSERT INTO room_spy_usage (room_id, room_code, player_id, round, uses)
+    VALUES (${liveRoom.id}, ${code}, ${playerId}, ${round}, 1)
+    ON CONFLICT (room_id, player_id, round) DO UPDATE
+      SET uses = room_spy_usage.uses + 1
+      WHERE room_spy_usage.uses < ${limit}
+    RETURNING uses
+  `);
+  const consumedRows = (consumed as any).rows ?? consumed;
+  const uses = Number(consumedRows?.[0]?.uses ?? 0);
+  if (uses <= 0) {
+    res.status(429).json({
+      error: callerPremium
+        ? "Ya usaste tus 2 espías esta ronda"
+        : "Ya espiaste esta ronda. Hazte Premium para 2 usos por ronda.",
+    });
+    return;
+  }
+
   res.json({
     rivalName: pick.name,
     category: pick.cat,
     word: pick.word,
-    usesLeft: limit - (current + 1),
+    usesLeft: Math.max(0, limit - uses),
     limit,
   });
 });
@@ -1804,12 +2261,42 @@ router.post("/:roomCode/funvote", writeLimiter, async (req, res) => {
   const rooms = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, code)).limit(1);
   if (rooms.length === 0) { res.status(404).json({ error: "Room not found" }); return; }
   const room = rooms[0];
+
+  // Fun-votes belong to the round currently being revealed. Do not accept
+  // votes while the round is still live, nor let a client manufacture an
+  // arbitrary round number that would pollute the in-memory vote stream.
+  if (room.status !== "stopped" && room.status !== "finished" &&
+      room.status !== "bluffvoting") {
+    res.status(409).json({ error: "La votación divertida sólo está disponible al revelar la ronda" });
+    return;
+  }
+  if (round !== room.currentRound) {
+    res.status(409).json({ error: "La votación pertenece a otra ronda" });
+    return;
+  }
+
   const players = parsePlayers(room.playersJson);
   if (!players.some((p: any) => p.playerId === playerId)) {
     res.status(403).json({ error: "No estás en esta sala" }); return;
   }
-  if (!players.some((p: any) => p.playerId === votedPlayerId)) {
+  const votedPlayer = players.find((p: any) => p.playerId === votedPlayerId);
+  if (!votedPlayer) {
     res.status(404).json({ error: "Ese jugador no está en la sala" }); return;
+  }
+
+  // The category/answer pair is displayed from the target player's authoritative
+  // round submission. Do not let a client manufacture a different answer and
+  // attach applause to it; otherwise the public fun-vote feed can be polluted
+  // with fabricated content that was never played.
+  const targetAnswers = votedPlayer.answers && typeof votedPlayer.answers === "object"
+    ? votedPlayer.answers as Record<string, unknown>
+    : {};
+  const targetAnswer = targetAnswers[category];
+  if (typeof targetAnswer !== "string" || targetAnswer.trim().length === 0) {
+    res.status(400).json({ error: "Esa categoría no tiene una respuesta registrada" }); return;
+  }
+  if (normalizeWord(answer ?? "") !== normalizeWord(targetAnswer)) {
+    res.status(400).json({ error: "La respuesta no coincide con la registrada" }); return;
   }
 
   let votes = roomFunVotes.get(code);
@@ -1892,6 +2379,15 @@ router.post("/:roomCode/rematch", writeLimiter, async (req, res) => {
         isReady: false,
       }];
 
+      // Carry the authoritative category configuration into the new room's
+      // persisted metadata. This makes the rematch independent of process-local
+      // Maps and ensures /start cannot lose the selected deck.
+      const rematchPackMeta = {
+        categoryPack: typeof oldMeta.categoryPack === "string" ? oldMeta.categoryPack : undefined,
+        customCategories: Array.isArray(oldMeta.customCategories) ? [...oldMeta.customCategories] : undefined,
+        customPackLabel: typeof oldMeta.customPackLabel === "string" ? oldMeta.customPackLabel : undefined,
+      };
+
       // The room-code UNIQUE constraint is the final authority. INSERT ...
       // ON CONFLICT DO NOTHING makes collision retries safe even under concurrency.
       let newCode: string | null = null;
@@ -1908,7 +2404,7 @@ router.post("/:roomCode/rematch", writeLimiter, async (req, res) => {
           gameMode: oldRoom.gameMode ?? "classic",
           language: oldRoom.language,
           playersJson: JSON.stringify(players),
-          stopperJson: null,
+          stopperJson: JSON.stringify(rematchPackMeta),
           isPublic: false,
         }).onConflictDoNothing({ target: roomsTable.roomCode }).returning({ roomCode: roomsTable.roomCode });
         if (inserted.length > 0) newCode = inserted[0].roomCode;
@@ -1941,6 +2437,31 @@ router.post("/:roomCode/rematch", writeLimiter, async (req, res) => {
     }
     if (outcome.kind === "not_member") {
       res.status(403).json({ error: "Only players in the room can request a rematch" }); return;
+    }
+
+    // A rematch must preserve the category deck selected for the finished
+    // room. Without this copy, crazy/mix/custom rooms silently restart as the
+    // standard pack even though the endpoint promises the same game settings.
+    const previousPack = roomCategoryPacks.get(oldCode);
+    const oldMetaForPack = parseBluffMeta(outcome.oldRoom.stopperJson) ?? {};
+    const persistedPack = typeof oldMetaForPack.categoryPack === "string"
+      ? oldMetaForPack.categoryPack
+      : null;
+    const persistedCustomCategories = Array.isArray(oldMetaForPack.customCategories)
+      ? [...oldMetaForPack.customCategories]
+      : undefined;
+    const persistedCustomLabel = typeof oldMetaForPack.customPackLabel === "string"
+      ? oldMetaForPack.customPackLabel
+      : undefined;
+
+    if (previousPack || persistedPack) {
+      roomCategoryPacks.set(outcome.rematchCode, {
+        pack: previousPack?.pack ?? persistedPack as any,
+        customCategories: previousPack?.customCategories
+          ? [...previousPack.customCategories]
+          : persistedCustomCategories,
+        customLabel: previousPack?.customLabel ?? persistedCustomLabel,
+      });
     }
 
     roomRematch.set(oldCode, outcome.rematchCode);
@@ -1976,7 +2497,7 @@ router.post("/:roomCode/phrase", writeLimiter, async (req, res) => {
   }
   const phrase: QuickPhrase = {
     id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-    playerName: String(playerName ?? "?").slice(0, 30),
+    playerName: String(roomPlayers.find((p: any) => p.playerId === playerId)?.playerName ?? "?").slice(0, 30),
     text: QUICK_PHRASES[phraseIndex],
     ts: Date.now(),
   };
@@ -2021,7 +2542,8 @@ router.post("/:roomCode/stop", async (req, res) => {
     return;
   }
 
-  const stopper = { id: playerId, name: playerName, stopTimestamp: Date.now() };
+  const memberName = String(roomPlayers.find((p: any) => p.playerId === playerId)?.playerName ?? "?").slice(0, 30);
+  const stopper = { id: playerId, name: memberName, stopTimestamp: Date.now() };
 
   // Preserve the authoritative round-start timestamp so clients keep seeing
   // a consistent deadline through STOP → freeze → submit transitions.
@@ -2033,14 +2555,33 @@ router.post("/:roomCode/stop", async (req, res) => {
     roundStartedAt: prevMeta.roundStartedAt ?? Date.now(),
   };
 
+  // CAS the transition on the exact room version we inspected. Without this,
+  // concurrent STOP/RESULTS requests could overwrite a newer playersJson or
+  // replace the authoritative stopper with a stale read.
   const [updated] = await db.update(roomsTable)
     .set({
       status: "stopped",
       stopperJson: JSON.stringify(newMeta),
       updatedAt: new Date(),
     })
-    .where(eq(roomsTable.roomCode, roomCode.toUpperCase()))
+    .where(and(
+      eq(roomsTable.roomCode, roomCode.toUpperCase()),
+      eq(roomsTable.status, "playing"),
+      eq(roomsTable.status, room.status), eq(roomsTable.currentRound, room.currentRound), eq(roomsTable.currentLetter, room.currentLetter), eq(roomsTable.playersJson, room.playersJson),
+    ))
     .returning();
+
+  if (!updated) {
+    const [current] = await db.select().from(roomsTable)
+      .where(eq(roomsTable.roomCode, roomCode.toUpperCase()))
+      .limit(1);
+    if (!current) {
+      res.status(404).json({ error: "Room not found" });
+      return;
+    }
+    res.json(formatRoom(current));
+    return;
+  }
 
   res.json(broadcastAndFormat(updated));
 
@@ -2082,12 +2623,31 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
     return;
   }
 
+  // A playing round may accept results only once its natural timer has expired.
+  // Otherwise clients could submit early; when the last player does so,
+  // finalizeRoundState() would advance the round before the authoritative
+  // deadline. Explicit STOP already moves the room to "stopped".
+  if (room.status === "playing") {
+    const endTs = roundEndTimestamp(room);
+    if (endTs && Date.now() < endTs) {
+      res.status(409).json({ error: "Round is still in progress" });
+      return;
+    }
+  }
+
   // ── Idempotency guard ─────────────────────────────────────────────────────
   // If this player already submitted for the current round (isReady === true),
   // return the current room state without re-applying score — prevents double-submit cheats.
   const existingPlayers = parsePlayers(room.playersJson);
   const me = existingPlayers.find((p: any) => p.playerId === body.data.playerId);
-  if (me?.isReady === true) {
+  // A valid session alone is not enough: /results mutates the room state and
+  // can trigger round advancement/final leaderboard side effects. Only an
+  // actual member of this room may submit results for it.
+  if (!me) {
+    res.status(403).json({ error: "Player is not a member of this room" });
+    return;
+  }
+  if (me.isReady === true) {
     res.json(formatRoom(room));
     return;
   }
@@ -2120,10 +2680,44 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
 
   // ── T002: Letter validation — strip answers that don't start with the correct letter
   const letter = (room.currentLetter ?? "A").toUpperCase();
+
+  // The category key is part of the client payload, so it must never become
+  // authoritative for scoring. Only categories actually shown for this room
+  // and round may contribute points; otherwise an attacker can invent a
+  // category name and exploit the validator's defensive "unknown dictionary"
+  // fallback to score arbitrary words.
+  const packConfig = roomCategoryPacks.get(roomCode.toUpperCase());
+  const resultMeta = parseBluffMeta(room.stopperJson) ?? {};
+  const persistedPack = typeof resultMeta.categoryPack === "string" ? resultMeta.categoryPack : "standard";
+  const persistedCustomCategories = Array.isArray(resultMeta.customCategories)
+    ? resultMeta.customCategories
+    : undefined;
+  const configuredPack = packConfig?.pack ?? persistedPack;
+  const configuredCategories = resolveCategoriesForRound(
+    configuredPack,
+    letter,
+    room.currentRound ?? 1,
+    packConfig?.customCategories ?? persistedCustomCategories,
+  );
+  // The standard pack is localized client-side. Accept its four supported
+  // language labels; crazy/mix intentionally use the Spanish labels used by
+  // the room UI. Custom packs use their exact server-supplied categories.
+  const standardLocalized = [
+    "Nombre", "Lugar", "Animal", "Objeto", "Color", "Fruta", "Marca",
+    "Name", "Place", "Animal", "Object", "Color", "Fruit", "Brand",
+    "Nome", "Lugar", "Animal", "Objeto", "Cor", "Fruta", "Marca",
+    "Prénom", "Lieu", "Animal", "Objet", "Couleur", "Fruit", "Marque",
+  ];
+  const allowedCategories = new Set(
+    (configuredPack === "standard" ? standardLocalized : configuredCategories)
+      .map((cat) => normalizeWord(cat)),
+  );
+
   const safeAnswers: Record<string, string> = {};
   if (answers && typeof answers === "object") {
     const entries = Object.entries(answers).slice(0, MAX_CATEGORIES_PER_ROUND);
     for (const [cat, val] of entries) {
+      if (!allowedCategories.has(normalizeWord(cat))) continue;
       if (typeof val === "string" && val.trim().length > 0) {
         const word = val.trim().slice(0, 80);
         if (word.toUpperCase().startsWith(letter)) {
@@ -2140,7 +2734,10 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
   // cap valid answers at AUTHORITATIVE_CATEGORY_CAP — even if the client
   // injects fake category keys, only this many can score (defends against
   // category-key injection padding the score with extra +10s).
-  const AUTHORITATIVE_CATEGORY_CAP = 8; // largest pack across ES/EN/PT/FR
+  // Custom room packs may contain up to 12 categories; the 8-category limit
+  // only applies to the standard language packs. Use the authoritative round
+  // configuration so legitimate custom answers are not silently discarded.
+  const AUTHORITATIVE_CATEGORY_CAP = Math.min(12, Math.max(1, configuredCategories.length));
   const scoredEntries = await Promise.all(
     Object.entries(safeAnswers).map(async ([category, word]) => ({
       word,
@@ -2175,9 +2772,19 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
     cappedRoundScore += 5;
   }
 
-  // 🕵️ Authoritative spy penalty: -10 pts if the server registered a spy use this round
-  const spies = roomSpyUsage.get(roomCode.toUpperCase());
-  if (spies?.has(playerId)) {
+  // 🕵️ Authoritative spy penalty: apply the persisted usage for THIS
+  // concrete room instance and round. The in-memory map was retired when
+  // spy usage became PostgreSQL-backed, so reading it here silently skipped
+  // the penalty on every Railway replica.
+  const spyUsageRows = await db.execute(sql`
+    SELECT uses
+    FROM room_spy_usage
+    WHERE room_id = ${room.id}
+      AND player_id = ${playerId}
+      AND round = ${Number(room.currentRound ?? 0)}
+    LIMIT 1
+  `) as unknown as { rows?: Array<{ uses: number }> };
+  if (Number(spyUsageRows.rows?.[0]?.uses ?? 0) > 0) {
     cappedRoundScore = Math.max(0, cappedRoundScore - 10);
   }
 
@@ -2185,7 +2792,11 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
   // score zero. A tampered client that buffered extra words past STOP can't
   // benefit because waiting past the cutoff zeroes them anyway. Honest clients
   // freeze for 3s and submit immediately, so they comfortably beat the 8s.
-  if (stopTimestamp && Date.now() - stopTimestamp > SUBMIT_GRACE_MS) {
+  // Apply the same hard cutoff to both explicit STOP and natural timer expiry.
+  // Without this, a late /results request after a round timed out naturally could
+  // still score before the background sweeper persisted the zeroed player.
+  const roundEndTs = roundEndTimestamp(room);
+  if (roundEndTs && Date.now() - roundEndTs > SUBMIT_GRACE_MS) {
     cappedRoundScore = 0;
   }
 
@@ -2198,6 +2809,9 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
         roundScore: cappedRoundScore,
         isReady: true,
         answers: safeAnswers,
+        // Server-validated count is persisted with the round snapshot so
+        // final Season Pass events never need to trust raw client answers.
+        validAnswerCount,
         // ⏱️ Tie-breaker source-of-truth: who finished first wins ties
         finishedAt,
         wasStopper: isStopper,
@@ -2242,7 +2856,7 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
       })
       .where(and(
         eq(roomsTable.roomCode, roomCode.toUpperCase()),
-        eq(roomsTable.updatedAt, authoritativeRoom.updatedAt),
+        eq(roomsTable.status, authoritativeRoom.status), eq(roomsTable.currentRound, authoritativeRoom.currentRound), eq(roomsTable.currentLetter, authoritativeRoom.currentLetter), eq(roomsTable.playersJson, authoritativeRoom.playersJson),
       ))
       .returning();
 
@@ -2294,6 +2908,9 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
         roundScore: cappedRoundScore,
         isReady: true,
         answers: safeAnswers,
+        // Preserve the server-validated word count when this submission is
+        // merged after losing the optimistic-concurrency race.
+        validAnswerCount,
         finishedAt,
         wasStopper: isStopper,
         bluffedCategories: bluffedCategories ?? [],
@@ -2367,8 +2984,13 @@ router.post("/:roomCode/bluff-vote", writeLimiter, async (req, res) => {
   const bluffVotes = meta.bluffVotes ?? {};
   const bluffDeadline = meta.bluffDeadline ?? new Date().toISOString();
 
-  // Store this player's vote
-  if (bluffVotes[accusedPlayerId]?.[category] !== undefined) {
+  // A vote that arrives after the deadline must not affect resolution.
+  // Keep the persisted vote map untouched in that case; the existing votes are
+  // the authoritative set for the expired voting window.
+  const deadlinePassed = Date.now() > new Date(bluffDeadline).getTime();
+
+  // Store this player's vote only while the voting window is still open.
+  if (!deadlinePassed && bluffVotes[accusedPlayerId]?.[category] !== undefined) {
     bluffVotes[accusedPlayerId][category][voterId] = vote;
   }
 
@@ -2386,9 +3008,6 @@ router.post("/:roomCode/bluff-vote", writeLimiter, async (req, res) => {
     if (!allVoted) break;
   }
 
-  // Also auto-resolve if deadline has passed
-  const deadlinePassed = Date.now() > new Date(bluffDeadline).getTime();
-
   if (allVoted || deadlinePassed) {
     // Resolve bluffs
     const resolved = resolveBluffs(players, bluffVotes);
@@ -2405,10 +3024,22 @@ router.post("/:roomCode/bluff-vote", writeLimiter, async (req, res) => {
         currentRound: isGameOver ? room.maxRounds : newRound,
         currentLetter: isGameOver ? room.currentLetter : randomLetter(),
         status: newStatus,
-        stopperJson: JSON.stringify({ stopper: meta.stopper, bluffResults: bluffVotes }),
+        stopperJson: JSON.stringify({
+          categoryPack: meta.categoryPack,
+          customCategories: meta.customCategories,
+          customPackLabel: meta.customPackLabel,
+          stopper: meta.stopper,
+          bluffResults: bluffVotes,
+        }),
         updatedAt: new Date(),
       })
-      .where(and(eq(roomsTable.roomCode, roomCode.toUpperCase()), eq(roomsTable.status, "bluffvoting")))
+      .where(and(
+      eq(roomsTable.roomCode, roomCode.toUpperCase()),
+      eq(roomsTable.status, "bluffvoting"),
+      eq(roomsTable.currentRound, room.currentRound),
+      eq(roomsTable.currentLetter, room.currentLetter),
+      eq(roomsTable.stopperJson, room.stopperJson),
+    ))
       .returning();
     if (!updated) {
       // Someone else already resolved this round — return current state, no submit.
@@ -2416,20 +3047,86 @@ router.post("/:roomCode/bluff-vote", writeLimiter, async (req, res) => {
       res.json(formatRoom(cur));
       return;
     }
-    if (isGameOver) {
-      submitAllScoresToLeaderboard(resolved, room.currentLetter || "A").catch(() => {});
-    }
+    // Final-score persistence and round cleanup are handled exactly once
+    // after the CAS transition. This path is a legitimate bluff-vote winner,
+    // so it must execute the same side effects as /resolve-bluffs.
+    applyRoundAdvanceSideEffects(room, resolved, newStatus);
     // 🚀 Broadcast resolution to all players (was waiting for polling — main lag in bluff phase)
     res.json(broadcastAndFormat(updated));
     return;
   }
 
-  // Save partial votes and return updated room
+  // Save partial votes with optimistic concurrency. Multiple opponents can
+  // vote at nearly the same time; without a CAS, their read-modify-write
+  // operations could overwrite each other's votes and leave the bluff phase
+  // waiting until the deadline.
   const newMeta = { ...meta, bluffVotes };
   const [updated] = await db.update(roomsTable)
     .set({ stopperJson: JSON.stringify(newMeta), updatedAt: new Date() })
-    .where(eq(roomsTable.roomCode, roomCode.toUpperCase()))
+    .where(and(
+      eq(roomsTable.roomCode, roomCode.toUpperCase()),
+      eq(roomsTable.status, "bluffvoting"),
+      eq(roomsTable.stopperJson, room.stopperJson),
+    ))
     .returning();
+
+  if (!updated) {
+    // Another vote won the race. Retry against the latest authoritative state
+    // instead of returning 200 while silently dropping THIS player's vote.
+    const [current] = await db.select().from(roomsTable)
+      .where(eq(roomsTable.roomCode, roomCode.toUpperCase()))
+      .limit(1);
+    if (!current) {
+      res.status(404).json({ error: "Room not found" });
+      return;
+    }
+    if (current.status !== "bluffvoting") {
+      res.json(formatRoom(current));
+      return;
+    }
+
+    const currentPlayers = parsePlayers(current.playersJson);
+    const currentVoter = currentPlayers.find((p: any) => p.playerId === voterId);
+    const currentAccused = currentPlayers.find((p: any) => p.playerId === accusedPlayerId);
+    if (!currentVoter || currentVoter.bluffedCategories?.length ||
+        !currentAccused?.bluffedCategories?.includes(category)) {
+      res.status(409).json({ error: "Vote no longer applicable" });
+      return;
+    }
+
+    const latestMeta = parseBluffMeta(current.stopperJson) ?? {};
+    const latestVotes = latestMeta.bluffVotes ?? {};
+    if (latestVotes[accusedPlayerId]?.[category]?.[voterId] === vote) {
+      res.json(formatRoom(current));
+      return;
+    }
+    if (latestVotes[accusedPlayerId]?.[category]) {
+      latestVotes[accusedPlayerId][category][voterId] = vote;
+    }
+
+    const [retried] = await db.update(roomsTable)
+      .set({
+        stopperJson: JSON.stringify({ ...latestMeta, bluffVotes: latestVotes }),
+        updatedAt: new Date(),
+      })
+      .where(and(
+        eq(roomsTable.roomCode, roomCode.toUpperCase()),
+        eq(roomsTable.status, "bluffvoting"),
+        eq(roomsTable.stopperJson, current.stopperJson),
+      ))
+      .returning();
+
+    if (!retried) {
+      const [latest] = await db.select().from(roomsTable)
+        .where(eq(roomsTable.roomCode, roomCode.toUpperCase()))
+        .limit(1);
+      res.status(409).json({ error: "Concurrent vote; please retry", room: latest ? formatRoom(latest) : null });
+      return;
+    }
+
+    res.json(broadcastAndFormat(retried));
+    return;
+  }
 
   // 🚀 Broadcast partial vote progress so everyone sees votes coming in live
   res.json(broadcastAndFormat(updated));
@@ -2469,19 +3166,31 @@ router.post("/:roomCode/resolve-bluffs", async (req, res) => {
       currentRound: isGameOver ? room.maxRounds : newRound,
       currentLetter: isGameOver ? room.currentLetter : randomLetter(),
       status: newStatus,
-      stopperJson: JSON.stringify({ stopper: meta.stopper, bluffResults: bluffVotes }),
+      stopperJson: JSON.stringify({
+          categoryPack: meta.categoryPack,
+          customCategories: meta.customCategories,
+          customPackLabel: meta.customPackLabel,
+          stopper: meta.stopper,
+          bluffResults: bluffVotes,
+        }),
       updatedAt: new Date(),
     })
-    .where(and(eq(roomsTable.roomCode, roomCode.toUpperCase()), eq(roomsTable.status, "bluffvoting")))
+    .where(and(
+      eq(roomsTable.roomCode, roomCode.toUpperCase()),
+      eq(roomsTable.status, "bluffvoting"),
+      eq(roomsTable.currentRound, room.currentRound),
+      eq(roomsTable.currentLetter, room.currentLetter),
+      eq(roomsTable.stopperJson, room.stopperJson),
+    ))
     .returning();
   if (!updated) {
     const [cur] = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, roomCode.toUpperCase())).limit(1);
     res.json(formatRoom(cur));
     return;
   }
-  if (isGameOver) {
-    submitAllScoresToLeaderboard(resolved, room.currentLetter || "A").catch(() => {});
-  }
+  // Use the same one-shot transition side effects as the other bluff
+  // resolution paths so spy/live state is cleared consistently.
+  applyRoundAdvanceSideEffects(room, resolved, newStatus);
 
   res.json(broadcastAndFormat(updated));
 });

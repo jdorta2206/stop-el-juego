@@ -29,11 +29,51 @@ export interface PushPayload {
 // the old schedule could produce several reminders in the same day (daily,
 // Happy Hour x3, shop deals, streak rescue, season claims, ranking, etc.).
 // Keep important game events, while throttling promotional/repetitive pushes.
-const promotionalLastSentAt = new Map<string, number>();
-const playerLastSentAt = new Map<string, number>();
 const PROMOTIONAL_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 const GENERAL_COOLDOWN_MS = 60 * 60 * 1000;
 const RANK_COOLDOWN_MS = 6 * 60 * 60 * 1000;
+const FRIEND_ONLINE_COOLDOWN_MS = 30 * 60 * 1000;
+
+function throttleKey(playerId: string, kind: string): string {
+  return `push:${playerId}:${kind}`;
+}
+
+async function claimNotificationThrottle(
+  playerId: string,
+  kind: "daily" | "rank" | "invite" | "friend" | "promo" | "other",
+  cooldownMs: number,
+): Promise<boolean> {
+  if (!playerId || playerId === "anonymous" || kind === "daily" || kind === "invite") return true;
+  const cutoff = new Date(Date.now() - cooldownMs);
+  const key = throttleKey(playerId, kind);
+  const result = await db.execute(sql`
+    INSERT INTO push_notification_throttles (throttle_key, claimed_at)
+    VALUES (${key}, NOW())
+    ON CONFLICT (throttle_key) DO UPDATE
+      SET claimed_at = NOW()
+      WHERE push_notification_throttles.claimed_at < ${cutoff}
+    RETURNING throttle_key
+  `);
+  return result.rows.length > 0;
+}
+
+async function rollbackNotificationThrottle(
+  playerId: string,
+  kind: "daily" | "rank" | "invite" | "friend" | "promo" | "other",
+): Promise<void> {
+  if (!playerId || playerId === "anonymous" || kind === "daily" || kind === "invite") return;
+  await db.execute(sql`
+    DELETE FROM push_notification_throttles
+    WHERE throttle_key = ${throttleKey(playerId, kind)}
+  `).catch(() => {});
+}
+
+function notificationCooldownMs(kind: ReturnType<typeof notificationKind>): number {
+  if (kind === "promo") return PROMOTIONAL_COOLDOWN_MS;
+  if (kind === "rank") return RANK_COOLDOWN_MS;
+  if (kind === "friend") return FRIEND_ONLINE_COOLDOWN_MS;
+  return GENERAL_COOLDOWN_MS;
+}
 
 function notificationKind(payload: PushPayload): "daily" | "rank" | "invite" | "friend" | "promo" | "other" {
   const text = `${payload.title} ${payload.body}`.toLowerCase();
@@ -45,51 +85,17 @@ function notificationKind(payload: PushPayload): "daily" | "rank" | "invite" | "
   return "other";
 }
 
-function allowNotification(playerId: string, payload: PushPayload): boolean {
-  // Anonymous broadcast subscriptions are intentionally not throttled here:
-  // they have no stable identity and must still receive the daily challenge.
-  if (!playerId || playerId === "anonymous") return true;
-
-  const now = Date.now();
-  const kind = notificationKind(payload);
-  const key = `${playerId}:${kind}`;
-
-  if (kind === "promo") {
-    const last = promotionalLastSentAt.get(key) || 0;
-    if (now - last < PROMOTIONAL_COOLDOWN_MS) return false;
-    promotionalLastSentAt.set(key, now);
-    return true;
-  }
-
-  if (kind === "rank") {
-    const last = playerLastSentAt.get(key) || 0;
-    if (now - last < RANK_COOLDOWN_MS) return false;
-    playerLastSentAt.set(key, now);
-    return true;
-  }
-
-  if (kind === "daily" || kind === "invite" || kind === "friend") return true;
-
-  const last = playerLastSentAt.get(playerId) || 0;
-  if (now - last < GENERAL_COOLDOWN_MS) return false;
-  playerLastSentAt.set(playerId, now);
-  return true;
-}
-
-function cleanupNotificationThrottleMaps() {
-  const cutoff = Date.now() - PROMOTIONAL_COOLDOWN_MS;
-  for (const [key, ts] of promotionalLastSentAt) {
-    if (ts < cutoff) promotionalLastSentAt.delete(key);
-  }
-  const generalCutoff = Date.now() - RANK_COOLDOWN_MS;
-  for (const [key, ts] of playerLastSentAt) {
-    if (ts < generalCutoff) playerLastSentAt.delete(key);
-  }
-}
-
-async function cleanStaleEndpoint(endpoint: string) {
+async function cleanStaleEndpoint(row: Pick<PushRow, "endpoint" | "p256dh" | "auth" | "playerId">) {
+  // Only remove the exact subscription that failed. The same endpoint can be
+  // re-registered concurrently (for example after browser renewal); an
+  // unconditional endpoint delete could otherwise erase the fresh row.
   await db.delete(pushSubscriptionsTable)
-    .where(eq(pushSubscriptionsTable.endpoint, endpoint))
+    .where(and(
+      eq(pushSubscriptionsTable.endpoint, row.endpoint),
+      eq(pushSubscriptionsTable.p256dh, row.p256dh),
+      eq(pushSubscriptionsTable.auth, row.auth),
+      eq(pushSubscriptionsTable.playerId, row.playerId),
+    ))
     .catch(() => {});
 }
 
@@ -114,15 +120,28 @@ function dedupeByPlayer(rows: PushRow[]): PushRow[] {
 
 export async function sendPushToPlayer(playerId: string, payload: PushPayload): Promise<number> {
   if (!VAPID_PUBLIC || !VAPID_PRIVATE) return 0;
-  if (!allowNotification(playerId, payload)) {
-    console.log(`[push] throttled player=${playerId} kind=${notificationKind(payload)} title=${payload.title}`);
+  const kind = notificationKind(payload);
+  const claimed = await claimNotificationThrottle(playerId, kind, notificationCooldownMs(kind));
+  if (!claimed) {
+    console.log(`[push] throttled player=${playerId} kind=${kind} title=${payload.title}`);
     return 0;
   }
 
-  const rows = await db.select().from(pushSubscriptionsTable)
-    .where(and(eq(pushSubscriptionsTable.playerId, playerId), excludeReplitOrigin));
+  let rows: PushRow[];
+  try {
+    rows = await db.select().from(pushSubscriptionsTable)
+      .where(and(eq(pushSubscriptionsTable.playerId, playerId), excludeReplitOrigin));
+  } catch (error) {
+    // A database read failure happens after the in-memory throttle is claimed.
+    // Release that claim so a transient outage does not suppress later pushes.
+    await rollbackNotificationThrottle(playerId, kind);
+    throw error;
+  }
 
-  const picked = dedupeByPlayer(rows);
+  // A direct player notification must reach every active device/session owned by
+  // the player. dedupeByPlayer() is only for broadcasts, where one notification
+  // per player is intentional; push_subscriptions.endpoint is already unique.
+  const picked = rows;
 
   let sent = 0;
   await Promise.allSettled(picked.map(async (row) => {
@@ -140,12 +159,16 @@ export async function sendPushToPlayer(playerId: string, payload: PushPayload): 
       sent++;
     } catch (e: any) {
       if (e.statusCode === 410 || e.statusCode === 404 || e.statusCode === 403) {
-        await cleanStaleEndpoint(row.endpoint);
+        await cleanStaleEndpoint(row);
       } else {
         console.error(`[push] send failed status=${e?.statusCode ?? "unknown"} player=${playerId}`);
       }
     }
   }));
+
+  // A failed delivery must not consume the cooldown: otherwise a transient
+  // webpush/provider failure can suppress the player's next valid notification.
+  if (sent === 0) await rollbackNotificationThrottle(playerId, kind);
 
   return sent;
 }
@@ -163,7 +186,7 @@ export async function sendPushToAllSubscribers(
 
   const picked = dedupeByPlayer(rows);
   let sent = 0, failed = 0;
-  const toDelete: string[] = [];
+  const toDelete: PushRow[] = [];
 
   await Promise.allSettled(picked.map(async (row) => {
     try {
@@ -180,13 +203,13 @@ export async function sendPushToAllSubscribers(
       sent++;
     } catch (e: any) {
       failed++;
-      if (e.statusCode === 410 || e.statusCode === 404 || e.statusCode === 403) toDelete.push(row.endpoint);
+      if (e.statusCode === 410 || e.statusCode === 404 || e.statusCode === 403) toDelete.push(row);
       else console.error(`[push] broadcast failed status=${e?.statusCode ?? "unknown"}`);
     }
   }));
 
-  for (const ep of toDelete) {
-    await cleanStaleEndpoint(ep);
+  for (const row of toDelete) {
+    await cleanStaleEndpoint(row);
   }
 
   return { sent, failed, removed: toDelete.length };
@@ -204,7 +227,7 @@ export async function sendLocalizedBroadcast(
   const picked = dedupeByPlayer(rows);
 
   let sent = 0, failed = 0;
-  const toDelete: string[] = [];
+  const toDelete: PushRow[] = [];
 
   await Promise.allSettled(picked.map(async (row) => {
     const payload = (row.language && payloadByLang[row.language]) || fallback;
@@ -222,20 +245,17 @@ export async function sendLocalizedBroadcast(
       sent++;
     } catch (e: any) {
       failed++;
-      if (e.statusCode === 410 || e.statusCode === 404 || e.statusCode === 403) toDelete.push(row.endpoint);
+      if (e.statusCode === 410 || e.statusCode === 404 || e.statusCode === 403) toDelete.push(row);
       else console.error(`[push] localized broadcast failed status=${e?.statusCode ?? "unknown"}`);
     }
   }));
 
-  for (const ep of toDelete) {
-    await cleanStaleEndpoint(ep);
+  for (const row of toDelete) {
+    await cleanStaleEndpoint(row);
   }
 
   return { sent, failed, removed: toDelete.length };
 }
-
-const friendOnlineNotifiedAt = new Map<string, number>();
-const FRIEND_ONLINE_COOLDOWN_MS = 30 * 60 * 1000;
 
 export async function notifyFollowersPlayerOnline(
   playerId: string,
@@ -250,7 +270,6 @@ export async function notifyFollowersPlayerOnline(
 
     if (followers.length === 0) return;
 
-    const now = Date.now();
     const MSGS: Record<string, PushPayload> = {
       es: { title: "🟢 ¡Amigo conectado!", body: `${playerName} está jugando ahora. ¡Reta a partida!`, url: "/multiplayer" },
       en: { title: "🟢 Friend online!", body: `${playerName} is playing now. Challenge them!`, url: "/multiplayer" },
@@ -260,22 +279,16 @@ export async function notifyFollowersPlayerOnline(
     const msg = MSGS[language] || MSGS.es;
 
     await Promise.allSettled(followers.map(async (follower) => {
-      const dedupeKey = `${follower.followerId}:${playerId}`;
-      const lastNotified = friendOnlineNotifiedAt.get(dedupeKey) || 0;
-      if (now - lastNotified < FRIEND_ONLINE_COOLDOWN_MS) return;
-
-      const sent = await sendPushToPlayer(follower.followerId, msg);
-      if (sent > 0) friendOnlineNotifiedAt.set(dedupeKey, now);
+      try {
+        // sendPushToPlayer performs the durable PostgreSQL claim. Keeping the
+        // claim in one place prevents a double-claim on the same notification.
+        await sendPushToPlayer(follower.followerId, msg);
+      } catch {
+        // sendPushToPlayer rolls back its claim when delivery fails.
+      }
     }));
   } catch (e) {
     console.error("[pushHelper] notifyFollowersPlayerOnline error:", e);
   }
 }
 
-setInterval(() => {
-  cleanupNotificationThrottleMaps();
-  const cutoff = Date.now() - FRIEND_ONLINE_COOLDOWN_MS;
-  for (const [key, ts] of friendOnlineNotifiedAt) {
-    if (ts < cutoff) friendOnlineNotifiedAt.delete(key);
-  }
-}, 60 * 60 * 1000);

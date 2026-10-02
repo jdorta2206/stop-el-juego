@@ -1,11 +1,19 @@
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
 import { timingSafeEqual } from "crypto";
-import { db } from "@workspace/db";
+import { db, indexesReady } from "@workspace/db";
 import { sql } from "drizzle-orm";
 import { authLimiter } from "../middlewares/rateLimit";
 import { sendLocalizedBroadcast, type PushPayload } from "../lib/pushHelper";
 
 const router: IRouter = Router();
+
+router.use((_req, res, next) => {
+  if (!indexesReady()) {
+    res.setHeader("Retry-After", "2");
+    return res.status(503).json({ error: "Server warming up", ready: false });
+  }
+  next();
+});
 
 // Timing-safe string compare that tolerates length differences.
 function safeEqual(a: string, b: string): boolean {

@@ -7,6 +7,7 @@ import router from "./routes";
 import adminPanel from "./routes/admin";
 import adminAnalytics from "./routes/adminAnalytics";
 import { WebhookHandlers } from "./webhookHandlers";
+import { isStripeReady } from "./stripeClient";
 import { generalLimiter } from "./middlewares/rateLimit";
 
 // Production trigger: frontend/runtime stability fixes are deployed together with the API.
@@ -20,6 +21,10 @@ app.post(
   async (req, res) => {
     const signature = req.headers["stripe-signature"];
     if (!signature) return res.status(400).json({ error: "Missing stripe-signature" });
+    if (!isStripeReady()) {
+      res.setHeader("Retry-After", "5");
+      return res.status(503).json({ error: "Stripe is still initializing" });
+    }
     try {
       const sig = Array.isArray(signature) ? signature[0] : signature;
       if (!Buffer.isBuffer(req.body)) {
@@ -107,7 +112,7 @@ if (process.env["SERVE_CLIENT"] === "1") {
   app.get("/app-ads.txt", (_req, res) => {
     res.type("text/plain");
     res.setHeader("Cache-Control", "public, max-age=3600");
-    res.status(200).send("google.com, pub-4807272408824742, DIRECT, f08c47fec0942fa0\\n");
+    res.status(200).send("google.com, pub-4807272408824742, DIRECT, f08c47fec0942fa0\n");
   });
 
   app.get("/.well-known/assetlinks.json", (_req, res) => {

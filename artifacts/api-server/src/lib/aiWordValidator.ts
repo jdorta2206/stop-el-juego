@@ -27,37 +27,43 @@ const MODEL = "gpt-5-mini";
 const GLOBAL_DAILY_LIMIT = 500;
 const PER_PLAYER_DAILY_LIMIT = 10;
 
-// In-memory per-day counters. Reset at the start of every UTC day.
-// Process-local: if the server restarts the counter resets, which is fine
-// for our purposes — we are protecting against runaway loops, not enforcing
-// strict billing.
-let counterDay = currentUtcDay();
-let globalCounter = 0;
-const playerCounters = new Map<string, number>();
+// Persistent daily quota. The counter lives in PostgreSQL so the limit is
+// shared across Railway replicas, deploys and process restarts.
+const GLOBAL_QUOTA_SCOPE = "__global__";
+
+let aiQuotaTablesReady: Promise<void> | null = null;
+
+async function ensureAiQuotaTables(): Promise<boolean> {
+  if (!aiQuotaTablesReady) {
+    aiQuotaTablesReady = db.execute(sql`
+      CREATE TABLE IF NOT EXISTS ai_word_validation_claims (
+        cache_key text PRIMARY KEY,
+        claimed_at timestamptz NOT NULL DEFAULT NOW()
+      )
+    `).then(() => db.execute(sql`
+      CREATE TABLE IF NOT EXISTS ai_word_validation_daily_quota (
+        quota_date date NOT NULL,
+        scope text NOT NULL,
+        used integer NOT NULL DEFAULT 0,
+        PRIMARY KEY (quota_date, scope)
+      )
+    `)).then(() => undefined).catch((err) => {
+      aiQuotaTablesReady = null;
+      console.error("[aiWordValidator] failed to initialize quota tables:", err);
+      throw err;
+    });
+  }
+
+  try {
+    await aiQuotaTablesReady;
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 function currentUtcDay(): string {
   return new Date().toISOString().slice(0, 10); // YYYY-MM-DD UTC
-}
-
-function rolloverIfNewDay(): void {
-  const today = currentUtcDay();
-  if (today !== counterDay) {
-    counterDay = today;
-    globalCounter = 0;
-    playerCounters.clear();
-  }
-}
-
-function bumpAndCheckQuota(playerId: string | null): boolean {
-  rolloverIfNewDay();
-  if (globalCounter >= GLOBAL_DAILY_LIMIT) return false;
-  if (playerId) {
-    const used = playerCounters.get(playerId) ?? 0;
-    if (used >= PER_PLAYER_DAILY_LIMIT) return false;
-    playerCounters.set(playerId, used + 1);
-  }
-  globalCounter += 1;
-  return true;
 }
 
 // Lazy client — instantiated on first use so the module loads even if the
@@ -163,67 +169,139 @@ export async function validateWordWithAi(opts: AiValidationOptions): Promise<AiV
   const client = getClient();
   if (!client) return { isValid: false, source: "no_client" };
 
-  if (!bumpAndCheckQuota(playerId)) {
-    return { isValid: false, source: "quota_blocked" };
-  }
+  if (!(await ensureAiQuotaTables())) return { isValid: false, source: "error" };
 
-  // Prompt is deliberately strict and one-shot. We ask for a single token
-  // ("si"/"no") so the answer is cheap to generate and trivial to parse.
-  // We do NOT trust the model's first-letter check (the caller already did
-  // that); we only ask: "is this a real member of the category?".
-  // Permisivo a propósito: el objetivo es NO penalizar al jugador por
-  // palabras reales que simplemente no estén en nuestro diccionario estático.
-  // Aceptamos regionalismos, variantes sin tilde, sinónimos, nombres comunes
-  // de tonos/especies/etc. Solo rechazamos basura clara (random keyboard
-  // mashing, palabras de otra categoría, nombres propios de personas/marcas
-  // cuando la categoría no es nombre/marca).
-  const systemPrompt =
-    `Eres un validador permisivo para un juego de palabras tipo "Stop"/"Tutti Frutti". ` +
-    `Decides si una palabra puede aceptarse como ejemplo razonable de una categoría. ` +
-    `Responde SOLO con "si" o "no", sin nada más. ` +
-    `Sé generoso: acepta regionalismos, variantes sin tilde, formas coloquiales, tonos/matices/especies/subtipos y cualquier palabra que un hablante nativo aceptaría sin discutir. ` +
-    `Si dudas entre aceptar o rechazar, acepta. ` +
-    `Rechaza solo: palabras inventadas/aleatorias, palabras claramente de otra categoría, errores ortográficos graves que cambian la palabra.`;
+  // Cross-replica single-flight without holding a PostgreSQL connection during
+// the external OpenAI call.
+async function claimValidation(key: string): Promise<boolean> {
+  const result = await db.execute(sql`
+    INSERT INTO ai_word_validation_claims (cache_key, claimed_at)
+    VALUES (${key}, NOW())
+    ON CONFLICT (cache_key) DO UPDATE
+      SET claimed_at = NOW()
+      WHERE ai_word_validation_claims.claimed_at < NOW() - INTERVAL '30 seconds'
+    RETURNING cache_key
+  `);
+  return result.rows.length > 0;
+}
 
-  const userPrompt =
-    `Idioma: ${languageName(lang)}.\n` +
-    `Categoría: ${category}.\n` +
-    `Palabra: "${word}".\n` +
-    `¿Podría aceptarse "${word}" como ${category} en ${languageName(lang)}? Responde "si" o "no".`;
+async function releaseValidationClaim(key: string): Promise<void> {
+  await db.execute(sql`DELETE FROM ai_word_validation_claims WHERE cache_key = ${key}`);
+}
 
-  try {
-    const resp = await Promise.race([
-      client.chat.completions.create({
-        model: MODEL,
-        // gpt-5-mini is a reasoning model — `max_completion_tokens` counts
-        // reasoning tokens too. Set high enough to leave room for thought;
-        // the actual answer is just one word so output cost stays minimal.
-        max_completion_tokens: 8192,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-      }),
-      // 12s timeout — gpt-5-mini reasoning is slower than chat models but
-      // we still cap it so a slow LLM never blocks the player's scoreboard.
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("ai_validator_timeout")), 12_000),
-      ),
-    ]);
-
-    const raw = resp.choices?.[0]?.message?.content?.toLowerCase().trim() ?? "";
-    // Accept "si", "sí", "yes", "true", "1" as positive verdicts. Anything
-    // else (including the model refusing to answer) counts as "no".
-    const isValid = /^(si|sí|s|yes|y|true|1)$/.test(raw);
-
-    // Cache both positive AND negative answers — the whole point is to
-    // never ask twice. Negatives are arguably the more valuable cache
-    // entries since they prevent a player from grinding the API.
-    await writeCache(word, category, lang, isValid, MODEL);
-
-    return { isValid, source: "ai" };
-  } catch (err) {
-    console.error("[aiWordValidator] ai call failed:", err instanceof Error ? err.message : err);
-    return { isValid: false, source: "error" };
+class QuotaUnavailableError extends Error {
+  constructor() {
+    super("AI validation quota unavailable");
+    this.name = "QuotaUnavailableError";
   }
 }
+
+async function reserveDailyQuota(playerId: string | null): Promise<boolean> {
+  const quotaDate = currentUtcDay();
+  try {
+    return await db.transaction(async (tx) => {
+      const globalReservation = await tx.execute(sql`
+        INSERT INTO ai_word_validation_daily_quota (quota_date, scope, used)
+        VALUES (${quotaDate}::date, ${GLOBAL_QUOTA_SCOPE}, 1)
+        ON CONFLICT (quota_date, scope) DO UPDATE
+          SET used = ai_word_validation_daily_quota.used + 1
+          WHERE ai_word_validation_daily_quota.used < ${GLOBAL_DAILY_LIMIT}
+        RETURNING used
+      `);
+      if (globalReservation.rows.length === 0) throw new QuotaUnavailableError();
+
+      if (playerId) {
+        const playerReservation = await tx.execute(sql`
+          INSERT INTO ai_word_validation_daily_quota (quota_date, scope, used)
+          VALUES (${quotaDate}::date, ${playerId}, 1)
+          ON CONFLICT (quota_date, scope) DO UPDATE
+            SET used = ai_word_validation_daily_quota.used + 1
+            WHERE ai_word_validation_daily_quota.used < ${PER_PLAYER_DAILY_LIMIT}
+          RETURNING used
+        `);
+        if (playerReservation.rows.length === 0) throw new QuotaUnavailableError();
+      }
+
+      return true;
+    });
+  } catch (err) {
+    if (err instanceof QuotaUnavailableError) return false;
+    throw err;
+  }
+}
+
+async function waitForValidationCache(word: string, category: string, lang: string): Promise<boolean | null> {
+  const deadline = Date.now() + 13_000;
+  while (Date.now() < deadline) {
+    const cached = await lookupCachedValidation(word, category, lang);
+    if (cached !== null) return cached;
+    await new Promise((resolve) => setTimeout(resolve, 150));
+  }
+  return null;
+}
+    const claimKey = `${word}\u0000${category}\u0000${lang}`;
+    let claimed = await claimValidation(claimKey);
+    if (!claimed) {
+      const waited = await waitForValidationCache(word, category, lang);
+      if (waited !== null) return { isValid: waited, source: "cache" as const };
+      claimed = await claimValidation(claimKey);
+      if (!claimed) return { isValid: false, source: "error" as const };
+    }
+
+    try {
+      const secondCheck = await lookupCachedValidation(word, category, lang);
+      if (secondCheck !== null) return { isValid: secondCheck, source: "cache" as const };
+      const quotaAllowed = await reserveDailyQuota(playerId);
+      if (!quotaAllowed) return { isValid: false, source: "quota_blocked" as const };
+
+    const systemPrompt =
+      `Eres un validador permisivo para un juego de palabras tipo "Stop"/"Tutti Frutti". ` +
+      `Decides si una palabra puede aceptarse como ejemplo razonable de una categoría. ` +
+      `Responde SOLO con "si" o "no", sin nada más. ` +
+      `Sé generoso: acepta regionalismos, variantes sin tilde, formas coloquiales, tonos/matices/especies/subtipos y cualquier palabra que un hablante nativo aceptaría sin discutir. ` +
+      `Si dudas entre aceptar o rechazar, acepta. ` +
+      `Rechaza solo: palabras inventadas/aleatorias, palabras claramente de otra categoría, errores ortográficos graves que cambian la palabra.`;
+
+    const userPrompt =
+      `Idioma: ${languageName(lang)}.\n` +
+      `Categoría: ${category}.\n` +
+      `Palabra: "${word}".\n` +
+      `¿Podría aceptarse "${word}" como ${category} en ${languageName(lang)}? Responde "si" o "no".`;
+
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 12_000);
+      let resp;
+      try {
+        resp = await client.chat.completions.create({
+          model: MODEL,
+          max_completion_tokens: 8192,
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt },
+          ],
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timeout);
+      }
+
+      const raw = resp.choices?.[0]?.message?.content?.toLowerCase().trim() ?? "";
+      const isValid = /^(si|sí|s|yes|y|true|1)$/.test(raw);
+
+      await db.execute(sql`
+        INSERT INTO word_validation_cache (word, category, lang, is_valid, source, model)
+        VALUES (${word}, ${category}, ${lang}, ${isValid}, 'ai', ${MODEL})
+        ON CONFLICT (word, category, lang) DO NOTHING
+      `);
+
+      return { isValid, source: "ai" as const };
+    } catch (err) {
+      console.error("[aiWordValidator] ai call failed:", err instanceof Error ? err.message : err);
+      return { isValid: false, source: "error" as const };
+    }
+  } finally {
+    await releaseValidationClaim(claimKey).catch(() => {});
+  }
+}
+

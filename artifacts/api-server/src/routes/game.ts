@@ -1427,8 +1427,7 @@ function isWordValid(word: string, letter: string, category: string, language = 
   return categoryWords.some(w => {
     const nw = normalizeWord(w);
     return nw === normalizedWord ||
-      normalizedWord.startsWith(nw) ||   // e.g. "rosado" starts with "rosa" ✓
-      nw.startsWith(normalizedWord);     // e.g. "ro" prefix of "rojo" ✓
+      normalizedWord.startsWith(nw);     // e.g. "rosado" starts with "rosa" ✓
   });
 }
 
@@ -1518,18 +1517,17 @@ router.post("/validate", async (req, res) => {
   let aiTotalScore = 0;
   const validatedCollectionWords: Array<{ word: string; category: string }> = [];
 
-  for (const pr of playerResponses) {
+  // Validate categories concurrently. AI fallback calls can take up to 12s each;
+  // doing them serially would make one slow round take the sum of all timeouts.
+  const roundEvaluations = await Promise.all(playerResponses.map(async (pr) => {
     const playerWord = pr.word?.trim() || "";
     const aiWord = getAiWord(letter, pr.category, language);
-
     const normPlayerWord = normalizeWord(playerWord);
-
-    // "Repetida" only means the player and the AI wrote the exact same word in the same category
-    // (handled below by giving 5pts each). Using the same word in different categories is allowed.
-    // Player word: try dict first, AI fallback if not found (network/cache).
-    const isPlayerWordValid = await isWordValidAsync(playerWord, letter, pr.category, language, playerId);
-    // AI word comes from our own dictionary, so it never needs the AI fallback.
-    const isAiWordValid = aiWord.length > 0 && isWordValid(aiWord, letter, pr.category, language);
+    const isPlayerWordValid = await isWordValidAsync(
+      playerWord, letter, pr.category, language, playerId,
+    );
+    const isAiWordValid = aiWord.length > 0 &&
+      isWordValid(aiWord, letter, pr.category, language);
 
     let playerScore = 0;
     let aiScore = 0;
@@ -1549,26 +1547,46 @@ router.post("/validate", async (req, res) => {
       }
     } else if (isPlayerWordValid) {
       playerScore = 10;
-      aiScore = 0;
     } else if (isAiWordValid) {
-      playerScore = 0;
       aiScore = 10;
     }
 
-    const formattedAiWord = aiWord ? aiWord.charAt(0).toUpperCase() + aiWord.slice(1) : "";
-    results[pr.category] = {
-      player: { response: playerWord, isValid: isPlayerWordValid, score: playerScore },
-      ai: { response: formattedAiWord, isValid: isAiWordValid, score: aiScore },
-    };
+    const formattedAiWord = aiWord
+      ? aiWord.charAt(0).toUpperCase() + aiWord.slice(1)
+      : "";
 
-    playerTotalScore += playerScore;
-    aiTotalScore += aiScore;
+    return {
+      category: pr.category,
+      playerWord,
+      aiWord: formattedAiWord,
+      isPlayerWordValid,
+      isAiWordValid,
+      playerScore,
+      aiScore,
+    };
+  }));
+
+  for (const evaluation of roundEvaluations) {
+    results[evaluation.category] = {
+      player: {
+        response: evaluation.playerWord,
+        isValid: evaluation.isPlayerWordValid,
+        score: evaluation.playerScore,
+      },
+      ai: {
+        response: evaluation.aiWord,
+        isValid: evaluation.isAiWordValid,
+        score: evaluation.aiScore,
+      },
+    };
+    playerTotalScore += evaluation.playerScore;
+    aiTotalScore += evaluation.aiScore;
   }
 
   // 🔒 Anti-cheat: hand back a signed, single-use voucher attesting the
   // server-computed base score for this round. The client returns it when
   // submitting the final game score so the leaderboard can't be fabricated.
-  const scoreToken = issueScoreToken(playerTotalScore, validatedCollectionWords);
+  const scoreToken = issueScoreToken(playerTotalScore, validatedCollectionWords, "solo", aiTotalScore);
 
   const response = ValidateRoundResponse.parse({
     results,

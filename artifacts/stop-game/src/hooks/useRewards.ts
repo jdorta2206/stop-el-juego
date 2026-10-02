@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { getApiUrl } from "@/lib/utils";
 
 const API = getApiUrl();
@@ -72,19 +72,27 @@ export function useRewards(playerId?: string | null, onClaimed?: () => void) {
   const [collection, setCollection] = useState<CollectionRewards | null>(null);
   const [prestige, setPrestige] = useState<PrestigeRewards | null>(null);
   const [loading, setLoading] = useState(false);
+  const requestRef = useRef<AbortController | null>(null);
 
   const refresh = useCallback(async () => {
+    requestRef.current?.abort();
     if (!playerId) { setCollection(null); setPrestige(null); return; }
+    const controller = new AbortController();
+    requestRef.current = controller;
     setLoading(true);
     try {
       const [c, p] = await Promise.all([
-        fetch(`${API}/api/rewards/collection`, { credentials: "include", headers: authHeaders() }),
-        fetch(`${API}/api/rewards/prestige`, { credentials: "include", headers: authHeaders() }),
+        fetch(`${API}/api/rewards/collection`, { credentials: "include", headers: authHeaders(), signal: controller.signal }),
+        fetch(`${API}/api/rewards/prestige`, { credentials: "include", headers: authHeaders(), signal: controller.signal }),
       ]);
       if (c.ok) setCollection(await c.json());
       if (p.ok) setPrestige(await p.json());
-    } catch { /* ignore */ }
-    finally { setLoading(false); }
+    } catch {
+      if (controller.signal.aborted) return;
+    } finally {
+      if (!controller.signal.aborted) setLoading(false);
+      if (requestRef.current === controller) requestRef.current = null;
+    }
   }, [playerId]);
 
   useEffect(() => { refresh(); }, [refresh]);

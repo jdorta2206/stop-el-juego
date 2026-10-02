@@ -37,7 +37,7 @@ function writeStoredPlayer(profile: PlayerProfile | null) {
   try { window.dispatchEvent(new CustomEvent(PLAYER_EVENT)); } catch {}
 }
 
-async function tryRestoreFrom(apiBase: string): Promise<PlayerProfile | null> {
+async function tryRestoreFrom(apiBase: string): Promise<{ profile: PlayerProfile | null; unauthorized: boolean }> {
   try {
     const headers: Record<string, string> = {};
     let token: string | null = null;
@@ -48,25 +48,29 @@ async function tryRestoreFrom(apiBase: string): Promise<PlayerProfile | null> {
     // A 401 can be caused by a transient cookie/proxy/navigation race during
     // OAuth return. Never destroy the only client-side session credential here;
     // explicit logout is the operation that clears it.
-    if (res.status === 401) return null;
-    if (!res.ok) return null;
+    if (res.status === 401) return { profile: null, unauthorized: true };
+    if (!res.ok) return { profile: null, unauthorized: false };
 
     const data = await res.json();
-    if (!data?.id || !data.name) return null;
+    if (!data?.id || !data.name) return { profile: null, unauthorized: false };
     if (data.token) { try { localStorage.setItem(SESSION_TOKEN_KEY, data.token); } catch {} }
 
-    return { id: data.id, name: String(data.name).trim().slice(0, 14), avatarColor: data.avatarColor || AVATAR_COLORS[0], loginMethod: data.loginMethod ?? null, picture: data.picture ?? null, fbAccessToken: null };
-  } catch { return null; }
+    return { profile: { id: data.id, name: String(data.name).trim().slice(0, 14), avatarColor: data.avatarColor || AVATAR_COLORS[0], loginMethod: data.loginMethod ?? null, picture: data.picture ?? null, fbAccessToken: null }, unauthorized: false };
+  } catch { return { profile: null, unauthorized: false }; }
 }
 
-async function tryRestoreSession(): Promise<PlayerProfile | null> {
+async function tryRestoreSession(): Promise<{ profile: PlayerProfile | null; unauthorized: boolean }> {
   const localBase = getApiUrl();
   const restored = await tryRestoreFrom(localBase);
-  if (restored) return restored;
+  if (restored.profile) return restored;
   try {
-    if (new URL(localBase, window.location.origin).origin !== CANONICAL_API_ORIGIN) return await tryRestoreFrom(CANONICAL_API_ORIGIN);
+    if (new URL(localBase, window.location.origin).origin !== CANONICAL_API_ORIGIN) {
+      const canonical = await tryRestoreFrom(CANONICAL_API_ORIGIN);
+      if (canonical.profile) return canonical;
+      return { profile: null, unauthorized: restored.unauthorized || canonical.unauthorized };
+    }
   } catch {}
-  return null;
+  return restored;
 }
 
 export function usePlayer() {
@@ -87,15 +91,20 @@ export function usePlayer() {
         void (async () => {
           const restored = await tryRestoreSession();
           if (cancelled) return;
-          if (restored) { writeStoredPlayer(restored); setPlayer(restored); setNeedsAuth(false); }
-          else { setPlayer(stored); setNeedsAuth(false); }
+          if (restored.profile) { writeStoredPlayer(restored.profile); setPlayer(restored.profile); setNeedsAuth(false); }
+          else if (restored.unauthorized) {
+            writeStoredPlayer(null);
+            try { localStorage.removeItem(SESSION_TOKEN_KEY); } catch {}
+            setPlayer(null);
+            setNeedsAuth(true);
+          } else { setPlayer(stored); setNeedsAuth(false); }
         })();
       }
     } else {
       void (async () => {
         const restored = await tryRestoreSession();
         if (cancelled) return;
-        if (restored) { writeStoredPlayer(restored); setPlayer(restored); setNeedsAuth(false); }
+        if (restored.profile) { writeStoredPlayer(restored.profile); setPlayer(restored.profile); setNeedsAuth(false); }
         else { setPlayer(null); setNeedsAuth(true); }
         setIsLoaded(true);
       })();

@@ -63,6 +63,19 @@ export function Layout({ children }: { children: ReactNode }) {
   const showInstallStep = canInstall && installCtaAllowed;
   const [notifToast, setNotifToast] = useState<string | null>(null);
   const [showNotifPrompt, setShowNotifPrompt] = useState(false);
+  const notifToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showNotifToast = (message: string, delay = 3500) => {
+    setNotifToast(message);
+    if (notifToastTimerRef.current) clearTimeout(notifToastTimerRef.current);
+    notifToastTimerRef.current = setTimeout(() => {
+      notifToastTimerRef.current = null;
+      setNotifToast(null);
+    }, delay);
+  };
+  useEffect(() => () => {
+    if (notifToastTimerRef.current) clearTimeout(notifToastTimerRef.current);
+    notifToastTimerRef.current = null;
+  }, []);
 
   // Proactive prompt — show once per install, 3 s after first open.
   // Rules:
@@ -158,12 +171,12 @@ export function Layout({ children }: { children: ReactNode }) {
               onClick={async () => {
                 if (isSubscribed) {
                   await unsubscribe();
-                  setNotifToast("🔕 Notificaciones desactivadas");
+                  showNotifToast("🔕 Notificaciones desactivadas");
                 } else {
                   const ok = await subscribe();
-                  if (ok) setNotifToast("🔔 ¡Notificaciones activadas!");
+                  if (ok) showNotifToast("🔔 ¡Notificaciones activadas!");
                 }
-                setTimeout(() => setNotifToast(null), 3500);
+
               }}
               disabled={notifLoading}
               title={isSubscribed ? "Desactivar notificaciones" : "Activar notificaciones"}
@@ -362,8 +375,8 @@ export function Layout({ children }: { children: ReactNode }) {
                 </Link>
               </li>
               <li>
-                <Link href="/cookies" className="text-white/50 hover:text-white/80 transition-colors text-xs">
-                  Política de cookies
+                <Link href="/privacidad" className="text-white/50 hover:text-white/80 transition-colors text-xs">
+                  Privacidad y cookies
                 </Link>
               </li>
             </ul>
@@ -470,8 +483,7 @@ export function Layout({ children }: { children: ReactNode }) {
                       onClick={async () => {
                         const result = await triggerInstall();
                         if (result === "accepted") {
-                          setNotifToast("📲 ¡App instalada!");
-                          setTimeout(() => setNotifToast(null), 3000);
+                          showNotifToast("📲 ¡App instalada!", 3000);
                         }
                       }}
                       disabled={isInstalling}
@@ -510,8 +522,7 @@ export function Layout({ children }: { children: ReactNode }) {
                         onClick={async () => {
                           const ok = await subscribe();
                           if (ok) {
-                            setNotifToast("🔔 ¡Notificaciones activadas!");
-                            setTimeout(() => setNotifToast(null), 3500);
+                            showNotifToast("🔔 ¡Notificaciones activadas!");
                             setShowNotifPrompt(false);
                             localStorage.setItem("stop_notif_prompt_v1", "1");
                           }

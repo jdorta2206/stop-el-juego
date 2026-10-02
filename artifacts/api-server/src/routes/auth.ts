@@ -1,12 +1,58 @@
 import { Router } from "express";
+
+
+const OAUTH_FETCH_TIMEOUT_MS = 15_000;
+
+async function oauthFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), OAUTH_FETCH_TIMEOUT_MS);
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 import type { Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
-import { issuePlayerToken, clearPlayerToken, PLAYER_TOKEN_BRIDGE_KEY, readPlayerId } from "../lib/playerAuth";
+import { issuePlayerToken, clearPlayerToken, PLAYER_TOKEN_BRIDGE_KEY, readPlayerId, isLoggedInId } from "../lib/playerAuth";
 import { db, playerScoresTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
+import { revokePlayerId, markPlayerRevoked, restorePlayerId, isPlayerRevoked } from "../lib/playerRevocation";
 
 const router = Router();
+
+const oauthHandoffTableReady = db.execute(sql`
+  CREATE TABLE IF NOT EXISTS oauth_handoffs (
+    code_hash text PRIMARY KEY,
+    payload_json text NOT NULL,
+    expires_at timestamptz NOT NULL
+  )
+`).then(() => db.execute(sql`
+  CREATE INDEX IF NOT EXISTS oauth_handoffs_expires_idx
+    ON oauth_handoffs (expires_at)
+`)).catch((err) => {
+  console.error("[auth] failed to initialize OAuth handoff storage:", err);
+  throw err;
+});
+
+const oauthHandoffCleanup = setInterval(() => {
+  void oauthHandoffTableReady.then(() => db.execute(sql`
+    DELETE FROM oauth_handoffs WHERE expires_at <= NOW()
+  `)).catch((err) => console.error("[auth] OAuth handoff cleanup failed:", err));
+}, 5 * 60 * 1000);
+oauthHandoffCleanup.unref?.();
+
+async function createOAuthHandoff(items: [string, string][]): Promise<string> {
+  await oauthHandoffTableReady;
+  const code = crypto.randomBytes(32).toString("base64url");
+  const codeHash = crypto.createHash("sha256").update(code).digest("hex");
+  await db.execute(sql`
+    INSERT INTO oauth_handoffs (code_hash, payload_json, expires_at)
+    VALUES (${codeHash}, ${JSON.stringify(items)}, NOW() + INTERVAL '2 minutes')
+  `);
+  return code;
+}
 
 // ── OAuth response shapes ───────────────────────────────────────────────────
 // External JSON from each provider. We only declare the fields we actually read;
@@ -76,6 +122,30 @@ function pickReturnOrigin(req: Request, requestedOrigin: string | null): string 
   return APP_ORIGIN;
 }
 
+/**
+ * OAuth callbacks always land on APP_ORIGIN. When login starts from another
+ * allowlisted origin (www/TWA), bounce the start request through APP_ORIGIN
+ * first so the nonce cookie is created on the SAME origin that receives the
+ * provider callback. Without this, the callback could not bind state to the
+ * initiating browser and login-CSRF remained possible across origins.
+ */
+function redirectOAuthStartToCanonical(
+  req: Request,
+  res: Response,
+  provider: string,
+): boolean {
+  const host = req.get("host");
+  let appHost = "";
+  try { appHost = new URL(APP_ORIGIN).host; } catch { return false; }
+  if (!host || host === appHost) return false;
+
+  const returnPath = typeof req.query["return"] === "string" ? req.query["return"] : "/";
+  const requestedOrigin = typeof req.query["origin"] === "string" ? req.query["origin"] : null;
+  const returnOrigin = pickReturnOrigin(req, requestedOrigin);
+  const params = new URLSearchParams({ return: returnPath, origin: returnOrigin });
+  res.redirect(APP_ORIGIN + "/api/auth/" + provider + "/start?" + params.toString());
+  return true;
+}
 /** Encode {returnPath, returnOrigin} into the OAuth `state` param. Keep it
  *  short — Google/Facebook accept up to ~2KB but smaller is safer. */
 function encodeAuthState(returnPath: string, returnOrigin: string): string {
@@ -233,70 +303,78 @@ function claimCode(code: string): boolean {
   return true;
 }
 
-// Helper: build a tiny HTML page that writes data to sessionStorage and redirects
-function bridgePage(key: string, value: string, returnPath: string) {
-  return bridgePageMulti([[key, value]], returnPath);
-}
-
-// Multi-key bridge page — writes multiple sessionStorage entries before redirecting.
-// `returnOrigin` lets us bounce the user back to the domain they came from
-// (e.g. stopjuegodepalabras.com) instead of hardcoded APP_ORIGIN, so the TWA
-// stays inside its trusted scope. Defaults to APP_ORIGIN for legacy callers.
-function bridgePageMulti(
+// Helper: build a tiny HTML page that redirects to the destination origin.
+// OAuth material is stored server-side under a single-use, 2-minute handoff code.
+// The code is intentionally opaque and contains no session/provider credentials.
+async function bridgePageMulti(
   items: [string, string][],
   returnPath: string,
   returnOrigin: string = APP_ORIGIN,
 ) {
-  // Most items are session-scoped (OAuth profile handoff). The
-  // PLAYER_TOKEN_BRIDGE_KEY entry, however, must persist across tabs and
-  // browser restarts so daily Season Pass missions keep accumulating — write
-  // it to localStorage. NOTE: these writes only help when returnOrigin equals
-  // APP_ORIGIN (same-origin). For the cross-origin case the items are also
-  // carried in the URL hash below (see handoffDest) and imported by the
-  // destination origin; that is the path that actually fixes cross-domain login.
-  const setItems = items
-    .map(([k, v]) => {
-      const store = k === PLAYER_TOKEN_BRIDGE_KEY ? "localStorage" : "sessionStorage";
-      return `${store}.setItem(${JSON.stringify(k)}, ${JSON.stringify(v)});`;
-    })
-    .join("\n    ");
-
-  // Cross-origin handoff. The storage writes above land on APP_ORIGIN (where
-  // this bridge is served), but the user is being redirected to returnOrigin
-  // (e.g. www.stopjuegodepalabras.com / the TWA), a DIFFERENT origin whose
-  // sessionStorage/localStorage are separate — so those writes are invisible
-  // there and the session wouldn't "stick" (user bounced back to login). To
-  // fix that we ALSO carry the items in the URL hash: the destination imports
-  // them into its OWN storage on load (consumeAuthHandoff). The hash fragment
-  // is never sent to servers / access logs and is stripped client-side on
-  // arrival so the token doesn't linger in the address bar.
+  const handoffCode = await createOAuthHandoff(items);
   const baseDest = returnOrigin + returnPath;
-  // Use a query parameter for the cross-origin handoff. Some Android/TWA
-  // navigation paths can drop URL fragments during an OAuth return, which
-  // leaves the player on the login screen even though Facebook completed.
-  // consumeAuthHandoff() accepts both query and hash forms and removes the
-  // parameter immediately before React mounts.
   const separator = baseDest.includes("?") ? "&" : "?";
-  const handoffDest = baseDest + separator +
-    "stopauth=" + encodeURIComponent(JSON.stringify(items));
+  const handoffDest = baseDest + separator + "stopauth=" + encodeURIComponent(handoffCode);
+
   return `<!DOCTYPE html><html><head><meta charset="utf-8">
 <title>Conectando...</title>
 <style>body{background:#0d1757;color:white;font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;}
 .logo{text-align:center;}.spinner{width:40px;height:40px;border:4px solid rgba(255,255,255,.2);border-top-color:#f9a825;border-radius:50%;animation:spin 0.8s linear infinite;margin:16px auto;}
 @keyframes spin{to{transform:rotate(360deg)}}</style></head>
 <body><div class="logo"><div class="spinner"></div><p>Conectando cuenta...</p></div>
-<script>
-  try {
-    ${setItems}
-  } catch(e) {}
-  window.location.replace(${JSON.stringify(handoffDest)});
-</script>
+<script>window.location.replace(${JSON.stringify(handoffDest)});</script>
 </body></html>`;
 }
+
+// The destination redeems the opaque handoff with POST, so the actual OAuth
+// session token and provider token never travel in a URL, Referer, or access log.
+router.post("/handoff", async (req: Request, res: Response) => {
+  const code = typeof req.body?.code === "string" ? req.body.code : "";
+  if (!/^[A-Za-z0-9_-]{40,64}$/.test(code)) {
+    return res.status(400).json({ error: "Invalid handoff code" });
+  }
+
+  try {
+    await oauthHandoffTableReady;
+    const codeHash = crypto.createHash("sha256").update(code).digest("hex");
+
+    const payload = await db.transaction(async (tx) => {
+      const rows = await tx.execute(sql`
+        SELECT payload_json
+        FROM oauth_handoffs
+        WHERE code_hash = ${codeHash}
+          AND expires_at > NOW()
+        FOR UPDATE
+      `);
+      const row = (rows.rows as any[])[0];
+      if (!row) return null;
+      await tx.execute(sql`DELETE FROM oauth_handoffs WHERE code_hash = ${codeHash}`);
+      return typeof row.payload_json === "string" ? row.payload_json : null;
+    });
+
+    if (!payload) {
+      return res.status(410).json({ error: "Handoff expired or already used" });
+    }
+
+    let items: unknown;
+    try { items = JSON.parse(payload); } catch {
+      return res.status(500).json({ error: "Invalid handoff payload" });
+    }
+    if (!Array.isArray(items)) {
+      return res.status(500).json({ error: "Invalid handoff payload" });
+    }
+
+    return res.json({ items });
+  } catch (err: any) {
+    console.error("[auth/handoff] redemption failed:", err?.message ?? err);
+    return res.status(503).json({ error: "OAuth handoff unavailable" });
+  }
+});
 
 // ── GOOGLE ─────────────────────────────────────────────────────────────────────
 
 router.get("/google/start", (req: Request, res: Response) => {
+  if (redirectOAuthStartToCanonical(req, res, "google")) return;
   const GOOGLE_CLIENT_ID = process.env["VITE_GOOGLE_CLIENT_ID"];
   if (!GOOGLE_CLIENT_ID) {
     return res.redirect(`${APP_ORIGIN}/?auth_error=google_not_configured`);
@@ -341,7 +419,7 @@ router.get("/google/callback", async (req: Request, res: Response) => {
     const redirectUri = `${APP_ORIGIN}/api/auth/google/callback`;
 
     // Exchange code → tokens
-    const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
+    const tokenRes = await oauthFetch("https://oauth2.googleapis.com/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
@@ -368,11 +446,10 @@ router.get("/google/callback", async (req: Request, res: Response) => {
       ) as OAuthProfile;
     } else if (tokenData.access_token) {
       // Fallback: use userinfo endpoint
-      const userinfoRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+      const userinfoRes = await oauthFetch("https://www.googleapis.com/oauth2/v3/userinfo", {
         headers: { Authorization: `Bearer ${tokenData.access_token}` },
       });
       payload = (await userinfoRes.json()) as OAuthProfile;
-      console.log("Google userinfo payload:", JSON.stringify(payload));
     } else {
       throw new Error("No id_token or access_token in Google response");
     }
@@ -389,8 +466,9 @@ router.get("/google/callback", async (req: Request, res: Response) => {
       provider: "google",
     });
 
+    await restorePlayerId(playerId);
     const sessionToken = issuePlayerToken(res, playerId);
-    res.send(bridgePageMulti([
+    res.send(await bridgePageMulti([
       ["oauth_user", user],
       ...(sessionToken ? [[PLAYER_TOKEN_BRIDGE_KEY, sessionToken] as [string, string]] : []),
     ], returnPath, returnOrigin));
@@ -403,6 +481,7 @@ router.get("/google/callback", async (req: Request, res: Response) => {
 // ── FACEBOOK ───────────────────────────────────────────────────────────────────
 
 router.get("/facebook/start", (req: Request, res: Response) => {
+  if (redirectOAuthStartToCanonical(req, res, "facebook")) return;
   const FACEBOOK_APP_ID = process.env["VITE_FACEBOOK_APP_ID"];
   if (!FACEBOOK_APP_ID) {
     return res.redirect(`${APP_ORIGIN}/?auth_error=facebook_not_configured`);
@@ -445,7 +524,7 @@ router.get("/facebook/callback", async (req: Request, res: Response) => {
     const redirectUri = `${APP_ORIGIN}/api/auth/facebook/callback`;
 
     // Exchange code → access token
-    const tokenRes = await fetch(
+    const tokenRes = await oauthFetch(
       `https://graph.facebook.com/v26.0/oauth/access_token?` +
       new URLSearchParams({ client_id: FACEBOOK_APP_ID, redirect_uri: redirectUri, client_secret: FACEBOOK_APP_SECRET, code })
     );
@@ -453,7 +532,7 @@ router.get("/facebook/callback", async (req: Request, res: Response) => {
     if (!tokenData.access_token) throw new Error("No access_token");
 
     // Fetch profile
-    const meRes = await fetch(
+    const meRes = await oauthFetch(
       `https://graph.facebook.com/v26.0/me?fields=id,name,email,picture.type(large)&access_token=${tokenData.access_token}`
     );
     const me = (await meRes.json()) as OAuthProfile;
@@ -492,8 +571,9 @@ router.get("/facebook/callback", async (req: Request, res: Response) => {
       provider: "facebook",
     });
 
+    await restorePlayerId(playerId);
     const sessionToken = issuePlayerToken(res, playerId);
-    res.send(bridgePageMulti([
+    res.send(await bridgePageMulti([
       ["oauth_user", user],
       ["fb_access_token", tokenData.access_token],
       ...(sessionToken ? [[PLAYER_TOKEN_BRIDGE_KEY, sessionToken] as [string, string]] : []),
@@ -507,6 +587,7 @@ router.get("/facebook/callback", async (req: Request, res: Response) => {
 // ── INSTAGRAM ─────────────────────────────────────────────────────────────────
 
 router.get("/instagram/start", (req: Request, res: Response) => {
+  if (redirectOAuthStartToCanonical(req, res, "instagram")) return;
   const INSTAGRAM_CLIENT_ID = process.env["INSTAGRAM_CLIENT_ID"];
   if (!INSTAGRAM_CLIENT_ID) {
     return res.redirect(`${APP_ORIGIN}/?auth_error=instagram_not_configured`);
@@ -547,7 +628,7 @@ router.get("/instagram/callback", async (req: Request, res: Response) => {
   try {
     const redirectUri = `${APP_ORIGIN}/api/auth/instagram/callback`;
 
-    const tokenRes = await fetch("https://api.instagram.com/oauth/access_token", {
+    const tokenRes = await oauthFetch("https://api.instagram.com/oauth/access_token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
@@ -565,7 +646,7 @@ router.get("/instagram/callback", async (req: Request, res: Response) => {
     }
     if (!tokenData.access_token) throw new Error("No access_token from Instagram");
 
-    const meRes = await fetch(
+    const meRes = await oauthFetch(
       `https://graph.instagram.com/v21.0/me?fields=id,username,profile_picture_url&access_token=${tokenData.access_token}`
     );
     const me = (await meRes.json()) as OAuthProfile;
@@ -580,8 +661,9 @@ router.get("/instagram/callback", async (req: Request, res: Response) => {
 
     await db.insert(playerScoresTable).values({ playerId, playerName: String(me.username || me.name || "Usuario").trim().slice(0, 14) || "Usuario", avatarColor: "#f9a825", profilePicture: me.profile_picture_url || null }).onConflictDoUpdate({ target: playerScoresTable.playerId, set: { playerName: String(me.username || me.name || "Usuario").trim().slice(0, 14) || "Usuario", profilePicture: me.profile_picture_url || null, updatedAt: new Date() } });
 
+    await restorePlayerId(playerId);
     const sessionToken = issuePlayerToken(res, playerId);
-    res.send(bridgePageMulti([
+    res.send(await bridgePageMulti([
       ["oauth_user", user],
       ...(sessionToken ? [[PLAYER_TOKEN_BRIDGE_KEY, sessionToken] as [string, string]] : []),
     ], returnPath, returnOrigin));
@@ -611,6 +693,7 @@ function makeAppleClientSecret(): string {
 }
 
 router.get("/apple/start", (req: Request, res: Response) => {
+  if (redirectOAuthStartToCanonical(req, res, "apple")) return;
   const APPLE_CLIENT_ID = process.env["APPLE_CLIENT_ID"];
   if (!APPLE_CLIENT_ID) {
     return res.redirect(`${APP_ORIGIN}/?auth_error=apple_not_configured`);
@@ -654,7 +737,7 @@ router.post("/apple/callback", async (req: Request, res: Response) => {
     const clientSecret = makeAppleClientSecret();
 
     // Exchange code → tokens
-    const tokenRes = await fetch("https://appleid.apple.com/auth/token", {
+    const tokenRes = await oauthFetch("https://appleid.apple.com/auth/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
@@ -687,22 +770,24 @@ router.post("/apple/callback", async (req: Request, res: Response) => {
     } catch (_) {}
 
     const playerId = `apple_${payload.sub}`;
+    const appleName = displayName.slice(0, 14) || "Apple User";
+    const hasAppleName = displayName !== "Apple User";
 
-    // Persist the Apple profile just like Google/Facebook/Instagram.
-    // Without this row, a later /api/auth/me restore kept the session cookie
-    // but returned name/avatar as null after the OAuth handoff was gone.
+    // Apple normally sends the name only on the first authorization. On later
+    // logins req.body.user is absent, so never overwrite an existing profile
+    // name with the fallback "Apple User".
     await db
       .insert(playerScoresTable)
       .values({
         playerId,
-        playerName: displayName.slice(0, 14) || "Apple User",
+        playerName: appleName,
         avatarColor: "#f9a825",
         profilePicture: null,
       })
       .onConflictDoUpdate({
         target: playerScoresTable.playerId,
         set: {
-          playerName: displayName.slice(0, 14) || "Apple User",
+          ...(hasAppleName ? { playerName: appleName } : {}),
           updatedAt: new Date(),
         },
       });
@@ -715,8 +800,9 @@ router.post("/apple/callback", async (req: Request, res: Response) => {
       provider: "apple",
     });
 
+    await restorePlayerId(playerId);
     const sessionToken = issuePlayerToken(res, playerId);
-    res.send(bridgePageMulti([
+    res.send(await bridgePageMulti([
       ["oauth_user", user],
       ...(sessionToken ? [[PLAYER_TOKEN_BRIDGE_KEY, sessionToken] as [string, string]] : []),
     ], returnPath, returnOrigin));
@@ -729,6 +815,7 @@ router.post("/apple/callback", async (req: Request, res: Response) => {
 // ── TIKTOK ────────────────────────────────────────────────────────────────────
 
 router.get("/tiktok/start", (req: Request, res: Response) => {
+  if (redirectOAuthStartToCanonical(req, res, "tiktok")) return;
   const TIKTOK_CLIENT_KEY = process.env["TIKTOK_CLIENT_KEY"]?.trim();
   if (!TIKTOK_CLIENT_KEY) {
     return res.redirect(`${APP_ORIGIN}/?auth_error=tiktok_not_configured`);
@@ -766,7 +853,7 @@ router.get("/tiktok/callback", async (req: Request, res: Response) => {
   try {
     const redirectUri = `${APP_ORIGIN}/api/auth/tiktok/callback`;
 
-    const tokenRes = await fetch("https://open.tiktokapis.com/v2/oauth/token/", {
+    const tokenRes = await oauthFetch("https://open.tiktokapis.com/v2/oauth/token/", {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
@@ -788,15 +875,37 @@ router.get("/tiktok/callback", async (req: Request, res: Response) => {
     if (!accessToken) throw new Error("No access_token from TikTok");
 
     const openId = tokenData.open_id || tokenData.data?.open_id;
+    if (typeof openId !== "string" || !openId.trim()) {
+      throw new Error("TikTok OAuth response missing open_id");
+    }
 
-    const meRes = await fetch(
+    const meRes = await oauthFetch(
       "https://open.tiktokapis.com/v2/user/info/?fields=open_id,display_name,avatar_url",
       { headers: { Authorization: `Bearer ${accessToken}` } }
     );
     const meData = (await meRes.json()) as TikTokUserResponse;
     const me = meData.data?.user || meData.user || {};
 
-    const playerId = `tt_${me.open_id || openId}`;
+    const resolvedOpenId = typeof me.open_id === "string" && me.open_id.trim() ? me.open_id : openId;
+    const playerId = `tt_${resolvedOpenId}`;
+
+    await db
+      .insert(playerScoresTable)
+      .values({
+        playerId,
+        playerName: String(me.display_name || "Tiktoker").trim().slice(0, 14) || "Tiktoker",
+        avatarColor: "#f9a825",
+        profilePicture: me.avatar_url || null,
+      })
+      .onConflictDoUpdate({
+        target: playerScoresTable.playerId,
+        set: {
+          playerName: String(me.display_name || "Tiktoker").trim().slice(0, 14) || "Tiktoker",
+          profilePicture: me.avatar_url || null,
+          updatedAt: new Date(),
+        },
+      });
+
     const user = JSON.stringify({
       id:       playerId,
       name:     me.display_name || "TikToker",
@@ -804,8 +913,9 @@ router.get("/tiktok/callback", async (req: Request, res: Response) => {
       provider: "tiktok",
     });
 
+    await restorePlayerId(playerId);
     const sessionToken = issuePlayerToken(res, playerId);
-    res.send(bridgePageMulti([
+    res.send(await bridgePageMulti([
       ["oauth_user", user],
       ...(sessionToken ? [[PLAYER_TOKEN_BRIDGE_KEY, sessionToken] as [string, string]] : []),
     ], returnPath, returnOrigin));
@@ -824,7 +934,7 @@ router.get("/tiktok/callback", async (req: Request, res: Response) => {
 // session by another year so casual players never get kicked out.
 router.get("/me", async (req: Request, res: Response) => {
   const playerId = readPlayerId(req);
-  if (!playerId) {
+  if (!playerId || isPlayerRevoked(playerId)) {
     return res.status(401).json({ error: "Not authenticated" });
   }
 
@@ -901,6 +1011,208 @@ router.get("/me", async (req: Request, res: Response) => {
 // always 200 so the client can fire it best-effort during logout without
 // caring about the result. The client also wipes its localStorage profile and
 // bridge token; this handles the cross-origin httpOnly cookie.
+router.post("/delete-account", async (req: Request, res: Response) => {
+  const playerId = readPlayerId(req);
+  if (!playerId || !isLoggedInId(playerId)) {
+    return res.status(401).json({ error: "Authentication required" });
+  }
+
+  try {
+    const rows = await db.execute(sql`
+      SELECT player_id, stripe_customer_id
+      FROM player_scores
+      WHERE player_id = ${playerId}
+      LIMIT 1
+    `);
+    const row = rows.rows?.[0] as
+      | { player_id: string; stripe_customer_id: string | null }
+      | undefined;
+
+    if (!row) {
+      clearPlayerToken(res);
+      return res.json({ ok: true, deleted: false });
+    }
+
+    // Cancel/delete the Stripe customer before removing the local account so
+    // an active web subscription cannot survive the account deletion.
+    if (row.stripe_customer_id) {
+      try {
+        const { getUncachableStripeClient } = await import("../stripeClient");
+        const stripe = await getUncachableStripeClient();
+        await stripe.customers.del(row.stripe_customer_id);
+      } catch (stripeError) {
+        console.error("[auth/delete-account] Stripe customer deletion failed:", stripeError);
+        return res.status(502).json({
+          error: "No se pudo completar la cancelación de la suscripción. Tu cuenta no se ha eliminado.",
+        });
+      }
+    }
+
+    await db.transaction(async (tx) => {
+      await revokePlayerId(playerId, tx);
+      const locked = await tx.execute(sql`
+        SELECT player_id
+        FROM player_scores
+        WHERE player_id = ${playerId}
+        FOR UPDATE
+      `);
+      if (!locked.rows?.length) return;
+
+      // Delete user-owned records from every current/future table that uses
+      // player_id, except immutable billing ledgers retained for audit.
+      const tableRows = await tx.execute(sql`
+        SELECT table_schema, table_name
+        FROM information_schema.columns
+        WHERE column_name = 'player_id'
+          AND table_schema = 'public'
+          AND table_name NOT IN ('player_scores', 'play_subscriptions', 'play_product_purchases', 'revoked_player_ids')
+        GROUP BY table_schema, table_name
+      `);
+
+      for (const table of tableRows.rows as Array<{ table_schema: string; table_name: string }>) {
+        const qualified = `"${table.table_schema.replace(/"/g, '""')}"."${table.table_name.replace(/"/g, '""')}"`;
+        const escapedPlayerId = playerId.replace(/'/g, "''");
+        await tx.execute(sql.raw(
+          `DELETE FROM ${qualified} WHERE "player_id" = '${escapedPlayerId}'`,
+        ));
+      }
+
+      // player_challenges uses from_player_id/to_player_id rather than the
+      // generic player_id column, so it is not covered by the purge above.
+      // Remove both incoming and outgoing challenges before deleting the
+      // account, otherwise a deleted player can remain in pending/history
+      // challenge records.
+      await tx.execute(sql`
+        DELETE FROM player_challenges
+        WHERE from_player_id = ${playerId} OR to_player_id = ${playerId}
+      `);
+
+      // Follows uses follower_id/followed_id rather than player_id, so it is
+      // not covered by the generic player_id purge above. Remove both sides
+      // of the relationship to avoid orphaned references to a deleted account.
+      await tx.execute(sql`
+        DELETE FROM follows
+        WHERE follower_id = ${playerId} OR followed_id = ${playerId}
+      `);
+
+      // A room/tournament can also retain non-host participants only inside
+      // players_json (and tournaments additionally in bracket_json). Remove
+      // the deleted player from those blobs while holding the row lock so a
+      // concurrent join/leave cannot reintroduce the stale identity.
+      const roomRows = await tx.execute(sql`
+        SELECT id, players_json
+        FROM rooms
+        WHERE host_id <> ${playerId}
+          AND players_json LIKE ${"%" + playerId + "%"}
+        FOR UPDATE
+      `);
+      for (const room of roomRows.rows as Array<{ id: number; players_json: string }>) {
+        let players: any[] = [];
+        try {
+          const parsed = JSON.parse(room.players_json);
+          players = Array.isArray(parsed) ? parsed : [];
+        } catch {
+          continue;
+        }
+        const filtered = players.filter((p) => p?.playerId !== playerId);
+        if (filtered.length !== players.length) {
+          await tx.execute(sql`
+            UPDATE rooms
+            SET players_json = ${JSON.stringify(filtered)}, updated_at = NOW()
+            WHERE id = ${room.id}
+          `);
+        }
+      }
+
+      const tournamentRows = await tx.execute(sql`
+        SELECT id, players_json, bracket_json
+        FROM tournaments
+        WHERE host_id <> ${playerId}
+          AND (players_json LIKE ${"%" + playerId + "%"} OR bracket_json LIKE ${"%" + playerId + "%"})
+        FOR UPDATE
+      `);
+      for (const tournament of tournamentRows.rows as Array<{
+        id: number;
+        players_json: string;
+        bracket_json: string | null;
+      }>) {
+        let players: any[] = [];
+        try {
+          const parsed = JSON.parse(tournament.players_json);
+          players = Array.isArray(parsed) ? parsed : [];
+        } catch {}
+
+        const filteredPlayers = players.filter((p) => p?.playerId !== playerId);
+        let bracket = null as any;
+        try {
+          bracket = tournament.bracket_json ? JSON.parse(tournament.bracket_json) : null;
+        } catch {}
+
+        let bracketChanged = false;
+        const scrub = (value: any): any => {
+          if (Array.isArray(value)) return value.map(scrub);
+          if (!value || typeof value !== "object") return value;
+          const obj = value as Record<string, any>;
+          const out: Record<string, any> = {};
+          const p1Removed = obj.p1Id === playerId;
+          const p2Removed = obj.p2Id === playerId;
+          const winnerRemoved = obj.winnerId === playerId;
+          if (p1Removed || p2Removed || winnerRemoved) bracketChanged = true;
+          for (const [key, val] of Object.entries(obj)) {
+            if (key === "p1Id" && p1Removed) out[key] = null;
+            else if (key === "p2Id" && p2Removed) out[key] = null;
+            else if (key === "winnerId" && winnerRemoved) out[key] = null;
+            else if (key === "p1Name" && p1Removed) out[key] = "TBD";
+            else if (key === "p2Name" && p2Removed) out[key] = "TBD";
+            else if (key === "winnerName" && winnerRemoved) out[key] = null;
+            else out[key] = scrub(val);
+          }
+          return out;
+        };
+        const cleanedBracket = bracket ? scrub(bracket) : bracket;
+
+        if (filteredPlayers.length !== players.length || bracketChanged) {
+          await tx.execute(sql`
+            UPDATE tournaments
+            SET players_json = ${JSON.stringify(filteredPlayers)},
+                bracket_json = ${cleanedBracket == null ? null : JSON.stringify(cleanedBracket)},
+                updated_at = NOW()
+            WHERE id = ${tournament.id}
+          `);
+        }
+      }
+
+      // Hosts are removed entirely; participant references above are scrubbed
+      // before these host-owned rows are deleted.
+      await tx.execute(sql`DELETE FROM rooms WHERE host_id = ${playerId}`);
+      await tx.execute(sql`DELETE FROM tournaments WHERE host_id = ${playerId}`);
+
+      // Keep Google Play purchase ledgers but sever their link to the deleted
+      // account and remove stored provider payloads that may contain PII.
+      const deletedId = sql`CONCAT('deleted_', LEFT(md5(${playerId} || ${Date.now()}::text), 24))`;
+      await tx.execute(sql`
+        UPDATE play_subscriptions
+        SET player_id = ${deletedId}, raw_json = '{}', updated_at = NOW()
+        WHERE player_id = ${playerId}
+      `);
+      await tx.execute(sql`
+        UPDATE play_product_purchases
+        SET player_id = ${deletedId}, raw_json = '{}', updated_at = NOW()
+        WHERE player_id = ${playerId}
+      `);
+
+      await tx.execute(sql`DELETE FROM player_scores WHERE player_id = ${playerId}`);
+    });
+
+    markPlayerRevoked(playerId);
+    clearPlayerToken(res);
+    return res.json({ ok: true, deleted: true });
+  } catch (error) {
+    console.error("[auth/delete-account] error:", error);
+    return res.status(500).json({ error: "No se pudo eliminar la cuenta. Inténtalo de nuevo." });
+  }
+});
+
 router.post("/logout", (_req: Request, res: Response) => {
   clearPlayerToken(res);
   res.json({ ok: true });

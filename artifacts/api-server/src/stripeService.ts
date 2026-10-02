@@ -2,19 +2,23 @@ import { stripeStorage } from "./stripeStorage";
 import { getUncachableStripeClient } from "./stripeClient";
 
 export class StripeService {
-  async createCustomer(email: string, playerId: string) {
+  async createCustomer(email: string, playerId: string, idempotencyKey?: string) {
     const stripe = await getUncachableStripeClient();
-    return await stripe.customers.create({
-      email,
-      metadata: { playerId },
-    });
+    return await stripe.customers.create(
+      {
+        email,
+        metadata: { playerId },
+      },
+      idempotencyKey ? { idempotencyKey } : undefined
+    );
   }
 
   async createCheckoutSession(
     customerId: string,
     priceId: string,
     successUrl: string,
-    cancelUrl: string
+    cancelUrl: string,
+    idempotencyKey?: string
   ) {
     const stripe = await getUncachableStripeClient();
     return await stripe.checkout.sessions.create({
@@ -30,7 +34,7 @@ export class StripeService {
       subscription_data: { trial_period_days: 7 },
       success_url: successUrl,
       cancel_url: cancelUrl,
-    });
+    }, idempotencyKey ? { idempotencyKey } : undefined);
   }
 
   // One-time payment session (mode: "payment") for the World Cup pack.
@@ -47,7 +51,8 @@ export class StripeService {
       metadata: Record<string, string>;
     },
     successUrl: string,
-    cancelUrl: string
+    cancelUrl: string,
+    idempotencyKey?: string
   ) {
     const stripe = await getUncachableStripeClient();
     return await stripe.checkout.sessions.create({
@@ -67,7 +72,7 @@ export class StripeService {
       metadata: opts.metadata,
       success_url: successUrl,
       cancel_url: cancelUrl,
-    });
+    }, idempotencyKey ? { idempotencyKey } : undefined);
   }
 
   async createCustomerPortalSession(customerId: string, returnUrl: string) {

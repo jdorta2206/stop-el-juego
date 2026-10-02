@@ -93,6 +93,17 @@ export function RewardedAd({ onComplete, onSkip, playerId, rewardType = "points"
   const [phase, setPhase] = useState<"pre" | "loading" | "error" | "done">("pre");
   const [errorDetail, setErrorDetail] = useState<string>("");
   const t = getT();
+  const timeoutRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
+  const mountedRef = useRef(true);
+  const onCompleteRef = useRef(onComplete);
+  const onSkipRef = useRef(onSkip);
+  onCompleteRef.current = onComplete;
+  onSkipRef.current = onSkip;
+  useEffect(() => () => {
+    mountedRef.current = false;
+    if (timeoutRef.current !== null) window.clearTimeout(timeoutRef.current);
+    timeoutRef.current = null;
+  }, []);
   const labels = { points: `+${rewardAmount} pts`, hint: t.ads.reward, extraTime: "+30s" };
   const icons = { points: <Star className="w-8 h-8 text-[#f9a825]" />, hint: <Zap className="w-8 h-8 text-[#f9a825]" />, extraTime: <Gift className="w-8 h-8 text-[#f9a825]" /> };
 
@@ -116,10 +127,14 @@ export function RewardedAd({ onComplete, onSkip, playerId, rewardType = "points"
     if (bridgeReady || knownTwa) {
       const result = await requestRewardedAd(placement);
       if (result.rewarded === true && (result.source === "admob" || result.source === "client")) {
+        if (!mountedRef.current) return;
         setPhase("done");
         void trackAnalyticsEvent("rewarded_ad_completed", { metadata: { placement, source: result.source } });
         void trackAnalyticsEvent("powerup_used", { metadata: { powerup: placement } });
-        window.setTimeout(() => onComplete(rewardAmount), 500);
+        timeoutRef.current = window.setTimeout(() => {
+          timeoutRef.current = null;
+          if (mountedRef.current) onCompleteRef.current(rewardAmount);
+        }, 500);
       } else {
         const detail = [
           result.errorCode != null ? `código ${result.errorCode}` : "",
@@ -128,20 +143,32 @@ export function RewardedAd({ onComplete, onSkip, playerId, rewardType = "points"
         ].filter(Boolean).join(" · ");
         setErrorDetail(detail);
         void trackAnalyticsEvent("rewarded_ad_failed", { metadata: { placement, error: detail.slice(0, 300) } });
+        if (!mountedRef.current) return;
         setPhase("error");
-        window.setTimeout(() => onSkip(), detail ? 5000 : 900);
+        timeoutRef.current = window.setTimeout(() => {
+          timeoutRef.current = null;
+          if (mountedRef.current) onSkipRef.current();
+        }, detail ? 5000 : 900);
       }
       return;
     }
 
     setErrorDetail("El puente nativo de anuncios no está disponible.");
+    if (!mountedRef.current) return;
     setPhase("error");
-    window.setTimeout(() => onSkip(), 5000);
+    timeoutRef.current = window.setTimeout(() => {
+      timeoutRef.current = null;
+      if (mountedRef.current) onSkipRef.current();
+    }, 5000);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Error desconocido";
       setErrorDetail(message.slice(0, 300));
+      if (!mountedRef.current) return;
       setPhase("error");
-      window.setTimeout(() => onSkip(), 5000);
+      timeoutRef.current = window.setTimeout(() => {
+        timeoutRef.current = null;
+        if (mountedRef.current) onSkipRef.current();
+      }, 5000);
     }
   };
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { getApiUrl } from "@/lib/utils";
 
 const API = getApiUrl();
@@ -62,21 +62,34 @@ export interface InventorySnapshot {
 export function useInventory(playerId?: string | null) {
   const [data, setData] = useState<InventorySnapshot | null>(null);
   const [loading, setLoading] = useState(false);
+  const refreshAbortRef = useRef<AbortController | null>(null);
 
   const refresh = useCallback(async () => {
     if (!playerId) { setData(null); return; }
+    refreshAbortRef.current?.abort();
+    const controller = new AbortController();
+    refreshAbortRef.current = controller;
     setLoading(true);
     try {
       const res = await fetch(`${API}/api/inventory`, {
         credentials: "include",
         headers: authHeaders(),
+        signal: controller.signal,
       });
-      if (res.ok) setData(await res.json());
+      if (res.ok && !controller.signal.aborted) setData(await res.json());
     } catch { /* ignore */ }
-    finally { setLoading(false); }
+    finally {
+      if (refreshAbortRef.current === controller) {
+        refreshAbortRef.current = null;
+        setLoading(false);
+      }
+    }
   }, [playerId]);
 
-  useEffect(() => { refresh(); }, [refresh]);
+  useEffect(() => {
+    void refresh();
+    return () => { refreshAbortRef.current?.abort(); };
+  }, [refresh]);
 
   const equip = useCallback(async (kind: EquipKind, value: string | null) => {
     if (!playerId) return null;
