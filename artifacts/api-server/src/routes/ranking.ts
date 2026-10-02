@@ -745,7 +745,34 @@ router.post("/scores", scoreLimiter, async (req, res) => {
       }
 
       let txPlayer;
+      let txNewStreak = newStreak;
+      let txUpdatedToday = updatedToday;
+      let txStreakDaysJson = newStreakDaysJson;
+
       if (existing.length > 0) {
+    // Re-read the authoritative streak under the same row lock used for the
+    // score update. The pre-transaction snapshot can be stale when two games
+    // finish concurrently for the same player.
+    const lockedStreak = await tx.execute(sql`
+      SELECT current_streak, last_played_date, streak_days_json
+      FROM player_scores
+      WHERE player_id = ${playerId}
+      FOR UPDATE
+    `) as unknown as { rows?: Array<{
+      current_streak: number;
+      last_played_date: string | null;
+      streak_days_json: string;
+    }> };
+    const streakRow = lockedStreak.rows?.[0];
+    if (!streakRow) throw new Error("SCORE_PLAYER_LOCK_FAILED");
+
+    const txStreak = calculateStreak(streakRow.last_played_date, streakRow.current_streak ?? 0);
+    txNewStreak = txStreak.newStreak;
+    txUpdatedToday = txStreak.updatedToday;
+    txStreakDaysJson = txUpdatedToday
+      ? appendStreakDay(streakRow.streak_days_json, today)
+      : undefined;
+
     const [updated] = await tx
       .update(playerScoresTable)
       .set({
@@ -762,11 +789,11 @@ router.post("/scores", scoreLimiter, async (req, res) => {
         // to overwrite a newer, higher level with a stale lower one.
         level: sql`GREATEST(${playerScoresTable.level}, ${newLevel})`,
         ...(coinGain > 0 ? { coins: sql`${playerScoresTable.coins} + ${coinGain}` } : {}),
-        ...(!isBonus && updatedToday ? {
-          currentStreak: newStreak,
-          longestStreak: newLongest,
+        ...(!isBonus && txUpdatedToday ? {
+          currentStreak: txNewStreak,
+          longestStreak: sql`GREATEST(${playerScoresTable.longestStreak}, ${txNewStreak})`,
           lastPlayedDate: today,
-          streakDaysJson: newStreakDaysJson,
+          streakDaysJson: txStreakDaysJson,
         } : {}),
         updatedAt: new Date(),
       })
@@ -868,7 +895,7 @@ router.post("/scores", scoreLimiter, async (req, res) => {
             { type: "play_game", value: 1 },
             ...(effectiveWon ? [{ type: "win_game", value: 1 }] : []),
             { type: "round_score", value: score },
-            { type: "streak", value: newStreak },
+            { type: "streak", value: txNewStreak },
             ...(collectionWords.length > 0 ? [{ type: "valid_words", value: collectionWords.length }] : []),
           ],
         );
