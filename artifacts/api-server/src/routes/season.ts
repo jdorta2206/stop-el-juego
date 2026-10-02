@@ -721,6 +721,20 @@ router.post("/claim-mission", requirePlayerIdentity, async (req: AuthedRequest, 
 
     // Atomic claim guard: lock row, re-check claimed flag, update inside the same tx.
     const claim = await db.transaction(async (tx) => {
+      // Serialize claims with season finalization and re-check that this season
+      // is still active. The season can roll over between getOrCreateActiveSeason()
+      // above and this transaction (midnight UTC), so the pre-transaction lookup
+      // alone is not sufficient to authorize a claim.
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(${season.id}::bigint)`);
+      const activeSeason = (await tx.execute(sql`
+        SELECT 1 FROM seasons
+        WHERE id = ${season.id} AND end_date >= ${today}
+        LIMIT 1
+      `)) as unknown as SqlResult<{ "?column?": number }>;
+      if ((activeSeason.rows?.length ?? 0) === 0) {
+        return { ok: false as const, error: "Season has ended", status: 409 };
+      }
+
       const locked = (await tx.execute(sql`
         SELECT id, xp, missions_json FROM season_progress WHERE id = ${progress.id} FOR UPDATE
       `)) as unknown as SqlResult<Pick<ProgressRowSql, "id" | "xp" | "missions_json">>;
@@ -814,6 +828,19 @@ router.post("/claim-tier", requirePlayerIdentity, async (req: AuthedRequest, res
 
     // Atomic claim guard
     const claim = await db.transaction(async (tx) => {
+      // Serialize claims with season finalization and re-check that this season
+      // is still active. The season can roll over between getOrCreateActiveSeason()
+      // above and this transaction (midnight UTC).
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(${season.id}::bigint)`);
+      const activeSeason = (await tx.execute(sql`
+        SELECT 1 FROM seasons
+        WHERE id = ${season.id} AND end_date >= ${todayUTC()}
+        LIMIT 1
+      `)) as unknown as SqlResult<{ "?column?": number }>;
+      if ((activeSeason.rows?.length ?? 0) === 0) {
+        return { ok: false as const, error: "Season has ended", status: 409 };
+      }
+
       // Keep the same lock order as authoritative scoring:
       // player_scores -> season_progress. Reversing these can deadlock a
       // concurrent score submission that already holds player_scores.
