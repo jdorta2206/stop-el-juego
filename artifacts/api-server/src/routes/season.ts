@@ -307,12 +307,12 @@ export async function getOrCreateProgressTx(
     row = existing[0];
   }
 
-  const locked = (await tx.execute(sql\`
+  const locked = (await tx.execute(sql`
     SELECT id, player_id, season_id, xp, claimed_tiers, missions_json, updated_at
     FROM season_progress
-    WHERE id = \${row.id}
+    WHERE id = ${row.id}
     FOR UPDATE
-  \`)) as unknown as SqlResult<ProgressRow>;
+  `)) as unknown as SqlResult<ProgressRow>;
   const current = locked.rows?.[0];
   if (!current) throw new Error("season progress row not found after upsert");
 
