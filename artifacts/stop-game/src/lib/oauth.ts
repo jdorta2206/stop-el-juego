@@ -90,7 +90,7 @@ export async function consumeAuthHandoff(): Promise<void> {
     // A stale/expired browser request or a temporarily unreachable API used to
     // leave the page before createRoot(), producing a blank screen.
     const controller = new AbortController();
-    const timeout = window.setTimeout(() => controller.abort(), 5000);
+    const timeout = window.setTimeout(() => controller.abort(), 1500);
     let response: Response;
     try {
       response = await fetch(`${apiBase}/api/auth/handoff`, {
