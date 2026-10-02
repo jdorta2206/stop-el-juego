@@ -97,6 +97,7 @@ export function useFollows(
       const r = await fetch(`${API_BASE}/api/friends/follow`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
+        credentials: "include",
         body: JSON.stringify({
           followerId: meId,
           followedId: target.playerId,
