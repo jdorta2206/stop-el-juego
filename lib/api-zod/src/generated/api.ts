@@ -25,8 +25,8 @@ export const ValidateRoundBody = zod.object({
   playerName: zod.string().optional(),
   playerResponses: zod.array(
     zod.object({
-      category: zod.string(),
-      word: zod.string(),
+      category: zod.string().max(120),
+      word: zod.string().max(100),
     }),
   ).max(12),
 });
