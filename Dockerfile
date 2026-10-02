@@ -14,6 +14,7 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 ENV CI=true
+ENV SERVE_CLIENT=1
 ENV PATH="/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin"
 
 RUN npm install -g pnpm@10.26.1 \
