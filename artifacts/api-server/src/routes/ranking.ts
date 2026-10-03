@@ -867,13 +867,18 @@ router.post("/scores", scoreLimiter, requirePlayerIdentity, async (req: AuthedRe
       }
 
       if (!txPlayer) throw new Error("SCORE_UPDATE_FAILED");
-      await tx.insert(gameHistoryTable).values({
-        playerId,
-        score,
-        letter,
-        mode: effectiveMode,
-        won: effectiveWon,
-      });
+      // Bonus submissions add points/XP to the existing game but are not
+      // separate games. Keep them out of game_history so profile statistics
+      // and recent-game history count only actual played games.
+      if (!isBonus) {
+        await tx.insert(gameHistoryTable).values({
+          playerId,
+          score,
+          letter,
+          mode: effectiveMode,
+          won: effectiveWon,
+        });
+      }
 
       // Keep voucher-backed collection words in the same transaction as the score.
       if (!isBonus && verified > 0 && scoreTokens) {
