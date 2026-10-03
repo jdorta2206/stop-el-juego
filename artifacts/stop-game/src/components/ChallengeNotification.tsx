@@ -50,7 +50,7 @@ export function ChallengeNotification({ challenge, onDismiss }: ChallengeNotific
       if (stored) playerData = JSON.parse(stored);
     } catch { /* ignore */ }
 
-    if (!playerData?.id) {
+    if (!playerData?.id || (challenge.recipientPlayerId && playerData.id !== challenge.recipientPlayerId)) {
       respondingRef.current = false;
       setResponding(false);
       return;
@@ -119,7 +119,7 @@ export function ChallengeNotification({ challenge, onDismiss }: ChallengeNotific
         response = await respondToChallenge(challenge.challengeId, true);
       }
     }
-    if (!response.ok || !response.roomCode) {
+    if (!response.ok || !response.roomCode || (challenge.recipientPlayerId && playerData.id !== challenge.recipientPlayerId)) {
       respondingRef.current = false;
       setResponding(false);
       return;
