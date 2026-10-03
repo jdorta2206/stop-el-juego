@@ -104,6 +104,7 @@ export function useSeason(playerId?: string | null) {
   const [progress, setProgress] = useState<SeasonProgress | null>(null);
   const [loading, setLoading] = useState(false);
   const refreshGenerationRef = useRef(0);
+  const currentPlayerIdRef = useRef(playerId);
 
   const refresh = useCallback(async () => {
     const generation = ++refreshGenerationRef.current;
@@ -130,26 +131,31 @@ export function useSeason(playerId?: string | null) {
     }
   }, [playerId]);
 
-  useEffect(() => () => { refreshGenerationRef.current += 1; }, [playerId]);
+  useEffect(() => {
+    currentPlayerIdRef.current = playerId;
+    refreshGenerationRef.current += 1;
+    return () => { refreshGenerationRef.current += 1; };
+  }, [playerId]);
 
   useEffect(() => { refresh(); }, [refresh]);
 
   const claimMission = useCallback(async (missionId: string) => {
-    if (!playerId) return null;
+    if (!playerId || currentPlayerIdRef.current !== playerId) return null;
     const res = await fetch(`${API}/api/season/claim-mission`, {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify({ missionId }),
     });
-    if (!res.ok) return null;
+    if (!res.ok || currentPlayerIdRef.current !== playerId) return null;
     const data = await res.json();
+    if (currentPlayerIdRef.current !== playerId) return null;
     await refresh();
     return data;
   }, [playerId, refresh]);
 
   const ackFinal = useCallback(async (seasonId: number) => {
-    if (!playerId) return;
+    if (!playerId || currentPlayerIdRef.current !== playerId) return;
     try {
       await fetch(`${API}/api/season/ack-final`, {
         method: "POST",
@@ -157,24 +163,23 @@ export function useSeason(playerId?: string | null) {
         headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ seasonId }),
       });
+      if (currentPlayerIdRef.current !== playerId) return;
       // Optimistically clear locally so the modal doesn't reopen on re-render.
       setProgress((prev) => (prev ? { ...prev, pendingFinal: null } : prev));
     } catch { /* ignore */ }
   }, [playerId]);
 
   const claimTier = useCallback(async (tier: number, track: "free" | "premium") => {
-    if (!playerId) return null;
+    if (!playerId || currentPlayerIdRef.current !== playerId) return null;
     const res = await fetch(`${API}/api/season/claim-tier`, {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify({ tier, track }),
     });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      return { error: err.error || "Failed" };
-    }
+    if (!res.ok || currentPlayerIdRef.current !== playerId) return null;
     const data = await res.json();
+    if (currentPlayerIdRef.current !== playerId) return null;
     await refresh();
     return data;
   }, [playerId, refresh]);
