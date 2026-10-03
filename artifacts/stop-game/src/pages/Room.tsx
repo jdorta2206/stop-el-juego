@@ -166,6 +166,10 @@ export default function Room() {
     setSpyUsesLeft(spyLimit);
     setIsStopping(false);
     setStopFlash(false);
+    reviewCountedRef.current = false;
+    seasonReportedRef.current = false;
+    creatorTrackedRef.current = null;
+    draftHydratedRef.current = "";
     hasSubmittedRef.current = false;
     submitInFlightRef.current = false;
     isFreezingRef.current = false;
