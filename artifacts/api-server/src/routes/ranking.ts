@@ -164,7 +164,7 @@ router.get("/scores", async (req, res) => {
       longestStreak: p.longest_streak ?? 0,
       isPremium: p.is_premium ?? false,
       achievementCount: parseAchievementCount(p.achievements_json),
-      title: getTitle(i + 1),
+      title: getTitle(Number(p.rank_position ?? (i + 1))),
       createdAt: p.created_at,
       updatedAt: p.updated_at,
       rank: Number(p.rank_position ?? (i + 1)),
