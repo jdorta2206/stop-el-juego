@@ -280,9 +280,10 @@ export default function Room() {
     : /* lobby / between_rounds / finished / spinning */                  1500;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const roomQueryKey = getGetRoomQueryKey(roomCode || "");
+  const roomQueryKey = [...getGetRoomQueryKey(roomCode || ""), player?.id ?? "guest"];
   const { data: room, error } = useGetRoom(roomCode || "", {
     query: {
+      queryKey: roomQueryKey,
       refetchInterval: pollingInterval,
       enabled: !!roomCode,
       // A polling request can have started before a newer SSE snapshot arrived.
