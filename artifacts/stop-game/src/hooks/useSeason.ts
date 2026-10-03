@@ -196,12 +196,21 @@ export function useSeason(playerId?: string | null) {
  * Fetches the season leaderboard. Public endpoint — viewer's row is included
  * automatically when an auth session is present.
  */
-export function useSeasonLeaderboard(seasonId?: number | null, enabled: boolean = true) {
+export function useSeasonLeaderboard(
+  seasonId?: number | null,
+  enabled: boolean = true,
+  viewerId?: string | null,
+) {
   const [data, setData] = useState<Leaderboard | null>(null);
   const [loading, setLoading] = useState(false);
+  const generationRef = useRef(0);
+  const currentViewerIdRef = useRef(viewerId);
 
   const refresh = useCallback(async () => {
     if (!enabled) return;
+    const generation = ++generationRef.current;
+    const controller = new AbortController();
+    const requestedViewerId = viewerId ?? null;
     setLoading(true);
     try {
       const url = new URL(`${API}/api/season/leaderboard`);
@@ -209,14 +218,34 @@ export function useSeasonLeaderboard(seasonId?: number | null, enabled: boolean 
       const r = await fetch(url.toString(), {
         credentials: "include",
         headers: authHeaders(),
+        signal: controller.signal,
       });
-      if (r.ok) setData(await r.json());
+      if (!r.ok) return;
+      const next = await r.json() as Leaderboard;
+      if (
+        controller.signal.aborted ||
+        generation !== generationRef.current ||
+        requestedViewerId !== currentViewerIdRef.current
+      ) return;
+      setData(next);
     } catch {
       /* ignore */
     } finally {
-      setLoading(false);
+      if (!controller.signal.aborted && generation === generationRef.current) {
+        setLoading(false);
+      }
     }
-  }, [seasonId, enabled]);
+  }, [seasonId, enabled, viewerId]);
+
+  useEffect(() => {
+    currentViewerIdRef.current = viewerId;
+    generationRef.current += 1;
+    setData(null);
+    setLoading(false);
+    return () => {
+      generationRef.current += 1;
+    };
+  }, [viewerId]);
 
   useEffect(() => { refresh(); }, [refresh]);
 
