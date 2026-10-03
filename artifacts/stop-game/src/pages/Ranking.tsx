@@ -73,8 +73,10 @@ function ChallengeBtn({
 
   const handleChallenge = useCallback(async () => {
     if (state !== "idle" || !currentPlayer) return;
+    const requestedPlayerId = currentPlayer.id;
     setState("sending");
     const result = await sendChallenge(currentPlayer, onlinePlayer.playerId, lang);
+    if (currentPlayer.id !== requestedPlayerId) { setState("idle"); return; }
     if (!result) { setState("idle"); return; }
     pendingRef.current = result.challengeId;
     setState("waiting");
@@ -87,6 +89,14 @@ function ChallengeBtn({
       if (!pendingRef.current || controller.signal.aborted) return;
       const status = await pollChallengeStatus(pendingRef.current, controller.signal);
       if (!pendingRef.current || controller.signal.aborted) return;
+      if (currentPlayer.id !== requestedPlayerId) {
+        controller.abort();
+        clearInterval(poll);
+        pollRef.current = null;
+        pendingRef.current = null;
+        setState("idle");
+        return;
+      }
       if (status.status === "accepted") {
         clearInterval(poll);
         pollRef.current = null;
