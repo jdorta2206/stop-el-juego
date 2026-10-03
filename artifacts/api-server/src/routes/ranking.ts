@@ -425,6 +425,7 @@ router.get("/profile/:playerId", async (req, res) => {
   res.json({
     playerId: ps.playerId,
     playerName: ps.playerName,
+    xp: ps.xp ?? 0,
     avatarColor: ps.avatarColor,
     picture: ps.profilePicture ?? null,
     avatarFrame: ps.equippedFrame ?? null,
