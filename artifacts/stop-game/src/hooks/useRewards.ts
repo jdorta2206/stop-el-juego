@@ -85,7 +85,9 @@ export function useRewards(playerId?: string | null, onClaimed?: () => void) {
         fetch(`${API}/api/rewards/collection`, { credentials: "include", headers: authHeaders(), signal: controller.signal }),
         fetch(`${API}/api/rewards/prestige`, { credentials: "include", headers: authHeaders(), signal: controller.signal }),
       ]);
+      if (controller.signal.aborted) return;
       if (c.ok) setCollection(await c.json());
+      if (controller.signal.aborted) return;
       if (p.ok) setPrestige(await p.json());
     } catch {
       if (controller.signal.aborted) return;
