@@ -1806,8 +1806,8 @@ router.post("/:roomCode/join", roomJoinLimiter, async (req, res) => {
 router.post("/:roomCode/start", async (req, res) => {
   const roomCode = paramStr(req.params.roomCode);
   const { hostId, roomId } = (req.body ?? {}) as { hostId?: string; roomId?: number };
-  if (!Number.isInteger(roomId) || roomId <= 0) { res.status(400).json({ error: "Missing roomId" }); return; }
-  const requiredRoomId = roomId as number;
+  const requiredRoomId = typeof roomId === "number" && Number.isInteger(roomId) && roomId > 0 ? roomId : null;
+  if (requiredRoomId === null) { res.status(400).json({ error: "Missing roomId" }); return; }
   const rooms = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, roomCode.toUpperCase())).limit(1);
   if (rooms.length === 0) { res.status(404).json({ error: "Room not found" }); return; }
 
@@ -2267,8 +2267,8 @@ router.post("/:roomCode/category-pack", async (req, res) => {
     customLabel?: string;
   };
   const { hostId, roomId, pack } = body;
-  if (!Number.isInteger(roomId) || roomId <= 0) { res.status(400).json({ error: "Missing roomId" }); return; }
-  const requiredRoomId = roomId;
+  const requiredRoomId = typeof roomId === "number" && Number.isInteger(roomId) && roomId > 0 ? roomId : null;
+  if (requiredRoomId === null) { res.status(400).json({ error: "Missing roomId" }); return; }
   // 🔒 Bind to the token first so a leaked hostId can't be replayed by a third party.
   if (!await verifyClaimedIdentity(req, hostId)) {
     res.status(403).json({ error: "Identity verification failed" }); return;
