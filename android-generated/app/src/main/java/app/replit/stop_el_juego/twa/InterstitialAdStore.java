@@ -15,8 +15,7 @@ import java.util.Calendar;
 
 public final class InterstitialAdStore {
     private static boolean adsTemporarilySuspended() {
-        Calendar now = Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC"));
-        return now.get(Calendar.YEAR) == 2026 && now.get(Calendar.MONTH) <= Calendar.OCTOBER;
+        return System.currentTimeMillis() < 1793491200000L; // 1 Nov 2026 00:00 UTC
     }
     private static final String TAG = "STOP_INTERSTITIAL";
     private static final String INTERSTITIAL_ID = "ca-app-pub-4807272408824742/7242069847";
