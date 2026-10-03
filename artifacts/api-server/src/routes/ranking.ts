@@ -754,13 +754,12 @@ router.post("/scores", scoreLimiter, requirePlayerIdentity, async (req: AuthedRe
       }
 
       if (!isBonus) {
-        const seasonEvents: Parameters<typeof applyAuthoritativeSeasonEventsInTransaction>[2] = [
-          { type: "play_game", value: 1 },
-          ...(effectiveWon ? [{ type: "win_game", value: 1 }] : []),
-          { type: "round_score", value: score },
-          ...(collectionWords.length > 0 ? [{ type: "valid_words", value: collectionWords.length }] : []),
-          ...(effectiveMode === "daily" ? [{ type: "daily_done", value: 1 }] : []),
-        ];
+        const seasonEvents: Parameters<typeof applyAuthoritativeSeasonEventsInTransaction>[2] = [];
+        seasonEvents.push({ type: "play_game", value: 1 });
+        if (effectiveWon) seasonEvents.push({ type: "win_game", value: 1 });
+        seasonEvents.push({ type: "round_score", value: score });
+        if (collectionWords.length > 0) seasonEvents.push({ type: "valid_words", value: collectionWords.length });
+        if (effectiveMode === "daily") seasonEvents.push({ type: "daily_done", value: 1 });
         await applyAuthoritativeSeasonEventsInTransaction(tx, playerId, seasonEvents);
       }
 
