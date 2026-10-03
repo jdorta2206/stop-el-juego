@@ -138,6 +138,10 @@ export default function Room() {
     return t && m ? { code: t, matchId: m } : null;
   })();
   const { player } = usePlayer();
+  // Prevent a rematch response started by a previous identity from navigating
+  // the currently active account into that previous player's rematch.
+  const currentPlayerIdRef = useRef<string | null>(null);
+  currentPlayerIdRef.current = player?.id ?? null;
   const { isPremium: meIsPremium } = usePremium(player?.id);
   const { followedIds, follow, unfollow } = useFollows(player?.id);
   // The host's own custom packs (premium feature). Non-premium players see
@@ -622,13 +626,17 @@ export default function Room() {
     if (rematchCode) { setLocation(`/room/${rematchCode}`); return; }
     if (!player?.id || !roomCode) return;
     setRematchLoading(true);
+    const requestedPlayerId = player.id;
     try {
       const r = await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/rematch`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify({ playerId: player.id, playerName: player.name ?? "?", avatarColor: (player as any).avatarColor }),
+        body: JSON.stringify({ playerId: requestedPlayerId, playerName: player.name ?? "?", avatarColor: (player as any).avatarColor }),
       });
       const j = await r.json();
+      // Identity may have changed while the request was in flight. Never let
+      // the old account's successful response mutate/navigate the new account.
+      if (requestedPlayerId !== currentPlayerIdRef.current) return;
       if (j.rematchCode) { setRematchCode(j.rematchCode); setLocation(`/room/${j.rematchCode}`); }
     } catch {} finally { setRematchLoading(false); }
   }, [rematchCode, rematchLoading, player, roomCode, setLocation, meIsPremium]);
