@@ -18,7 +18,8 @@
 
 type Rarity = "common" | "rare" | "epic" | "legendary";
 
-interface StoredWord {
+type StoredWord = string | {
+
   name?: string;
   cat?: string;
   r?: Rarity;
