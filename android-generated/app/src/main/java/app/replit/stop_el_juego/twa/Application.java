@@ -20,6 +20,9 @@ import com.google.android.gms.ads.rewarded.RewardedAd;
 import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback;
 
 public class Application extends android.app.Application {
+    private static boolean adsTemporarilySuspended() {
+        return System.currentTimeMillis() < 1793491200000L; // 1 Nov 2026 00:00 UTC
+    }
     private static final String TAG = "STOP_REWARDED";
     private static final String REAL_REWARDED_ID = "ca-app-pub-4807272408824742/3559554716";
     private static final long RETRY_DELAY_MS = 2000L;
@@ -37,11 +40,14 @@ public class Application extends android.app.Application {
     public void onCreate() {
         super.onCreate();
         instance = this;
-        MobileAds.initialize(this, status -> preloadRewardedAd());
+        MobileAds.initialize(this, status -> {
+            if (!adsTemporarilySuspended()) preloadRewardedAd();
+            else Log.d(TAG, "AdMob runtime gate active through 31 Oct 2026; rewarded preload disabled");
+        });
     }
 
     public static synchronized void preloadRewardedAd() {
-        if (loadingRewardedAd || preloadedRewardedAd != null || instance == null) return;
+        if (adsTemporarilySuspended() || loadingRewardedAd || preloadedRewardedAd != null || instance == null) return;
         loadingRewardedAd = true;
         RewardedAd.load(instance, REAL_REWARDED_ID, new AdRequest.Builder().build(), new RewardedAdLoadCallback() {
             @Override
@@ -59,7 +65,7 @@ public class Application extends android.app.Application {
                 Log.e(TAG, "Rewarded preload failed: code=" + error.getCode()
                         + " domain=" + error.getDomain()
                         + " message=" + error.getMessage());
-                if (instance != null) {
+                if (instance != null && !adsTemporarilySuspended()) {
                     instance.handler.postDelayed(Application::preloadRewardedAd, RETRY_DELAY_MS);
                 }
             }
@@ -67,7 +73,7 @@ public class Application extends android.app.Application {
     }
 
     private static synchronized void expirePreloadedRewardedAd() {
-        if (preloadedRewardedAd == null || instance == null) return;
+        if (adsTemporarilySuspended() || preloadedRewardedAd == null || instance == null) return;
         if (System.currentTimeMillis() - preloadedRewardedAdAt < PRELOADED_AD_TTL_MS) return;
         preloadedRewardedAd = null;
         preloadedRewardedAdAt = 0L;
@@ -77,6 +83,11 @@ public class Application extends android.app.Application {
 
     @Nullable
     public static synchronized RewardedAd takePreloadedRewardedAd() {
+        if (adsTemporarilySuspended()) {
+            preloadedRewardedAd = null;
+            preloadedRewardedAdAt = 0L;
+            return null;
+        }
         if (preloadedRewardedAd != null
                 && System.currentTimeMillis() - preloadedRewardedAdAt >= PRELOADED_AD_TTL_MS) {
             preloadedRewardedAd = null;
