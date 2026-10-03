@@ -190,10 +190,16 @@ export function usePushNotifications(playerId: string | undefined, language: str
       if (sub) {
         if (currentPlayerIdRef.current !== playerId) return;
         try {
+          const subJson = sub.toJSON();
           await fetch(`${API_BASE}/api/notifications/unsubscribe`, {
             method: "DELETE",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ endpoint: sub.endpoint, playerId: playerId || "anonymous" }),
+            body: JSON.stringify({
+              endpoint: sub.endpoint,
+              playerId: playerId || "anonymous",
+              p256dh: subJson.keys?.p256dh,
+              auth: subJson.keys?.auth,
+            }),
           });
         } catch (e) {
           console.warn("[push] unsubscribe server request failed", e);
