@@ -28,6 +28,7 @@ export interface IncomingChallenge {
   roomCode: string;
   createdAt: number;
   isRoomInvite?: boolean;
+  recipientPlayerId?: string;
 }
 
 // Send a heartbeat to mark this player as online
@@ -196,7 +197,7 @@ export function usePresence(
           // A room invite can be refreshed in-place (same challengeId) while
           // the notification is already visible. Keep the active notification
           // synchronized with its authoritative roomCode/createdAt.
-          setIncomingChallenge(refreshed);
+          setIncomingChallenge({ ...refreshed, recipientPlayerId: player.id });
           return;
         }
         activeChallenge.current = null;
@@ -204,7 +205,7 @@ export function usePresence(
       }
       if (challenges.length > 0) {
         activeChallenge.current = challenges[0].challengeId;
-        setIncomingChallenge(challenges[0]);
+        setIncomingChallenge({ ...challenges[0], recipientPlayerId: player.id });
       }
     } catch {
       // Abort is expected when a newer poll supersedes this one.
@@ -220,6 +221,9 @@ export function usePresence(
   }, []);
 
   useEffect(() => {
+    activeChallenge.current = null;
+    challengeAbortRef.current?.abort();
+    setIncomingChallenge(null);
     if (!player) return;
 
     pingAbortRef.current?.abort();
