@@ -90,11 +90,13 @@ export function useProgression(playerId?: string) {
   }, [playerId]);
 
   const syncAbortRef = useRef<AbortController | null>(null);
+  const currentPlayerIdRef = useRef<string | undefined>(playerId);
 
   const [levelUpInfo, setLevelUpInfo] = useState<{ from: number; to: number } | null>(null);
 
   // ── Sync from server on mount (server is source of truth) ──────────────
   useEffect(() => {
+    currentPlayerIdRef.current = playerId;
     if (!playerId || playerId.startsWith("guest_")) return;
     const API = getApiUrl();
     syncAbortRef.current?.abort();
@@ -108,6 +110,8 @@ export function useProgression(playerId?: string) {
         // inflated value if the server had legitimately corrected it down
         // (refund, anti-cheat clawback, manual support fix). Server wins
         // unconditionally on mount.
+        if (controller.signal.aborted || data?.xp == null || data.xp < 0) return;
+        if (playerId !== currentPlayerIdRef.current) return;
         if (data?.xp != null && data.xp >= 0) {
           const serverXp = data.xp;
           setXp(serverXp);
