@@ -534,8 +534,7 @@ router.post("/scores", scoreLimiter, requirePlayerIdentity, async (req: AuthedRe
   const { base: verifiedBase, verified, collectionWords, mode: certifiedMode, aiBase: certifiedAiBase, voucherJtis } = isBonus
     ? { base: 0, verified: 0, collectionWords: [] as Array<{ word: string; category: string }>, mode: null, aiBase: 0 }
     // /ranking/scores is the client solo leaderboard path. Keep its voucher
-    // count cap independent of the client-supplied `mode`; otherwise a caller
-    // could request `multiplayer` and raise the cap from 3 rounds to 12.
+    // count cap independent of the client-supplied `mode`.
     : await sumVerifiedBasePersistent(scoreTokens, 3);
   // A request that supplies vouchers must prove at least one fresh voucher.
   // Otherwise a replay of an already-consumed token set would fall through
@@ -755,13 +754,14 @@ router.post("/scores", scoreLimiter, requirePlayerIdentity, async (req: AuthedRe
       }
 
       if (!isBonus) {
-        await applyAuthoritativeSeasonEventsInTransaction(tx, playerId, [
+        const seasonEvents: Parameters<typeof applyAuthoritativeSeasonEventsInTransaction>[2] = [
           { type: "play_game", value: 1 },
           ...(effectiveWon ? [{ type: "win_game", value: 1 }] : []),
           { type: "round_score", value: score },
           ...(collectionWords.length > 0 ? [{ type: "valid_words", value: collectionWords.length }] : []),
           ...(effectiveMode === "daily" ? [{ type: "daily_done", value: 1 }] : []),
-        ]);
+        ];
+        await applyAuthoritativeSeasonEventsInTransaction(tx, playerId, seasonEvents);
       }
 
       if (verified > 0 && voucherJtis.length > 0) {
