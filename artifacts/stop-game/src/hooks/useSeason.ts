@@ -177,7 +177,12 @@ export function useSeason(playerId?: string | null) {
       headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify({ tier, track }),
     });
-    if (!res.ok || currentPlayerIdRef.current !== playerId) return null;
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      if (currentPlayerIdRef.current !== playerId) return null;
+      return { error: err.error || "Failed" };
+    }
+    if (currentPlayerIdRef.current !== playerId) return null;
     const data = await res.json();
     if (currentPlayerIdRef.current !== playerId) return null;
     await refresh();
