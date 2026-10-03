@@ -1260,7 +1260,6 @@ export default function SoloGame() {
     })
       .then((response) => {
         if (!response.ok) throw new Error(`daily-submit-${response.status}`);
-        localStorage.setItem(`stop_daily_${getTodayStr()}`, String(finalScore));
       })
       .catch(() => {
         // Never mark a logged-in daily as completed locally when the server
