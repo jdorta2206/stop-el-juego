@@ -1016,18 +1016,18 @@ export default function Room() {
   const castBluffVote = useCallback(async (accusedPlayerId: string, category: string, vote: "lie" | "real") => {
     if (!player || !roomCode) return;
     const requestedPlayerId = player.id;
-    setMyVotes(prev => ({
-      ...prev,
-      [accusedPlayerId]: { ...(prev[accusedPlayerId] ?? {}), [category]: vote },
-    }));
     try {
       await fetch(`${apiBase}/api/rooms/${roomCode.toUpperCase()}/bluff-vote`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ voterId: requestedPlayerId, accusedPlayerId, category, vote }),
       });
+      if (requestedPlayerId !== currentPlayerIdRef.current) return;
+      setMyVotes(prev => ({
+        ...prev,
+        [accusedPlayerId]: { ...(prev[accusedPlayerId] ?? {}), [category]: vote },
+      }));
     } catch { /* silent */ }
-    if (requestedPlayerId !== currentPlayerIdRef.current) return;
   }, [player, roomCode, apiBase]);
 
   // Force-resolve bluffs after deadline (any client can call this)
