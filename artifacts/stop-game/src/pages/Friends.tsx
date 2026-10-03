@@ -116,6 +116,7 @@ function FriendCard({
 
   const handleChallenge = async (): Promise<boolean> => {
     if (!friend.onlineData) return false;
+    const requestedPlayerId = currentPlayer.id;
     const result = await sendChallenge(currentPlayer, friend.onlineData.playerId);
     if (!result) return false;
     pendingId.current = result.challengeId;
@@ -131,6 +132,7 @@ function FriendCard({
         const status = await pollChallengeStatus(pendingId.current, controller.signal);
         if (!pendingId.current || controller.signal.aborted) return;
         if (status.status === "accepted") {
+        if (currentPlayer.id !== requestedPlayerId) return;
         clearInterval(poll); challengePollRef.current = null;
         if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current);
         challengeTimeoutRef.current = null; pendingId.current = null;
@@ -282,6 +284,7 @@ function OnlinePlayerCard({
   };
 
   const handleChallenge = async () => {
+    const requestedPlayerId = currentPlayer.id;
     const result = await sendChallenge(currentPlayer, player.playerId);
     if (!result) return;
     pendingId.current = result.challengeId;
@@ -297,6 +300,7 @@ function OnlinePlayerCard({
         const status = await pollChallengeStatus(pendingId.current, controller.signal);
         if (!pendingId.current || controller.signal.aborted) return;
         if (status.status === "accepted") {
+        if (currentPlayer.id !== requestedPlayerId) return;
         clearInterval(poll); challengePollRef.current = null;
         if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current);
         challengeTimeoutRef.current = null; pendingId.current = null;
