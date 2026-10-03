@@ -20,8 +20,13 @@ import com.google.android.gms.ads.interstitial.InterstitialAd;
 import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback;
 import com.google.android.gms.ads.LoadAdError;
 import com.google.android.gms.ads.MobileAds;
+import java.util.Calendar;
 
 public class InterstitialAdActivity extends Activity {
+    private static boolean adsTemporarilySuspended() {
+        Calendar now = Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC"));
+        return now.get(Calendar.YEAR) == 2026 && now.get(Calendar.MONTH) <= Calendar.OCTOBER;
+    }
     private static final String TAG = "STOP_INTERSTITIAL";
     private static final long LOAD_TIMEOUT_MS = 30_000L;
     private static final long DIAGNOSTIC_SCREEN_MS = 15_000L;
@@ -54,6 +59,7 @@ public class InterstitialAdActivity extends Activity {
     }
 
     private void loadAndShow() {
+        if (adsTemporarilySuspended()) { showDiagnostic("ANUNCIOS DESACTIVADOS TEMPORALMENTE", "AdMob está protegido hasta el 31 de octubre de 2026."); return; }
         InterstitialAd.load(this, "ca-app-pub-4807272408824742/7242069847",
                 new AdRequest.Builder().build(),
                 new InterstitialAdLoadCallback() {
