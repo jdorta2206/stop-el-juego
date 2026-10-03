@@ -740,11 +740,15 @@ export default function Room() {
       if (response.ok) {
         const ms = Number(data.cooldownMs ?? 18000);
         setHalloweenScareCooldownUntil(Date.now() + ms);
-        window.setTimeout(() => setHalloweenScareCooldownUntil(0), ms + 50);
+        window.setTimeout(() => {
+          if (requestedPlayerId === currentPlayerIdRef.current) setHalloweenScareCooldownUntil(0);
+        }, ms + 50);
       } else if (response.status === 429) {
         const ms = Number(data.retryAfterMs ?? 5000);
         setHalloweenScareCooldownUntil(Date.now() + ms);
-        window.setTimeout(() => setHalloweenScareCooldownUntil(0), ms + 50);
+        window.setTimeout(() => {
+          if (requestedPlayerId === currentPlayerIdRef.current) setHalloweenScareCooldownUntil(0);
+        }, ms + 50);
       }
     } catch {} finally { manualScareBusyRef.current = false; }
   }, [player, roomCode, phase, halloweenScareCooldownUntil]);
@@ -824,7 +828,6 @@ export default function Room() {
   ) => {
     if (!player || !roomCode) return;
     const requestedPlayerId = player.id;
-    setCategoryPack(pack);
     try {
       const res = await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/category-pack`, {
         method: "POST",
