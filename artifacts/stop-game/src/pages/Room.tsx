@@ -476,6 +476,11 @@ export default function Room() {
   const sound = useSound(muted);
   const haptic = useHaptic();
   const [stopFlash, setStopFlash] = useState(false);
+  // If the active account changes while a STOP request is in flight, the
+  // previous account must not leave the shared button state stuck for the new one.
+  useEffect(() => {
+    setIsStopping(false);
+  }, [player?.id]);
 
   // 📚 First-multiplayer-game coachmark — shows ONCE when the player reaches
   // the playing phase of their first online room. Dismisses on tap or as
