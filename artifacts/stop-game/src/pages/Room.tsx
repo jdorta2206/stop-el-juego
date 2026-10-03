@@ -1015,6 +1015,7 @@ export default function Room() {
   // Cast a bluff vote (opponent calls this)
   const castBluffVote = useCallback(async (accusedPlayerId: string, category: string, vote: "lie" | "real") => {
     if (!player || !roomCode) return;
+    const requestedPlayerId = player.id;
     setMyVotes(prev => ({
       ...prev,
       [accusedPlayerId]: { ...(prev[accusedPlayerId] ?? {}), [category]: vote },
@@ -1023,9 +1024,10 @@ export default function Room() {
       await fetch(`${apiBase}/api/rooms/${roomCode.toUpperCase()}/bluff-vote`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify({ voterId: player.id, accusedPlayerId, category, vote }),
+        body: JSON.stringify({ voterId: requestedPlayerId, accusedPlayerId, category, vote }),
       });
     } catch { /* silent */ }
+    if (requestedPlayerId !== currentPlayerIdRef.current) return;
   }, [player, roomCode, apiBase]);
 
   // Force-resolve bluffs after deadline (any client can call this)
@@ -1268,6 +1270,7 @@ export default function Room() {
 
   const handleStop = async () => {
     if (phase !== "playing" || isStopping || !player || !roomCode) return;
+    const requestedPlayerId = player.id;
     // 🛑 Punchy feedback BEFORE the network call so the press feels instant
     // even on slow connections. Sound + heavy haptic + screen flash.
     sound.playStop();
@@ -1281,6 +1284,7 @@ export default function Room() {
         headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ playerId: player.id, playerName: player.name }),
       });
+      if (requestedPlayerId !== currentPlayerIdRef.current) return;
       // 🛡️ Race fix: only kick off the freeze locally if polling hasn't already
       // done it. Otherwise stopAllTimers() here would clear the freeze interval
       // that the polling effect just installed and the countdown would stall at "3".
