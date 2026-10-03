@@ -604,6 +604,7 @@ export default function Room() {
   const handleAddBot = useCallback(async () => {
     if (!roomCode || !player?.id || addBotLoading) return;
     setAddBotLoading(true);
+    const requestedPlayerId = player.id;
     try {
       const res = await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/add-bot`, {
         method: "POST",
