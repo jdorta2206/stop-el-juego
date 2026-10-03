@@ -336,7 +336,8 @@ export default function Room() {
       es.onmessage = (e) => {
         try {
           const data = JSON.parse(e.data);
-          queryClient.setQueryData(getGetRoomQueryKey(code), (current: any) => {
+          const viewerRoomQueryKey = [...getGetRoomQueryKey(code), player.id];
+          queryClient.setQueryData(viewerRoomQueryKey, (current: any) => {
             const incomingVersion = Number(data?.roomVersion);
             const currentVersion = Number(current?.roomVersion);
             if (Number.isFinite(incomingVersion) && Number.isFinite(currentVersion)) {
@@ -1300,7 +1301,7 @@ export default function Room() {
       if (r.ok) {
         try {
           const data = await r.json();
-          queryClient.setQueryData(getGetRoomQueryKey(roomCode.toUpperCase()), data);
+          queryClient.setQueryData(roomQueryKey, data);
         } catch {}
       }
     } catch (e) { console.error(e); }
