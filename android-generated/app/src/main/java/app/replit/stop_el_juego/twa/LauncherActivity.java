@@ -32,6 +32,9 @@ import java.lang.reflect.Field;
 
 /** STOP TWA native bridge for Google Mobile Ads rewarded video. */
 public class LauncherActivity extends com.google.androidbrowserhelper.trusted.LauncherActivity {
+    private static boolean adsTemporarilySuspended() {
+        return System.currentTimeMillis() < 1793491200000L; // 1 Nov 2026 00:00 UTC
+    }
     private static final String TAG = "STOP_AD_BRIDGE";
     private static final Uri SOURCE_ORIGIN = Uri.parse("https://www.stopjuegodepalabras.com");
     private static final Uri TARGET_ORIGIN = Uri.parse("https://www.stopjuegodepalabras.com");
