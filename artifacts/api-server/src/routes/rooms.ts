@@ -3136,9 +3136,10 @@ router.post("/:roomCode/halloween-scare", halloweenScareLimiter, async (req, res
       eventKey: `received:${event.id}:${p.playerId}`,
     })),
   ];
+  let cooldownResult: Awaited<ReturnType<typeof recordHalloweenScareEventsWithCooldown>>;
   try {
     {
-      const cooldownResult = await recordHalloweenScareEventsWithCooldown(
+      cooldownResult = await recordHalloweenScareEventsWithCooldown(
         persistentEvents,
         isHalloweenPreviewAuthorized(req),
         room.id,
@@ -3261,6 +3262,11 @@ router.post("/:roomCode/stop", async (req, res) => {
 
     return stopped;
   });
+
+  if (!updated) {
+    res.status(409).json({ error: "Round changed; please refresh" });
+    return;
+  }
 
   try {
     // Halloween is deliberately persisted only after the authoritative STOP
