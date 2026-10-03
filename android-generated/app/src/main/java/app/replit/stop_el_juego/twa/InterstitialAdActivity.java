@@ -24,8 +24,7 @@ import java.util.Calendar;
 
 public class InterstitialAdActivity extends Activity {
     private static boolean adsTemporarilySuspended() {
-        Calendar now = Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC"));
-        return now.get(Calendar.YEAR) == 2026 && now.get(Calendar.MONTH) <= Calendar.OCTOBER;
+        return System.currentTimeMillis() < 1793491200000L; // 1 Nov 2026 00:00 UTC
     }
     private static final String TAG = "STOP_INTERSTITIAL";
     private static final long LOAD_TIMEOUT_MS = 30_000L;
