@@ -32,8 +32,8 @@ export default function Live() {
       activeController = controller;
       try {
         const r = await fetch(`${API}/api/rooms/${encodeURIComponent(code)}/spectate`, { signal: controller.signal });
-        if (r.status === 404) { setError("Sala no encontrada"); return; }
-        if (r.status === 403) { setError("Esta sala no es pública"); return; }
+        if (r.status === 404) { if (!stop && !controller.signal.aborted) setError("Sala no encontrada"); return; }
+        if (r.status === 403) { if (!stop && !controller.signal.aborted) setError("Esta sala no es pública"); return; }
         if (!r.ok) { if (!stop) setNetworkError(true); return; }
         const data = await r.json();
         if (!stop) { setRoom(data); setError(null); setNetworkError(false); }
