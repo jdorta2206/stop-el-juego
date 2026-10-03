@@ -1896,7 +1896,7 @@ export default function Room() {
                           });
                           const data = await r.json();
                           if (data.ok) {
-                            if (cardId === "lightning") setTimeLeft(t => Math.min(t + 15, ROUND_TIME + 15));
+                            if (currentPlayerIdRef.current === player.id && cardId === "lightning") setTimeLeft(t => Math.min(t + 15, ROUND_TIME + 15));
                           }
                         } catch {}
                       }}
@@ -2007,6 +2007,7 @@ export default function Room() {
                   disabled={spyUsesLeft <= 0 || spyLoading}
                   onClick={async () => {
                     if (spyUsesLeft <= 0 || spyLoading || !player?.id || !roomCode) return;
+                    const requestedPlayerId = player.id;
                     setSpyError(null);
                     setSpyLoading(true);
                     try {
@@ -2015,6 +2016,7 @@ export default function Room() {
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({ playerId: player.id }),
                       });
+                      if (requestedPlayerId !== currentPlayerIdRef.current) return;
                       if (!r.ok) {
                         const j = await r.json().catch(() => ({}));
                         setSpyError(j.error || "No se pudo espiar 🤷");
@@ -2027,10 +2029,11 @@ export default function Room() {
                         scheduleUiTimeout(() => setSpyReveal(null), 5000);
                       }
                     } catch {
+                      if (requestedPlayerId !== currentPlayerIdRef.current) return;
                       setSpyError("Sin conexión 📡");
                       scheduleUiTimeout(() => setSpyError(null), 2200);
                     } finally {
-                      setSpyLoading(false);
+                      if (requestedPlayerId === currentPlayerIdRef.current) setSpyLoading(false);
                     }
                   }}
                   className={`w-full py-2 rounded-full text-sm font-bold border-2 transition-all ${
