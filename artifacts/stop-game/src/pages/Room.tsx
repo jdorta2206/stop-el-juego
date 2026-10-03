@@ -186,7 +186,7 @@ export default function Room() {
       bluffVoteTimerRef.current = null;
     }
     setPhase("lobby");
-  }, [player?.id, spyLimit]);
+  }, [player?.id]);
   const { isPremium: meIsPremium } = usePremium(player?.id);
   const { followedIds, follow, unfollow } = useFollows(player?.id);
   // The host's own custom packs (premium feature). Non-premium players see
