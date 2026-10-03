@@ -18,9 +18,17 @@ type HalloweenProgressResponse = {
 
 export function useHalloweenProgress(playerId?: string | null) {
   const [data, setData] = useState<HalloweenProgressResponse | null>(null);
+  const [eventActive, setEventActive] = useState(() => isHalloweenActive());
 
   useEffect(() => {
-    if (!playerId || !isHalloweenActive()) {
+    const update = () => setEventActive(isHalloweenActive());
+    update();
+    const timer = window.setInterval(update, 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    if (!playerId || !eventActive) {
       setData(null);
       return;
     }
@@ -35,7 +43,7 @@ export function useHalloweenProgress(playerId?: string | null) {
       })
       .catch(() => {});
     return () => { cancelled = true; };
-  }, [playerId]);
+  }, [playerId, eventActive]);
 
   const report = useCallback(async (
     type: "game_completed" | "scare_received" | "scare_provoked",
