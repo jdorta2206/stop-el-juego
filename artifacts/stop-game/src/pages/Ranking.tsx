@@ -315,12 +315,17 @@ export default function Ranking() {
       roomCode: null,
       lastSeen: Date.now(),
     };
-    await follow(asOnlinePlayer);
+    const requestedPlayerId = player.id;
+    const followed = await follow(asOnlinePlayer);
+    if (!followed || player?.id !== requestedPlayerId) return;
     setFollowedIds(prev => new Set([...prev, p.playerId]));
   }, [player?.id, follow]);
 
   const unfollowPlayer = useCallback(async (targetId: string) => {
-    await unfollow(targetId);
+    const requestedPlayerId = player?.id;
+    if (!requestedPlayerId) return;
+    const unfollowed = await unfollow(targetId);
+    if (!unfollowed || player?.id !== requestedPlayerId) return;
     setFollowedIds(prev => { const s = new Set(prev); s.delete(targetId); return s; });
   }, [unfollow]);
 
