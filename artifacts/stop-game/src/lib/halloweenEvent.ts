@@ -1,5 +1,10 @@
-export const HALLOWEEN_START = "2026-10-15T00:00:00";
-export const HALLOWEEN_END = "2026-11-03T00:00:00";
+export const HALLOWEEN_START = "2026-10-15T00:00:00Z";
+export const HALLOWEEN_END = "2026-11-03T00:00:00Z";
+
+export const HALLOWEEN_START_MONTH = 9;
+export const HALLOWEEN_START_DAY = 15;
+export const HALLOWEEN_END_MONTH = 10;
+export const HALLOWEEN_END_DAY = 3; // exclusive: event includes November 2
 
 export const HALLOWEEN_CATEGORIES = {
   es: ["Disfraz de miedo", "Monstruo", "Película de terror", "Cosa de una casa encantada", "Criatura sobrenatural"],
@@ -48,9 +53,29 @@ export const HALLOWEEN_SCARES: Record<string, HalloweenScare[]> = {
   ],
 };
 
+export function getNextHalloweenStart(now = new Date()): Date {
+  const year = now.getUTCFullYear();
+  const thisStart = new Date(Date.UTC(year, HALLOWEEN_START_MONTH, HALLOWEEN_START_DAY));
+  return now < thisStart
+    ? thisStart
+    : new Date(Date.UTC(year + 1, HALLOWEEN_START_MONTH, HALLOWEEN_START_DAY));
+}
+
+export function isHalloweenUpcoming(now = new Date(), withinDays = 60): boolean {
+  if (isHalloweenActive(now)) return false;
+  const next = getNextHalloweenStart(now).getTime();
+  return next - now.getTime() <= withinDays * 24 * 60 * 60 * 1000;
+}
+
+export function getHalloweenWindow(year: number): { start: Date; end: Date } {
+  return {
+    start: new Date(Date.UTC(year, HALLOWEEN_START_MONTH, HALLOWEEN_START_DAY)),
+    end: new Date(Date.UTC(year, HALLOWEEN_END_MONTH, HALLOWEEN_END_DAY)),
+  };
+}
+
 export function isHalloweenActive(now = new Date()): boolean {
-  const start = new Date(HALLOWEEN_START);
-  const end = new Date(HALLOWEEN_END);
+  const { start, end } = getHalloweenWindow(now.getUTCFullYear());
   return now >= start && now < end;
 }
 
