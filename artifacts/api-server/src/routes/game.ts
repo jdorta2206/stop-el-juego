@@ -1457,7 +1457,7 @@ function isWordValid(word: string, letter: string, category: string, language = 
     const nw = normalizeWord(w);
     return nw === normalizedWord ||
       normalizedWord.startsWith(nw) ||   // e.g. "rosado" starts with "rosa" ✓
-      nw.startsWith(normalizedWord);     // e.g. "ro" prefix of "rojo" ✓
+      false; // A shorter prefix is not itself a valid answer.
   });
 }
 
