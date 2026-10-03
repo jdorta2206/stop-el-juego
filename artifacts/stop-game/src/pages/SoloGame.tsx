@@ -1,4 +1,5 @@
 import { trackAnalyticsEvent } from "@/lib/analyticsClient";
+import { areAdsTemporarilySuspended } from "@/lib/adsRuntime";
 import { hasAndroidAppReferrer } from "@/lib/playBilling";
 import { useState, useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -69,7 +70,8 @@ const SPEED_ROUND_TIME = 20;
 const CHAOS_ROUND_TIME = 45;
 const MAX_ROUNDS = 3;
 const EASY_LETTERS = ["A", "C", "E", "I", "L", "M", "P", "R", "S", "T"];
-const REWARDED_ADS_DISABLED = (() => {
+const ADS_TEMPORARILY_SUSPENDED = areAdsTemporarilySuspended();
+const REWARDED_ADS_DISABLED = ADS_TEMPORARILY_SUSPENDED || (() => {
   if (new URLSearchParams(window.location.search).get("rewardedAds") === "1") return false;
   if (import.meta.env.VITE_REWARDED_ADS_DISABLED !== "1") return false;
   // Keep rewarded ads disabled on normal web browsers, but allow the native
@@ -2104,15 +2106,22 @@ export default function SoloGame() {
                     ⭐ +20s
                   </button>
                 )}
-                {!rewardedUsed && !isPremium && !REWARDED_ADS_DISABLED && (
+                {!rewardedUsed && !isPremium && (ADS_TEMPORARILY_SUSPENDED || !REWARDED_ADS_DISABLED) && (
                   <button
-                    onClick={() => setRewardedAdType("extraTime")}
+                    onClick={() => {
+                       if (ADS_TEMPORARILY_SUSPENDED) {
+                         setTimeLeft(prev => prev + 30);
+                         setRewardedUsed(true);
+                         return;
+                       }
+                       setRewardedAdType("extraTime");
+                     }}
                     className="flex items-center justify-center gap-2 py-2 px-3 rounded-xl border border-yellow-500/30 bg-yellow-500/10 text-yellow-300 text-xs font-bold hover:bg-yellow-500/20 transition-all"
                   >
-                    <Tv2 className="w-3.5 h-3.5" /> +30s
+                    <Tv2 className="w-3.5 h-3.5" /> {ADS_TEMPORARILY_SUSPENDED ? "+30s GRATIS" : "+30s"}
                   </button>
                 )}
-                {!hintUsed && !isPremium && !REWARDED_ADS_DISABLED && (
+                {!hintUsed && !isPremium && (ADS_TEMPORARILY_SUSPENDED || !REWARDED_ADS_DISABLED) && (
                   <button
                     onClick={async () => {
                       const empty = categories.find(c => !(responses[c] && responses[c].trim().length > 0));
@@ -2128,12 +2137,21 @@ export default function SoloGame() {
                         toast({ title: lang === "en" ? "No valid hint available right now" : lang === "pt" ? "No hay una pista válida disponible ahora" : "No hay una pista válida disponible ahora" });
                         return;
                       }
-                      pendingHintRef.current = { category: empty, word };
+                      if (ADS_TEMPORARILY_SUSPENDED) {
+                         setResponses(prev => ({ ...prev, [empty]: word }));
+                         setHintReveal({ category: empty, word });
+                         setTimeout(() => setHintReveal(null), 3500);
+                         setHintUsed(true);
+                         return;
+                       }
+                       pendingHintRef.current = { category: empty, word };
                       setRewardedAdType("hint");
                     }}
                     className="flex items-center justify-center gap-2 py-2 px-3 rounded-xl border border-cyan-500/30 bg-cyan-500/10 text-cyan-300 text-xs font-bold hover:bg-cyan-500/20 transition-all"
                   >
-                    💡 {lang === "en" ? "Hint" : lang === "pt" ? "Dica" : lang === "fr" ? "Indice" : "Pista"}
+                    💡 {ADS_TEMPORARILY_SUSPENDED
+                       ? (lang === "en" ? "Free hint" : lang === "pt" ? "Dica grátis" : lang === "fr" ? "Indice gratuit" : "Pista gratis")
+                       : (lang === "en" ? "Hint" : lang === "pt" ? "Dica" : lang === "fr" ? "Indice" : "Pista")}
                   </button>
                 )}
                 {!hintUsed && isPremium && (
@@ -3000,12 +3018,23 @@ export default function SoloGame() {
                 </motion.div>
               )}
 
-              {round >= maxRounds && !doubleUsed && totalScore > 0 && !isDailyMode && !isPremium && !REWARDED_ADS_DISABLED && (
+              {round >= maxRounds && !doubleUsed && totalScore > 0 && !isDailyMode && !isPremium && (ADS_TEMPORARILY_SUSPENDED || !REWARDED_ADS_DISABLED) && (
                 <motion.button
                   initial={{ opacity: 0, scale: 0.9 }}
                   animate={{ opacity: 1, scale: 1 }}
                   whileHover={{ scale: 1.02 }}
-                  onClick={() => setRewardedAdType("double")}
+                  onClick={() => {
+                    if (ADS_TEMPORARILY_SUSPENDED) {
+                      const bonus = Math.max(0, totalScore);
+                      if (bonus > 0) {
+                        submitToLeaderboard(bonus, aiTotalScore, { bonus: true });
+                        setTotalScore(prev => prev + bonus);
+                        setDoubleUsed(true);
+                      }
+                      return;
+                    }
+                    setRewardedAdType("double");
+                  }}
                   className="w-full mb-3 py-3 px-4 rounded-xl flex items-center justify-center gap-2 font-black text-sm"
                   style={{
                     background: "linear-gradient(135deg, rgba(249,168,37,0.25), rgba(181,48,26,0.2))",
