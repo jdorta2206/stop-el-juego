@@ -20,7 +20,6 @@ import com.google.android.gms.ads.interstitial.InterstitialAd;
 import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback;
 import com.google.android.gms.ads.LoadAdError;
 import com.google.android.gms.ads.MobileAds;
-import java.util.Calendar;
 
 public class InterstitialAdActivity extends Activity {
     private static boolean adsTemporarilySuspended() {
