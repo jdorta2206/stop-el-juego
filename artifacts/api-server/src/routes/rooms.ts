@@ -766,13 +766,14 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
       if (!halloweenApplicable || halloweenResult !== null) await markMultiplayerAuxClaim(roomId, p.playerId, "halloween");
     } catch (err) { console.error("[halloween] trusted multiplayer completion failed:", err); }
 
-    const seasonOk = await recordAuthoritativeSeasonEvents(p.playerId, [
+    const seasonEvents: Parameters<typeof recordAuthoritativeSeasonEvents>[1] = [
       { type: "play_game", value: 1 },
       ...(won ? [{ type: "win_game", value: 1 }] : []),
       ...(rawScore > 0 ? [{ type: "round_score", value: rawScore }] : []),
       ...(validWords > 0 ? [{ type: "valid_words", value: validWords }] : []),
       { type: "streak", value: settlementStreak },
-    ], `multiplayer:${roomId}:${p.playerId}`);
+    ];
+    const seasonOk = await recordAuthoritativeSeasonEvents(p.playerId, seasonEvents, `multiplayer:${roomId}:${p.playerId}`);
     if (seasonOk) await markMultiplayerAuxClaim(roomId, p.playerId, "season");
   }));
 }
@@ -841,11 +842,12 @@ async function recoverMultiplayerAuxiliaryEffects(room: any, players: any[]): Pr
       scoreRow[0]?.currentStreak ?? 0,
     );
     if (!aux.has("season") && (existingSeasonEvent.rows ?? []).length === 0) {
-      const seasonOk = await recordAuthoritativeSeasonEvents(p.playerId, [
+      const seasonEvents: Parameters<typeof recordAuthoritativeSeasonEvents>[1] = [
         { type: "play_game", value: 1 }, ...(won ? [{ type: "win_game", value: 1 }] : []),
         ...(rawScore > 0 ? [{ type: "round_score", value: rawScore }] : []), ...(validWords > 0 ? [{ type: "valid_words", value: validWords }] : []),
         ...(streak > 0 ? [{ type: "streak", value: streak }] : []),
-      ], eventKey);
+      ];
+      const seasonOk = await recordAuthoritativeSeasonEvents(p.playerId, seasonEvents, eventKey);
       if (seasonOk) await markMultiplayerAuxClaim(room.id, p.playerId, "season");
     } else if (!aux.has("season")) await markMultiplayerAuxClaim(room.id, p.playerId, "season");
     if (!aux.has("halloween")) {
@@ -1805,6 +1807,7 @@ router.post("/:roomCode/start", async (req, res) => {
   const roomCode = paramStr(req.params.roomCode);
   const { hostId, roomId } = (req.body ?? {}) as { hostId?: string; roomId?: number };
   if (!Number.isInteger(roomId) || roomId <= 0) { res.status(400).json({ error: "Missing roomId" }); return; }
+  const requiredRoomId = roomId;
   const rooms = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, roomCode.toUpperCase())).limit(1);
   if (rooms.length === 0) { res.status(404).json({ error: "Room not found" }); return; }
 
@@ -1881,7 +1884,7 @@ router.post("/:roomCode/start", async (req, res) => {
     })
     .where(and(
       eq(roomsTable.roomCode, roomCode.toUpperCase()),
-      eq(roomsTable.id, roomId),
+      eq(roomsTable.id, requiredRoomId),
       eq(roomsTable.status, "waiting"),
       eq(roomsTable.roomVersion, room.roomVersion),
     ))
@@ -2265,6 +2268,7 @@ router.post("/:roomCode/category-pack", async (req, res) => {
   };
   const { hostId, roomId, pack } = body;
   if (!Number.isInteger(roomId) || roomId <= 0) { res.status(400).json({ error: "Missing roomId" }); return; }
+  const requiredRoomId = roomId;
   // 🔒 Bind to the token first so a leaked hostId can't be replayed by a third party.
   if (!await verifyClaimedIdentity(req, hostId)) {
     res.status(403).json({ error: "Identity verification failed" }); return;
@@ -2312,7 +2316,7 @@ router.post("/:roomCode/category-pack", async (req, res) => {
     .set({ stopperJson: JSON.stringify(packMeta), updatedAt: new Date(), roomVersion: sql`${roomsTable.roomVersion} + 1` })
     .where(and(
       eq(roomsTable.roomCode, code),
-      eq(roomsTable.id, roomId),
+      eq(roomsTable.id, requiredRoomId),
       eq(roomsTable.status, "waiting"),
       eq(roomsTable.roomVersion, rooms[0].roomVersion),
       eq(roomsTable.hostId, hostId),
