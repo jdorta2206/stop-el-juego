@@ -29,8 +29,7 @@ import java.nio.charset.StandardCharsets;
 
 public class RewardedAdActivity extends Activity {
     private static boolean adsTemporarilySuspended() {
-        Calendar now = Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC"));
-        return now.get(Calendar.YEAR) == 2026 && now.get(Calendar.MONTH) <= Calendar.OCTOBER;
+        return System.currentTimeMillis() < 1793491200000L; // 1 Nov 2026 00:00 UTC
     }
     private static final String TAG = "STOP_REWARDED";
     private static final String REAL_REWARDED_ID = "ca-app-pub-4807272408824742/3559554716";
