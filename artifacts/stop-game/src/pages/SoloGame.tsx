@@ -2121,7 +2121,7 @@ export default function SoloGame() {
                     <Tv2 className="w-3.5 h-3.5" /> {ADS_TEMPORARILY_SUSPENDED ? "+30s GRATIS" : "+30s"}
                   </button>
                 )}
-                {!hintUsed && !isPremium && !REWARDED_ADS_DISABLED && (
+                {!hintUsed && !isPremium && (ADS_TEMPORARILY_SUSPENDED || !REWARDED_ADS_DISABLED) && (
                   <button
                     onClick={async () => {
                       const empty = categories.find(c => !(responses[c] && responses[c].trim().length > 0));
