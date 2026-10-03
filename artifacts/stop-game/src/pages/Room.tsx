@@ -841,6 +841,7 @@ export default function Room() {
 
   const submitResults = useCallback(async (score: number, isStopper = false) => {
     if (hasSubmittedRef.current || submitInFlightRef.current || !player || !roomCode) return;
+    const requestedPlayerId = player.id;
     submitInFlightRef.current = true;
     sound.playCorrect();
     haptic.submit();
@@ -871,6 +872,10 @@ export default function Room() {
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
         await submitMutation.mutateAsync(payload);
+        if (requestedPlayerId !== currentPlayerIdRef.current) {
+          submitInFlightRef.current = false;
+          return;
+        }
         hasSubmittedRef.current = true;
         submitInFlightRef.current = false;
         if (submitRetryTimerRef.current) {
@@ -887,6 +892,7 @@ export default function Room() {
     }
 
     submitInFlightRef.current = false;
+    if (requestedPlayerId !== currentPlayerIdRef.current) return;
     // A failed network request must not permanently lock the client in
     // "Enviando…". Keep the exact payload and retry while the server is still
     // on this round. The server-side /results endpoint is idempotent, so a
