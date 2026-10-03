@@ -733,7 +733,7 @@ export default function Room() {
       const response = await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/halloween-scare`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders(), ...(isHalloweenPreview() ? { "x-halloween-preview": "1" } : {}) },
-        body: JSON.stringify({ playerId: player.id, playerName: player.name }),
+        body: JSON.stringify({ playerId: requestedPlayerId, playerName: player.name }),
       });
       const data = await response.json().catch(() => ({}));
       if (requestedPlayerId !== currentPlayerIdRef.current) return;
@@ -1301,24 +1301,27 @@ export default function Room() {
         startFreezeCountdown();
       }
     } catch (e) { console.error(e); }
-    setIsStopping(false);
+    finally {
+      if (requestedPlayerId === currentPlayerIdRef.current) setIsStopping(false);
+    }
   };
 
   const handleStart = async () => {
     if (!roomCode || !player) return;
+    const requestedPlayerId = player.id;
     try {
       const r = await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/start`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
         // 🔐 Server now requires hostId to authorize round start.
-        body: JSON.stringify({ hostId: player.id }),
+        body: JSON.stringify({ hostId: requestedPlayerId }),
       });
       // 🚀 Adelantamos el estado en local sin esperar al SSE/polling — quien pulsa
       // "Empezar" ve la transición instantánea (los demás llegan vía broadcast).
-      if (r.ok) {
+      if (r.ok && requestedPlayerId === currentPlayerIdRef.current) {
         try {
           const data = await r.json();
-          queryClient.setQueryData(roomQueryKey, data);
+          if (requestedPlayerId === currentPlayerIdRef.current) queryClient.setQueryData(roomQueryKey, data);
         } catch {}
       }
     } catch (e) { console.error(e); }
