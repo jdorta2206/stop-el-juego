@@ -25,7 +25,7 @@ public class Application extends android.app.Application {
     }
     private static final String TAG = "STOP_REWARDED";
     private static final String REAL_REWARDED_ID = "ca-app-pub-4807272408824742/3559554716";
-    private static final long RETRY_DELAY_MS = 2000L;
+    private static final long RETRY_DELAY_MS = 15 * 60 * 1000L;
     // Google documents that manually preloaded rewarded ads expire after one hour.
     // Refresh slightly before the hard expiry so a cached object is never shown stale.
     private static final long PRELOADED_AD_TTL_MS = 55 * 60 * 1000L;
