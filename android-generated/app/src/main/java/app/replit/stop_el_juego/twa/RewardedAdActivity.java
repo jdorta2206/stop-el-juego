@@ -18,6 +18,7 @@ import com.google.android.gms.ads.MobileAds;
 import com.google.android.gms.ads.rewarded.RewardedAd;
 import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback;
 import com.google.android.gms.ads.rewarded.ServerSideVerificationOptions;
+import java.util.Calendar;
 
 import org.json.JSONObject;
 
@@ -27,6 +28,10 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 
 public class RewardedAdActivity extends Activity {
+    private static boolean adsTemporarilySuspended() {
+        Calendar now = Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC"));
+        return now.get(Calendar.YEAR) == 2026 && now.get(Calendar.MONTH) <= Calendar.OCTOBER;
+    }
     private static final String TAG = "STOP_REWARDED";
     private static final String REAL_REWARDED_ID = "ca-app-pub-4807272408824742/3559554716";
     private static final long LOAD_TIMEOUT_MS = 10_000L;
