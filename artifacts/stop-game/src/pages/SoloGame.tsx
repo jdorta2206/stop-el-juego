@@ -1,4 +1,5 @@
 import { trackAnalyticsEvent } from "@/lib/analyticsClient";
+import { areAdsTemporarilySuspended } from "@/lib/adsRuntime";
 import { hasAndroidAppReferrer } from "@/lib/playBilling";
 import { useState, useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -69,7 +70,7 @@ const SPEED_ROUND_TIME = 20;
 const CHAOS_ROUND_TIME = 45;
 const MAX_ROUNDS = 3;
 const EASY_LETTERS = ["A", "C", "E", "I", "L", "M", "P", "R", "S", "T"];
-const REWARDED_ADS_DISABLED = (() => {
+const REWARDED_ADS_DISABLED = areAdsTemporarilySuspended() || (() => {
   if (new URLSearchParams(window.location.search).get("rewardedAds") === "1") return false;
   if (import.meta.env.VITE_REWARDED_ADS_DISABLED !== "1") return false;
   // Keep rewarded ads disabled on normal web browsers, but allow the native
