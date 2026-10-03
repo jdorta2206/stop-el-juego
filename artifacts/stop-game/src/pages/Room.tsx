@@ -852,6 +852,10 @@ export default function Room() {
     submitInFlightRef.current = true;
     sound.playCorrect();
     haptic.submit();
+    if (requestedPlayerId !== currentPlayerIdRef.current) {
+      submitInFlightRef.current = false;
+      return;
+    }
     setPhase("submitted");
     const bluffedList = [...bluffedCategoriesRef.current];
     // Build bluffedWords map: category → what the player wrote
@@ -877,6 +881,10 @@ export default function Room() {
     // 🔁 Retry up to 3 times with exponential backoff so a single dropped
     // request doesn't leave the player stuck on "Enviando…" forever.
     for (let attempt = 1; attempt <= 3; attempt++) {
+      if (requestedPlayerId !== currentPlayerIdRef.current) {
+        submitInFlightRef.current = false;
+        return;
+      }
       try {
         await submitMutation.mutateAsync(payload);
         if (requestedPlayerId !== currentPlayerIdRef.current) {
