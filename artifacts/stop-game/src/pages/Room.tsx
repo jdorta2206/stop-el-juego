@@ -1270,7 +1270,7 @@ export default function Room() {
     }
 
     if (roomStatus === "stopped") {
-      if (phase === "playing") {
+      if (phase === "playing" || phase === "lobby") {
         // Mark if this player was the one who called STOP (for speed bonus)
         iAmTheStopperRef.current = stopper?.id === player?.id;
         stopAllTimers();
