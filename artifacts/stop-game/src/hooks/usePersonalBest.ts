@@ -37,8 +37,10 @@ export function usePersonalBest(mode: GameMode, playerId?: string) {
   });
   const syncedRef = useRef(false);
   const syncAbortRef = useRef<AbortController | null>(null);
+  const currentPlayerIdRef = useRef<string | undefined>(playerId);
 
   useEffect(() => {
+    currentPlayerIdRef.current = playerId;
     try {
       setBests(JSON.parse(localStorage.getItem(storageKey(playerId)) || "{}"));
     } catch {
@@ -55,6 +57,7 @@ export function usePersonalBest(mode: GameMode, playerId?: string) {
     const controller = new AbortController();
     syncAbortRef.current = controller;
     syncBestsFromServer(playerId, controller.signal).then(serverBests => {
+      if (controller.signal.aborted || playerId !== currentPlayerIdRef.current) return;
       setBests(prev => {
         const authoritative: BestScores = {};
         for (const [m, score] of Object.entries(serverBests)) {
