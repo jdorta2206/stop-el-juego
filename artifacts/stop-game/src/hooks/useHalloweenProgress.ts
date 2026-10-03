@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { getApiUrl, authHeaders } from "@/lib/utils";
 import { isHalloweenActive } from "@/lib/halloweenEvent";
 
@@ -19,6 +19,11 @@ type HalloweenProgressResponse = {
 export function useHalloweenProgress(playerId?: string | null) {
   const [data, setData] = useState<HalloweenProgressResponse | null>(null);
   const [eventActive, setEventActive] = useState(() => isHalloweenActive());
+  const currentPlayerIdRef = useRef(playerId);
+
+  useEffect(() => {
+    currentPlayerIdRef.current = playerId;
+  }, [playerId]);
 
   useEffect(() => {
     const update = () => setEventActive(isHalloweenActive());
@@ -59,6 +64,7 @@ export function useHalloweenProgress(playerId?: string | null) {
       });
       if (!r.ok) return null;
       const next = await r.json();
+      if (currentPlayerIdRef.current !== playerId) return null;
       setData({ active: true, year: next.year, progress: {
         gamesCompleted: next.gamesCompleted,
         scaresReceived: next.scaresReceived,
