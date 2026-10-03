@@ -25,6 +25,7 @@ export default function Impossible() {
   const [outcome, setOutcome] = useState<{ won: boolean; word: string; timeMs: number; stats: { attempts: number; wins: number } } | null>(null);
   const startedAt = useRef<number>(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const currentPlayerIdRef = useRef(player?.id);\n  currentPlayerIdRef.current = player?.id;
 
   // Load combo + my prior attempt.
   useEffect(() => {
@@ -85,7 +86,7 @@ export default function Impossible() {
           surrendered,
         }),
       });
-      const data = await r.json();
+      const data = await r.json();\n      if (currentPlayerIdRef.current !== player.id) return;
       if (data.alreadyPlayed && data.result) {
         setMyAttempt(data.result);
       } else {
