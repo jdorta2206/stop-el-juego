@@ -58,6 +58,7 @@ export function issueScoreToken(
   collectionWords: Array<{ word: string; category: string }> = [],
   mode: ScoreVoucherMode = "solo",
   aiBase = 0,
+  playerId: string | null = null,
 ): string | null {
   const secret = getSigningSecret();
   if (!secret) return null;
@@ -76,7 +77,12 @@ export function issueScoreToken(
     mode === "daily" || mode === "multiplayer" ? mode : "solo";
   const safeAiBase = Math.max(0, Math.min(100_000, Math.floor(aiBase)));
   const collectionData = Buffer.from(JSON.stringify(safeCollectionWords), "utf8").toString("base64url");
-  const payload = `${safeBase}.${KIND_ROUND}.${exp}.${jti}.${safeMode}.${safeAiBase}.${collectionData}`;
+  const safePlayerId =
+    typeof playerId === "string" && playerId.length > 0 && playerId.length <= 200 && !playerId.includes(".")
+      ? playerId
+      : "";
+  const playerData = Buffer.from(safePlayerId, "utf8").toString("base64url");
+  const payload = `${safeBase}.${KIND_ROUND}.${exp}.${jti}.${playerData}.${safeMode}.${safeAiBase}.${collectionData}`;
   return `${payload}.${sign(secret, payload)}`;
 }
 
@@ -87,6 +93,7 @@ type VerifiedVoucher = {
   mode: ScoreVoucherMode | null;
   aiBase: number | null;
   collectionWords: Array<{ word: string; category: string }>;
+  playerId: string | null;
 };
 
 function parseVerifiedVoucher(
@@ -96,25 +103,34 @@ function parseVerifiedVoucher(
 ): VerifiedVoucher | null {
   if (typeof token !== "string" || token.length > MAX_TOKEN_LENGTH) return null;
   const parts = token.split(".");
-  if (parts.length !== 5 && parts.length !== 6 && parts.length !== 7 && parts.length !== 8) return null;
+  if (parts.length !== 5 && parts.length !== 6 && parts.length !== 7 && parts.length !== 8 && parts.length !== 9) return null;
 
   const [baseStr, kind, expStr, jti] = parts;
   const mode = parts.length >= 7
     ? (parts[4] === "daily" || parts[4] === "multiplayer" || parts[4] === "solo" ? parts[4] : null)
     : null;
-  const hasAiBase = parts.length === 8;
-  const aiBaseStr = hasAiBase ? parts[5] : "0";
-  const collectionData = hasAiBase ? parts[6] : parts.length === 7 ? parts[5] : parts.length === 6 ? parts[4] : "";
-  const sig = hasAiBase ? parts[7] : parts.length === 7 ? parts[6] : parts.length === 6 ? parts[5] : parts[4];
+  const hasPlayerBinding = parts.length === 9;
+  const hasAiBase = parts.length === 8 || hasPlayerBinding;
+  const playerData = hasPlayerBinding ? parts[4] : "";
+  const aiBaseIndex = hasPlayerBinding ? 6 : 5;
+  const collectionData = hasPlayerBinding
+    ? parts[7]
+    : parts.length === 8 ? parts[6] : parts.length === 7 ? parts[5] : parts.length === 6 ? parts[4] : "";
+  const sig = hasPlayerBinding
+    ? parts[8]
+    : parts.length === 8 ? parts[7] : parts.length === 7 ? parts[6] : parts.length === 6 ? parts[5] : parts[4];
+  const aiBaseStr = hasAiBase ? parts[aiBaseIndex] : "0";
   if (kind !== KIND_ROUND || !jti || !sig) return null;
 
-  const payload = hasAiBase
-    ? `${baseStr}.${kind}.${expStr}.${jti}.${parts[4]}.${aiBaseStr}.${collectionData}`
-    : parts.length === 7
-      ? `${baseStr}.${kind}.${expStr}.${jti}.${parts[4]}.${collectionData}`
-      : parts.length === 6
-        ? `${baseStr}.${kind}.${expStr}.${jti}.${collectionData}`
-        : `${baseStr}.${kind}.${expStr}.${jti}`;
+  const payload = hasPlayerBinding
+    ? `${baseStr}.${kind}.${expStr}.${jti}.${playerData}.${parts[5]}.${aiBaseStr}.${collectionData}`
+    : hasAiBase
+      ? `${baseStr}.${kind}.${expStr}.${jti}.${parts[4]}.${aiBaseStr}.${collectionData}`
+      : parts.length === 7
+        ? `${baseStr}.${kind}.${expStr}.${jti}.${parts[4]}.${collectionData}`
+        : parts.length === 6
+          ? `${baseStr}.${kind}.${expStr}.${jti}.${collectionData}`
+          : `${baseStr}.${kind}.${expStr}.${jti}`;
   const expected = sign(secret, payload);
 
   try {
@@ -131,6 +147,12 @@ function parseVerifiedVoucher(
   if (!Number.isSafeInteger(exp) || exp <= now) return null;
   if (!Number.isFinite(b) || !Number.isSafeInteger(b) || b < 0 || b > 100_000) return null;
   if (aiBase !== null && (!Number.isFinite(aiBase) || !Number.isSafeInteger(aiBase) || aiBase < 0 || aiBase > 100_000)) return null;
+
+  let playerId: string | null = null;
+  if (hasPlayerBinding) {
+    try { playerId = Buffer.from(playerData, "base64url").toString("utf8") || null; } catch { return null; }
+    if (playerId && (playerId.length > 200 || playerId.includes("."))) return null;
+  }
 
   let collectionWords: Array<{ word: string; category: string }> = [];
   if (collectionData) {
@@ -151,7 +173,7 @@ function parseVerifiedVoucher(
     }
   }
 
-  return { base: b, exp, jti, mode, aiBase, collectionWords };
+  return { base: b, exp, jti, mode, aiBase, collectionWords, playerId };
 }
 
 /** Legacy in-process helper retained for tests. */
@@ -197,9 +219,10 @@ export async function sumVerifiedBasePersistent(
   collectionWords: Array<{ word: string; category: string }>;
   mode: ScoreVoucherMode | null;
   aiBase: number | null;
+  playerId: string | null;
   voucherJtis: string[];
 }> {
-  const empty = { base: 0, verified: 0, collectionWords: [], mode: null, aiBase: 0, voucherJtis: [] as string[] };
+  const empty = { base: 0, verified: 0, collectionWords: [], mode: null, aiBase: 0, playerId: null, voucherJtis: [] as string[] };
   if (!Array.isArray(tokens) || tokens.length === 0 || tokens.length > MAX_TOKEN_BATCH) return empty;
   const secret = getSigningSecret();
   if (!secret) return empty;
@@ -216,6 +239,7 @@ export async function sumVerifiedBasePersistent(
     mode: ScoreVoucherMode | null;
     aiBase: number | null;
     collectionWords: Array<{ word: string; category: string }>;
+    playerId: string | null;
   }> = [];
 
   for (const token of tokens) {
@@ -227,6 +251,7 @@ export async function sumVerifiedBasePersistent(
       mode: voucher.mode,
       aiBase: voucher.aiBase,
       collectionWords: voucher.collectionWords,
+      playerId: voucher.playerId,
     });
   }
 
@@ -242,6 +267,9 @@ export async function sumVerifiedBasePersistent(
     mode,
     aiBase: counted.every((entry) => entry.aiBase !== null)
       ? counted.reduce((sum, entry) => sum + (entry.aiBase ?? 0), 0)
+      : null,
+    playerId: counted.length > 0 && counted.every((entry) => entry.playerId === counted[0].playerId)
+      ? counted[0].playerId
       : null,
     // Only consume vouchers that actually contributed to the capped score.
     // Extra valid vouchers in the request must remain available for a later retry/game.
