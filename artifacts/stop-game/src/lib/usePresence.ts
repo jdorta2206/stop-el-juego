@@ -31,11 +31,12 @@ export interface IncomingChallenge {
 }
 
 // Send a heartbeat to mark this player as online
-async function ping(player: PlayerProfile, roomCode?: string | null, language?: string) {
+async function ping(player: PlayerProfile, roomCode?: string | null, language?: string, signal?: AbortSignal) {
   try {
     await fetch(`${API_BASE}/api/presence/ping`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      signal,
       body: JSON.stringify({
         playerId: player.id,
         name: player.name,
@@ -162,6 +163,7 @@ export function usePresence(
   const activeChallenge = useRef<string | null>(null); // track if we're already showing one
   const refreshAbortRef = useRef<AbortController | null>(null);
   const challengeAbortRef = useRef<AbortController | null>(null);
+  const pingAbortRef = useRef<AbortController | null>(null);
 
   const refresh = useCallback(async () => {
     refreshAbortRef.current?.abort();
@@ -220,11 +222,14 @@ export function usePresence(
   useEffect(() => {
     if (!player) return;
 
-    ping(player, roomCode, language);
+    pingAbortRef.current?.abort();
+    const pingController = new AbortController();
+    pingAbortRef.current = pingController;
+    ping(player, roomCode, language, pingController.signal);
     refresh();
 
     intervalRef.current = setInterval(() => {
-      ping(player, roomCode, language);
+      ping(player, roomCode, language, pingController.signal);
       refresh();
     }, PING_INTERVAL);
 
@@ -238,6 +243,8 @@ export function usePresence(
       if (challengePollRef.current) clearInterval(challengePollRef.current);
       refreshAbortRef.current?.abort();
       challengeAbortRef.current?.abort();
+      pingController.abort();
+      if (pingAbortRef.current === pingController) pingAbortRef.current = null;
     };
   }, [player?.id, roomCode, language]);
 
