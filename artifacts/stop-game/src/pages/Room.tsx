@@ -610,6 +610,7 @@ export default function Room() {
         headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ hostId: player.id, roomId: room?.id }),
       });
+      if (requestedPlayerId !== currentPlayerIdRef.current) return;
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         toast({ title: data.error ?? "No se pudo añadir bot", variant: "destructive" });
@@ -726,6 +727,7 @@ export default function Room() {
 
   const sendHalloweenScare = useCallback(async () => {
     if (!player?.id || !roomCode || !isHalloweenActive() || !isHalloweenModeEnabled() || phase !== "playing" || manualScareBusyRef.current || Date.now() < halloweenScareCooldownUntil) return;
+    const requestedPlayerId = player.id;
     manualScareBusyRef.current = true;
     try {
       const response = await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/halloween-scare`, {
@@ -734,6 +736,7 @@ export default function Room() {
         body: JSON.stringify({ playerId: player.id, playerName: player.name }),
       });
       const data = await response.json().catch(() => ({}));
+      if (requestedPlayerId !== currentPlayerIdRef.current) return;
       if (response.ok) {
         const ms = Number(data.cooldownMs ?? 18000);
         setHalloweenScareCooldownUntil(Date.now() + ms);
@@ -820,6 +823,7 @@ export default function Room() {
     extras?: { customCategories?: string[]; customLabel?: string },
   ) => {
     if (!player || !roomCode) return;
+    const requestedPlayerId = player.id;
     setCategoryPack(pack);
     try {
       const res = await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/category-pack`, {
