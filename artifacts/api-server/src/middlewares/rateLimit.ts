@@ -10,7 +10,7 @@ interface RateLimitStore {
 }
 
 class PgRateLimitStore implements RateLimitStore {
-  private readonly prefix: string;
+  readonly prefix: string;
   private readonly windowMs: number;
   private cleanupTimer: ReturnType<typeof setInterval>;
 
