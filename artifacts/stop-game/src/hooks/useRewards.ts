@@ -73,6 +73,8 @@ export function useRewards(playerId?: string | null, onClaimed?: () => void) {
   const [prestige, setPrestige] = useState<PrestigeRewards | null>(null);
   const [loading, setLoading] = useState(false);
   const requestRef = useRef<AbortController | null>(null);
+  const currentPlayerIdRef = useRef(playerId);
+  currentPlayerIdRef.current = playerId;
 
   const refresh = useCallback(async () => {
     requestRef.current?.abort();
@@ -100,7 +102,7 @@ export function useRewards(playerId?: string | null, onClaimed?: () => void) {
   useEffect(() => { refresh(); }, [refresh]);
 
   const claim = useCallback(async (path: string, body: object): Promise<ClaimResult> => {
-    if (!playerId) return { error: "No player" };
+    if (!playerId || currentPlayerIdRef.current !== playerId) return { error: "No player" };
     try {
       const res = await fetch(`${API}/api/rewards/${path}`, {
         method: "POST",
@@ -109,8 +111,13 @@ export function useRewards(playerId?: string | null, onClaimed?: () => void) {
         body: JSON.stringify(body),
       });
       const json = (await res.json().catch(() => ({}))) as ClaimResult;
-      if (!res.ok) return { error: json.error || "Failed" };
+      if (!res.ok) {
+        if (currentPlayerIdRef.current !== playerId) return { error: "Failed" };
+        return { error: json.error || "Failed" };
+      }
+      if (currentPlayerIdRef.current !== playerId) return { error: "Failed" };
       await refresh();
+      if (currentPlayerIdRef.current !== playerId) return { error: "Failed" };
       onClaimed?.();
       return json;
     } catch {
