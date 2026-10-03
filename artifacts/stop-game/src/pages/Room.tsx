@@ -141,7 +141,47 @@ export default function Room() {
   // Prevent a rematch response started by a previous identity from navigating
   // the currently active account into that previous player's rematch.
   const currentPlayerIdRef = useRef<string | null>(null);
+  const previousPlayerIdRef = useRef<string | null>(null);
   currentPlayerIdRef.current = player?.id ?? null;
+
+  // A room component can survive an account switch (A -> B). All local
+  // gameplay state below belongs to the active player, so never carry A's
+  // answers/submission/freeze state into B.
+  useEffect(() => {
+    const nextId = player?.id ?? null;
+    const previousId = previousPlayerIdRef.current;
+    previousPlayerIdRef.current = nextId;
+    if (!previousId || previousId === nextId) return;
+
+    setResponses({});
+    responsesRef.current = {};
+    responsesSnapshotRef.current = {};
+    setBluffedCategories(new Set());
+    bluffedCategoriesRef.current = new Set();
+    setMyVotes({});
+    setMyBluffResults([]);
+    setSpyLoading(false);
+    setSpyReveal(null);
+    setSpyError(null);
+    setSpyUsesLeft(spyLimit);
+    setIsStopping(false);
+    setStopFlash(false);
+    hasSubmittedRef.current = false;
+    submitInFlightRef.current = false;
+    isFreezingRef.current = false;
+    iAmTheStopperRef.current = false;
+    lastRoundRef.current = 0;
+    stopAllTimers();
+    if (submitRetryTimerRef.current) {
+      clearTimeout(submitRetryTimerRef.current);
+      submitRetryTimerRef.current = null;
+    }
+    if (bluffVoteTimerRef.current) {
+      clearInterval(bluffVoteTimerRef.current);
+      bluffVoteTimerRef.current = null;
+    }
+    setPhase("lobby");
+  }, [player?.id, spyLimit, stopAllTimers]);
   const { isPremium: meIsPremium } = usePremium(player?.id);
   const { followedIds, follow, unfollow } = useFollows(player?.id);
   // The host's own custom packs (premium feature). Non-premium players see
@@ -1261,7 +1301,7 @@ export default function Room() {
         setPhase("lobby");
       }
     }
-  }, [roomStatus, currentRound]);
+  }, [roomStatus, currentRound, player?.id]);
 
   // ⚡ Auto-reveal categorías entre rondas para no aburrir a la gente.
   // ~0.7s por categoría (12 cats ≈ 8s total) + arranque rápido.
