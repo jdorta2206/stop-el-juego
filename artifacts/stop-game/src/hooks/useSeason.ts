@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { getApiUrl } from "@/lib/utils";
 
 const API = getApiUrl();
@@ -103,19 +103,24 @@ export function useSeason(playerId?: string | null) {
   const [season, setSeason] = useState<SeasonInfo | null>(null);
   const [progress, setProgress] = useState<SeasonProgress | null>(null);
   const [loading, setLoading] = useState(false);
+  const refreshGenerationRef = useRef(0);
 
   const refresh = useCallback(async () => {
+    const generation = ++refreshGenerationRef.current;
+    const controller = new AbortController();
     setLoading(true);
     try {
       const [s, p] = await Promise.all([
-        fetch(`${API}/api/season/current`).then((r) => (r.ok ? r.json() : null)),
+        fetch(`${API}/api/season/current`, { signal: controller.signal }).then((r) => (r.ok ? r.json() : null)),
         playerId
           ? fetch(`${API}/api/season/progress`, {
               credentials: "include",
               headers: authHeaders(),
+              signal: controller.signal,
             }).then((r) => (r.ok ? r.json() : null))
           : Promise.resolve(null),
       ]);
+      if (controller.signal.aborted || generation !== refreshGenerationRef.current) return;
       if (s) setSeason(s);
       if (p) setProgress(p);
     } catch {
@@ -124,6 +129,8 @@ export function useSeason(playerId?: string | null) {
       setLoading(false);
     }
   }, [playerId]);
+
+  useEffect(() => () => { refreshGenerationRef.current += 1; }, [playerId]);
 
   useEffect(() => { refresh(); }, [refresh]);
 
