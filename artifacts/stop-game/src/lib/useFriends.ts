@@ -67,8 +67,13 @@ export function useFacebookFriends(
   const requestRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    if (!fbAccessToken) return;
     requestRef.current?.abort();
+    setFriends([]);
+    setEnriched([]);
+    if (!fbAccessToken) {
+      setLoading(false);
+      return;
+    }
     const controller = new AbortController();
     requestRef.current = controller;
     setLoading(true);
