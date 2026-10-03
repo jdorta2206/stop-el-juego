@@ -763,7 +763,7 @@ router.post("/scores", scoreLimiter, requirePlayerIdentity, async (req: AuthedRe
         await applyAuthoritativeSeasonEventsInTransaction(tx, playerId, seasonEvents);
       }
 
-      if (verified > 0 && voucherJtis.length > 0) {
+      if (verified > 0 && voucherJtis && voucherJtis.length > 0) {
         await consumeScoreVoucherJtis(tx, voucherJtis);
       }
 
