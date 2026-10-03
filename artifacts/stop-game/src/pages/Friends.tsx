@@ -99,7 +99,7 @@ function FriendCard({
     challengeTimeoutRef.current = null;
     challengeAbortRef.current?.abort();
     pendingId.current = null;
-  }, []);
+  }, [currentPlayer.id]);
 
   const handleJoin = () => {
     if (friend.onlineData?.roomCode) {
@@ -118,7 +118,7 @@ function FriendCard({
     if (!friend.onlineData) return false;
     const requestedPlayerId = currentPlayer.id;
     const result = await sendChallenge(currentPlayer, friend.onlineData.playerId);
-    if (!result) return false;
+    if (!result || currentPlayer.id !== requestedPlayerId) return false;
     pendingId.current = result.challengeId;
     challengeAbortRef.current?.abort();
     if (challengePollRef.current) clearInterval(challengePollRef.current);
@@ -272,7 +272,7 @@ function OnlinePlayerCard({
     challengeTimeoutRef.current = null;
     challengeAbortRef.current?.abort();
     pendingId.current = null;
-  }, []);
+  }, [currentPlayer.id]);
 
   const handleJoin = () => {
     if (player.roomCode) {
@@ -286,7 +286,7 @@ function OnlinePlayerCard({
   const handleChallenge = async () => {
     const requestedPlayerId = currentPlayer.id;
     const result = await sendChallenge(currentPlayer, player.playerId);
-    if (!result) return;
+    if (!result || currentPlayer.id !== requestedPlayerId) return;
     pendingId.current = result.challengeId;
     challengeAbortRef.current?.abort();
     if (challengePollRef.current) clearInterval(challengePollRef.current);
