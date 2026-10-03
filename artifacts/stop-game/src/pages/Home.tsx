@@ -25,7 +25,7 @@ import { useCustomPacks } from "@/lib/useCustomPacks";
 import { BannerAd } from "@/components/AdSystem";
 import { PLAY_STORE_URL } from "@/lib/playReview";
 import { HalloweenBanner } from "@/components/HalloweenBanner";
-import { HALLOWEEN_START, isHalloweenActive, isHalloweenModeEnabled, setHalloweenModeEnabled } from "@/lib/halloweenEvent";
+import { isHalloweenActive, isHalloweenModeEnabled, setHalloweenModeEnabled } from "@/lib/halloweenEvent";
 import { useHalloweenProgress } from "@/hooks/useHalloweenProgress";
 import { HalloweenHomeAtmosphere } from "@/components/HalloweenHomeAtmosphere";
 
@@ -80,20 +80,7 @@ export default function Home() {
     return () => window.removeEventListener("halloween:audio-started", onHalloweenAudioStarted);
   }, []);
   const [showHalloweenAnnouncement, setShowHalloweenAnnouncement] = useState(false);
-  const [halloweenDaysUntilStart, setHalloweenDaysUntilStart] = useState(() =>
-    Math.max(0, Math.ceil((new Date(HALLOWEEN_START).getTime() - Date.now()) / 86_400_000)),
-  );
   const { data: halloweenProgressData } = useHalloweenProgress(player?.id);
-
-  // Pre-event countdown: this is informational only and never gates gameplay.
-  useEffect(() => {
-    const update = () => setHalloweenDaysUntilStart(
-      Math.max(0, Math.ceil((new Date(HALLOWEEN_START).getTime() - Date.now()) / 86_400_000)),
-    );
-    update();
-    const timer = window.setInterval(update, 60 * 60 * 1000);
-    return () => window.clearInterval(timer);
-  }, []);
 
   // Open the FTUE welcome modal once on first ever visit (after a tiny delay
   // so the home page can render its hero animation first).
@@ -153,24 +140,6 @@ export default function Home() {
   return (
     <Layout>
       <HalloweenHomeAtmosphere active={isHalloweenActive()} enabled={halloweenModeEnabled} />
-      {!isHalloweenActive() && halloweenDaysUntilStart > 0 && (
-        <div className="mx-auto mb-4 w-full max-w-2xl px-4" role="status" aria-live="polite">
-          <div
-            className="rounded-2xl px-4 py-3 text-center shadow-lg"
-            style={{
-              background: "linear-gradient(135deg, rgba(60,10,20,.94), rgba(20,8,15,.96))",
-              border: "1px solid rgba(248,113,113,.35)",
-            }}
-          >
-            <p className="text-orange-300 text-[10px] font-black uppercase tracking-[0.2em]">🎃 Próximo evento especial</p>
-            <p className="text-white font-black text-base mt-1">
-              Halloween comienza dentro de {halloweenDaysUntilStart} {halloweenDaysUntilStart === 1 ? "día" : "días"}
-            </p>
-            <p className="text-white/55 text-[11px] mt-1">15 de octubre · Sustos, ambientación de terror y recompensas especiales</p>
-          </div>
-        </div>
-      )}
-
       {showHalloweenAnnouncement && isHalloweenActive() && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 px-4 backdrop-blur-sm">
           <motion.div

@@ -180,6 +180,12 @@ function App() {
       const p = window.location.pathname.replace(base, "") || "/";
       return p === "/" || p === "";
     };
+    // The app owns Android/PWA back navigation, but normal browser history
+    // must remain usable so users can return to the page they came from.
+    const ownsBackNavigation =
+      document.referrer.startsWith("android-app://app.replit.stop_el_juego.twa") ||
+      window.matchMedia?.("(display-mode: standalone)")?.matches === true;
+    if (!ownsBackNavigation) return;
     try { window.history.pushState({ stopApp: true }, ""); } catch {}
     const onPop = () => {
       const open = document.body.dataset.modalOpen;
@@ -207,7 +213,8 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <MotionConfig reducedMotion="user">
         <ErrorBoundary>
-          <PackClaimHandler />\n          <ScoreOutboxHandler />
+          <PackClaimHandler />
+          <ScoreOutboxHandler />
           <SplashScreen onDone={() => setSplashDone(true)} lang={lang} />
           {splashDone && (
             <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>

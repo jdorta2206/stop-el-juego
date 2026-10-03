@@ -345,7 +345,7 @@ export default function Ranking() {
   const rest = players.slice(3);
   const baseList = filter === "weekly" ? weeklyPlayers : filter === "monthly" ? monthlyPlayers : allPlayers;
   const myEntry = baseList.find((p: any) => p.playerId === player?.id);
-  const myRank = myEntry ? baseList.indexOf(myEntry) + 1 : null;
+  const myRank = myEntry ? Number(myEntry.rank ?? (baseList.indexOf(myEntry) + 1)) : null;
   const isLoggedIn = player && player.loginMethod !== "guest";
   // If not in the top-100 list, build an entry from personal stats
   const myFallbackEntry = !myEntry && myStats?.score && myStats.score.gamesPlayed > 0
@@ -731,7 +731,7 @@ const PODIUM_ORDER = [1, 0, 2];
                 </div>
                 <div className="flex flex-col gap-1">
                   {rest.map((p: any, idx: number) => {
-                    const position = filter === "global" ? idx + 4 : players.indexOf(p) + 1;
+                    const position = Number(p.rank ?? (filter === "global" ? idx + 4 : players.indexOf(p) + 1));
                     const isMe = p.playerId === player?.id;
                     const isOnline = onlineMap.has(p.playerId);
                     const onlineData = onlineMap.get(p.playerId);

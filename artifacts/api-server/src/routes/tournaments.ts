@@ -171,14 +171,14 @@ router.get("/public", async (_req, res) => {
 });
 
 router.get("/:code", async (req, res) => {
-  const code = req.params.code.toUpperCase();
+  const code = String(req.params.code ?? "").toUpperCase();
   const rows = await db.select().from(tournamentsTable).where(eq(tournamentsTable.code, code)).limit(1);
   if (!rows.length) { res.status(404).json({ error: "Not found" }); return; }
   res.json(formatTournament(rows[0]));
 });
 
 router.post("/:code/join", async (req, res) => {
-  const code = req.params.code.toUpperCase();
+  const code = String(req.params.code ?? "").toUpperCase();
   const { playerId } = req.body as { playerId: string };
   if (!playerId || !await verifyClaimedIdentity(req, playerId)) {
     res.status(403).json({ error: "Identity verification failed" }); return;
@@ -215,7 +215,7 @@ router.post("/:code/join", async (req, res) => {
 });
 
 router.post("/:code/start", async (req, res) => {
-  const code = req.params.code.toUpperCase();
+  const code = String(req.params.code ?? "").toUpperCase();
   const { hostId } = req.body as { hostId: string };
   if (!hostId || !await verifyClaimedIdentity(req, hostId)) {
     res.status(403).json({ error: "Identity verification failed" }); return;
@@ -253,7 +253,7 @@ router.post("/:code/start", async (req, res) => {
 });
 
 router.post("/:code/start-match", requirePlayerIdentity, async (req: AuthedRequest, res) => {
-  const code = req.params.code.toUpperCase();
+  const code = String(req.params.code ?? "").toUpperCase();
   const { matchId } = req.body as { matchId: string };
   const callerId = req.playerId!;
 
@@ -331,7 +331,7 @@ router.post("/:code/start-match", requirePlayerIdentity, async (req: AuthedReque
       NOT_FOUND: 404, NO_BRACKET: 400, BAD_BRACKET: 400, MATCH_NOT_FOUND: 404,
       NOT_AUTHORIZED: 403, MATCH_NOT_PENDING: 409, INVALID_MATCH: 400,
     };
-    res.status(status[result.error] ?? 400).json({ error: result.error });
+    res.status(status[String(result.error)] ?? 400).json({ error: result.error });
     return;
   }
 
@@ -339,7 +339,7 @@ router.post("/:code/start-match", requirePlayerIdentity, async (req: AuthedReque
 });
 
 router.post("/:code/match-result", requirePlayerIdentity, async (req: AuthedRequest, res) => {
-  const code = req.params.code.toUpperCase();
+  const code = String(req.params.code ?? "").toUpperCase();
   const { matchId } = req.body as { matchId: string };
   const callerId = req.playerId!;
 
@@ -417,7 +417,7 @@ router.post("/:code/match-result", requirePlayerIdentity, async (req: AuthedRequ
       ROOM_MISMATCH: 409, MATCH_NOT_FINISHED: 409, ROOM_PARTICIPANTS_MISMATCH: 409,
       NO_WINNER: 409,
     };
-    res.status(status[result.error] ?? 400).json({ error: result.error });
+    res.status(status[String(result.error)] ?? 400).json({ error: result.error });
     return;
   }
 

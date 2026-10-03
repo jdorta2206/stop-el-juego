@@ -3,7 +3,7 @@ import { Router } from "express";
 
 const OAUTH_FETCH_TIMEOUT_MS = 15_000;
 
-async function oauthFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+async function oauthFetch(input: Parameters<typeof fetch>[0] | URL, init?: RequestInit): Promise<globalThis.Response> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), OAUTH_FETCH_TIMEOUT_MS);
   try {

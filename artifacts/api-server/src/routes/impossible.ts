@@ -117,7 +117,10 @@ router.post("/submit", async (req, res) => {
   }
 
   const combo = getImpossibleCombo(today, language);
-  const trimmed = String(word).trim();
+  // Bound the submitted word before it reaches the AI validator and database.
+  // Impossible mode is public-facing and must not accept arbitrarily large
+  // strings as an AI prompt or cache key.
+  const trimmed = String(word).trim().slice(0, 100);
   let won = false;
 
   if (!surrendered && trimmed.length >= 2) {
