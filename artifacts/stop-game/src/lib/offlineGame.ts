@@ -104,6 +104,32 @@ function isSafeInput(word: string): boolean {
   return true;
 }
 
+const HALLOWEEN_CATEGORY_ALIASES_OFFLINE: Record<string, string> = {
+  [normalizeWord("Disfraz de miedo")]: "Objeto",
+  [normalizeWord("Monstruo")]: "Animal",
+  [normalizeWord("Película de terror")]: "Película",
+  [normalizeWord("Cosa de una casa encantada")]: "Objeto",
+  [normalizeWord("Criatura sobrenatural")]: "Animal",
+  [normalizeWord("Scary costume")]: "Object",
+  [normalizeWord("Monster")]: "Animal",
+  [normalizeWord("Horror movie")]: "Movie",
+  [normalizeWord("Haunted house item")]: "Object",
+  [normalizeWord("Supernatural creature")]: "Animal",
+  [normalizeWord("Fantasia assustadora")]: "Objeto",
+  [normalizeWord("Monstro")]: "Animal",
+  [normalizeWord("Filme de terror")]: "Filme",
+  [normalizeWord("Coisa de uma casa assombrada")]: "Objeto",
+  [normalizeWord("Déguisement effrayant")]: "Objet",
+  [normalizeWord("Monstre")]: "Animal",
+  [normalizeWord("Film d'horreur")]: "Film",
+  [normalizeWord("Objet d'une maison hantée")]: "Objet",
+  [normalizeWord("Créature surnaturelle")]: "Animal",
+};
+
+function canonicalCategoryForValidation(category: string): string {
+  return HALLOWEEN_CATEGORY_ALIASES_OFFLINE[normalizeWord(category)] ?? category;
+}
+
 function findCategoryWords(langDict: Record<string, string[]>, category: string): string[] {
   const norm = normalizeWord(category);
   for (const [key, words] of Object.entries(langDict)) {
@@ -136,13 +162,14 @@ function isWordValid(
 
   if (bundle.neverValidWords.includes(normalizedWord)) return false;
 
-  const normCategory = normalizeWord(category);
+  const validationCategory = canonicalCategoryForValidation(category);
+  const normCategory = normalizeWord(validationCategory);
   if (bundle.openCategories.includes(normCategory)) return normalizedWord.length >= 3;
 
   const primaryDict = bundle.dictionary[language] || bundle.dictionary["es"];
-  let categoryWords = findCategoryWords(primaryDict || {}, category);
+  let categoryWords = findCategoryWords(primaryDict || {}, validationCategory);
   if (categoryWords.length === 0 && language !== "es" && bundle.dictionary["es"]) {
-    categoryWords = findCategoryWords(bundle.dictionary["es"], category);
+    categoryWords = findCategoryWords(bundle.dictionary["es"], validationCategory);
   }
   if (categoryWords.length === 0) return normalizedWord.length >= 3;
 
@@ -150,7 +177,7 @@ function isWordValid(
     const nw = normalizeWord(w);
     return nw === normalizedWord ||
       normalizedWord.startsWith(nw) ||
-      nw.startsWith(normalizedWord);
+      false; // A shorter prefix is not itself a valid answer.
   });
 }
 
