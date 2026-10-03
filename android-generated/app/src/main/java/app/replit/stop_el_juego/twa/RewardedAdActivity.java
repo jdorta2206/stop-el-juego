@@ -18,7 +18,6 @@ import com.google.android.gms.ads.MobileAds;
 import com.google.android.gms.ads.rewarded.RewardedAd;
 import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback;
 import com.google.android.gms.ads.rewarded.ServerSideVerificationOptions;
-import java.util.Calendar;
 
 import org.json.JSONObject;
 
@@ -77,6 +76,13 @@ public class RewardedAdActivity extends Activity {
         if (!isAllowedOrigin(origin)) {
             Log.e(TAG, "Rejected invalid rewarded origin: " + origin);
             sendClientResult("dismissed");
+            finish();
+            return;
+        }
+
+        if (adsTemporarilySuspended()) {
+            Log.d(TAG, "AdMob runtime gate active through 31 Oct 2026; skipping rewarded request");
+            sendClientResult("ads_suspended");
             finish();
             return;
         }
