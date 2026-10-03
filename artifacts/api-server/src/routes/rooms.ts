@@ -766,13 +766,12 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
       if (!halloweenApplicable || halloweenResult !== null) await markMultiplayerAuxClaim(roomId, p.playerId, "halloween");
     } catch (err) { console.error("[halloween] trusted multiplayer completion failed:", err); }
 
-    const seasonEvents: Parameters<typeof recordAuthoritativeSeasonEvents>[1] = [
-      { type: "play_game", value: 1 },
-      ...(won ? [{ type: "win_game", value: 1 }] : []),
-      ...(rawScore > 0 ? [{ type: "round_score", value: rawScore }] : []),
-      ...(validWords > 0 ? [{ type: "valid_words", value: validWords }] : []),
-      { type: "streak", value: settlementStreak },
-    ];
+    const seasonEvents: Parameters<typeof recordAuthoritativeSeasonEvents>[1] = [];
+    seasonEvents.push({ type: "play_game", value: 1 });
+    if (won) seasonEvents.push({ type: "win_game", value: 1 });
+    if (rawScore > 0) seasonEvents.push({ type: "round_score", value: rawScore });
+    if (validWords > 0) seasonEvents.push({ type: "valid_words", value: validWords });
+    seasonEvents.push({ type: "streak", value: settlementStreak });
     const seasonOk = await recordAuthoritativeSeasonEvents(p.playerId, seasonEvents, `multiplayer:${roomId}:${p.playerId}`);
     if (seasonOk) await markMultiplayerAuxClaim(roomId, p.playerId, "season");
   }));
@@ -842,11 +841,12 @@ async function recoverMultiplayerAuxiliaryEffects(room: any, players: any[]): Pr
       scoreRow[0]?.currentStreak ?? 0,
     );
     if (!aux.has("season") && (existingSeasonEvent.rows ?? []).length === 0) {
-      const seasonEvents: Parameters<typeof recordAuthoritativeSeasonEvents>[1] = [
-        { type: "play_game", value: 1 }, ...(won ? [{ type: "win_game", value: 1 }] : []),
-        ...(rawScore > 0 ? [{ type: "round_score", value: rawScore }] : []), ...(validWords > 0 ? [{ type: "valid_words", value: validWords }] : []),
-        ...(streak > 0 ? [{ type: "streak", value: streak }] : []),
-      ];
+      const seasonEvents: Parameters<typeof recordAuthoritativeSeasonEvents>[1] = [];
+      seasonEvents.push({ type: "play_game", value: 1 });
+      if (won) seasonEvents.push({ type: "win_game", value: 1 });
+      if (rawScore > 0) seasonEvents.push({ type: "round_score", value: rawScore });
+      if (validWords > 0) seasonEvents.push({ type: "valid_words", value: validWords });
+      if (streak > 0) seasonEvents.push({ type: "streak", value: streak });
       const seasonOk = await recordAuthoritativeSeasonEvents(p.playerId, seasonEvents, eventKey);
       if (seasonOk) await markMultiplayerAuxClaim(room.id, p.playerId, "season");
     } else if (!aux.has("season")) await markMultiplayerAuxClaim(room.id, p.playerId, "season");
@@ -1807,7 +1807,7 @@ router.post("/:roomCode/start", async (req, res) => {
   const roomCode = paramStr(req.params.roomCode);
   const { hostId, roomId } = (req.body ?? {}) as { hostId?: string; roomId?: number };
   if (!Number.isInteger(roomId) || roomId <= 0) { res.status(400).json({ error: "Missing roomId" }); return; }
-  const requiredRoomId = roomId;
+  const requiredRoomId = roomId as number;
   const rooms = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, roomCode.toUpperCase())).limit(1);
   if (rooms.length === 0) { res.status(404).json({ error: "Room not found" }); return; }
 
@@ -2703,6 +2703,7 @@ router.post("/:roomCode/spy", writeLimiter, async (req, res) => {
       pick,
       current,
       usesLeft: limit - (current + 1),
+      roomId: liveRoom.id,
     };
   });
 
@@ -2733,8 +2734,8 @@ router.post("/:roomCode/spy", writeLimiter, async (req, res) => {
   // Keep the in-memory map in sync as a fast path for the scoring code; the
   // persisted value remains authoritative across restarts.
   let used = roomSpyUsage.get(code);
-  if (!used || used.roomId !== room.id) {
-    used = { roomId: room.id, uses: new Map<string, number>() };
+  if (!used || used.roomId !== outcome.roomId) {
+    used = { roomId: outcome.roomId, uses: new Map<string, number>() };
     roomSpyUsage.set(code, used);
   }
   used.uses.set(playerId, outcome.current + 1);
