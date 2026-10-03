@@ -2892,7 +2892,7 @@ function StreamerModeCard({ room, playerId }: { room: any; playerId: string }) {
   const copy = (url: string, key: string) => {
     navigator.clipboard.writeText(url).catch(() => {});
     setCopied(key);
-    scheduleUiTimeout(() => setCopied(null), 1500);
+    window.setTimeout(() => setCopied(null), 1500);
   };
 
   return (
