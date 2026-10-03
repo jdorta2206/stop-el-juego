@@ -171,7 +171,8 @@ export default function Room() {
     isFreezingRef.current = false;
     iAmTheStopperRef.current = false;
     lastRoundRef.current = 0;
-    stopAllTimers();
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+    if (freezeTimerRef.current) { clearInterval(freezeTimerRef.current); freezeTimerRef.current = null; }
     if (submitRetryTimerRef.current) {
       clearTimeout(submitRetryTimerRef.current);
       submitRetryTimerRef.current = null;
@@ -181,7 +182,7 @@ export default function Room() {
       bluffVoteTimerRef.current = null;
     }
     setPhase("lobby");
-  }, [player?.id, spyLimit, stopAllTimers]);
+  }, [player?.id, spyLimit]);
   const { isPremium: meIsPremium } = usePremium(player?.id);
   const { followedIds, follow, unfollow } = useFollows(player?.id);
   // The host's own custom packs (premium feature). Non-premium players see
