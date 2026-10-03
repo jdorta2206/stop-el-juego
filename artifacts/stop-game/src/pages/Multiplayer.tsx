@@ -99,6 +99,7 @@ export default function Multiplayer() {
       if (currentPlayerIdRef.current !== requestedPlayerId) return;
       setLocation(`/room/${resumeCode}`);
     } catch {
+      if (currentPlayerIdRef.current !== requestedPlayerId) return;
       clearActiveRoom();
       setResumeCode(null);
       setResuming(false);
