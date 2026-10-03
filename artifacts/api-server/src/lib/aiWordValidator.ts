@@ -280,8 +280,7 @@ async function waitForValidationCache(word: string, category: string, lang: stri
             { role: "system", content: systemPrompt },
             { role: "user", content: userPrompt },
           ],
-          signal: controller.signal,
-        });
+        }, { signal: controller.signal });
       } finally {
         clearTimeout(timeout);
       }
