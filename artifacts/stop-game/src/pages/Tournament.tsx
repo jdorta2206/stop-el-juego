@@ -79,7 +79,24 @@ export default function Tournament() {
   }, []);
   const tournamentActionInFlightRef = useRef(false);
   const currentPlayerIdRef = useRef<string | null>(null);
+  const previousPlayerIdRef = useRef<string | null>(null);
   currentPlayerIdRef.current = player?.id ?? null;
+
+  useEffect(() => {
+    const nextId = player?.id ?? null;
+    const previousId = previousPlayerIdRef.current;
+    previousPlayerIdRef.current = nextId;
+    if (!previousId || previousId === nextId) return;
+    pollAbortRef.current?.abort();
+    setTournament(null);
+    setInvitedIds(new Set());
+    redirectedMatchRef.current = null;
+    resumeTournamentRef.current = null;
+    setError("");
+    setLoading(false);
+    setAutoJoinTried(false);
+    setView(urlCode ? "join" : "home");
+  }, [player?.id, urlCode]);
 
   const poll = useCallback(async () => {
     if (!tournament || !player) return;
@@ -88,6 +105,7 @@ export default function Tournament() {
     pollAbortRef.current = controller;
     try {
       const data: Tournament = await apiFetch(`/${tournament.code}`, { signal: controller.signal });
+      if (controller.signal.aborted || currentPlayerIdRef.current !== player.id) return;
       setTournament(data);
       if (data.status === "active" && view !== "bracket") setView("bracket");
 
@@ -292,8 +310,10 @@ Link: ${getInviteUrl()}`;
 
   const inviteToTournament = async (targetId: string, targetName: string) => {
     if (!tournament || !player || invitedIds.has(targetId) || inviteInFlightRef.current.has(targetId)) return;
+    const requestedPlayerId = player.id;
+    const requestedTournamentCode = tournament.code;
     inviteInFlightRef.current.add(targetId);
-    const roomCode = tournament.code;
+    const roomCode = requestedTournamentCode;
     const online = onlinePlayers.find(p => p.playerId === targetId);
     try {
       if (online) {
@@ -304,6 +324,7 @@ Link: ${getInviteUrl()}`;
 ${tournament.name}
 Código: ${roomCode}`)}`, "_blank");
       }
+      if (currentPlayerIdRef.current !== requestedPlayerId) return;
       setInvitedIds(prev => new Set([...prev, targetId]));
     } finally {
       inviteInFlightRef.current.delete(targetId);
