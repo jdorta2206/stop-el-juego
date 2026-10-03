@@ -2043,14 +2043,20 @@ export default function Room() {
                       if (requestedPlayerId !== currentPlayerIdRef.current) return;
                       if (!r.ok) {
                         const j = await r.json().catch(() => ({}));
+                        if (requestedPlayerId !== currentPlayerIdRef.current) return;
                         setSpyError(j.error || "No se pudo espiar 🤷");
-                        scheduleUiTimeout(() => setSpyError(null), 2200);
+                        scheduleUiTimeout(() => {
+                          if (requestedPlayerId === currentPlayerIdRef.current) setSpyError(null);
+                        }, 2200);
                       } else {
                         const data = await r.json();
+                        if (requestedPlayerId !== currentPlayerIdRef.current) return;
                         if (typeof data.usesLeft === "number") setSpyUsesLeft(data.usesLeft);
                         if (typeof data.limit === "number") setSpyLimit(data.limit);
                         setSpyReveal(data);
-                        scheduleUiTimeout(() => setSpyReveal(null), 5000);
+                        scheduleUiTimeout(() => {
+                          if (requestedPlayerId === currentPlayerIdRef.current) setSpyReveal(null);
+                        }, 5000);
                       }
                     } catch {
                       if (requestedPlayerId !== currentPlayerIdRef.current) return;
