@@ -7,7 +7,7 @@ const FACEBOOK_GRAPH_VERSION = "v26.0";
 
 const originalFetch = globalThis.fetch.bind(globalThis);
 
-function rewriteFacebookUrl(input: RequestInfo | URL): RequestInfo | URL {
+function rewriteFacebookUrl(input: Parameters<typeof fetch>[0] | URL): Parameters<typeof fetch>[0] | URL {
   const raw = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
   if (!raw.includes("facebook.com/")) return input;
 
@@ -21,7 +21,7 @@ function rewriteFacebookUrl(input: RequestInfo | URL): RequestInfo | URL {
   return new Request(rewritten, input);
 }
 
-globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit) =>
+globalThis.fetch = ((input: Parameters<typeof fetch>[0] | URL, init?: RequestInit) =>
   originalFetch(rewriteFacebookUrl(input), init)
 ) as typeof globalThis.fetch;
 
