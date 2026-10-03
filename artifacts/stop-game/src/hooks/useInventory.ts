@@ -64,6 +64,8 @@ export function useInventory(playerId?: string | null) {
   const [data, setData] = useState<InventorySnapshot | null>(null);
   const [loading, setLoading] = useState(false);
   const refreshAbortRef = useRef<AbortController | null>(null);
+  const currentPlayerIdRef = useRef(playerId);
+  currentPlayerIdRef.current = playerId;
 
   const refresh = useCallback(async () => {
     if (!playerId) { setData(null); return; }
@@ -93,7 +95,7 @@ export function useInventory(playerId?: string | null) {
   }, [refresh]);
 
   const equip = useCallback(async (kind: EquipKind, value: string | null) => {
-    if (!playerId) return null;
+    if (!playerId || currentPlayerIdRef.current !== playerId) return null;
     const res = await fetch(`${API}/api/inventory/equip`, {
       method: "POST",
       credentials: "include",
@@ -102,14 +104,18 @@ export function useInventory(playerId?: string | null) {
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
+      if (currentPlayerIdRef.current !== playerId) return null;
       return { error: err.error || "Failed" };
     }
+    if (currentPlayerIdRef.current !== playerId) return null;
+    const data = await res.json();
+    if (currentPlayerIdRef.current !== playerId) return null;
     await refresh();
-    return res.json();
+    return data;
   }, [playerId, refresh]);
 
   const buy = useCallback(async (itemId: string) => {
-    if (!playerId) return null;
+    if (!playerId || currentPlayerIdRef.current !== playerId) return null;
     const res = await fetch(`${API}/api/inventory/buy`, {
       method: "POST",
       credentials: "include",
@@ -118,10 +124,14 @@ export function useInventory(playerId?: string | null) {
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
+      if (currentPlayerIdRef.current !== playerId) return null;
       return { error: err.error || "Failed" };
     }
+    if (currentPlayerIdRef.current !== playerId) return null;
+    const data = await res.json();
+    if (currentPlayerIdRef.current !== playerId) return null;
     await refresh();
-    return res.json();
+    return data;
   }, [playerId, refresh]);
 
   return { inventory: data, loading, refresh, equip, buy };
