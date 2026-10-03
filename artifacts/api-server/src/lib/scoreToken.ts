@@ -106,8 +106,9 @@ function parseVerifiedVoucher(
   if (parts.length !== 5 && parts.length !== 6 && parts.length !== 7 && parts.length !== 8 && parts.length !== 9) return null;
 
   const [baseStr, kind, expStr, jti] = parts;
+  const modeIndex = parts.length === 9 ? 5 : 4;
   const mode = parts.length >= 7
-    ? (parts[4] === "daily" || parts[4] === "multiplayer" || parts[4] === "solo" ? parts[4] : null)
+    ? (parts[modeIndex] === "daily" || parts[modeIndex] === "multiplayer" || parts[modeIndex] === "solo" ? parts[modeIndex] : null)
     : null;
   const hasPlayerBinding = parts.length === 9;
   const hasAiBase = parts.length === 8 || hasPlayerBinding;
