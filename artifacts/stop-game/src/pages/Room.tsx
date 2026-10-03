@@ -1289,7 +1289,7 @@ export default function Room() {
       await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/stop`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify({ playerId: player.id, playerName: player.name }),
+        body: JSON.stringify({ playerId: requestedPlayerId, playerName: player.name }),
       });
       if (requestedPlayerId !== currentPlayerIdRef.current) return;
       // 🛡️ Race fix: only kick off the freeze locally if polling hasn't already
