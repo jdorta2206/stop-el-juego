@@ -170,6 +170,10 @@ export default function Room() {
     seasonReportedRef.current = false;
     creatorTrackedRef.current = null;
     draftHydratedRef.current = "";
+    if (reviewTimerRef.current) {
+      clearTimeout(reviewTimerRef.current);
+      reviewTimerRef.current = null;
+    }
     hasSubmittedRef.current = false;
     submitInFlightRef.current = false;
     isFreezingRef.current = false;
