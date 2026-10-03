@@ -386,6 +386,9 @@ export default function SeasonPass() {
 
   const xpToNext = useMemo(() => {
     if (!progress) return { current: 0, next: 100, pct: 0 };
+    if (progress.currentTier >= progress.totalTiers) {
+      return { current: 0, next: 0, pct: 100 };
+    }
     const tier = progress.currentTier;
     const base = tier * 100;
     const next = (tier + 1) * 100;
