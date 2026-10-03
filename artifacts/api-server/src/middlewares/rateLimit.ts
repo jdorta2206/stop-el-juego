@@ -68,18 +68,18 @@ class PgRateLimitStore implements RateLimitStore {
   }
 }
 
+// This middleware runs before route authentication, so body/query playerId is
+// attacker-controlled and cannot safely partition a protective rate limit.
+// Key the shared API limit by normalized client IP; authenticated endpoints
+// still perform their own identity/authorization checks afterwards.
 function playerKey(req: Request): string {
-  const pid =
-    (req.body && (req.body as any).playerId) ||
-    (req.query && (req.query as any).playerId) ||
-    "";
-  return `${pid || "anon"}|${ipKeyGenerator(req.ip ?? "")}`;
+  return ipKeyGenerator(req.ip ?? "");
 }
 
 const baseOpts = {
   standardHeaders: "draft-7" as const,
   legacyHeaders: false,
-  // The limiter itself uses the api_rate_limits table, which is created during\n  // startup. Do not query that table before schema bootstrap has completed;\n  // the global API readiness gate will return 503 for non-health routes.\n  skip: (req: Request) => req.path === "/healthz" || !indexesReady(),
+  skip: (req: Request) => req.path === "/healthz" || !indexesReady(),
   message: { error: "Too many requests, slow down a bit ⏳" },
 };
 
