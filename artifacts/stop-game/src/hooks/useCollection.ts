@@ -100,6 +100,7 @@ export function useCollection(playerId?: string) {
   useEffect(() => {
     migrateLegacy(playerId);
     setCollection(loadLocal(playerId));
+    setLastDiscovered(null);
     syncedRef.current = null;
     syncAbortRef.current?.abort();
   }, [playerId]);
