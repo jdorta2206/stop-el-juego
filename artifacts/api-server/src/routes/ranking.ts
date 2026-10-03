@@ -538,7 +538,7 @@ router.post("/scores", scoreLimiter, requirePlayerIdentity, async (req: AuthedRe
     ? await db.select().from(playerScoresTable).where(eq(playerScoresTable.playerId, playerId)).limit(1)
     : [];
 
-  const { base: verifiedBase, verified, collectionWords, mode: certifiedMode, aiBase: certifiedAiBase, voucherJtis } = isBonus
+  const { base: verifiedBase, verified, collectionWords, mode: certifiedMode, aiBase: certifiedAiBase, playerId: voucherPlayerId, voucherJtis } = isBonus
     ? { base: 0, verified: 0, collectionWords: [] as Array<{ word: string; category: string }>, mode: null, aiBase: 0 }
     // /ranking/scores is the client solo leaderboard path. Keep its voucher
     // count cap independent of the client-supplied `mode`.
@@ -547,7 +547,7 @@ router.post("/scores", scoreLimiter, requirePlayerIdentity, async (req: AuthedRe
   // Otherwise a replay of an already-consumed token set would fall through
   // to the offline absolute ceiling and could credit the same score again.
   const suppliedTokens = Array.isArray(scoreTokens) && scoreTokens.length > 0;
-  if (!isBonus && suppliedTokens && verified === 0) {
+  if (!isBonus && suppliedTokens && (verified === 0 || voucherPlayerId !== playerId)) {
     res.status(422).json({ error: "INVALID_SCORE_VOUCHER" });
     return;
   }
