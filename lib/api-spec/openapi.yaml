@@ -319,6 +319,7 @@ components:
             $ref: "#/components/schemas/CategoryResponse"
       required:
         - letter
+        - round
         - language
         - playerResponses
 
@@ -648,6 +649,8 @@ components:
           type: integer
         letter:
           type: string
+        round:
+          type: integer
         answers:
           type: object
           additionalProperties:
