@@ -320,6 +320,7 @@ components:
       required:
         - letter
         - round
+        - round
         - language
         - playerResponses
 
