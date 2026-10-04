@@ -3629,10 +3629,11 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
   const AUTHORITATIVE_CATEGORY_CAP = Math.min(12, Math.max(1, configuredCategories.length));
   const scoredEntries = await Promise.all(
     Object.entries(safeAnswers).map(async ([category, word]) => ({
+      category,
       word,
       valid: await isWordValidAsync(word, letter, category, room.language ?? "es", playerId),
     })),
-      category,
+  );
   // Scoring is per category/cell. The same valid word may legitimately
   // satisfy two different categories (for example, "naranja" as Fruit and
   // Color), so never deduplicate valid answers across categories.
