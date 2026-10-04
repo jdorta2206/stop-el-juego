@@ -2397,9 +2397,16 @@ export default function Room() {
           // Build uniqueness map: for each category, which normalized values appear >1 times
           const duplicatesByCategory: Record<string, Set<string>> = {};
           for (const cat of roundCategories) {
+            // The server persists authoritative validAnswers after validating
+            // every submitted word. Use that source for the reveal so special
+            // valid cases such as "ñu" (2 letters) cannot be shown as invalid.
             const vals = players
-              .map((p: any) => normalizeForScore(p.answers?.[cat] ?? ""))
-              .filter(v => v.length >= 2 && v.startsWith(normLetter));
+              .map((p: any) => normalizeForScore(
+                typeof p.validAnswers?.[cat] === "string"
+                  ? p.validAnswers[cat]
+                  : "",
+              ))
+              .filter(Boolean);
             const seen = new Set<string>();
             const dupes = new Set<string>();
             for (const v of vals) { if (seen.has(v)) dupes.add(v); else seen.add(v); }
@@ -2440,7 +2447,12 @@ export default function Room() {
                             {players.map((p: any) => {
                               const raw = p.answers?.[cat] ?? "";
                               const norm = normalizeForScore(raw);
-                              const valid = norm.length >= 3 && norm.startsWith(normLetter);
+                              const serverValidWord = typeof p.validAnswers?.[cat] === "string"
+                                ? p.validAnswers[cat]
+                                : null;
+                              const valid = serverValidWord !== null
+                                ? normalizeForScore(serverValidWord) === norm
+                                : norm.length >= 3 && norm.startsWith(normLetter);
                               const isDupe = valid && duplicatesByCategory[cat].has(norm);
                               const isMe = p.playerId === player?.id;
                               return (
