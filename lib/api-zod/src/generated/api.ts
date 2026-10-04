@@ -278,6 +278,7 @@ export const SubmitRoomResultsBody = zod.object({
   playerId: zod.string(),
   roundScore: zod.number(),
   letter: zod.string(),
+  round: zod.number(),
   answers: zod.record(zod.string(), zod.string()).optional(),
   bluffedCategories: zod.array(zod.string()).optional(),
   bluffedWords: zod.record(zod.string(), zod.string()).optional(),
