@@ -16,9 +16,8 @@ function getTodayStr(): string {
 }
 
 function getYesterdayStr(): string {
-  const d = new Date();
-  d.setDate(d.getDate() - 1);
-  return d.toISOString().slice(0, 10);
+  // getTodayStr() is UTC-based, so yesterday must use the same UTC clock.
+  return new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 
 function loadStreak(playerId?: string): StreakData {
