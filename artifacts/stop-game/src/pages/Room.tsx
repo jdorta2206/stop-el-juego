@@ -844,12 +844,22 @@ export default function Room() {
     const fallbackDuration = roundDurationFor(currentRound, currentLetter);
 
     const computeRemaining = (): number => {
-      // We re-read roundEndsAt fresh each tick so when a new poll updates the
-      // deadline (e.g. the server extended the round) we pick it up promptly.
+      // Re-read the authoritative room snapshot every tick. Lightning extends
+      // the natural deadline by 15s only for its owner in the current round.
       const r = roomRef.current as any;
       const roundEndsAt: number | null = typeof r?.roundEndsAt === "number" ? r.roundEndsAt : null;
       if (!roundEndsAt) return fallbackDuration;
-      const localDeadline = roundEndsAt + clockSkew;
+      const currentPlayer = Array.isArray(r?.players)
+        ? r.players.find((p: any) => p.playerId === player?.id)
+        : null;
+      const lightningUsedThisRound =
+        currentPlayer?.powerCard === "lightning" &&
+        currentPlayer?.powerCardUsed === true &&
+        currentPlayer?.powerCardUsedRound === r?.currentRound;
+      const meta = r?.stopper;
+      const explicitStop = typeof meta?.stopTimestamp === "number";
+      const localDeadline = roundEndsAt + clockSkew +
+        (lightningUsedThisRound && !explicitStop ? 15_000 : 0);
       return Math.max(0, Math.ceil((localDeadline - Date.now()) / 1000));
     };
 
