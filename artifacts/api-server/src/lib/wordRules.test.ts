@@ -22,7 +22,6 @@ describe("normalizeWord", () => {
   it("preserves ñ (does not collapse it into n)", () => {
     expect(normalizeWord("Ñu")).toBe("ñu");
     expect(normalizeWord("España")).toBe("españa");
-    // ñ must stay distinct from n after normalization
     expect(normalizeWord("año")).not.toBe(normalizeWord("ano"));
   });
 
@@ -43,6 +42,13 @@ describe("isSafeInput", () => {
     expect(isSafeInput("gato")).toBe(true);
     expect(isSafeInput("camión")).toBe(true);
     expect(isSafeInput("Nueva York")).toBe(true);
+  });
+
+  it("accepts supported-language letters previously rejected by the ASCII-ish gate", () => {
+    expect(isSafeInput("coração")).toBe(true);
+    expect(isSafeInput("maçã")).toBe(true);
+    expect(isSafeInput("garçon")).toBe(true);
+    expect(isSafeInput("français")).toBe(true);
   });
 
   it("rejects empty or whitespace-only input", () => {
