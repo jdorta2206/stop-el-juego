@@ -2503,9 +2503,10 @@ export default function Room() {
                 return tied.length === 1 ? best : null;
               };
               const loserMostEmpty = (() => {
-                const maxEmpty = Math.max(...stats.map(s => Math.max(0, 8 - s.filled)));
+                const categoryCount = roundCategories.length;
+                 const maxEmpty = Math.max(...stats.map(s => Math.max(0, categoryCount - s.filled)));
                 if (maxEmpty < 3) return null; // only shame if truly bad (3+ empty)
-                const cand = stats.filter(s => (8 - s.filled) === maxEmpty);
+                const cand = stats.filter(s => (categoryCount - s.filled) === maxEmpty);
                 return cand.length === 1 ? cand[0] : null;
               })();
 
@@ -2596,7 +2597,7 @@ export default function Room() {
                       <span className="text-2xl">🥶</span>
                       <div className="flex-1">
                         <p className="font-black text-blue-300">Cerebro Congelado</p>
-                        <p className="text-xs text-white/60">{loserMostEmpty.playerName} · {8 - loserMostEmpty.filled} casillas en blanco</p>
+                        <p className="text-xs text-white/60">{loserMostEmpty.playerName} · {Math.max(0, roundCategories.length - loserMostEmpty.filled)} casillas en blanco</p>
                       </div>
                     </div>
                   )}
