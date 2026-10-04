@@ -27,10 +27,22 @@ const presenceMap = new Map<string, PresenceEntry>();
 const presenceTableReady = db.execute(sql`
   CREATE TABLE IF NOT EXISTS player_presence (
     player_id text PRIMARY KEY,
+    name text NOT NULL,
+    picture text,
+    avatar_color text NOT NULL,
+    provider text,
     room_code text,
     last_seen timestamptz NOT NULL DEFAULT NOW()
   )
 `).then(() => db.execute(sql`
+  ALTER TABLE player_presence ADD COLUMN IF NOT EXISTS name text
+`)).then(() => db.execute(sql`
+  ALTER TABLE player_presence ADD COLUMN IF NOT EXISTS picture text
+`)).then(() => db.execute(sql`
+  ALTER TABLE player_presence ADD COLUMN IF NOT EXISTS avatar_color text
+`)).then(() => db.execute(sql`
+  ALTER TABLE player_presence ADD COLUMN IF NOT EXISTS provider text
+`)).then(() => db.execute(sql`
   CREATE INDEX IF NOT EXISTS player_presence_last_seen_idx
     ON player_presence (last_seen)
 `)).catch((err) => {
@@ -193,10 +205,16 @@ router.post("/ping", presenceLimiter, async (req, res) => {
     wasOffline = !existingRow || lastSeenMs < Date.now() - 3 * 60 * 1000;
 
     await tx.execute(sql`
-      INSERT INTO player_presence (player_id, room_code, last_seen)
-      VALUES (${playerId}, ${canonicalRoomCode}, ${now})
+      INSERT INTO player_presence
+      (player_id, name, picture, avatar_color, provider, room_code, last_seen)
+      VALUES
+        (${playerId}, ${profile.name}, ${profile.picture}, ${profile.avatarColor}, ${profile.provider}, ${canonicalRoomCode}, ${now})
       ON CONFLICT (player_id) DO UPDATE
-        SET room_code = EXCLUDED.room_code,
+        SET name = EXCLUDED.name,
+            picture = EXCLUDED.picture,
+            avatar_color = EXCLUDED.avatar_color,
+            provider = EXCLUDED.provider,
+            room_code = EXCLUDED.room_code,
             last_seen = EXCLUDED.last_seen
     `);
   });
