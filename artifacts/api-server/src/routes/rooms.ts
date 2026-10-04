@@ -3702,7 +3702,7 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
   // sweepStuckRooms() failsafe so a round can never deadlock waiting on a
   // submission that never physically arrives.
   const { sweptPlayers, newStatus, newLetter, newRound, newStopperJson } =
-    finalizeRoundState(room, updatedPlayers);
+    finalizeRoundState(room, reconciledPlayers);
 
   // Optimistic concurrency with bounded retry.
   // Two players can submit at virtually the same time. The old code returned
