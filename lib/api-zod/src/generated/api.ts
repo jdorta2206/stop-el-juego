@@ -58,6 +58,7 @@ export const ValidateRoundResponse = zod.object({
     .describe(
       "Signed, single-use voucher attesting the server-computed base\nscore for this round (`playerTotalScore`). The client returns it\n(alongside any other rounds' tokens) when submitting the final\ngame score, so the server can verify the score wasn't fabricated.\nAbsent when the round was validated offline.\n",
     ),
+  dailyScoreToken: zod.string().optional(),
 });
 
 /**
