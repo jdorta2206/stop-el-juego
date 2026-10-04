@@ -87,7 +87,8 @@ export default function Impossible() {
           surrendered,
         }),
       });
-      const data = await r.json();\n      if (currentPlayerIdRef.current !== player.id) return;
+      const data = await r.json();
+      if (currentPlayerIdRef.current !== player.id) return;
       if (data.alreadyPlayed && data.result) {
         setMyAttempt(data.result);
       } else {
