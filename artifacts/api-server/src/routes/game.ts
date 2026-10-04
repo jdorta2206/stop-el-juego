@@ -4,6 +4,7 @@ import { validateWordWithAi } from "../lib/aiWordValidator";
 import { issueScoreToken } from "../lib/scoreToken";
 import { normalizeWord, isSafeInput } from "../lib/wordRules";
 import { readPlayerId } from "../lib/playerAuth";
+import { getDailyChallenge } from "./daily";
 
 const router: IRouter = Router();
 
@@ -1513,7 +1514,19 @@ router.post("/validate", async (req, res) => {
     return;
   }
 
-  const { letter, language, playerResponses: rawPlayerResponses } = body.data;
+  const { letter, language, daily, playerResponses: rawPlayerResponses } = body.data;
+
+  if (daily) {
+    const todayChallenge = getDailyChallenge(new Date().toISOString().slice(0, 10), language);
+    const requestedCategories = rawPlayerResponses.map((pr) => normalizeWord(pr.category));
+    const expectedCategories = todayChallenge.categories.map((cat) => normalizeWord(cat));
+    if (letter.trim().toUpperCase() !== todayChallenge.letter ||
+        requestedCategories.length !== expectedCategories.length ||
+        requestedCategories.some((cat, i) => cat !== expectedCategories[i])) {
+      res.status(422).json({ error: "Invalid daily challenge" });
+      return;
+    }
+  }
 
   // A round is bounded by the category pack (currently at most 12 categories).
   // The client normally sends unique categories, but this endpoint is public and
@@ -1602,7 +1615,7 @@ router.post("/validate", async (req, res) => {
   const scoreToken = issueScoreToken(
     playerTotalScore,
     validatedCollectionWords,
-    "solo",
+    daily ? "daily" : "solo",
     aiTotalScore,
     readPlayerId(req),
   );
