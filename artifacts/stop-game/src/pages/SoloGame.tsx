@@ -772,6 +772,7 @@ export default function SoloGame() {
         letter,
         language: getCurrentLang() as import("@workspace/api-client-react").ValidateRoundRequestLanguage,
         playerName: player?.name,
+        daily: isDailyMode,
         playerResponses: formattedResponses,
       }
     });
