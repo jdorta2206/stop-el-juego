@@ -1619,12 +1619,16 @@ router.post("/validate", async (req, res) => {
     aiTotalScore,
     readPlayerId(req),
   );
+  const dailyScoreToken = daily
+    ? issueScoreToken(playerTotalScore, [], "daily", aiTotalScore, readPlayerId(req))
+    : null;
 
   const response = ValidateRoundResponse.parse({
     results,
     playerTotalScore,
     aiTotalScore,
     ...(scoreToken ? { scoreToken } : {}),
+    ...(dailyScoreToken ? { dailyScoreToken } : {}),
   });
 
   res.json(response);
