@@ -2146,12 +2146,24 @@ router.get("/:roomCode/draft", async (req, res) => {
 
   const lr = roomLiveResponses.get(code);
   const entry = lr?.get(playerId);
-  if (!entry) { res.json({ responses: {}, ts: 0, age: null }); return; }
+  if (!entry || entry.round !== Number(roomRow.currentRound ?? 0)) {
+    // A live draft can outlive the DB round transition for a few milliseconds.
+    // Never relabel a previous-round snapshot as the current round; callers
+    // must receive an empty draft until /typing sends the new-round snapshot.
+    res.json({
+      responses: {},
+      ts: 0,
+      age: null,
+      round: roomRow.currentRound,
+      letter: roomRow.currentLetter,
+    });
+    return;
+  }
   res.json({
     responses: entry.responses,
     ts: entry.ts,
     age: Date.now() - entry.ts,
-    round: roomRow.currentRound,
+    round: entry.round,
     letter: roomRow.currentLetter,
   });
 });
