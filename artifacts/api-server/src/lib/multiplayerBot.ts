@@ -454,21 +454,18 @@ async function performBotSubmit(
     // 🔒 Use the exact same authoritative validator as human /results.
     // Bots must never score from a weaker "starts with letter" rule because
     // their score participates in the winner calculation.
-    const seen = new Set<string>();
-    let validBotWords = 0;
+    const validAnswers: Record<string, string> = {};
     for (const category of sampleCats) {
       const w = answers[category];
       if (typeof w !== "string" || !w.trim()) continue;
-      const norm = w.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-      if (seen.has(norm)) continue;
       const valid = await isWordValidAsync(
         w, letter, category, room.language ?? "es", botPlayerId,
       );
-      if (valid) {
-        seen.add(norm);
-        validBotWords++;
-      }
+      if (valid) validAnswers[category] = w;
     }
+    // Scoring is per category/cell: the same valid word may score in multiple
+    // categories, matching the authoritative human /results implementation.
+    const validBotWords = Object.keys(validAnswers).length;
     let roundScore = validBotWords * 10;
     // Keep bot scoring aligned with the server-authoritative human STOP bonus:
     // a bot that actually triggers STOP gets +5 only when it fills every
@@ -487,6 +484,7 @@ async function performBotSubmit(
         roundScore,
         isReady: true,
         answers,
+        validAnswers,
         finishedAt,
         wasStopper: options.triggerStop && newStatus === "stopped",
       };
