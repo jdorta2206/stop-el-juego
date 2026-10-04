@@ -259,8 +259,8 @@ function getTyping(code: string, excludeId?: string): { playerId: string; player
 }
 
 // 🕵️ Live in-progress responses (for spy/peek mechanic). Stale after 5s.
-// playerId → { name, responses: { category: word }, ts }
-const roomLiveResponses = new Map<string, Map<string, { name: string; responses: Record<string, string>; ts: number }>>();
+// playerId → { name, responses: { category: word }, round, ts }
+const roomLiveResponses = new Map<string, Map<string, { name: string; responses: Record<string, string>; round: number; ts: number }>>();
 // Spy usage is persisted in PostgreSQL, keyed by room/player/round.
 // Free players: 1 use/round. Premium players: 2 uses/round.
 const SPY_LIMIT_FREE = 1;
@@ -2115,7 +2115,7 @@ router.post("/:roomCode/typing", writeLimiter, async (req, res) => {
         safe[String(k).slice(0, 60)] = v.trim().slice(0, 80);
       }
     }
-    lr.set(playerId, { name: memberName, responses: safe, ts: Date.now() });
+    lr.set(playerId, { name: memberName, responses: safe, round: room.currentRound, ts: Date.now() });
   }
 
   // Lightweight broadcast — re-fetch room and broadcast formatted state
@@ -2216,7 +2216,7 @@ router.post("/:roomCode/spy", writeLimiter, async (req, res) => {
     // A player may have left while their last typing snapshot is still fresh.
     // Never expose a departed player's draft through the spy mechanic.
     if (pid === playerId || !memberIds.has(pid)) continue;
-    if (info.ts < cutoff) continue;
+    if (info.ts < cutoff || info.round !== round) continue;
     for (const [cat, word] of Object.entries(info.responses)) {
       if (word && word.length > 0) candidates.push({ pid, name: info.name, cat, word });
     }
