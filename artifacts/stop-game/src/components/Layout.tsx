@@ -14,6 +14,7 @@ import { useT } from "@/i18n/useT";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { usePWAInstall } from "@/hooks/usePWAInstall";
 import { useInventory } from "@/hooks/useInventory";
+import { useIncidentGift } from "@/hooks/useIncidentGift";
 
 const LOGO_URL = `${import.meta.env.BASE_URL}images/stop-logo.png`;
 
@@ -41,7 +42,8 @@ const NAV_ITEMS = [
 export function Layout({ children }: { children: ReactNode }) {
   const { player, isLoaded, needsAuth, savePlayer, updateProfile, logout, dismissAuth } = usePlayer();
   const { isPremium } = usePremium(player?.id);
-  const { inventory } = useInventory(player?.id || null);
+  const { inventory, refresh: refreshInventory } = useInventory(player?.id || null);
+  const { claim: claimIncidentGift } = useIncidentGift(player?.id || null);
   const { t, lang } = useT();
   const [location, setLocation] = useLocation();
   const [showProfile, setShowProfile] = useState(false);
@@ -63,6 +65,25 @@ export function Layout({ children }: { children: ReactNode }) {
   const showInstallStep = canInstall && installCtaAllowed;
   const [notifToast, setNotifToast] = useState<string | null>(null);
   const [showNotifPrompt, setShowNotifPrompt] = useState(false);
+  const [showIncidentGift, setShowIncidentGift] = useState(false);
+  const incidentGiftChecked = useRef<string | null>(null);
+
+  useEffect(() => {
+    const playerId = player?.id;
+    if (!playerId || incidentGiftChecked.current === playerId) return;
+    incidentGiftChecked.current = playerId;
+    let cancelled = false;
+    (async () => {
+      const result = await claimIncidentGift();
+      if (!cancelled && result) {
+        await refreshInventory();
+        setShowIncidentGift(true);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [player?.id, claimIncidentGift, refreshInventory]);
+
+
   const notifToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const showNotifToast = (message: string, delay = 3500) => {
     setNotifToast(message);
@@ -146,6 +167,31 @@ export function Layout({ children }: { children: ReactNode }) {
           />
         )}
       </AnimatePresence>
+
+      {showIncidentGift && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 px-4">
+          <div className="w-full max-w-sm rounded-3xl p-6 text-center shadow-2xl"
+            style={{ background: "linear-gradient(145deg,#20152a,#15151f)", border: "2px solid rgba(251,113,133,.45)" }}>
+            <div className="text-5xl mb-3">🎁</div>
+            <h2 className="text-2xl font-black text-white">Un regalo para ti</h2>
+            <p className="mt-2 text-white/75">
+              Estos últimos días tuvimos un problema que impedía jugar correctamente. Lo sentimos de verdad.
+            </p>
+            <div className="mt-5 rounded-2xl p-4 bg-white/5 border border-white/10">
+              <div className="text-3xl">❤️</div>
+              <div className="mt-1 text-white font-black">Marco «Gracias por Seguir»</div>
+              <div className="mt-1 text-amber-300 font-black">+500 monedas</div>
+            </div>
+            <button
+              onClick={() => setShowIncidentGift(false)}
+              className="mt-5 w-full rounded-xl px-4 py-3 font-black text-black"
+              style={{ background: "#f9a825" }}
+            >
+              ¡Gracias! ❤️
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Header */}
       <header className="w-full px-4 py-3 flex items-center justify-between z-50 max-w-5xl mx-auto w-full">
