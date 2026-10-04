@@ -1940,7 +1940,9 @@ router.post("/:roomCode/use-card", async (req, res) => {
     }
 
     let updatedPlayers = players.map(p =>
-      p.playerId === playerId ? { ...p, powerCardUsed: true } : p
+      p.playerId === playerId
+        ? { ...p, powerCardUsed: true, powerCardUsedRound: room.currentRound }
+        : p
     );
 
     // Apply server-side effects
@@ -2807,7 +2809,11 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
   // The card is consumed by /use-card, so powerCardUsed + powerCard identify
   // the actual card activation; never trust a client-provided score multiplier.
   const submittedPlayer = players.find((p: any) => p.playerId === playerId);
-  if (submittedPlayer?.powerCard === "double_or_nothing" && submittedPlayer.powerCardUsed === true) {
+  if (
+    submittedPlayer?.powerCard === "double_or_nothing" &&
+    submittedPlayer.powerCardUsed === true &&
+    submittedPlayer.powerCardUsedRound === room.currentRound
+  ) {
     cappedRoundScore *= 2;
   }
 
