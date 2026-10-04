@@ -102,6 +102,7 @@ export const REWARD_FRAMES: Record<string, { label: string; glyph: string; color
   frame_prestige_silver:   { label: "Marco Leyenda Plata",    glyph: "🥈", color: "#cbd5e1" },
   frame_prestige_gold:     { label: "Marco Leyenda Oro",      glyph: "🥇", color: "#fbbf24" },
   frame_prestige_diamond:  { label: "Marco Leyenda Diamante", glyph: "💠", color: "#67e8f9" },
+  frame_thanks_2026:       { label: "Marco Gracias por Seguir", glyph: "❤️", color: "#fb7185" },
 };
 
 // ── Champion frames (top 3 of a season) ─────────────────────────────────────
