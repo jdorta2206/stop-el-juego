@@ -23,7 +23,71 @@ interface SqlResult<T> {
   rows?: T[];
 }
 
+const INCIDENT_GIFT_ID = "incident_gameplay_2026_10";
+const INCIDENT_GIFT_COINS = 500;
+const INCIDENT_GIFT_FRAME = "frame_thanks_2026";
+
 const router: IRouter = Router();
+
+// ── Incident goodwill gift ──────────────────────────────────────────────────
+// One-shot compensation for the recent gameplay outage. The grant is isolated
+// from normal collection/prestige rewards and is atomic with its claim marker.
+router.get("/incident-gift", requirePlayerIdentity, async (req: AuthedRequest, res) => {
+  const playerId = req.playerId!;
+  try {
+    const rows = await db.execute(sql`
+      SELECT incident_claims_json
+      FROM player_scores
+      WHERE player_id = ${playerId}
+      LIMIT 1
+    `) as unknown as SqlResult<{ incident_claims_json: string }>;
+    const row = rows.rows?.[0];
+    if (!row) { res.status(404).json({ error: "Player not found" }); return; }
+    const claims = parseStrArray(row.incident_claims_json);
+    res.json({ claimable: !claims.includes(INCIDENT_GIFT_ID), gift: { coins: INCIDENT_GIFT_COINS, frame: INCIDENT_GIFT_FRAME } });
+  } catch (e: unknown) {
+    console.error("[rewards/incident-gift/get] error:", e instanceof Error ? e.message : String(e));
+    res.status(500).json({ error: "Failed to load incident gift" });
+  }
+});
+
+router.post("/incident-gift/claim", requirePlayerIdentity, async (req: AuthedRequest, res) => {
+  const playerId = req.playerId!;
+  try {
+    const result = await db.transaction(async (tx) => {
+      const locked = await tx.execute(sql`
+        SELECT id, coins, inventory_json, incident_claims_json
+        FROM player_scores
+        WHERE player_id = ${playerId}
+        FOR UPDATE
+      `) as unknown as SqlResult<{ id: number; coins: number; inventory_json: string; incident_claims_json: string }>;
+      const row = locked.rows?.[0];
+      if (!row) return { ok: false as const, status: 404, error: "Player not found" };
+
+      const claims = parseStrArray(row.incident_claims_json);
+      if (claims.includes(INCIDENT_GIFT_ID)) {
+        return { ok: false as const, status: 409, error: "Already claimed" };
+      }
+
+      const inv = parseInventory(row.inventory_json);
+      if (!inv.frames.includes(INCIDENT_GIFT_FRAME)) inv.frames.push(INCIDENT_GIFT_FRAME);
+      claims.push(INCIDENT_GIFT_ID);
+      const newCoins = Number(row.coins ?? 0) + INCIDENT_GIFT_COINS;
+
+      await tx.update(playerScoresTable)
+        .set({ coins: newCoins, inventoryJson: JSON.stringify(inv), incidentClaimsJson: JSON.stringify(claims), updatedAt: new Date() })
+        .where(eq(playerScoresTable.id, row.id));
+
+      return { ok: true as const, coins: newCoins, grantedCoins: INCIDENT_GIFT_COINS, grantedFrame: INCIDENT_GIFT_FRAME };
+    });
+
+    if (!result.ok) { res.status(result.status).json({ error: result.error }); return; }
+    res.json({ ok: true, coins: result.coins, grantedCoins: result.grantedCoins, grantedFrame: result.grantedFrame });
+  } catch (e: unknown) {
+    console.error("[rewards/incident-gift/claim] error:", e instanceof Error ? e.message : String(e));
+    res.status(500).json({ error: "Failed to claim incident gift" });
+  }
+});
 
 const ADMOB_REQUEST_ID_RE = /^[A-Za-z0-9_-]{20,128}$/;
 const ADMOB_ORIGINS = new Set([
