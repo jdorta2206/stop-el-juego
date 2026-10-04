@@ -9,6 +9,7 @@ import { isPlayerRevoked, isPlayerRevocationCacheReady } from "./playerRevocatio
 // logged-in users — so only accounts dormant for >30 days must re-authenticate.
 const TTL_MS = 30 * 24 * 3600 * 1000;
 const COOKIE_NAME = "stop_pt";
+const GUEST_COOKIE_NAME = "stop_guest_pt";
 const HEADER_NAME = "x-stop-token";
 
 let warnedMissingSecret = false;
@@ -73,7 +74,9 @@ export interface AuthedRequest extends Request {
 
 /** Extract a verified playerId from cookie or X-Stop-Token header, or null. */
 export function readPlayerId(req: Request): string | null {
-  const cookieToken = req.cookies?.[COOKIE_NAME] as string | undefined;
+  const cookieToken =
+    (req.cookies?.[COOKIE_NAME] as string | undefined) ||
+    (req.cookies?.[GUEST_COOKIE_NAME] as string | undefined);
   const rawHeader = req.headers[HEADER_NAME];
   const headerToken = typeof rawHeader === "string" ? rawHeader : undefined;
   return verifyPlayerToken(cookieToken) ?? verifyPlayerToken(headerToken);
@@ -135,6 +138,19 @@ export function issuePlayerToken(res: Response, playerId: string): string | null
  * issuePlayerToken (sameSite/secure/path) — browsers only delete a cookie when
  * the clearing attributes match the ones it was set with.
  */
+export function issueGuestToken(res: Response, playerId: string): string | null {
+  const token = signPlayerToken(playerId);
+  if (!token) return null;
+  res.cookie(GUEST_COOKIE_NAME, token, {
+    httpOnly: true,
+    sameSite: "none",
+    secure: true,
+    maxAge: TTL_MS,
+    path: "/",
+  });
+  return token;
+}
+
 export function clearPlayerToken(res: Response): void {
   res.clearCookie(COOKIE_NAME, {
     httpOnly: true,
@@ -182,7 +198,13 @@ export function verifyClaimedIdentity(
   // allowing a `bot_*` id here would let any client impersonate a bot because
   // bot ids intentionally do not have user authentication tokens.
   if (claimedId.startsWith("bot_")) return false;
-  if (!isLoggedInId(claimedId)) return true;
+  if (!isLoggedInId(claimedId)) {
+    // Guest identities are UUIDs stored in the room state. The UUID alone is
+    // not a credential: once a guest has been registered, every mutating route
+    // must also present the server-issued signed guest cookie.
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(claimedId)) return false;
+    return readPlayerId(req) === claimedId;
+  }
   // A deleted OAuth account must remain unusable even while an old signed token
   // is still inside its normal TTL. Revocations are loaded from the database at
   // startup and updated immediately when an account is deleted.
