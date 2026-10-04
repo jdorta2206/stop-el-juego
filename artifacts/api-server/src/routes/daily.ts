@@ -152,7 +152,10 @@ router.post("/submit", async (req, res) => {
 
       if (existing.length > 0) {
         alreadyPlayed = true;
-        if (safeScore <= existing[0].score) return;
+        // A daily result is one challenge per player/date. Do not let a client
+        // switch language and use a different challenge to overwrite/improve
+        // the score that is already recorded for today's challenge.
+        if (existing[0].language !== normalizedLanguage || safeScore <= existing[0].score) return;
 
         if (verified > 0 && voucherJtis.length > 0) {
           await consumeScoreVoucherJtis(tx, voucherJtis);
