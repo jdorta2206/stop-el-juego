@@ -312,6 +312,9 @@ components:
           enum: [es, en, fr, pt]
         playerName:
           type: string
+        daily:
+          type: boolean
+          description: Whether this validation belongs to today's Daily Challenge.
         playerResponses:
           type: array
           maxItems: 12
