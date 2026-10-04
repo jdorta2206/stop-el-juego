@@ -18,6 +18,7 @@ export const LEGENDARY_FRAME_FX: Record<string, string> = {
   frame_prestige_bronze:     "frame-fx-bronze",
   frame_prestige_silver:     "frame-fx-silver",
   frame_prestige_gold:       "frame-fx-gold",
+  frame_thanks_2026:        "frame-fx-thanks",
   frame_prestige_diamond:    "frame-fx-diamond",
 };
 
