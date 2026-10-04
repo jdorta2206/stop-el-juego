@@ -3632,7 +3632,7 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
       word,
       valid: await isWordValidAsync(word, letter, category, room.language ?? "es", playerId),
     })),
-  );
+      category,
   // Scoring is per category/cell. The same valid word may legitimately
   // satisfy two different categories (for example, "naranja" as Fruit and
   // Color), so never deduplicate valid answers across categories.
