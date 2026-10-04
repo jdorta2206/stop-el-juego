@@ -52,6 +52,7 @@ export async function ensureIndexes(): Promise<void> {
     `ALTER TABLE player_scores ADD COLUMN IF NOT EXISTS equipped_title text`,
     `ALTER TABLE player_scores ADD COLUMN IF NOT EXISTS prestige_claims_json text NOT NULL DEFAULT '[]'`,
     `ALTER TABLE player_scores ADD COLUMN IF NOT EXISTS collection_claims_json text NOT NULL DEFAULT '[]'`,
+    `ALTER TABLE player_scores ADD COLUMN IF NOT EXISTS incident_claims_json text NOT NULL DEFAULT '[]'`,
     `ALTER TABLE player_scores ADD COLUMN IF NOT EXISTS notified_final_season_id integer`,
     `CREATE TABLE IF NOT EXISTS season_finals (id serial PRIMARY KEY, season_id integer NOT NULL, player_id text NOT NULL, final_rank integer NOT NULL, final_xp integer NOT NULL, total_players integer NOT NULL, awarded_cosmetic text, created_at timestamp NOT NULL DEFAULT NOW())`,
     `CREATE UNIQUE INDEX IF NOT EXISTS season_finals_season_player_uidx ON season_finals (season_id, player_id)`,
