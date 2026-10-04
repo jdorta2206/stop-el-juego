@@ -104,7 +104,10 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
       await db.execute(sql`
         SELECT COALESCE(games,0) AS games, COALESCE(conversions,0) AS conversions
         FROM guest_stats
-        WHERE day = to_char(now() AT TIME ZONE 'Europe/Madrid', 'YYYY-MM-DD')
+        WHERE day = to_char(
+          (date_trunc('day', now() AT TIME ZONE 'Europe/Madrid') AT TIME ZONE 'Europe/Madrid'),
+          'YYYY-MM-DD'
+        )
       `)
     ).rows[0] as Record<string, unknown> | undefined;
 
@@ -139,7 +142,10 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
     const guestsByDay = (
       await db.execute(sql`
         SELECT day AS d, games, conversions FROM guest_stats
-        WHERE day >= to_char(now() AT TIME ZONE 'UTC' - interval '14 days', 'YYYY-MM-DD')
+        WHERE day >= to_char(
+          (date_trunc('day', now() AT TIME ZONE 'Europe/Madrid') AT TIME ZONE 'Europe/Madrid') - interval '14 days',
+          'YYYY-MM-DD'
+        )
         ORDER BY day DESC
       `)
     ).rows as Record<string, unknown>[];
