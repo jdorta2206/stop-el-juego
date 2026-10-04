@@ -31,6 +31,7 @@ export const playerScoresTable = pgTable("player_scores", {
   equippedTitle: text("equipped_title"),
   prestigeClaimsJson: text("prestige_claims_json").notNull().default("[]"),
   collectionClaimsJson: text("collection_claims_json").notNull().default("[]"),
+  incidentClaimsJson: text("incident_claims_json").notNull().default("[]"),
   notifiedFinalSeasonId: integer("notified_final_season_id"),
   collectedWordsJson: text("collected_words_json").notNull().default("{}"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
