@@ -131,7 +131,7 @@ router.post("/progress/:playerId", async (req, res) => {
     .filter(mode => mode.length <= MAX_KEY_LENGTH)
     .slice(0, MAX_PERSONAL_BESTS);
 
-  if (modes.length === 0) {
+  if (modes.length === 0 && Object.keys(collectionIncoming).length === 0) {
     res.json({ ok: true });
     return;
   }
