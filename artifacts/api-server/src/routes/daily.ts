@@ -125,9 +125,9 @@ router.post("/submit", async (req, res) => {
   // posted score to a ceiling derived from the verified round voucher(s), or a
   // flat absolute ceiling when none are present (offline play). Never reject,
   // only clamp, so a legit daily score is never lost.
-  const { base: verifiedBase, verified, playerId: voucherPlayerId, voucherJtis } = await sumVerifiedBasePersistent(scoreTokens, 1);
+  const { base: verifiedBase, verified, playerId: voucherPlayerId, voucherJtis, mode: voucherMode } = await sumVerifiedBasePersistent(scoreTokens, 1);
   const suppliedTokens = Array.isArray(scoreTokens) && scoreTokens.length > 0;
-  if (suppliedTokens && (verified === 0 || voucherPlayerId !== playerId)) {
+  if (suppliedTokens && (verified === 0 || voucherPlayerId !== playerId || voucherMode !== "daily")) {
     res.status(422).json({ error: "INVALID_SCORE_VOUCHER" });
     return;
   }
