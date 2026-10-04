@@ -330,25 +330,6 @@ router.post("/challenge", inviteLimiter, async (req, res) => {
   for (let attempt = 0; attempt < 10 && !roomCode && !existingChallenge; attempt++) {
     const candidate = generateRoomCode();
     const outcome = await db.transaction(async (tx) => {
-      try {
-        await tx.insert(roomsTable).values({
-          roomCode: candidate,
-          hostId: fromPlayerId,
-          hostName: profile.name,
-          status: "waiting",
-          currentRound: 0,
-          maxRounds: 3,
-          language: "es",
-          playersJson: JSON.stringify(players),
-          stopperJson: null,
-          isPublic: false,
-        });
-      } catch (e: unknown) {
-        const message = e instanceof Error ? e.message : String(e);
-        if (/unique|duplicate/i.test(message) && attempt < 9) return { kind: "room_collision" as const };
-        throw new Error("CHALLENGE_ROOM_CREATE_FAILED");
-      }
-
       const inserted = await tx.execute(sql`
         INSERT INTO player_challenges
           (challenge_id, from_player_id, from_name, from_picture, from_avatar_color,
@@ -382,7 +363,33 @@ router.post("/challenge", inviteLimiter, async (req, res) => {
         };
       }
 
+      try {
+        await tx.insert(roomsTable).values({
+          roomCode: candidate,
+          hostId: fromPlayerId,
+          hostName: profile.name,
+          status: "waiting",
+          currentRound: 0,
+          maxRounds: 3,
+          language: "es",
+          playersJson: JSON.stringify(players),
+          stopperJson: null,
+          isPublic: false,
+        });
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : String(e);
+        if (/unique|duplicate/i.test(message) && attempt < 9) {
+          throw new Error("CHALLENGE_ROOM_CODE_COLLISION");
+        }
+        throw new Error("CHALLENGE_ROOM_CREATE_FAILED");
+      }
+
       return { kind: "created" as const, roomCode: candidate };
+    }).catch((error: unknown) => {
+      if (error instanceof Error && error.message === "CHALLENGE_ROOM_CODE_COLLISION") {
+        return { kind: "room_collision" as const };
+      }
+      throw error;
     });
 
     if (outcome.kind === "created") {
