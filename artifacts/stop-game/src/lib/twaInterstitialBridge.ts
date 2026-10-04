@@ -1,3 +1,5 @@
+import { getInstalledAppVersion } from "@/lib/appVersion";
+
 const RESULT_TIMEOUT_MS = 15_000;
 let initialized = false;
 
@@ -20,7 +22,7 @@ export function isTwaInterstitialAvailable(): boolean {
     if (params.has("appVersion") || /STOPApp\/[0-9][0-9.]*/i.test(navigator.userAgent || "")) return true;
 
     try {
-      if (localStorage.getItem("stop_installed_app_version")) return true;
+      if (getInstalledAppVersion()) return true;
     } catch {}
 
     // In a production TWA none of the browser-side TWA markers is guaranteed
