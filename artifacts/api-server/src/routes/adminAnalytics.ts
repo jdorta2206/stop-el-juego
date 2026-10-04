@@ -84,7 +84,7 @@ router.get("/", authLimiter, basicAuth, async (_req, res) => {
             WHEN s.player_id LIKE 'apple_%' THEN 'apple'
             WHEN s.player_id LIKE 'ig_%' THEN 'instagram'
             WHEN s.player_id LIKE 'tt_%' THEN 'tiktok'
-            WHEN s.player_id IS NOT NULL THEN 'guest'
+            WHEN s.player_id IS NOT NULL THEN 'account'
             ELSE 'unknown'
           END AS method
         FROM analytics_sessions s
