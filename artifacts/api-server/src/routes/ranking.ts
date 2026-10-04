@@ -701,13 +701,8 @@ router.post("/scores", scoreLimiter, requirePlayerIdentity, async (req: AuthedRe
         })
         .returning();
       if (!created) throw new Error("BONUS_SCORE_INSERT_FAILED");
-      await tx.insert(gameHistoryTable).values({
-        playerId,
-        score,
-        letter,
-        mode: mode ?? "solo",
-        won: effectiveWon,
-      });
+      // Bonus submissions are not standalone games and must not enter
+      // game_history, including when the player row is created here.
       return created;
     });
 
