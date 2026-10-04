@@ -423,18 +423,17 @@ async function performBotSubmit(
     // 🔒 Use the exact same authoritative validator as human /results.
     // Bots must never score from a weaker "starts with letter" rule because
     // their score participates in the winner calculation.
-    const seen = new Set<string>();
     let validBotWords = 0;
     for (const category of sampleCats) {
       const w = answers[category];
       if (typeof w !== "string" || !w.trim()) continue;
-      const norm = w.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-      if (seen.has(norm)) continue;
       const valid = await isWordValidAsync(
         w, letter, category, room.language ?? "es", botPlayerId,
       );
       if (valid) {
-        seen.add(norm);
+        // Scoring is per category/cell, matching human /results: the same
+        // valid word may legitimately satisfy multiple categories (e.g.
+        // "naranja" as Fruit and Color), so do not deduplicate by word.
         validBotWords++;
       }
     }
