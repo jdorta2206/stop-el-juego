@@ -319,8 +319,6 @@ components:
             $ref: "#/components/schemas/CategoryResponse"
       required:
         - letter
-        - round
-        - round
         - language
         - playerResponses
 
