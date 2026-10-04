@@ -470,6 +470,7 @@ export default function SoloGame() {
   // the game and hand them back on submit so the server can clamp a fabricated
   // total. Reset per new game (where totalScore resets to 0), not per round.
   const scoreTokensRef = useRef<string[]>([]);
+  const dailyScoreTokensRef = useRef<string[]>([]);
   // Stable idempotency key for the logical game score. It survives all round
   // transitions and is replaced only when a genuinely new game starts.
   const gameSubmissionIdRef = useRef<string | null>(null);
@@ -767,39 +768,52 @@ export default function SoloGame() {
     }));
 
     let apiData: ValidateRoundResponse | null = null;
+    const validationPromise = validateMutation.mutateAsync({
+      data: {
+        letter,
+        language: getCurrentLang() as import("@workspace/api-client-react").ValidateRoundRequestLanguage,
+        playerName: player?.name,
+        daily: isDailyMode,
+        playerResponses: formattedResponses,
+      }
+    });
     try {
-      // ⏱️ Timeout duro de 25s: si la IA del backend se cuelga con
-      // respuestas inválidas / palabras inventadas, NO dejamos al usuario
-      // atascado en "EL JUICIO". Disparamos el fallback offline / RESULTS.
+      // Keep a UX guard, but never replace an online server validation with the
+      // weaker offline dictionary. Promise.race does not cancel the original
+      // request, so a slow authoritative validation can still be recovered.
       const TIMEOUT_MS = 25000;
       apiData = await Promise.race([
-        validateMutation.mutateAsync({
-          data: {
-            letter,
-            language: getCurrentLang() as import("@workspace/api-client-react").ValidateRoundRequestLanguage,
-            playerName: player?.name,
-            playerResponses: formattedResponses,
-          }
-        }),
+        validationPromise,
         new Promise<ValidateRoundResponse>((_, reject) =>
           setTimeout(() => reject(new Error("validate-timeout")), TIMEOUT_MS)
         ),
       ]);
-    } catch {
-      // 📡 Sin conexión O timeout del servidor: validamos localmente con el
-      // diccionario cacheado. Si nunca se descargó el bundle, apiData seguirá
-      // null y caemos al fallback de cero puntos más abajo.
-      const local = validateRoundOffline({
-        letter,
-        language: getCurrentLang(),
-        playerResponses: formattedResponses,
-      });
-      if (local) {
-        apiData = local;
-        setIsOffline(true);
+    } catch (error) {
+      const isTimeout = error instanceof Error && error.message === "validate-timeout";
+      const isOffline = typeof navigator !== "undefined" && navigator.onLine === false;
+
+      if (isTimeout && !isOffline) {
+        // Recover the same server request instead of scoring differently just
+        // because it crossed the client-side UX threshold.
+        try {
+          apiData = await validationPromise;
+        } catch {
+          // A genuine server failure is not silently converted into an offline
+          // dictionary verdict. The zero-result fallback below remains safe.
+        }
+      } else if (isOffline) {
+        // Offline is the only case where the local dictionary is used here.
+        const local = validateRoundOffline({
+          letter,
+          language: getCurrentLang(),
+          playerResponses: formattedResponses,
+        });
+        if (local) {
+          apiData = local;
+          setIsOffline(true);
+        }
       }
     }
-
     // 🛟 Último recurso: si TODO falló (sin red + sin diccionario cacheado),
     // construimos una respuesta vacía válida para que la partida pueda
     // avanzar a RESULTS en vez de quedarse colgada en "EL JUICIO".
@@ -820,6 +834,7 @@ export default function SoloGame() {
     // 🔒 Capture this round's anti-cheat voucher (online play only — the
     // offline fallback payload has none). Accumulated for the final submit.
     if (apiData?.scoreToken) scoreTokensRef.current.push(apiData.scoreToken);
+    if (apiData?.dailyScoreToken) dailyScoreTokensRef.current.push(apiData.dailyScoreToken);
 
     // Persist whichever payload we ended up with so the RESULTS effect
     // and the UI read the *current* round's data, not the prior mutation.
@@ -1156,7 +1171,7 @@ export default function SoloGame() {
         avatarColor: player.avatarColor,
         score: finalScore,
         letter: currentLetter || "?",
-        mode: isDailyMode ? "daily" : "solo",
+        mode: isBonus ? "solo" : gameMode,
         won,
         bonus: isBonus,
         scoreTokens: scoreTokensRef.current,
@@ -1206,7 +1221,7 @@ export default function SoloGame() {
             avatarColor: player.avatarColor,
             score: finalScore,
             letter: currentLetter || "?",
-            mode: isDailyMode ? "daily" : "solo",
+            mode: isBonus ? "solo" : gameMode,
             won,
             bonus: isBonus,
             scoreTokens: scoreTokensRef.current,
@@ -1255,12 +1270,11 @@ export default function SoloGame() {
         score: finalScore,
         letter: dailyLetter || currentLetter,
         language: getCurrentLang(),
-        scoreTokens: scoreTokensRef.current,
+        scoreTokens: dailyScoreTokensRef.current,
       }),
     })
       .then((response) => {
         if (!response.ok) throw new Error(`daily-submit-${response.status}`);
-        localStorage.setItem(`stop_daily_${getTodayStr()}`, String(finalScore));
       })
       .catch(() => {
         // Never mark a logged-in daily as completed locally when the server
@@ -1303,6 +1317,7 @@ export default function SoloGame() {
       setRound(1);
       setTotalScore(0);
       scoreTokensRef.current = [];
+      dailyScoreTokensRef.current = [];
       gameSubmissionIdRef.current = null;
       setAiTotalScore(0);
       setBestRoundScore(0);

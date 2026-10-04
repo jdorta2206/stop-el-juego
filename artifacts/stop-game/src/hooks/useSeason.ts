@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { getApiUrl } from "@/lib/utils";
 
 const API = getApiUrl();
@@ -103,19 +103,25 @@ export function useSeason(playerId?: string | null) {
   const [season, setSeason] = useState<SeasonInfo | null>(null);
   const [progress, setProgress] = useState<SeasonProgress | null>(null);
   const [loading, setLoading] = useState(false);
+  const refreshGenerationRef = useRef(0);
+  const currentPlayerIdRef = useRef(playerId);
 
   const refresh = useCallback(async () => {
+    const generation = ++refreshGenerationRef.current;
+    const controller = new AbortController();
     setLoading(true);
     try {
       const [s, p] = await Promise.all([
-        fetch(`${API}/api/season/current`).then((r) => (r.ok ? r.json() : null)),
+        fetch(`${API}/api/season/current`, { signal: controller.signal }).then((r) => (r.ok ? r.json() : null)),
         playerId
           ? fetch(`${API}/api/season/progress`, {
               credentials: "include",
               headers: authHeaders(),
+              signal: controller.signal,
             }).then((r) => (r.ok ? r.json() : null))
           : Promise.resolve(null),
       ]);
+      if (controller.signal.aborted || generation !== refreshGenerationRef.current) return;
       if (s) setSeason(s);
       if (p) setProgress(p);
     } catch {
@@ -125,24 +131,31 @@ export function useSeason(playerId?: string | null) {
     }
   }, [playerId]);
 
+  useEffect(() => {
+    currentPlayerIdRef.current = playerId;
+    refreshGenerationRef.current += 1;
+    return () => { refreshGenerationRef.current += 1; };
+  }, [playerId]);
+
   useEffect(() => { refresh(); }, [refresh]);
 
   const claimMission = useCallback(async (missionId: string) => {
-    if (!playerId) return null;
+    if (!playerId || currentPlayerIdRef.current !== playerId) return null;
     const res = await fetch(`${API}/api/season/claim-mission`, {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify({ missionId }),
     });
-    if (!res.ok) return null;
+    if (!res.ok || currentPlayerIdRef.current !== playerId) return null;
     const data = await res.json();
+    if (currentPlayerIdRef.current !== playerId) return null;
     await refresh();
     return data;
   }, [playerId, refresh]);
 
   const ackFinal = useCallback(async (seasonId: number) => {
-    if (!playerId) return;
+    if (!playerId || currentPlayerIdRef.current !== playerId) return;
     try {
       await fetch(`${API}/api/season/ack-final`, {
         method: "POST",
@@ -150,13 +163,14 @@ export function useSeason(playerId?: string | null) {
         headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ seasonId }),
       });
+      if (currentPlayerIdRef.current !== playerId) return;
       // Optimistically clear locally so the modal doesn't reopen on re-render.
       setProgress((prev) => (prev ? { ...prev, pendingFinal: null } : prev));
     } catch { /* ignore */ }
   }, [playerId]);
 
   const claimTier = useCallback(async (tier: number, track: "free" | "premium") => {
-    if (!playerId) return null;
+    if (!playerId || currentPlayerIdRef.current !== playerId) return null;
     const res = await fetch(`${API}/api/season/claim-tier`, {
       method: "POST",
       credentials: "include",
@@ -165,9 +179,12 @@ export function useSeason(playerId?: string | null) {
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
+      if (currentPlayerIdRef.current !== playerId) return null;
       return { error: err.error || "Failed" };
     }
+    if (currentPlayerIdRef.current !== playerId) return null;
     const data = await res.json();
+    if (currentPlayerIdRef.current !== playerId) return null;
     await refresh();
     return data;
   }, [playerId, refresh]);
@@ -179,12 +196,21 @@ export function useSeason(playerId?: string | null) {
  * Fetches the season leaderboard. Public endpoint — viewer's row is included
  * automatically when an auth session is present.
  */
-export function useSeasonLeaderboard(seasonId?: number | null, enabled: boolean = true) {
+export function useSeasonLeaderboard(
+  seasonId?: number | null,
+  enabled: boolean = true,
+  viewerId?: string | null,
+) {
   const [data, setData] = useState<Leaderboard | null>(null);
   const [loading, setLoading] = useState(false);
+  const generationRef = useRef(0);
+  const currentViewerIdRef = useRef(viewerId);
 
   const refresh = useCallback(async () => {
     if (!enabled) return;
+    const generation = ++generationRef.current;
+    const controller = new AbortController();
+    const requestedViewerId = viewerId ?? null;
     setLoading(true);
     try {
       const url = new URL(`${API}/api/season/leaderboard`);
@@ -192,14 +218,34 @@ export function useSeasonLeaderboard(seasonId?: number | null, enabled: boolean 
       const r = await fetch(url.toString(), {
         credentials: "include",
         headers: authHeaders(),
+        signal: controller.signal,
       });
-      if (r.ok) setData(await r.json());
+      if (!r.ok) return;
+      const next = await r.json() as Leaderboard;
+      if (
+        controller.signal.aborted ||
+        generation !== generationRef.current ||
+        requestedViewerId !== currentViewerIdRef.current
+      ) return;
+      setData(next);
     } catch {
       /* ignore */
     } finally {
-      setLoading(false);
+      if (!controller.signal.aborted && generation === generationRef.current) {
+        setLoading(false);
+      }
     }
-  }, [seasonId, enabled]);
+  }, [seasonId, enabled, viewerId]);
+
+  useEffect(() => {
+    currentViewerIdRef.current = viewerId;
+    generationRef.current += 1;
+    setData(null);
+    setLoading(false);
+    return () => {
+      generationRef.current += 1;
+    };
+  }, [viewerId]);
 
   useEffect(() => { refresh(); }, [refresh]);
 

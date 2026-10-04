@@ -7,10 +7,11 @@ import { sendLocalizedBroadcast, type PushPayload } from "../lib/pushHelper";
 
 const router: IRouter = Router();
 
-router.use((_req, res, next) => {
+router.use((_req, res, next): void => {
   if (!indexesReady()) {
     res.setHeader("Retry-After", "2");
-    return res.status(503).json({ error: "Server warming up", ready: false });
+    res.status(503).json({ error: "Server warming up", ready: false });
+    return;
   }
   next();
 });
@@ -260,6 +261,128 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
       const lastSeen = row.last_seen ? new Date(String(row.last_seen)).toLocaleString("es-ES", { timeZone: "Europe/Madrid" }) : "—";
       return `<tr><td>${esc(row.player_name)}</td><td>${labels[String(row.event_name)] ?? esc(row.event_name)}</td><td>${platform}</td><td>${num(row.events)}</td><td>${lastSeen}</td></tr>`;
     }).join("");
+
+    // ── Incidencias derivadas de señales reales ────────────────────────────
+    // No llamamos "error" a algo que no esté registrado como tal. Estas
+    // alertas detectan síntomas medibles que merecen investigación.
+    const incidentHealth = (await db.execute(sql`
+      SELECT
+        COUNT(*) FILTER (WHERE event_name = 'game_start')::int AS starts,
+        COUNT(*) FILTER (WHERE event_name = 'game_complete')::int AS completes,
+        COUNT(*) FILTER (WHERE event_name = 'rewarded_ad_requested')::int AS ad_requests,
+        COUNT(*) FILTER (WHERE event_name = 'rewarded_ad_completed')::int AS ad_completes,
+        COUNT(*) FILTER (WHERE event_name = 'rewarded_ad_failed')::int AS ad_failures,
+        COUNT(DISTINCT session_id) FILTER (WHERE event_name = 'session_start')::int AS sessions
+      FROM analytics_events
+      WHERE created_at >= NOW() - INTERVAL '24 hours'
+    `)).rows[0] as Record<string,unknown> | undefined;
+
+    const incidentRows: { level:string; title:string; detail:string }[] = [];
+    const iStarts=num(incidentHealth?.starts), iCompletes=num(incidentHealth?.completes);
+    const iAdReq=num(incidentHealth?.ad_requests), iAdOk=num(incidentHealth?.ad_completes), iAdFail=num(incidentHealth?.ad_failures);
+    const iSessions=num(incidentHealth?.sessions);
+    if (iStarts >= 10 && iCompletes / iStarts < 0.5) incidentRows.push({level:"🔴",title:"Baja finalización de partidas",detail:`${iCompletes}/${iStarts} partidas terminadas en 24 h (${((iCompletes/iStarts)*100).toFixed(0)}%).`});
+    if (iAdReq >= 10 && iAdFail / iAdReq >= 0.2) incidentRows.push({level:"🟠",title:"Rewarded con demasiados fallos",detail:`${iAdFail}/${iAdReq} solicitudes fallaron (${((iAdFail/iAdReq)*100).toFixed(0)}%).`});
+    if (iSessions >= 10 && iStarts / iSessions < 0.3) incidentRows.push({level:"🟠",title:"Muchas sesiones no llegan a jugar",detail:`${iStarts} partidas iniciadas frente a ${iSessions} sesiones (${((iStarts/iSessions)*100).toFixed(0)}%).`});
+    if (incidentRows.length === 0) incidentRows.push({level:"🟢",title:"Sin anomalías derivadas detectadas",detail:"No se ha cruzado ninguno de los umbrales de alerta configurados con los datos disponibles."});
+
+    const incidentHtml = incidentRows.map((x) => `<tr><td>${x.level}</td><td>${esc(x.title)}</td><td>${esc(x.detail)}</td></tr>`).join("");
+
+    // ── Crecimiento y salud del juego ─────────────────────────────────────
+    const growthDaily = (await db.execute(sql`
+      SELECT d,
+             COALESCE(regs,0)::int AS regs,
+             COALESCE(sessions,0)::int AS sessions,
+             COALESCE(games,0)::int AS games,
+             COALESCE(starts,0)::int AS starts,
+             COALESCE(completes,0)::int AS completes
+      FROM (
+        SELECT to_char((created_at AT TIME ZONE 'UTC') AT TIME ZONE 'Europe/Madrid','YYYY-MM-DD') AS d, COUNT(*)::int AS games
+        FROM game_history
+        WHERE ${NOT_BOT} AND created_at >= NOW() - INTERVAL '30 days'
+        GROUP BY 1
+      ) g
+      FULL OUTER JOIN (
+        SELECT to_char((created_at AT TIME ZONE 'UTC') AT TIME ZONE 'Europe/Madrid','YYYY-MM-DD') AS d, COUNT(*)::int AS regs
+        FROM player_scores
+        WHERE ${NOT_BOT} AND created_at >= NOW() - INTERVAL '30 days'
+        GROUP BY 1
+      ) r USING (d)
+      FULL OUTER JOIN (
+        SELECT to_char((started_at AT TIME ZONE 'UTC') AT TIME ZONE 'Europe/Madrid','YYYY-MM-DD') AS d, COUNT(*)::int AS sessions
+        FROM analytics_sessions
+        WHERE started_at >= NOW() - INTERVAL '30 days'
+        GROUP BY 1
+      ) s USING (d)
+      FULL OUTER JOIN (
+        SELECT to_char((created_at AT TIME ZONE 'UTC') AT TIME ZONE 'Europe/Madrid','YYYY-MM-DD') AS d,
+               COUNT(*) FILTER (WHERE event_name = 'game_start')::int AS starts,
+               COUNT(*) FILTER (WHERE event_name = 'game_complete')::int AS completes
+        FROM analytics_events
+        WHERE created_at >= NOW() - INTERVAL '30 days'
+          AND event_name IN ('game_start','game_complete')
+        GROUP BY 1
+      ) e USING (d)
+      ORDER BY d DESC
+    `)).rows as Record<string, unknown>[];
+
+    const platformGrowth = (await db.execute(sql`
+      SELECT platform,
+        COUNT(*) FILTER (WHERE started_at >= NOW() - INTERVAL '7 days')::int AS current_sessions,
+        COUNT(*) FILTER (WHERE started_at >= NOW() - INTERVAL '14 days' AND started_at < NOW() - INTERVAL '7 days')::int AS previous_sessions,
+        COUNT(DISTINCT player_id) FILTER (WHERE started_at >= NOW() - INTERVAL '7 days' AND player_id IS NOT NULL)::int AS current_players,
+        COUNT(DISTINCT player_id) FILTER (WHERE started_at >= NOW() - INTERVAL '14 days' AND started_at < NOW() - INTERVAL '7 days' AND player_id IS NOT NULL)::int AS previous_players
+      FROM analytics_sessions
+      WHERE started_at >= NOW() - INTERVAL '14 days'
+      GROUP BY platform
+      ORDER BY current_sessions DESC
+    `)).rows as Record<string, unknown>[];
+
+    const funnelHealth = (await db.execute(sql`
+      SELECT
+        COUNT(DISTINCT CASE WHEN event_name = 'session_start' THEN session_id END)::int AS sessions,
+        COUNT(*) FILTER (WHERE event_name = 'game_start')::int AS starts,
+        COUNT(*) FILTER (WHERE event_name = 'game_complete')::int AS completes,
+        COUNT(*) FILTER (WHERE event_name = 'rewarded_ad_requested')::int AS ad_requests,
+        COUNT(*) FILTER (WHERE event_name = 'rewarded_ad_completed')::int AS ad_completes,
+        COUNT(*) FILTER (WHERE event_name = 'rewarded_ad_failed')::int AS ad_failures
+      FROM analytics_events
+      WHERE created_at >= NOW() - INTERVAL '7 days'
+    `)).rows[0] as Record<string, unknown> | undefined;
+
+    const pctChange = (current: number, previous: number): string => {
+      if (previous === 0) return current > 0 ? "+100%" : "0%";
+      const value = ((current - previous) / previous) * 100;
+      return `${value >= 0 ? "+" : ""}${value.toFixed(0)}%`;
+    };
+
+    const growthRows = growthDaily.map((row) => {
+      const starts = num(row.starts);
+      const completes = num(row.completes);
+      const completion = starts > 0 ? `${((completes / starts) * 100).toFixed(0)}%` : "—";
+      return `<tr><td>${esc(row.d)}</td><td>${num(row.regs)}</td><td>${num(row.sessions)}</td><td>${num(row.games)}</td><td>${starts}</td><td>${completes}</td><td>${completion}</td></tr>`;
+    }).join("");
+
+    const platformGrowthRows = platformGrowth.map((row) => {
+      const currentSessions = num(row.current_sessions);
+      const previousSessions = num(row.previous_sessions);
+      const currentPlayers = num(row.current_players);
+      const previousPlayers = num(row.previous_players);
+      const change = pctChange(currentSessions, previousSessions);
+      const trend = currentSessions > previousSessions ? "📈" : currentSessions < previousSessions ? "📉" : "➡️";
+      const platform = String(row.platform) === "android" ? "🤖 Android" : String(row.platform) === "ios" ? "🍎 iOS" : "🌐 Web";
+      return `<tr><td>${platform}</td><td>${currentSessions}</td><td>${previousSessions}</td><td>${change} ${trend}</td><td>${currentPlayers}</td><td>${previousPlayers}</td></tr>`;
+    }).join("");
+
+    const funnelSessions = num(funnelHealth?.sessions);
+    const funnelStarts = num(funnelHealth?.starts);
+    const funnelCompletes = num(funnelHealth?.completes);
+    const funnelAdRequests = num(funnelHealth?.ad_requests);
+    const funnelAdCompletes = num(funnelHealth?.ad_completes);
+    const funnelAdFailures = num(funnelHealth?.ad_failures);
+    const startRate = funnelSessions > 0 ? `${((funnelStarts / funnelSessions) * 100).toFixed(0)}%` : "—";
+    const completionRate = funnelStarts > 0 ? `${((funnelCompletes / funnelStarts) * 100).toFixed(0)}%` : "—";
+    const adCompletionRate = funnelAdRequests > 0 ? `${((funnelAdCompletes / funnelAdRequests) * 100).toFixed(0)}%` : "—";
 
     const html = `<!doctype html>
 <html lang="es"><head>

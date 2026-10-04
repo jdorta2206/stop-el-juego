@@ -233,9 +233,11 @@ export function useAchievements(playerId?: string) {
   const [newlyUnlocked, setNewlyUnlocked] = useState<AchievementDef | null>(null);
   const syncedRef = useRef(false);
   const syncAbortRef = useRef<AbortController | null>(null);
+  const currentPlayerIdRef = useRef<string | undefined>(playerId);
   const checkStreakMilestoneRef = useRef<(longestStreak: number) => AchievementDef | null>(() => null);
 
   useEffect(() => {
+    currentPlayerIdRef.current = playerId;
     setStats(loadStats(playerId));
     setUnlocked(loadUnlocked(playerId));
     syncedRef.current = false;
@@ -250,6 +252,7 @@ export function useAchievements(playerId?: string) {
     let milestoneTimer: number | null = null;
     syncAbortRef.current = controller;
     syncFromServer(playerId, controller.signal).then(({ achievements: serverIds, stats: serverStats }) => {
+      if (controller.signal.aborted || playerId !== currentPlayerIdRef.current) return;
       // Merge achievements
       setUnlocked(prev => {
         const merged = new Set([...prev, ...serverIds]);

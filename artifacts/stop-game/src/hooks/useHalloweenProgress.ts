@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { getApiUrl, authHeaders } from "@/lib/utils";
 import { isHalloweenActive } from "@/lib/halloweenEvent";
 
@@ -18,9 +18,22 @@ type HalloweenProgressResponse = {
 
 export function useHalloweenProgress(playerId?: string | null) {
   const [data, setData] = useState<HalloweenProgressResponse | null>(null);
+  const [eventActive, setEventActive] = useState(() => isHalloweenActive());
+  const currentPlayerIdRef = useRef(playerId);
 
   useEffect(() => {
-    if (!playerId || !isHalloweenActive()) {
+    currentPlayerIdRef.current = playerId;
+  }, [playerId]);
+
+  useEffect(() => {
+    const update = () => setEventActive(isHalloweenActive());
+    update();
+    const timer = window.setInterval(update, 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    if (!playerId || !eventActive) {
       setData(null);
       return;
     }
@@ -35,7 +48,7 @@ export function useHalloweenProgress(playerId?: string | null) {
       })
       .catch(() => {});
     return () => { cancelled = true; };
-  }, [playerId]);
+  }, [playerId, eventActive]);
 
   const report = useCallback(async (
     type: "game_completed" | "scare_received" | "scare_provoked",
@@ -51,6 +64,7 @@ export function useHalloweenProgress(playerId?: string | null) {
       });
       if (!r.ok) return null;
       const next = await r.json();
+      if (currentPlayerIdRef.current !== playerId) return null;
       setData({ active: true, year: next.year, progress: {
         gamesCompleted: next.gamesCompleted,
         scaresReceived: next.scaresReceived,

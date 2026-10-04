@@ -73,8 +73,10 @@ function ChallengeBtn({
 
   const handleChallenge = useCallback(async () => {
     if (state !== "idle" || !currentPlayer) return;
+    const requestedPlayerId = currentPlayer.id;
     setState("sending");
     const result = await sendChallenge(currentPlayer, onlinePlayer.playerId, lang);
+    if (currentPlayer.id !== requestedPlayerId) { setState("idle"); return; }
     if (!result) { setState("idle"); return; }
     pendingRef.current = result.challengeId;
     setState("waiting");
@@ -87,6 +89,14 @@ function ChallengeBtn({
       if (!pendingRef.current || controller.signal.aborted) return;
       const status = await pollChallengeStatus(pendingRef.current, controller.signal);
       if (!pendingRef.current || controller.signal.aborted) return;
+      if (currentPlayer.id !== requestedPlayerId) {
+        controller.abort();
+        clearInterval(poll);
+        pollRef.current = null;
+        pendingRef.current = null;
+        setState("idle");
+        return;
+      }
       if (status.status === "accepted") {
         clearInterval(poll);
         pollRef.current = null;
@@ -305,12 +315,17 @@ export default function Ranking() {
       roomCode: null,
       lastSeen: Date.now(),
     };
-    await follow(asOnlinePlayer);
+    const requestedPlayerId = player.id;
+    const followed = await follow(asOnlinePlayer);
+    if (!followed || player?.id !== requestedPlayerId) return;
     setFollowedIds(prev => new Set([...prev, p.playerId]));
   }, [player?.id, follow]);
 
   const unfollowPlayer = useCallback(async (targetId: string) => {
-    await unfollow(targetId);
+    const requestedPlayerId = player?.id;
+    if (!requestedPlayerId) return;
+    const unfollowed = await unfollow(targetId);
+    if (!unfollowed || player?.id !== requestedPlayerId) return;
     setFollowedIds(prev => { const s = new Set(prev); s.delete(targetId); return s; });
   }, [unfollow]);
 
@@ -345,7 +360,7 @@ export default function Ranking() {
   const rest = players.slice(3);
   const baseList = filter === "weekly" ? weeklyPlayers : filter === "monthly" ? monthlyPlayers : allPlayers;
   const myEntry = baseList.find((p: any) => p.playerId === player?.id);
-  const myRank = myEntry ? baseList.indexOf(myEntry) + 1 : null;
+  const myRank = myEntry ? Number(myEntry.rank ?? (baseList.indexOf(myEntry) + 1)) : null;
   const isLoggedIn = player && player.loginMethod !== "guest";
   // If not in the top-100 list, build an entry from personal stats
   const myFallbackEntry = !myEntry && myStats?.score && myStats.score.gamesPlayed > 0
@@ -731,7 +746,7 @@ const PODIUM_ORDER = [1, 0, 2];
                 </div>
                 <div className="flex flex-col gap-1">
                   {rest.map((p: any, idx: number) => {
-                    const position = filter === "global" ? idx + 4 : players.indexOf(p) + 1;
+                    const position = Number(p.rank ?? (filter === "global" ? idx + 4 : players.indexOf(p) + 1));
                     const isMe = p.playerId === player?.id;
                     const isOnline = onlineMap.has(p.playerId);
                     const onlineData = onlineMap.get(p.playerId);

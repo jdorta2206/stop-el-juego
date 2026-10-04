@@ -105,14 +105,13 @@ function normalizeForScore(word: string): string {
 
 function calcScore(responses: Record<string, string>, letter: string): number {
   let score = 0;
-  const usedNorm = new Set<string>();
   const normLetter = normalizeForScore(letter);
+  // Scoring is per category/cell. The same valid word in two different
+  // categories is two separate answers; only duplicate entries within the
+  // same category are collapsed here. Final scoring remains server-authoritative.
   for (const val of Object.values(responses)) {
     const norm = normalizeForScore(val);
-    if (norm.length >= 3 && norm.startsWith(normLetter) && !usedNorm.has(norm)) {
-      score += 10;
-      usedNorm.add(norm);
-    }
+    if (norm.length >= 3 && norm.startsWith(normLetter)) score += 10;
   }
   return score;
 }
@@ -138,6 +137,59 @@ export default function Room() {
     return t && m ? { code: t, matchId: m } : null;
   })();
   const { player } = usePlayer();
+  // Prevent a rematch response started by a previous identity from navigating
+  // the currently active account into that previous player's rematch.
+  const currentPlayerIdRef = useRef<string | null>(null);
+  const previousPlayerIdRef = useRef<string | null>(null);
+  currentPlayerIdRef.current = player?.id ?? null;
+
+  // A room component can survive an account switch (A -> B). All local
+  // gameplay state below belongs to the active player, so never carry A's
+  // answers/submission/freeze state into B.
+  useEffect(() => {
+    const nextId = player?.id ?? null;
+    const previousId = previousPlayerIdRef.current;
+    previousPlayerIdRef.current = nextId;
+    if (!previousId || previousId === nextId) return;
+
+    setResponses({});
+    responsesRef.current = {};
+    responsesSnapshotRef.current = {};
+    setBluffedCategories(new Set());
+    bluffedCategoriesRef.current = new Set();
+    setMyVotes({});
+    setMyBluffResults([]);
+    setSpyLoading(false);
+    setSpyReveal(null);
+    setSpyError(null);
+    setSpyUsesLeft(spyLimit);
+    setIsStopping(false);
+    setStopFlash(false);
+    reviewCountedRef.current = false;
+    seasonReportedRef.current = false;
+    creatorTrackedRef.current = null;
+    draftHydratedRef.current = "";
+    if (reviewTimerRef.current) {
+      clearTimeout(reviewTimerRef.current);
+      reviewTimerRef.current = null;
+    }
+    hasSubmittedRef.current = false;
+    submitInFlightRef.current = false;
+    isFreezingRef.current = false;
+    iAmTheStopperRef.current = false;
+    lastRoundRef.current = 0;
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+    if (freezeTimerRef.current) { clearInterval(freezeTimerRef.current); freezeTimerRef.current = null; }
+    if (submitRetryTimerRef.current) {
+      clearTimeout(submitRetryTimerRef.current);
+      submitRetryTimerRef.current = null;
+    }
+    if (bluffVoteTimerRef.current) {
+      clearInterval(bluffVoteTimerRef.current);
+      bluffVoteTimerRef.current = null;
+    }
+    setPhase("lobby");
+  }, [player?.id]);
   const { isPremium: meIsPremium } = usePremium(player?.id);
   const { followedIds, follow, unfollow } = useFollows(player?.id);
   // The host's own custom packs (premium feature). Non-premium players see
@@ -280,9 +332,10 @@ export default function Room() {
     : /* lobby / between_rounds / finished / spinning */                  1500;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const roomQueryKey = getGetRoomQueryKey(roomCode || "");
+  const roomQueryKey = [...getGetRoomQueryKey(roomCode || ""), player?.id ?? "guest"];
   const { data: room, error } = useGetRoom(roomCode || "", {
     query: {
+      queryKey: roomQueryKey,
       refetchInterval: pollingInterval,
       enabled: !!roomCode,
       // A polling request can have started before a newer SSE snapshot arrived.
@@ -331,7 +384,8 @@ export default function Room() {
       es.onmessage = (e) => {
         try {
           const data = JSON.parse(e.data);
-          queryClient.setQueryData(getGetRoomQueryKey(code), (current: any) => {
+          const viewerRoomQueryKey = [...getGetRoomQueryKey(code), player.id];
+          queryClient.setQueryData(viewerRoomQueryKey, (current: any) => {
             const incomingVersion = Number(data?.roomVersion);
             const currentVersion = Number(current?.roomVersion);
             if (Number.isFinite(incomingVersion) && Number.isFinite(currentVersion)) {
@@ -470,6 +524,11 @@ export default function Room() {
   const sound = useSound(muted);
   const haptic = useHaptic();
   const [stopFlash, setStopFlash] = useState(false);
+  // If the active account changes while a STOP request is in flight, the
+  // previous account must not leave the shared button state stuck for the new one.
+  useEffect(() => {
+    setIsStopping(false);
+  }, [player?.id]);
 
   // 📚 First-multiplayer-game coachmark — shows ONCE when the player reaches
   // the playing phase of their first online room. Dismisses on tap or as
@@ -598,12 +657,14 @@ export default function Room() {
   const handleAddBot = useCallback(async () => {
     if (!roomCode || !player?.id || addBotLoading) return;
     setAddBotLoading(true);
+    const requestedPlayerId = player.id;
     try {
       const res = await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/add-bot`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ hostId: player.id, roomId: room?.id }),
       });
+      if (requestedPlayerId !== currentPlayerIdRef.current) return;
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         toast({ title: data.error ?? "No se pudo añadir bot", variant: "destructive" });
@@ -621,13 +682,17 @@ export default function Room() {
     if (rematchCode) { setLocation(`/room/${rematchCode}`); return; }
     if (!player?.id || !roomCode) return;
     setRematchLoading(true);
+    const requestedPlayerId = player.id;
     try {
       const r = await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/rematch`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify({ playerId: player.id, playerName: player.name ?? "?", avatarColor: (player as any).avatarColor }),
+        body: JSON.stringify({ playerId: requestedPlayerId, playerName: player.name ?? "?", avatarColor: (player as any).avatarColor }),
       });
       const j = await r.json();
+      // Identity may have changed while the request was in flight. Never let
+      // the old account's successful response mutate/navigate the new account.
+      if (requestedPlayerId !== currentPlayerIdRef.current) return;
       if (j.rematchCode) { setRematchCode(j.rematchCode); setLocation(`/room/${j.rematchCode}`); }
     } catch {} finally { setRematchLoading(false); }
   }, [rematchCode, rematchLoading, player, roomCode, setLocation, meIsPremium]);
@@ -716,22 +781,28 @@ export default function Room() {
 
   const sendHalloweenScare = useCallback(async () => {
     if (!player?.id || !roomCode || !isHalloweenActive() || !isHalloweenModeEnabled() || phase !== "playing" || manualScareBusyRef.current || Date.now() < halloweenScareCooldownUntil) return;
+    const requestedPlayerId = player.id;
     manualScareBusyRef.current = true;
     try {
       const response = await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/halloween-scare`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders(), ...(isHalloweenPreview() ? { "x-halloween-preview": "1" } : {}) },
-        body: JSON.stringify({ playerId: player.id, playerName: player.name }),
+        body: JSON.stringify({ playerId: requestedPlayerId, playerName: player.name }),
       });
       const data = await response.json().catch(() => ({}));
+      if (requestedPlayerId !== currentPlayerIdRef.current) return;
       if (response.ok) {
         const ms = Number(data.cooldownMs ?? 18000);
         setHalloweenScareCooldownUntil(Date.now() + ms);
-        window.setTimeout(() => setHalloweenScareCooldownUntil(0), ms + 50);
+        window.setTimeout(() => {
+          if (requestedPlayerId === currentPlayerIdRef.current) setHalloweenScareCooldownUntil(0);
+        }, ms + 50);
       } else if (response.status === 429) {
         const ms = Number(data.retryAfterMs ?? 5000);
         setHalloweenScareCooldownUntil(Date.now() + ms);
-        window.setTimeout(() => setHalloweenScareCooldownUntil(0), ms + 50);
+        window.setTimeout(() => {
+          if (requestedPlayerId === currentPlayerIdRef.current) setHalloweenScareCooldownUntil(0);
+        }, ms + 50);
       }
     } catch {} finally { manualScareBusyRef.current = false; }
   }, [player, roomCode, phase, halloweenScareCooldownUntil]);
@@ -810,7 +881,7 @@ export default function Room() {
     extras?: { customCategories?: string[]; customLabel?: string },
   ) => {
     if (!player || !roomCode) return;
-    setCategoryPack(pack);
+    const requestedPlayerId = player.id;
     try {
       const res = await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/category-pack`, {
         method: "POST",
@@ -831,9 +902,14 @@ export default function Room() {
 
   const submitResults = useCallback(async (score: number, isStopper = false) => {
     if (hasSubmittedRef.current || submitInFlightRef.current || !player || !roomCode) return;
+    const requestedPlayerId = player.id;
     submitInFlightRef.current = true;
     sound.playCorrect();
     haptic.submit();
+    if (requestedPlayerId !== currentPlayerIdRef.current) {
+      submitInFlightRef.current = false;
+      return;
+    }
     setPhase("submitted");
     const bluffedList = [...bluffedCategoriesRef.current];
     // Build bluffedWords map: category → what the player wrote
@@ -859,8 +935,16 @@ export default function Room() {
     // 🔁 Retry up to 3 times with exponential backoff so a single dropped
     // request doesn't leave the player stuck on "Enviando…" forever.
     for (let attempt = 1; attempt <= 3; attempt++) {
+      if (requestedPlayerId !== currentPlayerIdRef.current) {
+        submitInFlightRef.current = false;
+        return;
+      }
       try {
         await submitMutation.mutateAsync(payload);
+        if (requestedPlayerId !== currentPlayerIdRef.current) {
+          submitInFlightRef.current = false;
+          return;
+        }
         hasSubmittedRef.current = true;
         submitInFlightRef.current = false;
         if (submitRetryTimerRef.current) {
@@ -877,6 +961,7 @@ export default function Room() {
     }
 
     submitInFlightRef.current = false;
+    if (requestedPlayerId !== currentPlayerIdRef.current) return;
     // A failed network request must not permanently lock the client in
     // "Enviando…". Keep the exact payload and retry while the server is still
     // on this round. The server-side /results endpoint is idempotent, so a
@@ -999,16 +1084,18 @@ export default function Room() {
   // Cast a bluff vote (opponent calls this)
   const castBluffVote = useCallback(async (accusedPlayerId: string, category: string, vote: "lie" | "real") => {
     if (!player || !roomCode) return;
-    setMyVotes(prev => ({
-      ...prev,
-      [accusedPlayerId]: { ...(prev[accusedPlayerId] ?? {}), [category]: vote },
-    }));
+    const requestedPlayerId = player.id;
     try {
       await fetch(`${apiBase}/api/rooms/${roomCode.toUpperCase()}/bluff-vote`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify({ voterId: player.id, accusedPlayerId, category, vote }),
+        body: JSON.stringify({ voterId: requestedPlayerId, accusedPlayerId, category, vote }),
       });
+      if (requestedPlayerId !== currentPlayerIdRef.current) return;
+      setMyVotes(prev => ({
+        ...prev,
+        [accusedPlayerId]: { ...(prev[accusedPlayerId] ?? {}), [category]: vote },
+      }));
     } catch { /* silent */ }
   }, [player, roomCode, apiBase]);
 
@@ -1182,7 +1269,7 @@ export default function Room() {
     }
 
     if (roomStatus === "stopped") {
-      if (phase === "playing") {
+      if (phase === "playing" || phase === "lobby") {
         // Mark if this player was the one who called STOP (for speed bonus)
         iAmTheStopperRef.current = stopper?.id === player?.id;
         stopAllTimers();
@@ -1222,7 +1309,7 @@ export default function Room() {
         setPhase("lobby");
       }
     }
-  }, [roomStatus, currentRound]);
+  }, [roomStatus, currentRound, player?.id]);
 
   // ⚡ Auto-reveal categorías entre rondas para no aburrir a la gente.
   // ~0.7s por categoría (12 cats ≈ 8s total) + arranque rápido.
@@ -1252,6 +1339,7 @@ export default function Room() {
 
   const handleStop = async () => {
     if (phase !== "playing" || isStopping || !player || !roomCode) return;
+    const requestedPlayerId = player.id;
     // 🛑 Punchy feedback BEFORE the network call so the press feels instant
     // even on slow connections. Sound + heavy haptic + screen flash.
     sound.playStop();
@@ -1263,8 +1351,9 @@ export default function Room() {
       await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/stop`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify({ playerId: player.id, playerName: player.name }),
+        body: JSON.stringify({ playerId: requestedPlayerId, playerName: player.name }),
       });
+      if (requestedPlayerId !== currentPlayerIdRef.current) return;
       // 🛡️ Race fix: only kick off the freeze locally if polling hasn't already
       // done it. Otherwise stopAllTimers() here would clear the freeze interval
       // that the polling effect just installed and the countdown would stall at "3".
@@ -1274,24 +1363,27 @@ export default function Room() {
         startFreezeCountdown();
       }
     } catch (e) { console.error(e); }
-    setIsStopping(false);
+    finally {
+      if (requestedPlayerId === currentPlayerIdRef.current) setIsStopping(false);
+    }
   };
 
   const handleStart = async () => {
     if (!roomCode || !player) return;
+    const requestedPlayerId = player.id;
     try {
       const r = await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/start`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
         // 🔐 Server now requires hostId to authorize round start.
-        body: JSON.stringify({ hostId: player.id }),
+        body: JSON.stringify({ hostId: requestedPlayerId }),
       });
       // 🚀 Adelantamos el estado en local sin esperar al SSE/polling — quien pulsa
       // "Empezar" ve la transición instantánea (los demás llegan vía broadcast).
-      if (r.ok) {
+      if (r.ok && requestedPlayerId === currentPlayerIdRef.current) {
         try {
           const data = await r.json();
-          queryClient.setQueryData(getGetRoomQueryKey(roomCode.toUpperCase()), data);
+          if (requestedPlayerId === currentPlayerIdRef.current) queryClient.setQueryData(roomQueryKey, data);
         } catch {}
       }
     } catch (e) { console.error(e); }
@@ -1876,7 +1968,7 @@ export default function Room() {
                           });
                           const data = await r.json();
                           if (data.ok) {
-                            if (cardId === "lightning") setTimeLeft(t => Math.min(t + 15, ROUND_TIME + 15));
+                            if (currentPlayerIdRef.current === player.id && cardId === "lightning") setTimeLeft(t => Math.min(t + 15, ROUND_TIME + 15));
                           }
                         } catch {}
                       }}
@@ -1987,6 +2079,7 @@ export default function Room() {
                   disabled={spyUsesLeft <= 0 || spyLoading}
                   onClick={async () => {
                     if (spyUsesLeft <= 0 || spyLoading || !player?.id || !roomCode) return;
+                    const requestedPlayerId = player.id;
                     setSpyError(null);
                     setSpyLoading(true);
                     try {
@@ -1995,22 +2088,30 @@ export default function Room() {
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({ playerId: player.id }),
                       });
+                      if (requestedPlayerId !== currentPlayerIdRef.current) return;
                       if (!r.ok) {
                         const j = await r.json().catch(() => ({}));
+                        if (requestedPlayerId !== currentPlayerIdRef.current) return;
                         setSpyError(j.error || "No se pudo espiar 🤷");
-                        scheduleUiTimeout(() => setSpyError(null), 2200);
+                        scheduleUiTimeout(() => {
+                          if (requestedPlayerId === currentPlayerIdRef.current) setSpyError(null);
+                        }, 2200);
                       } else {
                         const data = await r.json();
+                        if (requestedPlayerId !== currentPlayerIdRef.current) return;
                         if (typeof data.usesLeft === "number") setSpyUsesLeft(data.usesLeft);
                         if (typeof data.limit === "number") setSpyLimit(data.limit);
                         setSpyReveal(data);
-                        scheduleUiTimeout(() => setSpyReveal(null), 5000);
+                        scheduleUiTimeout(() => {
+                          if (requestedPlayerId === currentPlayerIdRef.current) setSpyReveal(null);
+                        }, 5000);
                       }
                     } catch {
+                      if (requestedPlayerId !== currentPlayerIdRef.current) return;
                       setSpyError("Sin conexión 📡");
                       scheduleUiTimeout(() => setSpyError(null), 2200);
                     } finally {
-                      setSpyLoading(false);
+                      if (requestedPlayerId === currentPlayerIdRef.current) setSpyLoading(false);
                     }
                   }}
                   className={`w-full py-2 rounded-full text-sm font-bold border-2 transition-all ${
@@ -2296,9 +2397,16 @@ export default function Room() {
           // Build uniqueness map: for each category, which normalized values appear >1 times
           const duplicatesByCategory: Record<string, Set<string>> = {};
           for (const cat of roundCategories) {
+            // The server persists authoritative validAnswers after validating
+            // every submitted word. Use that source for the reveal so special
+            // valid cases such as "ñu" (2 letters) cannot be shown as invalid.
             const vals = players
-              .map((p: any) => normalizeForScore(p.answers?.[cat] ?? ""))
-              .filter(v => v.length >= 2 && v.startsWith(normLetter));
+              .map((p: any) => normalizeForScore(
+                typeof p.validAnswers?.[cat] === "string"
+                  ? p.validAnswers[cat]
+                  : "",
+              ))
+              .filter(Boolean);
             const seen = new Set<string>();
             const dupes = new Set<string>();
             for (const v of vals) { if (seen.has(v)) dupes.add(v); else seen.add(v); }
@@ -2339,7 +2447,12 @@ export default function Room() {
                             {players.map((p: any) => {
                               const raw = p.answers?.[cat] ?? "";
                               const norm = normalizeForScore(raw);
-                              const valid = norm.length >= 2 && norm.startsWith(normLetter);
+                              const serverValidWord = typeof p.validAnswers?.[cat] === "string"
+                                ? p.validAnswers[cat]
+                                : null;
+                              const valid = serverValidWord !== null
+                                ? normalizeForScore(serverValidWord) === norm
+                                : false;
                               const isDupe = valid && duplicatesByCategory[cat].has(norm);
                               const isMe = p.playerId === player?.id;
                               return (
@@ -2851,7 +2964,7 @@ function StreamerModeCard({ room, playerId }: { room: any; playerId: string }) {
   const copy = (url: string, key: string) => {
     navigator.clipboard.writeText(url).catch(() => {});
     setCopied(key);
-    scheduleUiTimeout(() => setCopied(null), 1500);
+    window.setTimeout(() => setCopied(null), 1500);
   };
 
   return (

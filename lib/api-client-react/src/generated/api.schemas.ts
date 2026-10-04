@@ -48,6 +48,7 @@ export interface ValidateRoundRequest {
   letter: string;
   language: ValidateRoundRequestLanguage;
   playerName?: string;
+  daily?: boolean;
   playerResponses: CategoryResponse[];
 }
 
@@ -64,6 +65,7 @@ game score, so the server can verify the score wasn't fabricated.
 Absent when the round was validated offline.
  */
   scoreToken?: string;
+  dailyScoreToken?: string;
 }
 
 export interface PlayerScore {

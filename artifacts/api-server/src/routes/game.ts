@@ -3,6 +3,8 @@ import { ValidateRoundBody, ValidateRoundResponse } from "@workspace/api-zod";
 import { validateWordWithAi } from "../lib/aiWordValidator";
 import { issueScoreToken } from "../lib/scoreToken";
 import { normalizeWord, isSafeInput } from "../lib/wordRules";
+import { readPlayerId } from "../lib/playerAuth";
+import { getDailyChallenge } from "./daily";
 
 const router: IRouter = Router();
 
@@ -1456,7 +1458,7 @@ function isWordValid(word: string, letter: string, category: string, language = 
     const nw = normalizeWord(w);
     return nw === normalizedWord ||
       normalizedWord.startsWith(nw) ||   // e.g. "rosado" starts with "rosa" ✓
-      nw.startsWith(normalizedWord);     // e.g. "ro" prefix of "rojo" ✓
+      false; // A shorter prefix is not itself a valid answer.
   });
 }
 
@@ -1512,7 +1514,19 @@ router.post("/validate", async (req, res) => {
     return;
   }
 
-  const { letter, language, playerResponses: rawPlayerResponses } = body.data;
+  const { letter, language, daily, playerResponses: rawPlayerResponses } = body.data;
+
+  if (daily) {
+    const todayChallenge = getDailyChallenge(new Date().toISOString().slice(0, 10), language);
+    const requestedCategories = rawPlayerResponses.map((pr) => normalizeWord(pr.category));
+    const expectedCategories = todayChallenge.categories.map((cat) => normalizeWord(cat));
+    if (letter.trim().toUpperCase() !== todayChallenge.letter ||
+        requestedCategories.length !== expectedCategories.length ||
+        requestedCategories.some((cat, i) => cat !== expectedCategories[i])) {
+      res.status(422).json({ error: "Invalid daily challenge" });
+      return;
+    }
+  }
 
   // A round is bounded by the category pack (currently at most 12 categories).
   // The client normally sends unique categories, but this endpoint is public and
@@ -1598,13 +1612,23 @@ router.post("/validate", async (req, res) => {
   // 🔒 Anti-cheat: hand back a signed, single-use voucher attesting the
   // server-computed base score for this round. The client returns it when
   // submitting the final game score so the leaderboard can't be fabricated.
-  const scoreToken = issueScoreToken(playerTotalScore, validatedCollectionWords, "solo", aiTotalScore);
+  const scoreToken = issueScoreToken(
+    playerTotalScore,
+    validatedCollectionWords,
+    daily ? "daily" : "solo",
+    aiTotalScore,
+    readPlayerId(req),
+  );
+  const dailyScoreToken = daily
+    ? issueScoreToken(playerTotalScore, [], "daily", aiTotalScore, readPlayerId(req))
+    : null;
 
   const response = ValidateRoundResponse.parse({
     results,
     playerTotalScore,
     aiTotalScore,
     ...(scoreToken ? { scoreToken } : {}),
+    ...(dailyScoreToken ? { dailyScoreToken } : {}),
   });
 
   res.json(response);

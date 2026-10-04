@@ -125,9 +125,9 @@ router.post("/submit", async (req, res) => {
   // posted score to a ceiling derived from the verified round voucher(s), or a
   // flat absolute ceiling when none are present (offline play). Never reject,
   // only clamp, so a legit daily score is never lost.
-  const { base: verifiedBase, verified, voucherJtis } = await sumVerifiedBasePersistent(scoreTokens, 1);
+  const { base: verifiedBase, verified, playerId: voucherPlayerId, voucherJtis, mode: voucherMode } = await sumVerifiedBasePersistent(scoreTokens, 1);
   const suppliedTokens = Array.isArray(scoreTokens) && scoreTokens.length > 0;
-  if (suppliedTokens && verified === 0) {
+  if (suppliedTokens && (verified === 0 || voucherPlayerId !== playerId || voucherMode !== "daily")) {
     res.status(422).json({ error: "INVALID_SCORE_VOUCHER" });
     return;
   }
@@ -152,7 +152,10 @@ router.post("/submit", async (req, res) => {
 
       if (existing.length > 0) {
         alreadyPlayed = true;
-        if (safeScore <= existing[0].score) return;
+        // A daily result is one challenge per player/date. Do not let a client
+        // switch language and use a different challenge to overwrite/improve
+        // the score that is already recorded for today's challenge.
+        if (existing[0].language !== normalizedLanguage || safeScore <= existing[0].score) return;
 
         if (verified > 0 && voucherJtis.length > 0) {
           await consumeScoreVoucherJtis(tx, voucherJtis);
@@ -216,6 +219,7 @@ router.get("/rankings", async (req, res) => {
   const results = await db
     .select({
       id: dailyResultsTable.id,
+      playerId: dailyResultsTable.playerId,
       playerName: dailyResultsTable.playerName,
       avatarColor: dailyResultsTable.avatarColor,
       challengeDate: dailyResultsTable.challengeDate,

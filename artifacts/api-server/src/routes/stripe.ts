@@ -26,7 +26,7 @@ router.use((_req, res, next) => {
     res.setHeader("Retry-After", "5");
     return res.status(503).json({ error: "Stripe is still initializing" });
   }
-  next();
+  return next();
 });
 
 const APP_ORIGIN =

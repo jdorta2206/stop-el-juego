@@ -50,7 +50,7 @@ export function ChallengeNotification({ challenge, onDismiss }: ChallengeNotific
       if (stored) playerData = JSON.parse(stored);
     } catch { /* ignore */ }
 
-    if (!playerData?.id) {
+    if (!playerData?.id || (challenge.recipientPlayerId && playerData.id !== challenge.recipientPlayerId)) {
       respondingRef.current = false;
       setResponding(false);
       return;
@@ -94,6 +94,20 @@ export function ChallengeNotification({ challenge, onDismiss }: ChallengeNotific
       return;
     }
 
+    try {
+      const currentStored = localStorage.getItem("stop_player_v2");
+      const currentId = currentStored ? JSON.parse(currentStored)?.id : null;
+      if (!currentId || currentId !== playerData.id || (challenge.recipientPlayerId && currentId !== challenge.recipientPlayerId)) {
+        respondingRef.current = false;
+        setResponding(false);
+        return;
+      }
+    } catch {
+      respondingRef.current = false;
+      setResponding(false);
+      return;
+    }
+
     // Consume the invitation after /join. If the sender refreshed the same
     // pending invite in the tiny gap between those requests, /respond returns
     // the new roomCode; join that room and retry the acceptance once.
@@ -119,7 +133,7 @@ export function ChallengeNotification({ challenge, onDismiss }: ChallengeNotific
         response = await respondToChallenge(challenge.challengeId, true);
       }
     }
-    if (!response.ok || !response.roomCode) {
+    if (!response.ok || !response.roomCode || (challenge.recipientPlayerId && playerData.id !== challenge.recipientPlayerId)) {
       respondingRef.current = false;
       setResponding(false);
       return;

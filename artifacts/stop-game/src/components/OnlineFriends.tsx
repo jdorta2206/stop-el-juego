@@ -189,7 +189,9 @@ function PlayerRow({
 
   const handleChallenge = async (): Promise<boolean> => {
     if (!currentPlayer) return false;
+    const requestedPlayerId = currentPlayer.id;
     const result = await sendChallenge(currentPlayer, player.playerId);
+    if (currentPlayer.id !== requestedPlayerId) return false;
     if (!result) return false;
     pendingChallengeId.current = result.challengeId;
     challengeAbortRef.current?.abort();
@@ -203,6 +205,12 @@ function PlayerRow({
       try {
         const status = await pollChallengeStatus(pendingChallengeId.current, controller.signal);
         if (!pendingChallengeId.current || controller.signal.aborted) return;
+        if (currentPlayer.id !== requestedPlayerId) {
+          controller.abort();
+          clearInterval(poll); challengePollRef.current = null;
+          pendingChallengeId.current = null;
+          return;
+        }
         if (status.status === "accepted") {
         clearInterval(poll); challengePollRef.current = null;
         if (challengeTimeoutRef.current) clearTimeout(challengeTimeoutRef.current);

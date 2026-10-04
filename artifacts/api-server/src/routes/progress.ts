@@ -112,21 +112,26 @@ router.post("/progress/:playerId", async (req, res) => {
 
   const body = (req.body ?? {}) as JsonRecord;
   const personalBests = body.personalBests;
+  const collectedWords = body.collectedWords;
 
   // Ignore client-supplied achievements/stats entirely. In particular, never
   // persist arbitrary achievement ids, counters or booleans supplied by the
   // caller, even when the caller is authenticated.
-  if (!personalBests || typeof personalBests !== "object" || Array.isArray(personalBests)) {
+  const hasPersonalBests = personalBests && typeof personalBests === "object" && !Array.isArray(personalBests);
+  const hasCollectedWords = collectedWords && typeof collectedWords === "object" && !Array.isArray(collectedWords);
+
+  if (!hasPersonalBests && !hasCollectedWords) {
     res.json({ ok: true });
     return;
   }
 
-  const incoming = personalBests as JsonRecord;
+  const incoming = hasPersonalBests ? personalBests as JsonRecord : {};
+  const collectionIncoming = hasCollectedWords ? collectedWords as JsonRecord : {};
   const modes = Object.keys(incoming)
     .filter(mode => mode.length <= MAX_KEY_LENGTH)
     .slice(0, MAX_PERSONAL_BESTS);
 
-  if (modes.length === 0) {
+  if (modes.length === 0 && Object.keys(collectionIncoming).length === 0) {
     res.json({ ok: true });
     return;
   }
@@ -143,22 +148,30 @@ router.post("/progress/:playerId", async (req, res) => {
   const authoritativeMax = new Map(
     historyRows.map(row => [String(row.mode), Number(row.maxScore ?? 0)])
   );
+  // Older solo games were stored under the generic "solo" mode. Preserve
+  // those scores as evidence for the new explicit "normal" personal-best key.
+  const legacySoloMax = authoritativeMax.get("solo");
+  if (legacySoloMax !== undefined) {
+    authoritativeMax.set("normal", Math.max(authoritativeMax.get("normal") ?? 0, legacySoloMax));
+  }
 
   // Serialize the read/merge/write itself. Without the row lock, two devices
   // can both read the same JSON, merge different modes, and the second UPDATE
   // silently discard the first device's legitimate progress.
   await db.transaction(async (tx) => {
     const locked = await tx.execute(sql`
-      SELECT personal_bests_json
+      SELECT personal_bests_json, collected_words_json
       FROM player_scores
       WHERE player_id = ${playerId}
       FOR UPDATE
     `);
-    const lockedRow = (locked.rows as Array<{ personal_bests_json: string | null }>)[0];
+    const lockedRow = (locked.rows as Array<{ personal_bests_json: string | null; collected_words_json: string | null }>)[0];
     if (!lockedRow) throw new Error("Player not found");
 
     const current = parseJson<JsonRecord>(lockedRow.personal_bests_json, {});
     const merged: JsonRecord = { ...current };
+    const currentCollection = parseJson<JsonRecord>(lockedRow.collected_words_json, {});
+    const mergedCollection: JsonRecord = { ...currentCollection };
 
     for (const mode of modes) {
       const score = incoming[mode];
@@ -174,10 +187,17 @@ router.post("/progress/:playerId", async (req, res) => {
       merged[mode] = Math.max(Number(current[mode] ?? 0), safeScore);
     }
 
-    if (JSON.stringify(merged) !== JSON.stringify(current)) {
+    for (const [key, value] of Object.entries(collectionIncoming)) {
+      if (Object.keys(mergedCollection).length >= 5000) break;
+      if (mergedCollection[key] !== undefined) continue;
+      if (!value || typeof value !== "object" || Array.isArray(value)) continue;
+      mergedCollection[key] = value;
+    }
+
+    if (JSON.stringify(merged) !== JSON.stringify(current) || JSON.stringify(mergedCollection) !== JSON.stringify(currentCollection)) {
       await tx
         .update(playerScoresTable)
-        .set({ personalBestsJson: JSON.stringify(merged) })
+        .set({ personalBestsJson: JSON.stringify(merged), collectedWordsJson: JSON.stringify(mergedCollection) })
         .where(eq(playerScoresTable.playerId, playerId));
     }
   });

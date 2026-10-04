@@ -41,11 +41,18 @@ interface FriendEntry {
 
 function InviteRow({ friend, player, roomCode }: { friend: FriendEntry; player: PlayerProfile; roomCode: string }) {
   const [state, setState] = useState<InviteState>(friend.alreadyInRoom ? "sent" : "idle");
+  const currentPlayerIdRef = useRef(player.id);
+  useEffect(() => {
+    currentPlayerIdRef.current = player.id;
+    setState(friend.alreadyInRoom ? "sent" : "idle");
+  }, [player.id, friend.alreadyInRoom]);
 
   const handleInviteOnline = async () => {
     if (!friend.onlineData || state !== "idle") return;
+    const requestedPlayerId = player.id;
     setState("sending");
     const ok = await sendRoomInvite(player, friend.id, roomCode);
+    if (currentPlayerIdRef.current !== requestedPlayerId) return;
     setState(ok ? "sent" : "offline");
   };
 

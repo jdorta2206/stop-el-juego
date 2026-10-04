@@ -8,6 +8,8 @@ import { recordTrustedAnalyticsEvent } from "./analytics";
 import { recordAuthoritativeSeasonEvents } from "./season";
 import { recordHalloweenEvent, recordHalloweenScareEvents, getHalloweenEventYear, recordHalloweenScareEventsInTransaction, recordHalloweenScareEventsWithCooldown, isHalloweenPreviewAuthorized } from "./halloween";
 import { isHappyHourActiveForTzOffset, HAPPY_HOUR_MULTIPLIER } from "../lib/happyHour";
+import { isUserPremium } from "../lib/premiumStatus";
+import { stripeStorage } from "../stripeStorage";
 import { isWordValidAsync, HALLOWEEN_CATEGORY_ALIASES } from "./game";
 import { writeLimiter, roomJoinLimiter, halloweenScareLimiter } from "../middlewares/rateLimit";
 import { verifyClaimedIdentity, verifyPlayerToken, readPlayerId, isLoggedInId, isAuthConfigured } from "../lib/playerAuth";
@@ -217,7 +219,7 @@ function broadcastRoom(code: string, roomPayload: object) {
       }
       const payload = room.isPublic === true && !memberIds.has(client.playerId)
         ? sanitizeRoomForSpectator(room)
-        : room;
+        : sanitizeRoomForMember(room, client.playerId);
       client.res.write(`data: ${JSON.stringify(payload)}\n\n`);
     } catch {
       clients.delete(client);
@@ -564,7 +566,7 @@ function formatRoomForRequester(req: any, room: any) {
   const isMember =
     !!viewerId &&
     (full.hostId === viewerId || players.some((p: any) => p?.playerId === viewerId));
-  if (isMember) return full;
+  if (isMember) return sanitizeRoomForMember(full, viewerId);
   return full.isPublic === true ? sanitizeRoomForSpectator(full) : sanitizedRoomPreview(full);
 }
 
@@ -764,13 +766,13 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
       if (!halloweenApplicable || halloweenResult !== null) await markMultiplayerAuxClaim(roomId, p.playerId, "halloween");
     } catch (err) { console.error("[halloween] trusted multiplayer completion failed:", err); }
 
-    const seasonOk = await recordAuthoritativeSeasonEvents(p.playerId, [
-      { type: "play_game", value: 1 },
-      ...(won ? [{ type: "win_game", value: 1 }] : []),
-      ...(rawScore > 0 ? [{ type: "round_score", value: rawScore }] : []),
-      ...(validWords > 0 ? [{ type: "valid_words", value: validWords }] : []),
-      { type: "streak", value: settlementStreak },
-    ], `multiplayer:${roomId}:${p.playerId}`);
+    const seasonEvents: Parameters<typeof recordAuthoritativeSeasonEvents>[1] = [];
+    seasonEvents.push({ type: "play_game", value: 1 });
+    if (won) seasonEvents.push({ type: "win_game", value: 1 });
+    if (rawScore > 0) seasonEvents.push({ type: "round_score", value: rawScore });
+    if (validWords > 0) seasonEvents.push({ type: "valid_words", value: validWords });
+    seasonEvents.push({ type: "streak", value: settlementStreak });
+    const seasonOk = await recordAuthoritativeSeasonEvents(p.playerId, seasonEvents, `multiplayer:${roomId}:${p.playerId}`);
     if (seasonOk) await markMultiplayerAuxClaim(roomId, p.playerId, "season");
   }));
 }
@@ -839,11 +841,13 @@ async function recoverMultiplayerAuxiliaryEffects(room: any, players: any[]): Pr
       scoreRow[0]?.currentStreak ?? 0,
     );
     if (!aux.has("season") && (existingSeasonEvent.rows ?? []).length === 0) {
-      const seasonOk = await recordAuthoritativeSeasonEvents(p.playerId, [
-        { type: "play_game", value: 1 }, ...(won ? [{ type: "win_game", value: 1 }] : []),
-        ...(rawScore > 0 ? [{ type: "round_score", value: rawScore }] : []), ...(validWords > 0 ? [{ type: "valid_words", value: validWords }] : []),
-        ...(streak > 0 ? [{ type: "streak", value: streak }] : []),
-      ], eventKey);
+      const seasonEvents: Parameters<typeof recordAuthoritativeSeasonEvents>[1] = [];
+      seasonEvents.push({ type: "play_game", value: 1 });
+      if (won) seasonEvents.push({ type: "win_game", value: 1 });
+      if (rawScore > 0) seasonEvents.push({ type: "round_score", value: rawScore });
+      if (validWords > 0) seasonEvents.push({ type: "valid_words", value: validWords });
+      if (streak > 0) seasonEvents.push({ type: "streak", value: streak });
+      const seasonOk = await recordAuthoritativeSeasonEvents(p.playerId, seasonEvents, eventKey);
       if (seasonOk) await markMultiplayerAuxClaim(room.id, p.playerId, "season");
     } else if (!aux.has("season")) await markMultiplayerAuxClaim(room.id, p.playerId, "season");
     if (!aux.has("halloween")) {
@@ -872,6 +876,84 @@ function roundEndTimestamp(room: any): number | undefined {
   const startedAt = meta?.roundStartedAt;
   if (typeof startedAt === "number") return startedAt + roundDurationSecs(room) * 1000;
   return undefined;
+}
+
+/**
+ * Reconcile the authoritative score for every player who has submitted this
+ * round. Multiplayer uniqueness is a property of the ROUND, not of an
+ * individual /results request: duplicate valid words in the same category
+ * score 5 for every player instead of 10. Re-running is safe because each
+ * player's total is adjusted by (newRoundScore - oldRoundScore).
+ */
+function reconcileRoundScores(room: any, players: any[], configuredCategories: string[]): any[] {
+  const counts = new Map<string, number>();
+  const entriesByPlayer = new Map<string, Array<{ category: string; word: string }>>();
+
+  for (const player of players) {
+    if (!player?.isReady || !player?.validAnswers || typeof player.validAnswers !== "object") continue;
+    const entries: Array<{ category: string; word: string }> = [];
+    for (const [category, word] of Object.entries(player.validAnswers)) {
+      if (typeof word !== "string" || !word.trim()) continue;
+      const key = normalizeWord(category) + "\\u0000" + normalizeWord(word);
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+      entries.push({ category, word });
+    }
+    entriesByPlayer.set(String(player.playerId), entries);
+  }
+
+  const meta = parseBluffMeta(room.stopperJson) ?? {};
+  const stopperId = meta?.stopper?.id ?? meta?.id;
+  const spies = meta?.spyUsage;
+  const endTs = roundEndTimestamp(room);
+  const categoryCount = Math.min(12, Math.max(1, configuredCategories.length));
+
+  return players.map((player: any) => {
+    const oldRoundScore = Number(player.roundScore ?? 0);
+    const entries = entriesByPlayer.get(String(player.playerId)) ?? [];
+    let score = 0;
+
+    for (const { category, word } of entries) {
+      const key = normalizeWord(category) + "\\u0000" + normalizeWord(word);
+      score += (counts.get(key) ?? 0) > 1 ? 5 : 10;
+    }
+
+    const validAnswerCount = Math.min(entries.length, categoryCount);
+    if (stopperId === player.playerId && validAnswerCount >= categoryCount) score += 5;
+
+    if (spies && Number(spies[player.playerId] ?? 0) > 0) {
+      score = Math.max(0, score - 10);
+    }
+
+    if (
+      player.powerCardUsed === true &&
+      player.powerCardUsedRound === room.currentRound &&
+      player.powerCard === "double_or_nothing"
+    ) {
+      score *= 2;
+    }
+
+    const lightningUsedThisRound =
+      player.powerCard === "lightning" &&
+      player.powerCardUsed === true &&
+      player.powerCardUsedRound === room.currentRound;
+    const effectiveEndTs = endTs
+      ? endTs + (lightningUsedThisRound ? 15_000 : 0)
+      : undefined;
+    if (
+      effectiveEndTs &&
+      typeof player.finishedAt === "number" &&
+      player.finishedAt - effectiveEndTs > SUBMIT_GRACE_MS
+    ) {
+      score = 0;
+    }
+
+    return {
+      ...player,
+      score: (Number(player.score ?? 0) - oldRoundScore) + score,
+      roundScore: score,
+      validAnswerCount,
+    };
+  });
 }
 
 function finalizeRoundState(room: any, players: any[]): {
@@ -1294,6 +1376,34 @@ const SWEEP_TIMER_KEY = "__stopSweepStuckRoomsTimer";
 if (g[SWEEP_TIMER_KEY]) clearInterval(g[SWEEP_TIMER_KEY]);
 g[SWEEP_TIMER_KEY] = setInterval(() => { sweepStuckRooms().catch(() => {}); }, 3_000);
 
+// Member view: while a round is still being played/stopped, a player must
+// never receive another player's answers through the API/SSE payload, even
+// though those answers are persisted server-side for authoritative scoring.
+// The local player keeps their own state because the UI may need it after a
+// reconnect; legitimate round reveal remains unchanged once status becomes
+// "revealing" or later.
+function sanitizeRoomForMember(room: any, viewerId: string) {
+  const privateRound =
+    room.status === "playing" ||
+    room.status === "stopping" ||
+    room.status === "stopped";
+
+  if (!privateRound) return room;
+
+  return {
+    ...room,
+    players: (room.players ?? []).map((p: any) => {
+      if (p?.playerId === viewerId) return p;
+      return {
+        ...p,
+        answers: undefined,
+        validAnswers: undefined,
+        bluffedWords: undefined,
+      };
+    }),
+  };
+}
+
 // GET /rooms/public — list open public rooms (also purges stale rooms)
 // Sanitize a formatted room for public spectator/overlay views.
 // Hide individual players' answers while a round is in progress to prevent cheating.
@@ -1635,7 +1745,7 @@ router.get("/:roomCode", async (req, res) => {
     return;
   }
 
-  res.json(full);
+  res.json(sanitizeRoomForMember(full, viewerId));
 });
 
 // POST /rooms/:roomCode/join
@@ -1802,7 +1912,8 @@ router.post("/:roomCode/join", roomJoinLimiter, async (req, res) => {
 router.post("/:roomCode/start", async (req, res) => {
   const roomCode = paramStr(req.params.roomCode);
   const { hostId, roomId } = (req.body ?? {}) as { hostId?: string; roomId?: number };
-  if (!Number.isInteger(roomId) || roomId <= 0) { res.status(400).json({ error: "Missing roomId" }); return; }
+  const requiredRoomId = typeof roomId === "number" && Number.isInteger(roomId) && roomId > 0 ? roomId : null;
+  if (requiredRoomId === null) { res.status(400).json({ error: "Missing roomId" }); return; }
   const rooms = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, roomCode.toUpperCase())).limit(1);
   if (rooms.length === 0) { res.status(404).json({ error: "Room not found" }); return; }
 
@@ -1879,7 +1990,7 @@ router.post("/:roomCode/start", async (req, res) => {
     })
     .where(and(
       eq(roomsTable.roomCode, roomCode.toUpperCase()),
-      eq(roomsTable.id, roomId),
+      eq(roomsTable.id, requiredRoomId),
       eq(roomsTable.status, "waiting"),
       eq(roomsTable.roomVersion, room.roomVersion),
     ))
@@ -2086,6 +2197,7 @@ router.post("/:roomCode/leave", async (req, res) => {
       }
 
       let newHostId: string | null = null;
+      let newHostName = "";
       if (leaving.isHost) {
         // A bot can never become the authoritative host: it cannot authenticate
         // or call /start. If the last human leaves and only bots remain, delete
@@ -2097,6 +2209,7 @@ router.post("/:roomCode/leave", async (req, res) => {
         }
         remaining.forEach((p: any) => { p.isHost = p.playerId === nextHuman.playerId; });
         newHostId = nextHuman.playerId;
+        newHostName = nextHuman.playerName ?? "";
       }
 
       const setPayload: Record<string, unknown> = {
@@ -2106,7 +2219,7 @@ router.post("/:roomCode/leave", async (req, res) => {
       };
       if (newHostId) {
         setPayload.hostId = newHostId;
-        setPayload.hostName = remaining[0].playerName ?? "";
+        setPayload.hostName = newHostName;
       }
 
       const updated = await tx
@@ -2130,6 +2243,7 @@ router.post("/:roomCode/leave", async (req, res) => {
     // remaining player so the invariant "exactly one host" can never drift,
     // even if a previous code path forgot to clear it.
     let newHostId: string | null = null;
+    let newHostName = "";
     if (leaving.isHost) {
       // Never promote a bot to host. Bots cannot authenticate or start rounds.
       const nextHuman = remaining.find((p: any) => !p.isBot);
@@ -2139,6 +2253,7 @@ router.post("/:roomCode/leave", async (req, res) => {
       }
       remaining.forEach((p: any) => { p.isHost = p.playerId === nextHuman.playerId; });
       newHostId = nextHuman.playerId;
+      newHostName = nextHuman.playerName ?? "";
     }
 
     const setPayload: Record<string, unknown> = {
@@ -2148,7 +2263,7 @@ router.post("/:roomCode/leave", async (req, res) => {
     };
     if (newHostId) {
       setPayload.hostId = newHostId;
-      setPayload.hostName = remaining[0].playerName ?? "";
+      setPayload.hostName = newHostName;
     }
 
     const updated = await tx
@@ -2258,7 +2373,8 @@ router.post("/:roomCode/category-pack", async (req, res) => {
     customLabel?: string;
   };
   const { hostId, roomId, pack } = body;
-  if (!Number.isInteger(roomId) || roomId <= 0) { res.status(400).json({ error: "Missing roomId" }); return; }
+  const requiredRoomId = typeof roomId === "number" && Number.isInteger(roomId) && roomId > 0 ? roomId : null;
+  if (requiredRoomId === null) { res.status(400).json({ error: "Missing roomId" }); return; }
   // 🔒 Bind to the token first so a leaked hostId can't be replayed by a third party.
   if (!await verifyClaimedIdentity(req, hostId)) {
     res.status(403).json({ error: "Identity verification failed" }); return;
@@ -2306,7 +2422,7 @@ router.post("/:roomCode/category-pack", async (req, res) => {
     .set({ stopperJson: JSON.stringify(packMeta), updatedAt: new Date(), roomVersion: sql`${roomsTable.roomVersion} + 1` })
     .where(and(
       eq(roomsTable.roomCode, code),
-      eq(roomsTable.id, roomId),
+      eq(roomsTable.id, requiredRoomId),
       eq(roomsTable.status, "waiting"),
       eq(roomsTable.roomVersion, rooms[0].roomVersion),
       eq(roomsTable.hostId, hostId),
@@ -2552,7 +2668,7 @@ router.post("/:roomCode/typing", writeLimiter, async (req, res) => {
         safe[String(k).slice(0, 60)] = v.trim().slice(0, 80);
       }
     }
-    const nextSeq = Number.isInteger(seq) ? seq : 0;
+    const nextSeq: number = Number.isInteger(seq) ? Number(seq) : 0;
     const nextSessionId = typeof sessionId === "string" && sessionId.length > 0 ? sessionId.slice(0, 80) : "legacy";
     const previous = lr.get(playerId);
     // Requests are throttled client-side, but network latency can reorder them.
@@ -2693,6 +2809,7 @@ router.post("/:roomCode/spy", writeLimiter, async (req, res) => {
       pick,
       current,
       usesLeft: limit - (current + 1),
+      roomId: liveRoom.id,
     };
   });
 
@@ -2723,8 +2840,8 @@ router.post("/:roomCode/spy", writeLimiter, async (req, res) => {
   // Keep the in-memory map in sync as a fast path for the scoring code; the
   // persisted value remains authoritative across restarts.
   let used = roomSpyUsage.get(code);
-  if (!used || used.roomId !== room.id) {
-    used = { roomId: room.id, uses: new Map<string, number>() };
+  if (!used || used.roomId !== outcome.roomId) {
+    used = { roomId: outcome.roomId, uses: new Map<string, number>() };
     roomSpyUsage.set(code, used);
   }
   used.uses.set(playerId, outcome.current + 1);
@@ -3130,9 +3247,10 @@ router.post("/:roomCode/halloween-scare", halloweenScareLimiter, async (req, res
       eventKey: `received:${event.id}:${p.playerId}`,
     })),
   ];
+  let cooldownResult: Awaited<ReturnType<typeof recordHalloweenScareEventsWithCooldown>>;
   try {
     {
-      const cooldownResult = await recordHalloweenScareEventsWithCooldown(
+      cooldownResult = await recordHalloweenScareEventsWithCooldown(
         persistentEvents,
         isHalloweenPreviewAuthorized(req),
         room.id,
@@ -3255,6 +3373,11 @@ router.post("/:roomCode/stop", async (req, res) => {
 
     return stopped;
   });
+
+  if (!updated) {
+    res.status(409).json({ error: "Round changed; please refresh" });
+    return;
+  }
 
   try {
     // Halloween is deliberately persisted only after the authoritative STOP
@@ -3484,7 +3607,7 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
         const normalizedWord = normalizeWord(word);
         const normalizedLetter = normalizeWord(letter);
         if (
-          normalizedWord.length >= 3 &&
+          normalizedWord.length >= 2 &&
           normalizedWord.startsWith(normalizedLetter)
         ) {
           safeAnswers[cat] = word;
@@ -3506,18 +3629,18 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
   const AUTHORITATIVE_CATEGORY_CAP = Math.min(12, Math.max(1, configuredCategories.length));
   const scoredEntries = await Promise.all(
     Object.entries(safeAnswers).map(async ([category, word]) => ({
+      category,
       word,
       valid: await isWordValidAsync(word, letter, category, room.language ?? "es", playerId),
     })),
   );
-  const validNorms = new Set<string>();
-  let validAnswerCountRaw = 0;
+  // Scoring is per category/cell. The same valid word may legitimately
+  // satisfy two different categories (for example, "naranja" as Fruit and
+  // Color), so never deduplicate valid answers across categories.
+  const validAnswerCountRaw = scoredEntries.filter((entry) => entry.valid).length;
+  const validAnswers: Record<string, string> = {};
   for (const entry of scoredEntries) {
-    const norm = normalizeWord(entry.word);
-    if (entry.valid && !validNorms.has(norm)) {
-      validNorms.add(norm);
-      validAnswerCountRaw++;
-    }
+    if (entry.valid) validAnswers[entry.category] = entry.word;
   }
   const baseScoreRaw = validAnswerCountRaw * 10;
   const validAnswerCount = Math.min(validAnswerCountRaw, AUTHORITATIVE_CATEGORY_CAP);
@@ -3585,6 +3708,7 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
         roundScore: cappedRoundScore,
         isReady: true,
         answers: safeAnswers,
+        validAnswers,
         // Server-validated count is persisted with the round snapshot so
         // final Season Pass events never need to trust raw client answers.
         validAnswerCount,
@@ -3598,11 +3722,16 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
     return p;
   });
 
+  // Multiplayer duplicate-word scoring is round-wide. Reconcile before the
+  // CAS write so an earlier submitter is retroactively changed from 10 to 5
+  // when a later player submits the same valid word in the same category.
+  const reconciledPlayers = reconcileRoundScores(room, updatedPlayers, configuredCategories);
+
   // 🧹 Stuck-player sweep + round advance — shared with the background
   // sweepStuckRooms() failsafe so a round can never deadlock waiting on a
   // submission that never physically arrives.
   const { sweptPlayers, newStatus, newLetter, newRound, newStopperJson } =
-    finalizeRoundState(room, updatedPlayers);
+    finalizeRoundState(room, reconciledPlayers);
 
   // Optimistic concurrency with bounded retry.
   // Two players can submit at virtually the same time. The old code returned
@@ -3613,7 +3742,7 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
   // re-run the round finalizer, and retry. Never overwrite another player's
   // newer submission.
   let authoritativeRoom = room;
-  let authoritativePlayers = sweptPlayers;
+  let authoritativePlayers = reconciledPlayers;
   let authoritativeStatus = newStatus;
   let authoritativeRound = newRound;
   let authoritativeLetter = newLetter;
@@ -3687,7 +3816,7 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
 
     // Merge only our player into the latest state, preserving every other
     // player's answers/score that won the race.
-    authoritativePlayers = refreshedPlayers.map((p: any) => {
+    const mergedPlayers = refreshedPlayers.map((p: any) => {
       if (p.playerId !== playerId) return p;
       return {
         ...p,
@@ -3695,6 +3824,7 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
         roundScore: cappedRoundScore,
         isReady: true,
         answers: safeAnswers,
+        validAnswers,
         // Preserve the server-validated word count when this submission is
         // merged after losing the optimistic-concurrency race.
         validAnswerCount,
@@ -3705,7 +3835,12 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
       };
     });
 
-    const retryFinalized = finalizeRoundState(refreshed, authoritativePlayers);
+    const reconciledRetryPlayers = reconcileRoundScores(
+      refreshed,
+      mergedPlayers,
+      configuredCategories,
+    );
+    const retryFinalized = finalizeRoundState(refreshed, reconciledRetryPlayers);
     authoritativeRoom = refreshed;
     authoritativePlayers = retryFinalized.sweptPlayers;
     authoritativeStatus = retryFinalized.newStatus;

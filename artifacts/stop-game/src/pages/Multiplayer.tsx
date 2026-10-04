@@ -41,6 +41,8 @@ export default function Multiplayer() {
   const [loadingPublic, setLoadingPublic] = useState(false);
   const [resumeCode, setResumeCode] = useState<string | null>(null);
   const [resuming, setResuming] = useState(false);
+  const currentPlayerIdRef = useRef<string | null>(null);
+  currentPlayerIdRef.current = player?.id ?? null;
   const publicRoomsAbortRef = useRef<AbortController | null>(null);
 
   const createMutation = useCreateRoom();
@@ -82,6 +84,7 @@ export default function Multiplayer() {
 
   const handleResume = async () => {
     if (!player || !resumeCode || resuming) return;
+    const requestedPlayerId = player.id;
     setResuming(true);
     try {
       await joinMutation.mutateAsync({
@@ -93,8 +96,10 @@ export default function Multiplayer() {
           picture: player.picture || null,
         } as import("@workspace/api-client-react").JoinRoomRequest & { loginMethod?: string | null },
       });
+      if (currentPlayerIdRef.current !== requestedPlayerId) return;
       setLocation(`/room/${resumeCode}`);
     } catch {
+      if (currentPlayerIdRef.current !== requestedPlayerId) return;
       clearActiveRoom();
       setResumeCode(null);
       setResuming(false);
@@ -135,6 +140,7 @@ export default function Multiplayer() {
 
   const handleCreate = async () => {
     if (!player) return;
+    const requestedPlayerId = player.id;
     setError("");
     try {
       const room = await createMutation.mutateAsync({
@@ -151,8 +157,10 @@ export default function Multiplayer() {
           maxPlayers,
         } as any,
       });
+      if (currentPlayerIdRef.current !== requestedPlayerId) return;
       setLocation(`/room/${room.roomCode}`);
     } catch {
+      if (currentPlayerIdRef.current !== requestedPlayerId) return;
       setError(t.multiplayer.waitingForHost);
     }
   };
@@ -179,6 +187,7 @@ export default function Multiplayer() {
   const handleJoin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!player || !roomCode.trim()) return;
+    const requestedPlayerId = player.id;
     setError("");
     try {
       const room = await joinMutation.mutateAsync({
@@ -189,14 +198,17 @@ export default function Multiplayer() {
           avatarColor: player.avatarColor,
         } as import("@workspace/api-client-react").JoinRoomRequest & { loginMethod?: string | null },
       });
+      if (currentPlayerIdRef.current !== requestedPlayerId) return;
       setLocation(`/room/${room.roomCode}`);
     } catch (err) {
+      if (currentPlayerIdRef.current !== requestedPlayerId) return;
       setError(describeJoinError(err));
     }
   };
 
   const handleJoinPublic = async (code: string) => {
     if (!player) return;
+    const requestedPlayerId = player.id;
     setError("");
     try {
       const room = await joinMutation.mutateAsync({

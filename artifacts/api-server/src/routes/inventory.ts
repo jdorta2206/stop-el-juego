@@ -44,7 +44,7 @@ interface OwnedInventory {
 const router: IRouter = Router();
 
 async function requireInventoryIdentity(req: AuthedRequest, res: any, next: any): Promise<void> {
-  if (req.headers["x-halloween-preview"] === "1") {
+  if (isHalloweenPreviewAuthorized(req)) {
     const claimedId = String(req.headers["x-halloween-player-id"] ?? "").trim();
     if (claimedId && await verifyClaimedIdentity(req, claimedId)) {
       req.playerId = claimedId;

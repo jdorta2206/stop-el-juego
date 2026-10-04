@@ -73,6 +73,8 @@ export function useRewards(playerId?: string | null, onClaimed?: () => void) {
   const [prestige, setPrestige] = useState<PrestigeRewards | null>(null);
   const [loading, setLoading] = useState(false);
   const requestRef = useRef<AbortController | null>(null);
+  const currentPlayerIdRef = useRef(playerId);
+  currentPlayerIdRef.current = playerId;
 
   const refresh = useCallback(async () => {
     requestRef.current?.abort();
@@ -85,7 +87,9 @@ export function useRewards(playerId?: string | null, onClaimed?: () => void) {
         fetch(`${API}/api/rewards/collection`, { credentials: "include", headers: authHeaders(), signal: controller.signal }),
         fetch(`${API}/api/rewards/prestige`, { credentials: "include", headers: authHeaders(), signal: controller.signal }),
       ]);
+      if (controller.signal.aborted) return;
       if (c.ok) setCollection(await c.json());
+      if (controller.signal.aborted) return;
       if (p.ok) setPrestige(await p.json());
     } catch {
       if (controller.signal.aborted) return;
@@ -98,7 +102,7 @@ export function useRewards(playerId?: string | null, onClaimed?: () => void) {
   useEffect(() => { refresh(); }, [refresh]);
 
   const claim = useCallback(async (path: string, body: object): Promise<ClaimResult> => {
-    if (!playerId) return { error: "No player" };
+    if (!playerId || currentPlayerIdRef.current !== playerId) return { error: "No player" };
     try {
       const res = await fetch(`${API}/api/rewards/${path}`, {
         method: "POST",
@@ -107,8 +111,13 @@ export function useRewards(playerId?: string | null, onClaimed?: () => void) {
         body: JSON.stringify(body),
       });
       const json = (await res.json().catch(() => ({}))) as ClaimResult;
-      if (!res.ok) return { error: json.error || "Failed" };
+      if (!res.ok) {
+        if (currentPlayerIdRef.current !== playerId) return { error: "Failed" };
+        return { error: json.error || "Failed" };
+      }
+      if (currentPlayerIdRef.current !== playerId) return { error: "Failed" };
       await refresh();
+      if (currentPlayerIdRef.current !== playerId) return { error: "Failed" };
       onClaimed?.();
       return json;
     } catch {

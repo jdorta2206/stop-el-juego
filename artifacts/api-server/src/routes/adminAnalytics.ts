@@ -6,10 +6,11 @@ import { authLimiter } from "../middlewares/rateLimit";
 
 const router: IRouter = Router();
 
-router.use((_req, res, next) => {
+router.use((_req, res, next): void => {
   if (!indexesReady()) {
     res.setHeader("Retry-After", "2");
-    return res.status(503).json({ error: "Server warming up", ready: false });
+    res.status(503).json({ error: "Server warming up", ready: false });
+    return;
   }
   next();
 });

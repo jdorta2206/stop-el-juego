@@ -9,7 +9,11 @@ const storageKey = (playerId?: string) =>
 
 async function syncBestsFromServer(playerId: string, signal?: AbortSignal): Promise<BestScores> {
   try {
-    const r = await fetch(`${getApiUrl()}/api/ranking/progress/${playerId}`, { signal });
+    const r = await fetch(`${getApiUrl()}/api/ranking/progress/${playerId}`, {
+      signal,
+      headers: authHeaders(),
+      credentials: "include",
+    });
     if (!r.ok) return {};
     const data = await r.json();
     return (data.personalBests && typeof data.personalBests === "object") ? data.personalBests : {};
@@ -33,8 +37,10 @@ export function usePersonalBest(mode: GameMode, playerId?: string) {
   });
   const syncedRef = useRef(false);
   const syncAbortRef = useRef<AbortController | null>(null);
+  const currentPlayerIdRef = useRef<string | undefined>(playerId);
 
   useEffect(() => {
+    currentPlayerIdRef.current = playerId;
     try {
       setBests(JSON.parse(localStorage.getItem(storageKey(playerId)) || "{}"));
     } catch {
@@ -51,6 +57,7 @@ export function usePersonalBest(mode: GameMode, playerId?: string) {
     const controller = new AbortController();
     syncAbortRef.current = controller;
     syncBestsFromServer(playerId, controller.signal).then(serverBests => {
+      if (controller.signal.aborted || playerId !== currentPlayerIdRef.current) return;
       setBests(prev => {
         const authoritative: BestScores = {};
         for (const [m, score] of Object.entries(serverBests)) {

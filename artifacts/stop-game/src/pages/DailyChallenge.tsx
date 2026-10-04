@@ -17,6 +17,7 @@ interface DailyChallenge {
 }
 
 interface DailyRanking {
+  playerId: string;
   rank: number;
   playerName: string;
   avatarColor: string;
@@ -130,7 +131,7 @@ export default function DailyChallenge() {
   // when the player is actually present in the visible top-10; otherwise do
   // not invent a rank from the array index.
   const myRank = player
-    ? (rankings.find(r => r.playerName === player.name)?.rank ?? 0)
+    ? (rankings.find(r => r.playerId === player.id)?.rank ?? 0)
     : 0;
 
   return (
@@ -254,7 +255,7 @@ export default function DailyChallenge() {
           )}
 
           {playedToday && rankings.map((r, i) => {
-            const isMe = player && r.playerName === player.name;
+            const isMe = player && r.playerId === player.id;
             return (
               <motion.div
                 key={i}

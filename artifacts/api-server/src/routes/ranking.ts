@@ -164,7 +164,7 @@ router.get("/scores", async (req, res) => {
       longestStreak: p.longest_streak ?? 0,
       isPremium: p.is_premium ?? false,
       achievementCount: parseAchievementCount(p.achievements_json),
-      title: getTitle(i + 1),
+      title: getTitle(Number(p.rank_position ?? (i + 1))),
       createdAt: p.created_at,
       updatedAt: p.updated_at,
       rank: Number(p.rank_position ?? (i + 1)),
@@ -275,6 +275,8 @@ router.get("/monthly", async (_req, res) => {
       ps.avatar_color     AS "avatarColor",
       ps.profile_picture  AS "picture",
       ps.equipped_frame   AS "equippedFrame",
+      ps.equipped_avatar  AS "equippedAvatar",
+      ps.equipped_title   AS "equippedTitle",
       ps.current_streak   AS "currentStreak",
       ps.is_premium       AS "isPremium",
       ps.achievements_json AS "achievementsJson",
@@ -294,6 +296,10 @@ router.get("/monthly", async (_req, res) => {
     playerId:      p.playerId,
     playerName:    p.playerName ?? "—",
     avatarColor:   p.avatarColor ?? "#e53e3e",
+    picture:       p.picture ?? null,
+    avatarFrame:   p.equippedFrame ?? null,
+    avatarGlyph:   equippedAvatarGlyph(p.equippedAvatar),
+    equippedTitle: p.equippedTitle ?? null,
     totalScore:    Number(p.totalScore ?? 0),
     gamesPlayed:   Number(p.gamesPlayed ?? 0),
     wins:          Number(p.wins ?? 0),
@@ -419,6 +425,7 @@ router.get("/profile/:playerId", async (req, res) => {
   res.json({
     playerId: ps.playerId,
     playerName: ps.playerName,
+    xp: ps.xp ?? 0,
     avatarColor: ps.avatarColor,
     picture: ps.profilePicture ?? null,
     avatarFrame: ps.equippedFrame ?? null,
@@ -531,17 +538,16 @@ router.post("/scores", scoreLimiter, requirePlayerIdentity, async (req: AuthedRe
     ? await db.select().from(playerScoresTable).where(eq(playerScoresTable.playerId, playerId)).limit(1)
     : [];
 
-  const { base: verifiedBase, verified, collectionWords, mode: certifiedMode, aiBase: certifiedAiBase, voucherJtis } = isBonus
-    ? { base: 0, verified: 0, collectionWords: [] as Array<{ word: string; category: string }>, mode: null, aiBase: 0 }
+  const { base: verifiedBase, verified, collectionWords, mode: certifiedMode, aiBase: certifiedAiBase, playerId: voucherPlayerId, voucherJtis } = isBonus
+    ? { base: 0, verified: 0, collectionWords: [] as Array<{ word: string; category: string }>, mode: null, aiBase: 0, playerId: null, voucherJtis: [] as string[] }
     // /ranking/scores is the client solo leaderboard path. Keep its voucher
-    // count cap independent of the client-supplied `mode`; otherwise a caller
-    // could request `multiplayer` and raise the cap from 3 rounds to 12.
+    // count cap independent of the client-supplied `mode`.
     : await sumVerifiedBasePersistent(scoreTokens, 3);
   // A request that supplies vouchers must prove at least one fresh voucher.
   // Otherwise a replay of an already-consumed token set would fall through
   // to the offline absolute ceiling and could credit the same score again.
   const suppliedTokens = Array.isArray(scoreTokens) && scoreTokens.length > 0;
-  if (!isBonus && suppliedTokens && verified === 0) {
+  if (!isBonus && suppliedTokens && (verified === 0 || voucherPlayerId !== playerId)) {
     res.status(422).json({ error: "INVALID_SCORE_VOUCHER" });
     return;
   }
@@ -657,13 +663,8 @@ router.post("/scores", scoreLimiter, requirePlayerIdentity, async (req: AuthedRe
           .where(eq(playerScoresTable.playerId, playerId))
           .returning();
         if (!updated) throw new Error("BONUS_SCORE_UPDATE_FAILED");
-        await tx.insert(gameHistoryTable).values({
-          playerId,
-          score,
-          letter,
-          mode: mode ?? "solo",
-          won: effectiveWon,
-        });
+        // Bonus submissions are not standalone games, so they must not
+        // create a game_history row (the normal path below enforces this too).
         return updated;
       }
 
@@ -700,13 +701,8 @@ router.post("/scores", scoreLimiter, requirePlayerIdentity, async (req: AuthedRe
         })
         .returning();
       if (!created) throw new Error("BONUS_SCORE_INSERT_FAILED");
-      await tx.insert(gameHistoryTable).values({
-        playerId,
-        score,
-        letter,
-        mode: mode ?? "solo",
-        won: effectiveWon,
-      });
+      // Bonus submissions are not standalone games and must not enter
+      // game_history, including when the player row is created here.
       return created;
     });
 
@@ -755,16 +751,16 @@ router.post("/scores", scoreLimiter, requirePlayerIdentity, async (req: AuthedRe
       }
 
       if (!isBonus) {
-        await applyAuthoritativeSeasonEventsInTransaction(tx, playerId, [
-          { type: "play_game", value: 1 },
-          ...(effectiveWon ? [{ type: "win_game", value: 1 }] : []),
-          { type: "round_score", value: score },
-          ...(collectionWords.length > 0 ? [{ type: "valid_words", value: collectionWords.length }] : []),
-          ...(effectiveMode === "daily" ? [{ type: "daily_done", value: 1 }] : []),
-        ]);
+        const seasonEvents: Parameters<typeof applyAuthoritativeSeasonEventsInTransaction>[2] = [];
+        seasonEvents.push({ type: "play_game", value: 1 });
+        if (effectiveWon) seasonEvents.push({ type: "win_game", value: 1 });
+        seasonEvents.push({ type: "round_score", value: score });
+        if (collectionWords.length > 0) seasonEvents.push({ type: "valid_words", value: collectionWords.length });
+        if (effectiveMode === "daily") seasonEvents.push({ type: "daily_done", value: 1 });
+        await applyAuthoritativeSeasonEventsInTransaction(tx, playerId, seasonEvents);
       }
 
-      if (verified > 0 && voucherJtis.length > 0) {
+      if (verified > 0 && voucherJtis && voucherJtis.length > 0) {
         await consumeScoreVoucherJtis(tx, voucherJtis);
       }
 
@@ -862,13 +858,26 @@ router.post("/scores", scoreLimiter, requirePlayerIdentity, async (req: AuthedRe
       }
 
       if (!txPlayer) throw new Error("SCORE_UPDATE_FAILED");
-      await tx.insert(gameHistoryTable).values({
-        playerId,
-        score,
-        letter,
-        mode: effectiveMode,
-        won: effectiveWon,
-      });
+      // Bonus submissions add points/XP to the existing game but are not
+      // separate games. Keep them out of game_history so profile statistics
+      // and recent-game history count only actual played games.
+      if (!isBonus) {
+        // The signed voucher certifies the score as Solo, but the client
+        // gameplay mode (normal/quick/chaos/random) is still needed to keep
+        // mode-specific personal-best/history statistics coherent. It does
+        // not affect rewards, ceilings, or multipliers.
+        const historyMode = certifiedMode === "solo" &&
+          (mode === "normal" || mode === "quick" || mode === "chaos" || mode === "random")
+          ? mode
+          : effectiveMode;
+        await tx.insert(gameHistoryTable).values({
+          playerId,
+          score,
+          letter,
+          mode: historyMode,
+          won: effectiveWon,
+        });
+      }
 
       // Keep voucher-backed collection words in the same transaction as the score.
       if (!isBonus && verified > 0 && scoreTokens) {

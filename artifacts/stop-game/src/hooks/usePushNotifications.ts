@@ -45,15 +45,18 @@ export function usePushNotifications(playerId: string | undefined, language: str
         if (cancelled) return;
 
         // Prioritize the browser's actual persisted Push API subscription.
-        if (sub) {
-          setIsSubscribed(true);
-          try { localStorage.removeItem(DISABLED_KEY); } catch {}
-        } else {
+        // Do not publish isSubscribed=true until the server-side backfill has
+        // had a chance to register the endpoint: the Notifications page loads
+        // preferences when isSubscribed changes, so publishing it first creates
+        // a race where GET /preferences can run before POST /subscribe.
+        if (!sub) {
           let disabled = false;
           try { disabled = localStorage.getItem(DISABLED_KEY) === "1"; } catch {}
-          setIsSubscribed(!disabled);
+          if (!cancelled) setIsSubscribed(!disabled);
           return;
         }
+
+        try { localStorage.removeItem(DISABLED_KEY); } catch {}
 
         if (perm === "granted" && !cancelled && currentPlayerIdRef.current === playerId) {
           const tzOffsetMinutes = -new Date().getTimezoneOffset();
@@ -78,6 +81,8 @@ export function usePushNotifications(playerId: string | undefined, language: str
             console.warn("[push] subscription backfill error", e);
           }
         }
+
+        if (!cancelled) setIsSubscribed(true);
       } catch (e) {
         console.warn("[push] initialise error", e);
       }
@@ -185,10 +190,16 @@ export function usePushNotifications(playerId: string | undefined, language: str
       if (sub) {
         if (currentPlayerIdRef.current !== playerId) return;
         try {
+          const subJson = sub.toJSON();
           await fetch(`${API_BASE}/api/notifications/unsubscribe`, {
             method: "DELETE",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ endpoint: sub.endpoint, playerId: playerId || "anonymous" }),
+            body: JSON.stringify({
+              endpoint: sub.endpoint,
+              playerId: playerId || "anonymous",
+              p256dh: subJson.keys?.p256dh,
+              auth: subJson.keys?.auth,
+            }),
           });
         } catch (e) {
           console.warn("[push] unsubscribe server request failed", e);

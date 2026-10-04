@@ -43,6 +43,11 @@ export function useFollows(
   const [followedIds, setFollowedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const requestRef = useRef<AbortController | null>(null);
+  const currentMeIdRef = useRef(meId);
+
+  useEffect(() => {
+    currentMeIdRef.current = meId;
+  }, [meId]);
 
   const refresh = useCallback(async () => {
     requestRef.current?.abort();
@@ -57,6 +62,7 @@ export function useFollows(
     try {
       const r = await fetch(`${API_BASE}/api/friends/list/${encodeURIComponent(meId)}`, { signal: controller.signal, credentials: "include", headers: authHeaders() });
       const data = await r.json();
+      if (controller.signal.aborted || currentMeIdRef.current !== meId) return;
       const list: FollowedFriendBase[] = data.friends ?? [];
       setRawFriends(list);
       setFollowedIds(new Set(list.map((f) => f.followedId)));
@@ -107,9 +113,9 @@ export function useFollows(
           followedProvider: target.provider,
         }),
       });
-      if (!r.ok) return false;
+      if (!r.ok || currentMeIdRef.current !== meId) return false;
       setFollowedIds((prev) => new Set(prev).add(target.playerId));
-      refresh();
+      void refresh();
       return true;
     } catch { return false; }
   }, [meId, refresh]);
@@ -123,13 +129,13 @@ export function useFollows(
         credentials: "include",
         body: JSON.stringify({ followerId: meId, followedId: targetId }),
       });
-      if (!r.ok) return false;
+      if (!r.ok || currentMeIdRef.current !== meId) return false;
       setFollowedIds((prev) => {
         const n = new Set(prev);
         n.delete(targetId);
         return n;
       });
-      refresh();
+      void refresh();
       return true;
     } catch { return false; }
   }, [meId, refresh]);

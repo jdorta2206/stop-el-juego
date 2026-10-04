@@ -141,7 +141,6 @@ router.post("/follow", async (req, res) => {
       followedName: target.player_name,
       followedPicture: target.profile_picture ?? null,
       followedAvatarColor: target.avatar_color ?? "#e53e3e",
-      followedProvider: null,
     }).onConflictDoNothing({
       target: [followsTable.followerId, followsTable.followedId],
     });

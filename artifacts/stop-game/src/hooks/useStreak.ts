@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 interface StreakData {
   current: number;
@@ -35,9 +35,11 @@ function saveStreak(playerId: string | undefined, data: StreakData) {
 
 export function useStreak(playerId?: string) {
   const [streak, setStreak] = useState<StreakData>(() => loadStreak(playerId));
+  const streakPlayerIdRef = useRef<string | undefined>(playerId);
 
   // Recalculate on mount: if last play was not today or yesterday, reset streak
   useEffect(() => {
+    streakPlayerIdRef.current = playerId;
     const data = loadStreak(playerId);
     const today = getTodayStr();
     const yesterday = getYesterdayStr();
@@ -53,9 +55,11 @@ export function useStreak(playerId?: string) {
     } else {
       setStreak(data);
     }
+    streakPlayerIdRef.current = playerId;
   }, [playerId]);
 
   function recordPlay() {
+    if (streakPlayerIdRef.current !== playerId) return;
     setStreak(prev => {
       const today = getTodayStr();
       const yesterday = getYesterdayStr();
@@ -79,7 +83,10 @@ export function useStreak(playerId?: string) {
     });
   }
 
-  const playedToday = streak.lastPlayedDate === getTodayStr();
+  const streakForPlayer = streakPlayerIdRef.current === playerId
+    ? streak
+    : { current: 0, longest: 0, lastPlayedDate: null };
+  const playedToday = streakForPlayer.lastPlayedDate === getTodayStr();
 
-  return { streak, recordPlay, playedToday };
+  return { streak: streakForPlayer, recordPlay, playedToday };
 }

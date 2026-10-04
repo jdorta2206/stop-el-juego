@@ -95,6 +95,10 @@ function getLevelProgress(gamesPlayed: number): number {
 
 const MODE_LABELS: Record<string, { label: string; icon: string }> = {
   solo:        { label: "Solo",        icon: "🎯" },
+  normal:      { label: "Solo",        icon: "🎯" },
+  quick:       { label: "Rápido",      icon: "⚡" },
+  chaos:       { label: "Caos",        icon: "🌀" },
+  random:      { label: "Aleatorio",   icon: "🎲" },
   multiplayer: { label: "Multijugador",icon: "👥" },
   daily:       { label: "Diario",      icon: "📅" },
   blitz:       { label: "Blitz",       icon: "⚡" },

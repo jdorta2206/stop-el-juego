@@ -55,7 +55,7 @@ app.get('/delete-account', (req, res) => {
         <li>El asunto debe ser: <strong>"ELIMINAR MI CUENTA"</strong>.</li>
         <li>Incluye en el mensaje tu nombre de usuario (si lo recuerdas).</li>
       </ol>
-      <p>Procesaremos tu solicitud en un plazo máximo de 7 días. Una vez eliminada, no podrás recuperar tus datos.</p>
+      <p>Procesaremos tu solicitud en un plazo máximo de 30 días. Una vez eliminada, no podrás recuperar tus datos.</p>
       <p><a href="https://www.stopjuegodepalabras.com">Volver al juego</a></p>
     </body>
     </html>

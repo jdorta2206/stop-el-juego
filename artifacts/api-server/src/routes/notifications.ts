@@ -258,14 +258,26 @@ router.patch("/preferences", async (req, res) => {
 
 // DELETE /api/notifications/unsubscribe
 router.delete("/unsubscribe", async (req, res) => {
-  const { endpoint, playerId } = req.body || {};
-  if (!endpoint || !playerId) { res.status(400).json({ error: "Missing endpoint or playerId" }); return; }
+  const { endpoint, playerId, p256dh, auth } = req.body || {};
+  if (!endpoint || !playerId || !p256dh || !auth) {
+    res.status(400).json({ error: "Missing subscription identity" });
+    return;
+  }
   try {
     if (playerId !== "anonymous" && !await verifyClaimedIdentity(req, String(playerId))) {
       res.status(403).json({ error: "Identity verification failed" });
       return;
     }
-    await db.delete(pushSubscriptionsTable).where(and(eq(pushSubscriptionsTable.endpoint, endpoint), eq(pushSubscriptionsTable.playerId, playerId)));    res.json({ ok: true });
+    // Match the exact Push API key material as well as endpoint/player.
+    // This prevents an older in-flight unsubscribe from deleting a newer
+    // registration that reused the same endpoint.
+    await db.delete(pushSubscriptionsTable).where(and(
+      eq(pushSubscriptionsTable.endpoint, endpoint),
+      eq(pushSubscriptionsTable.playerId, playerId),
+      eq(pushSubscriptionsTable.p256dh, p256dh),
+      eq(pushSubscriptionsTable.auth, auth),
+    ));
+    res.json({ ok: true });
   } catch {
     res.status(500).json({ error: "Failed" });
   }

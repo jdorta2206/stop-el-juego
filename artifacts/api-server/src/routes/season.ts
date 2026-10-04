@@ -824,7 +824,7 @@ router.post("/claim-tier", requirePlayerIdentity, async (req: AuthedRequest, res
     track?: "free" | "premium";
   };
 
-  if (typeof tier !== "number" || !track || (track !== "free" && track !== "premium")) {
+  if (typeof tier !== "number" || !Number.isInteger(tier) || !track || (track !== "free" && track !== "premium")) {
     res.status(400).json({ error: "Missing or invalid fields" });
     return;
   }

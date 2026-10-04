@@ -23,10 +23,11 @@ export const ValidateRoundBody = zod.object({
   letter: zod.string().min(1).max(validateRoundBodyLetterMax),
   language: zod.enum(["es", "en", "fr", "pt"]),
   playerName: zod.string().optional(),
+  daily: zod.boolean().optional(),
   playerResponses: zod.array(
     zod.object({
-      category: zod.string(),
-      word: zod.string(),
+      category: zod.string().max(120),
+      word: zod.string().max(100),
     }),
   ).max(12),
 });
@@ -57,6 +58,7 @@ export const ValidateRoundResponse = zod.object({
     .describe(
       "Signed, single-use voucher attesting the server-computed base\nscore for this round (`playerTotalScore`). The client returns it\n(alongside any other rounds' tokens) when submitting the final\ngame score, so the server can verify the score wasn't fabricated.\nAbsent when the round was validated offline.\n",
     ),
+  dailyScoreToken: zod.string().optional(),
 });
 
 /**
@@ -99,11 +101,11 @@ export const GetLeaderboardResponse = zod.object({
 export const SubmitScoreBody = zod.object({
   submissionId: zod.string().min(8).max(160).regex(/^[A-Za-z0-9._:-]+$/).optional(),
   playerId: zod.string(),
-  playerName: zod.string(),
-  avatarColor: zod.string().optional(),
+  playerName: zod.string().min(1).max(80),
+  avatarColor: zod.string().max(32).optional(),
   score: zod.number(),
-  letter: zod.string(),
-  mode: zod.string(),
+  letter: zod.string().min(1).max(1),
+  mode: zod.string().max(32),
   won: zod.boolean().optional(),
   bonus: zod
     .boolean()
@@ -192,8 +194,8 @@ export const createRoomBodyMaxPlayersDefault = 8;
 
 export const CreateRoomBody = zod.object({
   hostId: zod.string(),
-  hostName: zod.string(),
-  avatarColor: zod.string().optional(),
+  hostName: zod.string().min(1).max(80),
+  avatarColor: zod.string().max(32).optional(),
   picture: zod.string().nullable().optional(),
   maxRounds: zod.number().default(createRoomBodyMaxRoundsDefault),
   language: zod.string().default(createRoomBodyLanguageDefault),
@@ -242,10 +244,10 @@ export const JoinRoomParams = zod.object({
 
 export const JoinRoomBody = zod.object({
   playerId: zod.string(),
-  playerName: zod.string(),
-  avatarColor: zod.string().optional(),
+  playerName: zod.string().min(1).max(80),
+  avatarColor: zod.string().max(32).optional(),
   picture: zod.string().nullable().optional(),
-  loginMethod: zod.string().nullish(),
+  loginMethod: zod.string().max(32).nullish(),
   challengeId: zod.string().optional(),
 });
 
