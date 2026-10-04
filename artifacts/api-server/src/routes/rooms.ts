@@ -666,6 +666,23 @@ function roundEndTimestamp(room: any): number | undefined {
   return undefined;
 }
 
+// ⚡ Lightning extends only the natural timer for the player who activated it.
+// An explicit STOP still ends the round for everyone immediately.
+function playerRoundEndTimestamp(room: any, player: any): number | undefined {
+  const endTs = roundEndTimestamp(room);
+  if (!endTs) return undefined;
+  const meta = parseBluffMeta(room.stopperJson);
+  const hasExplicitStop =
+    typeof meta?.stopTimestamp === "number" ||
+    typeof meta?.stopper?.stopTimestamp === "number";
+  if (hasExplicitStop) return endTs;
+  const lightningUsedThisRound =
+    player?.powerCard === "lightning" &&
+    player?.powerCardUsed === true &&
+    player?.powerCardUsedRound === room.currentRound;
+  return endTs + (lightningUsedThisRound ? 15_000 : 0);
+}
+
 function finalizeRoundState(room: any, players: any[]): {
   sweptPlayers: any[];
   newStatus: string;
@@ -684,20 +701,17 @@ function finalizeRoundState(room: any, players: any[]): {
 
   const sweptPlayers = (() => {
     if (!endTs) return players;
-    const sinceStop = Date.now() - endTs;
-    const gracePassed = sinceStop > SUBMIT_GRACE_MS;
-    // Only treat "offline" as fatal AFTER the presence buffer: a one-second
-    // SSE blip on a 4G network shouldn't zero a player whose /results is
-    // already on the wire.
+    const now = Date.now();
+    // Each player gets the authoritative deadline for their own round.
+    // Lightning users retain their extra 15s; everyone else keeps the normal
+    // grace window. This prevents the server from ending Lightning early while
+    // also preventing non-Lightning players from scoring during the extension.
     return players.map((p: any) => {
       if (p.isReady) return p;
-      // A disconnected SSE stream is NOT proof that the player's /results
-      // request is lost. HTTP and SSE can fail independently (mobile
-      // backgrounding, proxy reconnects, transient network changes). Do not
-      // zero a player before the full submit grace window, or a valid result
-      // still in flight can arrive after the round has already advanced.
+      const playerEndTs = playerRoundEndTimestamp(room, p) ?? endTs;
+      const gracePassed = now - playerEndTs > SUBMIT_GRACE_MS;
       if (gracePassed) {
-        return { ...p, isReady: true, roundScore: 0, validAnswerCount: 0, finishedAt: Date.now() };
+        return { ...p, isReady: true, roundScore: 0, validAnswerCount: 0, finishedAt: now };
       }
       return p;
     });
@@ -2661,18 +2675,6 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
     return;
   }
 
-  // A playing round may accept results only once its natural timer has expired.
-  // Otherwise clients could submit early; when the last player does so,
-  // finalizeRoundState() would advance the round before the authoritative
-  // deadline. Explicit STOP already moves the room to "stopped".
-  if (room.status === "playing") {
-    const endTs = roundEndTimestamp(room);
-    if (endTs && Date.now() < endTs) {
-      res.status(409).json({ error: "Round is still in progress" });
-      return;
-    }
-  }
-
   // ── Idempotency guard ─────────────────────────────────────────────────────
   // If this player already submitted for the current round (isReady === true),
   // return the current room state without re-applying score — prevents double-submit cheats.
@@ -2688,6 +2690,17 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
   if (me.isReady === true) {
     res.json(formatRoom(room));
     return;
+  }
+
+  // A playing round may accept this player's result only after their
+  // authoritative deadline. Lightning extends that deadline by 15s for its
+  // owner only; explicit STOP still ends the round immediately.
+  if (room.status === "playing") {
+    const endTs = playerRoundEndTimestamp(room, me);
+    if (endTs && Date.now() < endTs) {
+      res.status(409).json({ error: "Round is still in progress" });
+      return;
+    }
   }
   // ─────────────────────────────────────────────────────────────────────────
 
@@ -2840,7 +2853,7 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
   // Apply the same hard cutoff to both explicit STOP and natural timer expiry.
   // Without this, a late /results request after a round timed out naturally could
   // still score before the background sweeper persisted the zeroed player.
-  const roundEndTs = roundEndTimestamp(room);
+  const roundEndTs = playerRoundEndTimestamp(room, submittedPlayer);
   if (roundEndTs && Date.now() - roundEndTs > SUBMIT_GRACE_MS) {
     cappedRoundScore = 0;
   }
