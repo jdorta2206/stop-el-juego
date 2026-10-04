@@ -767,39 +767,51 @@ export default function SoloGame() {
     }));
 
     let apiData: ValidateRoundResponse | null = null;
+    const validationPromise = validateMutation.mutateAsync({
+      data: {
+        letter,
+        language: getCurrentLang() as import("@workspace/api-client-react").ValidateRoundRequestLanguage,
+        playerName: player?.name,
+        playerResponses: formattedResponses,
+      }
+    });
     try {
-      // ⏱️ Timeout duro de 25s: si la IA del backend se cuelga con
-      // respuestas inválidas / palabras inventadas, NO dejamos al usuario
-      // atascado en "EL JUICIO". Disparamos el fallback offline / RESULTS.
+      // Keep a UX guard, but never replace an online server validation with the
+      // weaker offline dictionary. Promise.race does not cancel the original
+      // request, so a slow authoritative validation can still be recovered.
       const TIMEOUT_MS = 25000;
       apiData = await Promise.race([
-        validateMutation.mutateAsync({
-          data: {
-            letter,
-            language: getCurrentLang() as import("@workspace/api-client-react").ValidateRoundRequestLanguage,
-            playerName: player?.name,
-            playerResponses: formattedResponses,
-          }
-        }),
+        validationPromise,
         new Promise<ValidateRoundResponse>((_, reject) =>
           setTimeout(() => reject(new Error("validate-timeout")), TIMEOUT_MS)
         ),
       ]);
-    } catch {
-      // 📡 Sin conexión O timeout del servidor: validamos localmente con el
-      // diccionario cacheado. Si nunca se descargó el bundle, apiData seguirá
-      // null y caemos al fallback de cero puntos más abajo.
-      const local = validateRoundOffline({
-        letter,
-        language: getCurrentLang(),
-        playerResponses: formattedResponses,
-      });
-      if (local) {
-        apiData = local;
-        setIsOffline(true);
+    } catch (error) {
+      const isTimeout = error instanceof Error && error.message === "validate-timeout";
+      const isOffline = typeof navigator !== "undefined" && navigator.onLine === false;
+
+      if (isTimeout && !isOffline) {
+        // Recover the same server request instead of scoring differently just
+        // because it crossed the client-side UX threshold.
+        try {
+          apiData = await validationPromise;
+        } catch {
+          // A genuine server failure is not silently converted into an offline
+          // dictionary verdict. The zero-result fallback below remains safe.
+        }
+      } else if (isOffline) {
+        // Offline is the only case where the local dictionary is used here.
+        const local = validateRoundOffline({
+          letter,
+          language: getCurrentLang(),
+          playerResponses: formattedResponses,
+        });
+        if (local) {
+          apiData = local;
+          setIsOffline(true);
+        }
       }
     }
-
     // 🛟 Último recurso: si TODO falló (sin red + sin diccionario cacheado),
     // construimos una respuesta vacía válida para que la partida pueda
     // avanzar a RESULTS en vez de quedarse colgada en "EL JUICIO".
