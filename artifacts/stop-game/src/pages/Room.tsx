@@ -780,6 +780,7 @@ export default function Room() {
         playerId: player.id,
         roundScore: finalScore,
         letter: currentLetter,
+        round: currentRound,
         answers: { ...responsesSnapshotRef.current },
         bluffedCategories: bluffedList.length > 0 ? bluffedList : undefined,
         bluffedWords: bluffedList.length > 0 ? bluffedWords : undefined,
@@ -798,7 +799,7 @@ export default function Room() {
         }
       }
     }
-  }, [player, roomCode, currentLetter]);
+  }, [player, roomCode, currentLetter, currentRound]);
 
   const autoSubmit = useCallback((asStopper = false) => {
     // Snapshot current responses before clearing for the bluff words map
