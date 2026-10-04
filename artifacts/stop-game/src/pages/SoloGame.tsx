@@ -470,6 +470,7 @@ export default function SoloGame() {
   // the game and hand them back on submit so the server can clamp a fabricated
   // total. Reset per new game (where totalScore resets to 0), not per round.
   const scoreTokensRef = useRef<string[]>([]);
+  const dailyScoreTokensRef = useRef<string[]>([]);
   // Stable idempotency key for the logical game score. It survives all round
   // transitions and is replaced only when a genuinely new game starts.
   const gameSubmissionIdRef = useRef<string | null>(null);
@@ -833,6 +834,7 @@ export default function SoloGame() {
     // 🔒 Capture this round's anti-cheat voucher (online play only — the
     // offline fallback payload has none). Accumulated for the final submit.
     if (apiData?.scoreToken) scoreTokensRef.current.push(apiData.scoreToken);
+    if (apiData?.dailyScoreToken) dailyScoreTokensRef.current.push(apiData.dailyScoreToken);
 
     // Persist whichever payload we ended up with so the RESULTS effect
     // and the UI read the *current* round's data, not the prior mutation.
@@ -1315,6 +1317,7 @@ export default function SoloGame() {
       setRound(1);
       setTotalScore(0);
       scoreTokensRef.current = [];
+      dailyScoreTokensRef.current = [];
       gameSubmissionIdRef.current = null;
       setAiTotalScore(0);
       setBestRoundScore(0);
