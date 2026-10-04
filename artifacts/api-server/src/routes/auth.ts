@@ -283,13 +283,17 @@ function verifyAuthState(
     return { returnPath: signed.r, returnOrigin: signed.o, csrfFail: false };
   }
 
-  // No nonce cookie reached this host (cross-origin www/TWA, Apple form_post,
-  // legacy links, or no SESSION_SECRET configured): fail open so login works.
+  // With signed OAuth state enabled, absence of the nonce is itself a CSRF
+  // failure. A valid HMAC alone is not enough: an attacker can obtain a
+  // legitimate signed state + authorization code in their own browser and
+  // replay that callback in a victim's browser (login-CSRF) if we fail open.
+  // The external-origin start flow is redirected to APP_ORIGIN before the
+  // nonce is issued, so legitimate browser flows still get the cookie here.
   if (signed) {
-    // Trust the integrity-checked (HMAC) payload for the return target.
-    return { returnPath: signed.r, returnOrigin: signed.o, csrfFail: false };
+    return { returnPath: signed.r, returnOrigin: signed.o, csrfFail: true };
   }
-  // Legacy / unsigned state — preserve prior behavior.
+  // Legacy / unsigned state remains supported only when no signed state can
+  // be validated (e.g. deployments without SESSION_SECRET).
   const legacy = decodeAuthState(raw);
   return { returnPath: legacy.returnPath, returnOrigin: legacy.returnOrigin, csrfFail: false };
 }
