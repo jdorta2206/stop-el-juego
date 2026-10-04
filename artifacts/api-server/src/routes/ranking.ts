@@ -867,11 +867,19 @@ router.post("/scores", scoreLimiter, requirePlayerIdentity, async (req: AuthedRe
       // separate games. Keep them out of game_history so profile statistics
       // and recent-game history count only actual played games.
       if (!isBonus) {
+        // The signed voucher certifies the score as Solo, but the client
+        // gameplay mode (normal/quick/chaos/random) is still needed to keep
+        // mode-specific personal-best/history statistics coherent. It does
+        // not affect rewards, ceilings, or multipliers.
+        const historyMode = certifiedMode === "solo" &&
+          (mode === "normal" || mode === "quick" || mode === "chaos" || mode === "random")
+          ? mode
+          : effectiveMode;
         await tx.insert(gameHistoryTable).values({
           playerId,
           score,
           letter,
-          mode: effectiveMode,
+          mode: historyMode,
           won: effectiveWon,
         });
       }
