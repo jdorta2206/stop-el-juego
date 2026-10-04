@@ -169,7 +169,7 @@ router.get("/scores", async (req, res) => {
       title: getTitle(i + 1),
       createdAt: p.created_at,
       updatedAt: p.updated_at,
-      rank: i === 0 ? 1 : Number(players[i - 1]?.total_score) === Number(p.total_score) ? players[i - 1].rank : i + 1,
+      rank: i === 0 ? 1 : Number((rows.rows as Array<Record<string, unknown>>)[i - 1]?.total_score) === Number(p.total_score) ? (i === 0 ? 1 : Number((rows.rows as Array<Record<string, unknown>>)[i - 1]?.total_score) === Number((rows.rows as Array<Record<string, unknown>>)[i - 2]?.total_score) ? 0 : i) : i + 1,
     })),
     total,
   });
@@ -217,7 +217,7 @@ router.get("/weekly", async (req, res) => {
     isPremium:     p.isPremium ?? false,
     achievementCount: parseAchievementCount(p.achievementsJson),
     title:         getTitle(i + 1),
-    rank:          i === 0 ? 1 : Number(players[i - 1]?.totalScore) === Number(p.totalScore) ? players[i - 1].rank : i + 1,
+    rank:          i === 0 ? 1 : Number((rows.rows as Array<Record<string, unknown>>)[i - 1]?.totalScore) === Number(p.totalScore) ? i : i + 1,
   }));
 
   const now = new Date();
