@@ -2800,6 +2800,14 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
     cappedRoundScore += 5;
   }
 
+  // 🎯 Double or Nothing is a server-authoritative round-score multiplier.
+  // The card is consumed by /use-card, so powerCardUsed + powerCard identify
+  // the actual card activation; never trust a client-provided score multiplier.
+  const submittedPlayer = players.find((p: any) => p.playerId === playerId);
+  if (submittedPlayer?.powerCard === "double_or_nothing" && submittedPlayer.powerCardUsed === true) {
+    cappedRoundScore *= 2;
+  }
+
   // 🕵️ Authoritative spy penalty: apply the persisted usage for THIS
   // concrete room instance and round. The in-memory map was retired when
   // spy usage became PostgreSQL-backed, so reading it here silently skipped
