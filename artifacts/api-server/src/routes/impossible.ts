@@ -4,6 +4,7 @@ import { eq, and, count, sql } from "drizzle-orm";
 import { getImpossibleCombo } from "../lib/impossibleCombos";
 import { validateWordWithAi } from "../lib/aiWordValidator";
 import { verifyClaimedIdentity } from "../lib/playerAuth";
+import { normalizeWord } from "../lib/wordRules";
 
 const router: IRouter = Router();
 const SUPPORTED_LANGUAGES = new Set(["es", "en", "pt", "fr"]);
@@ -118,15 +119,16 @@ router.post("/submit", async (req, res) => {
 
   const combo = getImpossibleCombo(today, language);
   const trimmed = String(word).trim();
+  const normalizedWord = normalizeWord(trimmed);
   let won = false;
 
-  if (!surrendered && trimmed.length >= 2) {
+  if (!surrendered && normalizedWord.length >= 2) {
     const normalize = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
-    const startsRight = normalize(trimmed).startsWith(normalize(combo.letter));
+    const startsRight = normalize(normalizedWord).startsWith(normalize(combo.letter));
     if (startsRight) {
       try {
         const r = await validateWordWithAi({
-          word: trimmed,
+          word: normalizedWord,
           category: combo.category,
           lang: language,
           playerId,
