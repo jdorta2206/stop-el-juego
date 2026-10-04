@@ -44,6 +44,7 @@ const ROOM_FRAME_COLORS: Record<string, string> = {
   frame_free_5:"#cd7f32", frame_free_10:"#c0c0c0", frame_free_15:"#f9a825", frame_free_20:"#67e8f9", frame_free_25:"#a78bfa", frame_free_30:"#f472b6",
   frame_shop_neon:"#22d3ee", frame_shop_plata:"#94a3b8", frame_shop_esmeralda:"#10b981", frame_shop_menta:"#34d399", frame_shop_coral:"#fb7185", frame_shop_rosa:"#ec4899", frame_shop_rubi:"#e11d48", frame_shop_zafiro:"#2563eb", frame_shop_indigo:"#6366f1", frame_shop_amatista:"#9333ea", frame_shop_dorado:"#f59e0b", frame_shop_fuego:"#fb923c", frame_shop_rayo:"#38bdf8", frame_shop_lava:"#ef4444", frame_shop_galaxia:"#a855f7",
   frame_collection_hunter:"#38bdf8", frame_collection_legend:"#f472b6", frame_collection_master:"#06b6d4", frame_collection_explorer:"#22c55e", frame_collection_mythic:"#a855f7",
+  frame_thanks_2026:"#fb7185",
   frame_prestige_bronze:"#cd7f32", frame_prestige_silver:"#cbd5e1", frame_prestige_gold:"#fbbf24", frame_prestige_diamond:"#67e8f9",
 };
 const ROOM_AVATARS: Record<string,string> = {
