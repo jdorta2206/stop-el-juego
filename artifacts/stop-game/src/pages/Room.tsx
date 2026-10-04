@@ -1223,9 +1223,11 @@ export default function Room() {
     if (navigator.share) {
       try { await navigator.share({ title: "STOP - Sala de juego", text }); } catch {}
     } else {
-      navigator.clipboard.writeText(text);
-      setCopied(true);
-      scheduleUiTimeout(() => setCopied(false), 2500);
+      try {
+        await navigator.clipboard.writeText(text);
+        setCopied(true);
+        scheduleUiTimeout(() => setCopied(false), 2500);
+      } catch {}
     }
   };
 
