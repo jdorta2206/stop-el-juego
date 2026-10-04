@@ -23,6 +23,7 @@ export const ValidateRoundBody = zod.object({
   letter: zod.string().min(1).max(validateRoundBodyLetterMax),
   language: zod.enum(["es", "en", "fr", "pt"]),
   playerName: zod.string().optional(),
+  daily: zod.boolean().optional(),
   playerResponses: zod.array(
     zod.object({
       category: zod.string().max(120),
