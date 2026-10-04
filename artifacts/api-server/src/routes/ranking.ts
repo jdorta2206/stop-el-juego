@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import crypto from "crypto";
 import { db } from "@workspace/db";
-import { playerScoresTable, gameHistoryTable, scoreBonusClaimsTable, scoreSubmissionIdempotencyTable } from "@workspace/db";
+import { playerScoresTable, gameHistoryTable, scoreBonusClaimsTable, scoreSubmissionIdempotencyTable, pushSubscriptionsTable } from "@workspace/db";
 import { eq, desc, sql } from "drizzle-orm";
 import { sendPushToPlayer } from "../lib/pushHelper";
 import { recordTrustedAnalyticsEvent } from "./analytics";
@@ -12,7 +12,7 @@ import { verifyClaimedIdentity, requirePlayerIdentity, type AuthedRequest } from
 import { verifyScoreVouchers, claimScoreVouchersTx, ceilingFromBase, absoluteCeiling } from "../lib/scoreToken";
 import { applyAuthoritativeSeasonEventsTx, getOrCreateActiveSeason, getOrCreateProgress } from "./season";
 import {
-  isHappyHourActiveUtc,
+  isHappyHourActiveForTzOffset,
   HAPPY_HOUR_MULTIPLIER,
 } from "../lib/happyHour";
 
@@ -571,7 +571,17 @@ router.post("/scores", scoreLimiter, async (req, res) => {
 
   const baseXpGain = calcXpGain(score, effectiveWon, effectiveMode);
   const baseCoinGain = calcCoinGain(score, effectiveWon, effectiveMode, isBonus);
-  const happyHourActive = isHappyHourActiveUtc();
+  // Happy Hour is a local-time event, with eligibility decided server-side
+  // from the player's stored timezone offset. The score request cannot choose it.
+  // Players without a stored subscription use the documented UTC fallback (0).
+  const happyHourSubscription = await db
+    .select({ tzOffsetMinutes: pushSubscriptionsTable.tzOffsetMinutes })
+    .from(pushSubscriptionsTable)
+    .where(eq(pushSubscriptionsTable.playerId, playerId))
+    .orderBy(desc(pushSubscriptionsTable.createdAt))
+    .limit(1);
+  const happyHourTzOffset = happyHourSubscription[0]?.tzOffsetMinutes ?? 0;
+  const happyHourActive = isHappyHourActiveForTzOffset(happyHourTzOffset);
   const xpMultiplier = happyHourActive ? HAPPY_HOUR_MULTIPLIER : 1;
   const coinMultiplier = happyHourActive ? HAPPY_HOUR_MULTIPLIER : 1;
   const xpGain = baseXpGain * xpMultiplier;
