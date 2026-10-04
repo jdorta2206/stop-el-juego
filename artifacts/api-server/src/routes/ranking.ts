@@ -663,13 +663,8 @@ router.post("/scores", scoreLimiter, requirePlayerIdentity, async (req: AuthedRe
           .where(eq(playerScoresTable.playerId, playerId))
           .returning();
         if (!updated) throw new Error("BONUS_SCORE_UPDATE_FAILED");
-        await tx.insert(gameHistoryTable).values({
-          playerId,
-          score,
-          letter,
-          mode: mode ?? "solo",
-          won: effectiveWon,
-        });
+        // Bonus submissions are not standalone games, so they must not
+        // create a game_history row (the normal path below enforces this too).
         return updated;
       }
 
