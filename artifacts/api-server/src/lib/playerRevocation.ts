@@ -53,6 +53,20 @@ export function markPlayerRevoked(playerId: string): void {
 
 export async function restorePlayerId(playerId: string): Promise<void> {
   if (!playerId) return;
+
+  // Only a profile that exists again may clear the deletion tombstone.
+  // This closes the delete-vs-OAuth race: if deletion committed after an
+  // OAuth callback wrote the profile, the row is gone and the tombstone must
+  // remain. A later login that intentionally recreates the profile may clear
+  // it because the profile then exists after the deletion boundary.
+  const rows = await db.execute(sql`
+    SELECT 1
+    FROM player_scores
+    WHERE player_id = ${playerId}
+    LIMIT 1
+  `);
+  if (!rows.rows?.length) return;
+
   await db.execute(sql`DELETE FROM revoked_player_ids WHERE player_id = ${playerId}`);
   revokedPlayerIds.delete(playerId);
 }
