@@ -6,6 +6,8 @@ import { CreateRoomBody, JoinRoomBody, SubmitRoomResultsBody } from "@workspace/
 import { calculateStreak, appendStreakDay, calcXpGain, calcCoinGain, calcLevel, lookupPlayerTzOffset } from "./ranking";
 import { recordTrustedAnalyticsEvent } from "./analytics";
 import { recordAuthoritativeSeasonEvents } from "./season";
+import { isUserPremium } from "../lib/premiumStatus";
+import { stripeStorage } from "../stripeStorage";
 import { recordHalloweenEvent, recordHalloweenScareEvents, getHalloweenEventYear, recordHalloweenScareEventsInTransaction, recordHalloweenScareEventsWithCooldown, isHalloweenPreviewAuthorized } from "./halloween";
 import { isHappyHourActiveForTzOffset, HAPPY_HOUR_MULTIPLIER } from "../lib/happyHour";
 import { isWordValidAsync, HALLOWEEN_CATEGORY_ALIASES } from "./game";
@@ -766,9 +768,9 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
 
     const seasonOk = await recordAuthoritativeSeasonEvents(p.playerId, [
       { type: "play_game", value: 1 },
-      ...(won ? [{ type: "win_game", value: 1 }] : []),
-      ...(rawScore > 0 ? [{ type: "round_score", value: rawScore }] : []),
-      ...(validWords > 0 ? [{ type: "valid_words", value: validWords }] : []),
+      ...(won ? [{ type: "win_game" as const, value: 1 }] : []),
+      ...(rawScore > 0 ? [{ type: "round_score" as const, value: rawScore }] : []),
+      ...(validWords > 0 ? [{ type: "valid_words" as const, value: validWords }] : []),
       { type: "streak", value: settlementStreak },
     ], `multiplayer:${roomId}:${p.playerId}`);
     if (seasonOk) await markMultiplayerAuxClaim(roomId, p.playerId, "season");
@@ -840,9 +842,9 @@ async function recoverMultiplayerAuxiliaryEffects(room: any, players: any[]): Pr
     );
     if (!aux.has("season") && (existingSeasonEvent.rows ?? []).length === 0) {
       const seasonOk = await recordAuthoritativeSeasonEvents(p.playerId, [
-        { type: "play_game", value: 1 }, ...(won ? [{ type: "win_game", value: 1 }] : []),
-        ...(rawScore > 0 ? [{ type: "round_score", value: rawScore }] : []), ...(validWords > 0 ? [{ type: "valid_words", value: validWords }] : []),
-        ...(streak > 0 ? [{ type: "streak", value: streak }] : []),
+        { type: "play_game", value: 1 }, ...(won ? [{ type: "win_game" as const, value: 1 }] : []),
+        ...(rawScore > 0 ? [{ type: "round_score" as const, value: rawScore }] : []), ...(validWords > 0 ? [{ type: "valid_words" as const, value: validWords }] : []),
+        ...(streak > 0 ? [{ type: "streak" as const, value: streak }] : []),
       ], eventKey);
       if (seasonOk) await markMultiplayerAuxClaim(room.id, p.playerId, "season");
     } else if (!aux.has("season")) await markMultiplayerAuxClaim(room.id, p.playerId, "season");
