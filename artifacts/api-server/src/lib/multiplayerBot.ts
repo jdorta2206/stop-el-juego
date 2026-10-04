@@ -488,7 +488,56 @@ async function performBotSubmit(
         finishedAt,
         wasStopper: options.triggerStop && newStatus === "stopped",
       };
+    });    });
+
+    // A bot can be the last submitter. Reconcile the complete round here too,
+    // otherwise a human's earlier 10-point answer would remain 10 when this
+    // bot submits the same valid word/category and should make both 5.
+    const duplicateCounts = new Map<string, number>();
+    for (const p of updatedPlayers) {
+      if (!p.isReady || !p.validAnswers || typeof p.validAnswers !== "object") continue;
+      for (const [category, word] of Object.entries(p.validAnswers)) {
+        if (typeof word !== "string" || !word.trim()) continue;
+        const key = category.trim().toLowerCase() + "\\u0000" +
+          word.trim().toLowerCase().normalize("NFD").replace(/[\\u0300-\\u036f]/g, "");
+        duplicateCounts.set(key, (duplicateCounts.get(key) ?? 0) + 1);
+      }
+    }
+
+    const meta = (() => {
+      try { return room.stopperJson ? JSON.parse(room.stopperJson) : {}; } catch { return {}; }
+    })();
+    const stopperId = meta?.stopper?.id ?? meta?.id;
+    const spies = meta?.spyUsage;
+    const categoryCount = Math.min(12, Math.max(1, sampleCats.length));
+
+    const reconciledPlayers = updatedPlayers.map(p => {
+      if (!p.isReady || !p.validAnswers || typeof p.validAnswers !== "object") return p;
+      const oldRoundScore = Number(p.roundScore ?? 0);
+      let score = 0;
+      for (const [category, word] of Object.entries(p.validAnswers)) {
+        if (typeof word !== "string" || !word.trim()) continue;
+        const key = category.trim().toLowerCase() + "\\u0000" +
+          word.trim().toLowerCase().normalize("NFD").replace(/[\\u0300-\\u036f]/g, "");
+        score += (duplicateCounts.get(key) ?? 0) > 1 ? 5 : 10;
+      }
+      const validCount = Math.min(Object.keys(p.validAnswers).length, categoryCount);
+      if (stopperId === p.playerId && validCount >= categoryCount) score += 5;
+      if (spies && Number(spies[p.playerId] ?? 0) > 0) score = Math.max(0, score - 10);
+      if (
+        p.powerCardUsed === true &&
+        p.powerCardUsedRound === room.currentRound &&
+        p.powerCard === "double_or_nothing"
+      ) score *= 2;
+      return {
+        ...p,
+        score: Number(p.score ?? 0) - oldRoundScore + score,
+        roundScore: score,
+        validAnswerCount: validCount,
+      };
     });
+
+
 
     // Bot never bluffs, so if its submission completes the round and there
     // are no human bluffers we can advance directly; otherwise just save and
@@ -499,9 +548,9 @@ async function performBotSubmit(
     let nextStopperJson: string | null = newStopperJson;
 
     let didFinishGame = false;
-    const allReady = updatedPlayers.every(p => p.isReady);
+    const allReady = reconciledPlayers.every(p => p.isReady);
     if (allReady) {
-      const bluffers = updatedPlayers.filter(p => p.bluffedCategories?.length > 0);
+      const bluffers = reconciledPlayers.filter(p => p.bluffedCategories?.length > 0);
       if (bluffers.length === 0) {
         // Advance — mirror the rooms.ts /results advancement.
         nextRound = (room.currentRound ?? 0) + 1;
@@ -530,7 +579,7 @@ async function performBotSubmit(
 
     const updateResult = await db.update(roomsTable)
       .set({
-        playersJson: JSON.stringify(updatedPlayers),
+        playersJson: JSON.stringify(reconciledPlayers),
         status: nextStatus,
         currentRound: nextRound,
         currentLetter: nextLetter,
@@ -565,7 +614,7 @@ async function performBotSubmit(
     // was the one that ended the match — otherwise humans get no XP/ranking
     // update from games the bot "finished".
     if (nextStatus === "finished" || nextStatus === "waiting") {
-      deps.onRoundAdvanced(room, updatedPlayers, nextStatus);
+      deps.onRoundAdvanced(room, reconciledPlayers, nextStatus);
       clearBotTimers(code);
     }
   } catch (err) {
