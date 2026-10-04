@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { detectPaymentChannel, isLikelyPlayTwa } from "@/lib/playBilling";
+import { detectPaymentChannel, fetchPlayProduct, isLikelyPlayTwa, type PlayProduct } from "@/lib/playBilling";
 
 export type PaymentChannel = "play" | "stripe";
 
@@ -12,6 +12,7 @@ export type PaymentChannel = "play" | "stripe";
  */
 export function usePaymentChannel() {
   const [channel, setChannel] = useState<PaymentChannel | "loading">("loading");
+  const [playProduct, setPlayProduct] = useState<PlayProduct | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -27,6 +28,9 @@ export function usePaymentChannel() {
       // because DigitalGoodsService happens to exist.
       if (isLikelyPlayTwa()) {
         setChannel("play");
+        void fetchPlayProduct().then((product) => {
+          if (!cancelled) setPlayProduct(product);
+        });
         return;
       }
 
@@ -50,5 +54,6 @@ export function usePaymentChannel() {
     channel,
     isPlay: channel === "play",
     isReady: channel !== "loading",
+    playProduct,
   };
 }
