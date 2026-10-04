@@ -10,6 +10,7 @@ import { Router, type IRouter } from "express";
 import { db, playerScoresTable, indexesReady } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
 import { requirePlayerIdentity, type AuthedRequest } from "../lib/playerAuth";
+import { writeLimiter } from "../middlewares/rateLimit";
 import {
   computeCollectionStats,
   evaluateCollectionSets,
@@ -51,7 +52,7 @@ async function cleanupAdmobRewardRequests(): Promise<void> {
   ));
 }
 
-router.post("/admob-result", async (req, res) => {
+router.post("/admob-result", writeLimiter, async (req, res) => {
   if (!indexesReady()) {
     res.setHeader("Retry-After", "2");
     res.status(503).json({ error: "Server warming up", ready: false });
