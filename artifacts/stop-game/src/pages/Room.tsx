@@ -105,14 +105,13 @@ function normalizeForScore(word: string): string {
 
 function calcScore(responses: Record<string, string>, letter: string): number {
   let score = 0;
-  const usedNorm = new Set<string>();
   const normLetter = normalizeForScore(letter);
+  // Scoring is per category/cell. The same valid word in two different
+  // categories is two separate answers; only duplicate entries within the
+  // same category are collapsed here. Final scoring remains server-authoritative.
   for (const val of Object.values(responses)) {
     const norm = normalizeForScore(val);
-    if (norm.length >= 3 && norm.startsWith(normLetter) && !usedNorm.has(norm)) {
-      score += 10;
-      usedNorm.add(norm);
-    }
+    if (norm.length >= 3 && norm.startsWith(normLetter)) score += 10;
   }
   return score;
 }
@@ -2441,7 +2440,7 @@ export default function Room() {
                             {players.map((p: any) => {
                               const raw = p.answers?.[cat] ?? "";
                               const norm = normalizeForScore(raw);
-                              const valid = norm.length >= 2 && norm.startsWith(normLetter);
+                              const valid = norm.length >= 3 && norm.startsWith(normLetter);
                               const isDupe = valid && duplicatesByCategory[cat].has(norm);
                               const isMe = p.playerId === player?.id;
                               return (
