@@ -2765,15 +2765,10 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
       valid: await isWordValidAsync(word, letter, category, room.language ?? "es", playerId),
     })),
   );
-  const validNorms = new Set<string>();
-  let validAnswerCountRaw = 0;
-  for (const entry of scoredEntries) {
-    const norm = normalizeWord(entry.word);
-    if (entry.valid && !validNorms.has(norm)) {
-      validNorms.add(norm);
-      validAnswerCountRaw++;
-    }
-  }
+  // Scoring is per category/cell. The same valid word may legitimately
+  // satisfy two different categories (for example, "naranja" as Fruit and
+  // Color), so never deduplicate valid answers across categories.
+  const validAnswerCountRaw = scoredEntries.filter((entry) => entry.valid).length;
   const baseScoreRaw = validAnswerCountRaw * 10;
   const validAnswerCount = Math.min(validAnswerCountRaw, AUTHORITATIVE_CATEGORY_CAP);
   const baseScore = Math.min(baseScoreRaw, validAnswerCount * 10);
