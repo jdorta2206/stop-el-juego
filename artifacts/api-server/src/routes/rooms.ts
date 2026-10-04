@@ -2033,11 +2033,11 @@ router.get("/:roomCode/events", async (req, res) => {
     const members = parsePlayers(roomRow.playersJson);
     const isMember = !!playerId && members.some((p: any) => p.playerId === playerId);
     if (!isMember) { res.status(403).json({ error: "Not a member of this room" }); return; }
-    // 🔒 If the claimed member is a logged-in account, prove ownership. EventSource
-    // cannot send custom headers, so accept the signed token via the `token` query
-    // param (falls back to the auth cookie). Guests (UUID ids) carry no token and
-    // are gated only by knowing their own random id. Fails open when auth is unset.
-    if (isLoggedInId(playerId) && isAuthConfigured()) {
+    // 🔒 Every private-room member must prove ownership. EventSource cannot
+    // send custom headers, so accept the signed token via the `token` query
+    // param (falls back to the auth/guest cookie). This applies to guests too:
+    // knowing a UUID is never sufficient to subscribe to private-room state.
+    if (isAuthConfigured()) {
       const queryToken = typeof req.query["token"] === "string" ? (req.query["token"] as string) : undefined;
       const verified = verifyPlayerToken(queryToken) ?? readPlayerId(req);
       if (verified !== playerId) {
