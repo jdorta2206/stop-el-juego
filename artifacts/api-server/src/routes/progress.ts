@@ -143,6 +143,12 @@ router.post("/progress/:playerId", async (req, res) => {
   const authoritativeMax = new Map(
     historyRows.map(row => [String(row.mode), Number(row.maxScore ?? 0)])
   );
+  // Older solo games were stored under the generic "solo" mode. Preserve
+  // those scores as evidence for the new explicit "normal" personal-best key.
+  const legacySoloMax = authoritativeMax.get("solo");
+  if (legacySoloMax !== undefined) {
+    authoritativeMax.set("normal", Math.max(authoritativeMax.get("normal") ?? 0, legacySoloMax));
+  }
 
   // Serialize the read/merge/write itself. Without the row lock, two devices
   // can both read the same JSON, merge different modes, and the second UPDATE
