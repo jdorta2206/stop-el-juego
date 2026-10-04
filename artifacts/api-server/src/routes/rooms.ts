@@ -2670,6 +2670,13 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
   if (rooms.length === 0) { res.status(404).json({ error: "Room not found" }); return; }
 
   const room = rooms[0];
+  // A delayed/retried submission must belong to the exact round it was created for.
+  // Without this binding, an old request can arrive after the room advances and be
+  // interpreted as a fresh submission for the new round.
+  if (body.data.round !== Number(room.currentRound ?? 0)) {
+    res.json(formatRoom(room));
+    return;
+  }
   if (room.status !== "stopped" && room.status !== "playing") {
     res.json(formatRoom(room));
     return;
