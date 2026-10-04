@@ -8,7 +8,7 @@ import { recordTrustedAnalyticsEvent } from "./analytics";
 import { applyAuthoritativeSeasonEventsTx, getOrCreateActiveSeason, getOrCreateProgressTx } from "./season";
 import { isWordValidAsync } from "./game";
 import { writeLimiter, roomJoinLimiter } from "../middlewares/rateLimit";
-import { verifyClaimedIdentity, verifyPlayerToken, readPlayerId, isLoggedInId, isAuthConfigured } from "../lib/playerAuth";
+import { verifyClaimedIdentity, verifyPlayerToken, readPlayerId, isLoggedInId, isAuthConfigured, issueGuestToken } from "../lib/playerAuth";
 import { isUserPremium } from "../lib/premiumStatus";
 import { stripeStorage } from "../stripeStorage";
 import {
@@ -1173,8 +1173,11 @@ router.post("/", async (req, res) => {
   if (!body.success) { res.status(400).json({ error: "Invalid request body" }); return; }
 
   const { hostId, hostName, avatarColor, picture, loginMethod, maxRounds, language, isPublic } = body.data;
-  // 🔒 A logged-in account can only create a room AS ITSELF. Guests (UUID ids) pass.
-  if (!verifyClaimedIdentity(req, hostId)) {
+  // 🔒 Logged-in accounts and existing guests must prove ownership. A guest
+  // without a session cookie may bootstrap only a brand-new room identity.
+  const guestId = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(hostId);
+  const guestBootstrap = guestId && !readPlayerId(req);
+  if (!verifyClaimedIdentity(req, hostId) && !guestBootstrap) {
     res.status(403).json({ error: "Identity verification failed" }); return;
   }
   const gameMode = (body.data as any).gameMode ?? "classic";
@@ -1274,6 +1277,7 @@ router.post("/", async (req, res) => {
     return;
   }
 
+  if (guestId) issueGuestToken(res, hostId);
   res.status(201).json(formatRoom(room));
 });
 
@@ -1296,10 +1300,7 @@ router.get("/:roomCode", async (req, res) => {
   // Public rooms are intentionally discoverable/spectatable, but strangers
   // must receive the same sanitized view used by the spectator endpoint so
   // in-round answers are never exposed through this generic route.
-  const verified = readPlayerId(req);
-  const asserted =
-    paramStr(req.query["viewerId"]) || paramStr(req.headers["x-viewer-id"]);
-  const viewerId = verified || (asserted && !isLoggedInId(asserted) ? asserted : "");
+  const viewerId = readPlayerId(req);
   const isMember =
     !!viewerId &&
     (full.hostId === viewerId || players.some((p) => p?.playerId === viewerId));
@@ -1324,8 +1325,19 @@ router.post("/:roomCode/join", roomJoinLimiter, async (req, res) => {
 
   const code = roomCode.toUpperCase();
   const { playerId, playerName, avatarColor, picture, loginMethod } = body.data;
-  // 🔒 A logged-in account can only join AS ITSELF. Guests (UUID ids) pass.
-  if (!verifyClaimedIdentity(req, playerId)) {
+
+  // A guest may bootstrap only when this identity is not already a member of
+  // the target room. Reusing a known guest UUID for an existing member requires
+  // the server-issued signed guest cookie.
+  const guestJoinId = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(playerId);
+  const [authRoom] = await db.select().from(roomsTable).where(eq(roomsTable.roomCode, code)).limit(1);
+  if (!authRoom) { res.status(404).json({ error: "Room not found" }); return; }
+  const authPlayers = parsePlayers(authRoom.playersJson);
+  const guestBootstrapJoin =
+    guestJoinId &&
+    !authPlayers.some((p: any) => p.playerId === playerId) &&
+    !readPlayerId(req);
+  if (!verifyClaimedIdentity(req, playerId) && !guestBootstrapJoin) {
     res.status(403).json({ error: "Identity verification failed" }); return;
   }
   const joinerPremium = await isPlayerPremium(playerId);
@@ -1450,6 +1462,7 @@ router.post("/:roomCode/join", roomJoinLimiter, async (req, res) => {
     return;
   }
 
+  if (guestJoinId) issueGuestToken(res, playerId);
   // 🚀 Notifica a todos en la sala que entró un nuevo jugador
   res.json(broadcastAndFormat(outcome.row));
 });
