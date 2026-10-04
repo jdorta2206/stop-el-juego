@@ -23,11 +23,11 @@ export function normalizeWord(word: string): string {
     .trim();
 }
 
-/** Hard limits to prevent abuse: max 60 chars, must contain a real letter, no absurd repetitions */
+/** Hard limits to prevent abuse: max 60 chars, must contain a Unicode letter, no absurd repetitions */
 export function isSafeInput(word: string): boolean {
   if (!word || word.trim().length === 0) return false;
   if (word.length > 60) return false;
-  if (!/[a-záéíóúàèìòùäëïöüñœæß]/i.test(word)) return false;
+  if (!/\p{L}/u.test(word)) return false;
   if (/(.)\1{3,}/.test(word.toLowerCase())) return false;
   return true;
 }
