@@ -1270,7 +1270,7 @@ export default function SoloGame() {
         score: finalScore,
         letter: dailyLetter || currentLetter,
         language: getCurrentLang(),
-        scoreTokens: scoreTokensRef.current,
+        scoreTokens: dailyScoreTokensRef.current,
       }),
     })
       .then((response) => {
