@@ -245,15 +245,17 @@ export default function Tournament() {
     }
   };
 
-  const copyCode = () => {
+  const copyCode = async () => {
     if (!tournament) return;
-    navigator.clipboard.writeText(tournament.code);
-    setCopied(true);
-    if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
-    copiedTimerRef.current = setTimeout(() => {
-      copiedTimerRef.current = null;
-      setCopied(false);
-    }, 2000);
+    try {
+      await navigator.clipboard.writeText(tournament.code);
+      setCopied(true);
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+      copiedTimerRef.current = setTimeout(() => {
+        copiedTimerRef.current = null;
+        setCopied(false);
+      }, 2000);
+    } catch {}
   };
 
   const getInviteUrl = () => {
