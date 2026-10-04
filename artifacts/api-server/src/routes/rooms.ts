@@ -219,7 +219,7 @@ function broadcastRoom(code: string, roomPayload: object) {
       }
       const payload = room.isPublic === true && !memberIds.has(client.playerId)
         ? sanitizeRoomForSpectator(room)
-        : room;
+        : sanitizeRoomForMember(room, client.playerId);
       client.res.write(`data: ${JSON.stringify(payload)}\n\n`);
     } catch {
       clients.delete(client);
@@ -566,7 +566,7 @@ function formatRoomForRequester(req: any, room: any) {
   const isMember =
     !!viewerId &&
     (full.hostId === viewerId || players.some((p: any) => p?.playerId === viewerId));
-  if (isMember) return full;
+  if (isMember) return sanitizeRoomForMember(full, viewerId);
   return full.isPublic === true ? sanitizeRoomForSpectator(full) : sanitizedRoomPreview(full);
 }
 
@@ -1376,6 +1376,34 @@ const SWEEP_TIMER_KEY = "__stopSweepStuckRoomsTimer";
 if (g[SWEEP_TIMER_KEY]) clearInterval(g[SWEEP_TIMER_KEY]);
 g[SWEEP_TIMER_KEY] = setInterval(() => { sweepStuckRooms().catch(() => {}); }, 3_000);
 
+// Member view: while a round is still being played/stopped, a player must
+// never receive another player's answers through the API/SSE payload, even
+// though those answers are persisted server-side for authoritative scoring.
+// The local player keeps their own state because the UI may need it after a
+// reconnect; legitimate round reveal remains unchanged once status becomes
+// "revealing" or later.
+function sanitizeRoomForMember(room: any, viewerId: string) {
+  const privateRound =
+    room.status === "playing" ||
+    room.status === "stopping" ||
+    room.status === "stopped";
+
+  if (!privateRound) return room;
+
+  return {
+    ...room,
+    players: (room.players ?? []).map((p: any) => {
+      if (p?.playerId === viewerId) return p;
+      return {
+        ...p,
+        answers: undefined,
+        validAnswers: undefined,
+        bluffedWords: undefined,
+      };
+    }),
+  };
+}
+
 // GET /rooms/public — list open public rooms (also purges stale rooms)
 // Sanitize a formatted room for public spectator/overlay views.
 // Hide individual players' answers while a round is in progress to prevent cheating.
@@ -1717,7 +1745,7 @@ router.get("/:roomCode", async (req, res) => {
     return;
   }
 
-  res.json(full);
+  res.json(sanitizeRoomForMember(full, viewerId));
 });
 
 // POST /rooms/:roomCode/join
