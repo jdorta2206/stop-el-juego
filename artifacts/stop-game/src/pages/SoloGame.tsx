@@ -712,7 +712,12 @@ export default function SoloGame() {
       });
       if (local) {
         apiData = local;
-        setIsOffline(true);
+        // Only show the offline indicator when the browser actually reports
+        // no network. An HTTP 4xx/5xx from the validation API is a server/API
+        // failure, not proof that the player's connection is offline.
+        if (typeof navigator !== "undefined" && navigator.onLine === false) {
+          setIsOffline(true);
+        }
       }
     }
 
