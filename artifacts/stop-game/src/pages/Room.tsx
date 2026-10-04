@@ -2452,7 +2452,7 @@ export default function Room() {
                                 : null;
                               const valid = serverValidWord !== null
                                 ? normalizeForScore(serverValidWord) === norm
-                                : norm.length >= 3 && norm.startsWith(normLetter);
+                                : false;
                               const isDupe = valid && duplicatesByCategory[cat].has(norm);
                               const isMe = p.playerId === player?.id;
                               return (
