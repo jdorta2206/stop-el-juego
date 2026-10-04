@@ -488,7 +488,7 @@ async function performBotSubmit(
         finishedAt,
         wasStopper: options.triggerStop && newStatus === "stopped",
       };
-    });    });
+    });
 
     // A bot can be the last submitter. Reconcile the complete round here too,
     // otherwise a human's earlier 10-point answer would remain 10 when this
