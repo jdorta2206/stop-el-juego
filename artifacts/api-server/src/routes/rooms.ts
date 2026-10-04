@@ -3607,7 +3607,7 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
         const normalizedWord = normalizeWord(word);
         const normalizedLetter = normalizeWord(letter);
         if (
-          normalizedWord.length >= 3 &&
+          normalizedWord.length >= 2 &&
           normalizedWord.startsWith(normalizedLetter)
         ) {
           safeAnswers[cat] = word;
