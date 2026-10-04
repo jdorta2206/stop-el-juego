@@ -878,6 +878,84 @@ function roundEndTimestamp(room: any): number | undefined {
   return undefined;
 }
 
+/**
+ * Reconcile the authoritative score for every player who has submitted this
+ * round. Multiplayer uniqueness is a property of the ROUND, not of an
+ * individual /results request: duplicate valid words in the same category
+ * score 5 for every player instead of 10. Re-running is safe because each
+ * player's total is adjusted by (newRoundScore - oldRoundScore).
+ */
+function reconcileRoundScores(room: any, players: any[], configuredCategories: string[]): any[] {
+  const counts = new Map<string, number>();
+  const entriesByPlayer = new Map<string, Array<{ category: string; word: string }>>();
+
+  for (const player of players) {
+    if (!player?.isReady || !player?.validAnswers || typeof player.validAnswers !== "object") continue;
+    const entries: Array<{ category: string; word: string }> = [];
+    for (const [category, word] of Object.entries(player.validAnswers)) {
+      if (typeof word !== "string" || !word.trim()) continue;
+      const key = normalizeWord(category) + "\\u0000" + normalizeWord(word);
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+      entries.push({ category, word });
+    }
+    entriesByPlayer.set(String(player.playerId), entries);
+  }
+
+  const meta = parseBluffMeta(room.stopperJson) ?? {};
+  const stopperId = meta?.stopper?.id ?? meta?.id;
+  const spies = meta?.spyUsage;
+  const endTs = roundEndTimestamp(room);
+  const categoryCount = Math.min(12, Math.max(1, configuredCategories.length));
+
+  return players.map((player: any) => {
+    const oldRoundScore = Number(player.roundScore ?? 0);
+    const entries = entriesByPlayer.get(String(player.playerId)) ?? [];
+    let score = 0;
+
+    for (const { category, word } of entries) {
+      const key = normalizeWord(category) + "\\u0000" + normalizeWord(word);
+      score += (counts.get(key) ?? 0) > 1 ? 5 : 10;
+    }
+
+    const validAnswerCount = Math.min(entries.length, categoryCount);
+    if (stopperId === player.playerId && validAnswerCount >= categoryCount) score += 5;
+
+    if (spies && Number(spies[player.playerId] ?? 0) > 0) {
+      score = Math.max(0, score - 10);
+    }
+
+    if (
+      player.powerCardUsed === true &&
+      player.powerCardUsedRound === room.currentRound &&
+      player.powerCard === "double_or_nothing"
+    ) {
+      score *= 2;
+    }
+
+    const lightningUsedThisRound =
+      player.powerCard === "lightning" &&
+      player.powerCardUsed === true &&
+      player.powerCardUsedRound === room.currentRound;
+    const effectiveEndTs = endTs
+      ? endTs + (lightningUsedThisRound ? 15_000 : 0)
+      : undefined;
+    if (
+      effectiveEndTs &&
+      typeof player.finishedAt === "number" &&
+      player.finishedAt - effectiveEndTs > SUBMIT_GRACE_MS
+    ) {
+      score = 0;
+    }
+
+    return {
+      ...player,
+      score: (Number(player.score ?? 0) - oldRoundScore) + score,
+      roundScore: score,
+      validAnswerCount,
+    };
+  });
+}
+
 function finalizeRoundState(room: any, players: any[]): {
   sweptPlayers: any[];
   newStatus: string;
@@ -3531,6 +3609,10 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
   // satisfy two different categories (for example, "naranja" as Fruit and
   // Color), so never deduplicate valid answers across categories.
   const validAnswerCountRaw = scoredEntries.filter((entry) => entry.valid).length;
+  const validAnswers: Record<string, string> = {};
+  for (const entry of scoredEntries) {
+    if (entry.valid) validAnswers[entry.category] = entry.word;
+  }
   const baseScoreRaw = validAnswerCountRaw * 10;
   const validAnswerCount = Math.min(validAnswerCountRaw, AUTHORITATIVE_CATEGORY_CAP);
   const baseScore = Math.min(baseScoreRaw, validAnswerCount * 10);
@@ -3597,6 +3679,7 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
         roundScore: cappedRoundScore,
         isReady: true,
         answers: safeAnswers,
+        validAnswers,
         // Server-validated count is persisted with the round snapshot so
         // final Season Pass events never need to trust raw client answers.
         validAnswerCount,
@@ -3609,6 +3692,11 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
     }
     return p;
   });
+
+  // Multiplayer duplicate-word scoring is round-wide. Reconcile before the
+  // CAS write so an earlier submitter is retroactively changed from 10 to 5
+  // when a later player submits the same valid word in the same category.
+  const reconciledPlayers = reconcileRoundScores(room, updatedPlayers, configuredCategories);
 
   // 🧹 Stuck-player sweep + round advance — shared with the background
   // sweepStuckRooms() failsafe so a round can never deadlock waiting on a
@@ -3625,7 +3713,7 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
   // re-run the round finalizer, and retry. Never overwrite another player's
   // newer submission.
   let authoritativeRoom = room;
-  let authoritativePlayers = sweptPlayers;
+  let authoritativePlayers = reconciledPlayers;
   let authoritativeStatus = newStatus;
   let authoritativeRound = newRound;
   let authoritativeLetter = newLetter;
@@ -3699,7 +3787,7 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
 
     // Merge only our player into the latest state, preserving every other
     // player's answers/score that won the race.
-    authoritativePlayers = refreshedPlayers.map((p: any) => {
+    const mergedPlayers = refreshedPlayers.map((p: any) => {
       if (p.playerId !== playerId) return p;
       return {
         ...p,
@@ -3707,6 +3795,7 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
         roundScore: cappedRoundScore,
         isReady: true,
         answers: safeAnswers,
+        validAnswers,
         // Preserve the server-validated word count when this submission is
         // merged after losing the optimistic-concurrency race.
         validAnswerCount,
@@ -3717,7 +3806,12 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
       };
     });
 
-    const retryFinalized = finalizeRoundState(refreshed, authoritativePlayers);
+    const reconciledRetryPlayers = reconcileRoundScores(
+      refreshed,
+      mergedPlayers,
+      configuredCategories,
+    );
+    const retryFinalized = finalizeRoundState(refreshed, reconciledRetryPlayers);
     authoritativeRoom = refreshed;
     authoritativePlayers = retryFinalized.sweptPlayers;
     authoritativeStatus = retryFinalized.newStatus;
