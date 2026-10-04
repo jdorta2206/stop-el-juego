@@ -135,6 +135,7 @@ const FRAME_COLORS_BY_ID: Record<string, string> = {
   frame_prestige_bronze:   "#cd7f32",
   frame_prestige_silver:   "#cbd5e1",
   frame_prestige_gold:     "#fbbf24",
+  frame_thanks_2026:        "#fb7185",
   frame_prestige_diamond:  "#67e8f9",
 };
 
