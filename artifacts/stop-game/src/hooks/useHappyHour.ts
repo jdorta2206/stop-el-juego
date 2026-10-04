@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { getApiUrl } from "@/lib/utils";
 
-const HAPPY_HOUR_START_UTC_MIN = 21 * 60;
+const HAPPY_HOUR_START_LOCAL_MIN = 21 * 60;
 const HAPPY_HOUR_DURATION_MIN = 60;
 const HAPPY_HOUR_MULTIPLIER = 2;
 
@@ -15,18 +15,20 @@ export interface HappyHourState {
 }
 
 /**
- * Computes the server-authoritative UTC Happy Hour window locally (no network)
+ * Computes the local-time Happy Hour window locally (no network)
  * so the banner can tick down second-by-second without spamming the API.
- * The user's clock is display-only; reward eligibility is checked from server time.
+ * The user's clock drives the display; reward eligibility is still checked authoritatively by the server.
  */
 function computeWindow(nowMs: number): HappyHourState {
   const d = new Date(nowMs);
+  const tzOffsetMinutes = -d.getTimezoneOffset();
   const utcMinFrac =
     d.getUTCHours() * 60 +
     d.getUTCMinutes() +
     d.getUTCSeconds() / 60 +
     d.getUTCMilliseconds() / 60_000;
-  const minsToStart = HAPPY_HOUR_START_UTC_MIN - utcMinFrac;
+  const localMinFrac = ((utcMinFrac + tzOffsetMinutes) % 1440 + 1440) % 1440;
+  const minsToStart = HAPPY_HOUR_START_LOCAL_MIN - localMinFrac;
   let startsAtUtcMs = nowMs + minsToStart * 60_000;
   let endsAtUtcMs = startsAtUtcMs + HAPPY_HOUR_DURATION_MIN * 60_000;
   if (nowMs >= endsAtUtcMs) {
