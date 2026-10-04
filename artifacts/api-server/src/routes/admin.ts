@@ -242,6 +242,13 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
 
   <a class="btn" href="">🔄 Actualizar</a>
 
+  <h2>Analytics del juego</h2>
+  <div class="card">
+    <div class="label">Diagnóstico en tiempo real</div>
+    <div style="color:#8a98a8;font-size:.85rem;margin:8px 0 12px;">Web · Android · iOS · sesiones · partidas · publicidad · eventos</div>
+    <iframe src="/test/analytics" title="Analytics de STOP" style="display:block;width:100%;height:760px;border:1px solid #283140;border-radius:10px;background:#0f1216;"></iframe>
+  </div>
+
   <h2>Notificaciones</h2>
   <form method="post" action="/test/notify-mundial" onsubmit="return confirm('¿Enviar la notificación del Pack Mundial a TODOS los jugadores suscritos?');">
     <p class="sub" style="margin:0 0 8px;">Envía a todos los suscriptores: «⚽ ¡Nuevo Pack Mundial! Elige tu equipo y equípate como él». Al tocarla, se abre la Tienda.</p>
