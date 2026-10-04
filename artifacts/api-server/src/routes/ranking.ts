@@ -539,7 +539,7 @@ router.post("/scores", scoreLimiter, requirePlayerIdentity, async (req: AuthedRe
     : [];
 
   const { base: verifiedBase, verified, collectionWords, mode: certifiedMode, aiBase: certifiedAiBase, playerId: voucherPlayerId, voucherJtis } = isBonus
-    ? { base: 0, verified: 0, collectionWords: [] as Array<{ word: string; category: string }>, mode: null, aiBase: 0, playerId: null }
+    ? { base: 0, verified: 0, collectionWords: [] as Array<{ word: string; category: string }>, mode: null, aiBase: 0, playerId: null, voucherJtis: [] as string[] }
     // /ranking/scores is the client solo leaderboard path. Keep its voucher
     // count cap independent of the client-supplied `mode`.
     : await sumVerifiedBasePersistent(scoreTokens, 3);
