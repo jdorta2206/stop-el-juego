@@ -1,3 +1,5 @@
+import { getInstalledAppVersion } from "@/lib/appVersion";
+
 const STORAGE_KEY = "stop_player_v2";
 const ANALYTICS_TWA_KEY = "stop_analytics_twa_v1";
 function isTwa(): boolean {
@@ -12,7 +14,7 @@ function platform(): "web" | "android" | "ios" {
   if (typeof window === "undefined") return "web";
   try {
     if (/iphone|ipad|ipod/i.test(navigator.userAgent)) return "ios";
-    if (isTwa() || !!localStorage.getItem("stop_installed_app_version")) return "android";
+    if (isTwa() || !!getInstalledAppVersion()) return "android";
   } catch {}
   return "web";
 }
