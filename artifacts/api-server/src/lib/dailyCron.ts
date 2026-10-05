@@ -91,7 +91,7 @@ async function claimDailyLock(today: string, key: string = CRON_KEY): Promise<bo
 /**
  * Sends a "save your streak" push to every player whose streak is at risk:
  *   - current_streak >= 2 (so it's worth saving)
- *   - last_played_date is exactly yesterday (UTC) — they haven't played today yet
+ *   - last_played_date is exactly yesterday (Madrid) — they haven't played today yet
  * Looks up each player's preferred language from their first push subscription.
  */
 // Per-recipient claim for scheduled pushes. A failed delivery releases only
