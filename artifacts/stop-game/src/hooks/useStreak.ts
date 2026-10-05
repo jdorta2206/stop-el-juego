@@ -11,14 +11,16 @@ function storageKey(playerId?: string) {
   return playerId ? `${STORAGE_KEY}:${playerId}` : `${STORAGE_KEY}:guest`;
 }
 
+const MADRID_DATE = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Madrid", year: "numeric", month: "2-digit", day: "2-digit" });
+
 function getTodayStr(): string {
-  return new Date().toISOString().slice(0, 10);
+  return MADRID_DATE.format(new Date());
 }
 
 function getYesterdayStr(): string {
-  const d = new Date();
-  d.setDate(d.getDate() - 1);
-  return d.toISOString().slice(0, 10);
+  const today = getTodayStr();
+  const [year, month, day] = today.split("-").map(Number);
+  return MADRID_DATE.format(new Date(Date.UTC(year, month - 1, day - 1, 12)));
 }
 
 function loadStreak(playerId?: string): StreakData {
