@@ -141,7 +141,7 @@ async function sendStreakRescueNotifications() {
     for (const row of rows.rows as Array<{ player_id: string; current_streak: number; language: string }>) {
       const lang = STREAK_RESCUE_MSGS[row.language] ? row.language : "es";
       const claimKey = "streak_rescue_player";
-      if (!await claimPlayerNotification(today, claimKey, row.player_id)) continue;
+      if (!await claimPlayerNotification(row.local_day, claimKey, row.player_id)) continue;
       try {
         const msg = STREAK_RESCUE_MSGS[lang](row.current_streak);
         const n = await sendPushToPlayer(row.player_id, {
@@ -328,7 +328,11 @@ async function sendPerUserDailyNotifications() {
     // far-west offsets around UTC midnight.
     const utcMinutesOfDay = utcHour * 60 + utcMinute;
     const rows = (await db.execute(sql`
-      SELECT player_id, language, hour_local
+      SELECT player_id, language, hour_local,
+             CASE WHEN NULLIF(time_zone, '') IS NOT NULL
+               THEN TO_CHAR(NOW() AT TIME ZONE time_zone, 'YYYY-MM-DD')
+               ELSE TO_CHAR((NOW() AT TIME ZONE 'UTC') + (tz_offset_minutes * INTERVAL '1 minute'), 'YYYY-MM-DD')
+             END AS local_day
       FROM push_subscriptions
       WHERE enabled = TRUE
         AND muted_until < ${now}
@@ -343,7 +347,7 @@ async function sendPerUserDailyNotifications() {
           ELSE ((${utcMinutesOfDay}::int + tz_offset_minutes + 10080) % 60)
         END < 5
       LIMIT 10000
-    `)) as unknown as { rows?: SubscriptionWithPrefsRow[] };
+    `)) as unknown as { rows?: Array<SubscriptionWithPrefsRow & { local_day: string }> };
 
     const candidates = rows.rows ?? [];
     if (candidates.length === 0) return;
@@ -436,7 +440,11 @@ async function sendHappyHourNotifications() {
     for (const slot of slots) {
 
       const rows = (await db.execute(sql`
-        SELECT player_id, language
+        SELECT player_id, language,
+               CASE WHEN NULLIF(time_zone, '') IS NOT NULL
+                 THEN TO_CHAR(NOW() AT TIME ZONE time_zone, 'YYYY-MM-DD')
+                 ELSE TO_CHAR((NOW() AT TIME ZONE 'UTC') + (tz_offset_minutes * INTERVAL '1 minute'), 'YYYY-MM-DD')
+               END AS local_day
         FROM push_subscriptions
         WHERE enabled = TRUE
           AND muted_until < ${now}
@@ -447,7 +455,7 @@ async function sendHappyHourNotifications() {
             THEN (EXTRACT(HOUR FROM (NOW() AT TIME ZONE time_zone))::int * 60 + EXTRACT(MINUTE FROM (NOW() AT TIME ZONE time_zone))::int)
             ELSE (((${utcMinutesOfDay}::int + tz_offset_minutes + 10080) % 1440)) END) < ${slot.target + 5}
         LIMIT 10000
-      `)) as unknown as { rows?: Array<{ player_id: string; language: string }> };
+      `)) as unknown as { rows?: Array<{ player_id: string; language: string; local_day: string }> };
 
       const candidates = rows.rows ?? [];
       if (candidates.length === 0) continue;
@@ -458,7 +466,7 @@ async function sendHappyHourNotifications() {
         if (seen.has(row.player_id)) continue;
         seen.add(row.player_id);
         const claimKey = "hh_" + slot.key;
-        if (!await claimPlayerNotification(today, claimKey, row.player_id)) continue;
+        if (!await claimPlayerNotification(row.local_day, claimKey, row.player_id)) continue;
         try {
           const lang = HAPPY_HOUR_MSGS[slot.key][row.language] ? row.language : "es";
           const msg = HAPPY_HOUR_MSGS[slot.key][lang];
@@ -520,7 +528,7 @@ async function sendDailyDealsNotifications() {
       if (seen.has(row.player_id)) continue;
       seen.add(row.player_id);
       const claimKey = "deals_player";
-      if (!await claimPlayerNotification(today, claimKey, row.player_id)) continue;
+      if (!await claimPlayerNotification(row.local_day, claimKey, row.player_id)) continue;
       try {
         const lang = DEALS_MSGS[row.language] ? row.language : "es";
         const msg = DEALS_MSGS[lang](maxDiscount);
