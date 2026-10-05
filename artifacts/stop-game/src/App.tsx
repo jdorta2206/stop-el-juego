@@ -207,7 +207,8 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <MotionConfig reducedMotion="user">
         <ErrorBoundary>
-          <PackClaimHandler />\n          <ScoreOutboxHandler />
+          <PackClaimHandler />
+          <ScoreOutboxHandler />
           <SplashScreen onDone={() => setSplashDone(true)} lang={lang} />
           {splashDone && (
             <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
