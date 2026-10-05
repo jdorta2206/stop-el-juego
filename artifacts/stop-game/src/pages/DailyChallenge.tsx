@@ -36,8 +36,34 @@ function getTodayStr() {
 
 function getTimeUntilMidnight(): string {
   const now = new Date();
-  const midnight = new Date(now);
-  midnight.setUTCHours(24, 0, 0, 0);
+  const todayMadrid = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Madrid",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(now);
+  const [year, month, day] = todayMadrid.split("-").map(Number);
+  // The daily challenge rolls over at Madrid midnight, not UTC midnight.
+  const probe = new Date(Date.UTC(year, month - 1, day + 1, 12, 0, 0));
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Europe/Madrid",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(probe);
+  const part = (type: string) => Number(parts.find(p => p.type === type)?.value ?? 0);
+  const localProbeMs = Date.UTC(
+    part("year"), part("month") - 1, part("day"),
+    part("hour"), part("minute"), part("second"),
+  );
+  const offsetMs = localProbeMs - probe.getTime();
+  const midnight = new Date(
+    Date.UTC(year, month - 1, day + 1, 0, 0, 0) - offsetMs,
+  );
   const diff = midnight.getTime() - now.getTime();
   const h = Math.floor(diff / 3600000);
   const m = Math.floor((diff % 3600000) / 60000);
