@@ -104,7 +104,7 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
       await db.execute(sql`
         SELECT COALESCE(games,0) AS games, COALESCE(conversions,0) AS conversions
         FROM guest_stats
-        WHERE day = to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD')
+        WHERE day = to_char(now() AT TIME ZONE 'Europe/Madrid', 'YYYY-MM-DD')
       `)
     ).rows[0] as Record<string, unknown> | undefined;
 
@@ -143,6 +143,85 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
         ORDER BY day DESC
       `)
     ).rows as Record<string, unknown>[];
+
+    // ── Retención y embudo real (analytics_sessions / trusted events) ────────
+    // DAU/WAU/MAU usa player_id para cuentas y session_id para invitados.
+    const retentionKpis = (
+      await db.execute(sql`
+        SELECT
+          COUNT(DISTINCT CASE WHEN s.started_at >= (date_trunc('day', NOW() AT TIME ZONE 'Europe/Madrid') AT TIME ZONE 'Europe/Madrid') THEN COALESCE(s.player_id, s.session_id) END)::int AS dau,
+          COUNT(DISTINCT CASE WHEN s.started_at >= NOW() - INTERVAL '7 days' THEN COALESCE(s.player_id, s.session_id) END)::int AS wau,
+          COUNT(DISTINCT CASE WHEN s.started_at >= NOW() - INTERVAL '30 days' THEN COALESCE(s.player_id, s.session_id) END)::int AS mau,
+          COUNT(DISTINCT CASE WHEN s.started_at >= NOW() - INTERVAL '7 days' AND s.player_id IS NOT NULL THEN s.player_id END)::int AS account_active_7d,
+          COUNT(DISTINCT CASE WHEN s.started_at >= NOW() - INTERVAL '7 days' AND s.player_id IS NULL THEN s.session_id END)::int AS guest_active_7d
+        FROM analytics_sessions s
+        WHERE s.started_at >= NOW() - INTERVAL '30 days'
+      `)
+    ).rows[0] as Record<string, unknown> | undefined;
+
+    const funnel = (
+      await db.execute(sql`
+        SELECT
+          COUNT(DISTINCT CASE WHEN event_name = 'session_start' THEN COALESCE(player_id, session_id) END)::int AS sessions,
+          COUNT(DISTINCT CASE WHEN event_name = 'game_start' THEN COALESCE(player_id, session_id) END)::int AS game_players,
+          COUNT(DISTINCT CASE WHEN event_name = 'game_complete' THEN COALESCE(player_id, session_id) END)::int AS completed_players,
+          COUNT(DISTINCT CASE WHEN event_name = 'rewarded_ad_requested' THEN COALESCE(player_id, session_id) END)::int AS ad_players,
+          COUNT(DISTINCT CASE WHEN event_name = 'rewarded_ad_failed' THEN COALESCE(player_id, session_id) END)::int AS ad_failed_players
+        FROM analytics_events
+        WHERE trusted = TRUE AND created_at >= NOW() - INTERVAL '7 days'
+      `)
+    ).rows[0] as Record<string, unknown> | undefined;
+
+    const activityByDay = (
+      await db.execute(sql`
+        SELECT to_char((created_at AT TIME ZONE 'UTC') AT TIME ZONE 'Europe/Madrid', 'YYYY-MM-DD') AS d,
+               COUNT(DISTINCT COALESCE(player_id, session_id)) FILTER (WHERE event_name = 'session_start')::int AS active,
+               COUNT(DISTINCT COALESCE(player_id, session_id)) FILTER (WHERE event_name = 'game_start')::int AS starters,
+               COUNT(DISTINCT COALESCE(player_id, session_id)) FILTER (WHERE event_name = 'game_complete')::int AS completers
+        FROM analytics_events
+        WHERE trusted = TRUE AND created_at >= NOW() - INTERVAL '14 days'
+          AND event_name IN ('session_start','game_start','game_complete')
+        GROUP BY d ORDER BY d DESC
+      `)
+    ).rows as Record<string, unknown>[];
+
+    const churnBuckets = (
+      await db.execute(sql`
+        SELECT
+          COUNT(*) FILTER (WHERE last_seen >= NOW() - INTERVAL '1 day')::int AS active_1d,
+          COUNT(*) FILTER (WHERE last_seen < NOW() - INTERVAL '1 day' AND last_seen >= NOW() - INTERVAL '3 days')::int AS away_1_3d,
+          COUNT(*) FILTER (WHERE last_seen < NOW() - INTERVAL '3 days' AND last_seen >= NOW() - INTERVAL '7 days')::int AS away_3_7d,
+          COUNT(*) FILTER (WHERE last_seen < NOW() - INTERVAL '7 days' AND last_seen >= NOW() - INTERVAL '14 days')::int AS away_7_14d,
+          COUNT(*) FILTER (WHERE last_seen < NOW() - INTERVAL '14 days')::int AS away_14d
+        FROM (
+          SELECT player_id, MAX(last_seen) AS last_seen
+          FROM analytics_sessions
+          WHERE player_id IS NOT NULL AND player_id NOT LIKE 'bot_%'
+          GROUP BY player_id
+        ) x
+      `)
+    ).rows[0] as Record<string, unknown> | undefined;
+
+    const platformVersions = (
+      await db.execute(sql`
+        SELECT platform, COALESCE(app_version, '—') AS app_version,
+               COUNT(DISTINCT COALESCE(player_id, session_id)) FILTER (WHERE started_at >= NOW() - INTERVAL '7 days')::int AS active_7d
+        FROM analytics_sessions
+        WHERE started_at >= NOW() - INTERVAL '7 days'
+        GROUP BY platform, app_version
+        ORDER BY active_7d DESC, platform, app_version
+        LIMIT 30
+      `)
+    ).rows as Record<string, unknown>[];
+
+    const activityRows = activityByDay.map((row) =>
+      `<tr><td>\${esc(row.d)}</td><td>\${num(row.active)}</td><td>\${num(row.starters)}</td><td>\${num(row.completers)}</td><td>\${num(row.starters) > 0 ? Math.round((num(row.completers) / num(row.starters)) * 100) : 0}%</td></tr>`
+    ).join('');
+
+    const platformVersionRows = platformVersions.map((row) => {
+      const platform = String(row.platform) === 'android' ? '🤖 Android' : String(row.platform) === 'ios' ? '🍎 iOS' : '🌐 Web';
+      return `<tr><td>\${platform}</td><td>\${esc(row.app_version)}</td><td>\${num(row.active_7d)}</td></tr>`;
+    }).join('');
 
     // Top 10 jugadores
     const top = (
@@ -293,12 +372,58 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
 
   <h2>Hoy</h2>
   <div class="cards">
-    <div class="card accent"><div class="label">Registrados activos</div><div class="val">${num(todayRows.active)}</div></div>
+    <div class="card"><div class="label">Puntuaciones actualizadas hoy</div><div class="val">${num(todayRows.active)}</div></div>
     <div class="card"><div class="label">Nuevos registros</div><div class="val">${num(todayRows.new_users)}</div></div>
     <div class="card"><div class="label">Partidas (registrados)</div><div class="val">${num(todayRows.games)}</div></div>
     <div class="card"><div class="label">Partidas de invitados</div><div class="val">${num(guestToday?.games)}</div></div>
     <div class="card"><div class="label">Invitados → registro</div><div class="val">${num(guestToday?.conversions)}</div></div>
   </div>
+
+  <h2>📈 Salud real del juego</h2>
+  <div class="cards">
+    <div class="card accent"><div class="label">DAU real · hoy</div><div class="val">\${num(retentionKpis?.dau)}</div></div>
+    <div class="card"><div class="label">WAU real · 7 días</div><div class="val">\${num(retentionKpis?.wau)}</div></div>
+    <div class="card"><div class="label">MAU real · 30 días</div><div class="val">\${num(retentionKpis?.mau)}</div></div>
+    <div class="card"><div class="label">Cuentas activas · 7 días</div><div class="val">\${num(retentionKpis?.account_active_7d)}</div></div>
+    <div class="card"><div class="label">Invitados activos · 7 días</div><div class="val">\${num(retentionKpis?.guest_active_7d)}</div></div>
+    <div class="card"><div class="label">Inicio → fin · 7 días</div><div class="val">\${num(funnel?.game_players) > 0 ? Math.round((num(funnel?.completed_players) / num(funnel?.game_players)) * 100) : 0}%</div></div>
+  </div>
+
+  <h2>🎯 Embudo de jugadores · últimos 7 días</h2>
+  <table>
+    <thead><tr><th>Etapa</th><th>Jugadores únicos</th></tr></thead>
+    <tbody>
+      <tr><td>Sesión iniciada</td><td>\${num(funnel?.sessions)}</td></tr>
+      <tr><td>Partida iniciada</td><td>\${num(funnel?.game_players)}</td></tr>
+      <tr><td>Partida terminada</td><td>\${num(funnel?.completed_players)}</td></tr>
+      <tr><td>Pidió rewarded</td><td>\${num(funnel?.ad_players)}</td></tr>
+      <tr><td>Rewarded falló</td><td>\${num(funnel?.ad_failed_players)}</td></tr>
+    </tbody>
+  </table>
+
+  <h2>🚪 Por dónde se está yendo la gente</h2>
+  <table>
+    <thead><tr><th>Última actividad</th><th>Jugadores registrados</th></tr></thead>
+    <tbody>
+      <tr><td>Activos &lt; 1 día</td><td>\${num(churnBuckets?.active_1d)}</td></tr>
+      <tr><td>Ausentes 1–3 días</td><td>\${num(churnBuckets?.away_1_3d)}</td></tr>
+      <tr><td>Ausentes 3–7 días</td><td>\${num(churnBuckets?.away_3_7d)}</td></tr>
+      <tr><td>Ausentes 7–14 días</td><td>\${num(churnBuckets?.away_7_14d)}</td></tr>
+      <tr><td>Ausentes &gt; 14 días</td><td>\${num(churnBuckets?.away_14d)}</td></tr>
+    </tbody>
+  </table>
+
+  <h2>📅 Actividad real · últimos 14 días</h2>
+  <table>
+    <thead><tr><th>Día</th><th>Activos</th><th>Inician partida</th><th>Terminan partida</th><th>Conversión</th></tr></thead>
+    <tbody>\${activityRows || '<tr><td colspan="5">Sin eventos de actividad.</td></tr>'}</tbody>
+  </table>
+
+  <h2>📱 Versión y plataforma · últimos 7 días</h2>
+  <table>
+    <thead><tr><th>Plataforma</th><th>Versión</th><th>Activos únicos</th></tr></thead>
+    <tbody>\${platformVersionRows || '<tr><td colspan="3">Sin datos.</td></tr>'}</tbody>
+  </table>
 
   <h2>Totales históricos</h2>
   <div class="cards">
