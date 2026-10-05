@@ -833,7 +833,7 @@ async function recoverMultiplayerAuxiliaryEffects(room: any, players: any[]): Pr
       month = previous.getUTCMonth() + 1;
       day = previous.getUTCDate();
       target = new Intl.DateTimeFormat("en-CA", {
-        timeZone: "Europe/Madrid",
+        timeZone,
         year: "numeric",
         month: "2-digit",
         day: "2-digit",
