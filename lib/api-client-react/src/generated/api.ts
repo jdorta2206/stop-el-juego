@@ -36,6 +36,10 @@ import type {
 import { customFetch } from "../custom-fetch";
 import type { ErrorType, BodyType } from "../custom-fetch";
 
+const browserTimeZone = (): string => {
+  try { return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"; } catch { return "UTC"; }
+};
+
 type AwaitedInput<T> = PromiseLike<T> | T;
 
 type Awaited<O> = O extends AwaitedInput<infer T> ? T : never;
@@ -311,7 +315,7 @@ export const submitScore = async (
   return customFetch<PlayerScore>(getSubmitScoreUrl(), {
     ...options,
     method: "POST",
-    headers: { "Content-Type": "application/json", ...options?.headers },
+    headers: { "Content-Type": "application/json", "X-Stop-Timezone": browserTimeZone(), ...options?.headers },
     body: JSON.stringify(submitScoreRequest),
   });
 };
@@ -487,6 +491,7 @@ export const getStreakCalendar = async (
     {
       ...options,
       method: "GET",
+      headers: { "X-Stop-Timezone": browserTimeZone(), ...options?.headers },
     },
   );
 };
@@ -577,7 +582,7 @@ export const createRoom = async (
   return customFetch<Room>(getCreateRoomUrl(), {
     ...options,
     method: "POST",
-    headers: { "Content-Type": "application/json", ...options?.headers },
+    headers: { "Content-Type": "application/json", "X-Stop-Timezone": browserTimeZone(), ...options?.headers },
     body: JSON.stringify(createRoomRequest),
   });
 };
@@ -741,7 +746,7 @@ export const joinRoom = async (
   return customFetch<Room>(getJoinRoomUrl(roomCode), {
     ...options,
     method: "POST",
-    headers: { "Content-Type": "application/json", ...options?.headers },
+    headers: { "Content-Type": "application/json", "X-Stop-Timezone": browserTimeZone(), ...options?.headers },
     body: JSON.stringify(joinRoomRequest),
   });
 };

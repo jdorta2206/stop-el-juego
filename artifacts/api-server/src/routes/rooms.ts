@@ -3,7 +3,7 @@ import { db } from "@workspace/db";
 import { roomsTable, playerScoresTable, gameHistoryTable } from "@workspace/db";
 import { eq, and, or, lt, gt, ne, inArray, sql } from "drizzle-orm";
 import { CreateRoomBody, JoinRoomBody, SubmitRoomResultsBody } from "@workspace/api-zod";
-import { calculateStreak, appendStreakDay, calcXpGain, calcCoinGain, calcLevel, lookupPlayerTzOffset } from "./ranking";
+import { calculateStreak, appendStreakDay, calcXpGain, calcCoinGain, calcLevel, lookupPlayerTimezone, normalizePlayerTimeZone } from "./ranking";
 import { recordTrustedAnalyticsEvent } from "./analytics";
 import { recordAuthoritativeSeasonEvents } from "./season";
 import { recordHalloweenEvent, recordHalloweenScareEvents, getHalloweenEventYear, recordHalloweenScareEventsInTransaction, recordHalloweenScareEventsWithCooldown, isHalloweenPreviewAuthorized } from "./halloween";
@@ -610,12 +610,7 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
     return String(a.playerId || "").localeCompare(String(b.playerId || ""));
   });
   const winner = sorted[0];
-  const today = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Europe/Madrid",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date());
+  // Streak dates are local to each player; global room timing remains UTC/instant-based.
   const normalizedRoomCode = String(roomCode || "").toUpperCase();
   const [settlementRoom] = await db.select({ stopperJson: roomsTable.stopperJson })
     .from(roomsTable)
@@ -631,7 +626,9 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
     const score = Math.round(rawScore * 1.5);
     const won = winner?.playerId === p.playerId;
     const xpBase = calcXpGain(score, won, "multiplayer");
-    const tzOffset = await lookupPlayerTzOffset(p.playerId);
+    const storedTimezone = await lookupPlayerTimezone(p.playerId);
+    const playerTimezone = { timeZone: p.timeZone ? normalizePlayerTimeZone(p.timeZone) : (storedTimezone.timeZone ?? "UTC"), tzOffset: storedTimezone.tzOffset };
+    const tzOffset = playerTimezone.tzOffset;
     const happyHour = tzOffset !== null && isHappyHourActiveForTzOffset(tzOffset);
     const xpGain = happyHour ? xpBase * HAPPY_HOUR_MULTIPLIER : xpBase;
     const coinGain = calcCoinGain(score, won, "multiplayer", false);
@@ -682,12 +679,17 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
 
       const { newStreak, updatedToday } = calculateStreak(
         existing[0]?.lastPlayedDate ?? null,
-        existing[0]?.currentStreak ?? 0
+        existing[0]?.currentStreak ?? 0,
+        playerTimezone.timeZone ?? "UTC",
       );
       const newLongest = Math.max(existing[0]?.longestStreak ?? 0, newStreak);
       settlementStreak = newStreak;
+      const playerToday = new Intl.DateTimeFormat("en-CA", {
+        timeZone: playerTimezone.timeZone ?? "UTC",
+        year: "numeric", month: "2-digit", day: "2-digit",
+      }).format(new Date());
       const newStreakDaysJson = updatedToday
-        ? appendStreakDay(existing[0]?.streakDaysJson, today)
+        ? appendStreakDay(existing[0]?.streakDaysJson, playerToday)
         : undefined;
       const newXp = (existing[0]?.xp ?? 0) + xpGain;
       const newLevel = calcLevel(newXp);
@@ -805,6 +807,7 @@ async function recoverMultiplayerAuxiliaryEffects(room: any, players: any[]): Pr
     streakDaysJson: unknown,
     finishedAt: unknown,
     fallback: number,
+    timeZone: string,
   ): number {
     if (typeof finishedAt !== "number" || !Number.isFinite(finishedAt)) return fallback;
     let parsed: unknown;
@@ -814,7 +817,7 @@ async function recoverMultiplayerAuxiliaryEffects(room: any, players: any[]): Pr
       typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d)
     ));
     let target = new Intl.DateTimeFormat("en-CA", {
-      timeZone: "Europe/Madrid",
+      timeZone,
       year: "numeric",
       month: "2-digit",
       day: "2-digit",
@@ -852,10 +855,13 @@ async function recoverMultiplayerAuxiliaryEffects(room: any, players: any[]): Pr
       currentStreak: playerScoresTable.currentStreak,
       streakDaysJson: playerScoresTable.streakDaysJson,
     }).from(playerScoresTable).where(eq(playerScoresTable.playerId, p.playerId)).limit(1);
+    const storedTimezone = await lookupPlayerTimezone(p.playerId);
+    const playerTimeZone = p.timeZone ? normalizePlayerTimeZone(p.timeZone) : (storedTimezone.timeZone ?? "UTC");
     const streak = streakForSettlementDate(
       scoreRow[0]?.streakDaysJson,
       p.finishedAt,
       scoreRow[0]?.currentStreak ?? 0,
+      playerTimeZone,
     );
     if (!aux.has("season") && (existingSeasonEvent.rows ?? []).length === 0) {
       const seasonOk = await recordAuthoritativeSeasonEvents(p.playerId, [
@@ -1554,6 +1560,7 @@ router.post("/", async (req, res) => {
     picture: effectivePicture,
     loginMethod: effectiveLoginMethod,
     isPremium: hostPremium,
+    timeZone: normalizePlayerTimeZone(req.headers["x-stop-timezone"]),
     score: 0,
     roundScore: 0,
     isHost: true,
@@ -1768,6 +1775,7 @@ router.post("/:roomCode/join", roomJoinLimiter, async (req, res) => {
         picture: effectivePicture,
         loginMethod: effectiveLoginMethod,
         isPremium: joinerPremium,
+        timeZone: normalizePlayerTimeZone(req.headers["x-stop-timezone"]),
         score: 0,
         roundScore: 0,
         isHost: false,

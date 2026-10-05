@@ -96,26 +96,31 @@ export function appendStreakDay(prevJson: string | null | undefined, today: stri
   return JSON.stringify(days);
 }
 
+export function normalizePlayerTimeZone(raw: unknown): string {
+  const timeZone = typeof raw === "string" && raw.trim() ? raw.trim() : "UTC";
+  try {
+    new Intl.DateTimeFormat("en-CA", { timeZone }).format(new Date());
+    return timeZone;
+  } catch {
+    return "UTC";
+  }
+}
+
 export function calculateStreak(
   lastPlayedDate: string | null,
-  currentStreak: number
+  currentStreak: number,
+  timeZone = "UTC",
 ): { newStreak: number; updatedToday: boolean } {
   const today = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Europe/Madrid",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
+    timeZone: normalizePlayerTimeZone(timeZone),
+    year: "numeric", month: "2-digit", day: "2-digit",
   }).format(new Date());
-  if (lastPlayedDate === today) {
-    return { newStreak: currentStreak, updatedToday: false };
-  }
+  if (lastPlayedDate === today) return { newStreak: currentStreak, updatedToday: false };
 
   const [year, month, day] = today.split("-").map(Number);
   const yesterday = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Europe/Madrid",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
+    timeZone: normalizePlayerTimeZone(timeZone),
+    year: "numeric", month: "2-digit", day: "2-digit",
   }).format(new Date(Date.UTC(year, month - 1, day - 1, 12)));
 
   const newStreak = lastPlayedDate === yesterday ? currentStreak + 1 : 1;
@@ -788,10 +793,12 @@ router.post("/scores", scoreLimiter, requirePlayerIdentity, async (req: AuthedRe
         .where(eq(playerScoresTable.playerId, playerId))
         .for("update");
       const lockedExisting = lockedRows[0];
-      const lockedToday = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Madrid", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+      const playerTimeZone = normalizePlayerTimeZone(req.headers["x-stop-timezone"]);
+      const lockedToday = new Intl.DateTimeFormat("en-CA", { timeZone: playerTimeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
       const { newStreak: lockedStreak, updatedToday: lockedUpdatedToday } = calculateStreak(
         lockedExisting?.lastPlayedDate ?? null,
         lockedExisting?.currentStreak ?? 0,
+        playerTimeZone,
       );
       const lockedLongest = Math.max(lockedExisting?.longestStreak ?? 0, lockedStreak);
       const lockedStreakDaysJson = lockedUpdatedToday

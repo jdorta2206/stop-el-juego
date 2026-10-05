@@ -78,7 +78,16 @@ router.get("/streak/calendar/:playerId", async (req, res) => {
   const player = rows[0];
   const storedDays = parseJson<string[]>(player.streakDaysJson, []);
   const days = [...new Set(storedDays)].sort().slice(-30);
-  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Madrid", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+  const requestedTimezone = typeof req.headers["x-stop-timezone"] === "string" ? req.headers["x-stop-timezone"] : "";
+  const storedTimezone = await (async () => {
+    try {
+      const rows = await db.execute(sql`SELECT time_zone FROM push_subscriptions WHERE player_id = ${playerId} AND enabled = TRUE AND time_zone IS NOT NULL ORDER BY id DESC LIMIT 1`);
+      return String((rows.rows?.[0] as any)?.time_zone ?? "UTC");
+    } catch { return "UTC"; }
+  })();
+  let playerTimezone = requestedTimezone || storedTimezone;
+  try { new Intl.DateTimeFormat("en-CA", { timeZone: playerTimezone }).format(new Date()); } catch { playerTimezone = storedTimezone; }
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: playerTimezone, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 
   res.json({
     currentStreak: player.currentStreak ?? 0,
