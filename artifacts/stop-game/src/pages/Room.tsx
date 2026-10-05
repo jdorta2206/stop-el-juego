@@ -28,7 +28,7 @@ import { useHaptic } from "@/hooks/useHaptic";
 import { ShareResultsModal } from "@/components/ShareResultsModal";
 import { recordExternalStat } from "@/hooks/useAchievements";
 import { CountUp } from "@/components/CountUp";
-import { getApiUrl, publicLink, authHeaders, getSessionToken } from "@/lib/utils";
+import { getApiUrl, publicLink, authHeaders } from "@/lib/utils";
 import { reportSeasonEvent } from "@/hooks/useSeason";
 import { saveActiveRoom, clearActiveRoom, touchActiveRoom } from "@/lib/activeRoom";
 import { useT } from "@/i18n/useT";
@@ -314,8 +314,7 @@ export default function Room() {
     if (!roomCode || !player?.id) return;
     const code = roomCode.toUpperCase();
     const API = getApiUrl();
-    const tok = getSessionToken();
-    const url = `${API}/api/rooms/${code}/events?playerId=${player.id}${tok ? `&token=${encodeURIComponent(tok)}` : ""}`;
+    const url = `${API}/api/rooms/${code}/events?playerId=${encodeURIComponent(player.id)}`;
     let es: EventSource;
     let retryTimeout: ReturnType<typeof setTimeout>;
     let closed = false;
@@ -323,7 +322,7 @@ export default function Room() {
 
     function connect() {
       if (closed) return;
-      es = new EventSource(url);
+      es = new EventSource(url, { withCredentials: true });
       es.onopen = () => {
         attempts = 0; // 🔁 reset backoff on successful connection
         setSseActive(true);
