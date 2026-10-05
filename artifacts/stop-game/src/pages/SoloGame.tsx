@@ -1085,7 +1085,7 @@ export default function SoloGame() {
         if (!isDailyMode) recordInterstitialGameCompleted();
         // The private /test panel tracks guest games separately from registered
         // game_history. Only anonymous players must increment that aggregate.
-        if (!player) trackGuestGame();
+        if (!player || player.loginMethod === "guest") trackGuestGame();
       }
 
       // AI personality comment
