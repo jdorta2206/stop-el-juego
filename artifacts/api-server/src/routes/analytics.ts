@@ -163,6 +163,32 @@ router.post("/game-start", presenceLimiter, async (req, res) => {
   }
 });
 
+router.post("/client-error", presenceLimiter, async (req, res) => {
+  try {
+    await analyticsTablesReady;
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const message = typeof body.message === "string" ? body.message.slice(0, 500) : "Unknown client error";
+    const stack = typeof body.stack === "string" ? body.stack.slice(0, 2500) : null;
+    const componentStack = typeof body.componentStack === "string" ? body.componentStack.slice(0, 2500) : null;
+    const sessionId = typeof body.sessionId === "string" ? body.sessionId.slice(0, 128) : null;
+    const playerId = readPlayerId(req);
+    const platform = platformFromRequest(req);
+    const appVersion = String(req.headers["x-client-version"] ?? "").slice(0, 32) || null;
+    const language = typeof body.language === "string" ? body.language.slice(0, 16) : null;
+    const metadataJson = JSON.stringify({ message, stack, componentStack }).slice(0, 4000);
+    await db.execute(sql`
+      INSERT INTO analytics_events
+        (event_name, player_id, session_id, platform, app_version, language, metadata_json, trusted)
+      VALUES
+        ('client_error', ${playerId}, ${sessionId}, ${platform}, ${appVersion}, ${language}, ${metadataJson}, TRUE)
+    `);
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error("[analytics] client-error failed:", err);
+    return res.status(500).json({ error: "Analytics unavailable" });
+  }
+});
+
 router.post("/event", presenceLimiter, async (req, res) => {
   try {
     await analyticsTablesReady;
