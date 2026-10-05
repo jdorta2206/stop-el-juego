@@ -2439,12 +2439,10 @@ router.get("/:roomCode/events", async (req, res) => {
   }
   if (playerId && isLoggedInId(playerId) && isAuthConfigured()) {
     // EventSource cannot send custom headers, so accept the signed token via the
-    // token query param (falls back to the auth cookie). This applies to both
-    // private and public rooms because public rooms still contain richer state
-    // for authenticated members.
-    // EventSource sends the httpOnly auth cookie with credentials; never accept
-    // the long-lived session token through the URL, where it can leak into logs,
-    // browser history, monitoring, or referrers.
+    // EventSource sends the httpOnly auth cookie with credentials. This applies
+    // to both private and public rooms because public rooms still contain richer
+    // state for authenticated members. Never accept the long-lived session token
+    // through the URL, where it can leak into logs, history, monitoring, or referrers.
     const verified = readPlayerId(req);
     if (verified !== playerId) {
       res.status(403).json({ error: "Identity verification failed" }); return;
