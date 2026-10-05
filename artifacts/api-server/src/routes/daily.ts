@@ -159,26 +159,10 @@ router.post("/submit", async (req, res) => {
 
       if (existing.length > 0) {
         alreadyPlayed = true;
-        if (safeScore <= existing[0].score) return;
-
-        if (verified > 0 && voucherJtis.length > 0) {
-          await consumeScoreVoucherJtis(tx, voucherJtis);
-        }
-
-        await tx.update(dailyResultsTable)
-          .set({ score: safeScore, playerName: canonicalPlayerName, avatarColor: canonicalAvatarColor })
-          .where(and(
-            eq(dailyResultsTable.playerId, playerId),
-            eq(dailyResultsTable.challengeDate, today),
-            sql`${dailyResultsTable.score} < ${safeScore}`,
-          ));
         return;
       }
 
-      if (verified > 0 && voucherJtis.length > 0) {
-        await consumeScoreVoucherJtis(tx, voucherJtis);
-      }
-      await tx.insert(dailyResultsTable).values({
+      const inserted = await tx.insert(dailyResultsTable).values({
         playerId,
         playerName: canonicalPlayerName,
         avatarColor: canonicalAvatarColor || "#e53e3e",
@@ -186,14 +170,18 @@ router.post("/submit", async (req, res) => {
         score: safeScore,
         letter,
         language: normalizedLanguage,
-      }).onConflictDoUpdate({
+      }).onConflictDoNothing({
         target: [dailyResultsTable.playerId, dailyResultsTable.challengeDate, dailyResultsTable.language],
-        set: {
-          score: sql`GREATEST(${dailyResultsTable.score}, EXCLUDED.score)`,
-          playerName: sql`CASE WHEN EXCLUDED.score > ${dailyResultsTable.score} THEN ${canonicalPlayerName} ELSE ${dailyResultsTable.playerName} END`,
-          avatarColor: sql`CASE WHEN EXCLUDED.score > ${dailyResultsTable.score} THEN ${canonicalAvatarColor} ELSE ${dailyResultsTable.avatarColor} END`,
-        },
-      });
+      }).returning({ id: dailyResultsTable.id });
+
+      if (inserted.length === 0) {
+        alreadyPlayed = true;
+        return;
+      }
+
+      if (verified > 0 && voucherJtis.length > 0) {
+        await consumeScoreVoucherJtis(tx, voucherJtis);
+      }
       submitted = true;
     });
   } catch (error) {
