@@ -11,16 +11,25 @@ function storageKey(playerId?: string) {
   return playerId ? `${STORAGE_KEY}:${playerId}` : `${STORAGE_KEY}:guest`;
 }
 
-const MADRID_DATE = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Madrid", year: "numeric", month: "2-digit", day: "2-digit" });
+function getPlayerTimeZone(): string {
+  try { return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"; } catch { return "UTC"; }
+}
 
 function getTodayStr(): string {
-  return MADRID_DATE.format(new Date());
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: getPlayerTimeZone(),
+    year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(new Date());
 }
 
 function getYesterdayStr(): string {
+  const timeZone = getPlayerTimeZone();
   const today = getTodayStr();
   const [year, month, day] = today.split("-").map(Number);
-  return MADRID_DATE.format(new Date(Date.UTC(year, month - 1, day - 1, 12)));
+  const probe = new Date(Date.UTC(year, month - 1, day - 1, 12));
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone, year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(probe);
 }
 
 function loadStreak(playerId?: string): StreakData {
