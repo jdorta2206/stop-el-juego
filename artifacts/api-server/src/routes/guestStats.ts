@@ -6,13 +6,18 @@ import { writeLimiter } from "../middlewares/rateLimit";
 
 const router: IRouter = Router();
 
-function todayUtc(): string {
-  return new Date().toISOString().split("T")[0];
+function todayMadrid(): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Madrid",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
 }
 
 // Atomic daily upsert: increment `games` or `conversions` for today by 1.
 async function bump(column: "games" | "conversions") {
-  const day = todayUtc();
+  const day = todayMadrid();
   await db
     .insert(guestStatsTable)
     .values({
