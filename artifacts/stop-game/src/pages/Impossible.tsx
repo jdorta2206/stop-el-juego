@@ -88,7 +88,7 @@ export default function Impossible() {
     try {
       const r = await fetch(`${API}/api/impossible/submit`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "X-Stop-Timezone": getPlayerTimeZone() },
         body: JSON.stringify({
           playerId: player.id,
           playerName: player.name,
