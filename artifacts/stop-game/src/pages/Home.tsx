@@ -100,16 +100,26 @@ export default function Home() {
     return () => window.removeEventListener("halloween:audio-started", onHalloweenAudioStarted);
   }, []);
   const [showHalloweenAnnouncement, setShowHalloweenAnnouncement] = useState(false);
-  const [halloweenDaysUntilStart, setHalloweenDaysUntilStart] = useState(() =>
-    Math.max(0, Math.ceil((new Date(HALLOWEEN_START).getTime() - Date.now()) / 86_400_000)),
-  );
+  const [halloweenDaysUntilStart, setHalloweenDaysUntilStart] = useState(() => {
+    const target = new Date(HALLOWEEN_START);
+    const targetLocal = new Date(target.getFullYear(), target.getMonth(), target.getDate());
+    const now = new Date();
+    const todayLocal = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    return Math.max(0, Math.round((targetLocal.getTime() - todayLocal.getTime()) / 86_400_000));
+  });
   const { data: halloweenProgressData } = useHalloweenProgress(player?.id);
 
   // Pre-event countdown: this is informational only and never gates gameplay.
   useEffect(() => {
-    const update = () => setHalloweenDaysUntilStart(
-      Math.max(0, Math.ceil((new Date(HALLOWEEN_START).getTime() - Date.now()) / 86_400_000)),
-    );
+    const update = () => {
+      const target = new Date(HALLOWEEN_START);
+      const targetLocal = new Date(target.getFullYear(), target.getMonth(), target.getDate());
+      const now = new Date();
+      const todayLocal = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      setHalloweenDaysUntilStart(
+        Math.max(0, Math.round((targetLocal.getTime() - todayLocal.getTime()) / 86_400_000)),
+      );
+    };
     update();
     const timer = window.setInterval(update, 60 * 60 * 1000);
     return () => window.clearInterval(timer);
