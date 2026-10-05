@@ -583,7 +583,7 @@ router.post("/scores", scoreLimiter, requirePlayerIdentity, async (req: AuthedRe
   const oldTotal = existing.length > 0 ? existing[0].totalScore : 0;
   const newTotal = oldTotal + score;
 
-  const today = new Date().toISOString().split("T")[0];
+  const today = new Intl.DateTimeFormat("en-CA", {\n    timeZone: "Europe/Madrid",\n    year: "numeric",\n    month: "2-digit",\n    day: "2-digit",\n  }).format(new Date());
   let authoritativeStreak = existing[0]?.currentStreak ?? 0;
 
   // 🔒 For voucher-backed Solo submissions, the win/loss result must come
