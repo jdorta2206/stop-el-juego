@@ -303,10 +303,10 @@ export default function SoloGame() {
       lang === "fr" ? "📡 Tu joues hors ligne" :
       "📡 Estás jugando sin conexión";
     const description =
-      lang === "en" ? "Your games still work — your score will be uploaded to the ranking when you're back online." :
-      lang === "pt" ? "As tuas partidas funcionam — a tua pontuação será enviada ao ranking quando voltares a ter internet." :
-      lang === "fr" ? "Tes parties fonctionnent — ton score sera envoyé au classement quand tu auras de nouveau internet." :
-      "Tus partidas funcionan, pero tu puntuación se subirá al ranking cuando vuelvas a tener internet.";
+      lang === "en" ? "Your games still work. Only server-verified rounds can be uploaded to the ranking." :
+      lang === "pt" ? "As tuas partidas continuam a funcionar. Só as rondas verificadas pelo servidor entram no ranking." :
+      lang === "fr" ? "Tes parties fonctionnent toujours. Seules les manches vérifiées par le serveur peuvent entrer au classement." :
+      "Tus partidas siguen funcionando. Solo las rondas verificadas por el servidor pueden entrar en el ranking.";
     toast({ title, description });
   }, [isOffline, lang, toast]);
 
@@ -1151,8 +1151,17 @@ export default function SoloGame() {
   const submitToLeaderboard = (finalScore: number, finalAiScore: number, opts?: { bonus?: boolean }) => {
     if (!player || player.loginMethod === "guest") return;
     if (finalScore <= 0) return;
-    const won = finalScore > finalAiScore;
     const isBonus = opts?.bonus === true;
+    if (!isBonus && scoreTokensRef.current.length === 0) {
+      const offMsg =
+        lang === "en" ? "Offline — this score stays on this device and won't enter the ranking." :
+        lang === "pt" ? "Offline — esta pontuação fica neste dispositivo e não entra no ranking." :
+        lang === "fr" ? "Hors-ligne — ce score reste sur cet appareil et n'entre pas au classement." :
+        "Sin conexión: esta puntuación queda en este dispositivo y no entra en el ranking.";
+      toast({ title: "📡 " + offMsg });
+      return;
+    }
+    const won = finalScore > finalAiScore;
     submitScoreMutation.mutate({
       data: {
         submissionId: `${gameSubmissionIdRef.current ?? createSubmissionId()}${isBonus ? ":bonus" : ""}`,
