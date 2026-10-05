@@ -9,8 +9,13 @@ const router: IRouter = Router();
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-function getTodayUTC(): string {
-  return new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+function getTodayMadrid(): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Madrid",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
 }
 
 function getDailyChallenge(dateStr: string, language: string) {
@@ -48,7 +53,7 @@ function getDailyChallenge(dateStr: string, language: string) {
 router.get("/", (req, res) => {
   const requestedLanguage = typeof req.query.language === "string" ? req.query.language.trim().toLowerCase() : "es";
   const language = ["es", "en", "pt", "fr"].includes(requestedLanguage) ? requestedLanguage : "es";
-  const today = getTodayUTC();
+  const today = getTodayMadrid();
   const challenge = getDailyChallenge(today, language);
   res.json(challenge);
 });
@@ -66,7 +71,7 @@ router.get("/status", async (req, res) => {
   }
   const requestedLanguage = typeof req.query.language === "string" ? req.query.language.trim().toLowerCase() : "es";
   const language = ["es", "en", "pt", "fr"].includes(requestedLanguage) ? requestedLanguage : "es";
-  const today = getTodayUTC();
+  const today = getTodayMadrid();
   const rows = await db
     .select({ score: dailyResultsTable.score })
     .from(dailyResultsTable)
@@ -117,7 +122,7 @@ router.post("/submit", async (req, res) => {
     res.status(400).json({ error: "Unsupported daily challenge language" });
     return;
   }
-  const today = getTodayUTC();
+  const today = getTodayMadrid();
   const expectedChallenge = getDailyChallenge(today, normalizedLanguage);
   if (typeof letter !== "string" || letter.trim().toUpperCase() !== expectedChallenge.letter) {
     res.status(422).json({ error: "Invalid daily challenge letter" });
@@ -206,7 +211,7 @@ router.post("/submit", async (req, res) => {
 router.get("/rankings", async (req, res) => {
   const requestedLanguage = typeof req.query.language === "string" ? req.query.language.trim().toLowerCase() : "es";
   const language = ["es", "en", "pt", "fr"].includes(requestedLanguage) ? requestedLanguage : "es";
-  const today = getTodayUTC();
+  const today = getTodayMadrid();
 
   const results = await db
     .select({
