@@ -125,6 +125,15 @@ export interface ShopItem extends CosmeticMeta {
   price: number;
 }
 
+export const COMPENSATION_FRAME = {
+  id: "frame_gracias_por_seguir",
+  kind: "frame" as const,
+  name: "Gracias por Seguir",
+  description: "Marco exclusivo de compensación por la interrupción del servicio.",
+  price: 0,
+  rarity: "legendary" as const,
+};
+
 export const SHOP_ITEMS: ShopItem[] = [
   // ── Avatares ────────────────────────────────────────────────────────────
   // Solo necesitan un emoji (glyph); el cliente lo pinta. Precios variados
