@@ -1,3 +1,4 @@
+import { trackClientError } from "@/lib/analyticsClient";
 import { Component, type ErrorInfo, type ReactNode } from "react";
 
 interface Props {
@@ -24,6 +25,7 @@ export class ErrorBoundary extends Component<Props, State> {
   componentDidCatch(error: Error, info: ErrorInfo) {
     // Log to console for dev visibility; in prod this also surfaces in Sentry/Adsterra logs.
     console.error("[ErrorBoundary] Uncaught render error:", error, info.componentStack);
+    trackClientError(error, info.componentStack);
   }
 
   private handleReload = () => {
