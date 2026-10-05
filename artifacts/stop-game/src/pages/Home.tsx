@@ -70,7 +70,7 @@ export default function Home() {
     const controller = new AbortController();
     const today = new Date().toISOString().slice(0, 10);
     const localPlayed = (() => {
-      try { return !!localStorage.getItem(`stop_daily_${today}`); } catch { return false; }
+      try { return !!localStorage.getItem(`stop_daily_${today}_${lang}_${player?.id || "guest"}`); } catch { return false; }
     })();
 
     if (!player || player.loginMethod === "guest") {
