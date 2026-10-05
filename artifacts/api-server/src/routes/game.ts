@@ -1484,12 +1484,12 @@ router.post("/validate", async (req, res) => {
 
   const { letter, language, playerResponses: rawPlayerResponses } = body.data;
 
-  // Every built-in and custom solo pack is server/UI-defined as exactly
-  // seven categories. The voucher ceiling is derived from the number of
-  // validated categories, so accepting an attacker-supplied larger list would
-  // let the client mint a voucher for more score than a real round can contain.
-  const CATEGORIES_PER_ROUND = 7;
-  if (rawPlayerResponses.length !== CATEGORIES_PER_ROUND) {
+  // Normal/custom solo rounds use 7 categories; the daily challenge is
+  // intentionally a 5-category board. The voucher ceiling is derived from
+  // the actual validated category count, so accepting the daily shape does
+  // not grant score for categories that were not played.
+  const VALID_CATEGORY_COUNTS = new Set([5, 7]);
+  if (!VALID_CATEGORY_COUNTS.has(rawPlayerResponses.length)) {
     res.status(400).json({ error: "Invalid category count" });
     return;
   }
