@@ -6,9 +6,20 @@ import { writeLimiter } from "../middlewares/rateLimit";
 
 const router: IRouter = Router();
 
-function todayMadrid(): string {
+function playerTimeZone(req: { headers: Record<string, unknown> }): string {
+  const raw = req.headers["x-stop-timezone"];
+  const timeZone = typeof raw === "string" && raw.trim() ? raw.trim() : "UTC";
+  try {
+    new Intl.DateTimeFormat("en-CA", { timeZone }).format(new Date());
+    return timeZone;
+  } catch {
+    return "UTC";
+  }
+}
+
+function todayForPlayer(req: { headers: Record<string, unknown> }): string {
   return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Europe/Madrid",
+    timeZone: playerTimeZone(req),
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
