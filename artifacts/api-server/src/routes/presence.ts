@@ -223,28 +223,32 @@ router.post("/ping", presenceLimiter, async (req, res) => {
   }
 
   await presenceTableReady;
-  const existingRows = await db.execute(sql`
-    SELECT last_seen
-    FROM player_presence
-    WHERE player_id = ${playerId}
-    LIMIT 1
-  `);
-  const wasOffline = (existingRows.rows as any[]).length === 0 ||
-    new Date((existingRows.rows as any[])[0].last_seen).getTime() < Date.now() - 3 * 60 * 1000;
   const lastSeen = new Date();
-  await db.execute(sql`
-    INSERT INTO player_presence
-      (player_id, name, picture, avatar_color, provider, room_code, last_seen)
-    VALUES
-      (${playerId}, ${profile.name}, ${profile.picture}, ${profile.avatarColor}, ${profile.provider}, ${canonicalRoomCode}, ${lastSeen})
-    ON CONFLICT (player_id) DO UPDATE SET
-      name = EXCLUDED.name,
-      picture = EXCLUDED.picture,
-      avatar_color = EXCLUDED.avatar_color,
-      provider = EXCLUDED.provider,
-      room_code = EXCLUDED.room_code,
-      last_seen = EXCLUDED.last_seen
-  `);
+  const wasOffline = await db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${playerId}, 0))`);
+    const existingRows = await tx.execute(sql`
+      SELECT last_seen
+      FROM player_presence
+      WHERE player_id = ${playerId}
+      LIMIT 1
+    `);
+    const offline = (existingRows.rows as any[]).length === 0 ||
+      new Date((existingRows.rows as any[])[0].last_seen).getTime() < Date.now() - 3 * 60 * 1000;
+    await tx.execute(sql`
+      INSERT INTO player_presence
+        (player_id, name, picture, avatar_color, provider, room_code, last_seen)
+      VALUES
+        (${playerId}, ${profile.name}, ${profile.picture}, ${profile.avatarColor}, ${profile.provider}, ${canonicalRoomCode}, ${lastSeen})
+      ON CONFLICT (player_id) DO UPDATE SET
+        name = EXCLUDED.name,
+        picture = EXCLUDED.picture,
+        avatar_color = EXCLUDED.avatar_color,
+        provider = EXCLUDED.provider,
+        room_code = EXCLUDED.room_code,
+        last_seen = EXCLUDED.last_seen
+    `);
+    return offline;
+  });
   presenceMap.set(playerId, {
     ...profile,
     roomCode: canonicalRoomCode,
