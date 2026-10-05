@@ -610,7 +610,12 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
     return String(a.playerId || "").localeCompare(String(b.playerId || ""));
   });
   const winner = sorted[0];
-  const today = new Date().toISOString().split("T")[0];
+  const today = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Madrid",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
   const normalizedRoomCode = String(roomCode || "").toUpperCase();
   const [settlementRoom] = await db.select({ stopperJson: roomsTable.stopperJson })
     .from(roomsTable)
