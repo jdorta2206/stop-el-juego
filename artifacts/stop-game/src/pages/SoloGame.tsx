@@ -1275,7 +1275,7 @@ export default function SoloGame() {
     }
     fetch(`${getApiUrl()}/api/daily/submit`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", ...authHeaders() },
+      headers: { "Content-Type": "application/json", ...authHeaders(), "X-Stop-Timezone": (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"; } catch { return "UTC"; } })() },
       credentials: "include",
       body: JSON.stringify({
         playerId: player.id,
