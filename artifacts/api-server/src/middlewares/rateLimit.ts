@@ -2,6 +2,7 @@ import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import type { Request } from "express";
 import { db, indexesReady } from "@workspace/db";
 import { sql } from "drizzle-orm";
+import { readPlayerId } from "../lib/playerAuth";
 
 interface RateLimitStore {
   increment: (key: string) => Promise<{ totalHits: number; resetTime: Date }>;
@@ -69,17 +70,23 @@ class PgRateLimitStore implements RateLimitStore {
 }
 
 function playerKey(req: Request): string {
-  const pid =
-    (req.body && (req.body as any).playerId) ||
-    (req.query && (req.query as any).playerId) ||
-    "";
-  return `${pid || "anon"}|${ipKeyGenerator(req.ip ?? "")}`;
+  // Never trust a client-supplied playerId as a rate-limit identity: guests can
+  // rotate arbitrary IDs and otherwise obtain a fresh bucket on every request.
+  // Logged-in callers keep per-account isolation only when the server can verify
+  // their signed token; unauthenticated/guest traffic is bounded by source IP.
+  const verifiedPlayerId = readPlayerId(req);
+  return verifiedPlayerId
+    ? `player:${verifiedPlayerId}`
+    : `ip:${ipKeyGenerator(req.ip ?? "")}`;
 }
 
 const baseOpts = {
   standardHeaders: "draft-7" as const,
   legacyHeaders: false,
-  // The limiter itself uses the api_rate_limits table, which is created during\n  // startup. Do not query that table before schema bootstrap has completed;\n  // the global API readiness gate will return 503 for non-health routes.\n  skip: (req: Request) => req.path === "/healthz" || !indexesReady(),
+  // The limiter itself uses the api_rate_limits table, which is created during
+  // startup. Do not query that table before schema bootstrap has completed;
+  // the global API readiness gate will return 503 for non-health routes.
+  skip: (req: Request) => req.path === "/healthz" || !indexesReady(),
   message: { error: "Too many requests, slow down a bit ⏳" },
 };
 
