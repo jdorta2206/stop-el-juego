@@ -102,7 +102,21 @@ function mixCrazyCategory(cats: string[], t: any): string[] {
 }
 
 function getTodayStr(): string {
-  return new Date().toISOString().slice(0, 10);
+  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  try {
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date());
+  } catch {
+    return new Intl.DateTimeFormat("en-CA", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date());
+  }
 }
 
 export default function SoloGame() {
