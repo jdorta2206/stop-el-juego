@@ -68,7 +68,12 @@ export default function Home() {
 
   useEffect(() => {
     const controller = new AbortController();
-    const today = new Date().toISOString().slice(0, 10);
+    const today = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Europe/Madrid",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date());
     const localPlayed = (() => {
       try { return !!localStorage.getItem(`stop_daily_${today}_${lang}_${player?.id || "guest"}`); } catch { return false; }
     })();
