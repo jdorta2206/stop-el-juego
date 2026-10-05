@@ -78,7 +78,7 @@ router.get("/streak/calendar/:playerId", async (req, res) => {
   const player = rows[0];
   const storedDays = parseJson<string[]>(player.streakDaysJson, []);
   const days = [...new Set(storedDays)].sort().slice(-30);
-  const today = new Date().toISOString().slice(0, 10);
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Madrid", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 
   res.json({
     currentStreak: player.currentStreak ?? 0,
