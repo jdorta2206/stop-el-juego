@@ -7,6 +7,8 @@ import { pauseGameTimer, resumeGameTimer } from "@/lib/timerPauseGuard";
 import { trackAnalyticsEvent } from "@/lib/analyticsClient";
 
 const ADS_DISABLED = import.meta.env.VITE_ADS_DISABLED === "1";
+// Temporary production fallback while AdMob is blocked: the rewarded action is granted locally instead of showing a dead ad slot.
+const FREE_REWARDED_FALLBACK = import.meta.env.VITE_REWARDED_ADS_DISABLED === "1";
 const ADSTERRA_BANNER_KEY = ADS_DISABLED ? undefined : ((import.meta.env.VITE_ADSTERRA_BANNER_KEY as string | undefined) ?? "1212cb86d493b763d38d4523eec88cac");
 const ADSTERRA_BANNER_W = 320;
 const ADSTERRA_BANNER_H = 50;
@@ -115,6 +117,21 @@ export function RewardedAd({ onComplete, onSkip, playerId, rewardType = "points"
 
   const startWatching = async () => {
     setRewardedAdPlayerId(playerId);
+    if (FREE_REWARDED_FALLBACK) {
+      const placement = rewardType === "extraTime" ? "extra_time" : rewardType === "hint" ? "hint" : "double_points";
+      void trackAnalyticsEvent("rewarded_ad_requested", { metadata: { placement, source: "free_fallback" } });
+      if (!mountedRef.current) return;
+      pauseGameTimer();
+      window.dispatchEvent(new Event(GAME_TIMER_PAUSE_EVENT));
+      setPhase("done");
+      void trackAnalyticsEvent("rewarded_ad_completed", { metadata: { placement, source: "free_fallback" } });
+      void trackAnalyticsEvent("powerup_used", { metadata: { powerup: placement, source: "free_fallback" } });
+      timeoutRef.current = window.setTimeout(() => {
+        timeoutRef.current = null;
+        if (mountedRef.current) onCompleteRef.current(rewardAmount);
+      }, 300);
+      return;
+    }
     const placement = rewardType === "extraTime" ? "extra_time" : rewardType === "hint" ? "hint" : "double_points";
     void trackAnalyticsEvent("rewarded_ad_requested", { metadata: { placement } });
     pauseGameTimer();
@@ -176,5 +193,5 @@ export function RewardedAd({ onComplete, onSkip, playerId, rewardType = "points"
     }
   };
 
-  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"><div className="w-full max-w-sm rounded-3xl overflow-hidden bg-white shadow-2xl"><div className="p-6 text-center"><h3 className="text-xl font-black">{phase === "done" ? "¡Recompensa!" : phase === "error" ? "Anuncio no disponible" : "Mira el anuncio"}</h3>{phase === "pre" && <><div className="my-5 flex justify-center">{icons[rewardType]}</div><p className="text-gray-600 text-sm mb-5">{labels[rewardType]}</p><button onClick={startWatching} className="w-full py-3 rounded-xl font-bold bg-[#f9a825] text-[#0d1757]">Ver anuncio</button><button onClick={onSkip} className="w-full py-2 mt-2 text-gray-500">Ahora no</button></>}{phase === "loading" && <div className="py-10"><div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-4 border-gray-200 border-t-[#f9a825]"/><p className="text-sm text-gray-600">Cargando anuncio…</p></div>}{phase === "error" && <><div className="py-8 text-4xl">📺</div><p className="text-sm text-gray-600">No se ha podido mostrar un anuncio recompensado.</p>{errorDetail && <p className="mt-2 rounded-lg bg-gray-100 px-3 py-2 text-left text-[11px] leading-4 text-gray-600 break-words">Diagnóstico: {errorDetail}</p>}<button onClick={onSkip} className="w-full py-2 mt-4 text-gray-500">Continuar</button></>}{phase === "done" && <div className="py-8"><div className="text-5xl mb-3">🎉</div><p className="text-gray-700">{labels[rewardType]}</p></div>}</div></div></div>;
+  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"><div className="w-full max-w-sm rounded-3xl overflow-hidden bg-white shadow-2xl"><div className="p-6 text-center"><h3 className="text-xl font-black">{phase === "done" ? "¡Recompensa!" : phase === "error" ? "Anuncio no disponible" : "Mira el anuncio"}</h3>{phase === "pre" && <><div className="my-5 flex justify-center">{icons[rewardType]}</div><p className="text-gray-600 text-sm mb-5">{FREE_REWARDED_FALLBACK ? "Recompensa gratuita mientras AdMob no está disponible." : labels[rewardType]}</p><button onClick={startWatching} className="w-full py-3 rounded-xl font-bold bg-[#f9a825] text-[#0d1757]">{FREE_REWARDED_FALLBACK ? "Obtener recompensa gratis" : "Ver anuncio"}</button><button onClick={onSkip} className="w-full py-2 mt-2 text-gray-500">Ahora no</button></>}{phase === "loading" && <div className="py-10"><div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-4 border-gray-200 border-t-[#f9a825]"/><p className="text-sm text-gray-600">Cargando anuncio…</p></div>}{phase === "error" && <><div className="py-8 text-4xl">📺</div><p className="text-sm text-gray-600">No se ha podido mostrar un anuncio recompensado.</p>{errorDetail && <p className="mt-2 rounded-lg bg-gray-100 px-3 py-2 text-left text-[11px] leading-4 text-gray-600 break-words">Diagnóstico: {errorDetail}</p>}<button onClick={onSkip} className="w-full py-2 mt-4 text-gray-500">Continuar</button></>}{phase === "done" && <div className="py-8"><div className="text-5xl mb-3">🎉</div><p className="text-gray-700">{labels[rewardType]}</p></div>}</div></div></div>;
 }
