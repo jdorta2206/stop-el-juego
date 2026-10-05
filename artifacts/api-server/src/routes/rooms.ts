@@ -10,7 +10,7 @@ import { recordHalloweenEvent, recordHalloweenScareEvents, getHalloweenEventYear
 import { isHappyHourActiveForTzOffset, HAPPY_HOUR_MULTIPLIER } from "../lib/happyHour";
 import { isWordValidAsync, HALLOWEEN_CATEGORY_ALIASES } from "./game";
 import { writeLimiter, roomJoinLimiter, halloweenScareLimiter } from "../middlewares/rateLimit";
-import { verifyClaimedIdentity, verifyPlayerToken, readPlayerId, isLoggedInId, isAuthConfigured } from "../lib/playerAuth";
+import { verifyClaimedIdentity, readPlayerId, isLoggedInId, isAuthConfigured } from "../lib/playerAuth";
 import {
   pickBotIdentity,
   makeBotPlayer,
@@ -2438,12 +2438,12 @@ router.get("/:roomCode/events", async (req, res) => {
     res.status(403).json({ error: "Not a member of this room" }); return;
   }
   if (playerId && isLoggedInId(playerId) && isAuthConfigured()) {
-    // EventSource cannot send custom headers, so accept the signed token via the
-    // token query param (falls back to the auth cookie). This applies to both
-    // private and public rooms because public rooms still contain richer state
-    // for authenticated members.
-    const queryToken = typeof req.query["token"] === "string" ? (req.query["token"] as string) : undefined;
-    const verified = verifyPlayerToken(queryToken) ?? readPlayerId(req);
+    // EventSource cannot send custom headers, so authenticate with the signed
+    // httpOnly session cookie via credentials. This applies
+    // to both private and public rooms because public rooms still contain richer
+    // state for authenticated members. Never accept the long-lived session token
+    // through the URL, where it can leak into logs, history, monitoring, or referrers.
+    const verified = readPlayerId(req);
     if (verified !== playerId) {
       res.status(403).json({ error: "Identity verification failed" }); return;
     }
