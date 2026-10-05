@@ -45,6 +45,26 @@ export default function Home() {
   // Whether today's daily challenge was already played (same localStorage key
   // the DailyChallenge page uses), so the banner reflects the player's state.
   const [dailyDone, setDailyDone] = useState(false);
+  const [showDowntimeCompensation, setShowDowntimeCompensation] = useState(false);
+
+  // One-time server-authoritative compensation for the recent service interruption.
+  // The endpoint is idempotent, so revisiting Home cannot grant it twice.
+  useEffect(() => {
+    if (!player || player.loginMethod === "guest") return;
+    const controller = new AbortController();
+    fetch(`${getApiUrl()}/api/rewards/downtime-compensation`, {
+      method: "POST",
+      headers: { ...authHeaders() },
+      credentials: "include",
+      signal: controller.signal,
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (!controller.signal.aborted && data?.granted === true) setShowDowntimeCompensation(true);
+      })
+      .catch(() => { /* compensation is non-blocking */ });
+    return () => controller.abort();
+  }, [player?.id, player?.loginMethod]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -132,7 +152,7 @@ export default function Home() {
     // Personalised invite banner — persist through OAuth redirect via sessionStorage
     const from = params.get("from");
     if (from) {
-      const name = decodeURIComponent(from);
+      const name = from;
       sessionStorage.setItem("stop_invited_by", name);
       window.history.replaceState({}, "", window.location.pathname);
       setInvitedBy(name);
@@ -193,6 +213,33 @@ export default function Home() {
               className="mt-5 w-full rounded-2xl bg-red-700 px-5 py-3 text-sm font-black text-white shadow-lg active:scale-95"
             >
               ¡ENTRAR AL EVENTO! 🎃
+            </button>
+          </motion.div>
+        </div>
+      )}
+
+      {showDowntimeCompensation && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/75 px-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="downtime-compensation-title">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.88, y: 18 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            className="w-full max-w-sm rounded-3xl p-6 text-center shadow-2xl"
+            style={{ background: "linear-gradient(145deg, #17102a, #2b163f 55%, #151021)", border: "2px solid rgba(249,168,37,.55)" }}
+          >
+            <div className="text-5xl mb-3">🎁</div>
+            <p className="text-[#f9a825] text-xs font-black uppercase tracking-[0.2em]">Gracias por seguir ahí</p>
+            <h2 id="downtime-compensation-title" className="text-white text-2xl font-black mt-1">Un regalo para ti</h2>
+            <p className="text-white/75 text-sm mt-3">Sentimos la interrupción reciente. Hemos añadido a tu cuenta:</p>
+            <div className="mt-4 space-y-2">
+              <div className="rounded-2xl bg-black/25 border border-white/10 px-4 py-3 text-white font-black">🪙 500 monedas</div>
+              <div className="rounded-2xl bg-black/25 border border-white/10 px-4 py-3 text-white font-black">🎁 Marco exclusivo «Gracias por Seguir»</div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowDowntimeCompensation(false)}
+              className="mt-5 w-full rounded-2xl bg-[#f9a825] px-5 py-3 text-sm font-black text-[#24120a] shadow-lg active:scale-95"
+            >
+              ¡Gracias! ❤️
             </button>
           </motion.div>
         </div>

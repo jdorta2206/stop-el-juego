@@ -98,7 +98,7 @@ export default function Overlay() {
         {/* Scoreboard */}
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           {players.slice(0, 8).map((p: any, i: number) => (
-            <motion.div key={p.playerId} layout
+            <motion.div key={p.playerName} layout
               initial={{ opacity: 0 }} animate={{ opacity: 1 }}
               style={{
                 display: "flex", alignItems: "center", gap: 10,

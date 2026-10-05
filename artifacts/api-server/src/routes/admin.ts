@@ -104,7 +104,7 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
       await db.execute(sql`
         SELECT COALESCE(games,0) AS games, COALESCE(conversions,0) AS conversions
         FROM guest_stats
-        WHERE day = to_char(now() AT TIME ZONE 'Europe/Madrid', 'YYYY-MM-DD')
+        WHERE day = to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD')
       `)
     ).rows[0] as Record<string, unknown> | undefined;
 

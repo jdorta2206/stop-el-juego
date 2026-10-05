@@ -202,10 +202,10 @@ router.get("/admob-result/:requestId", async (req, res) => {
 
     const ageMs = Date.now() - new Date(row.created_at).getTime();
 
-    // Keep pending requests alive for the same window the web client polls.
-    // AdMob SSV can legitimately arrive well after the ad UI has been dismissed;
-    // expiring at 45s could consume a still-valid reward before its signed SSV.
-    if (ageMs >= 120_000) {
+    // Keep pending requests alive long enough for delayed AdMob SSV callbacks.
+    // Google documents that SSV callbacks may be delayed, so consuming at the
+    // same 120s client polling deadline could discard a legitimate reward.
+    if (ageMs >= 300_000) {
       const updated = await db.execute(sql`
         UPDATE admob_reward_requests
         SET consumed_at = NOW()

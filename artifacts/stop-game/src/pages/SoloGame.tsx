@@ -970,11 +970,16 @@ export default function SoloGame() {
         }
       }
 
-      const won = (ps + stolenScore + sabotageStolen) > as_;
-
       // 🕵️ Espía costs -10 puntos per use, ONLY for uses in THIS round
       // (spyUsesThisRound resets in startRound; spyUsesLeft is the per-game pool).
       const spyCost = spyUsesThisRound * 10;
+
+      // Determine the winner from the final round delta, including every modifier.
+      // Previously bluff bonuses and spy costs were applied after this decision,
+      // so UI state (winner/combo/achievements/commentary) could disagree with
+      // the final score sent to the server.
+      const won = (ps + stolenScore + sabotageStolen + bluffBonusScore - spyCost) > as_;
+
       const roundDelta = ps + stolenScore + sabotageStolen + bluffBonusScore - spyCost;
       let finalPlayerScore = totalScore + roundDelta;
 

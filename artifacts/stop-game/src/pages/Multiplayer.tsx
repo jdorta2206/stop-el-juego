@@ -40,6 +40,38 @@ export default function Multiplayer() {
   const [publicRooms, setPublicRooms] = useState<PublicRoom[]>([]);
   const [loadingPublic, setLoadingPublic] = useState(false);
   const [resumeCode, setResumeCode] = useState<string | null>(null);
+
+  // PWA share_target delivers the shared link as ?url=<encoded-url>.
+  // Accept same-origin room links and personal invite links; never navigate
+  // to an arbitrary external URL supplied through the share target.
+  useEffect(() => {
+    const shared = new URLSearchParams(window.location.search).get("url");
+    if (!shared) return;
+    try {
+      const target = new URL(shared, window.location.origin);
+      if (target.origin !== window.location.origin) return;
+
+      const sharedRoom =
+        target.searchParams.get("room") ??
+        target.pathname.match(/^\/room\/([^/]+)$/i)?.[1];
+      if (sharedRoom) {
+        setRoomCode(sharedRoom.toUpperCase().slice(0, 6));
+        return;
+      }
+
+      // Personal InviteFriends links land on "/?ref=...&from=...".
+      // The share target action is /multiplayer, so restore that URL so the
+      // existing Home invite-banner flow can process it normally.
+      if (
+        (target.pathname === "/" || target.pathname === "") &&
+        (target.searchParams.has("ref") || target.searchParams.has("from"))
+      ) {
+        window.location.replace(target.pathname + target.search);
+      }
+    } catch {
+      // Ignore malformed share-target payloads and keep the normal join UI.
+    }
+  }, []);
   const [resuming, setResuming] = useState(false);
   const publicRoomsAbortRef = useRef<AbortController | null>(null);
 

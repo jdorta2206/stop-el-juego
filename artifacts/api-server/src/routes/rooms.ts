@@ -2106,7 +2106,7 @@ router.post("/:roomCode/leave", async (req, res) => {
       };
       if (newHostId) {
         setPayload.hostId = newHostId;
-        setPayload.hostName = remaining[0].playerName ?? "";
+        setPayload.hostName = remaining.find((p: any) => p.playerId === newHostId)?.playerName ?? "";
       }
 
       const updated = await tx
@@ -2148,7 +2148,7 @@ router.post("/:roomCode/leave", async (req, res) => {
     };
     if (newHostId) {
       setPayload.hostId = newHostId;
-      setPayload.hostName = remaining[0].playerName ?? "";
+      setPayload.hostName = remaining.find((p: any) => p.playerId === newHostId)?.playerName ?? "";
     }
 
     const updated = await tx

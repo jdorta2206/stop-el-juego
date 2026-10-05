@@ -149,8 +149,7 @@ function isWordValid(
   return categoryWords.some(w => {
     const nw = normalizeWord(w);
     return nw === normalizedWord ||
-      normalizedWord.startsWith(nw) ||
-      nw.startsWith(normalizedWord);
+      normalizedWord.startsWith(nw);
   });
 }
 

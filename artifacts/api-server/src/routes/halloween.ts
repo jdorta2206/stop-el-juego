@@ -85,7 +85,7 @@ router.use((_req, res, next) => {
 
 router.get("/progress", async (req: AuthedRequest, res) => {
   const playerId = String(req.headers["x-halloween-player-id"] ?? "").trim();
-  if (!playerId || !verifyClaimedIdentity(req, playerId)) {
+  if (!playerId || !(await verifyClaimedIdentity(req, playerId))) {
     res.status(401).json({ error: "Authentication required" });
     return;
   }

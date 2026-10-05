@@ -27,7 +27,13 @@ export function ChallengeNotification({ challenge, onDismiss }: ChallengeNotific
       setCountdown((v) => {
         if (v <= 1) {
           clearInterval(timer);
-          void respondToChallenge(challenge.challengeId, false).finally(onDismiss);
+          // Do not race an explicit accept/decline already in flight.
+          // A click made before the visual deadline must be allowed to finish.
+          if (!respondingRef.current) {
+            respondingRef.current = true;
+            setResponding(true);
+            void respondToChallenge(challenge.challengeId, false).finally(onDismiss);
+          }
           return 0;
         }
         return v - 1;

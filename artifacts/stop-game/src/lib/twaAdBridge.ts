@@ -3,7 +3,7 @@ const RESULT_BASE = "/api/rewards/admob-result";
 // Keep the web-side request alive long enough to reconcile a delayed callback.
 // The native Activity can keep the ad visible well beyond the initial load.
 // Do not resume/close the game while a real rewarded ad is still in progress.
-const RESULT_TIMEOUT_MS = 120_000;
+const RESULT_TIMEOUT_MS = 300_000;
 
 type RewardedPlacement = "extra_time" | "hint" | "double_points" | "skip_round" | "extra_pack";
 type RewardResult = { rewarded: boolean; source: "admob" | "client" | "skipped" | "error"; errorCode?: number; errorDomain?: string; errorMessage?: string };

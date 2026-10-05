@@ -138,10 +138,14 @@ export default function Tournament() {
     tournamentActionInFlightRef.current = true;
     setLoading(true); setError("");
     try {
-      const data: Tournament = await apiFetch("/", {
+      const data: Tournament & { error?: string } = await apiFetch("/", {
         method: "POST",
         body: JSON.stringify({ hostId: player.id, hostName: player.name, name: tName.trim(), size: tSize, isPublic: tIsPublic }),
       });
+      if (data.error) {
+        setError(data.error);
+        return;
+      }
       setTournament(data);
       setView("lobby");
     } catch { setError("Error al crear torneo"); }

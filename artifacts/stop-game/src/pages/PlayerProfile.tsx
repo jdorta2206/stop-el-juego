@@ -136,6 +136,7 @@ const FRAME_COLORS_BY_ID: Record<string, string> = {
   frame_prestige_silver:   "#cbd5e1",
   frame_prestige_gold:     "#fbbf24",
   frame_prestige_diamond:  "#67e8f9",
+  frame_gracias_por_seguir: "#f9a825",
 };
 
 const TITLE_META_BY_ID: Record<string, { label: string; icon: string; color: string }> = {

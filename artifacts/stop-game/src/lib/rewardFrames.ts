@@ -12,6 +12,7 @@ export const REWARD_FRAME_META: Record<string, { label: string; glyph: string }>
   frame_prestige_silver:     { label: "Marco Leyenda Plata",    glyph: "🥈" },
   frame_prestige_gold:       { label: "Marco Leyenda Oro",      glyph: "🥇" },
   frame_prestige_diamond:    { label: "Marco Leyenda Diamante", glyph: "💠" },
+  frame_gracias_por_seguir: { label: "Gracias por Seguir", glyph: "🎁" },
 };
 
 /** Display name for a reward frame id; falls back to a generic label. */

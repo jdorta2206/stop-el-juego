@@ -30,6 +30,9 @@ const AVATAR_GLYPHS = ["🎯", "🔥", "⚡", "🌟", "👑", "💎"];
  * AND shop IDs. Returns `null` for unknown IDs so callers can fail closed.
  */
 export function resolveCosmetic(id: string): CosmeticMeta | null {
+  if (id === "frame_gracias_por_seguir") {
+    return { id, kind: "frame", label: "Gracias por Seguir", glyph: "🎁", color: "#f9a825" };
+  }
   // Season Pass — free track frames at tier 5,10,15,20,25,30
   let m = id.match(/^frame_free_(\d+)$/);
   if (m) {
@@ -102,6 +105,7 @@ export const REWARD_FRAMES: Record<string, { label: string; glyph: string; color
   frame_prestige_silver:   { label: "Marco Leyenda Plata",    glyph: "🥈", color: "#cbd5e1" },
   frame_prestige_gold:     { label: "Marco Leyenda Oro",      glyph: "🥇", color: "#fbbf24" },
   frame_prestige_diamond:  { label: "Marco Leyenda Diamante", glyph: "💠", color: "#67e8f9" },
+  frame_gracias_por_seguir: { label: "Gracias por Seguir", glyph: "🎁", color: "#f9a825" },
 };
 
 // ── Champion frames (top 3 of a season) ─────────────────────────────────────
