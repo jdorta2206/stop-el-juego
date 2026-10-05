@@ -487,6 +487,7 @@ export const getStreakCalendar = async (
     {
       ...options,
       method: "GET",
+      headers: { "X-Stop-Timezone": browserTimeZone(), ...options?.headers },
     },
   );
 };
