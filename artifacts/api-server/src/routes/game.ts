@@ -1455,8 +1455,7 @@ function isWordValid(word: string, letter: string, category: string, language = 
   return categoryWords.some(w => {
     const nw = normalizeWord(w);
     return nw === normalizedWord ||
-      normalizedWord.startsWith(nw) ||   // e.g. "rosado" starts with "rosa" ✓
-      nw.startsWith(normalizedWord);     // e.g. "ro" prefix of "rojo" ✓
+      normalizedWord.startsWith(nw);     // e.g. "rosado" starts with "rosa" ✓
   });
 }
 
