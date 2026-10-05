@@ -105,10 +105,25 @@ async function releasePlayerNotification(today: string, key: string, playerId: s
   await releaseDailyLock(today, key + "_" + playerId);
 }
 
+function madridDateString(date: Date): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Madrid",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+
+function madridYesterdayString(date: Date = new Date()): string {
+  const today = madridDateString(date);
+  const [year, month, day] = today.split("-").map(Number);
+  return madridDateString(new Date(Date.UTC(year, month - 1, day - 1, 12)));
+}
+
 async function sendStreakRescueNotifications() {
   try {
-    const today = new Date().toISOString().slice(0, 10);
-    const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+    const today = madridDateString(new Date());
+    const yesterday = madridYesterdayString();
 
     // Players with a worth-saving streak who haven't played today
     const rows = await db.execute(sql`
