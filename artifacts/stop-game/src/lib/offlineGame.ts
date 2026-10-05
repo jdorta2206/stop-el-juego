@@ -247,9 +247,8 @@ export type OutboxScorePayload = {
   mode: string;
   won: boolean;
   bonus?: boolean;
-  // 🔒 Anti-cheat vouchers gathered during the game. Usually empty for queued
-  // (offline) submissions since offline rounds are validated locally and get
-  // no token — those fall back to the server's absolute ceiling.
+  // 🔒 Only voucher-backed results may enter the authoritative ranking.
+  // Fully offline rounds have no server proof and therefore remain local-only.
   scoreTokens?: string[];
 };
 
@@ -328,6 +327,13 @@ export async function flushScoreOutbox(
           : 0;
         if (nextIndex < 0) break;
         const next = cur[nextIndex];
+        // Entries created by the old offline flow may contain no server voucher.
+        // They are no longer eligible for authoritative ranking; discard them
+        // locally instead of retrying an unprovable score forever.
+        if (!Array.isArray(next.payload?.scoreTokens) || next.payload.scoreTokens.length === 0) {
+          writeOutbox(cur.filter((entry) => entry.id !== next.id));
+          continue;
+        }
         try {
           // Keep the entry durable until the server acknowledges the POST.
           // Removing it before the await could permanently lose the score if
