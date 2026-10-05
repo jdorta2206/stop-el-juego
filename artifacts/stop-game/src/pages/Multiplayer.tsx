@@ -53,7 +53,7 @@ export default function Multiplayer() {
 
       const sharedRoom =
         target.searchParams.get("room") ??
-        target.pathname.match(/^\\/room\\/([^/]+)$/i)?.[1];
+        target.pathname.match(/^\/room\/([^/]+)$/i)?.[1];
       if (sharedRoom) {
         setRoomCode(sharedRoom.toUpperCase().slice(0, 6));
         return;
