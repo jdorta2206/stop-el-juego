@@ -807,6 +807,7 @@ async function recoverMultiplayerAuxiliaryEffects(room: any, players: any[]): Pr
     streakDaysJson: unknown,
     finishedAt: unknown,
     fallback: number,
+    timeZone: string,
   ): number {
     if (typeof finishedAt !== "number" || !Number.isFinite(finishedAt)) return fallback;
     let parsed: unknown;
@@ -816,7 +817,7 @@ async function recoverMultiplayerAuxiliaryEffects(room: any, players: any[]): Pr
       typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d)
     ));
     let target = new Intl.DateTimeFormat("en-CA", {
-      timeZone: "Europe/Madrid",
+      timeZone,
       year: "numeric",
       month: "2-digit",
       day: "2-digit",
@@ -854,10 +855,13 @@ async function recoverMultiplayerAuxiliaryEffects(room: any, players: any[]): Pr
       currentStreak: playerScoresTable.currentStreak,
       streakDaysJson: playerScoresTable.streakDaysJson,
     }).from(playerScoresTable).where(eq(playerScoresTable.playerId, p.playerId)).limit(1);
+    const storedTimezone = await lookupPlayerTimezone(p.playerId);
+    const playerTimeZone = p.timeZone ? normalizePlayerTimeZone(p.timeZone) : (storedTimezone.timeZone ?? "UTC");
     const streak = streakForSettlementDate(
       scoreRow[0]?.streakDaysJson,
       p.finishedAt,
       scoreRow[0]?.currentStreak ?? 0,
+      playerTimeZone,
     );
     if (!aux.has("season") && (existingSeasonEvent.rows ?? []).length === 0) {
       const seasonOk = await recordAuthoritativeSeasonEvents(p.playerId, [
