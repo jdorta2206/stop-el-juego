@@ -793,10 +793,12 @@ router.post("/scores", scoreLimiter, requirePlayerIdentity, async (req: AuthedRe
         .where(eq(playerScoresTable.playerId, playerId))
         .for("update");
       const lockedExisting = lockedRows[0];
-      const lockedToday = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Madrid", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+      const playerTimeZone = normalizePlayerTimeZone(req.headers["x-stop-timezone"]);
+      const lockedToday = new Intl.DateTimeFormat("en-CA", { timeZone: playerTimeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
       const { newStreak: lockedStreak, updatedToday: lockedUpdatedToday } = calculateStreak(
         lockedExisting?.lastPlayedDate ?? null,
         lockedExisting?.currentStreak ?? 0,
+        playerTimeZone,
       );
       const lockedLongest = Math.max(lockedExisting?.longestStreak ?? 0, lockedStreak);
       const lockedStreakDaysJson = lockedUpdatedToday
