@@ -280,7 +280,7 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
         message = String(meta.message ?? meta.path ?? '—').slice(0, 180);
       } catch {}
       const time = row.created_at ? new Date(String(row.created_at)).toLocaleString('es-ES', { timeZone: 'Europe/Madrid' }) : '—';
-      return \`<tr><td>\${String(row.event_name) === 'client_error' ? '🐛 Juego' : '⚠️ API'}</td><td>\${esc(row.platform)}</td><td>\${esc(row.app_version || '—')}</td><td>\${esc(message)}</td><td>\${time}</td></tr>\`;
+      return `<tr><td>${String(row.event_name) === "client_error" ? "🐛 Juego" : "⚠️ API"}</td><td>${esc(row.platform)}</td><td>${esc(row.app_version || "—")}</td><td>${esc(message)}</td><td>${time}</td></tr>`;
     }).join('');
 
     const modeUsage = (
