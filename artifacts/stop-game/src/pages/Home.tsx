@@ -54,7 +54,7 @@ export default function Home() {
     const controller = new AbortController();
     fetch(`${getApiUrl()}/api/rewards/downtime-compensation`, {
       method: "POST",
-      headers: { ...authHeaders(), "X-Stop-Timezone": timeZone },
+      headers: { ...authHeaders() },
       credentials: "include",
       signal: controller.signal,
     })
