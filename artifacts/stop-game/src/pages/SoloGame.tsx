@@ -1268,7 +1268,7 @@ export default function SoloGame() {
     // record. Logged-in players are marked locally only after the server
     // confirms the score was accepted.
     if (!player || player.loginMethod === "guest") {
-      localStorage.setItem(`stop_daily_${getTodayStr()}`, String(finalScore));
+      localStorage.setItem(`stop_daily_${getTodayStr()}_${getCurrentLang()}`, String(finalScore));
       return;
     }
     fetch(`${getApiUrl()}/api/daily/submit`, {
