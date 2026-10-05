@@ -56,13 +56,14 @@ function getTimeUntilMidnight(): string {
     hourCycle: "h23",
   }).formatToParts(probe);
   const part = (type: string) => Number(parts.find(p => p.type === type)?.value ?? 0);
-  const madridMidnight = Date.UTC(
-    part("year"), part("month") - 1, part("day"), 0, 0, 0,
+  const localProbeMs = Date.UTC(
+    part("year"), part("month") - 1, part("day"),
+    part("hour"), part("minute"), part("second"),
   );
-  const offsetMs = probe.getTime() - Date.UTC(
-    part("year"), part("month") - 1, part("day"), 12, 0, 0,
+  const offsetMs = localProbeMs - probe.getTime();
+  const midnight = new Date(
+    Date.UTC(year, month - 1, day + 1, 0, 0, 0) - offsetMs,
   );
-  const midnight = new Date(madridMidnight + offsetMs);
   const diff = midnight.getTime() - now.getTime();
   const h = Math.floor(diff / 3600000);
   const m = Math.floor((diff % 3600000) / 60000);
