@@ -310,6 +310,17 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
       { label: "Partida", value: num(funnel?.game_players) },
       { label: "Finalizada", value: num(funnel?.completed_players) },
     ];
+    const adUnique = (await db.execute(sql`
+      SELECT
+        COUNT(DISTINCT CASE WHEN event_name = 'ad_impression' THEN COALESCE(player_id, session_id) END)::int AS impressions,
+        COUNT(DISTINCT CASE WHEN event_name = 'rewarded_ad_requested' THEN COALESCE(player_id, session_id) END)::int AS requested,
+        COUNT(DISTINCT CASE WHEN event_name = 'rewarded_ad_completed' THEN COALESCE(player_id, session_id) END)::int AS completed,
+        COUNT(DISTINCT CASE WHEN event_name = 'rewarded_ad_failed' THEN COALESCE(player_id, session_id) END)::int AS failed
+      FROM analytics_events
+      WHERE trusted = TRUE AND created_at >= NOW() - INTERVAL '7 days'
+        AND event_name IN ('ad_impression','rewarded_ad_requested','rewarded_ad_completed','rewarded_ad_failed')
+    `)).rows[0] as Record<string, unknown> | undefined;
+
     const adChart = [
       { label: "Solicitados", value: num(adUnique?.requested) },
       { label: "Completados", value: num(adUnique?.completed) },
@@ -408,17 +419,6 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
         AND e.event_name IN ('rewarded_ad_requested','rewarded_ad_completed','rewarded_ad_failed','ad_impression')
       GROUP BY e.player_id, ps.player_name, e.platform, e.event_name ORDER BY last_seen DESC LIMIT 300
     `)).rows as Record<string, unknown>[];
-
-    const adUnique = (await db.execute(sql`
-      SELECT
-        COUNT(DISTINCT CASE WHEN event_name = 'ad_impression' THEN COALESCE(player_id, session_id) END)::int AS impressions,
-        COUNT(DISTINCT CASE WHEN event_name = 'rewarded_ad_requested' THEN COALESCE(player_id, session_id) END)::int AS requested,
-        COUNT(DISTINCT CASE WHEN event_name = 'rewarded_ad_completed' THEN COALESCE(player_id, session_id) END)::int AS completed,
-        COUNT(DISTINCT CASE WHEN event_name = 'rewarded_ad_failed' THEN COALESCE(player_id, session_id) END)::int AS failed
-      FROM analytics_events
-      WHERE trusted = TRUE AND created_at >= NOW() - INTERVAL '7 days'
-        AND event_name IN ('ad_impression','rewarded_ad_requested','rewarded_ad_completed','rewarded_ad_failed')
-    `)).rows[0] as Record<string, unknown> | undefined;
 
     const activeSessionRows = activeSessions.map((row) => {
       const platform = String(row.platform) === "android" ? "🤖 Android" : String(row.platform) === "ios" ? "🍎 iOS" : "🌐 Web";
