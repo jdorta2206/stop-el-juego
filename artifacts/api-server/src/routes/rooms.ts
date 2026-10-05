@@ -610,12 +610,7 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
     return String(a.playerId || "").localeCompare(String(b.playerId || ""));
   });
   const winner = sorted[0];
-  const today = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Europe/Madrid",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date());
+  // Streak dates are local to each player; global room timing remains UTC/instant-based.
   const normalizedRoomCode = String(roomCode || "").toUpperCase();
   const [settlementRoom] = await db.select({ stopperJson: roomsTable.stopperJson })
     .from(roomsTable)
@@ -631,7 +626,8 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
     const score = Math.round(rawScore * 1.5);
     const won = winner?.playerId === p.playerId;
     const xpBase = calcXpGain(score, won, "multiplayer");
-    const tzOffset = await lookupPlayerTzOffset(p.playerId);
+    const playerTimezone = await lookupPlayerTimezone(p.playerId);
+    const tzOffset = playerTimezone.tzOffset;
     const happyHour = tzOffset !== null && isHappyHourActiveForTzOffset(tzOffset);
     const xpGain = happyHour ? xpBase * HAPPY_HOUR_MULTIPLIER : xpBase;
     const coinGain = calcCoinGain(score, won, "multiplayer", false);
@@ -682,12 +678,17 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
 
       const { newStreak, updatedToday } = calculateStreak(
         existing[0]?.lastPlayedDate ?? null,
-        existing[0]?.currentStreak ?? 0
+        existing[0]?.currentStreak ?? 0,
+        playerTimezone.timeZone ?? "UTC",
       );
       const newLongest = Math.max(existing[0]?.longestStreak ?? 0, newStreak);
       settlementStreak = newStreak;
+      const playerToday = new Intl.DateTimeFormat("en-CA", {
+        timeZone: playerTimezone.timeZone ?? "UTC",
+        year: "numeric", month: "2-digit", day: "2-digit",
+      }).format(new Date());
       const newStreakDaysJson = updatedToday
-        ? appendStreakDay(existing[0]?.streakDaysJson, today)
+        ? appendStreakDay(existing[0]?.streakDaysJson, playerToday)
         : undefined;
       const newXp = (existing[0]?.xp ?? 0) + xpGain;
       const newLevel = calcLevel(newXp);
