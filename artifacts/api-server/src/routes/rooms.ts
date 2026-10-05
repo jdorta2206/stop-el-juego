@@ -3588,9 +3588,15 @@ router.post("/:roomCode/results", writeLimiter, async (req, res) => {
     me.powerCard === "lightning" &&
     me.powerCardUsed === true &&
     me.powerCardUsedRound === room.currentRound;
-  const effectivePlayerEndTs = roundEndTs
-    ? roundEndTs + (lightningUsedThisRound ? 15_000 : 0)
-    : undefined;
+  // An explicit STOP ends the round immediately. The grace window must start
+  // at STOP, not at the original natural deadline, otherwise a player could
+  // submit newly-added answers long after an early STOP. Lightning can extend
+  // a natural timer, but it must never extend an explicit STOP.
+  const effectivePlayerEndTs = stopTimestamp
+    ? stopTimestamp
+    : roundEndTs
+      ? roundEndTs + (lightningUsedThisRound ? 15_000 : 0)
+      : undefined;
   if (effectivePlayerEndTs && Date.now() - effectivePlayerEndTs > SUBMIT_GRACE_MS) {
     cappedRoundScore = 0;
   }
