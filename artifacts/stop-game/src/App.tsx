@@ -1,6 +1,6 @@
 import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useState, useEffect, lazy, Suspense } from "react";
+import { useState, useEffect, useLayoutEffect, lazy, Suspense } from "react";
 import { MotionConfig } from "framer-motion";
 import { Toaster } from "@/components/ui/toaster";
 import { SplashScreen } from "@/components/SplashScreen";
@@ -172,6 +172,13 @@ function ScoreOutboxHandler() {
 
 function App() {
   const [splashDone, setSplashDone] = useState(false);
+
+  // Production prerender puts SEO HTML inside #root. Reveal it only after
+  // React has committed the real application, preventing a raw-HTML flash.
+  useLayoutEffect(() => {
+    const root = document.getElementById("root");
+    if (root) root.style.visibility = "visible";
+  }, []);
   const lang = (localStorage.getItem("stop_lang") ?? "es") as string;
 
   useEffect(() => {
