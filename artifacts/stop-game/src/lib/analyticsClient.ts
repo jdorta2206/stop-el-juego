@@ -32,7 +32,7 @@ export function trackTrustedGameStart(options?: { mode?: string; language?: stri
       },
       body: JSON.stringify({
         mode: options?.mode ?? null,
-        language: options?.language ?? document.documentElement.lang || null,
+        language: options?.language ?? (document.documentElement.lang || null),
       }),
       credentials: "include",
       keepalive: true,
