@@ -25,9 +25,13 @@ interface DailyRanking {
 
 const API_BASE = getApiUrl();
 
+function getPlayerTimeZone() {
+  try { return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"; } catch { return "UTC"; }
+}
+
 function getTodayStr() {
   return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Europe/Madrid",
+    timeZone: getPlayerTimeZone(),
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -36,34 +40,20 @@ function getTodayStr() {
 
 function getTimeUntilMidnight(): string {
   const now = new Date();
-  const todayMadrid = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Europe/Madrid",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
+  const timeZone = getPlayerTimeZone();
+  const today = new Intl.DateTimeFormat("en-CA", {
+    timeZone, year: "numeric", month: "2-digit", day: "2-digit",
   }).format(now);
-  const [year, month, day] = todayMadrid.split("-").map(Number);
-  // The daily challenge rolls over at Madrid midnight, not UTC midnight.
+  const [year, month, day] = today.split("-").map(Number);
   const probe = new Date(Date.UTC(year, month - 1, day + 1, 12, 0, 0));
   const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "Europe/Madrid",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hourCycle: "h23",
+    timeZone, year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
   }).formatToParts(probe);
   const part = (type: string) => Number(parts.find(p => p.type === type)?.value ?? 0);
-  const localProbeMs = Date.UTC(
-    part("year"), part("month") - 1, part("day"),
-    part("hour"), part("minute"), part("second"),
-  );
+  const localProbeMs = Date.UTC(part("year"), part("month") - 1, part("day"), part("hour"), part("minute"), part("second"));
   const offsetMs = localProbeMs - probe.getTime();
-  const midnight = new Date(
-    Date.UTC(year, month - 1, day + 1, 0, 0, 0) - offsetMs,
-  );
+  const midnight = new Date(Date.UTC(year, month - 1, day + 1, 0, 0, 0) - offsetMs);
   const diff = midnight.getTime() - now.getTime();
   const h = Math.floor(diff / 3600000);
   const m = Math.floor((diff % 3600000) / 60000);
@@ -85,12 +75,12 @@ export default function DailyChallenge() {
 
   useEffect(() => {
     const controller = new AbortController();
-    fetch(`${API_BASE}/api/daily?language=${lang}`, { signal: controller.signal })
+    fetch(`${API_BASE}/api/daily?language=${lang}`, { headers: { "X-Stop-Timezone": getPlayerTimeZone() }, signal: controller.signal })
       .then(r => r.json())
       .then(setChallenge)
       .catch(() => {});
 
-    fetch(`${API_BASE}/api/daily/rankings?language=${lang}`, { signal: controller.signal })
+    fetch(`${API_BASE}/api/daily/rankings?language=${lang}`, { headers: { "X-Stop-Timezone": getPlayerTimeZone() }, signal: controller.signal })
       .then(r => r.json())
       .then(d => setRankings(d.rankings || []))
       .catch(() => {});
@@ -106,7 +96,7 @@ export default function DailyChallenge() {
       }
     } else {
       fetch(`${API_BASE}/api/daily/status?playerId=${encodeURIComponent(player.id)}&language=${encodeURIComponent(lang)}`, {
-        headers: { ...authHeaders() },
+        headers: { ...authHeaders(), "X-Stop-Timezone": getPlayerTimeZone() },
         credentials: "include",
         signal: controller.signal,
       })
