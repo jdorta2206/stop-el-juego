@@ -1006,6 +1006,18 @@ router.get("/me", async (req: Request, res: Response) => {
 // caring about the result. The client also wipes its localStorage profile and
 // bridge token; this handles the cross-origin httpOnly cookie.
 router.post("/delete-account", async (req: Request, res: Response) => {
+  const host = req.headers.host;
+  const origin = req.headers.origin;
+  const referer = req.headers.referer;
+  let sameOrigin = false;
+  if (host && origin) {
+    try { sameOrigin = new URL(origin).host === host; } catch { sameOrigin = false; }
+  } else if (host && referer) {
+    try { sameOrigin = new URL(referer).host === host; } catch { sameOrigin = false; }
+  }
+  if (!sameOrigin) {
+    return res.status(403).json({ error: "Solicitud de origen no válido" });
+  }
   const playerId = readPlayerId(req);
   if (!playerId || !isLoggedInId(playerId)) {
     return res.status(401).json({ error: "Authentication required" });
