@@ -1487,6 +1487,7 @@ router.get("/offline-bundle", (_req, res) => {
     dictionary: DICTIONARY,
     openCategories: Array.from(OPEN_CATEGORIES),
     neverValidWords: Array.from(NEVER_VALID_WORDS),
+    categoryAliases: HALLOWEEN_CATEGORY_ALIASES,
   });
 });
 
