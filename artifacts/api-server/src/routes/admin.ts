@@ -531,7 +531,7 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
     ${svgBars(powerupChart, "Recompensas más utilizadas · 7 días")}
   </div>
 
-  <h2>📅 Actividad real · últimos 14 días</h2
+  <h2>📅 Actividad real · últimos 14 días</h2>
   <table>
     <thead><tr><th>Día</th><th>Activos</th><th>Inician partida</th><th>Terminan partida</th><th>Conversión</th></tr></thead>
     <tbody>${activityRows || '<tr><td colspan="5">Sin eventos de actividad.</td></tr>'}</tbody>
