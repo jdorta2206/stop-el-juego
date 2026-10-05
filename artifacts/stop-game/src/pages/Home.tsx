@@ -132,7 +132,7 @@ export default function Home() {
     // Personalised invite banner — persist through OAuth redirect via sessionStorage
     const from = params.get("from");
     if (from) {
-      const name = decodeURIComponent(from);
+      const name = from;
       sessionStorage.setItem("stop_invited_by", name);
       window.history.replaceState({}, "", window.location.pathname);
       setInvitedBy(name);
