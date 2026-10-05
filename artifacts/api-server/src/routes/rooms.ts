@@ -1051,7 +1051,7 @@ async function sweepStuckRooms() {
     // settlement function for every finished room, including already-settled
     // games, causing avoidable DB/CPU load and repeated timezone lookups.
     const finishedRooms = await db.select().from(roomsTable)
-      .where(and(eq(roomsTable.status, "finished"), gt(roomsTable.updatedAt, new Date(Date.now() - 6 * 60 * 60 * 1000))));
+      .where(eq(roomsTable.status, "finished"));
     for (const room of finishedRooms) {
       const players = parsePlayers(room.playersJson);
       const eligible = players.filter((p: any) => p && !p.isBot && p.playerId && p.loginMethod !== "guest");
