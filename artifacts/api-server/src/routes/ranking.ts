@@ -613,8 +613,10 @@ router.post("/scores", scoreLimiter, requirePlayerIdentity, async (req: AuthedRe
   const baseXpGain = calcXpGain(score, effectiveWon, effectiveMode);
   const baseCoinGain = calcCoinGain(score, effectiveWon, effectiveMode, isBonus);
   const playerTimezone = await lookupPlayerTimezone(playerId);
-  const happyHourActive = playerTimezone.timeZone
-    ? isHappyHourActiveForTimeZone(playerTimezone.timeZone)
+  const requestTimezone = normalizePlayerTimeZone(req.headers["x-stop-timezone"]);
+  const effectiveTimeZone = requestTimezone ?? playerTimezone.timeZone;
+  const happyHourActive = effectiveTimeZone
+    ? isHappyHourActiveForTimeZone(effectiveTimeZone)
     : playerTimezone.tzOffset !== null && isHappyHourActiveForTzOffset(playerTimezone.tzOffset);
   const xpMultiplier = happyHourActive ? HAPPY_HOUR_MULTIPLIER : 1;
   const coinMultiplier = happyHourActive ? HAPPY_HOUR_MULTIPLIER : 1;
