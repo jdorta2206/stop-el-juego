@@ -245,6 +245,44 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
     ).join('');
 
 
+    const errorSummary = (
+      await db.execute(sql`
+        SELECT event_name, COUNT(*)::int AS total
+        FROM analytics_events
+        WHERE trusted = TRUE
+          AND event_name IN ('client_error','api_error')
+          AND created_at >= NOW() - INTERVAL '7 days'
+        GROUP BY event_name ORDER BY total DESC
+      `)
+    ).rows as Record<string, unknown>[];
+
+    const recentErrors = (
+      await db.execute(sql`
+        SELECT event_name, platform, app_version, created_at,
+               metadata_json
+        FROM analytics_events
+        WHERE trusted = TRUE
+          AND event_name IN ('client_error','api_error')
+          AND created_at >= NOW() - INTERVAL '24 hours'
+        ORDER BY created_at DESC
+        LIMIT 100
+      `)
+    ).rows as Record<string, unknown>[];
+
+    const errorChart = errorSummary.map((row) => ({
+      label: String(row.event_name) === 'client_error' ? 'Fallos del juego' : 'Fallos API',
+      value: num(row.total),
+    }));
+    const errorRows = recentErrors.map((row) => {
+      let message = '—';
+      try {
+        const meta = JSON.parse(String(row.metadata_json || '{}')) as Record<string, unknown>;
+        message = String(meta.message ?? meta.path ?? '—').slice(0, 180);
+      } catch {}
+      const time = row.created_at ? new Date(String(row.created_at)).toLocaleString('es-ES', { timeZone: 'Europe/Madrid' }) : '—';
+      return \`<tr><td>\${String(row.event_name) === 'client_error' ? '🐛 Juego' : '⚠️ API'}</td><td>\${esc(row.platform)}</td><td>\${esc(row.app_version || '—')}</td><td>\${esc(message)}</td><td>\${time}</td></tr>\`;
+    }).join('');
+
     const modeUsage = (
       await db.execute(sql`
         SELECT COALESCE(mode, 'sin modo') AS mode, COUNT(*)::int AS total
@@ -472,6 +510,15 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
       <tr><td>Ausentes 7–14 días</td><td>${num(churnBuckets?.away_7_14d)}</td></tr>
       <tr><td>Ausentes &gt; 14 días</td><td>${num(churnBuckets?.away_14d)}</td></tr>
     </tbody>
+  </table>
+
+  <h2>🚨 Fallos detectados</h2>
+  <div class="charts">
+    ${svgBars(errorChart, "Fallos registrados · últimos 7 días")}
+  </div>
+  <table>
+    <thead><tr><th>Tipo</th><th>Plataforma</th><th>Versión</th><th>Detalle</th><th>Cuándo</th></tr></thead>
+    <tbody>${errorRows || '<tr><td colspan="5">No hay fallos registrados en las últimas 24 horas.</td></tr>'}</tbody>
   </table>
 
   <h2>📊 Lo que está pasando de un vistazo</h2>
