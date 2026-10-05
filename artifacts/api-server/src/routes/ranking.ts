@@ -461,16 +461,17 @@ router.post("/scores", scoreLimiter, requirePlayerIdentity, async (req: AuthedRe
 
   // Every authoritative client submission carries a stable ID for the logical
   // score write. A retry must resolve to the already-accepted write rather than
-  // crediting score/XP/coins/history a second time. Legacy requests without an
-  // ID are still accepted only when they carry server vouchers (those vouchers
-  // already provide replay protection); unverified offline requests must use
-  // the idempotency key.
+  // crediting score/XP/coins/history a second time.
   if (typeof submissionId === "string" && !/^[A-Za-z0-9._:-]{8,160}$/.test(submissionId)) {
     res.status(400).json({ error: "INVALID_SUBMISSION_ID" });
     return;
   }
-  if (!submissionId && !isBonus && (!Array.isArray(scoreTokens) || scoreTokens.length === 0)) {
-    res.status(422).json({ error: "SUBMISSION_ID_REQUIRED" });
+  // Offline play remains fully local, but an unverified result must never enter
+  // the authoritative ranking. A submissionId only provides idempotency; it
+  // cannot prove that the claimed game was actually played. Only server-issued
+  // round vouchers can authorize score/XP/coin/history writes.
+  if (!isBonus && (!Array.isArray(scoreTokens) || scoreTokens.length === 0)) {
+    res.status(422).json({ error: "SCORE_VOUCHER_REQUIRED" });
     return;
   }
   if (submissionId) {

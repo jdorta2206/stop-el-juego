@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import { db, dailyResultsTable, playerScoresTable } from "@workspace/db";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { verifyClaimedIdentity } from "../lib/playerAuth";
-import { sumVerifiedBasePersistent, consumeScoreVoucherJtis, ceilingFromBase, absoluteCeiling } from "../lib/scoreToken";
+import { sumVerifiedBasePersistent, consumeScoreVoucherJtis, ceilingFromBase } from "../lib/scoreToken";
 import { recordAuthoritativeSeasonEvents } from "./season";
 
 const router: IRouter = Router();
@@ -124,17 +124,20 @@ router.post("/submit", async (req, res) => {
     return;
   }
 
-  // 🔒 Anti-cheat clamp — same scheme as the global leaderboard: clamp the
-  // posted score to a ceiling derived from the verified round voucher(s), or a
-  // flat absolute ceiling when none are present (offline play). Never reject,
-  // only clamp, so a legit daily score is never lost.
+  // 🔒 Daily ranking is authoritative too: a client-calculated offline score
+  // has no server proof and must not be accepted just because it is below the
+  // absolute ceiling. Only server-issued round vouchers can authorize the write.
   const { base: verifiedBase, verified, voucherJtis } = await sumVerifiedBasePersistent(scoreTokens, 1);
   const suppliedTokens = Array.isArray(scoreTokens) && scoreTokens.length > 0;
-  if (suppliedTokens && verified === 0) {
+  if (!suppliedTokens) {
+    res.status(422).json({ error: "SCORE_VOUCHER_REQUIRED" });
+    return;
+  }
+  if (verified === 0) {
     res.status(422).json({ error: "INVALID_SCORE_VOUCHER" });
     return;
   }
-  const dailyCeiling = verified > 0 ? ceilingFromBase(verifiedBase) : absoluteCeiling("daily");
+  const dailyCeiling = ceilingFromBase(verifiedBase);
   const safeScore = Math.max(0, Math.min(Number(score) || 0, dailyCeiling));
 
   // Only allow one submission per player per day. Voucher consumption and
