@@ -7,56 +7,45 @@ import { recordAuthoritativeSeasonEvents } from "./season";
 
 const router: IRouter = Router();
 
-// ── Helpers ────────────────────────────────────────────────────────────────────
-
 function getTodayUTC(): string {
-  return new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  return new Date().toISOString().slice(0, 10);
 }
 
 function getDailyChallenge(dateStr: string, language: string) {
   const seed = dateStr.replace(/-/g, "").split("").reduce(
     (acc, c, i) => acc + c.charCodeAt(0) * (i + 1), 0
   );
-
   const alphabets: Record<string, string[]> = {
     es: "ABCDEFGHIJKLMNOPRSTUVWYZ".split(""),
     en: "ABCDEFGHIJKLMNOPRSTUVWYZ".split(""),
     pt: "ABCDEFGHIJKLMNOPRSTUVWYZ".split(""),
     fr: "ABCDEFGHIJKLMNOPRSTUVWYZ".split(""),
   };
-
   const allCategories: Record<string, string[]> = {
     es: ["Nombre", "Lugar", "Animal", "Objeto", "Color", "Fruta", "Marca"],
     en: ["Name", "Place", "Animal", "Object", "Color", "Fruit", "Brand"],
     pt: ["Nome", "Lugar", "Animal", "Objeto", "Cor", "Fruta", "Marca"],
     fr: ["Prénom", "Lieu", "Animal", "Objet", "Couleur", "Fruit", "Marque"],
   };
-
   const alphabet = alphabets[language] || alphabets.es;
   const letter = alphabet[seed % alphabet.length];
-
   const cats = allCategories[language] || allCategories.es;
   const startIdx = (seed * 3) % cats.length;
   const categories = [...cats.slice(startIdx), ...cats.slice(0, startIdx)].slice(0, 5);
-
   return { letter, categories, date: dateStr };
 }
 
-// ── Routes ─────────────────────────────────────────────────────────────────────
-
-// GET /api/daily?language=es  → today's challenge (letter + categories)
 router.get("/", (req, res) => {
   const requestedLanguage = typeof req.query.language === "string" ? req.query.language.trim().toLowerCase() : "es";
   const language = ["es", "en", "pt", "fr"].includes(requestedLanguage) ? requestedLanguage : "es";
   const today = getTodayUTC();
-  const challenge = getDailyChallenge(today, language);
-  res.json(challenge);
+  res.json(getDailyChallenge(today, language));
 });
 
-// GET /api/daily/status?playerId=...&language=es → authoritative completion state
 router.get("/status", async (req, res) => {
   const playerId = typeof req.query.playerId === "string" ? req.query.playerId.trim() : "";
-  if (!playerId) {
+  const language = typeof req.query.language === "string" ? req.query.language.trim().toLowerCase() : "";
+  if (!playerId || !["es", "en", "pt", "fr"].includes(language)) {
     res.status(400).json({ error: "Invalid daily status request" });
     return;
   }
@@ -71,29 +60,24 @@ router.get("/status", async (req, res) => {
     .where(and(
       eq(dailyResultsTable.playerId, playerId),
       eq(dailyResultsTable.challengeDate, today),
+      eq(dailyResultsTable.language, language),
     ))
     .limit(1);
-  res.json({ played: rows.length > 0, score: rows[0]?.score ?? null, date: today });
+  res.json({ played: rows.length > 0, score: rows[0]?.score ?? null, date: today, language });
 });
 
-// POST /api/daily/submit  → save a player's score for today
 router.post("/submit", async (req, res) => {
   const { playerId, playerName, score, letter, language, scoreTokens } = req.body;
   if (!playerId || !playerName || score == null || !letter) {
     res.status(400).json({ error: "Missing required fields" });
     return;
   }
-  // 🔒 Only the authenticated owner may submit a daily score for a logged-in id.
   if (!await verifyClaimedIdentity(req, playerId)) {
     res.status(403).json({ error: "Identity verification failed" });
     return;
   }
-
   const [canonicalPlayer] = await db
-    .select({
-      playerName: playerScoresTable.playerName,
-      avatarColor: playerScoresTable.avatarColor,
-    })
+    .select({ playerName: playerScoresTable.playerName, avatarColor: playerScoresTable.avatarColor })
     .from(playerScoresTable)
     .where(eq(playerScoresTable.playerId, playerId))
     .limit(1);
@@ -103,11 +87,6 @@ router.post("/submit", async (req, res) => {
   }
   const canonicalPlayerName = canonicalPlayer.playerName;
   const canonicalAvatarColor = canonicalPlayer.avatarColor;
-
-  // 🔒 Bind the submission to the server-generated challenge. A client must not
-  // be able to submit a score under a different letter/language for today's
-  // ranking. Unsupported languages fall back to Spanish for GET, but submissions
-  // must explicitly use one of the supported challenge languages.
   const normalizedLanguage = typeof language === "string" ? language.trim().toLowerCase() : "";
   const supportedLanguages = new Set(["es", "en", "pt", "fr"]);
   if (!supportedLanguages.has(normalizedLanguage)) {
@@ -121,10 +100,6 @@ router.post("/submit", async (req, res) => {
     return;
   }
 
-  // 🔒 Anti-cheat clamp — same scheme as the global leaderboard: clamp the
-  // posted score to a ceiling derived from the verified round voucher(s), or a
-  // flat absolute ceiling when none are present (offline play). Never reject,
-  // only clamp, so a legit daily score is never lost.
   const { base: verifiedBase, verified, voucherJtis } = await sumVerifiedBasePersistent(scoreTokens, 1);
   const suppliedTokens = Array.isArray(scoreTokens) && scoreTokens.length > 0;
   if (suppliedTokens && verified === 0) {
@@ -134,9 +109,6 @@ router.post("/submit", async (req, res) => {
   const dailyCeiling = verified > 0 ? ceilingFromBase(verifiedBase) : absoluteCeiling("daily");
   const safeScore = Math.max(0, Math.min(Number(score) || 0, dailyCeiling));
 
-  // Only allow one submission per player per day. Voucher consumption and
-  // the daily write share one transaction so a failed write cannot burn a valid
-  // voucher and leave the player unable to retry.
   let alreadyPlayed = false;
   let submitted = false;
   try {
@@ -147,30 +119,26 @@ router.post("/submit", async (req, res) => {
         .where(and(
           eq(dailyResultsTable.playerId, playerId),
           eq(dailyResultsTable.challengeDate, today),
+          eq(dailyResultsTable.language, normalizedLanguage),
         ))
         .limit(1);
 
       if (existing.length > 0) {
         alreadyPlayed = true;
         if (safeScore <= existing[0].score) return;
-
-        if (verified > 0 && voucherJtis.length > 0) {
-          await consumeScoreVoucherJtis(tx, voucherJtis);
-        }
-
+        if (verified > 0 && voucherJtis.length > 0) await consumeScoreVoucherJtis(tx, voucherJtis);
         await tx.update(dailyResultsTable)
           .set({ score: safeScore, playerName: canonicalPlayerName, avatarColor: canonicalAvatarColor })
           .where(and(
             eq(dailyResultsTable.playerId, playerId),
             eq(dailyResultsTable.challengeDate, today),
+            eq(dailyResultsTable.language, normalizedLanguage),
             sql`${dailyResultsTable.score} < ${safeScore}`,
           ));
         return;
       }
 
-      if (verified > 0 && voucherJtis.length > 0) {
-        await consumeScoreVoucherJtis(tx, voucherJtis);
-      }
+      if (verified > 0 && voucherJtis.length > 0) await consumeScoreVoucherJtis(tx, voucherJtis);
       await tx.insert(dailyResultsTable).values({
         playerId,
         playerName: canonicalPlayerName,
@@ -180,7 +148,7 @@ router.post("/submit", async (req, res) => {
         letter,
         language: normalizedLanguage,
       }).onConflictDoUpdate({
-        target: [dailyResultsTable.playerId, dailyResultsTable.challengeDate],
+        target: [dailyResultsTable.playerId, dailyResultsTable.challengeDate, dailyResultsTable.language],
         set: {
           score: sql`GREATEST(${dailyResultsTable.score}, EXCLUDED.score)`,
           playerName: sql`CASE WHEN EXCLUDED.score > ${dailyResultsTable.score} THEN ${canonicalPlayerName} ELSE ${dailyResultsTable.playerName} END`,
@@ -198,21 +166,15 @@ router.post("/submit", async (req, res) => {
   }
 
   if (submitted) {
-    void recordAuthoritativeSeasonEvents(
-      playerId,
-      [{ type: "daily_done", value: 1 }],
-      `daily:${today}`,
-    );
+    void recordAuthoritativeSeasonEvents(playerId, [{ type: "daily_done", value: 1 }], `daily:${today}:${normalizedLanguage}`);
   }
-  res.status(submitted ? 201 : 200).json({ submitted, alreadyPlayed });
+  res.status(submitted ? 201 : 200).json({ submitted, alreadyPlayed, language: normalizedLanguage });
 });
 
-// GET /api/daily/rankings?language=es  → top 10 players for today
 router.get("/rankings", async (req, res) => {
   const requestedLanguage = typeof req.query.language === "string" ? req.query.language.trim().toLowerCase() : "es";
   const language = ["es", "en", "pt", "fr"].includes(requestedLanguage) ? requestedLanguage : "es";
   const today = getTodayUTC();
-
   const results = await db
     .select({
       id: dailyResultsTable.id,
@@ -225,15 +187,9 @@ router.get("/rankings", async (req, res) => {
       rank: sql<number>`RANK() OVER (ORDER BY ${dailyResultsTable.score} DESC)`,
     })
     .from(dailyResultsTable)
-    .where(
-      and(
-        eq(dailyResultsTable.challengeDate, today),
-        eq(dailyResultsTable.language, language)
-      )
-    )
+    .where(and(eq(dailyResultsTable.challengeDate, today), eq(dailyResultsTable.language, language)))
     .orderBy(desc(dailyResultsTable.score))
     .limit(10);
-
   res.json({ date: today, rankings: results });
 });
 
