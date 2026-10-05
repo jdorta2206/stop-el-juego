@@ -11,6 +11,15 @@ import { recordExternalStat } from "@/hooks/useAchievements";
 const API = getApiUrl();
 const ROUND_MS = 60000;
 
+function getTodayMadrid() {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Madrid",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
+
 interface Combo { date: string; language: string; letter: string; category: string; stats: { attempts: number; wins: number } }
 interface Result { played: boolean; result?: { letter: string; category: string; attempted_word?: string; attemptedWord?: string; won: boolean; time_ms?: number; timeMs?: number } }
 
@@ -115,7 +124,7 @@ export default function Impossible() {
     const w = myAttempt?.attemptedWord || outcome?.word || "";
     const won = !!myAttempt?.won;
     const timeSec = Math.round(((myAttempt?.timeMs ?? outcome?.timeMs ?? ROUND_MS) / 1000));
-    const date = combo?.date ?? new Date().toISOString().slice(0, 10);
+    const date = combo?.date ?? getTodayMadrid();
     const stats = outcome?.stats ?? combo?.stats;
     const s = stats;
     const pct = s && s.attempts > 0 ? Math.round((s.wins / s.attempts) * 100) : null;
