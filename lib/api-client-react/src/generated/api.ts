@@ -311,7 +311,7 @@ export const submitScore = async (
   return customFetch<PlayerScore>(getSubmitScoreUrl(), {
     ...options,
     method: "POST",
-    headers: { "Content-Type": "application/json", ...options?.headers },
+    headers: { "Content-Type": "application/json", "X-Stop-Timezone": browserTimeZone(), ...options?.headers },
     body: JSON.stringify(submitScoreRequest),
   });
 };
@@ -577,7 +577,7 @@ export const createRoom = async (
   return customFetch<Room>(getCreateRoomUrl(), {
     ...options,
     method: "POST",
-    headers: { "Content-Type": "application/json", ...options?.headers },
+    headers: { "Content-Type": "application/json", "X-Stop-Timezone": browserTimeZone(), ...options?.headers },
     body: JSON.stringify(createRoomRequest),
   });
 };
@@ -741,7 +741,7 @@ export const joinRoom = async (
   return customFetch<Room>(getJoinRoomUrl(roomCode), {
     ...options,
     method: "POST",
-    headers: { "Content-Type": "application/json", ...options?.headers },
+    headers: { "Content-Type": "application/json", "X-Stop-Timezone": browserTimeZone(), ...options?.headers },
     body: JSON.stringify(joinRoomRequest),
   });
 };
