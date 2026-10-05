@@ -20,6 +20,7 @@ import playBillingRouter from "./playBilling";
 import customPacksRouter from "./customPacks";
 import guestStatsRouter from "./guestStats";
 import halloweenRouter from "./halloween";
+import compensationRouter from "./compensation";
 import { indexesReady } from "@workspace/db";
 
 const router: IRouter = Router();
@@ -56,5 +57,6 @@ router.use("/billing/play", playBillingRouter);
 router.use("/custom-packs", customPacksRouter);
 router.use("/guest-stats", guestStatsRouter);
 router.use("/halloween", halloweenRouter);
+router.use("/rewards", compensationRouter);
 
 export default router;
