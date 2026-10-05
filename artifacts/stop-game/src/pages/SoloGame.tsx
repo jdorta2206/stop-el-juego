@@ -1,4 +1,4 @@
-import { trackAnalyticsEvent } from "@/lib/analyticsClient";
+import { trackAnalyticsEvent, trackTrustedGameStart } from "@/lib/analyticsClient";
 import { hasAndroidAppReferrer } from "@/lib/playBilling";
 import { useState, useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -544,7 +544,7 @@ export default function SoloGame() {
     halloweenScareRoundRef.current = null;
     halloweenAnswerScareRoundRef.current = null;
     setHalloweenScare(null);
-    void trackAnalyticsEvent("game_start", { metadata: { mode: isDailyMode ? "daily" : "solo" } });
+    trackTrustedGameStart({ mode: isDailyMode ? "daily" : "solo", language: getCurrentLang() });
     // Snapshot the tutorial state at the moment the player presses Play so
     // the rules of the round are stable until it ends.
     const tutorialNow = ftue.isInTutorial && !isDailyMode;
