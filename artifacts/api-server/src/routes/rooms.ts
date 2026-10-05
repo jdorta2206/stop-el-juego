@@ -626,7 +626,8 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
     const score = Math.round(rawScore * 1.5);
     const won = winner?.playerId === p.playerId;
     const xpBase = calcXpGain(score, won, "multiplayer");
-    const playerTimezone = { timeZone: normalizePlayerTimeZone(p.timeZone), tzOffset: (await lookupPlayerTimezone(p.playerId)).tzOffset };
+    const storedTimezone = await lookupPlayerTimezone(p.playerId);
+    const playerTimezone = { timeZone: p.timeZone ? normalizePlayerTimeZone(p.timeZone) : (storedTimezone.timeZone ?? "UTC"), tzOffset: storedTimezone.tzOffset };
     const tzOffset = playerTimezone.tzOffset;
     const happyHour = tzOffset !== null && isHappyHourActiveForTzOffset(tzOffset);
     const xpGain = happyHour ? xpBase * HAPPY_HOUR_MULTIPLIER : xpBase;
