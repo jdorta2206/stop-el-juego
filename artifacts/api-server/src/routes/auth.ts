@@ -310,10 +310,7 @@ async function bridgePageMulti(
 ) {
   const handoffCode = await createOAuthHandoff(items);
   const baseDest = returnOrigin + returnPath;
-  const separator = baseDest.includes("?") ? "&" : "?";
-  const handoffDest = baseDest + separator + "oauth_handoff_nonce=" + encodeURIComponent(
-    new URLSearchParams(returnPath.split("?")[1] || "").get("oauth_handoff_nonce") || "",
-  ) + "#stopauth=" + encodeURIComponent(handoffCode);
+  const handoffDest = baseDest + "#stopauth=" + encodeURIComponent(handoffCode);
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8">
 <title>Conectando...</title>
