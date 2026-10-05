@@ -588,7 +588,7 @@ router.post("/scores", scoreLimiter, requirePlayerIdentity, async (req: AuthedRe
   const oldTotal = existing.length > 0 ? existing[0].totalScore : 0;
   const newTotal = oldTotal + score;
 
-  const today = new Intl.DateTimeFormat("en-CA", {\n    timeZone: "Europe/Madrid",\n    year: "numeric",\n    month: "2-digit",\n    day: "2-digit",\n  }).format(new Date());
+  // The player's day is resolved from the timezone supplied by the device.\n  // This value is used only as a fallback for the first-row creation path;\n  // existing players use the locked, authoritative value below.\n  const playerTimeZoneForNewPlayer = normalizePlayerTimeZone(req.headers["x-stop-timezone"]);\n  const today = new Intl.DateTimeFormat("en-CA", {\n    timeZone: playerTimeZoneForNewPlayer,\n    year: "numeric",\n    month: "2-digit",\n    day: "2-digit",\n  }).format(new Date());
   let authoritativeStreak = existing[0]?.currentStreak ?? 0;
 
   // 🔒 For voucher-backed Solo submissions, the win/loss result must come
