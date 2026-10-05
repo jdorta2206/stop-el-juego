@@ -808,14 +808,28 @@ async function recoverMultiplayerAuxiliaryEffects(room: any, players: any[]): Pr
     const days = new Set(parsed.filter((d): d is string =>
       typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d)
     ));
-    const target = new Date(finishedAt).toISOString().slice(0, 10);
+    let target = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Europe/Madrid",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date(finishedAt));
     if (!days.has(target)) return fallback;
 
     let count = 0;
-    let cursor = new Date(`${target}T00:00:00.000Z`);
-    while (days.has(cursor.toISOString().slice(0, 10))) {
+    let [year, month, day] = target.split("-").map(Number);
+    while (days.has(target)) {
       count++;
-      cursor = new Date(cursor.getTime() - 86_400_000);
+      const previous = new Date(Date.UTC(year, month - 1, day - 1, 12));
+      year = previous.getUTCFullYear();
+      month = previous.getUTCMonth() + 1;
+      day = previous.getUTCDate();
+      target = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Europe/Madrid",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).format(previous);
     }
     return count;
   }
