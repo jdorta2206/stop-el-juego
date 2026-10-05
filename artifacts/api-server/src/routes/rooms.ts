@@ -10,7 +10,7 @@ import { recordHalloweenEvent, recordHalloweenScareEvents, getHalloweenEventYear
 import { isHappyHourActiveForTzOffset, HAPPY_HOUR_MULTIPLIER } from "../lib/happyHour";
 import { isWordValidAsync, HALLOWEEN_CATEGORY_ALIASES } from "./game";
 import { writeLimiter, roomJoinLimiter, halloweenScareLimiter } from "../middlewares/rateLimit";
-import { verifyClaimedIdentity, verifyPlayerToken, readPlayerId, isLoggedInId, isAuthConfigured } from "../lib/playerAuth";
+import { verifyClaimedIdentity, readPlayerId, isLoggedInId, isAuthConfigured } from "../lib/playerAuth";
 import {
   pickBotIdentity,
   makeBotPlayer,
