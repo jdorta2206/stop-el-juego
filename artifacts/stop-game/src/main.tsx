@@ -106,6 +106,11 @@ async function bootstrapApp() {
   );
 
   if (typeof window !== "undefined") {
+    // The production build prerenders SEO content into #root. Keep that
+    // content invisible until React has committed the real application,
+    // otherwise users briefly see the raw prerendered HTML on startup.
+    const root = document.getElementById("root");
+    if (root) root.style.visibility = "visible";
     requestAnimationFrame(() => {
       const splash = document.getElementById("html-splash");
       if (!splash) return;
