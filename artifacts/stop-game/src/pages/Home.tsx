@@ -54,7 +54,7 @@ export default function Home() {
     const controller = new AbortController();
     fetch(`${getApiUrl()}/api/rewards/downtime-compensation`, {
       method: "POST",
-      headers: { ...authHeaders() },
+      headers: { ...authHeaders(), "X-Stop-Timezone": timeZone },
       credentials: "include",
       signal: controller.signal,
     })
@@ -68,8 +68,11 @@ export default function Home() {
 
   useEffect(() => {
     const controller = new AbortController();
+    const timeZone = (() => {
+      try { return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"; } catch { return "UTC"; }
+    })();
     const today = new Intl.DateTimeFormat("en-CA", {
-      timeZone: "Europe/Madrid",
+      timeZone,
       year: "numeric",
       month: "2-digit",
       day: "2-digit",
