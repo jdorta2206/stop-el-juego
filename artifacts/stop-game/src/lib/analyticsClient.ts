@@ -19,6 +19,27 @@ function platform(): "web" | "android" | "ios" {
 function sessionId(): string | null {
   try { return sessionStorage.getItem(`stop_analytics_session_id_${platform()}`); } catch { return null; }
 }
+export function trackTrustedGameStart(options?: { mode?: string; language?: string | null }): void {
+  if (typeof window === "undefined") return;
+  try {
+    void fetch(`${window.location.origin}/api/analytics/game-start`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Client-Platform": platform(),
+        ...(isTwa() ? { "X-Client-TWA": "1" } : {}),
+        ...(localStorage.getItem("stop_session_token") ? { "X-Stop-Token": localStorage.getItem("stop_session_token")! } : {}),
+      },
+      body: JSON.stringify({
+        mode: options?.mode ?? null,
+        language: options?.language ?? document.documentElement.lang || null,
+      }),
+      credentials: "include",
+      keepalive: true,
+    }).catch(() => {});
+  } catch {}
+}
+
 export function trackAnalyticsEvent(eventName: string, options?: { mode?: string; aiDifficulty?: string; metadata?: Record<string, unknown> }): void {
   if (typeof window === "undefined") return;
   try {
