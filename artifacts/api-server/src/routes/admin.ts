@@ -139,7 +139,7 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
     const guestsByDay = (
       await db.execute(sql`
         SELECT day AS d, games, conversions FROM guest_stats
-        WHERE day >= to_char(now() AT TIME ZONE 'UTC' - interval '14 days', 'YYYY-MM-DD')
+        WHERE day >= to_char(now() AT TIME ZONE 'Europe/Madrid' - interval '14 days', 'YYYY-MM-DD')
         ORDER BY day DESC
       `)
     ).rows as Record<string, unknown>[];
