@@ -64,3 +64,27 @@ export function trackAnalyticsEvent(eventName: string, options?: { mode?: string
     }).catch(() => {});
   } catch {}
 }
+
+export function trackClientError(error: unknown, componentStack?: string | null): void {
+  if (typeof window === "undefined") return;
+  try {
+    const value = error instanceof Error ? error : new Error(String(error));
+    void fetch(`${window.location.origin}/api/analytics/client-error`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Client-Platform": platform(),
+        ...(isTwa() ? { "X-Client-TWA": "1" } : {}),
+        ...(localStorage.getItem("stop_session_token") ? { "X-Stop-Token": localStorage.getItem("stop_session_token")! } : {}),
+      },
+      body: JSON.stringify({
+        message: value.message.slice(0, 500),
+        stack: value.stack?.slice(0, 2500) ?? null,
+        componentStack: componentStack?.slice(0, 2500) ?? null,
+        sessionId: sessionId(),
+        language: document.documentElement.lang || null,
+      }),
+      keepalive: true,
+    }).catch(() => {});
+  } catch {}
+}
