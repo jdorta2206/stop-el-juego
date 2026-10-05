@@ -2130,7 +2130,7 @@ export default function SoloGame() {
                     ⭐ +20s
                   </button>
                 )}
-                {!rewardedUsed && !isPremium && !REWARDED_ADS_DISABLED && (
+                {!rewardedUsed && !isPremium && (
                   <button
                     onClick={() => setRewardedAdType("extraTime")}
                     className="flex items-center justify-center gap-2 py-2 px-3 rounded-xl border border-yellow-500/30 bg-yellow-500/10 text-yellow-300 text-xs font-bold hover:bg-yellow-500/20 transition-all"
@@ -3026,7 +3026,7 @@ export default function SoloGame() {
                 </motion.div>
               )}
 
-              {round >= maxRounds && !doubleUsed && totalScore > 0 && !isDailyMode && !isPremium && !REWARDED_ADS_DISABLED && (
+              {round >= maxRounds && !doubleUsed && totalScore > 0 && !isDailyMode && !isPremium && (
                 <motion.button
                   initial={{ opacity: 0, scale: 0.9 }}
                   animate={{ opacity: 1, scale: 1 }}
