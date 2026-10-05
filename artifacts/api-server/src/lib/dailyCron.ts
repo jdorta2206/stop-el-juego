@@ -105,40 +105,44 @@ async function releasePlayerNotification(today: string, key: string, playerId: s
   await releaseDailyLock(today, key + "_" + playerId);
 }
 
-function madridDateString(date: Date): string {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Europe/Madrid",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(date);
-}
-
-function madridYesterdayString(date: Date = new Date()): string {
-  const today = madridDateString(date);
-  const [year, month, day] = today.split("-").map(Number);
-  return madridDateString(new Date(Date.UTC(year, month - 1, day - 1, 12)));
+function playerLocalDateSql() {
+  return sql`CASE
+    WHEN NULLIF(sub.time_zone, '') IS NOT NULL
+      THEN TO_CHAR(NOW() AT TIME ZONE sub.time_zone, 'YYYY-MM-DD')
+    ELSE TO_CHAR((NOW() AT TIME ZONE 'UTC') + (sub.tz_offset_minutes * INTERVAL '1 minute'), 'YYYY-MM-DD')
+  END`;
 }
 
 async function sendStreakRescueNotifications() {
   try {
-    const today = madridDateString(new Date());
-    const yesterday = madridYesterdayString();
-
-    // Players with a worth-saving streak who haven't played today
+    // Streak eligibility is per player's calendar, not server/Madrid time.
+    // Use the most recently created push subscription as the player's current
+    // timezone source; subscriptions store the IANA zone and offset fallback.
     const rows = await db.execute(sql`
-      SELECT ps.player_id, ps.current_streak,
-             COALESCE(MIN(sub.language), 'es') AS language
+      SELECT DISTINCT ON (ps.player_id)
+             ps.player_id,
+             ps.current_streak,
+             COALESCE(sub.language, 'es') AS language,
+             ${playerLocalDateSql()} AS local_day
       FROM player_scores ps
       INNER JOIN push_subscriptions sub ON sub.player_id = ps.player_id
       WHERE ps.current_streak >= 2
-        AND ps.last_played_date = ${yesterday}
-      GROUP BY ps.player_id, ps.current_streak
+        AND ps.last_played_date = (
+          CASE
+            WHEN NULLIF(sub.time_zone, '') IS NOT NULL
+              THEN TO_CHAR((NOW() AT TIME ZONE sub.time_zone) - INTERVAL '1 day', 'YYYY-MM-DD')
+            ELSE TO_CHAR(
+              ((NOW() AT TIME ZONE 'UTC') + (sub.tz_offset_minutes * INTERVAL '1 minute')) - INTERVAL '1 day',
+              'YYYY-MM-DD'
+            )
+          END
+        )
+      ORDER BY ps.player_id, sub.created_at DESC, sub.id DESC
       LIMIT 5000
     `);
 
     let sent = 0;
-    for (const row of rows.rows as Array<{ player_id: string; current_streak: number; language: string }>) {
+    for (const row of rows.rows as Array<{ player_id: string; current_streak: number; language: string; local_day: string }>) {
       const lang = STREAK_RESCUE_MSGS[row.language] ? row.language : "es";
       const claimKey = "streak_rescue_player";
       if (!await claimPlayerNotification(row.local_day, claimKey, row.player_id)) continue;
@@ -151,41 +155,16 @@ async function sendStreakRescueNotifications() {
           url: "/solo?mode=quick&auto=1",
         });
         sent += n;
-        if (n === 0) await releasePlayerNotification(today, claimKey, row.player_id);
+        if (n === 0) await releasePlayerNotification(row.local_day, claimKey, row.player_id);
       } catch (error) {
-        await releasePlayerNotification(today, claimKey, row.player_id);
+        await releasePlayerNotification(row.local_day, claimKey, row.player_id);
         console.error("[streakRescueCron] player notification failed:", error);
       }
     }
-    console.log(`[streakRescueCron] Notifications sent: ${sent} (candidates: ${rows.rows.length}, date: ${today})`);
+    console.log(`[streakRescueCron] Notifications sent: ${sent} (candidates: ${rows.rows.length})`);
   } catch (e) {
     console.error("[streakRescueCron] Error:", e);
   }
-}
-
-/**
- * Sends a "claim your missions" push to every player who, in the currently
- * active season, has at least one mission that is `completed: true` but
- * `claimed: false`. Rotated nightly so XP doesn't evaporate when missions
- * roll over the next day.
- *
- * The eligibility filter is intentionally a coarse SQL prefilter
- * (`missions_json` LIKE '%"completed":true%') followed by a precise JSON
- * parse in code: missions are tiny and the prefilter cuts the candidate
- * set by ~98% without needing a Postgres jsonb column.
- */
-interface SqlResult<T> {
-  rows?: T[];
-}
-
-interface SeasonIdRow {
-  id: number;
-}
-
-interface SeasonClaimCandidateRow {
-  player_id: string;
-  missions_json: string;
-  language: string;
 }
 
 async function sendSeasonClaimNotifications() {
