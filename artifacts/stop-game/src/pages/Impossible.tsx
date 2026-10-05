@@ -11,9 +11,13 @@ import { recordExternalStat } from "@/hooks/useAchievements";
 const API = getApiUrl();
 const ROUND_MS = 60000;
 
-function getTodayMadrid() {
+function getPlayerTimeZone(): string {
+  try { return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"; } catch { return "UTC"; }
+}
+
+function getTodayLocal() {
   return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Europe/Madrid",
+    timeZone: getPlayerTimeZone(),
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -38,12 +42,12 @@ export default function Impossible() {
   // Load combo + my prior attempt.
   useEffect(() => {
     let stop = false;
-    fetch(`${API}/api/impossible?language=${lang}`)
+    fetch(`${API}/api/impossible?language=${lang}`, { headers: { "X-Stop-Timezone": getPlayerTimeZone() } })
       .then(r => r.json())
       .then(d => { if (!stop) setCombo(d); })
       .catch(() => {});
     if (player?.id) {
-      fetch(`${API}/api/impossible/me/${encodeURIComponent(player.id)}?language=${lang}`)
+      fetch(`${API}/api/impossible/me/${encodeURIComponent(player.id)}?language=${lang}`, { headers: { "X-Stop-Timezone": getPlayerTimeZone() } })
         .then(r => r.json())
         .then((d: Result) => {
           if (stop || !d.played || !d.result) return;
@@ -124,7 +128,7 @@ export default function Impossible() {
     const w = myAttempt?.attemptedWord || outcome?.word || "";
     const won = !!myAttempt?.won;
     const timeSec = Math.round(((myAttempt?.timeMs ?? outcome?.timeMs ?? ROUND_MS) / 1000));
-    const date = combo?.date ?? getTodayMadrid();
+    const date = combo?.date ?? getTodayLocal();
     const stats = outcome?.stats ?? combo?.stats;
     const s = stats;
     const pct = s && s.attempts > 0 ? Math.round((s.wins / s.attempts) * 100) : null;
