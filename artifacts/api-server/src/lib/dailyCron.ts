@@ -222,7 +222,7 @@ async function sendSeasonClaimNotifications() {
 
       const lang = SEASON_CLAIM_MSGS[row.language] ? row.language : "es";
       const claimKey = "season_claim_player";
-      if (!await claimPlayerNotification(today, claimKey, row.player_id)) continue;
+      if (!await claimPlayerNotification(row.local_day, claimKey, row.player_id)) continue;
       try {
         const msg = SEASON_CLAIM_MSGS[lang];
         const n = await sendPushToPlayer(row.player_id, {
@@ -232,9 +232,9 @@ async function sendSeasonClaimNotifications() {
           url: "/season",
         });
         sent += n;
-        if (n === 0) await releasePlayerNotification(today, claimKey, row.player_id);
+        if (n === 0) await releasePlayerNotification(row.local_day, claimKey, row.player_id);
       } catch (error) {
-        await releasePlayerNotification(today, claimKey, row.player_id);
+        await releasePlayerNotification(row.local_day, claimKey, row.player_id);
         console.error("[seasonClaimCron] player notification failed:", error);
       }
     }
@@ -331,7 +331,8 @@ async function sendPerUserDailyNotifications() {
     const candidates = rows.rows ?? [];
     if (candidates.length === 0) return;
 
-    const today = utcNow.toISOString().slice(0, 10);
+    // The notification is a per-player local-calendar event. Use the local
+    // day returned with each candidate for the idempotency claim, not UTC.
     // Claim independently per player: concurrent cron instances cannot both
     // deliver, while a failed delivery can release its own claim for retry.
     const seen = new Set<string>();
