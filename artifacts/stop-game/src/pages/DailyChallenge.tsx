@@ -66,7 +66,8 @@ export default function DailyChallenge() {
 
     // Logged-in players use the server as the source of truth. Local storage
     // is only a guest fallback because guests have no server daily result.
-    const localPlayed = localStorage.getItem(`stop_daily_${getTodayStr()}`);
+    const guestDailyKey = `stop_daily_${getTodayStr()}_${lang}`;
+    const localPlayed = localStorage.getItem(guestDailyKey);
     if (!player || player.loginMethod === "guest") {
       if (localPlayed) {
         setPlayedToday(true);
