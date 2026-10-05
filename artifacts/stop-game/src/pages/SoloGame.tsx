@@ -1204,24 +1204,37 @@ export default function SoloGame() {
         // para evitar duplicar puntuaciones cuando es un error de servidor
         // que en realidad sí pudo persistir.
         if (typeof navigator !== "undefined" && navigator.onLine === false) {
-          await enqueueScoreOutbox({
-            submissionId: `${gameSubmissionIdRef.current ?? createSubmissionId()}${isBonus ? ":bonus" : ""}`,
-            playerId: player.id,
-            playerName: player.name,
-            avatarColor: player.avatarColor,
-            score: finalScore,
-            letter: currentLetter || "?",
-            mode: isDailyMode ? "daily" : "solo",
-            won,
-            bonus: isBonus,
-            scoreTokens: scoreTokensRef.current,
-          });
-          const offMsg =
-            lang === "en" ? "Offline — score will sync when you're back." :
-            lang === "pt" ? "Offline — a pontuação irá sincronizar quando voltares." :
-            lang === "fr" ? "Hors-ligne — le score sera envoyé au retour." :
-            "Sin conexión: tu puntuación se enviará al volver internet.";
-          toast({ title: "📡 " + offMsg });
+          // Only server-voucher-backed rounds can be synchronized to the
+          // authoritative ranking. A fully offline game is still playable, but
+          // its locally calculated score has no server proof and stays local.
+          const hasServerProof = scoreTokensRef.current.length > 0;
+          if (hasServerProof) {
+            await enqueueScoreOutbox({
+              submissionId: `${gameSubmissionIdRef.current ?? createSubmissionId()}${isBonus ? ":bonus" : ""}`,
+              playerId: player.id,
+              playerName: player.name,
+              avatarColor: player.avatarColor,
+              score: finalScore,
+              letter: currentLetter || "?",
+              mode: isDailyMode ? "daily" : "solo",
+              won,
+              bonus: isBonus,
+              scoreTokens: scoreTokensRef.current,
+            });
+            const offMsg =
+              lang === "en" ? "Offline — verified rounds will sync when you're back." :
+              lang === "pt" ? "Offline — as rondas verificadas sincronizam quando voltares." :
+              lang === "fr" ? "Hors-ligne — les manches vérifiées seront synchronisées au retour." :
+              "Sin conexión: las rondas verificadas se sincronizarán al volver.";
+            toast({ title: "📡 " + offMsg });
+          } else {
+            const offMsg =
+              lang === "en" ? "Offline — this score stays on this device and won't enter the ranking." :
+              lang === "pt" ? "Offline — esta pontuação fica neste dispositivo e não entra no ranking." :
+              lang === "fr" ? "Hors-ligne — ce score reste sur cet appareil et n'entre pas au classement." :
+              "Sin conexión: esta puntuación queda en este dispositivo y no entra en el ranking.";
+            toast({ title: "📡 " + offMsg });
+          }
           return;
         }
         const msg =
