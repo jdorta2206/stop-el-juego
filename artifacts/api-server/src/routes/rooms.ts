@@ -2438,8 +2438,8 @@ router.get("/:roomCode/events", async (req, res) => {
     res.status(403).json({ error: "Not a member of this room" }); return;
   }
   if (playerId && isLoggedInId(playerId) && isAuthConfigured()) {
-    // EventSource cannot send custom headers, so accept the signed token via the
-    // EventSource sends the httpOnly auth cookie with credentials. This applies
+    // EventSource cannot send custom headers, so authenticate with the signed
+    // httpOnly session cookie via credentials. This applies
     // to both private and public rooms because public rooms still contain richer
     // state for authenticated members. Never accept the long-lived session token
     // through the URL, where it can leak into logs, history, monitoring, or referrers.
