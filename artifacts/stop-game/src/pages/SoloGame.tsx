@@ -1083,6 +1083,9 @@ export default function SoloGame() {
         // not when the player later presses "Jugar de nuevo". This preserves
         // the every-3-games cadence even if the player leaves the RESULTS screen.
         if (!isDailyMode) recordInterstitialGameCompleted();
+        // The private /test panel tracks guest games separately from registered
+        // game_history. Only anonymous players must increment that aggregate.
+        if (!player) trackGuestGame();
       }
 
       // AI personality comment
