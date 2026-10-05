@@ -1500,7 +1500,7 @@ router.post("/validate", async (req, res) => {
     seenCategories.add(key);
     return true;
   });
-  if (playerResponses.length !== CATEGORIES_PER_ROUND) {
+  if (!VALID_CATEGORY_COUNTS.has(playerResponses.length)) {
     res.status(400).json({ error: "Duplicate or invalid categories" });
     return;
   }
