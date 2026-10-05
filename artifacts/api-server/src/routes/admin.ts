@@ -71,6 +71,32 @@ function num(v: unknown): number {
   return Number(v ?? 0);
 }
 
+
+function svgLineChart(rows: Array<{ label: string; value: number }>, title: string): string {
+  const safeRows = rows.filter((r) => Number.isFinite(r.value));
+  if (!safeRows.length) return '<div class="emptyChart">Sin datos suficientes para el gráfico.</div>';
+  const max = Math.max(...safeRows.map((r) => r.value), 1);
+  const width = 760, height = 220, left = 42, right = 18, top = 26, bottom = 34;
+  const innerW = width - left - right, innerH = height - top - bottom;
+  const points = safeRows.map((r, i) => {
+    const x = safeRows.length === 1 ? left + innerW / 2 : left + (i * innerW) / (safeRows.length - 1);
+    const y = top + innerH - (r.value / max) * innerH;
+    return { x, y, label: r.label, value: r.value };
+  });
+  const poly = points.map((p) => p.x.toFixed(1) + "," + p.y.toFixed(1)).join(" ");
+  const dots = points.map((p) => '<circle cx="' + p.x.toFixed(1) + '" cy="' + p.y.toFixed(1) + '" r="3.5" fill="#4ade80"><title>' + esc(p.label) + ': ' + p.value + '</title></circle>').join("");
+  const labels = points.map((p) => '<text x="' + p.x.toFixed(1) + '" y="' + (height - 10) + '" text-anchor="middle">' + esc(p.label) + '</text>').join("");
+  return '<div class="chart"><div class="chartTitle">' + esc(title) + '</div><svg viewBox="0 0 ' + width + ' ' + height + '" role="img" aria-label="' + esc(title) + '"><line x1="' + left + '" y1="' + (top + innerH) + '" x2="' + (width - right) + '" y2="' + (top + innerH) + '" stroke="#334155"/><polyline points="' + poly + '" fill="none" stroke="#4ade80" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>' + dots + labels + '</svg></div>';
+}
+
+function svgBars(rows: Array<{ label: string; value: number }>, title: string): string {
+  const safeRows = rows.filter((r) => Number.isFinite(r.value));
+  if (!safeRows.length) return '<div class="emptyChart">Sin datos suficientes para el gráfico.</div>';
+  const max = Math.max(...safeRows.map((r) => r.value), 1);
+  const bars = safeRows.map((r) => '<div class="barRow"><div class="barLabel">' + esc(r.label) + '</div><div class="barTrack"><div class="barFill" style="width:' + Math.max(0, Math.min(100, (r.value / max) * 100)).toFixed(1) + '%"></div></div><div class="barValue">' + r.value + '</div></div>').join("");
+  return '<div class="chart"><div class="chartTitle">' + esc(title) + '</div>' + bars + '</div>';
+}
+
 function esc(v: unknown): string {
   return String(v ?? "")
     .replace(/&/g, "&amp;")
@@ -218,6 +244,40 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
       `<tr><td>${esc(row.d)}</td><td>${num(row.active)}</td><td>${num(row.starters)}</td><td>${num(row.completers)}</td><td>${num(row.starters) > 0 ? Math.round((num(row.completers) / num(row.starters)) * 100) : 0}%</td></tr>`
     ).join('');
 
+
+    const modeUsage = (
+      await db.execute(sql`
+        SELECT COALESCE(mode, 'sin modo') AS mode, COUNT(*)::int AS total
+        FROM analytics_events
+        WHERE trusted = TRUE AND event_name = 'game_start' AND created_at >= NOW() - INTERVAL '7 days'
+        GROUP BY mode ORDER BY total DESC LIMIT 10
+      `)
+    ).rows as Record<string, unknown>[];
+
+    const powerupUsage = (
+      await db.execute(sql`
+        SELECT COALESCE(metadata_json::jsonb->>'powerup', 'sin identificar') AS powerup, COUNT(*)::int AS total
+        FROM analytics_events
+        WHERE trusted = TRUE AND event_name = 'powerup_used' AND created_at >= NOW() - INTERVAL '7 days'
+        GROUP BY powerup ORDER BY total DESC LIMIT 10
+      `)
+    ).rows as Record<string, unknown>[];
+
+    const chartActivity = [...activityByDay].reverse().map((row) => ({ label: String(row.d).slice(5), value: num(row.active) }));
+    const chartCompletions = [...activityByDay].reverse().map((row) => ({ label: String(row.d).slice(5), value: num(row.starters) > 0 ? Math.round((num(row.completers) / num(row.starters)) * 100) : 0 }));
+    const modeChart = modeUsage.map((row) => ({ label: String(row.mode), value: num(row.total) }));
+    const powerupChart = powerupUsage.map((row) => ({ label: String(row.powerup), value: num(row.total) }));
+    const funnelChart = [
+      { label: "Sesión", value: num(funnel?.sessions) },
+      { label: "Partida", value: num(funnel?.game_players) },
+      { label: "Finalizada", value: num(funnel?.completed_players) },
+    ];
+    const adChart = [
+      { label: "Solicitados", value: num(adUnique?.requested) },
+      { label: "Completados", value: num(adUnique?.completed) },
+      { label: "Fallidos", value: num(adUnique?.failed) },
+    ];
+
     const platformVersionRows = platformVersions.map((row) => {
       const platform = String(row.platform) === 'android' ? '🤖 Android' : String(row.platform) === 'ios' ? '🍎 iOS' : '🌐 Web';
       return `<tr><td>${platform}</td><td>${esc(row.app_version)}</td><td>${num(row.active_7d)}</td></tr>`;
@@ -357,6 +417,7 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
   .card .label { color:#8a98a8; font-size:.78rem; text-transform:uppercase; letter-spacing:.04em; }
   .card .val { font-size:2rem; font-weight:700; margin-top:4px; }
   .card.accent .val { color:#4ade80; }
+  .charts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-bottom:18px}.chart{background:#1a2029;border:1px solid #283140;border-radius:14px;padding:14px;min-height:220px}.chartTitle{font-weight:700;margin-bottom:10px}.chart svg{width:100%;height:auto}.chart svg text{fill:#8a98a8;font-size:11px}.emptyChart{color:#8a98a8;padding:50px 10px;text-align:center}.barRow{display:grid;grid-template-columns:110px 1fr 54px;gap:8px;align-items:center;margin:9px 0}.barLabel{font-size:.8rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.barTrack{height:12px;background:#11161d;border-radius:999px;overflow:hidden}.barFill{height:100%;background:#4ade80;border-radius:999px}@media(max-width:800px){.charts{grid-template-columns:1fr}.barRow{grid-template-columns:90px 1fr 45px}}
   h2 { font-size:1.05rem; margin:24px 0 10px; }
   table { width:100%; border-collapse:collapse; background:#1a2029; border-radius:12px; overflow:hidden; font-size:.9rem; }
   th,td { padding:10px 12px; text-align:left; border-bottom:1px solid #232b36; }
@@ -413,7 +474,17 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
     </tbody>
   </table>
 
-  <h2>📅 Actividad real · últimos 14 días</h2>
+  <h2>📊 Lo que está pasando de un vistazo</h2>
+  <div class="charts">
+    ${svgLineChart(chartActivity, "Jugadores activos por día · 14 días")}
+    ${svgLineChart(chartCompletions, "Porcentaje de finalización · 14 días")}
+    ${svgBars(funnelChart, "Embudo · jugadores únicos · 7 días")}
+    ${svgBars(adChart, "Publicidad · usuarios únicos · 7 días")}
+    ${svgBars(modeChart, "Modos más jugados · 7 días")}
+    ${svgBars(powerupChart, "Recompensas más utilizadas · 7 días")}
+  </div>
+
+  <h2>📅 Actividad real · últimos 14 días</h2
   <table>
     <thead><tr><th>Día</th><th>Activos</th><th>Inician partida</th><th>Terminan partida</th><th>Conversión</th></tr></thead>
     <tbody>${activityRows || '<tr><td colspan="5">Sin eventos de actividad.</td></tr>'}</tbody>
