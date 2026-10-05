@@ -147,7 +147,7 @@ export default function Live() {
           <p className="text-white/60 text-xs uppercase tracking-wider px-1">Marcador en vivo</p>
           <AnimatePresence>
             {players.map((p: any, i: number) => (
-              <motion.div key={p.playerId} layout
+              <motion.div key={p.playerName} layout
                 initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
                 className="flex items-center gap-3 px-3 py-2.5 rounded-xl"
                 style={{
