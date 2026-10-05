@@ -140,6 +140,29 @@ router.post("/heartbeat", presenceLimiter, async (req, res) => {
   }
 });
 
+router.post("/game-start", presenceLimiter, async (req, res) => {
+  try {
+    await analyticsTablesReady;
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const sessionId = serverSessionId(req, res);
+    const playerId = readPlayerId(req);
+    const language = typeof body.language === "string" ? body.language.slice(0, 16) : null;
+    const mode = typeof body.mode === "string" ? body.mode.slice(0, 32) : null;
+    const appVersion = String(req.headers["x-client-version"] ?? "").slice(0, 32) || null;
+    const platform = platformFromRequest(req);
+    await db.execute(sql`
+      INSERT INTO analytics_events
+        (event_name, player_id, session_id, platform, app_version, language, mode, metadata_json, trusted)
+      VALUES
+        ('game_start', ${playerId}, ${sessionId}, ${platform}, ${appVersion}, ${language}, ${mode}, '{}', TRUE)
+    `);
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error("[analytics] trusted game-start failed:", err);
+    return res.status(500).json({ error: "Analytics unavailable" });
+  }
+});
+
 router.post("/event", presenceLimiter, async (req, res) => {
   try {
     await analyticsTablesReady;
