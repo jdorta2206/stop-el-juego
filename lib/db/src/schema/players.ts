@@ -124,7 +124,7 @@ export const dailyResultsTable = pgTable("daily_results", {
   language: text("language").notNull().default("es"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (t) => ({
-  playerDateUnique: uniqueIndex("daily_results_player_date_uidx").on(t.playerId, t.challengeDate),
+  playerDateUnique: uniqueIndex("daily_results_player_date_language_uidx").on(t.playerId, t.challengeDate, t.language),
 }));
 
 export const insertDailyResultSchema = createInsertSchema(dailyResultsTable).omit({ id: true, createdAt: true });

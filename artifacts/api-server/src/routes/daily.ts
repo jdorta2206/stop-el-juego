@@ -64,6 +64,8 @@ router.get("/status", async (req, res) => {
     res.status(403).json({ error: "Identity verification failed" });
     return;
   }
+  const requestedLanguage = typeof req.query.language === "string" ? req.query.language.trim().toLowerCase() : "es";
+  const language = ["es", "en", "pt", "fr"].includes(requestedLanguage) ? requestedLanguage : "es";
   const today = getTodayUTC();
   const rows = await db
     .select({ score: dailyResultsTable.score })
@@ -71,6 +73,7 @@ router.get("/status", async (req, res) => {
     .where(and(
       eq(dailyResultsTable.playerId, playerId),
       eq(dailyResultsTable.challengeDate, today),
+      eq(dailyResultsTable.language, language),
     ))
     .limit(1);
   res.json({ played: rows.length > 0, score: rows[0]?.score ?? null, date: today });
@@ -147,6 +150,7 @@ router.post("/submit", async (req, res) => {
         .where(and(
           eq(dailyResultsTable.playerId, playerId),
           eq(dailyResultsTable.challengeDate, today),
+          eq(dailyResultsTable.language, normalizedLanguage),
         ))
         .limit(1);
 
@@ -180,7 +184,7 @@ router.post("/submit", async (req, res) => {
         letter,
         language: normalizedLanguage,
       }).onConflictDoUpdate({
-        target: [dailyResultsTable.playerId, dailyResultsTable.challengeDate],
+        target: [dailyResultsTable.playerId, dailyResultsTable.challengeDate, dailyResultsTable.language],
         set: {
           score: sql`GREATEST(${dailyResultsTable.score}, EXCLUDED.score)`,
           playerName: sql`CASE WHEN EXCLUDED.score > ${dailyResultsTable.score} THEN ${canonicalPlayerName} ELSE ${dailyResultsTable.playerName} END`,
@@ -201,7 +205,7 @@ router.post("/submit", async (req, res) => {
     void recordAuthoritativeSeasonEvents(
       playerId,
       [{ type: "daily_done", value: 1 }],
-      `daily:${today}`,
+      `daily:${today}:${normalizedLanguage}`,
     );
   }
   res.status(submitted ? 201 : 200).json({ submitted, alreadyPlayed });
