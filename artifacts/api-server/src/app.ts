@@ -9,7 +9,8 @@ import adminAnalytics from "./routes/adminAnalytics";
 import { WebhookHandlers } from "./webhookHandlers";
 import { isStripeReady } from "./stripeClient";
 import { generalLimiter } from "./middlewares/rateLimit";
-import { indexesReady } from "@workspace/db";
+import { db, indexesReady } from "@workspace/db";
+import { sql } from "drizzle-orm";
 
 // Production trigger: frontend/runtime stability fixes are deployed together with the API.
 const app: Express = express();
@@ -181,8 +182,17 @@ if (process.env["SERVE_CLIENT"] === "1") {
   });
 }
 
-app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+app.use((err: any, req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error("[API ERROR]", err?.message ?? err, err?.stack);
+  void db.execute(sql`
+    INSERT INTO analytics_events (event_name, platform, metadata_json, trusted)
+    VALUES ('api_error', 'web', ${JSON.stringify({
+      method: req.method,
+      path: req.path.slice(0, 300),
+      status: 500,
+      message: String(err?.message ?? err).slice(0, 500),
+    }).slice(0, 4000)}, TRUE)
+  `).catch(() => {});
   if (res.headersSent) return;
   res.status(500).json({ error: "Internal server error" });
 });
