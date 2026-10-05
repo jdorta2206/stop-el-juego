@@ -13,9 +13,20 @@ function parseLanguage(value: unknown): string | null {
   return SUPPORTED_LANGUAGES.has(language) ? language : null;
 }
 
-function getTodayMadrid(): string {
+function getPlayerTimeZone(req: { headers: Record<string, unknown> }): string {
+  const raw = req.headers["x-stop-timezone"];
+  const timeZone = typeof raw === "string" && raw.trim() ? raw.trim() : "UTC";
+  try {
+    new Intl.DateTimeFormat("en-CA", { timeZone }).format(new Date());
+    return timeZone;
+  } catch {
+    return "UTC";
+  }
+}
+
+function getTodayForPlayer(req: { headers: Record<string, unknown> }): string {
   return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Europe/Madrid",
+    timeZone: getPlayerTimeZone(req),
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -26,7 +37,7 @@ function getTodayMadrid(): string {
 // Returns today's brutal combo plus global stats (how many won vs attempted).
 router.get("/", async (req, res) => {
   const language = parseLanguage(req.query.language) ?? "es";
-  const today = getTodayMadrid();
+  const today = getTodayForPlayer(req);
   const combo = getImpossibleCombo(today, language);
 
   const rows = await db
@@ -62,7 +73,7 @@ router.get("/me/:playerId", async (req, res) => {
   }
 
   const language = parseLanguage(req.query.language) ?? "es";
-  const today = getTodayMadrid();
+  const today = getTodayForPlayer(req);
 
   const rows = await db
     .select()
@@ -104,7 +115,7 @@ router.post("/submit", async (req, res) => {
     return;
   }
 
-  const today = getTodayMadrid();
+  const today = getTodayForPlayer(req);
 
   // Idempotency: if they already submitted today, return the prior result.
   const existing = await db
