@@ -60,6 +60,7 @@ export async function ensureIndexes(): Promise<void> {
     `DELETE FROM daily_results a USING daily_results b
        WHERE a.player_id = b.player_id
          AND a.challenge_date = b.challenge_date
+         AND a.language = b.language
          AND (a.score < b.score OR (a.score = b.score AND a.id < b.id))`,
     `DROP INDEX IF EXISTS daily_results_player_date_uidx`,
     `CREATE UNIQUE INDEX IF NOT EXISTS daily_results_player_date_language_uidx
