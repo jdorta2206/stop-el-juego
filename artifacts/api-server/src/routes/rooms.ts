@@ -3,7 +3,7 @@ import { db } from "@workspace/db";
 import { roomsTable, playerScoresTable, gameHistoryTable } from "@workspace/db";
 import { eq, and, or, lt, gt, ne, inArray, sql } from "drizzle-orm";
 import { CreateRoomBody, JoinRoomBody, SubmitRoomResultsBody } from "@workspace/api-zod";
-import { calculateStreak, appendStreakDay, calcXpGain, calcCoinGain, calcLevel, lookupPlayerTzOffset } from "./ranking";
+import { calculateStreak, appendStreakDay, calcXpGain, calcCoinGain, calcLevel, lookupPlayerTimezone, normalizePlayerTimeZone } from "./ranking";
 import { recordTrustedAnalyticsEvent } from "./analytics";
 import { recordAuthoritativeSeasonEvents } from "./season";
 import { recordHalloweenEvent, recordHalloweenScareEvents, getHalloweenEventYear, recordHalloweenScareEventsInTransaction, recordHalloweenScareEventsWithCooldown, isHalloweenPreviewAuthorized } from "./halloween";
@@ -626,7 +626,7 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
     const score = Math.round(rawScore * 1.5);
     const won = winner?.playerId === p.playerId;
     const xpBase = calcXpGain(score, won, "multiplayer");
-    const playerTimezone = await lookupPlayerTimezone(p.playerId);
+    const playerTimezone = { timeZone: normalizePlayerTimeZone(p.timeZone), tzOffset: (await lookupPlayerTimezone(p.playerId)).tzOffset };
     const tzOffset = playerTimezone.tzOffset;
     const happyHour = tzOffset !== null && isHappyHourActiveForTzOffset(tzOffset);
     const xpGain = happyHour ? xpBase * HAPPY_HOUR_MULTIPLIER : xpBase;
@@ -1555,6 +1555,7 @@ router.post("/", async (req, res) => {
     picture: effectivePicture,
     loginMethod: effectiveLoginMethod,
     isPremium: hostPremium,
+    timeZone: normalizePlayerTimeZone(req.headers["x-stop-timezone"]),
     score: 0,
     roundScore: 0,
     isHost: true,
@@ -1769,6 +1770,7 @@ router.post("/:roomCode/join", roomJoinLimiter, async (req, res) => {
         picture: effectivePicture,
         loginMethod: effectiveLoginMethod,
         isPremium: joinerPremium,
+        timeZone: normalizePlayerTimeZone(req.headers["x-stop-timezone"]),
         score: 0,
         roundScore: 0,
         isHost: false,
