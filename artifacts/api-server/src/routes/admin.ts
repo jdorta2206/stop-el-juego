@@ -215,12 +215,12 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
     ).rows as Record<string, unknown>[];
 
     const activityRows = activityByDay.map((row) =>
-      `<tr><td>\${esc(row.d)}</td><td>\${num(row.active)}</td><td>\${num(row.starters)}</td><td>\${num(row.completers)}</td><td>\${num(row.starters) > 0 ? Math.round((num(row.completers) / num(row.starters)) * 100) : 0}%</td></tr>`
+      `<tr><td>${esc(row.d)}</td><td>${num(row.active)}</td><td>${num(row.starters)}</td><td>${num(row.completers)}</td><td>${num(row.starters) > 0 ? Math.round((num(row.completers) / num(row.starters)) * 100) : 0}%</td></tr>`
     ).join('');
 
     const platformVersionRows = platformVersions.map((row) => {
       const platform = String(row.platform) === 'android' ? '🤖 Android' : String(row.platform) === 'ios' ? '🍎 iOS' : '🌐 Web';
-      return `<tr><td>\${platform}</td><td>\${esc(row.app_version)}</td><td>\${num(row.active_7d)}</td></tr>`;
+      return `<tr><td>${platform}</td><td>${esc(row.app_version)}</td><td>${num(row.active_7d)}</td></tr>`;
     }).join('');
 
     // Top 10 jugadores
@@ -381,23 +381,23 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
 
   <h2>📈 Salud real del juego</h2>
   <div class="cards">
-    <div class="card accent"><div class="label">DAU real · hoy</div><div class="val">\${num(retentionKpis?.dau)}</div></div>
-    <div class="card"><div class="label">WAU real · 7 días</div><div class="val">\${num(retentionKpis?.wau)}</div></div>
-    <div class="card"><div class="label">MAU real · 30 días</div><div class="val">\${num(retentionKpis?.mau)}</div></div>
-    <div class="card"><div class="label">Cuentas activas · 7 días</div><div class="val">\${num(retentionKpis?.account_active_7d)}</div></div>
-    <div class="card"><div class="label">Invitados activos · 7 días</div><div class="val">\${num(retentionKpis?.guest_active_7d)}</div></div>
-    <div class="card"><div class="label">Inicio → fin · 7 días</div><div class="val">\${num(funnel?.game_players) > 0 ? Math.round((num(funnel?.completed_players) / num(funnel?.game_players)) * 100) : 0}%</div></div>
+    <div class="card accent"><div class="label">DAU real · hoy</div><div class="val">${num(retentionKpis?.dau)}</div></div>
+    <div class="card"><div class="label">WAU real · 7 días</div><div class="val">${num(retentionKpis?.wau)}</div></div>
+    <div class="card"><div class="label">MAU real · 30 días</div><div class="val">${num(retentionKpis?.mau)}</div></div>
+    <div class="card"><div class="label">Cuentas activas · 7 días</div><div class="val">${num(retentionKpis?.account_active_7d)}</div></div>
+    <div class="card"><div class="label">Invitados activos · 7 días</div><div class="val">${num(retentionKpis?.guest_active_7d)}</div></div>
+    <div class="card"><div class="label">Inicio → fin · 7 días</div><div class="val">${num(funnel?.game_players) > 0 ? Math.round((num(funnel?.completed_players) / num(funnel?.game_players)) * 100) : 0}%</div></div>
   </div>
 
   <h2>🎯 Embudo de jugadores · últimos 7 días</h2>
   <table>
     <thead><tr><th>Etapa</th><th>Jugadores únicos</th></tr></thead>
     <tbody>
-      <tr><td>Sesión iniciada</td><td>\${num(funnel?.sessions)}</td></tr>
-      <tr><td>Partida iniciada</td><td>\${num(funnel?.game_players)}</td></tr>
-      <tr><td>Partida terminada</td><td>\${num(funnel?.completed_players)}</td></tr>
-      <tr><td>Pidió rewarded</td><td>\${num(funnel?.ad_players)}</td></tr>
-      <tr><td>Rewarded falló</td><td>\${num(funnel?.ad_failed_players)}</td></tr>
+      <tr><td>Sesión iniciada</td><td>${num(funnel?.sessions)}</td></tr>
+      <tr><td>Partida iniciada</td><td>${num(funnel?.game_players)}</td></tr>
+      <tr><td>Partida terminada</td><td>${num(funnel?.completed_players)}</td></tr>
+      <tr><td>Pidió rewarded</td><td>${num(funnel?.ad_players)}</td></tr>
+      <tr><td>Rewarded falló</td><td>${num(funnel?.ad_failed_players)}</td></tr>
     </tbody>
   </table>
 
@@ -405,24 +405,24 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
   <table>
     <thead><tr><th>Última actividad</th><th>Jugadores registrados</th></tr></thead>
     <tbody>
-      <tr><td>Activos &lt; 1 día</td><td>\${num(churnBuckets?.active_1d)}</td></tr>
-      <tr><td>Ausentes 1–3 días</td><td>\${num(churnBuckets?.away_1_3d)}</td></tr>
-      <tr><td>Ausentes 3–7 días</td><td>\${num(churnBuckets?.away_3_7d)}</td></tr>
-      <tr><td>Ausentes 7–14 días</td><td>\${num(churnBuckets?.away_7_14d)}</td></tr>
-      <tr><td>Ausentes &gt; 14 días</td><td>\${num(churnBuckets?.away_14d)}</td></tr>
+      <tr><td>Activos &lt; 1 día</td><td>${num(churnBuckets?.active_1d)}</td></tr>
+      <tr><td>Ausentes 1–3 días</td><td>${num(churnBuckets?.away_1_3d)}</td></tr>
+      <tr><td>Ausentes 3–7 días</td><td>${num(churnBuckets?.away_3_7d)}</td></tr>
+      <tr><td>Ausentes 7–14 días</td><td>${num(churnBuckets?.away_7_14d)}</td></tr>
+      <tr><td>Ausentes &gt; 14 días</td><td>${num(churnBuckets?.away_14d)}</td></tr>
     </tbody>
   </table>
 
   <h2>📅 Actividad real · últimos 14 días</h2>
   <table>
     <thead><tr><th>Día</th><th>Activos</th><th>Inician partida</th><th>Terminan partida</th><th>Conversión</th></tr></thead>
-    <tbody>\${activityRows || '<tr><td colspan="5">Sin eventos de actividad.</td></tr>'}</tbody>
+    <tbody>${activityRows || '<tr><td colspan="5">Sin eventos de actividad.</td></tr>'}</tbody>
   </table>
 
   <h2>📱 Versión y plataforma · últimos 7 días</h2>
   <table>
     <thead><tr><th>Plataforma</th><th>Versión</th><th>Activos únicos</th></tr></thead>
-    <tbody>\${platformVersionRows || '<tr><td colspan="3">Sin datos.</td></tr>'}</tbody>
+    <tbody>${platformVersionRows || '<tr><td colspan="3">Sin datos.</td></tr>'}</tbody>
   </table>
 
   <h2>Totales históricos</h2>
