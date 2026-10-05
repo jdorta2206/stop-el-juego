@@ -1,3 +1,5 @@
+import { areAdsTemporarilySuspended } from "@/lib/adsRuntime";
+
 const RESULT_TIMEOUT_MS = 15_000;
 let initialized = false;
 
@@ -44,7 +46,7 @@ function makeRequestId(): string {
 
 export async function requestInterstitialAd(): Promise<void> {
   initTwaInterstitialBridge();
-  if (typeof window === "undefined" || !isTwaInterstitialAvailable()) return;
+  if (areAdsTemporarilySuspended() || typeof window === "undefined" || !isTwaInterstitialAvailable()) return;
 
   const requestId = makeRequestId();
   const origin = window.location.origin;

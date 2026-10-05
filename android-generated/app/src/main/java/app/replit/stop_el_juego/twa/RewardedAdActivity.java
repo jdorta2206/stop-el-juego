@@ -27,6 +27,9 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 
 public class RewardedAdActivity extends Activity {
+    private static boolean adsTemporarilySuspended() {
+        return System.currentTimeMillis() < 1793491200000L; // 1 Nov 2026 00:00 UTC
+    }
     private static final String TAG = "STOP_REWARDED";
     private static final String REAL_REWARDED_ID = "ca-app-pub-4807272408824742/3559554716";
     private static final long LOAD_TIMEOUT_MS = 10_000L;
@@ -73,6 +76,13 @@ public class RewardedAdActivity extends Activity {
         if (!isAllowedOrigin(origin)) {
             Log.e(TAG, "Rejected invalid rewarded origin: " + origin);
             sendClientResult("dismissed");
+            finish();
+            return;
+        }
+
+        if (adsTemporarilySuspended()) {
+            Log.d(TAG, "AdMob runtime gate active through 31 Oct 2026; skipping rewarded request");
+            sendClientResult("ads_suspended");
             finish();
             return;
         }

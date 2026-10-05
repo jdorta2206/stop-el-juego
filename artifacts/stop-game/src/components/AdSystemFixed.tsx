@@ -5,8 +5,9 @@ import { detectPaymentChannel, hasAndroidAppReferrer } from "@/lib/playBilling";
 import { initTwaAdBridge, isTwaAdBridgeAvailable, requestRewardedAd, setRewardedAdPlayerId } from "@/lib/twaAdBridge";
 import { pauseGameTimer, resumeGameTimer } from "@/lib/timerPauseGuard";
 import { trackAnalyticsEvent } from "@/lib/analyticsClient";
+import { areAdsTemporarilySuspended } from "@/lib/adsRuntime";
 
-const ADS_DISABLED = import.meta.env.VITE_ADS_DISABLED === "1";
+const ADS_DISABLED = import.meta.env.VITE_ADS_DISABLED === "1" || areAdsTemporarilySuspended();
 const ADSTERRA_BANNER_KEY = ADS_DISABLED ? undefined : ((import.meta.env.VITE_ADSTERRA_BANNER_KEY as string | undefined) ?? "1212cb86d493b763d38d4523eec88cac");
 const ADSTERRA_BANNER_W = 320;
 const ADSTERRA_BANNER_H = 50;
@@ -114,6 +115,10 @@ export function RewardedAd({ onComplete, onSkip, playerId, rewardType = "points"
   useEffect(() => { initTwaAdBridge(); }, []);
 
   const startWatching = async () => {
+    if (areAdsTemporarilySuspended()) {
+      onSkipRef.current();
+      return;
+    }
     setRewardedAdPlayerId(playerId);
     const placement = rewardType === "extraTime" ? "extra_time" : rewardType === "hint" ? "hint" : "double_points";
     void trackAnalyticsEvent("rewarded_ad_requested", { metadata: { placement } });

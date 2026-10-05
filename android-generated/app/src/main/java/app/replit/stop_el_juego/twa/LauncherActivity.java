@@ -31,6 +31,9 @@ import java.lang.reflect.Field;
 
 /** STOP TWA native bridge for Google Mobile Ads rewarded video. */
 public class LauncherActivity extends com.google.androidbrowserhelper.trusted.LauncherActivity {
+    private static boolean adsTemporarilySuspended() {
+        return System.currentTimeMillis() < 1793491200000L; // 1 Nov 2026 00:00 UTC
+    }
     private static final String TAG = "STOP_AD_BRIDGE";
     private static final Uri SOURCE_ORIGIN = Uri.parse("https://www.stopjuegodepalabras.com");
     private static final Uri TARGET_ORIGIN = Uri.parse("https://www.stopjuegodepalabras.com");
@@ -55,9 +58,13 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
         super.onCreate(savedInstanceState);
         MobileAds.initialize(this, status -> {
             mobileAdsReady = true;
-            Log.d(TAG, "MobileAds initialized; starting rewarded + interstitial preload");
-            preloadRewardedAd();
-            InterstitialAdStore.initialize(this);
+            if (!adsTemporarilySuspended()) {
+                Log.d(TAG, "MobileAds initialized; starting rewarded + interstitial preload");
+                preloadRewardedAd();
+                InterstitialAdStore.initialize(this);
+            } else {
+                Log.d(TAG, "AdMob runtime gate active through 31 Oct 2026; no ad requests will be made");
+            }
         });
         if (Build.VERSION.SDK_INT > Build.VERSION_CODES.O) {
             setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT);
@@ -179,6 +186,12 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     }
 
     private void showInterstitialWhenReady() {
+        if (adsTemporarilySuspended()) {
+            String requestId = activeInterstitialRequestId;
+            activeInterstitialRequestId = null;
+            sendInterstitialResult(requestId, false, "ads_suspended");
+            return;
+        }
         if (!mobileAdsReady) {
             Log.w(TAG, "INTERSTITIAL requested before Mobile Ads initialization finished");
             activeInterstitialRequestId = null;
@@ -220,7 +233,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     }
     private String rewardedUnitId() { return USE_TEST_REWARDED_ADS ? REWARDED_TEST_ID : REWARDED_REAL_ID; }
     private void preloadRewardedAd() {
-        if (!mobileAdsReady || rewardedAd != null || rewardedAdLoading) return;
+        if (adsTemporarilySuspended() || !mobileAdsReady || rewardedAd != null || rewardedAdLoading) return;
         rewardedAdLoading = true;
         Log.d(TAG, "Rewarded load requested; unit=" + rewardedUnitId());
         RewardedAd.load(this, rewardedUnitId(), new AdRequest.Builder().build(), new RewardedAdLoadCallback() {
@@ -240,6 +253,10 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
         });
     }
     private void showRewardedAdWhenReady() {
+        if (adsTemporarilySuspended()) {
+            sendResult(false, "ads_suspended");
+            return;
+        }
         if (rewardedAd != null) { showRewardedAd(); return; }
         if (!mobileAdsReady) { Log.w(TAG, "Rewarded requested before Mobile Ads initialization finished"); return; }
         preloadRewardedAd();
