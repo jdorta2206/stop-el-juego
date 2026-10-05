@@ -11,6 +11,7 @@ export type OfflineBundle = {
   dictionary: Record<string, Record<string, string[]>>;
   openCategories: string[];
   neverValidWords: string[];
+  categoryAliases?: Record<string, string>;
 };
 
 export type OfflineValidateRequest = {
@@ -136,13 +137,14 @@ function isWordValid(
 
   if (bundle.neverValidWords.includes(normalizedWord)) return false;
 
-  const normCategory = normalizeWord(category);
+  const canonicalCategory = bundle.categoryAliases?.[normalizeWord(category)] ?? category;
+  const normCategory = normalizeWord(canonicalCategory);
   if (bundle.openCategories.includes(normCategory)) return normalizedWord.length >= 3;
 
   const primaryDict = bundle.dictionary[language] || bundle.dictionary["es"];
-  let categoryWords = findCategoryWords(primaryDict || {}, category);
+  let categoryWords = findCategoryWords(primaryDict || {}, canonicalCategory);
   if (categoryWords.length === 0 && language !== "es" && bundle.dictionary["es"]) {
-    categoryWords = findCategoryWords(bundle.dictionary["es"], category);
+    categoryWords = findCategoryWords(bundle.dictionary["es"], canonicalCategory);
   }
   if (categoryWords.length === 0) return normalizedWord.length >= 3;
 
@@ -161,7 +163,8 @@ export function getAiWordOffline(
   const bundle = getCachedOfflineBundle();
   if (!bundle) return "";
   const langDict = bundle.dictionary[language] || bundle.dictionary["es"] || {};
-  let categoryWords = findCategoryWords(langDict, category);
+  const canonicalCategory = bundle.categoryAliases?.[normalizeWord(category)] ?? category;
+  let categoryWords = findCategoryWords(langDict, canonicalCategory);
   if (categoryWords.length === 0 && language !== "es" && bundle.dictionary["es"]) {
     categoryWords = findCategoryWords(bundle.dictionary["es"], category);
   }
