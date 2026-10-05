@@ -2442,8 +2442,10 @@ router.get("/:roomCode/events", async (req, res) => {
     // token query param (falls back to the auth cookie). This applies to both
     // private and public rooms because public rooms still contain richer state
     // for authenticated members.
-    const queryToken = typeof req.query["token"] === "string" ? (req.query["token"] as string) : undefined;
-    const verified = verifyPlayerToken(queryToken) ?? readPlayerId(req);
+    // EventSource sends the httpOnly auth cookie with credentials; never accept
+    // the long-lived session token through the URL, where it can leak into logs,
+    // browser history, monitoring, or referrers.
+    const verified = readPlayerId(req);
     if (verified !== playerId) {
       res.status(403).json({ error: "Identity verification failed" }); return;
     }
