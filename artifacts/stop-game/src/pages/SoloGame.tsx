@@ -463,7 +463,16 @@ export default function SoloGame() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customPacksLoading]);
 
-  const validateMutation = useValidateRound();
+  const validateMutation = useValidateRound({
+    request: {
+      headers: {
+        "X-Stop-Game-Mode": isDailyMode ? "daily" : "solo",
+        "X-Stop-Timezone": (() => {
+          try { return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"; } catch { return "UTC"; }
+        })(),
+      },
+    },
+  });
   const submitScoreMutation = useSubmitScore();
   const queryClient = useQueryClient();
   const timerRef = useRef<NodeJS.Timeout>(null);
