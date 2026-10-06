@@ -3,6 +3,7 @@ import { ValidateRoundBody, ValidateRoundResponse } from "@workspace/api-zod";
 import { validateWordWithAi } from "../lib/aiWordValidator";
 import { issueScoreToken } from "../lib/scoreToken";
 import { normalizeWord, isSafeInput } from "../lib/wordRules";
+import { getDailyChallenge } from "./daily";
 
 const router: IRouter = Router();
 
