@@ -583,7 +583,7 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
   <table><thead><tr><th>Jugador</th><th>Evento</th><th>Plataforma</th><th>Veces</th><th>Último evento</th></tr></thead>
   <tbody>${adViewerRows || '<tr><td colspan="5">Sin eventos de publicidad.</td></tr>'}</tbody></table>
 
-  <a class="btn" href="/test/analytics">📡 Abrir análisis detallado</a>
+  <a class="btn" href="/test/analytics">📡 Abrir análisis detallado</a>\n  <a class="btn" href="/test/health">🛡️ Salud operativa</a>
 
   <h2>Notificaciones</h2>
   <form method="post" action="/test/notify-mundial" onsubmit="return confirm('¿Enviar la notificación del Pack Mundial a TODOS los jugadores suscritos?');">
