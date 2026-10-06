@@ -53,7 +53,8 @@ public class RewardedAdActivity extends Activity {
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);\n        if (!AdsPolicy.isEnabled()) { finish(); return; }
+        super.onCreate(savedInstanceState);
+        if (!AdsPolicy.isEnabled()) { finish(); return; }
 
         Uri data = getIntent().getData();
         requestId = data == null ? null : data.getQueryParameter("requestId");
