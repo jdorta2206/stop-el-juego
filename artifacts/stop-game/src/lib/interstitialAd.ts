@@ -30,7 +30,8 @@ export function consumeInterstitialSlot(): void {
   try { localStorage.setItem(CONSUMED_KEY, String(games)); } catch {}
 }
 
-export async function maybeShowInterstitial(isPremium: boolean): Promise<boolean> {\n  if (import.meta.env.VITE_ADS_DISABLED === "1") return false;
+export async function maybeShowInterstitial(isPremium: boolean): Promise<boolean> {
+  if (import.meta.env.VITE_ADS_DISABLED === "1") return false;
   if (isPremium || !interstitialEligible() || !isTwaInterstitialAvailable()) return false;
   // Consume before launching so repeated taps/re-renders cannot trigger two ads.
   consumeInterstitialSlot();
