@@ -415,6 +415,47 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
       ) x GROUP BY method ORDER BY unique_users DESC, method
     `)).rows as Record<string, unknown>[];
 
+    // Desglose de plataforma y cruce plataforma + método de acceso.
+    // Las cuentas se cuentan por player_id; los invitados por session_id.
+    const platformMethods = (await db.execute(sql`
+      SELECT
+        CASE WHEN s.platform = 'android' THEN 'android' WHEN s.platform = 'ios' THEN 'ios' ELSE 'web' END AS platform,
+        CASE WHEN s.login_method = 'google' OR s.player_id LIKE 'google_%' THEN 'google'
+             WHEN s.login_method = 'facebook' OR s.player_id LIKE 'fb_%' THEN 'facebook'
+             WHEN s.login_method = 'apple' OR s.player_id LIKE 'apple_%' THEN 'apple'
+             WHEN s.login_method = 'instagram' OR s.player_id LIKE 'ig_%' THEN 'instagram'
+             WHEN s.login_method = 'tiktok' OR s.player_id LIKE 'tt_%' THEN 'tiktok'
+             WHEN s.player_id IS NOT NULL THEN 'account' ELSE 'guest' END AS method,
+        COUNT(DISTINCT COALESCE(s.player_id, s.session_id)) FILTER (WHERE s.last_seen >= NOW() - INTERVAL '90 seconds')::int AS active,
+        COUNT(DISTINCT COALESCE(s.player_id, s.session_id))::int AS unique_users,
+        COUNT(*)::int AS sessions
+      FROM analytics_sessions s
+      WHERE s.started_at >= NOW() - INTERVAL '24 hours'
+      GROUP BY platform, method
+      ORDER BY unique_users DESC, platform, method
+    `)).rows as Record<string, unknown>[];
+
+    const platformTotals = (await db.execute(sql`
+      SELECT
+        CASE WHEN s.platform = 'android' THEN 'android' WHEN s.platform = 'ios' THEN 'ios' ELSE 'web' END AS platform,
+        COUNT(DISTINCT COALESCE(s.player_id, s.session_id)) FILTER (WHERE s.last_seen >= NOW() - INTERVAL '90 seconds')::int AS active,
+        COUNT(DISTINCT COALESCE(s.player_id, s.session_id))::int AS unique_users,
+        COUNT(*)::int AS sessions
+      FROM analytics_sessions s
+      WHERE s.started_at >= NOW() - INTERVAL '24 hours'
+      GROUP BY platform
+      ORDER BY unique_users DESC, platform
+    `)).rows as Record<string, unknown>[];
+
+    const platformLabels: Record<string, string> = { android: '🤖 Android', ios: '🍎 iOS', web: '🌐 Web' };
+    const methodLabels: Record<string, string> = { google: '🔵 Google / Gmail', facebook: '🔵 Facebook', apple: '🍎 Apple', instagram: '📸 Instagram', tiktok: '🎵 TikTok', account: '👤 Cuenta', guest: '👤 Invitado' };
+    const platformTotalRows = platformTotals.map((row) =>
+      `<tr><td>${platformLabels[String(row.platform)] ?? esc(row.platform)}</td><td>${num(row.active)}</td><td>${num(row.unique_users)}</td><td>${num(row.sessions)}</td></tr>`,
+    ).join('');
+    const platformMethodRows = platformMethods.map((row) =>
+      `<tr><td>${platformLabels[String(row.platform)] ?? esc(row.platform)}</td><td>${methodLabels[String(row.method)] ?? esc(row.method)}</td><td>${num(row.active)}</td><td>${num(row.unique_users)}</td><td>${num(row.sessions)}</td></tr>`,
+    ).join('');
+
     const adViewers = (await db.execute(sql`
       SELECT COALESCE(ps.player_name, CASE WHEN e.player_id IS NULL THEN 'Invitado' ELSE e.player_id END) AS player_name,
              e.platform, e.event_name, MAX(e.created_at) AS last_seen, COUNT(*)::int AS events
@@ -594,6 +635,15 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
   </div>
   <table><thead><tr><th>Jugador</th><th>Login</th><th>Plataforma</th><th>Versión</th><th>Idioma</th><th>Última conexión</th></tr></thead>
   <tbody>${activeSessionRows || '<tr><td colspan="6">Ahora mismo no hay conexiones activas.</td></tr>'}</tbody></table>
+
+  <h2>📱 Desde dónde se conectan · últimas 24 h</h2>
+  <table><thead><tr><th>Plataforma</th><th>Activos ahora</th><th>Usuarios únicos</th><th>Sesiones</th></tr></thead>
+  <tbody>${platformTotalRows || '<tr><td colspan="4">Sin datos.</td></tr>'}</tbody></table>
+
+  <h2>🔗 Plataforma + acceso · últimas 24 h</h2>
+  <p class="sub">Cruce real entre dispositivo/plataforma y forma de acceso. Invitados se cuentan por sesión.</p>
+  <table><thead><tr><th>Plataforma</th><th>Acceso</th><th>Activos ahora</th><th>Usuarios únicos</th><th>Sesiones</th></tr></thead>
+  <tbody>${platformMethodRows || '<tr><td colspan="5">Sin datos.</td></tr>'}</tbody></table>
 
   <h2>🔐 Cómo se conectan · últimas 24 h</h2>
   <p class="sub">Usuarios únicos: una cuenta cuenta una vez; los invitados se cuentan por sesión. Activos ahora = señal en los últimos 90 segundos.</p>
