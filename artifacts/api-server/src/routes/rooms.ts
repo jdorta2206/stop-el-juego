@@ -2066,9 +2066,9 @@ router.post("/:roomCode/leave", async (req, res) => {
   // person in the room and corrupt the player list.
   type LeaveOutcome =
     | { kind: "noop" }
-    | { kind: "deleted"; roomId: number }
-    | { kind: "settlementPending" }
-    | { kind: "updated"; row: any; newHostId: string | null };
+    | { kind: "deleted"; roomId: number; status: string }
+    | { kind: "settlementPending"; status: string }
+    | { kind: "updated"; row: any; newHostId: string | null; status: string };
 
   const outcome: LeaveOutcome = await db.transaction(async (tx) => {
     const rows = await tx.execute(
@@ -2095,7 +2095,7 @@ router.post("/:roomCode/leave", async (req, res) => {
         WHERE room_id = ${raw.id} AND player_id = ${playerId}
         LIMIT 1
       `);
-      if ((claimRows.rows ?? []).length === 0) return { kind: "settlementPending" } as const;
+      if ((claimRows.rows ?? []).length === 0) return { kind: "settlementPending", status } as const;
 
       // The core leaderboard claim is not enough to safely delete the
       // finished-room recovery snapshot: Season/Halloween effects are recorded
@@ -2109,7 +2109,7 @@ router.post("/:roomCode/leave", async (req, res) => {
       `);
       const auxEffects = new Set((auxRows.rows ?? []).map((row: any) => String(row.effect)));
       if (!auxEffects.has("season") || !auxEffects.has("halloween")) {
-        return { kind: "settlementPending" } as const;
+        return { kind: "settlementPending", status } as const;
       }
     }
 
@@ -2123,7 +2123,7 @@ router.post("/:roomCode/leave", async (req, res) => {
     if (status !== "waiting") {
       if (remaining.length === 0) {
         await tx.delete(roomsTable).where(eq(roomsTable.roomCode, code));
-        return { kind: "deleted", roomId: Number(raw.id) } as const;
+        return { kind: "deleted", roomId: Number(raw.id), status } as const;
       }
 
       let newHostId: string | null = null;
@@ -2156,7 +2156,7 @@ router.post("/:roomCode/leave", async (req, res) => {
         .where(eq(roomsTable.roomCode, code))
         .returning();
 
-      return { kind: "updated", row: updated[0], newHostId } as const;
+      return { kind: "updated", row: updated[0], newHostId, status } as const;
     }
 
     // Empty lobby → delete the row and free ephemeral state.
@@ -2200,6 +2200,19 @@ router.post("/:roomCode/leave", async (req, res) => {
 
     return { kind: "updated", row: updated[0], newHostId } as const;
   });
+
+  if (outcome.kind !== "noop") {
+    void recordTrustedAnalyticsEvent({
+      eventName: "game_leave",
+      playerId,
+      mode: "multiplayer",
+      metadata: {
+        reason: outcome.kind === "settlementPending" ? "leave_during_settlement" : "explicit_leave",
+        roomStatus: outcome.status,
+        roomDeleted: outcome.kind === "deleted",
+      },
+    }).catch(() => {});
+  }
 
   if (outcome.kind === "settlementPending") {
     // Keep the finished-room snapshot intact. Settlement recovery will retry
