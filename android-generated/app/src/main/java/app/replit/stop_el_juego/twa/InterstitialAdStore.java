@@ -27,7 +27,7 @@ public final class InterstitialAdStore {
     private InterstitialAdStore() {}
 
     public static synchronized void initialize(Context context) {
-        if (context == null) return;
+        if (!AdsPolicy.isEnabled() || context == null) return;
         appContext = context.getApplicationContext();
         if (initializing) return;
         initializing = true;
@@ -41,7 +41,7 @@ public final class InterstitialAdStore {
     }
 
     public static synchronized void preload() {
-        if (appContext == null || loading || preloadedAd != null) return;
+        if (!AdsPolicy.isEnabled() || appContext == null || loading || preloadedAd != null) return;
         loading = true;
         Log.d(TAG, "Preloading production interstitial");
         InterstitialAd.load(appContext, INTERSTITIAL_ID, new AdRequest.Builder().build(),
@@ -70,7 +70,7 @@ public final class InterstitialAdStore {
     }
 
     @Nullable
-    public static synchronized InterstitialAd take() {
+    public static synchronized InterstitialAd take() {\n        if (!AdsPolicy.isEnabled()) return null;
         if (preloadedAd != null
                 && System.currentTimeMillis() - preloadedAdAt >= PRELOADED_AD_TTL_MS) {
             Log.d(TAG, "Discarding expired preloaded interstitial");
