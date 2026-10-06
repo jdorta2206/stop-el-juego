@@ -1,4 +1,5 @@
 import { trackAnalyticsEvent, trackTrustedGameStart } from "@/lib/analyticsClient";
+import { hasAndroidAppReferrer } from "@/lib/playBilling";
 import { useState, useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
@@ -68,7 +69,22 @@ const SPEED_ROUND_TIME = 20;
 const CHAOS_ROUND_TIME = 45;
 const MAX_ROUNDS = 3;
 const EASY_LETTERS = ["A", "C", "E", "I", "L", "M", "P", "R", "S", "T"];
-const REWARDED_ADS_DISABLED = import.meta.env.VITE_REWARDED_ADS_DISABLED === "1";
+const REWARDED_ADS_DISABLED = (() => {
+  if (import.meta.env.VITE_REWARDED_ADS_DISABLED !== "1") return false;
+  // Keep rewarded ads disabled on normal web browsers, but allow the native
+  // Google Play TWA to use the real AdMob RewardedAdActivity.
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const twaByReferrer = document.referrer.startsWith("android-app://app.replit.stop_el_juego.twa");
+    const twaBySource = params.get("source") === "googleplay-twa" || params.get("source") === "twa";
+    const androidStandalone = /Android/i.test(navigator.userAgent || "") &&
+      (window.matchMedia?.("(display-mode: standalone)").matches === true ||
+       window.matchMedia?.("(display-mode: fullscreen)").matches === true);
+    return !(twaByReferrer || twaBySource || androidStandalone || hasAndroidAppReferrer());
+  } catch {
+    return true;
+  }
+})();
 
 function getCrazyCategory(t: any): string | null {
   if (!t.crazyCategories || t.crazyCategories.length === 0) return null;
@@ -2140,7 +2156,7 @@ export default function SoloGame() {
                     ⭐ +20s
                   </button>
                 )}
-                {!rewardedUsed && !isPremium && !REWARDED_ADS_DISABLED && (
+                {!rewardedUsed && !isPremium && (
                   <button
                     onClick={() => setRewardedAdType("extraTime")}
                     className="flex items-center justify-center gap-2 py-2 px-3 rounded-xl border border-yellow-500/30 bg-yellow-500/10 text-yellow-300 text-xs font-bold hover:bg-yellow-500/20 transition-all"
@@ -3036,7 +3052,7 @@ export default function SoloGame() {
                 </motion.div>
               )}
 
-              {round >= maxRounds && !doubleUsed && totalScore > 0 && !isDailyMode && !isPremium && !REWARDED_ADS_DISABLED && (
+              {round >= maxRounds && !doubleUsed && totalScore > 0 && !isDailyMode && !isPremium && (
                 <motion.button
                   initial={{ opacity: 0, scale: 0.9 }}
                   animate={{ opacity: 1, scale: 1 }}
