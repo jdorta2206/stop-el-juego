@@ -114,6 +114,7 @@ export function AuthModal({ onSave, initial, onDismiss }: AuthModalProps) {
   const handleSave = () => {
     if (!name.trim()) return;
     const persistentId = oauthId || initial?.id || crypto.randomUUID();
+    trackSuccessfulGuestConversion(loginMethod);
     onSave({
       id: persistentId,
       name: name.trim().slice(0, 14),
