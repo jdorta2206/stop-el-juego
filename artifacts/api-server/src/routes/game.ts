@@ -1524,6 +1524,28 @@ router.post("/validate", async (req, res) => {
     res.status(400).json({ error: "Too many categories" });
     return;
   }
+  const requestedGameMode = req.header("x-stop-game-mode") === "daily" ? "daily" : "solo";
+  if (requestedGameMode === "daily") {
+    const rawTimeZone = req.header("x-stop-timezone")?.trim() || "UTC";
+    let timeZone = "UTC";
+    try {
+      new Intl.DateTimeFormat("en-CA", { timeZone: rawTimeZone }).format(new Date());
+      timeZone = rawTimeZone;
+    } catch {}
+    const today = new Intl.DateTimeFormat("en-CA", {
+      timeZone, year: "numeric", month: "2-digit", day: "2-digit",
+    }).format(new Date());
+    const expected = getDailyChallenge(today, language);
+    const submittedCategories = rawPlayerResponses.map((pr) => normalizeWord(pr.category)).sort();
+    const expectedCategories = expected.categories.map((category) => normalizeWord(category)).sort();
+    if (letter.trim().toUpperCase() !== expected.letter ||
+        submittedCategories.length !== expectedCategories.length ||
+        submittedCategories.some((category, index) => category !== expectedCategories[index])) {
+      res.status(422).json({ error: "Invalid daily challenge payload" });
+      return;
+    }
+  }
+
   const seenCategories = new Set<string>();
   const playerResponses = rawPlayerResponses.filter((pr) => {
     const key = normalizeWord(pr.category);
@@ -1599,7 +1621,7 @@ router.post("/validate", async (req, res) => {
   // 🔒 Anti-cheat: hand back a signed, single-use voucher attesting the
   // server-computed base score for this round. The client returns it when
   // submitting the final game score so the leaderboard can't be fabricated.
-  const scoreToken = issueScoreToken(playerTotalScore, validatedCollectionWords, "solo", aiTotalScore);
+  const scoreToken = issueScoreToken(playerTotalScore, validatedCollectionWords, requestedGameMode, aiTotalScore);
 
   const response = ValidateRoundResponse.parse({
     results,
