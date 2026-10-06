@@ -53,12 +53,14 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        MobileAds.initialize(this, status -> {
-            mobileAdsReady = true;
-            Log.d(TAG, "MobileAds initialized; starting rewarded + interstitial preload");
-            preloadRewardedAd();
-            InterstitialAdStore.initialize(this);
-        });
+        if (AdsPolicy.isEnabled()) {
+            MobileAds.initialize(this, status -> {
+                mobileAdsReady = true;
+                Log.d(TAG, "MobileAds initialized; starting rewarded + interstitial preload");
+                preloadRewardedAd();
+                InterstitialAdStore.initialize(this);
+            });
+        }
         if (Build.VERSION.SDK_INT > Build.VERSION_CODES.O) {
             setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT);
         } else {
@@ -149,6 +151,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     }
 
     private void handleWebMessage(String raw) {
+        if (!AdsPolicy.isEnabled()) return;
         try {
             JSONObject message = new JSONObject(raw);
             String type = message.optString("type", "");

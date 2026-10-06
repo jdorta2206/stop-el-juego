@@ -37,11 +37,11 @@ public class Application extends android.app.Application {
     public void onCreate() {
         super.onCreate();
         instance = this;
-        MobileAds.initialize(this, status -> preloadRewardedAd());
+        if (AdsPolicy.isEnabled()) MobileAds.initialize(this, status -> preloadRewardedAd());
     }
 
     public static synchronized void preloadRewardedAd() {
-        if (loadingRewardedAd || preloadedRewardedAd != null || instance == null) return;
+        if (!AdsPolicy.isEnabled() || loadingRewardedAd || preloadedRewardedAd != null || instance == null) return;
         loadingRewardedAd = true;
         RewardedAd.load(instance, REAL_REWARDED_ID, new AdRequest.Builder().build(), new RewardedAdLoadCallback() {
             @Override
@@ -76,7 +76,7 @@ public class Application extends android.app.Application {
     }
 
     @Nullable
-    public static synchronized RewardedAd takePreloadedRewardedAd() {
+    public static synchronized RewardedAd takePreloadedRewardedAd() {\n        if (!AdsPolicy.isEnabled()) return null;
         if (preloadedRewardedAd != null
                 && System.currentTimeMillis() - preloadedRewardedAdAt >= PRELOADED_AD_TTL_MS) {
             preloadedRewardedAd = null;
