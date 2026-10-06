@@ -558,7 +558,7 @@ export default function SoloGame() {
     halloweenScareRoundRef.current = null;
     halloweenAnswerScareRoundRef.current = null;
     setHalloweenScare(null);
-    trackTrustedGameStart({ mode: isDailyMode ? "daily" : "solo", language: getCurrentLang() });
+    trackTrustedGameStart({ mode: gameMode, language: getCurrentLang() });
     // Snapshot the tutorial state at the moment the player presses Play so
     // the rules of the round are stable until it ends.
     const tutorialNow = ftue.isInTutorial && !isDailyMode;
@@ -1313,7 +1313,7 @@ export default function SoloGame() {
 
   const nextRound = async () => {
     if (round >= maxRounds) {
-      void trackAnalyticsEvent("game_complete", { metadata: { mode: isDailyMode ? "daily" : "solo", rounds: maxRounds } });
+      void trackAnalyticsEvent("game_complete", { metadata: { mode: gameMode, rounds: maxRounds } });
       recordPlay();
       // Calculate XP with multipliers
       const validCount = results
