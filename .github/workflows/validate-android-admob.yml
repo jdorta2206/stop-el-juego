@@ -35,8 +35,10 @@ jobs:
           grep -q 'CustomTabsSession' app/src/main/java/app/replit/stop_el_juego/twa/LauncherActivity.java
           grep -q 'requestPostMessageChannel' app/src/main/java/app/replit/stop_el_juego/twa/LauncherActivity.java
           grep -q 'STOP_AD_REWARDED_RESULT' app/src/main/java/app/replit/stop_el_juego/twa/LauncherActivity.java
-          grep -q 'ca-app-pub-4807272408824742/3559554716' app/src/main/java/app/replit/stop_el_juego/twa/LauncherActivity.java
-          grep -q 'ca-app-pub-4807272408824742/7242069847' app/src/main/java/app/replit/stop_el_juego/twa/LauncherActivity.java
+          grep -q 'ca-app-pub-4807272408824742/3559554716' app/src/main/java/app/replit/stop_el_juego/twa/RewardedAdActivity.java
+          grep -q 'ca-app-pub-4807272408824742/7242069847' app/src/main/java/app/replit/stop_el_juego/twa/InterstitialAdActivity.java
+          grep -q 'private static final boolean ENABLED = false;' app/src/main/java/app/replit/stop_el_juego/twa/AdsPolicy.java
+          ! grep -R -F '\\n' app/src/main/java/app/replit/stop_el_juego/twa/RewardedAdActivity.java app/src/main/java/app/replit/stop_el_juego/twa/InterstitialAdActivity.java
           grep -q 'public class DelegationService extends com.google.androidbrowserhelper.trusted.DelegationService' app/src/main/java/app/replit/stop_el_juego/twa/DelegationService.java
           grep -q 'DigitalGoodsRequestHandler' app/src/main/java/app/replit/stop_el_juego/twa/DelegationService.java
           grep -q 'com.google.androidbrowserhelper.playbilling.provider.PaymentActivity' app/src/main/AndroidManifest.xml
