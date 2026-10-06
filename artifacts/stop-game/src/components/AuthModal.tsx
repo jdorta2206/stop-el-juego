@@ -41,7 +41,15 @@ export function AuthModal({ onSave, initial, onDismiss }: AuthModalProps) {
   const [existingStats, setExistingStats] = useState<{ totalScore: number; gamesPlayed: number } | null>(null);
   const mountedRef = useRef(true);
   const statsAbortRef = useRef<AbortController | null>(null);
-  const welcomeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);\n  const guestConversionTrackedRef = useRef(false);\n\n  const trackSuccessfulGuestConversion = (method: string | null) => {\n    if (initial?.loginMethod === "guest" && method && method !== "guest" && !guestConversionTrackedRef.current) {\n      guestConversionTrackedRef.current = true;\n      trackGuestConversion();\n    }\n  };
+  const welcomeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const guestConversionTrackedRef = useRef(false);
+
+  const trackSuccessfulGuestConversion = (method: string | null) => {
+    if (initial?.loginMethod === "guest" && method && method !== "guest" && !guestConversionTrackedRef.current) {
+      guestConversionTrackedRef.current = true;
+      trackGuestConversion();
+    }
+  };
 
   useEffect(() => () => {
     mountedRef.current = false;
