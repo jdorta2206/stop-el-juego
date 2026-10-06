@@ -27,8 +27,8 @@ function todayForPlayer(req: { headers: Record<string, unknown> }): string {
 }
 
 // Atomic daily upsert: increment `games` or `conversions` for today by 1.
-async function bump(column: "games" | "conversions") {
-  const day = todayMadrid();
+async function bump(req: { headers: Record<string, unknown> }, column: "games" | "conversions") {
+  const day = todayForPlayer(_req);
   await db
     .insert(guestStatsTable)
     .values({
@@ -48,7 +48,7 @@ async function bump(column: "games" | "conversions") {
 // POST /guest-stats/game — a guest finished a game.
 router.post("/game", writeLimiter, async (_req, res) => {
   try {
-    await bump("games");
+    await bump(_req, "games");
   } catch (err) {
     // Never let analytics break the game — log and still return 204 so the
     // client fire-and-forget call never surfaces an error to the player.
@@ -60,7 +60,7 @@ router.post("/game", writeLimiter, async (_req, res) => {
 // POST /guest-stats/conversion — a guest tapped the "sign in" CTA.
 router.post("/conversion", writeLimiter, async (_req, res) => {
   try {
-    await bump("conversions");
+    await bump(_req, "conversions");
   } catch (err) {
     console.error("[guest-stats] failed to record conversion:", err);
   }
