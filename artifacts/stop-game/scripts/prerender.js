@@ -30,7 +30,10 @@ const pages = [
         <p>Si quieres conocer las reglas con más detalle, consulta nuestra <a href="/como-jugar">guía sobre cómo jugar a STOP</a>. Allí explicamos la dinámica, las categorías, la puntuación y distintas estrategias para mejorar.</p>
         <h2>Juega solo o con otras personas</h2>
         <p>Puedes utilizar STOP como una forma de practicar por tu cuenta o entrar en partidas multijugador. Jugar contra la IA permite entrenar la rapidez mental y ampliar tu repertorio de respuestas sin depender de que haya otra persona disponible. En las partidas online puedes competir con amigos y otros jugadores, comparar resultados y tratar de mejorar tu posición en el ranking.</p>
-        <p>La experiencia está pensada para que una partida sea fácil de empezar y también para que haya motivos para volver. Las diferentes categorías y modos hacen que no tengas que repetir siempre la misma combinación de respuestas.</p>
+        <p>La experiencia está pensada para que una partida sea fácil de empezar y también para que haya motivos para volver. Las diferentes categorías y modos hacen que no tengas que repetir siempre la misma combinación de respuestas. STOP también incorpora sistemas propios de partidas online, como ranking, retos diarios, progresión y partidas multijugador.</p>
+        <h2>Cómo funciona la versión online de STOP</h2>
+        <p>La versión online mantiene la mecánica del juego de categorías y añade sistemas digitales para gestionar rondas, respuestas y resultados. Puedes practicar contra la IA, crear o unirte a partidas multijugador y consultar tu progreso después de jugar. La plataforma separa la experiencia de juego de las páginas informativas para que puedas conocer las reglas, estrategias y características del servicio antes de empezar.</p>
+        <p>Si quieres conocer estos sistemas con más detalle, consulta nuestra <a href="/como-funciona">guía sobre cómo funciona STOP El Juego</a>.</p>
         <h2>¿Por qué es divertido?</h2>
         <p>STOP mezcla tres cosas que funcionan especialmente bien juntas: palabras, tiempo y competición. El límite de tiempo hace que tengas que tomar decisiones rápidas; las categorías te obligan a cambiar de una idea a otra; y la puntuación convierte cada respuesta en una pequeña apuesta entre velocidad y originalidad. Además, las respuestas inesperadas suelen ser parte de lo más divertido de una partida: una palabra que alguien recuerda de repente puede cambiar el resultado de una ronda.</p>
         <p>También es un juego fácil de explicar. No necesitas aprender un sistema complicado antes de empezar: basta con entender las categorías y la regla de la letra inicial. Después, la práctica hace que cada vez encuentres respuestas con mayor rapidez.</p>
@@ -81,7 +84,7 @@ const finalHtml = fs.readFileSync(indexPath, "utf8");
 const rootMatch = finalHtml.match(/<div\s+id=["']root["']>([\s\S]*?)<\/div>/i);
 const root = rootMatch?.[1] ?? "";
 const wordCount = root.replace(/<[^>]+>/g, " ").replace(/&[^;]+;/g, " ").trim().split(/\s+/).filter(Boolean).length;
-const requiredLinks = ["/como-jugar", "/blog", "/estrategias"];
+const requiredLinks = ["/como-jugar", "/como-funciona", "/blog", "/estrategias"];
 
 if (wordCount < 300) {
   throw new Error(`El contenido prerenderizado de la portada tiene solo ${wordCount} palabras; se requieren al menos 300.`);
