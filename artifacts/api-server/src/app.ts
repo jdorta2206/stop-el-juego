@@ -6,6 +6,7 @@ import cookieParser from "cookie-parser";
 import router from "./routes";
 import adminPanel from "./routes/admin";
 import adminAnalytics from "./routes/adminAnalytics";
+import adminHealth from "./routes/adminHealth";
 import { WebhookHandlers } from "./webhookHandlers";
 import { isStripeReady } from "./stripeClient";
 import { generalLimiter } from "./middlewares/rateLimit";
@@ -101,6 +102,7 @@ app.use(express.urlencoded({ extended: true, limit: "64kb" }));
 app.use("/api", generalLimiter);
 app.use("/api", router);
 app.use("/test/analytics", adminAnalytics);
+app.use("/test/health", adminHealth);
 
 // Private analytics panel. Mounted directly so it cannot monkey-patch Express responses.
 app.use("/test", adminPanel);
