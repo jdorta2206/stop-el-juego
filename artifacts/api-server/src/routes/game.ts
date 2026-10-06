@@ -3,6 +3,7 @@ import { ValidateRoundBody, ValidateRoundResponse } from "@workspace/api-zod";
 import { validateWordWithAi } from "../lib/aiWordValidator";
 import { issueScoreToken } from "../lib/scoreToken";
 import { normalizeWord, isSafeInput } from "../lib/wordRules";
+import { readPlayerId } from "../lib/playerAuth";
 import { getDailyChallenge } from "./daily";
 
 const router: IRouter = Router();
@@ -1556,11 +1557,10 @@ router.post("/validate", async (req, res) => {
   // Best-effort player id from common header conventions used elsewhere in
   // the codebase. Used only to apply the per-player AI-call quota; absence
   // is fine, the global daily cap still protects against runaway cost.
-  const playerId =
-    (req.header("x-player-id") as string | undefined) ||
-    (typeof (req as { playerId?: unknown }).playerId === "string"
-      ? ((req as { playerId?: string }).playerId ?? null)
-      : null);
+  // Never trust a client-asserted player id for the AI quota. Use only
+  // the cryptographically verified session identity; guests remain unscoped
+  // and are protected by the global quota.
+  const playerId = readPlayerId(req);
 
   const results: Record<string, {
     player: { response: string; isValid: boolean; score: number; isDuplicate?: boolean };
