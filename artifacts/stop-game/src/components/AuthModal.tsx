@@ -101,7 +101,7 @@ export function AuthModal({ onSave, initial, onDismiss }: AuthModalProps) {
           } as any;
           if (welcomeTimerRef.current) clearTimeout(welcomeTimerRef.current);
           welcomeTimerRef.current = setTimeout(() => {
-            if (mountedRef.current && !controller.signal.aborted) onSave(profile);
+            if (mountedRef.current && !controller.signal.aborted) {\n              trackSuccessfulGuestConversion(oauthUser.provider);\n              onSave(profile);\n            }
           }, 2000);
         }
       })
