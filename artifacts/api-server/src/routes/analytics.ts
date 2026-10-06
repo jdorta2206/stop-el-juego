@@ -128,11 +128,19 @@ router.post("/heartbeat", presenceLimiter, async (req, res) => {
       VALUES (${sessionId}, ${playerId}, ${loginMethod}, ${platform}, ${appVersion}, ${language}, NOW(), NOW())
       ON CONFLICT (session_id) DO UPDATE SET player_id = EXCLUDED.player_id, login_method = EXCLUDED.login_method, platform = EXCLUDED.platform, app_version = EXCLUDED.app_version, language = EXCLUDED.language, last_seen = NOW()
     `);
-    await db.execute(sql`
-      INSERT INTO analytics_events (event_name, session_id, platform, app_version, language, metadata_json, trusted)
-      SELECT 'session_start', ${sessionId}, ${platform}, ${appVersion}, ${language}, '{}', TRUE
-      WHERE NOT EXISTS (SELECT 1 FROM analytics_events WHERE event_name = 'session_start' AND session_id = ${sessionId})
-    `);
+    await db.transaction(async (tx) => {
+      // Serialize the one-time session_start claim per session. The lock is
+      // transaction-scoped, so concurrent heartbeats cannot both insert it.
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${sessionId}, 0))`);
+      await tx.execute(sql`
+        INSERT INTO analytics_events (event_name, session_id, platform, app_version, language, metadata_json, trusted)
+        SELECT 'session_start', ${sessionId}, ${platform}, ${appVersion}, ${language}, '{}', TRUE
+        WHERE NOT EXISTS (
+          SELECT 1 FROM analytics_events
+          WHERE event_name = 'session_start' AND session_id = ${sessionId}
+        )
+      `);
+    });
     return res.json({ ok: true, platform, appVersion });
   } catch (err) {
     console.error("[analytics] heartbeat failed:", err);
