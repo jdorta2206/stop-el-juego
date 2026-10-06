@@ -143,14 +143,14 @@ router.post("/submit", async (req, res) => {
   // 🔒 Daily ranking is authoritative too: a client-calculated offline score
   // has no server proof and must not be accepted just because it is below the
   // absolute ceiling. Only server-issued round vouchers can authorize the write.
-  const { base: verifiedBase, verified, voucherJtis } = await sumVerifiedBasePersistent(scoreTokens, 1);
+  const { base: verifiedBase, verified, voucherJtis, mode: certifiedMode } = await sumVerifiedBasePersistent(scoreTokens, 1);
   const suppliedTokens = Array.isArray(scoreTokens) && scoreTokens.length > 0;
   if (!suppliedTokens) {
     res.status(422).json({ error: "SCORE_VOUCHER_REQUIRED" });
     return;
   }
-  if (verified === 0) {
-    res.status(422).json({ error: "INVALID_SCORE_VOUCHER" });
+  if (verified === 0 || certifiedMode !== "daily") {
+    res.status(422).json({ error: "INVALID_DAILY_SCORE_VOUCHER" });
     return;
   }
   const dailyCeiling = ceilingFromBase(verifiedBase);
