@@ -76,7 +76,8 @@ public class Application extends android.app.Application {
     }
 
     @Nullable
-    public static synchronized RewardedAd takePreloadedRewardedAd() {\n        if (!AdsPolicy.isEnabled()) return null;
+    public static synchronized RewardedAd takePreloadedRewardedAd() {
+        if (!AdsPolicy.isEnabled()) return null;
         if (preloadedRewardedAd != null
                 && System.currentTimeMillis() - preloadedRewardedAdAt >= PRELOADED_AD_TTL_MS) {
             preloadedRewardedAd = null;
