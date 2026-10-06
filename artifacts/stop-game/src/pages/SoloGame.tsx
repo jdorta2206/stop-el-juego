@@ -27,7 +27,7 @@ import { useT } from "@/i18n/useT";
 import { useTicker } from "@/hooks/useTicker";
 import { useStreak } from "@/hooks/useStreak";
 import { useProgression, calcXpFromResults } from "@/hooks/useProgression";
-import { trackGuestGame, trackGuestConversion } from "@/lib/guestStats";
+import { trackGuestGame } from "@/lib/guestStats";
 import { useSound } from "@/hooks/useSound";
 import { useToast } from "@/hooks/use-toast";
 import { pickRandomPersonality, getAIComment, type AIPersonality } from "@/data/aiPersonalities";
