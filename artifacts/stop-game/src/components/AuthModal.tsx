@@ -18,6 +18,7 @@ import {
 } from "@/lib/oauth";
 import { useT } from "@/i18n/useT";
 import { LanguageSelector } from "./LanguageSelector";
+import { trackGuestConversion } from "@/lib/guestStats";
 
 const LOGO_URL = `${import.meta.env.BASE_URL}images/stop-logo.png`;
 
