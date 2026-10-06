@@ -68,30 +68,27 @@ router.get("/", authLimiter, basicAuth, async (_req, res) => {
     `);
 
     const loginMethods = await db.execute(sql`
-      SELECT method,
-             COUNT(*) FILTER (WHERE last_seen >= NOW() - INTERVAL '90 seconds')::int AS active,
-             COUNT(*)::int AS sessions
-      FROM (
-        SELECT s.session_id, s.last_seen,
+      WITH methods(method) AS (
+        VALUES ('google'), ('facebook'), ('account'), ('guest')
+      ),
+      observed AS (
+        SELECT s.session_id, s.player_id, s.last_seen,
           CASE
-            WHEN s.login_method IN ('google','gmail') THEN 'google'
-            WHEN s.login_method = 'facebook' THEN 'facebook'
-            WHEN s.login_method = 'apple' THEN 'apple'
-            WHEN s.login_method = 'instagram' THEN 'instagram'
-            WHEN s.login_method = 'tiktok' THEN 'tiktok'
-            WHEN s.player_id LIKE 'google_%' THEN 'google'
-            WHEN s.player_id LIKE 'fb_%' THEN 'facebook'
-            WHEN s.player_id LIKE 'apple_%' THEN 'apple'
-            WHEN s.player_id LIKE 'ig_%' THEN 'instagram'
-            WHEN s.player_id LIKE 'tt_%' THEN 'tiktok'
+            WHEN s.login_method IN ('google','gmail') OR s.player_id LIKE 'google_%' THEN 'google'
+            WHEN s.login_method = 'facebook' OR s.player_id LIKE 'fb_%' THEN 'facebook'
             WHEN s.player_id IS NOT NULL THEN 'account'
-            ELSE 'unknown'
+            ELSE 'guest'
           END AS method
         FROM analytics_sessions s
         WHERE s.started_at >= date_trunc('day', NOW() AT TIME ZONE 'Europe/Madrid') AT TIME ZONE 'Europe/Madrid'
-      ) x
-      GROUP BY method
-      ORDER BY sessions DESC, method
+      )
+      SELECT m.method,
+             COUNT(*) FILTER (WHERE o.last_seen >= NOW() - INTERVAL '90 seconds')::int AS active,
+             COUNT(o.session_id)::int AS sessions
+      FROM methods m
+      LEFT JOIN observed o ON o.method = m.method
+      GROUP BY m.method
+      ORDER BY CASE m.method WHEN 'facebook' THEN 1 WHEN 'google' THEN 2 WHEN 'account' THEN 3 ELSE 4 END
     `);
 
     const events = await db.execute(sql`
