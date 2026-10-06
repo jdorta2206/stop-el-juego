@@ -29,7 +29,7 @@ function getTodayForPlayer(req: { headers: Record<string, unknown> }): string {
   }).format(new Date());
 }
 
-function getDailyChallenge(dateStr: string, language: string) {
+export function getDailyChallenge(dateStr: string, language: string) {
   const seed = dateStr.replace(/-/g, "").split("").reduce(
     (acc, c, i) => acc + c.charCodeAt(0) * (i + 1), 0
   );
