@@ -21,6 +21,7 @@ const Terms = lazy(() => import("@/pages/Terms"));
 const FAQ = lazy(() => import("@/pages/FAQ"));
 const About = lazy(() => import("@/pages/About"));
 const HowToPlay = lazy(() => import("@/pages/HowToPlay"));
+const ComoFunciona = lazy(() => import("@/pages/ComoFunciona"));
 const DailyChallenge = lazy(() => import("@/pages/DailyChallenge"));
 const Impossible = lazy(() => import("@/pages/Impossible"));
 const Friends = lazy(() => import("@/pages/Friends"));
@@ -84,6 +85,7 @@ function Router() {
       <Route path="/terms" component={Terms} />
       <Route path="/acerca" component={About} />
       <Route path="/como-jugar" component={HowToPlay} />
+      <Route path="/como-funciona" component={ComoFunciona} />
       <Route path="/reto" component={DailyChallenge} />
       <Route path="/imposible" component={Impossible} />
       <Route path="/impossible" component={Impossible} />
