@@ -70,7 +70,8 @@ public final class InterstitialAdStore {
     }
 
     @Nullable
-    public static synchronized InterstitialAd take() {\n        if (!AdsPolicy.isEnabled()) return null;
+    public static synchronized InterstitialAd take() {
+        if (!AdsPolicy.isEnabled()) return null;
         if (preloadedAd != null
                 && System.currentTimeMillis() - preloadedAdAt >= PRELOADED_AD_TTL_MS) {
             Log.d(TAG, "Discarding expired preloaded interstitial");
