@@ -390,9 +390,13 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
     `)).rows as Record<string, unknown>[];
 
     const loginMethods = (await db.execute(sql`
-      SELECT method, COUNT(*) FILTER (WHERE last_seen >= NOW() - INTERVAL '90 seconds')::int AS active, COUNT(*)::int AS sessions
+      SELECT method,
+             COUNT(DISTINCT CASE WHEN last_seen >= NOW() - INTERVAL '90 seconds'
+               THEN COALESCE(player_id, session_id) END)::int AS active,
+             COUNT(DISTINCT COALESCE(player_id, session_id))::int AS unique_users,
+             COUNT(*)::int AS sessions
       FROM (
-        SELECT s.session_id, s.last_seen,
+        SELECT s.session_id, s.player_id, s.last_seen,
           CASE
             WHEN s.login_method IN ('google','gmail') THEN 'google'
             WHEN s.login_method = 'facebook' THEN 'facebook'
@@ -408,7 +412,7 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
             ELSE 'guest'
           END AS method
         FROM analytics_sessions s WHERE s.started_at >= NOW() - INTERVAL '24 hours'
-      ) x GROUP BY method ORDER BY sessions DESC, method
+      ) x GROUP BY method ORDER BY unique_users DESC, method
     `)).rows as Record<string, unknown>[];
 
     const adViewers = (await db.execute(sql`
@@ -428,7 +432,7 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
 
     const loginRows = loginMethods.map((row) => {
       const labels: Record<string,string> = { google:"🔵 Google / Gmail", facebook:"🔵 Facebook", apple:"🍎 Apple", instagram:"📸 Instagram", tiktok:"🎵 TikTok", account:"👤 Cuenta", guest:"👤 Invitado" };
-      return `<tr><td>${labels[String(row.method)] ?? esc(row.method)}</td><td>${num(row.active)}</td><td>${num(row.sessions)}</td></tr>`;
+      return `<tr><td>${labels[String(row.method)] ?? esc(row.method)}</td><td>${num(row.active)}</td><td>${num(row.unique_users)}</td><td>${num(row.sessions)}</td></tr>`;
     }).join("");
 
     const adViewerRows = adViewers.map((row) => {
@@ -576,8 +580,9 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
   <tbody>${activeSessionRows || '<tr><td colspan="6">Ahora mismo no hay conexiones activas.</td></tr>'}</tbody></table>
 
   <h2>🔐 Cómo se conectan · últimas 24 h</h2>
-  <table><thead><tr><th>Método</th><th>Activos ahora</th><th>Sesiones</th></tr></thead>
-  <tbody>${loginRows || '<tr><td colspan="3">Sin datos.</td></tr>'}</tbody></table>
+  <p class="sub">Usuarios únicos: una cuenta cuenta una vez; los invitados se cuentan por sesión. Activos ahora = señal en los últimos 90 segundos.</p>
+  <table><thead><tr><th>Método</th><th>Activos ahora</th><th>Usuarios únicos</th><th>Sesiones</th></tr></thead>
+  <tbody>${loginRows}</tbody></table>
 
   <h2>📺 Quién ve publicidad · últimos 7 días</h2>
   <table><thead><tr><th>Jugador</th><th>Evento</th><th>Plataforma</th><th>Veces</th><th>Último evento</th></tr></thead>
