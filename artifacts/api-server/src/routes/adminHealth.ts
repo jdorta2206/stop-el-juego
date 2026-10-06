@@ -1,5 +1,6 @@
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
 import { timingSafeEqual } from "crypto";
+import { getHeapStatistics } from "v8";
 import { db, indexesReady } from "@workspace/db";
 import { sql } from "drizzle-orm";
 import { isStripeReady } from "../stripeClient";
@@ -172,12 +173,13 @@ router.get("/", basicAuth, async (_req: Request, res: Response) => {
     });
 
     const memory = process.memoryUsage();
-    const heapUsedPct = Math.round((memory.heapUsed / Math.max(memory.heapTotal, 1)) * 100);
+    const heapLimit = getHeapStatistics().heap_size_limit;
+    const heapUsedPct = Math.round((memory.heapUsed / Math.max(heapLimit, 1)) * 100);
     checks.push({
       name: "Memoria del proceso",
       status: heapUsedPct < 80 ? "ok" : heapUsedPct < 92 ? "warn" : "error",
       value: `${heapUsedPct}% heap`,
-      detail: `${Math.round(memory.heapUsed / 1024 / 1024)} MB usados de ${Math.round(memory.heapTotal / 1024 / 1024)} MB.`,
+      detail: `${Math.round(memory.heapUsed / 1024 / 1024)} MB usados de un límite V8 de ${Math.round(heapLimit / 1024 / 1024)} MB.`,
     });
 
     const uptimeHours = process.uptime() / 3600;
