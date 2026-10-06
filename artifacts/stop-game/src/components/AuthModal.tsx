@@ -101,7 +101,10 @@ export function AuthModal({ onSave, initial, onDismiss }: AuthModalProps) {
           } as any;
           if (welcomeTimerRef.current) clearTimeout(welcomeTimerRef.current);
           welcomeTimerRef.current = setTimeout(() => {
-            if (mountedRef.current && !controller.signal.aborted) {\n              trackSuccessfulGuestConversion(oauthUser.provider);\n              onSave(profile);\n            }
+            if (mountedRef.current && !controller.signal.aborted) {
+              trackSuccessfulGuestConversion(oauthUser.provider);
+              onSave(profile);
+            }
           }, 2000);
         }
       })
@@ -111,6 +114,7 @@ export function AuthModal({ onSave, initial, onDismiss }: AuthModalProps) {
   const handleSave = () => {
     if (!name.trim()) return;
     const persistentId = oauthId || initial?.id || crypto.randomUUID();
+    trackSuccessfulGuestConversion(loginMethod);
     onSave({
       id: persistentId,
       name: name.trim().slice(0, 14),
