@@ -390,9 +390,13 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
     `)).rows as Record<string, unknown>[];
 
     const loginMethods = (await db.execute(sql`
-      SELECT method, COUNT(*) FILTER (WHERE last_seen >= NOW() - INTERVAL '90 seconds')::int AS active, COUNT(*)::int AS sessions
+      SELECT method,
+             COUNT(DISTINCT CASE WHEN last_seen >= NOW() - INTERVAL '90 seconds'
+               THEN COALESCE(player_id, session_id) END)::int AS active,
+             COUNT(DISTINCT COALESCE(player_id, session_id))::int AS unique_users,
+             COUNT(*)::int AS sessions
       FROM (
-        SELECT s.session_id, s.last_seen,
+        SELECT s.session_id, s.player_id, s.last_seen,
           CASE
             WHEN s.login_method IN ('google','gmail') THEN 'google'
             WHEN s.login_method = 'facebook' THEN 'facebook'
@@ -408,7 +412,7 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
             ELSE 'guest'
           END AS method
         FROM analytics_sessions s WHERE s.started_at >= NOW() - INTERVAL '24 hours'
-      ) x GROUP BY method ORDER BY sessions DESC, method
+      ) x GROUP BY method ORDER BY unique_users DESC, method
     `)).rows as Record<string, unknown>[];
 
     const adViewers = (await db.execute(sql`
