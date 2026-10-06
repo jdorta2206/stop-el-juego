@@ -190,6 +190,9 @@ router.get("/", authLimiter, basicAuth, async (_req, res) => {
       const labels: Record<string, string> = { google: "🔵 Google / Gmail", facebook: "🔵 Facebook", apple: "🍎 Apple", guest: "👤 Invitado", instagram: "📸 Instagram", tiktok: "🎵 TikTok", unknown: "❓ Sin identificar" };
       return `<tr><td>${labels[String(row.method)] ?? esc(row.method)}</td><td>${n(row.active)}</td><td>${n(row.sessions)}</td></tr>`;
     }).join("");
+    const loginMethodMap = new Map<string, number>(
+      (loginMethods.rows as any[]).map((row) => [String(row.method), n(row.active)])
+    );
 
     const eventRows = (events.rows as any[]).map((row) => `<tr><td>${esc(row.event_name)}</td><td>${n(row.total)}</td></tr>`).join("");
     const powerupLabels: Record<string, string> = {
@@ -230,7 +233,7 @@ router.get("/", authLimiter, basicAuth, async (_req, res) => {
       :root{color-scheme:dark}*{box-sizing:border-box}body{margin:0;padding:20px;background:#0f1216;color:#e8edf2;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}h1{font-size:1.4rem;margin:0 0 4px}.sub{color:#8a98a8;font-size:.85rem;margin:0 0 20px}.card{background:#1a2029;border:1px solid #283140;border-radius:14px;padding:16px;margin-bottom:18px}table{width:100%;border-collapse:collapse;font-size:.9rem}th,td{padding:10px 12px;border-bottom:1px solid #232b36;text-align:left}th{background:#222a35;color:#9fb0c2;font-size:.76rem;text-transform:uppercase}td:not(:first-child),th:not(:first-child){text-align:right}tr:last-child td{border-bottom:0}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.kpiBox{background:#141922;border:1px solid #283140;border-radius:12px;padding:12px}.kpi{font-size:1.8rem;font-weight:700}.kpi{font-size:1.8rem;font-weight:700}.label{font-size:.76rem;color:#8a98a8;text-transform:uppercase}@media(max-width:700px){.grid{grid-template-columns:1fr}}
 a{color:#4ade80;text-decoration:none}
     </style></head><body><h1>📊 Analytics de STOP</h1><p class="sub">Panel privado · plataforma y comportamiento · últimos 7 días</p>
-    <div class="grid"><div class="card"><div class="label">🍎 iOS conectados</div><div class="kpi">${platformMap.get("ios")?.active ?? 0}</div></div><div class="card"><div class="label">🤖 Android conectados</div><div class="kpi">${platformMap.get("android")?.active ?? 0}</div></div><div class="card"><div class="label">🌐 Web conectados</div><div class="kpi">${platformMap.get("web")?.active ?? 0}</div></div></div>
+    <div class="grid"><div class="card"><div class="label">🍎 iOS conectados</div><div class="kpi">${platformMap.get("ios")?.active ?? 0}</div></div><div class="card"><div class="label">🤖 Android conectados</div><div class="kpi">${platformMap.get("android")?.active ?? 0}</div></div><div class="card"><div class="label">🌐 Web conectados</div><div class="kpi">${platformMap.get("web")?.active ?? 0}</div></div><div class="card"><div class="label">🔵 Facebook conectados</div><div class="kpi">${loginMethodMap.get("facebook") ?? 0}</div></div></div>
     <div class="card"><h2>👥 Quién está conectado ahora</h2><p class="sub">Sesiones activas en los últimos 90 segundos. No se muestran correos ni credenciales.</p><table><thead><tr><th>Jugador</th><th>Cómo conecta</th><th>Plataforma</th><th>Versión</th><th>Idioma</th><th>Última señal</th></tr></thead><tbody>${activeSessionRows || '<tr><td colspan="6">No hay jugadores conectados ahora.</td></tr>'}</tbody></table></div>
     <div class="card"><h2>📺 Publicidad · últimos 7 días</h2><div class="grid">
       <div class="kpiBox"><div class="label">Usuarios con anuncio</div><div class="kpi">${adImpressionViewers}</div></div>
