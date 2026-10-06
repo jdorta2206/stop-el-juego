@@ -445,13 +445,19 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
     const html = `<!doctype html>
 <html lang="es"><head>
 <meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <meta name="robots" content="noindex,nofollow"/>
-<title>STOP · Panel privado</title>
+<link rel="manifest" href="/test-manifest.json"/>
+<meta name="theme-color" content="#0f1216"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="STOP Control"/>
+<title>STOP Control · Panel privado</title>
 <style>
   :root { color-scheme: dark; }
   * { box-sizing: border-box; }
-  body { margin:0; font-family: system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:#0f1216; color:#e8edf2; padding:20px; }
+  body { margin:0; font-family: system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:#0f1216; color:#e8edf2; padding:calc(14px + env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) calc(24px + env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left)); }
   h1 { font-size:1.4rem; margin:0 0 4px; }
   .sub { color:#8a98a8; font-size:.85rem; margin-bottom:20px; }
   .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:24px; }
@@ -468,10 +474,20 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
   td:not(:first-child), th:not(:first-child) { text-align:right; }
   .foot { margin-top:24px; color:#5f6c7b; font-size:.78rem; }
   a.btn { display:inline-block; margin-top:8px; color:#4ade80; text-decoration:none; border:1px solid #2c6b45; padding:6px 14px; border-radius:8px; }
+@media(max-width:600px){
+  body{padding-left:12px;padding-right:12px}
+  .cards{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .card{padding:12px;border-radius:12px}
+  .card .val{font-size:1.55rem}
+  table{display:block;overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch}
+  th,td{padding:9px 10px}
+  h2{margin-top:20px}
+  a.btn,button.btn{min-height:44px;padding:10px 14px}
+}
 </style>
 </head><body>
-  <h1>📊 Panel privado de STOP</h1>
-  <div class="sub">Datos en tiempo real · Hora de España (Europe/Madrid): ${esc(now)}</div>
+  <h1>📊 STOP Control</h1>
+  <div class="sub">Panel privado · datos en tiempo real · ${esc(now)}</div>
 
   <h2>Hoy</h2>
   <div class="cards">
