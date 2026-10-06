@@ -31,7 +31,6 @@ export function consumeInterstitialSlot(): void {
 }
 
 export async function maybeShowInterstitial(isPremium: boolean): Promise<boolean> {
-  if (import.meta.env.VITE_ADS_DISABLED === "1") return false;
   if (isPremium || !interstitialEligible() || !isTwaInterstitialAvailable()) return false;
   // Consume before launching so repeated taps/re-renders cannot trigger two ads.
   consumeInterstitialSlot();
