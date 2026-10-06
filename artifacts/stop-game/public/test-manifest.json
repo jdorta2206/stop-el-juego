@@ -1,0 +1,18 @@
+{
+  "id": "/test",
+  "name": "STOP Control",
+  "short_name": "STOP Control",
+  "description": "Panel privado de control y diagnóstico de STOP El Juego",
+  "start_url": "/test",
+  "scope": "/test",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "portrait",
+  "background_color": "#0f1216",
+  "theme_color": "#0f1216",
+  "lang": "es",
+  "icons": [
+    {"src": "/images/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+    {"src": "/images/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"}
+  ]
+}
