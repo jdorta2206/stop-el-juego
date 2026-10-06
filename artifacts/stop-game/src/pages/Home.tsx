@@ -1139,6 +1139,7 @@ export default function Home() {
             )}
           <nav className="flex flex-wrap justify-center gap-x-5 gap-y-2 text-sm text-white/60">
             <Link href="/como-jugar" className="hover:text-[#f9a825] transition-colors">Cómo jugar</Link>
+             <Link href="/como-funciona" className="hover:text-[#f9a825] transition-colors">Cómo funciona</Link>
             <Link href="/estrategias" className="hover:text-[#f9a825] transition-colors">Estrategias</Link>
             <Link href="/acerca" className="hover:text-[#f9a825] transition-colors">Acerca de</Link>
             <Link href="/privacidad" className="hover:text-[#f9a825] transition-colors">Privacidad</Link>
