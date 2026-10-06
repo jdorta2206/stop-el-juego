@@ -33,7 +33,7 @@ public class InterstitialAdActivity extends Activity {
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
+        super.onCreate(savedInstanceState);\n        if (!AdsPolicy.isEnabled()) { finish(); return; }
 
         Uri data = getIntent().getData();
         String origin = data == null ? null : data.getQueryParameter("origin");
