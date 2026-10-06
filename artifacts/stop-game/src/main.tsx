@@ -106,12 +106,9 @@ async function bootstrapApp() {
   );
 
   if (typeof window !== "undefined") {
-    requestAnimationFrame(() => {
-      const splash = document.getElementById("html-splash");
-      if (!splash) return;
-      splash.classList.add("fade-out");
-      window.setTimeout(() => splash.remove(), 400);
-    });
+    // The React SplashScreen owns removal of the static HTML splash. Keeping
+    // it here would expose the prerendered SEO homepage while React is still
+    // waiting for its splash/router transition to finish.
     setTimeout(() => { ensureOfflineBundle(); }, 1500);
   }
 }

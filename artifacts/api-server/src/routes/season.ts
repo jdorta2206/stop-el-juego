@@ -341,7 +341,7 @@ async function getOrCreateProgress(playerId: string, seasonId: number): Promise<
 async function applyAuthoritativeSeasonEventsInTransaction(
   tx: any,
   playerId: string,
-  events: Array<{ type: "win_game" | "play_game" | "round_score" | "streak" | "valid_words" | "daily_done"; value?: number }>,
+  events: ReadonlyArray<{ type: "win_game" | "play_game" | "round_score" | "streak" | "valid_words" | "daily_done"; value?: number }>,
   eventKey?: string,
 ): Promise<void> {
   if (!playerId || events.length === 0) return;
