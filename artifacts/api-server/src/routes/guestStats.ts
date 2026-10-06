@@ -28,7 +28,7 @@ function todayForPlayer(req: { headers: Record<string, unknown> }): string {
 
 // Atomic daily upsert: increment `games` or `conversions` for today by 1.
 async function bump(req: { headers: Record<string, unknown> }, column: "games" | "conversions") {
-  const day = todayForPlayer(_req);
+  const day = todayForPlayer(req);
   await db
     .insert(guestStatsTable)
     .values({
