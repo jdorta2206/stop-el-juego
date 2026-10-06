@@ -45,16 +45,27 @@ function getTimeUntilMidnight(): string {
     timeZone, year: "numeric", month: "2-digit", day: "2-digit",
   }).format(now);
   const [year, month, day] = today.split("-").map(Number);
-  const probe = new Date(Date.UTC(year, month - 1, day + 1, 12, 0, 0));
-  const parts = new Intl.DateTimeFormat("en-US", {
+  const nextDay = new Date(Date.UTC(year, month - 1, day + 1, 12, 0, 0));
+  const nextDate = new Intl.DateTimeFormat("en-CA", {
     timeZone, year: "numeric", month: "2-digit", day: "2-digit",
-    hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
-  }).formatToParts(probe);
-  const part = (type: string) => Number(parts.find(p => p.type === type)?.value ?? 0);
-  const localProbeMs = Date.UTC(part("year"), part("month") - 1, part("day"), part("hour"), part("minute"), part("second"));
-  const offsetMs = localProbeMs - probe.getTime();
-  const midnight = new Date(Date.UTC(year, month - 1, day + 1, 0, 0, 0) - offsetMs);
-  const diff = midnight.getTime() - now.getTime();
+  }).format(nextDay);
+
+  // Find the first instant whose player-local calendar date is the next day.
+  // This remains correct when a timezone changes its offset at midnight,
+  // where applying the noon offset to 00:00 would produce the wrong instant.
+  const localDateAt = (instant: number) => new Intl.DateTimeFormat("en-CA", {
+    timeZone, year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(new Date(instant));
+
+  let low = nextDay.getTime() - 36 * 3600000;
+  let high = nextDay.getTime() + 36 * 3600000;
+  for (let i = 0; i < 48; i++) {
+    const mid = Math.floor((low + high) / 2);
+    if (localDateAt(mid) >= nextDate) high = mid;
+    else low = mid + 1;
+  }
+
+  const diff = Math.max(0, high - now.getTime());
   const h = Math.floor(diff / 3600000);
   const m = Math.floor((diff % 3600000) / 60000);
   return `${h}h ${m}m`;
