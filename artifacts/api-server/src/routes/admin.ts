@@ -432,7 +432,7 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
 
     const loginRows = loginMethods.map((row) => {
       const labels: Record<string,string> = { google:"🔵 Google / Gmail", facebook:"🔵 Facebook", apple:"🍎 Apple", instagram:"📸 Instagram", tiktok:"🎵 TikTok", account:"👤 Cuenta", guest:"👤 Invitado" };
-      return `<tr><td>${labels[String(row.method)] ?? esc(row.method)}</td><td>${num(row.active)}</td><td>${num(row.sessions)}</td></tr>`;
+      return `<tr><td>${labels[String(row.method)] ?? esc(row.method)}</td><td>${num(row.active)}</td><td>${num(row.unique_users)}</td><td>${num(row.sessions)}</td></tr>`;
     }).join("");
 
     const adViewerRows = adViewers.map((row) => {
@@ -580,8 +580,9 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
   <tbody>${activeSessionRows || '<tr><td colspan="6">Ahora mismo no hay conexiones activas.</td></tr>'}</tbody></table>
 
   <h2>🔐 Cómo se conectan · últimas 24 h</h2>
-  <table><thead><tr><th>Método</th><th>Activos ahora</th><th>Sesiones</th></tr></thead>
-  <tbody>${loginRows || '<tr><td colspan="3">Sin datos.</td></tr>'}</tbody></table>
+  <p class="sub">Usuarios únicos: una cuenta cuenta una vez; los invitados se cuentan por sesión. Activos ahora = señal en los últimos 90 segundos.</p>
+  <table><thead><tr><th>Método</th><th>Activos ahora</th><th>Usuarios únicos</th><th>Sesiones</th></tr></thead>
+  <tbody>${loginRows}</tbody></table>
 
   <h2>📺 Quién ve publicidad · últimos 7 días</h2>
   <table><thead><tr><th>Jugador</th><th>Evento</th><th>Plataforma</th><th>Veces</th><th>Último evento</th></tr></thead>
