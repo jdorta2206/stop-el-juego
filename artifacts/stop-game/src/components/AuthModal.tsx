@@ -42,6 +42,14 @@ export function AuthModal({ onSave, initial, onDismiss }: AuthModalProps) {
   const mountedRef = useRef(true);
   const statsAbortRef = useRef<AbortController | null>(null);
   const welcomeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const guestConversionTrackedRef = useRef(false);
+
+  const trackSuccessfulGuestConversion = (method: string | null) => {
+    if (initial?.loginMethod === "guest" && method && method !== "guest" && !guestConversionTrackedRef.current) {
+      guestConversionTrackedRef.current = true;
+      trackGuestConversion();
+    }
+  };
 
   useEffect(() => () => {
     mountedRef.current = false;
@@ -93,7 +101,10 @@ export function AuthModal({ onSave, initial, onDismiss }: AuthModalProps) {
           } as any;
           if (welcomeTimerRef.current) clearTimeout(welcomeTimerRef.current);
           welcomeTimerRef.current = setTimeout(() => {
-            if (mountedRef.current && !controller.signal.aborted) onSave(profile);
+            if (mountedRef.current && !controller.signal.aborted) {
+              trackSuccessfulGuestConversion(oauthUser.provider);
+              onSave(profile);
+            }
           }, 2000);
         }
       })
