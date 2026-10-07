@@ -268,35 +268,48 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
     ).join('');
 
 
-    const errorSummary = (
+    // Estado de incidencias: solo se considera ACTIVO un error que haya ocurrido
+    // en los últimos 15 minutos. Los errores anteriores siguen conservados como
+    // HISTÓRICO, pero nunca contaminan el semáforo actual del panel.
+    const currentErrors = (
+      await db.execute(sql`
+        SELECT event_name, platform, app_version, created_at, metadata_json
+        FROM analytics_events
+        WHERE trusted = TRUE
+          AND event_name IN ('client_error','api_error')
+          AND created_at >= NOW() - INTERVAL '15 minutes'
+        ORDER BY created_at DESC
+        LIMIT 100
+      `)
+    ).rows as Record<string, unknown>[];
+
+    const historicalErrorSummary = (
       await db.execute(sql`
         SELECT event_name, COUNT(*)::int AS total
         FROM analytics_events
         WHERE trusted = TRUE
           AND event_name IN ('client_error','api_error')
           AND created_at >= NOW() - INTERVAL '7 days'
+          AND created_at < NOW() - INTERVAL '15 minutes'
         GROUP BY event_name ORDER BY total DESC
       `)
     ).rows as Record<string, unknown>[];
 
-    const recentErrors = (
-      await db.execute(sql`
-        SELECT event_name, platform, app_version, created_at,
-               metadata_json
-        FROM analytics_events
-        WHERE trusted = TRUE
-          AND event_name IN ('client_error','api_error')
-          AND created_at >= NOW() - INTERVAL '24 hours'
-        ORDER BY created_at DESC
-        LIMIT 100
-      `)
-    ).rows as Record<string, unknown>[];
+    const historicalErrorCount = num((await db.execute(sql`
+      SELECT COUNT(*)::int AS total
+      FROM analytics_events
+      WHERE trusted = TRUE
+        AND event_name IN ('client_error','api_error')
+        AND created_at >= NOW() - INTERVAL '7 days'
+        AND created_at < NOW() - INTERVAL '15 minutes'
+    `)).rows[0]?.total);
 
-    const errorChart = errorSummary.map((row) => ({
+    const historicalErrorChart = historicalErrorSummary.map((row) => ({
       label: String(row.event_name) === 'client_error' ? 'Fallos del juego' : 'Fallos API',
       value: num(row.total),
     }));
-    const errorRows = recentErrors.map((row) => {
+
+    const errorRows = currentErrors.map((row) => {
       let message = '—';
       try {
         const meta = JSON.parse(String(row.metadata_json || '{}')) as Record<string, unknown>;
@@ -305,6 +318,10 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
       const time = row.created_at ? new Date(String(row.created_at)).toLocaleString('es-ES', { timeZone: 'Europe/Madrid' }) : '—';
       return `<tr><td>${String(row.event_name) === "client_error" ? "🐛 Juego" : "⚠️ API"}</td><td>${esc(row.platform)}</td><td>${esc(row.app_version || "—")}</td><td>${esc(message)}</td><td>${time}</td></tr>`;
     }).join('');
+
+    const errorStatus = currentErrors.length === 0
+      ? '<div class="card" style="border-color:#2c6b45"><div class="label">Estado actual</div><div class="val">🟢 OK</div><div class="sub">Sin errores registrados en los últimos 15 minutos.</div></div>'
+      : `<div class="card" style="border-color:#7f1d1d"><div class="label">Estado actual</div><div class="val">🔴 ${currentErrors.length} activo(s)</div><div class="sub">Hay errores recientes que requieren comprobación.</div></div>`;
 
     const modeUsage = (
       await db.execute(sql`
@@ -612,14 +629,21 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
     </tbody>
   </table>
 
-  <h2>🚨 Fallos detectados</h2>
-  <div class="charts">
-    ${svgBars(errorChart, "Fallos registrados · últimos 7 días")}
+  <h2>🛡️ Estado de incidencias</h2>
+  <div class="cards">
+    ${errorStatus}
   </div>
   <table>
     <thead><tr><th>Tipo</th><th>Plataforma</th><th>Versión</th><th>Detalle</th><th>Cuándo</th></tr></thead>
-    <tbody>${errorRows || '<tr><td colspan="5">No hay fallos registrados en las últimas 24 horas.</td></tr>'}</tbody>
+    <tbody>${errorRows || '<tr><td colspan="5">No hay incidencias activas en los últimos 15 minutos.</td></tr>'}</tbody>
   </table>
+
+  <h2>🗂️ Histórico de fallos · últimos 7 días</h2>
+  <p class="sub">Estos eventos se conservan para auditoría, pero <b>no significan que el juego esté roto ahora</b>. Si no hay incidencias en los últimos 15 minutos, el estado actual permanece 🟢 OK.</p>
+  <div class="charts">
+    ${svgBars(historicalErrorChart, "Eventos históricos · no activos")}
+  </div>
+  <div class="sub">${historicalErrorCount} evento(s) históricos fuera de la ventana activa.</div>
 
   <h2>📊 Lo que está pasando de un vistazo</h2>
   <div class="charts">
