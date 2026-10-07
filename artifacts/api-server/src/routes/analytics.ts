@@ -1,6 +1,6 @@
 import { Router, type IRouter, type Request } from "express";
 import { randomUUID } from "crypto";
-import { db } from "@workspace/db";
+import { db, pool } from "@workspace/db";
 import { sql } from "drizzle-orm";
 import { presenceLimiter } from "../middlewares/rateLimit";
 import { readPlayerId } from "../lib/playerAuth";
@@ -37,41 +37,67 @@ function platformFromRequest(req: Request): "web" | "android" | "ios" {
 }
 
 async function ensureAnalyticsTables(): Promise<void> {
-  await db.execute(sql.raw(`
-    CREATE TABLE IF NOT EXISTS analytics_sessions (
-      session_id text PRIMARY KEY,
-      player_id text,
-      platform text NOT NULL DEFAULT 'web',
-      app_version text,
-      language text,
-      last_seen timestamp NOT NULL DEFAULT NOW(),
-      started_at timestamp NOT NULL DEFAULT NOW()
-    )
-  `));
-  await db.execute(sql.raw(`ALTER TABLE analytics_sessions ADD COLUMN IF NOT EXISTS login_method text`));
-  await db.execute(sql.raw(`CREATE INDEX IF NOT EXISTS analytics_sessions_last_seen_idx ON analytics_sessions (last_seen)`));
-  await db.execute(sql.raw(`CREATE INDEX IF NOT EXISTS analytics_sessions_platform_last_seen_idx ON analytics_sessions (platform, last_seen)`));
-  await db.execute(sql.raw(`
-    CREATE TABLE IF NOT EXISTS analytics_events (
-      id serial PRIMARY KEY,
-      event_name text NOT NULL,
-      player_id text,
-      session_id text,
-      platform text NOT NULL DEFAULT 'web',
-      app_version text,
-      language text,
-      mode text,
-      ai_difficulty text,
-      metadata_json text NOT NULL DEFAULT '{}',
-      trusted boolean NOT NULL DEFAULT FALSE,
-      created_at timestamp NOT NULL DEFAULT NOW()
-    )
-  `));
-  await db.execute(sql.raw(`ALTER TABLE analytics_events ADD COLUMN IF NOT EXISTS metadata_json text NOT NULL DEFAULT '{}'`));
-  await db.execute(sql.raw(`ALTER TABLE analytics_events ADD COLUMN IF NOT EXISTS trusted boolean NOT NULL DEFAULT FALSE`));
-  await db.execute(sql.raw(`CREATE INDEX IF NOT EXISTS analytics_events_created_at_idx ON analytics_events (created_at)`));
-  await db.execute(sql.raw(`CREATE INDEX IF NOT EXISTS analytics_events_platform_created_at_idx ON analytics_events (platform, created_at)`));
-  await db.execute(sql.raw(`CREATE INDEX IF NOT EXISTS analytics_events_name_created_at_idx ON analytics_events (event_name, created_at)`));
+  const client = await pool.connect();
+  try {
+    const stmts = [
+      `CREATE TABLE IF NOT EXISTS analytics_sessions (
+        session_id text PRIMARY KEY,
+        player_id text,
+        platform text NOT NULL DEFAULT 'web',
+        app_version text,
+        language text,
+        last_seen timestamp NOT NULL DEFAULT NOW(),
+        started_at timestamp NOT NULL DEFAULT NOW()
+      )`,
+      `ALTER TABLE analytics_sessions ADD COLUMN IF NOT EXISTS login_method text`,
+      `CREATE INDEX IF NOT EXISTS analytics_sessions_last_seen_idx ON analytics_sessions (last_seen)`,
+      `CREATE INDEX IF NOT EXISTS analytics_sessions_platform_last_seen_idx ON analytics_sessions (platform, last_seen)`,
+      `CREATE TABLE IF NOT EXISTS analytics_events (
+        id serial PRIMARY KEY,
+        event_name text NOT NULL,
+        player_id text,
+        session_id text,
+        platform text NOT NULL DEFAULT 'web',
+        app_version text,
+        language text,
+        mode text,
+        ai_difficulty text,
+        metadata_json text NOT NULL DEFAULT '{}',
+        trusted boolean NOT NULL DEFAULT FALSE,
+        created_at timestamp NOT NULL DEFAULT NOW()
+      )`,
+      `ALTER TABLE analytics_events ADD COLUMN IF NOT EXISTS metadata_json text NOT NULL DEFAULT '{}'`,
+      `ALTER TABLE analytics_events ADD COLUMN IF NOT EXISTS trusted boolean NOT NULL DEFAULT FALSE`,
+      `CREATE INDEX IF NOT EXISTS analytics_events_created_at_idx ON analytics_events (created_at)`,
+      `CREATE INDEX IF NOT EXISTS analytics_events_platform_created_at_idx ON analytics_events (platform, created_at)`,
+      `CREATE INDEX IF NOT EXISTS analytics_events_name_created_at_idx ON analytics_events (event_name, created_at)`,
+    ];
+
+    for (const stmt of stmts) await client.query(stmt);
+
+    const check = await client.query(`
+      SELECT
+        EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_schema = current_schema()
+            AND table_name = 'analytics_events'
+            AND column_name = 'metadata_json'
+        ) AS metadata_json,
+        EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_schema = current_schema()
+            AND table_name = 'analytics_events'
+            AND column_name = 'trusted'
+        ) AS trusted
+    `);
+    const row = check.rows[0] as { metadata_json?: boolean; trusted?: boolean } | undefined;
+    if (!row?.metadata_json || !row?.trusted) {
+      throw new Error("Analytics schema verification failed: analytics_events columns are missing");
+    }
+    console.log("[analytics] schema ready: analytics_events.metadata_json/trusted verified");
+  } finally {
+    client.release();
+  }
 }
 
 const analyticsTablesReady = ensureAnalyticsTables().catch((err) => {
