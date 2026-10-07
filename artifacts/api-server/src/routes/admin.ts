@@ -193,7 +193,7 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
       WHERE trusted = TRUE
         AND event_name = 'game_start'
         AND created_at >= NOW() - INTERVAL '24 hours'
-        AND metadata_json NOT LIKE '%"source":"server_room_start"%'
+        AND metadata_json LIKE '%"source":"client_game_start"%'
     `)).rows[0] as Record<string, unknown> | undefined;
 
     // ── Retención y embudo real (analytics_sessions / trusted events) ────────
