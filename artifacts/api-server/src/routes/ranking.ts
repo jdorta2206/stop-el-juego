@@ -613,11 +613,13 @@ router.post("/scores", scoreLimiter, requirePlayerIdentity, async (req: AuthedRe
   const baseXpGain = calcXpGain(score, effectiveWon, effectiveMode);
   const baseCoinGain = calcCoinGain(score, effectiveWon, effectiveMode, isBonus);
   const playerTimezone = await lookupPlayerTimezone(playerId);
-  const requestTimezone = normalizePlayerTimeZone(req.headers["x-stop-timezone"]);
-  const effectiveTimeZone = requestTimezone ?? playerTimezone.timeZone;
+  // Happy Hour is a reward multiplier, so never let the request choose the
+  // timezone used to grant it. Use the timezone persisted for the account's
+  // enabled push subscription; fall back to its persisted UTC offset.
+  const effectiveTimeZone = playerTimezone.timeZone;
   const happyHourActive = effectiveTimeZone
     ? isHappyHourActiveForTimeZone(effectiveTimeZone)
-    : playerTimezone.tzOffset !== null && isHappyHourActiveForTzOffset(playerTimezone.tzOffset);
+    : isHappyHourActiveForTzOffset(playerTimezone.tzOffset);
   const xpMultiplier = happyHourActive ? HAPPY_HOUR_MULTIPLIER : 1;
   const coinMultiplier = happyHourActive ? HAPPY_HOUR_MULTIPLIER : 1;
   const xpGain = baseXpGain * xpMultiplier;
