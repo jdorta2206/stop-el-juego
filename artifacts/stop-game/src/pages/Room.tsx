@@ -33,7 +33,8 @@ import { reportSeasonEvent } from "@/hooks/useSeason";
 import { saveActiveRoom, clearActiveRoom, touchActiveRoom } from "@/lib/activeRoom";
 import { useT } from "@/i18n/useT";
 import { useToast } from "@/hooks/use-toast";
-import { useReviewPrompt, recordGamePlayed } from "@/hooks/useReviewPrompt";\nimport { trackTrustedGameStart } from "@/lib/analyticsClient";
+import { useReviewPrompt, recordGamePlayed } from "@/hooks/useReviewPrompt";
+import { trackTrustedGameStart } from "@/lib/analyticsClient";
 import { ReviewPromptCard } from "@/components/ReviewPromptCard";
 import { maybeShowInterstitial, recordInterstitialGameCompleted } from "@/lib/interstitialAd";
 import { applyHalloweenCategory, getHalloweenScare, getHalloweenScareById, isHalloweenActive, isHalloweenPreview, isHalloweenModeEnabled } from "@/lib/halloweenEvent";
@@ -253,7 +254,8 @@ export default function Room() {
   // Latest room snapshot, kept in a ref so the 4Hz round-timer interval can
   // read fresh deadlines without re-creating the interval on every poll.
   const roomRef = useRef<any>(null);
-  const lastStatusRef = useRef<string>("");\n  const gameStartTrackedRoomRef = useRef<string | null>(null);
+  const lastStatusRef = useRef<string>("");
+  const gameStartTrackedRoomRef = useRef<string | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const freezeTimerRef = useRef<NodeJS.Timeout | null>(null);
   const hasSubmittedRef = useRef(false);
@@ -1192,7 +1194,13 @@ export default function Room() {
     }
 
     if (roomStatus === "playing") {
-\n      // Track one trusted start per multiplayer match/client, never per round or poll.\n      const trackedRoom = roomCode?.toUpperCase() ?? null;\n      if (trackedRoom && gameStartTrackedRoomRef.current !== trackedRoom) {\n        gameStartTrackedRoomRef.current = trackedRoom;\n        trackTrustedGameStart({ mode: gameMode, language: getCurrentLang() });\n      }      if (currentRound !== lastRoundRef.current) {
+
+      // Track one trusted start per multiplayer match/client, never per round or poll.
+      const trackedRoom = roomCode?.toUpperCase() ?? null;
+      if (trackedRoom && gameStartTrackedRoomRef.current !== trackedRoom) {
+        gameStartTrackedRoomRef.current = trackedRoom;
+        trackTrustedGameStart({ mode: gameMode, language: getCurrentLang() });
+      }      if (currentRound !== lastRoundRef.current) {
         lastRoundRef.current = currentRound;
         hasSubmittedRef.current = false;
         isFreezingRef.current = false;
