@@ -5,6 +5,7 @@ function isTwa(): boolean {
   try {
     const params = new URLSearchParams(window.location.search);
     if (params.get("source") === "googleplay-twa" || params.get("source") === "twa") return true;
+    if (document.referrer.startsWith("android-app://")) return true;
     if (localStorage.getItem(ANALYTICS_TWA_KEY) === "1") return true;
     return document.referrer.startsWith("android-app://app.replit.stop_el_juego.twa");
   } catch { return false; }
