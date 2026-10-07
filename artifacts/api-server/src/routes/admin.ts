@@ -387,7 +387,14 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
       })
       .join("");
 
-    const dailyQualityRows = days.map((d) => {\n      const e = byDay.get(d)!;\n      const startsVersion = e.starts > 0 ? `${Math.round((e.startsWithVersion / e.starts) * 100)}%` : "—";\n      const warning = (e.games + e.guestGames) > 0 && e.starts === 0 ? " 🔴" : "";\n      return `<tr><td>${esc(d)}</td><td>${e.games}</td><td>${e.guestGames}</td><td>${e.starts}${warning}</td><td>${startsVersion}</td></tr>`;\n    }).join("");\n\n    const topRows = top
+    const dailyQualityRows = days.map((d) => {
+      const e = byDay.get(d)!;
+      const startsVersion = e.starts > 0 ? `${Math.round((e.startsWithVersion / e.starts) * 100)}%` : "—";
+      const warning = (e.games + e.guestGames) > 0 && e.starts === 0 ? " 🔴" : "";
+      return `<tr><td>${esc(d)}</td><td>${e.games}</td><td>${e.guestGames}</td><td>${e.starts}${warning}</td><td>${startsVersion}</td></tr>`;
+    }).join("");
+
+    const topRows = top
       .map(
         (p, i) =>
           `<tr><td>${i + 1}</td><td>${esc(p.player_name)}${p.is_premium ? " ⭐" : ""}</td><td>${num(p.total_score).toLocaleString("es-ES")}</td><td>${num(p.games_played)}</td></tr>`,
@@ -563,7 +570,15 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
     <div class="card"><div class="label">Invitados → registro</div><div class="val">${num(guestToday?.conversions)}</div></div>
   </div>
 
-  <h2>🛡️ Calidad de los datos del panel</h2>\n  <div class="cards">\n    <div class="card"><div class="label">Sesiones con versión · 7 días</div><div class="val">${num(analyticsVersionCoverage?.sessions) > 0 ? Math.round((num(analyticsVersionCoverage?.sessions_with_version) / num(analyticsVersionCoverage?.sessions)) * 100) : 0}%</div></div>\n    <div class="card"><div class="label">Game starts con versión · 7 días</div><div class="val">${num(analyticsStartCoverage?.starts) > 0 ? Math.round((num(analyticsStartCoverage?.starts_with_version) / num(analyticsStartCoverage?.starts)) * 100) : 0}%</div></div>\n    <div class="card"><div class="label">Game starts con plataforma · 7 días</div><div class="val">${num(analyticsStartCoverage?.starts) > 0 ? Math.round((num(analyticsStartCoverage?.starts_with_platform) / num(analyticsStartCoverage?.starts)) * 100) : 0}%</div></div>\n  </div>\n  <div class="sub">Los resultados guardados y las partidas de invitados proceden de fuentes distintas. <b>Game start</b> es telemetría y se usa para detectar pérdidas de instrumentación; no se usa para inventar el número de partidas.</div>\n\n  <h2>📈 Salud real del juego</h2>
+  <h2>🛡️ Calidad de los datos del panel</h2>
+  <div class="cards">
+    <div class="card"><div class="label">Sesiones con versión · 7 días</div><div class="val">${num(analyticsVersionCoverage?.sessions) > 0 ? Math.round((num(analyticsVersionCoverage?.sessions_with_version) / num(analyticsVersionCoverage?.sessions)) * 100) : 0}%</div></div>
+    <div class="card"><div class="label">Game starts con versión · 7 días</div><div class="val">${num(analyticsStartCoverage?.starts) > 0 ? Math.round((num(analyticsStartCoverage?.starts_with_version) / num(analyticsStartCoverage?.starts)) * 100) : 0}%</div></div>
+    <div class="card"><div class="label">Game starts con plataforma · 7 días</div><div class="val">${num(analyticsStartCoverage?.starts) > 0 ? Math.round((num(analyticsStartCoverage?.starts_with_platform) / num(analyticsStartCoverage?.starts)) * 100) : 0}%</div></div>
+  </div>
+  <div class="sub">Los resultados guardados y las partidas de invitados proceden de fuentes distintas. <b>Game start</b> es telemetría y se usa para detectar pérdidas de instrumentación; no se usa para inventar el número de partidas.</div>
+
+  <h2>📈 Salud real del juego</h2>
   <div class="cards">
     <div class="card accent"><div class="label">DAU real · hoy</div><div class="val">${num(retentionKpis?.dau)}</div></div>
     <div class="card"><div class="label">WAU real · 7 días</div><div class="val">${num(retentionKpis?.wau)}</div></div>
@@ -641,7 +656,14 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
     <tbody>${dailyRows || '<tr><td colspan="6">Sin datos</td></tr>'}</tbody>
   </table>
 
-  <h2>🔎 Conciliación de juego y telemetría · últimos 14 días</h2>\n  <table>\n    <thead><tr><th>Día</th><th>Resultados registrados</th><th>Inv. partidas</th><th>Game starts</th><th>Starts con versión</th></tr></thead>\n    <tbody>${dailyQualityRows || '<tr><td colspan="5">Sin datos</td></tr>'}</tbody>\n  </table>\n  <div class="sub">🔴 significa que existen resultados/partidas contabilizadas pero no llegó ningún <code>game_start</code> ese día. Eso es una alerta de telemetría, no un “día sin jugadores”.</div>\n\n  <h2>Top 10 jugadores</h2>
+  <h2>🔎 Conciliación de juego y telemetría · últimos 14 días</h2>
+  <table>
+    <thead><tr><th>Día</th><th>Resultados registrados</th><th>Inv. partidas</th><th>Game starts</th><th>Starts con versión</th></tr></thead>
+    <tbody>${dailyQualityRows || '<tr><td colspan="5">Sin datos</td></tr>'}</tbody>
+  </table>
+  <div class="sub">🔴 significa que existen resultados/partidas contabilizadas pero no llegó ningún <code>game_start</code> ese día. Eso es una alerta de telemetría, no un “día sin jugadores”.</div>
+
+  <h2>Top 10 jugadores</h2>
   <table>
     <thead><tr><th>#</th><th>Jugador</th><th>Puntos</th><th>Partidas</th></tr></thead>
     <tbody>${topRows || '<tr><td colspan="4">Sin datos</td></tr>'}</tbody>
