@@ -138,3 +138,5 @@ jobs:
       - name: Remove signing material
         if: always()
         run: rm -f android-release.keystore
+
+# Rebuild trigger: Android 1.3.6.9 / 54 verification
