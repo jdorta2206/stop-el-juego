@@ -22,7 +22,32 @@ window.addEventListener("error", (event) => {
   try {
     if (sessionStorage.getItem(CHUNK_RECOVERY_KEY) === "1") return;
     sessionStorage.setItem(CHUNK_RECOVERY_KEY, "1");
-    window.location.reload();
+
+    // A deployment can leave an older service worker controlling the page
+    // while the server has already removed the hashed chunk it cached.
+    // Unregister that controller and clear only the static asset caches before
+    // retrying. Keep DATA_CACHE intact so offline game data is not destroyed.
+    void (async () => {
+      try {
+        const registrations = await navigator.serviceWorker?.getRegistrations?.() || [];
+        await Promise.all(registrations.map((registration) => registration.unregister()));
+      } catch {
+        // Cache recovery is best-effort and must never block gameplay.
+      }
+
+      try {
+        const keys = await caches.keys();
+        await Promise.all(
+          keys
+            .filter((key) => key.startsWith("stop-v"))
+            .map((key) => caches.delete(key))
+        );
+      } catch {
+        // Browser cache APIs are optional; the reload below remains the fallback.
+      }
+
+      window.location.reload();
+    })();
   } catch {
     // Recovery must never interfere with gameplay.
   }
