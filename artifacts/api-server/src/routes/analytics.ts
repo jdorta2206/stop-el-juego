@@ -7,6 +7,7 @@ import { readPlayerId } from "../lib/playerAuth";
 
 const router: IRouter = Router();
 const PLATFORMS = new Set(["web", "android", "ios"]);
+const TRUSTED_CLIENT_TELEMETRY_EVENTS = new Set(["game_lobby_view"]);
 const SERVER_SESSION_COOKIE = "stop_analytics_session";
 const CURRENT_TWA_ANALYTICS_VERSION = "1.3.6.8";
 const CURRENT_WEB_ANALYTICS_VERSION = String(process.env.RAILWAY_GIT_COMMIT_SHA ?? "web-dev").slice(0, 12);
@@ -224,9 +225,10 @@ router.post("/event", presenceLimiter, async (req, res) => {
     const metadataJson = JSON.stringify(metadata).slice(0, 4000);
     const playerId = readPlayerId(req);
     const sessionId = clean(body.sessionId, 128);
+    const trusted = TRUSTED_CLIENT_TELEMETRY_EVENTS.has(eventName);
     await db.execute(sql`
-      INSERT INTO analytics_events (event_name, player_id, session_id, platform, app_version, language, mode, ai_difficulty, metadata_json)
-      VALUES (${eventName}, ${playerId}, ${sessionId}, ${platformFromRequest(req)}, ${String(req.headers["x-client-version"] ?? "").slice(0, 32) || null}, ${clean(body.language, 16)}, ${clean(body.mode, 32)}, ${clean(body.aiDifficulty, 32)}, ${metadataJson})
+      INSERT INTO analytics_events (event_name, player_id, session_id, platform, app_version, language, mode, ai_difficulty, metadata_json, trusted)
+      VALUES (${eventName}, ${playerId}, ${sessionId}, ${platformFromRequest(req)}, ${String(req.headers["x-client-version"] ?? "").slice(0, 32) || null}, ${clean(body.language, 16)}, ${clean(body.mode, 32)}, ${clean(body.aiDifficulty, 32)}, ${metadataJson}, ${trusted})
   `);
     return res.json({ ok: true });
   } catch (err) {
