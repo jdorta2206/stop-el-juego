@@ -27,11 +27,11 @@ android {
         resValue "string", "fullScopeUrl", 'https://www.stopjuegodepalabras.com/'
         resValue "string", "hostName", twaManifest.get('hostName')
         resValue "color", "colorPrimary", twaManifest.get('themeColor')
-        resValue "color", "colorPrimaryDark", twaManifest.get('themeColor')Dark
+        resValue "color", "colorPrimaryDark", twaManifest.get('themeColorDark')
         resValue "color", "navigationColor", twaManifest.get('navigationColor')
-        resValue "color", "navigationColorDark", twaManifest.get('navigationColor')Dark
+        resValue "color", "navigationColorDark", twaManifest.get('navigationColorDark')
         resValue "color", "navigationDividerColor", twaManifest.get('navigationDividerColor')
-        resValue "color", "navigationDividerColorDark", twaManifest.get('navigationDividerColor')Dark
+        resValue "color", "navigationDividerColorDark", twaManifest.get('navigationDividerColorDark')
         resValue "color", "backgroundColor", twaManifest.get('backgroundColor')
         resValue "string", "providerAuthority", twaManifest.get('applicationId') + '.fileprovider'
         resValue "bool", "enableNotification", twaManifest.get('enableNotifications').toString()
