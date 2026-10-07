@@ -76,6 +76,20 @@ const analyticsTablesReady = ensureAnalyticsTables().catch((err) => {
   throw err;
 });
 
+async function latestPlatformForPlayer(playerId: string | null | undefined): Promise<"web" | "android" | "ios" | null> {
+  if (!playerId) return null;
+  const rows = await db.execute(sql`
+    SELECT platform
+    FROM analytics_sessions
+    WHERE player_id = ${playerId}
+      AND platform IN ('web', 'android', 'ios')
+    ORDER BY last_seen DESC
+    LIMIT 1
+  `);
+  const platform = String((rows.rows[0] as any)?.platform ?? "");
+  return platform === "android" || platform === "ios" || platform === "web" ? platform : null;
+}
+
 export async function recordTrustedAnalyticsEvent(input: {
   eventName: string;
   playerId?: string | null;
@@ -86,12 +100,13 @@ export async function recordTrustedAnalyticsEvent(input: {
   metadata?: Record<string, unknown>;
 }): Promise<void> {
   await analyticsTablesReady;
+  const resolvedPlatform = input.platform ?? await latestPlatformForPlayer(input.playerId);
   const metadataJson = JSON.stringify(input.metadata ?? {}).slice(0, 4000);
   await db.execute(sql`
     INSERT INTO analytics_events
       (event_name, player_id, platform, app_version, language, mode, metadata_json, trusted)
     VALUES
-      (${input.eventName}, ${input.playerId ?? null}, ${input.platform ?? "web"},
+      (${input.eventName}, ${input.playerId ?? null}, ${resolvedPlatform ?? "web"},
        ${input.appVersion ?? null}, ${input.language ?? null}, ${input.mode ?? null},
        ${metadataJson}, TRUE)
   `);
