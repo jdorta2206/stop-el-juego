@@ -14,6 +14,13 @@ import androidx.browser.customtabs.CustomTabsCallback;
 import androidx.browser.customtabs.CustomTabsService;
 import androidx.browser.customtabs.CustomTabsSession;
 
+import com.google.android.play.core.appupdate.AppUpdateInfo;
+import com.google.android.play.core.appupdate.AppUpdateManager;
+import com.google.android.play.core.appupdate.AppUpdateManagerFactory;
+import com.google.android.play.core.install.InstallStateUpdatedListener;
+import com.google.android.play.core.install.model.AppUpdateType;
+import com.google.android.play.core.install.model.InstallStatus;
+import com.google.android.play.core.install.model.UpdateAvailability;
 import com.google.android.gms.ads.AdError;
 import com.google.android.gms.ads.AdRequest;
 import com.google.android.gms.ads.FullScreenContentCallback;
@@ -49,10 +56,22 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     private String activePlacement;
     private boolean channelRequestInFlight;
     private int channelRequestAttempts;
+    private static final int APP_UPDATE_REQUEST_CODE = 1907;
+    private AppUpdateManager appUpdateManager;
+    private boolean appUpdateCheckInFlight;
+    private final InstallStateUpdatedListener appUpdateListener = state -> {
+        if (state.installStatus() == InstallStatus.DOWNLOADED) {
+            Log.d(TAG, "Play update downloaded; completing installation");
+            appUpdateManager.completeUpdate();
+        }
+    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        appUpdateManager = AppUpdateManagerFactory.create(this);
+        appUpdateManager.registerListener(appUpdateListener);
+        checkForPlayUpdate();
         if (AdsPolicy.isEnabled()) {
             MobileAds.initialize(this, status -> {
                 mobileAdsReady = true;
