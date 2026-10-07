@@ -10,6 +10,19 @@ const PLATFORMS = new Set(["web", "android", "ios"]);
 const SERVER_SESSION_COOKIE = "stop_analytics_session";
 const CURRENT_TWA_ANALYTICS_VERSION = "1.3.6.8";
 
+function isTwaRequest(req: Request): boolean {
+  if (String(req.headers["x-client-twa"] ?? "") === "1") return true;
+  const referrer = String(req.headers.referer ?? req.headers.referrer ?? "");
+  if (referrer.startsWith("android-app://")) return true;
+  return /STOPApp\\/[0-9][0-9.]*/i.test(String(req.headers["user-agent"] ?? ""));
+}
+
+function appVersionFromRequest(req: Request): string | null {
+  const clientVersion = String(req.headers["x-client-version"] ?? "").trim().slice(0, 32);
+  if (clientVersion) return clientVersion;
+  return isTwaRequest(req) ? CURRENT_TWA_ANALYTICS_VERSION : null;
+}
+
 function platformFromRequest(req: Request): "web" | "android" | "ios" {
   const explicit = String(req.headers["x-client-platform"] ?? "").toLowerCase();
   const twa = String(req.headers["x-client-twa"] ?? "") === "1";
@@ -97,9 +110,10 @@ router.use(async (req, res, next) => {
     await analyticsTablesReady;
     const sessionId = serverSessionId(req, res);
     const platform = platformFromRequest(req);
+    const appVersion = appVersionFromRequest(req);
     await db.execute(sql`
-      INSERT INTO analytics_sessions (session_id, platform, last_seen, started_at)
-      VALUES (${sessionId}, ${platform}, NOW(), NOW())
+      INSERT INTO analytics_sessions (session_id, platform, app_version, last_seen, started_at)
+      VALUES (${sessionId}, ${platform}, ${appVersion}, NOW(), NOW())
       ON CONFLICT (session_id) DO UPDATE SET platform = EXCLUDED.platform, last_seen = NOW()
     `);
   } catch (err) {
@@ -122,10 +136,8 @@ router.post("/heartbeat", presenceLimiter, async (req, res) => {
         ? "guest"
         : null;
     const language = typeof body.language === "string" ? body.language.slice(0, 16) : null;
-    const clientVersion = String(req.headers["x-client-version"] ?? "").slice(0, 32);
-    const twa = String(req.headers["x-client-twa"] ?? "") === "1";
-    const appVersion = clientVersion || (twa ? CURRENT_TWA_ANALYTICS_VERSION : null);
     const platform = platformFromRequest(req);
+    const appVersion = appVersionFromRequest(req);
     await db.execute(sql`
       INSERT INTO analytics_sessions (session_id, player_id, login_method, platform, app_version, language, last_seen, started_at)
       VALUES (${sessionId}, ${playerId}, ${loginMethod}, ${platform}, ${appVersion}, ${language}, NOW(), NOW())
