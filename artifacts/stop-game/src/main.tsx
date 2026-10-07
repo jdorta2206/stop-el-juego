@@ -5,7 +5,7 @@ import "./index.css";
 import { ensureOfflineBundle } from "./lib/offlineGame";
 import { consumeAuthHandoff } from "./lib/oauth";
 import { initTwaAdBridge } from "./lib/twaAdBridge";
-import { captureInstalledAppVersion, getInstalledAppVersion } from "./lib/appVersion";
+import { captureInstalledAppVersion, getInstalledAppVersion, getAnalyticsClientVersion } from "./lib/appVersion";
 
 // Install the TWA AdMob message listener before React mounts. Native TWA can
 // complete the postMessage handshake very early during page startup; waiting
@@ -101,7 +101,7 @@ async function startAnalyticsHeartbeat() {
     if (pingInFlight) return;
     pingInFlight = true;
     try {
-      const version = getInstalledAppVersion();
+      const version = getAnalyticsClientVersion();
       let playerId: string | null = null;
       let loginMethod: string | null = null;
       try {
