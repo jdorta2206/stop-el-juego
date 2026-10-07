@@ -341,7 +341,7 @@ async function sendPerUserDailyNotifications() {
       if (seen.has(row.player_id)) continue;
       seen.add(row.player_id);
       const claimKey = "daily_player";
-      if (!await claimPlayerNotification(today, claimKey, row.player_id)) continue;
+      if (!await claimPlayerNotification(row.local_day, claimKey, row.player_id)) continue;
       try {
         const lang = DAILY_VARIANTS[row.language] ? row.language : "es";
         const msg = variantForToday(lang);
@@ -352,7 +352,7 @@ async function sendPerUserDailyNotifications() {
           url: "/reto",
         });
         sent += n;
-        if (n === 0) await releasePlayerNotification(today, claimKey, row.player_id);
+        if (n === 0) await releasePlayerNotification(row.local_day, claimKey, row.player_id);
       } catch (error) {
         await releasePlayerNotification(today, claimKey, row.player_id);
         console.error("[dailyCron] daily notification failed:", error);
