@@ -1,6 +1,7 @@
 package app.replit.stop_el_juego.twa;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
 import android.net.Uri;
@@ -59,10 +60,10 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     private static final int APP_UPDATE_REQUEST_CODE = 1907;
     private AppUpdateManager appUpdateManager;
     private boolean appUpdateCheckInFlight;
+    private boolean appUpdateReadyDialogShown;
     private final InstallStateUpdatedListener appUpdateListener = state -> {
         if (state.installStatus() == InstallStatus.DOWNLOADED) {
-            Log.d(TAG, "Play update downloaded; completing installation");
-            appUpdateManager.completeUpdate();
+            showPlayUpdateReadyDialog();
         }
     };
 
