@@ -74,7 +74,7 @@ function num(v: unknown): number {
 
 function svgLineChart(rows: Array<{ label: string; value: number }>, title: string): string {
   const safeRows = rows.filter((r) => Number.isFinite(r.value));
-  if (!safeRows.length) return '<div class="emptyChart">Sin datos suficientes para el gráfico.</div>';
+  if (!safeRows.length) return '<div class="chart"><div class="chartTitle">' + esc(title) + '</div><div class="emptyChart">Sin datos suficientes para el gráfico.</div></div>';
   const max = Math.max(...safeRows.map((r) => r.value), 1);
   const width = 760, height = 220, left = 42, right = 18, top = 26, bottom = 34;
   const innerW = width - left - right, innerH = height - top - bottom;
@@ -91,7 +91,7 @@ function svgLineChart(rows: Array<{ label: string; value: number }>, title: stri
 
 function svgBars(rows: Array<{ label: string; value: number }>, title: string): string {
   const safeRows = rows.filter((r) => Number.isFinite(r.value));
-  if (!safeRows.length) return '<div class="emptyChart">Sin datos suficientes para el gráfico.</div>';
+  if (!safeRows.length) return '<div class="chart"><div class="chartTitle">' + esc(title) + '</div><div class="emptyChart">Sin datos suficientes para el gráfico.</div></div>';
   const max = Math.max(...safeRows.map((r) => r.value), 1);
   const bars = safeRows.map((r) => '<div class="barRow"><div class="barLabel">' + esc(r.label) + '</div><div class="barTrack"><div class="barFill" style="width:' + Math.max(0, Math.min(100, (r.value / max) * 100)).toFixed(1) + '%"></div></div><div class="barValue">' + r.value + '</div></div>').join("");
   return '<div class="chart"><div class="chartTitle">' + esc(title) + '</div>' + bars + '</div>';
