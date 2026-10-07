@@ -178,7 +178,7 @@ router.post("/game-start", presenceLimiter, async (req, res) => {
       INSERT INTO analytics_events
         (event_name, player_id, session_id, platform, app_version, language, mode, metadata_json, trusted)
       VALUES
-        ('game_start', ${playerId}, ${sessionId}, ${platform}, ${appVersion}, ${language}, ${mode}, '{}', TRUE)
+        ('game_start', ${playerId}, ${sessionId}, ${platform}, ${appVersion}, ${language}, ${mode}, '{"source":"client_game_start"}', TRUE)
     `);
     return res.json({ ok: true });
   } catch (err) {
