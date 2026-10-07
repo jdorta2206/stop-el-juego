@@ -1,4 +1,4 @@
-import { getInstalledAppVersion } from "./appVersion";
+import { getAnalyticsClientVersion } from "./appVersion";
 const STORAGE_KEY = "stop_player_v2";
 const ANALYTICS_TWA_KEY = "stop_analytics_twa_v1";
 function isTwa(): boolean {
@@ -24,7 +24,7 @@ function sessionId(): string | null {
 export function trackTrustedGameStart(options?: { mode?: string; language?: string | null }): void {
   if (typeof window === "undefined") return;
   try {
-    const appVersion = getInstalledAppVersion();
+    const appVersion = getAnalyticsClientVersion();
     const token = (() => { try { return localStorage.getItem("stop_session_token") || sessionStorage.getItem("stop_session_token"); } catch { return null; } })();
     void fetch(`${window.location.origin}/api/analytics/game-start`, {
       method: "POST",
@@ -50,7 +50,7 @@ export function trackAnalyticsEvent(eventName: string, options?: { mode?: string
   try {
     let playerId: string | null = null;
     let loginMethod: string | null = null;
-    const appVersion = getInstalledAppVersion();
+    const appVersion = getAnalyticsClientVersion();
     const token = (() => { try { return localStorage.getItem("stop_session_token") || sessionStorage.getItem("stop_session_token"); } catch { return null; } })();
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
@@ -76,7 +76,7 @@ export function trackAnalyticsEvent(eventName: string, options?: { mode?: string
 export function trackClientError(error: unknown, componentStack?: string | null): void {
   if (typeof window === "undefined") return;
   try {
-    const appVersion = getInstalledAppVersion();
+    const appVersion = getAnalyticsClientVersion();
     const token = (() => { try { return localStorage.getItem("stop_session_token") || sessionStorage.getItem("stop_session_token"); } catch { return null; } })();
     const value = error instanceof Error ? error : new Error(String(error));
     void fetch(`${window.location.origin}/api/analytics/client-error`, {
