@@ -48,7 +48,7 @@ router.get("/", authLimiter, basicAuth, async (_req, res) => {
   try {
     const online = await db.execute(sql`
       SELECT platform, COUNT(*)::int AS active
-      FROM analytics_sessions
+      FROM public.analytics_sessions
       WHERE last_seen >= NOW() - INTERVAL '90 seconds'
       GROUP BY platform
       ORDER BY platform
@@ -61,7 +61,7 @@ router.get("/", authLimiter, basicAuth, async (_req, res) => {
     const today = await db.execute(sql`
       WITH day_events AS (
         SELECT *
-        FROM analytics_events
+        FROM public.analytics_events
         WHERE trusted = TRUE
           AND created_at >= date_trunc('day', NOW() AT TIME ZONE 'Europe/Madrid') AT TIME ZONE 'Europe/Madrid'
       ),
@@ -103,7 +103,7 @@ router.get("/", authLimiter, basicAuth, async (_req, res) => {
             WHEN s.player_id IS NOT NULL THEN 'account'
             ELSE 'guest'
           END AS method
-        FROM analytics_sessions s
+        FROM public.analytics_sessions s
         WHERE s.started_at >= date_trunc('day', NOW() AT TIME ZONE 'Europe/Madrid') AT TIME ZONE 'Europe/Madrid'
       )
       SELECT m.method,
@@ -117,7 +117,7 @@ router.get("/", authLimiter, basicAuth, async (_req, res) => {
 
     const events = await db.execute(sql`
       SELECT event_name, COUNT(*)::int AS total
-      FROM analytics_events
+      FROM public.analytics_events
       WHERE trusted = TRUE
         AND created_at >= NOW() - INTERVAL '7 days'
       GROUP BY event_name
@@ -127,7 +127,7 @@ router.get("/", authLimiter, basicAuth, async (_req, res) => {
 
     const powerups = await db.execute(sql`
       SELECT event_name, COUNT(*)::int AS total
-      FROM analytics_events
+      FROM public.analytics_events
       WHERE trusted = TRUE
         AND created_at >= NOW() - INTERVAL '7 days'
         AND event_name IN ('rewarded_ad_requested','rewarded_ad_completed','rewarded_ad_failed','powerup_used','game_start','game_complete')
@@ -160,7 +160,7 @@ router.get("/", authLimiter, basicAuth, async (_req, res) => {
           WHEN s.player_id IS NOT NULL THEN 'Cuenta'
           ELSE 'Sin identificar'
         END AS login_method
-      FROM analytics_sessions s
+      FROM public.analytics_sessions s
       LEFT JOIN player_scores ps ON ps.player_id = s.player_id
       WHERE s.last_seen >= NOW() - INTERVAL '90 seconds'
       ORDER BY s.last_seen DESC
@@ -174,7 +174,7 @@ router.get("/", authLimiter, basicAuth, async (_req, res) => {
         e.event_name,
         MAX(e.created_at) AS last_seen,
         COUNT(*)::int AS events
-      FROM analytics_events e
+      FROM public.analytics_events e
       LEFT JOIN player_scores ps ON ps.player_id = e.player_id
       WHERE e.trusted = TRUE
         AND e.created_at >= NOW() - INTERVAL '7 days'
@@ -190,7 +190,7 @@ router.get("/", authLimiter, basicAuth, async (_req, res) => {
         COUNT(DISTINCT CASE WHEN event_name = 'rewarded_ad_requested' THEN COALESCE(player_id, session_id) END)::int AS rewarded_requesters,
         COUNT(DISTINCT CASE WHEN event_name = 'rewarded_ad_completed' THEN COALESCE(player_id, session_id) END)::int AS rewarded_viewers,
         COUNT(DISTINCT CASE WHEN event_name = 'rewarded_ad_failed' THEN COALESCE(player_id, session_id) END)::int AS rewarded_failures
-      FROM analytics_events
+      FROM public.analytics_events
       WHERE trusted = TRUE
         AND created_at >= NOW() - INTERVAL '7 days'
         AND event_name IN ('ad_impression','rewarded_ad_requested','rewarded_ad_completed','rewarded_ad_failed')
