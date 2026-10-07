@@ -13,6 +13,21 @@ import { captureInstalledAppVersion, getInstalledAppVersion } from "./lib/appVer
 initTwaAdBridge();
 captureInstalledAppVersion();
 
+// Recover once from a stale dynamic-import chunk after a deployment.
+// This is deliberately one-shot so a genuinely missing asset cannot cause a reload loop.
+const CHUNK_RECOVERY_KEY = "stop_chunk_recovery_once";
+window.addEventListener("error", (event) => {
+  const message = String(event?.message || "");
+  if (!message.includes("Failed to fetch dynamically imported module")) return;
+  try {
+    if (sessionStorage.getItem(CHUNK_RECOVERY_KEY) === "1") return;
+    sessionStorage.setItem(CHUNK_RECOVERY_KEY, "1");
+    window.location.reload();
+  } catch {
+    // Recovery must never interfere with gameplay.
+  }
+});
+
 async function startAnalyticsHeartbeat() {
   if (typeof window === "undefined") return;
 
