@@ -40,6 +40,9 @@ const buildTimestamp = Date.now().toString();
 
 export default defineConfig({
   base: basePath,
+  define: {
+    "import.meta.env.VITE_WEB_BUILD_VERSION": JSON.stringify(`web-${buildTimestamp}`),
+  },
   plugins: [react(), tailwindcss(), wellKnownAssetlinks(), ...replitPlugins],
   resolve: {
     alias: {
