@@ -16,6 +16,12 @@ const STORAGE_KEY = "stop_app_version";
 // will NOT see the "update available" prompt.
 export const MIN_RECOMMENDED_APP_VERSION = "1.3.4.0";
 
+// Current published TWA build. The TWA start URL identifies the Play app,
+// but older published builds did not include an appVersion query parameter.
+// Keep this fallback only for that TWA marker; normal web clients remain unversioned
+// unless they explicitly report a version.
+export const CURRENT_TWA_VERSION = "1.3.6.3";
+
 function clean(v: string | null | undefined): string | null {
   if (!v) return null;
   const t = v.trim();
@@ -24,7 +30,17 @@ function clean(v: string | null | undefined): string | null {
 
 function readFromUrl(): string | null {
   try {
-    return clean(new URLSearchParams(window.location.search).get("appVersion"));
+    const params = new URLSearchParams(window.location.search);
+    const explicit = clean(params.get("appVersion"));
+    if (explicit) return explicit;
+
+    // The published TWA currently launches with source=googleplay-twa.
+    // Until all Play builds carry appVersion explicitly, this gives analytics
+    // a truthful version for the current published TWA instead of reporting null.
+    if (params.get("source") === "googleplay-twa" || params.get("source") === "twa") {
+      return CURRENT_TWA_VERSION;
+    }
+    return null;
   } catch {
     return null;
   }
