@@ -182,7 +182,7 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
     const analyticsVersionCoverage = (await db.execute(sql`
       SELECT COUNT(*)::int AS sessions,
              COUNT(*) FILTER (WHERE app_version IS NOT NULL AND app_version <> '')::int AS sessions_with_version
-      FROM analytics_sessions WHERE started_at >= NOW() - INTERVAL '7 days'
+      FROM analytics_sessions WHERE started_at >= NOW() - INTERVAL '24 hours'
     `)).rows[0] as Record<string, unknown> | undefined;
 
     const analyticsStartCoverage = (await db.execute(sql`
@@ -190,7 +190,7 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
              COUNT(*) FILTER (WHERE app_version IS NOT NULL AND app_version <> '')::int AS starts_with_version,
              COUNT(*) FILTER (WHERE platform IN ('web','android','ios'))::int AS starts_with_platform
       FROM analytics_events
-      WHERE trusted = TRUE AND event_name = 'game_start' AND created_at >= NOW() - INTERVAL '7 days'
+      WHERE trusted = TRUE AND event_name = 'game_start' AND created_at >= NOW() - INTERVAL '24 hours'
     `)).rows[0] as Record<string, unknown> | undefined;
 
     // ── Retención y embudo real (analytics_sessions / trusted events) ────────
@@ -212,8 +212,8 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
       await db.execute(sql`
         SELECT
           COUNT(DISTINCT CASE WHEN event_name = 'session_start' THEN session_id END)::int AS sessions,
-          COUNT(*) FILTER (WHERE event_name = 'game_start')::int AS games_started,
-          COUNT(*) FILTER (WHERE event_name = 'game_complete')::int AS games_completed,
+          COUNT(DISTINCT CASE WHEN event_name = 'game_start' THEN COALESCE(player_id, session_id) END)::int AS games_started,
+          COUNT(DISTINCT CASE WHEN event_name = 'game_complete' THEN COALESCE(player_id, session_id) END)::int AS games_completed,
           COUNT(DISTINCT CASE WHEN event_name = 'game_start' THEN COALESCE(player_id, session_id) END)::int AS game_players,
           COUNT(DISTINCT CASE WHEN event_name = 'game_complete' THEN COALESCE(player_id, session_id) END)::int AS completed_players,
           COUNT(DISTINCT CASE WHEN event_name = 'rewarded_ad_requested' THEN COALESCE(player_id, session_id) END)::int AS ad_players,
@@ -227,8 +227,8 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
       await db.execute(sql`
         SELECT to_char((created_at AT TIME ZONE 'UTC') AT TIME ZONE 'Europe/Madrid', 'YYYY-MM-DD') AS d,
                COUNT(DISTINCT session_id) FILTER (WHERE event_name = 'session_start')::int AS active,
-               COUNT(*) FILTER (WHERE event_name = 'game_start')::int AS starters,
-               COUNT(*) FILTER (WHERE event_name = 'game_complete')::int AS completers
+               COUNT(DISTINCT COALESCE(player_id, session_id)) FILTER (WHERE event_name = 'game_start')::int AS starters,
+               COUNT(DISTINCT COALESCE(player_id, session_id)) FILTER (WHERE event_name = 'game_complete')::int AS completers
         FROM analytics_events
         WHERE trusted = TRUE AND created_at >= NOW() - INTERVAL '14 days'
           AND event_name IN ('session_start','game_start','game_complete')
@@ -591,9 +591,9 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
 
   <h2>🛡️ Calidad de los datos del panel</h2>
   <div class="cards">
-    <div class="card"><div class="label">Sesiones con versión · 7 días</div><div class="val">${num(analyticsVersionCoverage?.sessions) > 0 ? Math.round((num(analyticsVersionCoverage?.sessions_with_version) / num(analyticsVersionCoverage?.sessions)) * 100) : 0}%</div></div>
-    <div class="card"><div class="label">Game starts con versión · 7 días</div><div class="val">${num(analyticsStartCoverage?.starts) > 0 ? Math.round((num(analyticsStartCoverage?.starts_with_version) / num(analyticsStartCoverage?.starts)) * 100) : 0}%</div></div>
-    <div class="card"><div class="label">Game starts con plataforma · 7 días</div><div class="val">${num(analyticsStartCoverage?.starts) > 0 ? Math.round((num(analyticsStartCoverage?.starts_with_platform) / num(analyticsStartCoverage?.starts)) * 100) : 0}%</div></div>
+    <div class="card"><div class="label">Sesiones con versión · 24 h</div><div class="val">${num(analyticsVersionCoverage?.sessions) > 0 ? Math.round((num(analyticsVersionCoverage?.sessions_with_version) / num(analyticsVersionCoverage?.sessions)) * 100) : 0}%</div></div>
+    <div class="card"><div class="label">Game starts con versión · 24 h</div><div class="val">${num(analyticsStartCoverage?.starts) > 0 ? Math.round((num(analyticsStartCoverage?.starts_with_version) / num(analyticsStartCoverage?.starts)) * 100) : 0}%</div></div>
+    <div class="card"><div class="label">Game starts con plataforma · 24 h</div><div class="val">${num(analyticsStartCoverage?.starts) > 0 ? Math.round((num(analyticsStartCoverage?.starts_with_platform) / num(analyticsStartCoverage?.starts)) * 100) : 0}%</div></div>
   </div>
   <div class="sub">Los resultados guardados y las partidas de invitados proceden de fuentes distintas. <b>Game start</b> es telemetría y se usa para detectar pérdidas de instrumentación; no se usa para inventar el número de partidas.</div>
 
