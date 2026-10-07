@@ -211,7 +211,9 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
     const funnel = (
       await db.execute(sql`
         SELECT
-          COUNT(DISTINCT CASE WHEN event_name = 'session_start' THEN COALESCE(player_id, session_id) END)::int AS sessions,
+          COUNT(DISTINCT CASE WHEN event_name = 'session_start' THEN session_id END)::int AS sessions,
+          COUNT(*) FILTER (WHERE event_name = 'game_start')::int AS games_started,
+          COUNT(*) FILTER (WHERE event_name = 'game_complete')::int AS games_completed,
           COUNT(DISTINCT CASE WHEN event_name = 'game_start' THEN COALESCE(player_id, session_id) END)::int AS game_players,
           COUNT(DISTINCT CASE WHEN event_name = 'game_complete' THEN COALESCE(player_id, session_id) END)::int AS completed_players,
           COUNT(DISTINCT CASE WHEN event_name = 'rewarded_ad_requested' THEN COALESCE(player_id, session_id) END)::int AS ad_players,
@@ -224,9 +226,9 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
     const activityByDay = (
       await db.execute(sql`
         SELECT to_char((created_at AT TIME ZONE 'UTC') AT TIME ZONE 'Europe/Madrid', 'YYYY-MM-DD') AS d,
-               COUNT(DISTINCT COALESCE(player_id, session_id)) FILTER (WHERE event_name = 'session_start')::int AS active,
-               COUNT(DISTINCT COALESCE(player_id, session_id)) FILTER (WHERE event_name = 'game_start')::int AS starters,
-               COUNT(DISTINCT COALESCE(player_id, session_id)) FILTER (WHERE event_name = 'game_complete')::int AS completers
+               COUNT(DISTINCT session_id) FILTER (WHERE event_name = 'session_start')::int AS active,
+               COUNT(*) FILTER (WHERE event_name = 'game_start')::int AS starters,
+               COUNT(*) FILTER (WHERE event_name = 'game_complete')::int AS completers
         FROM analytics_events
         WHERE trusted = TRUE AND created_at >= NOW() - INTERVAL '14 days'
           AND event_name IN ('session_start','game_start','game_complete')
@@ -346,9 +348,9 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
     const modeChart = modeUsage.map((row) => ({ label: String(row.mode), value: num(row.total) }));
     const powerupChart = powerupUsage.map((row) => ({ label: String(row.powerup), value: num(row.total) }));
     const funnelChart = [
-      { label: "Sesión", value: num(funnel?.sessions) },
-      { label: "Partida", value: num(funnel?.game_players) },
-      { label: "Finalizada", value: num(funnel?.completed_players) },
+      { label: "Sesiones", value: num(funnel?.sessions) },
+      { label: "Inicios de partida", value: num(funnel?.games_started) },
+      { label: "Partidas finalizadas", value: num(funnel?.games_completed) },
     ];
     const adUnique = (await db.execute(sql`
       SELECT
