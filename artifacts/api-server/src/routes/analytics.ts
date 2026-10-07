@@ -9,6 +9,7 @@ const router: IRouter = Router();
 const PLATFORMS = new Set(["web", "android", "ios"]);
 const SERVER_SESSION_COOKIE = "stop_analytics_session";
 const CURRENT_TWA_ANALYTICS_VERSION = "1.3.6.8";
+const CURRENT_WEB_ANALYTICS_VERSION = String(process.env.RAILWAY_GIT_COMMIT_SHA ?? "web-dev").slice(0, 12);
 
 function isTwaRequest(req: Request): boolean {
   if (String(req.headers["x-client-twa"] ?? "") === "1") return true;
@@ -20,7 +21,7 @@ function isTwaRequest(req: Request): boolean {
 function appVersionFromRequest(req: Request): string | null {
   const clientVersion = String(req.headers["x-client-version"] ?? "").trim().slice(0, 32);
   if (clientVersion) return clientVersion;
-  return isTwaRequest(req) ? CURRENT_TWA_ANALYTICS_VERSION : null;
+  return isTwaRequest(req) ? CURRENT_TWA_ANALYTICS_VERSION : CURRENT_WEB_ANALYTICS_VERSION;
 }
 
 function platformFromRequest(req: Request): "web" | "android" | "ios" {
