@@ -170,6 +170,29 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
       `)
     ).rows as Record<string, unknown>[];
 
+    const analyticsStartsByDay = (await db.execute(sql`
+      SELECT to_char((created_at AT TIME ZONE 'UTC') AT TIME ZONE 'Europe/Madrid', 'YYYY-MM-DD') AS d,
+             COUNT(*)::int AS starts,
+             COUNT(*) FILTER (WHERE app_version IS NOT NULL AND app_version <> '')::int AS starts_with_version
+      FROM analytics_events
+      WHERE trusted = TRUE AND event_name = 'game_start' AND created_at >= NOW() - INTERVAL '14 days'
+      GROUP BY d ORDER BY d DESC
+    `)).rows as Record<string, unknown>[];
+
+    const analyticsVersionCoverage = (await db.execute(sql`
+      SELECT COUNT(*)::int AS sessions,
+             COUNT(*) FILTER (WHERE app_version IS NOT NULL AND app_version <> '')::int AS sessions_with_version
+      FROM analytics_sessions WHERE started_at >= NOW() - INTERVAL '7 days'
+    `)).rows[0] as Record<string, unknown> | undefined;
+
+    const analyticsStartCoverage = (await db.execute(sql`
+      SELECT COUNT(*)::int AS starts,
+             COUNT(*) FILTER (WHERE app_version IS NOT NULL AND app_version <> '')::int AS starts_with_version,
+             COUNT(*) FILTER (WHERE platform IN ('web','android','ios'))::int AS starts_with_platform
+      FROM analytics_events
+      WHERE trusted = TRUE AND event_name = 'game_start' AND created_at >= NOW() - INTERVAL '7 days'
+    `)).rows[0] as Record<string, unknown> | undefined;
+
     // ── Retención y embudo real (analytics_sessions / trusted events) ────────
     // DAU/WAU/MAU usa player_id para cuentas y session_id para invitados.
     const retentionKpis = (
@@ -344,14 +367,15 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
     ).rows as Record<string, unknown>[];
 
     // Merge daily series by date key.
-    const byDay = new Map<string, { regs: number; games: number; players: number; guestGames: number; conversions: number }>();
+    const byDay = new Map<string, { regs: number; games: number; players: number; guestGames: number; conversions: number; starts: number; startsWithVersion: number }>();
     const ensure = (d: string) => {
-      if (!byDay.has(d)) byDay.set(d, { regs: 0, games: 0, players: 0, guestGames: 0, conversions: 0 });
+      if (!byDay.has(d)) byDay.set(d, { regs: 0, games: 0, players: 0, guestGames: 0, conversions: 0, starts: 0, startsWithVersion: 0 });
       return byDay.get(d)!;
     };
     for (const r of gamesByDay) { const e = ensure(String(r.d)); e.games = num(r.games); e.players = num(r.players); }
     for (const r of regsByDay) { ensure(String(r.d)).regs = num(r.regs); }
     for (const r of guestsByDay) { const e = ensure(String(r.d)); e.guestGames = num(r.games); e.conversions = num(r.conversions); }
+    for (const r of analyticsStartsByDay) { const e = ensure(String(r.d)); e.starts = num(r.starts); e.startsWithVersion = num(r.starts_with_version); }
     const days = [...byDay.keys()].sort().reverse();
 
     const now = new Date().toLocaleString("es-ES", { timeZone: "Europe/Madrid" });
@@ -534,8 +558,8 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
   <div class="cards">
     <div class="card"><div class="label">Puntuaciones actualizadas hoy</div><div class="val">${num(todayRows.active)}</div></div>
     <div class="card"><div class="label">Nuevos registros</div><div class="val">${num(todayRows.new_users)}</div></div>
-    <div class="card"><div class="label">Partidas (registrados)</div><div class="val">${num(todayRows.games)}</div></div>
-    <div class="card"><div class="label">Partidas de invitados</div><div class="val">${num(guestToday?.games)}</div></div>
+    <div class="card"><div class="label">Resultados guardados · registrados</div><div class="val">${num(todayRows.games)}</div></div>
+    <div class="card"><div class="label">Partidas contabilizadas · invitados</div><div class="val">${num(guestToday?.games)}</div></div>
     <div class="card"><div class="label">Invitados → registro</div><div class="val">${num(guestToday?.conversions)}</div></div>
   </div>
 
