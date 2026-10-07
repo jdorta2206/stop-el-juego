@@ -243,7 +243,7 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
           COUNT(DISTINCT CASE WHEN event_name = 'rewarded_ad_requested' THEN COALESCE(player_id, session_id) END)::int AS ad_players,
           COUNT(DISTINCT CASE WHEN event_name = 'rewarded_ad_failed' THEN COALESCE(player_id, session_id) END)::int AS ad_failed_players
         FROM analytics_events
-        WHERE trusted = TRUE AND created_at >= NOW() - INTERVAL '7 days'
+        WHERE created_at >= NOW() - INTERVAL '7 days'
       `)
     ).rows[0] as Record<string, unknown> | undefined;
 
@@ -641,8 +641,8 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
       <tr><td>Partida iniciada</td><td>${num(funnel?.game_players)}</td></tr>
       <tr><td>Partida iniciada sin finalizar</td><td>${num(funnel?.started_without_complete)}</td></tr>
       <tr><td>Partida terminada</td><td>${num(funnel?.completed_players)}</td></tr>
-      <tr><td>Pidió rewarded</td><td>${num(funnel?.ad_players)}</td></tr>
-      <tr><td>Rewarded falló</td><td>${num(funnel?.ad_failed_players)}</td></tr>
+      <tr><td>Rewarded solicitado <span style="color:#8a98a8">(telemetría)</span></td><td>${num(funnel?.ad_players)}</td></tr>
+      <tr><td>Rewarded fallido <span style="color:#8a98a8">(telemetría)</span></td><td>${num(funnel?.ad_failed_players)}</td></tr>
     </tbody>
   </table>
 
