@@ -567,7 +567,8 @@ export default function SoloGame() {
     halloweenScareRoundRef.current = null;
     halloweenAnswerScareRoundRef.current = null;
     setHalloweenScare(null);
-    // A logical game starts only on a fresh game. Subsequent rounds use startGame(false).\n    if (newGame) trackTrustedGameStart({ mode: gameMode, language: getCurrentLang() });
+    // A logical game starts only on a fresh game. Subsequent rounds use startGame(false).
+    if (newGame) trackTrustedGameStart({ mode: gameMode, language: getCurrentLang() });
     // Snapshot the tutorial state at the moment the player presses Play so
     // the rules of the round are stable until it ends.
     const tutorialNow = ftue.isInTutorial && !isDailyMode;
