@@ -22,13 +22,16 @@ function sessionId(): string | null {
 export function trackTrustedGameStart(options?: { mode?: string; language?: string | null }): void {
   if (typeof window === "undefined") return;
   try {
+    const appVersion = getInstalledAppVersion();
+    const token = (() => { try { return localStorage.getItem("stop_session_token") || sessionStorage.getItem("stop_session_token"); } catch { return null; } })();
     void fetch(`${window.location.origin}/api/analytics/game-start`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "X-Client-Platform": platform(),
         ...(isTwa() ? { "X-Client-TWA": "1" } : {}),
-        ...(localStorage.getItem("stop_session_token") ? { "X-Stop-Token": localStorage.getItem("stop_session_token")! } : {}),
+        ...(appVersion ? { "X-Client-Version": appVersion } : {}),
+        ...(token ? { "X-Stop-Token": token } : {}),
       },
       body: JSON.stringify({
         mode: options?.mode ?? null,
@@ -45,6 +48,8 @@ export function trackAnalyticsEvent(eventName: string, options?: { mode?: string
   try {
     let playerId: string | null = null;
     let loginMethod: string | null = null;
+    const appVersion = getInstalledAppVersion();
+    const token = (() => { try { return localStorage.getItem("stop_session_token") || sessionStorage.getItem("stop_session_token"); } catch { return null; } })();
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const player = JSON.parse(raw);
@@ -56,7 +61,8 @@ export function trackAnalyticsEvent(eventName: string, options?: { mode?: string
         "Content-Type": "application/json",
         "X-Client-Platform": platform(),
         ...(isTwa() ? { "X-Client-TWA": "1" } : {}),
-        ...(localStorage.getItem("stop_session_token") ? { "X-Stop-Token": localStorage.getItem("stop_session_token")! } : {}),
+        ...(appVersion ? { "X-Client-Version": appVersion } : {}),
+        ...(token ? { "X-Stop-Token": token } : {}),
       },
       body: JSON.stringify({ eventName, playerId, sessionId: sessionId(), language: document.documentElement.lang || null,
         mode: options?.mode ?? null, aiDifficulty: options?.aiDifficulty ?? null,
@@ -68,6 +74,8 @@ export function trackAnalyticsEvent(eventName: string, options?: { mode?: string
 export function trackClientError(error: unknown, componentStack?: string | null): void {
   if (typeof window === "undefined") return;
   try {
+    const appVersion = getInstalledAppVersion();
+    const token = (() => { try { return localStorage.getItem("stop_session_token") || sessionStorage.getItem("stop_session_token"); } catch { return null; } })();
     const value = error instanceof Error ? error : new Error(String(error));
     void fetch(`${window.location.origin}/api/analytics/client-error`, {
       method: "POST",
@@ -75,7 +83,8 @@ export function trackClientError(error: unknown, componentStack?: string | null)
         "Content-Type": "application/json",
         "X-Client-Platform": platform(),
         ...(isTwa() ? { "X-Client-TWA": "1" } : {}),
-        ...(localStorage.getItem("stop_session_token") ? { "X-Stop-Token": localStorage.getItem("stop_session_token")! } : {}),
+        ...(appVersion ? { "X-Client-Version": appVersion } : {}),
+        ...(token ? { "X-Stop-Token": token } : {}),
       },
       body: JSON.stringify({
         message: value.message.slice(0, 500),
