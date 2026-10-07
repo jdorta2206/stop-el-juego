@@ -22,6 +22,13 @@ export const MIN_RECOMMENDED_APP_VERSION = "1.3.4.0";
 // unless they explicitly report a version.
 export const CURRENT_TWA_VERSION = "1.3.6.8";
 
+// Unique build identifier used only for operational web telemetry.
+export const CURRENT_WEB_VERSION = import.meta.env.VITE_WEB_BUILD_VERSION || "web-dev";
+
+export function getAnalyticsClientVersion(): string {
+  return getInstalledAppVersion() ?? CURRENT_WEB_VERSION;
+}
+
 function clean(v: string | null | undefined): string | null {
   if (!v) return null;
   const t = v.trim();
