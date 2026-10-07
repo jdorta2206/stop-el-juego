@@ -170,6 +170,29 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
       `)
     ).rows as Record<string, unknown>[];
 
+    const analyticsStartsByDay = (await db.execute(sql`
+      SELECT to_char((created_at AT TIME ZONE 'UTC') AT TIME ZONE 'Europe/Madrid', 'YYYY-MM-DD') AS d,
+             COUNT(*)::int AS starts,
+             COUNT(*) FILTER (WHERE app_version IS NOT NULL AND app_version <> '')::int AS starts_with_version
+      FROM analytics_events
+      WHERE trusted = TRUE AND event_name = 'game_start' AND created_at >= NOW() - INTERVAL '14 days'
+      GROUP BY d ORDER BY d DESC
+    `)).rows as Record<string, unknown>[];
+
+    const analyticsVersionCoverage = (await db.execute(sql`
+      SELECT COUNT(*)::int AS sessions,
+             COUNT(*) FILTER (WHERE app_version IS NOT NULL AND app_version <> '')::int AS sessions_with_version
+      FROM analytics_sessions WHERE started_at >= NOW() - INTERVAL '7 days'
+    `)).rows[0] as Record<string, unknown> | undefined;
+
+    const analyticsStartCoverage = (await db.execute(sql`
+      SELECT COUNT(*)::int AS starts,
+             COUNT(*) FILTER (WHERE app_version IS NOT NULL AND app_version <> '')::int AS starts_with_version,
+             COUNT(*) FILTER (WHERE platform IN ('web','android','ios'))::int AS starts_with_platform
+      FROM analytics_events
+      WHERE trusted = TRUE AND event_name = 'game_start' AND created_at >= NOW() - INTERVAL '7 days'
+    `)).rows[0] as Record<string, unknown> | undefined;
+
     // ── Retención y embudo real (analytics_sessions / trusted events) ────────
     // DAU/WAU/MAU usa player_id para cuentas y session_id para invitados.
     const retentionKpis = (
@@ -344,14 +367,15 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
     ).rows as Record<string, unknown>[];
 
     // Merge daily series by date key.
-    const byDay = new Map<string, { regs: number; games: number; players: number; guestGames: number; conversions: number }>();
+    const byDay = new Map<string, { regs: number; games: number; players: number; guestGames: number; conversions: number; starts: number; startsWithVersion: number }>();
     const ensure = (d: string) => {
-      if (!byDay.has(d)) byDay.set(d, { regs: 0, games: 0, players: 0, guestGames: 0, conversions: 0 });
+      if (!byDay.has(d)) byDay.set(d, { regs: 0, games: 0, players: 0, guestGames: 0, conversions: 0, starts: 0, startsWithVersion: 0 });
       return byDay.get(d)!;
     };
     for (const r of gamesByDay) { const e = ensure(String(r.d)); e.games = num(r.games); e.players = num(r.players); }
     for (const r of regsByDay) { ensure(String(r.d)).regs = num(r.regs); }
     for (const r of guestsByDay) { const e = ensure(String(r.d)); e.guestGames = num(r.games); e.conversions = num(r.conversions); }
+    for (const r of analyticsStartsByDay) { const e = ensure(String(r.d)); e.starts = num(r.starts); e.startsWithVersion = num(r.starts_with_version); }
     const days = [...byDay.keys()].sort().reverse();
 
     const now = new Date().toLocaleString("es-ES", { timeZone: "Europe/Madrid" });
@@ -362,6 +386,13 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
         return `<tr><td>${esc(d)}</td><td>${e.regs}</td><td>${e.players}</td><td>${e.games}</td><td>${e.guestGames}</td><td>${e.conversions}</td></tr>`;
       })
       .join("");
+
+    const dailyQualityRows = days.map((d) => {
+      const e = byDay.get(d)!;
+      const startsVersion = e.starts > 0 ? `${Math.round((e.startsWithVersion / e.starts) * 100)}%` : "—";
+      const warning = (e.games + e.guestGames) > 0 && e.starts === 0 ? " 🔴" : "";
+      return `<tr><td>${esc(d)}</td><td>${e.games}</td><td>${e.guestGames}</td><td>${e.starts}${warning}</td><td>${startsVersion}</td></tr>`;
+    }).join("");
 
     const topRows = top
       .map(
@@ -534,10 +565,18 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
   <div class="cards">
     <div class="card"><div class="label">Puntuaciones actualizadas hoy</div><div class="val">${num(todayRows.active)}</div></div>
     <div class="card"><div class="label">Nuevos registros</div><div class="val">${num(todayRows.new_users)}</div></div>
-    <div class="card"><div class="label">Partidas (registrados)</div><div class="val">${num(todayRows.games)}</div></div>
-    <div class="card"><div class="label">Partidas de invitados</div><div class="val">${num(guestToday?.games)}</div></div>
+    <div class="card"><div class="label">Resultados guardados · registrados</div><div class="val">${num(todayRows.games)}</div></div>
+    <div class="card"><div class="label">Partidas contabilizadas · invitados</div><div class="val">${num(guestToday?.games)}</div></div>
     <div class="card"><div class="label">Invitados → registro</div><div class="val">${num(guestToday?.conversions)}</div></div>
   </div>
+
+  <h2>🛡️ Calidad de los datos del panel</h2>
+  <div class="cards">
+    <div class="card"><div class="label">Sesiones con versión · 7 días</div><div class="val">${num(analyticsVersionCoverage?.sessions) > 0 ? Math.round((num(analyticsVersionCoverage?.sessions_with_version) / num(analyticsVersionCoverage?.sessions)) * 100) : 0}%</div></div>
+    <div class="card"><div class="label">Game starts con versión · 7 días</div><div class="val">${num(analyticsStartCoverage?.starts) > 0 ? Math.round((num(analyticsStartCoverage?.starts_with_version) / num(analyticsStartCoverage?.starts)) * 100) : 0}%</div></div>
+    <div class="card"><div class="label">Game starts con plataforma · 7 días</div><div class="val">${num(analyticsStartCoverage?.starts) > 0 ? Math.round((num(analyticsStartCoverage?.starts_with_platform) / num(analyticsStartCoverage?.starts)) * 100) : 0}%</div></div>
+  </div>
+  <div class="sub">Los resultados guardados y las partidas de invitados proceden de fuentes distintas. <b>Game start</b> es telemetría y se usa para detectar pérdidas de instrumentación; no se usa para inventar el número de partidas.</div>
 
   <h2>📈 Salud real del juego</h2>
   <div class="cards">
@@ -616,6 +655,13 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
     <thead><tr><th>Día</th><th>Nuevos</th><th>Activos</th><th>Partidas</th><th>Inv. partidas</th><th>Inv.→reg.</th></tr></thead>
     <tbody>${dailyRows || '<tr><td colspan="6">Sin datos</td></tr>'}</tbody>
   </table>
+
+  <h2>🔎 Conciliación de juego y telemetría · últimos 14 días</h2>
+  <table>
+    <thead><tr><th>Día</th><th>Resultados registrados</th><th>Inv. partidas</th><th>Game starts</th><th>Starts con versión</th></tr></thead>
+    <tbody>${dailyQualityRows || '<tr><td colspan="5">Sin datos</td></tr>'}</tbody>
+  </table>
+  <div class="sub">🔴 significa que existen resultados/partidas contabilizadas pero no llegó ningún <code>game_start</code> ese día. Eso es una alerta de telemetría, no un “día sin jugadores”.</div>
 
   <h2>Top 10 jugadores</h2>
   <table>
