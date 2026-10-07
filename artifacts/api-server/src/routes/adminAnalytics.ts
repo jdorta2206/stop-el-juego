@@ -54,15 +54,39 @@ router.get("/", authLimiter, basicAuth, async (_req, res) => {
       ORDER BY platform
     `);
 
+    // "game_start" no es directamente una partida: Multiplayer puede emitirlo
+    // por participante y por ronda. Para STOP Control lo normalizamos a una
+    // unidad comparable con game_complete: una partida-jugador.
+    // Solo contamos una vez cada jugador y sala para los starts de servidor.
     const today = await db.execute(sql`
+      WITH day_events AS (
+        SELECT *
+        FROM analytics_events
+        WHERE trusted = TRUE
+          AND created_at >= date_trunc('day', NOW() AT TIME ZONE 'Europe/Madrid') AT TIME ZONE 'Europe/Madrid'
+      ),
+      normalized_starts AS (
+        SELECT platform, session_id, player_id, created_at
+        FROM day_events
+        WHERE event_name = 'game_start'
+          AND metadata_json::jsonb->>'source' = 'client_game_start'
+        UNION ALL
+        SELECT DISTINCT ON (platform, player_id, metadata_json::jsonb->>'roomId')
+               platform, session_id, player_id, MIN(created_at) OVER (
+                 PARTITION BY platform, player_id, metadata_json::jsonb->>'roomId'
+               ) AS created_at
+        FROM day_events
+        WHERE event_name = 'game_start'
+          AND metadata_json::jsonb->>'source' = 'server_room_start'
+          AND player_id IS NOT NULL
+        ORDER BY platform, player_id, metadata_json::jsonb->>'roomId', created_at
+      )
       SELECT platform,
              COUNT(*) FILTER (WHERE event_name = 'session_start')::int AS sessions,
-             COUNT(*) FILTER (WHERE event_name = 'game_start')::int AS games_started,
+             (SELECT COUNT(*) FROM normalized_starts ns WHERE ns.platform = de.platform)::int AS games_started,
              COUNT(*) FILTER (WHERE event_name = 'game_complete')::int AS games_completed,
              COUNT(*) FILTER (WHERE event_name IN ('ad_impression','rewarded_ad_completed'))::int AS ad_impressions
-      FROM analytics_events
-      WHERE trusted = TRUE
-        AND created_at >= date_trunc('day', NOW() AT TIME ZONE 'Europe/Madrid') AT TIME ZONE 'Europe/Madrid'
+      FROM day_events de
       GROUP BY platform
       ORDER BY platform
     `);
@@ -197,8 +221,8 @@ router.get("/", authLimiter, basicAuth, async (_req, res) => {
       rewarded_ad_completed: "✅ Anuncio completado",
       rewarded_ad_failed: "❌ Anuncio fallido",
       powerup_used: "🎁 Recompensa utilizada",
-      game_start: "🎮 Partida iniciada",
-      game_complete: "🏁 Partida terminada",
+      game_start: "🎮 Inicio de partida · telemetría",
+      game_complete: "🏁 Partida terminada · resultado real",
     };
     const powerupRows = (powerups.rows as any[]).map((row) => `<tr><td>${powerupLabels[String(row.event_name)] ?? esc(row.event_name)}</td><td>${n(row.total)}</td></tr>`).join("");
 
@@ -239,7 +263,7 @@ a{color:#4ade80;text-decoration:none}
       <div class="kpiBox"><div class="label">Rewarded fallidos</div><div class="kpi">${rewardedFailures}</div></div>
     </div>
     <table><thead><tr><th>Jugador</th><th>Evento</th><th>Plataforma</th><th>Eventos</th><th>Último</th></tr></thead><tbody>${adViewerRows || '<tr><td colspan="5">No hay eventos de publicidad.</td></tr>'}</tbody></table></div>
-    <div class="card"><h2>Plataformas · hoy</h2><table><thead><tr><th>Plataforma</th><th>Ahora</th><th>Sesiones</th><th>Partidas iniciadas</th><th>Partidas terminadas</th><th>Impresiones publicidad</th></tr></thead><tbody>${platformRows}</tbody></table></div>
+    <div class="card"><h2>Plataformas · hoy</h2><table><thead><tr><th>Plataforma</th><th>Ahora</th><th>Sesiones</th><th>Partidas iniciadas · jugador</th><th>Partidas terminadas · resultado real</th><th>Impresiones publicidad</th></tr></thead><tbody>${platformRows}</tbody></table></div>
     <div class="card"><h2>Conexiones por método · hoy</h2><table><thead><tr><th>Método</th><th>Ahora</th><th>Sesiones</th></tr></thead><tbody>${loginRows || '<tr><td colspan="3">Todavía no hay conexiones identificadas.</td></tr>'}</tbody></table></div>
     <div class="card"><h2>Uso del juego y publicidad · últimos 7 días</h2><table><thead><tr><th>Métrica</th><th>Total</th></tr></thead><tbody>${powerupRows || '<tr><td colspan="2">Todavía no hay datos.</td></tr>'}</tbody></table></div>
     <div class="card"><h2>Eventos · últimos 7 días</h2><table><thead><tr><th>Evento</th><th>Total</th></tr></thead><tbody>${eventRows || '<tr><td colspan="2">Todavía no hay eventos.</td></tr>'}</tbody></table></div>
