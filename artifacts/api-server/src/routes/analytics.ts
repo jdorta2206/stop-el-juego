@@ -14,7 +14,7 @@ function isTwaRequest(req: Request): boolean {
   if (String(req.headers["x-client-twa"] ?? "") === "1") return true;
   const referrer = String(req.headers.referer ?? req.headers.referrer ?? "");
   if (referrer.startsWith("android-app://")) return true;
-  return /STOPApp\\/[0-9][0-9.]*/i.test(String(req.headers["user-agent"] ?? ""));
+  return /STOPApp\/[0-9][0-9.]*/i.test(String(req.headers["user-agent"] ?? ""));
 }
 
 function appVersionFromRequest(req: Request): string | null {
