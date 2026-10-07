@@ -52,7 +52,21 @@ jobs:
           set -euo pipefail
           sed -i -E 's/versionCode [0-9]+/versionCode 54/' app/build.gradle
           sed -i -E 's/versionName "[^"]+"/versionName "1.3.6.9"/' app/build.gradle
-          sed -i -E 's#launchUrl: '/\?source=googleplay-twa[^']*'#launchUrl: '/?source=googleplay-twa&appVersion=1.3.6.9'#' app/build.gradle
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('app/build.gradle')
+          s = p.read_text()
+          marker = "launchUrl:"
+          line = next((line for line in s.splitlines() if marker in line), None)
+          if line is None:
+              raise SystemExit('launchUrl not found')
+          lines = s.splitlines()
+          for i, current in enumerate(lines):
+              if marker in current:
+                  lines[i] = "    launchUrl: '/?source=googleplay-twa&appVersion=1.3.6.9',"
+                  break
+          p.write_text("\n".join(lines) + "\n")
+          PY
           grep -q 'versionCode 54' app/build.gradle
           grep -q 'versionName "1.3.6.9"' app/build.gradle
           grep -q 'appVersion=1.3.6.9' app/build.gradle
