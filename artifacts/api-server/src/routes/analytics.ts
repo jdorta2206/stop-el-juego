@@ -46,10 +46,12 @@ async function ensureAnalyticsTables(): Promise<void> {
       language text,
       last_seen timestamp NOT NULL DEFAULT NOW(),
       started_at timestamp NOT NULL DEFAULT NOW()
-    );
-    ALTER TABLE analytics_sessions ADD COLUMN IF NOT EXISTS login_method text;
-    CREATE INDEX IF NOT EXISTS analytics_sessions_last_seen_idx ON analytics_sessions (last_seen);
-    CREATE INDEX IF NOT EXISTS analytics_sessions_platform_last_seen_idx ON analytics_sessions (platform, last_seen);
+    )
+  `));
+  await db.execute(sql.raw(`ALTER TABLE analytics_sessions ADD COLUMN IF NOT EXISTS login_method text`));
+  await db.execute(sql.raw(`CREATE INDEX IF NOT EXISTS analytics_sessions_last_seen_idx ON analytics_sessions (last_seen)`));
+  await db.execute(sql.raw(`CREATE INDEX IF NOT EXISTS analytics_sessions_platform_last_seen_idx ON analytics_sessions (platform, last_seen)`));
+  await db.execute(sql.raw(`
     CREATE TABLE IF NOT EXISTS analytics_events (
       id serial PRIMARY KEY,
       event_name text NOT NULL,
@@ -63,13 +65,13 @@ async function ensureAnalyticsTables(): Promise<void> {
       metadata_json text NOT NULL DEFAULT '{}',
       trusted boolean NOT NULL DEFAULT FALSE,
       created_at timestamp NOT NULL DEFAULT NOW()
-    );
-    CREATE INDEX IF NOT EXISTS analytics_events_created_at_idx ON analytics_events (created_at);
-    CREATE INDEX IF NOT EXISTS analytics_events_platform_created_at_idx ON analytics_events (platform, created_at);
-    CREATE INDEX IF NOT EXISTS analytics_events_name_created_at_idx ON analytics_events (event_name, created_at);
-    ALTER TABLE analytics_events ADD COLUMN IF NOT EXISTS metadata_json text NOT NULL DEFAULT '{}';
-    ALTER TABLE analytics_events ADD COLUMN IF NOT EXISTS trusted boolean NOT NULL DEFAULT FALSE;
+    )
   `));
+  await db.execute(sql.raw(`ALTER TABLE analytics_events ADD COLUMN IF NOT EXISTS metadata_json text NOT NULL DEFAULT '{}'`));
+  await db.execute(sql.raw(`ALTER TABLE analytics_events ADD COLUMN IF NOT EXISTS trusted boolean NOT NULL DEFAULT FALSE`));
+  await db.execute(sql.raw(`CREATE INDEX IF NOT EXISTS analytics_events_created_at_idx ON analytics_events (created_at)`));
+  await db.execute(sql.raw(`CREATE INDEX IF NOT EXISTS analytics_events_platform_created_at_idx ON analytics_events (platform, created_at)`));
+  await db.execute(sql.raw(`CREATE INDEX IF NOT EXISTS analytics_events_name_created_at_idx ON analytics_events (event_name, created_at)`));
 }
 
 const analyticsTablesReady = ensureAnalyticsTables().catch((err) => {
