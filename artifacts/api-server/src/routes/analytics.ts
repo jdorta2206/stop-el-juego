@@ -172,9 +172,7 @@ router.post("/game-start", presenceLimiter, async (req, res) => {
     const playerId = readPlayerId(req);
     const language = typeof body.language === "string" ? body.language.slice(0, 16) : null;
     const mode = typeof body.mode === "string" ? body.mode.slice(0, 32) : null;
-    const clientVersion = String(req.headers["x-client-version"] ?? "").slice(0, 32);
-    const twa = String(req.headers["x-client-twa"] ?? "") === "1";
-    const appVersion = clientVersion || (twa ? CURRENT_TWA_ANALYTICS_VERSION : null);
+    const appVersion = appVersionFromRequest(req);
     const platform = platformFromRequest(req);
     await db.execute(sql`
       INSERT INTO analytics_events
