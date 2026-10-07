@@ -67,6 +67,7 @@ async function ensureAnalyticsTables(): Promise<void> {
     CREATE INDEX IF NOT EXISTS analytics_events_created_at_idx ON analytics_events (created_at);
     CREATE INDEX IF NOT EXISTS analytics_events_platform_created_at_idx ON analytics_events (platform, created_at);
     CREATE INDEX IF NOT EXISTS analytics_events_name_created_at_idx ON analytics_events (event_name, created_at);
+    ALTER TABLE analytics_events ADD COLUMN IF NOT EXISTS metadata_json text NOT NULL DEFAULT '{}';
     ALTER TABLE analytics_events ADD COLUMN IF NOT EXISTS trusted boolean NOT NULL DEFAULT FALSE;
   `));
 }
