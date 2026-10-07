@@ -40,7 +40,7 @@ async function ensureAnalyticsTables(): Promise<void> {
   const client = await pool.connect();
   try {
     const stmts = [
-      `CREATE TABLE IF NOT EXISTS analytics_sessions (
+      `CREATE TABLE IF NOT EXISTS public.analytics_sessions (
         session_id text PRIMARY KEY,
         player_id text,
         platform text NOT NULL DEFAULT 'web',
@@ -49,10 +49,10 @@ async function ensureAnalyticsTables(): Promise<void> {
         last_seen timestamp NOT NULL DEFAULT NOW(),
         started_at timestamp NOT NULL DEFAULT NOW()
       )`,
-      `ALTER TABLE analytics_sessions ADD COLUMN IF NOT EXISTS login_method text`,
+      `ALTER TABLE public.analytics_sessions ADD COLUMN IF NOT EXISTS login_method text`,
       `CREATE INDEX IF NOT EXISTS analytics_sessions_last_seen_idx ON analytics_sessions (last_seen)`,
       `CREATE INDEX IF NOT EXISTS analytics_sessions_platform_last_seen_idx ON analytics_sessions (platform, last_seen)`,
-      `CREATE TABLE IF NOT EXISTS analytics_events (
+      `CREATE TABLE IF NOT EXISTS public.analytics_events (
         id serial PRIMARY KEY,
         event_name text NOT NULL,
         player_id text,
@@ -66,8 +66,8 @@ async function ensureAnalyticsTables(): Promise<void> {
         trusted boolean NOT NULL DEFAULT FALSE,
         created_at timestamp NOT NULL DEFAULT NOW()
       )`,
-      `ALTER TABLE analytics_events ADD COLUMN IF NOT EXISTS metadata_json text NOT NULL DEFAULT '{}'`,
-      `ALTER TABLE analytics_events ADD COLUMN IF NOT EXISTS trusted boolean NOT NULL DEFAULT FALSE`,
+      `ALTER TABLE public.analytics_events ADD COLUMN IF NOT EXISTS metadata_json text NOT NULL DEFAULT '{}'`,
+      `ALTER TABLE public.analytics_events ADD COLUMN IF NOT EXISTS trusted boolean NOT NULL DEFAULT FALSE`,
       `CREATE INDEX IF NOT EXISTS analytics_events_created_at_idx ON analytics_events (created_at)`,
       `CREATE INDEX IF NOT EXISTS analytics_events_platform_created_at_idx ON analytics_events (platform, created_at)`,
       `CREATE INDEX IF NOT EXISTS analytics_events_name_created_at_idx ON analytics_events (event_name, created_at)`,
@@ -79,7 +79,7 @@ async function ensureAnalyticsTables(): Promise<void> {
       SELECT
         EXISTS (
           SELECT 1 FROM information_schema.columns
-          WHERE table_schema = current_schema()
+          WHERE table_schema = 'public'
             AND table_name = 'analytics_events'
             AND column_name = 'metadata_json'
         ) AS metadata_json,
@@ -109,7 +109,7 @@ async function latestPlatformForPlayer(playerId: string | null | undefined): Pro
   if (!playerId) return null;
   const rows = await db.execute(sql`
     SELECT platform
-    FROM analytics_sessions
+    FROM public.analytics_sessions
     WHERE player_id = ${playerId}
       AND platform IN ('web', 'android', 'ios')
     ORDER BY last_seen DESC
@@ -132,7 +132,7 @@ export async function recordTrustedAnalyticsEvent(input: {
   const resolvedPlatform = input.platform ?? await latestPlatformForPlayer(input.playerId);
   const metadataJson = JSON.stringify(input.metadata ?? {}).slice(0, 4000);
   await db.execute(sql`
-    INSERT INTO analytics_events
+    INSERT INTO public.analytics_events
       (event_name, player_id, platform, app_version, language, mode, metadata_json, trusted)
     VALUES
       (${input.eventName}, ${input.playerId ?? null}, ${resolvedPlatform ?? "web"},
@@ -158,7 +158,7 @@ router.use(async (req, res, next) => {
     const platform = platformFromRequest(req);
     const appVersion = appVersionFromRequest(req);
     await db.execute(sql`
-      INSERT INTO analytics_sessions (session_id, platform, app_version, last_seen, started_at)
+      INSERT INTO public.analytics_sessions (session_id, platform, app_version, last_seen, started_at)
       VALUES (${sessionId}, ${platform}, ${appVersion}, NOW(), NOW())
       ON CONFLICT (session_id) DO UPDATE SET platform = EXCLUDED.platform, last_seen = NOW()
     `);
@@ -185,7 +185,7 @@ router.post("/heartbeat", presenceLimiter, async (req, res) => {
     const platform = platformFromRequest(req);
     const appVersion = appVersionFromRequest(req);
     await db.execute(sql`
-      INSERT INTO analytics_sessions (session_id, player_id, login_method, platform, app_version, language, last_seen, started_at)
+      INSERT INTO public.analytics_sessions (session_id, player_id, login_method, platform, app_version, language, last_seen, started_at)
       VALUES (${sessionId}, ${playerId}, ${loginMethod}, ${platform}, ${appVersion}, ${language}, NOW(), NOW())
       ON CONFLICT (session_id) DO UPDATE SET player_id = EXCLUDED.player_id, login_method = EXCLUDED.login_method, platform = EXCLUDED.platform, app_version = EXCLUDED.app_version, language = EXCLUDED.language, last_seen = NOW()
     `);
@@ -194,10 +194,10 @@ router.post("/heartbeat", presenceLimiter, async (req, res) => {
       // transaction-scoped, so concurrent heartbeats cannot both insert it.
       await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${sessionId}, 0))`);
       await tx.execute(sql`
-        INSERT INTO analytics_events (event_name, session_id, platform, app_version, language, metadata_json, trusted)
+        INSERT INTO public.analytics_events (event_name, session_id, platform, app_version, language, metadata_json, trusted)
         SELECT 'session_start', ${sessionId}, ${platform}, ${appVersion}, ${language}, '{}', TRUE
         WHERE NOT EXISTS (
-          SELECT 1 FROM analytics_events
+          SELECT 1 FROM public.analytics_events
           WHERE event_name = 'session_start' AND session_id = ${sessionId}
         )
       `);
@@ -220,7 +220,7 @@ router.post("/game-start", presenceLimiter, async (req, res) => {
     const appVersion = appVersionFromRequest(req);
     const platform = platformFromRequest(req);
     await db.execute(sql`
-      INSERT INTO analytics_events
+      INSERT INTO public.analytics_events
         (event_name, player_id, session_id, platform, app_version, language, mode, metadata_json, trusted)
       VALUES
         ('game_start', ${playerId}, ${sessionId}, ${platform}, ${appVersion}, ${language}, ${mode}, '{"source":"client_game_start"}', TRUE)
@@ -246,7 +246,7 @@ router.post("/client-error", presenceLimiter, async (req, res) => {
     const language = typeof body.language === "string" ? body.language.slice(0, 16) : null;
     const metadataJson = JSON.stringify({ message, stack, componentStack }).slice(0, 4000);
     await db.execute(sql`
-      INSERT INTO analytics_events
+      INSERT INTO public.analytics_events
         (event_name, player_id, session_id, platform, app_version, language, metadata_json, trusted)
       VALUES
         ('client_error', ${playerId}, ${sessionId}, ${platform}, ${appVersion}, ${language}, ${metadataJson}, TRUE)
@@ -271,7 +271,7 @@ router.post("/event", presenceLimiter, async (req, res) => {
     const sessionId = clean(body.sessionId, 128);
     const trusted = TRUSTED_CLIENT_TELEMETRY_EVENTS.has(eventName);
     await db.execute(sql`
-      INSERT INTO analytics_events (event_name, player_id, session_id, platform, app_version, language, mode, ai_difficulty, metadata_json, trusted)
+      INSERT INTO public.analytics_events (event_name, player_id, session_id, platform, app_version, language, mode, ai_difficulty, metadata_json, trusted)
       VALUES (${eventName}, ${playerId}, ${sessionId}, ${platformFromRequest(req)}, ${String(req.headers["x-client-version"] ?? "").slice(0, 32) || null}, ${clean(body.language, 16)}, ${clean(body.mode, 32)}, ${clean(body.aiDifficulty, 32)}, ${metadataJson}, ${trusted})
   `);
     return res.json({ ok: true });
@@ -284,7 +284,7 @@ router.post("/event", presenceLimiter, async (req, res) => {
 router.get("/summary", async (_req, res) => {
   try {
     await analyticsTablesReady;
-    const rows = await db.execute(sql`SELECT platform, COUNT(*)::int AS active FROM analytics_sessions WHERE last_seen >= NOW() - INTERVAL '90 seconds' GROUP BY platform ORDER BY platform`);
+    const rows = await db.execute(sql`SELECT platform, COUNT(*)::int AS active FROM public.analytics_sessions WHERE last_seen >= NOW() - INTERVAL '90 seconds' GROUP BY platform ORDER BY platform`);
     return res.json({ platforms: rows.rows });
   } catch (err) {
     console.error("[analytics] summary failed:", err);
