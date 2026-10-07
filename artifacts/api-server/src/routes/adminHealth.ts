@@ -148,6 +148,142 @@ router.get("/", basicAuth, async (_req: Request, res: Response) => {
         : `${apiErrors} API + ${clientErrors} cliente en los últimos 15 minutos.`,
     });
 
+    // ── Evidencia real de juego ───────────────────────────────────────────
+    // Estas comprobaciones no declaran "verde" por el mero hecho de que Node
+    // responda: necesitan evidencia reciente del flujo real de partida.
+    const gameplayRows = (await db.execute(sql`
+      SELECT
+        COUNT(*) FILTER (WHERE event_name = 'game_start')::int AS starts,
+        COUNT(*) FILTER (WHERE event_name = 'game_complete')::int AS completes,
+        COUNT(*) FILTER (WHERE event_name = 'client_error')::int AS client_errors,
+        COUNT(*) FILTER (WHERE event_name = 'api_error')::int AS api_errors,
+        COUNT(*) FILTER (
+          WHERE event_name = 'client_error'
+            AND metadata_json ILIKE '%Failed to fetch dynamically imported module%'
+        )::int AS chunk_errors,
+        COUNT(*) FILTER (
+          WHERE event_name = 'client_error'
+            AND metadata_json ILIKE '%Loading chunk%'
+        )::int AS loading_chunk_errors
+      FROM analytics_events
+      WHERE trusted = TRUE
+        AND created_at >= NOW() - INTERVAL '2 hours'
+    `)).rows[0] as {
+      starts?: number;
+      completes?: number;
+      client_errors?: number;
+      api_errors?: number;
+      chunk_errors?: number;
+      loading_chunk_errors?: number;
+    } | undefined;
+
+    const recentStarts = Number(gameplayRows?.starts ?? 0);
+    const recentCompletes = Number(gameplayRows?.completes ?? 0);
+    const recentChunkErrors = Number(gameplayRows?.chunk_errors ?? 0) + Number(gameplayRows?.loading_chunk_errors ?? 0);
+    const completionRate = recentStarts > 0 ? Math.round((recentCompletes / recentStarts) * 100) : 0;
+
+    checks.push({
+      name: "Flujo real de partida",
+      status: recentStarts < 5
+        ? "warn"
+        : completionRate < 50
+          ? "error"
+          : completionRate < 80
+            ? "warn"
+            : "ok",
+      value: recentStarts < 5 ? `${recentStarts} inicios` : `${completionRate}% inicio → fin`,
+      detail: recentStarts < 5
+        ? "No hay suficiente actividad reciente para declarar el flujo sano; se necesitan al menos 5 inicios en las últimas 2 horas."
+        : `${recentStarts} partidas iniciadas y ${recentCompletes} terminadas en las últimas 2 horas.`,
+    });
+
+    checks.push({
+      name: "Carga de módulos / chunks",
+      status: recentChunkErrors === 0 ? "ok" : "error",
+      value: String(recentChunkErrors),
+      detail: recentChunkErrors === 0
+        ? "No se han detectado fallos de carga dinámica de módulos en las últimas 2 horas."
+        : `${recentChunkErrors} fallo(s) de carga dinámica detectado(s); esto sí se considera una incidencia de experiencia real.`,
+    });
+
+    const telemetryRows = (await db.execute(sql`
+      SELECT
+        COUNT(*)::int AS starts,
+        COUNT(*) FILTER (WHERE app_version IS NOT NULL AND app_version <> '')::int AS with_version,
+        COUNT(*) FILTER (WHERE platform IN ('web','android','ios'))::int AS with_platform
+      FROM analytics_events
+      WHERE trusted = TRUE
+        AND event_name = 'game_start'
+        AND created_at >= NOW() - INTERVAL '2 hours'
+    `)).rows[0] as { starts?: number; with_version?: number; with_platform?: number } | undefined;
+    const telemetryStarts = Number(telemetryRows?.starts ?? 0);
+    const versionCoverage = telemetryStarts > 0 ? Math.round((Number(telemetryRows?.with_version ?? 0) / telemetryStarts) * 100) : 0;
+    const platformCoverage = telemetryStarts > 0 ? Math.round((Number(telemetryRows?.with_platform ?? 0) / telemetryStarts) * 100) : 0;
+
+    checks.push({
+      name: "Telemetría del juego",
+      status: telemetryStarts < 5
+        ? "warn"
+        : versionCoverage < 90 || platformCoverage < 90
+          ? "warn"
+          : "ok",
+      value: telemetryStarts < 5 ? `${telemetryStarts} inicios observados` : `${versionCoverage}% versión · ${platformCoverage}% plataforma`,
+      detail: telemetryStarts < 5
+        ? "Todavía no hay suficiente tráfico reciente para validar la cobertura de telemetría."
+        : "La cobertura se mide sobre partidas reales de las últimas 2 horas, no sobre el histórico.",
+    });
+
+    const rewardRows = (await db.execute(sql`
+      SELECT
+        COUNT(*) FILTER (WHERE event_name = 'rewarded_ad_requested')::int AS requested,
+        COUNT(*) FILTER (WHERE event_name = 'rewarded_ad_failed')::int AS failed,
+        COUNT(*) FILTER (WHERE event_name = 'rewarded_ad_completed')::int AS completed
+      FROM analytics_events
+      WHERE trusted = TRUE
+        AND created_at >= NOW() - INTERVAL '24 hours'
+        AND event_name IN ('rewarded_ad_requested','rewarded_ad_failed','rewarded_ad_completed')
+    `)).rows[0] as { requested?: number; failed?: number; completed?: number } | undefined;
+    const rewardedRequested = Number(rewardRows?.requested ?? 0);
+    const rewardedFailed = Number(rewardRows?.failed ?? 0);
+    const rewardedCompleted = Number(rewardRows?.completed ?? 0);
+    const rewardedFailureRate = rewardedRequested > 0 ? Math.round((rewardedFailed / rewardedRequested) * 100) : 0;
+
+    checks.push({
+      name: "Publicidad recompensada",
+      status: rewardedRequested < 5 ? "ok" : rewardedFailureRate > 50 ? "warn" : "ok",
+      value: rewardedRequested === 0 ? "SIN SOLICITUDES" : `${rewardedCompleted}/${rewardedRequested} completados`,
+      detail: rewardedRequested < 5
+        ? "No hay suficientes solicitudes recientes para evaluar la tasa de fallo."
+        : `${rewardedFailed} fallos de ${rewardedRequested} solicitudes en las últimas 24 horas (${rewardedFailureRate}%).`,
+    });
+
+    const stuckRows = (await db.execute(sql`
+      SELECT COUNT(*)::int AS stuck
+      FROM analytics_events s
+      WHERE s.trusted = TRUE
+        AND s.event_name = 'game_start'
+        AND s.created_at BETWEEN NOW() - INTERVAL '60 minutes' AND NOW() - INTERVAL '15 minutes'
+        AND NOT EXISTS (
+          SELECT 1
+          FROM analytics_events c
+          WHERE c.trusted = TRUE
+            AND c.event_name = 'game_complete'
+            AND COALESCE(c.player_id, c.session_id) = COALESCE(s.player_id, s.session_id)
+            AND c.created_at >= s.created_at
+            AND c.created_at <= s.created_at + INTERVAL '30 minutes'
+        )
+    `)).rows[0] as { stuck?: number } | undefined;
+    const stuckStarts = Number(stuckRows?.stuck ?? 0);
+
+    checks.push({
+      name: "Partidas potencialmente atascadas",
+      status: stuckStarts === 0 ? "ok" : stuckStarts <= 2 ? "warn" : "error",
+      value: String(stuckStarts),
+      detail: stuckStarts === 0
+        ? "No se observan inicios antiguos sin finalización posterior en la ventana comprobable."
+        : `${stuckStarts} inicio(s) no tienen un final posterior dentro de 30 minutos; investigar antes de asumir fallo definitivo.`,
+    });
+
     const activeRows = (await db.execute(sql`
       SELECT COUNT(*)::int AS active
       FROM analytics_sessions
