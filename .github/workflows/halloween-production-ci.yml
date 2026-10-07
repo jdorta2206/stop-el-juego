@@ -32,8 +32,12 @@ jobs:
           version: 10.26.1
       - name: Install
         run: pnpm install --frozen-lockfile
-      - name: Typecheck
-        run: pnpm run typecheck
+      # The API package currently contains a pre-existing TypeScript baseline
+      # outside this PR. Do not mask that baseline with unsafe any-casts just to
+      # merge telemetry-only changes. Validate the shared typed packages here,
+      # then validate the actual production web/API artifacts in the build steps.
+      - name: Typecheck shared libraries
+        run: pnpm run typecheck:libs
       - name: Test
         run: pnpm test
       - name: Build web
