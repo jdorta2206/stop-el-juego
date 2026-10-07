@@ -20,7 +20,7 @@ export const MIN_RECOMMENDED_APP_VERSION = "1.3.4.0";
 // but older published builds did not include an appVersion query parameter.
 // Keep this fallback only for that TWA marker; normal web clients remain unversioned
 // unless they explicitly report a version.
-export const CURRENT_TWA_VERSION = "1.3.6.3";
+export const CURRENT_TWA_VERSION = "1.3.6.8";
 
 function clean(v: string | null | undefined): string | null {
   if (!v) return null;
