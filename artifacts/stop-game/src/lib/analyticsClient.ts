@@ -1,3 +1,4 @@
+import { getInstalledAppVersion } from "./appVersion";
 const STORAGE_KEY = "stop_player_v2";
 const ANALYTICS_TWA_KEY = "stop_analytics_twa_v1";
 function isTwa(): boolean {
