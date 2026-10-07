@@ -107,7 +107,7 @@ async function releasePlayerNotification(today: string, key: string, playerId: s
 
 function playerLocalDateSql() {
   return sql`CASE
-    WHEN NULLIF(sub.time_zone, '') IS NOT NULL
+    WHEN NULLIF(sub.time_zone, '') IS NOT NULL AND EXISTS (SELECT 1 FROM pg_timezone_names valid_tz WHERE valid_tz.name = sub.time_zone)
       THEN TO_CHAR(NOW() AT TIME ZONE sub.time_zone, 'YYYY-MM-DD')
     ELSE TO_CHAR((NOW() AT TIME ZONE 'UTC') + (sub.tz_offset_minutes * INTERVAL '1 minute'), 'YYYY-MM-DD')
   END`;
@@ -129,7 +129,7 @@ async function sendStreakRescueNotifications() {
       WHERE ps.current_streak >= 2
         AND ps.last_played_date = (
           CASE
-            WHEN NULLIF(sub.time_zone, '') IS NOT NULL
+            WHEN NULLIF(sub.time_zone, '') IS NOT NULL AND EXISTS (SELECT 1 FROM pg_timezone_names valid_tz WHERE valid_tz.name = sub.time_zone)
               THEN TO_CHAR((NOW() AT TIME ZONE sub.time_zone) - INTERVAL '1 day', 'YYYY-MM-DD')
             ELSE TO_CHAR(
               ((NOW() AT TIME ZONE 'UTC') + (sub.tz_offset_minutes * INTERVAL '1 minute')) - INTERVAL '1 day',
@@ -308,7 +308,7 @@ async function sendPerUserDailyNotifications() {
     const utcMinutesOfDay = utcHour * 60 + utcMinute;
     const rows = (await db.execute(sql`
       SELECT player_id, language, hour_local,
-             CASE WHEN NULLIF(time_zone, '') IS NOT NULL
+             CASE WHEN NULLIF(time_zone, '') IS NOT NULL AND EXISTS (SELECT 1 FROM pg_timezone_names valid_tz WHERE valid_tz.name = push_subscriptions.time_zone)
                THEN TO_CHAR(NOW() AT TIME ZONE time_zone, 'YYYY-MM-DD')
                ELSE TO_CHAR((NOW() AT TIME ZONE 'UTC') + (tz_offset_minutes * INTERVAL '1 minute'), 'YYYY-MM-DD')
              END AS local_day
@@ -316,12 +316,12 @@ async function sendPerUserDailyNotifications() {
       WHERE enabled = TRUE
         AND muted_until < ${now}
         AND hour_local = CASE
-          WHEN NULLIF(time_zone, '') IS NOT NULL
+          WHEN NULLIF(time_zone, '') IS NOT NULL AND EXISTS (SELECT 1 FROM pg_timezone_names valid_tz WHERE valid_tz.name = push_subscriptions.time_zone)
             THEN EXTRACT(HOUR FROM (NOW() AT TIME ZONE time_zone))::int
           ELSE (((${utcMinutesOfDay}::int + tz_offset_minutes + 10080) / 60) % 24)
         END
         AND CASE
-          WHEN NULLIF(time_zone, '') IS NOT NULL
+          WHEN NULLIF(time_zone, '') IS NOT NULL AND EXISTS (SELECT 1 FROM pg_timezone_names valid_tz WHERE valid_tz.name = push_subscriptions.time_zone)
             THEN EXTRACT(MINUTE FROM (NOW() AT TIME ZONE time_zone))::int
           ELSE ((${utcMinutesOfDay}::int + tz_offset_minutes + 10080) % 60)
         END < 5
@@ -421,17 +421,17 @@ async function sendHappyHourNotifications() {
 
       const rows = (await db.execute(sql`
         SELECT player_id, language,
-               CASE WHEN NULLIF(time_zone, '') IS NOT NULL
+               CASE WHEN NULLIF(time_zone, '') IS NOT NULL AND EXISTS (SELECT 1 FROM pg_timezone_names valid_tz WHERE valid_tz.name = push_subscriptions.time_zone)
                  THEN TO_CHAR(NOW() AT TIME ZONE time_zone, 'YYYY-MM-DD')
                  ELSE TO_CHAR((NOW() AT TIME ZONE 'UTC') + (tz_offset_minutes * INTERVAL '1 minute'), 'YYYY-MM-DD')
                END AS local_day
         FROM push_subscriptions
         WHERE enabled = TRUE
           AND muted_until < ${now}
-          AND (CASE WHEN NULLIF(time_zone, '') IS NOT NULL
+          AND (CASE WHEN NULLIF(time_zone, '') IS NOT NULL AND EXISTS (SELECT 1 FROM pg_timezone_names valid_tz WHERE valid_tz.name = push_subscriptions.time_zone)
             THEN (EXTRACT(HOUR FROM (NOW() AT TIME ZONE time_zone))::int * 60 + EXTRACT(MINUTE FROM (NOW() AT TIME ZONE time_zone))::int)
             ELSE (((${utcMinutesOfDay}::int + tz_offset_minutes + 10080) % 1440)) END) >= ${slot.target}
-          AND (CASE WHEN NULLIF(time_zone, '') IS NOT NULL
+          AND (CASE WHEN NULLIF(time_zone, '') IS NOT NULL AND EXISTS (SELECT 1 FROM pg_timezone_names valid_tz WHERE valid_tz.name = push_subscriptions.time_zone)
             THEN (EXTRACT(HOUR FROM (NOW() AT TIME ZONE time_zone))::int * 60 + EXTRACT(MINUTE FROM (NOW() AT TIME ZONE time_zone))::int)
             ELSE (((${utcMinutesOfDay}::int + tz_offset_minutes + 10080) % 1440)) END) < ${slot.target + 5}
         LIMIT 10000
@@ -488,10 +488,10 @@ async function sendDailyDealsNotifications() {
       FROM push_subscriptions
       WHERE enabled = TRUE
         AND muted_until < ${now}
-        AND (CASE WHEN NULLIF(time_zone, '') IS NOT NULL
+        AND (CASE WHEN NULLIF(time_zone, '') IS NOT NULL AND EXISTS (SELECT 1 FROM pg_timezone_names valid_tz WHERE valid_tz.name = push_subscriptions.time_zone)
           THEN (EXTRACT(HOUR FROM (NOW() AT TIME ZONE time_zone))::int * 60 + EXTRACT(MINUTE FROM (NOW() AT TIME ZONE time_zone))::int)
           ELSE (((${utcMinutesOfDay}::int + tz_offset_minutes + 10080) % 1440)) END) >= ${DAILY_DEALS_LOCAL_MIN}
-        AND (CASE WHEN NULLIF(time_zone, '') IS NOT NULL
+        AND (CASE WHEN NULLIF(time_zone, '') IS NOT NULL AND EXISTS (SELECT 1 FROM pg_timezone_names valid_tz WHERE valid_tz.name = push_subscriptions.time_zone)
           THEN (EXTRACT(HOUR FROM (NOW() AT TIME ZONE time_zone))::int * 60 + EXTRACT(MINUTE FROM (NOW() AT TIME ZONE time_zone))::int)
           ELSE (((${utcMinutesOfDay}::int + tz_offset_minutes + 10080) % 1440)) END) < ${DAILY_DEALS_LOCAL_MIN + 5}
       LIMIT 10000
