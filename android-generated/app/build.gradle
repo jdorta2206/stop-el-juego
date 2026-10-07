@@ -5,7 +5,7 @@ plugins {
 }
 
 def twaManifest = [
-    applicationId: 'app.replit.stop_el_juego.twa', hostName: 'www.stopjuegodepalabras.com', launchUrl: '/?source=googleplay-twa&appVersion=1.3.6.9', name: 'STOP - El Juego', launcherName: 'STOP',
+    applicationId: 'app.replit.stop_el_juego.twa', hostName: 'www.stopjuegodepalabras.com', launchUrl: '/?source=googleplay-twa&appVersion=1.3.6.9', name: 'STOP - El Juego', launcherName: 'STOP', 
     themeColor: '#0D1757', themeColorDark: '#000000', navigationColor: '#0D1757', navigationColorDark: '#0D1757', navigationDividerColor: '#0D1757', navigationDividerColorDark: '#0D1757', backgroundColor: '#0D1757',
     enableNotifications: true, shortcuts: [], splashScreenFadeOutDuration: 0, generatorApp: 'bubblewrap-cli', fallbackType: 'customtabs', enableSiteSettingsShortcut: false, orientation: 'portrait',
 ]
@@ -19,27 +19,27 @@ android {
         targetSdkVersion 36
         versionCode 54
         versionName "1.3.6.9"
-        resValue "string", "appName", twaManifest.name
-        resValue "string", "launcherName", twaManifest.launcherName
-        def launchUrl = "https://" + twaManifest.hostName + twaManifest.launchUrl
+        resValue "string", "appName", twaManifest['name']
+        resValue "string", "launcherName", twaManifest['launcherName']
+        def launchUrl = "https://" + twaManifest['hostName'] + twaManifest['launchUrl']
         resValue "string", "launchUrl", launchUrl
         resValue "string", "webManifestUrl", 'https://www.stopjuegodepalabras.com/manifest.json'
         resValue "string", "fullScopeUrl", 'https://www.stopjuegodepalabras.com/'
-        resValue "string", "hostName", twaManifest.hostName
-        resValue "color", "colorPrimary", twaManifest.themeColor
-        resValue "color", "colorPrimaryDark", twaManifest.themeColorDark
-        resValue "color", "navigationColor", twaManifest.navigationColor
-        resValue "color", "navigationColorDark", twaManifest.navigationColorDark
-        resValue "color", "navigationDividerColor", twaManifest.navigationDividerColor
-        resValue "color", "navigationDividerColorDark", twaManifest.navigationDividerColorDark
-        resValue "color", "backgroundColor", twaManifest.backgroundColor
-        resValue "string", "providerAuthority", twaManifest.applicationId + '.fileprovider'
-        resValue "bool", "enableNotification", twaManifest.enableNotifications.toString()
-        resValue "integer", "splashScreenFadeOutDuration", twaManifest.splashScreenFadeOutDuration.toString()
-        resValue "string", "generatorApp", twaManifest.generatorApp
-        resValue "string", "fallbackType", twaManifest.fallbackType
-        resValue "bool", "enableSiteSettingsShortcut", twaManifest.enableSiteSettingsShortcut.toString()
-        resValue "string", "orientation", twaManifest.orientation
+        resValue "string", "hostName", twaManifest['hostName']
+        resValue "color", "colorPrimary", twaManifest['themeColor']
+        resValue "color", "colorPrimaryDark", twaManifest['themeColorDark']
+        resValue "color", "navigationColor", twaManifest['navigationColor']
+        resValue "color", "navigationColorDark", twaManifest['navigationColorDark']
+        resValue "color", "navigationDividerColor", twaManifest['navigationDividerColor']
+        resValue "color", "navigationDividerColorDark", twaManifest['navigationDividerColorDark']
+        resValue "color", "backgroundColor", twaManifest['backgroundColor']
+        resValue "string", "providerAuthority", twaManifest['applicationId'] + '.fileprovider'
+        resValue "bool", "enableNotification", twaManifest['enableNotifications'].toString()
+        resValue "integer", "splashScreenFadeOutDuration", twaManifest['splashScreenFadeOutDuration'].toString()
+        resValue "string", "generatorApp", twaManifest['generatorApp']
+        resValue "string", "fallbackType", twaManifest['fallbackType']
+        resValue "bool", "enableSiteSettingsShortcut", twaManifest['enableSiteSettingsShortcut'].toString()
+        resValue "string", "orientation", twaManifest['orientation']
     }
     buildTypes { release { minifyEnabled false } }
     if (System.getenv('KEYSTORE_PASSWORD') && System.getenv('KEY_ALIAS') && System.getenv('KEY_PASSWORD')) {
