@@ -190,7 +190,10 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
              COUNT(*) FILTER (WHERE app_version IS NOT NULL AND app_version <> '')::int AS starts_with_version,
              COUNT(*) FILTER (WHERE platform IN ('web','android','ios'))::int AS starts_with_platform
       FROM analytics_events
-      WHERE trusted = TRUE AND event_name = 'game_start' AND created_at >= NOW() - INTERVAL '24 hours'
+      WHERE trusted = TRUE
+        AND event_name = 'game_start'
+        AND created_at >= NOW() - INTERVAL '24 hours'
+        AND metadata_json NOT LIKE '%"source":"server_room_start"%'
     `)).rows[0] as Record<string, unknown> | undefined;
 
     // ── Retención y embudo real (analytics_sessions / trusted events) ────────
@@ -592,7 +595,7 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
   <h2>🛡️ Calidad de los datos del panel</h2>
   <div class="cards">
     <div class="card"><div class="label">Sesiones con versión · 24 h</div><div class="val">${num(analyticsVersionCoverage?.sessions) > 0 ? Math.round((num(analyticsVersionCoverage?.sessions_with_version) / num(analyticsVersionCoverage?.sessions)) * 100) : 0}%</div></div>
-    <div class="card"><div class="label">Game starts con versión · 24 h</div><div class="val">${num(analyticsStartCoverage?.starts) > 0 ? Math.round((num(analyticsStartCoverage?.starts_with_version) / num(analyticsStartCoverage?.starts)) * 100) : 0}%</div></div>
+    <div class="card"><div class="label">Game starts de cliente con versión · 24 h</div><div class="val">${num(analyticsStartCoverage?.starts) > 0 ? Math.round((num(analyticsStartCoverage?.starts_with_version) / num(analyticsStartCoverage?.starts)) * 100) : 0}%</div></div>
     <div class="card"><div class="label">Game starts con plataforma · 24 h</div><div class="val">${num(analyticsStartCoverage?.starts) > 0 ? Math.round((num(analyticsStartCoverage?.starts_with_platform) / num(analyticsStartCoverage?.starts)) * 100) : 0}%</div></div>
   </div>
   <div class="sub">Los resultados guardados y las partidas de invitados proceden de fuentes distintas. <b>Game start</b> es telemetría y se usa para detectar pérdidas de instrumentación; no se usa para inventar el número de partidas.</div>
