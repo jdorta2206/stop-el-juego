@@ -8,6 +8,7 @@ import { readPlayerId } from "../lib/playerAuth";
 const router: IRouter = Router();
 const PLATFORMS = new Set(["web", "android", "ios"]);
 const SERVER_SESSION_COOKIE = "stop_analytics_session";
+const CURRENT_TWA_ANALYTICS_VERSION = "1.3.6.8";
 
 function platformFromRequest(req: Request): "web" | "android" | "ios" {
   const explicit = String(req.headers["x-client-platform"] ?? "").toLowerCase();
@@ -121,7 +122,9 @@ router.post("/heartbeat", presenceLimiter, async (req, res) => {
         ? "guest"
         : null;
     const language = typeof body.language === "string" ? body.language.slice(0, 16) : null;
-    const appVersion = String(req.headers["x-client-version"] ?? "").slice(0, 32) || null;
+    const clientVersion = String(req.headers["x-client-version"] ?? "").slice(0, 32);
+    const twa = String(req.headers["x-client-twa"] ?? "") === "1";
+    const appVersion = clientVersion || (twa ? CURRENT_TWA_ANALYTICS_VERSION : null);
     const platform = platformFromRequest(req);
     await db.execute(sql`
       INSERT INTO analytics_sessions (session_id, player_id, login_method, platform, app_version, language, last_seen, started_at)
@@ -156,7 +159,9 @@ router.post("/game-start", presenceLimiter, async (req, res) => {
     const playerId = readPlayerId(req);
     const language = typeof body.language === "string" ? body.language.slice(0, 16) : null;
     const mode = typeof body.mode === "string" ? body.mode.slice(0, 32) : null;
-    const appVersion = String(req.headers["x-client-version"] ?? "").slice(0, 32) || null;
+    const clientVersion = String(req.headers["x-client-version"] ?? "").slice(0, 32);
+    const twa = String(req.headers["x-client-twa"] ?? "") === "1";
+    const appVersion = clientVersion || (twa ? CURRENT_TWA_ANALYTICS_VERSION : null);
     const platform = platformFromRequest(req);
     await db.execute(sql`
       INSERT INTO analytics_events
