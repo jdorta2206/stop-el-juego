@@ -56,9 +56,9 @@ jobs:
             const gradle = path.join(out, 'app', 'build.gradle');
             let text = fs.readFileSync(gradle, 'utf8');
             text = text.replace('splashScreenFadeOutDuration: ,', 'splashScreenFadeOutDuration: 0,');
-            text = text.replace('versionName ""', 'versionName "1.3.6.3"');
+            text = text.replace('versionName ""', 'versionName "1.3.6.8"');
             text = text.replace(/minSdkVersion\s+21/, 'minSdkVersion 23');
-            text = text.replace(/launchUrl:\s*'https:\/\/www\.stopjuegodepalabras\.com\/?\?source=googleplay-twa'/, "launchUrl: '/?source=googleplay-twa'");
+            text = text.replace(/launchUrl:\s*'https:\/\/www\.stopjuegodepalabras\.com\/?\?source=googleplay-twa'/, "launchUrl: '/?source=googleplay-twa&appVersion=1.3.6.8'");
             text = text.replace("implementation 'com.google.androidbrowserhelper:androidbrowserhelper:2.7.0-alpha02'", "implementation 'com.google.androidbrowserhelper:androidbrowserhelper:2.7.3'");
             text = text.replace("enableSiteSettingsShortcut: 'false'", "enableSiteSettingsShortcut: false");
             fs.writeFileSync(gradle, text);

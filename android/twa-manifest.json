@@ -12,7 +12,7 @@
   "navigationDividerColorDark": "#0d1757",
   "backgroundColor": "#0d1757",
   "enableNotifications": true,
-  "startUrl": "https://www.stopjuegodepalabras.com/?source=googleplay-twa&appVersion=1.3.6.3",
+  "startUrl": "https://www.stopjuegodepalabras.com/?source=googleplay-twa&appVersion=1.3.6.8",
   "iconUrl": "https://www.stopjuegodepalabras.com/images/icon-512.png",
   "maskableIconUrl": "https://www.stopjuegodepalabras.com/images/icon-maskable-512.png",
   "monochromeIconUrl": "https://www.stopjuegodepalabras.com/images/icon-mono-512.png",
@@ -38,6 +38,6 @@
     "path": "./android.keystore",
     "alias": "android"
   },
-  "appVersionName": "1.3.6.3",
-  "appVersionCode": 17
+  "appVersionName": "1.3.6.8",
+  "appVersionCode": 53
 }
