@@ -34,7 +34,7 @@ import { saveActiveRoom, clearActiveRoom, touchActiveRoom } from "@/lib/activeRo
 import { useT } from "@/i18n/useT";
 import { useToast } from "@/hooks/use-toast";
 import { useReviewPrompt, recordGamePlayed } from "@/hooks/useReviewPrompt";
-import { trackTrustedGameStart } from "@/lib/analyticsClient";
+import { trackAnalyticsEvent, trackTrustedGameStart } from "@/lib/analyticsClient";
 import { ReviewPromptCard } from "@/components/ReviewPromptCard";
 import { maybeShowInterstitial, recordInterstitialGameCompleted } from "@/lib/interstitialAd";
 import { applyHalloweenCategory, getHalloweenScare, getHalloweenScareById, isHalloweenActive, isHalloweenPreview, isHalloweenModeEnabled } from "@/lib/halloweenEvent";
@@ -536,6 +536,10 @@ export default function Room() {
   const maxRounds = room?.maxRounds || 3;
   const maxPlayers = (room as any)?.maxPlayers || 8;
   const gameMode = (room as any)?.gameMode || "classic";
+  // Telemetry-only: reaching the multiplayer room is distinct from a real game start.
+  useEffect(() => {
+    trackAnalyticsEvent("game_lobby_view", { mode: "multiplayer", metadata: { surface: "multiplayer_room" } });
+  }, []);
   const players = room?.players || [];
   const stopper = (room as any)?.stopper;
 
