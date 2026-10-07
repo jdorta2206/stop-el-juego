@@ -18,9 +18,6 @@ import androidx.browser.customtabs.CustomTabsSession;
 import com.google.android.play.core.appupdate.AppUpdateInfo;
 import com.google.android.play.core.appupdate.AppUpdateManager;
 import com.google.android.play.core.appupdate.AppUpdateManagerFactory;
-import com.google.android.play.core.install.InstallStateUpdatedListener;
-import com.google.android.play.core.install.model.AppUpdateType;
-import com.google.android.play.core.install.model.InstallStatus;
 import com.google.android.play.core.install.model.UpdateAvailability;
 import com.google.android.gms.ads.AdError;
 import com.google.android.gms.ads.AdRequest;
@@ -57,21 +54,14 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     private String activePlacement;
     private boolean channelRequestInFlight;
     private int channelRequestAttempts;
-    private static final int APP_UPDATE_REQUEST_CODE = 1907;
+    private static final String PLAY_STORE_PACKAGE = "app.replit.stop_el_juego.twa";
     private AppUpdateManager appUpdateManager;
-    private boolean appUpdateCheckInFlight;
-    private boolean appUpdateReadyDialogShown;
-    private final InstallStateUpdatedListener appUpdateListener = state -> {
-        if (state.installStatus() == InstallStatus.DOWNLOADED) {
-            showPlayUpdateReadyDialog();
-        }
-    };
+    private boolean playUpdatePromptShown;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         appUpdateManager = AppUpdateManagerFactory.create(this);
-        appUpdateManager.registerListener(appUpdateListener);
         checkForPlayUpdate();
         if (AdsPolicy.isEnabled()) {
             MobileAds.initialize(this, status -> {
@@ -86,6 +76,51 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
         } else {
             setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
         }
+    }
+
+    private void checkForPlayUpdate() {
+        if (appUpdateManager == null || playUpdatePromptShown || isFinishing()) return;
+        appUpdateManager.getAppUpdateInfo()
+                .addOnSuccessListener(info -> {
+                    if (info.updateAvailability() == UpdateAvailability.UPDATE_AVAILABLE) {
+                        showPlayUpdateDialog();
+                    }
+                })
+                .addOnFailureListener(error ->
+                        Log.w(TAG, "Google Play update check failed; continuing normally", error));
+    }
+
+    private void showPlayUpdateDialog() {
+        if (playUpdatePromptShown || isFinishing()) return;
+        playUpdatePromptShown = true;
+        new AlertDialog.Builder(this)
+                .setTitle("Nueva actualización disponible")
+                .setMessage("Hay una nueva versión de STOP disponible en Google Play. Actualiza ahora para seguir usando la versión más reciente.")
+                .setPositiveButton("Actualizar", (dialog, which) -> openPlayStore())
+                .setNegativeButton("Ahora no", null)
+                .setCancelable(true)
+                .show();
+    }
+
+    private void openPlayStore() {
+        try {
+            startActivity(new Intent(Intent.ACTION_VIEW,
+                    Uri.parse("market://details?id=" + PLAY_STORE_PACKAGE)));
+        } catch (RuntimeException error) {
+            Log.w(TAG, "Play Store app unavailable; opening web listing", error);
+            try {
+                startActivity(new Intent(Intent.ACTION_VIEW,
+                        Uri.parse("https://play.google.com/store/apps/details?id=" + PLAY_STORE_PACKAGE)));
+            } catch (RuntimeException fallbackError) {
+                Log.e(TAG, "Unable to open Google Play listing", fallbackError);
+            }
+        }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        checkForPlayUpdate();
     }
 
     @Override
