@@ -219,6 +219,10 @@ export default function SoloGame() {
   const dailyCategories = urlParams.get("cats")?.split(",").filter(Boolean) || [];
 
   const gameMode = isDailyMode ? "daily" : isQuickMode ? "quick" : isChaosMode ? "chaos" : isRandomMode ? "random" : "normal";
+  // Telemetry-only: reaching the solo lobby is distinct from actually starting a game.
+  useEffect(() => {
+    trackAnalyticsEvent("game_lobby_view", { mode: gameMode, metadata: { surface: "solo_lobby" } });
+  }, [gameMode]);
   const { best: personalBest, updateBest } = usePersonalBest(gameMode, player?.id);
   const reviewPrompt = useReviewPrompt();
   const reviewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
