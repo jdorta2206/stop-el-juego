@@ -180,7 +180,6 @@ router.get("/", basicAuth, async (_req: Request, res: Response) => {
     const recentStarts = Number(gameplayRows?.starts ?? 0);
     const recentCompletes = Number(gameplayRows?.completes ?? 0);
     const recentChunkErrors = Number(gameplayRows?.chunk_errors ?? 0) + Number(gameplayRows?.loading_chunk_errors ?? 0);
-    const recentGameplayErrors = Number(gameplayRows?.client_errors ?? 0) + Number(gameplayRows?.api_errors ?? 0);
     const completionRate = recentStarts > 0 ? Math.round((recentCompletes / recentStarts) * 100) : 0;
 
     checks.push({
