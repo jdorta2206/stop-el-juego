@@ -177,8 +177,8 @@ router.get("/", basicAuth, async (_req: Request, res: Response) => {
     // responda: necesitan evidencia reciente del flujo real de partida.
     const gameplayRows = (await db.execute(sql`
       SELECT
-        COUNT(*) FILTER (WHERE event_name = 'game_start')::int AS starts,
-        COUNT(*) FILTER (WHERE event_name = 'game_complete')::int AS completes,
+        COUNT(DISTINCT COALESCE(player_id, session_id)) FILTER (WHERE event_name = 'game_start')::int AS starts,
+        COUNT(DISTINCT COALESCE(player_id, session_id)) FILTER (WHERE event_name = 'game_complete')::int AS completes,
         COUNT(*) FILTER (WHERE event_name = 'client_error')::int AS client_errors,
         COUNT(*) FILTER (WHERE event_name = 'api_error')::int AS api_errors,
         COUNT(*) FILTER (
@@ -218,7 +218,7 @@ router.get("/", basicAuth, async (_req: Request, res: Response) => {
       value: recentStarts < 5 ? `${recentStarts} inicios` : `${completionRate}% inicio → fin`,
       detail: recentStarts < 5
         ? "No hay suficiente actividad reciente para declarar el flujo sano; se necesitan al menos 5 inicios en las últimas 2 horas."
-        : `${recentStarts} partidas iniciadas y ${recentCompletes} terminadas en las últimas 2 horas.`,
+        : `${recentStarts} jugadores/sesiones con inicio y ${recentCompletes} con resultado en las últimas 2 horas.`,
     });
 
     checks.push({
