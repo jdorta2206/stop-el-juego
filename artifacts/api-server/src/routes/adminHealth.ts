@@ -91,8 +91,8 @@ router.get("/", basicAuth, async (_req: Request, res: Response) => {
     }
 
     const errorRows = (await db.execute(sql`
-      SELECT COUNT(*) FILTER (WHERE event_name = 'api_error')::int AS api_errors,
-             COUNT(*) FILTER (WHERE event_name = 'client_error')::int AS client_errors
+      SELECT COUNT(*) FILTER (WHERE s.event_name = 'api_error')::int AS api_errors,
+             COUNT(*) FILTER (WHERE s.event_name = 'client_error')::int AS client_errors
       FROM public.analytics_events
       WHERE trusted = TRUE AND event_name IN ('api_error', 'client_error')
         AND created_at >= NOW() - INTERVAL '15 minutes'
@@ -102,7 +102,7 @@ router.get("/", basicAuth, async (_req: Request, res: Response) => {
 
     const gameplayRows = (await db.execute(sql`
       SELECT
-        COUNT(DISTINCT session_id) FILTER (WHERE event_name = 'game_start')::int AS starts,
+        COUNT(DISTINCT s.session_id) FILTER (WHERE s.event_name = 'game_start')::int AS starts,
         COUNT(DISTINCT s.session_id) FILTER (
           WHERE s.event_name = 'game_start'
             AND EXISTS (
@@ -120,10 +120,10 @@ router.get("/", basicAuth, async (_req: Request, res: Response) => {
         )::int AS completes,
         COUNT(*) FILTER (WHERE event_name = 'client_error')::int AS client_errors,
         COUNT(*) FILTER (WHERE event_name = 'api_error')::int AS api_errors,
-        COUNT(*) FILTER (WHERE event_name = 'client_error' AND COALESCE(metadata_json::text, '') ILIKE '%Failed to fetch dynamically imported module%')::int AS chunk_errors,
+        COUNT(*) FILTER (WHERE s.event_name = 'client_error' AND COALESCE(s.metadata_json::text, '') ILIKE '%Failed to fetch dynamically imported module%')::int AS chunk_errors,
         COUNT(*) FILTER (WHERE event_name = 'client_error' AND COALESCE(metadata_json::text, '') ILIKE '%Loading chunk%')::int AS loading_chunk_errors
-      FROM public.analytics_events
-      WHERE trusted = TRUE AND created_at >= NOW() - INTERVAL '2 hours'
+      FROM public.analytics_events s
+      WHERE s.trusted = TRUE AND s.created_at >= NOW() - INTERVAL '2 hours'
     `)).rows[0] as { starts?: number; completes?: number; client_errors?: number; api_errors?: number; chunk_errors?: number; loading_chunk_errors?: number } | undefined;
 
     const recentStarts = Number(gameplayRows?.starts ?? 0), recentCompletes = Number(gameplayRows?.completes ?? 0);
