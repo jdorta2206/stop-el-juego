@@ -20,445 +20,173 @@ function safeEqual(a: string, b: string): boolean {
 function basicAuth(req: Request, res: Response, next: NextFunction): void {
   const user = process.env["ADMIN_PANEL_USER"];
   const pass = process.env["ADMIN_PANEL_PASSWORD"];
-
-  if (!user || !pass) {
-    res.status(503).type("html").send("<h1>Panel no configurado</h1>");
-    return;
-  }
-
+  if (!user || !pass) { res.status(503).type("html").send("<h1>Panel no configurado</h1>"); return; }
   const [scheme, encoded] = String(req.headers.authorization || "").split(" ");
   if (scheme === "Basic" && encoded) {
     const decoded = Buffer.from(encoded, "base64").toString("utf8");
     const idx = decoded.indexOf(":");
     const gotUser = decoded.slice(0, idx);
     const gotPass = decoded.slice(idx + 1);
-    if (safeEqual(gotUser, user) && safeEqual(gotPass, pass)) {
-      next();
-      return;
-    }
+    if (safeEqual(gotUser, user) && safeEqual(gotPass, pass)) { next(); return; }
   }
-
-  res
-    .set("WWW-Authenticate", 'Basic realm="STOP Panel", charset="UTF-8"')
-    .status(401)
-    .type("html")
-    .send("<h1>Acceso restringido</h1><p>Credenciales requeridas.</p>");
+  res.set("WWW-Authenticate", 'Basic realm="STOP Panel", charset="UTF-8"').status(401).type("html").send("<h1>Acceso restringido</h1><p>Credenciales requeridas.</p>");
 }
 
 function esc(value: unknown): string {
-  return String(value ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+  return String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
-type Check = {
-  name: string;
-  status: "ok" | "warn" | "error";
-  value: string;
-  detail: string;
-};
-
-function badge(status: Check["status"]): string {
-  if (status === "ok") return "🟢";
-  if (status === "warn") return "🟡";
-  return "🔴";
-}
-
-function statusLabel(status: Check["status"]): string {
-  if (status === "ok") return "OK";
-  if (status === "warn") return "ATENCIÓN";
-  return "PROBLEMA";
-}
+type Check = { name: string; status: "ok" | "warn" | "error"; value: string; detail: string };
+function badge(status: Check["status"]): string { return status === "ok" ? "🟢" : status === "warn" ? "🟡" : "🔴"; }
+function statusLabel(status: Check["status"]): string { return status === "ok" ? "OK" : status === "warn" ? "ATENCIÓN" : "PROBLEMA"; }
 
 router.get("/", basicAuth, async (_req: Request, res: Response) => {
   const started = Date.now();
   const checks: Check[] = [];
-
   try {
     const dbStarted = Date.now();
     await db.execute(sql`SELECT 1 AS ok`);
     const dbMs = Date.now() - dbStarted;
-
-    checks.push({
-      name: "Base de datos",
-      status: dbMs < 500 ? "ok" : dbMs < 1500 ? "warn" : "error",
-      value: `${dbMs} ms`,
-      detail: dbMs < 500 ? "Consulta de salud dentro de lo normal." : "La base de datos está respondiendo más lenta de lo esperado.",
-    });
-
-    checks.push({
-      name: "Índices / arranque",
-      status: indexesReady() ? "ok" : "error",
-      value: indexesReady() ? "LISTO" : "NO LISTO",
-      detail: indexesReady() ? "El servicio considera la base preparada." : "El backend todavía no considera terminada la inicialización.",
-    });
-
-    checks.push({
-      name: "Stripe",
-      status: isStripeReady() ? "ok" : "warn",
-      value: isStripeReady() ? "LISTO" : "NO LISTO",
-      detail: isStripeReady() ? "El cliente de pagos está inicializado." : "Stripe todavía no está listo; comprobar configuración si persiste.",
-    });
+    checks.push({ name: "Base de datos", status: dbMs < 500 ? "ok" : dbMs < 1500 ? "warn" : "error", value: `${dbMs} ms`, detail: dbMs < 500 ? "Consulta de salud dentro de lo normal." : "La base de datos está respondiendo más lenta de lo esperado." });
+    checks.push({ name: "Índices / arranque", status: indexesReady() ? "ok" : "error", value: indexesReady() ? "LISTO" : "NO LISTO", detail: indexesReady() ? "El servicio considera la base preparada." : "El backend todavía no considera terminada la inicialización." });
+    checks.push({ name: "Stripe", status: isStripeReady() ? "ok" : "warn", value: isStripeReady() ? "LISTO" : "NO LISTO", detail: isStripeReady() ? "El cliente de pagos está inicializado." : "Stripe todavía no está listo; comprobar configuración si persiste." });
 
     const requiredColumns: Record<string, string[]> = {
       player_scores: ["player_id"],
       game_history: ["player_id", "score", "created_at"],
-      analytics_events: ["event_name", "created_at", "metadata_json", "trusted"],
+      analytics_events: ["event_name", "created_at", "metadata_json", "trusted", "session_id"],
       analytics_sessions: ["session_id", "platform", "last_seen"],
       guest_stats: ["day", "games", "conversions"],
     };
     const criticalTables = Object.keys(requiredColumns);
     const tableRows = (await db.execute(sql`
-      SELECT table_name
-      FROM information_schema.tables
+      SELECT table_name FROM information_schema.tables
       WHERE table_schema = 'public'
         AND table_name = ANY(ARRAY['player_scores','game_history','analytics_events','analytics_sessions','guest_stats'])
     `)).rows as Array<{ table_name: string }>;
     const tableSet = new Set(tableRows.map((r) => String(r.table_name)));
     const columnRows = (await db.execute(sql`
-      SELECT table_name, column_name
-      FROM information_schema.columns
+      SELECT table_name, column_name FROM information_schema.columns
       WHERE table_schema = 'public'
         AND table_name = ANY(ARRAY['player_scores','game_history','analytics_events','analytics_sessions','guest_stats'])
     `)).rows as Array<{ table_name: string; column_name: string }>;
     const columnsByTable = new Map<string, Set<string>>();
     for (const row of columnRows) {
       const set = columnsByTable.get(String(row.table_name)) ?? new Set<string>();
-      set.add(String(row.column_name));
-      columnsByTable.set(String(row.table_name), set);
+      set.add(String(row.column_name)); columnsByTable.set(String(row.table_name), set);
     }
     const missingSchema: string[] = [];
     for (const table of criticalTables) {
-      if (!tableSet.has(table)) {
-        missingSchema.push(`${table} (tabla)`);
-        continue;
-      }
-      for (const column of requiredColumns[table]) {
-        if (!columnsByTable.get(table)?.has(column)) missingSchema.push(`${table}.${column}`);
-      }
+      if (!tableSet.has(table)) { missingSchema.push(`${table} (tabla)`); continue; }
+      for (const column of requiredColumns[table]) if (!columnsByTable.get(table)?.has(column)) missingSchema.push(`${table}.${column}`);
     }
-
-    checks.push({
-      name: "Tablas críticas",
-      status: missingSchema.length === 0 ? "ok" : "error",
-      value: missingSchema.length === 0 ? "5/5 + columnas" : "ESQUEMA INCOMPLETO",
-      detail: missingSchema.length === 0
-        ? "Existen las 5 tablas críticas y las columnas mínimas que necesita el diagnóstico."
-        : `Faltan: ${missingSchema.join(", ")}.`,
-    });
+    checks.push({ name: "Tablas críticas", status: missingSchema.length === 0 ? "ok" : "error", value: missingSchema.length === 0 ? "5/5 + columnas" : "ESQUEMA INCOMPLETO", detail: missingSchema.length === 0 ? "Existen las 5 tablas críticas y las columnas mínimas que necesita el diagnóstico." : `Faltan: ${missingSchema.join(", ")}.` });
 
     const errorRows = (await db.execute(sql`
-      SELECT
-        COUNT(*) FILTER (WHERE event_name = 'api_error')::int AS api_errors,
-        COUNT(*) FILTER (WHERE event_name = 'client_error')::int AS client_errors
-      FROM analytics_events
-      WHERE trusted = TRUE
-        AND event_name IN ('api_error', 'client_error')
+      SELECT COUNT(*) FILTER (WHERE event_name = 'api_error')::int AS api_errors,
+             COUNT(*) FILTER (WHERE event_name = 'client_error')::int AS client_errors
+      FROM public.analytics_events
+      WHERE trusted = TRUE AND event_name IN ('api_error', 'client_error')
         AND created_at >= NOW() - INTERVAL '15 minutes'
     `)).rows[0] as { api_errors?: number; client_errors?: number } | undefined;
+    const apiErrors = Number(errorRows?.api_errors ?? 0), clientErrors = Number(errorRows?.client_errors ?? 0), totalErrors = apiErrors + clientErrors;
+    checks.push({ name: "Errores recientes", status: totalErrors === 0 ? "ok" : totalErrors <= 5 ? "warn" : "error", value: String(totalErrors), detail: totalErrors === 0 ? "No hay errores registrados en los últimos 15 minutos." : `${apiErrors} API + ${clientErrors} cliente en los últimos 15 minutos.` });
 
-    const apiErrors = Number(errorRows?.api_errors ?? 0);
-    const clientErrors = Number(errorRows?.client_errors ?? 0);
-    const totalErrors = apiErrors + clientErrors;
-
-    checks.push({
-      name: "Errores recientes",
-      status: totalErrors === 0 ? "ok" : totalErrors <= 5 ? "warn" : "error",
-      value: String(totalErrors),
-      detail: totalErrors === 0
-        ? "No hay errores registrados en los últimos 15 minutos."
-        : `${apiErrors} API + ${clientErrors} cliente en los últimos 15 minutos.`,
-    });
-
-    // ── Evidencia real de juego ───────────────────────────────────────────
-    // Estas comprobaciones no declaran "verde" por el mero hecho de que Node
-    // responda: necesitan evidencia reciente del flujo real de partida.
     const gameplayRows = (await db.execute(sql`
       SELECT
         COUNT(DISTINCT session_id) FILTER (WHERE event_name = 'game_start')::int AS starts,
         COUNT(DISTINCT s.session_id) FILTER (
           WHERE s.event_name = 'game_start'
             AND EXISTS (
-              SELECT 1
-              FROM analytics_events c
-              WHERE c.trusted = TRUE
-                AND c.event_name = 'game_complete'
-                AND c.created_at >= s.created_at
-                AND c.created_at <= s.created_at + INTERVAL '30 minutes'
+              SELECT 1 FROM public.analytics_events c
+              WHERE c.trusted = TRUE AND c.event_name = 'game_complete'
+                AND c.created_at >= s.created_at AND c.created_at <= s.created_at + INTERVAL '30 minutes'
                 AND (
                   c.session_id = s.session_id
                   OR (
-                    c.session_id IS NULL
-                    AND c.player_id IS NOT NULL
-                    AND c.player_id = s.player_id
-                    AND c.metadata_json ILIKE '%server_score_submission%'
+                    c.session_id IS NULL AND c.player_id IS NOT NULL AND c.player_id = s.player_id
+                    AND COALESCE(c.metadata_json::text, '') ILIKE '%server_score_submission%'
                   )
                 )
             )
         )::int AS completes,
         COUNT(*) FILTER (WHERE event_name = 'client_error')::int AS client_errors,
         COUNT(*) FILTER (WHERE event_name = 'api_error')::int AS api_errors,
-        COUNT(*) FILTER (
-          WHERE event_name = 'client_error'
-            AND metadata_json ILIKE '%Failed to fetch dynamically imported module%'
-        )::int AS chunk_errors,
-        COUNT(*) FILTER (
-          WHERE event_name = 'client_error'
-            AND metadata_json ILIKE '%Loading chunk%'
-        )::int AS loading_chunk_errors
-      FROM analytics_events
-      WHERE trusted = TRUE
-        AND created_at >= NOW() - INTERVAL '2 hours'
-    `)).rows[0] as {
-      starts?: number;
-      completes?: number;
-      client_errors?: number;
-      api_errors?: number;
-      chunk_errors?: number;
-      loading_chunk_errors?: number;
-    } | undefined;
+        COUNT(*) FILTER (WHERE event_name = 'client_error' AND COALESCE(metadata_json::text, '') ILIKE '%Failed to fetch dynamically imported module%')::int AS chunk_errors,
+        COUNT(*) FILTER (WHERE event_name = 'client_error' AND COALESCE(metadata_json::text, '') ILIKE '%Loading chunk%')::int AS loading_chunk_errors
+      FROM public.analytics_events
+      WHERE trusted = TRUE AND created_at >= NOW() - INTERVAL '2 hours'
+    `)).rows[0] as { starts?: number; completes?: number; client_errors?: number; api_errors?: number; chunk_errors?: number; loading_chunk_errors?: number } | undefined;
 
-    const recentStarts = Number(gameplayRows?.starts ?? 0);
-    const recentCompletes = Number(gameplayRows?.completes ?? 0);
+    const recentStarts = Number(gameplayRows?.starts ?? 0), recentCompletes = Number(gameplayRows?.completes ?? 0);
     const recentChunkErrors = Number(gameplayRows?.chunk_errors ?? 0) + Number(gameplayRows?.loading_chunk_errors ?? 0);
     const completionRate = recentStarts > 0 ? Math.round((recentCompletes / recentStarts) * 100) : 0;
-
-    checks.push({
-      name: "Flujo real de partida",
-      status: recentStarts < 5
-        ? "warn"
-        : completionRate < 50
-          ? "error"
-          : completionRate < 80
-            ? "warn"
-            : "ok",
-      value: recentStarts < 5 ? `${recentStarts} sesiones con inicio` : `${completionRate}% inicio → resultado`,
-      detail: recentStarts < 5
-        ? "No hay suficiente actividad reciente para declarar el flujo sano; se necesitan al menos 5 sesiones con inicio en las últimas 2 horas."
-        : `${recentStarts} sesiones con inicio y ${recentCompletes} sesiones con resultado en las últimas 2 horas.`,
-    });
-
-    checks.push({
-      name: "Carga de módulos / chunks",
-      status: recentChunkErrors === 0 ? "ok" : "error",
-      value: String(recentChunkErrors),
-      detail: recentChunkErrors === 0
-        ? "No se han detectado fallos de carga dinámica de módulos en las últimas 2 horas."
-        : `${recentChunkErrors} fallo(s) de carga dinámica detectado(s); esto sí se considera una incidencia de experiencia real.`,
-    });
+    checks.push({ name: "Flujo real de partida", status: recentStarts < 5 ? "warn" : completionRate < 50 ? "error" : completionRate < 80 ? "warn" : "ok", value: recentStarts < 5 ? `${recentStarts} sesiones con inicio` : `${completionRate}% inicio → resultado`, detail: recentStarts < 5 ? "No hay suficiente actividad reciente para declarar el flujo sano; se necesitan al menos 5 sesiones con inicio en las últimas 2 horas." : `${recentStarts} sesiones con inicio y ${recentCompletes} sesiones con resultado en las últimas 2 horas.` });
+    checks.push({ name: "Carga de módulos / chunks", status: recentChunkErrors === 0 ? "ok" : "error", value: String(recentChunkErrors), detail: recentChunkErrors === 0 ? "No se han detectado fallos de carga dinámica de módulos en las últimas 2 horas." : `${recentChunkErrors} fallo(s) de carga dinámica detectado(s); esto sí se considera una incidencia de experiencia real.` });
 
     const telemetryRows = (await db.execute(sql`
-      SELECT
-        COUNT(DISTINCT session_id)::int AS starts,
-        COUNT(DISTINCT session_id)
-          FILTER (WHERE app_version IS NOT NULL AND app_version <> '')::int AS with_version,
-        COUNT(DISTINCT session_id)
-          FILTER (WHERE platform IN ('web','android','ios'))::int AS with_platform
-      FROM analytics_events
-      WHERE trusted = TRUE
-        AND event_name = 'game_start'
-        AND created_at >= NOW() - INTERVAL '2 hours'
+      SELECT COUNT(DISTINCT session_id)::int AS starts,
+             COUNT(DISTINCT session_id) FILTER (WHERE app_version IS NOT NULL AND app_version <> '')::int AS with_version,
+             COUNT(DISTINCT session_id) FILTER (WHERE platform IN ('web','android','ios'))::int AS with_platform
+      FROM public.analytics_events
+      WHERE trusted = TRUE AND event_name = 'game_start' AND created_at >= NOW() - INTERVAL '2 hours'
     `)).rows[0] as { starts?: number; with_version?: number; with_platform?: number } | undefined;
     const telemetryStarts = Number(telemetryRows?.starts ?? 0);
     const versionCoverage = telemetryStarts > 0 ? Math.round((Number(telemetryRows?.with_version ?? 0) / telemetryStarts) * 100) : 0;
     const platformCoverage = telemetryStarts > 0 ? Math.round((Number(telemetryRows?.with_platform ?? 0) / telemetryStarts) * 100) : 0;
-
-    checks.push({
-      name: "Telemetría del juego",
-      status: telemetryStarts < 5
-        ? "warn"
-        : versionCoverage < 90 || platformCoverage < 90
-          ? "warn"
-          : "ok",
-      value: telemetryStarts < 5 ? `${telemetryStarts} inicios observados` : `${versionCoverage}% versión · ${platformCoverage}% plataforma`,
-      detail: telemetryStarts < 5
-        ? "Todavía no hay suficiente tráfico reciente para validar la cobertura de telemetría."
-        : "La cobertura se mide sobre partidas reales de las últimas 2 horas, no sobre el histórico.",
-    });
+    checks.push({ name: "Telemetría del juego", status: telemetryStarts < 5 ? "warn" : versionCoverage < 90 || platformCoverage < 90 ? "warn" : "ok", value: telemetryStarts < 5 ? `${telemetryStarts} inicios observados` : `${versionCoverage}% versión · ${platformCoverage}% plataforma`, detail: telemetryStarts < 5 ? "Todavía no hay suficiente tráfico reciente para validar la cobertura de telemetría." : "La cobertura se mide sobre partidas reales de las últimas 2 horas, no sobre el histórico." });
 
     const rewardRows = (await db.execute(sql`
-      SELECT
-        COUNT(*) FILTER (WHERE event_name = 'rewarded_ad_requested')::int AS requested,
-        COUNT(*) FILTER (WHERE event_name = 'rewarded_ad_failed')::int AS failed,
-        COUNT(*) FILTER (WHERE event_name = 'rewarded_ad_completed')::int AS completed
-      FROM analytics_events
-      WHERE trusted = TRUE
-        AND created_at >= NOW() - INTERVAL '24 hours'
+      SELECT COUNT(*) FILTER (WHERE event_name = 'rewarded_ad_requested')::int AS requested,
+             COUNT(*) FILTER (WHERE event_name = 'rewarded_ad_failed')::int AS failed,
+             COUNT(*) FILTER (WHERE event_name = 'rewarded_ad_completed')::int AS completed
+      FROM public.analytics_events
+      WHERE trusted = TRUE AND created_at >= NOW() - INTERVAL '24 hours'
         AND event_name IN ('rewarded_ad_requested','rewarded_ad_failed','rewarded_ad_completed')
     `)).rows[0] as { requested?: number; failed?: number; completed?: number } | undefined;
-    const rewardedRequested = Number(rewardRows?.requested ?? 0);
-    const rewardedFailed = Number(rewardRows?.failed ?? 0);
-    const rewardedCompleted = Number(rewardRows?.completed ?? 0);
+    const rewardedRequested = Number(rewardRows?.requested ?? 0), rewardedFailed = Number(rewardRows?.failed ?? 0), rewardedCompleted = Number(rewardRows?.completed ?? 0);
     const rewardedFailureRate = rewardedRequested > 0 ? Math.round((rewardedFailed / rewardedRequested) * 100) : 0;
-
-    checks.push({
-      name: "Publicidad recompensada",
-      status: rewardedRequested < 5 ? "ok" : rewardedFailureRate > 50 ? "warn" : "ok",
-      value: rewardedRequested === 0 ? "SIN SOLICITUDES" : `${rewardedCompleted}/${rewardedRequested} completados`,
-      detail: rewardedRequested < 5
-        ? "No hay suficientes solicitudes recientes para evaluar la tasa de fallo."
-        : `${rewardedFailed} fallos de ${rewardedRequested} solicitudes en las últimas 24 horas (${rewardedFailureRate}%).`,
-    });
+    checks.push({ name: "Publicidad recompensada", status: rewardedRequested < 5 ? "ok" : rewardedFailureRate > 50 ? "warn" : "ok", value: rewardedRequested === 0 ? "SIN SOLICITUDES" : `${rewardedCompleted}/${rewardedRequested} completados`, detail: rewardedRequested < 5 ? "No hay suficientes solicitudes recientes para evaluar la tasa de fallo." : `${rewardedFailed} fallos de ${rewardedRequested} solicitudes en las últimas 24 horas (${rewardedFailureRate}%).` });
 
     const stuckRows = (await db.execute(sql`
       SELECT COUNT(DISTINCT s.session_id)::int AS stuck
-      FROM analytics_events s
-      WHERE s.trusted = TRUE
-        AND s.event_name = 'game_start'
+      FROM public.analytics_events s
+      WHERE s.trusted = TRUE AND s.event_name = 'game_start'
         AND s.created_at BETWEEN NOW() - INTERVAL '60 minutes' AND NOW() - INTERVAL '15 minutes'
         AND NOT EXISTS (
-          SELECT 1
-          FROM analytics_events c
-          WHERE c.trusted = TRUE
-            AND c.event_name = 'game_complete'
-            AND c.created_at >= s.created_at
-            AND c.created_at <= s.created_at + INTERVAL '30 minutes'
+          SELECT 1 FROM public.analytics_events c
+          WHERE c.trusted = TRUE AND c.event_name = 'game_complete'
+            AND c.created_at >= s.created_at AND c.created_at <= s.created_at + INTERVAL '30 minutes'
             AND (
               c.session_id = s.session_id
               OR (
-                c.session_id IS NULL
-                AND c.player_id IS NOT NULL
-                AND c.player_id = s.player_id
-                AND c.metadata_json ILIKE '%server_score_submission%'
+                c.session_id IS NULL AND c.player_id IS NOT NULL AND c.player_id = s.player_id
+                AND COALESCE(c.metadata_json::text, '') ILIKE '%server_score_submission%'
               )
             )
         )
     `)).rows[0] as { stuck?: number } | undefined;
     const stuckStarts = Number(stuckRows?.stuck ?? 0);
+    checks.push({ name: "Partidas potencialmente atascadas", status: stuckStarts === 0 ? "ok" : stuckStarts <= 2 ? "warn" : "error", value: String(stuckStarts), detail: stuckStarts === 0 ? "No se observan sesiones antiguas con inicio sin finalización posterior en la ventana comprobable." : `${stuckStarts} sesión(es) con inicio no tienen un final posterior dentro de 30 minutos; investigar antes de asumir fallo definitivo.` });
 
-    checks.push({
-      name: "Partidas potencialmente atascadas",
-      status: stuckStarts === 0 ? "ok" : stuckStarts <= 2 ? "warn" : "error",
-      value: String(stuckStarts),
-      detail: stuckStarts === 0
-        ? "No se observan sesiones antiguas con inicio sin finalización posterior en la ventana comprobable."
-        : `${stuckStarts} sesión(es) con inicio no tienen un final posterior dentro de 30 minutos; investigar antes de asumir fallo definitivo.`,
-    });
-
-    const activeRows = (await db.execute(sql`
-      SELECT COUNT(*)::int AS active
-      FROM analytics_sessions
-      WHERE last_seen >= NOW() - INTERVAL '90 seconds'
-    `)).rows[0] as { active?: number } | undefined;
+    const activeRows = (await db.execute(sql`SELECT COUNT(*)::int AS active FROM public.analytics_sessions WHERE last_seen >= NOW() - INTERVAL '90 seconds'`)).rows[0] as { active?: number } | undefined;
     const active = Number(activeRows?.active ?? 0);
-
-    const eventRows = (await db.execute(sql`
-      SELECT COUNT(*)::int AS events
-      FROM analytics_events
-      WHERE trusted = TRUE
-        AND created_at >= NOW() - INTERVAL '15 minutes'
-    `)).rows[0] as { events?: number } | undefined;
+    const eventRows = (await db.execute(sql`SELECT COUNT(*)::int AS events FROM public.analytics_events WHERE trusted = TRUE AND created_at >= NOW() - INTERVAL '15 minutes'`)).rows[0] as { events?: number } | undefined;
     const recentEvents = Number(eventRows?.events ?? 0);
+    checks.push({ name: "Monitorización", status: active > 0 ? "ok" : recentEvents > 0 ? "warn" : "ok", value: active > 0 ? `${active} sesiones` : recentEvents > 0 ? "TRÁFICO SIN PRESENCIA" : "SIN TRÁFICO", detail: active > 0 ? `${active} sesiones activas en los últimos 90 segundos; ${recentEvents} eventos fiables en 15 minutos.` : recentEvents > 0 ? `Hay ${recentEvents} eventos fiables recientes, pero ninguna sesión con presencia en los últimos 90 segundos; revisar si el heartbeat/presencia está llegando.` : "No hay sesiones activas ni eventos fiables recientes; no se considera por sí solo un fallo del juego." });
 
-    const monitorStatus = active > 0 ? "ok" : recentEvents > 0 ? "warn" : "ok";
-    const monitorValue = active > 0 ? `${active} sesiones` : recentEvents > 0 ? "TRÁFICO SIN PRESENCIA" : "SIN TRÁFICO";
-    const monitorDetail = active > 0
-      ? `${active} sesiones activas en los últimos 90 segundos; ${recentEvents} eventos fiables en 15 minutos.`
-      : recentEvents > 0
-        ? `Hay ${recentEvents} eventos fiables recientes, pero ninguna sesión con presencia en los últimos 90 segundos; revisar si el heartbeat/presencia está llegando.`
-        : "No hay sesiones activas ni eventos fiables recientes; no se considera por sí solo un fallo del juego.";
-
-    checks.push({
-      name: "Monitorización",
-      status: monitorStatus,
-      value: monitorValue,
-      detail: monitorDetail,
-    });
-
-    const memory = process.memoryUsage();
-    const heapLimit = getHeapStatistics().heap_size_limit;
+    const memory = process.memoryUsage(), heapLimit = getHeapStatistics().heap_size_limit;
     const heapUsedPct = Math.round((memory.heapUsed / Math.max(heapLimit, 1)) * 100);
-    checks.push({
-      name: "Memoria del proceso",
-      status: heapUsedPct < 80 ? "ok" : heapUsedPct < 92 ? "warn" : "error",
-      value: `${heapUsedPct}% heap`,
-      detail: `${Math.round(memory.heapUsed / 1024 / 1024)} MB usados de un límite V8 de ${Math.round(heapLimit / 1024 / 1024)} MB.`,
-    });
-
+    checks.push({ name: "Memoria del proceso", status: heapUsedPct < 80 ? "ok" : heapUsedPct < 92 ? "warn" : "error", value: `${heapUsedPct}% heap`, detail: `${Math.round(memory.heapUsed / 1024 / 1024)} MB usados de un límite V8 de ${Math.round(heapLimit / 1024 / 1024)} MB.` });
     const uptimeHours = process.uptime() / 3600;
-    checks.push({
-      name: "Proceso",
-      status: "ok",
-      value: `${uptimeHours.toFixed(1)} h`,
-      detail: "Proceso Node.js activo y respondiendo a esta comprobación.",
-    });
+    checks.push({ name: "Proceso", status: "ok", value: `${uptimeHours.toFixed(1)} h`, detail: "Proceso Node.js activo y respondiendo a esta comprobación." });
 
-    const overall = checks.some((c) => c.status === "error")
-      ? "error"
-      : checks.some((c) => c.status === "warn")
-        ? "warn"
-        : "ok";
+    const overall = checks.some((c) => c.status === "error") ? "error" : checks.some((c) => c.status === "warn") ? "warn" : "ok";
+    const overallText = overall === "ok" ? "JUEGO SANO" : overall === "warn" ? "ATENCIÓN" : "PROBLEMA";
+    const checkRows = checks.map((check) => `<tr><td>${badge(check.status)} <strong>${esc(check.name)}</strong></td><td><span class="pill ${check.status}">${statusLabel(check.status)}</span></td><td>${esc(check.value)}</td><td>${esc(check.detail)}</td></tr>`).join("");
+    const now = new Date().toLocaleString("es-ES", { timeZone: "Europe/Madrid" }), elapsed = Date.now() - started;
 
-    const overallText = overall === "ok"
-      ? "JUEGO SANO"
-      : overall === "warn"
-        ? "ATENCIÓN"
-        : "PROBLEMA";
-
-    const checkRows = checks.map((check) => `
-      <tr>
-        <td>${badge(check.status)} <strong>${esc(check.name)}</strong></td>
-        <td><span class="pill ${check.status}">${statusLabel(check.status)}</span></td>
-        <td>${esc(check.value)}</td>
-        <td>${esc(check.detail)}</td>
-      </tr>
-    `).join("");
-
-    const now = new Date().toLocaleString("es-ES", { timeZone: "Europe/Madrid" });
-    const elapsed = Date.now() - started;
-
-    res.status(200).type("html").send(`<!doctype html>
-<html lang="es">
-<head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
-<meta name="robots" content="noindex,nofollow"/>
-<meta http-equiv="refresh" content="30"/>
-<title>STOP · Salud operativa</title>
-<style>
-:root{color-scheme:dark}*{box-sizing:border-box}
-body{margin:0;background:#0f1216;color:#e8edf2;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;padding:18px}
-.wrap{max-width:1100px;margin:auto}.sub{color:#8a98a8;font-size:.85rem}
-.hero{border:1px solid #283140;border-radius:16px;padding:20px;margin:16px 0;background:#1a2029}
-.hero.ok{border-color:#2c6b45}.hero.warn{border-color:#80651f}.hero.error{border-color:#7f2d2d}
-.hero h1{margin:0 0 6px;font-size:1.5rem}.hero .state{font-size:1.8rem;font-weight:800}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:16px 0}
-.card{background:#1a2029;border:1px solid #283140;border-radius:14px;padding:15px}.label{color:#8a98a8;font-size:.75rem;text-transform:uppercase}.value{font-size:1.7rem;font-weight:700;margin-top:4px}
-table{width:100%;border-collapse:collapse;background:#1a2029;border-radius:14px;overflow:hidden;font-size:.88rem}
-th,td{padding:11px 12px;border-bottom:1px solid #232b36;text-align:left;vertical-align:top}
-th{background:#222a35;color:#9fb0c2;font-size:.75rem;text-transform:uppercase}
-tr:last-child td{border-bottom:0}.pill{display:inline-block;border-radius:999px;padding:3px 8px;font-size:.72rem;font-weight:700}.pill.ok{background:#123d26;color:#6ee7a0}.pill.warn{background:#4a3910;color:#f4cf65}.pill.error{background:#4a1717;color:#ff8c8c}
-.btn{display:inline-block;margin:14px 8px 0 0;padding:8px 13px;border:1px solid #2c6b45;border-radius:8px;color:#6ee7a0;text-decoration:none}
-.foot{margin-top:16px;color:#5f6c7b;font-size:.76rem}
-@media(max-width:700px){body{padding:10px}table{font-size:.78rem}th,td{padding:9px 7px}.grid{grid-template-columns:1fr 1fr}}
-</style>
-</head>
-<body><div class="wrap">
-<div class="sub">STOP · Centro de operaciones · actualización automática cada 30 s</div>
-<div class="hero ${overall}">
-  <h1>🛡️ Salud operativa</h1>
-  <div class="state">${overall === "ok" ? "🟢" : overall === "warn" ? "🟡" : "🔴"} ${overallText}</div>
-  <div class="sub">Comprobado: ${esc(now)} · respuesta del diagnóstico: ${elapsed} ms</div>
-</div>
-
-<div class="grid">
-  <div class="card"><div class="label">Sesiones activas</div><div class="value">${active}</div></div>
-  <div class="card"><div class="label">Errores · 15 min</div><div class="value">${totalErrors}</div></div>
-  <div class="card"><div class="label">Eventos · 15 min</div><div class="value">${recentEvents}</div></div>
-  <div class="card"><div class="label">Uptime proceso</div><div class="value">${uptimeHours.toFixed(1)} h</div></div>
-</div>
-
-<table>
-<thead><tr><th>Control</th><th>Estado</th><th>Valor</th><th>Qué significa</th></tr></thead>
-<tbody>${checkRows}</tbody>
-</table>
-
-<a class="btn" href="/test">← Panel completo</a>
-<a class="btn" href="/test/health">🔄 Comprobar ahora</a>
-<div class="foot">Panel privado. No compartas la URL ni las credenciales.</div>
-</div></body></html>`);
+    res.status(200).type("html").send(`<!doctype html><html lang="es"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><meta name="robots" content="noindex,nofollow"/><meta http-equiv="refresh" content="30"/><title>STOP · Salud operativa</title><style>:root{color-scheme:dark}*{box-sizing:border-box}body{margin:0;background:#0f1216;color:#e8edf2;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;padding:18px}.wrap{max-width:1100px;margin:auto}.sub{color:#8a98a8;font-size:.85rem}.hero{border:1px solid #283140;border-radius:16px;padding:20px;margin:16px 0;background:#1a2029}.hero.ok{border-color:#2c6b45}.hero.warn{border-color:#80651f}.hero.error{border-color:#7f2d2d}.hero h1{margin:0 0 6px;font-size:1.5rem}.hero .state{font-size:1.8rem;font-weight:800}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:16px 0}.card{background:#1a2029;border:1px solid #283140;border-radius:14px;padding:15px}.label{color:#8a98a8;font-size:.75rem;text-transform:uppercase}.value{font-size:1.7rem;font-weight:700;margin-top:4px}table{width:100%;border-collapse:collapse;background:#1a2029;border-radius:14px;overflow:hidden;font-size:.88rem}th,td{padding:11px 12px;border-bottom:1px solid #232b36;text-align:left;vertical-align:top}th{background:#222a35;color:#9fb0c2;font-size:.75rem;text-transform:uppercase}tr:last-child td{border-bottom:0}.pill{display:inline-block;border-radius:999px;padding:3px 8px;font-size:.72rem;font-weight:700}.pill.ok{background:#123d26;color:#6ee7a0}.pill.warn{background:#4a3910;color:#f4cf65}.pill.error{background:#4a1717;color:#ff8c8c}.btn{display:inline-block;margin:14px 8px 0 0;padding:8px 13px;border:1px solid #2c6b45;border-radius:8px;color:#6ee7a0;text-decoration:none}.foot{margin-top:16px;color:#5f6c7b;font-size:.76rem}@media(max-width:700px){body{padding:10px}table{font-size:.78rem}th,td{padding:9px 7px}.grid{grid-template-columns:1fr 1fr}}</style></head><body><div class="wrap"><div class="sub">STOP · Centro de operaciones · actualización automática cada 30 s</div><div class="hero ${overall}"><h1>🛡️ Salud operativa</h1><div class="state">${overall === "ok" ? "🟢" : overall === "warn" ? "🟡" : "🔴"} ${overallText}</div><div class="sub">Comprobado: ${esc(now)} · respuesta del diagnóstico: ${elapsed} ms</div></div><div class="grid"><div class="card"><div class="label">Sesiones activas</div><div class="value">${active}</div></div><div class="card"><div class="label">Errores · 15 min</div><div class="value">${totalErrors}</div></div><div class="card"><div class="label">Eventos · 15 min</div><div class="value">${recentEvents}</div></div><div class="card"><div class="label">Uptime proceso</div><div class="value">${uptimeHours.toFixed(1)} h</div></div></div><table><thead><tr><th>Control</th><th>Estado</th><th>Valor</th><th>Qué significa</th></tr></thead><tbody>${checkRows}</tbody></table><a class="btn" href="/test">← Panel completo</a><a class="btn" href="/test/health">🔄 Comprobar ahora</a><div class="foot">Panel privado. No compartas la URL ni las credenciales.</div></div></body></html>`);
   } catch (err: any) {
     console.error("[admin health] error:", err?.message ?? err);
     res.status(500).type("html").send("<h1>🔴 Error del diagnóstico</h1><p>No se pudo completar la comprobación de salud.</p><a href=\"/test\">Volver al panel</a>");
