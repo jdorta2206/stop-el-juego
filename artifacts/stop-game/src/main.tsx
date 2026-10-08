@@ -13,19 +13,23 @@ import { captureInstalledAppVersion, getInstalledAppVersion, getAnalyticsClientV
 initTwaAdBridge();
 captureInstalledAppVersion();
 
-// Recover once from a stale dynamic-import chunk after a deployment.
-// This is deliberately one-shot so a genuinely missing asset cannot cause a reload loop.
-const CHUNK_RECOVERY_KEY = "stop_chunk_recovery_once";
-window.addEventListener("error", (event) => {
-  const message = String(event?.message || "");
-  if (!message.includes("Failed to fetch dynamically imported module")) return;
+// Recover once per deployed app version from a stale dynamic-import chunk.
+// Vite emits vite:preloadError for failed dynamic imports; the generic error
+// event alone is not sufficient for all browsers because import() failures can
+// surface as rejected promises. The version-scoped guard prevents reload loops
+// while allowing the next deployment to recover again in the same tab.
+const CHUNK_RECOVERY_KEY = `stop_chunk_recovery_once_${getAnalyticsClientVersion() || "unknown"}`;
+let chunkRecoveryStarted = false;
+function recoverFromChunkError(): void {
+  if (chunkRecoveryStarted) return;
   try {
     if (sessionStorage.getItem(CHUNK_RECOVERY_KEY) === "1") return;
     sessionStorage.setItem(CHUNK_RECOVERY_KEY, "1");
+    chunkRecoveryStarted = true;
 
     // A deployment can leave an older service worker controlling the page
     // while the server has already removed the hashed chunk it cached.
-    // Unregister that controller and clear only the static asset caches before
+    // Unregister that controller and clear only static asset caches before
     // retrying. Keep DATA_CACHE intact so offline game data is not destroyed.
     void (async () => {
       try {
@@ -51,6 +55,17 @@ window.addEventListener("error", (event) => {
   } catch {
     // Recovery must never interfere with gameplay.
   }
+}
+
+window.addEventListener("vite:preloadError", (event) => {
+  event.preventDefault();
+  recoverFromChunkError();
+});
+
+window.addEventListener("error", (event) => {
+  const message = String(event?.message || "");
+  if (!message.includes("Failed to fetch dynamically imported module")) return;
+  recoverFromChunkError();
 });
 
 async function startAnalyticsHeartbeat() {
