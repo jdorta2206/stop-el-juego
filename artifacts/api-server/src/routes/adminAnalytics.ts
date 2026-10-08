@@ -254,7 +254,7 @@ a{color:#4ade80;text-decoration:none}
       <div class="kpiBox"><div class="label">Rewarded fallidos</div><div class="kpi">${rewardedFailures}</div></div>
     </div>
     <table><thead><tr><th>Jugador</th><th>Evento</th><th>Plataforma</th><th>Eventos</th><th>Último</th></tr></thead><tbody>${adViewerRows || '<tr><td colspan="5">No hay eventos de publicidad.</td></tr>'}</tbody></table></div>
-    <div class="card"><h2>Plataformas · hoy</h2><table><thead><tr><th>Plataforma</th><th>Ahora</th><th>Sesiones</th><th>Partidas iniciadas · jugador</th><th>Partidas terminadas · resultado real</th><th>Impresiones publicidad</th></tr></thead><tbody>${platformRows}</tbody></table></div>
+    <div class="card"><h2>Plataformas · hoy</h2><table><thead><tr><th>Plataforma</th><th>Ahora</th><th>Sesiones</th><th>Jugadores que iniciaron</th><th>Resultados terminados</th><th>Impresiones publicidad</th></tr></thead><tbody>${platformRows}</tbody></table></div>
     <div class="card"><h2>Conexiones por método · hoy</h2><table><thead><tr><th>Método</th><th>Ahora</th><th>Sesiones</th></tr></thead><tbody>${loginRows || '<tr><td colspan="3">Todavía no hay conexiones identificadas.</td></tr>'}</tbody></table></div>
     <div class="card"><h2>Uso del juego y publicidad · últimos 7 días</h2><table><thead><tr><th>Métrica</th><th>Total</th></tr></thead><tbody>${powerupRows || '<tr><td colspan="2">Todavía no hay datos.</td></tr>'}</tbody></table></div>
     <div class="card"><h2>Eventos · últimos 7 días</h2><table><thead><tr><th>Evento</th><th>Total</th></tr></thead><tbody>${eventRows || '<tr><td colspan="2">Todavía no hay eventos.</td></tr>'}</tbody></table></div>
