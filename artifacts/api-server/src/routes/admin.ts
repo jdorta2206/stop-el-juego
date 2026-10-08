@@ -394,6 +394,7 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
       { label: "Usuarios con solicitud", value: num(adUnique?.requested) },
       { label: "Usuarios con completado", value: num(adUnique?.completed) },
       { label: "Usuarios con fallo", value: num(adUnique?.failed) },
+      { label: "Usuarios con impresión", value: num(adUnique?.impressions) },
     ];
 
     const platformVersionRows = platformVersions.map((row) => {
