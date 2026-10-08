@@ -119,9 +119,14 @@ async function latestPlatformForPlayer(playerId: string | null | undefined): Pro
   return platform === "android" || platform === "ios" || platform === "web" ? platform : null;
 }
 
+export function getAnalyticsSessionId(req: Request, res: any): string {
+  return serverSessionId(req, res);
+}
+
 export async function recordTrustedAnalyticsEvent(input: {
   eventName: string;
   playerId?: string | null;
+  sessionId?: string | null;
   platform?: "web" | "android" | "ios";
   appVersion?: string | null;
   language?: string | null;
@@ -133,9 +138,9 @@ export async function recordTrustedAnalyticsEvent(input: {
   const metadataJson = JSON.stringify(input.metadata ?? {}).slice(0, 4000);
   await db.execute(sql`
     INSERT INTO public.analytics_events
-      (event_name, player_id, platform, app_version, language, mode, metadata_json, trusted)
+      (event_name, player_id, session_id, platform, app_version, language, mode, metadata_json, trusted)
     VALUES
-      (${input.eventName}, ${input.playerId ?? null}, ${resolvedPlatform ?? "web"},
+      (${input.eventName}, ${input.playerId ?? null}, ${input.sessionId ?? null}, ${resolvedPlatform ?? "web"},
        ${input.appVersion ?? null}, ${input.language ?? null}, ${input.mode ?? null},
        ${metadataJson}, TRUE)
   `);
