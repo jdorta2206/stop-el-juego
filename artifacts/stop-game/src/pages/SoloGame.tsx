@@ -572,7 +572,10 @@ export default function SoloGame() {
     halloweenAnswerScareRoundRef.current = null;
     setHalloweenScare(null);
     // A logical game starts only on a fresh game. Subsequent rounds use startGame(false).
-    if (newGame) trackTrustedGameStart({ mode: gameMode, language: getCurrentLang() });
+    if (newGame) {
+      gameCompleteTrackedRef.current = false;
+      trackTrustedGameStart({ mode: gameMode, language: getCurrentLang(), gameId: gameSubmissionIdRef.current });
+    }
     // Snapshot the tutorial state at the moment the player presses Play so
     // the rules of the round are stable until it ends.
     const tutorialNow = ftue.isInTutorial && !isDailyMode;
@@ -1107,6 +1110,13 @@ export default function SoloGame() {
           submitToLeaderboard(finalPlayerScore, finalAi);
           if (isDailyMode) submitDailyResult(finalPlayerScore);
         }
+        if (!gameCompleteTrackedRef.current) {
+          gameCompleteTrackedRef.current = true;
+          void trackAnalyticsEvent("game_complete", {
+            mode: gameMode,
+            metadata: { mode: gameMode, rounds: maxRounds, gameId: gameSubmissionIdRef.current },
+          });
+        }
         // Count the completed game when the final round actually finishes,
         // not when the player later presses "Jugar de nuevo". This preserves
         // the every-3-games cadence even if the player leaves the RESULTS screen.
@@ -1292,6 +1302,9 @@ export default function SoloGame() {
   // clicking "Jugar de nuevo" lost their score entirely. Guarded by a ref so
   // the submission fires exactly once per game.
   const submittedRef = useRef(false);
+  // Trusted completion is emitted when the final RESULTS state is reached,
+  // not when the player later presses "Jugar de nuevo".
+  const gameCompleteTrackedRef = useRef(false);
 
   const submitDailyResult = (finalScore: number) => {
     // Guests have no server daily result, so local storage is their completion
@@ -1327,7 +1340,6 @@ export default function SoloGame() {
 
   const nextRound = async () => {
     if (round >= maxRounds) {
-      void trackAnalyticsEvent("game_complete", { metadata: { mode: gameMode, rounds: maxRounds } });
       recordPlay();
       // Calculate XP with multipliers
       const validCount = results
