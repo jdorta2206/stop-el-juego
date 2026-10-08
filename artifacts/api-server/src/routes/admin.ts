@@ -204,10 +204,10 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
           COUNT(DISTINCT CASE WHEN s.last_seen >= (date_trunc('day', NOW() AT TIME ZONE 'Europe/Madrid') AT TIME ZONE 'Europe/Madrid') THEN COALESCE(s.player_id, s.session_id) END)::int AS dau,
           COUNT(DISTINCT CASE WHEN s.last_seen >= NOW() - INTERVAL '7 days' THEN COALESCE(s.player_id, s.session_id) END)::int AS wau,
           COUNT(DISTINCT CASE WHEN s.last_seen >= NOW() - INTERVAL '30 days' THEN COALESCE(s.player_id, s.session_id) END)::int AS mau,
-          COUNT(DISTINCT CASE WHEN s.started_at >= NOW() - INTERVAL '7 days' AND s.player_id IS NOT NULL THEN s.player_id END)::int AS account_active_7d,
-          COUNT(DISTINCT CASE WHEN s.started_at >= NOW() - INTERVAL '7 days' AND s.player_id IS NULL THEN s.session_id END)::int AS guest_active_7d
+          COUNT(DISTINCT CASE WHEN s.last_seen >= NOW() - INTERVAL '7 days' AND s.player_id IS NOT NULL THEN s.player_id END)::int AS account_active_7d,
+          COUNT(DISTINCT CASE WHEN s.last_seen >= NOW() - INTERVAL '7 days' AND s.player_id IS NULL THEN s.session_id END)::int AS guest_active_7d
         FROM analytics_sessions s
-        WHERE s.started_at >= NOW() - INTERVAL '30 days'
+        WHERE s.last_seen >= NOW() - INTERVAL '30 days'
       `)
     ).rows[0] as Record<string, unknown> | undefined;
 
