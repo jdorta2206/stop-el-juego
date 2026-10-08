@@ -47,6 +47,30 @@ export function trackTrustedGameStart(options?: { mode?: string; language?: stri
 
 export function trackAnalyticsEvent(eventName: string, options?: { mode?: string; aiDifficulty?: string; metadata?: Record<string, unknown> }): void {
   if (typeof window === "undefined") return;
+  if (eventName === "game_complete") {
+    try {
+      const appVersion = getAnalyticsClientVersion();
+      const token = (() => { try { return localStorage.getItem("stop_session_token") || sessionStorage.getItem("stop_session_token"); } catch { return null; } })();
+      void fetch(`${window.location.origin}/api/analytics/game-complete`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Client-Platform": platform(),
+          ...(isTwa() ? { "X-Client-TWA": "1" } : {}),
+          ...(appVersion ? { "X-Client-Version": appVersion } : {}),
+          ...(token ? { "X-Stop-Token": token } : {}),
+        },
+        body: JSON.stringify({
+          mode: options?.mode ?? null,
+          rounds: options?.metadata?.rounds ?? null,
+          language: document.documentElement.lang || null,
+        }),
+        credentials: "include",
+        keepalive: true,
+      }).catch(() => {});
+    } catch {}
+    return;
+  }
   try {
     let playerId: string | null = null;
     let loginMethod: string | null = null;
