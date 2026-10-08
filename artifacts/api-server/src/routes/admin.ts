@@ -281,9 +281,9 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
     const platformVersions = (
       await db.execute(sql`
         SELECT platform, COALESCE(app_version, '—') AS app_version,
-               COUNT(DISTINCT COALESCE(player_id, session_id)) FILTER (WHERE started_at >= NOW() - INTERVAL '7 days')::int AS active_7d
+               COUNT(DISTINCT COALESCE(player_id, session_id)) FILTER (WHERE last_seen >= NOW() - INTERVAL '7 days')::int AS active_7d
         FROM analytics_sessions
-        WHERE started_at >= NOW() - INTERVAL '7 days'
+        WHERE last_seen >= NOW() - INTERVAL '7 days'
         GROUP BY platform, app_version
         ORDER BY active_7d DESC, platform, app_version
         LIMIT 30
@@ -690,13 +690,13 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
 
   <h2>📅 Actividad real · últimos 14 días</h2>
   <table>
-    <thead><tr><th>Día</th><th>Activos</th><th>Inician partida</th><th>Terminan partida</th><th>Conversión</th></tr></thead>
+    <thead><tr><th>Día</th><th>Sesiones activas</th><th>Jugadores que inician</th><th>Jugadores que terminan</th><th>Conversión</th></tr></thead>
     <tbody>${activityRows || '<tr><td colspan="5">Sin eventos de actividad.</td></tr>'}</tbody>
   </table>
 
   <h2>📱 Versión y plataforma · últimos 7 días</h2>
   <table>
-    <thead><tr><th>Plataforma</th><th>Versión</th><th>Activos únicos</th></tr></thead>
+    <thead><tr><th>Plataforma</th><th>Versión</th><th>Jugadores activos únicos · 7 días</th></tr></thead>
     <tbody>${platformVersionRows || '<tr><td colspan="3">Sin datos.</td></tr>'}</tbody>
   </table>
 
