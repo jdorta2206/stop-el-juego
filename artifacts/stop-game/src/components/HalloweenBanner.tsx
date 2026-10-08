@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useT } from "@/i18n/useT";
-import { getHalloweenLabel, getHalloweenSubtitle, isHalloweenActive, isHalloweenUpcoming, getNextHalloweenStart, HALLOWEEN_END } from "@/lib/halloweenEvent";
+import { getHalloweenLabel, isHalloweenActive, isHalloweenUpcoming, getNextHalloweenStart, getHalloweenWindow } from "@/lib/halloweenEvent";
 
 function formatRemaining(ms: number, lang: string): string {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
@@ -17,20 +17,28 @@ export function HalloweenBanner({ className = "" }: { className?: string }) {
   const { lang } = useT();
   const active = isHalloweenActive();
   const upcoming = !active && isHalloweenUpcoming();
-  const [remaining, setRemaining] = useState(() => Math.max(0, new Date(HALLOWEEN_END).getTime() - Date.now()));
+  const nextStart = getNextHalloweenStart();
+  const eventEnd = getHalloweenWindow(nextStart.getUTCFullYear()).end;
+  const [remaining, setRemaining] = useState(() => Math.max(0, (active ? eventEnd : nextStart).getTime() - Date.now()));
 
   useEffect(() => {
-    if (!active) return;
-    const update = () => setRemaining(Math.max(0, new Date(HALLOWEEN_END).getTime() - Date.now()));
+    if (!active && !upcoming) return;
+    const update = () => {
+      const target = active ? getHalloweenWindow(new Date().getUTCFullYear()).end : getNextHalloweenStart();
+      setRemaining(Math.max(0, target.getTime() - Date.now()));
+    };
     update();
     const timer = window.setInterval(update, 60_000);
     return () => window.clearInterval(timer);
-  }, [active]);
+  }, [active, upcoming]);
 
   if (!active && !upcoming) return null;
-  const nextStart = getNextHalloweenStart();
   const nextDate = new Intl.DateTimeFormat(lang === "es" ? "es-ES" : lang === "fr" ? "fr-FR" : lang === "pt" ? "pt-PT" : "en-GB", { day: "numeric", month: "long" }).format(nextStart);
-  const upcomingText = lang === "es" ? "Evento especial · " + nextDate : lang === "fr" ? "Événement spécial · " + nextDate : lang === "pt" ? "Evento especial · " + nextDate : "Special event · " + nextDate;
+  const countdownText = formatRemaining(remaining, lang);
+  const upcomingText = lang === "es" ? "Comienza el " + nextDate + " · " + countdownText
+    : lang === "fr" ? "Commence le " + nextDate + " · " + countdownText
+    : lang === "pt" ? "Começa em " + nextDate + " · " + countdownText
+    : "Starts " + nextDate + " · " + countdownText;
 
   return (
     <div
