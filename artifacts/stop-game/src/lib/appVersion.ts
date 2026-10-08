@@ -85,6 +85,19 @@ export function captureInstalledAppVersion(): string | null {
     }
     return fresh;
   }
+
+  // Older builds used to persist a guessed version just because the URL had
+  // source=googleplay-twa. Remove that stale guess; otherwise it can make an
+  // actually unknown/old installation look up to date forever.
+  try {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("source") === "googleplay-twa" || params.get("source") === "twa") {
+      localStorage.removeItem(STORAGE_KEY);
+      return null;
+    }
+  } catch {
+    // Storage and URL access are best-effort.
+  }
   return readStored();
 }
 
