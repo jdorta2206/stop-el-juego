@@ -140,3 +140,5 @@ jobs:
         run: rm -f android-release.keystore
 
 # Rebuild trigger: Android 1.3.6.9 / 54 verification
+
+# Force build after Gradle manifest-key correction
