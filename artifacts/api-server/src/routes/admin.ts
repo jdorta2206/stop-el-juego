@@ -468,13 +468,16 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
 
     const loginMethods = (await db.execute(sql`
       WITH methods(method) AS (
-        VALUES ('google'), ('facebook'), ('account'), ('guest')
+        VALUES ('google'), ('facebook'), ('apple'), ('instagram'), ('tiktok'), ('account'), ('guest')
       ),
       observed AS (
         SELECT s.session_id, s.player_id, s.last_seen,
           CASE
             WHEN s.login_method IN ('google','gmail') OR s.player_id LIKE 'google_%' THEN 'google'
             WHEN s.login_method = 'facebook' OR s.player_id LIKE 'fb_%' THEN 'facebook'
+            WHEN s.login_method = 'apple' OR s.player_id LIKE 'apple_%' THEN 'apple'
+            WHEN s.login_method = 'instagram' OR s.player_id LIKE 'ig_%' THEN 'instagram'
+            WHEN s.login_method = 'tiktok' OR s.player_id LIKE 'tt_%' THEN 'tiktok'
             WHEN s.player_id IS NOT NULL THEN 'account'
             ELSE 'guest'
           END AS method
@@ -489,7 +492,7 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
       FROM methods m
       LEFT JOIN observed o ON o.method = m.method
       GROUP BY m.method
-      ORDER BY CASE m.method WHEN 'facebook' THEN 1 WHEN 'google' THEN 2 WHEN 'account' THEN 3 ELSE 4 END
+      ORDER BY CASE m.method WHEN 'facebook' THEN 1 WHEN 'google' THEN 2 WHEN 'apple' THEN 3 WHEN 'instagram' THEN 4 WHEN 'tiktok' THEN 5 WHEN 'account' THEN 6 ELSE 7 END
     `)).rows as Record<string, unknown>[];
 
     // Desglose de plataforma y cruce plataforma + método de acceso.
