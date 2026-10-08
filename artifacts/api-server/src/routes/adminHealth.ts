@@ -102,27 +102,51 @@ router.get("/", basicAuth, async (_req: Request, res: Response) => {
       detail: isStripeReady() ? "El cliente de pagos está inicializado." : "Stripe todavía no está listo; comprobar configuración si persiste.",
     });
 
+    const requiredColumns: Record<string, string[]> = {
+      player_scores: ["player_id"],
+      game_history: ["player_id", "score", "created_at"],
+      analytics_events: ["event_name", "created_at", "metadata_json", "trusted"],
+      analytics_sessions: ["session_id", "platform", "last_seen"],
+      guest_stats: ["day", "games", "conversions"],
+    };
+    const criticalTables = Object.keys(requiredColumns);
     const tableRows = (await db.execute(sql`
       SELECT table_name
       FROM information_schema.tables
       WHERE table_schema = 'public'
-        AND table_name = ANY(ARRAY[
-          'player_scores',
-          'game_history',
-          'analytics_events',
-          'analytics_sessions',
-          'guest_stats'
-        ])
+        AND table_name = ANY(ARRAY['player_scores','game_history','analytics_events','analytics_sessions','guest_stats'])
     `)).rows as Array<{ table_name: string }>;
     const tableSet = new Set(tableRows.map((r) => String(r.table_name)));
-    const missingTables = ["player_scores", "game_history", "analytics_events", "analytics_sessions", "guest_stats"]
-      .filter((name) => !tableSet.has(name));
+    const columnRows = (await db.execute(sql`
+      SELECT table_name, column_name
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = ANY(ARRAY['player_scores','game_history','analytics_events','analytics_sessions','guest_stats'])
+    `)).rows as Array<{ table_name: string; column_name: string }>;
+    const columnsByTable = new Map<string, Set<string>>();
+    for (const row of columnRows) {
+      const set = columnsByTable.get(String(row.table_name)) ?? new Set<string>();
+      set.add(String(row.column_name));
+      columnsByTable.set(String(row.table_name), set);
+    }
+    const missingSchema: string[] = [];
+    for (const table of criticalTables) {
+      if (!tableSet.has(table)) {
+        missingSchema.push(`${table} (tabla)`);
+        continue;
+      }
+      for (const column of requiredColumns[table]) {
+        if (!columnsByTable.get(table)?.has(column)) missingSchema.push(`${table}.${column}`);
+      }
+    }
 
     checks.push({
       name: "Tablas críticas",
-      status: missingTables.length === 0 ? "ok" : "error",
-      value: missingTables.length === 0 ? "5/5" : `${5 - missingTables.length}/5`,
-      detail: missingTables.length === 0 ? "Las tablas necesarias para el panel y la trazabilidad existen." : `Faltan: ${missingTables.join(", ")}.`,
+      status: missingSchema.length === 0 ? "ok" : "error",
+      value: missingSchema.length === 0 ? "5/5 + columnas" : "ESQUEMA INCOMPLETO",
+      detail: missingSchema.length === 0
+        ? "Existen las 5 tablas críticas y las columnas mínimas que necesita el diagnóstico."
+        : `Faltan: ${missingSchema.join(", ")}.`,
     });
 
     const errorRows = (await db.execute(sql`
