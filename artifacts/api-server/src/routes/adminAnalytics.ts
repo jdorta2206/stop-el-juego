@@ -69,17 +69,17 @@ router.get("/", authLimiter, basicAuth, async (_req, res) => {
         SELECT platform, session_id, player_id, created_at
         FROM day_events
         WHERE event_name = 'game_start'
-          AND to_jsonb(day_events)->'metadata_json'->>'source' = 'client_game_start'
+          AND metadata_json::jsonb->>'source' = 'client_game_start'
         UNION ALL
-        SELECT DISTINCT ON (platform, player_id, to_jsonb(day_events)->'metadata_json'->>'roomId')
+        SELECT DISTINCT ON (platform, player_id, metadata_json::jsonb->>'roomId')
                platform, session_id, player_id, MIN(created_at) OVER (
-                 PARTITION BY platform, player_id, to_jsonb(day_events)->'metadata_json'->>'roomId'
+                 PARTITION BY platform, player_id, metadata_json::jsonb->>'roomId'
                ) AS created_at
         FROM day_events
         WHERE event_name = 'game_start'
-          AND to_jsonb(day_events)->'metadata_json'->>'source' = 'server_room_start'
+          AND metadata_json::jsonb->>'source' = 'server_room_start'
           AND player_id IS NOT NULL
-        ORDER BY platform, player_id, to_jsonb(day_events)->'metadata_json'->>'roomId', created_at
+        ORDER BY platform, player_id, metadata_json::jsonb->>'roomId', created_at
       )
       SELECT platform,
              COUNT(*) FILTER (WHERE event_name = 'session_start')::int AS sessions,
