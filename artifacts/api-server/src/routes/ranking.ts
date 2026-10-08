@@ -4,7 +4,7 @@ import { db } from "@workspace/db";
 import { playerScoresTable, gameHistoryTable, pushSubscriptionsTable, scoreBonusClaimsTable, scoreSubmissionClaimsTable } from "@workspace/db";
 import { eq, desc, sql } from "drizzle-orm";
 import { sendPushToPlayer } from "../lib/pushHelper";
-import { recordTrustedAnalyticsEvent } from "./analytics";
+import { getAnalyticsSessionId, recordTrustedAnalyticsEvent } from "./analytics";
 import { resolveCosmetic } from "../lib/inventoryCatalog";
 import { SubmitScoreBody, GetLeaderboardQueryParams } from "@workspace/api-zod";
 import { scoreLimiter } from "../middlewares/rateLimit";
@@ -996,6 +996,7 @@ router.post("/scores", scoreLimiter, requirePlayerIdentity, async (req: AuthedRe
     void recordTrustedAnalyticsEvent({
       eventName: "game_complete",
       playerId,
+      sessionId: getAnalyticsSessionId(req, res),
       mode: effectiveMode,
       metadata: { source: "server_score_submission" },
     }).catch((err) => console.error("[analytics] trusted game_complete failed:", err));
