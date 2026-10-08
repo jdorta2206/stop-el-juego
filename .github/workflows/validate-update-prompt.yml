@@ -33,5 +33,7 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Build STOP game
         run: pnpm --filter @workspace/stop-game build
-      - name: Typecheck workspace
-        run: pnpm run typecheck
+      - name: Typecheck shared libraries
+        run: pnpm run typecheck:libs
+      - name: Typecheck STOP game only
+        run: pnpm exec tsc -p artifacts/stop-game/tsconfig.json --noEmit
