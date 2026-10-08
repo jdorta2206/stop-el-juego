@@ -268,7 +268,7 @@ router.get("/", basicAuth, async (_req: Request, res: Response) => {
           FROM analytics_events c
           WHERE c.trusted = TRUE
             AND c.event_name = 'game_complete'
-            AND COALESCE(c.player_id, c.session_id) = COALESCE(s.player_id, s.session_id)
+            AND c.session_id = s.session_id
             AND c.created_at >= s.created_at
             AND c.created_at <= s.created_at + INTERVAL '30 minutes'
         )
