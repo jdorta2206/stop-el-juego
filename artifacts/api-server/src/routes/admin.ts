@@ -243,7 +243,8 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
           COUNT(DISTINCT CASE WHEN event_name = 'rewarded_ad_requested' THEN COALESCE(player_id, session_id) END)::int AS ad_players,
           COUNT(DISTINCT CASE WHEN event_name = 'rewarded_ad_failed' THEN COALESCE(player_id, session_id) END)::int AS ad_failed_players
         FROM analytics_events
-        WHERE created_at >= NOW() - INTERVAL '7 days'
+        WHERE trusted = TRUE
+          AND created_at >= NOW() - INTERVAL '7 days'
       `)
     ).rows[0] as Record<string, unknown> | undefined;
 
@@ -383,7 +384,8 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
         COUNT(DISTINCT CASE WHEN event_name = 'rewarded_ad_completed' THEN COALESCE(player_id, session_id) END)::int AS completed,
         COUNT(DISTINCT CASE WHEN event_name = 'rewarded_ad_failed' THEN COALESCE(player_id, session_id) END)::int AS failed
       FROM analytics_events
-      WHERE created_at >= NOW() - INTERVAL '7 days'
+      WHERE trusted = TRUE
+        AND created_at >= NOW() - INTERVAL '7 days'
         AND event_name IN ('ad_impression','rewarded_ad_requested','rewarded_ad_completed','rewarded_ad_failed')
     `)).rows[0] as Record<string, unknown> | undefined;
 
