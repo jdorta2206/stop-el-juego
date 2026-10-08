@@ -391,9 +391,9 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
     `)).rows[0] as Record<string, unknown> | undefined;
 
     const adChart = [
-      { label: "Solicitados", value: num(adUnique?.requested) },
-      { label: "Completados", value: num(adUnique?.completed) },
-      { label: "Fallidos", value: num(adUnique?.failed) },
+      { label: "Usuarios con solicitud", value: num(adUnique?.requested) },
+      { label: "Usuarios con completado", value: num(adUnique?.completed) },
+      { label: "Usuarios con fallo", value: num(adUnique?.failed) },
     ];
 
     const platformVersionRows = platformVersions.map((row) => {
@@ -732,10 +732,10 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
   <h2>👥 Quién está conectado ahora</h2>
   <div class="cards">
     <div class="card accent"><div class="label">Conectados últimos 90 s</div><div class="val">${activeSessions.length}</div></div>
-    <div class="card"><div class="label">Vistas de anuncio · 7 días</div><div class="val">${num(adUnique?.impressions)}</div></div>
-    <div class="card"><div class="label">Rewarded solicitados · 7 días</div><div class="val">${num(adUnique?.requested)}</div></div>
-    <div class="card"><div class="label">Rewarded completados · 7 días</div><div class="val">${num(adUnique?.completed)}</div></div>
-    <div class="card"><div class="label">Rewarded fallidos · 7 días</div><div class="val">${num(adUnique?.failed)}</div></div>
+    <div class="card"><div class="label">Usuarios con impresión · 7 días</div><div class="val">${num(adUnique?.impressions)}</div></div>
+    <div class="card"><div class="label">Usuarios con Rewarded solicitado · 7 días</div><div class="val">${num(adUnique?.requested)}</div></div>
+    <div class="card"><div class="label">Usuarios con Rewarded completado · 7 días</div><div class="val">${num(adUnique?.completed)}</div></div>
+    <div class="card"><div class="label">Usuarios con Rewarded fallido · 7 días</div><div class="val">${num(adUnique?.failed)}</div></div>
   </div>
   <table><thead><tr><th>Jugador</th><th>Login</th><th>Plataforma</th><th>Versión</th><th>Idioma</th><th>Última conexión</th></tr></thead>
   <tbody>${activeSessionRows || '<tr><td colspan="6">Ahora mismo no hay conexiones activas.</td></tr>'}</tbody></table>
