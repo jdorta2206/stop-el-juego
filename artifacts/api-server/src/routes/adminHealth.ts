@@ -325,13 +325,19 @@ router.get("/", basicAuth, async (_req: Request, res: Response) => {
     `)).rows[0] as { events?: number } | undefined;
     const recentEvents = Number(eventRows?.events ?? 0);
 
+    const monitorStatus = active > 0 ? "ok" : recentEvents > 0 ? "warn" : "ok";
+    const monitorValue = active > 0 ? `${active} sesiones` : recentEvents > 0 ? "TRÁFICO SIN PRESENCIA" : "SIN TRÁFICO";
+    const monitorDetail = active > 0
+      ? `${active} sesiones activas en los últimos 90 segundos; ${recentEvents} eventos fiables en 15 minutos.`
+      : recentEvents > 0
+        ? `Hay ${recentEvents} eventos fiables recientes, pero ninguna sesión con presencia en los últimos 90 segundos; revisar si el heartbeat/presencia está llegando.`
+        : "No hay sesiones activas ni eventos fiables recientes; no se considera por sí solo un fallo del juego.";
+
     checks.push({
       name: "Monitorización",
-      status: active === 0 || recentEvents > 0 ? "ok" : "warn",
-      value: active > 0 ? `${recentEvents} eventos` : "SIN TRÁFICO",
-      detail: active > 0
-        ? `${active} sesiones activas y ${recentEvents} eventos fiables en 15 minutos.`
-        : "No hay sesiones activas ahora; no se considera un fallo de instrumentación.",
+      status: monitorStatus,
+      value: monitorValue,
+      detail: monitorDetail,
     });
 
     const memory = process.memoryUsage();
