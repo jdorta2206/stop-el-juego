@@ -233,10 +233,10 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
                 SELECT 1 FROM analytics_events gc
                 WHERE gc.trusted = TRUE
                   AND gc.event_name = 'game_complete'
-                  AND COALESCE(gc.player_id, gc.session_id) = COALESCE(analytics_events.player_id, analytics_events.session_id)
+                  AND gc.session_id = analytics_events.session_id
                   AND gc.created_at >= NOW() - INTERVAL '7 days'
               )
-            THEN COALESCE(player_id, session_id) END)::int AS started_without_complete,
+            THEN session_id END)::int AS started_without_complete,
           COUNT(DISTINCT CASE WHEN event_name = 'game_complete' THEN COALESCE(player_id, session_id) END)::int AS games_completed,
           COUNT(DISTINCT CASE WHEN event_name = 'game_start' THEN COALESCE(player_id, session_id) END)::int AS game_players,
           COUNT(DISTINCT CASE WHEN event_name = 'game_complete' THEN COALESCE(player_id, session_id) END)::int AS completed_players,
@@ -635,20 +635,20 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
 
   <h2>🎯 Embudo de jugadores · últimos 7 días</h2>
   <table>
-    <thead><tr><th>Etapa</th><th>Jugadores únicos</th></tr></thead>
+    <thead><tr><th>Etapa</th><th>Unidad</th><th>Total</th></tr></thead>
     <tbody>
-      <tr><td>Sesión iniciada</td><td>${num(funnel?.sessions)}</td></tr>
-      <tr><td>Lobby de juego visto</td><td>${num(funnel?.lobby_sessions)}</td></tr>
-      <tr><td>Lobby sin iniciar partida <span style="color:#8a98a8">(telemetría)</span></td><td>${num(funnel?.lobby_without_start)}</td></tr>
-      <tr><td>Partida iniciada</td><td>${num(funnel?.game_players)}</td></tr>
-      <tr><td>Partida iniciada sin finalizar</td><td>${num(funnel?.started_without_complete)}</td></tr>
-      <tr><td>Partida terminada</td><td>${num(funnel?.completed_players)}</td></tr>
-      <tr><td>Rewarded solicitado <span style="color:#8a98a8">(telemetría)</span></td><td>${num(funnel?.ad_players)}</td></tr>
-      <tr><td>Rewarded fallido <span style="color:#8a98a8">(telemetría)</span></td><td>${num(funnel?.ad_failed_players)}</td></tr>
+      <tr><td>Sesión iniciada</td><td>Sesiones</td><td>${num(funnel?.sessions)}</td></tr>
+      <tr><td>Lobby de juego visto</td><td>Sesiones</td><td>${num(funnel?.lobby_sessions)}</td></tr>
+      <tr><td>Lobby sin iniciar partida <span style="color:#8a98a8">(telemetría)</span></td><td>Sesiones</td><td>${num(funnel?.lobby_without_start)}</td></tr>
+      <tr><td>Partida iniciada</td><td>Jugadores únicos</td><td>${num(funnel?.game_players)}</td></tr>
+      <tr><td>Inicio sin final en la misma sesión</td><td>Sesiones</td><td>${num(funnel?.started_without_complete)}</td></tr>
+      <tr><td>Partida terminada</td><td>Jugadores únicos</td><td>${num(funnel?.completed_players)}</td></tr>
+      <tr><td>Rewarded solicitado <span style="color:#8a98a8">(telemetría)</span></td><td>Jugadores únicos</td><td>${num(funnel?.ad_players)}</td></tr>
+      <tr><td>Rewarded fallido <span style="color:#8a98a8">(telemetría)</span></td><td>Jugadores únicos</td><td>${num(funnel?.ad_failed_players)}</td></tr>
     </tbody>
   </table>
 
-  <div class="sub">El embudo ahora separa entrada al lobby de inicio real. <b>“Lobby sin iniciar” no se considera abandono confirmado</b>: puede significar salida, navegación a otra pantalla o pérdida de telemetría. “Iniciada sin finalizar” identifica jugadores que tienen inicio registrado pero no un resultado final en los últimos 7 días.</div>
+  <div class="sub">El embudo separa sesiones de jugadores únicos. <b>“Lobby sin iniciar” no se considera abandono confirmado</b>: puede significar salida, navegación a otra pantalla o pérdida de telemetría. “Inicio sin final” compara inicio y resultado dentro de la misma sesión.</div>
 
   <h2>🚪 Por dónde se está yendo la gente</h2>
   <table>
