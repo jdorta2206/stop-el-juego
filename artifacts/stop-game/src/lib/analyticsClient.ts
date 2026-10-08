@@ -21,7 +21,7 @@ function platform(): "web" | "android" | "ios" {
 function sessionId(): string | null {
   try { return sessionStorage.getItem(`stop_analytics_session_id_${platform()}`); } catch { return null; }
 }
-export function trackTrustedGameStart(options?: { mode?: string; language?: string | null }): void {
+export function trackTrustedGameStart(options?: { mode?: string; language?: string | null; gameId?: string | null }): void {
   if (typeof window === "undefined") return;
   try {
     const appVersion = getAnalyticsClientVersion();
@@ -38,6 +38,7 @@ export function trackTrustedGameStart(options?: { mode?: string; language?: stri
       body: JSON.stringify({
         mode: options?.mode ?? null,
         language: options?.language ?? (document.documentElement.lang || null),
+        gameId: options?.gameId ?? null,
       }),
       credentials: "include",
       keepalive: true,
@@ -64,6 +65,7 @@ export function trackAnalyticsEvent(eventName: string, options?: { mode?: string
           mode: options?.mode ?? null,
           rounds: options?.metadata?.rounds ?? null,
           language: document.documentElement.lang || null,
+          gameId: typeof options?.metadata?.gameId === "string" ? options.metadata.gameId : null,
         }),
         credentials: "include",
         keepalive: true,
