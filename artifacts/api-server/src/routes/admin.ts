@@ -540,7 +540,8 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
       SELECT COALESCE(ps.player_name, CASE WHEN e.player_id IS NULL THEN 'Invitado' ELSE e.player_id END) AS player_name,
              e.platform, e.event_name, MAX(e.created_at) AS last_seen, COUNT(*)::int AS events
       FROM analytics_events e LEFT JOIN player_scores ps ON ps.player_id = e.player_id
-      WHERE e.created_at >= NOW() - INTERVAL '7 days'
+      WHERE e.trusted = TRUE
+        AND e.created_at >= NOW() - INTERVAL '7 days'
         AND e.event_name IN ('rewarded_ad_requested','rewarded_ad_completed','rewarded_ad_failed','ad_impression')
       GROUP BY e.player_id, ps.player_name, e.platform, e.event_name ORDER BY last_seen DESC LIMIT 300
     `)).rows as Record<string, unknown>[];
