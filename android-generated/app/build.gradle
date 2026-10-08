@@ -19,27 +19,27 @@ android {
         targetSdkVersion 36
         versionCode 54
         versionName "1.3.6.9"
-        resValue "string", "appName", twaManifest['name']
-        resValue "string", "launcherName", twaManifest['launcherName']
-        def launchUrl = "https://" + twaManifest['hostName'] + twaManifest['launchUrl']
+        resValue "string", "appName", "STOP - El Juego"
+        resValue "string", "launcherName", "STOP"
+        def launchUrl = "https://www.stopjuegodepalabras.com/?source=googleplay-twa&appVersion=1.3.6.9"
         resValue "string", "launchUrl", launchUrl
         resValue "string", "webManifestUrl", 'https://www.stopjuegodepalabras.com/manifest.json'
         resValue "string", "fullScopeUrl", 'https://www.stopjuegodepalabras.com/'
-        resValue "string", "hostName", twaManifest['hostName']
-        resValue "color", "colorPrimary", twaManifest['themeColor']
-        resValue "color", "colorPrimaryDark", twaManifest['themeColorDark']
-        resValue "color", "navigationColor", twaManifest['navigationColor']
-        resValue "color", "navigationColorDark", twaManifest['navigationColorDark']
-        resValue "color", "navigationDividerColor", twaManifest['navigationDividerColor']
-        resValue "color", "navigationDividerColorDark", twaManifest['navigationDividerColorDark']
-        resValue "color", "backgroundColor", twaManifest['backgroundColor']
-        resValue "string", "providerAuthority", twaManifest['applicationId'] + '.fileprovider'
-        resValue "bool", "enableNotification", twaManifest['enableNotifications'].toString()
-        resValue "integer", "splashScreenFadeOutDuration", twaManifest['splashScreenFadeOutDuration'].toString()
-        resValue "string", "generatorApp", twaManifest['generatorApp']
-        resValue "string", "fallbackType", twaManifest['fallbackType']
-        resValue "bool", "enableSiteSettingsShortcut", twaManifest['enableSiteSettingsShortcut'].toString()
-        resValue "string", "orientation", twaManifest['orientation']
+        resValue "string", "hostName", "www.stopjuegodepalabras.com"
+        resValue "color", "colorPrimary", "#0D1757"
+        resValue "color", "colorPrimaryDark", "#000000"
+        resValue "color", "navigationColor", "#0D1757"
+        resValue "color", "navigationColorDark", "#0D1757"
+        resValue "color", "navigationDividerColor", "#0D1757"
+        resValue "color", "navigationDividerColorDark", "#0D1757"
+        resValue "color", "backgroundColor", "#0D1757"
+        resValue "string", "providerAuthority", "app.replit.stop_el_juego.twa.fileprovider"
+        resValue "bool", "enableNotification", "true"
+        resValue "integer", "splashScreenFadeOutDuration", "0"
+        resValue "string", "generatorApp", "bubblewrap-cli"
+        resValue "string", "fallbackType", "customtabs"
+        resValue "bool", "enableSiteSettingsShortcut", "false"
+        resValue "string", "orientation", "portrait"
     }
     buildTypes { release { minifyEnabled false } }
     if (System.getenv('KEYSTORE_PASSWORD') && System.getenv('KEY_ALIAS') && System.getenv('KEY_PASSWORD')) {
