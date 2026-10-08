@@ -178,7 +178,26 @@ router.get("/", basicAuth, async (_req: Request, res: Response) => {
     const gameplayRows = (await db.execute(sql`
       SELECT
         COUNT(DISTINCT session_id) FILTER (WHERE event_name = 'game_start')::int AS starts,
-        COUNT(DISTINCT session_id) FILTER (WHERE event_name = 'game_complete')::int AS completes,
+        COUNT(DISTINCT s.session_id) FILTER (
+          WHERE s.event_name = 'game_start'
+            AND EXISTS (
+              SELECT 1
+              FROM analytics_events c
+              WHERE c.trusted = TRUE
+                AND c.event_name = 'game_complete'
+                AND c.created_at >= s.created_at
+                AND c.created_at <= s.created_at + INTERVAL '30 minutes'
+                AND (
+                  c.session_id = s.session_id
+                  OR (
+                    c.session_id IS NULL
+                    AND c.player_id IS NOT NULL
+                    AND c.player_id = s.player_id
+                    AND c.metadata_json ILIKE '%server_score_submission%'
+                  )
+                )
+            )
+        )::int AS completes,
         COUNT(*) FILTER (WHERE event_name = 'client_error')::int AS client_errors,
         COUNT(*) FILTER (WHERE event_name = 'api_error')::int AS api_errors,
         COUNT(*) FILTER (
@@ -294,9 +313,17 @@ router.get("/", basicAuth, async (_req: Request, res: Response) => {
           FROM analytics_events c
           WHERE c.trusted = TRUE
             AND c.event_name = 'game_complete'
-            AND c.session_id = s.session_id
             AND c.created_at >= s.created_at
             AND c.created_at <= s.created_at + INTERVAL '30 minutes'
+            AND (
+              c.session_id = s.session_id
+              OR (
+                c.session_id IS NULL
+                AND c.player_id IS NOT NULL
+                AND c.player_id = s.player_id
+                AND c.metadata_json ILIKE '%server_score_submission%'
+              )
+            )
         )
     `)).rows[0] as { stuck?: number } | undefined;
     const stuckStarts = Number(stuckRows?.stuck ?? 0);
