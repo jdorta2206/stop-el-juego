@@ -239,6 +239,31 @@ router.post("/game-start", presenceLimiter, async (req, res) => {
   }
 });
 
+router.post("/game-complete", presenceLimiter, async (req, res) => {
+  try {
+    await analyticsTablesReady;
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const sessionId = serverSessionId(req, res);
+    const playerId = readPlayerId(req);
+    const language = typeof body.language === "string" ? body.language.slice(0, 16) : null;
+    const mode = typeof body.mode === "string" ? body.mode.slice(0, 32) : null;
+    const rounds = Number.isFinite(Number(body.rounds)) ? Math.max(1, Math.min(50, Number(body.rounds))) : null;
+    const appVersion = appVersionFromRequest(req);
+    const platform = platformFromRequest(req);
+    const metadataJson = JSON.stringify({ source: "client_game_complete", rounds }).slice(0, 4000);
+    await db.execute(sql`
+      INSERT INTO public.analytics_events
+        (event_name, player_id, session_id, platform, app_version, language, mode, metadata_json, trusted)
+      VALUES
+        ('game_complete', ${playerId}, ${sessionId}, ${platform}, ${appVersion}, ${language}, ${mode}, ${metadataJson}, TRUE)
+    `);
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error("[analytics] trusted game-complete failed:", err);
+    return res.status(500).json({ error: "Analytics unavailable" });
+  }
+});
+
 router.post("/client-error", presenceLimiter, async (req, res) => {
   try {
     await analyticsTablesReady;
