@@ -374,8 +374,9 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
     const powerupChart = powerupUsage.map((row) => ({ label: String(row.powerup), value: num(row.total) }));
     const funnelChart = [
       { label: "Sesiones", value: num(funnel?.sessions) },
-      { label: "Inicios de partida", value: num(funnel?.games_started) },
-      { label: "Partidas finalizadas", value: num(funnel?.games_completed) },
+      { label: "Lobbies", value: num(funnel?.lobby_sessions) },
+      { label: "Jugadores que iniciaron", value: num(funnel?.game_players) },
+      { label: "Jugadores con resultado", value: num(funnel?.completed_players) },
     ];
     const adUnique = (await db.execute(sql`
       SELECT
