@@ -18,7 +18,7 @@ export function HalloweenBanner({ className = "" }: { className?: string }) {
   const active = isHalloweenActive();
   const upcoming = !active && isHalloweenUpcoming();
   const nextStart = getNextHalloweenStart();
-  const eventEnd = getHalloweenWindow(nextStart.getUTCFullYear()).end;
+  const eventEnd = getHalloweenWindow(new Date().getUTCFullYear()).end;
   const [remaining, setRemaining] = useState(() => Math.max(0, (active ? eventEnd : nextStart).getTime() - Date.now()));
 
   useEffect(() => {
