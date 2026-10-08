@@ -612,8 +612,8 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
     <div class="card"><div class="label">Puntuaciones actualizadas hoy</div><div class="val">${num(todayRows.active)}</div></div>
     <div class="card"><div class="label">Nuevos registros</div><div class="val">${num(todayRows.new_users)}</div></div>
     <div class="card"><div class="label">Resultados guardados · registrados</div><div class="val">${num(todayRows.games)}</div></div>
-    <div class="card"><div class="label">Partidas contabilizadas · invitados</div><div class="val">${num(guestToday?.games)}</div></div>
-    <div class="card"><div class="label">Invitados → registro</div><div class="val">${num(guestToday?.conversions)}</div></div>
+    <div class="card"><div class="label">Partidas invitados · fecha local</div><div class="val">${num(guestToday?.games)}</div></div>
+    <div class="card"><div class="label">Invitados → registro · fecha local</div><div class="val">${num(guestToday?.conversions)}</div></div>
   </div>
 
   <h2>🛡️ Calidad de los datos del panel</h2>
@@ -710,16 +710,16 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
 
   <h2>Últimos 14 días</h2>
   <table>
-    <thead><tr><th>Día</th><th>Nuevos</th><th>Activos</th><th>Partidas</th><th>Inv. partidas</th><th>Inv.→reg.</th></tr></thead>
+    <thead><tr><th>Día</th><th>Nuevos</th><th>Activos</th><th>Partidas</th><th>Inv. partidas · fecha local</th><th>Inv.→reg. · fecha local</th></tr></thead>
     <tbody>${dailyRows || '<tr><td colspan="6">Sin datos</td></tr>'}</tbody>
   </table>
 
   <h2>🔎 Conciliación de juego y telemetría · últimos 14 días</h2>
   <table>
-    <thead><tr><th>Día</th><th>Resultados registrados</th><th>Inv. partidas</th><th>Game starts</th><th>Starts con versión</th></tr></thead>
+    <thead><tr><th>Día</th><th>Resultados registrados</th><th>Inv. partidas · fecha local</th><th>Game starts</th><th>Starts con versión</th></tr></thead>
     <tbody>${dailyQualityRows || '<tr><td colspan="5">Sin datos</td></tr>'}</tbody>
   </table>
-  <div class="sub">🔴 significa que existen resultados/partidas contabilizadas pero no llegó ningún <code>game_start</code> ese día. Eso es una alerta de telemetría, no un “día sin jugadores”.</div>
+  <div class="sub">Las métricas de invitados usan la fecha local enviada por cada jugador; no representan necesariamente la misma zona horaria que las métricas de cuentas/partidas. 🔴 significa que existen resultados/partidas contabilizadas pero no llegó ningún <code>game_start</code> ese día. Es una alerta de telemetría, no un “día sin jugadores”.</div>
 
   <h2>Top 10 jugadores</h2>
   <table>
