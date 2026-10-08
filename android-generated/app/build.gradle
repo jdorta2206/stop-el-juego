@@ -19,27 +19,27 @@ android {
         targetSdkVersion 36
         versionCode 54
         versionName "1.3.6.9"
-        resValue "string", "appName", twaManifest.get('name')
-        resValue "string", "launcherName", twaManifest.get('launcherName')
-        def launchUrl = "https://" + twaManifest.get('hostName') + twaManifest.get('launchUrl')
+        resValue "string", "appName", twaManifest['name']
+        resValue "string", "launcherName", twaManifest['launcherName']
+        def launchUrl = "https://" + twaManifest['hostName'] + twaManifest['launchUrl']
         resValue "string", "launchUrl", launchUrl
         resValue "string", "webManifestUrl", 'https://www.stopjuegodepalabras.com/manifest.json'
         resValue "string", "fullScopeUrl", 'https://www.stopjuegodepalabras.com/'
-        resValue "string", "hostName", twaManifest.get('hostName')
-        resValue "color", "colorPrimary", twaManifest.get('themeColor')
-        resValue "color", "colorPrimaryDark", twaManifest.get('themeColorDark')
-        resValue "color", "navigationColor", twaManifest.get('navigationColor')
-        resValue "color", "navigationColorDark", twaManifest.get('navigationColorDark')
-        resValue "color", "navigationDividerColor", twaManifest.get('navigationDividerColor')
-        resValue "color", "navigationDividerColorDark", twaManifest.get('navigationDividerColorDark')
-        resValue "color", "backgroundColor", twaManifest.get('backgroundColor')
-        resValue "string", "providerAuthority", twaManifest.get('applicationId') + '.fileprovider'
-        resValue "bool", "enableNotification", twaManifest.get('enableNotifications').toString()
-        resValue "integer", "splashScreenFadeOutDuration", twaManifest.get('splashScreenFadeOutDuration').toString()
-        resValue "string", "generatorApp", twaManifest.get('generatorApp')
-        resValue "string", "fallbackType", twaManifest.get('fallbackType')
-        resValue "bool", "enableSiteSettingsShortcut", twaManifest.get('enableSiteSettingsShortcut').toString()
-        resValue "string", "orientation", twaManifest.get('orientation')
+        resValue "string", "hostName", twaManifest['hostName']
+        resValue "color", "colorPrimary", twaManifest['themeColor']
+        resValue "color", "colorPrimaryDark", twaManifest['themeColorDark']
+        resValue "color", "navigationColor", twaManifest['navigationColor']
+        resValue "color", "navigationColorDark", twaManifest['navigationColorDark']
+        resValue "color", "navigationDividerColor", twaManifest['navigationDividerColor']
+        resValue "color", "navigationDividerColorDark", twaManifest['navigationDividerColorDark']
+        resValue "color", "backgroundColor", twaManifest['backgroundColor']
+        resValue "string", "providerAuthority", twaManifest['applicationId'] + '.fileprovider'
+        resValue "bool", "enableNotification", twaManifest['enableNotifications'].toString()
+        resValue "integer", "splashScreenFadeOutDuration", twaManifest['splashScreenFadeOutDuration'].toString()
+        resValue "string", "generatorApp", twaManifest['generatorApp']
+        resValue "string", "fallbackType", twaManifest['fallbackType']
+        resValue "bool", "enableSiteSettingsShortcut", twaManifest['enableSiteSettingsShortcut'].toString()
+        resValue "string", "orientation", twaManifest['orientation']
     }
     buildTypes { release { minifyEnabled false } }
     if (System.getenv('KEYSTORE_PASSWORD') && System.getenv('KEY_ALIAS') && System.getenv('KEY_PASSWORD')) {
@@ -56,7 +56,7 @@ task generateShorcutsFile {
     xmlMarkup.'shortcuts'('xmlns:android': 'http://schemas.android.com/apk/res/android') {
         twaManifest.shortcuts.eachWithIndex { s, i ->
             'shortcut'('android:shortcutId': 'shortcut' + i, 'android:enabled': 'true', 'android:icon': '@drawable/' + s.icon, 'android:shortcutShortLabel': '@string/shortcut_short_name_' + i, 'android:shortcutLongLabel': '@string/shortcut_name_' + i) {
-                'intent'('android:action': 'android.intent.action.MAIN', 'android:targetPackage': twaManifest.get('applicationId'), 'android:targetClass': twaManifest.get('applicationId') + '.LauncherActivity', 'android:data': s.url)
+                'intent'('android:action': 'android.intent.action.MAIN', 'android:targetPackage': twaManifest['applicationId'], 'android:targetClass': twaManifest['applicationId'] + '.LauncherActivity', 'android:data': s.url)
                 'categories'('android:name': 'android.intent.category.LAUNCHER')
             }
         }
