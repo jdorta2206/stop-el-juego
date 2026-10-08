@@ -91,8 +91,8 @@ router.get("/", basicAuth, async (_req: Request, res: Response) => {
     }
 
     const errorRows = (await db.execute(sql`
-      SELECT COUNT(*) FILTER (WHERE s.event_name = 'api_error')::int AS api_errors,
-             COUNT(*) FILTER (WHERE s.event_name = 'client_error')::int AS client_errors
+      SELECT COUNT(*) FILTER (WHERE event_name = 'api_error')::int AS api_errors,
+             COUNT(*) FILTER (WHERE event_name = 'client_error')::int AS client_errors
       FROM public.analytics_events
       WHERE trusted = TRUE AND event_name IN ('api_error', 'client_error')
         AND created_at >= NOW() - INTERVAL '15 minutes'
