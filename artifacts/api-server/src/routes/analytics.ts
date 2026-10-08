@@ -67,6 +67,7 @@ async function ensureAnalyticsTables(): Promise<void> {
         created_at timestamp NOT NULL DEFAULT NOW()
       )`,
       `ALTER TABLE public.analytics_events ADD COLUMN IF NOT EXISTS session_id text`,
+      `ALTER TABLE public.analytics_events ADD COLUMN IF NOT EXISTS game_id text`,
       `ALTER TABLE public.analytics_events ADD COLUMN IF NOT EXISTS session_id text`,
       `ALTER TABLE public.analytics_events ADD COLUMN IF NOT EXISTS metadata_json text NOT NULL DEFAULT '{}'`,
       `ALTER TABLE public.analytics_events ADD COLUMN IF NOT EXISTS trusted boolean NOT NULL DEFAULT FALSE`,
@@ -224,13 +225,14 @@ router.post("/game-start", presenceLimiter, async (req, res) => {
     const playerId = readPlayerId(req);
     const language = typeof body.language === "string" ? body.language.slice(0, 16) : null;
     const mode = typeof body.mode === "string" ? body.mode.slice(0, 32) : null;
+    const gameId = typeof body.gameId === "string" ? body.gameId.slice(0, 128) : null;
     const appVersion = appVersionFromRequest(req);
     const platform = platformFromRequest(req);
     await db.execute(sql`
       INSERT INTO public.analytics_events
-        (event_name, player_id, session_id, platform, app_version, language, mode, metadata_json, trusted)
+        (event_name, player_id, session_id, game_id, platform, app_version, language, mode, metadata_json, trusted)
       VALUES
-        ('game_start', ${playerId}, ${sessionId}, ${platform}, ${appVersion}, ${language}, ${mode}, '{"source":"client_game_start"}', TRUE)
+        ('game_start', ${playerId}, ${sessionId}, ${gameId}, ${platform}, ${appVersion}, ${language}, ${mode}, '{"source":"client_game_start"}', TRUE)
     `);
     return res.json({ ok: true });
   } catch (err) {
@@ -247,15 +249,16 @@ router.post("/game-complete", presenceLimiter, async (req, res) => {
     const playerId = readPlayerId(req);
     const language = typeof body.language === "string" ? body.language.slice(0, 16) : null;
     const mode = typeof body.mode === "string" ? body.mode.slice(0, 32) : null;
+    const gameId = typeof body.gameId === "string" ? body.gameId.slice(0, 128) : null;
     const rounds = Number.isFinite(Number(body.rounds)) ? Math.max(1, Math.min(50, Number(body.rounds))) : null;
     const appVersion = appVersionFromRequest(req);
     const platform = platformFromRequest(req);
     const metadataJson = JSON.stringify({ source: "client_game_complete", rounds }).slice(0, 4000);
     await db.execute(sql`
       INSERT INTO public.analytics_events
-        (event_name, player_id, session_id, platform, app_version, language, mode, metadata_json, trusted)
+        (event_name, player_id, session_id, game_id, platform, app_version, language, mode, metadata_json, trusted)
       VALUES
-        ('game_complete', ${playerId}, ${sessionId}, ${platform}, ${appVersion}, ${language}, ${mode}, ${metadataJson}, TRUE)
+        ('game_complete', ${playerId}, ${sessionId}, ${gameId}, ${platform}, ${appVersion}, ${language}, ${mode}, ${metadataJson}, TRUE)
     `);
     return res.json({ ok: true });
   } catch (err) {
