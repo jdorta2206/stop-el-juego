@@ -4,7 +4,7 @@ import { roomsTable, playerScoresTable, gameHistoryTable } from "@workspace/db";
 import { eq, and, or, lt, gt, ne, inArray, sql } from "drizzle-orm";
 import { CreateRoomBody, JoinRoomBody, SubmitRoomResultsBody } from "@workspace/api-zod";
 import { calculateStreak, appendStreakDay, calcXpGain, calcCoinGain, calcLevel, lookupPlayerTimezone, normalizePlayerTimeZone } from "./ranking";
-import { recordTrustedAnalyticsEvent } from "./analytics";
+import { getAnalyticsSessionId, recordTrustedAnalyticsEvent } from "./analytics";
 import { recordAuthoritativeSeasonEvents } from "./season";
 import { recordHalloweenEvent, recordHalloweenScareEvents, getHalloweenEventYear, recordHalloweenScareEventsInTransaction, recordHalloweenScareEventsWithCooldown, isHalloweenPreviewAuthorized } from "./halloween";
 import { isHappyHourActiveForTzOffset, HAPPY_HOUR_MULTIPLIER } from "../lib/happyHour";
@@ -760,6 +760,7 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
     void recordTrustedAnalyticsEvent({
       eventName: "game_complete",
       playerId: p.playerId,
+      sessionId: getAnalyticsSessionId(req, res),
       mode: "multiplayer",
       metadata: { source: "server_room_result", roomCode: normalizedRoomCode },
     }).catch((err) => console.error("[analytics] trusted multiplayer game_complete failed:", err));
