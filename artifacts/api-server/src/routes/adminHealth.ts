@@ -232,9 +232,11 @@ router.get("/", basicAuth, async (_req: Request, res: Response) => {
 
     const telemetryRows = (await db.execute(sql`
       SELECT
-        COUNT(*)::int AS starts,
-        COUNT(*) FILTER (WHERE app_version IS NOT NULL AND app_version <> '')::int AS with_version,
-        COUNT(*) FILTER (WHERE platform IN ('web','android','ios'))::int AS with_platform
+        COUNT(DISTINCT COALESCE(player_id, session_id))::int AS starts,
+        COUNT(DISTINCT COALESCE(player_id, session_id))
+          FILTER (WHERE app_version IS NOT NULL AND app_version <> '')::int AS with_version,
+        COUNT(DISTINCT COALESCE(player_id, session_id))
+          FILTER (WHERE platform IN ('web','android','ios'))::int AS with_platform
       FROM analytics_events
       WHERE trusted = TRUE
         AND event_name = 'game_start'
