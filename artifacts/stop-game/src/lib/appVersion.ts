@@ -14,13 +14,13 @@ const STORAGE_KEY = "stop_app_version";
 // Bump this to the latest published versionName whenever you ship an Android
 // build you want everyone on. Anyone whose installed version is >= this value
 // will NOT see the "update available" prompt.
-export const MIN_RECOMMENDED_APP_VERSION = "1.3.6.5";
+export const MIN_RECOMMENDED_APP_VERSION = "1.3.6.9";
 
 // Current published TWA build. The TWA start URL identifies the Play app,
 // but older published builds did not include an appVersion query parameter.
 // Keep this fallback only for that TWA marker; normal web clients remain unversioned
 // unless they explicitly report a version.
-export const CURRENT_TWA_VERSION = "1.3.6.5";
+export const CURRENT_TWA_VERSION = "1.3.6.9";
 
 // Unique build identifier used only for operational web telemetry.
 export const CURRENT_WEB_VERSION = import.meta.env.VITE_WEB_BUILD_VERSION || "web-dev";
