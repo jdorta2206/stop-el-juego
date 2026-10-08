@@ -67,6 +67,7 @@ async function ensureAnalyticsTables(): Promise<void> {
         created_at timestamp NOT NULL DEFAULT NOW()
       )`,
       `ALTER TABLE public.analytics_events ADD COLUMN IF NOT EXISTS session_id text`,
+      `ALTER TABLE public.analytics_events ADD COLUMN IF NOT EXISTS session_id text`,
       `ALTER TABLE public.analytics_events ADD COLUMN IF NOT EXISTS metadata_json text NOT NULL DEFAULT '{}'`,
       `ALTER TABLE public.analytics_events ADD COLUMN IF NOT EXISTS trusted boolean NOT NULL DEFAULT FALSE`,
       `CREATE INDEX IF NOT EXISTS analytics_events_created_at_idx ON analytics_events (created_at)`,
