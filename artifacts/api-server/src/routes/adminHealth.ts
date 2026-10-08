@@ -177,8 +177,8 @@ router.get("/", basicAuth, async (_req: Request, res: Response) => {
     // responda: necesitan evidencia reciente del flujo real de partida.
     const gameplayRows = (await db.execute(sql`
       SELECT
-        COUNT(DISTINCT COALESCE(player_id, session_id)) FILTER (WHERE event_name = 'game_start')::int AS starts,
-        COUNT(DISTINCT COALESCE(player_id, session_id)) FILTER (WHERE event_name = 'game_complete')::int AS completes,
+        COUNT(DISTINCT session_id) FILTER (WHERE event_name = 'game_start')::int AS starts,
+        COUNT(DISTINCT session_id) FILTER (WHERE event_name = 'game_complete')::int AS completes,
         COUNT(*) FILTER (WHERE event_name = 'client_error')::int AS client_errors,
         COUNT(*) FILTER (WHERE event_name = 'api_error')::int AS api_errors,
         COUNT(*) FILTER (
@@ -215,10 +215,10 @@ router.get("/", basicAuth, async (_req: Request, res: Response) => {
           : completionRate < 80
             ? "warn"
             : "ok",
-      value: recentStarts < 5 ? `${recentStarts} inicios` : `${completionRate}% inicio → fin`,
+      value: recentStarts < 5 ? `${recentStarts} sesiones con inicio` : `${completionRate}% inicio → resultado`,
       detail: recentStarts < 5
-        ? "No hay suficiente actividad reciente para declarar el flujo sano; se necesitan al menos 5 inicios en las últimas 2 horas."
-        : `${recentStarts} jugadores/sesiones con inicio y ${recentCompletes} con resultado en las últimas 2 horas.`,
+        ? "No hay suficiente actividad reciente para declarar el flujo sano; se necesitan al menos 5 sesiones con inicio en las últimas 2 horas."
+        : `${recentStarts} sesiones con inicio y ${recentCompletes} sesiones con resultado en las últimas 2 horas.`,
     });
 
     checks.push({
@@ -232,10 +232,10 @@ router.get("/", basicAuth, async (_req: Request, res: Response) => {
 
     const telemetryRows = (await db.execute(sql`
       SELECT
-        COUNT(DISTINCT COALESCE(player_id, session_id))::int AS starts,
-        COUNT(DISTINCT COALESCE(player_id, session_id))
+        COUNT(DISTINCT session_id)::int AS starts,
+        COUNT(DISTINCT session_id)
           FILTER (WHERE app_version IS NOT NULL AND app_version <> '')::int AS with_version,
-        COUNT(DISTINCT COALESCE(player_id, session_id))
+        COUNT(DISTINCT session_id)
           FILTER (WHERE platform IN ('web','android','ios'))::int AS with_platform
       FROM analytics_events
       WHERE trusted = TRUE
@@ -284,7 +284,7 @@ router.get("/", basicAuth, async (_req: Request, res: Response) => {
     });
 
     const stuckRows = (await db.execute(sql`
-      SELECT COUNT(*)::int AS stuck
+      SELECT COUNT(DISTINCT s.session_id)::int AS stuck
       FROM analytics_events s
       WHERE s.trusted = TRUE
         AND s.event_name = 'game_start'
@@ -306,8 +306,8 @@ router.get("/", basicAuth, async (_req: Request, res: Response) => {
       status: stuckStarts === 0 ? "ok" : stuckStarts <= 2 ? "warn" : "error",
       value: String(stuckStarts),
       detail: stuckStarts === 0
-        ? "No se observan inicios antiguos sin finalización posterior en la ventana comprobable."
-        : `${stuckStarts} inicio(s) no tienen un final posterior dentro de 30 minutos; investigar antes de asumir fallo definitivo.`,
+        ? "No se observan sesiones antiguas con inicio sin finalización posterior en la ventana comprobable."
+        : `${stuckStarts} sesión(es) con inicio no tienen un final posterior dentro de 30 minutos; investigar antes de asumir fallo definitivo.`,
     });
 
     const activeRows = (await db.execute(sql`
