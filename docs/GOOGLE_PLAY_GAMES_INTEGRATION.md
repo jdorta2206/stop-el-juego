@@ -11,7 +11,8 @@ The current Android package is a Trusted Web Activity (TWA), not a native game A
 - Android application ID: `app.replit.stop_el_juego.twa`.
 - Android project: `android-generated/`; release workflow builds signed APK and AAB from this project.
 - Existing local achievements are defined in `artifacts/stop-game/src/hooks/useAchievements.ts`.
-- The current project has no detected Play Games Services SDK dependency, PGS application ID resource, or PGS achievements/leaderboards API calls.
+- Phase 1 scaffolding is now present on this branch: Play Games Services v2 SDK dependency (`22.1.0`), manifest metadata, project ID resource (`902072408470`), and a best-effort authentication capability check in `LauncherActivity`.
+- No achievement reporting, leaderboard submission/UI, cloud-save implementation, or web-to-native PGS message protocol has been added yet.
 - The app's local achievements and the web backend's player identity/progression remain the source of truth for STOP. PGS is an optional platform layer and must never grant XP, coins, streaks, rewards, or competitive score on its own.
 
 ## Required external configuration (must be supplied from Play Console)
@@ -28,7 +29,8 @@ These values cannot safely be guessed or fabricated. Without them, a successful 
 
 ### Phase 1 — native SDK and graceful capability detection
 
-- Add the current Play Games Services v2 SDK to the Android module and initialize it using the configured project ID.
+- **Scaffolding added on the integration branch:** SDK dependency, manifest project metadata, project ID resource, and non-blocking authentication capability check.
+- Still required: build the Android project and verify the dependency/API compiles; test sign-in with Play Console-configured test accounts after the Android OAuth client is linked.
 - Keep all PGS calls isolated from the ad bridge.
 - If PGS is not configured, the Play Games app is missing, authentication is declined, or network/service calls fail, log a diagnostic and continue the existing TWA game unchanged.
 - Do not expose a general-purpose JavaScript interface to arbitrary pages. Any web-to-native bridge must validate the exact HTTPS origin, message schema, request IDs, and allowed action IDs.
@@ -53,6 +55,10 @@ These values cannot safely be guessed or fabricated. Without them, a successful 
 - Confirm existing ads, billing, notifications, deep links, gameplay, player identity, progression, and rankings still work.
 - Do not merge or publish until these gates pass and the Play Games configuration is available.
 
-## Current blocker
+## Current status and blockers
 
-The repository alone does not reveal the Play Games Services project ID, linked OAuth credential, Play App Signing SHA-1, or created Play Console achievement/leaderboard IDs. Those must be configured or supplied before the feature can be end-to-end verified. This branch deliberately does not insert placeholder IDs or claim the integration is live.
+- **Implemented on branch, not released:** SDK dependency + project metadata + best-effort auth capability check.
+- **Still blocked for end-to-end auth verification:** linked Android OAuth credential using the Play App Signing SHA-1.
+- **Not implemented yet:** STOP achievement mapping/reporting, leaderboard mapping/submission, any guarded native/web action protocol, and Saved Games save/load/conflict handling.
+- Play Console achievement and leaderboard IDs must be created before those features can be wired to real resources. Saved Games must remain disabled until its implementation is ready to test.
+- No build or device test result is available from the current integration commit. Do not call this integration complete or live.
