@@ -54,6 +54,27 @@ export interface AchievementDef {
 // and the BASE_URL prefix (artifact path /stop-game/) is applied uniformly.
 const IMG = (id: string) => `${import.meta.env.BASE_URL}achievements/${id}.png`;
 
+// Stable Play Console IDs for the 15 STOP achievements. These IDs are platform
+// identifiers only: local/backend progression remains authoritative. Reporting is
+// intentionally not triggered until the origin-validated native bridge is ready.
+export const GOOGLE_PLAY_ACHIEVEMENT_IDS: Readonly<Record<string, string>> = Object.freeze({
+  first_win: "CgkIlrPSvaAaEAIQAQ",
+  combo3: "CgkIlrPSvaAaEAIQGg",
+  speed_demon: "CgkIlrPSvaAaEAIQEw",
+  chaos_master: "CgkIlrPSvaAaEAIQEQ",
+  wordsmith: "CgkIlrPSvaAaEAIQGA",
+  veteran: "CgkIlrPSvaAaEAIQHA",
+  champion: "CgkIlrPSvaAaEAIQGw",
+  unstoppable: "CgkIlrPSvaAaEAIQEA",
+  streak_3: "CgkIlrPSvaAaEAIQFQ",
+  streak_7: "CgkIlrPSvaAaEAIQEg",
+  streak_14: "CgkIlrPSvaAaEAIQGQ",
+  streak_30: "CgkIlrPSvaAaEAIQFw",
+  creator: "CgkIlrPSvaAaEAIQFg",
+  viral: "CgkIlrPSvaAaEAIQFA",
+  shutout: "CgkIlrPSvaAaEAIQHQ",
+});
+
 export const ACHIEVEMENTS: AchievementDef[] = [
   {
     id: "first_win", icon: "🏆", image: IMG("first_win"), nameKey: "first_win_name", descKey: "first_win_desc", xpReward: 50,
