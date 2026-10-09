@@ -26,6 +26,7 @@ import com.google.android.gms.ads.LoadAdError;
 import com.google.android.gms.ads.MobileAds;
 import com.google.android.gms.ads.rewarded.RewardedAd;
 import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback;
+import com.google.android.gms.games.PlayGames;
 import com.google.androidbrowserhelper.trusted.QualityEnforcer;
 import com.google.androidbrowserhelper.trusted.TwaLauncher;
 
@@ -61,6 +62,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        checkPlayGamesSignInBestEffort();
         appUpdateManager = AppUpdateManagerFactory.create(this);
         checkForPlayUpdate();
         if (AdsPolicy.isEnabled()) {
@@ -75,6 +77,26 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT);
         } else {
             setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+        }
+    }
+
+    /**
+     * Play Games sign-in is best-effort only: authentication failure must never
+     * prevent the existing TWA game, ads fallback, or offline play from starting.
+     */
+    private void checkPlayGamesSignInBestEffort() {
+        try {
+            PlayGames.getGamesSignInClient(this).isAuthenticated()
+                    .addOnCompleteListener(task -> {
+                        if (task.isSuccessful() && task.getResult() != null
+                                && task.getResult().isAuthenticated()) {
+                            Log.i("STOP_PLAY_GAMES", "Play Games authentication available");
+                        } else {
+                            Log.i("STOP_PLAY_GAMES", "Play Games authentication unavailable; continuing without it");
+                        }
+                    });
+        } catch (RuntimeException error) {
+            Log.w("STOP_PLAY_GAMES", "Play Games check failed; continuing normally", error);
         }
     }
 
