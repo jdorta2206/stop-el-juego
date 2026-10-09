@@ -48,6 +48,28 @@ jobs:
           grep -q 'getAchievementsIntent' android-generated/app/src/main/java/app/replit/stop_el_juego/twa/PlayGamesAchievementsActivity.java
           ! grep -q 'handleAchievementUnlock\|unlock(achievementId)' android-generated/app/src/main/java/app/replit/stop_el_juego/twa/PlayGamesAchievementsActivity.java
           ! grep -q 'android:host="unlock"' android-generated/app/src/main/AndroidManifest.xml
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+
+          ts = Path("artifacts/stop-game/src/hooks/useAchievements.ts").read_text()
+          java = Path("android-generated/app/src/main/java/app/replit/stop_el_juego/twa/LauncherActivity.java").read_text()
+          bridge = Path("artifacts/stop-game/src/lib/twaAdBridge.ts").read_text()
+
+          ts_block = re.search(r"GOOGLE_PLAY_ACHIEVEMENT_IDS[^=]*= Object\.freeze\(\{(.*?)\}\);", ts, re.S)
+          if not ts_block:
+              raise SystemExit("Could not locate TypeScript achievement ID map")
+          ts_map = dict(re.findall(r'\s*(\w+):\s*"([^"]+)"', ts_block.group(1)))
+          java_map = dict(re.findall(r'case "([^"]+)": achievementId = "([^"]+)"; break;', java))
+          if len(ts_map) != 15 or len(java_map) != 15:
+              raise SystemExit(f"Expected 15 achievement mappings; TypeScript={len(ts_map)}, Java={len(java_map)}")
+          if ts_map != java_map:
+              raise SystemExit(f"Achievement key/ID mismatch: TypeScript-only={set(ts_map.items()) - set(java_map.items())}; Java-only={set(java_map.items()) - set(ts_map.items())}")
+          fn = re.search(r"export function reportGooglePlayAchievement\(achievementKey: string\): void \{(.*?)\n\}", bridge, re.S)
+          if not fn or "window.location" in fn.group(1) or "postMessage" in fn.group(1):
+              raise SystemExit("Web reporting hook must remain inert until the non-navigating bridge is device-tested")
+          print("Verified: all 15 achievement keys/IDs match exactly and web reporting remains inert.")
+          PY
           echo "PGS source guards passed; exported unlock deep link is removed and web achievement reporting remains disabled pending a tested non-navigating bridge."
 
       - name: Assemble debug APK
