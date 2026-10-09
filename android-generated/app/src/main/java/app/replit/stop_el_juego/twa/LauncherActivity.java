@@ -230,10 +230,25 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     }
 
     private void handleWebMessage(String raw) {
-        if (!AdsPolicy.isEnabled()) return;
         try {
             JSONObject message = new JSONObject(raw);
             String type = message.optString("type", "");
+
+            // PGS uses the already origin-validated TWA postMessage channel, never
+            // a browsable custom URL. A fixed key allowlist prevents arbitrary IDs.
+            if ("STOP_PGS_UNLOCK_ACHIEVEMENT".equals(type)) {
+                String origin = message.optString("origin", "");
+                String key = message.optString("achievementKey", "");
+                if (!messageChannelReady || !relationshipValidated || !isAllowedOrigin(origin)) {
+                    Log.w("STOP_PLAY_GAMES", "Rejected achievement request from invalid origin/channel");
+                    return;
+                }
+                reportPlayGamesAchievement(key);
+                return;
+            }
+
+            // PGS must continue to work even when the ads policy is disabled.
+            if (!AdsPolicy.isEnabled()) return;
             if ("STOP_AD_REQUEST_INTERSTITIAL".equals(type)) {
                 String requestId = message.optString("requestId", "");
                 String origin = message.optString("origin", "");
@@ -258,6 +273,50 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             rewardGrantedForCurrentAd = false;
             showRewardedAdWhenReady();
         } catch (JSONException ignored) { Log.w(TAG, "Ignoring malformed web message"); }
+    }
+
+    private void reportPlayGamesAchievement(String key) {
+        final String achievementId;
+        switch (key) {
+            case "first_win": achievementId = "CgkIlrPSvaAaEAIQAQ"; break;
+            case "combo3": achievementId = "CgkIlrPSvaAaEAIQGg"; break;
+            case "speed_demon": achievementId = "CgkIlrPSvaAaEAIQEw"; break;
+            case "chaos_master": achievementId = "CgkIlrPSvaAaEAIQEQ"; break;
+            case "wordsmith": achievementId = "CgkIlrPSvaAaEAIQGA"; break;
+            case "veteran": achievementId = "CgkIlrPSvaAaEAIQHA"; break;
+            case "champion": achievementId = "CgkIlrPSvaAaEAIQGw"; break;
+            case "unstoppable": achievementId = "CgkIlrPSvaAaEAIQEA"; break;
+            case "streak_3": achievementId = "CgkIlrPSvaAaEAIQFQ"; break;
+            case "streak_7": achievementId = "CgkIlrPSvaAaEAIQEg"; break;
+            case "streak_14": achievementId = "CgkIlrPSvaAaEAIQGQ"; break;
+            case "streak_30": achievementId = "CgkIlrPSvaAaEAIQFw"; break;
+            case "creator": achievementId = "CgkIlrPSvaAaEAIQFg"; break;
+            case "viral": achievementId = "CgkIlrPSvaAaEAIQFA"; break;
+            case "shutout": achievementId = "CgkIlrPSvaAaEAIQHQ"; break;
+            default:
+                Log.w("STOP_PLAY_GAMES", "Rejected unknown achievement key=" + key);
+                return;
+        }
+        try {
+            PlayGames.getGamesSignInClient(this).isAuthenticated()
+                    .addOnCompleteListener(task -> {
+                        if (!task.isSuccessful() || task.getResult() == null || !task.getResult().isAuthenticated()) {
+                            Log.i("STOP_PLAY_GAMES", "Achievement not reported: player is not authenticated");
+                            return;
+                        }
+                        try {
+                            PlayGames.getAchievementsClient(this).unlock(achievementId)
+                                    .addOnSuccessListener(ignored ->
+                                            Log.i("STOP_PLAY_GAMES", "Achievement unlock requested: " + key))
+                                    .addOnFailureListener(error ->
+                                            Log.w("STOP_PLAY_GAMES", "Achievement report failed; STOP continues", error));
+                        } catch (RuntimeException error) {
+                            Log.w("STOP_PLAY_GAMES", "Achievement report unavailable; STOP continues", error);
+                        }
+                    });
+        } catch (RuntimeException error) {
+            Log.w("STOP_PLAY_GAMES", "Play Games unavailable; STOP continues", error);
+        }
     }
 
     private void showInterstitialWhenReady() {
