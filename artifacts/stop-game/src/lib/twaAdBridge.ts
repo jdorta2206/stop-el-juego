@@ -40,11 +40,13 @@ export function reportGooglePlayAchievement(achievementKey: string): void {
   if (typeof window === "undefined" || !PGS_ACHIEVEMENT_KEYS.has(achievementKey)) return;
   try {
     if (window.location.origin !== PGS_ALLOWED_ORIGIN || !isTwaAdBridgeAvailable()) return;
-    window.postMessage({
-      type: "STOP_PGS_UNLOCK_ACHIEVEMENT",
-      origin: PGS_ALLOWED_ORIGIN,
-      achievementKey,
-    }, PGS_ALLOWED_ORIGIN);
+    // window.postMessage only dispatches a browser Window message; it does not
+    // deliver a message to Android CustomTabsCallback.onPostMessage. Use the
+    // app's registered, allowlisted native deep-link route instead.
+    const unlockUrl = new URL("stoppgs://unlock");
+    unlockUrl.searchParams.set("achievementKey", achievementKey);
+    unlockUrl.searchParams.set("origin", PGS_ALLOWED_ORIGIN);
+    window.location.href = unlockUrl.toString();
   } catch {
     // Google Play Games is optional and must never affect STOP gameplay.
   }
