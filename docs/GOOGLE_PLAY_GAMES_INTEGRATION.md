@@ -30,7 +30,7 @@ These values cannot safely be guessed or fabricated. Without them, a successful 
 ### Phase 1 — native SDK and graceful capability detection
 
 - **Scaffolding added on the integration branch:** SDK dependency, manifest project metadata, project ID resource, and non-blocking authentication capability check. The SDK initializes through its default manifest provider.
-- An unsigned Android debug APK/AAB validation workflow is configured to install Android SDK API 36 and attempt both build targets. Its result still needs to be confirmed; test sign-in with Play Console-configured test accounts after the Android OAuth client is linked.
+- **Build verified:** GitHub Actions run 37949040253 completed successfully, including `:app:assembleDebug`, `:app:bundleDebug`, and checks that both APK and AAB artifacts exist. This verifies debug compilation only; it does not verify sign-in, release signing, or on-device behavior. Test sign-in with Play Console-configured accounts after the Android OAuth client is linked.
 - Keep all PGS calls isolated from the ad bridge.
 - If PGS is not configured, the Play Games app is missing, authentication is declined, or network/service calls fail, log a diagnostic and continue the existing TWA game unchanged.
 - Do not expose a general-purpose JavaScript interface to arbitrary pages. Any web-to-native bridge must validate the exact HTTPS origin, message schema, request IDs, and allowed action IDs.
@@ -61,4 +61,4 @@ These values cannot safely be guessed or fabricated. Without them, a successful 
 - **Still blocked for end-to-end auth verification:** linked Android OAuth credential using the Play App Signing SHA-1.
 - **Not implemented yet:** STOP achievement mapping/reporting, leaderboard mapping/submission, any guarded native/web action protocol, and Saved Games save/load/conflict handling.
 - Play Console achievement and leaderboard IDs must be created before those features can be wired to real resources. Saved Games must remain disabled until its implementation is ready to test.
-- No successful build or device test result is confirmed yet. Do not call this integration complete or live.
+- Successful unsigned debug APK/AAB build verified in GitHub Actions run 37949040253. No successful device test or end-to-end PGS authentication result is confirmed. Do not call this integration complete or live.
