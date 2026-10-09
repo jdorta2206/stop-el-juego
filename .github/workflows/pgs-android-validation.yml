@@ -51,6 +51,20 @@ jobs:
             android-generated/app/build/outputs/bundle/debug/app-debug.aab
           if-no-files-found: error
           retention-days: 7
+      - name: Verify Play Games and existing release configuration
+        working-directory: android-generated
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'applicationId "app.replit.stop_el_juego.twa"' app/build.gradle
+          grep -Fq 'versionCode 54' app/build.gradle
+          grep -Fq 'versionName "1.3.6.9"' app/build.gradle
+          grep -Fq 'appVersion=1.3.6.9' app/build.gradle
+          grep -Fq "play-services-games-v2:22.1.0" app/build.gradle
+          grep -Fq 'com.google.android.gms.games.APP_ID' app/src/main/AndroidManifest.xml
+          grep -Fq 'game_services_project_id' app/src/main/AndroidManifest.xml
+          grep -Fq 'POST_NOTIFICATIONS' app/src/main/AndroidManifest.xml
+          grep -Fq 'AppUpdateManagerFactory.create(this)' app/src/main/java/app/replit/stop_el_juego/twa/LauncherActivity.java
       - name: Verify debug artifacts exist
         shell: bash
         run: |
