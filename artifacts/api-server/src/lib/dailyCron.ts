@@ -524,9 +524,9 @@ async function sendDailyDealsNotifications() {
           url: `/player/${row.player_id}#tienda`,
         });
         sent += n;
-        if (n === 0) await releasePlayerNotification(today, claimKey, row.player_id);
+        if (n === 0) await releasePlayerNotification(row.local_day, claimKey, row.player_id);
       } catch (error) {
-        await releasePlayerNotification(today, claimKey, row.player_id);
+        await releasePlayerNotification(row.local_day, claimKey, row.player_id);
         console.error("[dailyDealsCron] player notification failed:", error);
       }
     }
