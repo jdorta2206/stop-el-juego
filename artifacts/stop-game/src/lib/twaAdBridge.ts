@@ -37,19 +37,11 @@ const PGS_ACHIEVEMENT_KEYS = new Set([
  * Never sends arbitrary Play Console IDs: only known internal achievement keys.
  */
 export function reportGooglePlayAchievement(achievementKey: string): void {
+  // Intentionally disabled until a non-navigating, end-to-end-tested TWA-to-
+  // Android request channel is available. Navigating to a custom scheme for
+  // every unlock can interrupt an active round or repeatedly background STOP.
+  // Keep this best-effort hook inert: local/server progression is unaffected.
   if (typeof window === "undefined" || !PGS_ACHIEVEMENT_KEYS.has(achievementKey)) return;
-  try {
-    if (window.location.origin !== PGS_ALLOWED_ORIGIN || !isTwaAdBridgeAvailable()) return;
-    // window.postMessage only dispatches a browser Window message; it does not
-    // deliver a message to Android CustomTabsCallback.onPostMessage. Use the
-    // app's registered, allowlisted native deep-link route instead.
-    const unlockUrl = new URL("stoppgs://unlock");
-    unlockUrl.searchParams.set("achievementKey", achievementKey);
-    unlockUrl.searchParams.set("origin", PGS_ALLOWED_ORIGIN);
-    window.location.href = unlockUrl.toString();
-  } catch {
-    // Google Play Games is optional and must never affect STOP gameplay.
-  }
 }
 
 export function isTwaAdBridgeAvailable(): boolean {
