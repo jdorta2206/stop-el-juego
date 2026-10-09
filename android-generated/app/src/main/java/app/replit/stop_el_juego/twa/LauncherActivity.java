@@ -63,9 +63,8 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        // Initialize PGS v2 before making Games SDK calls; sign-in never gates TWA startup.
-        PlayGamesSdk.initialize(getApplicationContext());
-        checkPlayGamesSignInBestEffort();
+        // PGS is optional: SDK initialization/authentication failures must never block TWA startup.
+        initializePlayGamesBestEffort();
         appUpdateManager = AppUpdateManagerFactory.create(this);
         checkForPlayUpdate();
         if (AdsPolicy.isEnabled()) {
@@ -80,6 +79,19 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT);
         } else {
             setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+        }
+    }
+
+    /**
+     * Play Games is optional: even SDK initialization errors must not prevent STOP
+     * from opening. Authentication itself is also best-effort.
+     */
+    private void initializePlayGamesBestEffort() {
+        try {
+            PlayGamesSdk.initialize(getApplicationContext());
+            checkPlayGamesSignInBestEffort();
+        } catch (RuntimeException error) {
+            Log.w("STOP_PLAY_GAMES", "Play Games initialization failed; continuing normally", error);
         }
     }
 

@@ -27,6 +27,10 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+      - name: Install Android SDK components
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
       - name: Build debug APK and AAB (no signing secrets)
