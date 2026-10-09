@@ -1,6 +1,7 @@
 package app.replit.stop_el_juego.twa;
 
 import android.app.Activity;
+import android.content.Intent;
 import android.os.Bundle;
 import android.util.Log;
 
@@ -25,6 +26,22 @@ public final class PlayGamesAchievementsActivity extends Activity {
         }
 
         try {
+            // Sign-in is attempted only after the player explicitly asks to view
+            // achievements. A cancellation/failure never blocks STOP gameplay.
+            PlayGames.getGamesSignInClient(this).signIn()
+                    .addOnSuccessListener(ignored -> openAchievements())
+                    .addOnFailureListener(error -> {
+                        Log.w("STOP_PLAY_GAMES", "Sign-in unavailable; cannot show PGS achievements", error);
+                        finish();
+                    });
+        } catch (RuntimeException error) {
+            Log.w("STOP_PLAY_GAMES", "Play Games sign-in unavailable", error);
+            finish();
+        }
+    }
+
+    private void openAchievements() {
+        try {
             PlayGames.getAchievementsClient(this).getAchievementsIntent()
                     .addOnSuccessListener(intent -> {
                         try {
@@ -47,7 +64,7 @@ public final class PlayGamesAchievementsActivity extends Activity {
     }
 
     @Override
-    protected void onActivityResult(int requestCode, int resultCode, android.content.Intent data) {
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == RC_ACHIEVEMENTS_UI) finish();
     }
