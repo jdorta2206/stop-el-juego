@@ -45,8 +45,10 @@ jobs:
           grep -q 'stoppgs' android-generated/app/src/main/AndroidManifest.xml
           ! grep -q 'stoppgs://unlock' artifacts/stop-game/src/lib/twaAdBridge.ts
           grep -q 'reportGooglePlayAchievement' artifacts/stop-game/src/lib/twaAdBridge.ts
-          grep -q 'handleAchievementUnlock' android-generated/app/src/main/java/app/replit/stop_el_juego/twa/PlayGamesAchievementsActivity.java
-          echo "PGS source guards passed; web achievement reporting remains safely disabled pending a tested non-navigating bridge."
+          grep -q 'getAchievementsIntent' android-generated/app/src/main/java/app/replit/stop_el_juego/twa/PlayGamesAchievementsActivity.java
+          ! grep -q 'handleAchievementUnlock\|unlock(achievementId)' android-generated/app/src/main/java/app/replit/stop_el_juego/twa/PlayGamesAchievementsActivity.java
+          ! grep -q 'android:host="unlock"' android-generated/app/src/main/AndroidManifest.xml
+          echo "PGS source guards passed; exported unlock deep link is removed and web achievement reporting remains disabled pending a tested non-navigating bridge."
 
       - name: Assemble debug APK
         working-directory: android-generated
