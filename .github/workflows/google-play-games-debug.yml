@@ -36,9 +36,6 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
       - name: Verify integration sources and route allowlist
         shell: bash
         run: |
