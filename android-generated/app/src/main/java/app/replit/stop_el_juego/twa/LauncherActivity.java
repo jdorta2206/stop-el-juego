@@ -305,11 +305,9 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                             return;
                         }
                         try {
-                            PlayGames.getAchievementsClient(this).unlock(achievementId)
-                                    .addOnSuccessListener(ignored ->
-                                            Log.i("STOP_PLAY_GAMES", "Achievement unlock requested: " + key))
-                                    .addOnFailureListener(error ->
-                                            Log.w("STOP_PLAY_GAMES", "Achievement report failed; STOP continues", error));
+                            // Play Games SDK v2 unlock() returns void, not a Task.
+                            PlayGames.getAchievementsClient(this).unlock(achievementId);
+                            Log.i("STOP_PLAY_GAMES", "Achievement unlock request submitted: " + key);
                         } catch (RuntimeException error) {
                             Log.w("STOP_PLAY_GAMES", "Achievement report unavailable; STOP continues", error);
                         }
