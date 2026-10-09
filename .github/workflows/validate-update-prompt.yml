@@ -1,0 +1,39 @@
+name: Validate TWA update prompt
+
+on:
+  pull_request:
+    branches:
+      - fix/audit-health-diagnostic-build
+    paths:
+      - "artifacts/stop-game/src/lib/appVersion.ts"
+      - "artifacts/stop-game/src/main.tsx"
+      - ".github/workflows/validate-update-prompt.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build-stop-game:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - name: Enable pnpm
+        run: corepack enable
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build STOP game
+        run: pnpm --filter @workspace/stop-game build
+      - name: Typecheck shared libraries
+        run: pnpm run typecheck:libs
+      - name: Typecheck app-version module in isolation
+        run: pnpm exec tsc --noEmit --skipLibCheck --target ES2022 --module ESNext --moduleResolution Bundler --lib ES2022,DOM --types vite/client artifacts/stop-game/src/lib/appVersion.ts

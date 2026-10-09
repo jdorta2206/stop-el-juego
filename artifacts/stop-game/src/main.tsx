@@ -5,7 +5,7 @@ import "./index.css";
 import { ensureOfflineBundle } from "./lib/offlineGame";
 import { consumeAuthHandoff } from "./lib/oauth";
 import { initTwaAdBridge } from "./lib/twaAdBridge";
-import { captureInstalledAppVersion, getInstalledAppVersion, getAnalyticsClientVersion } from "./lib/appVersion";
+import { captureInstalledAppVersion, getInstalledAppVersion, getAnalyticsClientVersion, isAppUpdateRecommended } from "./lib/appVersion";
 
 // Install the TWA AdMob message listener before React mounts. Native TWA can
 // complete the postMessage handshake very early during page startup; waiting
@@ -178,6 +178,78 @@ async function bootstrapApp() {
 
 void startAnalyticsHeartbeat();
 void bootstrapApp();
+
+// The native Play Core prompt only works when Google Play reports an eligible
+// update. This web fallback also covers older TWA builds that do not report a
+// version at all. It never blocks gameplay and only opens the official listing.
+function showTwaUpdatePromptIfNeeded(): void {
+  const params = new URLSearchParams(window.location.search);
+  const isTwa =
+    params.get("source") === "googleplay-twa" ||
+    params.get("source") === "twa" ||
+    document.referrer.startsWith("android-app://app.replit.stop_el_juego.twa") ||
+    !!getInstalledAppVersion();
+  if (!isTwa || !isAppUpdateRecommended()) return;
+  if (document.getElementById("stop-twa-update-dialog")) return;
+
+  const overlay = document.createElement("div");
+  overlay.id = "stop-twa-update-dialog";
+  Object.assign(overlay.style, {
+    position: "fixed", inset: "0", zIndex: "100000",
+    display: "flex", alignItems: "center", justifyContent: "center",
+    padding: "24px", background: "rgba(3, 7, 25, 0.82)",
+    backdropFilter: "blur(6px)", fontFamily: "inherit",
+  });
+
+  const panel = document.createElement("section");
+  Object.assign(panel.style, {
+    width: "100%", maxWidth: "360px", padding: "24px",
+    borderRadius: "20px", border: "1px solid rgba(249,168,37,.6)",
+    background: "linear-gradient(145deg,#101b50,#190d32)",
+    color: "#fff", textAlign: "center", boxShadow: "0 18px 60px rgba(0,0,0,.55)",
+  });
+
+  const title = document.createElement("h2");
+  title.textContent = "Comprueba si hay una actualización";
+  Object.assign(title.style, { margin: "0 0 12px", fontSize: "21px", lineHeight: "1.25" });
+
+  const message = document.createElement("p");
+  message.textContent = "Esta instalación de STOP no informa de una versión reciente. Abre Google Play para comprobar si tienes una actualización disponible. El juego seguirá funcionando si no hay ninguna.";
+  Object.assign(message.style, { margin: "0 0 20px", fontSize: "14px", lineHeight: "1.5", color: "rgba(255,255,255,.88)" });
+
+  const update = document.createElement("button");
+  update.type = "button";
+  update.textContent = "Comprobar en Google Play";
+  Object.assign(update.style, {
+    width: "100%", padding: "12px 16px", border: "0", borderRadius: "12px",
+    background: "#f9a825", color: "#11183e", fontWeight: "700",
+    fontSize: "14px", cursor: "pointer",
+  });
+  update.onclick = () => {
+    window.location.href = "https://play.google.com/store/apps/details?id=app.replit.stop_el_juego.twa";
+  };
+
+  const later = document.createElement("button");
+  later.type = "button";
+  later.textContent = "Seguir jugando";
+  Object.assign(later.style, {
+    marginTop: "10px", width: "100%", padding: "11px 16px",
+    border: "1px solid rgba(255,255,255,.28)", borderRadius: "12px",
+    background: "transparent", color: "#fff", fontWeight: "600",
+    fontSize: "14px", cursor: "pointer",
+  });
+  later.onclick = () => overlay.remove();
+
+  panel.append(title, message, update, later);
+  overlay.appendChild(panel);
+  document.body.appendChild(overlay);
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", showTwaUpdatePromptIfNeeded, { once: true });
+} else {
+  showTwaUpdatePromptIfNeeded();
+}
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
