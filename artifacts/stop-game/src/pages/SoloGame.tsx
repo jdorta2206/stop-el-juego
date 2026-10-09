@@ -2875,7 +2875,11 @@ export default function SoloGame() {
                       <p className="text-white/50 text-xs font-bold text-center">
                         🏆 {lang === "en" ? "Record" : lang === "pt" ? "Recorde" : lang === "fr" ? "Record" : "Récord"}: {personalBest} pts
                       </p>
-                      {bestResult.diff > -20 ? (
+                      {bestResult.diff === 0 ? (
+                        <p className="text-white/80 font-black text-sm text-center">
+                          {lang === "en" ? "You matched your personal best! 🎯" : lang === "pt" ? "Igualaste o teu recorde pessoal! 🎯" : lang === "fr" ? "Tu as égalé ton record personnel ! 🎯" : "¡Has igualado tu récord personal! 🎯"}
+                        </p>
+                      ) : bestResult.diff > -20 ? (
                         <p className="text-white/80 font-black text-sm text-center">
                           {lang === "en" ? `So close! ${Math.abs(bestResult.diff)} pts away 😤` : lang === "pt" ? `Tão perto! Faltaram ${Math.abs(bestResult.diff)} pts 😤` : lang === "fr" ? `Si proche ! ${Math.abs(bestResult.diff)} pts de plus 😤` : `¡Tan cerca! Te faltaron ${Math.abs(bestResult.diff)} pts 😤`}
                         </p>
