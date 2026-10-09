@@ -36,16 +36,17 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Verify integration sources and route allowlist
+      - name: Verify integration sources and safe achievement behavior
         shell: bash
         run: |
           set -euo pipefail
           test -f android-generated/app/src/main/java/app/replit/stop_el_juego/twa/PlayGamesAchievementsActivity.java
           grep -q 'play-services-games-v2:22.1.0' android-generated/app/build.gradle
           grep -q 'stoppgs' android-generated/app/src/main/AndroidManifest.xml
-          grep -q 'stoppgs://unlock' artifacts/stop-game/src/lib/twaAdBridge.ts
+          ! grep -q 'stoppgs://unlock' artifacts/stop-game/src/lib/twaAdBridge.ts
+          grep -q 'reportGooglePlayAchievement' artifacts/stop-game/src/lib/twaAdBridge.ts
           grep -q 'handleAchievementUnlock' android-generated/app/src/main/java/app/replit/stop_el_juego/twa/PlayGamesAchievementsActivity.java
-          echo "PGS source guards passed."
+          echo "PGS source guards passed; web achievement reporting remains safely disabled pending a tested non-navigating bridge."
 
       - name: Assemble debug APK
         working-directory: android-generated
