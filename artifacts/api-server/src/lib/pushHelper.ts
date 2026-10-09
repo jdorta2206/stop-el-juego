@@ -98,7 +98,7 @@ function rollbackNotificationThrottle(playerId: string, payload: PushPayload) {
   if (!playerId || playerId === "anonymous") return;
   const kind = notificationKind(payload);
   if (kind === "daily" || kind === "invite" || kind === "friend") return;
-  if (kind === "promo") promotionalLastSentAt.delete(`${playerId}:${kind}`);
+  if (kind.startsWith("promo")) promotionalLastSentAt.delete(`${playerId}:${kind}`);
   else if (kind === "rank") playerLastSentAt.delete(`${playerId}:${kind}`);
   else playerLastSentAt.delete(playerId);
 }
