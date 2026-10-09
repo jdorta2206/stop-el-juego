@@ -27,6 +27,7 @@ import com.google.android.gms.ads.MobileAds;
 import com.google.android.gms.ads.rewarded.RewardedAd;
 import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback;
 import com.google.android.gms.games.PlayGames;
+import com.google.android.gms.games.PlayGamesSdk;
 import com.google.androidbrowserhelper.trusted.QualityEnforcer;
 import com.google.androidbrowserhelper.trusted.TwaLauncher;
 
@@ -62,6 +63,8 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        // Initialize PGS v2 before making Games SDK calls; sign-in never gates TWA startup.
+        PlayGamesSdk.initialize(getApplicationContext());
         checkPlayGamesSignInBestEffort();
         appUpdateManager = AppUpdateManagerFactory.create(this);
         checkForPlayUpdate();
