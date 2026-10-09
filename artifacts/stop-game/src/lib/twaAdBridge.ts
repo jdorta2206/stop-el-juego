@@ -24,6 +24,32 @@ export function initTwaAdBridge(): void {
   installResumeListener();
 }
 
+const PGS_ALLOWED_ORIGIN = "https://www.stopjuegodepalabras.com";
+const PGS_ACHIEVEMENT_KEYS = new Set([
+  "first_win", "combo3", "speed_demon", "chaos_master", "wordsmith",
+  "veteran", "champion", "unstoppable", "streak_3", "streak_7",
+  "streak_14", "streak_30", "creator", "viral", "shutout",
+]);
+
+/**
+ * Best-effort reporting to the native TWA bridge. STOP progression is already
+ * persisted locally/server-side before this is called; PGS failure is ignored.
+ * Never sends arbitrary Play Console IDs: only known internal achievement keys.
+ */
+export function reportGooglePlayAchievement(achievementKey: string): void {
+  if (typeof window === "undefined" || !PGS_ACHIEVEMENT_KEYS.has(achievementKey)) return;
+  try {
+    if (window.location.origin !== PGS_ALLOWED_ORIGIN || !isTwaAdBridgeAvailable()) return;
+    window.postMessage({
+      type: "STOP_PGS_UNLOCK_ACHIEVEMENT",
+      origin: PGS_ALLOWED_ORIGIN,
+      achievementKey,
+    }, PGS_ALLOWED_ORIGIN);
+  } catch {
+    // Google Play Games is optional and must never affect STOP gameplay.
+  }
+}
+
 export function isTwaAdBridgeAvailable(): boolean {
   if (typeof window === "undefined") return false;
   try {
