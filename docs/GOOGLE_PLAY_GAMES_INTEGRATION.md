@@ -11,7 +11,7 @@ The current Android package is a Trusted Web Activity (TWA), not a native game A
 - Android application ID: `app.replit.stop_el_juego.twa`.
 - Android project: `android-generated/`; release workflow builds signed APK and AAB from this project.
 - Existing local achievements are defined in `artifacts/stop-game/src/hooks/useAchievements.ts`.
-- Phase 1 scaffolding is now present on this branch: Play Games Services v2 SDK dependency (`22.1.0`), manifest metadata, project ID resource (`902072408470`), and a best-effort authentication capability check in `LauncherActivity`.
+- Phase 1 scaffolding is now present on this branch: Play Games Services v2 SDK dependency (`22.1.0`), manifest metadata, project ID resource (`902072408470`), and a best-effort authentication capability check in `LauncherActivity`. The SDK's manifest provider performs normal initialization; the TWA activity does not manually initialize the SDK.
 - No achievement reporting, leaderboard submission/UI, cloud-save implementation, or web-to-native PGS message protocol has been added yet.
 - The app's local achievements and the web backend's player identity/progression remain the source of truth for STOP. PGS is an optional platform layer and must never grant XP, coins, streaks, rewards, or competitive score on its own.
 
@@ -29,8 +29,8 @@ These values cannot safely be guessed or fabricated. Without them, a successful 
 
 ### Phase 1 — native SDK and graceful capability detection
 
-- **Scaffolding added on the integration branch:** SDK dependency, manifest project metadata, project ID resource, and non-blocking authentication capability check.
-- Still required: build the Android project and verify the dependency/API compiles; test sign-in with Play Console-configured test accounts after the Android OAuth client is linked.
+- **Scaffolding added on the integration branch:** SDK dependency, manifest project metadata, project ID resource, and non-blocking authentication capability check. The SDK initializes through its default manifest provider.
+- An unsigned Android debug APK/AAB validation workflow is configured to install Android SDK API 36 and attempt both build targets. Its result still needs to be confirmed; test sign-in with Play Console-configured test accounts after the Android OAuth client is linked.
 - Keep all PGS calls isolated from the ad bridge.
 - If PGS is not configured, the Play Games app is missing, authentication is declined, or network/service calls fail, log a diagnostic and continue the existing TWA game unchanged.
 - Do not expose a general-purpose JavaScript interface to arbitrary pages. Any web-to-native bridge must validate the exact HTTPS origin, message schema, request IDs, and allowed action IDs.
@@ -61,4 +61,4 @@ These values cannot safely be guessed or fabricated. Without them, a successful 
 - **Still blocked for end-to-end auth verification:** linked Android OAuth credential using the Play App Signing SHA-1.
 - **Not implemented yet:** STOP achievement mapping/reporting, leaderboard mapping/submission, any guarded native/web action protocol, and Saved Games save/load/conflict handling.
 - Play Console achievement and leaderboard IDs must be created before those features can be wired to real resources. Saved Games must remain disabled until its implementation is ready to test.
-- No build or device test result is available from the current integration commit. Do not call this integration complete or live.
+- No successful build or device test result is confirmed yet. Do not call this integration complete or live.
