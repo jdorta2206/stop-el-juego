@@ -30,7 +30,7 @@ These values cannot safely be guessed or fabricated. Without them, a successful 
 ### Phase 1 — native SDK and graceful capability detection
 
 - **Scaffolding added on the integration branch:** SDK dependency, manifest project metadata, project ID resource, and non-blocking authentication capability check. The SDK initializes through its default manifest provider.
-- **Build verified:** GitHub Actions run 37949040253 completed successfully, including `:app:assembleDebug`, `:app:bundleDebug`, and checks that both APK and AAB artifacts exist. This verifies debug compilation only; it does not verify sign-in, release signing, or on-device behavior. Test sign-in with Play Console-configured accounts after the Android OAuth client is linked.
+- **Build verified:** GitHub Actions run 37949040253 completed successfully, including `:app:assembleDebug`, `:app:bundleDebug`, and checks that both APK and AAB artifacts exist. This verifies debug compilation only; it does not verify sign-in, release signing, or on-device behavior. Test sign-in with Play Console-configured accounts after the Android OAuth client is linked. The validation workflow now uploads both debug artifacts for seven days after a successful run so they can be installed on a test device; this remains an unsigned debug build, not a release candidate.
 - Keep all PGS calls isolated from the ad bridge.
 - If PGS is not configured, the Play Games app is missing, authentication is declined, or network/service calls fail, log a diagnostic and continue the existing TWA game unchanged.
 - Do not expose a general-purpose JavaScript interface to arbitrary pages. Any web-to-native bridge must validate the exact HTTPS origin, message schema, request IDs, and allowed action IDs.
