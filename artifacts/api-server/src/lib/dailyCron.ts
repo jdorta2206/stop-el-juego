@@ -354,7 +354,7 @@ async function sendPerUserDailyNotifications() {
         sent += n;
         if (n === 0) await releasePlayerNotification(row.local_day, claimKey, row.player_id);
       } catch (error) {
-        await releasePlayerNotification(today, claimKey, row.player_id);
+        await releasePlayerNotification(row.local_day, claimKey, row.player_id);
         console.error("[dailyCron] daily notification failed:", error);
       }
     }
@@ -457,9 +457,9 @@ async function sendHappyHourNotifications() {
             url: slot.url,
           });
           sent += n;
-          if (n === 0) await releasePlayerNotification(today, claimKey, row.player_id);
+          if (n === 0) await releasePlayerNotification(row.local_day, claimKey, row.player_id);
         } catch (error) {
-          await releasePlayerNotification(today, claimKey, row.player_id);
+          await releasePlayerNotification(row.local_day, claimKey, row.player_id);
           console.error("[happyHourCron] notification failed:", error);
         }
       }
@@ -482,9 +482,14 @@ async function sendDailyDealsNotifications() {
     const now = Date.now();
     const utcNow = new Date(now);
     const utcMinutesOfDay = utcNow.getUTCHours() * 60 + utcNow.getUTCMinutes();
-    const today = utcNow.toISOString().slice(0, 10);
     const rows = (await db.execute(sql`
-      SELECT player_id, language
+      SELECT player_id, language,
+             CASE
+               WHEN NULLIF(time_zone, '') IS NOT NULL
+                 AND EXISTS (SELECT 1 FROM pg_timezone_names valid_tz WHERE valid_tz.name = push_subscriptions.time_zone)
+               THEN TO_CHAR(NOW() AT TIME ZONE time_zone, 'YYYY-MM-DD')
+               ELSE TO_CHAR((NOW() AT TIME ZONE 'UTC') + (tz_offset_minutes * INTERVAL '1 minute'), 'YYYY-MM-DD')
+             END AS local_day
       FROM push_subscriptions
       WHERE enabled = TRUE
         AND muted_until < ${now}
@@ -495,7 +500,7 @@ async function sendDailyDealsNotifications() {
           THEN (EXTRACT(HOUR FROM (NOW() AT TIME ZONE time_zone))::int * 60 + EXTRACT(MINUTE FROM (NOW() AT TIME ZONE time_zone))::int)
           ELSE (((${utcMinutesOfDay}::int + tz_offset_minutes + 10080) % 1440)) END) < ${DAILY_DEALS_LOCAL_MIN + 5}
       LIMIT 10000
-    `)) as unknown as { rows?: Array<{ player_id: string; language: string }> };
+    `)) as unknown as { rows?: Array<{ player_id: string; language: string; local_day: string }> };
 
     const candidates = rows.rows ?? [];
     if (candidates.length === 0) return;
@@ -519,9 +524,9 @@ async function sendDailyDealsNotifications() {
           url: `/player/${row.player_id}#tienda`,
         });
         sent += n;
-        if (n === 0) await releasePlayerNotification(today, claimKey, row.player_id);
+        if (n === 0) await releasePlayerNotification(row.local_day, claimKey, row.player_id);
       } catch (error) {
-        await releasePlayerNotification(today, claimKey, row.player_id);
+        await releasePlayerNotification(row.local_day, claimKey, row.player_id);
         console.error("[dailyDealsCron] player notification failed:", error);
       }
     }
