@@ -78,6 +78,18 @@
         </activity>
 
         <activity
+            android:name=".PlayGamesAchievementsActivity"
+            android:exported="true"
+            android:excludeFromRecents="true">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="stoppgs" android:host="achievements" />
+            </intent-filter>
+        </activity>
+
+        <activity
             android:name=".RewardedAdActivity"
             android:exported="true"
             android:excludeFromRecents="true"
