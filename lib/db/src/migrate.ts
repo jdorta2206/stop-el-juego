@@ -67,6 +67,13 @@ export async function ensureIndexes(): Promise<void> {
        ON daily_results (player_id, challenge_date, language)`,
     `CREATE TABLE IF NOT EXISTS multiplayer_settlement_claims (room_id integer NOT NULL, player_id text NOT NULL, created_at timestamp NOT NULL DEFAULT NOW(), PRIMARY KEY (room_id, player_id))`,
     `CREATE TABLE IF NOT EXISTS cron_locks (lock_key text PRIMARY KEY, last_run_date text NOT NULL, updated_at timestamp NOT NULL DEFAULT NOW())`,
+    // Older production tables can predate the primary-key definition. Keep the
+    // newest claim per key, then ensure ON CONFLICT (lock_key) always has a
+    // real unique index to arbitrate claims safely across replicas.
+    `DELETE FROM cron_locks a USING cron_locks b
+       WHERE a.lock_key = b.lock_key
+         AND (a.updated_at < b.updated_at OR (a.updated_at = b.updated_at AND a.ctid < b.ctid))`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS cron_locks_lock_key_uidx ON cron_locks (lock_key)`,
     `CREATE TABLE IF NOT EXISTS revoked_player_ids (player_id text PRIMARY KEY, revoked_at timestamp NOT NULL DEFAULT NOW())`,
     `CREATE INDEX IF NOT EXISTS revoked_player_ids_revoked_at_idx ON revoked_player_ids (revoked_at)`,
     `CREATE TABLE IF NOT EXISTS api_rate_limits (bucket_key text PRIMARY KEY, window_start timestamp NOT NULL, hits integer NOT NULL DEFAULT 0)`,
