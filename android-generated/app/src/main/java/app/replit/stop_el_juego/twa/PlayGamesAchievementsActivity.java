@@ -81,12 +81,11 @@ public final class PlayGamesAchievementsActivity extends Activity {
                             return;
                         }
                         try {
-                            PlayGames.getAchievementsClient(this).unlock(achievementId)
-                                    .addOnSuccessListener(ignored ->
-                                            Log.i("STOP_PLAY_GAMES", "Achievement unlock requested: " + key))
-                                    .addOnFailureListener(error ->
-                                            Log.w("STOP_PLAY_GAMES", "Achievement unlock failed", error))
-                                    .addOnCompleteListener(ignored -> finish());
+                            // The Play Games SDK v2 unlock() method returns void;
+                            // it queues the request without exposing a Task callback.
+                            PlayGames.getAchievementsClient(this).unlock(achievementId);
+                            Log.i("STOP_PLAY_GAMES", "Achievement unlock request submitted: " + key);
+                            finish();
                         } catch (RuntimeException error) {
                             Log.w("STOP_PLAY_GAMES", "Achievement unlock unavailable", error);
                             finish();
