@@ -1,6 +1,9 @@
 name: Validate Android debug build
 
 on:
+  push:
+    branches:
+      - feat/google-play-games-integration
   pull_request:
     branches:
       - fix/audit-health-diagnostic-build
