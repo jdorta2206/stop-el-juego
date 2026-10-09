@@ -25,10 +25,6 @@ public final class PlayGamesAchievementsActivity extends Activity {
         }
 
         String host = getIntent().getData().getHost();
-        if ("unlock".equals(host)) {
-            handleAchievementUnlock();
-            return;
-        }
         if (!"achievements".equals(host)) {
             finish();
             return;
@@ -46,76 +42,6 @@ public final class PlayGamesAchievementsActivity extends Activity {
         } catch (RuntimeException error) {
             Log.w("STOP_PLAY_GAMES", "Play Games sign-in unavailable", error);
             finish();
-        }
-    }
-
-    /**
-     * Receives a fixed-key unlock request from the web game's registered custom
-     * scheme. The caller cannot supply arbitrary Play Console achievement IDs.
-     * PGS is best-effort and this short-lived activity always returns to STOP.
-     */
-    private void handleAchievementUnlock() {
-        String origin = getIntent().getData().getQueryParameter("origin");
-        String key = getIntent().getData().getQueryParameter("achievementKey");
-        if (!"https://www.stopjuegodepalabras.com".equals(origin)
-                && !"https://stopjuegodepalabras.com".equals(origin)) {
-            Log.w("STOP_PLAY_GAMES", "Rejected unlock deep link with invalid origin");
-            finish();
-            return;
-        }
-
-        String achievementId = achievementIdForKey(key);
-        if (achievementId == null) {
-            Log.w("STOP_PLAY_GAMES", "Rejected unknown achievement key=" + key);
-            finish();
-            return;
-        }
-
-        try {
-            PlayGames.getGamesSignInClient(this).isAuthenticated()
-                    .addOnCompleteListener(task -> {
-                        if (!task.isSuccessful() || task.getResult() == null
-                                || !task.getResult().isAuthenticated()) {
-                            Log.i("STOP_PLAY_GAMES", "Unlock skipped: player is not authenticated");
-                            finish();
-                            return;
-                        }
-                        try {
-                            // The Play Games SDK v2 unlock() method returns void;
-                            // it queues the request without exposing a Task callback.
-                            PlayGames.getAchievementsClient(this).unlock(achievementId);
-                            Log.i("STOP_PLAY_GAMES", "Achievement unlock request submitted: " + key);
-                            finish();
-                        } catch (RuntimeException error) {
-                            Log.w("STOP_PLAY_GAMES", "Achievement unlock unavailable", error);
-                            finish();
-                        }
-                    });
-        } catch (RuntimeException error) {
-            Log.w("STOP_PLAY_GAMES", "Play Games unavailable for unlock", error);
-            finish();
-        }
-    }
-
-    private static String achievementIdForKey(String key) {
-        if (key == null) return null;
-        switch (key) {
-            case "first_win": return "CgkIlrPSvaAaEAIQAQ";
-            case "combo3": return "CgkIlrPSvaAaEAIQGg";
-            case "speed_demon": return "CgkIlrPSvaAaEAIQEw";
-            case "chaos_master": return "CgkIlrPSvaAaEAIQEQ";
-            case "wordsmith": return "CgkIlrPSvaAaEAIQGA";
-            case "veteran": return "CgkIlrPSvaAaEAIQHA";
-            case "champion": return "CgkIlrPSvaAaEAIQGw";
-            case "unstoppable": return "CgkIlrPSvaAaEAIQEA";
-            case "streak_3": return "CgkIlrPSvaAaEAIQFQ";
-            case "streak_7": return "CgkIlrPSvaAaEAIQEg";
-            case "streak_14": return "CgkIlrPSvaAaEAIQGQ";
-            case "streak_30": return "CgkIlrPSvaAaEAIQFw";
-            case "creator": return "CgkIlrPSvaAaEAIQFg";
-            case "viral": return "CgkIlrPSvaAaEAIQFA";
-            case "shutout": return "CgkIlrPSvaAaEAIQHQ";
-            default: return null;
         }
     }
 
