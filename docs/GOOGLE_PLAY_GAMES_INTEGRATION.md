@@ -12,7 +12,7 @@ The current Android package is a Trusted Web Activity (TWA), not a native game A
 - Android project: `android-generated/`; release workflow builds signed APK and AAB from this project.
 - Existing local achievements are defined in `artifacts/stop-game/src/hooks/useAchievements.ts`.
 - Phase 1 scaffolding is now present on this branch: Play Games Services v2 SDK dependency (`22.1.0`), manifest metadata, project ID resource (`902072408470`), and a best-effort authentication capability check in `LauncherActivity`. The SDK's manifest provider performs normal initialization; the TWA activity does not manually initialize the SDK.
-- No achievement reporting, leaderboard submission/UI, cloud-save implementation, or web-to-native PGS message protocol has been added yet.
+- Achievement reporting code and a fixed-key web/native request path have been added on this branch; successful delivery through the TWA postMessage channel and real PGS unlocks are not yet verified in CI or on a device. Leaderboard submission/UI and cloud-save implementation remain absent.
 - The app's local achievements and the web backend's player identity/progression remain the source of truth for STOP. PGS is an optional platform layer and must never grant XP, coins, streaks, rewards, or competitive score on its own.
 
 ## Required external configuration (must be supplied from Play Console)
@@ -20,7 +20,7 @@ The current Android package is a Trusted Web Activity (TWA), not a native game A
 1. Create/configure Play Games Services for the existing Play Store app.
 2. Record the numeric Play Games Services project ID.
 3. Link an Android OAuth credential for package `app.replit.stop_el_juego.twa` using the **Google Play App Signing SHA-1** from Play Console. Add a separate debug credential only if local debug testing is needed.
-4. Create the achievement IDs and leaderboard IDs in Play Console and publish the PGS configuration for test accounts.
+4. Achievement IDs have been created and mapped. Keep the configuration in draft until the bridge is validated on a device; leaderboard IDs are out of scope for this phase.
 5. Confirm the existing release signing workflow can produce a candidate AAB without changing the production version or pushing to the Railway-connected branch.
 
 These values cannot safely be guessed or fabricated. Without them, a successful build would not prove PGS authentication works.
@@ -31,14 +31,14 @@ These values cannot safely be guessed or fabricated. Without them, a successful 
 
 - **Scaffolding added on the integration branch:** SDK dependency, manifest project metadata, project ID resource, and non-blocking authentication capability check. The SDK initializes through its default manifest provider.
 - **Build verified:** GitHub Actions run 37949040253 completed successfully, including `:app:assembleDebug`, `:app:bundleDebug`, and checks that both APK and AAB artifacts exist. This verifies debug compilation only; it does not verify sign-in, release signing, or on-device behavior. Test sign-in with Play Console-configured accounts after the Android OAuth client is linked. The validation workflow uploads both debug artifacts for seven days after a successful run so they can be installed on a test device; this remains an unsigned debug build, not a release candidate. A follow-up workflow check also guards the package ID, `versionCode 54`, `versionName 1.3.6.9`, start URL version, PGS SDK/manifest metadata, notification permission, and Play update-check wiring against accidental regression.
-- Keep all PGS calls isolated from the ad bridge.
+- PGS reporting is handled as a separate message type on the existing origin-validated TWA channel; it is processed before the ads-enabled guard so turning ads off does not disable achievements. No general-purpose JavaScript interface or achievement custom URL is used.
 - If PGS is not configured, the Play Games app is missing, authentication is declined, or network/service calls fail, log a diagnostic and continue the existing TWA game unchanged.
 - Do not expose a general-purpose JavaScript interface to arbitrary pages. Any web-to-native bridge must validate the exact HTTPS origin, message schema, request IDs, and allowed action IDs.
 
 ### Phase 2 — achievements
 
 - **ID mapping implemented:** all 15 local achievement keys map to the exact IDs supplied from Play Console in `GOOGLE_PLAY_ACHIEVEMENT_IDS` in `useAchievements.ts`.
-- **Reporting not yet implemented:** do not treat mapping alone as integration completion. Before sending reports, implement an origin-validated web-to-native protocol and ensure only the fixed allowlist of achievement keys is accepted. Client-side stats/localStorage alone are not authoritative for competitive rewards.
+- **Reporting path implemented, not yet end-to-end verified:** newly unlocked keys are sent best-effort from the web hook; Android accepts only the known 15-key allowlist, requires the validated TWA message channel and allowed HTTPS origin, and calls `AchievementsClient.unlock()` only after checking PGS authentication. Client-side stats/localStorage remain non-authoritative for competitive rewards.
 - When reporting is implemented, it must be best-effort and idempotent. A failure to report an achievement must not block a round or change its result.
 
 ### Phase 3 — leaderboards (after score authority review)
@@ -60,6 +60,7 @@ These values cannot safely be guessed or fabricated. Without them, a successful 
 - **Implemented on branch, not released:** SDK dependency + project metadata + best-effort auth capability check.
 - **Still blocked for end-to-end auth verification:** linked Android OAuth credential using the Play App Signing SHA-1.
 - **Implemented:** mapping of all 15 STOP achievement keys to the real Play Console IDs.
-- **Not implemented yet:** achievement reporting, origin-validated native/web action protocol, leaderboard mapping/submission, and Saved Games save/load/conflict handling.
+- **Implemented on branch:** achievement reporting path and origin/channel checks, with allowlisted IDs.
+- **Not implemented yet:** leaderboard mapping/submission and Saved Games save/load/conflict handling.
 - Play Console achievement and leaderboard IDs must be created before those features can be wired to real resources. Saved Games must remain disabled until its implementation is ready to test.
 - Unsigned debug APK/AAB build verified in GitHub Actions run 37961964977; artifact `stop-pgs-debug-build` was uploaded successfully and expires 2026-10-16. The next workflow run will also execute static guards for PGS configuration and preserved Android release settings. No successful device test or end-to-end PGS authentication result is confirmed. Do not call this integration complete or live.
