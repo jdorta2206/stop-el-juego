@@ -42,13 +42,24 @@ const PROMOTIONAL_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 const GENERAL_COOLDOWN_MS = 60 * 60 * 1000;
 const RANK_COOLDOWN_MS = 6 * 60 * 60 * 1000;
 
-function notificationKind(payload: PushPayload): "daily" | "rank" | "invite" | "friend" | "promo" | "other" {
+function notificationKind(payload: PushPayload):
+  | "daily" | "rank" | "invite" | "friend"
+  | "promo-happy-hour-pre" | "promo-happy-hour-live" | "promo-happy-hour-last"
+  | "promo-deals" | "promo-season-claim" | "promo" | "other" {
   const text = `${payload.title} ${payload.body}`.toLowerCase();
-  if (/reto diario|daily stop challenge|today's stop challenge|desafio diário|défi quotidien/.test(text)) return "daily";
+  if (/reto diario|daily stop challenge|today's stop challenge|desafio diário|défi quotidien|tu reto stop de hoy|te toca jugar|hora de tu stop|time to play|stop time/.test(text)) return "daily";
   if (/te han superado|you.?ve been overtaken|superaram|dépassé/.test(text)) return "rank";
   if (/te invitan|you.?re invited|convidado|invité/.test(text)) return "invite";
   if (/amigo conectado|friend online|amigo online|ami connecté/.test(text)) return "friend";
-  if (/happy hour|ofertas hoy|new deals|novas ofertas|nouvelles offres|misiones listas|missions ready|missões prontas|missions prêtes/.test(text)) return "promo";
+
+  // Each scheduled Happy Hour slot is a distinct event. A single 24-hour
+  // cooldown for every promotional push used to suppress the live and final
+  // reminders after the pre-alert had been sent.
+  if (/happy hour en 15 min|happy hour in 15 min|happy hour em 15 min|happy hour dans 15 min/.test(text)) return "promo-happy-hour-pre";
+  if (/quedan 10 min de happy hour|10 min of happy hour left|restam 10 min de happy hour|10 min restantes de happy hour/.test(text)) return "promo-happy-hour-last";
+  if (/happy hour/.test(text)) return "promo-happy-hour-live";
+  if (/ofertas hoy|new deals|novas ofertas|nouvelles offres/.test(text)) return "promo-deals";
+  if (/misiones listas|missions ready|missões prontas|missions prêtes/.test(text)) return "promo-season-claim";
   return "other";
 }
 
@@ -61,7 +72,7 @@ function allowNotification(playerId: string, payload: PushPayload): boolean {
   const kind = notificationKind(payload);
   const key = `${playerId}:${kind}`;
 
-  if (kind === "promo") {
+  if (kind.startsWith("promo")) {
     const last = promotionalLastSentAt.get(key) || 0;
     if (now - last < PROMOTIONAL_COOLDOWN_MS) return false;
     promotionalLastSentAt.set(key, now);
@@ -87,7 +98,7 @@ function rollbackNotificationThrottle(playerId: string, payload: PushPayload) {
   if (!playerId || playerId === "anonymous") return;
   const kind = notificationKind(payload);
   if (kind === "daily" || kind === "invite" || kind === "friend") return;
-  if (kind === "promo") promotionalLastSentAt.delete(`${playerId}:${kind}`);
+  if (kind.startsWith("promo")) promotionalLastSentAt.delete(`${playerId}:${kind}`);
   else if (kind === "rank") playerLastSentAt.delete(`${playerId}:${kind}`);
   else playerLastSentAt.delete(playerId);
 }
