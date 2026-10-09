@@ -5,11 +5,13 @@ import { Lock, ArrowLeft, Trophy } from "lucide-react";
 import { ACHIEVEMENTS, useAchievements } from "@/hooks/useAchievements";
 import { usePlayer } from "@/hooks/use-player";
 import { useT } from "@/i18n/useT";
+import { isTwaAdBridgeAvailable } from "@/lib/twaAdBridge";
 
 export default function Achievements() {
   const { player } = usePlayer();
   const { unlocked } = useAchievements(player?.id);
   const { t } = useT();
+  const showGooglePlayGamesEntry = isTwaAdBridgeAvailable();
   const tA = t.achievements as unknown as Record<string, string>;
 
   const total = ACHIEVEMENTS.length;
@@ -35,6 +37,26 @@ export default function Achievements() {
             <h1 className="text-2xl font-black text-white">{tA.title ?? "Logros"}</h1>
           </div>
         </div>
+
+        {showGooglePlayGamesEntry && (
+          <a
+            href="stoppgs://achievements"
+            className="flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-black text-white"
+            style={{
+              background: "linear-gradient(135deg, rgba(66,133,244,0.28), rgba(52,168,83,0.18))",
+              border: "1px solid rgba(255,255,255,0.2)",
+            }}
+            onClick={(event) => {
+              // Only this explicit tap launches the native Google Play Games screen.
+              // If PGS is not configured, native code exits safely without affecting STOP.
+              event.preventDefault();
+              window.location.href = "stoppgs://achievements";
+            }}
+          >
+            <Trophy className="w-5 h-5" />
+            Ver logros de Google Play Games
+          </a>
+        )}
 
         {/* Progress bar */}
         <motion.div
