@@ -37,9 +37,9 @@ These values cannot safely be guessed or fabricated. Without them, a successful 
 
 ### Phase 2 — achievements
 
-- Map only existing STOP achievement definitions to Play Console IDs; do not invent a second XP/reward system.
-- Trigger achievements only from server-confirmed milestones. Never trust a client-supplied “unlock” message or award gameplay currency from PGS.
-- Treat PGS reporting as best-effort and idempotent. A failure to report an achievement must not block a round or change its result.
+- **ID mapping implemented:** all 15 local achievement keys map to the exact IDs supplied from Play Console in `GOOGLE_PLAY_ACHIEVEMENT_IDS` in `useAchievements.ts`.
+- **Reporting not yet implemented:** do not treat mapping alone as integration completion. Before sending reports, implement an origin-validated web-to-native protocol and ensure only the fixed allowlist of achievement keys is accepted. Client-side stats/localStorage alone are not authoritative for competitive rewards.
+- When reporting is implemented, it must be best-effort and idempotent. A failure to report an achievement must not block a round or change its result.
 
 ### Phase 3 — leaderboards (after score authority review)
 
@@ -59,6 +59,7 @@ These values cannot safely be guessed or fabricated. Without them, a successful 
 
 - **Implemented on branch, not released:** SDK dependency + project metadata + best-effort auth capability check.
 - **Still blocked for end-to-end auth verification:** linked Android OAuth credential using the Play App Signing SHA-1.
-- **Not implemented yet:** STOP achievement mapping/reporting, leaderboard mapping/submission, any guarded native/web action protocol, and Saved Games save/load/conflict handling.
+- **Implemented:** mapping of all 15 STOP achievement keys to the real Play Console IDs.
+- **Not implemented yet:** achievement reporting, origin-validated native/web action protocol, leaderboard mapping/submission, and Saved Games save/load/conflict handling.
 - Play Console achievement and leaderboard IDs must be created before those features can be wired to real resources. Saved Games must remain disabled until its implementation is ready to test.
 - Unsigned debug APK/AAB build verified in GitHub Actions run 37961964977; artifact `stop-pgs-debug-build` was uploaded successfully and expires 2026-10-16. The next workflow run will also execute static guards for PGS configuration and preserved Android release settings. No successful device test or end-to-end PGS authentication result is confirmed. Do not call this integration complete or live.
