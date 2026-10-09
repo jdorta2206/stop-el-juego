@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { getApiUrl, authHeaders } from "@/lib/utils";
+import { reportGooglePlayAchievement } from "@/lib/twaAdBridge";
 
 const STATS_KEY = "stop_achievement_stats_v1";
 const UNLOCKED_KEY = "stop_achievements_unlocked_v1";
@@ -342,6 +343,12 @@ export function useAchievements(playerId?: string) {
       setUnlocked(newUnlocked);
       setNewlyUnlocked(justUnlocked);
     }
+    // Reporting is optional; STOP's own unlock and persistence happen first.
+    for (const id of newUnlocked) {
+      if (!currentUnlocked.has(id) && GOOGLE_PLAY_ACHIEVEMENT_IDS[id]) {
+        reportGooglePlayAchievement(id);
+      }
+    }
     // Always persist stats + achievements to server after every round
     if (playerId) saveToServer(playerId, [...newUnlocked], next);
   }, [playerId]);
@@ -388,6 +395,11 @@ export function useAchievements(playerId?: string) {
       setUnlocked(newUnlocked);
       setNewlyUnlocked(justUnlocked);
     }
+    for (const id of newUnlocked) {
+      if (!currentUnlocked.has(id) && GOOGLE_PLAY_ACHIEVEMENT_IDS[id]) {
+        reportGooglePlayAchievement(id);
+      }
+    }
     // Persist when either stats moved forward or new achievements were added.
     if (playerId && (justUnlocked || next !== current)) {
       saveToServer(playerId, [...newUnlocked], next);
@@ -419,6 +431,7 @@ export function useAchievements(playerId?: string) {
       const def = (e as CustomEvent<AchievementDef>).detail;
       if (!def) return;
       consume(def);
+      reportGooglePlayAchievement(def.id);
       // Clear the persisted pending unlock — this listener already showed it.
       try { sessionStorage.removeItem(PENDING_UNLOCK_KEY); } catch {}
     };
@@ -432,7 +445,10 @@ export function useAchievements(playerId?: string) {
       if (raw) {
         const id = JSON.parse(raw) as string;
         const def = ACHIEVEMENTS.find(a => a.id === id);
-        if (def) consume(def);
+        if (def) {
+          consume(def);
+          reportGooglePlayAchievement(def.id);
+        }
         sessionStorage.removeItem(PENDING_UNLOCK_KEY);
       }
     } catch {}
