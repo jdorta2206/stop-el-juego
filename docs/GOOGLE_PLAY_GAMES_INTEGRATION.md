@@ -12,8 +12,8 @@ The current Android package is a Trusted Web Activity (TWA), not a native game A
 - Android project: `android-generated/`; release workflow builds signed APK and AAB from this project.
 - Existing local achievements are defined in `artifacts/stop-game/src/hooks/useAchievements.ts`.
 - Phase 1 scaffolding is now present on this branch: Play Games Services v2 SDK dependency (`22.1.0`), manifest metadata, project ID resource (`902072408470`), and a best-effort authentication capability check in `LauncherActivity`. The SDK's manifest provider performs normal initialization; the TWA activity does not manually initialize the SDK.
-- Achievement reporting code and a fixed-key web/native request path have been added on this branch; successful delivery through the TWA postMessage channel and real PGS unlocks are not yet verified in CI or on a device. Leaderboard submission/UI and cloud-save implementation remain absent.
-- The app's local achievements and the web backend's player identity/progression remain the source of truth for STOP. PGS is an optional platform layer and must never grant XP, coins, streaks, rewards, or competitive score on its own.
+- Achievement reporting code and a fixed-key web/native request path have been added on this branch; successful delivery through the registered deep link and real PGS unlocks are not yet verified in CI or on a device. Leaderboard submission/UI and cloud-save implementation remain absent.
+- The app's local achievements and the web backend's player identity/progression remain the source of truth for STOP. PGS is an optional platform layer and must never grant XP, coins, streaks, rewards, or competitive score on its own. Achievement unlock requests now use a registered `stoppgs://unlock` Android deep link because browser `window.postMessage()` does not itself deliver messages to `CustomTabsCallback.onPostMessage()`.
 
 ## Required external configuration (must be supplied from Play Console)
 
@@ -31,14 +31,14 @@ These values cannot safely be guessed or fabricated. Without them, a successful 
 
 - **Scaffolding added on the integration branch:** SDK dependency, manifest project metadata, project ID resource, and non-blocking authentication capability check. The SDK initializes through its default manifest provider.
 - **Build verified:** GitHub Actions run 37949040253 completed successfully, including `:app:assembleDebug`, `:app:bundleDebug`, and checks that both APK and AAB artifacts exist. This verifies debug compilation only; it does not verify sign-in, release signing, or on-device behavior. Test sign-in with Play Console-configured accounts after the Android OAuth client is linked. The validation workflow uploads both debug artifacts for seven days after a successful run so they can be installed on a test device; this remains an unsigned debug build, not a release candidate. A follow-up workflow check also guards the package ID, `versionCode 54`, `versionName 1.3.6.9`, start URL version, PGS SDK/manifest metadata, notification permission, and Play update-check wiring against accidental regression.
-- PGS reporting is handled as a separate message type on the existing origin-validated TWA channel; it is processed before the ads-enabled guard so turning ads off does not disable achievements. No general-purpose JavaScript interface or achievement custom URL is used.
+- PGS reporting uses the dedicated `stoppgs://unlock` deep link and is independent of the ads bridge/policy, so turning ads off does not disable achievements. Android validates the HTTPS origin query parameter and a fixed internal-key allowlist; arbitrary Play Console IDs are never accepted. The web helper only emits the link on the exact production origin and when it detects the TWA environment.
 - If PGS is not configured, the Play Games app is missing, authentication is declined, or network/service calls fail, log a diagnostic and continue the existing TWA game unchanged.
-- Do not expose a general-purpose JavaScript interface to arbitrary pages. Any web-to-native bridge must validate the exact HTTPS origin, message schema, request IDs, and allowed action IDs.
+- Do not expose a general-purpose JavaScript interface to arbitrary pages. Any web-to-native bridge must validate the exact HTTPS origin, request schema, and allowed action IDs. For achievement unlocks, use only the registered deep-link route and fixed key allowlist.
 
 ### Phase 2 — achievements
 
 - **ID mapping implemented:** all 15 local achievement keys map to the exact IDs supplied from Play Console in `GOOGLE_PLAY_ACHIEVEMENT_IDS` in `useAchievements.ts`.
-- **Reporting path implemented, not yet end-to-end verified:** newly unlocked keys are sent best-effort from the web hook; Android accepts only the known 15-key allowlist, requires the validated TWA message channel and allowed HTTPS origin, and calls `AchievementsClient.unlock()` only after checking PGS authentication. Client-side stats/localStorage remain non-authoritative for competitive rewards.
+- **Reporting path implemented, not yet end-to-end verified:** newly unlocked keys are sent best-effort from the web hook through `stoppgs://unlock`; Android accepts only the known 15-key allowlist, checks the allowed HTTPS origin and PGS authentication, and calls `AchievementsClient.unlock()`. Client-side stats/localStorage remain non-authoritative for competitive rewards.
 - When reporting is implemented, it must be best-effort and idempotent. A failure to report an achievement must not block a round or change its result.
 
 ### Phase 3 — leaderboards (after score authority review)
