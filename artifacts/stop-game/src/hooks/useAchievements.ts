@@ -56,8 +56,8 @@ export interface AchievementDef {
 const IMG = (id: string) => `${import.meta.env.BASE_URL}achievements/${id}.png`;
 
 // Stable Play Console IDs for the 15 STOP achievements. These IDs are platform
-// identifiers only: local/backend progression remains authoritative. Reporting is
-// intentionally not triggered until the origin-validated native bridge is ready.
+// identifiers only: local/backend progression remains authoritative. Reporting
+// is best-effort and queues until the non-navigational native bridge is ready.
 export const GOOGLE_PLAY_ACHIEVEMENT_IDS: Readonly<Record<string, string>> = Object.freeze({
   first_win: "CgkIlrPSvaAaEAIQAQ",
   combo3: "CgkIlrPSvaAaEAIQGg",
