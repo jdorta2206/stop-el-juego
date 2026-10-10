@@ -20,7 +20,7 @@ export default function Achievements() {
 
   return (
     <Layout>
-      <div className="w-full max-w-2xl mx-auto px-4 py-4 space-y-4">
+      <div className="w-full max-w-2xl mx-auto px-4 py-4 space-y-4 rounded-3xl" style={{ background: "linear-gradient(180deg, rgba(127,29,29,0.42) 0%, rgba(69,10,10,0.30) 100%)", border: "1px solid rgba(248,113,113,0.28)", boxShadow: "0 12px 36px rgba(127,29,29,0.16)" }}>
         {/* Header */}
         <div className="flex items-center gap-3">
           <Link href="/">
