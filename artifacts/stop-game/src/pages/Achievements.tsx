@@ -43,8 +43,9 @@ export default function Achievements() {
             href="stoppgs://achievements"
             className="flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-black text-white"
             style={{
-              background: "linear-gradient(135deg, rgba(66,133,244,0.28), rgba(52,168,83,0.18))",
-              border: "1px solid rgba(255,255,255,0.2)",
+              background: "linear-gradient(135deg, rgba(220,38,38,0.92), rgba(153,27,27,0.96))",
+              border: "1px solid rgba(255,107,53,0.75)",
+              boxShadow: "0 4px 16px rgba(220,38,38,0.22)",
             }}
             onClick={(event) => {
               // Only this explicit tap launches the native Google Play Games screen.
