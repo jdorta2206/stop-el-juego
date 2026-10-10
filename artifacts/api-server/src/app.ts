@@ -175,9 +175,25 @@ if (process.env["SERVE_CLIENT"] === "1") {
       res.status(404).end();
       return;
     }
-    res.sendFile(path.join(clientDist, "index.html"), {
-      headers: { "Cache-Control": "no-cache, no-store, must-revalidate" },
-    }, next);
+
+    // Do not pass Express's next() directly as sendFile's completion callback:
+    // sendFile can finish the response before downstream error handling runs.
+    // Forward only a genuine file error, and never attempt a second response.
+    res.sendFile(
+      path.join(clientDist, "index.html"),
+      { headers: { "Cache-Control": "no-cache, no-store, must-revalidate" } },
+      (err) => {
+        if (!err) return;
+        if (res.headersSent) {
+          console.error("[SPA FALLBACK] sendFile failed after response headers were sent", {
+            path: req.path,
+            error: err.message,
+          });
+          return;
+        }
+        next(err);
+      },
+    );
   });
 }
 
