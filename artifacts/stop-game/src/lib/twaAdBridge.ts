@@ -9,27 +9,73 @@ type RewardedPlacement = "extra_time" | "hint" | "double_points" | "skip_round" 
 type RewardResult = { rewarded: boolean; source: "admob" | "client" | "skipped" | "error"; errorCode?: number; errorDomain?: string; errorMessage?: string };
 
 let initialized = false;
+let messageChannelReady = false;
 let pendingPlayerId = "guest";
+const queuedAchievementKeys = new Set<string>();
 
 export function setRewardedAdPlayerId(playerId: string | undefined): void {
   pendingPlayerId = playerId || "guest";
 }
 
-function installResumeListener(): void {
-  if (typeof window === "undefined" || initialized) return;
-  initialized = true;
-}
-
-export function initTwaAdBridge(): void {
-  installResumeListener();
-}
-
-const PGS_ALLOWED_ORIGIN = "https://www.stopjuegodepalabras.com";
+const PGS_ALLOWED_ORIGINS = new Set([
+  "https://www.stopjuegodepalabras.com",
+  "https://stopjuegodepalabras.com",
+]);
 const PGS_ACHIEVEMENT_KEYS = new Set([
   "first_win", "combo3", "speed_demon", "chaos_master", "wordsmith",
   "veteran", "champion", "unstoppable", "streak_3", "streak_7",
   "streak_14", "streak_30", "creator", "viral", "shutout",
 ]);
+
+function isAllowedPageOrigin(): boolean {
+  return typeof window !== "undefined" && PGS_ALLOWED_ORIGINS.has(window.location.origin);
+}
+
+function sendAchievementRequest(achievementKey: string): boolean {
+  if (typeof window === "undefined" || !messageChannelReady || !isAllowedPageOrigin()) return false;
+  if (!PGS_ACHIEVEMENT_KEYS.has(achievementKey)) return false;
+  try {
+    // Android receives this via CustomTabsCallback.onPostMessage. This is a
+    // non-navigational message; it must never change location or interrupt play.
+    window.postMessage({
+      type: "STOP_PGS_UNLOCK_ACHIEVEMENT",
+      origin: window.location.origin,
+      achievementKey,
+    }, window.location.origin);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function handleNativeBridgeMessage(event: MessageEvent): void {
+  if (!isAllowedPageOrigin()) return;
+  const raw = event.data;
+  let message: unknown = raw;
+  if (typeof raw === "string") {
+    try { message = JSON.parse(raw); } catch { return; }
+  }
+  if (!message || typeof message !== "object") return;
+  const type = (message as { type?: unknown }).type;
+  if (type !== "STOP_AD_BRIDGE_READY") return;
+  messageChannelReady = true;
+
+  // Retry only achievements queued by real local achievement events. A Set
+  // deduplicates repeat events while the channel is becoming ready.
+  for (const key of queuedAchievementKeys) {
+    if (sendAchievementRequest(key)) queuedAchievementKeys.delete(key);
+  }
+}
+
+function installResumeListener(): void {
+  if (typeof window === "undefined" || initialized) return;
+  initialized = true;
+  window.addEventListener("message", handleNativeBridgeMessage);
+}
+
+export function initTwaAdBridge(): void {
+  installResumeListener();
+}
 
 /**
  * Best-effort reporting to the native TWA bridge. STOP progression is already
@@ -37,11 +83,11 @@ const PGS_ACHIEVEMENT_KEYS = new Set([
  * Never sends arbitrary Play Console IDs: only known internal achievement keys.
  */
 export function reportGooglePlayAchievement(achievementKey: string): void {
-  // Intentionally disabled until a non-navigating, end-to-end-tested TWA-to-
-  // Android request channel is available. Navigating to a custom scheme for
-  // every unlock can interrupt an active round or repeatedly background STOP.
-  // Keep this best-effort hook inert: local/server progression is unaffected.
   if (typeof window === "undefined" || !PGS_ACHIEVEMENT_KEYS.has(achievementKey)) return;
+  if (sendAchievementRequest(achievementKey)) return;
+  // Queue only in the official STOP origin; never let a web mirror queue actions
+  // that might later be sent if it is navigated into a TWA context.
+  if (isAllowedPageOrigin()) queuedAchievementKeys.add(achievementKey);
 }
 
 export function isTwaAdBridgeAvailable(): boolean {
