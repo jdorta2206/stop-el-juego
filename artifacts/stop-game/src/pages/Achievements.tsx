@@ -5,13 +5,14 @@ import { Lock, ArrowLeft, Trophy } from "lucide-react";
 import { ACHIEVEMENTS, useAchievements } from "@/hooks/useAchievements";
 import { usePlayer } from "@/hooks/use-player";
 import { useT } from "@/i18n/useT";
-import { isTwaAdBridgeAvailable } from "@/lib/twaAdBridge";
 
 export default function Achievements() {
   const { player } = usePlayer();
   const { unlocked } = useAchievements(player?.id);
   const { t } = useT();
-  const showGooglePlayGamesEntry = isTwaAdBridgeAvailable();
+  // The ad bridge is independent of Google Play Games. Do not hide the PGS entry
+  // just because the rewarded-ad MessagePort has not initialized in a TWA session.
+  const showGooglePlayGamesEntry = typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent || "");
   const tA = t.achievements as unknown as Record<string, string>;
 
   const total = ACHIEVEMENTS.length;
