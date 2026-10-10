@@ -44,18 +44,14 @@ export function usePushNotifications(playerId: string | undefined, language: str
         const sub = await reg.pushManager.getSubscription();
         if (cancelled) return;
 
-        // Prioritize the browser's actual persisted Push API subscription.
-        if (sub) {
-          setIsSubscribed(true);
-          try { localStorage.removeItem(DISABLED_KEY); } catch {}
-        } else {
-          let disabled = false;
-          try { disabled = localStorage.getItem(DISABLED_KEY) === "1"; } catch {}
-          setIsSubscribed(!disabled);
+        // A browser subscription alone does not prove the server has it linked
+        // to this player. Never show "enabled" until the API confirms it.
+        if (!sub || perm !== "granted") {
+          if (!cancelled) setIsSubscribed(false);
           return;
         }
 
-        if (perm === "granted" && !cancelled && currentPlayerIdRef.current === playerId) {
+        if (!cancelled && currentPlayerIdRef.current === playerId) {
           const tzOffsetMinutes = -new Date().getTimezoneOffset();
           const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
           try {
@@ -73,9 +69,22 @@ export function usePushNotifications(playerId: string | undefined, language: str
                 origin: window.location.origin,
               }),
             });
-            if (!res.ok) console.warn("[push] subscription backfill failed", res.status);
+            if (!res.ok) throw new Error(`subscription backfill HTTP ${res.status}`);
+            const verify = await fetch(
+              `${API_BASE}/api/notifications/preferences?endpoint=${encodeURIComponent(sub.endpoint)}&playerId=${encodeURIComponent(playerId || "anonymous")}`,
+              { signal: controller.signal },
+            );
+            if (!verify.ok) throw new Error(`subscription verification HTTP ${verify.status}`);
+            const prefs = await verify.json();
+            if (!cancelled && currentPlayerIdRef.current === playerId) {
+              setIsSubscribed(prefs?.enabled === true);
+              if (prefs?.enabled === true) {
+                try { localStorage.removeItem(DISABLED_KEY); } catch {}
+              }
+            }
           } catch (e) {
-            console.warn("[push] subscription backfill error", e);
+            if (!cancelled) setIsSubscribed(false);
+            console.warn("[push] server subscription verification failed", e);
           }
         }
       } catch (e) {
@@ -123,9 +132,19 @@ export function usePushNotifications(playerId: string | undefined, language: str
 
       if (!res.ok) throw new Error(`subscription HTTP ${res.status}`);
       if (currentPlayerIdRef.current !== playerId) return false;
+
+      // Confirm the endpoint is stored for this exact player and enabled.
+      const verify = await fetch(
+        `${API_BASE}/api/notifications/preferences?endpoint=${encodeURIComponent(sub.endpoint)}&playerId=${encodeURIComponent(playerId || "anonymous")}`,
+      );
+      if (!verify.ok) throw new Error(`subscription verification HTTP ${verify.status}`);
+      const prefs = await verify.json();
+      if (prefs?.enabled !== true) throw new Error("server did not confirm enabled subscription");
+      if (currentPlayerIdRef.current !== playerId) return false;
       setIsSubscribed(true);
       return true;
     } catch (e) {
+      setIsSubscribed(false);
       console.error("Push subscribe error:", e);
       return false;
     } finally {
