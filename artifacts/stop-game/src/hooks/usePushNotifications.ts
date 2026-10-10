@@ -44,45 +44,43 @@ export function usePushNotifications(playerId: string | undefined, language: str
         const sub = await reg.pushManager.getSubscription();
         if (cancelled) return;
 
-        // Prioritize the browser's actual persisted Push API subscription.
-        // Do not publish isSubscribed=true until the server-side backfill has
-        // had a chance to register the endpoint: the Notifications page loads
-        // preferences when isSubscribed changes, so publishing it first creates
-        // a race where GET /preferences can run before POST /subscribe.
+        // A browser permission or a stale local flag is not a real Push subscription.
+        // Only report active after the server has accepted the persisted endpoint.
         if (!sub) {
-          let disabled = false;
-          try { disabled = localStorage.getItem(DISABLED_KEY) === "1"; } catch {}
-          if (!cancelled) setIsSubscribed(!disabled);
+          if (!cancelled) setIsSubscribed(false);
           return;
         }
 
-        try { localStorage.removeItem(DISABLED_KEY); } catch {}
-
-        if (perm === "granted" && !cancelled && currentPlayerIdRef.current === playerId) {
-          const tzOffsetMinutes = -new Date().getTimezoneOffset();
-          const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
-          try {
-            if (currentPlayerIdRef.current !== playerId) return;
-            const res = await fetch(`${API_BASE}/api/notifications/subscribe`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              signal: controller.signal,
-              body: JSON.stringify({
-                playerId: playerId || "anonymous",
-                subscription: sub.toJSON(),
-                language,
-                tzOffsetMinutes,
-                timeZone,
-                origin: window.location.origin,
-              }),
-            });
-            if (!res.ok) console.warn("[push] subscription backfill failed", res.status);
-          } catch (e) {
-            console.warn("[push] subscription backfill error", e);
-          }
+        if (perm !== "granted" || cancelled || currentPlayerIdRef.current !== playerId) {
+          if (!cancelled) setIsSubscribed(false);
+          return;
         }
 
-        if (!cancelled) setIsSubscribed(true);
+        const tzOffsetMinutes = -new Date().getTimezoneOffset();
+        const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
+        const res = await fetch(`${API_BASE}/api/notifications/subscribe`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          signal: controller.signal,
+          body: JSON.stringify({
+            playerId: playerId || "anonymous",
+            subscription: sub.toJSON(),
+            language,
+            tzOffsetMinutes,
+            timeZone,
+            origin: window.location.origin,
+          }),
+        });
+        if (!res.ok) {
+          if (!cancelled) setIsSubscribed(false);
+          console.warn("[push] subscription backfill failed", res.status);
+          return;
+        }
+
+        if (!cancelled && currentPlayerIdRef.current === playerId) {
+          try { localStorage.removeItem(DISABLED_KEY); } catch {}
+          setIsSubscribed(true);
+        }
       } catch (e) {
         console.warn("[push] initialise error", e);
       }
