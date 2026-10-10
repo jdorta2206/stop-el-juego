@@ -2,9 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { getApiUrl } from "@/lib/utils";
 
 const API_BASE = getApiUrl();
-const VAPID_PUBLIC =
-  import.meta.env.VITE_VAPID_PUBLIC_KEY ||
-  "BOwVNL3sEONgyFulirkX5dzwQo662Yj2_C846OSMrTSfiz4GFwEsl3_1NY3x_GqJIco8P7Ls85u56IRC3Y8Bj2c";
+const BUILD_VAPID_PUBLIC = import.meta.env.VITE_VAPID_PUBLIC_KEY || "";
 const DISABLED_KEY = "stop_push_notifications_disabled";
 
 function urlB64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
@@ -12,6 +10,35 @@ function urlB64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
   const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
   const rawData = atob(base64);
   return Uint8Array.from([...rawData].map((c) => c.charCodeAt(0))) as Uint8Array<ArrayBuffer>;
+}
+
+async function getServerVapidPublicKey(signal?: AbortSignal): Promise<string> {
+  const response = await fetch(`${API_BASE}/api/notifications/vapid-public-key`, {
+    cache: "no-store",
+    signal,
+  });
+  if (!response.ok) throw new Error(`VAPID public key HTTP ${response.status}`);
+  const data: unknown = await response.json();
+  const key = typeof data === "object" && data !== null && "key" in data
+    ? (data as { key?: unknown }).key
+    : undefined;
+  if (typeof key !== "string" || !key.trim()) {
+    throw new Error("Server VAPID public key is not configured");
+  }
+  // A configured build key must match the server key; otherwise new
+  // subscriptions could never be delivered by the server's private key.
+  if (BUILD_VAPID_PUBLIC && BUILD_VAPID_PUBLIC !== key) {
+    throw new Error("Client and server VAPID public keys do not match");
+  }
+  return key;
+}
+
+function sameApplicationServerKey(subscription: PushSubscription, publicKey: string): boolean {
+  const current = subscription.options.applicationServerKey;
+  if (!current) return false;
+  const expected = urlB64ToUint8Array(publicKey);
+  const actual = new Uint8Array(current);
+  return actual.length === expected.length && actual.every((value, index) => value === expected[index]);
 }
 
 export type NotifPermission = "default" | "granted" | "denied" | "unsupported";
@@ -39,13 +66,11 @@ export function usePushNotifications(playerId: string | undefined, language: str
         if (cancelled) return;
         const sub = await reg.pushManager.getSubscription();
         if (cancelled) return;
-        // A browser permission or stale local flag is not a real Push subscription.
-        // Only report active after the server has accepted the persisted endpoint.
         if (!sub) {
           if (!cancelled) setIsSubscribed(false);
           return;
         }
-        if (perm !== "granted" || cancelled || currentPlayerIdRef.current !== playerId) {
+        if (perm !== "granted" || currentPlayerIdRef.current !== playerId) {
           if (!cancelled) setIsSubscribed(false);
           return;
         }
@@ -74,7 +99,7 @@ export function usePushNotifications(playerId: string | undefined, language: str
           setIsSubscribed(true);
         }
       } catch (e) {
-        console.warn("[push] initialise error", e);
+        if (!controller.signal.aborted) console.warn("[push] initialise error", e);
       }
     };
     void initialise();
@@ -82,20 +107,47 @@ export function usePushNotifications(playerId: string | undefined, language: str
   }, [playerId, language]);
 
   const subscribe = useCallback(async () => {
-    if (!VAPID_PUBLIC || !("serviceWorker" in navigator)) return false;
+    if (!("serviceWorker" in navigator) || !("Notification" in window)) return false;
     setLoading(true);
     try {
       const reg = await navigator.serviceWorker.ready;
       const perm = await Notification.requestPermission();
       setPermission(perm as NotifPermission);
       if (perm !== "granted") return false;
-      try { localStorage.removeItem(DISABLED_KEY); } catch {}
-      const existing = await reg.pushManager.getSubscription();
+
+      // Fetch the server's authoritative public key before creating a
+      // subscription. Never silently create one with a stale build-time key.
+      const vapidPublic = await getServerVapidPublicKey();
       if (currentPlayerIdRef.current !== playerId) return false;
-      const sub = existing || await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlB64ToUint8Array(VAPID_PUBLIC),
-      });
+      let sub = await reg.pushManager.getSubscription();
+
+      if (sub && !sameApplicationServerKey(sub, vapidPublic)) {
+        const old = sub.toJSON();
+        // Remove the old database registration first, matching its exact keys.
+        // If this fails, abort rather than leave an ambiguous server-side row.
+        const removed = await fetch(`${API_BASE}/api/notifications/unsubscribe`, {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            endpoint: sub.endpoint,
+            playerId: playerId || "anonymous",
+            p256dh: old.keys?.p256dh,
+            auth: old.keys?.auth,
+          }),
+        });
+        if (!removed.ok) throw new Error(`old subscription cleanup HTTP ${removed.status}`);
+        await sub.unsubscribe();
+        sub = null;
+      }
+
+      if (!sub) {
+        sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlB64ToUint8Array(vapidPublic),
+        });
+      }
+      if (currentPlayerIdRef.current !== playerId) return false;
+
       const tzOffsetMinutes = -new Date().getTimezoneOffset();
       const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
       const res = await fetch(`${API_BASE}/api/notifications/subscribe`, {
@@ -108,15 +160,17 @@ export function usePushNotifications(playerId: string | undefined, language: str
           hourLocal: 20,
           tzOffsetMinutes,
           timeZone,
-          origin: typeof window !== "undefined" ? window.location.origin : undefined,
+          origin: window.location.origin,
         }),
       });
       if (!res.ok) throw new Error(`subscription HTTP ${res.status}`);
       if (currentPlayerIdRef.current !== playerId) return false;
+      try { localStorage.removeItem(DISABLED_KEY); } catch {}
       setIsSubscribed(true);
       return true;
     } catch (e) {
-      console.error("Push subscribe error:", e);
+      console.error("[push] subscribe failed", e);
+      setIsSubscribed(false);
       return false;
     } finally {
       setLoading(false);
@@ -153,8 +207,7 @@ export function usePushNotifications(playerId: string | undefined, language: str
     try {
       const reg = await navigator.serviceWorker.ready;
       const sub = await reg.pushManager.getSubscription();
-      if (!sub) return false;
-      if (currentPlayerIdRef.current !== playerId) return false;
+      if (!sub || currentPlayerIdRef.current !== playerId) return false;
       const res = await fetch(`${API_BASE}/api/notifications/preferences`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -199,6 +252,6 @@ export function usePushNotifications(playerId: string | undefined, language: str
   }, [playerId]);
 
   useEffect(() => () => preferencesAbortRef.current?.abort(), [playerId]);
-  const isSupported = "Notification" in window && "serviceWorker" in navigator && !!VAPID_PUBLIC;
+  const isSupported = "Notification" in window && "serviceWorker" in navigator;
   return { permission, isSubscribed, loading, subscribe, unsubscribe, isSupported, getPreferences, updatePreferences };
 }
