@@ -2,10 +2,23 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { getApiUrl } from "@/lib/utils";
 
 const API_BASE = getApiUrl();
-const VAPID_PUBLIC =
-  import.meta.env.VITE_VAPID_PUBLIC_KEY ||
-  "BOwVNL3sEONgyFulirkX5dzwQo662jY2_C846OSMrTSfiz4GFwEsl3_1NY3x_GqJIco8P7Ls85u56IRC3Y8Bj2c";
 const DISABLED_KEY = "stop_push_notifications_disabled";
+
+async function getServerVapidPublicKey(): Promise<string> {
+  const response = await fetch(`${API_BASE}/api/notifications/vapid-public-key`);
+  if (!response.ok) throw new Error(`VAPID public key HTTP ${response.status}`);
+  const payload = await response.json();
+  if (typeof payload?.key !== "string" || !payload.key.trim()) {
+    throw new Error("Server did not provide a VAPID public key");
+  }
+  return payload.key.trim();
+}
+
+function sameBytes(a: ArrayBuffer | null, b: Uint8Array<ArrayBuffer>): boolean {
+  if (!a) return false;
+  const left = new Uint8Array(a);
+  return left.length === b.length && left.every((value, index) => value === b[index]);
+}
 
 function urlB64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
@@ -97,9 +110,12 @@ export function usePushNotifications(playerId: string | undefined, language: str
   }, [playerId, language]);
 
   const subscribe = useCallback(async () => {
-    if (!VAPID_PUBLIC || !("serviceWorker" in navigator)) return false;
+    if (!("serviceWorker" in navigator) || !("Notification" in window)) return false;
     setLoading(true);
     try {
+      // Always use the production server's key; build-time keys can be stale.
+      const vapidPublicKey = await getServerVapidPublicKey();
+      const applicationServerKey = urlB64ToUint8Array(vapidPublicKey);
       const reg = await navigator.serviceWorker.ready;
       const perm = await Notification.requestPermission();
       setPermission(perm as NotifPermission);
@@ -107,11 +123,16 @@ export function usePushNotifications(playerId: string | undefined, language: str
 
       try { localStorage.removeItem(DISABLED_KEY); } catch {}
 
-      const existing = await reg.pushManager.getSubscription();
+      let existing = await reg.pushManager.getSubscription();
       if (currentPlayerIdRef.current !== playerId) return false;
+      // Existing browser subscriptions cannot be migrated to a different VAPID key.
+      if (existing && !sameBytes(existing.options.applicationServerKey, applicationServerKey)) {
+        await existing.unsubscribe();
+        existing = null;
+      }
       const sub = existing || await reg.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: urlB64ToUint8Array(VAPID_PUBLIC),
+        applicationServerKey,
       });
 
       const tzOffsetMinutes = -new Date().getTimezoneOffset();
@@ -224,7 +245,7 @@ export function usePushNotifications(playerId: string | undefined, language: str
 
   useEffect(() => () => preferencesAbortRef.current?.abort(), [playerId]);
 
-  const isSupported = "Notification" in window && "serviceWorker" in navigator && !!VAPID_PUBLIC;
+  const isSupported = "Notification" in window && "serviceWorker" in navigator;
 
   return { permission, isSubscribed, loading, subscribe, unsubscribe, isSupported, getPreferences, updatePreferences };
 }
