@@ -66,11 +66,19 @@ jobs:
           if ts_map != java_map:
               raise SystemExit(f"Achievement key/ID mismatch: TypeScript-only={set(ts_map.items()) - set(java_map.items())}; Java-only={set(java_map.items()) - set(ts_map.items())}")
           fn = re.search(r"export function reportGooglePlayAchievement\(achievementKey: string\): void \{(.*?)\n\}", bridge, re.S)
-          if not fn or "window.location" in fn.group(1) or "postMessage" in fn.group(1):
-              raise SystemExit("Web reporting hook must remain inert until the non-navigating bridge is device-tested")
-          print("Verified: all 15 achievement keys/IDs match exactly and web reporting remains inert.")
+          if not fn or "sendAchievementRequest" not in fn.group(1) or "queuedAchievementKeys.add" not in fn.group(1):
+              raise SystemExit("Achievement hook must use the queued, non-navigational TWA bridge")
+          if "window.addEventListener(\"message\", handleNativeBridgeMessage)" not in bridge:
+              raise SystemExit("Native postMessage receiver is missing")
+          if "window.location.href" in fn.group(1) or "stoppgs://unlock" in bridge:
+              raise SystemExit("Achievement reporting must not navigate to a custom scheme")
+          if "STOP_PGS_UNLOCK_ACHIEVEMENT" not in bridge or "STOP_AD_BRIDGE_READY" not in bridge:
+              raise SystemExit("Required PGS bridge protocol messages are missing")
+          if "relationshipValidated" not in java or "isAllowedOrigin(origin)" not in java:
+              raise SystemExit("Native side must retain TWA origin validation")
+          print("Verified: all 15 achievement keys/IDs match; bridge listener, readiness queue, non-navigation, and native origin guard are present.")
           PY
-          echo "PGS source guards passed; exported unlock deep link is removed and web achievement reporting remains disabled pending a tested non-navigating bridge."
+          echo "PGS source guards passed: achievement requests use the non-navigational message bridge and fixed key allowlist."
 
       - name: Assemble debug APK
         working-directory: android-generated
