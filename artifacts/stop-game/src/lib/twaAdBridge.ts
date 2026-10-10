@@ -9,6 +9,7 @@ type RewardedPlacement = "extra_time" | "hint" | "double_points" | "skip_round" 
 type RewardResult = { rewarded: boolean; source: "admob" | "client" | "skipped" | "error"; errorCode?: number; errorDomain?: string; errorMessage?: string };
 
 let initialized = false;
+let nativeMessagePort: MessagePort | null = null;
 let messageChannelReady = false;
 let pendingPlayerId = "guest";
 const queuedAchievementKeys = new Set<string>();
@@ -32,24 +33,27 @@ function isAllowedPageOrigin(): boolean {
 }
 
 function sendAchievementRequest(achievementKey: string): boolean {
-  if (typeof window === "undefined" || !messageChannelReady || !isAllowedPageOrigin()) return false;
+  if (typeof window === "undefined" || !messageChannelReady || !nativeMessagePort || !isAllowedPageOrigin()) return false;
   if (!PGS_ACHIEVEMENT_KEYS.has(achievementKey)) return false;
   try {
-    // Android receives this via CustomTabsCallback.onPostMessage. This is a
-    // non-navigational message; it must never change location or interrupt play.
-    window.postMessage(JSON.stringify({
+    // TWA postMessage supplies a MessagePort on the initial native message.
+    // Replies must travel over that port, not window.postMessage (which would
+    // only message this page or its frames and would never reach Android).
+    nativeMessagePort.postMessage(JSON.stringify({
       type: "STOP_PGS_UNLOCK_ACHIEVEMENT",
       origin: window.location.origin,
       achievementKey,
-    }), window.location.origin);
+    }));
     return true;
   } catch {
+    messageChannelReady = false;
+    nativeMessagePort = null;
     return false;
   }
 }
 
 function handleNativeBridgeMessage(event: MessageEvent): void {
-  if (!isAllowedPageOrigin()) return;
+  if (!isAllowedPageOrigin() || !PGS_ALLOWED_ORIGINS.has(event.origin)) return;
   const raw = event.data;
   let message: unknown = raw;
   if (typeof raw === "string") {
@@ -58,6 +62,12 @@ function handleNativeBridgeMessage(event: MessageEvent): void {
   if (!message || typeof message !== "object") return;
   const type = (message as { type?: unknown }).type;
   if (type !== "STOP_AD_BRIDGE_READY") return;
+
+  const port = event.ports?.[0];
+  if (!port) return;
+  nativeMessagePort?.close();
+  nativeMessagePort = port;
+  nativeMessagePort.start();
   messageChannelReady = true;
 
   // Retry only achievements queued by real local achievement events. A Set
