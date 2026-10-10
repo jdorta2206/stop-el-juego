@@ -14,6 +14,8 @@ import androidx.browser.customtabs.CustomTabsCallback;
 import androidx.browser.customtabs.CustomTabsService;
 import androidx.browser.customtabs.CustomTabsSession;
 
+import com.google.android.gms.games.PlayGames;
+import com.google.android.gms.games.GamesSignInClient;
 import com.google.android.gms.ads.AdError;
 import com.google.android.gms.ads.AdRequest;
 import com.google.android.gms.ads.FullScreenContentCallback;
@@ -53,6 +55,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        initializePlayGamesSignIn();
         MobileAds.initialize(this, status -> {
             mobileAdsReady = true;
             Log.d(TAG, "MobileAds initialized; starting rewarded + interstitial preload");
@@ -63,6 +66,33 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT);
         } else {
             setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+        }
+    }
+
+    /** Starts Play Games Services v2 automatic authentication for Play-installed users. */
+    private void initializePlayGamesSignIn() {
+        try {
+            GamesSignInClient signInClient = PlayGames.getGamesSignInClient(this);
+            signInClient.isAuthenticated().addOnCompleteListener(task -> {
+                if (!task.isSuccessful()) {
+                    Log.w(TAG, "Play Games authentication status check failed", task.getException());
+                    return;
+                }
+                boolean authenticated = task.getResult().isAuthenticated();
+                Log.i(TAG, "Play Games authenticated=" + authenticated);
+                if (!authenticated) {
+                    signInClient.signIn().addOnCompleteListener(signInTask -> {
+                        if (signInTask.isSuccessful() && signInTask.getResult().isAuthenticated()) {
+                            Log.i(TAG, "Play Games sign-in completed");
+                        } else {
+                            Log.w(TAG, "Play Games sign-in did not complete", signInTask.getException());
+                        }
+                    });
+                }
+            });
+        } catch (RuntimeException error) {
+            // Play Games must never prevent STOP from launching if the service is unavailable.
+            Log.w(TAG, "Play Games initialization failed; continuing without it", error);
         }
     }
 
