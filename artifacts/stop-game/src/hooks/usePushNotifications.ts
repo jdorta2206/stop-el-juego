@@ -74,6 +74,25 @@ export function usePushNotifications(playerId: string | undefined, language: str
           if (!cancelled) setIsSubscribed(false);
           return;
         }
+
+        // Do not backfill an old browser subscription under a different VAPID
+        // key. That would make the UI look enabled while pushes cannot decrypt.
+        // Renewal requires the user's explicit Subscribe action/permission flow.
+        let serverVapidPublic: string;
+        try {
+          serverVapidPublic = await getServerVapidPublicKey(controller.signal);
+        } catch (error) {
+          if (!cancelled) setIsSubscribed(false);
+          console.warn("[push] cannot validate existing subscription key", error);
+          return;
+        }
+        if (cancelled) return;
+        if (!sameApplicationServerKey(sub, serverVapidPublic)) {
+          if (!cancelled) setIsSubscribed(false);
+          console.warn("[push] existing subscription uses a different VAPID key; user renewal required");
+          return;
+        }
+
         const tzOffsetMinutes = -new Date().getTimezoneOffset();
         const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
         const res = await fetch(`${API_BASE}/api/notifications/subscribe`, {
