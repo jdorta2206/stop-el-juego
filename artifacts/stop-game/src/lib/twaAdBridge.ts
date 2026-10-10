@@ -37,11 +37,11 @@ function sendAchievementRequest(achievementKey: string): boolean {
   try {
     // Android receives this via CustomTabsCallback.onPostMessage. This is a
     // non-navigational message; it must never change location or interrupt play.
-    window.postMessage({
+    window.postMessage(JSON.stringify({
       type: "STOP_PGS_UNLOCK_ACHIEVEMENT",
       origin: window.location.origin,
       achievementKey,
-    }, window.location.origin);
+    }), window.location.origin);
     return true;
   } catch {
     return false;
