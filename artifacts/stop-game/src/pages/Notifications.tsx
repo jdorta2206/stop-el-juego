@@ -73,6 +73,8 @@ export default function NotificationsPage() {
       unmuted: "Reanudado",
       activated: "Notificaciones activadas",
       deactivated: "Notificaciones desactivadas",
+      enableFailed: "No se pudieron activar. Comprueba la conexión e inténtalo de nuevo.",
+      renewHint: "Si estaban activadas y dejaron de funcionar, pulsa Activar para renovar la suscripción.",
     },
     en: {
       title: "Notifications",
@@ -98,6 +100,8 @@ export default function NotificationsPage() {
       unmuted: "Resumed",
       activated: "Notifications enabled",
       deactivated: "Notifications disabled",
+      enableFailed: "Could not enable notifications. Check your connection and try again.",
+      renewHint: "If notifications were on but stopped working, tap Enable to renew the subscription.",
     },
     pt: {
       title: "Notificações",
@@ -123,6 +127,8 @@ export default function NotificationsPage() {
       unmuted: "Retomado",
       activated: "Notificações ativadas",
       deactivated: "Notificações desativadas",
+      enableFailed: "Não foi possível ativar. Verifica a ligação e tenta novamente.",
+      renewHint: "Se estavam ativas e deixaram de funcionar, toca em Ativar para renovar a subscrição.",
     },
     fr: {
       title: "Notifications",
@@ -148,6 +154,8 @@ export default function NotificationsPage() {
       unmuted: "Repris",
       activated: "Notifications activées",
       deactivated: "Notifications désactivées",
+      enableFailed: "Impossible d'activer. Vérifie la connexion et réessaie.",
+      renewHint: "Si elles étaient activées mais ne fonctionnent plus, appuie sur Activer pour renouveler l'abonnement.",
     },
   } as const;
   const t = T[lang as keyof typeof T] ?? T.es;
@@ -193,6 +201,9 @@ export default function NotificationsPage() {
             <div className="flex-1">
               <p className="text-white font-black">{isSubscribed ? t.activeTitle : t.enableTitle}</p>
               <p className="text-white/55 text-sm mt-1">{t.enableBody}</p>
+              {!isSubscribed && permission === "granted" && (
+                <p className="text-amber-200/90 text-xs mt-2">{t.renewHint}</p>
+              )}
             </div>
           </div>
           <button
@@ -202,7 +213,7 @@ export default function NotificationsPage() {
                 flashToast(t.deactivated);
               } else {
                 const ok = await subscribe();
-                if (ok) flashToast(t.activated);
+                flashToast(ok ? t.activated : t.enableFailed);
               }
             }}
             disabled={loading}
