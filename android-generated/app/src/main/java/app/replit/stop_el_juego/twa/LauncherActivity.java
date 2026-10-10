@@ -26,6 +26,7 @@ import com.google.android.gms.ads.LoadAdError;
 import com.google.android.gms.ads.MobileAds;
 import com.google.android.gms.ads.rewarded.RewardedAd;
 import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback;
+import com.google.android.gms.games.PlayGames;
 import com.google.androidbrowserhelper.trusted.QualityEnforcer;
 import com.google.androidbrowserhelper.trusted.TwaLauncher;
 
@@ -61,6 +62,9 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        // PGS SDK auto-initializes through its manifest provider by default.
+        // Authentication is only a best-effort capability check; it never gates TWA startup.
+        checkPlayGamesSignInBestEffort();
         appUpdateManager = AppUpdateManagerFactory.create(this);
         checkForPlayUpdate();
         if (AdsPolicy.isEnabled()) {
@@ -75,6 +79,26 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT);
         } else {
             setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+        }
+    }
+
+    /**
+     * Play Games sign-in is best-effort only: authentication failure must never
+     * prevent the existing TWA game, ads fallback, or offline play from starting.
+     */
+    private void checkPlayGamesSignInBestEffort() {
+        try {
+            PlayGames.getGamesSignInClient(this).isAuthenticated()
+                    .addOnCompleteListener(task -> {
+                        if (task.isSuccessful() && task.getResult() != null
+                                && task.getResult().isAuthenticated()) {
+                            Log.i("STOP_PLAY_GAMES", "Play Games authentication available");
+                        } else {
+                            Log.i("STOP_PLAY_GAMES", "Play Games authentication unavailable; continuing without it");
+                        }
+                    });
+        } catch (RuntimeException error) {
+            Log.w("STOP_PLAY_GAMES", "Play Games check failed; continuing normally", error);
         }
     }
 
@@ -206,10 +230,25 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     }
 
     private void handleWebMessage(String raw) {
-        if (!AdsPolicy.isEnabled()) return;
         try {
             JSONObject message = new JSONObject(raw);
             String type = message.optString("type", "");
+
+            // PGS uses the already origin-validated TWA postMessage channel, never
+            // a browsable custom URL. A fixed key allowlist prevents arbitrary IDs.
+            if ("STOP_PGS_UNLOCK_ACHIEVEMENT".equals(type)) {
+                String origin = message.optString("origin", "");
+                String key = message.optString("achievementKey", "");
+                if (!messageChannelReady || !relationshipValidated || !isAllowedOrigin(origin)) {
+                    Log.w("STOP_PLAY_GAMES", "Rejected achievement request from invalid origin/channel");
+                    return;
+                }
+                reportPlayGamesAchievement(key);
+                return;
+            }
+
+            // PGS must continue to work even when the ads policy is disabled.
+            if (!AdsPolicy.isEnabled()) return;
             if ("STOP_AD_REQUEST_INTERSTITIAL".equals(type)) {
                 String requestId = message.optString("requestId", "");
                 String origin = message.optString("origin", "");
@@ -234,6 +273,48 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             rewardGrantedForCurrentAd = false;
             showRewardedAdWhenReady();
         } catch (JSONException ignored) { Log.w(TAG, "Ignoring malformed web message"); }
+    }
+
+    private void reportPlayGamesAchievement(String key) {
+        final String achievementId;
+        switch (key) {
+            case "first_win": achievementId = "CgkIlrPSvaAaEAIQAQ"; break;
+            case "combo3": achievementId = "CgkIlrPSvaAaEAIQGg"; break;
+            case "speed_demon": achievementId = "CgkIlrPSvaAaEAIQEw"; break;
+            case "chaos_master": achievementId = "CgkIlrPSvaAaEAIQEQ"; break;
+            case "wordsmith": achievementId = "CgkIlrPSvaAaEAIQGA"; break;
+            case "veteran": achievementId = "CgkIlrPSvaAaEAIQHA"; break;
+            case "champion": achievementId = "CgkIlrPSvaAaEAIQGw"; break;
+            case "unstoppable": achievementId = "CgkIlrPSvaAaEAIQEA"; break;
+            case "streak_3": achievementId = "CgkIlrPSvaAaEAIQFQ"; break;
+            case "streak_7": achievementId = "CgkIlrPSvaAaEAIQEg"; break;
+            case "streak_14": achievementId = "CgkIlrPSvaAaEAIQGQ"; break;
+            case "streak_30": achievementId = "CgkIlrPSvaAaEAIQFw"; break;
+            case "creator": achievementId = "CgkIlrPSvaAaEAIQFg"; break;
+            case "viral": achievementId = "CgkIlrPSvaAaEAIQFA"; break;
+            case "shutout": achievementId = "CgkIlrPSvaAaEAIQHQ"; break;
+            default:
+                Log.w("STOP_PLAY_GAMES", "Rejected unknown achievement key=" + key);
+                return;
+        }
+        try {
+            PlayGames.getGamesSignInClient(this).isAuthenticated()
+                    .addOnCompleteListener(task -> {
+                        if (!task.isSuccessful() || task.getResult() == null || !task.getResult().isAuthenticated()) {
+                            Log.i("STOP_PLAY_GAMES", "Achievement not reported: player is not authenticated");
+                            return;
+                        }
+                        try {
+                            // Play Games SDK v2 unlock() returns void, not a Task.
+                            PlayGames.getAchievementsClient(this).unlock(achievementId);
+                            Log.i("STOP_PLAY_GAMES", "Achievement unlock request submitted: " + key);
+                        } catch (RuntimeException error) {
+                            Log.w("STOP_PLAY_GAMES", "Achievement report unavailable; STOP continues", error);
+                        }
+                    });
+        } catch (RuntimeException error) {
+            Log.w("STOP_PLAY_GAMES", "Play Games unavailable; STOP continues", error);
+        }
     }
 
     private void showInterstitialWhenReady() {

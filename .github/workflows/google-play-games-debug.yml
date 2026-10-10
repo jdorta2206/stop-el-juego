@@ -1,0 +1,111 @@
+name: Google Play Games integration debug
+
+on:
+  push:
+    branches:
+      - feat/google-play-games-integration
+  pull_request:
+    branches:
+      - fix/audit-health-diagnostic-build
+    paths:
+      - 'android-generated/**'
+      - 'artifacts/stop-game/src/hooks/useAchievements.ts'
+      - 'artifacts/stop-game/src/lib/twaAdBridge.ts'
+      - 'docs/GOOGLE_PLAY_GAMES_INTEGRATION.md'
+      - '.github/workflows/google-play-games-debug.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: google-play-games-debug-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android-debug:
+    name: Compile current PGS integration
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout tested revision
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Verify integration sources and safe achievement behavior
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f android-generated/app/src/main/java/app/replit/stop_el_juego/twa/PlayGamesAchievementsActivity.java
+          grep -q 'play-services-games-v2:22.1.0' android-generated/app/build.gradle
+          grep -q 'stoppgs' android-generated/app/src/main/AndroidManifest.xml
+          ! grep -q 'stoppgs://unlock' artifacts/stop-game/src/lib/twaAdBridge.ts
+          grep -q 'reportGooglePlayAchievement' artifacts/stop-game/src/lib/twaAdBridge.ts
+          grep -q 'getAchievementsIntent' android-generated/app/src/main/java/app/replit/stop_el_juego/twa/PlayGamesAchievementsActivity.java
+          ! grep -q 'handleAchievementUnlock\|unlock(achievementId)' android-generated/app/src/main/java/app/replit/stop_el_juego/twa/PlayGamesAchievementsActivity.java
+          ! grep -q 'android:host="unlock"' android-generated/app/src/main/AndroidManifest.xml
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+
+          ts = Path("artifacts/stop-game/src/hooks/useAchievements.ts").read_text()
+          java = Path("android-generated/app/src/main/java/app/replit/stop_el_juego/twa/LauncherActivity.java").read_text()
+          bridge = Path("artifacts/stop-game/src/lib/twaAdBridge.ts").read_text()
+
+          ts_block = re.search(r"GOOGLE_PLAY_ACHIEVEMENT_IDS[^=]*= Object\.freeze\(\{(.*?)\}\);", ts, re.S)
+          if not ts_block:
+              raise SystemExit("Could not locate TypeScript achievement ID map")
+          ts_map = dict(re.findall(r'\s*(\w+):\s*"([^"]+)"', ts_block.group(1)))
+          java_map = dict(re.findall(r'case "([^"]+)": achievementId = "([^"]+)"; break;', java))
+          if len(ts_map) != 15 or len(java_map) != 15:
+              raise SystemExit(f"Expected 15 achievement mappings; TypeScript={len(ts_map)}, Java={len(java_map)}")
+          if ts_map != java_map:
+              raise SystemExit(f"Achievement key/ID mismatch: TypeScript-only={set(ts_map.items()) - set(java_map.items())}; Java-only={set(java_map.items()) - set(ts_map.items())}")
+          fn = re.search(r"export function reportGooglePlayAchievement\(achievementKey: string\): void \{(.*?)\n\}", bridge, re.S)
+          if not fn or "sendAchievementRequest" not in fn.group(1) or "queuedAchievementKeys.add" not in fn.group(1):
+              raise SystemExit("Achievement hook must use the queued, non-navigational TWA bridge")
+          if "window.addEventListener(\"message\", handleNativeBridgeMessage)" not in bridge:
+              raise SystemExit("Native postMessage receiver is missing")
+          if "event.ports?.[0]" not in bridge or "nativeMessagePort.postMessage" not in bridge:
+              raise SystemExit("Web-to-native messages must use the MessagePort transferred by TWA")
+          if "PGS_ALLOWED_ORIGINS.has(event.origin)" not in bridge:
+              raise SystemExit("Web side must validate the incoming native message origin")
+          if "window.location.href" in fn.group(1) or "stoppgs://unlock" in bridge:
+              raise SystemExit("Achievement reporting must not navigate to a custom scheme")
+          if "STOP_PGS_UNLOCK_ACHIEVEMENT" not in bridge or "STOP_AD_BRIDGE_READY" not in bridge:
+              raise SystemExit("Required PGS bridge protocol messages are missing")
+          if "relationshipValidated" not in java or "isAllowedOrigin(origin)" not in java:
+              raise SystemExit("Native side must retain TWA origin validation")
+          print("Verified: all 15 achievement keys/IDs match; bridge listener, readiness queue, non-navigation, and native origin guard are present.")
+          PY
+          echo "PGS source guards passed: achievement requests use the non-navigational message bridge and fixed key allowlist."
+
+      - name: Assemble debug APK
+        working-directory: android-generated
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x ./gradlew
+          ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Verify and fingerprint APK
+        working-directory: android-generated
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK='app/build/outputs/apk/debug/app-debug.apk'
+          test -s "$APK"
+          ls -lh "$APK"
+          sha256sum "$APK"
+
+      - name: Upload debug APK for device testing
+        uses: actions/upload-artifact@v4
+        with:
+          name: stop-pgs-integration-debug-${{ github.sha }}
+          path: android-generated/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 7

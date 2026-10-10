@@ -9,4 +9,6 @@
         }
     }]
   </string>
+  <!-- Play Games Services project ID from Play Console. -->
+  <string name="game_services_project_id" translatable="false">902072408470</string>
 </resources>
