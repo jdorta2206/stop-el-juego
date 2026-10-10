@@ -299,7 +299,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                     sendPlayGamesStatus(false, "not_authenticated");
                     return;
                 }
-                PlayGames.getAchievementsClient(this).unlock(id)
+                PlayGames.getAchievementsClient(this).unlockImmediate(id)
                         .addOnSuccessListener(unused ->
                                 sendPlayGamesStatus(true, "achievement_unlocked"))
                         .addOnFailureListener(error -> {
