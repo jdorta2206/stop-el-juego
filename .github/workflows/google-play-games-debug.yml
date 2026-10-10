@@ -70,6 +70,10 @@ jobs:
               raise SystemExit("Achievement hook must use the queued, non-navigational TWA bridge")
           if "window.addEventListener(\"message\", handleNativeBridgeMessage)" not in bridge:
               raise SystemExit("Native postMessage receiver is missing")
+          if "event.ports?.[0]" not in bridge or "nativeMessagePort.postMessage" not in bridge:
+              raise SystemExit("Web-to-native messages must use the MessagePort transferred by TWA")
+          if "PGS_ALLOWED_ORIGINS.has(event.origin)" not in bridge:
+              raise SystemExit("Web side must validate the incoming native message origin")
           if "window.location.href" in fn.group(1) or "stoppgs://unlock" in bridge:
               raise SystemExit("Achievement reporting must not navigate to a custom scheme")
           if "STOP_PGS_UNLOCK_ACHIEVEMENT" not in bridge or "STOP_AD_BRIDGE_READY" not in bridge:
