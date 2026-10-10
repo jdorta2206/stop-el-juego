@@ -26,6 +26,8 @@ import com.google.android.gms.ads.LoadAdError;
 import com.google.android.gms.ads.MobileAds;
 import com.google.android.gms.ads.rewarded.RewardedAd;
 import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback;
+import com.google.android.gms.games.PlayGames;
+import com.google.android.gms.games.PlayGamesSdk;
 import com.google.androidbrowserhelper.trusted.QualityEnforcer;
 import com.google.androidbrowserhelper.trusted.TwaLauncher;
 
@@ -57,11 +59,19 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     private static final String PLAY_STORE_PACKAGE = "app.replit.stop_el_juego.twa";
     private AppUpdateManager appUpdateManager;
     private boolean playUpdatePromptShown;
+    private boolean playGamesInitialized;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         appUpdateManager = AppUpdateManagerFactory.create(this);
+        try {
+            PlayGamesSdk.initialize(getApplicationContext());
+            playGamesInitialized = true;
+            Log.i("STOP_PLAY_GAMES", "Play Games SDK initialized");
+        } catch (RuntimeException error) {
+            Log.w("STOP_PLAY_GAMES", "Play Games SDK initialization failed; app continues normally", error);
+        }
         checkForPlayUpdate();
         if (AdsPolicy.isEnabled()) {
             MobileAds.initialize(this, status -> {
@@ -206,10 +216,14 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     }
 
     private void handleWebMessage(String raw) {
-        if (!AdsPolicy.isEnabled()) return;
         try {
             JSONObject message = new JSONObject(raw);
             String type = message.optString("type", "");
+            if (type.startsWith("STOP_PGS_")) {
+                handlePlayGamesMessage(type, message);
+                return;
+            }
+            if (!AdsPolicy.isEnabled()) return;
             if ("STOP_AD_REQUEST_INTERSTITIAL".equals(type)) {
                 String requestId = message.optString("requestId", "");
                 String origin = message.optString("origin", "");
@@ -234,6 +248,70 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             rewardGrantedForCurrentAd = false;
             showRewardedAdWhenReady();
         } catch (JSONException ignored) { Log.w(TAG, "Ignoring malformed web message"); }
+    }
+
+
+    private void handlePlayGamesMessage(String type, JSONObject message) {
+        if (!messageChannelReady || !playGamesInitialized) {
+            sendPlayGamesStatus(false, "sdk_unavailable");
+            return;
+        }
+        if ("STOP_PGS_SIGN_IN".equals(type) || "STOP_PGS_STATUS".equals(type)) {
+            PlayGames.getGamesSignInClient(this).isAuthenticated()
+                    .addOnCompleteListener(task -> {
+                        boolean authenticated = task.isSuccessful()
+                                && task.getResult() != null
+                                && task.getResult().isAuthenticated();
+                        if (authenticated) {
+                            sendPlayGamesStatus(true, "authenticated");
+                        } else if ("STOP_PGS_SIGN_IN".equals(type)) {
+                            PlayGames.getGamesSignInClient(this).signIn()
+                                    .addOnCompleteListener(signInTask -> {
+                                        boolean signedIn = signInTask.isSuccessful()
+                                                && signInTask.getResult() != null
+                                                && signInTask.getResult().isAuthenticated();
+                                        sendPlayGamesStatus(signedIn, signedIn ? "authenticated" : "sign_in_failed");
+                                    });
+                        } else {
+                            sendPlayGamesStatus(false, "not_authenticated");
+                        }
+                    });
+            return;
+        }
+        if ("STOP_PGS_SHOW_ACHIEVEMENTS".equals(type)) {
+            PlayGames.getAchievementsClient(this).getAchievementsIntent()
+                    .addOnSuccessListener(intent -> {
+                        try { startActivityForResult(intent, 7402); sendPlayGamesStatus(true, "achievements_opened"); }
+                        catch (RuntimeException error) { sendPlayGamesStatus(false, "achievements_unavailable"); }
+                    })
+                    .addOnFailureListener(error -> sendPlayGamesStatus(false, "achievements_unavailable"));
+            return;
+        }
+        if ("STOP_PGS_UNLOCK_ACHIEVEMENT".equals(type)) {
+            String id = message.optString("achievementId", "").trim();
+            // Only accept Google Play achievement IDs, never arbitrary payloads.
+            if (!id.matches("Cgk[A-Za-z0-9_-]{10,}")) {
+                sendPlayGamesStatus(false, "invalid_achievement_id");
+                return;
+            }
+            PlayGames.getGamesSignInClient(this).isAuthenticated().addOnCompleteListener(task -> {
+                if (!task.isSuccessful() || task.getResult() == null || !task.getResult().isAuthenticated()) {
+                    sendPlayGamesStatus(false, "not_authenticated");
+                    return;
+                }
+                PlayGames.getAchievementsClient(this).unlock(id);
+                sendPlayGamesStatus(true, "achievement_unlock_requested");
+            });
+        }
+    }
+
+    private void sendPlayGamesStatus(boolean ok, String status) {
+        JSONObject result = newMessage("STOP_PGS_STATUS_RESULT");
+        try {
+            result.put("ok", ok);
+            result.put("status", status);
+        } catch (JSONException ignored) { return; }
+        sendMessage(result);
     }
 
     private void showInterstitialWhenReady() {
