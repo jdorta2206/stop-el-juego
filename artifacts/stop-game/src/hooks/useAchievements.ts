@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { getApiUrl, authHeaders } from "@/lib/utils";
+import { unlockPlayGamesAchievementForMilestone } from "@/lib/twaPlayGamesBridge";
 
 const STATS_KEY = "stop_achievement_stats_v1";
 const UNLOCKED_KEY = "stop_achievements_unlocked_v1";
@@ -313,6 +314,9 @@ export function useAchievements(playerId?: string) {
     for (const ach of ACHIEVEMENTS) {
       if (!newUnlocked.has(ach.id) && ach.check(next)) {
         newUnlocked.add(ach.id);
+        // Keep native achievements in sync for every newly-earned milestone,
+        // not only the first toast shown when a round unlocks several at once.
+        unlockPlayGamesAchievementForMilestone(ach.id);
         if (!justUnlocked) justUnlocked = ach;
       }
     }
@@ -346,6 +350,7 @@ export function useAchievements(playerId?: string) {
         const id = MILESTONE_TO_ACHIEVEMENT[m];
         if (!newUnlocked.has(id)) {
           newUnlocked.add(id);
+          unlockPlayGamesAchievementForMilestone(id);
           const def = ACHIEVEMENTS.find(a => a.id === id) ?? null;
           // Show the *highest* milestone just crossed.
           if (def) justUnlocked = def;
@@ -452,6 +457,7 @@ export function recordExternalStat(
   for (const ach of ACHIEVEMENTS) {
     if (!newUnlocked.has(ach.id) && ach.check(next)) {
       newUnlocked.add(ach.id);
+      unlockPlayGamesAchievementForMilestone(ach.id);
       if (!justUnlocked) justUnlocked = ach;
     }
   }
