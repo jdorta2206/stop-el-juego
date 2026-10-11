@@ -84,8 +84,10 @@ export function initTwaPlayGamesBridge(): void {
     }
     receiveNativeMessage(event.data);
   });
-  // Queue a status request until the host transfers its MessagePort.
-  post("STOP_PGS_STATUS");
+  // Start the Google Play Games connection on app entry. The native side checks
+  // existing authentication first and only invokes the SDK sign-in flow when needed.
+  // Queue until the host transfers its MessagePort; this never blocks game startup.
+  post("STOP_PGS_SIGN_IN");
 }
 
 export function requestPlayGamesSignIn(): boolean {
