@@ -1200,7 +1200,8 @@ export default function Room() {
 
       // Multiplayer game_start is recorded authoritatively by the server when
       // the room transitions into a live round. Do not emit a second client-side
-      // start here: it lacks roomId and cannot be correlated with the server result.      if (currentRound !== lastRoundRef.current) {
+      // start here: it lacks roomId and cannot be correlated with the server result.
+      if (currentRound !== lastRoundRef.current) {
         lastRoundRef.current = currentRound;
         hasSubmittedRef.current = false;
         isFreezingRef.current = false;
