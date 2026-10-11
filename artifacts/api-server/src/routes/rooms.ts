@@ -762,7 +762,7 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
       playerId: p.playerId,
       sessionId: getAnalyticsSessionId(req, res),
       mode: "multiplayer",
-      metadata: { source: "server_room_result", roomCode: normalizedRoomCode },
+      metadata: { source: "server_room_result", roomCode: normalizedRoomCode, roomId },
     }).catch((err) => console.error("[analytics] trusted multiplayer game_complete failed:", err));
 
     const validWords = Number.isFinite(p.validAnswerCount) ? Math.max(0, Math.floor(p.validAnswerCount)) : 0;
