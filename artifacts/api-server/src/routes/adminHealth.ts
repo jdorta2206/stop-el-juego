@@ -53,9 +53,24 @@ EXTRACT(EPOCH FROM (
      WHERE e.trusted=TRUE AND e.session_id=s.session_id AND e.created_at>=s.started_at)
   )-s.started_at
 ))::int AS duration_seconds,
-(SELECT le.event_name FROM public.analytics_events le
- WHERE le.trusted=TRUE AND le.session_id=s.session_id AND le.created_at>=s.started_at
- ORDER BY le.created_at DESC LIMIT 1) AS last_event,
+COALESCE(
+ (SELECT c.event_name FROM public.analytics_events c
+  WHERE c.trusted=TRUE AND c.event_name='game_complete'
+    AND c.created_at>=s.started_at AND c.created_at<=s.started_at+INTERVAL '30 minutes'
+    AND (
+      (s.game_id IS NOT NULL AND c.game_id=s.game_id)
+      OR c.session_id=s.session_id
+      OR (c.player_id IS NOT NULL AND c.player_id=s.player_id
+        AND COALESCE(c.metadata_json::text,'') ILIKE '%server_score_submission%')
+      OR (COALESCE(c.metadata_json::text,'') ILIKE '%server_room_result%'
+        AND substring(s.metadata_json from '"roomId"[[:space:]]*:[[:space:]]*"([^"]+)"')
+          = substring(c.metadata_json from '"roomId"[[:space:]]*:[[:space:]]*"([^"]+)"'))
+    )
+  ORDER BY c.created_at DESC LIMIT 1),
+ (SELECT le.event_name FROM public.analytics_events le
+  WHERE le.trusted=TRUE AND le.session_id=s.session_id AND le.created_at>=s.started_at
+  ORDER BY le.created_at DESC LIMIT 1)
+) AS last_event,
 EXISTS(SELECT 1 FROM public.analytics_events c
  WHERE c.trusted=TRUE AND c.event_name='game_complete'
    AND c.created_at>=s.started_at AND c.created_at<=s.started_at+INTERVAL '30 minutes'
