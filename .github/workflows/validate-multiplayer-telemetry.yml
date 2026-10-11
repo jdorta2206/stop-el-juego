@@ -6,6 +6,9 @@ on:
       - fix/audit-health-diagnostic-build
     paths:
       - "artifacts/stop-game/src/pages/Room.tsx"
+      - "artifacts/api-server/src/routes/adminHealth.ts"
+      - "artifacts/api-server/package.json"
+      - "artifacts/api-server/build.ts"
       - ".github/workflows/validate-multiplayer-telemetry.yml"
   push:
     branches:
@@ -39,6 +42,14 @@ jobs:
           cache: pnpm
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile
+      - name: Build API server package
+        run: pnpm --filter @workspace/api-server build
+      - name: Verify API output exists
+        run: test -f artifacts/api-server/dist/index.cjs
+      - name: Report API typecheck
+        if: always()
+        continue-on-error: true
+        run: pnpm --filter @workspace/api-server typecheck
       - name: Build frontend package
         run: pnpm --filter @workspace/stop-game build
       - name: Verify frontend output exists
