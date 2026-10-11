@@ -47,7 +47,7 @@ EXTRACT(EPOCH FROM (
           OR (COALESCE(c.metadata_json::text,'') ILIKE '%server_room_result%'
             AND substring(s.metadata_json from '"roomId"[[:space:]]*:[[:space:]]*"([^"]+)"')
               = substring(c.metadata_json from '"roomId"[[:space:]]*:[[:space:]]*"([^"]+)"'))
-        ),
+        )),
     (SELECT MAX(e.created_at) FROM public.analytics_events e
      WHERE e.trusted=TRUE AND e.session_id=s.session_id AND e.created_at>=s.started_at)
   )-s.started_at
@@ -66,7 +66,7 @@ EXISTS(SELECT 1 FROM public.analytics_events c
       OR (COALESCE(c.metadata_json::text,'') ILIKE '%server_room_result%'
         AND substring(s.metadata_json from '"roomId"[[:space:]]*:[[:space:]]*"([^"]+)"')
           = substring(c.metadata_json from '"roomId"[[:space:]]*:[[:space:]]*"([^"]+)"'))
-    ) AS completed,
+    )) AS completed,
 EXISTS(SELECT 1 FROM public.analytics_events x
  WHERE x.trusted=TRUE AND x.session_id=s.session_id
    AND x.event_name IN ('client_error','api_error')
