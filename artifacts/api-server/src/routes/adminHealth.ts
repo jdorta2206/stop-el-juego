@@ -45,7 +45,8 @@ EXTRACT(EPOCH FROM (
           (s.game_id IS NOT NULL AND c.game_id=s.game_id)
           OR (s.game_id IS NULL AND c.game_id IS NULL AND c.session_id=s.session_id AND COALESCE(c.metadata_json::text,'') NOT ILIKE '%server_room_result%' AND NOT EXISTS (SELECT 1 FROM public.analytics_events s2 WHERE s2.trusted=TRUE AND s2.event_name='game_start' AND s2.session_id=s.session_id AND s2.created_at>s.created_at AND s2.created_at<=c.created_at))
           OR (s.game_id IS NULL AND c.game_id IS NULL AND c.player_id IS NOT NULL AND c.player_id=s.player_id
-            AND COALESCE(c.metadata_json::text,'') ILIKE '%server_score_submission%')
+            AND COALESCE(c.metadata_json::text,'') ILIKE '%server_score_submission%'
+            AND NOT EXISTS (SELECT 1 FROM public.analytics_events s2 WHERE s2.trusted=TRUE AND s2.event_name='game_start' AND s2.player_id=s.player_id AND s2.created_at>s.created_at AND s2.created_at<=c.created_at))
           OR (COALESCE(c.metadata_json::text,'') ILIKE '%server_room_result%'
             AND substring(s.metadata_json from '"roomId"[[:space:]]*:[[:space:]]*"([^"]+)"')
               = substring(c.metadata_json from '"roomId"[[:space:]]*:[[:space:]]*"([^"]+)"'))
