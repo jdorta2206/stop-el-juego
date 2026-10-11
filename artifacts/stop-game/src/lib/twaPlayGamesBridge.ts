@@ -1,6 +1,6 @@
 /**
  * Google Play Games Services v2 bridge for the Android TWA.
- * Uses the existing Custom Tabs postMessage channel; ordinary web and iOS are no-ops.
+ * Uses the Custom Tabs MessagePort supplied by the native host; ordinary web and iOS are no-ops.
  */
 const ORIGIN = "https://www.stopjuegodepalabras.com";
 type PgsStatus = { ok: boolean; status: string };
@@ -8,6 +8,7 @@ type NativeMessage = { type: string; [key: string]: string };
 
 let initialized = false;
 let channelReady = false;
+let messagePort: MessagePort | null = null;
 let pendingMessages: NativeMessage[] = [];
 let lastStatus: PgsStatus | null = null;
 
@@ -28,10 +29,12 @@ function receiveNativeMessage(raw: unknown): void {
   let payload: any;
   try { payload = JSON.parse(raw); } catch { return; }
   if (payload?.type === "STOP_AD_BRIDGE_READY") {
-    channelReady = true;
-    const queued = pendingMessages;
-    pendingMessages = [];
-    for (const message of queued) send(message);
+    channelReady = messagePort !== null;
+    if (channelReady) {
+      const queued = pendingMessages;
+      pendingMessages = [];
+      for (const message of queued) send(message);
+    }
     return;
   }
   if (payload?.type !== "STOP_PGS_STATUS_RESULT") return;
@@ -43,12 +46,15 @@ function receiveNativeMessage(raw: unknown): void {
 }
 
 function send(message: NativeMessage): boolean {
+  if (!messagePort || !channelReady) return false;
   try {
-    // CustomTabsSession.postMessage delivers native messages as window message
-    // events. The reverse direction uses the page's window.postMessage API.
-    window.postMessage(JSON.stringify(message), ORIGIN);
+    // TWA Custom Tabs messaging is a MessagePort channel. window.postMessage()
+    // alone only posts to this page; it does not deliver the request to Android.
+    messagePort.postMessage(JSON.stringify(message));
     return true;
   } catch {
+    channelReady = false;
+    messagePort = null;
     return false;
   }
 }
@@ -56,7 +62,7 @@ function send(message: NativeMessage): boolean {
 function post(type: string, extra: Record<string, string> = {}): boolean {
   if (!isAndroidTwa()) return false;
   const message = { type, ...extra };
-  if (!channelReady) {
+  if (!channelReady || !messagePort) {
     pendingMessages.push(message);
     return true;
   }
@@ -69,9 +75,16 @@ export function initTwaPlayGamesBridge(): void {
   if (!isAndroidTwa()) return;
   window.addEventListener("message", (event: MessageEvent) => {
     if (event.origin !== ORIGIN) return;
+    // Chrome transfers the native-to-web MessagePort with the first host message.
+    const transferredPort = event.ports?.[0];
+    if (transferredPort) {
+      messagePort = transferredPort;
+      messagePort.onmessage = (portEvent: MessageEvent) => receiveNativeMessage(portEvent.data);
+      messagePort.start?.();
+    }
     receiveNativeMessage(event.data);
   });
-  // Native host sends readiness repeatedly while the TWA message channel opens.
+  // Queue a status request until the host transfers its MessagePort.
   post("STOP_PGS_STATUS");
 }
 
