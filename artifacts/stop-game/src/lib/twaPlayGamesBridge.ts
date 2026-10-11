@@ -103,6 +103,32 @@ export function unlockPlayGamesAchievement(achievementId: string): boolean {
   return post("STOP_PGS_UNLOCK_ACHIEVEMENT", { achievementId: id });
 }
 
+
+/** Published Google Play Games achievement IDs from the STOP game-services project. */
+const PLAY_GAMES_ACHIEVEMENT_IDS: Record<string, string> = {
+  first_win: "CgkIlrPSvaAaEAIQAQ",
+  combo3: "CgkIlrPSvaAaEAIQGg",
+  speed_demon: "CgkIlrPSvaAaEAIQEw",
+  chaos_master: "CgkIlrPSvaAaEAIQEQ",
+  wordsmith: "CgkIlrPSvaAaEAIQGA",
+  veteran: "CgkIlrPSvaAaEAIQHA",
+  champion: "CgkIlrPSvaAaEAIQGw",
+  unstoppable: "CgkIlrPSvaAaEAIQEA",
+  streak_3: "CgkIlrPSvaAaEAIQFQ",
+  streak_7: "CgkIlrPSvaAaEAIQEg",
+  streak_14: "CgkIlrPSvaAaEAIQGQ",
+  streak_30: "CgkIlrPSvaAaEAIQFw",
+  creator: "CgkIlrPSvaAaEAIQFg",
+  viral: "CgkIlrPSvaAaEAIQFA",
+  shutout: "CgkIlrPSvaAaEAIQHQ",
+};
+
+/** Maps an internal STOP achievement key to its published Play Games ID. */
+export function unlockPlayGamesAchievementForMilestone(milestoneId: string): boolean {
+  const achievementId = PLAY_GAMES_ACHIEVEMENT_IDS[milestoneId];
+  return achievementId ? unlockPlayGamesAchievement(achievementId) : false;
+}
+
 export function getLastPlayGamesStatus(): PgsStatus | null {
   return lastStatus;
 }
