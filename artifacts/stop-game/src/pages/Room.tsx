@@ -34,7 +34,7 @@ import { saveActiveRoom, clearActiveRoom, touchActiveRoom } from "@/lib/activeRo
 import { useT } from "@/i18n/useT";
 import { useToast } from "@/hooks/use-toast";
 import { useReviewPrompt, recordGamePlayed } from "@/hooks/useReviewPrompt";
-import { trackAnalyticsEvent, trackTrustedGameStart } from "@/lib/analyticsClient";
+import { trackAnalyticsEvent } from "@/lib/analyticsClient";
 import { ReviewPromptCard } from "@/components/ReviewPromptCard";
 import { maybeShowInterstitial, recordInterstitialGameCompleted } from "@/lib/interstitialAd";
 import { applyHalloweenCategory, getHalloweenScare, getHalloweenScareById, isHalloweenActive, isHalloweenPreview, isHalloweenModeEnabled } from "@/lib/halloweenEvent";
@@ -255,7 +255,6 @@ export default function Room() {
   // read fresh deadlines without re-creating the interval on every poll.
   const roomRef = useRef<any>(null);
   const lastStatusRef = useRef<string>("");
-  const gameStartTrackedRoomRef = useRef<string | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const freezeTimerRef = useRef<NodeJS.Timeout | null>(null);
   const hasSubmittedRef = useRef(false);
