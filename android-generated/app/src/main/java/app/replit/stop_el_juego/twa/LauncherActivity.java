@@ -147,7 +147,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             @Override
             public void onNavigationEvent(int navigationEvent, @Nullable Bundle extras) {
                 super.onNavigationEvent(navigationEvent, extras);
-                if (navigationEvent == NAVIGATION_FINISHED) requestMessageChannelWithRetry(250L);
+                if (navigationEvent == NAVIGATION_FINISHED && relationshipValidated) requestMessageChannelWithRetry(250L);
             }
             @Override
             public void onMessageChannelReady(@Nullable Bundle extras) {
