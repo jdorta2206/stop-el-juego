@@ -1198,12 +1198,9 @@ export default function Room() {
 
     if (roomStatus === "playing") {
 
-      // Track one trusted start per multiplayer match/client, never per round or poll.
-      const trackedRoom = roomCode?.toUpperCase() ?? null;
-      if (trackedRoom && gameStartTrackedRoomRef.current !== trackedRoom) {
-        gameStartTrackedRoomRef.current = trackedRoom;
-        trackTrustedGameStart({ mode: gameMode, language: getCurrentLang() });
-      }      if (currentRound !== lastRoundRef.current) {
+      // Multiplayer game_start is recorded authoritatively by the server when
+      // the room transitions into a live round. Do not emit a second client-side
+      // start here: it lacks roomId and cannot be correlated with the server result.      if (currentRound !== lastRoundRef.current) {
         lastRoundRef.current = currentRound;
         hasSubmittedRef.current = false;
         isFreezingRef.current = false;
