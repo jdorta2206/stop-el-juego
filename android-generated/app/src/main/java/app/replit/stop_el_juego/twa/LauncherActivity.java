@@ -147,7 +147,13 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             @Override
             public void onNavigationEvent(int navigationEvent, @Nullable Bundle extras) {
                 super.onNavigationEvent(navigationEvent, extras);
-                if (navigationEvent == NAVIGATION_FINISHED && relationshipValidated) requestMessageChannelWithRetry(250L);
+                if (navigationEvent != NAVIGATION_FINISHED) return;
+                // TwaLauncher validates handle_all_urls for launching the TWA, but
+                // postMessage requires the separate use_as_origin relationship.
+                // Request it explicitly; otherwise this callback may never set
+                // relationshipValidated and the native bridge remains disabled.
+                requestUseAsOriginValidation(0);
+                if (relationshipValidated) requestMessageChannelWithRetry(250L);
             }
             @Override
             public void onMessageChannelReady(@Nullable Bundle extras) {
@@ -163,6 +169,26 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                 handleWebMessage(message);
             }
         };
+    }
+
+    private void requestUseAsOriginValidation(int attempt) {
+        if (relationshipValidated || isFinishing()) return;
+        CustomTabsSession session = getTwaSession();
+        if (session != null) {
+            try {
+                boolean requested = session.validateRelationship(
+                        CustomTabsService.RELATION_USE_AS_ORIGIN, SOURCE_ORIGIN, new Bundle());
+                Log.d(TAG, "Requested use_as_origin validation attempt=" + (attempt + 1)
+                        + " accepted=" + requested);
+                if (requested) return; // Result arrives asynchronously via onRelationshipValidationResult.
+            } catch (RuntimeException error) {
+                Log.w(TAG, "use_as_origin validation request failed", error);
+            }
+        }
+        if (attempt < 10) {
+            getWindow().getDecorView().postDelayed(
+                    () -> requestUseAsOriginValidation(attempt + 1), 300L);
+        }
     }
 
     private void sendReadyBurst(int attempt) {
