@@ -28,7 +28,7 @@ const telemetryRows=(await db.execute(sql`SELECT COUNT(*)::int AS start_events,C
 const rewardRows=(await db.execute(sql`SELECT COUNT(*) FILTER(WHERE event_name='rewarded_ad_requested')::int AS requested,COUNT(*) FILTER(WHERE event_name='rewarded_ad_failed')::int AS failed,COUNT(*) FILTER(WHERE event_name='rewarded_ad_completed')::int AS completed FROM public.analytics_events WHERE trusted=TRUE AND created_at>=NOW()-INTERVAL '24 hours' AND event_name IN ('rewarded_ad_requested','rewarded_ad_failed','rewarded_ad_completed')`)).rows[0] as {requested?:number;failed?:number;completed?:number}|undefined;const rewardedRequested=Number(rewardRows?.requested??0),rewardedFailed=Number(rewardRows?.failed??0),rewardedCompleted=Number(rewardRows?.completed??0),rewardedFailureRate=rewardedRequested>0?Math.round(rewardedFailed/rewardedRequested*100):0;checks.push({name:"Publicidad recompensada",status:rewardedRequested<5?"ok":rewardedFailureRate>50?"warn":"ok",value:rewardedRequested===0?"SIN SOLICITUDES":`${rewardedCompleted}/${rewardedRequested} completados`,detail:rewardedRequested<5?"No hay suficientes solicitudes recientes para evaluar la tasa de fallo.":`${rewardedFailed} fallos de ${rewardedRequested} solicitudes en las últimas 24 horas (${rewardedFailureRate}%).`});
 const matureSessions=(await db.execute(sql`
 WITH starts AS (
-  SELECT id,session_id,player_id,game_id,created_at AS started_at
+  SELECT id,session_id,player_id,game_id,metadata_json,created_at AS started_at
   FROM public.analytics_events
   WHERE trusted=TRUE AND event_name='game_start'
     AND created_at BETWEEN NOW()-INTERVAL '2 hours' AND NOW()-INTERVAL '30 minutes'
@@ -42,7 +42,10 @@ EXTRACT(EPOCH FROM (
        AND ((s.game_id IS NOT NULL AND c.game_id=s.game_id)
          OR (s.game_id IS NULL AND (c.session_id=s.session_id
            OR (c.player_id IS NOT NULL AND c.player_id=s.player_id
-             AND COALESCE(c.metadata_json::text,'') ILIKE '%server_score_submission%'))))),
+             AND COALESCE(c.metadata_json::text,'') ILIKE '%server_score_submission%')
+           OR (COALESCE(c.metadata_json::text,'') ILIKE '%server_room_result%'
+             AND substring(s.metadata_json from '"roomId"[[:space:]]*:[[:space:]]*"([^"]+)"')
+               = substring(c.metadata_json from '"roomId"[[:space:]]*:[[:space:]]*"([^"]+)"'))))),
     (SELECT MAX(e.created_at) FROM public.analytics_events e
      WHERE e.trusted=TRUE AND e.session_id=s.session_id AND e.created_at>=s.started_at)
   )-s.started_at
@@ -56,7 +59,10 @@ EXISTS(SELECT 1 FROM public.analytics_events c
    AND ((s.game_id IS NOT NULL AND c.game_id=s.game_id)
      OR (s.game_id IS NULL AND (c.session_id=s.session_id
        OR (c.player_id IS NOT NULL AND c.player_id=s.player_id
-         AND COALESCE(c.metadata_json::text,'') ILIKE '%server_score_submission%'))))) AS completed,
+         AND COALESCE(c.metadata_json::text,'') ILIKE '%server_score_submission%')
+       OR (COALESCE(c.metadata_json::text,'') ILIKE '%server_room_result%'
+         AND substring(s.metadata_json from '"roomId"[[:space:]]*:[[:space:]]*"([^"]+)"')
+           = substring(c.metadata_json from '"roomId"[[:space:]]*:[[:space:]]*"([^"]+)"'))))) AS completed,
 EXISTS(SELECT 1 FROM public.analytics_events x
  WHERE x.trusted=TRUE AND x.session_id=s.session_id
    AND x.event_name IN ('client_error','api_error')
