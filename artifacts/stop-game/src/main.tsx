@@ -15,44 +15,48 @@ initTwaAdBridge();
 initTwaPlayGamesBridge();
 captureInstalledAppVersion();
 
-// Recover once from a stale dynamic-import chunk after a deployment.
-// This is deliberately one-shot so a genuinely missing asset cannot cause a reload loop.
+// Recover from stale/missing lazy chunks after a deployment. Browsers report
+// these failures with different messages; Vite also emits "vite:preloadError".
+// Keep recovery one-shot per tab to avoid reload loops on a genuinely missing asset.
 const CHUNK_RECOVERY_KEY = "stop_chunk_recovery_once";
-window.addEventListener("error", (event) => {
-  const message = String(event?.message || "");
-  if (!message.includes("Failed to fetch dynamically imported module")) return;
+let chunkRecoveryStarted = false;
+function recoverFromChunkFailure(reason: unknown) {
+  if (chunkRecoveryStarted) return;
+  const message = typeof reason === "string"
+    ? reason
+    : String((reason as { message?: unknown } | null)?.message ?? reason ?? "");
+  const isChunkFailure = /failed to fetch dynamically imported module|importing a module script failed|error loading dynamically imported module|failed to load module script|loading chunk .* failed|chunkloaderror|vite:preloaderror/i.test(message)
+    || /dynamic import|modulepreload/i.test(message);
+  if (!isChunkFailure) return;
+
   try {
     if (sessionStorage.getItem(CHUNK_RECOVERY_KEY) === "1") return;
     sessionStorage.setItem(CHUNK_RECOVERY_KEY, "1");
+    chunkRecoveryStarted = true;
 
-    // A deployment can leave an older service worker controlling the page
-    // while the server has already removed the hashed chunk it cached.
-    // Unregister that controller and clear only the static asset caches before
-    // retrying. Keep DATA_CACHE intact so offline game data is not destroyed.
+    // Remove stale code caches only. Never clear player/offline data.
     void (async () => {
       try {
         const registrations = await navigator.serviceWorker?.getRegistrations?.() || [];
         await Promise.all(registrations.map((registration) => registration.unregister()));
-      } catch {
-        // Cache recovery is best-effort and must never block gameplay.
-      }
-
+      } catch {}
       try {
         const keys = await caches.keys();
-        await Promise.all(
-          keys
-            .filter((key) => key.startsWith("stop-v"))
-            .map((key) => caches.delete(key))
-        );
-      } catch {
-        // Browser cache APIs are optional; the reload below remains the fallback.
-      }
-
+        await Promise.all(keys.filter((key) => /^stop-v/i.test(key)).map((key) => caches.delete(key)));
+      } catch {}
       window.location.reload();
     })();
   } catch {
     // Recovery must never interfere with gameplay.
   }
+}
+
+window.addEventListener("error", (event) => recoverFromChunkFailure(event?.message || ""));
+window.addEventListener("unhandledrejection", (event) => recoverFromChunkFailure(event?.reason));
+window.addEventListener("vite:preloadError", (event) => {
+  recoverFromChunkFailure((event as CustomEvent).payload || "vite:preloadError");
+  // Allow the recovery reload; prevent the stale chunk error from becoming an uncaught page failure.
+  event.preventDefault();
 });
 
 async function startAnalyticsHeartbeat() {
