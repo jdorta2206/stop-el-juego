@@ -37,6 +37,7 @@ function receiveNativeMessage(raw: unknown): void {
   let payload: any;
   try { payload = JSON.parse(raw); } catch { return; }
   if (payload?.type === "STOP_AD_BRIDGE_READY") {
+    const wasReady = channelReady;
     channelReady = messagePort !== null;
     if (channelReady) {
       const queued = pendingMessages;
@@ -46,7 +47,7 @@ function receiveNativeMessage(raw: unknown): void {
       // Startup sign-in can finish before the Custom Tabs channel is ready,
       // so its native status reply may be lost. Request a fresh snapshot once
       // the web listener and message port are both ready.
-      post("STOP_PGS_STATUS");
+      if (!wasReady) post("STOP_PGS_STATUS");
     }
     return;
   }
