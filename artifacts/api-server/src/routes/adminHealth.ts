@@ -100,7 +100,7 @@ WITH starts AS (
   SELECT DISTINCT ON (COALESCE(game_id::text, 'legacy:' || id::text)) id,session_id,player_id,game_id,metadata_json,created_at
   FROM public.analytics_events
   WHERE trusted=TRUE AND event_name='game_start'
-    AND created_at BETWEEN NOW()-INTERVAL '60 minutes' AND NOW()-INTERVAL '15 minutes'
+    AND created_at BETWEEN NOW()-INTERVAL '60 minutes' AND NOW()-INTERVAL '30 minutes'
   ORDER BY COALESCE(game_id::text, 'legacy:' || id::text), created_at ASC
 )
 SELECT COUNT(*)::int AS stuck
