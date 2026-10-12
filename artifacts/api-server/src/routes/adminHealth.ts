@@ -21,6 +21,19 @@ SELECT COUNT(DISTINCT s.session_id) FILTER(WHERE s.event_name='game_start' AND s
 COUNT(DISTINCT s.session_id) FILTER(WHERE s.event_name='game_start' AND s.player_id IS NOT NULL AND EXISTS(SELECT 1 FROM public.analytics_events c WHERE c.trusted=TRUE AND c.event_name='game_complete' AND c.created_at>=s.created_at AND c.created_at<=s.created_at+INTERVAL '30 minutes' AND (c.session_id=s.session_id OR (c.player_id IS NOT NULL AND c.player_id=s.player_id AND ((COALESCE(c.metadata_json::text,'') ILIKE '%server_score_submission%' AND NOT EXISTS (SELECT 1 FROM public.analytics_events s2 WHERE s2.trusted=TRUE AND s2.event_name='game_start' AND s2.player_id=s.player_id AND s2.created_at>s.created_at AND s2.created_at<=c.created_at)) OR (COALESCE(c.metadata_json::text,'') ILIKE '%server_room_result%' AND substring(s.metadata_json from '"roomId"[[:space:]]*:[[:space:]]*"([^"]+)"') = substring(c.metadata_json from '"roomId"[[:space:]]*:[[:space:]]*"([^"]+)"')))))))::int AS completes
 FROM public.analytics_events s WHERE s.trusted=TRUE AND s.created_at BETWEEN NOW()-INTERVAL '2 hours' AND NOW()-INTERVAL '30 minutes'
 `)).rows[0] as {starts?:number;completes?:number}|undefined;const recentStarts=Number(gameplayRows?.starts??0),recentCompletes=Number(gameplayRows?.completes??0),completionRate=recentStarts>0?Math.round(recentCompletes/recentStarts*100):0;checks.push({name:"Flujo real de partida",status:recentStarts<5?"warn":completionRate<50?"error":completionRate<80?"warn":"ok",value:recentStarts<5?`${recentStarts} sesiones registradas maduras`:`${completionRate}% inicio → resultado`,detail:recentStarts<5?"No hay suficiente actividad madura para declarar el flujo sano; se excluyen los últimos 30 minutos porque esas partidas todavía pueden estar en curso.":`${recentStarts} sesiones registradas con inicio y ${recentCompletes} con resultado entre 30 minutos y 2 horas atrás; se excluyen invitados porque sus partidas se contabilizan por separado y no generan el mismo evento de resultado.`});
+const clientErrorDetailRows=(await db.execute(sql`
+SELECT to_char(created_at AT TIME ZONE 'Europe/Madrid','DD/MM HH24:MI:SS') AS occurred_at,
+platform, app_version, metadata_json
+FROM public.analytics_events
+WHERE trusted=TRUE AND event_name='client_error'
+AND created_at>=NOW()-INTERVAL '15 minutes'
+ORDER BY created_at DESC
+LIMIT 5
+`)).rows as Array<{occurred_at?:string;platform?:string;app_version?:string;metadata_json?:string}>;
+// Show only sanitized error messages in the private health panel; never expose stacks, player IDs, or session IDs.
+const safeErrorText=(value:string)=>value.replace(/https?:\/\/[^\s"'<>]+/gi,(url)=>url.split(/[?#]/,1)[0]).replace(/\bBearer\s+\S+/gi,"Bearer [oculto]").replace(/(token|password|authorization|cookie)\s*[:=]\s*[^\s,;]+/gi,"$1=[oculto]").replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi,"[email oculto]").replace(/\s+/g," ").slice(0,180);
+const clientErrorSummaries=clientErrorDetailRows.map((row)=>{let message="Error de cliente (sin mensaje)";try{const parsed=JSON.parse(String(row.metadata_json??"{}")) as {message?:unknown};if(typeof parsed.message==="string"&&parsed.message.trim())message=safeErrorText(parsed.message.trim())}catch{}return `${String(row.occurred_at??"hora desconocida")} · ${String(row.platform??"plataforma desconocida")} · ${String(row.app_version??"versión desconocida")} · ${message}`});
+checks.push({name:"Detalle de errores cliente",status:clientErrorSummaries.length===0?"ok":"warn",value:clientErrorSummaries.length===0?"SIN ERRORES":`${clientErrorSummaries.length} detalle(s)`,detail:clientErrorSummaries.length===0?"No hay errores de cliente en los últimos 15 minutos.":clientErrorSummaries.join(" | ")});
 const chunkRows=(await db.execute(sql`
 SELECT COUNT(*) FILTER(WHERE created_at>=NOW()-INTERVAL '15 minutes')::int AS recent,
 COUNT(*)::int AS window
