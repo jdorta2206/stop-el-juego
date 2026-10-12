@@ -75,6 +75,17 @@ function post(type: string, extra: Record<string, string> = {}): boolean {
   if (!isAndroidTwa()) return false;
   const message = { type, ...extra };
   if (!channelReady || !messagePort) {
+    // The app requests sign-in automatically at startup. If the player taps the
+    // button before Android finishes opening the MessagePort, do not enqueue a
+    // second sign-in request behind the first one.
+    if (type === "STOP_PGS_SIGN_IN" &&
+        pendingMessages.some((pending) => pending.type === "STOP_PGS_SIGN_IN")) {
+      return true;
+    }
+    // Status refreshes are snapshots, so only the newest queued refresh matters.
+    if (type === "STOP_PGS_STATUS") {
+      pendingMessages = pendingMessages.filter((pending) => pending.type !== "STOP_PGS_STATUS");
+    }
     pendingMessages.push(message);
     return true;
   }
