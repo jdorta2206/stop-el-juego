@@ -4,8 +4,6 @@ on:
   push:
     branches:
       - master
-      - fix/android-play-games-release-v55
-      - fix/android-play-games-release-v56
 
   workflow_dispatch:
 
