@@ -16,9 +16,17 @@ export function isAndroidTwa(): boolean {
   if (typeof window === "undefined") return false;
   try {
     const params = new URLSearchParams(window.location.search);
-    return params.get("source") === "googleplay-twa" ||
-      params.get("source") === "twa" ||
-      document.referrer.startsWith("android-app://app.replit.stop_el_juego.twa");
+    if (params.get("source") === "googleplay-twa" || params.get("source") === "twa" ||
+        document.referrer.startsWith("android-app://app.replit.stop_el_juego.twa")) {
+      return true;
+    }
+    // TWA launchers do not consistently preserve an app referrer or query marker.
+    // Android Chrome's installed TWA runs in standalone display mode; regular browser
+    // tabs and iOS do not. Guard with Android UA to avoid showing native controls elsewhere.
+    const android = /Android/i.test(navigator.userAgent);
+    const standalone = window.matchMedia?.("(display-mode: standalone)").matches === true ||
+      (navigator as Navigator & { standalone?: boolean }).standalone === true;
+    return android && standalone;
   } catch {
     return false;
   }
@@ -48,8 +56,6 @@ function receiveNativeMessage(raw: unknown): void {
 function send(message: NativeMessage): boolean {
   if (!messagePort || !channelReady) return false;
   try {
-    // TWA Custom Tabs messaging is a MessagePort channel. window.postMessage()
-    // alone only posts to this page; it does not deliver the request to Android.
     messagePort.postMessage(JSON.stringify(message));
     return true;
   } catch {
@@ -75,7 +81,6 @@ export function initTwaPlayGamesBridge(): void {
   if (!isAndroidTwa()) return;
   window.addEventListener("message", (event: MessageEvent) => {
     if (event.origin !== ORIGIN) return;
-    // Chrome transfers the native-to-web MessagePort with the first host message.
     const transferredPort = event.ports?.[0];
     if (transferredPort) {
       messagePort = transferredPort;
@@ -84,9 +89,6 @@ export function initTwaPlayGamesBridge(): void {
     }
     receiveNativeMessage(event.data);
   });
-  // Start the Google Play Games connection on app entry. The native side checks
-  // existing authentication first and only invokes the SDK sign-in flow when needed.
-  // Queue until the host transfers its MessagePort; this never blocks game startup.
   post("STOP_PGS_SIGN_IN");
 }
 
@@ -104,7 +106,6 @@ export function unlockPlayGamesAchievement(achievementId: string): boolean {
   if (!/^Cgk[A-Za-z0-9_-]{10,}$/.test(id)) return false;
   return post("STOP_PGS_UNLOCK_ACHIEVEMENT", { achievementId: id });
 }
-
 
 /** Published Google Play Games achievement IDs from the STOP game-services project. */
 const PLAY_GAMES_ACHIEVEMENT_IDS: Record<string, string> = {
@@ -125,7 +126,6 @@ const PLAY_GAMES_ACHIEVEMENT_IDS: Record<string, string> = {
   shutout: "CgkIlrPSvaAaEAIQHQ",
 };
 
-/** Maps an internal STOP achievement key to its published Play Games ID. */
 export function unlockPlayGamesAchievementForMilestone(milestoneId: string): boolean {
   const achievementId = PLAY_GAMES_ACHIEVEMENT_IDS[milestoneId];
   return achievementId ? unlockPlayGamesAchievement(achievementId) : false;
