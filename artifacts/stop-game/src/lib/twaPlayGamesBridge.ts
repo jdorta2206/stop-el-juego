@@ -42,6 +42,11 @@ function receiveNativeMessage(raw: unknown): void {
       const queued = pendingMessages;
       pendingMessages = [];
       for (const message of queued) send(message);
+
+      // Startup sign-in can finish before the Custom Tabs channel is ready,
+      // so its native status reply may be lost. Request a fresh snapshot once
+      // the web listener and message port are both ready.
+      post("STOP_PGS_STATUS");
     }
     return;
   }
