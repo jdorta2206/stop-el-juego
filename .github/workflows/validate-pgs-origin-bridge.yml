@@ -1,0 +1,58 @@
+name: Validate Play Games bridge origin
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - "android-generated/**"
+      - "artifacts/stop-game/src/lib/twaPlayGamesBridge.ts"
+      - ".github/workflows/validate-pgs-origin-bridge.yml"
+  push:
+    branches: [fix/pgs-validate-native-message-origin]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pgs-origin-bridge-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+      - name: Install Android SDK components
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+      - name: Verify PGS origin and channel guards
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          web = Path("artifacts/stop-game/src/lib/twaPlayGamesBridge.ts").read_text()
+          native = Path("android-generated/app/src/main/java/app/replit/stop_el_juego/twa/LauncherActivity.java").read_text()
+          assert 'const message = { type, ...extra, origin: window.location.origin };' in web
+          assert 'if (!messageChannelReady || !relationshipValidated || !isAllowedOrigin(origin))' in native
+          assert 'String origin = message.optString("origin", "");' in native
+          assert 'STOP_PGS_UNLOCK_ACHIEVEMENT' in web and 'STOP_PGS_UNLOCK_ACHIEVEMENT' in native
+          assert 'return "https://stopjuegodepalabras.com".equals(origin)' in native
+          assert '|| "https://www.stopjuegodepalabras.com".equals(origin);' in native
+          print("PGS web origin payload and native TWA relationship/origin guards verified.")
+          PY
+      - name: Compile Android debug APK
+        working-directory: android-generated
+        run: |
+          set -euo pipefail
+          chmod +x ./gradlew
+          ./gradlew :app:assembleDebug --no-daemon --stacktrace
+          test -s app/build/outputs/apk/debug/app-debug.apk
