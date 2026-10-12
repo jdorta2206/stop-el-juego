@@ -15,6 +15,10 @@
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
 
         <meta-data
+            android:name="com.google.android.gms.games.APP_ID"
+            android:value="@string/game_services_project_id" />
+
+        <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
             android:value="ca-app-pub-4807272408824742~9880632781" />
 
@@ -70,6 +74,18 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="https" android:host="@string/hostName" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".PlayGamesAchievementsActivity"
+            android:exported="true"
+            android:excludeFromRecents="true">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="stoppgs" android:host="achievements" />
             </intent-filter>
         </activity>
 

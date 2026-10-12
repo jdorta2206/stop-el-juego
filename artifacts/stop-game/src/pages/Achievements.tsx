@@ -10,6 +10,9 @@ export default function Achievements() {
   const { player } = usePlayer();
   const { unlocked } = useAchievements(player?.id);
   const { t } = useT();
+  // The ad bridge is independent of Google Play Games. Do not hide the PGS entry
+  // just because the rewarded-ad MessagePort has not initialized in a TWA session.
+  const showGooglePlayGamesEntry = typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent || "");
   const tA = t.achievements as unknown as Record<string, string>;
 
   const total = ACHIEVEMENTS.length;
@@ -18,7 +21,7 @@ export default function Achievements() {
 
   return (
     <Layout>
-      <div className="w-full max-w-2xl mx-auto px-4 py-4 space-y-4">
+      <div className="w-full max-w-2xl mx-auto px-4 py-4 space-y-4 rounded-3xl" style={{ background: "linear-gradient(180deg, rgba(127,29,29,0.42) 0%, rgba(69,10,10,0.30) 100%)", border: "1px solid rgba(248,113,113,0.28)", boxShadow: "0 12px 36px rgba(127,29,29,0.16)" }}>
         {/* Header */}
         <div className="flex items-center gap-3">
           <Link href="/">
@@ -35,6 +38,27 @@ export default function Achievements() {
             <h1 className="text-2xl font-black text-white">{tA.title ?? "Logros"}</h1>
           </div>
         </div>
+
+        {showGooglePlayGamesEntry && (
+          <a
+            href="stoppgs://achievements"
+            className="flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-black text-white"
+            style={{
+              background: "linear-gradient(135deg, rgba(220,38,38,0.92), rgba(153,27,27,0.96))",
+              border: "1px solid rgba(255,107,53,0.75)",
+              boxShadow: "0 4px 16px rgba(220,38,38,0.22)",
+            }}
+            onClick={(event) => {
+              // Only this explicit tap launches the native Google Play Games screen.
+              // If PGS is not configured, native code exits safely without affecting STOP.
+              event.preventDefault();
+              window.location.href = "stoppgs://achievements";
+            }}
+          >
+            <Trophy className="w-5 h-5" />
+            Ver logros de Google Play Games
+          </a>
+        )}
 
         {/* Progress bar */}
         <motion.div
