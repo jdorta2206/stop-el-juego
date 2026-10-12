@@ -783,6 +783,7 @@ export default function Home() {
             </motion.div>
           </Link>
 
+          {/* Android-only account entry point; keep web and iOS unchanged. */}
           {isAndroidTwa() && (
             <div className="w-full space-y-2">
               <button
