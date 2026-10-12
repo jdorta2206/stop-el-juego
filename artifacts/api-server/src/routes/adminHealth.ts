@@ -22,7 +22,7 @@ COUNT(DISTINCT s.session_id) FILTER(WHERE s.event_name='game_start' AND s.player
 FROM public.analytics_events s WHERE s.trusted=TRUE AND s.created_at BETWEEN NOW()-INTERVAL '2 hours' AND NOW()-INTERVAL '30 minutes'
 `)).rows[0] as {starts?:number;completes?:number}|undefined;const recentStarts=Number(gameplayRows?.starts??0),recentCompletes=Number(gameplayRows?.completes??0),completionRate=recentStarts>0?Math.round(recentCompletes/recentStarts*100):0;checks.push({name:"Flujo real de partida",status:recentStarts<5?"warn":completionRate<50?"error":completionRate<80?"warn":"ok",value:recentStarts<5?`${recentStarts} sesiones registradas maduras`:`${completionRate}% inicio → resultado`,detail:recentStarts<5?"No hay suficiente actividad madura para declarar el flujo sano; se excluyen los últimos 30 minutos porque esas partidas todavía pueden estar en curso.":`${recentStarts} sesiones registradas con inicio y ${recentCompletes} con resultado entre 30 minutos y 2 horas atrás; se excluyen invitados porque sus partidas se contabilizan por separado y no generan el mismo evento de resultado.`});
 const clientErrorDetailRows=(await db.execute(sql`
-SELECT to_char(created_at AT TIME ZONE 'Europe/Madrid','DD/MM HH24:MI:SS') AS occurred_at,
+SELECT to_char((created_at AT TIME ZONE 'UTC') AT TIME ZONE 'Europe/Madrid','DD/MM HH24:MI:SS') AS occurred_at,
 platform, app_version, metadata_json
 FROM public.analytics_events
 WHERE trusted=TRUE AND event_name='client_error'
