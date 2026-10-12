@@ -27,7 +27,12 @@ function recoverFromChunkFailure(reason: unknown) {
     : String((reason as { message?: unknown } | null)?.message ?? reason ?? "");
   const isChunkFailure = /failed to fetch dynamically imported module|importing a module script failed|error loading dynamically imported module|failed to load module script|loading chunk .* failed|chunkloaderror|vite:preloaderror/i.test(message)
     || /dynamic import|modulepreload/i.test(message);
-  if (!isChunkFailure) return;
+  // Some WebViews report a stale React.lazy module as an undefined default
+  // export instead of a conventional chunk-loading error. Recover only from
+  // these explicit module-resolution signatures, using the same one-shot
+  // cache cleanup below; unrelated runtime errors must not trigger reloads.
+  const isLazyDefaultFailure = /cannot read properties of undefined \(reading ['"]default['"]\)|undefined is not an object.*(?:_result\.default|\.default)|_result\.default/i.test(message);
+  if (!isChunkFailure && !isLazyDefaultFailure) return;
 
   try {
     if (sessionStorage.getItem(CHUNK_RECOVERY_KEY) === "1") return;
