@@ -145,7 +145,16 @@ async function startAnalyticsHeartbeat() {
 }
 
 async function bootstrapApp() {
-  await consumeAuthHandoff();
+  // OAuth handoff is an optional startup enhancement. Never let a stalled
+  // network request prevent the game UI from mounting indefinitely.
+  try {
+    await Promise.race([
+      consumeAuthHandoff(),
+      new Promise<void>((resolve) => window.setTimeout(resolve, 2500)),
+    ]);
+  } catch {
+    // Authentication recovery must not take the whole game offline.
+  }
   createRoot(document.getElementById("root")!).render(
     <HelmetProvider>
       <App />
