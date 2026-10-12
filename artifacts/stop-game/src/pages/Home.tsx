@@ -127,28 +127,34 @@ export default function Home() {
     return () => window.removeEventListener("halloween:audio-started", onHalloweenAudioStarted);
   }, []);
   const [showHalloweenAnnouncement, setShowHalloweenAnnouncement] = useState(false);
-  const [halloweenDaysUntilStart, setHalloweenDaysUntilStart] = useState(() => {
+  const [halloweenCountdown, setHalloweenCountdown] = useState(() => {
     const target = new Date(HALLOWEEN_START);
     const targetLocal = new Date(target.getFullYear(), target.getMonth(), target.getDate());
-    const now = new Date();
-    const todayLocal = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    return Math.max(0, Math.round((targetLocal.getTime() - todayLocal.getTime()) / 86_400_000));
+    const remaining = Math.max(0, targetLocal.getTime() - Date.now());
+    return {
+      days: Math.floor(remaining / 86_400_000),
+      hours: Math.floor((remaining % 86_400_000) / 3_600_000),
+      minutes: Math.floor((remaining % 3_600_000) / 60_000),
+      seconds: Math.floor((remaining % 60_000) / 1_000),
+    };
   });
   const { data: halloweenProgressData } = useHalloweenProgress(player?.id);
 
-  // Pre-event countdown: this is informational only and never gates gameplay.
+  // Live local-time countdown; informational only and never gates gameplay.
   useEffect(() => {
     const update = () => {
       const target = new Date(HALLOWEEN_START);
       const targetLocal = new Date(target.getFullYear(), target.getMonth(), target.getDate());
-      const now = new Date();
-      const todayLocal = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      setHalloweenDaysUntilStart(
-        Math.max(0, Math.round((targetLocal.getTime() - todayLocal.getTime()) / 86_400_000)),
-      );
+      const remaining = Math.max(0, targetLocal.getTime() - Date.now());
+      setHalloweenCountdown({
+        days: Math.floor(remaining / 86_400_000),
+        hours: Math.floor((remaining % 86_400_000) / 3_600_000),
+        minutes: Math.floor((remaining % 3_600_000) / 60_000),
+        seconds: Math.floor((remaining % 60_000) / 1_000),
+      });
     };
     update();
-    const timer = window.setInterval(update, 60 * 60 * 1000);
+    const timer = window.setInterval(update, 1_000);
     return () => window.clearInterval(timer);
   }, []);
 
@@ -221,7 +227,11 @@ export default function Home() {
           >
             <p className="text-orange-300 text-[10px] font-black uppercase tracking-[0.2em]">🎃 Próximo evento especial</p>
             <p className="text-white font-black text-base mt-1">
-              Halloween comienza dentro de {halloweenDaysUntilStart} {halloweenDaysUntilStart === 1 ? "día" : "días"}
+              {halloweenCountdown.days > 0
+                ? `Halloween comienza en ${halloweenCountdown.days}d ${String(halloweenCountdown.hours).padStart(2, "0")}h ${String(halloweenCountdown.minutes).padStart(2, "0")}m ${String(halloweenCountdown.seconds).padStart(2, "0")}s`
+                : halloweenCountdown.hours > 0
+                  ? `Halloween comienza en ${halloweenCountdown.hours}h ${String(halloweenCountdown.minutes).padStart(2, "0")}m ${String(halloweenCountdown.seconds).padStart(2, "0")}s`
+                  : `Halloween comienza en ${halloweenCountdown.minutes}m ${String(halloweenCountdown.seconds).padStart(2, "0")}s`}
             </p>
             <p className="text-white/55 text-[11px] mt-1">15 de octubre · Sustos, ambientación de terror y recompensas especiales</p>
           </div>
