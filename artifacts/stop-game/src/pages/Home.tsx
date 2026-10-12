@@ -48,14 +48,22 @@ export default function Home() {
   const [dailyDone, setDailyDone] = useState(false);
   const [showDowntimeCompensation, setShowDowntimeCompensation] = useState(false);
   const [playGamesStatus, setPlayGamesStatus] = useState<{ ok: boolean; status: string } | null>(() => getLastPlayGamesStatus());
+  const playGamesTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const onPlayGamesStatus = (event: Event) => {
       const detail = (event as CustomEvent<{ ok: boolean; status: string }>).detail;
-      if (detail && typeof detail.ok === "boolean") setPlayGamesStatus(detail);
+      if (detail && typeof detail.ok === "boolean") {
+        if (playGamesTimeoutRef.current) clearTimeout(playGamesTimeoutRef.current);
+        playGamesTimeoutRef.current = null;
+        setPlayGamesStatus(detail);
+      }
     };
     window.addEventListener("stop:play-games-status", onPlayGamesStatus);
-    return () => window.removeEventListener("stop:play-games-status", onPlayGamesStatus);
+    return () => {
+      window.removeEventListener("stop:play-games-status", onPlayGamesStatus);
+      if (playGamesTimeoutRef.current) clearTimeout(playGamesTimeoutRef.current);
+    };
   }, []);
 
   // One-time server-authoritative compensation for the recent service interruption.
@@ -789,9 +797,23 @@ export default function Home() {
               <button
                 type="button"
                 onClick={() => {
+                  if (playGamesTimeoutRef.current) clearTimeout(playGamesTimeoutRef.current);
                   setPlayGamesStatus({ ok: false, status: "conectando" });
                   const sent = requestPlayGamesSignIn();
-                  if (!sent) setPlayGamesStatus({ ok: false, status: "puente_no_disponible" });
+                  if (!sent) {
+                    setPlayGamesStatus({ ok: false, status: "puente_no_disponible" });
+                    return;
+                  }
+                  // Never leave the player with an endless "connecting" message if
+                  // Android cannot deliver a status response through the TWA bridge.
+                  playGamesTimeoutRef.current = setTimeout(() => {
+                    setPlayGamesStatus(current =>
+                      current?.status === "conectando"
+                        ? { ok: false, status: "sin_respuesta" }
+                        : current
+                    );
+                    playGamesTimeoutRef.current = null;
+                  }, 12000);
                 }}
                 className="w-full flex items-center justify-center gap-3 rounded-xl px-4 py-3 font-extrabold text-white shadow-lg active:scale-[0.98] transition-transform"
                 style={{ background: "linear-gradient(135deg, #168b55 0%, #0f6b43 100%)", border: "1px solid rgba(255,255,255,0.22)" }}
@@ -810,7 +832,16 @@ export default function Home() {
               >Ver mis logros de Google Play Games</button>
               {playGamesStatus && (
                 <p role="status" className={`text-center text-xs font-semibold ${playGamesStatus.ok ? "text-emerald-300" : "text-amber-200"}`}>
-                  {playGamesStatus.ok ? "Google Play Games conectado" : `Google Play Games: ${playGamesStatus.status}`}
+                  {playGamesStatus.ok ? "Google Play Games conectado" : ({
+                    conectando: "Conectando con Google Play Games…",
+                    puente_no_disponible: "Google Play Games no está disponible en esta sesión. Abre STOP desde la app instalada.",
+                    sin_respuesta: "Google Play Games no responde. Comprueba la conexión y vuelve a intentarlo.",
+                    sdk_unavailable: "Google Play Games no se ha podido iniciar en este dispositivo.",
+                    sign_in_in_progress: "La conexión con Google Play Games ya está en curso. Espera unos segundos.",
+                    sign_in_failed: "No se pudo iniciar sesión en Google Play Games. Inténtalo de nuevo.",
+                    not_authenticated: "Todavía no has conectado Google Play Games.",
+                    unavailable: "Google Play Games no está disponible ahora mismo.",
+                  }[playGamesStatus.status] ?? `No se pudo conectar con Google Play Games (${playGamesStatus.status}).`)}
                 </p>
               )}
             </div>
