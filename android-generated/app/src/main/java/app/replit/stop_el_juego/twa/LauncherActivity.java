@@ -60,6 +60,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     private AppUpdateManager appUpdateManager;
     private boolean playUpdatePromptShown;
     private boolean playGamesInitialized;
+    private boolean playGamesSignInInFlight;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -69,6 +70,8 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             PlayGamesSdk.initialize(getApplicationContext());
             playGamesInitialized = true;
             Log.i("STOP_PLAY_GAMES", "Play Games SDK initialized");
+            // Start authentication from the native app launch, independently of web/bridge readiness.
+            startPlayGamesSignInIfNeeded();
         } catch (RuntimeException error) {
             Log.w("STOP_PLAY_GAMES", "Play Games SDK initialization failed; app continues normally", error);
         }
@@ -277,30 +280,62 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     }
 
 
-    private void handlePlayGamesMessage(String type, JSONObject message) {
-        if (!messageChannelReady || !playGamesInitialized) {
-            sendPlayGamesStatus(false, "sdk_unavailable");
-            return;
-        }
-        if ("STOP_PGS_SIGN_IN".equals(type) || "STOP_PGS_STATUS".equals(type)) {
+    private void startPlayGamesSignInIfNeeded() {
+        if (!playGamesInitialized || playGamesSignInInFlight || isFinishing()) return;
+        playGamesSignInInFlight = true;
+        try {
             PlayGames.getGamesSignInClient(this).isAuthenticated()
                     .addOnCompleteListener(task -> {
                         boolean authenticated = task.isSuccessful()
                                 && task.getResult() != null
                                 && task.getResult().isAuthenticated();
                         if (authenticated) {
+                            playGamesSignInInFlight = false;
+                            Log.i("STOP_PLAY_GAMES", "Already authenticated");
                             sendPlayGamesStatus(true, "authenticated");
-                        } else if ("STOP_PGS_SIGN_IN".equals(type)) {
+                            return;
+                        }
+                        try {
                             PlayGames.getGamesSignInClient(this).signIn()
                                     .addOnCompleteListener(signInTask -> {
                                         boolean signedIn = signInTask.isSuccessful()
                                                 && signInTask.getResult() != null
                                                 && signInTask.getResult().isAuthenticated();
+                                        playGamesSignInInFlight = false;
+                                        Log.i("STOP_PLAY_GAMES", signedIn
+                                                ? "Native startup sign-in succeeded"
+                                                : "Native startup sign-in did not complete; guest play remains available");
                                         sendPlayGamesStatus(signedIn, signedIn ? "authenticated" : "sign_in_failed");
                                     });
-                        } else {
-                            sendPlayGamesStatus(false, "not_authenticated");
+                        } catch (RuntimeException error) {
+                            playGamesSignInInFlight = false;
+                            Log.w("STOP_PLAY_GAMES", "Native sign-in could not start; app continues normally", error);
+                            sendPlayGamesStatus(false, "sign_in_failed");
                         }
+                    });
+        } catch (RuntimeException error) {
+            playGamesSignInInFlight = false;
+            Log.w("STOP_PLAY_GAMES", "Authentication check failed; app continues normally", error);
+            sendPlayGamesStatus(false, "sign_in_failed");
+        }
+    }
+
+    private void handlePlayGamesMessage(String type, JSONObject message) {
+        if (!playGamesInitialized) {
+            sendPlayGamesStatus(false, "sdk_unavailable");
+            return;
+        }
+        if ("STOP_PGS_SIGN_IN".equals(type)) {
+            startPlayGamesSignInIfNeeded();
+            return;
+        }
+        if ("STOP_PGS_STATUS".equals(type)) {
+            PlayGames.getGamesSignInClient(this).isAuthenticated()
+                    .addOnCompleteListener(task -> {
+                        boolean authenticated = task.isSuccessful()
+                                && task.getResult() != null
+                                && task.getResult().isAuthenticated();
+                        sendPlayGamesStatus(authenticated, authenticated ? "authenticated" : "not_authenticated");
                     });
             return;
         }

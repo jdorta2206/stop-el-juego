@@ -90,6 +90,14 @@ export function initTwaPlayGamesBridge(): void {
     receiveNativeMessage(event.data);
   });
   post("STOP_PGS_SIGN_IN");
+
+  // The Play Games account can change while Android backgrounds the TWA.
+  // Refresh status when the player returns so the UI does not keep stale auth state.
+  const refreshStatus = () => {
+    if (document.visibilityState === "visible") post("STOP_PGS_STATUS");
+  };
+  document.addEventListener("visibilitychange", refreshStatus);
+  window.addEventListener("focus", refreshStatus);
 }
 
 export function requestPlayGamesSignIn(): boolean {
