@@ -10,10 +10,17 @@ interface State {
   error: Error | null;
 }
 
+const LAZY_DEFAULT_RECOVERY_KEY = "stop_lazy_default_boundary_recovery_once";
+
+function isLazyDefaultImportFailure(error: Error | null): boolean {
+  const message = error?.message || "";
+  return /cannot read properties of undefined \(reading ['"]default['"]\)|undefined is not an object.*(?:_result\.default|\.default)|_result\.default/i.test(message);
+}
+
 /**
  * Catches uncaught render errors so a single bug in any page doesn't blank
  * the entire app for production users. Shows a recovery screen with a
- * "Reload" button.
+ * "Reload" button for ordinary errors.
  */
 export class ErrorBoundary extends Component<Props, State> {
   state: State = { hasError: false, error: null };
@@ -25,12 +32,40 @@ export class ErrorBoundary extends Component<Props, State> {
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error("[ErrorBoundary] Uncaught render error:", error, info.componentStack);
     trackClientError(error, info.componentStack);
+
+    // React.lazy can surface a stale/rejected module as an undefined
+    // ".default" during rendering, before window-level chunk handlers can
+    // recognize it. Recover automatically once per tab, but never loop.
+    if (isLazyDefaultImportFailure(error)) {
+      try {
+        if (sessionStorage.getItem(LAZY_DEFAULT_RECOVERY_KEY) !== "1") {
+          sessionStorage.setItem(LAZY_DEFAULT_RECOVERY_KEY, "1");
+          void this.recoverAssetCacheAndReload();
+        }
+      } catch {
+        // If session storage is unavailable, leave the recovery screen usable.
+      }
+    }
   }
 
+  private recoverAssetCacheAndReload = async () => {
+    // Clear only app asset caches. Keep the service worker registered so
+    // push notifications continue working; preserve DATA_CACHE and game data.
+    try {
+      const keys = await caches.keys();
+      await Promise.all(
+        keys
+          .filter((key) => key.startsWith("stop-v"))
+          .map((key) => caches.delete(key))
+      );
+    } catch {
+      // Cache APIs may be unavailable; still try a fresh document.
+    }
+    window.location.reload();
+  };
+
   private handleReload = () => {
-    // A failed React.lazy import can remain rejected for the lifetime of this
-    // document. A plain reload may also reuse a stale service-worker cache.
-    // Clear only app asset caches, preserving DATA_CACHE and saved game data.
+    // Manual recovery is available for any other render error.
     void (async () => {
       try {
         const registrations = await navigator.serviceWorker?.getRegistrations?.() || [];
