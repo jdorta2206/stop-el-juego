@@ -281,7 +281,17 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
 
 
     private void startPlayGamesSignInIfNeeded() {
-        if (!playGamesInitialized || playGamesSignInInFlight || isFinishing()) return;
+        if (!playGamesInitialized) {
+            sendPlayGamesStatus(false, "sdk_unavailable");
+            return;
+        }
+        if (playGamesSignInInFlight) {
+            // A manual tap can arrive while launch-time authentication is pending.
+            // Reply instead of silently ignoring the tap.
+            sendPlayGamesStatus(false, "sign_in_in_progress");
+            return;
+        }
+        if (isFinishing()) return;
         playGamesSignInInFlight = true;
         try {
             PlayGames.getGamesSignInClient(this).isAuthenticated()
