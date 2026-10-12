@@ -73,7 +73,7 @@ function send(message: NativeMessage): boolean {
 
 function post(type: string, extra: Record<string, string> = {}): boolean {
   if (!isAndroidTwa()) return false;
-  const message = { type, ...extra };
+  const message = { type, ...extra, origin: window.location.origin };
   if (!channelReady || !messagePort) {
     // The app requests sign-in automatically at startup. If the player taps the
     // button before Android finishes opening the MessagePort, do not enqueue a
