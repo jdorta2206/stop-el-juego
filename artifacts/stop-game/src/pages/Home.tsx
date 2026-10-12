@@ -129,8 +129,7 @@ export default function Home() {
   const [showHalloweenAnnouncement, setShowHalloweenAnnouncement] = useState(false);
   const [halloweenCountdown, setHalloweenCountdown] = useState(() => {
     const target = new Date(HALLOWEEN_START);
-    const targetLocal = new Date(target.getFullYear(), target.getMonth(), target.getDate());
-    const remaining = Math.max(0, targetLocal.getTime() - Date.now());
+    const remaining = Math.max(0, target.getTime() - Date.now());
     return {
       days: Math.floor(remaining / 86_400_000),
       hours: Math.floor((remaining % 86_400_000) / 3_600_000),
@@ -144,8 +143,7 @@ export default function Home() {
   useEffect(() => {
     const update = () => {
       const target = new Date(HALLOWEEN_START);
-      const targetLocal = new Date(target.getFullYear(), target.getMonth(), target.getDate());
-      const remaining = Math.max(0, targetLocal.getTime() - Date.now());
+      const remaining = Math.max(0, target.getTime() - Date.now());
       setHalloweenCountdown({
         days: Math.floor(remaining / 86_400_000),
         hours: Math.floor((remaining % 86_400_000) / 3_600_000),
