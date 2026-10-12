@@ -791,12 +791,15 @@ export default function Home() {
             </motion.div>
           </Link>
 
-          {/* Android-only account entry point; keep web and iOS unchanged. */}
-          {isAndroidTwa() && (
-            <div className="w-full space-y-2">
+          {/* Always show the Play Games entry point; native actions are available only in the installed Android TWA. */}
+          <div className="w-full space-y-2">
               <button
                 type="button"
                 onClick={() => {
+                  if (!isAndroidTwa()) {
+                    setPlayGamesStatus({ ok: false, status: "solo_android_twa" });
+                    return;
+                  }
                   if (playGamesTimeoutRef.current) clearTimeout(playGamesTimeoutRef.current);
                   setPlayGamesStatus({ ok: false, status: "conectando" });
                   const sent = requestPlayGamesSignIn();
@@ -834,12 +837,19 @@ export default function Home() {
               </button>
               <button
                 type="button"
-                onClick={() => showPlayGamesAchievements()}
+                onClick={() => {
+                  if (!isAndroidTwa()) {
+                    setPlayGamesStatus({ ok: false, status: "solo_android_twa" });
+                    return;
+                  }
+                  showPlayGamesAchievements();
+                }}
                 className="w-full rounded-lg border border-white/15 bg-black/20 px-3 py-2 text-sm font-bold text-white/90 active:scale-[0.99] transition-transform"
               >Ver mis logros de Google Play Games</button>
               {playGamesStatus && (
                 <p role="status" className={`text-center text-xs font-semibold ${playGamesStatus.ok ? "text-emerald-300" : "text-amber-200"}`}>
                   {playGamesStatus.ok ? "Google Play Games conectado" : ({
+                    solo_android_twa: "Google Play Games funciona desde la app STOP instalada desde Google Play; en la web puedes seguir jugando normalmente.",
                     conectando: "Conectando con Google Play Games…",
                     puente_no_disponible: "Google Play Games no está disponible en esta sesión. Abre STOP desde la app instalada.",
                     sin_respuesta: "Google Play Games no responde. Comprueba la conexión y vuelve a intentarlo.",
@@ -851,8 +861,7 @@ export default function Home() {
                   }[playGamesStatus.status] ?? `No se pudo conectar con Google Play Games (${playGamesStatus.status}).`)}
                 </p>
               )}
-            </div>
-          )}
+          </div>
 
           {/* Live stats chip — visible always, makes rank tangible */}
           {player && player.loginMethod !== "guest" && (
