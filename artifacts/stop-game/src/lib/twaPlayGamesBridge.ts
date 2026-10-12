@@ -106,6 +106,10 @@ export function initTwaPlayGamesBridge(): void {
     }
     receiveNativeMessage(event.data);
   });
+  // Surface an explicit startup state immediately, rather than leaving the
+  // home screen looking disconnected while native Play Games authentication runs.
+  lastStatus = { ok: false, status: "conectando" };
+  window.dispatchEvent(new CustomEvent("stop:play-games-status", { detail: lastStatus }));
   post("STOP_PGS_SIGN_IN");
 
   // The Play Games account can change while Android backgrounds the TWA.
