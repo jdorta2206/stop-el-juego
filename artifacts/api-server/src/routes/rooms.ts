@@ -761,6 +761,7 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
       eventName: "game_complete",
       playerId: p.playerId,
       sessionId: getAnalyticsSessionId(req, res),
+      gameId: `multiplayer-room:${roomId}`,
       mode: "multiplayer",
       metadata: { source: "server_room_result", roomCode: normalizedRoomCode, roomId },
     }).catch((err) => console.error("[analytics] trusted multiplayer game_complete failed:", err));
@@ -1940,19 +1941,21 @@ router.post("/:roomCode/start", async (req, res) => {
   // (antes solo el host recibía la respuesta y los demás esperaban polling).
   res.json(broadcastAndFormat(updateResult[0]));
 
-  // Trusted funnel instrumentation: a multiplayer match has now actually
-  // started. Record one start per human participant so multiplayer completions
-  // cannot appear in the funnel without a corresponding start.
-  await Promise.allSettled(
-    resetPlayers
-      .filter((p: any) => p.isBot !== true && typeof p.playerId === "string" && p.playerId)
-      .map((p: any) => recordTrustedAnalyticsEvent({
-        eventName: "game_start",
-        playerId: p.playerId,
-        mode: "multiplayer",
-        metadata: { source: "server_room_start", roomCode: roomCode.toUpperCase(), roomId },
-      }))
-  );
+  // A room represents one match (rematches create a new room ID). Rounds
+  // after round 1 must not inflate match-start telemetry.
+  if (newRound === 1) {
+    await Promise.allSettled(
+      resetPlayers
+        .filter((p: any) => p.isBot !== true && typeof p.playerId === "string" && p.playerId)
+        .map((p: any) => recordTrustedAnalyticsEvent({
+          eventName: "game_start",
+          playerId: p.playerId,
+          gameId: `multiplayer-room:${roomId}`,
+          mode: "multiplayer",
+          metadata: { source: "server_room_start", roomCode: roomCode.toUpperCase(), roomId },
+        }))
+    );
+  }
 
   // 🤖 Schedule bot STOPs/submits for this round. Done after the broadcast
   // so humans see the round start immediately, then bots act on their own

@@ -34,7 +34,7 @@ import { saveActiveRoom, clearActiveRoom, touchActiveRoom } from "@/lib/activeRo
 import { useT } from "@/i18n/useT";
 import { useToast } from "@/hooks/use-toast";
 import { useReviewPrompt, recordGamePlayed } from "@/hooks/useReviewPrompt";
-import { trackAnalyticsEvent, trackTrustedGameStart } from "@/lib/analyticsClient";
+import { trackAnalyticsEvent } from "@/lib/analyticsClient";
 import { ReviewPromptCard } from "@/components/ReviewPromptCard";
 import { maybeShowInterstitial, recordInterstitialGameCompleted } from "@/lib/interstitialAd";
 import { applyHalloweenCategory, getHalloweenScare, getHalloweenScareById, isHalloweenActive, isHalloweenPreview, isHalloweenModeEnabled } from "@/lib/halloweenEvent";
@@ -255,7 +255,6 @@ export default function Room() {
   // read fresh deadlines without re-creating the interval on every poll.
   const roomRef = useRef<any>(null);
   const lastStatusRef = useRef<string>("");
-  const gameStartTrackedRoomRef = useRef<string | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const freezeTimerRef = useRef<NodeJS.Timeout | null>(null);
   const hasSubmittedRef = useRef(false);
@@ -1199,12 +1198,10 @@ export default function Room() {
 
     if (roomStatus === "playing") {
 
-      // Track one trusted start per multiplayer match/client, never per round or poll.
-      const trackedRoom = roomCode?.toUpperCase() ?? null;
-      if (trackedRoom && gameStartTrackedRoomRef.current !== trackedRoom) {
-        gameStartTrackedRoomRef.current = trackedRoom;
-        trackTrustedGameStart({ mode: gameMode, language: getCurrentLang() });
-      }      if (currentRound !== lastRoundRef.current) {
+      // Multiplayer game_start is recorded authoritatively by the server when
+      // the room transitions into a live round. Do not emit a second client-side
+      // start here: it lacks roomId and cannot be correlated with the server result.
+      if (currentRound !== lastRoundRef.current) {
         lastRoundRef.current = currentRound;
         hasSubmittedRef.current = false;
         isFreezingRef.current = false;
