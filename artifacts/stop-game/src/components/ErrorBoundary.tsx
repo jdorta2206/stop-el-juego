@@ -13,7 +13,7 @@ interface State {
 /**
  * Catches uncaught render errors so a single bug in any page doesn't blank
  * the entire app for production users. Shows a recovery screen with a
- * "Reload" button and (in dev) the stack trace.
+ * "Reload" button.
  */
 export class ErrorBoundary extends Component<Props, State> {
   state: State = { hasError: false, error: null };
@@ -23,18 +23,41 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    // Log to console for dev visibility; in prod this also surfaces in Sentry/Adsterra logs.
     console.error("[ErrorBoundary] Uncaught render error:", error, info.componentStack);
     trackClientError(error, info.componentStack);
   }
 
   private handleReload = () => {
-    try {
-      this.setState({ hasError: false, error: null });
+    // A failed React.lazy import can remain rejected for the lifetime of this
+    // document. A plain reload may also reuse a stale service-worker cache.
+    // Clear only app asset caches, preserving DATA_CACHE and saved game data.
+    void (async () => {
+      try {
+        const registrations = await navigator.serviceWorker?.getRegistrations?.() || [];
+        await Promise.all(registrations.map((registration) => registration.unregister()));
+      } catch {
+        // Best effort: recovery must not be blocked by service-worker APIs.
+      }
+
+      try {
+        const keys = await caches.keys();
+        await Promise.all(
+          keys
+            .filter((key) => key.startsWith("stop-v"))
+            .map((key) => caches.delete(key))
+        );
+      } catch {
+        // Cache APIs may be unavailable; still retry a fresh document.
+      }
+
+      try {
+        sessionStorage.removeItem("stop_chunk_recovery_once");
+      } catch {
+        // Storage can be unavailable in restricted webviews.
+      }
+
       window.location.reload();
-    } catch {
-      // ignore — page reload should still work even if state update fails
-    }
+    })();
   };
 
   private handleGoHome = () => {
