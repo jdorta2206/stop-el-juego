@@ -249,6 +249,12 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             JSONObject message = new JSONObject(raw);
             String type = message.optString("type", "");
             if (type.startsWith("STOP_PGS_")) {
+                String origin = message.optString("origin", "");
+                if (!messageChannelReady || !relationshipValidated || !isAllowedOrigin(origin)) {
+                    Log.w("STOP_PLAY_GAMES", "Rejected PGS message from invalid origin/channel: " + origin);
+                    sendPlayGamesStatus(false, "invalid_origin_or_channel");
+                    return;
+                }
                 handlePlayGamesMessage(type, message);
                 return;
             }
