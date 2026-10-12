@@ -214,7 +214,7 @@ export default function Home() {
   return (
     <Layout>
       <HalloweenHomeAtmosphere active={isHalloweenActive()} enabled={halloweenModeEnabled} />
-      {!isHalloweenActive() && halloweenDaysUntilStart > 0 && (
+      {!isHalloweenActive() && (halloweenCountdown.days > 0 || halloweenCountdown.hours > 0 || halloweenCountdown.minutes > 0 || halloweenCountdown.seconds > 0) && (
         <div className="mx-auto mb-4 w-full max-w-2xl px-4" role="status" aria-live="polite">
           <div
             className="rounded-2xl px-4 py-3 text-center shadow-lg"
