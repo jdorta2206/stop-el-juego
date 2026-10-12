@@ -819,7 +819,14 @@ export default function Home() {
                 style={{ background: "linear-gradient(135deg, #168b55 0%, #0f6b43 100%)", border: "1px solid rgba(255,255,255,0.22)" }}
                 aria-label="Conectar con Google Play Games"
               >
-                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-[#168b55]"><Trophy className="h-5 w-5" /></span>
+                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white shadow-sm" aria-hidden="true">
+                    <svg viewBox="0 0 48 48" className="h-8 w-8" role="img" aria-label="Google Play Games">
+                      <path d="M10 13.5c-3.7 0-6.2 3.2-5.3 6.8l3.2 12.4c.8 3.1 4.7 4.2 7.3 2.1l5.1-4.2h7.4l5.1 4.2c2.6 2.1 6.5 1 7.3-2.1l3.2-12.4c.9-3.6-1.6-6.8-5.3-6.8H10Z" fill="#4285F4"/>
+                      <path d="M13 20v8M9 24h8" stroke="#fff" strokeWidth="3" strokeLinecap="round"/>
+                      <circle cx="32" cy="22" r="2.5" fill="#EA4335"/><circle cx="36" cy="27" r="2.5" fill="#FBBC04"/>
+                      <path d="M21 30h6l-3-4z" fill="#34A853"/>
+                    </svg>
+                  </span>
                 <span className="text-left">
                   <span className="block">Google Play Games</span>
                   <span className="block text-xs font-semibold text-white/80">Conectar tu cuenta y conseguir logros</span>
