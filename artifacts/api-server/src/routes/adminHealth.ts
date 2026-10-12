@@ -33,7 +33,7 @@ WITH starts AS (
   FROM public.analytics_events
   WHERE trusted=TRUE AND event_name='game_start'
     AND created_at BETWEEN NOW()-INTERVAL '2 hours' AND NOW()-INTERVAL '30 minutes'
-  ORDER BY COALESCE(game_id::text, 'legacy:' || id::text), created_at DESC
+  ORDER BY COALESCE(game_id::text, 'legacy:' || id::text), created_at ASC
 )
 SELECT s.id,s.session_id,s.player_id,s.game_id,s.started_at,
 EXTRACT(EPOCH FROM (
