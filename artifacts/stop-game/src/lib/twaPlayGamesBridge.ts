@@ -12,7 +12,7 @@ let messagePort: MessagePort | null = null;
 let pendingMessages: NativeMessage[] = [];
 let lastStatus: PgsStatus | null = null;
 
-function isAndroidTwa(): boolean {
+export function isAndroidTwa(): boolean {
   if (typeof window === "undefined") return false;
   try {
     const params = new URLSearchParams(window.location.search);
