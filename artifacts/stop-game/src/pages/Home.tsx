@@ -28,6 +28,7 @@ import { HalloweenBanner } from "@/components/HalloweenBanner";
 import { HALLOWEEN_START, isHalloweenActive, isHalloweenModeEnabled, setHalloweenModeEnabled } from "@/lib/halloweenEvent";
 import { useHalloweenProgress } from "@/hooks/useHalloweenProgress";
 import { HalloweenHomeAtmosphere } from "@/components/HalloweenHomeAtmosphere";
+import { getLastPlayGamesStatus, isAndroidTwa, requestPlayGamesSignIn, showPlayGamesAchievements } from "@/lib/twaPlayGamesBridge";
 
 const LOGO_URL = `${import.meta.env.BASE_URL}images/stop-logo.png`;
 const HALLOWEEN_PREVIEW = import.meta.env.VITE_HALLOWEEN_PREVIEW === "true";
@@ -46,6 +47,16 @@ export default function Home() {
   // the DailyChallenge page uses), so the banner reflects the player's state.
   const [dailyDone, setDailyDone] = useState(false);
   const [showDowntimeCompensation, setShowDowntimeCompensation] = useState(false);
+  const [playGamesStatus, setPlayGamesStatus] = useState<{ ok: boolean; status: string } | null>(() => getLastPlayGamesStatus());
+
+  useEffect(() => {
+    const onPlayGamesStatus = (event: Event) => {
+      const detail = (event as CustomEvent<{ ok: boolean; status: string }>).detail;
+      if (detail && typeof detail.ok === "boolean") setPlayGamesStatus(detail);
+    };
+    window.addEventListener("stop:play-games-status", onPlayGamesStatus);
+    return () => window.removeEventListener("stop:play-games-status", onPlayGamesStatus);
+  }, []);
 
   // One-time server-authoritative compensation for the recent service interruption.
   // The endpoint is idempotent, so revisiting Home cannot grant it twice.
@@ -771,6 +782,35 @@ export default function Home() {
               </span>
             </motion.div>
           </Link>
+
+          {/* Android-only account entry point; keep web and iOS unchanged. */}
+          {isAndroidTwa() && (
+            <div className="w-full space-y-2">
+              <button
+                type="button"
+                onClick={() => requestPlayGamesSignIn()}
+                className="w-full flex items-center justify-center gap-3 rounded-xl px-4 py-3 font-extrabold text-white shadow-lg active:scale-[0.98] transition-transform"
+                style={{ background: "linear-gradient(135deg, #168b55 0%, #0f6b43 100%)", border: "1px solid rgba(255,255,255,0.22)" }}
+                aria-label="Conectar con Google Play Games"
+              >
+                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-[#168b55]"><Trophy className="h-5 w-5" /></span>
+                <span className="text-left">
+                  <span className="block">Google Play Games</span>
+                  <span className="block text-xs font-semibold text-white/80">Conectar tu cuenta y conseguir logros</span>
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => showPlayGamesAchievements()}
+                className="w-full rounded-lg border border-white/15 bg-black/20 px-3 py-2 text-sm font-bold text-white/90 active:scale-[0.99] transition-transform"
+              >Ver mis logros de Google Play Games</button>
+              {playGamesStatus && (
+                <p role="status" className={`text-center text-xs font-semibold ${playGamesStatus.ok ? "text-emerald-300" : "text-amber-200"}`}>
+                  {playGamesStatus.ok ? "Google Play Games conectado" : `Google Play Games: ${playGamesStatus.status}`}
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Live stats chip — visible always, makes rank tangible */}
           {player && player.loginMethod !== "guest" && (

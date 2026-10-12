@@ -15,6 +15,10 @@
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
 
         <meta-data
+            android:name="com.google.android.gms.games.APP_ID"
+            android:value="@string/game_services_project_id" />
+
+        <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
             android:value="ca-app-pub-4807272408824742~9880632781" />
 

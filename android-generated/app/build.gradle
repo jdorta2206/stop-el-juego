@@ -69,5 +69,6 @@ dependencies {
     implementation 'com.google.androidbrowserhelper:androidbrowserhelper:2.7.3'
     implementation 'com.google.androidbrowserhelper:billing:1.2.0'
     implementation 'com.google.android.gms:play-services-ads:25.4.0'
+    implementation 'com.google.android.gms:play-services-games-v2:22.1.0'
     implementation 'com.google.android.play:app-update:2.1.0'
 }

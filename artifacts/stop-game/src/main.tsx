@@ -5,12 +5,14 @@ import "./index.css";
 import { ensureOfflineBundle } from "./lib/offlineGame";
 import { consumeAuthHandoff } from "./lib/oauth";
 import { initTwaAdBridge } from "./lib/twaAdBridge";
+import { initTwaPlayGamesBridge } from "./lib/twaPlayGamesBridge";
 import { captureInstalledAppVersion, getInstalledAppVersion, getAnalyticsClientVersion } from "./lib/appVersion";
 
 // Install the TWA AdMob message listener before React mounts. Native TWA can
 // complete the postMessage handshake very early during page startup; waiting
 // for RewardedAd to mount can otherwise miss STOP_AD_BRIDGE_READY entirely.
 initTwaAdBridge();
+initTwaPlayGamesBridge();
 captureInstalledAppVersion();
 
 // Recover once from a stale dynamic-import chunk after a deployment.

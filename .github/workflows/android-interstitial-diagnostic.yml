@@ -8,6 +8,7 @@ on:
   push:
     branches:
       - fix/interstitial-twa-detection-final
+      - feat/google-play-games-native-bridge
 
 permissions:
   contents: read
@@ -50,8 +51,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sed -i -E 's/versionCode [0-9]+/versionCode 51/' app/build.gradle
-          grep -q 'versionCode 51' app/build.gradle
+          sed -i -E 's/versionCode [0-9]+/versionCode 55/' app/build.gradle
+          grep -q 'versionCode 55' app/build.gradle
       - name: Build signed diagnostic APK
         working-directory: android-generated
         shell: bash
@@ -71,7 +72,7 @@ jobs:
       - name: Upload signed APK
         uses: actions/upload-artifact@v4
         with:
-          name: stop-android-interstitial-signed-v51
+          name: stop-android-interstitial-signed-v55
           path: android-generated/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 7
