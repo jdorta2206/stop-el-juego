@@ -788,7 +788,11 @@ export default function Home() {
             <div className="w-full space-y-2">
               <button
                 type="button"
-                onClick={() => requestPlayGamesSignIn()}
+                onClick={() => {
+                  setPlayGamesStatus({ ok: false, status: "conectando" });
+                  const sent = requestPlayGamesSignIn();
+                  if (!sent) setPlayGamesStatus({ ok: false, status: "puente_no_disponible" });
+                }}
                 className="w-full flex items-center justify-center gap-3 rounded-xl px-4 py-3 font-extrabold text-white shadow-lg active:scale-[0.98] transition-transform"
                 style={{ background: "linear-gradient(135deg, #168b55 0%, #0f6b43 100%)", border: "1px solid rgba(255,255,255,0.22)" }}
                 aria-label="Conectar con Google Play Games"
