@@ -101,7 +101,7 @@ WITH starts AS (
   FROM public.analytics_events
   WHERE trusted=TRUE AND event_name='game_start'
     AND created_at BETWEEN NOW()-INTERVAL '60 minutes' AND NOW()-INTERVAL '15 minutes'
-  ORDER BY COALESCE(game_id::text, 'legacy:' || id::text), created_at DESC
+  ORDER BY COALESCE(game_id::text, 'legacy:' || id::text), created_at ASC
 )
 SELECT COUNT(*)::int AS stuck
 FROM starts s
