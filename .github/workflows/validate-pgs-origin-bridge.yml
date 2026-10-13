@@ -6,9 +6,15 @@ on:
     paths:
       - "android-generated/**"
       - "artifacts/stop-game/src/lib/twaPlayGamesBridge.ts"
+      - "artifacts/stop-game/src/hooks/useAchievements.ts"
       - ".github/workflows/validate-pgs-origin-bridge.yml"
   push:
-    branches: [fix/pgs-validate-native-message-origin]
+    branches: [fix/pgs-noninteractive-startup-clean]
+    paths:
+      - "android-generated/**"
+      - "artifacts/stop-game/src/lib/twaPlayGamesBridge.ts"
+      - "artifacts/stop-game/src/hooks/useAchievements.ts"
+      - ".github/workflows/validate-pgs-origin-bridge.yml"
   workflow_dispatch:
 
 permissions:
