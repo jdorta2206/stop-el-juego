@@ -110,7 +110,9 @@ export function initTwaPlayGamesBridge(): void {
   // home screen looking disconnected while native Play Games authentication runs.
   lastStatus = { ok: false, status: "conectando" };
   window.dispatchEvent(new CustomEvent("stop:play-games-status", { detail: lastStatus }));
-  post("STOP_PGS_SIGN_IN");
+  // LauncherActivity owns the single launch-time sign-in attempt. Do not enqueue
+  // another sign-in here: it can race the native attempt and return sign_in_in_progress.
+  // The status snapshot requested when the message channel opens reconciles the UI.
 
   // The Play Games account can change while Android backgrounds the TWA.
   // Refresh status when the player returns so the UI does not keep stale auth state.
