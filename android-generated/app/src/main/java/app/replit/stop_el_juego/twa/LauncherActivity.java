@@ -74,8 +74,9 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             PlayGamesSdk.initialize(getApplicationContext());
             playGamesInitialized = true;
             Log.i("STOP_PLAY_GAMES", "Play Games SDK initialized");
-            // Start authentication from the native app launch, independently of web/bridge readiness.
-            startPlayGamesSignInIfNeeded();
+            // Never launch interactive Play Games UI automatically on startup.
+            // Check existing auth state only; the player can explicitly sign in from STOP.
+            refreshPlayGamesStatusOnly();
         } catch (RuntimeException error) {
             Log.w("STOP_PLAY_GAMES", "Play Games SDK initialization failed; app continues normally", error);
         }
@@ -312,6 +313,29 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
         } catch (JSONException ignored) { Log.w(TAG, "Ignoring malformed web message"); }
     }
 
+
+    private void refreshPlayGamesStatusOnly() {
+        if (!playGamesInitialized || isFinishing()) {
+            sendPlayGamesStatus(false, "sdk_unavailable");
+            return;
+        }
+        try {
+            PlayGames.getGamesSignInClient(this).isAuthenticated()
+                    .addOnCompleteListener(task -> {
+                        boolean authenticated = task.isSuccessful()
+                                && task.getResult() != null
+                                && task.getResult().isAuthenticated();
+                        if (!task.isSuccessful()) {
+                            Log.w("STOP_PLAY_GAMES", "Startup auth-state check failed", task.getException());
+                        }
+                        sendPlayGamesStatus(authenticated,
+                                authenticated ? "authenticated" : "not_authenticated");
+                    });
+        } catch (RuntimeException error) {
+            Log.w("STOP_PLAY_GAMES", "Startup auth-state check failed; guest play remains available", error);
+            sendPlayGamesStatus(false, "sign_in_failed");
+        }
+    }
 
     private void startPlayGamesSignInIfNeeded() {
         if (!playGamesInitialized) {
