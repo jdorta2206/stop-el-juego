@@ -48,6 +48,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     private boolean relationshipValidated;
     private boolean originValidationRequestPending;
     private int originValidationAttempts;
+    private int originValidationGeneration;
     private boolean messageChannelReady;
     private boolean mobileAdsReady;
     private RewardedAd rewardedAd;
@@ -145,6 +146,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             public void onRelationshipValidationResult(int relation, @NonNull Uri requestedOrigin,
                     boolean result, @Nullable Bundle extras) {
                 originValidationRequestPending = false;
+                originValidationGeneration++; // Invalidate the timeout for the completed request.
                 relationshipValidated = relation == CustomTabsService.RELATION_USE_AS_ORIGIN
                         && result && SOURCE_ORIGIN.equals(requestedOrigin);
                 Log.d(TAG, "use_as_origin validation=" + result + " relation=" + relation + " origin=" + requestedOrigin);
@@ -188,6 +190,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
         if (relationshipValidated || originValidationRequestPending || isFinishing()
                 || originValidationAttempts >= 10) return;
         originValidationAttempts++;
+        final int requestGeneration = ++originValidationGeneration;
         CustomTabsSession session = getTwaSession();
         if (session != null) {
             try {
@@ -200,7 +203,8 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                     // Some Custom Tabs implementations can fail to deliver a validation callback.
                     // Bound the wait and retry without blocking gameplay.
                     getWindow().getDecorView().postDelayed(() -> {
-                        if (!relationshipValidated && originValidationRequestPending) {
+                        if (requestGeneration == originValidationGeneration
+                                && !relationshipValidated && originValidationRequestPending) {
                             originValidationRequestPending = false;
                             requestUseAsOriginValidation();
                         }
