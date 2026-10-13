@@ -1,4 +1,4 @@
-name: Android interstitial diagnostic build
+name: Android Play Games startup UI test bundle
 
 on:
   workflow_dispatch:
@@ -51,29 +51,30 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sed -i -E 's/versionCode [0-9]+/versionCode 55/' app/build.gradle
-          grep -q 'versionCode 55' app/build.gradle
-      - name: Build signed diagnostic APK
+          sed -i -E 's/versionCode [0-9]+/versionCode 58/; s/versionName "[^"]+"/versionName "1.3.7.2"/' app/build.gradle
+          grep -q 'versionCode 58' app/build.gradle
+          grep -q 'versionName "1.3.7.2"' app/build.gradle
+      - name: Build signed Play Games test bundle
         working-directory: android-generated
         shell: bash
         run: |
           set -euo pipefail
           chmod +x ./gradlew
-          ./gradlew clean assembleRelease --no-daemon --stacktrace
-      - name: Verify signed APK
+          ./gradlew clean bundleRelease --no-daemon --stacktrace
+      - name: Verify signed Android App Bundle
         working-directory: android-generated
         shell: bash
         run: |
           set -euo pipefail
-          APK='app/build/outputs/apk/release/app-release.apk'
-          test -s "$APK"
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs "$APK"
-          sha256sum "$APK"
-      - name: Upload signed APK
+          AAB='app/build/outputs/bundle/release/app-release.aab'
+          test -s "$AAB"
+          jarsigner -verify -verbose -certs "$AAB" >/dev/null
+          sha256sum "$AAB"
+      - name: Upload signed Android App Bundle
         uses: actions/upload-artifact@v4
         with:
-          name: stop-android-interstitial-signed-v55
-          path: android-generated/app/build/outputs/apk/release/app-release.apk
+          name: stop-play-games-startup-v58-aab
+          path: android-generated/app/build/outputs/bundle/release/app-release.aab
           if-no-files-found: error
           retention-days: 7
       - name: Remove signing material
