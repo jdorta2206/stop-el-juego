@@ -23,13 +23,12 @@ export function isAndroidTwa(): boolean {
         document.referrer.startsWith("android-app://app.replit.stop_el_juego.twa")) {
       return true;
     }
-    // TWA launchers do not consistently preserve an app referrer or query marker.
-    // Android Chrome's installed TWA runs in standalone display mode; regular browser
-    // tabs and iOS do not. Guard with Android UA to avoid showing native controls elsewhere.
-    const android = /Android/i.test(navigator.userAgent);
-    const standalone = window.matchMedia?.("(display-mode: standalone)").matches === true ||
-      (navigator as Navigator & { standalone?: boolean }).standalone === true;
-    return android && standalone;
+    // Older Play Store builds do not yet include the launchUrl marker. Some
+    // Android TWA/Chrome versions also report display-mode "browser" and omit
+    // the app referrer, so requiring standalone mode hides the status card in
+    // the actual installed app. Restrict this fallback to Android; the native
+    // message channel remains the authority for whether Play Games is available.
+    return /Android/i.test(navigator.userAgent);
   } catch {
     return false;
   }
