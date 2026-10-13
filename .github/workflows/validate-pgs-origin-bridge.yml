@@ -39,13 +39,14 @@ jobs:
           packages: platform-tools
       - name: Install Android SDK components
         run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
-      - name: Verify PGS origin and channel guards
+      - name: Verify PGS origin, channel and achievement result guards
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
           web = Path("artifacts/stop-game/src/lib/twaPlayGamesBridge.ts").read_text()
+          hook = Path("artifacts/stop-game/src/hooks/useAchievements.ts").read_text()
           native = Path("android-generated/app/src/main/java/app/replit/stop_el_juego/twa/LauncherActivity.java").read_text()
           assert 'const message = { type, ...extra, origin: window.location.origin };' in web
           assert 'if (!messageChannelReady || !relationshipValidated || !isAllowedOrigin(origin))' in native
@@ -53,7 +54,17 @@ jobs:
           assert 'STOP_PGS_UNLOCK_ACHIEVEMENT' in web and 'STOP_PGS_UNLOCK_ACHIEVEMENT' in native
           assert 'return "https://stopjuegodepalabras.com".equals(origin)' in native
           assert '|| "https://www.stopjuegodepalabras.com".equals(origin);' in native
-          print("PGS web origin payload and native TWA relationship/origin guards verified.")
+          # Native reports an outcome per unlock, and web routes it separately
+          # from auth snapshots so a failed unlock cannot overwrite auth state.
+          assert 'STOP_PGS_ACHIEVEMENT_RESULT' in native
+          assert 'STOP_PGS_ACHIEVEMENT_RESULT' in web
+          assert 'stop:play-games-achievement-result' in web
+          assert 'payload.type !== "STOP_PGS_STATUS_RESULT"' in web
+          # Local milestones remain authoritative; authenticated status retries
+          # locally earned milestones, rather than awarding local XP on native success.
+          assert 'unlockPlayGamesAchievementForMilestone(achievementId)' in hook
+          assert 'stop:play-games-status' in hook
+          print("PGS origin/channel guards and separate achievement-result routing verified.")
           PY
       - name: Compile Android debug APK
         working-directory: android-generated
