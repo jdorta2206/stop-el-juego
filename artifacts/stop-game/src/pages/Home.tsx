@@ -66,6 +66,31 @@ export default function Home() {
     };
   }, []);
 
+  // Apply the same bounded wait to automatic startup sign-in and manual retries.
+  // Previously the timeout only ran after tapping the button, leaving the initial
+  // "conectando" state forever when the native bridge never replied.
+  useEffect(() => {
+    if (playGamesTimeoutRef.current) {
+      clearTimeout(playGamesTimeoutRef.current);
+      playGamesTimeoutRef.current = null;
+    }
+    if (playGamesStatus?.status !== "conectando") return;
+    playGamesTimeoutRef.current = setTimeout(() => {
+      setPlayGamesStatus(current =>
+        current?.status === "conectando"
+          ? { ok: false, status: "sin_respuesta" }
+          : current
+      );
+      playGamesTimeoutRef.current = null;
+    }, 12000);
+    return () => {
+      if (playGamesTimeoutRef.current) {
+        clearTimeout(playGamesTimeoutRef.current);
+        playGamesTimeoutRef.current = null;
+      }
+    };
+  }, [playGamesStatus?.status]);
+
   // One-time server-authoritative compensation for the recent service interruption.
   // The endpoint is idempotent, so revisiting Home cannot grant it twice.
   useEffect(() => {
@@ -815,16 +840,6 @@ export default function Home() {
                     setPlayGamesStatus({ ok: false, status: "puente_no_disponible" });
                     return;
                   }
-                  // Never leave the player with an endless "connecting" message if
-                  // Android cannot deliver a status response through the TWA bridge.
-                  playGamesTimeoutRef.current = setTimeout(() => {
-                    setPlayGamesStatus(current =>
-                      current?.status === "conectando"
-                        ? { ok: false, status: "sin_respuesta" }
-                        : current
-                    );
-                    playGamesTimeoutRef.current = null;
-                  }, 12000);
                 }}
                 className="w-full flex items-center justify-center gap-3 rounded-xl px-4 py-3 font-extrabold text-white shadow-lg active:scale-[0.98] transition-transform"
                 style={{ background: "linear-gradient(135deg, #168b55 0%, #0f6b43 100%)", border: "1px solid rgba(255,255,255,0.22)" }}
