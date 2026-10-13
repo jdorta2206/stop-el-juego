@@ -435,25 +435,35 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
         }
         if ("STOP_PGS_UNLOCK_ACHIEVEMENT".equals(type)) {
             String id = message.optString("achievementId", "").trim();
-            // Only accept Google Play achievement IDs, never arbitrary payloads.
+            // Report an achievement-specific outcome without mutating auth status.
             if (!id.matches("Cgk[A-Za-z0-9_-]{10,}")) {
-                sendPlayGamesStatus(false, "invalid_achievement_id");
+                sendPlayGamesAchievementResult(id, false, "invalid_achievement_id");
                 return;
             }
             PlayGames.getGamesSignInClient(this).isAuthenticated().addOnCompleteListener(task -> {
                 if (!task.isSuccessful() || task.getResult() == null || !task.getResult().isAuthenticated()) {
-                    sendPlayGamesStatus(false, "not_authenticated");
+                    sendPlayGamesAchievementResult(id, false, "not_authenticated");
                     return;
                 }
                 PlayGames.getAchievementsClient(this).unlockImmediate(id)
                         .addOnSuccessListener(unused ->
-                                sendPlayGamesStatus(true, "achievement_unlocked"))
+                                sendPlayGamesAchievementResult(id, true, "achievement_unlocked"))
                         .addOnFailureListener(error -> {
                             Log.w("STOP_PLAY_GAMES", "Achievement unlock failed", error);
-                            sendPlayGamesStatus(false, "achievement_unlock_failed");
+                            sendPlayGamesAchievementResult(id, false, "achievement_unlock_failed");
                         });
             });
         }
+    }
+
+    private void sendPlayGamesAchievementResult(String achievementId, boolean ok, String status) {
+        JSONObject result = newMessage("STOP_PGS_ACHIEVEMENT_RESULT");
+        try {
+            result.put("achievementId", achievementId == null ? "" : achievementId);
+            result.put("ok", ok);
+            result.put("status", status);
+        } catch (JSONException ignored) { return; }
+        sendMessage(result);
     }
 
     private void sendPlayGamesStatus(boolean ok, String status) {
