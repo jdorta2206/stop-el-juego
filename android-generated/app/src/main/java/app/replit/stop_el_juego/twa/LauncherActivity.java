@@ -75,7 +75,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             playGamesInitialized = true;
             Log.i("STOP_PLAY_GAMES", "Play Games SDK initialized");
             // Start authentication from the native app launch, independently of web/bridge readiness.
-            startPlayGamesSignInIfNeeded();
+            checkPlayGamesAuthenticationOnStartup();
         } catch (RuntimeException error) {
             Log.w("STOP_PLAY_GAMES", "Play Games SDK initialization failed; app continues normally", error);
         }
@@ -313,6 +313,34 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     }
 
 
+    /**
+     * Check startup authentication without forcing an interactive sign-in Activity over the TWA.
+     * The explicit sign-in UI is reserved for the user's Play Games button.
+     */
+    private void checkPlayGamesAuthenticationOnStartup() {
+        if (!playGamesInitialized || isFinishing()) {
+            sendPlayGamesStatus(false, "sdk_unavailable");
+            return;
+        }
+        try {
+            PlayGames.getGamesSignInClient(this).isAuthenticated()
+                    .addOnCompleteListener(task -> {
+                        if (!task.isSuccessful()) {
+                            Log.e("STOP_PLAY_GAMES", "Startup isAuthenticated task failed", task.getException());
+                        }
+                        boolean authenticated = task.isSuccessful()
+                                && task.getResult() != null
+                                && task.getResult().isAuthenticated();
+                        Log.i("STOP_PLAY_GAMES", authenticated
+                                ? "Automatically authenticated at startup"
+                                : "No automatic authentication at startup; STOP remains available as guest");
+                        sendPlayGamesStatus(authenticated, authenticated ? "authenticated" : "not_authenticated");
+                    });
+        } catch (RuntimeException error) {
+            Log.e("STOP_PLAY_GAMES", "Startup authentication check failed; continuing as guest", error);
+            sendPlayGamesStatus(false, "sign_in_failed");
+        }
+    }
     private void startPlayGamesSignInIfNeeded() {
         if (!playGamesInitialized) {
             sendPlayGamesStatus(false, "sdk_unavailable");
