@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { getApiUrl, authHeaders } from "@/lib/utils";
-import { unlockPlayGamesAchievementForMilestone } from "@/lib/twaPlayGamesBridge";
+import { unlockPlayGamesAchievementForMilestone, unlockPlayGamesAchievementForMilestone as retryPlayGamesAchievement } from "@/lib/twaPlayGamesBridge";
 
 const STATS_KEY = "stop_achievement_stats_v1";
 const UNLOCKED_KEY = "stop_achievements_unlocked_v1";
@@ -235,6 +235,29 @@ export function useAchievements(playerId?: string) {
   const syncedRef = useRef(false);
   const syncAbortRef = useRef<AbortController | null>(null);
   const checkStreakMilestoneRef = useRef<(longestStreak: number) => AchievementDef | null>(() => null);
+
+  const playGamesWasAuthenticatedRef = useRef(false);
+
+  // If a milestone was earned while Play Games was signed out, retry the
+  // native unlocks when the player explicitly signs in later. Local STOP
+  // achievements remain the source of truth; Google unlocks are idempotent.
+  useEffect(() => {
+    const onPlayGamesStatus = (event: Event) => {
+      const detail = (event as CustomEvent<{ ok?: boolean; status?: string }>).detail;
+      const authenticated = detail?.ok === true && detail?.status === "authenticated";
+      if (!authenticated) {
+        playGamesWasAuthenticatedRef.current = false;
+        return;
+      }
+      if (playGamesWasAuthenticatedRef.current) return;
+      playGamesWasAuthenticatedRef.current = true;
+      for (const achievementId of loadUnlocked(playerId)) {
+        retryPlayGamesAchievement(achievementId);
+      }
+    };
+    window.addEventListener("stop:play-games-status", onPlayGamesStatus);
+    return () => window.removeEventListener("stop:play-games-status", onPlayGamesStatus);
+  }, [playerId]);
 
   useEffect(() => {
     setStats(loadStats(playerId));
