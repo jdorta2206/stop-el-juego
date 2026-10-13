@@ -46,9 +46,9 @@ function receiveNativeMessage(raw: unknown): void {
       pendingMessages = [];
       for (const message of queued) send(message);
 
-      // Startup sign-in can finish before the Custom Tabs channel is ready,
-      // so its native status reply may be lost. Request a fresh snapshot once
-      // the web listener and message port are both ready.
+      // The native startup auth-state check can finish before the Custom Tabs
+      // channel is ready, so its status reply may be lost. Request a fresh
+      // snapshot once the web listener and message port are both ready.
       if (!wasReady) post("STOP_PGS_STATUS");
     }
     return;
@@ -77,9 +77,8 @@ function post(type: string, extra: Record<string, string> = {}): boolean {
   if (!isAndroidTwa()) return false;
   const message = { type, ...extra, origin: window.location.origin };
   if (!channelReady || !messagePort) {
-    // The app requests sign-in automatically at startup. If the player taps the
-    // button before Android finishes opening the MessagePort, do not enqueue a
-    // second sign-in request behind the first one.
+    // If the player taps sign-in before Android finishes opening the MessagePort,
+    // do not queue duplicate explicit sign-in requests.
     if (type === "STOP_PGS_SIGN_IN" &&
         pendingMessages.some((pending) => pending.type === "STOP_PGS_SIGN_IN")) {
       return true;
@@ -109,12 +108,11 @@ export function initTwaPlayGamesBridge(): void {
     receiveNativeMessage(event.data);
   });
   // Surface an explicit startup state immediately, rather than leaving the
-  // home screen looking disconnected while native Play Games authentication runs.
+  // home screen looking disconnected while native Play Games checks auth state.
   lastStatus = { ok: false, status: "conectando" };
   window.dispatchEvent(new CustomEvent("stop:play-games-status", { detail: lastStatus }));
-  // LauncherActivity owns the single launch-time sign-in attempt. Do not enqueue
-  // another sign-in here: it can race the native attempt and return sign_in_in_progress.
-  // The status snapshot requested when the message channel opens reconciles the UI.
+  // Startup is deliberately non-interactive. Sign-in is only requested after an
+  // explicit player action; the status snapshot reconciles the UI when the channel opens.
 
   // The Play Games account can change while Android backgrounds the TWA.
   // Refresh status when the player returns so the UI does not keep stale auth state.
