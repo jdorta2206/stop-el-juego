@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { getApiUrl, authHeaders } from "@/lib/utils";
-import { unlockPlayGamesAchievementForMilestone, unlockPlayGamesAchievementForMilestone as retryPlayGamesAchievement } from "@/lib/twaPlayGamesBridge";
+import { getLastPlayGamesStatus, unlockPlayGamesAchievementForMilestone } from "@/lib/twaPlayGamesBridge";
 
 const STATS_KEY = "stop_achievement_stats_v1";
 const UNLOCKED_KEY = "stop_achievements_unlocked_v1";
@@ -252,10 +252,12 @@ export function useAchievements(playerId?: string) {
       if (playGamesWasAuthenticatedRef.current) return;
       playGamesWasAuthenticatedRef.current = true;
       for (const achievementId of loadUnlocked(playerId)) {
-        retryPlayGamesAchievement(achievementId);
+        unlockPlayGamesAchievementForMilestone(achievementId);
       }
     };
     window.addEventListener("stop:play-games-status", onPlayGamesStatus);
+    const currentStatus = getLastPlayGamesStatus();
+    if (currentStatus) onPlayGamesStatus(new CustomEvent("stop:play-games-status", { detail: currentStatus }));
     return () => window.removeEventListener("stop:play-games-status", onPlayGamesStatus);
   }, [playerId]);
 
