@@ -53,6 +53,17 @@ function receiveNativeMessage(raw: unknown): void {
     }
     return;
   }
+  if (payload?.type === "STOP_PGS_ACHIEVEMENT_RESULT") {
+    // Achievement outcomes are not authentication snapshots; keep them out of lastStatus.
+    window.dispatchEvent(new CustomEvent("stop:play-games-achievement-result", {
+      detail: {
+        achievementId: typeof payload.achievementId === "string" ? payload.achievementId : "",
+        ok: payload.ok === true,
+        status: typeof payload.status === "string" ? payload.status : "unknown",
+      },
+    }));
+    return;
+  }
   if (payload?.type !== "STOP_PGS_STATUS_RESULT") return;
   lastStatus = {
     ok: payload.ok === true,
