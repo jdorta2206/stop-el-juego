@@ -187,10 +187,10 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     private void requestUseAsOriginValidation() {
         if (relationshipValidated || originValidationRequestPending || isFinishing()
                 || originValidationAttempts >= 10) return;
+        originValidationAttempts++;
         CustomTabsSession session = getTwaSession();
         if (session != null) {
             try {
-                originValidationAttempts++;
                 boolean requested = session.validateRelationship(
                         CustomTabsService.RELATION_USE_AS_ORIGIN, SOURCE_ORIGIN, new Bundle());
                 Log.d(TAG, "Requested use_as_origin validation attempt=" + originValidationAttempts
