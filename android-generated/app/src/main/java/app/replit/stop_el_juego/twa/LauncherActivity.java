@@ -64,6 +64,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     private boolean playUpdatePromptShown;
     private boolean playGamesInitialized;
     private boolean playGamesSignInInFlight;
+    private int playGamesSignInGeneration;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -325,9 +326,24 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
         }
         if (isFinishing()) return;
         playGamesSignInInFlight = true;
+        final int signInGeneration = ++playGamesSignInGeneration;
+        // Bound the authentication check, but do not time out the user-driven sign-in UI.
+        getWindow().getDecorView().postDelayed(() -> {
+            if (playGamesSignInInFlight && signInGeneration == playGamesSignInGeneration && !isFinishing()) {
+                playGamesSignInInFlight = false;
+                Log.e("STOP_PLAY_GAMES", "isAuthenticated check timed out after 15 seconds; check Play Games Console credentials and signing certificate");
+                sendPlayGamesStatus(false, "sign_in_timeout");
+            }
+        }, 15000L);
         try {
             PlayGames.getGamesSignInClient(this).isAuthenticated()
                     .addOnCompleteListener(task -> {
+                        // The authentication check completed. Invalidate its timeout before
+                        // opening signIn(), which may legitimately wait for user interaction.
+                        if (signInGeneration == playGamesSignInGeneration) playGamesSignInGeneration++;
+                        if (!task.isSuccessful()) {
+                            Log.e("STOP_PLAY_GAMES", "isAuthenticated task failed", task.getException());
+                        }
                         boolean authenticated = task.isSuccessful()
                                 && task.getResult() != null
                                 && task.getResult().isAuthenticated();
@@ -340,6 +356,9 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                         try {
                             PlayGames.getGamesSignInClient(this).signIn()
                                     .addOnCompleteListener(signInTask -> {
+                                        if (!signInTask.isSuccessful()) {
+                                            Log.e("STOP_PLAY_GAMES", "signIn task failed", signInTask.getException());
+                                        }
                                         boolean signedIn = signInTask.isSuccessful()
                                                 && signInTask.getResult() != null
                                                 && signInTask.getResult().isAuthenticated();
@@ -351,13 +370,13 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                                     });
                         } catch (RuntimeException error) {
                             playGamesSignInInFlight = false;
-                            Log.w("STOP_PLAY_GAMES", "Native sign-in could not start; app continues normally", error);
+                            Log.e("STOP_PLAY_GAMES", "Native sign-in could not start", error);
                             sendPlayGamesStatus(false, "sign_in_failed");
                         }
                     });
         } catch (RuntimeException error) {
             playGamesSignInInFlight = false;
-            Log.w("STOP_PLAY_GAMES", "Authentication check failed; app continues normally", error);
+            Log.e("STOP_PLAY_GAMES", "Authentication check failed", error);
             sendPlayGamesStatus(false, "sign_in_failed");
         }
     }

@@ -879,6 +879,7 @@ export default function Home() {
                     sdk_unavailable: "Google Play Games no se ha podido iniciar en este dispositivo.",
                     sign_in_in_progress: "La conexión con Google Play Games ya está en curso. Espera unos segundos.",
                     sign_in_failed: "No se pudo iniciar sesión en Google Play Games. Inténtalo de nuevo.",
+                    sign_in_timeout: "Google Play Games ha tardado demasiado en responder. Revisa la configuración de Play Games y vuelve a intentarlo.",
                     not_authenticated: "Todavía no has conectado Google Play Games.",
                     unavailable: "Google Play Games no está disponible ahora mismo.",
                   }[playGamesStatus.status] ?? `No se pudo conectar con Google Play Games (${playGamesStatus.status}).`)}
