@@ -2,7 +2,10 @@
  * Google Play Games Services v2 bridge for the Android TWA.
  * Uses the Custom Tabs MessagePort supplied by the native host; ordinary web and iOS are no-ops.
  */
-const ORIGIN = "https://www.stopjuegodepalabras.com";
+const ALLOWED_ORIGINS = new Set([
+  "https://www.stopjuegodepalabras.com",
+  "https://stopjuegodepalabras.com",
+]);
 type PgsStatus = { ok: boolean; status: string };
 type NativeMessage = { type: string; [key: string]: string };
 
@@ -97,7 +100,7 @@ export function initTwaPlayGamesBridge(): void {
   initialized = true;
   if (!isAndroidTwa()) return;
   window.addEventListener("message", (event: MessageEvent) => {
-    if (event.origin !== ORIGIN) return;
+    if (!ALLOWED_ORIGINS.has(event.origin)) return;
     const transferredPort = event.ports?.[0];
     if (transferredPort) {
       messagePort = transferredPort;
