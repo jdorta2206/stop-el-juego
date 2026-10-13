@@ -354,6 +354,9 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
         // Bound the authentication check, but do not time out the user-driven sign-in UI.
         getWindow().getDecorView().postDelayed(() -> {
             if (playGamesSignInInFlight && signInGeneration == playGamesSignInGeneration && !isFinishing()) {
+                // Invalidate the pending auth callback so a late response cannot
+                // unexpectedly launch interactive sign-in after we reported timeout.
+                playGamesSignInGeneration++;
                 playGamesSignInInFlight = false;
                 Log.e("STOP_PLAY_GAMES", "isAuthenticated check timed out after 15 seconds; check Play Games Console credentials and signing certificate");
                 sendPlayGamesStatus(false, "sign_in_timeout");
@@ -362,9 +365,12 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
         try {
             PlayGames.getGamesSignInClient(this).isAuthenticated()
                     .addOnCompleteListener(task -> {
+                        // Ignore a late response after timeout/cancellation or a newer attempt.
+                        if (signInGeneration != playGamesSignInGeneration
+                                || !playGamesSignInInFlight || isFinishing()) return;
                         // The authentication check completed. Invalidate its timeout before
                         // opening signIn(), which may legitimately wait for user interaction.
-                        if (signInGeneration == playGamesSignInGeneration) playGamesSignInGeneration++;
+                        playGamesSignInGeneration++;
                         if (!task.isSuccessful()) {
                             Log.e("STOP_PLAY_GAMES", "isAuthenticated task failed", task.getException());
                         }
