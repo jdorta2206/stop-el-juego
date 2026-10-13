@@ -64,6 +64,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     private boolean playUpdatePromptShown;
     private boolean playGamesInitialized;
     private boolean playGamesSignInInFlight;
+    private int playGamesSignInGeneration;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -325,17 +326,21 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
         }
         if (isFinishing()) return;
         playGamesSignInInFlight = true;
-        // Never leave the native bridge locked if Play Games fails to complete a task.
+        final int signInGeneration = ++playGamesSignInGeneration;
+        // Bound the authentication check, but do not time out the user-driven sign-in UI.
         getWindow().getDecorView().postDelayed(() -> {
-            if (playGamesSignInInFlight && !isFinishing()) {
+            if (playGamesSignInInFlight && signInGeneration == playGamesSignInGeneration && !isFinishing()) {
                 playGamesSignInInFlight = false;
-                Log.e("STOP_PLAY_GAMES", "Sign-in timed out after 15 seconds; check Play Games Console credentials, testers and package signing certificate");
+                Log.e("STOP_PLAY_GAMES", "isAuthenticated check timed out after 15 seconds; check Play Games Console credentials and signing certificate");
                 sendPlayGamesStatus(false, "sign_in_timeout");
             }
         }, 15000L);
         try {
             PlayGames.getGamesSignInClient(this).isAuthenticated()
                     .addOnCompleteListener(task -> {
+                        // The authentication check completed. Invalidate its timeout before
+                        // opening signIn(), which may legitimately wait for user interaction.
+                        if (signInGeneration == playGamesSignInGeneration) playGamesSignInGeneration++;
                         if (!task.isSuccessful()) {
                             Log.e("STOP_PLAY_GAMES", "isAuthenticated task failed", task.getException());
                         }
