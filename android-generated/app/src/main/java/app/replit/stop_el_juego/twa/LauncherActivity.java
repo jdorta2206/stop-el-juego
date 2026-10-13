@@ -46,6 +46,9 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     private static final String REWARDED_REAL_ID = "ca-app-pub-4807272408824742/3559554716";
 
     private boolean relationshipValidated;
+    private boolean originValidationRequestPending;
+    private int originValidationAttempts;
+    private int originValidationGeneration;
     private boolean messageChannelReady;
     private boolean mobileAdsReady;
     private RewardedAd rewardedAd;
@@ -142,10 +145,19 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             @Override
             public void onRelationshipValidationResult(int relation, @NonNull Uri requestedOrigin,
                     boolean result, @Nullable Bundle extras) {
+                originValidationRequestPending = false;
+                originValidationGeneration++; // Invalidate the timeout for the completed request.
                 relationshipValidated = relation == CustomTabsService.RELATION_USE_AS_ORIGIN
                         && result && SOURCE_ORIGIN.equals(requestedOrigin);
                 Log.d(TAG, "use_as_origin validation=" + result + " relation=" + relation + " origin=" + requestedOrigin);
-                if (relationshipValidated) requestMessageChannelWithRetry(100L);
+                if (relationshipValidated) {
+                    requestMessageChannelWithRetry(100L);
+                } else if (originValidationAttempts < 10 && !isFinishing()) {
+                    // A negative callback can be transient (for example while Digital Asset Links
+                    // is being refreshed); retry a bounded number of times before leaving PGS optional.
+                    getWindow().getDecorView().postDelayed(
+                            LauncherActivity.this::requestUseAsOriginValidation, 500L);
+                }
             }
             @Override
             public void onNavigationEvent(int navigationEvent, @Nullable Bundle extras) {
@@ -155,7 +167,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                 // postMessage requires the separate use_as_origin relationship.
                 // Request it explicitly; otherwise this callback may never set
                 // relationshipValidated and the native bridge remains disabled.
-                requestUseAsOriginValidation(0);
+                requestUseAsOriginValidation();
                 if (relationshipValidated) requestMessageChannelWithRetry(250L);
             }
             @Override
@@ -174,23 +186,37 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
         };
     }
 
-    private void requestUseAsOriginValidation(int attempt) {
-        if (relationshipValidated || isFinishing()) return;
+    private void requestUseAsOriginValidation() {
+        if (relationshipValidated || originValidationRequestPending || isFinishing()
+                || originValidationAttempts >= 10) return;
+        originValidationAttempts++;
+        final int requestGeneration = ++originValidationGeneration;
         CustomTabsSession session = getTwaSession();
         if (session != null) {
             try {
                 boolean requested = session.validateRelationship(
                         CustomTabsService.RELATION_USE_AS_ORIGIN, SOURCE_ORIGIN, new Bundle());
-                Log.d(TAG, "Requested use_as_origin validation attempt=" + (attempt + 1)
+                Log.d(TAG, "Requested use_as_origin validation attempt=" + originValidationAttempts
                         + " accepted=" + requested);
-                if (requested) return; // Result arrives asynchronously via onRelationshipValidationResult.
+                if (requested) {
+                    originValidationRequestPending = true;
+                    // Some Custom Tabs implementations can fail to deliver a validation callback.
+                    // Bound the wait and retry without blocking gameplay.
+                    getWindow().getDecorView().postDelayed(() -> {
+                        if (requestGeneration == originValidationGeneration
+                                && !relationshipValidated && originValidationRequestPending) {
+                            originValidationRequestPending = false;
+                            requestUseAsOriginValidation();
+                        }
+                    }, 1500L);
+                    return;
+                }
             } catch (RuntimeException error) {
                 Log.w(TAG, "use_as_origin validation request failed", error);
             }
         }
-        if (attempt < 10) {
-            getWindow().getDecorView().postDelayed(
-                    () -> requestUseAsOriginValidation(attempt + 1), 300L);
+        if (originValidationAttempts < 10) {
+            getWindow().getDecorView().postDelayed(this::requestUseAsOriginValidation, 300L);
         }
     }
 
