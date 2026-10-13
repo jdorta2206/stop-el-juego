@@ -59,7 +59,7 @@ jobs:
           assert 'STOP_PGS_ACHIEVEMENT_RESULT' in native
           assert 'STOP_PGS_ACHIEVEMENT_RESULT' in web
           assert 'stop:play-games-achievement-result' in web
-          assert 'payload.type !== "STOP_PGS_STATUS_RESULT"' in web
+          assert 'if (payload?.type !== "STOP_PGS_STATUS_RESULT") return;' in web
           # Local milestones remain authoritative; authenticated status retries
           # locally earned milestones, rather than awarding local XP on native success.
           assert 'unlockPlayGamesAchievementForMilestone(achievementId)' in hook
