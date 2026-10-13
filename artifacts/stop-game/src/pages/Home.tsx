@@ -824,68 +824,50 @@ export default function Home() {
             </motion.div>
           </Link>
 
-          {/* Always show the Play Games entry point; native actions are available only in the installed Android TWA. */}
-          <div className="w-full space-y-2">
-              <button
-                type="button"
-                onClick={() => {
-                  if (!isAndroidTwa()) {
-                    setPlayGamesStatus({ ok: false, status: "solo_android_twa" });
-                    return;
-                  }
-                  if (playGamesTimeoutRef.current) clearTimeout(playGamesTimeoutRef.current);
-                  setPlayGamesStatus({ ok: false, status: "conectando" });
-                  const sent = requestPlayGamesSignIn();
-                  if (!sent) {
-                    setPlayGamesStatus({ ok: false, status: "puente_no_disponible" });
-                    return;
-                  }
-                }}
-                className="w-full flex items-center justify-center gap-3 rounded-xl px-4 py-3 font-extrabold text-white shadow-lg active:scale-[0.98] transition-transform"
-                style={{ background: "linear-gradient(135deg, #168b55 0%, #0f6b43 100%)", border: "1px solid rgba(255,255,255,0.22)" }}
-                aria-label="Conectar con Google Play Games"
-              >
-                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white shadow-sm" aria-hidden="true">
-                    <svg viewBox="0 0 48 48" className="h-8 w-8" role="img" aria-label="Google Play Games">
-                      <path d="M10 13.5c-3.7 0-6.2 3.2-5.3 6.8l3.2 12.4c.8 3.1 4.7 4.2 7.3 2.1l5.1-4.2h7.4l5.1 4.2c2.6 2.1 6.5 1 7.3-2.1l3.2-12.4c.9-3.6-1.6-6.8-5.3-6.8H10Z" fill="#4285F4"/>
-                      <path d="M13 20v8M9 24h8" stroke="#fff" strokeWidth="3" strokeLinecap="round"/>
-                      <circle cx="32" cy="22" r="2.5" fill="#EA4335"/><circle cx="36" cy="27" r="2.5" fill="#FBBC04"/>
-                      <path d="M21 30h6l-3-4z" fill="#34A853"/>
-                    </svg>
-                  </span>
-                <span className="text-left">
-                  <span className="block">Google Play Games</span>
-                  <span className="block text-xs font-semibold text-white/80">Conectar tu cuenta y conseguir logros</span>
-                </span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  if (!isAndroidTwa()) {
-                    setPlayGamesStatus({ ok: false, status: "solo_android_twa" });
-                    return;
-                  }
-                  showPlayGamesAchievements();
-                }}
-                className="w-full rounded-lg border border-white/15 bg-black/20 px-3 py-2 text-sm font-bold text-white/90 active:scale-[0.99] transition-transform"
-              >Ver mis logros de Google Play Games</button>
-              {playGamesStatus && (
-                <p role="status" className={`text-center text-xs font-semibold ${playGamesStatus.ok ? "text-emerald-300" : "text-amber-200"}`}>
-                  {playGamesStatus.ok ? "Google Play Games conectado" : ({
-                    solo_android_twa: "Google Play Games funciona desde la app STOP instalada desde Google Play; en la web puedes seguir jugando normalmente.",
-                    conectando: "Conectando con Google Play Games…",
-                    puente_no_disponible: "Google Play Games no está disponible en esta sesión. Abre STOP desde la app instalada.",
-                    sin_respuesta: "Google Play Games no responde. Comprueba la conexión y vuelve a intentarlo.",
-                    sdk_unavailable: "Google Play Games no se ha podido iniciar en este dispositivo.",
-                    sign_in_in_progress: "La conexión con Google Play Games ya está en curso. Espera unos segundos.",
-                    sign_in_failed: "No se pudo iniciar sesión en Google Play Games. Inténtalo de nuevo.",
-                    sign_in_timeout: "Google Play Games ha tardado demasiado en responder. Revisa la configuración de Play Games y vuelve a intentarlo.",
-                    not_authenticated: "Todavía no has conectado Google Play Games.",
-                    unavailable: "Google Play Games no está disponible ahora mismo.",
-                  }[playGamesStatus.status] ?? `No se pudo conectar con Google Play Games (${playGamesStatus.status}).`)}
-                </p>
-              )}
-          </div>
+          {/* Play Games stays quiet during normal play; only expose the relevant action on Android. */}
+          {isAndroidTwa() && (
+            <div className="w-full space-y-2 rounded-xl border border-white/10 bg-black/15 p-3">
+              <p className={`text-center text-sm font-semibold ${playGamesStatus?.ok ? "text-emerald-300" : "text-white/80"}`} role="status">
+                {playGamesStatus?.ok
+                  ? "Google Play Games conectado"
+                  : playGamesStatus?.status === "conectando"
+                    ? "Conectando con Google Play Games…"
+                    : playGamesStatus
+                      ? ({
+                          puente_no_disponible: "No se ha podido abrir el canal de conexión. Vuelve a intentarlo.",
+                          sin_respuesta: "Google Play Games no responde. Puedes volver a intentarlo.",
+                          sdk_unavailable: "Google Play Games no se ha podido iniciar en este dispositivo.",
+                          sign_in_in_progress: "La conexión sigue en curso. Espera unos segundos.",
+                          sign_in_failed: "No se pudo conectar con Google Play Games.",
+                          sign_in_timeout: "Google Play Games ha tardado demasiado en responder.",
+                          not_authenticated: "Google Play Games todavía no está conectado.",
+                          unavailable: "Google Play Games no está disponible ahora mismo.",
+                        }[playGamesStatus.status] ?? "Google Play Games no está conectado.")
+                      : "Comprobando conexión con Google Play Games…"}
+              </p>
+              {playGamesStatus?.ok ? (
+                <button
+                  type="button"
+                  onClick={() => showPlayGamesAchievements()}
+                  className="w-full rounded-lg border border-white/15 bg-black/20 px-3 py-2 text-sm font-bold text-white/90 active:scale-[0.99] transition-transform"
+                >
+                  Ver mis logros
+                </button>
+              ) : playGamesStatus?.status !== "conectando" ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPlayGamesStatus({ ok: false, status: "conectando" });
+                    const sent = requestPlayGamesSignIn();
+                    if (!sent) setPlayGamesStatus({ ok: false, status: "puente_no_disponible" });
+                  }}
+                  className="mx-auto block rounded-lg border border-white/15 bg-white/10 px-4 py-2 text-sm font-bold text-white/90 active:scale-[0.99] transition-transform"
+                >
+                  Reintentar conexión
+                </button>
+              ) : null}
+            </div>
+          )}
 
           {/* Live stats chip — visible always, makes rank tangible */}
           {player && player.loginMethod !== "guest" && (
