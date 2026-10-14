@@ -276,7 +276,10 @@ router.post("/event", presenceLimiter, async (req, res) => {
     const metadataJson = JSON.stringify(metadata).slice(0, 4000);
     const playerId = readPlayerId(req);
     const sessionId = clean(body.sessionId, 128);
-    const trusted = TRUSTED_CLIENT_TELEMETRY_EVENTS.has(eventName);
+    // Guest game_complete is client-reported and can be forged; trust it only for
+    // aggregate completion funneling, never as proof of score, rewards, or achievements.
+    const trusted = TRUSTED_CLIENT_TELEMETRY_EVENTS.has(eventName) ||
+      (eventName === "game_complete" && (metadata as Record<string, unknown>).guest === true);
     await db.execute(sql`
       INSERT INTO public.analytics_events (event_name, player_id, session_id, platform, app_version, language, mode, ai_difficulty, metadata_json, trusted)
       VALUES (${eventName}, ${playerId}, ${sessionId}, ${platformFromRequest(req)}, ${String(req.headers["x-client-version"] ?? "").slice(0, 32) || null}, ${clean(body.language, 16)}, ${clean(body.mode, 32)}, ${clean(body.aiDifficulty, 32)}, ${metadataJson}, ${trusted})
