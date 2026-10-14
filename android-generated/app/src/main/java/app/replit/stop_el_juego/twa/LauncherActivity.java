@@ -65,6 +65,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     private boolean playGamesInitialized;
     private boolean playGamesSignInInFlight;
     private int playGamesSignInGeneration;
+    private int playGamesStatusGeneration;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -320,9 +321,13 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             sendPlayGamesStatus(false, "sdk_unavailable");
             return;
         }
+        final int statusGeneration = ++playGamesStatusGeneration;
         try {
             PlayGames.getGamesSignInClient(this).isAuthenticated()
                     .addOnCompleteListener(task -> {
+                        // Ignore an older snapshot if the player has since started
+                        // an explicit sign-in or a newer status check.
+                        if (statusGeneration != playGamesStatusGeneration || isFinishing()) return;
                         boolean authenticated = task.isSuccessful()
                                 && task.getResult() != null
                                 && task.getResult().isAuthenticated();
@@ -350,6 +355,9 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             return;
         }
         if (isFinishing()) return;
+        // Invalidate any startup/background status snapshot so a late signed-out
+        // result cannot overwrite the result of this user-requested sign-in.
+        playGamesStatusGeneration++;
         playGamesSignInInFlight = true;
         final int signInGeneration = ++playGamesSignInGeneration;
         // Bound the authentication check, but do not time out the user-driven sign-in UI.
@@ -422,8 +430,14 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             return;
         }
         if ("STOP_PGS_STATUS".equals(type)) {
+            // The explicit sign-in flow will publish its own final status.
+            // Avoid a background snapshot racing with that flow.
+            if (playGamesSignInInFlight) return;
+            final int statusGeneration = ++playGamesStatusGeneration;
             PlayGames.getGamesSignInClient(this).isAuthenticated()
                     .addOnCompleteListener(task -> {
+                        if (statusGeneration != playGamesStatusGeneration
+                                || playGamesSignInInFlight || isFinishing()) return;
                         boolean authenticated = task.isSuccessful()
                                 && task.getResult() != null
                                 && task.getResult().isAuthenticated();
