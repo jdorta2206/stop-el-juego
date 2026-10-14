@@ -431,12 +431,18 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             return;
         }
         if ("STOP_PGS_SHOW_ACHIEVEMENTS".equals(type)) {
+            // Opening the achievements UI is an action result, not an auth snapshot.
+            // Never overwrite a valid Play Games session with a UI-launch failure.
             PlayGames.getAchievementsClient(this).getAchievementsIntent()
                     .addOnSuccessListener(intent -> {
-                        try { startActivityForResult(intent, 7402); sendPlayGamesStatus(true, "achievements_opened"); }
-                        catch (RuntimeException error) { sendPlayGamesStatus(false, "achievements_unavailable"); }
+                        try {
+                            startActivityForResult(intent, 7402);
+                        } catch (RuntimeException error) {
+                            Log.w("STOP_PLAY_GAMES", "Could not open achievements UI", error);
+                        }
                     })
-                    .addOnFailureListener(error -> sendPlayGamesStatus(false, "achievements_unavailable"));
+                    .addOnFailureListener(error ->
+                            Log.w("STOP_PLAY_GAMES", "Achievements UI unavailable", error));
             return;
         }
         if ("STOP_PGS_UNLOCK_ACHIEVEMENT".equals(type)) {
