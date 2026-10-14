@@ -242,6 +242,10 @@ export function useAchievements(playerId?: string) {
   // native unlocks when the player explicitly signs in later. Local STOP
   // achievements remain the source of truth; Google unlocks are idempotent.
   useEffect(() => {
+    // A different STOP account may have different local milestones. Treat each
+    // playerId as a fresh sync so the prior account's authenticated flag cannot
+    // suppress the new account's own achievement upload.
+    playGamesWasAuthenticatedRef.current = false;
     const onPlayGamesStatus = (event: Event) => {
       const detail = (event as CustomEvent<{ ok?: boolean; status?: string }>).detail;
       const authenticated = detail?.ok === true && detail?.status === "authenticated";
@@ -302,6 +306,16 @@ export function useAchievements(playerId?: string) {
       // Deterministically evaluate streak milestones from the authoritative
       // server-side longestStreak — does NOT depend on the player opening the
       // streak calendar modal. checkStreakMilestone is idempotent.
+      // If Play Games was already authenticated before this server sync
+      // completed, the initial auth event could only upload local milestones.
+      // Retry the server-owned milestone IDs now as well; unlocks are idempotent.
+      const playGamesStatus = getLastPlayGamesStatus();
+      if (playGamesStatus?.ok && playGamesStatus.status === "authenticated") {
+        for (const achievementId of serverIds) {
+          unlockPlayGamesAchievementForMilestone(achievementId);
+        }
+      }
+
       const serverLongest = Number(serverStats.longestStreak ?? 0);
       if (serverLongest >= STREAK_MILESTONES[0]) {
         // Defer to next tick so the stats setState above has settled.
