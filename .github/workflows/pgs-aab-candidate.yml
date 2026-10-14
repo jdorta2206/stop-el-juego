@@ -7,6 +7,7 @@ on:
       - fix/pgs-noninteractive-startup-clean
     paths:
       - ".github/workflows/pgs-aab-candidate.yml"
+      - ".github/workflows/validate-pgs-origin-bridge.yml"
       - "android-generated/**"
       - "artifacts/stop-game/src/pages/Home.tsx"
       - "artifacts/stop-game/src/lib/twaPlayGamesBridge.ts"
