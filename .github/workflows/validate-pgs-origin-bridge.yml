@@ -73,7 +73,37 @@ jobs:
           # locally earned milestones, rather than awarding local XP on native success.
           assert 'unlockPlayGamesAchievementForMilestone(achievementId)' in hook
           assert 'stop:play-games-status' in hook
-          print("PGS origin/channel guards and separate achievement-result routing verified.")
+
+          # Keep local STOP milestone keys and Play Games IDs in lockstep.
+          # This cannot prove Play Console publication, but catches missing,
+          # malformed, duplicated, or orphaned IDs before the branch can pass CI.
+          import re
+          mapping_match = re.search(
+              r'const PLAY_GAMES_ACHIEVEMENT_IDS: Record<string, string> = \{(.*?)\n\};',
+              web, re.S
+          )
+          assert mapping_match, "Play Games achievement ID map is missing"
+          mapping = dict(re.findall(
+              r'\s*([a-z0-9_]+):\s*"([^"]+)"', mapping_match.group(1)
+          ))
+          definitions_match = re.search(
+              r'export const ACHIEVEMENTS: AchievementDef\[\] = \[(.*?)\n\];',
+              hook, re.S
+          )
+          assert definitions_match, "Local achievement definitions are missing"
+          local_keys = set(re.findall(
+              r'\bid:\s*"([a-z0-9_]+)"', definitions_match.group(1)
+          ))
+          assert len(mapping) == 15, f"Expected 15 Play Games mappings, found {len(mapping)}"
+          assert set(mapping) == local_keys, (
+              f"Play Games/local achievement mismatch: missing={sorted(local_keys - set(mapping))}, "
+              f"orphaned={sorted(set(mapping) - local_keys)}"
+          )
+          assert len(set(mapping.values())) == len(mapping), "Duplicate Play Games achievement IDs"
+          invalid_ids = {key: value for key, value in mapping.items()
+                         if not re.fullmatch(r"Cgk[A-Za-z0-9_-]{10,}", value)}
+          assert not invalid_ids, f"Malformed Play Games IDs: {invalid_ids}"
+          print("PGS origin/channel guards, result routing, and all 15 local-to-Play-Games mappings verified.")
           PY
       - name: Compile Android debug APK
         working-directory: android-generated
