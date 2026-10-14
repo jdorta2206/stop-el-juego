@@ -280,6 +280,10 @@ export function useAchievements(playerId?: string) {
     let milestoneTimer: number | null = null;
     syncAbortRef.current = controller;
     syncFromServer(playerId, controller.signal).then(({ achievements: serverIds, stats: serverStats }) => {
+      // Account can change while the request is in flight. Do not let an old
+      // response merge milestones or stats into the newly selected player's UI.
+      if (controller.signal.aborted) return;
+
       // Merge achievements
       setUnlocked(prev => {
         const merged = new Set([...prev, ...serverIds]);
