@@ -1041,6 +1041,20 @@ export default function SoloGame() {
       if (round >= maxRounds) {
         const br = updateBest(finalPlayerScore);
         setBestResult(br);
+        if ((!player || player.loginMethod === "guest") && (br.isNew || finalPlayerScore >= 50)) {
+          try {
+            const promptKey = "stop_guest_register_prompted_v1";
+            if (!sessionStorage.getItem(promptKey)) {
+              sessionStorage.setItem(promptKey, "1");
+              toast({
+                title: lang === "en" ? "Great score!" : lang === "pt" ? "Boa pontuação!" : lang === "fr" ? "Bon score !" : "¡Buena puntuación!",
+                description: lang === "en" ? "Sign in to keep your points and personal best." : lang === "pt" ? "Inicia sessão para guardar os teus pontos e recorde." : lang === "fr" ? "Connectez-vous pour conserver vos points et votre record." : "Regístrate para guardar tus puntos y tu récord personal.",
+              });
+            }
+          } catch {
+            // Prompting must never affect gameplay.
+          }
+        }
         if (br.isNew) {
           setTimeout(() => {
             vibrate([60, 40, 60, 40, 200]);
