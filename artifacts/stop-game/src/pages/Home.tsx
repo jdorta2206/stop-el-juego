@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { Link } from "wouter";
 import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui";
-import { Play, Users, Trophy, Share2, Facebook, Instagram, Crown, Swords, BookOpen, Flame, Calendar, Zap, Star, Medal } from "lucide-react";
+import { Play, Users, Trophy, Share2, Facebook, Instagram, Crown, Swords, BookOpen, Flame, Calendar, Zap, Star, Medal, Gamepad2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { shareText, getApiUrl, authHeaders } from "@/lib/utils";
 import { PremiumModal } from "@/components/PremiumModal";
@@ -827,6 +827,23 @@ export default function Home() {
           {/* Play Games stays quiet during normal play; only expose the relevant action on Android. */}
           {isAndroidTwa() && (
             <div className="w-full space-y-2 rounded-xl border border-white/10 bg-black/15 p-3">
+              <div className="flex items-center justify-center gap-2" aria-hidden="true">
+                <motion.div
+                  animate={playGamesStatus?.status === "conectando" || !playGamesStatus ? { rotate: [0, -8, 8, 0], scale: [1, 1.08, 1] } : { rotate: 0, scale: 1 }}
+                  transition={playGamesStatus?.status === "conectando" || !playGamesStatus ? { duration: 1.2, repeat: Infinity, ease: "easeInOut" } : { duration: 0.2 }}
+                  className={`flex h-9 w-9 items-center justify-center rounded-xl ${playGamesStatus?.ok ? "bg-emerald-500/20 text-emerald-300" : "bg-white/10 text-white"}`}
+                >
+                  <Gamepad2 className="h-5 w-5" />
+                </motion.div>
+                <span className="text-xs font-extrabold tracking-wide text-white/75">GOOGLE PLAY GAMES</span>
+                {(playGamesStatus?.status === "conectando" || !playGamesStatus) && (
+                  <motion.span
+                    className="h-2 w-2 rounded-full bg-emerald-400"
+                    animate={{ opacity: [0.25, 1, 0.25] }}
+                    transition={{ duration: 1, repeat: Infinity }}
+                  />
+                )}
+              </div>
               <p className={`text-center text-sm font-semibold ${playGamesStatus?.ok ? "text-emerald-300" : "text-white/80"}`} role="status">
                 {playGamesStatus?.ok
                   ? "Google Play Games conectado"
