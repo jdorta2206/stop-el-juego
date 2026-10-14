@@ -28,6 +28,7 @@ import { useTicker } from "@/hooks/useTicker";
 import { useStreak } from "@/hooks/useStreak";
 import { useProgression, calcXpFromResults } from "@/hooks/useProgression";
 import { trackGuestGame } from "@/lib/guestStats";
+import { saveGuestProgress, getPendingGuestGames, removePendingGuestGame } from "@/lib/guestProgress";
 import { useSound } from "@/hooks/useSound";
 import { useToast } from "@/hooks/use-toast";
 import { pickRandomPersonality, getAIComment, type AIPersonality } from "@/data/aiPersonalities";
@@ -478,6 +479,7 @@ export default function SoloGame() {
     },
   });
   const submitScoreMutation = useSubmitScore();
+  const guestMigrationInFlightRef = useRef<Set<string>>(new Set());
   const queryClient = useQueryClient();
   const timerRef = useRef<NodeJS.Timeout>(null);
   const stopTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1113,7 +1115,17 @@ export default function SoloGame() {
         if (!isDailyMode) recordInterstitialGameCompleted();
         // The private /test panel tracks guest games separately from registered
         // game_history. Only anonymous players must increment that aggregate.
-        if (!player || player.loginMethod === "guest") trackGuestGame();
+        if (!player || player.loginMethod === "guest") {
+          trackGuestGame();
+          saveGuestProgress({
+            submissionId: gameSubmissionIdRef.current ?? createSubmissionId(),
+            score: finalPlayerScore,
+            letter: currentLetter || "?",
+            mode: isDailyMode ? "daily" : "solo",
+            won: finalPlayerScore > finalAiForGame,
+            scoreTokens: scoreTokensRef.current,
+          });
+        }
       }
 
       // AI personality comment
@@ -1285,6 +1297,35 @@ export default function SoloGame() {
       }
     });
   };
+
+  // Migrate only server-vouched guest games after a real account is available.
+  // Server-side submission claims make concurrent tabs/retries idempotent.
+  useEffect(() => {
+    if (!player || player.loginMethod === "guest") return;
+    let pending: ReturnType<typeof getPendingGuestGames>;
+    try { pending = getPendingGuestGames(); } catch { return; }
+    for (const game of pending) {
+      if (!game.scoreTokens.length || guestMigrationInFlightRef.current.has(game.submissionId)) continue;
+      guestMigrationInFlightRef.current.add(game.submissionId);
+      submitScoreMutation.mutate({
+        data: {
+          submissionId: game.submissionId,
+          playerId: player.id,
+          playerName: player.name,
+          avatarColor: player.avatarColor,
+          score: game.score,
+          letter: game.letter,
+          mode: game.mode,
+          won: game.won,
+          scoreTokens: game.scoreTokens,
+        },
+      }, {
+        onSuccess: () => removePendingGuestGame(game.submissionId),
+        onSettled: () => guestMigrationInFlightRef.current.delete(game.submissionId),
+      });
+    }
+  }, [player?.id, player?.loginMethod]); // eslint-disable-line react-hooks/exhaustive-deps
+
 
   // 💾 Auto-submit final score the moment the RESULTS screen first shows the
   // final round. Previously the submit only happened inside `nextRound()` (the
