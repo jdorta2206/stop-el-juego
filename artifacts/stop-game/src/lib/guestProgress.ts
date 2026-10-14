@@ -16,10 +16,11 @@ type GuestProgress = {
   bestScore: number;
   totalPoints: number;
   pendingGames: PendingGuestGame[];
+  recordedSubmissionIds: string[];
 };
 
 function emptyProgress(): GuestProgress {
-  return { version: 1, bestScore: 0, totalPoints: 0, pendingGames: [] };
+  return { version: 1, bestScore: 0, totalPoints: 0, pendingGames: [], recordedSubmissionIds: [] };
 }
 
 function readProgress(): GuestProgress {
@@ -39,6 +40,9 @@ function readProgress(): GuestProgress {
         (game.mode === "solo" || game.mode === "daily") &&
         Array.isArray(game.scoreTokens) && game.scoreTokens.every((token) => typeof token === "string")
       ).slice(-MAX_PENDING_GAMES) : [],
+      recordedSubmissionIds: Array.isArray(parsed.recordedSubmissionIds)
+        ? parsed.recordedSubmissionIds.filter((id): id is string => typeof id === "string").slice(-100)
+        : [],
     };
   } catch {
     return emptyProgress();
@@ -58,9 +62,14 @@ function writeProgress(progress: GuestProgress): void {
 export function saveGuestProgress(input: Omit<PendingGuestGame, "createdAt">): void {
   try {
     const progress = readProgress();
+    const alreadyRecorded = progress.recordedSubmissionIds.includes(input.submissionId);
     const alreadyPending = progress.pendingGames.some((game) => game.submissionId === input.submissionId);
     progress.bestScore = Math.max(progress.bestScore, Math.max(0, Math.floor(input.score)));
-    progress.totalPoints += Math.max(0, Math.floor(input.score));
+    if (!alreadyRecorded) {
+      progress.totalPoints += Math.max(0, Math.floor(input.score));
+      progress.recordedSubmissionIds.push(input.submissionId);
+      progress.recordedSubmissionIds = progress.recordedSubmissionIds.slice(-100);
+    }
     if (!alreadyPending && input.scoreTokens.length > 0 && input.scoreTokens.length <= 64) {
       progress.pendingGames.push({
         ...input,
