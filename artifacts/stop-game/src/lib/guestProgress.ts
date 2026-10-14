@@ -1,5 +1,9 @@
 const STORAGE_KEY = "stop_guest_progress_v1";
 const MAX_PENDING_GAMES = 20;
+// Server-issued score vouchers expire after 30 minutes. Retire migration
+// attempts a little earlier to allow for clock/network delay; local best and
+// accumulated points are deliberately preserved.
+const GUEST_VOUCHER_MIGRATION_MAX_AGE_MS = 25 * 60 * 1000;
 
 export type PendingGuestGame = {
   submissionId: string;
@@ -38,7 +42,8 @@ function readProgress(): GuestProgress {
         !!game && typeof game.submissionId === "string" &&
         Number.isFinite(game.score) && game.score >= 0 &&
         (game.mode === "solo" || game.mode === "daily") &&
-        Array.isArray(game.scoreTokens) && game.scoreTokens.every((token) => typeof token === "string")
+        Array.isArray(game.scoreTokens) && game.scoreTokens.every((token) => typeof token === "string") &&
+        Number.isFinite(game.createdAt) && game.createdAt > 0
       ).slice(-MAX_PENDING_GAMES) : [],
       recordedSubmissionIds: Array.isArray(parsed.recordedSubmissionIds)
         ? parsed.recordedSubmissionIds.filter((id): id is string => typeof id === "string").slice(-100)
@@ -85,8 +90,23 @@ export function saveGuestProgress(input: Omit<PendingGuestGame, "createdAt">): v
   }
 }
 
+/**
+ * Return only migration candidates whose vouchers should still be within the
+ * server's 30-minute validity window. Expired candidates are removed from the
+ * retry queue, but local best/total/recorded IDs are preserved. The server
+ * remains authoritative and validates every voucher regardless of this filter.
+ */
 export function getPendingGuestGames(): PendingGuestGame[] {
-  return readProgress().pendingGames;
+  const progress = readProgress();
+  const now = Date.now();
+  const eligible = progress.pendingGames.filter((game) =>
+    now - game.createdAt < GUEST_VOUCHER_MIGRATION_MAX_AGE_MS
+  );
+  if (eligible.length !== progress.pendingGames.length) {
+    progress.pendingGames = eligible;
+    writeProgress(progress);
+  }
+  return eligible;
 }
 
 /** Remove only the acknowledged submission; keep the local best and accumulated total. */
