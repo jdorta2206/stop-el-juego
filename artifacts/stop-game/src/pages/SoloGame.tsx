@@ -1048,7 +1048,7 @@ export default function SoloGame() {
               sessionStorage.setItem(promptKey, "1");
               toast({
                 title: lang === "en" ? "Great score!" : lang === "pt" ? "Boa pontuação!" : lang === "fr" ? "Bon score !" : "¡Buena puntuación!",
-                description: lang === "en" ? "Sign in to keep your points and personal best." : lang === "pt" ? "Inicia sessão para guardar os teus pontos e recorde." : lang === "fr" ? "Connectez-vous pour conserver vos points et votre record." : "Regístrate para guardar tus puntos y tu récord personal.",
+                description: lang === "en" ? "Sign in to transfer verified games and save future scores to your account." : lang === "pt" ? "Inicia sessão para transferir partidas verificadas e guardar futuras pontuações na tua conta." : lang === "fr" ? "Connectez-vous pour transférer les parties vérifiées et enregistrer vos prochains scores sur votre compte." : "Inicia sesión para transferir las partidas verificadas y guardar futuras puntuaciones en tu cuenta.",
               });
             }
           } catch {
