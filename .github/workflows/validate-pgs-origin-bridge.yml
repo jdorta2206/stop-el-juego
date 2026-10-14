@@ -58,15 +58,18 @@ jobs:
           assert '<string name="game_services_project_id" translatable="false">902072408470</string>' in strings
           assert 'android:name="com.google.android.gms.games.APP_ID"' in manifest
           assert 'android:value="@string/game_services_project_id"' in manifest
-          # Startup attempts Play Games auth as requested; auth failure/cancellation
-          # must report a non-blocking status so guest play remains available.
+          # Startup checks existing auth without opening interactive sign-in;
+          # the user can explicitly request sign-in and guest play remains available.
           on_create = native.split("protected void onCreate(Bundle savedInstanceState)", 1)[1].split("private void checkForPlayUpdate()", 1)[0]
-          startup_sign_in = native.split("private void startPlayGamesSignInIfNeeded()", 1)[1].split("private void handlePlayGamesMessage(", 1)[0]
-          assert "startPlayGamesSignInIfNeeded();" in on_create
-          assert "PlayGames.getGamesSignInClient(this).isAuthenticated()" in startup_sign_in
-          assert "PlayGames.getGamesSignInClient(this).signIn()" in startup_sign_in
-          assert '"sign_in_failed"' in startup_sign_in
-          assert "guest play remains available" in startup_sign_in
+          startup_status = native.split("private void refreshPlayGamesStatusOnly()", 1)[1].split("private void startPlayGamesSignInIfNeeded()", 1)[0]
+          manual_sign_in = native.split("private void startPlayGamesSignInIfNeeded()", 1)[1].split("private void handlePlayGamesMessage(", 1)[0]
+          assert "refreshPlayGamesStatusOnly();" in on_create
+          assert "startPlayGamesSignInIfNeeded();" not in on_create
+          assert "PlayGames.getGamesSignInClient(this).isAuthenticated()" in startup_status
+          assert '"not_authenticated"' in startup_status
+          assert "guest play remains available" in startup_status
+          assert "PlayGames.getGamesSignInClient(this).signIn()" in manual_sign_in
+          assert '"sign_in_failed"' in manual_sign_in
           assert 'const message = { type, ...extra, origin: window.location.origin };' in web
           assert 'if (!messageChannelReady || !relationshipValidated || !isAllowedOrigin(origin))' in native
           assert 'String origin = message.optString("origin", "");' in native
