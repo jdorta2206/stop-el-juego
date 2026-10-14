@@ -499,6 +499,8 @@ export default function SoloGame() {
   // Stable idempotency key for the logical game score. It survives all round
   // transitions and is replaced only when a genuinely new game starts.
   const gameSubmissionIdRef = useRef<string | null>(null);
+  // Prevent duplicate guest completion telemetry if the RESULTS effect re-runs.
+  const guestCompletionTrackedRef = useRef(false);
   const createSubmissionId = () => {
     try {
       if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -572,7 +574,10 @@ export default function SoloGame() {
     halloweenAnswerScareRoundRef.current = null;
     setHalloweenScare(null);
     // A logical game starts only on a fresh game. Subsequent rounds use startGame(false).
-    if (newGame) trackTrustedGameStart({ mode: gameMode, language: getCurrentLang() });
+    if (newGame) {
+      guestCompletionTrackedRef.current = false;
+      trackTrustedGameStart({ mode: gameMode, language: getCurrentLang() });
+    }
     // Snapshot the tutorial state at the moment the player presses Play so
     // the rules of the round are stable until it ends.
     const tutorialNow = ftue.isInTutorial && !isDailyMode;
@@ -1112,8 +1117,17 @@ export default function SoloGame() {
         // the every-3-games cadence even if the player leaves the RESULTS screen.
         if (!isDailyMode) recordInterstitialGameCompleted();
         // The private /test panel tracks guest games separately from registered
-        // game_history. Only anonymous players must increment that aggregate.
-        if (!player || player.loginMethod === "guest") trackGuestGame();
+        // game_history. Emit completion at the final results screen, exactly once.
+        if (!player || player.loginMethod === "guest") {
+          trackGuestGame();
+          if (!guestCompletionTrackedRef.current) {
+            guestCompletionTrackedRef.current = true;
+            trackAnalyticsEvent("game_complete", {
+              mode: gameMode,
+              metadata: { guest: true, submissionId: gameSubmissionIdRef.current },
+            });
+          }
+        }
       }
 
       // AI personality comment
