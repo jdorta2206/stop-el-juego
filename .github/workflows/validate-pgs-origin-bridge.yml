@@ -6,9 +6,15 @@ on:
     paths:
       - "android-generated/**"
       - "artifacts/stop-game/src/lib/twaPlayGamesBridge.ts"
+      - "artifacts/stop-game/src/hooks/useAchievements.ts"
       - ".github/workflows/validate-pgs-origin-bridge.yml"
   push:
-    branches: [fix/pgs-validate-native-message-origin]
+    branches: [fix/pgs-noninteractive-startup-clean]
+    paths:
+      - "android-generated/**"
+      - "artifacts/stop-game/src/lib/twaPlayGamesBridge.ts"
+      - "artifacts/stop-game/src/hooks/useAchievements.ts"
+      - ".github/workflows/validate-pgs-origin-bridge.yml"
   workflow_dispatch:
 
 permissions:
@@ -33,21 +39,96 @@ jobs:
           packages: platform-tools
       - name: Install Android SDK components
         run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
-      - name: Verify PGS origin and channel guards
+      - name: Verify PGS origin, channel and achievement result guards
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
           web = Path("artifacts/stop-game/src/lib/twaPlayGamesBridge.ts").read_text()
+          hook = Path("artifacts/stop-game/src/hooks/useAchievements.ts").read_text()
           native = Path("android-generated/app/src/main/java/app/replit/stop_el_juego/twa/LauncherActivity.java").read_text()
+          gradle = Path("android-generated/app/build.gradle").read_text()
+          manifest = Path("android-generated/app/src/main/AndroidManifest.xml").read_text()
+          strings = Path("android-generated/app/src/main/res/values/strings.xml").read_text()
+          # Guard the Android identity and Play Games project wiring against drift.
+          assert 'applicationId "app.replit.stop_el_juego.twa"' in gradle
+          assert 'applicationId: \'app.replit.stop_el_juego.twa\'' in gradle
+          assert 'implementation \'com.google.android.gms:play-services-games-v2:22.1.0\'' in gradle
+          assert '<string name="game_services_project_id" translatable="false">902072408470</string>' in strings
+          assert 'android:name="com.google.android.gms.games.APP_ID"' in manifest
+          assert 'android:value="@string/game_services_project_id"' in manifest
+          # Startup checks existing auth without opening interactive sign-in;
+          # the user can explicitly request sign-in and guest play remains available.
+          on_create = native.split("protected void onCreate(Bundle savedInstanceState)", 1)[1].split("private void checkForPlayUpdate()", 1)[0]
+          startup_status = native.split("private void refreshPlayGamesStatusOnly()", 1)[1].split("private void startPlayGamesSignInIfNeeded()", 1)[0]
+          manual_sign_in = native.split("private void startPlayGamesSignInIfNeeded()", 1)[1].split("private void handlePlayGamesMessage(", 1)[0]
+          assert "refreshPlayGamesStatusOnly();" in on_create
+          assert "startPlayGamesSignInIfNeeded();" not in on_create
+          assert "PlayGames.getGamesSignInClient(this).isAuthenticated()" in startup_status
+          assert '"not_authenticated"' in startup_status
+          assert "guest play remains available" in startup_status
+          assert "PlayGames.getGamesSignInClient(this).signIn()" in manual_sign_in
+          assert '"sign_in_failed"' in manual_sign_in
+          # Stale status snapshots must not overwrite a manual sign-in result.
+          assert "private int playGamesStatusGeneration;" in native
+          assert "statusGeneration != playGamesStatusGeneration" in startup_status
+          assert "playGamesStatusGeneration++;" in manual_sign_in
+          status_refresh = native.split('if ("STOP_PGS_STATUS".equals(type))', 1)[1].split('if ("STOP_PGS_SHOW_ACHIEVEMENTS".equals(type))', 1)[0]
+          assert "if (playGamesSignInInFlight) return;" in status_refresh
+          assert "statusGeneration != playGamesStatusGeneration" in status_refresh
           assert 'const message = { type, ...extra, origin: window.location.origin };' in web
           assert 'if (!messageChannelReady || !relationshipValidated || !isAllowedOrigin(origin))' in native
           assert 'String origin = message.optString("origin", "");' in native
           assert 'STOP_PGS_UNLOCK_ACHIEVEMENT' in web and 'STOP_PGS_UNLOCK_ACHIEVEMENT' in native
           assert 'return "https://stopjuegodepalabras.com".equals(origin)' in native
           assert '|| "https://www.stopjuegodepalabras.com".equals(origin);' in native
-          print("PGS web origin payload and native TWA relationship/origin guards verified.")
+          # Native reports an outcome per unlock, and web routes it separately
+          # from auth snapshots so a failed unlock cannot overwrite auth state.
+          assert 'STOP_PGS_ACHIEVEMENT_RESULT' in native
+          assert 'STOP_PGS_ACHIEVEMENT_RESULT' in web
+          assert 'stop:play-games-achievement-result' in web
+          assert 'if (payload?.type !== "STOP_PGS_STATUS_RESULT") return;' in web
+          # Opening the achievements UI is not an auth snapshot; failures must
+          # not make a connected player appear signed out in the STOP interface.
+          show_achievements = native.split('if ("STOP_PGS_SHOW_ACHIEVEMENTS".equals(type))', 1)[1].split('if ("STOP_PGS_UNLOCK_ACHIEVEMENT".equals(type))', 1)[0]
+          assert 'sendPlayGamesStatus(' not in show_achievements
+          assert 'Achievements UI unavailable' in show_achievements
+          # Local milestones remain authoritative; authenticated status retries
+          # locally earned milestones, rather than awarding local XP on native success.
+          assert 'unlockPlayGamesAchievementForMilestone(achievementId)' in hook
+          assert 'stop:play-games-status' in hook
+
+          # Keep local STOP milestone keys and Play Games IDs in lockstep.
+          # This cannot prove Play Console publication, but catches missing,
+          # malformed, duplicated, or orphaned IDs before the branch can pass CI.
+          import re
+          mapping_match = re.search(
+              r'const PLAY_GAMES_ACHIEVEMENT_IDS: Record<string, string> = \{(.*?)\n\};',
+              web, re.S
+          )
+          assert mapping_match, "Play Games achievement ID map is missing"
+          mapping = dict(re.findall(
+              r'\s*([a-z0-9_]+):\s*"([^"]+)"', mapping_match.group(1)
+          ))
+          definitions_match = re.search(
+              r'export const ACHIEVEMENTS: AchievementDef\[\] = \[(.*?)\n\];',
+              hook, re.S
+          )
+          assert definitions_match, "Local achievement definitions are missing"
+          local_keys = set(re.findall(
+              r'\bid:\s*"([a-z0-9_]+)"', definitions_match.group(1)
+          ))
+          assert len(mapping) == 15, f"Expected 15 Play Games mappings, found {len(mapping)}"
+          assert set(mapping) == local_keys, (
+              f"Play Games/local achievement mismatch: missing={sorted(local_keys - set(mapping))}, "
+              f"orphaned={sorted(set(mapping) - local_keys)}"
+          )
+          assert len(set(mapping.values())) == len(mapping), "Duplicate Play Games achievement IDs"
+          invalid_ids = {key: value for key, value in mapping.items()
+                         if not re.fullmatch(r"Cgk[A-Za-z0-9_-]{10,}", value)}
+          assert not invalid_ids, f"Malformed Play Games IDs: {invalid_ids}"
+          print("PGS origin/channel guards, result routing, and all 15 local-to-Play-Games mappings verified.")
           PY
       - name: Compile Android debug APK
         working-directory: android-generated
@@ -56,3 +137,10 @@ jobs:
           chmod +x ./gradlew
           ./gradlew :app:assembleDebug --no-daemon --stacktrace
           test -s app/build/outputs/apk/debug/app-debug.apk
+      - name: Publish debug APK as a test artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: stop-pgs-debug-apk
+          path: android-generated/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 7

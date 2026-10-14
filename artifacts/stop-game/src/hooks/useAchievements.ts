@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { getApiUrl, authHeaders } from "@/lib/utils";
-import { unlockPlayGamesAchievementForMilestone } from "@/lib/twaPlayGamesBridge";
+import { getLastPlayGamesStatus, unlockPlayGamesAchievementForMilestone } from "@/lib/twaPlayGamesBridge";
 
 const STATS_KEY = "stop_achievement_stats_v1";
 const UNLOCKED_KEY = "stop_achievements_unlocked_v1";
@@ -236,6 +236,35 @@ export function useAchievements(playerId?: string) {
   const syncAbortRef = useRef<AbortController | null>(null);
   const checkStreakMilestoneRef = useRef<(longestStreak: number) => AchievementDef | null>(() => null);
 
+  const playGamesWasAuthenticatedRef = useRef(false);
+
+  // If a milestone was earned while Play Games was signed out, retry the
+  // native unlocks when the player explicitly signs in later. Local STOP
+  // achievements remain the source of truth; Google unlocks are idempotent.
+  useEffect(() => {
+    // A different STOP account may have different local milestones. Treat each
+    // playerId as a fresh sync so the prior account's authenticated flag cannot
+    // suppress the new account's own achievement upload.
+    playGamesWasAuthenticatedRef.current = false;
+    const onPlayGamesStatus = (event: Event) => {
+      const detail = (event as CustomEvent<{ ok?: boolean; status?: string }>).detail;
+      const authenticated = detail?.ok === true && detail?.status === "authenticated";
+      if (!authenticated) {
+        playGamesWasAuthenticatedRef.current = false;
+        return;
+      }
+      if (playGamesWasAuthenticatedRef.current) return;
+      playGamesWasAuthenticatedRef.current = true;
+      for (const achievementId of loadUnlocked(playerId)) {
+        unlockPlayGamesAchievementForMilestone(achievementId);
+      }
+    };
+    window.addEventListener("stop:play-games-status", onPlayGamesStatus);
+    const currentStatus = getLastPlayGamesStatus();
+    if (currentStatus) onPlayGamesStatus(new CustomEvent("stop:play-games-status", { detail: currentStatus }));
+    return () => window.removeEventListener("stop:play-games-status", onPlayGamesStatus);
+  }, [playerId]);
+
   useEffect(() => {
     setStats(loadStats(playerId));
     setUnlocked(loadUnlocked(playerId));
@@ -251,6 +280,10 @@ export function useAchievements(playerId?: string) {
     let milestoneTimer: number | null = null;
     syncAbortRef.current = controller;
     syncFromServer(playerId, controller.signal).then(({ achievements: serverIds, stats: serverStats }) => {
+      // Account can change while the request is in flight. Do not let an old
+      // response merge milestones or stats into the newly selected player's UI.
+      if (controller.signal.aborted) return;
+
       // Merge achievements
       setUnlocked(prev => {
         const merged = new Set([...prev, ...serverIds]);
@@ -277,6 +310,16 @@ export function useAchievements(playerId?: string) {
       // Deterministically evaluate streak milestones from the authoritative
       // server-side longestStreak — does NOT depend on the player opening the
       // streak calendar modal. checkStreakMilestone is idempotent.
+      // If Play Games was already authenticated before this server sync
+      // completed, the initial auth event could only upload local milestones.
+      // Retry the server-owned milestone IDs now as well; unlocks are idempotent.
+      const playGamesStatus = getLastPlayGamesStatus();
+      if (playGamesStatus?.ok && playGamesStatus.status === "authenticated") {
+        for (const achievementId of serverIds) {
+          unlockPlayGamesAchievementForMilestone(achievementId);
+        }
+      }
+
       const serverLongest = Number(serverStats.longestStreak ?? 0);
       if (serverLongest >= STREAK_MILESTONES[0]) {
         // Defer to next tick so the stats setState above has settled.

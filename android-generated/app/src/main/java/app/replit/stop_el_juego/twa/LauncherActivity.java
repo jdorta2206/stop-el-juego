@@ -65,6 +65,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     private boolean playGamesInitialized;
     private boolean playGamesSignInInFlight;
     private int playGamesSignInGeneration;
+    private int playGamesStatusGeneration;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -74,8 +75,9 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             PlayGamesSdk.initialize(getApplicationContext());
             playGamesInitialized = true;
             Log.i("STOP_PLAY_GAMES", "Play Games SDK initialized");
-            // Start authentication from the native app launch, independently of web/bridge readiness.
-            startPlayGamesSignInIfNeeded();
+            // Check an existing Play Games session without opening interactive sign-in
+            // during startup. Players can explicitly retry from the STOP home screen.
+            refreshPlayGamesStatusOnly();
         } catch (RuntimeException error) {
             Log.w("STOP_PLAY_GAMES", "Play Games SDK initialization failed; app continues normally", error);
         }
@@ -278,8 +280,9 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             if (type.startsWith("STOP_PGS_")) {
                 String origin = message.optString("origin", "");
                 if (!messageChannelReady || !relationshipValidated || !isAllowedOrigin(origin)) {
+                    // A rejected message is not an authentication result. Do not let
+                    // an untrusted/stale request overwrite the player's real PGS status.
                     Log.w("STOP_PLAY_GAMES", "Rejected PGS message from invalid origin/channel: " + origin);
-                    sendPlayGamesStatus(false, "invalid_origin_or_channel");
                     return;
                 }
                 handlePlayGamesMessage(type, message);
@@ -313,6 +316,33 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     }
 
 
+    private void refreshPlayGamesStatusOnly() {
+        if (!playGamesInitialized || isFinishing()) {
+            sendPlayGamesStatus(false, "sdk_unavailable");
+            return;
+        }
+        final int statusGeneration = ++playGamesStatusGeneration;
+        try {
+            PlayGames.getGamesSignInClient(this).isAuthenticated()
+                    .addOnCompleteListener(task -> {
+                        // Ignore an older snapshot if the player has since started
+                        // an explicit sign-in or a newer status check.
+                        if (statusGeneration != playGamesStatusGeneration || isFinishing()) return;
+                        boolean authenticated = task.isSuccessful()
+                                && task.getResult() != null
+                                && task.getResult().isAuthenticated();
+                        if (!task.isSuccessful()) {
+                            Log.w("STOP_PLAY_GAMES", "Startup auth-state check failed", task.getException());
+                        }
+                        sendPlayGamesStatus(authenticated,
+                                authenticated ? "authenticated" : "not_authenticated");
+                    });
+        } catch (RuntimeException error) {
+            Log.w("STOP_PLAY_GAMES", "Startup auth-state check failed; guest play remains available", error);
+            sendPlayGamesStatus(false, "sign_in_failed");
+        }
+    }
+
     private void startPlayGamesSignInIfNeeded() {
         if (!playGamesInitialized) {
             sendPlayGamesStatus(false, "sdk_unavailable");
@@ -325,11 +355,17 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             return;
         }
         if (isFinishing()) return;
+        // Invalidate any startup/background status snapshot so a late signed-out
+        // result cannot overwrite the result of this user-requested sign-in.
+        playGamesStatusGeneration++;
         playGamesSignInInFlight = true;
         final int signInGeneration = ++playGamesSignInGeneration;
         // Bound the authentication check, but do not time out the user-driven sign-in UI.
         getWindow().getDecorView().postDelayed(() -> {
             if (playGamesSignInInFlight && signInGeneration == playGamesSignInGeneration && !isFinishing()) {
+                // Invalidate the pending auth callback so a late response cannot
+                // unexpectedly launch interactive sign-in after we reported timeout.
+                playGamesSignInGeneration++;
                 playGamesSignInInFlight = false;
                 Log.e("STOP_PLAY_GAMES", "isAuthenticated check timed out after 15 seconds; check Play Games Console credentials and signing certificate");
                 sendPlayGamesStatus(false, "sign_in_timeout");
@@ -338,9 +374,12 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
         try {
             PlayGames.getGamesSignInClient(this).isAuthenticated()
                     .addOnCompleteListener(task -> {
+                        // Ignore a late response after timeout/cancellation or a newer attempt.
+                        if (signInGeneration != playGamesSignInGeneration
+                                || !playGamesSignInInFlight || isFinishing()) return;
                         // The authentication check completed. Invalidate its timeout before
                         // opening signIn(), which may legitimately wait for user interaction.
-                        if (signInGeneration == playGamesSignInGeneration) playGamesSignInGeneration++;
+                        playGamesSignInGeneration++;
                         if (!task.isSuccessful()) {
                             Log.e("STOP_PLAY_GAMES", "isAuthenticated task failed", task.getException());
                         }
@@ -391,8 +430,14 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             return;
         }
         if ("STOP_PGS_STATUS".equals(type)) {
+            // The explicit sign-in flow will publish its own final status.
+            // Avoid a background snapshot racing with that flow.
+            if (playGamesSignInInFlight) return;
+            final int statusGeneration = ++playGamesStatusGeneration;
             PlayGames.getGamesSignInClient(this).isAuthenticated()
                     .addOnCompleteListener(task -> {
+                        if (statusGeneration != playGamesStatusGeneration
+                                || playGamesSignInInFlight || isFinishing()) return;
                         boolean authenticated = task.isSuccessful()
                                 && task.getResult() != null
                                 && task.getResult().isAuthenticated();
@@ -401,35 +446,51 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             return;
         }
         if ("STOP_PGS_SHOW_ACHIEVEMENTS".equals(type)) {
+            // Opening the achievements UI is an action result, not an auth snapshot.
+            // Never overwrite a valid Play Games session with a UI-launch failure.
             PlayGames.getAchievementsClient(this).getAchievementsIntent()
                     .addOnSuccessListener(intent -> {
-                        try { startActivityForResult(intent, 7402); sendPlayGamesStatus(true, "achievements_opened"); }
-                        catch (RuntimeException error) { sendPlayGamesStatus(false, "achievements_unavailable"); }
+                        try {
+                            startActivityForResult(intent, 7402);
+                        } catch (RuntimeException error) {
+                            Log.w("STOP_PLAY_GAMES", "Could not open achievements UI", error);
+                        }
                     })
-                    .addOnFailureListener(error -> sendPlayGamesStatus(false, "achievements_unavailable"));
+                    .addOnFailureListener(error ->
+                            Log.w("STOP_PLAY_GAMES", "Achievements UI unavailable", error));
             return;
         }
         if ("STOP_PGS_UNLOCK_ACHIEVEMENT".equals(type)) {
             String id = message.optString("achievementId", "").trim();
-            // Only accept Google Play achievement IDs, never arbitrary payloads.
+            // Report an achievement-specific outcome without mutating auth status.
             if (!id.matches("Cgk[A-Za-z0-9_-]{10,}")) {
-                sendPlayGamesStatus(false, "invalid_achievement_id");
+                sendPlayGamesAchievementResult(id, false, "invalid_achievement_id");
                 return;
             }
             PlayGames.getGamesSignInClient(this).isAuthenticated().addOnCompleteListener(task -> {
                 if (!task.isSuccessful() || task.getResult() == null || !task.getResult().isAuthenticated()) {
-                    sendPlayGamesStatus(false, "not_authenticated");
+                    sendPlayGamesAchievementResult(id, false, "not_authenticated");
                     return;
                 }
                 PlayGames.getAchievementsClient(this).unlockImmediate(id)
                         .addOnSuccessListener(unused ->
-                                sendPlayGamesStatus(true, "achievement_unlocked"))
+                                sendPlayGamesAchievementResult(id, true, "achievement_unlocked"))
                         .addOnFailureListener(error -> {
                             Log.w("STOP_PLAY_GAMES", "Achievement unlock failed", error);
-                            sendPlayGamesStatus(false, "achievement_unlock_failed");
+                            sendPlayGamesAchievementResult(id, false, "achievement_unlock_failed");
                         });
             });
         }
+    }
+
+    private void sendPlayGamesAchievementResult(String achievementId, boolean ok, String status) {
+        JSONObject result = newMessage("STOP_PGS_ACHIEVEMENT_RESULT");
+        try {
+            result.put("achievementId", achievementId == null ? "" : achievementId);
+            result.put("ok", ok);
+            result.put("status", status);
+        } catch (JSONException ignored) { return; }
+        sendMessage(result);
     }
 
     private void sendPlayGamesStatus(boolean ok, String status) {
