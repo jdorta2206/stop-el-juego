@@ -122,8 +122,9 @@ export function initTwaPlayGamesBridge(): void {
   // home screen looking disconnected while native Play Games checks auth state.
   lastStatus = { ok: false, status: "conectando" };
   window.dispatchEvent(new CustomEvent("stop:play-games-status", { detail: lastStatus }));
-  // Startup is deliberately non-interactive. Sign-in is only requested after an
-  // explicit player action; the status snapshot reconciles the UI when the channel opens.
+  // Native LauncherActivity starts the Play Games sign-in check on app launch.
+  // This bridge reports a connecting state and reconciles it when the native
+  // MessagePort becomes ready; web-only sessions remain unaffected.
 
   // The Play Games account can change while Android backgrounds the TWA.
   // Refresh status when the player returns so the UI does not keep stale auth state.
