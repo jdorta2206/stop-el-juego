@@ -48,6 +48,16 @@ jobs:
           web = Path("artifacts/stop-game/src/lib/twaPlayGamesBridge.ts").read_text()
           hook = Path("artifacts/stop-game/src/hooks/useAchievements.ts").read_text()
           native = Path("android-generated/app/src/main/java/app/replit/stop_el_juego/twa/LauncherActivity.java").read_text()
+          gradle = Path("android-generated/app/build.gradle").read_text()
+          manifest = Path("android-generated/app/src/main/AndroidManifest.xml").read_text()
+          strings = Path("android-generated/app/src/main/res/values/strings.xml").read_text()
+          # Guard the Android identity and Play Games project wiring against drift.
+          assert 'applicationId "app.replit.stop_el_juego.twa"' in gradle
+          assert 'applicationId: \'app.replit.stop_el_juego.twa\'' in gradle
+          assert 'implementation \'com.google.android.gms:play-services-games-v2:22.1.0\'' in gradle
+          assert '<string name="game_services_project_id" translatable="false">902072408470</string>' in strings
+          assert 'android:name="com.google.android.gms.games.APP_ID"' in manifest
+          assert 'android:value="@string/game_services_project_id"' in manifest
           # Startup attempts Play Games auth as requested; auth failure/cancellation
           # must report a non-blocking status so guest play remains available.
           on_create = native.split("protected void onCreate(Bundle savedInstanceState)", 1)[1].split("private void checkForPlayUpdate()", 1)[0]
