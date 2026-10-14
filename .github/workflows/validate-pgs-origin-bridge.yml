@@ -48,18 +48,15 @@ jobs:
           web = Path("artifacts/stop-game/src/lib/twaPlayGamesBridge.ts").read_text()
           hook = Path("artifacts/stop-game/src/hooks/useAchievements.ts").read_text()
           native = Path("android-generated/app/src/main/java/app/replit/stop_el_juego/twa/LauncherActivity.java").read_text()
-          # Guard the critical non-interactive startup contract: startup may only
-          # inspect existing auth state; interactive sign-in belongs to the explicit
-          # STOP_PGS_SIGN_IN handler.
+          # Startup attempts Play Games auth as requested; auth failure/cancellation
+          # must report a non-blocking status so guest play remains available.
           on_create = native.split("protected void onCreate(Bundle savedInstanceState)", 1)[1].split("private void checkForPlayUpdate()", 1)[0]
-          startup_check = native.split("private void refreshPlayGamesStatusOnly()", 1)[1].split("private void startPlayGamesSignInIfNeeded()", 1)[0]
-          explicit_sign_in = native.split("private void startPlayGamesSignInIfNeeded()", 1)[1].split("private void handlePlayGamesMessage(", 1)[0]
-          assert "refreshPlayGamesStatusOnly();" in on_create
-          assert "startPlayGamesSignInIfNeeded()" not in on_create
-          assert ".signIn()" not in startup_check
-          assert ".isAuthenticated()" in startup_check
-          assert ".signIn()" in explicit_sign_in
-          assert 'guest play remains available' in startup_check
+          startup_sign_in = native.split("private void startPlayGamesSignInIfNeeded()", 1)[1].split("private void handlePlayGamesMessage(", 1)[0]
+          assert "startPlayGamesSignInIfNeeded();" in on_create
+          assert "PlayGames.getGamesSignInClient(this).isAuthenticated()" in startup_sign_in
+          assert "PlayGames.getGamesSignInClient(this).signIn()" in startup_sign_in
+          assert '"sign_in_failed"' in startup_sign_in
+          assert "guest play remains available" in startup_sign_in
           assert 'const message = { type, ...extra, origin: window.location.origin };' in web
           assert 'if (!messageChannelReady || !relationshipValidated || !isAllowedOrigin(origin))' in native
           assert 'String origin = message.optString("origin", "");' in native
