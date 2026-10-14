@@ -122,9 +122,9 @@ export function initTwaPlayGamesBridge(): void {
   // home screen looking disconnected while native Play Games checks auth state.
   lastStatus = { ok: false, status: "conectando" };
   window.dispatchEvent(new CustomEvent("stop:play-games-status", { detail: lastStatus }));
-  // Native LauncherActivity starts the Play Games sign-in check on app launch.
-  // This bridge reports a connecting state and reconciles it when the native
-  // MessagePort becomes ready; web-only sessions remain unaffected.
+  // Native LauncherActivity checks existing Play Games auth on app launch
+  // without opening interactive sign-in. Reconcile status when the MessagePort
+  // becomes ready; web-only sessions remain unaffected.
 
   // The Play Games account can change while Android backgrounds the TWA.
   // Refresh status when the player returns so the UI does not keep stale auth state.
@@ -150,7 +150,7 @@ export function unlockPlayGamesAchievement(achievementId: string): boolean {
   return post("STOP_PGS_UNLOCK_ACHIEVEMENT", { achievementId: id });
 }
 
-/** Published Google Play Games achievement IDs from the STOP game-services project. */
+/** Configured Play Games IDs. Console existence/publication must be verified separately. */
 const PLAY_GAMES_ACHIEVEMENT_IDS: Record<string, string> = {
   first_win: "CgkIlrPSvaAaEAIQAQ",
   combo3: "CgkIlrPSvaAaEAIQGg",
