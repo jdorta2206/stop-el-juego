@@ -65,6 +65,8 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     private boolean playGamesInitialized;
     private boolean playGamesSignInInFlight;
     private int playGamesSignInGeneration;
+    // Keep the most recent PGS result until the TWA MessagePort is ready.
+    @Nullable private JSONObject pendingPlayGamesStatus;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -177,6 +179,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                 channelRequestInFlight = false;
                 channelRequestAttempts = 0;
                 Log.d(TAG, "TWA message channel ready");
+                flushPendingPlayGamesStatus();
                 sendReadyBurst(0);
             }
             @Override
@@ -438,6 +441,21 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             result.put("ok", ok);
             result.put("status", status);
         } catch (JSONException ignored) { return; }
+        // Startup authentication can finish before Chrome Custom Tabs establishes
+        // the MessagePort. Do not silently discard that result: deliver it as soon
+        // as the validated channel becomes ready.
+        if (!messageChannelReady) {
+            pendingPlayGamesStatus = result;
+            Log.d("STOP_PLAY_GAMES", "Queued PGS status until TWA message channel is ready: " + status);
+            return;
+        }
+        sendMessage(result);
+    }
+
+    private void flushPendingPlayGamesStatus() {
+        if (!messageChannelReady || pendingPlayGamesStatus == null) return;
+        JSONObject result = pendingPlayGamesStatus;
+        pendingPlayGamesStatus = null;
         sendMessage(result);
     }
 
