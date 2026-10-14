@@ -11,6 +11,7 @@ on:
       - "android-generated/**"
       - "artifacts/stop-game/src/pages/Home.tsx"
       - "artifacts/stop-game/src/lib/twaPlayGamesBridge.ts"
+      - "artifacts/stop-game/src/hooks/useAchievements.ts"
 
 permissions:
   contents: read
