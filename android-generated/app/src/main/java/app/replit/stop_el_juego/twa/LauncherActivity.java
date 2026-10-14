@@ -279,8 +279,9 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             if (type.startsWith("STOP_PGS_")) {
                 String origin = message.optString("origin", "");
                 if (!messageChannelReady || !relationshipValidated || !isAllowedOrigin(origin)) {
+                    // A rejected message is not an authentication result. Do not let
+                    // an untrusted/stale request overwrite the player's real PGS status.
                     Log.w("STOP_PLAY_GAMES", "Rejected PGS message from invalid origin/channel: " + origin);
-                    sendPlayGamesStatus(false, "invalid_origin_or_channel");
                     return;
                 }
                 handlePlayGamesMessage(type, message);
