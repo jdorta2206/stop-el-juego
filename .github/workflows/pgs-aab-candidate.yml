@@ -8,6 +8,8 @@ on:
     paths:
       - ".github/workflows/pgs-aab-candidate.yml"
       - "android-generated/**"
+      - "artifacts/stop-game/src/pages/Home.tsx"
+      - "artifacts/stop-game/src/lib/twaPlayGamesBridge.ts"
 
 permissions:
   contents: read
