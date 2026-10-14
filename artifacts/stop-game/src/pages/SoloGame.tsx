@@ -1312,32 +1312,44 @@ export default function SoloGame() {
     });
   };
 
-  // Migrate only server-vouched guest games after a real account is available.
-  // Server-side submission claims make concurrent tabs/retries idempotent.
+  // Migrate server-vouched guest games after a real account is available.
+  // Process each mutation with its own awaited result: callbacks passed to
+  // mutate() are observer-scoped and can be skipped for earlier calls in a loop.
   useEffect(() => {
     if (!player || player.loginMethod === "guest") return;
+    let cancelled = false;
     let pending: ReturnType<typeof getPendingGuestGames>;
     try { pending = getPendingGuestGames(); } catch { return; }
-    for (const game of pending) {
-      if (!game.scoreTokens.length || guestMigrationInFlightRef.current.has(game.submissionId)) continue;
-      guestMigrationInFlightRef.current.add(game.submissionId);
-      submitScoreMutation.mutate({
-        data: {
-          submissionId: game.submissionId,
-          playerId: player.id,
-          playerName: player.name,
-          avatarColor: player.avatarColor,
-          score: game.score,
-          letter: game.letter,
-          mode: game.mode,
-          won: game.won,
-          scoreTokens: game.scoreTokens,
-        },
-      }, {
-        onSuccess: () => removePendingGuestGame(game.submissionId),
-        onSettled: () => guestMigrationInFlightRef.current.delete(game.submissionId),
-      });
-    }
+
+    void (async () => {
+      for (const game of pending) {
+        if (cancelled) break;
+        if (!game.scoreTokens.length || guestMigrationInFlightRef.current.has(game.submissionId)) continue;
+        guestMigrationInFlightRef.current.add(game.submissionId);
+        try {
+          await submitScoreMutation.mutateAsync({
+            data: {
+              submissionId: game.submissionId,
+              playerId: player.id,
+              playerName: player.name,
+              avatarColor: player.avatarColor,
+              score: game.score,
+              letter: game.letter,
+              mode: game.mode,
+              won: game.won,
+              scoreTokens: game.scoreTokens,
+            },
+          });
+          removePendingGuestGame(game.submissionId);
+        } catch {
+          // Keep failed/expired submissions locally; never block sign-in or gameplay.
+        } finally {
+          guestMigrationInFlightRef.current.delete(game.submissionId);
+        }
+      }
+    })();
+
+    return () => { cancelled = true; };
   }, [player?.id, player?.loginMethod]); // eslint-disable-line react-hooks/exhaustive-deps
 
 
