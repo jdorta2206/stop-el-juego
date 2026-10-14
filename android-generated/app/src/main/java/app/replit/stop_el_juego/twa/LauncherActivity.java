@@ -74,9 +74,10 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             PlayGamesSdk.initialize(getApplicationContext());
             playGamesInitialized = true;
             Log.i("STOP_PLAY_GAMES", "Play Games SDK initialized");
-            // Never launch interactive Play Games UI automatically on startup.
-            // Check existing auth state only; the player can explicitly sign in from STOP.
-            refreshPlayGamesStatusOnly();
+            // Start Play Games authentication on launch as requested. The web UI shows
+            // a bounded "connecting" indicator while this runs; failure/cancellation is
+            // non-blocking and the player can continue as a guest.
+            startPlayGamesSignInIfNeeded();
         } catch (RuntimeException error) {
             Log.w("STOP_PLAY_GAMES", "Play Games SDK initialization failed; app continues normally", error);
         }
