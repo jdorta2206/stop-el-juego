@@ -82,6 +82,11 @@ jobs:
           assert 'STOP_PGS_ACHIEVEMENT_RESULT' in web
           assert 'stop:play-games-achievement-result' in web
           assert 'if (payload?.type !== "STOP_PGS_STATUS_RESULT") return;' in web
+          # Opening the achievements UI is not an auth snapshot; failures must
+          # not make a connected player appear signed out in the STOP interface.
+          show_achievements = native.split('if ("STOP_PGS_SHOW_ACHIEVEMENTS".equals(type))', 1)[1].split('if ("STOP_PGS_UNLOCK_ACHIEVEMENT".equals(type))', 1)[0]
+          assert 'sendPlayGamesStatus(' not in show_achievements
+          assert 'Achievements UI unavailable' in show_achievements
           # Local milestones remain authoritative; authenticated status retries
           # locally earned milestones, rather than awarding local XP on native success.
           assert 'unlockPlayGamesAchievementForMilestone(achievementId)' in hook
