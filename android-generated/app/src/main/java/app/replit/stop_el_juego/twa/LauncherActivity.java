@@ -306,37 +306,9 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
         }, 300L);
     }
     @Nullable private CustomTabsSession getTwaSession() {
-        // Android Browser Helper 2.7.4 does not expose getCustomTabsSession().
-        // Until the upstream public accessor is released, read the existing launcher
-        // session defensively and log failures so bridge diagnostics are actionable.
-        try {
-            Object launcher = findFieldValue(this, "mTwaLauncher");
-            if (!(launcher instanceof com.google.androidbrowserhelper.trusted.TwaLauncher)) {
-                Log.w(TAG, "TWA launcher unavailable; cannot establish postMessage channel");
-                return null;
-            }
-            Object value = findFieldValue(launcher, "mSession");
-            if (value instanceof CustomTabsSession) return (CustomTabsSession) value;
-            Log.w(TAG, "TWA CustomTabsSession is not ready yet");
-        } catch (ReflectiveOperationException | RuntimeException error) {
-            Log.w(TAG, "Unable to obtain TWA CustomTabsSession", error);
-        }
-        return null;
-    }
-
-    @Nullable private static Object findFieldValue(Object target, String fieldName)
-            throws ReflectiveOperationException {
-        Class<?> type = target.getClass();
-        while (type != null) {
-            try {
-                java.lang.reflect.Field field = type.getDeclaredField(fieldName);
-                field.setAccessible(true);
-                return field.get(target);
-            } catch (NoSuchFieldException ignored) {
-                type = type.getSuperclass();
-            }
-        }
-        return null;
+        // Uses the public accessor added by the pinned Android Browser Helper source revision.
+        // The session is nullable until Chrome's Custom Tabs service has connected.
+        return getCustomTabsSession();
     }
 
     private void handleWebMessage(String raw) {
