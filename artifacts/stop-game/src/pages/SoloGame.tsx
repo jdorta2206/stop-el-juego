@@ -44,6 +44,7 @@ import { maybeShowInterstitial, recordInterstitialGameCompleted } from "@/lib/in
 import { ReviewPromptCard } from "@/components/ReviewPromptCard";
 import { HalloweenBanner } from "@/components/HalloweenBanner";
 import { HalloweenAmbience } from "@/components/HalloweenAmbience";
+import { HalloweenGameTheme } from "@/components/HalloweenGameTheme";
 import { applyHalloweenCategory, isHalloweenActive, isHalloweenPreview, isHalloweenModeEnabled, getHalloweenScare } from "@/lib/halloweenEvent";
 import { HalloweenScareOverlay } from "@/components/HalloweenScare";
 import type { HalloweenScare } from "@/lib/halloweenEvent";
@@ -1631,6 +1632,7 @@ export default function SoloGame() {
           onShared={() => recordExternalStat(player?.id, { timesShared: 1 })}
         />
 
+        <HalloweenGameTheme active={isHalloweenActive() && isHalloweenModeEnabled() && !isDailyMode && !isQuickMode && !isChaosMode && !isRandomMode && gameState === "PLAYING"} />
         <HalloweenAmbience active={isHalloweenActive() && isHalloweenModeEnabled() && !isDailyMode && !isQuickMode && !isChaosMode && !isRandomMode && gameState === "PLAYING"} muted={muted} heavy={halloweenScareAfterglow || !!halloweenScare} />
         <AnimatePresence>{halloweenScare && <HalloweenScareOverlay scare={halloweenScare} muted={muted} reducedEffects={false} onDone={() => { setHalloweenScare(null); setHalloweenScareAfterglow(true); window.setTimeout(() => setHalloweenScareAfterglow(false), 3000); }} />}</AnimatePresence>
 
