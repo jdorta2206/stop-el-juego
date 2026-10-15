@@ -48,6 +48,7 @@ import { HalloweenAmbience } from "@/components/HalloweenAmbience";
 import { applyHalloweenCategory, isHalloweenActive, isHalloweenPreview, isHalloweenModeEnabled, getHalloweenScare } from "@/lib/halloweenEvent";
 import { HalloweenScareOverlay } from "@/components/HalloweenScare";
 import type { HalloweenScare } from "@/lib/halloweenEvent";
+import { reportHalloweenEvent } from "@/hooks/useHalloweenProgress";
 import { preloadHalloweenScareAssets } from "@/lib/halloweenScareAssets";
 import { preloadHalloweenScareAudio } from "@/lib/halloweenScareAudio";
 
@@ -500,6 +501,7 @@ export default function SoloGame() {
   // Stable idempotency key for the logical game score. It survives all round
   // transitions and is replaced only when a genuinely new game starts.
   const gameSubmissionIdRef = useRef<string | null>(null);
+  const reportedHalloweenScareRef = useRef<string | null>(null);
   const createSubmissionId = () => {
     try {
       if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -565,6 +567,15 @@ export default function SoloGame() {
       }
     };
   }, [responses, gameState, round, lang, halloweenScare, isDailyMode, isQuickMode, isChaosMode, isRandomMode]);
+
+  // Persist received Halloween scares so the event progress reflects what players actually see.
+  useEffect(() => {
+    if (!halloweenScare || !player?.id || !isHalloweenActive()) return;
+    const eventKey = `solo:${gameSubmissionIdRef.current ?? "game"}:${round}:${halloweenScare.id}`;
+    if (reportedHalloweenScareRef.current === eventKey) return;
+    reportedHalloweenScareRef.current = eventKey;
+    void reportHalloweenEvent(player.id, "scare_received", eventKey);
+  }, [halloweenScare?.id, player?.id, round]);
 
   const startGame = (newGame = true) => {
     if (!gameSubmissionIdRef.current) gameSubmissionIdRef.current = createSubmissionId();
