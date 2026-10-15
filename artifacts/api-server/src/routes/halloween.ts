@@ -46,22 +46,54 @@ function parseJsonArray(raw: string | null | undefined): string[] {
 }
 
 async function getOrCreateProgress(playerId: string, year: number): Promise<ProgressRow> {
-  await db.execute(sql`
-    INSERT INTO halloween_progress (player_id, event_year)
-    VALUES (${playerId}, ${year})
-    ON CONFLICT (player_id, event_year) DO NOTHING
-  `);
-  const result = await db.execute(sql`
-    SELECT id, event_year, games_completed, scares_received, scares_provoked,
-           coins_earned, rewards_json
-    FROM halloween_progress
-    WHERE player_id = ${playerId} AND event_year = ${year}
-    LIMIT 1
-  `);
-  return (result.rows?.[0] as ProgressRow) ?? {
-    id: 0, event_year: year, games_completed: 0, scares_received: 0,
-    scares_provoked: 0, coins_earned: 0, rewards_json: "[]",
-  };
+  return await db.transaction(async (tx) => {
+    await tx.execute(sql`
+      INSERT INTO halloween_progress (player_id, event_year)
+      VALUES (${playerId}, ${year})
+      ON CONFLICT (player_id, event_year) DO NOTHING
+    `);
+    const result = await tx.execute(sql`
+      SELECT id, event_year, games_completed, scares_received, scares_provoked,
+             coins_earned, rewards_json
+      FROM halloween_progress
+      WHERE player_id = ${playerId} AND event_year = ${year}
+      FOR UPDATE
+    `);
+    const row = (result.rows?.[0] as ProgressRow) ?? null;
+    if (!row) {
+      return {
+        id: 0, event_year: year, games_completed: 0, scares_received: 0,
+        scares_provoked: 0, coins_earned: 0, rewards_json: "[]",
+      };
+    }
+
+    // The original event only awarded coins at milestones, so accounts with
+    // a few completed games could remain at 0. Give those existing games a
+    // one-time 50-coin base reward without duplicating any milestone payout.
+    const hasReachedCoinMilestone =
+      row.games_completed >= 5 || row.scares_received >= 3 || row.scares_provoked >= 3;
+    if (row.coins_earned === 0 && !hasReachedCoinMilestone) {
+      const retroactiveCoins =
+        row.games_completed * 50 + (row.scares_received + row.scares_provoked) * 25;
+      if (retroactiveCoins > 0) {
+        const updatedPlayer = await tx.execute(sql`
+          UPDATE player_scores
+          SET coins = coins + ${retroactiveCoins}, updated_at = NOW()
+          WHERE player_id = ${playerId}
+          RETURNING player_id
+        `);
+        if ((updatedPlayer.rows?.length ?? 0) > 0) {
+          await tx.execute(sql`
+            UPDATE halloween_progress
+            SET coins_earned = ${retroactiveCoins}, updated_at = NOW()
+            WHERE id = ${row.id}
+          `);
+          row.coins_earned = retroactiveCoins;
+        }
+      }
+    }
+    return row;
+  });
 }
 
 const REWARD_RULES = [
@@ -203,7 +235,7 @@ export async function recordHalloweenEventInTransaction(
       const received = row.scares_received + (type === "scare_received" ? 1 : 0);
       const provoked = row.scares_provoked + (type === "scare_provoked" ? 1 : 0);
       const rewards = parseJsonArray(row.rewards_json);
-      let coinsAwarded = 0;
+      let coinsAwarded = type === "game_completed" ? 50 : 25;
       const newRewardItems: string[] = [];
 
       for (const rule of REWARD_RULES) {
@@ -378,7 +410,7 @@ export async function recordHalloweenScareEventsInTransaction(
       const received = row.scares_received + (event.type === "scare_received" ? 1 : 0);
       const provoked = row.scares_provoked + (event.type === "scare_provoked" ? 1 : 0);
       const rewards = parseJsonArray(row.rewards_json);
-      let coinsAwarded = 0;
+      let coinsAwarded = 25;
       const newRewardItems: string[] = [];
 
       for (const rule of REWARD_RULES) {
