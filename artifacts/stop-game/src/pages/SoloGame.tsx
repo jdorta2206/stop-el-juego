@@ -43,6 +43,7 @@ import { useReviewPrompt, recordGamePlayed, recordScoreAndPercentile } from "@/h
 import { maybeShowInterstitial, recordInterstitialGameCompleted } from "@/lib/interstitialAd";
 import { ReviewPromptCard } from "@/components/ReviewPromptCard";
 import { HalloweenBanner } from "@/components/HalloweenBanner";
+import { HalloweenGameTheme } from "@/components/HalloweenGameTheme";
 import { HalloweenAmbience } from "@/components/HalloweenAmbience";
 import { applyHalloweenCategory, isHalloweenActive, isHalloweenPreview, isHalloweenModeEnabled, getHalloweenScare } from "@/lib/halloweenEvent";
 import { HalloweenScareOverlay } from "@/components/HalloweenScare";
@@ -518,8 +519,9 @@ export default function SoloGame() {
     if (halloweenScare || halloweenScareRoundRef.current === round) return;
 
     const preview = isHalloweenPreview();
-    const min = preview ? 4000 : 10000;
-    const max = preview ? 7500 : 50000;
+    // Guarantee a visible in-round scare early enough to be noticed in a normal 60s round.
+    const min = preview ? 2500 : 8000;
+    const max = preview ? 5000 : 16000;
     const delay = min + Math.floor(Math.random() * (max - min));
     halloweenScareTimerRef.current = window.setTimeout(() => {
       halloweenScareTimerRef.current = null;
@@ -1631,6 +1633,7 @@ export default function SoloGame() {
           onShared={() => recordExternalStat(player?.id, { timesShared: 1 })}
         />
 
+        <HalloweenGameTheme active={isHalloweenActive() && isHalloweenModeEnabled() && !isDailyMode && !isQuickMode && !isChaosMode && !isRandomMode && gameState === "PLAYING"} />
         <HalloweenAmbience active={isHalloweenActive() && isHalloweenModeEnabled() && !isDailyMode && !isQuickMode && !isChaosMode && !isRandomMode && gameState === "PLAYING"} muted={muted} heavy={halloweenScareAfterglow || !!halloweenScare} />
         <AnimatePresence>{halloweenScare && <HalloweenScareOverlay scare={halloweenScare} muted={muted} reducedEffects={false} onDone={() => { setHalloweenScare(null); setHalloweenScareAfterglow(true); window.setTimeout(() => setHalloweenScareAfterglow(false), 3000); }} />}</AnimatePresence>
 
