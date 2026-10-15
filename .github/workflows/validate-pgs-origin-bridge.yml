@@ -5,6 +5,7 @@ on:
     branches: [master]
     paths:
       - "android-generated/**"
+      - "scripts/build-pgs-android-browser-helper.sh"
       - "artifacts/stop-game/src/lib/twaPlayGamesBridge.ts"
       - ".github/workflows/validate-pgs-origin-bridge.yml"
   push:
@@ -45,7 +46,11 @@ jobs:
           assert 'if (!messageChannelReady || !relationshipValidated || !isAllowedOrigin(origin))' in native
           assert 'String origin = message.optString("origin", "");' in native
           assert 'STOP_PGS_UNLOCK_ACHIEVEMENT' in web and 'STOP_PGS_UNLOCK_ACHIEVEMENT' in native
-          assert 'com.github.dnikolaev.android-browser-helper:androidbrowserhelper:febadb4dcdd7a66fb4d17175b67c012f245c8610' in Path('android-generated/app/build.gradle').read_text()
+          gradle = Path('android-generated/app/build.gradle').read_text()
+          build_script = Path('scripts/build-pgs-android-browser-helper.sh').read_text()
+          assert "implementation files('libs/androidbrowserhelper-release.aar')" in gradle
+          assert 'febadb4dcdd7a66fb4d17175b67c012f245c8610' in build_script
+          assert 'com.github.dnikolaev.android-browser-helper:androidbrowserhelper:' not in gradle
           assert 'getTwaSession()' in native
           assert 'return getCustomTabsSession();' in native
           assert 'findFieldValue(' not in native
@@ -57,6 +62,8 @@ jobs:
           assert "postDelayed(this::requestUseAsOriginValidation, 1500L)" in native
           print("PGS origin guards, bounded resume fallback, and Android version code verified.")
           PY
+      - name: Build pinned Android Browser Helper AAR
+        run: bash scripts/build-pgs-android-browser-helper.sh
       - name: Compile Android debug APK
         working-directory: android-generated
         run: |
