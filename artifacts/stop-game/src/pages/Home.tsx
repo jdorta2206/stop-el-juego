@@ -29,7 +29,7 @@ import { HALLOWEEN_START, isHalloweenActive, isHalloweenModeEnabled, setHallowee
 import { useHalloweenProgress } from "@/hooks/useHalloweenProgress";
 import { HalloweenHomeAtmosphere } from "@/components/HalloweenHomeAtmosphere";
 import { PlayGamesConnectBanner } from "@/components/PlayGamesConnectBanner";
-import { getLastPlayGamesStatus, isAndroidTwa, requestPlayGamesSignIn, showPlayGamesAchievements } from "@/lib/twaPlayGamesBridge";
+import { getLastPlayGamesStatus, getPlayGamesDiagnostics, isAndroidTwa, requestPlayGamesSignIn, showPlayGamesAchievements } from "@/lib/twaPlayGamesBridge";
 
 const LOGO_URL = `${import.meta.env.BASE_URL}images/stop-logo.png`;
 const HALLOWEEN_PREVIEW = import.meta.env.VITE_HALLOWEEN_PREVIEW === "true";
@@ -50,6 +50,38 @@ export default function Home() {
   const [showDowntimeCompensation, setShowDowntimeCompensation] = useState(false);
   const [playGamesStatus, setPlayGamesStatus] = useState<{ ok: boolean; status: string } | null>(() => getLastPlayGamesStatus());
   const playGamesTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // TEMPORAL: diagnóstico Play Games (retirar tras resolver)
+  const [showPlayGamesDiagnostics, setShowPlayGamesDiagnostics] = useState(false);
+  const [playGamesDiagnosticsText, setPlayGamesDiagnosticsText] = useState("");
+  const playGamesTapCountRef = useRef(0);
+  const playGamesLastTapAtRef = useRef(0);
+
+  const handlePlayGamesDiagnosticTap = () => {
+    try {
+      const now = Date.now();
+      playGamesTapCountRef.current = now - playGamesLastTapAtRef.current > 2000
+        ? 1
+        : playGamesTapCountRef.current + 1;
+      playGamesLastTapAtRef.current = now;
+      if (playGamesTapCountRef.current >= 5) {
+        setShowPlayGamesDiagnostics(value => !value);
+        playGamesTapCountRef.current = 0;
+        playGamesLastTapAtRef.current = 0;
+      }
+    } catch { /* diagnóstico temporal no bloqueante */ }
+  };
+
+  useEffect(() => {
+    if (!showPlayGamesDiagnostics) return;
+    const refreshDiagnostics = () => {
+      try {
+        setPlayGamesDiagnosticsText(JSON.stringify(getPlayGamesDiagnostics(), null, 2));
+      } catch { setPlayGamesDiagnosticsText("Diagnóstico no disponible"); }
+    };
+    refreshDiagnostics();
+    const timer = window.setInterval(refreshDiagnostics, 1000);
+    return () => window.clearInterval(timer);
+  }, [showPlayGamesDiagnostics]);
 
   useEffect(() => {
     const onPlayGamesStatus = (event: Event) => {
@@ -829,7 +861,12 @@ export default function Home() {
           {/* Play Games stays quiet during normal play; only expose the relevant action on Android. */}
           {isAndroidTwa() && (
             <div className="w-full space-y-2 rounded-xl border border-white/10 bg-black/15 p-3">
-              <p className={`text-center text-sm font-semibold ${playGamesStatus?.ok ? "text-emerald-300" : "text-white/80"}`} role="status">
+              {/* TEMPORAL: diagnóstico Play Games (retirar tras resolver) */}
+              <p
+                className={`text-center text-sm font-semibold ${playGamesStatus?.ok ? "text-emerald-300" : "text-white/80"}`}
+                role="status"
+                onClick={handlePlayGamesDiagnosticTap}
+              >
                 {playGamesStatus?.ok
                   ? "Google Play Games conectado"
                   : playGamesStatus?.status === "conectando"
@@ -847,6 +884,11 @@ export default function Home() {
                         }[playGamesStatus.status] ?? "Google Play Games no está conectado.")
                       : "Comprobando conexión con Google Play Games…"}
               </p>
+              {showPlayGamesDiagnostics && (
+                <pre className="max-h-56 overflow-auto rounded-md border border-white/10 bg-black/40 p-2 text-left font-mono text-[10px] leading-relaxed text-emerald-200 whitespace-pre-wrap break-words">
+                  {playGamesDiagnosticsText}
+                </pre>
+              )}
               {playGamesStatus?.ok ? (
                 <button
                   type="button"
