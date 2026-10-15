@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { AVATAR_GLYPH_BY_ID } from "@/lib/cosmeticHelpers";
 
 import { useParams, useLocation } from "wouter";
 import { Layout } from "@/components/Layout";
@@ -54,17 +55,13 @@ const ROOM_FRAME_COLORS: Record<string, string> = {
   frame_collection_hunter:"#38bdf8", frame_collection_legend:"#f472b6", frame_collection_master:"#06b6d4", frame_collection_explorer:"#22c55e", frame_collection_mythic:"#a855f7",
   frame_prestige_bronze:"#cd7f32", frame_prestige_silver:"#cbd5e1", frame_prestige_gold:"#fbbf24", frame_prestige_diamond:"#67e8f9",
 };
-const ROOM_AVATARS: Record<string,string> = {
-  avatar_premium_5:"🎯",avatar_premium_10:"🔥",avatar_premium_15:"⚡",avatar_premium_20:"🌟",avatar_premium_25:"👑",avatar_premium_30:"💎",
-  avatar_wc_ball:"⚽",avatar_wc_jersey:"👕",avatar_wc_goal:"🥅",avatar_wc_gloves:"🧤",avatar_wc_boots:"👟",avatar_wc_medal:"🥇",avatar_wc_trophy:"🏆",avatar_wc_flag_es:"🇪🇸",avatar_wc_flag_br:"🇧🇷",avatar_wc_flag_ar:"🇦🇷",avatar_wc_flag_fr:"🇫🇷",avatar_wc_flag_de:"🇩🇪",avatar_wc_flag_pt:"🇵🇹",avatar_wc_flag_it:"🇮🇹",avatar_wc_flag_nl:"🇳🇱",avatar_wc_flag_mx:"🇲🇽",avatar_wc_flag_us:"🇺🇸",avatar_wc_flag_uy:"🇺🇾",avatar_wc_flag_co:"🇨🇴",avatar_wc_flag_jp:"🇯🇵",
-  avatar_shop_rocket:"🚀",avatar_shop_pizza:"🍕",avatar_shop_burger:"🍔",avatar_shop_cat:"🐱",avatar_shop_dog:"🐶",avatar_shop_alien:"👽",avatar_shop_unicorn:"🦄",avatar_shop_ghost:"👻",avatar_shop_ninja:"🥷",avatar_shop_robot:"🤖",avatar_shop_flower:"🌸",avatar_shop_fox:"🦊",avatar_shop_clown:"🤡",avatar_shop_gamepad:"🎮",avatar_shop_butterfly:"🦋",avatar_shop_owl:"🦉",avatar_shop_panda:"🐼",avatar_shop_star:"✨",avatar_shop_octopus:"🐙",avatar_shop_skull:"💀",avatar_shop_lion:"🦁",avatar_shop_tiger:"🐯",avatar_shop_devil:"😈",avatar_shop_angel:"😇",avatar_shop_pirate:"🏴‍☠️",avatar_shop_dragon:"🐉",avatar_shop_rainbow:"🌈",avatar_shop_wizard:"🧙",avatar_shop_crystal:"🔮",avatar_shop_phoenix:"🦅",avatar_shop_money:"🤑",
-};
+
 const ROOM_TITLES: Record<string,string> = {
   novato:"🌱 Novato", jugador:"🎮 Jugador", veterano:"🛡️ Veterano", en_racha:"🔥 En Racha", imparable:"⚡ El Imparable", ganador:"🏅 Ganador", invencible:"⚔️ Invencible", erudito:"📚 Erudito", sabio:"🧠 Sabio", millonario:"💰 Millonario", coleccionista:"🏆 Coleccionista", leyenda_viva:"👑 Leyenda Viva", gran_leyenda:"🌟 Gran Leyenda", leyenda_eterna:"💫 Leyenda Eterna", semidios:"🔱 Semidiós",
 };
 function RoomCosmeticAvatar({ p, size = "sm" }: { p: any; size?: "xs"|"sm"|"md" }) {
   const px = size === "xs" ? 20 : size === "md" ? 40 : 32;
-  const equippedGlyph = ROOM_AVATARS[p.equippedAvatar];
+  const equippedGlyph = AVATAR_GLYPH_BY_ID[p.equippedAvatar];
   const glyph = equippedGlyph || (p.isBot ? "🤖" : p.playerName?.charAt(0).toUpperCase() || "?");
   const picture = typeof p.picture === "string" && /^https?:\/\//i.test(p.picture) ? p.picture : null;
   const frame = ROOM_FRAME_COLORS[p.equippedFrame];
