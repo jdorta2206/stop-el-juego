@@ -28,6 +28,7 @@ import { HalloweenBanner } from "@/components/HalloweenBanner";
 import { HALLOWEEN_START, isHalloweenActive, isHalloweenModeEnabled, setHalloweenModeEnabled } from "@/lib/halloweenEvent";
 import { useHalloweenProgress } from "@/hooks/useHalloweenProgress";
 import { HalloweenHomeAtmosphere } from "@/components/HalloweenHomeAtmosphere";
+import { PlayGamesConnectBanner } from "@/components/PlayGamesConnectBanner";
 import { getLastPlayGamesStatus, isAndroidTwa, requestPlayGamesSignIn, showPlayGamesAchievements } from "@/lib/twaPlayGamesBridge";
 
 const LOGO_URL = `${import.meta.env.BASE_URL}images/stop-logo.png`;
@@ -238,6 +239,7 @@ export default function Home() {
 
   return (
     <Layout>
+      <PlayGamesConnectBanner />
       <HalloweenHomeAtmosphere active={isHalloweenActive()} enabled={halloweenModeEnabled} />
       {!isHalloweenActive() && (halloweenCountdown.days > 0 || halloweenCountdown.hours > 0 || halloweenCountdown.minutes > 0 || halloweenCountdown.seconds > 0) && (
         <div className="mx-auto mb-4 w-full max-w-2xl px-4" role="status" aria-live="polite">
