@@ -257,9 +257,18 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
         getWindow().getDecorView().postDelayed(this::requestMessageChannelAttempt, initialDelayMs);
     }
     private void requestMessageChannelAttempt() {
-        if (messageChannelReady) { channelRequestInFlight = false; return; }
+        if (messageChannelReady || isFinishing()) {
+            channelRequestInFlight = false;
+            return;
+        }
         CustomTabsSession session = getTwaSession();
-        if (session == null) { retryMessageChannel(); return; }
+        if (session == null) {
+            // Count missing-session retries too, so a TWA session that never appears
+            // cannot schedule retries indefinitely.
+            channelRequestAttempts++;
+            retryMessageChannel();
+            return;
+        }
         channelRequestAttempts++;
         try {
             boolean requested = session.requestPostMessageChannel(SOURCE_ORIGIN, TARGET_ORIGIN, new Bundle());
@@ -284,8 +293,17 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
         retryMessageChannel();
     }
     private void retryMessageChannel() {
-        if (channelRequestAttempts >= 20 || messageChannelReady) { channelRequestInFlight = false; return; }
-        getWindow().getDecorView().postDelayed(this::requestMessageChannelAttempt, 300L);
+        if (isFinishing() || channelRequestAttempts >= 20 || messageChannelReady) {
+            channelRequestInFlight = false;
+            return;
+        }
+        getWindow().getDecorView().postDelayed(() -> {
+            if (!isFinishing() && !messageChannelReady && channelRequestAttempts < 20) {
+                requestMessageChannelAttempt();
+            } else {
+                channelRequestInFlight = false;
+            }
+        }, 300L);
     }
     @Nullable private CustomTabsSession getTwaSession() {
         try {
