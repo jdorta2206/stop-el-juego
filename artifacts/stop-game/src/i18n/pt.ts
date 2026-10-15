@@ -43,6 +43,14 @@ const pt = {
     canYouBeat: "Você consegue superar?",
   },
 
+  playGamesBanner: {
+    connecting: "Conectando ao Google Play Jogos…",
+    connected: "Conectado ao Google Play Jogos.",
+    failed: "Não foi possível conectar ao Google Play Jogos.",
+    retry: "Tentar novamente",
+    continue: "Continuar",
+  },
+
   game: {
     round: "Rodada",
     of: "de",
