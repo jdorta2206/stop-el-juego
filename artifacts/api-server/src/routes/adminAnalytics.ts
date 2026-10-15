@@ -187,6 +187,52 @@ router.get("/", authLimiter, basicAuth, async (_req, res) => {
         AND event_name IN ('ad_impression','rewarded_ad_requested','rewarded_ad_completed','rewarded_ad_failed')
     `);
 
+    const halloweenSummary = await db.execute(sql`
+      SELECT event_name, platform, COUNT(*)::int AS total,
+             COUNT(DISTINCT COALESCE(player_id, session_id))::int AS players
+      FROM public.analytics_events
+      WHERE event_name IN ('halloween_scare_seen','halloween_scare_report_attempt','halloween_scare_report_saved','halloween_scare_report_failed')
+        AND created_at >= NOW() - INTERVAL '24 hours'
+      GROUP BY event_name, platform
+      ORDER BY event_name, platform
+    `);
+
+    const halloweenFailures = await db.execute(sql`
+      SELECT platform, app_version, language, created_at, metadata_json
+      FROM public.analytics_events
+      WHERE event_name = 'halloween_scare_report_failed'
+        AND created_at >= NOW() - INTERVAL '24 hours'
+      ORDER BY created_at DESC
+      LIMIT 30
+    `);
+
+    const halloweenTotals = new Map<string, number>();
+    for (const row of halloweenSummary.rows as any[]) {
+      const key = String(row.event_name);
+      halloweenTotals.set(key, (halloweenTotals.get(key) ?? 0) + n(row.total));
+    }
+    const halloweenSummaryRows = (halloweenSummary.rows as any[]).map((row) => {
+      const labels: Record<string, string> = {
+        halloween_scare_seen: "Sustos detectados en la partida (cliente)",
+        halloween_scare_report_attempt: "Envíos intentados al servidor",
+        halloween_scare_report_saved: "Envíos aceptados (HTTP OK)",
+        halloween_scare_report_failed: "Envíos fallidos",
+      };
+      const platform = String(row.platform) === "android" ? "🤖 Android" : String(row.platform) === "ios" ? "🍎 iOS" : "🌐 Web";
+      return `<tr><td>${labels[String(row.event_name)] ?? esc(row.event_name)}</td><td>${platform}</td><td>${n(row.total)}</td><td>${n(row.players)}</td></tr>`;
+    }).join("");
+    const halloweenFailureRows = (halloweenFailures.rows as any[]).map((row) => {
+      let metadata = "{}";
+      try { metadata = JSON.stringify(JSON.parse(String(row.metadata_json ?? "{}"))); } catch { metadata = String(row.metadata_json ?? "{}"); }
+      const when = row.created_at ? new Date(String(row.created_at)).toLocaleString("es-ES", { timeZone: "Europe/Madrid" }) : "—";
+      const platform = String(row.platform) === "android" ? "🤖 Android" : String(row.platform) === "ios" ? "🍎 iOS" : "🌐 Web";
+      return `<tr><td>${when}</td><td>${platform}</td><td>${esc(row.app_version || "—")}</td><td>${esc(row.language || "—")}</td><td><code>${esc(metadata)}</code></td></tr>`;
+    }).join("");
+    const halloweenSeen = halloweenTotals.get("halloween_scare_seen") ?? 0;
+    const halloweenAttempts = halloweenTotals.get("halloween_scare_report_attempt") ?? 0;
+    const halloweenSaved = halloweenTotals.get("halloween_scare_report_saved") ?? 0;
+    const halloweenFailed = halloweenTotals.get("halloween_scare_report_failed") ?? 0;
+
     const platformMap = new Map<string, { active: number; sessions: number; started: number; completed: number; ads: number }>();
     for (const row of online.rows as any[]) platformMap.set(String(row.platform), { active: n(row.active), sessions: 0, started: 0, completed: 0, ads: 0 });
     for (const row of today.rows as any[]) {
@@ -254,6 +300,17 @@ a{color:#4ade80;text-decoration:none}
       <div class="kpiBox"><div class="label">Rewarded fallidos</div><div class="kpi">${rewardedFailures}</div></div>
     </div>
     <table><thead><tr><th>Jugador</th><th>Evento</th><th>Plataforma</th><th>Eventos</th><th>Último</th></tr></thead><tbody>${adViewerRows || '<tr><td colspan="5">No hay eventos de publicidad.</td></tr>'}</tbody></table></div>
+    <div class="card"><h2>🎃 Halloween · diagnóstico de sustos (últimas 24 h)</h2>
+      <p class="sub">“Detectados” es una señal del cliente; “aceptados” confirma que el endpoint respondió correctamente. Los fallos muestran código HTTP (401/403/410/500) o 0 si fue un error de red.</p>
+      <div class="grid">
+        <div class="kpiBox"><div class="label">Sustos detectados</div><div class="kpi">${halloweenSeen}</div></div>
+        <div class="kpiBox"><div class="label">Envíos intentados</div><div class="kpi">${halloweenAttempts}</div></div>
+        <div class="kpiBox"><div class="label">Envíos aceptados</div><div class="kpi">${halloweenSaved}</div></div>
+        <div class="kpiBox"><div class="label">Envíos fallidos</div><div class="kpi">${halloweenFailed}</div></div>
+      </div>
+      <h3>Desglose por plataforma</h3><table><thead><tr><th>Señal</th><th>Plataforma</th><th>Eventos</th><th>Jugadores/sesiones</th></tr></thead><tbody>${halloweenSummaryRows || '<tr><td colspan="4">Aún no hay telemetría de Halloween. Los eventos nuevos empezarán a registrarse cuando se publique este cambio.</td></tr>'}</tbody></table>
+      <h3>Últimos fallos de registro</h3><table><thead><tr><th>Fecha (Madrid)</th><th>Plataforma</th><th>Versión</th><th>Idioma</th><th>Diagnóstico</th></tr></thead><tbody>${halloweenFailureRows || '<tr><td colspan="5">No hay fallos registrados en las últimas 24 horas.</td></tr>'}</tbody></table>
+    </div>
     <div class="card"><h2>Plataformas · hoy</h2><table><thead><tr><th>Plataforma</th><th>Ahora</th><th>Sesiones</th><th>Jugadores que iniciaron</th><th>Resultados terminados</th><th>Impresiones publicidad</th></tr></thead><tbody>${platformRows}</tbody></table></div>
     <div class="card"><h2>Conexiones por método · hoy</h2><table><thead><tr><th>Método</th><th>Ahora</th><th>Sesiones</th></tr></thead><tbody>${loginRows || '<tr><td colspan="3">Todavía no hay conexiones identificadas.</td></tr>'}</tbody></table></div>
     <div class="card"><h2>Uso del juego y publicidad · últimos 7 días</h2><table><thead><tr><th>Métrica</th><th>Total</th></tr></thead><tbody>${powerupRows || '<tr><td colspan="2">Todavía no hay datos.</td></tr>'}</tbody></table></div>
