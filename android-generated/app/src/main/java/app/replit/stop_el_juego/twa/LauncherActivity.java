@@ -29,12 +29,9 @@ import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback;
 import com.google.android.gms.games.PlayGames;
 import com.google.android.gms.games.PlayGamesSdk;
 import com.google.androidbrowserhelper.trusted.QualityEnforcer;
-import com.google.androidbrowserhelper.trusted.TwaLauncher;
 
 import org.json.JSONException;
 import org.json.JSONObject;
-
-import java.lang.reflect.Field;
 
 /** STOP TWA native bridge for Google Mobile Ads rewarded video. */
 public class LauncherActivity extends com.google.androidbrowserhelper.trusted.LauncherActivity {
@@ -306,26 +303,14 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
         }, 300L);
     }
     @Nullable private CustomTabsSession getTwaSession() {
-        try {
-            Object launcher = findFieldValue(this, "mTwaLauncher");
-            if (!(launcher instanceof TwaLauncher)) return null;
-            Object session = findFieldValue(launcher, "mSession");
-            return session instanceof CustomTabsSession ? (CustomTabsSession) session : null;
-        } catch (ReflectiveOperationException | ClassCastException error) {
-            Log.w(TAG, "Unable to obtain TWA CustomTabsSession", error);
-            return null;
+        // Android Browser Helper 2.7.4 exposes the active TWA session through a
+        // supported accessor. Avoid reflecting into private mTwaLauncher/mSession
+        // fields: that can silently return null and leave the web bridge disconnected.
+        CustomTabsSession session = getCustomTabsSession();
+        if (session == null) {
+            Log.w(TAG, "Android Browser Helper returned no active CustomTabsSession");
         }
-    }
-    @Nullable private static Object findFieldValue(Object target, String fieldName) throws ReflectiveOperationException {
-        Class<?> type = target.getClass();
-        while (type != null) {
-            try {
-                Field field = type.getDeclaredField(fieldName);
-                field.setAccessible(true);
-                return field.get(target);
-            } catch (NoSuchFieldException ignored) { type = type.getSuperclass(); }
-        }
-        return null;
+        return session;
     }
 
     private void handleWebMessage(String raw) {
