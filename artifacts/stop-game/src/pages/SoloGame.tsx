@@ -44,6 +44,7 @@ import { maybeShowInterstitial, recordInterstitialGameCompleted } from "@/lib/in
 import { ReviewPromptCard } from "@/components/ReviewPromptCard";
 import { HalloweenBanner } from "@/components/HalloweenBanner";
 import { HalloweenAmbience } from "@/components/HalloweenAmbience";
+import { HalloweenGameTheme } from "@/components/HalloweenGameTheme";
 import { applyHalloweenCategory, isHalloweenActive, isHalloweenPreview, isHalloweenModeEnabled, getHalloweenScare } from "@/lib/halloweenEvent";
 import { HalloweenScareOverlay } from "@/components/HalloweenScare";
 import type { HalloweenScare } from "@/lib/halloweenEvent";
@@ -518,8 +519,8 @@ export default function SoloGame() {
     if (halloweenScare || halloweenScareRoundRef.current === round) return;
 
     const preview = isHalloweenPreview();
-    const min = preview ? 4000 : 10000;
-    const max = preview ? 7500 : 50000;
+    const min = preview ? 2500 : 7000;
+    const max = preview ? 5000 : 14000;
     const delay = min + Math.floor(Math.random() * (max - min));
     halloweenScareTimerRef.current = window.setTimeout(() => {
       halloweenScareTimerRef.current = null;
@@ -543,7 +544,7 @@ export default function SoloGame() {
     halloweenAnswerScareTimerRef.current = window.setTimeout(() => {
       halloweenAnswerScareTimerRef.current = null;
       if (halloweenScare || gameState !== "PLAYING" || halloweenAnswerScareRoundRef.current === round) return;
-      const chance = isHalloweenPreview() ? 0.72 : 0.32;
+      const chance = isHalloweenPreview() ? 0.85 : 0.6;
       if (Math.random() > chance) { halloweenAnswerScareRoundRef.current = round; return; }
       halloweenAnswerScareRoundRef.current = round;
       const minDelay = isHalloweenPreview() ? 900 : 1600;
@@ -1631,6 +1632,7 @@ export default function SoloGame() {
           onShared={() => recordExternalStat(player?.id, { timesShared: 1 })}
         />
 
+        <HalloweenGameTheme active={isHalloweenActive() && isHalloweenModeEnabled() && !isDailyMode && !isQuickMode && !isChaosMode && !isRandomMode && gameState === "PLAYING"} />
         <HalloweenAmbience active={isHalloweenActive() && isHalloweenModeEnabled() && !isDailyMode && !isQuickMode && !isChaosMode && !isRandomMode && gameState === "PLAYING"} muted={muted} heavy={halloweenScareAfterglow || !!halloweenScare} />
         <AnimatePresence>{halloweenScare && <HalloweenScareOverlay scare={halloweenScare} muted={muted} reducedEffects={false} onDone={() => { setHalloweenScare(null); setHalloweenScareAfterglow(true); window.setTimeout(() => setHalloweenScareAfterglow(false), 3000); }} />}</AnimatePresence>
 
