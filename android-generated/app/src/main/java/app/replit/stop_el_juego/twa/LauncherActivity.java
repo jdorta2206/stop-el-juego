@@ -74,15 +74,19 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         appUpdateManager = AppUpdateManagerFactory.create(this);
-        try {
-            PlayGamesSdk.initialize(getApplicationContext());
-            playGamesInitialized = true;
-            Log.i("STOP_PLAY_GAMES", "Play Games SDK initialized");
-            // Authentication is scheduled from onResume, after the native activity has entered
-            // the foreground. Starting sign-in in onCreate races TWA/Chrome startup on some devices.
-        } catch (RuntimeException error) {
-            Log.w("STOP_PLAY_GAMES", "Play Games SDK initialization failed; app continues normally", error);
+        // StopApplication initializes PGS before any activity. Retain an activity-level
+        // fallback only if application initialization failed, without blocking gameplay.
+        playGamesInitialized = StopApplication.isPlayGamesInitialized();
+        if (!playGamesInitialized) {
+            try {
+                PlayGamesSdk.initialize(this);
+                playGamesInitialized = true;
+                Log.i("STOP_PLAY_GAMES", "Play Games SDK initialized by activity fallback");
+            } catch (RuntimeException error) {
+                Log.w("STOP_PLAY_GAMES", "Play Games SDK unavailable; app continues normally", error);
+            }
         }
+        // Authentication is scheduled from onResume after the activity enters the foreground.
         checkForPlayUpdate();
         if (AdsPolicy.isEnabled()) {
             MobileAds.initialize(this, status -> {
@@ -253,20 +257,53 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
         getWindow().getDecorView().postDelayed(this::requestMessageChannelAttempt, initialDelayMs);
     }
     private void requestMessageChannelAttempt() {
-        if (messageChannelReady) { channelRequestInFlight = false; return; }
+        if (messageChannelReady || isFinishing()) {
+            channelRequestInFlight = false;
+            return;
+        }
         CustomTabsSession session = getTwaSession();
-        if (session == null) { retryMessageChannel(); return; }
+        if (session == null) {
+            // Count missing-session retries too, so a TWA session that never appears
+            // cannot schedule retries indefinitely.
+            channelRequestAttempts++;
+            retryMessageChannel();
+            return;
+        }
         channelRequestAttempts++;
         try {
             boolean requested = session.requestPostMessageChannel(SOURCE_ORIGIN, TARGET_ORIGIN, new Bundle());
             Log.d(TAG, "requestPostMessageChannel attempt=" + channelRequestAttempts + " accepted=" + requested);
-            if (requested) { channelRequestInFlight = false; return; }
+            if (requested) {
+                channelRequestInFlight = false;
+                // Chrome may accept the request without delivering onMessageChannelReady.
+                // Retry the handshake rather than leaving the web PGS bridge waiting forever.
+                final int requestedAttempt = channelRequestAttempts;
+                getWindow().getDecorView().postDelayed(() -> {
+                    if (!messageChannelReady && !isFinishing()
+                            && requestedAttempt == channelRequestAttempts
+                            && channelRequestAttempts < 20 && relationshipValidated) {
+                        Log.w(TAG, "Message channel accepted but readiness callback did not arrive; retrying");
+                        channelRequestInFlight = true;
+                        requestMessageChannelAttempt();
+                    }
+                }, 2500L);
+                return;
+            }
         } catch (RuntimeException error) { Log.w(TAG, "requestPostMessageChannel failed", error); }
         retryMessageChannel();
     }
     private void retryMessageChannel() {
-        if (channelRequestAttempts >= 20 || messageChannelReady) { channelRequestInFlight = false; return; }
-        getWindow().getDecorView().postDelayed(this::requestMessageChannelAttempt, 300L);
+        if (isFinishing() || channelRequestAttempts >= 20 || messageChannelReady) {
+            channelRequestInFlight = false;
+            return;
+        }
+        getWindow().getDecorView().postDelayed(() -> {
+            if (!isFinishing() && !messageChannelReady && channelRequestAttempts < 20) {
+                requestMessageChannelAttempt();
+            } else {
+                channelRequestInFlight = false;
+            }
+        }, 300L);
     }
     @Nullable private CustomTabsSession getTwaSession() {
         try {
