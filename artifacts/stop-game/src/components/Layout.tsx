@@ -23,7 +23,7 @@ export function ProfilePhotoAvatar({ picture, glyph, name, color, frame, title, 
   return (
     <div className="flex flex-col items-center gap-1 min-w-0">
       <div className={`relative ${size} rounded-full flex-shrink-0 flex items-center justify-center overflow-hidden text-white font-black shadow ${className}`} style={{ backgroundColor: color || "#555", border: `2px solid ${frameColor}` }}>
-        {validPicture ? <img src={picture!} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : (glyph || name.charAt(0).toUpperCase())}
+        {typeof glyph === "string" && glyph.trim() ? glyph : validPicture ? <img src={picture!} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : name.charAt(0).toUpperCase()}
       </div>
       {title ? <span className="max-w-[140px] truncate text-[10px] font-black text-secondary">{title}</span> : null}
     </div>
