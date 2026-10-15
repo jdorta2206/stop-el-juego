@@ -52,7 +52,10 @@ jobs:
           assert 'import java.lang.reflect.Field;' not in native
           assert 'return "https://stopjuegodepalabras.com".equals(origin)' in native
           assert '|| "https://www.stopjuegodepalabras.com".equals(origin);' in native
-          print("PGS web origin payload and native TWA relationship/origin guards verified.")
+          gradle = Path("android-generated/app/build.gradle").read_text()
+          assert "versionCode 61" in gradle and 'versionName "1.3.7.5"' in gradle
+          assert "postDelayed(this::requestUseAsOriginValidation, 1500L)" in native
+          print("PGS origin guards, bounded resume fallback, and Android version code verified.")
           PY
       - name: Compile Android debug APK
         working-directory: android-generated
