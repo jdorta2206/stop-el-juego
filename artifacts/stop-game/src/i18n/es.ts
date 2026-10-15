@@ -435,6 +435,13 @@ const es = {
     enableNotifications: "Avísame para no perder mi racha",
     tutorialBadge: "Tutorial",
   },
+  profileCosmetics: {
+    section: "Personaliza tu avatar",
+    myPhoto: "Mi foto",
+    myAvatar: "Mi avatar",
+    equipped: "Equipado",
+    noAvatars: "Aún no tienes avatares cosméticos. Consigue uno en la tienda.",
+  },
 } as const;
 
 export default es;
