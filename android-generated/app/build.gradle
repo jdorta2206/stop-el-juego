@@ -74,7 +74,10 @@ dependencies {
     implementation 'androidx.core:core:1.17.0'
     implementation 'androidx.appcompat:appcompat:1.7.0'
     implementation 'com.google.guava:guava:33.4.8-android'
-    // Billing pulls the published Browser Helper 2.2.2 transitively; exclude it because the pinned local AAR replaces it.\n    implementation('com.google.androidbrowserhelper:billing:1.2.0') {\n        exclude group: 'com.google.androidbrowserhelper', module: 'androidbrowserhelper'\n    }
+    // Billing provides DigitalGoodsRequestHandler; exclude its duplicate core helper.
+    implementation('com.google.androidbrowserhelper:billing:1.2.0') {
+        exclude group: 'com.google.androidbrowserhelper', module: 'androidbrowserhelper'
+    }
     implementation 'com.google.android.gms:play-services-ads:25.4.0'
     implementation 'com.google.android.gms:play-services-games-v2:22.1.0'
     implementation 'com.google.android.play:app-update:2.1.0'
