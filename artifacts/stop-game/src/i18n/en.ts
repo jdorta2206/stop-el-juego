@@ -43,6 +43,14 @@ const en = {
     canYouBeat: "Can you beat it?",
   },
 
+  playGamesBanner: {
+    connecting: "Connecting to Google Play Games…",
+    connected: "Connected to Google Play Games.",
+    failed: "Couldn't connect to Google Play Games.",
+    retry: "Retry",
+    continue: "Continue",
+  },
+
   game: {
     round: "Round",
     of: "of",
