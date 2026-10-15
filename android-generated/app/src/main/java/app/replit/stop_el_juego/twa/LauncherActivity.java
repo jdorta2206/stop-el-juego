@@ -260,7 +260,23 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
         try {
             boolean requested = session.requestPostMessageChannel(SOURCE_ORIGIN, TARGET_ORIGIN, new Bundle());
             Log.d(TAG, "requestPostMessageChannel attempt=" + channelRequestAttempts + " accepted=" + requested);
-            if (requested) { channelRequestInFlight = false; return; }
+            if (requested) {
+                channelRequestInFlight = false;
+                // Chrome can accept the request but never deliver onMessageChannelReady
+                // (for example while the TWA session is being recreated). Retry the
+                // handshake instead of leaving the web bridge stuck in "sin_respuesta".
+                final int requestedAttempt = channelRequestAttempts;
+                getWindow().getDecorView().postDelayed(() -> {
+                    if (!messageChannelReady && !isFinishing()
+                            && requestedAttempt == channelRequestAttempts
+                            && channelRequestAttempts < 20 && relationshipValidated) {
+                        Log.w(TAG, "Message channel accepted but readiness callback did not arrive; retrying");
+                        channelRequestInFlight = true;
+                        requestMessageChannelAttempt();
+                    }
+                }, 2500L);
+                return;
+            }
         } catch (RuntimeException error) { Log.w(TAG, "requestPostMessageChannel failed", error); }
         retryMessageChannel();
     }
