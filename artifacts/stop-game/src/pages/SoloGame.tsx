@@ -201,7 +201,7 @@ export default function SoloGame() {
 
   // Preload Halloween assets while the lobby is visible so the scare never waits for network/decode.
   useEffect(() => {
-    if (!isHalloweenActive() || !isHalloweenModeEnabled() || isDailyMode) return;
+    if (!isHalloweenActive() || !isHalloweenModeEnabled()) return;
     void preloadHalloweenScareAssets();
     preloadHalloweenScareAudio();
   }, [isDailyMode]);
@@ -511,7 +511,7 @@ export default function SoloGame() {
 
   // Halloween scares only run while actively answering. Daily/quick/chaos/random are excluded.
   useEffect(() => {
-    if (gameState !== "PLAYING" || !isHalloweenActive() || !isHalloweenModeEnabled() || isDailyMode || isQuickMode || isChaosMode || isRandomMode) {
+    if (gameState !== "PLAYING" || !isHalloweenActive() || !isHalloweenModeEnabled()) {
       if (halloweenScareTimerRef.current) { clearTimeout(halloweenScareTimerRef.current); halloweenScareTimerRef.current = null; }
       if (halloweenAnswerScareTimerRef.current) { clearTimeout(halloweenAnswerScareTimerRef.current); halloweenAnswerScareTimerRef.current = null; }
       return;
@@ -537,7 +537,7 @@ export default function SoloGame() {
   // extra delay. Once armed it is not tied to further keystrokes, so it feels
   // unpredictable instead of firing on a fixed input pattern.
   useEffect(() => {
-    if (gameState !== "PLAYING" || !isHalloweenActive() || !isHalloweenModeEnabled() || isDailyMode || isQuickMode || isChaosMode || isRandomMode || halloweenScare || halloweenAnswerScareRoundRef.current === round) return;
+    if (gameState !== "PLAYING" || !isHalloweenActive() || !isHalloweenModeEnabled() || halloweenScare || halloweenAnswerScareRoundRef.current === round) return;
     const hasRealWord = Object.values(responses).some(v => typeof v === "string" && v.trim().length >= 3);
     if (!hasRealWord || halloweenAnswerScareTimerRef.current) return;
 
@@ -1633,8 +1633,8 @@ export default function SoloGame() {
           onShared={() => recordExternalStat(player?.id, { timesShared: 1 })}
         />
 
-        <HalloweenGameTheme active={isHalloweenActive() && isHalloweenModeEnabled() && !isDailyMode && !isQuickMode && !isChaosMode && !isRandomMode && gameState === "PLAYING"} />
-        <HalloweenAmbience active={isHalloweenActive() && isHalloweenModeEnabled() && !isDailyMode && !isQuickMode && !isChaosMode && !isRandomMode && gameState === "PLAYING"} muted={muted} heavy={halloweenScareAfterglow || !!halloweenScare} />
+        <HalloweenGameTheme active={isHalloweenActive() && isHalloweenModeEnabled() && gameState === "PLAYING"} />
+        <HalloweenAmbience active={isHalloweenActive() && isHalloweenModeEnabled() && gameState === "PLAYING"} muted={muted} heavy={halloweenScareAfterglow || !!halloweenScare} />
         <AnimatePresence>{halloweenScare && <HalloweenScareOverlay scare={halloweenScare} muted={muted} reducedEffects={false} onDone={() => { setHalloweenScare(null); setHalloweenScareAfterglow(true); window.setTimeout(() => setHalloweenScareAfterglow(false), 3000); }} />}</AnimatePresence>
 
         {/* Achievement toast notification */}
