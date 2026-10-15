@@ -7,7 +7,7 @@ import { readPlayerId } from "../lib/playerAuth";
 
 const router: IRouter = Router();
 const PLATFORMS = new Set(["web", "android", "ios"]);
-const TRUSTED_CLIENT_TELEMETRY_EVENTS = new Set(["game_lobby_view"]);
+const TRUSTED_CLIENT_TELEMETRY_EVENTS = new Set(["game_lobby_view", "halloween_scare_seen", "halloween_scare_report_attempt", "halloween_scare_report_saved", "halloween_scare_report_failed"]);
 const SERVER_SESSION_COOKIE = "stop_analytics_session";
 const CURRENT_TWA_ANALYTICS_VERSION = "1.3.6.9";
 const CURRENT_WEB_ANALYTICS_VERSION = String(process.env.RAILWAY_GIT_COMMIT_SHA ?? "web-dev").slice(0, 12);
