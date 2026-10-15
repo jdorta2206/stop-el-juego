@@ -39,6 +39,7 @@ import { ReviewPromptCard } from "@/components/ReviewPromptCard";
 import { maybeShowInterstitial, recordInterstitialGameCompleted } from "@/lib/interstitialAd";
 import { applyHalloweenCategory, getHalloweenScare, getHalloweenScareById, isHalloweenActive, isHalloweenPreview, isHalloweenModeEnabled } from "@/lib/halloweenEvent";
 import { HalloweenAmbience } from "@/components/HalloweenAmbience";
+import { HalloweenGameTheme } from "@/components/HalloweenGameTheme";
 import { HalloweenScareOverlay } from "@/components/HalloweenScare";
 import { getHalloweenReducedEffects } from "@/lib/halloweenAccessibility";
 import { preloadHalloweenScareAssets } from "@/lib/halloweenScareAssets";
@@ -666,10 +667,10 @@ export default function Room() {
     const key = `halloween-ambient|${roomCode.toUpperCase()}|${currentRound}|${currentLetter}`;
     let hash = 2166136261 >>> 0;
     for (let i = 0; i < key.length; i++) { hash ^= key.charCodeAt(i); hash = Math.imul(hash, 16777619); }
-    if ((hash % 100) >= 48) return;
     const preview = isHalloweenPreview();
-    const minDelay = preview ? 5000 : 10000;
-    const maxDelay = preview ? 12000 : 42000;
+    // Every eligible round gets a scare; keep it early enough to be noticed.
+    const minDelay = preview ? 4000 : 7000;
+    const maxDelay = preview ? 9000 : 18000;
     const delay = minDelay + ((hash >>> 8) % Math.max(1, maxDelay - minDelay));
     halloweenScareTimerRef.current = window.setTimeout(() => {
       halloweenScareTimerRef.current = null;
@@ -2819,6 +2820,7 @@ export default function Room() {
         })()}
 
       </AnimatePresence>
+      <HalloweenGameTheme active={isHalloweenActive() && isHalloweenModeEnabled() && phase === "playing" && categoryPack === "standard"} />
       <HalloweenAmbience active={isHalloweenActive() && isHalloweenModeEnabled() && phase === "playing" && categoryPack === "standard"} muted={muted} heavy={!!halloweenScare} />
       <AnimatePresence>
         {halloweenScare && <HalloweenScareOverlay scare={halloweenScare} muted={muted} reducedEffects={reducedHalloweenEffects} onDone={() => setHalloweenScare(null)} />}
