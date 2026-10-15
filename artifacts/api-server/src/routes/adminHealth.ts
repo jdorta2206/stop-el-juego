@@ -17,10 +17,61 @@ checks.push({name:"Índices / arranque",status:indexesReady()?"ok":"error",value
 const requiredColumns:Record<string,string[]>={player_scores:["player_id"],game_history:["player_id","score","created_at"],analytics_events:["event_name","created_at","metadata_json","trusted","session_id"],analytics_sessions:["session_id","platform","last_seen"],guest_stats:["day","games","conversions"]};const criticalTables=Object.keys(requiredColumns);const tableRows=(await db.execute(sql`SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_name=ANY(ARRAY['player_scores','game_history','analytics_events','analytics_sessions','guest_stats'])`)).rows as Array<{table_name:string}>;const tableSet=new Set(tableRows.map(r=>String(r.table_name)));const columnRows=(await db.execute(sql`SELECT table_name,column_name FROM information_schema.columns WHERE table_schema='public' AND table_name=ANY(ARRAY['player_scores','game_history','analytics_events','analytics_sessions','guest_stats'])`)).rows as Array<{table_name:string;column_name:string}>;const columnsByTable=new Map<string,Set<string>>();for(const row of columnRows){const set=columnsByTable.get(String(row.table_name))??new Set<string>();set.add(String(row.column_name));columnsByTable.set(String(row.table_name),set)}const missingSchema:string[]=[];for(const table of criticalTables){if(!tableSet.has(table)){missingSchema.push(`${table} (tabla)`);continue;}for(const column of requiredColumns[table])if(!columnsByTable.get(table)?.has(column))missingSchema.push(`${table}.${column}`)}checks.push({name:"Tablas críticas",status:missingSchema.length===0?"ok":"error",value:missingSchema.length===0?"5/5 + columnas":"ESQUEMA INCOMPLETO",detail:missingSchema.length===0?"Existen las 5 tablas críticas y las columnas mínimas que necesita el diagnóstico.":`Faltan: ${missingSchema.join(", ")}.`});
 const errorRows=(await db.execute(sql`SELECT COUNT(*) FILTER(WHERE event_name='api_error')::int AS api_errors,COUNT(*) FILTER(WHERE event_name='client_error')::int AS client_errors FROM public.analytics_events WHERE trusted=TRUE AND event_name IN ('api_error','client_error') AND created_at>=NOW()-INTERVAL '15 minutes'`)).rows[0] as {api_errors?:number;client_errors?:number}|undefined;const apiErrors=Number(errorRows?.api_errors??0),clientErrors=Number(errorRows?.client_errors??0),totalErrors=apiErrors+clientErrors;checks.push({name:"Errores recientes",status:totalErrors===0?"ok":totalErrors<=5?"warn":"error",value:String(totalErrors),detail:totalErrors===0?"No hay errores registrados en los últimos 15 minutos.":`${apiErrors} API + ${clientErrors} cliente en los últimos 15 minutos.`});
 const gameplayRows=(await db.execute(sql`
-SELECT COUNT(DISTINCT s.session_id) FILTER(WHERE s.event_name='game_start' AND s.player_id IS NOT NULL)::int AS starts,
-COUNT(DISTINCT s.session_id) FILTER(WHERE s.event_name='game_start' AND s.player_id IS NOT NULL AND EXISTS(SELECT 1 FROM public.analytics_events c WHERE c.trusted=TRUE AND c.event_name='game_complete' AND c.created_at>=s.created_at AND c.created_at<=s.created_at+INTERVAL '30 minutes' AND (c.session_id=s.session_id OR (c.player_id IS NOT NULL AND c.player_id=s.player_id AND ((COALESCE(c.metadata_json::text,'') ILIKE '%server_score_submission%' AND NOT EXISTS (SELECT 1 FROM public.analytics_events s2 WHERE s2.trusted=TRUE AND s2.event_name='game_start' AND s2.player_id=s.player_id AND s2.created_at>s.created_at AND s2.created_at<=c.created_at)) OR (COALESCE(c.metadata_json::text,'') ILIKE '%server_room_result%' AND substring(s.metadata_json from '"roomId"[[:space:]]*:[[:space:]]*"([^"]+)"') = substring(c.metadata_json from '"roomId"[[:space:]]*:[[:space:]]*"([^"]+)"')))))))::int AS completes
-FROM public.analytics_events s WHERE s.trusted=TRUE AND s.created_at BETWEEN NOW()-INTERVAL '2 hours' AND NOW()-INTERVAL '30 minutes'
-`)).rows[0] as {starts?:number;completes?:number}|undefined;const recentStarts=Number(gameplayRows?.starts??0),recentCompletes=Number(gameplayRows?.completes??0),completionRate=recentStarts>0?Math.round(recentCompletes/recentStarts*100):0;checks.push({name:"Flujo real de partida",status:recentStarts<5?"ok":completionRate<50?"error":completionRate<80?"warn":"ok",value:recentStarts<5?`${recentStarts} sesiones registradas maduras`:`${completionRate}% inicio → resultado`,detail:recentStarts<5?"Muestra insuficiente para evaluar el flujo; se muestra como dato no concluyente y no como incidencia. Se excluyen los últimos 30 minutos porque esas partidas todavía pueden estar en curso.":`${recentStarts} sesiones registradas con inicio y ${recentCompletes} con resultado entre 30 minutos y 2 horas atrás; se excluyen invitados porque sus partidas se contabilizan por separado.`});
+WITH starts AS (
+  SELECT DISTINCT ON (s.session_id)
+    s.session_id,s.player_id,s.metadata_json,s.created_at AS started_at
+  FROM public.analytics_events s
+  WHERE s.trusted=TRUE AND s.event_name='game_start'
+    AND s.player_id IS NOT NULL
+    AND s.created_at BETWEEN NOW()-INTERVAL '2 hours' AND NOW()-INTERVAL '30 minutes'
+  ORDER BY s.session_id,s.created_at ASC
+),
+completed AS (
+  SELECT s.session_id
+  FROM starts s
+  WHERE EXISTS (
+    SELECT 1 FROM public.analytics_events c
+    WHERE c.trusted=TRUE AND c.event_name='game_complete'
+      AND c.created_at>=s.started_at AND c.created_at<=s.started_at+INTERVAL '30 minutes'
+      AND (
+        c.session_id=s.session_id
+        OR (
+          c.player_id IS NOT NULL AND c.player_id=s.player_id
+          AND (
+            (
+              COALESCE(c.metadata_json::text,'') ILIKE '%server_score_submission%'
+              AND NOT EXISTS (
+                SELECT 1 FROM public.analytics_events s2
+                WHERE s2.trusted=TRUE AND s2.event_name='game_start'
+                  AND s2.player_id=s.player_id
+                  AND s2.created_at>s.started_at AND s2.created_at<=c.created_at
+              )
+            )
+            OR (
+              COALESCE(c.metadata_json::text,'') ILIKE '%server_room_result%'
+              AND substring(s.metadata_json from '"roomId"[[:space:]]*:[[:space:]]*"([^"]+)"')
+                = substring(c.metadata_json from '"roomId"[[:space:]]*:[[:space:]]*"([^"]+)"')
+            )
+          )
+        )
+      )
+  )
+  OR EXISTS (
+    SELECT 1 FROM public.game_history gh
+    WHERE gh.player_id=s.player_id
+      AND gh.created_at>=s.started_at
+      AND gh.created_at<=s.started_at+INTERVAL '30 minutes'
+      AND NOT EXISTS (
+        SELECT 1 FROM public.analytics_events s2
+        WHERE s2.trusted=TRUE AND s2.event_name='game_start'
+          AND s2.player_id=s.player_id
+          AND s2.created_at>s.started_at AND s2.created_at<=gh.created_at
+      )
+  )
+)
+SELECT COUNT(*)::int AS starts,COUNT(c.session_id)::int AS completes
+FROM starts s LEFT JOIN completed c ON c.session_id=s.session_id
+`)).rows[0] as {starts?:number;completes?:number}|undefined;const recentStarts=Number(gameplayRows?.starts??0),recentCompletes=Number(gameplayRows?.completes??0),completionRate=recentStarts>0?Math.round(recentCompletes/recentStarts*100):0;const flowStatus:Check["status"]=recentStarts<5?"ok":recentStarts>=10&&completionRate<40?"error":completionRate<80?"warn":"ok";checks.push({name:"Flujo real de partida",status:flowStatus,value:recentStarts<5?`${recentStarts} sesiones registradas maduras`:`${completionRate}% inicio → resultado`,detail:recentStarts<5?"Muestra insuficiente para evaluar el flujo; se muestra como dato no concluyente y no como incidencia. Se excluyen los últimos 30 minutos porque esas partidas todavía pueden estar en curso.":`${recentStarts} sesiones registradas maduras; ${recentCompletes} con resultado. Se correlacionan los eventos de finalización con la sesión y, cuando falta esa asociación, con el resultado guardado del jugador; se excluyen invitados.`});
 const clientErrorDetailRows=(await db.execute(sql`
 SELECT to_char((created_at AT TIME ZONE 'UTC') AT TIME ZONE 'Europe/Madrid','DD/MM HH24:MI:SS') AS occurred_at,
 platform, app_version, metadata_json
