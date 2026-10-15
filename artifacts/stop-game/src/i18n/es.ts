@@ -420,6 +420,12 @@ const es = {
     close: "Cerrar",
   },
 
+  profileAvatar: {
+    photo: "Mi foto",
+    avatar: "Mi avatar",
+    noAvatars: "Todavía no tienes avatares comprados.",
+  },
+
   ftue: {
     welcomeTitle: "¡Bienvenido a STOP!",
     welcomeBody: "Sale una letra al azar. Escribe palabras en cada categoría que empiecen por esa letra. ¡Más rápido y original que la IA!",
