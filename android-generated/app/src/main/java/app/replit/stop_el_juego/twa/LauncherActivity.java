@@ -64,6 +64,8 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     private boolean playUpdatePromptShown;
     private boolean playGamesInitialized;
     private boolean playGamesSignInInFlight;
+    private boolean playGamesStartupSignInScheduled;
+    private boolean playGamesStartupSignInAttempted;
     private int playGamesSignInGeneration;
     // Keep the most recent PGS result until the TWA MessagePort is ready.
     @Nullable private JSONObject pendingPlayGamesStatus;
@@ -76,8 +78,8 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             PlayGamesSdk.initialize(getApplicationContext());
             playGamesInitialized = true;
             Log.i("STOP_PLAY_GAMES", "Play Games SDK initialized");
-            // Start authentication from the native app launch, independently of web/bridge readiness.
-            startPlayGamesSignInIfNeeded();
+            // Authentication is scheduled from onResume, after the native activity has entered
+            // the foreground. Starting sign-in in onCreate races TWA/Chrome startup on some devices.
         } catch (RuntimeException error) {
             Log.w("STOP_PLAY_GAMES", "Play Games SDK initialization failed; app continues normally", error);
         }
@@ -140,6 +142,21 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     protected void onResume() {
         super.onResume();
         checkForPlayUpdate();
+        schedulePlayGamesStartupSignIn();
+    }
+
+    private void schedulePlayGamesStartupSignIn() {
+        if (!playGamesInitialized || playGamesStartupSignInScheduled || playGamesStartupSignInAttempted
+                || isFinishing()) return;
+        playGamesStartupSignInScheduled = true;
+        // Let the launcher finish entering the foreground before requesting Google auth UI.
+        getWindow().getDecorView().postDelayed(() -> {
+            playGamesStartupSignInScheduled = false;
+            if (isFinishing() || playGamesStartupSignInAttempted) return;
+            playGamesStartupSignInAttempted = true;
+            Log.i("STOP_PLAY_GAMES", "Starting one-time startup sign-in after onResume");
+            startPlayGamesSignInIfNeeded();
+        }, 1200L);
     }
 
     @Override
