@@ -67,12 +67,28 @@ export function useHalloweenProgress(playerId?: string | null) {
   return { data, report };
 }
 
+async function reportHalloweenDiagnostic(eventName: string, metadata: Record<string, unknown>) {
+  try {
+    await fetch(`${getApiUrl()}/api/analytics/event`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      body: JSON.stringify({ eventName, metadata }),
+    });
+  } catch {
+    // Diagnostics must never interrupt gameplay or Halloween progress.
+  }
+}
+
 export async function reportHalloweenEvent(
   playerId: string,
   type: "game_completed" | "scare_received" | "scare_provoked",
   eventKey: string,
 ) {
   if (!playerId || !isHalloweenActive()) return null;
+  const diagnostic = { type, eventKey: eventKey.slice(0, 160) };
+  void reportHalloweenDiagnostic("halloween_scare_seen", diagnostic);
+  void reportHalloweenDiagnostic("halloween_scare_report_attempt", diagnostic);
   try {
     const r = await fetch(`${getApiUrl()}/api/halloween/event`, {
       method: "POST",
@@ -80,8 +96,15 @@ export async function reportHalloweenEvent(
       headers: { "Content-Type": "application/json", ...authHeaders(), "x-halloween-player-id": playerId, ...(import.meta.env.VITE_HALLOWEEN_PREVIEW === "true" ? { "x-halloween-preview": "1" } : {}) },
       body: JSON.stringify({ type, eventKey }),
     });
-    return r.ok ? await r.json() : null;
+    if (!r.ok) {
+      void reportHalloweenDiagnostic("halloween_scare_report_failed", { ...diagnostic, httpStatus: r.status });
+      return null;
+    }
+    const result = await r.json();
+    void reportHalloweenDiagnostic("halloween_scare_report_saved", diagnostic);
+    return result;
   } catch {
+    void reportHalloweenDiagnostic("halloween_scare_report_failed", { ...diagnostic, httpStatus: 0, reason: "network_error" });
     return null;
   }
 }
