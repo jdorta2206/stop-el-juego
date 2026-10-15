@@ -45,7 +45,7 @@ jobs:
           assert 'if (!messageChannelReady || !relationshipValidated || !isAllowedOrigin(origin))' in native
           assert 'String origin = message.optString("origin", "");' in native
           assert 'STOP_PGS_UNLOCK_ACHIEVEMENT' in web and 'STOP_PGS_UNLOCK_ACHIEVEMENT' in native
-          assert 'com.github.dnikolaev.android_browser_helper:androidbrowserhelper:febadb4dcdd7a66fb4d17175b67c012f245c8610' in Path('android-generated/app/build.gradle').read_text()
+          assert 'com.github.dnikolaev.android-browser-helper:androidbrowserhelper:febadb4dcdd7a66fb4d17175b67c012f245c8610' in Path('android-generated/app/build.gradle').read_text()
           assert 'getTwaSession()' in native
           assert 'return getCustomTabsSession();' in native
           assert 'findFieldValue(' not in native
