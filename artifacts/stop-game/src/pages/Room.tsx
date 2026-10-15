@@ -30,6 +30,7 @@ import { recordExternalStat } from "@/hooks/useAchievements";
 import { CountUp } from "@/components/CountUp";
 import { getApiUrl, publicLink, authHeaders } from "@/lib/utils";
 import { reportSeasonEvent } from "@/hooks/useSeason";
+import { reportHalloweenEvent } from "@/hooks/useHalloweenProgress";
 import { saveActiveRoom, clearActiveRoom, touchActiveRoom } from "@/lib/activeRoom";
 import { useT } from "@/i18n/useT";
 import { useToast } from "@/hooks/use-toast";
@@ -683,6 +684,15 @@ export default function Room() {
     };
   }, [phase, categoryPack, roomCode, currentLetter, currentRound]);
 
+  const reportedHalloweenScareRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!halloweenScare || !player?.id || !isHalloweenActive()) return;
+    const eventKey = `room:${roomCode ?? "room"}:${currentRound ?? 0}:${halloweenScare.id}`;
+    if (reportedHalloweenScareRef.current === eventKey) return;
+    reportedHalloweenScareRef.current = eventKey;
+    void reportHalloweenEvent(player.id, "scare_received", eventKey);
+  }, [halloweenScare?.id, player?.id, roomCode, currentRound]);
+
   // First STOP of a round scares everyone except the player who pressed STOP.
   useEffect(() => {
     const status = String((room as any)?.status ?? "");
@@ -730,6 +740,7 @@ export default function Room() {
       });
       const data = await response.json().catch(() => ({}));
       if (response.ok) {
+        void reportHalloweenEvent(player.id, "scare_provoked", `room:${roomCode.toUpperCase()}:${Date.now()}`);
         const ms = Number(data.cooldownMs ?? 18000);
         setHalloweenScareCooldownUntil(Date.now() + ms);
         window.setTimeout(() => setHalloweenScareCooldownUntil(0), ms + 50);

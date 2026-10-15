@@ -596,10 +596,41 @@ export async function recordHalloweenScareEvents(
   );
 }
 
-router.post("/event", async (_req, res) => {
-  // Halloween progress is authoritative server state. Clients cannot mint
-  // progress/rewards by posting arbitrary event types or keys.
-  res.status(410).json({ error: "Halloween progress is recorded by gameplay" });
+router.post("/event", async (req: AuthedRequest, res) => {
+  // Only accept authenticated scare events emitted by the active game UI.
+  // Game completions and arbitrary reward claims remain server-authoritative.
+  const playerId = String(req.headers["x-halloween-player-id"] ?? "").trim();
+  const type = req.body?.type;
+  const eventKey = String(req.body?.eventKey ?? "").trim();
+  if (!playerId || !(await verifyClaimedIdentity(req, playerId))) {
+    res.status(401).json({ error: "Authentication required" });
+    return;
+  }
+  if (!isLoggedInId(playerId)) {
+    res.status(403).json({ error: "Halloween rewards require a registered account" });
+    return;
+  }
+  const validType = type === "scare_received" || type === "scare_provoked";
+  const validKey = eventKey.length > 0 && eventKey.length <= 160 &&
+    (type === "scare_received"
+      ? /^(solo|room):[A-Za-z0-9:_-]+$/.test(eventKey)
+      : type === "scare_provoked" && /^room:[A-Za-z0-9:_-]+$/.test(eventKey));
+  if (!validType || !validKey) {
+    res.status(400).json({ error: "Invalid Halloween scare event" });
+    return;
+  }
+  const preview = isHalloweenPreviewAuthorized(req);
+  try {
+    const result = await recordHalloweenEvent(playerId, type, eventKey, preview);
+    if (!result) {
+      res.status(409).json({ error: "Halloween event is not active" });
+      return;
+    }
+    res.json({ year: getHalloweenEventYear(new Date(), preview), ...result });
+  } catch (error) {
+    console.error("[halloween/event] failed to record scare:", error);
+    res.status(500).json({ error: "Failed to record Halloween scare" });
+  }
 });
 
 export default router;

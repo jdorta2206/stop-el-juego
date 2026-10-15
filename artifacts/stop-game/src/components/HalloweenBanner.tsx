@@ -7,10 +7,10 @@ function formatRemaining(ms: number, lang: string): string {
   const days = Math.floor(totalSeconds / 86400);
   const hours = Math.floor((totalSeconds % 86400) / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
-  if (lang === "es") return "Quedan " + days + " días, " + hours + " h y " + minutes + " min";
-  if (lang === "fr") return "Il reste " + days + " jours, " + hours + " h et " + minutes + " min";
-  if (lang === "pt") return "Faltam " + days + " dias, " + hours + " h e " + minutes + " min";
-  return days + " days, " + hours + "h and " + minutes + "m remaining";
+  if (lang === "es") return "Termina en " + days + " días, " + hours + " h y " + minutes + " min";
+  if (lang === "fr") return "Se termine dans " + days + " jours, " + hours + " h et " + minutes + " min";
+  if (lang === "pt") return "Termina em " + days + " dias, " + hours + " h e " + minutes + " min";
+  return "Ends in " + days + " days, " + hours + "h and " + minutes + "m";
 }
 
 export function HalloweenBanner({ className = "" }: { className?: string }) {
