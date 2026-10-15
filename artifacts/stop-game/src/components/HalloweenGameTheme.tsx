@@ -53,7 +53,7 @@ export function HalloweenGameTheme({ active }: HalloweenGameThemeProps) {
   return (
     <div
       aria-hidden="true"
-      className="fixed inset-0 z-[5] pointer-events-none overflow-hidden select-none"
+      className="fixed inset-0 z-[20] pointer-events-none overflow-hidden select-none"
     >
       {/* Dark vignette / fog. It sits behind controls and answer cards. */}
       <div
