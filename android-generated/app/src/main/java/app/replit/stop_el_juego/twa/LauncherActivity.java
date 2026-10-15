@@ -330,7 +330,6 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                 field.setAccessible(true);
                 return field.get(target);
             } catch (NoSuchFieldException ignored) {
- {
                 type = type.getSuperclass();
             }
         }
