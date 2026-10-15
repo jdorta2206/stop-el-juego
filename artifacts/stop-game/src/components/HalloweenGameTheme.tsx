@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { HALLOWEEN_GAME_MUSIC } from "@/lib/halloweenGameMusic";
+import { trackAnalyticsEvent } from "@/lib/analyticsClient";
 
 interface HalloweenGameThemeProps {
   active: boolean;
@@ -18,6 +19,8 @@ export function HalloweenGameTheme({ active }: HalloweenGameThemeProps) {
 
   useEffect(() => {
     if (!active || typeof window === "undefined") return;
+
+    trackAnalyticsEvent("halloween_event_enter", { metadata: { surface: "live_game" } });
 
     const music = new Audio(HALLOWEEN_GAME_MUSIC);
     music.preload = "auto";
