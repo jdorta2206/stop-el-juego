@@ -419,6 +419,13 @@ const pt = {
     enableNotifications: "Avisa-me para não perder a minha sequência",
     tutorialBadge: "Tutorial",
   },
+  profileCosmetics: {
+    section: "Personaliza o teu avatar",
+    myPhoto: "A minha foto",
+    myAvatar: "O meu avatar",
+    equipped: "Equipado",
+    noAvatars: "Ainda não tens avatares cosméticos. Obtém um na loja.",
+  },
 } as const;
 
 export default pt;
