@@ -74,15 +74,19 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         appUpdateManager = AppUpdateManagerFactory.create(this);
-        try {
-            PlayGamesSdk.initialize(getApplicationContext());
-            playGamesInitialized = true;
-            Log.i("STOP_PLAY_GAMES", "Play Games SDK initialized");
-            // Authentication is scheduled from onResume, after the native activity has entered
-            // the foreground. Starting sign-in in onCreate races TWA/Chrome startup on some devices.
-        } catch (RuntimeException error) {
-            Log.w("STOP_PLAY_GAMES", "Play Games SDK initialization failed; app continues normally", error);
+        // StopApplication initializes PGS before any activity. Retain an activity-level
+        // fallback only if application initialization failed, without blocking gameplay.
+        playGamesInitialized = StopApplication.isPlayGamesInitialized();
+        if (!playGamesInitialized) {
+            try {
+                PlayGamesSdk.initialize(this);
+                playGamesInitialized = true;
+                Log.i("STOP_PLAY_GAMES", "Play Games SDK initialized by activity fallback");
+            } catch (RuntimeException error) {
+                Log.w("STOP_PLAY_GAMES", "Play Games SDK unavailable; app continues normally", error);
+            }
         }
+        // Authentication is scheduled from onResume after the activity enters the foreground.
         checkForPlayUpdate();
         if (AdsPolicy.isEnabled()) {
             MobileAds.initialize(this, status -> {
