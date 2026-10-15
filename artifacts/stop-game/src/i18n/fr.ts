@@ -404,6 +404,12 @@ const fr = {
     close: "Fermer",
   },
 
+  profileAvatar: {
+    photo: "Ma photo",
+    avatar: "Mon avatar",
+    noAvatars: "Tu n'as pas encore d'avatars.",
+  },
+
   ftue: {
     welcomeTitle: "Bienvenue dans STOP !",
     welcomeBody: "Une lettre tombe au hasard. Écris un mot dans chaque catégorie qui commence par cette lettre — plus vite et plus original que l'IA !",
