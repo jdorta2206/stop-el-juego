@@ -404,6 +404,12 @@ const pt = {
     close: "Fechar",
   },
 
+  profileAvatar: {
+    photo: "Minha foto",
+    avatar: "Meu avatar",
+    noAvatars: "Ainda não tens avatares comprados.",
+  },
+
   ftue: {
     welcomeTitle: "Bem-vindo ao STOP!",
     welcomeBody: "Sai uma letra ao acaso. Escreve uma palavra em cada categoria que comece por essa letra — mais rápido e original que a IA!",
