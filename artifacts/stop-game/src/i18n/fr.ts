@@ -419,6 +419,13 @@ const fr = {
     enableNotifications: "Préviens-moi pour ne pas perdre ma série",
     tutorialBadge: "Tutoriel",
   },
+  profileCosmetics: {
+    section: "Personnalise ton avatar",
+    myPhoto: "Ma photo",
+    myAvatar: "Mon avatar",
+    equipped: "Équipé",
+    noAvatars: "Tu ne possèdes pas encore d’avatar cosmétique. Obtiens-en un dans la boutique.",
+  },
 } as const;
 
 export default fr;
