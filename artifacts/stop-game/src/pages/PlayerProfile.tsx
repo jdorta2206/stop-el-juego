@@ -18,7 +18,7 @@ import { useRewards } from "@/hooks/useRewards";
 import { celebrateReward } from "@/lib/celebrate";
 import { rewardFrameName } from "@/lib/rewardFrames";
 import { CosmeticShop } from "@/components/CosmeticShop";
-import { AVATAR_GLYPH_BY_ID, LEGENDARY_FRAME_FX } from "@/lib/cosmeticHelpers";
+import { LEGENDARY_FRAME_FX } from "@/lib/cosmeticHelpers";
 import { useT } from "@/i18n/useT";
 
 // Niveles (sin cambios)
