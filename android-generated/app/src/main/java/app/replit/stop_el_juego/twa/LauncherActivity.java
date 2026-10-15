@@ -143,6 +143,9 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     protected void onResume() {
         super.onResume();
         checkForPlayUpdate();
+        // Some Custom Tabs providers do not consistently emit NAVIGATION_FINISHED.
+        // Kick off the existing bounded, duplicate-guarded origin validation on resume too.
+        getWindow().getDecorView().postDelayed(this::requestUseAsOriginValidation, 1500L);
         schedulePlayGamesStartupSignIn();
     }
 
