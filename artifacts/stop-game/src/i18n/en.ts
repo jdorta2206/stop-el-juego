@@ -419,6 +419,13 @@ const en = {
     enableNotifications: "Remind me so I don't lose my streak",
     tutorialBadge: "Tutorial",
   },
+  profileCosmetics: {
+    section: "Customize your avatar",
+    myPhoto: "My photo",
+    myAvatar: "My avatar",
+    equipped: "Equipped",
+    noAvatars: "You don't own any cosmetic avatars yet. Get one in the shop.",
+  },
 } as const;
 
 export default en;

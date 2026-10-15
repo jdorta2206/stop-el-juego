@@ -17,13 +17,23 @@ import { useInventory } from "@/hooks/useInventory";
 
 const LOGO_URL = `${import.meta.env.BASE_URL}images/stop-logo.png`;
 
+const PROFILE_AVATAR_GLYPHS: Record<string, string> = {
+  avatar_premium_5: "🎯", avatar_premium_10: "🔥", avatar_premium_15: "⚡", avatar_premium_20: "🌟", avatar_premium_25: "👑", avatar_premium_30: "💎",
+  avatar_shop_rocket: "🚀", avatar_shop_pizza: "🍕", avatar_shop_burger: "🍔", avatar_shop_cat: "🐱", avatar_shop_dog: "🐶", avatar_shop_alien: "👽", avatar_shop_unicorn: "🦄", avatar_shop_ghost: "👻", avatar_shop_ninja: "🥷", avatar_shop_robot: "🤖", avatar_shop_flower: "🌸", avatar_shop_fox: "🦊", avatar_shop_clown: "🤡", avatar_shop_gamepad: "🎮", avatar_shop_butterfly: "🦋", avatar_shop_owl: "🦉", avatar_shop_panda: "🐼", avatar_shop_star: "✨", avatar_shop_octopus: "🐙", avatar_shop_skull: "💀", avatar_shop_lion: "🦁", avatar_shop_tiger: "🐯", avatar_shop_devil: "😈", avatar_shop_angel: "😇", avatar_shop_pirate: "🏴‍☠️", avatar_shop_dragon: "🐉", avatar_shop_rainbow: "🌈", avatar_shop_wizard: "🧙", avatar_shop_crystal: "🔮", avatar_shop_phoenix: "🦅", avatar_shop_money: "🤑",
+  avatar_halloween_ghost: "👻", avatar_halloween_pumpkin: "🎃", avatar_halloween_vampire: "🧛", avatar_halloween_witch: "🧙‍♀️",
+  avatar_wc_ball: "⚽", avatar_wc_jersey: "👕", avatar_wc_goal: "🥅", avatar_wc_gloves: "🧤", avatar_wc_boots: "👟", avatar_wc_medal: "🥇", avatar_wc_trophy: "🏆", avatar_wc_flag_es: "🇪🇸", avatar_wc_flag_br: "🇧🇷", avatar_wc_flag_ar: "🇦🇷", avatar_wc_flag_fr: "🇫🇷", avatar_wc_flag_de: "🇩🇪", avatar_wc_flag_pt: "🇵🇹", avatar_wc_flag_it: "🇮🇹", avatar_wc_flag_nl: "🇳🇱", avatar_wc_flag_mx: "🇲🇽", avatar_wc_flag_us: "🇺🇸", avatar_wc_flag_uy: "🇺🇾", avatar_wc_flag_co: "🇨🇴", avatar_wc_flag_jp: "🇯🇵",
+};
+
 export function ProfilePhotoAvatar({ picture, glyph, name, color, frame, title, size="w-9 h-9", className="" }: { picture?: string | null; glyph?: string | null; name: string; color?: string | null; frame?: string | null; title?: string | null; size?: string; className?: string }) {
   const validPicture = typeof picture === "string" && /^https?:\/\//i.test(picture);
+  const resolvedGlyph = typeof glyph === "string" && glyph.trim()
+    ? (PROFILE_AVATAR_GLYPHS[glyph] || (glyph.startsWith("avatar_") ? null : glyph))
+    : null;
   const frameColor = frame ? "#f9a825" : "rgba(255,255,255,.12)";
   return (
     <div className="flex flex-col items-center gap-1 min-w-0">
       <div className={`relative ${size} rounded-full flex-shrink-0 flex items-center justify-center overflow-hidden text-white font-black shadow ${className}`} style={{ backgroundColor: color || "#555", border: `2px solid ${frameColor}` }}>
-        {validPicture ? <img src={picture!} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : (glyph || name.charAt(0).toUpperCase())}
+        {resolvedGlyph ? resolvedGlyph : validPicture ? <img src={picture!} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : name.charAt(0).toUpperCase()}
       </div>
       {title ? <span className="max-w-[140px] truncate text-[10px] font-black text-secondary">{title}</span> : null}
     </div>

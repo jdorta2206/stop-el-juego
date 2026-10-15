@@ -14,6 +14,7 @@ import { useFollows } from "@/lib/useFollows";
 import { useCallback, useEffect, useState } from "react";
 import { type OnlinePlayer } from "@/lib/usePresence";
 import { useInventory } from "@/hooks/useInventory";
+import { useT } from "@/i18n/useT";
 import { useRewards } from "@/hooks/useRewards";
 import { celebrateReward } from "@/lib/celebrate";
 import { rewardFrameName } from "@/lib/rewardFrames";
@@ -264,6 +265,7 @@ export default function PlayerProfile() {
   const params = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
   const { player: me } = usePlayer();
+  const { t } = useT();
 
   // Si no hay id en la URL (ej: /perfil), usa el id del jugador autenticado (tu propio perfil)
   const id = params.id || me?.id || null;
@@ -281,6 +283,7 @@ export default function PlayerProfile() {
   const isLoggedIn = !!(me && me.loginMethod !== "guest");
   const { inventory, refresh: refreshInventory, equip, buy } = useInventory(isMe ? me?.id : null);
   const [busyAction, setBusyAction] = useState<string | null>(null);
+  const [showAvatarChoices, setShowAvatarChoices] = useState(false);
   const { prestige, claimPrestige } = useRewards(isMe ? me?.id : null, refreshInventory);
 
   const handleClaimPrestige = useCallback(async (tier: number) => {
@@ -380,7 +383,7 @@ export default function PlayerProfile() {
                 ? inventory?.equipped.frame ?? data.equippedFrame
                 : data.equippedFrame;
               const equippedAvatar = isMe
-                ? inventory?.equipped.avatar ?? data.equippedAvatar
+                ? (inventory ? inventory.equipped.avatar : data.equippedAvatar)
                 : data.equippedAvatar;
               const frameColor = equippedFrame ? FRAME_COLORS_BY_ID[equippedFrame] : null;
               const fxClass = equippedFrame ? LEGENDARY_FRAME_FX[equippedFrame] : null;
@@ -393,11 +396,16 @@ export default function PlayerProfile() {
                     boxShadow: fxClass ? undefined : (frameColor ? `0 0 18px ${frameColor}66` : undefined),
                   }}
                 >
-                  {data.picture && /^https?:\/\//i.test(data.picture)
-                    ? <img src={data.picture} alt="" referrerPolicy="no-referrer" className="w-full h-full object-cover rounded-full" />
-                    : equippedAvatar && AVATAR_GLYPH_BY_ID[equippedAvatar]
-                      ? AVATAR_GLYPH_BY_ID[equippedAvatar]
-                      : data.playerName?.charAt(0).toUpperCase()}
+                  {(() => {
+                    const equippedGlyph = equippedAvatar
+                      ? inventory?.owned.avatars.find((avatar) => avatar.id === equippedAvatar)?.glyph || AVATAR_GLYPH_BY_ID[equippedAvatar]
+                      : null;
+                    return equippedGlyph
+                      ? equippedGlyph
+                      : data.picture && /^https?:\/\//i.test(data.picture)
+                        ? <img src={data.picture} alt="" referrerPolicy="no-referrer" className="w-full h-full object-cover rounded-full" />
+                        : data.playerName?.charAt(0).toUpperCase();
+                  })()}
                 </div>
               );
             })()}
@@ -441,6 +449,65 @@ export default function PlayerProfile() {
             )}
           </div>
         </motion.div>
+
+        {isMe && inventory && (
+          <section className="w-full rounded-2xl border border-white/10 bg-black/20 p-3 space-y-3" aria-label={t.profileCosmetics.section}>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                disabled={busyAction === "equip:avatar"}
+                onClick={async () => {
+                  setBusyAction("equip:avatar");
+                  try {
+                    const result = await equip("avatar", null);
+                    if (result && !("error" in result)) setShowAvatarChoices(false);
+                  } catch { /* keep the current display on failure */ }
+                  finally { setBusyAction(null); }
+                }}
+                className={`rounded-xl px-3 py-2 text-sm font-bold border transition-colors disabled:opacity-50 ${!inventory.equipped.avatar ? "bg-secondary text-black border-secondary" : "bg-white/5 text-white/80 border-white/10"}`}
+              >
+                {t.profileCosmetics.myPhoto}
+              </button>
+              <button
+                type="button"
+                aria-expanded={showAvatarChoices}
+                onClick={() => setShowAvatarChoices((open) => !open)}
+                className={`rounded-xl px-3 py-2 text-sm font-bold border transition-colors ${inventory.equipped.avatar ? "bg-secondary text-black border-secondary" : "bg-white/5 text-white/80 border-white/10"}`}
+              >
+                {t.profileCosmetics.myAvatar}
+              </button>
+            </div>
+            {showAvatarChoices && (
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                {inventory.owned.avatars.map((avatar) => (
+                  <button
+                    key={avatar.id}
+                    type="button"
+                    disabled={busyAction === "equip:avatar"}
+                    aria-pressed={inventory.equipped.avatar === avatar.id}
+                    onClick={async () => {
+                      setBusyAction("equip:avatar");
+                      try {
+                        const result = await equip("avatar", avatar.id);
+                        if (result && !("error" in result)) setShowAvatarChoices(false);
+                      } catch { /* keep the current display on failure */ }
+                      finally { setBusyAction(null); }
+                    }}
+                    className={`flex flex-col items-center justify-center gap-1 rounded-xl border p-2 min-h-16 disabled:opacity-50 ${inventory.equipped.avatar === avatar.id ? "border-secondary bg-secondary/15" : "border-white/10 bg-white/5"}`}
+                    title={avatar.label}
+                  >
+                    <span className="text-2xl" aria-hidden="true">{avatar.glyph}</span>
+                    <span className="text-[10px] text-white/75 text-center leading-tight">{avatar.label}</span>
+                    {inventory.equipped.avatar === avatar.id && <span className="text-[10px] font-bold text-secondary">{t.profileCosmetics.equipped}</span>}
+                  </button>
+                ))}
+                {inventory.owned.avatars.length === 0 && (
+                  <p className="col-span-full text-xs text-white/50">{t.profileCosmetics.noAvatars}</p>
+                )}
+              </div>
+            )}
+          </section>
+        )}
 
         <div className="space-y-2 px-2">
           <div className="flex justify-between text-sm">

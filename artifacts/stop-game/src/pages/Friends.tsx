@@ -159,7 +159,7 @@ function FriendCard({
       style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}
     >
       <div className="relative flex-shrink-0">
-        <Avatar picture={friend.followedPicture} name={friend.followedName} avatarColor={friend.followedAvatarColor} frame={(friend as any).equippedFrame} title={(friend as any).equippedTitle} glyph={(friend as any).equippedAvatar} size={44} />
+        <Avatar picture={friend.followedPicture} name={friend.followedName} avatarColor={friend.followedAvatarColor} frame={(friend.onlineData as any)?.equippedFrame ?? (friend as any).equippedFrame} title={(friend.onlineData as any)?.equippedTitle ?? (friend as any).equippedTitle} glyph={(friend.onlineData as any)?.equippedAvatar ?? (friend as any).equippedAvatar} size={44} />
         <span className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-[#0d1757] ${
           friend.isOnline ? "bg-green-400 shadow-[0_0_6px_#4ade80]" : "bg-gray-600"
         }`} />
