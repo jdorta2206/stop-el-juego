@@ -38,6 +38,7 @@ import { trackAnalyticsEvent, trackTrustedGameStart } from "@/lib/analyticsClien
 import { ReviewPromptCard } from "@/components/ReviewPromptCard";
 import { maybeShowInterstitial, recordInterstitialGameCompleted } from "@/lib/interstitialAd";
 import { applyHalloweenCategory, getHalloweenScare, getHalloweenScareById, isHalloweenActive, isHalloweenPreview, isHalloweenModeEnabled } from "@/lib/halloweenEvent";
+import { HalloweenGameTheme } from "@/components/HalloweenGameTheme";
 import { HalloweenAmbience } from "@/components/HalloweenAmbience";
 import { HalloweenScareOverlay } from "@/components/HalloweenScare";
 import { getHalloweenReducedEffects } from "@/lib/halloweenAccessibility";
@@ -662,14 +663,13 @@ export default function Room() {
     if (halloweenScareTimerRef.current) clearTimeout(halloweenScareTimerRef.current);
     if (halloweenScareHideTimerRef.current) clearTimeout(halloweenScareHideTimerRef.current);
     setHalloweenScare(null);
-    if (!isHalloweenActive() || !isHalloweenModeEnabled() || phase !== "playing" || categoryPack !== "standard" || !roomCode || !currentLetter || !currentRound) return;
+    if (!isHalloweenActive() || !isHalloweenModeEnabled() || phase !== "playing" || !roomCode || !currentLetter || !currentRound) return;
     const key = `halloween-ambient|${roomCode.toUpperCase()}|${currentRound}|${currentLetter}`;
     let hash = 2166136261 >>> 0;
     for (let i = 0; i < key.length; i++) { hash ^= key.charCodeAt(i); hash = Math.imul(hash, 16777619); }
-    if ((hash % 100) >= 48) return;
     const preview = isHalloweenPreview();
-    const minDelay = preview ? 5000 : 10000;
-    const maxDelay = preview ? 12000 : 42000;
+    const minDelay = preview ? 1800 : 4000;
+    const maxDelay = preview ? 3500 : 9000;
     const delay = minDelay + ((hash >>> 8) % Math.max(1, maxDelay - minDelay));
     halloweenScareTimerRef.current = window.setTimeout(() => {
       halloweenScareTimerRef.current = null;
@@ -2819,7 +2819,8 @@ export default function Room() {
         })()}
 
       </AnimatePresence>
-      <HalloweenAmbience active={isHalloweenActive() && isHalloweenModeEnabled() && phase === "playing" && categoryPack === "standard"} muted={muted} heavy={!!halloweenScare} />
+      <HalloweenGameTheme active={isHalloweenActive() && isHalloweenModeEnabled() && phase === "playing"} />
+      <HalloweenAmbience active={isHalloweenActive() && isHalloweenModeEnabled() && phase === "playing"} muted={muted} heavy={!!halloweenScare} />
       <AnimatePresence>
         {halloweenScare && <HalloweenScareOverlay scare={halloweenScare} muted={muted} reducedEffects={reducedHalloweenEffects} onDone={() => setHalloweenScare(null)} />}
       </AnimatePresence>
