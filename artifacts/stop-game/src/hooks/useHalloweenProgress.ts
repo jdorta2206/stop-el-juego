@@ -86,6 +86,7 @@ export async function reportHalloweenEvent(
   eventKey: string,
 ) {
   if (!playerId || !isHalloweenActive()) return null;
+  if (type !== "scare_received" && type !== "scare_provoked") return null;
   const diagnostic = { type, eventKey: eventKey.slice(0, 160) };
   void reportHalloweenDiagnostic("halloween_scare_seen", diagnostic);
   void reportHalloweenDiagnostic("halloween_scare_report_attempt", diagnostic);
