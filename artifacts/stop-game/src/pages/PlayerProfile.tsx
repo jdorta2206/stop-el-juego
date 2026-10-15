@@ -458,9 +458,11 @@ export default function PlayerProfile() {
                 disabled={busyAction === "equip:avatar"}
                 onClick={async () => {
                   setBusyAction("equip:avatar");
-                  try { await equip("avatar", null); } catch { /* keep the current display on failure */ }
+                  try {
+                    const result = await equip("avatar", null);
+                    if (result && !("error" in result)) setShowAvatarChoices(false);
+                  } catch { /* keep the current display on failure */ }
                   finally { setBusyAction(null); }
-                  setShowAvatarChoices(false);
                 }}
                 className={`rounded-xl px-3 py-2 text-sm font-bold border transition-colors disabled:opacity-50 ${!inventory.equipped.avatar ? "bg-secondary text-black border-secondary" : "bg-white/5 text-white/80 border-white/10"}`}
               >
