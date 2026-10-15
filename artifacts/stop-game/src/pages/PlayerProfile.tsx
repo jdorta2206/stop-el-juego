@@ -383,7 +383,7 @@ export default function PlayerProfile() {
                 ? inventory?.equipped.frame ?? data.equippedFrame
                 : data.equippedFrame;
               const equippedAvatar = isMe
-                ? inventory?.equipped.avatar ?? data.equippedAvatar
+                ? (inventory ? inventory.equipped.avatar : data.equippedAvatar)
                 : data.equippedAvatar;
               const frameColor = equippedFrame ? FRAME_COLORS_BY_ID[equippedFrame] : null;
               const fxClass = equippedFrame ? LEGENDARY_FRAME_FX[equippedFrame] : null;
