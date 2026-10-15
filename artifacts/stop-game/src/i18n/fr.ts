@@ -43,6 +43,14 @@ const fr = {
     canYouBeat: "Peux-tu le battre ?",
   },
 
+  playGamesBanner: {
+    connecting: "Connexion à Google Play Jeux…",
+    connected: "Connecté à Google Play Jeux.",
+    failed: "Impossible de se connecter à Google Play Jeux.",
+    retry: "Réessayer",
+    continue: "Continuer",
+  },
+
   game: {
     round: "Manche",
     of: "sur",
