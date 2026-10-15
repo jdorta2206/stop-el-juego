@@ -404,6 +404,12 @@ const en = {
     close: "Close",
   },
 
+  profileAvatar: {
+    photo: "My photo",
+    avatar: "My avatar",
+    noAvatars: "You don't own any avatars yet.",
+  },
+
   ftue: {
     welcomeTitle: "Welcome to STOP!",
     welcomeBody: "A random letter pops up. Write a word in each category that starts with that letter — faster and more original than the AI!",
