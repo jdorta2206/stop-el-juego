@@ -18,7 +18,8 @@ import { useRewards } from "@/hooks/useRewards";
 import { celebrateReward } from "@/lib/celebrate";
 import { rewardFrameName } from "@/lib/rewardFrames";
 import { CosmeticShop } from "@/components/CosmeticShop";
-import { LEGENDARY_FRAME_FX } from "@/lib/cosmeticHelpers";
+import { AVATAR_GLYPH_BY_ID, LEGENDARY_FRAME_FX } from "@/lib/cosmeticHelpers";
+import { useT } from "@/i18n/useT";
 
 // Niveles (sin cambios)
 interface LevelInfo {
@@ -264,6 +265,7 @@ export default function PlayerProfile() {
   const params = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
   const { player: me } = usePlayer();
+  const { t } = useT();
 
   // Si no hay id en la URL (ej: /perfil), usa el id del jugador autenticado (tu propio perfil)
   const id = params.id || me?.id || null;
@@ -281,6 +283,7 @@ export default function PlayerProfile() {
   const isLoggedIn = !!(me && me.loginMethod !== "guest");
   const { inventory, refresh: refreshInventory, equip, buy } = useInventory(isMe ? me?.id : null);
   const [busyAction, setBusyAction] = useState<string | null>(null);
+  const [showAvatarPicker, setShowAvatarPicker] = useState(false);
   const { prestige, claimPrestige } = useRewards(isMe ? me?.id : null, refreshInventory);
 
   const handleClaimPrestige = useCallback(async (tier: number) => {
@@ -380,7 +383,7 @@ export default function PlayerProfile() {
                 ? inventory?.equipped.frame ?? data.equippedFrame
                 : data.equippedFrame;
               const equippedAvatar = isMe
-                ? inventory?.equipped.avatar ?? data.equippedAvatar
+                ? (inventory ? inventory.equipped.avatar : data.equippedAvatar)
                 : data.equippedAvatar;
               const frameColor = equippedFrame ? FRAME_COLORS_BY_ID[equippedFrame] : null;
               const fxClass = equippedFrame ? LEGENDARY_FRAME_FX[equippedFrame] : null;
@@ -393,10 +396,10 @@ export default function PlayerProfile() {
                     boxShadow: fxClass ? undefined : (frameColor ? `0 0 18px ${frameColor}66` : undefined),
                   }}
                 >
-                  {data.picture && /^https?:\/\//i.test(data.picture)
-                    ? <img src={data.picture} alt="" referrerPolicy="no-referrer" className="w-full h-full object-cover rounded-full" />
-                    : equippedAvatar && AVATAR_GLYPH_BY_ID[equippedAvatar]
-                      ? AVATAR_GLYPH_BY_ID[equippedAvatar]
+                  {equippedAvatar && AVATAR_GLYPH_BY_ID[equippedAvatar]
+                    ? AVATAR_GLYPH_BY_ID[equippedAvatar]
+                    : data.picture && /^https?:\/\//i.test(data.picture)
+                      ? <img src={data.picture} alt="" referrerPolicy="no-referrer" className="w-full h-full object-cover rounded-full" />
                       : data.playerName?.charAt(0).toUpperCase()}
                 </div>
               );
@@ -408,6 +411,57 @@ export default function PlayerProfile() {
               {level.icon}
             </span>
           </div>
+
+          {isMe && inventory && (
+            <div className="w-full max-w-xs space-y-2">
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  disabled={busyAction === "equip:avatar"}
+                  onClick={async () => {
+                    setBusyAction("equip:avatar");
+                    try { await equip("avatar", null); } catch { /* fail silently */ }
+                    finally { setBusyAction(null); setShowAvatarPicker(false); }
+                  }}
+                  className={`rounded-xl px-3 py-2 text-sm font-bold border transition-colors disabled:opacity-50 ${!inventory.equipped.avatar ? "bg-secondary/20 border-secondary/50 text-secondary" : "bg-white/5 border-white/10 text-white/70"}`}
+                >
+                  {t.profileAvatar.photo}
+                </button>
+                <button
+                  type="button"
+                  aria-expanded={showAvatarPicker}
+                  onClick={() => setShowAvatarPicker(v => !v)}
+                  className={`rounded-xl px-3 py-2 text-sm font-bold border transition-colors ${inventory.equipped.avatar ? "bg-secondary/20 border-secondary/50 text-secondary" : "bg-white/5 border-white/10 text-white/70"}`}
+                >
+                  {t.profileAvatar.avatar}
+                </button>
+              </div>
+              {showAvatarPicker && (
+                <div className="rounded-xl border border-white/10 bg-black/20 p-2 grid grid-cols-2 gap-2">
+                  {(inventory.owned.avatars || []).map(item => (
+                    <button
+                      type="button"
+                      key={item.id}
+                      disabled={busyAction === "equip:avatar"}
+                      onClick={async () => {
+                        setBusyAction("equip:avatar");
+                        try { await equip("avatar", item.id); } catch { /* fail silently */ }
+                        finally { setBusyAction(null); setShowAvatarPicker(false); }
+                      }}
+                      className={`flex items-center gap-2 rounded-lg px-2 py-2 text-left text-xs font-bold border disabled:opacity-50 ${inventory.equipped.avatar === item.id ? "border-secondary/60 bg-secondary/10 text-secondary" : "border-white/10 bg-white/5 text-white/80"}`}
+                    >
+                      <span className="text-xl">{item.glyph || AVATAR_GLYPH_BY_ID[item.id] || "👤"}</span>
+                      <span className="truncate">{item.label}</span>
+                      {inventory.equipped.avatar === item.id && <Check className="w-3 h-3 ml-auto flex-shrink-0" />}
+                    </button>
+                  ))}
+                  {(inventory.owned.avatars || []).length === 0 && (
+                    <p className="col-span-2 text-xs text-white/50">{t.profileAvatar.noAvatars}</p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="text-center">
             <h1 className="text-3xl font-display font-black">{data.playerName}</h1>
