@@ -62,7 +62,8 @@ jobs:
           assert "postDelayed(this::requestUseAsOriginValidation, 1500L)" in native
           assert "STOP patch: retain this Activity and its CustomTabsSession" in build_script
           assert "mBrowserWasLaunched = true;" in build_script
-          assert "source.count(old) != 1" in build_script
+          assert "callback_lines = [i for i, line in enumerate(lines)" in build_script
+          assert "lines[index - 1].strip() != \"() -> {\"" in build_script
           assert "protected boolean shouldLaunchImmediately()" in native
           assert "return false;" in native[native.index("protected boolean shouldLaunchImmediately()"):native.index("protected void onCreate")]
           assert "launchTwaOnce();" in native
