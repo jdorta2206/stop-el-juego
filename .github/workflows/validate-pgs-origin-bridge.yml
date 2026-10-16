@@ -43,6 +43,9 @@ jobs:
           web = Path("artifacts/stop-game/src/lib/twaPlayGamesBridge.ts").read_text()
           native = Path("android-generated/app/src/main/java/app/replit/stop_el_juego/twa/LauncherActivity.java").read_text()
           assert 'const message = { type, ...extra, origin: window.location.origin };' in web
+          assert '"android-app://www.stopjuegodepalabras.com"' in web
+          assert 'ALLOWED_MESSAGE_EVENT_ORIGINS.has(event.origin)' in web
+          assert 'ALLOWED_ORIGINS.has(event.origin)' not in web
           assert 'if (!messageChannelReady || !relationshipValidated || !isAllowedOrigin(origin))' in native
           assert 'postMessage-channel request performs its own origin handshake.' in native
           assert 'relationshipValidated = true;\n                messageChannelReady = true;' in native
