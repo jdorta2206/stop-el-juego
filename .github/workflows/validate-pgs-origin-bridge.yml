@@ -58,7 +58,7 @@ jobs:
           assert 'return "https://stopjuegodepalabras.com".equals(origin)' in native
           assert '|| "https://www.stopjuegodepalabras.com".equals(origin);' in native
           gradle = Path("android-generated/app/build.gradle").read_text()
-          assert "versionCode 63" in gradle and 'versionName "1.3.7.7"' in gradle
+          assert "versionCode 64" in gradle and 'versionName "1.3.7.8"' in gradle
           assert "postDelayed(this::requestUseAsOriginValidation, 1500L)" in native
           assert "STOP patch: retain this Activity and its CustomTabsSession" in build_script
           assert "mBrowserWasLaunched = true;" in build_script
