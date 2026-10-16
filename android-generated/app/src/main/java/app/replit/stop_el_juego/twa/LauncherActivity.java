@@ -143,8 +143,12 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     protected void onResume() {
         super.onResume();
         checkForPlayUpdate();
-        // Some Custom Tabs providers do not consistently emit NAVIGATION_FINISHED.
-        // Kick off the existing bounded, duplicate-guarded origin validation on resume too.
+        // The TWA session may bind after Activity.onResume. Give it a fresh bounded
+        // validation window on each foreground return instead of exhausting all retries
+        // during the initial Custom Tabs service bind.
+        if (!relationshipValidated && !originValidationRequestPending) {
+            originValidationAttempts = 0;
+        }
         getWindow().getDecorView().postDelayed(this::requestUseAsOriginValidation, 1500L);
         schedulePlayGamesStartupSignIn();
     }
@@ -173,7 +177,9 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                 originValidationGeneration++; // Invalidate the timeout for the completed request.
                 relationshipValidated = relation == CustomTabsService.RELATION_USE_AS_ORIGIN
                         && result && SOURCE_ORIGIN.equals(requestedOrigin);
-                Log.d(TAG, "use_as_origin validation=" + result + " relation=" + relation + " origin=" + requestedOrigin);
+                Log.i(TAG, "BRIDGE_DIAG phase=origin_validation_callback result=" + result
+                        + " relation=" + relation + " origin=" + requestedOrigin
+                        + " expected=" + SOURCE_ORIGIN + " sessionAvailable=" + (getTwaSession() != null));
                 if (relationshipValidated) {
                     requestMessageChannelWithRetry(100L);
                 } else if (originValidationAttempts < 10 && !isFinishing()) {
@@ -199,7 +205,8 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                 messageChannelReady = true;
                 channelRequestInFlight = false;
                 channelRequestAttempts = 0;
-                Log.d(TAG, "TWA message channel ready");
+                Log.i(TAG, "BRIDGE_DIAG phase=message_channel_ready originValidated=" + relationshipValidated
+                        + " sessionAvailable=" + (getTwaSession() != null));
                 flushPendingPlayGamesStatus();
                 sendReadyBurst(0);
             }
@@ -213,16 +220,18 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
 
     private void requestUseAsOriginValidation() {
         if (relationshipValidated || originValidationRequestPending || isFinishing()
-                || originValidationAttempts >= 10) return;
+                || originValidationAttempts >= 40) return;
         originValidationAttempts++;
         final int requestGeneration = ++originValidationGeneration;
         CustomTabsSession session = getTwaSession();
+        Log.i(TAG, "BRIDGE_DIAG phase=origin_validation_request attempt=" + originValidationAttempts
+                + " sessionAvailable=" + (session != null) + " finishing=" + isFinishing());
         if (session != null) {
             try {
                 boolean requested = session.validateRelationship(
                         CustomTabsService.RELATION_USE_AS_ORIGIN, SOURCE_ORIGIN, new Bundle());
-                Log.d(TAG, "Requested use_as_origin validation attempt=" + originValidationAttempts
-                        + " accepted=" + requested);
+                Log.i(TAG, "BRIDGE_DIAG phase=origin_validation_requested attempt=" + originValidationAttempts
+                        + " accepted=" + requested + " origin=" + SOURCE_ORIGIN);
                 if (requested) {
                     originValidationRequestPending = true;
                     // Some Custom Tabs implementations can fail to deliver a validation callback.
@@ -240,8 +249,8 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                 Log.w(TAG, "use_as_origin validation request failed", error);
             }
         }
-        if (originValidationAttempts < 10) {
-            getWindow().getDecorView().postDelayed(this::requestUseAsOriginValidation, 300L);
+        if (originValidationAttempts < 40) {
+            getWindow().getDecorView().postDelayed(this::requestUseAsOriginValidation, 500L);
         }
     }
 
@@ -272,7 +281,8 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
         channelRequestAttempts++;
         try {
             boolean requested = session.requestPostMessageChannel(SOURCE_ORIGIN, TARGET_ORIGIN, new Bundle());
-            Log.d(TAG, "requestPostMessageChannel attempt=" + channelRequestAttempts + " accepted=" + requested);
+            Log.i(TAG, "BRIDGE_DIAG phase=request_message_channel attempt=" + channelRequestAttempts
+                    + " accepted=" + requested + " originValidated=" + relationshipValidated);
             if (requested) {
                 channelRequestInFlight = false;
                 // Chrome may accept the request without delivering onMessageChannelReady.
@@ -626,7 +636,8 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
         if (session == null || !messageChannelReady) return;
         try {
             int result = session.postMessage(message.toString(), null);
-            Log.d(TAG, "postMessage result=" + result + " message=" + message.optString("type"));
+            Log.i(TAG, "BRIDGE_DIAG phase=native_post_message result=" + result
+                    + " message=" + message.optString("type") + " channelReady=" + messageChannelReady);
         } catch (RuntimeException error) { Log.w(TAG, "postMessage failed", error); }
     }
 }
