@@ -63,7 +63,12 @@ jobs:
           assert "STOP patch: retain this Activity and its CustomTabsSession" in build_script
           assert "mBrowserWasLaunched = true;" in build_script
           assert "source.count(old) != 1" in build_script
-          print("PGS origin guards, session-retaining TWA lifecycle patch, bounded resume fallback, and Android version code verified.")
+          assert "protected boolean shouldLaunchImmediately()" in native
+          assert "return false;" in native[native.index("protected boolean shouldLaunchImmediately()"):native.index("protected void onCreate")]
+          assert "launchTwaOnce();" in native
+          assert "Starting startup sign-in while launcher is foregrounded" in native
+          assert "schedulePlayGamesStartupSignIn" not in native
+          print("PGS guards, foreground startup sign-in, session-retaining TWA lifecycle patch, and Android version code verified.")
           PY
       - name: Build pinned Android Browser Helper AAR
         run: bash scripts/build-pgs-android-browser-helper.sh
