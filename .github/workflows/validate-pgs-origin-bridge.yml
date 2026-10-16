@@ -5,10 +5,11 @@ on:
     branches: [master]
     paths:
       - "android-generated/**"
+      - "scripts/build-pgs-android-browser-helper.sh"
       - "artifacts/stop-game/src/lib/twaPlayGamesBridge.ts"
       - ".github/workflows/validate-pgs-origin-bridge.yml"
   push:
-    branches: [fix/pgs-validate-native-message-origin]
+    branches: [fix/pgs-validate-native-message-origin, fix/pgs-public-session-accessor]
   workflow_dispatch:
 
 permissions:
@@ -45,10 +46,33 @@ jobs:
           assert 'if (!messageChannelReady || !relationshipValidated || !isAllowedOrigin(origin))' in native
           assert 'String origin = message.optString("origin", "");' in native
           assert 'STOP_PGS_UNLOCK_ACHIEVEMENT' in web and 'STOP_PGS_UNLOCK_ACHIEVEMENT' in native
+          gradle = Path('android-generated/app/build.gradle').read_text()
+          build_script = Path('scripts/build-pgs-android-browser-helper.sh').read_text()
+          assert "implementation files('libs/androidbrowserhelper-release.aar')" in gradle
+          assert 'febadb4dcdd7a66fb4d17175b67c012f245c8610' in build_script
+          assert 'com.github.dnikolaev.android-browser-helper:androidbrowserhelper:' not in gradle
+          assert 'getTwaSession()' in native
+          assert 'return getCustomTabsSession();' in native
+          assert 'findFieldValue(' not in native
+          assert 'java.lang.reflect' not in native
           assert 'return "https://stopjuegodepalabras.com".equals(origin)' in native
           assert '|| "https://www.stopjuegodepalabras.com".equals(origin);' in native
-          print("PGS web origin payload and native TWA relationship/origin guards verified.")
+          gradle = Path("android-generated/app/build.gradle").read_text()
+          assert "versionCode 63" in gradle and 'versionName "1.3.7.7"' in gradle
+          assert "postDelayed(this::requestUseAsOriginValidation, 1500L)" in native
+          assert "STOP patch: retain this Activity and its CustomTabsSession" in build_script
+          assert "mBrowserWasLaunched = true;" in build_script
+          assert "callback_lines = [i for i, line in enumerate(lines)" in build_script
+          assert "lines[index - 1].strip() != \"() -> {\"" in build_script
+          assert "protected boolean shouldLaunchImmediately()" in native
+          assert "return false;" in native[native.index("protected boolean shouldLaunchImmediately()"):native.index("protected void onCreate")]
+          assert "launchTwaOnce();" in native
+          assert "Starting startup sign-in while launcher is foregrounded" in native
+          assert "schedulePlayGamesStartupSignIn" not in native
+          print("PGS guards, foreground startup sign-in, session-retaining TWA lifecycle patch, and Android version code verified.")
           PY
+      - name: Build pinned Android Browser Helper AAR
+        run: bash scripts/build-pgs-android-browser-helper.sh
       - name: Compile Android debug APK
         working-directory: android-generated
         run: |
