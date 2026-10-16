@@ -25,27 +25,30 @@ test -s "$HELPER_LAUNCHER"
 # after closing the TWA, because mBrowserWasLaunched is set by this callback.
 python3 - "$HELPER_LAUNCHER" <<'PY'
 from pathlib import Path
+import re
 import sys
 
 path = Path(sys.argv[1])
 source = path.read_text()
-old = """() -> {
-            mBrowserWasLaunched = true;
-            finish();
-        },"""
-new = """() -> {
-            // STOP patch: retain this Activity and its CustomTabsSession while
-            // the TWA is open. Finishing here unbinds the service in onDestroy()
-            // and invalidates the CustomTabsCallback used by postMessage.
-            // onRestart() finishes this Activity after the user closes the TWA.
-            mBrowserWasLaunched = true;
-        },"""
-if source.count(old) != 1:
+pattern = re.compile(
+    r"(\\(\\) -> \\{\\n)([ \\t]*)mBrowserWasLaunched = true;\\n"
+    r"[ \\t]*finish\\(\\);\\n[ \\t]*\\},"
+)
+replacement = (
+    r"\\1\\2// STOP patch: retain this Activity and its CustomTabsSession while\\n"
+    r"\\2// the TWA is open. Finishing here unbinds the service in onDestroy()\\n"
+    r"\\2// and invalidates the CustomTabsCallback used by postMessage.\\n"
+    r"\\2// onRestart() finishes this Activity after the user closes the TWA.\\n"
+    r"\\2mBrowserWasLaunched = true;\\n"
+    r"\\2},"
+)
+patched_source, replacements = pattern.subn(replacement, source, count=1)
+if replacements != 1:
     raise SystemExit(
         "Expected exactly one stock TWA completion callback to patch; "
-        f"found {source.count(old)}. Refusing to build an unpatched helper."
+        f"found {replacements}. Refusing to build an unpatched helper."
     )
-path.write_text(source.replace(old, new, 1))
+path.write_text(patched_source)
 patched = path.read_text()
 if "STOP patch: retain this Activity and its CustomTabsSession" not in patched:
     raise SystemExit("TWA session lifecycle patch verification failed")
