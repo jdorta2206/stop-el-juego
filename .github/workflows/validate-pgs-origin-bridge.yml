@@ -49,6 +49,12 @@ jobs:
           assert '|| "https://www.stopjuegodepalabras.com".equals(origin);' in native
           print("PGS web origin payload and native TWA relationship/origin guards verified.")
           PY
+      - name: Build pinned Android Browser Helper
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x scripts/build-pgs-android-browser-helper.sh
+          scripts/build-pgs-android-browser-helper.sh
       - name: Compile Android debug APK
         working-directory: android-generated
         run: |
