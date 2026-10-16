@@ -18,14 +18,15 @@ git clone --quiet --filter=blob:none "$REPO_URL" "$TMP_DIR/android-browser-helpe
 git -C "$TMP_DIR/android-browser-helper" checkout --quiet --detach "$PINNED_COMMIT"
 
 HELPER_LAUNCHER="$TMP_DIR/android-browser-helper/androidbrowserhelper/src/main/java/com/google/androidbrowserhelper/trusted/LauncherActivity.java"
+HELPER_TWA_LAUNCHER="$TMP_DIR/android-browser-helper/androidbrowserhelper/src/main/java/com/google/androidbrowserhelper/trusted/TwaLauncher.java"
 test -s "$HELPER_LAUNCHER"
+test -s "$HELPER_TWA_LAUNCHER"
 
 # Keep the launcher Activity and its CustomTabsService binding alive behind Chrome.
 # The inherited onRestart() already finishes the activity when the user returns
 # after closing the TWA, because mBrowserWasLaunched is set by this callback.
 python3 - "$HELPER_LAUNCHER" <<'PY'
 from pathlib import Path
-import re
 import sys
 
 path = Path(sys.argv[1])
@@ -50,6 +51,39 @@ patched = path.read_text()
 if "STOP patch: retain this Activity and its CustomTabsSession" not in patched:
     raise SystemExit("TWA session lifecycle patch verification failed")
 print("Applied and verified STOP TWA session lifecycle patch.")
+PY
+
+# CustomTabsSession.validateRelationship() requires CustomTabsClient.warmup()
+# to have been called first. The upstream helper skips warmup on providers that
+# advertise launch-without-warmup support, which can leave STOP's use_as_origin
+# validation rejected. Warm up unconditionally before creating the TWA session.
+python3 - "$HELPER_TWA_LAUNCHER" <<'PY'
+from pathlib import Path
+import re
+import sys
+
+path = Path(sys.argv[1])
+source = path.read_text()
+pattern = re.compile(
+    r'if\s*\(\s*!ChromeLegacyUtils\s*\.supportsLaunchWithoutWarmup\('
+    r'\s*mContext\.getPackageManager\(\)\s*,\s*mProviderPackage\s*\)\s*\)'
+    r'\s*\{\s*client\.warmup\(0\);\s*\}',
+    re.S,
+)
+patched, count = pattern.subn(
+    'client.warmup(0); // STOP patch: required before validateRelationship',
+    source,
+)
+if count != 1:
+    raise SystemExit(
+        "Expected exactly one conditional TWA warmup block; "
+        f"found {count}. Refusing to build an unpatched helper."
+    )
+path.write_text(patched)
+verified = path.read_text()
+if "client.warmup(0); // STOP patch: required before validateRelationship" not in verified:
+    raise SystemExit("Custom Tabs warmup patch verification failed")
+print("Applied and verified unconditional Custom Tabs warmup before session creation.")
 PY
 
 (
