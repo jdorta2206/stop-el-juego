@@ -31,18 +31,26 @@ import sys
 path = Path(sys.argv[1])
 source = path.read_text()
 pattern = re.compile(
-    r"(\\(\\) -> \\{\\n)([ \\t]*)mBrowserWasLaunched = true;\\n"
-    r"[ \\t]*finish\\(\\);\\n[ \\t]*\\},"
+    r"(?P<arrow>[ \\t]*)\\(\\) -> \\{\\n"
+    r"(?P<body>[ \\t]*)mBrowserWasLaunched = true;\\n"
+    r"[ \\t]*finish\\(\\);\\n(?P<close>[ \\t]*)\\},"
 )
-replacement = (
-    r"\\1\\2// STOP patch: retain this Activity and its CustomTabsSession while\\n"
-    r"\\2// the TWA is open. Finishing here unbinds the service in onDestroy()\\n"
-    r"\\2// and invalidates the CustomTabsCallback used by postMessage.\\n"
-    r"\\2// onRestart() finishes this Activity after the user closes the TWA.\\n"
-    r"\\2mBrowserWasLaunched = true;\\n"
-    r"\\2},"
-)
-patched_source, replacements = pattern.subn(replacement, source, count=1)
+
+def retain_session(match):
+    arrow = match.group("arrow")
+    body = match.group("body")
+    close = match.group("close")
+    return (
+        f"{arrow}() -> {{\\n"
+        f"{body}// STOP patch: retain this Activity and its CustomTabsSession while\\n"
+        f"{body}// the TWA is open. Finishing here unbinds the service in onDestroy()\\n"
+        f"{body}// and invalidates the CustomTabsCallback used by postMessage.\\n"
+        f"{body}// onRestart() finishes this Activity after the user closes the TWA.\\n"
+        f"{body}mBrowserWasLaunched = true;\\n"
+        f"{close}}},"
+    )
+
+patched_source, replacements = pattern.subn(retain_session, source, count=1)
 if replacements != 1:
     raise SystemExit(
         "Expected exactly one stock TWA completion callback to patch; "
