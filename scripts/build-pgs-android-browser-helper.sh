@@ -30,32 +30,21 @@ import sys
 
 path = Path(sys.argv[1])
 source = path.read_text()
-pattern = re.compile(
-    r"(?P<arrow>[ \t]*)\(\) -> \{\n"
-    r"(?P<body>[ \t]*)mBrowserWasLaunched = true;\n"
-    r"[ \t]*finish\(\);\n(?P<close>[ \t]*)\},"
-)
-
-def retain_session(match):
-    arrow = match.group("arrow")
-    body = match.group("body")
-    close = match.group("close")
-    return (
-        f"{arrow}() -> {{\n"
-        f"{body}// STOP patch: retain this Activity and its CustomTabsSession while\n"
-        f"{body}// the TWA is open. Finishing here unbinds the service in onDestroy()\n"
-        f"{body}// and invalidates the CustomTabsCallback used by postMessage.\n"
-        f"{body}// onRestart() finishes this Activity after the user closes the TWA.\n"
-        f"{body}mBrowserWasLaunched = true;\n"
-        f"{close}},"
-    )
-
-patched_source, replacements = pattern.subn(retain_session, source, count=1)
-if replacements != 1:
+lines = source.splitlines()
+callback_lines = [i for i, line in enumerate(lines) if "mBrowserWasLaunched = true;" in line]
+if len(callback_lines) != 1:
     raise SystemExit(
-        "Expected exactly one stock TWA completion callback to patch; "
-        f"found {replacements}. Refusing to build an unpatched helper."
+        "Expected exactly one stock TWA launch-completion marker; "
+        f"found {len(callback_lines)}. Refusing to build an unpatched helper."
     )
+index = callback_lines[0]
+if index == 0 or index + 1 >= len(lines):
+    raise SystemExit("TWA completion callback is truncated; refusing to patch")
+if lines[index - 1].strip() != "() -> {" or "finish();" not in lines[index + 1]:
+    raise SystemExit("TWA completion callback shape changed; refusing to patch")
+lines[index] += " // STOP patch: retain this Activity and its CustomTabsSession"
+del lines[index + 1]
+patched_source = "\n".join(lines) + "\n"
 path.write_text(patched_source)
 patched = path.read_text()
 if "STOP patch: retain this Activity and its CustomTabsSession" not in patched:
