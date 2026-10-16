@@ -61,8 +61,8 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     private boolean playUpdatePromptShown;
     private boolean playGamesInitialized;
     private boolean playGamesSignInInFlight;
-    private boolean playGamesStartupSignInScheduled;
     private boolean playGamesStartupSignInAttempted;
+    private boolean twaLaunchStarted;
     private int playGamesSignInGeneration;
     // Keep the most recent PGS result until the TWA MessagePort is ready.
     @Nullable private JSONObject pendingPlayGamesStatus;
@@ -149,22 +149,29 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
         if (!relationshipValidated && !originValidationRequestPending) {
             originValidationAttempts = 0;
         }
-        getWindow().getDecorView().postDelayed(this::requestUseAsOriginValidation, 1500L);
-        schedulePlayGamesStartupSignIn();
+        // Authenticate while this launcher Activity is foregrounded. The TWA is
+        // opened only after Play Games authentication finishes (or safely fails),
+        // so Android does not block the native sign-in UI as a background launch.
+        if (!twaLaunchStarted && !playGamesStartupSignInAttempted && !isFinishing()) {
+            playGamesStartupSignInAttempted = true;
+            Log.i("STOP_PLAY_GAMES", "Starting startup sign-in while launcher is foregrounded");
+            startPlayGamesSignInIfNeeded();
+        }
+        if (twaLaunchStarted) {
+            getWindow().getDecorView().postDelayed(this::requestUseAsOriginValidation, 1500L);
+        }
     }
 
-    private void schedulePlayGamesStartupSignIn() {
-        if (!playGamesInitialized || playGamesStartupSignInScheduled || playGamesStartupSignInAttempted
-                || isFinishing()) return;
-        playGamesStartupSignInScheduled = true;
-        // Let the launcher finish entering the foreground before requesting Google auth UI.
-        getWindow().getDecorView().postDelayed(() -> {
-            playGamesStartupSignInScheduled = false;
-            if (isFinishing() || playGamesStartupSignInAttempted) return;
-            playGamesStartupSignInAttempted = true;
-            Log.i("STOP_PLAY_GAMES", "Starting one-time startup sign-in after onResume");
-            startPlayGamesSignInIfNeeded();
-        }, 1200L);
+    private void launchTwaOnce() {
+        if (twaLaunchStarted || isFinishing()) return;
+        twaLaunchStarted = true;
+        try {
+            Log.i("STOP_PLAY_GAMES", "Launching TWA after startup authentication flow");
+            launchTwa();
+        } catch (RuntimeException error) {
+            twaLaunchStarted = false;
+            Log.e("STOP_PLAY_GAMES", "Unable to launch TWA after startup authentication", error);
+        }
     }
 
     @Override
@@ -366,6 +373,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     private void startPlayGamesSignInIfNeeded() {
         if (!playGamesInitialized) {
             sendPlayGamesStatus(false, "sdk_unavailable");
+            launchTwaOnce();
             return;
         }
         if (playGamesSignInInFlight) {
@@ -383,6 +391,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                 playGamesSignInInFlight = false;
                 Log.e("STOP_PLAY_GAMES", "isAuthenticated check timed out after 15 seconds; check Play Games Console credentials and signing certificate");
                 sendPlayGamesStatus(false, "sign_in_timeout");
+                launchTwaOnce();
             }
         }, 15000L);
         try {
@@ -401,6 +410,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                             playGamesSignInInFlight = false;
                             Log.i("STOP_PLAY_GAMES", "Already authenticated");
                             sendPlayGamesStatus(true, "authenticated");
+                            launchTwaOnce();
                             return;
                         }
                         try {
@@ -417,17 +427,20 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                                                 ? "Native startup sign-in succeeded"
                                                 : "Native startup sign-in did not complete; guest play remains available");
                                         sendPlayGamesStatus(signedIn, signedIn ? "authenticated" : "sign_in_failed");
+                                        launchTwaOnce();
                                     });
                         } catch (RuntimeException error) {
                             playGamesSignInInFlight = false;
                             Log.e("STOP_PLAY_GAMES", "Native sign-in could not start", error);
                             sendPlayGamesStatus(false, "sign_in_failed");
+                            launchTwaOnce();
                         }
                     });
         } catch (RuntimeException error) {
             playGamesSignInInFlight = false;
             Log.e("STOP_PLAY_GAMES", "Authentication check failed", error);
             sendPlayGamesStatus(false, "sign_in_failed");
+            launchTwaOnce();
         }
     }
 
