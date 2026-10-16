@@ -6,6 +6,13 @@ const ALLOWED_ORIGINS = new Set([
   "https://www.stopjuegodepalabras.com",
   "https://stopjuegodepalabras.com",
 ]);
+// Android Custom Tabs reports native-host postMessage events with this origin.
+// Keep it separate from ALLOWED_ORIGINS: payloads still must declare the HTTPS
+// web origin, and native code independently validates that payload origin.
+const ALLOWED_MESSAGE_EVENT_ORIGINS = new Set([
+  ...ALLOWED_ORIGINS,
+  "android-app://www.stopjuegodepalabras.com",
+]);
 type PgsStatus = { ok: boolean; status: string };
 type NativeMessage = { type: string; [key: string]: string };
 
@@ -153,9 +160,9 @@ export function initTwaPlayGamesBridge(): void {
       diagnostics.messageEvents += 1;
       diagnostics.lastMessageOrigin = typeof event.origin === "string" ? event.origin : null;
       if (event.ports?.[0]) diagnostics.portsReceived += 1;
-      if (ALLOWED_ORIGINS.has(event.origin)) diagnostics.messageEventsAllowedOrigin += 1;
+      if (ALLOWED_MESSAGE_EVENT_ORIGINS.has(event.origin)) diagnostics.messageEventsAllowedOrigin += 1;
     } catch { /* diagnóstico temporal no bloqueante */ }
-    if (!ALLOWED_ORIGINS.has(event.origin)) return;
+    if (!ALLOWED_MESSAGE_EVENT_ORIGINS.has(event.origin)) return;
     const transferredPort = event.ports?.[0];
     if (transferredPort) {
       messagePort = transferredPort;
