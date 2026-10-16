@@ -2,8 +2,10 @@
 set -euo pipefail
 
 # Build the pinned Android Browser Helper revision that exposes
-# LauncherActivity.getCustomTabsSession(). It is an upstream PR commit and is
-# not published to Maven/JitPack, so build the AAR from source reproducibly.
+# LauncherActivity.getCustomTabsSession(). Patch its launcher lifecycle so the
+# activity owning the TWA CustomTabsSession survives while Chrome is foregrounded.
+# The stock completion callback finishes LauncherActivity immediately, which
+# triggers TwaLauncher.destroy()/unbindService() and kills the postMessage bridge.
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ANDROID_DIR="$ROOT_DIR/android-generated"
 TMP_DIR="$(mktemp -d)"
@@ -15,6 +17,41 @@ PINNED_COMMIT="febadb4dcdd7a66fb4d17175b67c012f245c8610"
 git clone --quiet --filter=blob:none "$REPO_URL" "$TMP_DIR/android-browser-helper"
 git -C "$TMP_DIR/android-browser-helper" checkout --quiet --detach "$PINNED_COMMIT"
 
+HELPER_LAUNCHER="$TMP_DIR/android-browser-helper/androidbrowserhelper/src/main/java/com/google/androidbrowserhelper/trusted/LauncherActivity.java"
+test -s "$HELPER_LAUNCHER"
+
+# Keep the launcher Activity and its CustomTabsService binding alive behind Chrome.
+# The inherited onRestart() already finishes the activity when the user returns
+# after closing the TWA, because mBrowserWasLaunched is set by this callback.
+python3 - "$HELPER_LAUNCHER" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+source = path.read_text()
+old = """() -> {
+            mBrowserWasLaunched = true;
+            finish();
+        },"""
+new = """() -> {
+            // STOP patch: retain this Activity and its CustomTabsSession while
+            // the TWA is open. Finishing here unbinds the service in onDestroy()
+            // and invalidates the CustomTabsCallback used by postMessage.
+            // onRestart() finishes this Activity after the user closes the TWA.
+            mBrowserWasLaunched = true;
+        },"""
+if source.count(old) != 1:
+    raise SystemExit(
+        "Expected exactly one stock TWA completion callback to patch; "
+        f"found {source.count(old)}. Refusing to build an unpatched helper."
+    )
+path.write_text(source.replace(old, new, 1))
+patched = path.read_text()
+if "STOP patch: retain this Activity and its CustomTabsSession" not in patched:
+    raise SystemExit("TWA session lifecycle patch verification failed")
+print("Applied and verified STOP TWA session lifecycle patch.")
+PY
+
 (
   cd "$TMP_DIR/android-browser-helper"
   chmod +x ./gradlew
@@ -25,4 +62,4 @@ AAR="$TMP_DIR/android-browser-helper/androidbrowserhelper/build/outputs/aar/andr
 test -s "$AAR"
 mkdir -p "$ANDROID_DIR/app/libs"
 cp "$AAR" "$ANDROID_DIR/app/libs/androidbrowserhelper-release.aar"
-echo "Built pinned Android Browser Helper AAR from $PINNED_COMMIT"
+echo "Built patched Android Browser Helper AAR from $PINNED_COMMIT"
