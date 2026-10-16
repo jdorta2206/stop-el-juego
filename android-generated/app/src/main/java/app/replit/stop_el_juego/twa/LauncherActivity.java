@@ -68,6 +68,14 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     @Nullable private JSONObject pendingPlayGamesStatus;
 
     @Override
+    protected boolean shouldLaunchImmediately() {
+        // Delay launching Chrome until native Play Games sign-in has completed.
+        // Otherwise Android may reject the sign-in UI because the launcher is
+        // already backgrounded by the TWA.
+        return false;
+    }
+
+    @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         appUpdateManager = AppUpdateManagerFactory.create(this);
