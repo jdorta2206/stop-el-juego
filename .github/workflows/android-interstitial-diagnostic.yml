@@ -42,9 +42,9 @@ jobs:
           test -n "$KEYSTORE_PASSWORD" || { echo "Missing Android keystore password"; exit 1; }
           test -n "$KEY_ALIAS" || { echo "Missing Android key alias"; exit 1; }
           test -n "$KEY_PASSWORD" || { echo "Missing Android key password"; exit 1; }
-          grep -q 'versionCode 61' android-generated/app/build.gradle
-          grep -q 'versionName "1.3.7.5"' android-generated/app/build.gradle
-          grep -q 'appVersion=1.3.7.5' android-generated/app/build.gradle
+          grep -q 'versionCode 62' android-generated/app/build.gradle
+          grep -q 'versionName "1.3.7.6"' android-generated/app/build.gradle
+          grep -q 'appVersion=1.3.7.6' android-generated/app/build.gradle
       - name: Decode signing keystore
         shell: bash
         env:
@@ -71,8 +71,8 @@ jobs:
           test -s "$AAB"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs "$APK"
           jarsigner -verify -verbose -certs "$AAB" >/tmp/aab-signature-check.txt
-          grep -q 'versionCode 61' app/build.gradle
-          grep -q 'versionName "1.3.7.5"' app/build.gradle
+          grep -q 'versionCode 62' app/build.gradle
+          grep -q 'versionName "1.3.7.6"' app/build.gradle
           python3 - <<'PY'
           import zipfile
           from pathlib import Path
@@ -92,7 +92,7 @@ jobs:
       - name: Upload signed candidate artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: stop-pgs-candidate-v61-1.3.7.5
+          name: stop-pgs-candidate-v62-1.3.7.6
           path: |
             android-generated/app/build/outputs/apk/release/app-release.apk
             android-generated/app/build/outputs/bundle/release/app-release.aab
