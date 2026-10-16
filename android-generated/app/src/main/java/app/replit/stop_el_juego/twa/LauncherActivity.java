@@ -182,7 +182,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                         + " expected=" + SOURCE_ORIGIN + " sessionAvailable=" + (getTwaSession() != null));
                 if (relationshipValidated) {
                     requestMessageChannelWithRetry(100L);
-                } else if (originValidationAttempts < 10 && !isFinishing()) {
+                } else if (originValidationAttempts < 40 && !isFinishing()) {
                     // A negative callback can be transient (for example while Digital Asset Links
                     // is being refreshed); retry a bounded number of times before leaving PGS optional.
                     getWindow().getDecorView().postDelayed(
