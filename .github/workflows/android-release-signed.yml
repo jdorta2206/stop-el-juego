@@ -87,6 +87,8 @@ jobs:
           if 'android.permission.POST_NOTIFICATIONS' not in p.read_text():
               raise SystemExit('POST_NOTIFICATIONS permission missing before build')
           PY
+      - name: Build patched Android Browser Helper AAR for PGS bridge
+        run: bash scripts/build-pgs-android-browser-helper.sh
       - name: Build signed Release APK and AAB
         working-directory: android-generated
         run: |
@@ -140,6 +142,6 @@ jobs:
         if: always()
         run: rm -f android-release.keystore
 
-# Rebuild trigger: Android 1.3.7.8 / 60 Google Play Games release
+# Rebuild trigger: Android 1.3.7.8 / 64 Google Play Games release
 
 # Force build after Gradle manifest-key correction
