@@ -170,6 +170,31 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
         }
     }
 
+    private void showPlayGamesWelcomeThenLaunch() {
+        if (isFinishing()) {
+            launchTwaOnce();
+            return;
+        }
+        // Native, non-blocking welcome for returning Play Games players.
+        // This is branding only: it does not force Google to re-authenticate.
+        final AlertDialog welcome = new AlertDialog.Builder(this)
+                .setTitle("🎮 Google Play Games")
+                .setMessage("Cuenta conectada a STOP.\nPreparando tu partida…")
+                .setCancelable(false)
+                .create();
+        try {
+            welcome.show();
+            getWindow().getDecorView().postDelayed(() -> {
+                if (!isFinishing() && welcome.isShowing()) welcome.dismiss();
+                launchTwaOnce();
+            }, 1000L);
+        } catch (RuntimeException error) {
+            Log.w("STOP_PLAY_GAMES", "Welcome screen unavailable; continuing to the game", error);
+            if (welcome.isShowing()) welcome.dismiss();
+            launchTwaOnce();
+        }
+    }
+
     private void launchTwaOnce() {
         if (twaLaunchStarted || isFinishing()) return;
         twaLaunchStarted = true;
@@ -422,7 +447,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                             playGamesSignInInFlight = false;
                             Log.i("STOP_PLAY_GAMES", "Already authenticated");
                             sendPlayGamesStatus(true, "authenticated");
-                            launchTwaOnce();
+                            showPlayGamesWelcomeThenLaunch();
                             return;
                         }
                         try {
