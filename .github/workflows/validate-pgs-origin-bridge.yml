@@ -46,9 +46,10 @@ jobs:
           assert '"android-app://www.stopjuegodepalabras.com"' in web
           assert 'ALLOWED_MESSAGE_EVENT_ORIGINS.has(event.origin)' in web
           assert 'ALLOWED_ORIGINS.has(event.origin)' not in web
-          assert 'if (!messageChannelReady || !relationshipValidated || !isAllowedOrigin(origin))' in native
+          assert 'if (!messageChannelReady || !isAllowedOrigin(origin))' in native
           assert 'postMessage-channel request performs its own origin handshake.' in native
-          assert 'relationshipValidated = true;\n                messageChannelReady = true;' in native
+          assert 'relationshipValidated = true;\n                messageChannelReady = true;' not in native
+          assert 'Chrome\'s MessagePort handshake is tracked separately from the standalone use_as_origin callback.' in native
           assert 'channelRequestAttempts < 20 && relationshipValidated' not in native
           assert 'String origin = message.optString("origin", "");' in native
           assert 'STOP_PGS_UNLOCK_ACHIEVEMENT' in web and 'STOP_PGS_UNLOCK_ACHIEVEMENT' in native
