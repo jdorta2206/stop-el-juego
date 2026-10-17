@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - master
+      - fix/pgs-startup-signin-release-v64
 
   workflow_dispatch:
 
