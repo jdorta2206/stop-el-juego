@@ -87,3 +87,10 @@ jobs:
           chmod +x ./gradlew
           ./gradlew :app:assembleDebug --no-daemon --stacktrace
           test -s app/build/outputs/apk/debug/app-debug.apk
+      - name: Upload validated debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: stop-pgs-bridge-debug-apk
+          path: android-generated/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 7
