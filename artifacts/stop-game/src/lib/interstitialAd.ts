@@ -1,4 +1,5 @@
 import { isTwaInterstitialAvailable, requestInterstitialAd } from "@/lib/twaInterstitialBridge";
+import { areAdsTemporarilySuspended } from "@/lib/adsRuntime";
 
 const GAMES_KEY = "stop_games_played_v1";
 const CONSUMED_KEY = "stop_interstitial_consumed_games_v1";
@@ -31,7 +32,7 @@ export function consumeInterstitialSlot(): void {
 }
 
 export async function maybeShowInterstitial(isPremium: boolean): Promise<boolean> {
-  if (isPremium || !interstitialEligible() || !isTwaInterstitialAvailable()) return false;
+  if (areAdsTemporarilySuspended() || isPremium || !interstitialEligible() || !isTwaInterstitialAvailable()) return false;
   // Consume before launching so repeated taps/re-renders cannot trigger two ads.
   consumeInterstitialSlot();
   await requestInterstitialAd();
