@@ -2,7 +2,7 @@ name: Validate Play Games bridge origin
 
 on:
   pull_request:
-    branches: [master]
+    branches: [master, fix/pgs-warmup-before-origin-validation]
     paths:
       - "android-generated/**"
       - "scripts/build-pgs-android-browser-helper.sh"
