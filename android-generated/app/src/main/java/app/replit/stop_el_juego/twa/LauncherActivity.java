@@ -219,8 +219,8 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             }
             @Override
             public void onMessageChannelReady(@Nullable Bundle extras) {
-                // Chrome only opens the MessagePort after its channel/origin handshake.
-                relationshipValidated = true;
+                // Chrome's MessagePort handshake is tracked separately from the standalone use_as_origin callback.
+                // Native actions still require a ready channel and an exact HTTPS payload origin.
                 messageChannelReady = true;
                 channelRequestInFlight = false;
                 channelRequestAttempts = 0;
@@ -346,7 +346,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             String type = message.optString("type", "");
             if (type.startsWith("STOP_PGS_")) {
                 String origin = message.optString("origin", "");
-                if (!messageChannelReady || !relationshipValidated || !isAllowedOrigin(origin)) {
+                if (!messageChannelReady || !isAllowedOrigin(origin)) {
                     Log.w("STOP_PLAY_GAMES", "Rejected PGS message from invalid origin/channel: " + origin);
                     sendPlayGamesStatus(false, "invalid_origin_or_channel");
                     return;
