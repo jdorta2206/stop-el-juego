@@ -46,13 +46,13 @@ jobs:
           printf '%s' "$KEYSTORE_BASE64" | base64 --decode > android-release.keystore
           test -s android-release.keystore
           keytool -list -keystore android-release.keystore -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" >/dev/null
-      - name: Set v65 version code and verify notification permission
+      - name: Set v66 version code and verify notification permission
         working-directory: android-generated
         shell: bash
         run: |
           set -euo pipefail
-          sed -i -E 's/versionCode [0-9]+/versionCode 65/' app/build.gradle
-          sed -i -E 's/versionName "[^"]+"/versionName "1.3.7.9"/' app/build.gradle
+          sed -i -E 's/versionCode [0-9]+/versionCode 66/' app/build.gradle
+          sed -i -E 's/versionName "[^"]+"/versionName "1.3.8.0"/' app/build.gradle
           python3 - <<'PY'
           from pathlib import Path
           p = Path('app/build.gradle')
@@ -64,13 +64,13 @@ jobs:
           lines = s.splitlines()
           for i, current in enumerate(lines):
               if marker in current:
-                  lines[i] = "    launchUrl: '/?source=googleplay-twa&appVersion=1.3.7.9',"
+                  lines[i] = "    launchUrl: '/?source=googleplay-twa&appVersion=1.3.8.0',"
                   break
           p.write_text("\n".join(lines) + "\n")
           PY
-          grep -q 'versionCode 65' app/build.gradle
-          grep -q 'versionName "1.3.7.9"' app/build.gradle
-          grep -q 'appVersion=1.3.7.9' app/build.gradle
+          grep -q 'versionCode 66' app/build.gradle
+          grep -q 'versionName "1.3.8.0"' app/build.gradle
+          grep -q 'appVersion=1.3.8.0' app/build.gradle
           python3 - <<'PY'
           from pathlib import Path
           p = Path('app/src/main/AndroidManifest.xml')
@@ -103,9 +103,9 @@ jobs:
           AAB='app/build/outputs/bundle/release/app-release.aab'
           test -s "$APK"
           test -s "$AAB"
-          grep -q 'versionCode 65' app/build.gradle
-          grep -q 'versionName "1.3.7.9"' app/build.gradle
-          grep -q 'appVersion=1.3.7.9' app/build.gradle
+          grep -q 'versionCode 66' app/build.gradle
+          grep -q 'versionName "1.3.8.0"' app/build.gradle
+          grep -q 'appVersion=1.3.8.0' app/build.gradle
           grep -q 'checkForPlayUpdate' app/src/main/java/app/replit/stop_el_juego/twa/LauncherActivity.java
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs "$APK"
           "$ANDROID_HOME/build-tools/35.0.0/aapt2" dump permissions "$APK" | tee /tmp/apk-permissions.txt
@@ -132,7 +132,7 @@ jobs:
       - name: Upload signed Release artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: stop-android-release-signed-v65-pgs-channel-handshake
+          name: stop-android-release-signed-v66-pgs-channel-handshake
           path: |
             android-generated/app/build/outputs/apk/release/app-release.apk
             android-generated/app/build/outputs/bundle/release/app-release.aab
@@ -142,6 +142,6 @@ jobs:
         if: always()
         run: rm -f android-release.keystore
 
-# Rebuild trigger: Android 1.3.7.9 / 65 Google Play Games release
+# Rebuild trigger: Android 1.3.8.0 / 65 Google Play Games release
 
 # Force build after Gradle manifest-key correction
