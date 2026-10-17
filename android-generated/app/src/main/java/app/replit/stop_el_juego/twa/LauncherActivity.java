@@ -146,6 +146,10 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     protected void onResume() {
         super.onResume();
         checkForPlayUpdate();
+        // Do not rely only on NAVIGATION_FINISHED: some Custom Tabs providers do not
+        // deliver that callback consistently. Start bounded origin validation when the
+        // activity resumes as a second entry point; the validation method guards duplicates.
+        getWindow().getDecorView().postDelayed(this::requestUseAsOriginValidation, 1500L);
         schedulePlayGamesStartupSignIn();
     }
 
