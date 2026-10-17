@@ -312,11 +312,17 @@ export function useAchievements(playerId?: string) {
     const newUnlocked = new Set(currentUnlocked);
     let justUnlocked: AchievementDef | null = null;
     for (const ach of ACHIEVEMENTS) {
-      if (!newUnlocked.has(ach.id) && ach.check(next)) {
+      if (!ach.check(next)) continue;
+
+      // Always retry eligible native unlocks after a completed round. Local
+      // achievements may have been earned before Play Games sign-in/channel
+      // readiness, so gating this call on !newUnlocked.has(ach.id) permanently
+      // drops the native unlock for returning players. Play Games unlocks are
+      // idempotent; retrying an already-earned milestone is safe.
+      unlockPlayGamesAchievementForMilestone(ach.id);
+
+      if (!newUnlocked.has(ach.id)) {
         newUnlocked.add(ach.id);
-        // Keep native achievements in sync for every newly-earned milestone,
-        // not only the first toast shown when a round unlocks several at once.
-        unlockPlayGamesAchievementForMilestone(ach.id);
         if (!justUnlocked) justUnlocked = ach;
       }
     }
