@@ -175,11 +175,51 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             launchTwaOnce();
             return;
         }
-        // Native, non-blocking welcome for returning Play Games players.
-        // This is branding only: it does not force Google to re-authenticate.
+        // Native branded welcome for returning Play Games players. Google controls
+        // its own sign-in UI separately; this short screen never blocks guest fallback.
+        final LinearLayout content = new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setGravity(Gravity.CENTER);
+        final float density = getResources().getDisplayMetrics().density;
+        int horizontal = (int) (28 * density);
+        int vertical = (int) (24 * density);
+        content.setPadding(horizontal, vertical, horizontal, vertical);
+
+        final TextView logo = new TextView(this);
+        logo.setText("🎮");
+        logo.setTextSize(42);
+        logo.setGravity(Gravity.CENTER);
+        content.addView(logo, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+
+        final TextView heading = new TextView(this);
+        heading.setText("Google Play Games");
+        heading.setTextSize(21);
+        heading.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        heading.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams headingParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        headingParams.topMargin = (int) (8 * density);
+        content.addView(heading, headingParams);
+
+        final TextView status = new TextView(this);
+        status.setText("Cuenta conectada a STOP");
+        status.setTextSize(16);
+        status.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams statusParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        statusParams.topMargin = (int) (8 * density);
+        content.addView(status, statusParams);
+
+        final ProgressBar progress = new ProgressBar(this);
+        LinearLayout.LayoutParams progressParams = new LinearLayout.LayoutParams(
+                (int) (36 * density), (int) (36 * density));
+        progressParams.gravity = Gravity.CENTER_HORIZONTAL;
+        progressParams.topMargin = (int) (18 * density);
+        content.addView(progress, progressParams);
+
         final AlertDialog welcome = new AlertDialog.Builder(this)
-                .setTitle("🎮 Google Play Games")
-                .setMessage("Cuenta conectada a STOP.\nPreparando tu partida…")
+                .setView(content)
                 .setCancelable(false)
                 .create();
         try {
@@ -187,7 +227,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             getWindow().getDecorView().postDelayed(() -> {
                 if (!isFinishing() && welcome.isShowing()) welcome.dismiss();
                 launchTwaOnce();
-            }, 1000L);
+            }, 1200L);
         } catch (RuntimeException error) {
             Log.w("STOP_PLAY_GAMES", "Welcome screen unavailable; continuing to the game", error);
             if (welcome.isShowing()) welcome.dismiss();
