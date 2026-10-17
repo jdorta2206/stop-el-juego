@@ -9,7 +9,7 @@ on:
       - "artifacts/stop-game/src/lib/twaPlayGamesBridge.ts"
       - ".github/workflows/validate-pgs-origin-bridge.yml"
   push:
-    branches: [fix/pgs-validate-native-message-origin, fix/pgs-public-session-accessor, fix/pgs-warmup-before-origin-validation]
+    branches: [fix/pgs-validate-native-message-origin, fix/pgs-public-session-accessor, fix/pgs-warmup-before-origin-validation, fix/pgs-startup-welcome]
   workflow_dispatch:
 
 permissions:
