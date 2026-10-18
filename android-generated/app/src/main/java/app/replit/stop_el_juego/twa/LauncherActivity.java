@@ -509,7 +509,13 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                                                 ? "Native startup sign-in succeeded"
                                                 : "Native startup sign-in did not complete; guest play remains available");
                                         sendPlayGamesStatus(signedIn, signedIn ? "authenticated" : "sign_in_failed");
-                                        launchTwaOnce();
+                                        if (signedIn) {
+                                            // Keep first-time sign-in consistent with returning authenticated users:
+                                            // show the native STOP / Play Games welcome before opening the TWA.
+                                            showPlayGamesWelcomeThenLaunch();
+                                        } else {
+                                            launchTwaOnce();
+                                        }
                                     });
                         } catch (RuntimeException error) {
                             playGamesSignInInFlight = false;
