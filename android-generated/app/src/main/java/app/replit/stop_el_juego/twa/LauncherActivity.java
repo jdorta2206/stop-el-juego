@@ -71,6 +71,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     private int playGamesSignInGeneration;
     // Keep the most recent PGS result until the TWA MessagePort is ready.
     @Nullable private JSONObject pendingPlayGamesStatus;
+    @Nullable private AlertDialog startupWelcomeDialog;
 
     @Override
     protected boolean shouldLaunchImmediately() {
@@ -223,19 +224,30 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
         progressParams.topMargin = (int) (18 * density);
         content.addView(progress, progressParams);
 
-        final AlertDialog welcome = new AlertDialog.Builder(this)
+        startupWelcomeDialog = new AlertDialog.Builder(this)
                 .setView(content)
                 .setCancelable(false)
                 .create();
         try {
-            welcome.show();
+            startupWelcomeDialog.show();
+            // Start the TWA immediately, but keep the branded dialog over the white
+            // Custom Tabs startup surface until the first navigation has finished.
+            launchTwaOnce();
+            // Safety fallback: never leave the native dialog blocking the game forever
+            // if Chrome does not deliver NAVIGATION_FINISHED on a device.
             getWindow().getDecorView().postDelayed(() -> {
-                if (!isFinishing() && welcome.isShowing()) welcome.dismiss();
-                launchTwaOnce();
-            }, 1200L);
+                if (startupWelcomeDialog != null && startupWelcomeDialog.isShowing()) {
+                    startupWelcomeDialog.dismiss();
+                    startupWelcomeDialog = null;
+                    Log.w("STOP_PLAY_GAMES", "Startup welcome dismissed by 8s safety timeout");
+                }
+            }, 8000L);
         } catch (RuntimeException error) {
             Log.w("STOP_PLAY_GAMES", "Welcome screen unavailable; continuing to the game", error);
-            if (welcome.isShowing()) welcome.dismiss();
+            if (startupWelcomeDialog != null && startupWelcomeDialog.isShowing()) {
+                startupWelcomeDialog.dismiss();
+            }
+            startupWelcomeDialog = null;
             launchTwaOnce();
         }
     }
@@ -278,6 +290,13 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             public void onNavigationEvent(int navigationEvent, @Nullable Bundle extras) {
                 super.onNavigationEvent(navigationEvent, extras);
                 if (navigationEvent != NAVIGATION_FINISHED) return;
+                // Keep the native branded startup visible while Chrome loads the TWA.
+                // Dismissing it on a fixed short timer exposes Chrome's white startup page.
+                if (startupWelcomeDialog != null && startupWelcomeDialog.isShowing()) {
+                    startupWelcomeDialog.dismiss();
+                    startupWelcomeDialog = null;
+                    Log.i("STOP_PLAY_GAMES", "Startup welcome dismissed after TWA navigation finished");
+                }
                 // TwaLauncher validates handle_all_urls for launching the TWA, but
                 // postMessage requires the separate use_as_origin relationship.
                 // Request it explicitly; otherwise this callback may never set
