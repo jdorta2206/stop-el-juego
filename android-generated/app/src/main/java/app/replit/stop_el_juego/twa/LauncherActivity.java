@@ -511,7 +511,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                             playGamesSignInInFlight = false;
                             Log.i("STOP_PLAY_GAMES", "Already authenticated");
                             sendPlayGamesStatus(true, "authenticated");
-                            showPlayGamesWelcomeThenLaunch();
+                            launchTwaOnce();
                             return;
                         }
                         // Bound automatic sign-in too: this is startup, not a user-held dialog.
@@ -550,7 +550,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                                         if (signedIn) {
                                             // Keep first-time sign-in consistent with returning authenticated users:
                                             // show the native STOP / Play Games welcome before opening the TWA.
-                                            showPlayGamesWelcomeThenLaunch();
+                                            launchTwaOnce();
                                         } else {
                                             launchTwaOnce();
                                         }
