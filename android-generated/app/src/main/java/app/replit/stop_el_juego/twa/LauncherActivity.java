@@ -582,6 +582,9 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
         if ("STOP_PGS_STATUS".equals(type)) {
             PlayGames.getGamesSignInClient(this).isAuthenticated()
                     .addOnCompleteListener(task -> {
+                        if (!task.isSuccessful()) {
+                            Log.e("STOP_PLAY_GAMES", "Status isAuthenticated task failed", task.getException());
+                        }
                         boolean authenticated = task.isSuccessful()
                                 && task.getResult() != null
                                 && task.getResult().isAuthenticated();
@@ -595,7 +598,10 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                         try { startActivityForResult(intent, 7402); sendPlayGamesStatus(true, "achievements_opened"); }
                         catch (RuntimeException error) { sendPlayGamesStatus(false, "achievements_unavailable"); }
                     })
-                    .addOnFailureListener(error -> sendPlayGamesStatus(false, "achievements_unavailable"));
+                    .addOnFailureListener(error -> {
+                        Log.e("STOP_PLAY_GAMES", "getAchievementsIntent failed", error);
+                        sendPlayGamesStatus(false, "achievements_unavailable");
+                    });
             return;
         }
         if ("STOP_PGS_UNLOCK_ACHIEVEMENT".equals(type)) {
