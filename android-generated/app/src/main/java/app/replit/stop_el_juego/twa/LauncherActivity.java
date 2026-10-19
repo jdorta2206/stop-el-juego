@@ -514,9 +514,28 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                             showPlayGamesWelcomeThenLaunch();
                             return;
                         }
+                        // Bound automatic sign-in too: this is startup, not a user-held dialog.
+                        // If Play Games never completes (misconfigured project/network), preserve guest play.
+                        final int startupSignInGeneration = ++playGamesSignInGeneration;
+                        getWindow().getDecorView().postDelayed(() -> {
+                            if (playGamesSignInInFlight
+                                    && startupSignInGeneration == playGamesSignInGeneration
+                                    && !isFinishing()) {
+                                playGamesSignInGeneration++;
+                                playGamesSignInInFlight = false;
+                                Log.e("STOP_PLAY_GAMES", "signIn task timed out after 15 seconds; continuing as guest");
+                                sendPlayGamesStatus(false, "sign_in_timeout");
+                                launchTwaOnce();
+                            }
+                        }, 15000L);
                         try {
                             PlayGames.getGamesSignInClient(this).signIn()
                                     .addOnCompleteListener(signInTask -> {
+                                        if (startupSignInGeneration != playGamesSignInGeneration || isFinishing()) {
+                                            Log.w("STOP_PLAY_GAMES", "Ignoring late signIn result after timeout");
+                                            return;
+                                        }
+                                        playGamesSignInGeneration++;
                                         if (!signInTask.isSuccessful()) {
                                             Log.e("STOP_PLAY_GAMES", "signIn task failed", signInTask.getException());
                                         }
