@@ -5,25 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>STOP - Juego de palabras online: juega gratis</title>
     <link rel="canonical" href="https://www.stopjuegodepalabras.com/" />
-    <!-- Emergency production HTML recovery.
-         Never unregister the Service Worker or delete caches here: doing so can
-         destroy the offline bundle before main.tsx gets a chance to register it.
-         The SW already uses network-first navigation, so an online cache-busting
-         reload is sufficient to escape a stale HTML document. Offline entry is
-         left completely untouched. -->
-    <script>
-      (function () {
-        try {
-          var key = "stop-html-recovery-v2";
-          if (navigator.onLine && !sessionStorage.getItem(key)) {
-            sessionStorage.setItem(key, "1");
-            var u = new URL(location.href);
-            u.searchParams.set("_app_refresh", String(Date.now()));
-            location.replace(u.href);
-          }
-        } catch (_) {}
-      })();
-    </script>
+    <!-- Avoid an unconditional cache-busting navigation at startup: it visibly
+         reopens the TWA/web page and can expose a blank transition. Runtime chunk
+         recovery remains in main.tsx and only runs when a chunk actually fails. -->
     <!-- Railway: frontend + API are built and served as one production service. -->
     <link rel="icon" type="image/png" href="/images/stop-logo.png" />
     <link rel="apple-touch-icon" href="/images/icon-192.png" />
@@ -67,7 +51,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-      #root { visibility:hidden; }
+      html, body { margin:0; min-height:100%; background:#060318; }\n      #root { visibility:hidden; min-height:100vh; background:#060318; }
       #html-splash { position:fixed; inset:0; z-index:99999; display:flex; align-items:center; justify-content:center; background:radial-gradient(ellipse at 50% 45%, #5a1208 0%, #1a063a 55%, #060318 100%); transition:opacity .35s ease; }
       #html-splash.fade-out { opacity:0; pointer-events:none; }
       #html-splash img { width:160px; height:160px; border-radius:50%; filter:drop-shadow(0 0 28px rgba(181,48,26,.95)) drop-shadow(0 4px 16px rgba(0,0,0,.8)); animation:splash-pulse 1.6s ease-in-out infinite; }
