@@ -12,6 +12,7 @@ import android.widget.TextView;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.SystemClock;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
@@ -72,6 +73,8 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     // Keep the most recent PGS result until the TWA MessagePort is ready.
     @Nullable private JSONObject pendingPlayGamesStatus;
     @Nullable private AlertDialog startupWelcomeDialog;
+    private long startupWelcomeShownAtMs;
+    private static final long STARTUP_WELCOME_MIN_VISIBLE_MS = 1400L;
 
     @Override
     protected boolean shouldLaunchImmediately() {
@@ -230,6 +233,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                 .create();
         try {
             startupWelcomeDialog.show();
+            startupWelcomeShownAtMs = SystemClock.elapsedRealtime();
             // Start the TWA immediately, but keep the branded dialog over the white
             // Custom Tabs startup surface until the first navigation has finished.
             launchTwaOnce();
@@ -290,12 +294,18 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             public void onNavigationEvent(int navigationEvent, @Nullable Bundle extras) {
                 super.onNavigationEvent(navigationEvent, extras);
                 if (navigationEvent != NAVIGATION_FINISHED) return;
-                // Keep the native branded startup visible while Chrome loads the TWA.
-                // Dismissing it on a fixed short timer exposes Chrome's white startup page.
+                // Do not flash away the native welcome as soon as Chrome reports navigation.
+                // Hold it for a minimum visible interval, then dismiss on the UI thread.
                 if (startupWelcomeDialog != null && startupWelcomeDialog.isShowing()) {
-                    startupWelcomeDialog.dismiss();
-                    startupWelcomeDialog = null;
-                    Log.i("STOP_PLAY_GAMES", "Startup welcome dismissed after TWA navigation finished");
+                    long elapsed = SystemClock.elapsedRealtime() - startupWelcomeShownAtMs;
+                    long remaining = Math.max(0L, STARTUP_WELCOME_MIN_VISIBLE_MS - elapsed);
+                    getWindow().getDecorView().postDelayed(() -> {
+                        if (startupWelcomeDialog != null && startupWelcomeDialog.isShowing()) {
+                            startupWelcomeDialog.dismiss();
+                            startupWelcomeDialog = null;
+                            Log.i("STOP_PLAY_GAMES", "Startup welcome dismissed after minimum visible interval");
+                        }
+                    }, remaining);
                 }
                 // TwaLauncher validates handle_all_urls for launching the TWA, but
                 // postMessage requires the separate use_as_origin relationship.
