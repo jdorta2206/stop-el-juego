@@ -209,7 +209,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
         content.addView(heading, headingParams);
 
         final TextView status = new TextView(this);
-        status.setText("Cuenta conectada a STOP");
+        status.setText("Preparando STOP…");
         status.setTextSize(16);
         status.setGravity(Gravity.CENTER);
         LinearLayout.LayoutParams statusParams = new LinearLayout.LayoutParams(
