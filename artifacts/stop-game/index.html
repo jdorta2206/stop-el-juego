@@ -18,7 +18,12 @@
       (function () {
         try {
           var key = "stop-html-recovery-v2";
-          if (navigator.onLine && !sessionStorage.getItem(key)) {
+          var params = new URLSearchParams(location.search);
+          var isTwaLaunch =
+            params.get("source") === "googleplay-twa" ||
+            params.get("source") === "twa" ||
+            document.referrer.indexOf("android-app://app.replit.stop_el_juego.twa") === 0;
+          if (!isTwaLaunch && navigator.onLine && !sessionStorage.getItem(key)) {
             sessionStorage.setItem(key, "1");
             var u = new URL(location.href);
             u.searchParams.set("_app_refresh", String(Date.now()));
