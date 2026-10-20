@@ -218,6 +218,12 @@ export function usePresence(
   }, []);
 
   useEffect(() => {
+    // A different account must never inherit the previous account's pending
+    // challenge UI/lock. Reset this before starting the new polling loop.
+    activeChallenge.current = null;
+    setIncomingChallenge(null);
+    setOnlinePlayers([]);
+
     if (!player) return;
 
     ping(player, roomCode, language);
