@@ -1871,6 +1871,9 @@ router.post("/:roomCode/start", async (req, res) => {
     roundScore: 0,
     validAnswerCount: 0,
     finishedAt: undefined,
+    // Answers are round-scoped; never expose the previous round's answers
+    // while the new round is waiting for submissions.
+    answers: {},
     // Assign 1 random card at game start (round 1); keep it for subsequent rounds until used
     powerCard: newRound === 1
       ? MP_CARDS[Math.floor(Math.random() * MP_CARDS.length)]
