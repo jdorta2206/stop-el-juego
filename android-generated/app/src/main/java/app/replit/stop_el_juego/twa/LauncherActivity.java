@@ -4,9 +4,15 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
+import android.graphics.Typeface;
+import android.view.Gravity;
+import android.widget.LinearLayout;
+import android.widget.ProgressBar;
+import android.widget.TextView;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.SystemClock;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
@@ -66,6 +72,9 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     private int playGamesSignInGeneration;
     // Keep the most recent PGS result until the TWA MessagePort is ready.
     @Nullable private JSONObject pendingPlayGamesStatus;
+    @Nullable private AlertDialog startupWelcomeDialog;
+    private long startupWelcomeShownAtMs;
+    private static final long STARTUP_WELCOME_MIN_VISIBLE_MS = 1400L;
 
     @Override
     protected boolean shouldLaunchImmediately() {
@@ -170,6 +179,83 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
         }
     }
 
+    private void showPlayGamesWelcomeThenLaunch() {
+        if (isFinishing()) {
+            launchTwaOnce();
+            return;
+        }
+        // Native branded welcome for returning Play Games players. Google controls
+        // its own sign-in UI separately; this short screen never blocks guest fallback.
+        final LinearLayout content = new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setGravity(Gravity.CENTER);
+        final float density = getResources().getDisplayMetrics().density;
+        int horizontal = (int) (28 * density);
+        int vertical = (int) (24 * density);
+        content.setPadding(horizontal, vertical, horizontal, vertical);
+
+        final TextView logo = new TextView(this);
+        logo.setText("🎮");
+        logo.setTextSize(42);
+        logo.setGravity(Gravity.CENTER);
+        content.addView(logo, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+
+        final TextView heading = new TextView(this);
+        heading.setText("Google Play Games");
+        heading.setTextSize(21);
+        heading.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        heading.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams headingParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        headingParams.topMargin = (int) (8 * density);
+        content.addView(heading, headingParams);
+
+        final TextView status = new TextView(this);
+        status.setText("Preparando STOP…");
+        status.setTextSize(16);
+        status.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams statusParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        statusParams.topMargin = (int) (8 * density);
+        content.addView(status, statusParams);
+
+        final ProgressBar progress = new ProgressBar(this);
+        LinearLayout.LayoutParams progressParams = new LinearLayout.LayoutParams(
+                (int) (36 * density), (int) (36 * density));
+        progressParams.gravity = Gravity.CENTER_HORIZONTAL;
+        progressParams.topMargin = (int) (18 * density);
+        content.addView(progress, progressParams);
+
+        startupWelcomeDialog = new AlertDialog.Builder(this)
+                .setView(content)
+                .setCancelable(false)
+                .create();
+        try {
+            startupWelcomeDialog.show();
+            startupWelcomeShownAtMs = SystemClock.elapsedRealtime();
+            // Start the TWA immediately, but keep the branded dialog over the white
+            // Custom Tabs startup surface until the first navigation has finished.
+            launchTwaOnce();
+            // Safety fallback: never leave the native dialog blocking the game forever
+            // if Chrome does not deliver NAVIGATION_FINISHED on a device.
+            getWindow().getDecorView().postDelayed(() -> {
+                if (startupWelcomeDialog != null && startupWelcomeDialog.isShowing()) {
+                    startupWelcomeDialog.dismiss();
+                    startupWelcomeDialog = null;
+                    Log.w("STOP_PLAY_GAMES", "Startup welcome dismissed by 8s safety timeout");
+                }
+            }, 8000L);
+        } catch (RuntimeException error) {
+            Log.w("STOP_PLAY_GAMES", "Welcome screen unavailable; continuing to the game", error);
+            if (startupWelcomeDialog != null && startupWelcomeDialog.isShowing()) {
+                startupWelcomeDialog.dismiss();
+            }
+            startupWelcomeDialog = null;
+            launchTwaOnce();
+        }
+    }
+
     private void launchTwaOnce() {
         if (twaLaunchStarted || isFinishing()) return;
         twaLaunchStarted = true;
@@ -208,6 +294,19 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             public void onNavigationEvent(int navigationEvent, @Nullable Bundle extras) {
                 super.onNavigationEvent(navigationEvent, extras);
                 if (navigationEvent != NAVIGATION_FINISHED) return;
+                // Do not flash away the native welcome as soon as Chrome reports navigation.
+                // Hold it for a minimum visible interval, then dismiss on the UI thread.
+                if (startupWelcomeDialog != null && startupWelcomeDialog.isShowing()) {
+                    long elapsed = SystemClock.elapsedRealtime() - startupWelcomeShownAtMs;
+                    long remaining = Math.max(0L, STARTUP_WELCOME_MIN_VISIBLE_MS - elapsed);
+                    getWindow().getDecorView().postDelayed(() -> {
+                        if (startupWelcomeDialog != null && startupWelcomeDialog.isShowing()) {
+                            startupWelcomeDialog.dismiss();
+                            startupWelcomeDialog = null;
+                            Log.i("STOP_PLAY_GAMES", "Startup welcome dismissed after minimum visible interval");
+                        }
+                    }, remaining);
+                }
                 // TwaLauncher validates handle_all_urls for launching the TWA, but
                 // postMessage requires the separate use_as_origin relationship.
                 // Request it explicitly; otherwise this callback may never set
@@ -422,12 +521,31 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                             playGamesSignInInFlight = false;
                             Log.i("STOP_PLAY_GAMES", "Already authenticated");
                             sendPlayGamesStatus(true, "authenticated");
-                            launchTwaOnce();
+                            showPlayGamesWelcomeThenLaunch();
                             return;
                         }
+                        // Bound automatic sign-in too: this is startup, not a user-held dialog.
+                        // If Play Games never completes (misconfigured project/network), preserve guest play.
+                        final int startupSignInGeneration = ++playGamesSignInGeneration;
+                        getWindow().getDecorView().postDelayed(() -> {
+                            if (playGamesSignInInFlight
+                                    && startupSignInGeneration == playGamesSignInGeneration
+                                    && !isFinishing()) {
+                                playGamesSignInGeneration++;
+                                playGamesSignInInFlight = false;
+                                Log.e("STOP_PLAY_GAMES", "signIn task timed out after 15 seconds; continuing as guest");
+                                sendPlayGamesStatus(false, "sign_in_timeout");
+                                launchTwaOnce();
+                            }
+                        }, 15000L);
                         try {
                             PlayGames.getGamesSignInClient(this).signIn()
                                     .addOnCompleteListener(signInTask -> {
+                                        if (startupSignInGeneration != playGamesSignInGeneration || isFinishing()) {
+                                            Log.w("STOP_PLAY_GAMES", "Ignoring late signIn result after timeout");
+                                            return;
+                                        }
+                                        playGamesSignInGeneration++;
                                         if (!signInTask.isSuccessful()) {
                                             Log.e("STOP_PLAY_GAMES", "signIn task failed", signInTask.getException());
                                         }
@@ -439,7 +557,12 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                                                 ? "Native startup sign-in succeeded"
                                                 : "Native startup sign-in did not complete; guest play remains available");
                                         sendPlayGamesStatus(signedIn, signedIn ? "authenticated" : "sign_in_failed");
-                                        launchTwaOnce();
+                                        if (signedIn) {
+                                            // Keep first-time sign-in consistent with returning authenticated users.
+                                            showPlayGamesWelcomeThenLaunch();
+                                        } else {
+                                            launchTwaOnce();
+                                        }
                                     });
                         } catch (RuntimeException error) {
                             playGamesSignInInFlight = false;
@@ -468,6 +591,9 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
         if ("STOP_PGS_STATUS".equals(type)) {
             PlayGames.getGamesSignInClient(this).isAuthenticated()
                     .addOnCompleteListener(task -> {
+                        if (!task.isSuccessful()) {
+                            Log.e("STOP_PLAY_GAMES", "Status isAuthenticated task failed", task.getException());
+                        }
                         boolean authenticated = task.isSuccessful()
                                 && task.getResult() != null
                                 && task.getResult().isAuthenticated();
@@ -481,7 +607,10 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                         try { startActivityForResult(intent, 7402); sendPlayGamesStatus(true, "achievements_opened"); }
                         catch (RuntimeException error) { sendPlayGamesStatus(false, "achievements_unavailable"); }
                     })
-                    .addOnFailureListener(error -> sendPlayGamesStatus(false, "achievements_unavailable"));
+                    .addOnFailureListener(error -> {
+                        Log.e("STOP_PLAY_GAMES", "getAchievementsIntent failed", error);
+                        sendPlayGamesStatus(false, "achievements_unavailable");
+                    });
             return;
         }
         if ("STOP_PGS_UNLOCK_ACHIEVEMENT".equals(type)) {

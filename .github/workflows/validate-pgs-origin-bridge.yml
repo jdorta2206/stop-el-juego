@@ -9,7 +9,7 @@ on:
       - "artifacts/stop-game/src/lib/twaPlayGamesBridge.ts"
       - ".github/workflows/validate-pgs-origin-bridge.yml"
   push:
-    branches: [fix/pgs-validate-native-message-origin, fix/pgs-public-session-accessor, fix/pgs-warmup-before-origin-validation]
+    branches: [fix/pgs-validate-native-message-origin, fix/pgs-public-session-accessor, fix/pgs-warmup-before-origin-validation, fix/pgs-startup-welcome]
   workflow_dispatch:
 
 permissions:
@@ -65,7 +65,7 @@ jobs:
           assert 'return "https://stopjuegodepalabras.com".equals(origin)' in native
           assert '|| "https://www.stopjuegodepalabras.com".equals(origin);' in native
           gradle = Path("android-generated/app/build.gradle").read_text()
-          assert "versionCode 66" in gradle and 'versionName "1.3.8.0"' in gradle
+          assert "versionCode 70" in gradle and 'versionName "1.3.8.4"' in gradle
           assert "postDelayed(this::requestUseAsOriginValidation, 1500L)" in native
           assert "STOP patch: retain this Activity and its CustomTabsSession" in build_script
           assert "mBrowserWasLaunched = true;" in build_script
@@ -87,3 +87,10 @@ jobs:
           chmod +x ./gradlew
           ./gradlew :app:assembleDebug --no-daemon --stacktrace
           test -s app/build/outputs/apk/debug/app-debug.apk
+      - name: Upload validated debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: stop-pgs-bridge-debug-apk
+          path: android-generated/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 7
