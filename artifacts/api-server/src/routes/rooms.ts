@@ -1871,6 +1871,11 @@ router.post("/:roomCode/start", async (req, res) => {
     roundScore: 0,
     validAnswerCount: 0,
     finishedAt: undefined,
+    // Round-scoped bluff state must never leak into the next round.
+    bluffedCategories: [],
+    bluffedWords: {},
+    bluffResults: [],
+    wasStopper: false,
     // Assign 1 random card at game start (round 1); keep it for subsequent rounds until used
     powerCard: newRound === 1
       ? MP_CARDS[Math.floor(Math.random() * MP_CARDS.length)]
