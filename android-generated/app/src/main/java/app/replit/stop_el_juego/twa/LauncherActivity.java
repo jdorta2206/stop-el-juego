@@ -29,12 +29,9 @@ import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback;
 import com.google.android.gms.games.PlayGames;
 import com.google.android.gms.games.PlayGamesSdk;
 import com.google.androidbrowserhelper.trusted.QualityEnforcer;
-import com.google.androidbrowserhelper.trusted.TwaLauncher;
 
 import org.json.JSONException;
 import org.json.JSONObject;
-
-import java.lang.reflect.Field;
 
 /** STOP TWA native bridge for Google Mobile Ads rewarded video. */
 public class LauncherActivity extends com.google.androidbrowserhelper.trusted.LauncherActivity {
@@ -146,6 +143,9 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     protected void onResume() {
         super.onResume();
         checkForPlayUpdate();
+        // Some Custom Tabs providers do not consistently emit NAVIGATION_FINISHED.
+        // Kick off the existing bounded, duplicate-guarded origin validation on resume too.
+        getWindow().getDecorView().postDelayed(this::requestUseAsOriginValidation, 1500L);
         schedulePlayGamesStartupSignIn();
     }
 
@@ -306,24 +306,35 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
         }, 300L);
     }
     @Nullable private CustomTabsSession getTwaSession() {
+        // Android Browser Helper 2.7.4 does not expose getCustomTabsSession().
+        // Until the upstream public accessor is released, read the existing launcher
+        // session defensively and log failures so bridge diagnostics are actionable.
         try {
             Object launcher = findFieldValue(this, "mTwaLauncher");
-            if (!(launcher instanceof TwaLauncher)) return null;
-            Object session = findFieldValue(launcher, "mSession");
-            return session instanceof CustomTabsSession ? (CustomTabsSession) session : null;
-        } catch (ReflectiveOperationException | ClassCastException error) {
+            if (!(launcher instanceof com.google.androidbrowserhelper.trusted.TwaLauncher)) {
+                Log.w(TAG, "TWA launcher unavailable; cannot establish postMessage channel");
+                return null;
+            }
+            Object value = findFieldValue(launcher, "mSession");
+            if (value instanceof CustomTabsSession) return (CustomTabsSession) value;
+            Log.w(TAG, "TWA CustomTabsSession is not ready yet");
+        } catch (ReflectiveOperationException | RuntimeException error) {
             Log.w(TAG, "Unable to obtain TWA CustomTabsSession", error);
-            return null;
         }
+        return null;
     }
-    @Nullable private static Object findFieldValue(Object target, String fieldName) throws ReflectiveOperationException {
+
+    @Nullable private static Object findFieldValue(Object target, String fieldName)
+            throws ReflectiveOperationException {
         Class<?> type = target.getClass();
         while (type != null) {
             try {
-                Field field = type.getDeclaredField(fieldName);
+                java.lang.reflect.Field field = type.getDeclaredField(fieldName);
                 field.setAccessible(true);
                 return field.get(target);
-            } catch (NoSuchFieldException ignored) { type = type.getSuperclass(); }
+            } catch (NoSuchFieldException ignored) {
+                type = type.getSuperclass();
+            }
         }
         return null;
     }
