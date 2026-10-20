@@ -28,6 +28,7 @@ import { useTicker } from "@/hooks/useTicker";
 import { useStreak } from "@/hooks/useStreak";
 import { useProgression, calcXpFromResults } from "@/hooks/useProgression";
 import { trackGuestGame } from "@/lib/guestStats";
+import { saveGuestProgress, getPendingGuestGames, removePendingGuestGame } from "@/lib/guestProgress";
 import { useSound } from "@/hooks/useSound";
 import { useToast } from "@/hooks/use-toast";
 import { pickRandomPersonality, getAIComment, type AIPersonality } from "@/data/aiPersonalities";
@@ -480,6 +481,7 @@ export default function SoloGame() {
     },
   });
   const submitScoreMutation = useSubmitScore();
+  const guestMigrationInFlightRef = useRef<Set<string>>(new Set());
   const queryClient = useQueryClient();
   const timerRef = useRef<NodeJS.Timeout>(null);
   const stopTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1052,6 +1054,20 @@ export default function SoloGame() {
       if (round >= maxRounds) {
         const br = updateBest(finalPlayerScore);
         setBestResult(br);
+        if ((!player || player.loginMethod === "guest") && (br.isNew || finalPlayerScore >= 50)) {
+          try {
+            const promptKey = "stop_guest_register_prompted_v1";
+            if (!sessionStorage.getItem(promptKey)) {
+              sessionStorage.setItem(promptKey, "1");
+              toast({
+                title: lang === "en" ? "Great score!" : lang === "pt" ? "Boa pontuação!" : lang === "fr" ? "Bon score !" : "¡Buena puntuación!",
+                description: lang === "en" ? "Sign in to transfer verified games and save future scores to your account." : lang === "pt" ? "Inicia sessão para transferir partidas verificadas e guardar futuras pontuações na tua conta." : lang === "fr" ? "Connectez-vous pour transférer les parties vérifiées et enregistrer vos prochains scores sur votre compte." : "Inicia sesión para transferir las partidas verificadas y guardar futuras puntuaciones en tu cuenta.",
+              });
+            }
+          } catch {
+            // Prompting must never affect gameplay.
+          }
+        }
         if (br.isNew) {
           setTimeout(() => {
             vibrate([60, 40, 60, 40, 200]);
@@ -1126,7 +1142,17 @@ export default function SoloGame() {
         if (!isDailyMode) recordInterstitialGameCompleted();
         // The private /test panel tracks guest games separately from registered
         // game_history. Only anonymous players must increment that aggregate.
-        if (!player || player.loginMethod === "guest") trackGuestGame();
+        if (!player || player.loginMethod === "guest") {
+          trackGuestGame();
+          saveGuestProgress({
+            submissionId: gameSubmissionIdRef.current ?? createSubmissionId(),
+            score: finalPlayerScore,
+            letter: currentLetter || "?",
+            mode: isDailyMode ? "daily" : "solo",
+            won: finalPlayerScore > finalAiForGame,
+            scoreTokens: scoreTokensRef.current,
+          });
+        }
       }
 
       // AI personality comment
@@ -1298,6 +1324,47 @@ export default function SoloGame() {
       }
     });
   };
+
+  // Migrate server-vouched guest games after a real account is available.
+  // Process each mutation with its own awaited result: callbacks passed to
+  // mutate() are observer-scoped and can be skipped for earlier calls in a loop.
+  useEffect(() => {
+    if (!player || player.loginMethod === "guest") return;
+    let cancelled = false;
+    let pending: ReturnType<typeof getPendingGuestGames>;
+    try { pending = getPendingGuestGames(); } catch { return; }
+
+    void (async () => {
+      for (const game of pending) {
+        if (cancelled) break;
+        if (!game.scoreTokens.length || guestMigrationInFlightRef.current.has(game.submissionId)) continue;
+        guestMigrationInFlightRef.current.add(game.submissionId);
+        try {
+          await submitScoreMutation.mutateAsync({
+            data: {
+              submissionId: game.submissionId,
+              playerId: player.id,
+              playerName: player.name,
+              avatarColor: player.avatarColor,
+              score: game.score,
+              letter: game.letter,
+              mode: game.mode,
+              won: game.won,
+              scoreTokens: game.scoreTokens,
+            },
+          });
+          removePendingGuestGame(game.submissionId);
+        } catch {
+          // Keep failed/expired submissions locally; never block sign-in or gameplay.
+        } finally {
+          guestMigrationInFlightRef.current.delete(game.submissionId);
+        }
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [player?.id, player?.loginMethod]); // eslint-disable-line react-hooks/exhaustive-deps
+
 
   // 💾 Auto-submit final score the moment the RESULTS screen first shows the
   // final round. Previously the submit only happened inside `nextRound()` (the
