@@ -2,10 +2,23 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { getApiUrl } from "@/lib/utils";
 
 const API_BASE = getApiUrl();
-const VAPID_PUBLIC =
-  import.meta.env.VITE_VAPID_PUBLIC_KEY ||
-  "BOwVNL3sEONgyFulirkX5dzwQo662jY2_C846OSMrTSfiz4GFwEsl3_1NY3x_GqJIco8P7Ls85u56IRC3Y8Bj2c";
 const DISABLED_KEY = "stop_push_notifications_disabled";
+
+async function getServerVapidPublicKey(): Promise<string> {
+  const response = await fetch(`${API_BASE}/api/notifications/vapid-public-key`);
+  if (!response.ok) throw new Error(`VAPID public key HTTP ${response.status}`);
+  const payload = await response.json();
+  if (typeof payload?.key !== "string" || !payload.key.trim()) {
+    throw new Error("Server did not provide a VAPID public key");
+  }
+  return payload.key.trim();
+}
+
+function sameBytes(a: ArrayBuffer | null, b: Uint8Array<ArrayBuffer>): boolean {
+  if (!a) return false;
+  const left = new Uint8Array(a);
+  return left.length === b.length && left.every((value, index) => value === b[index]);
+}
 
 function urlB64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
@@ -44,18 +57,14 @@ export function usePushNotifications(playerId: string | undefined, language: str
         const sub = await reg.pushManager.getSubscription();
         if (cancelled) return;
 
-        // Prioritize the browser's actual persisted Push API subscription.
-        if (sub) {
-          setIsSubscribed(true);
-          try { localStorage.removeItem(DISABLED_KEY); } catch {}
-        } else {
-          let disabled = false;
-          try { disabled = localStorage.getItem(DISABLED_KEY) === "1"; } catch {}
-          setIsSubscribed(!disabled);
+        // A browser subscription alone does not prove the server has it linked
+        // to this player. Never show "enabled" until the API confirms it.
+        if (!sub || perm !== "granted") {
+          if (!cancelled) setIsSubscribed(false);
           return;
         }
 
-        if (perm === "granted" && !cancelled && currentPlayerIdRef.current === playerId) {
+        if (!cancelled && currentPlayerIdRef.current === playerId) {
           const tzOffsetMinutes = -new Date().getTimezoneOffset();
           const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
           try {
@@ -73,9 +82,22 @@ export function usePushNotifications(playerId: string | undefined, language: str
                 origin: window.location.origin,
               }),
             });
-            if (!res.ok) console.warn("[push] subscription backfill failed", res.status);
+            if (!res.ok) throw new Error(`subscription backfill HTTP ${res.status}`);
+            const verify = await fetch(
+              `${API_BASE}/api/notifications/preferences?endpoint=${encodeURIComponent(sub.endpoint)}&playerId=${encodeURIComponent(playerId || "anonymous")}`,
+              { signal: controller.signal },
+            );
+            if (!verify.ok) throw new Error(`subscription verification HTTP ${verify.status}`);
+            const prefs = await verify.json();
+            if (!cancelled && currentPlayerIdRef.current === playerId) {
+              setIsSubscribed(prefs?.enabled === true);
+              if (prefs?.enabled === true) {
+                try { localStorage.removeItem(DISABLED_KEY); } catch {}
+              }
+            }
           } catch (e) {
-            console.warn("[push] subscription backfill error", e);
+            if (!cancelled) setIsSubscribed(false);
+            console.warn("[push] server subscription verification failed", e);
           }
         }
       } catch (e) {
@@ -88,9 +110,12 @@ export function usePushNotifications(playerId: string | undefined, language: str
   }, [playerId, language]);
 
   const subscribe = useCallback(async () => {
-    if (!VAPID_PUBLIC || !("serviceWorker" in navigator)) return false;
+    if (!("serviceWorker" in navigator) || !("Notification" in window)) return false;
     setLoading(true);
     try {
+      // Always use the production server's key; build-time keys can be stale.
+      const vapidPublicKey = await getServerVapidPublicKey();
+      const applicationServerKey = urlB64ToUint8Array(vapidPublicKey);
       const reg = await navigator.serviceWorker.ready;
       const perm = await Notification.requestPermission();
       setPermission(perm as NotifPermission);
@@ -98,11 +123,16 @@ export function usePushNotifications(playerId: string | undefined, language: str
 
       try { localStorage.removeItem(DISABLED_KEY); } catch {}
 
-      const existing = await reg.pushManager.getSubscription();
+      let existing = await reg.pushManager.getSubscription();
       if (currentPlayerIdRef.current !== playerId) return false;
+      // Existing browser subscriptions cannot be migrated to a different VAPID key.
+      if (existing && !sameBytes(existing.options.applicationServerKey, applicationServerKey)) {
+        await existing.unsubscribe();
+        existing = null;
+      }
       const sub = existing || await reg.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: urlB64ToUint8Array(VAPID_PUBLIC),
+        applicationServerKey,
       });
 
       const tzOffsetMinutes = -new Date().getTimezoneOffset();
@@ -123,9 +153,19 @@ export function usePushNotifications(playerId: string | undefined, language: str
 
       if (!res.ok) throw new Error(`subscription HTTP ${res.status}`);
       if (currentPlayerIdRef.current !== playerId) return false;
+
+      // Confirm the endpoint is stored for this exact player and enabled.
+      const verify = await fetch(
+        `${API_BASE}/api/notifications/preferences?endpoint=${encodeURIComponent(sub.endpoint)}&playerId=${encodeURIComponent(playerId || "anonymous")}`,
+      );
+      if (!verify.ok) throw new Error(`subscription verification HTTP ${verify.status}`);
+      const prefs = await verify.json();
+      if (prefs?.enabled !== true) throw new Error("server did not confirm enabled subscription");
+      if (currentPlayerIdRef.current !== playerId) return false;
       setIsSubscribed(true);
       return true;
     } catch (e) {
+      setIsSubscribed(false);
       console.error("Push subscribe error:", e);
       return false;
     } finally {
@@ -205,7 +245,7 @@ export function usePushNotifications(playerId: string | undefined, language: str
 
   useEffect(() => () => preferencesAbortRef.current?.abort(), [playerId]);
 
-  const isSupported = "Notification" in window && "serviceWorker" in navigator && !!VAPID_PUBLIC;
+  const isSupported = "Notification" in window && "serviceWorker" in navigator;
 
   return { permission, isSubscribed, loading, subscribe, unsubscribe, isSupported, getPreferences, updatePreferences };
 }
