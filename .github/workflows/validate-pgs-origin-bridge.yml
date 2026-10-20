@@ -45,6 +45,11 @@ jobs:
           assert 'if (!messageChannelReady || !relationshipValidated || !isAllowedOrigin(origin))' in native
           assert 'String origin = message.optString("origin", "");' in native
           assert 'STOP_PGS_UNLOCK_ACHIEVEMENT' in web and 'STOP_PGS_UNLOCK_ACHIEVEMENT' in native
+          assert 'androidbrowserhelper:2.7.4' in Path('android-generated/app/build.gradle').read_text()
+          assert 'getTwaSession()' in native
+          assert 'findFieldValue(this, "mTwaLauncher")' in native
+          assert ' = getCustomTabsSession();' not in native
+          assert 'import java.lang.reflect.Field;' not in native
           assert 'return "https://stopjuegodepalabras.com".equals(origin)' in native
           assert '|| "https://www.stopjuegodepalabras.com".equals(origin);' in native
           print("PGS web origin payload and native TWA relationship/origin guards verified.")
