@@ -182,6 +182,8 @@ export interface CreateRoomRequest {
   hostName: string;
   avatarColor?: string;
   picture?: string | null;
+  gameMode?: "classic" | "blitz" | "challenge" | "random";
+  maxPlayers?: number;
   maxRounds?: number;
   language?: string;
   loginMethod?: string | null;
