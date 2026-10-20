@@ -29,12 +29,9 @@ import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback;
 import com.google.android.gms.games.PlayGames;
 import com.google.android.gms.games.PlayGamesSdk;
 import com.google.androidbrowserhelper.trusted.QualityEnforcer;
-import com.google.androidbrowserhelper.trusted.TwaLauncher;
 
 import org.json.JSONException;
 import org.json.JSONObject;
-
-import java.lang.reflect.Field;
 
 /** STOP TWA native bridge for Google Mobile Ads rewarded video. */
 public class LauncherActivity extends com.google.androidbrowserhelper.trusted.LauncherActivity {
@@ -64,11 +61,19 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     private boolean playUpdatePromptShown;
     private boolean playGamesInitialized;
     private boolean playGamesSignInInFlight;
-    private boolean playGamesStartupSignInScheduled;
     private boolean playGamesStartupSignInAttempted;
+    private boolean twaLaunchStarted;
     private int playGamesSignInGeneration;
     // Keep the most recent PGS result until the TWA MessagePort is ready.
     @Nullable private JSONObject pendingPlayGamesStatus;
+
+    @Override
+    protected boolean shouldLaunchImmediately() {
+        // Delay launching Chrome until native Play Games sign-in has completed.
+        // Otherwise Android may reject the sign-in UI because the launcher is
+        // already backgrounded by the TWA.
+        return false;
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -146,21 +151,35 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     protected void onResume() {
         super.onResume();
         checkForPlayUpdate();
-        schedulePlayGamesStartupSignIn();
+        // The TWA session may bind after Activity.onResume. Give it a fresh bounded
+        // validation window on each foreground return instead of exhausting all retries
+        // during the initial Custom Tabs service bind.
+        if (!relationshipValidated && !originValidationRequestPending) {
+            originValidationAttempts = 0;
+        }
+        // Authenticate while this launcher Activity is foregrounded. The TWA is
+        // opened only after Play Games authentication finishes (or safely fails),
+        // so Android does not block the native sign-in UI as a background launch.
+        if (!twaLaunchStarted && !playGamesStartupSignInAttempted && !isFinishing()) {
+            playGamesStartupSignInAttempted = true;
+            Log.i("STOP_PLAY_GAMES", "Starting startup sign-in while launcher is foregrounded");
+            startPlayGamesSignInIfNeeded();
+        }
+        if (twaLaunchStarted) {
+            getWindow().getDecorView().postDelayed(this::requestUseAsOriginValidation, 1500L);
+        }
     }
 
-    private void schedulePlayGamesStartupSignIn() {
-        if (!playGamesInitialized || playGamesStartupSignInScheduled || playGamesStartupSignInAttempted
-                || isFinishing()) return;
-        playGamesStartupSignInScheduled = true;
-        // Let the launcher finish entering the foreground before requesting Google auth UI.
-        getWindow().getDecorView().postDelayed(() -> {
-            playGamesStartupSignInScheduled = false;
-            if (isFinishing() || playGamesStartupSignInAttempted) return;
-            playGamesStartupSignInAttempted = true;
-            Log.i("STOP_PLAY_GAMES", "Starting one-time startup sign-in after onResume");
-            startPlayGamesSignInIfNeeded();
-        }, 1200L);
+    private void launchTwaOnce() {
+        if (twaLaunchStarted || isFinishing()) return;
+        twaLaunchStarted = true;
+        try {
+            Log.i("STOP_PLAY_GAMES", "Launching TWA after startup authentication flow");
+            launchTwa();
+        } catch (RuntimeException error) {
+            twaLaunchStarted = false;
+            Log.e("STOP_PLAY_GAMES", "Unable to launch TWA after startup authentication", error);
+        }
     }
 
     @Override
@@ -173,10 +192,12 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                 originValidationGeneration++; // Invalidate the timeout for the completed request.
                 relationshipValidated = relation == CustomTabsService.RELATION_USE_AS_ORIGIN
                         && result && SOURCE_ORIGIN.equals(requestedOrigin);
-                Log.d(TAG, "use_as_origin validation=" + result + " relation=" + relation + " origin=" + requestedOrigin);
+                Log.i(TAG, "BRIDGE_DIAG phase=origin_validation_callback result=" + result
+                        + " relation=" + relation + " origin=" + requestedOrigin
+                        + " expected=" + SOURCE_ORIGIN + " sessionAvailable=" + (getTwaSession() != null));
                 if (relationshipValidated) {
                     requestMessageChannelWithRetry(100L);
-                } else if (originValidationAttempts < 10 && !isFinishing()) {
+                } else if (originValidationAttempts < 40 && !isFinishing()) {
                     // A negative callback can be transient (for example while Digital Asset Links
                     // is being refreshed); retry a bounded number of times before leaving PGS optional.
                     getWindow().getDecorView().postDelayed(
@@ -199,7 +220,8 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                 messageChannelReady = true;
                 channelRequestInFlight = false;
                 channelRequestAttempts = 0;
-                Log.d(TAG, "TWA message channel ready");
+                Log.i(TAG, "BRIDGE_DIAG phase=message_channel_ready originValidated=" + relationshipValidated
+                        + " sessionAvailable=" + (getTwaSession() != null));
                 flushPendingPlayGamesStatus();
                 sendReadyBurst(0);
             }
@@ -213,16 +235,18 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
 
     private void requestUseAsOriginValidation() {
         if (relationshipValidated || originValidationRequestPending || isFinishing()
-                || originValidationAttempts >= 10) return;
+                || originValidationAttempts >= 40) return;
         originValidationAttempts++;
         final int requestGeneration = ++originValidationGeneration;
         CustomTabsSession session = getTwaSession();
+        Log.i(TAG, "BRIDGE_DIAG phase=origin_validation_request attempt=" + originValidationAttempts
+                + " sessionAvailable=" + (session != null) + " finishing=" + isFinishing());
         if (session != null) {
             try {
                 boolean requested = session.validateRelationship(
                         CustomTabsService.RELATION_USE_AS_ORIGIN, SOURCE_ORIGIN, new Bundle());
-                Log.d(TAG, "Requested use_as_origin validation attempt=" + originValidationAttempts
-                        + " accepted=" + requested);
+                Log.i(TAG, "BRIDGE_DIAG phase=origin_validation_requested attempt=" + originValidationAttempts
+                        + " accepted=" + requested + " origin=" + SOURCE_ORIGIN);
                 if (requested) {
                     originValidationRequestPending = true;
                     // Some Custom Tabs implementations can fail to deliver a validation callback.
@@ -240,8 +264,8 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                 Log.w(TAG, "use_as_origin validation request failed", error);
             }
         }
-        if (originValidationAttempts < 10) {
-            getWindow().getDecorView().postDelayed(this::requestUseAsOriginValidation, 300L);
+        if (originValidationAttempts < 40) {
+            getWindow().getDecorView().postDelayed(this::requestUseAsOriginValidation, 500L);
         }
     }
 
@@ -272,7 +296,8 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
         channelRequestAttempts++;
         try {
             boolean requested = session.requestPostMessageChannel(SOURCE_ORIGIN, TARGET_ORIGIN, new Bundle());
-            Log.d(TAG, "requestPostMessageChannel attempt=" + channelRequestAttempts + " accepted=" + requested);
+            Log.i(TAG, "BRIDGE_DIAG phase=request_message_channel attempt=" + channelRequestAttempts
+                    + " accepted=" + requested + " originValidated=" + relationshipValidated);
             if (requested) {
                 channelRequestInFlight = false;
                 // Chrome may accept the request without delivering onMessageChannelReady.
@@ -306,26 +331,9 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
         }, 300L);
     }
     @Nullable private CustomTabsSession getTwaSession() {
-        try {
-            Object launcher = findFieldValue(this, "mTwaLauncher");
-            if (!(launcher instanceof TwaLauncher)) return null;
-            Object session = findFieldValue(launcher, "mSession");
-            return session instanceof CustomTabsSession ? (CustomTabsSession) session : null;
-        } catch (ReflectiveOperationException | ClassCastException error) {
-            Log.w(TAG, "Unable to obtain TWA CustomTabsSession", error);
-            return null;
-        }
-    }
-    @Nullable private static Object findFieldValue(Object target, String fieldName) throws ReflectiveOperationException {
-        Class<?> type = target.getClass();
-        while (type != null) {
-            try {
-                Field field = type.getDeclaredField(fieldName);
-                field.setAccessible(true);
-                return field.get(target);
-            } catch (NoSuchFieldException ignored) { type = type.getSuperclass(); }
-        }
-        return null;
+        // Uses the public accessor added by the pinned Android Browser Helper source revision.
+        // The session is nullable until Chrome's Custom Tabs service has connected.
+        return getCustomTabsSession();
     }
 
     private void handleWebMessage(String raw) {
@@ -373,6 +381,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     private void startPlayGamesSignInIfNeeded() {
         if (!playGamesInitialized) {
             sendPlayGamesStatus(false, "sdk_unavailable");
+            launchTwaOnce();
             return;
         }
         if (playGamesSignInInFlight) {
@@ -390,6 +399,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                 playGamesSignInInFlight = false;
                 Log.e("STOP_PLAY_GAMES", "isAuthenticated check timed out after 15 seconds; check Play Games Console credentials and signing certificate");
                 sendPlayGamesStatus(false, "sign_in_timeout");
+                launchTwaOnce();
             }
         }, 15000L);
         try {
@@ -408,6 +418,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                             playGamesSignInInFlight = false;
                             Log.i("STOP_PLAY_GAMES", "Already authenticated");
                             sendPlayGamesStatus(true, "authenticated");
+                            launchTwaOnce();
                             return;
                         }
                         try {
@@ -424,17 +435,20 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                                                 ? "Native startup sign-in succeeded"
                                                 : "Native startup sign-in did not complete; guest play remains available");
                                         sendPlayGamesStatus(signedIn, signedIn ? "authenticated" : "sign_in_failed");
+                                        launchTwaOnce();
                                     });
                         } catch (RuntimeException error) {
                             playGamesSignInInFlight = false;
                             Log.e("STOP_PLAY_GAMES", "Native sign-in could not start", error);
                             sendPlayGamesStatus(false, "sign_in_failed");
+                            launchTwaOnce();
                         }
                     });
         } catch (RuntimeException error) {
             playGamesSignInInFlight = false;
             Log.e("STOP_PLAY_GAMES", "Authentication check failed", error);
             sendPlayGamesStatus(false, "sign_in_failed");
+            launchTwaOnce();
         }
     }
 
@@ -643,7 +657,8 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
         if (session == null || !messageChannelReady) return;
         try {
             int result = session.postMessage(message.toString(), null);
-            Log.d(TAG, "postMessage result=" + result + " message=" + message.optString("type"));
+            Log.i(TAG, "BRIDGE_DIAG phase=native_post_message result=" + result
+                    + " message=" + message.optString("type") + " channelReady=" + messageChannelReady);
         } catch (RuntimeException error) { Log.w(TAG, "postMessage failed", error); }
     }
 }

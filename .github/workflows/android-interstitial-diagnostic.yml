@@ -1,4 +1,4 @@
-name: Android interstitial diagnostic build
+name: Android signed Play Games candidate build
 
 on:
   workflow_dispatch:
@@ -9,6 +9,7 @@ on:
     branches:
       - fix/interstitial-twa-detection-final
       - feat/google-play-games-native-bridge
+      - fix/pgs-public-session-accessor
 
 permissions:
   contents: read
@@ -16,6 +17,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     env:
       KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
       KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
@@ -28,16 +30,21 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - name: Validate signing secrets
+      - name: Build pinned Android Browser Helper AAR
+        run: bash scripts/build-pgs-android-browser-helper.sh
+      - name: Validate candidate version and signing secrets
         shell: bash
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: |
           set -euo pipefail
-          test -n "$KEYSTORE_BASE64"
-          test -n "$KEYSTORE_PASSWORD"
-          test -n "$KEY_ALIAS"
-          test -n "$KEY_PASSWORD"
+          test -n "$KEYSTORE_BASE64" || { echo "Missing Android keystore secret"; exit 1; }
+          test -n "$KEYSTORE_PASSWORD" || { echo "Missing Android keystore password"; exit 1; }
+          test -n "$KEY_ALIAS" || { echo "Missing Android key alias"; exit 1; }
+          test -n "$KEY_PASSWORD" || { echo "Missing Android key password"; exit 1; }
+          grep -q 'versionCode 63' android-generated/app/build.gradle
+          grep -q 'versionName "1.3.7.7"' android-generated/app/build.gradle
+          grep -q 'appVersion=1.3.7.7' android-generated/app/build.gradle
       - name: Decode signing keystore
         shell: bash
         env:
@@ -45,35 +52,50 @@ jobs:
         run: |
           set -euo pipefail
           printf '%s' "$KEYSTORE_BASE64" | base64 --decode > android-release.keystore
+          test -s android-release.keystore
           keytool -list -keystore android-release.keystore -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" >/dev/null
-      - name: Set diagnostic version code
+      - name: Build signed Release APK and AAB
         working-directory: android-generated
-        shell: bash
-        run: |
-          set -euo pipefail
-          sed -i -E 's/versionCode [0-9]+/versionCode 55/' app/build.gradle
-          grep -q 'versionCode 55' app/build.gradle
-      - name: Build signed diagnostic APK
-        working-directory: android-generated
-        shell: bash
         run: |
           set -euo pipefail
           chmod +x ./gradlew
-          ./gradlew clean assembleRelease --no-daemon --stacktrace
-      - name: Verify signed APK
+          ./gradlew clean assembleRelease bundleRelease --no-daemon --stacktrace
+      - name: Verify signed candidate APK and AAB
         working-directory: android-generated
         shell: bash
         run: |
           set -euo pipefail
           APK='app/build/outputs/apk/release/app-release.apk'
+          AAB='app/build/outputs/bundle/release/app-release.aab'
           test -s "$APK"
+          test -s "$AAB"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs "$APK"
-          sha256sum "$APK"
-      - name: Upload signed APK
+          jarsigner -verify -verbose -certs "$AAB" >/tmp/aab-signature-check.txt
+          grep -q 'versionCode 63' app/build.gradle
+          grep -q 'versionName "1.3.7.7"' app/build.gradle
+          python3 - <<'PY'
+          import zipfile
+          from pathlib import Path
+          aab = Path('app/build/outputs/bundle/release/app-release.aab')
+          with zipfile.ZipFile(aab) as z:
+              manifest = z.read('base/manifest/AndroidManifest.xml')
+              for permission in (
+                  b'com.google.android.gms.permission.AD_ID',
+                  b'android.permission.POST_NOTIFICATIONS',
+              ):
+                  if permission not in manifest:
+                      raise SystemExit(f'AAB missing required permission: {permission.decode()}')
+          print('AAB manifest permission checks passed.')
+          PY
+          sha256sum "$APK" "$AAB"
+          ls -lh "$APK" "$AAB"
+      - name: Upload signed candidate artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: stop-android-interstitial-signed-v55
-          path: android-generated/app/build/outputs/apk/release/app-release.apk
+          name: stop-pgs-candidate-v63-1.3.7.7
+          path: |
+            android-generated/app/build/outputs/apk/release/app-release.apk
+            android-generated/app/build/outputs/bundle/release/app-release.aab
           if-no-files-found: error
           retention-days: 7
       - name: Remove signing material
