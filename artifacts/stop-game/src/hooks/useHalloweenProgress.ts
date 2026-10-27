@@ -87,6 +87,15 @@ export async function reportHalloweenEvent(
 ) {
   if (!playerId || !isHalloweenActive()) return null;
   if (type !== "scare_received" && type !== "scare_provoked") return null;
+
+  // Persistent Halloween rewards are intentionally limited to authenticated
+  // OAuth accounts by the server. Do not send guest events that are guaranteed
+  // to receive HTTP 403, or count those expected rejections as failed reports.
+  // Keep this prefix list aligned with isLoggedInId() in api-server/playerAuth.
+  const isRegisteredAccount = ["google_", "fb_", "ig_", "apple_", "tt_"]
+    .some((prefix) => playerId.startsWith(prefix));
+  if (!isRegisteredAccount) return null;
+
   const diagnostic = { type, eventKey: eventKey.slice(0, 160) };
   void reportHalloweenDiagnostic("halloween_scare_seen", diagnostic);
   void reportHalloweenDiagnostic("halloween_scare_report_attempt", diagnostic);
