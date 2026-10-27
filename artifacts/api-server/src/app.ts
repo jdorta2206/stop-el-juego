@@ -185,7 +185,7 @@ if (process.env["SERVE_CLIENT"] === "1") {
 }
 
 app.use((err: any, req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  console.error("[API ERROR]", err?.message ?? err, err?.stack);
+  console.error("[API ERROR]", JSON.stringify({ method: req.method, originalUrl: req.originalUrl, path: req.path, headersSent: res.headersSent }), err?.message ?? err, err?.stack);
   void db.execute(sql`
     INSERT INTO analytics_events (event_name, platform, metadata_json, trusted)
     VALUES ('api_error', 'web', ${JSON.stringify({
