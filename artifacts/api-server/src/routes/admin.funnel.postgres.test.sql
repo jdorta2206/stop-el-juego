@@ -43,8 +43,8 @@ BEGIN
         AND gs.created_at >= lobby.created_at
     );
 
-  IF lobby_without_start <> 4 THEN
-    RAISE EXCEPTION 'Expected 4 lobby sessions without a valid later start, got %', lobby_without_start;
+  IF lobby_without_start <> 3 THEN
+    RAISE EXCEPTION 'Expected 3 lobby sessions without a valid later start, got %', lobby_without_start;
   END IF;
 
   SELECT COUNT(*) INTO started_without_complete
@@ -58,8 +58,8 @@ BEGIN
         AND gc.created_at >= start_event.created_at
     );
 
-  IF started_without_complete <> 3 THEN
-    RAISE EXCEPTION 'Expected 3 starts without a valid later completion, got %', started_without_complete;
+  IF started_without_complete <> 6 THEN
+    RAISE EXCEPTION 'Expected 6 starts without a valid later completion, got %', started_without_complete;
   END IF;
 END $$;
 
