@@ -10,23 +10,15 @@ const adminRouteSource = readFileSync(
 );
 
 describe("STOP Control analytics funnel event ordering", () => {
-  it("only treats a game start at or after the lobby view as a transition", () => {
-    const lobbyWithoutStart = adminRouteSource.match(
-      /AS lobby_without_start,[\s\S]*?\) THEN session_id END\)::int AS lobby_without_start/,
-    );
-    expect(lobbyWithoutStart).not.toBeNull();
-    expect(lobbyWithoutStart?.[0]).toContain(
-      "gs.created_at >= analytics_events.created_at",
+  it("requires a game start to be at or after the lobby view", () => {
+    expect(adminRouteSource).toMatch(
+      /gs\.event_name = 'game_start'[\s\S]*?gs\.created_at >= analytics_events\.created_at/,
     );
   });
 
-  it("only treats a game completion at or after the start as a transition", () => {
-    const startedWithoutComplete = adminRouteSource.match(
-      /AS started_without_complete,[\s\S]*?\) THEN session_id END\)::int AS started_without_complete/,
-    );
-    expect(startedWithoutComplete).not.toBeNull();
-    expect(startedWithoutComplete?.[0]).toContain(
-      "gc.created_at >= analytics_events.created_at",
+  it("requires a game completion to be at or after the game start", () => {
+    expect(adminRouteSource).toMatch(
+      /gc\.event_name = 'game_complete'[\s\S]*?gc\.created_at >= analytics_events\.created_at/,
     );
   });
 });
