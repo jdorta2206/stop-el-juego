@@ -14,15 +14,15 @@ function isAtOrAfter(candidate: number, reference: number): boolean {
 }
 
 describe("STOP Control analytics funnel event ordering", () => {
-  it("requires a game start to be at or after the lobby view", () => {
+  it("requires a trusted game start in the same session at or after the lobby view", () => {
     expect(adminRouteSource).toMatch(
-      /gs\.event_name = 'game_start'[\s\S]*?gs\.created_at >= analytics_events\.created_at/,
+      /gs\\.trusted = TRUE[\\s\\S]*?gs\\.event_name = 'game_start'[\\s\\S]*?gs\\.session_id = analytics_events\\.session_id[\\s\\S]*?gs\\.created_at >= analytics_events\\.created_at/,
     );
   });
 
-  it("requires a game completion to be at or after the game start", () => {
+  it("requires a trusted game completion in the same session at or after the game start", () => {
     expect(adminRouteSource).toMatch(
-      /gc\.event_name = 'game_complete'[\s\S]*?gc\.created_at >= analytics_events\.created_at/,
+      /gc\\.trusted = TRUE[\\s\\S]*?gc\\.event_name = 'game_complete'[\\s\\S]*?gc\\.session_id = analytics_events\\.session_id[\\s\\S]*?gc\\.created_at >= analytics_events\\.created_at/,
     );
   });
 
