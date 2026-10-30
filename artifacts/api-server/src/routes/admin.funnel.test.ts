@@ -26,7 +26,7 @@ describe("STOP Control analytics funnel event ordering", () => {
 
   it("requires a trusted game start in the same session at or after the lobby view", () => {
     const lobbyTransition = funnelQuery.match(
-      /AS lobby_without_start([\s\S]*?)AS games_started/,
+      /COUNT\\(DISTINCT CASE\\s+WHEN event_name = 'game_lobby_view'[\\s\\S]*?AS lobby_without_start/,
     )?.[1];
     expect(lobbyTransition).toBeDefined();
     expect(lobbyTransition).toMatch(/gs\.trusted = TRUE/);
@@ -38,7 +38,7 @@ describe("STOP Control analytics funnel event ordering", () => {
 
   it("requires a trusted completion in the same session at or after the game start", () => {
     const completionTransition = funnelQuery.match(
-      /AS started_without_complete([\s\S]*?)AS games_completed/,
+      /COUNT\\(DISTINCT CASE\\s+WHEN event_name = 'game_start'[\\s\\S]*?AS started_without_complete/,
     )?.[1];
     expect(completionTransition).toBeDefined();
     expect(completionTransition).toMatch(/gc\.trusted = TRUE/);
