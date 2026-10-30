@@ -1,0 +1,55 @@
+name: Analytics funnel regression test
+
+on:
+  pull_request:
+    paths:
+      - "artifacts/api-server/src/routes/admin.ts"
+      - "artifacts/api-server/src/routes/admin.funnel.test.ts"
+      - "artifacts/api-server/src/routes/admin.funnel.postgres.test.sql"
+      - "artifacts/api-server/package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/analytics-funnel-test.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  funnel-regression:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: funnel_test
+          POSTGRES_PASSWORD: funnel_test
+          POSTGRES_DB: funnel_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U funnel_test -d funnel_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install --yes postgresql-client
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Run funnel regression test
+        run: pnpm --filter @workspace/api-server exec vitest run src/routes/admin.funnel.test.ts
+      - name: Run PostgreSQL event-order regression
+        env:
+          PGPASSWORD: funnel_test
+        run: psql --host 127.0.0.1 --username funnel_test --dbname funnel_test --set ON_ERROR_STOP=1 --file artifacts/api-server/src/routes/admin.funnel.postgres.test.sql

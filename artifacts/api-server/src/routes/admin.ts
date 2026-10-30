@@ -223,6 +223,7 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
                 WHERE gs.trusted = TRUE
                   AND gs.event_name = 'game_start'
                   AND gs.session_id = analytics_events.session_id
+                  AND gs.created_at >= analytics_events.created_at
                   AND gs.created_at >= NOW() - INTERVAL '7 days'
               )
             THEN session_id END)::int AS lobby_without_start,
@@ -234,6 +235,7 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
                 WHERE gc.trusted = TRUE
                   AND gc.event_name = 'game_complete'
                   AND gc.session_id = analytics_events.session_id
+                  AND gc.created_at >= analytics_events.created_at
                   AND gc.created_at >= NOW() - INTERVAL '7 days'
               )
             THEN session_id END)::int AS started_without_complete,
