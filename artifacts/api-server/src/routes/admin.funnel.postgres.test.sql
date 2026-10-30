@@ -25,7 +25,8 @@ INSERT INTO funnel_test_events (event_id, event_name, session_id, trusted, creat
   ('lobby-other-session','game_lobby_view', 'session-f', true,  '2026-01-01T00:00:09Z'),
   ('start-other-session','game_start',      'session-z', true,  '2026-01-01T00:00:10Z'),
   ('lobby-untrusted',    'game_lobby_view', 'session-g', true,  '2026-01-01T00:00:11Z'),
-  ('start-untrusted',    'game_start',      'session-g', false, '2026-01-01T00:00:12Z');
+  ('start-untrusted',    'game_start',      'session-g', false, '2026-01-01T00:00:12Z'),
+  ('lobby-untrusted-event', 'game_lobby_view', 'session-h', false, '2026-01-01T00:00:13Z');
 
 DO $$
 DECLARE
@@ -34,7 +35,8 @@ DECLARE
 BEGIN
   SELECT COUNT(*) INTO lobby_without_start
   FROM funnel_test_events lobby
-  WHERE lobby.event_name = 'game_lobby_view'
+  WHERE lobby.trusted = TRUE
+    AND lobby.event_name = 'game_lobby_view'
     AND NOT EXISTS (
       SELECT 1 FROM funnel_test_events gs
       WHERE gs.trusted = TRUE
@@ -49,7 +51,8 @@ BEGIN
 
   SELECT COUNT(*) INTO started_without_complete
   FROM funnel_test_events start_event
-  WHERE start_event.event_name = 'game_start'
+  WHERE start_event.trusted = TRUE
+    AND start_event.event_name = 'game_start'
     AND NOT EXISTS (
       SELECT 1 FROM funnel_test_events gc
       WHERE gc.trusted = TRUE
@@ -58,8 +61,8 @@ BEGIN
         AND gc.created_at >= start_event.created_at
     );
 
-  IF started_without_complete <> 6 THEN
-    RAISE EXCEPTION 'Expected 6 starts without a valid later completion, got %', started_without_complete;
+  IF started_without_complete <> 5 THEN
+    RAISE EXCEPTION 'Expected 5 trusted starts without a valid later completion, got %', started_without_complete;
   END IF;
 END $$;
 
