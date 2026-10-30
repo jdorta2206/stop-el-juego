@@ -61,8 +61,8 @@ BEGIN
         AND gc.created_at >= start_event.created_at
     );
 
-  IF started_without_complete <> 4 THEN
-    RAISE EXCEPTION 'Expected 4 trusted starts without a valid later completion, got %', started_without_complete;
+  IF started_without_complete <> 5 THEN
+    RAISE EXCEPTION 'Expected 5 trusted starts without a valid later completion, got %', started_without_complete;
   END IF;
 END $$;
 
