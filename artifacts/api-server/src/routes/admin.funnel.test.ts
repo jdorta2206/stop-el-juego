@@ -9,36 +9,42 @@ const adminRouteSource = readFileSync(
   "utf8",
 );
 
-function isAtOrAfter(candidate: number, reference: number): boolean {
-  return candidate >= reference;
+// Inspect the actual production funnel SQL, not a separately copied predicate.
+const funnelQueryMatch = adminRouteSource.match(
+  /const funnel = \(\s*await db\.execute\(sql\`([\s\S]*?)\`\)\s*\)\.rows/,
+);
+if (!funnelQueryMatch) {
+  throw new Error("Could not locate the production analytics funnel SQL in admin.ts");
 }
+const funnelQuery = funnelQueryMatch[1];
 
 describe("STOP Control analytics funnel event ordering", () => {
+  it("keeps the funnel restricted to trusted events in the seven-day window", () => {
+    expect(funnelQuery).toMatch(/WHERE trusted = TRUE/);
+    expect(funnelQuery).toMatch(/created_at >= NOW\(\) - INTERVAL '7 days'/);
+  });
+
   it("requires a trusted game start in the same session at or after the lobby view", () => {
-    expect(adminRouteSource).toMatch(
-      /gs\.trusted = TRUE[\s\S]*?gs\.event_name = 'game_start'[\s\S]*?gs\.session_id = analytics_events\.session_id[\s\S]*?gs\.created_at >= analytics_events\.created_at/,
-    );
+    const lobbyTransition = funnelQuery.match(
+      /AS lobby_without_start([\s\S]*?)AS games_started/,
+    )?.[1];
+    expect(lobbyTransition).toBeDefined();
+    expect(lobbyTransition).toMatch(/gs\.trusted = TRUE/);
+    expect(lobbyTransition).toMatch(/gs\.event_name = 'game_start'/);
+    expect(lobbyTransition).toMatch(/gs\.session_id = analytics_events\.session_id/);
+    expect(lobbyTransition).toMatch(/gs\.created_at >= analytics_events\.created_at/);
+    expect(lobbyTransition).toMatch(/gs\.created_at >= NOW\(\) - INTERVAL '7 days'/);
   });
 
-  it("requires a trusted game completion in the same session at or after the game start", () => {
-    expect(adminRouteSource).toMatch(
-      /gc\.trusted = TRUE[\s\S]*?gc\.event_name = 'game_complete'[\s\S]*?gc\.session_id = analytics_events\.session_id[\s\S]*?gc\.created_at >= analytics_events\.created_at/,
-    );
-  });
-
-  it("does not treat an earlier start as a transition after the lobby", () => {
-    expect(isAtOrAfter(99, 100)).toBe(false);
-  });
-
-  it("accepts a start at the same instant as the lobby", () => {
-    expect(isAtOrAfter(100, 100)).toBe(true);
-  });
-
-  it("accepts a start after the lobby", () => {
-    expect(isAtOrAfter(101, 100)).toBe(true);
-  });
-
-  it("does not treat an earlier completion as after the game start", () => {
-    expect(isAtOrAfter(199, 200)).toBe(false);
+  it("requires a trusted completion in the same session at or after the game start", () => {
+    const completionTransition = funnelQuery.match(
+      /AS started_without_complete([\s\S]*?)AS games_completed/,
+    )?.[1];
+    expect(completionTransition).toBeDefined();
+    expect(completionTransition).toMatch(/gc\.trusted = TRUE/);
+    expect(completionTransition).toMatch(/gc\.event_name = 'game_complete'/);
+    expect(completionTransition).toMatch(/gc\.session_id = analytics_events\.session_id/);
+    expect(completionTransition).toMatch(/gc\.created_at >= analytics_events\.created_at/);
+    expect(completionTransition).toMatch(/gc\.created_at >= NOW\(\) - INTERVAL '7 days'/);
   });
 });
