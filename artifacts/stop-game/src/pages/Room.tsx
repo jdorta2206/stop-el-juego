@@ -1298,13 +1298,13 @@ export default function Room() {
   };
 
   const handleStart = async () => {
-    if (!roomCode || !player) return;
+    if (!roomCode || !player || !Number.isInteger(room?.id) || room.id <= 0) return;
     try {
       const r = await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/start`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
         // 🔐 Server now requires hostId to authorize round start.
-        body: JSON.stringify({ hostId: player.id }),
+        body: JSON.stringify({ hostId: player.id, roomId: room?.id }),
       });
       // 🚀 Adelantamos el estado en local sin esperar al SSE/polling — quien pulsa
       // "Empezar" ve la transición instantánea (los demás llegan vía broadcast).
