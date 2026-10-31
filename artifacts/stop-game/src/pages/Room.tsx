@@ -1304,7 +1304,7 @@ export default function Room() {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
         // 🔐 Server now requires hostId to authorize round start.
-        body: JSON.stringify({ hostId: player.id }),
+        body: JSON.stringify({ hostId: player.id, roomId: room?.id }),
       });
       // 🚀 Adelantamos el estado en local sin esperar al SSE/polling — quien pulsa
       // "Empezar" ve la transición instantánea (los demás llegan vía broadcast).
