@@ -410,26 +410,15 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                             sendPlayGamesStatus(true, "authenticated");
                             return;
                         }
-                        try {
-                            PlayGames.getGamesSignInClient(this).signIn()
-                                    .addOnCompleteListener(signInTask -> {
-                                        if (!signInTask.isSuccessful()) {
-                                            Log.e("STOP_PLAY_GAMES", "signIn task failed", signInTask.getException());
-                                        }
-                                        boolean signedIn = signInTask.isSuccessful()
-                                                && signInTask.getResult() != null
-                                                && signInTask.getResult().isAuthenticated();
-                                        playGamesSignInInFlight = false;
-                                        Log.i("STOP_PLAY_GAMES", signedIn
-                                                ? "Native startup sign-in succeeded"
-                                                : "Native startup sign-in did not complete; guest play remains available");
-                                        sendPlayGamesStatus(signedIn, signedIn ? "authenticated" : "sign_in_failed");
-                                    });
-                        } catch (RuntimeException error) {
-                            playGamesSignInInFlight = false;
-                            Log.e("STOP_PLAY_GAMES", "Native sign-in could not start", error);
-                            sendPlayGamesStatus(false, "sign_in_failed");
-                        }
+                        // PGS v2 performs platform authentication automatically during SDK
+                        // initialization. Do not call signIn() during startup: that is a
+                        // separate, user-driven flow and can compete with the native welcome
+                        // popup. Keep manual sign-in available through STOP_PGS_SIGN_IN.
+                        playGamesSignInInFlight = false;
+                        Log.i("STOP_PLAY_GAMES", "Startup authentication check complete; authenticated="
+                                + authenticated);
+                        sendPlayGamesStatus(authenticated,
+                                authenticated ? "authenticated" : "not_authenticated");
                     });
         } catch (RuntimeException error) {
             playGamesSignInInFlight = false;
