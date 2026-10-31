@@ -1298,7 +1298,7 @@ export default function Room() {
   };
 
   const handleStart = async () => {
-    if (!roomCode || !player) return;
+    if (!roomCode || !player || !Number.isInteger(room?.id) || room.id <= 0) return;
     try {
       const r = await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/start`, {
         method: "POST",
