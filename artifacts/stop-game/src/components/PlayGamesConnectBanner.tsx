@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Gamepad2, CheckCircle2, Loader2 } from "lucide-react";
 import {
   getLastPlayGamesStatus,
   requestPlayGamesSignIn,
@@ -8,8 +9,8 @@ import { useT } from "@/i18n/useT";
 type PlayGamesStatus = { ok: boolean; status: string };
 
 const SESSION_KEY = "stop_pgs_connect_banner_seen_v1";
-const MAX_VISIBLE_MS = 2800;
-const CONNECTED_VISIBLE_MS = 1500;
+const MAX_VISIBLE_MS = 3800;
+const CONNECTED_VISIBLE_MS = 2200;
 
 const WEB_ONLY_STATUSES = new Set([
   "conectando",
@@ -135,31 +136,45 @@ export function PlayGamesConnectBanner() {
     status.status === "sign_in_in_progress";
 
   return (
-    <div className="pointer-events-none fixed inset-x-3 top-[max(0.75rem,env(safe-area-inset-top))] z-[120]">
+    <div className="mx-auto mb-4 w-full max-w-md px-4" role="status" aria-live="polite">
       <div
-        className="pointer-events-auto mx-auto flex max-w-md items-center gap-3 rounded-xl border border-white/15 bg-slate-950/95 p-3 text-white shadow-xl"
-        role="status"
-        aria-live="polite"
+        className="relative flex items-center gap-3 overflow-hidden rounded-2xl border px-4 py-3 text-white shadow-[0_12px_36px_rgba(0,0,0,.32)]"
+        style={{
+          background: "linear-gradient(115deg, rgba(13,20,38,.98), rgba(25,32,55,.96) 58%, rgba(20,54,48,.96))",
+          borderColor: connected ? "rgba(74,222,128,.42)" : "rgba(255,255,255,.16)",
+        }}
       >
+        <div
+          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/[.08] shadow-inner"
+          aria-hidden="true"
+        >
+          <Gamepad2 className="h-7 w-7 text-emerald-300" strokeWidth={2.1} />
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <div className="mb-1 flex items-center gap-2">
+            <span className="text-[10px] font-black uppercase tracking-[.18em] text-white/65">
+              Google Play Juegos
+            </span>
+            {connected && <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-300" />}
+          </div>
+          <p className="text-sm font-bold leading-snug text-white">
+            {connected
+              ? t.playGamesBanner.connected
+              : connecting
+                ? t.playGamesBanner.connecting
+                : t.playGamesBanner.failed}
+          </p>
+        </div>
+
         {!connected && connecting && (
-          <span
-            aria-hidden="true"
-            className="h-5 w-5 shrink-0 animate-spin rounded-full border-2 border-white/30 border-t-white motion-reduce:animate-none"
-          />
+          <Loader2 className="h-5 w-5 shrink-0 animate-spin text-emerald-300 motion-reduce:animate-none" aria-hidden="true" />
         )}
 
-        <p className="min-w-0 flex-1 text-sm">
-          {connected
-            ? t.playGamesBanner.connected
-            : connecting
-              ? t.playGamesBanner.connecting
-              : t.playGamesBanner.failed}
-        </p>
-
-        {!connected && (
+        {!connected && !connecting && (
           <button
             type="button"
-            className="shrink-0 rounded-lg bg-white/10 px-3 py-2 text-sm font-semibold"
+            className="shrink-0 rounded-xl border border-white/15 bg-white/10 px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-white/15"
             onClick={() => {
               setStatus({ ok: false, status: "conectando" });
               requestPlayGamesSignIn();
@@ -171,7 +186,7 @@ export function PlayGamesConnectBanner() {
 
         <button
           type="button"
-          className="shrink-0 rounded-lg px-2 py-2 text-sm"
+          className="ml-0.5 shrink-0 rounded-lg px-1.5 py-2 text-xs font-semibold text-white/55 hover:text-white"
           aria-label={t.playGamesBanner.continue}
           onClick={() => setVisible(false)}
         >
