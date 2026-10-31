@@ -19,13 +19,15 @@ import { AVATAR_GLYPH_BY_ID } from "@/lib/cosmeticHelpers";
 const LOGO_URL = `${import.meta.env.BASE_URL}images/stop-logo.png`;
 
 export function ProfilePhotoAvatar({ picture, glyph, name, color, frame, title, size="w-9 h-9", className="" }: { picture?: string | null; glyph?: string | null; name: string; color?: string | null; frame?: string | null; title?: string | null; size?: string; className?: string }) {
+  const [imageFailed, setImageFailed] = useState(false);
+  useEffect(() => { setImageFailed(false); }, [picture]);
   const validPicture = typeof picture === "string" && /^https?:\/\//i.test(picture);
   const displayGlyph = glyph ? (AVATAR_GLYPH_BY_ID[glyph] || glyph) : null;
   const frameColor = frame ? "#f9a825" : "rgba(255,255,255,.12)";
   return (
     <div className="flex flex-col items-center gap-1 min-w-0">
       <div className={`relative ${size} rounded-full flex-shrink-0 flex items-center justify-center overflow-hidden text-white font-black shadow ${className}`} style={{ backgroundColor: color || "#555", border: `2px solid ${frameColor}` }}>
-        {displayGlyph ? displayGlyph : validPicture ? <img src={picture!} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : name.charAt(0).toUpperCase()}
+        {displayGlyph ? displayGlyph : validPicture && !imageFailed ? <img src={picture!} alt="" onError={() => setImageFailed(true)} className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : name.charAt(0).toUpperCase()}
       </div>
       {title ? <span className="max-w-[140px] truncate text-[10px] font-black text-secondary">{title}</span> : null}
     </div>
