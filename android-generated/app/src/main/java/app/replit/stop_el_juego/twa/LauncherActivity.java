@@ -146,21 +146,20 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     protected void onResume() {
         super.onResume();
         checkForPlayUpdate();
-        schedulePlayGamesStartupSignIn();
     }
 
     private void schedulePlayGamesStartupSignIn() {
         if (!playGamesInitialized || playGamesStartupSignInScheduled || playGamesStartupSignInAttempted
                 || isFinishing()) return;
         playGamesStartupSignInScheduled = true;
-        // Let the launcher finish entering the foreground before requesting Google auth UI.
+        // Wait until NAVIGATION_FINISHED and let the first game frame render before Google auth UI.
         getWindow().getDecorView().postDelayed(() -> {
             playGamesStartupSignInScheduled = false;
             if (isFinishing() || playGamesStartupSignInAttempted) return;
             playGamesStartupSignInAttempted = true;
             Log.i("STOP_PLAY_GAMES", "Starting one-time startup sign-in after onResume");
             startPlayGamesSignInIfNeeded();
-        }, 1200L);
+        }, 800L);
     }
 
     @Override
@@ -193,6 +192,9 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                 // relationshipValidated and the native bridge remains disabled.
                 requestUseAsOriginValidation();
                 if (relationshipValidated) requestMessageChannelWithRetry(250L);
+                // Start the native Play Games welcome only after the TWA page has
+                // completed its first navigation, so Google UI cannot interrupt startup. 
+                schedulePlayGamesStartupSignIn();
             }
             @Override
             public void onMessageChannelReady(@Nullable Bundle extras) {
