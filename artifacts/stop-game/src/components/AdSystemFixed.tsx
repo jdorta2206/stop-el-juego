@@ -8,7 +8,16 @@ import { trackAnalyticsEvent } from "@/lib/analyticsClient";
 
 const ADS_DISABLED = import.meta.env.VITE_ADS_DISABLED === "1";
 // Temporary production fallback while AdMob is blocked: the rewarded action is granted locally instead of showing a dead ad slot.
-const FREE_REWARDED_FALLBACK = import.meta.env.VITE_REWARDED_ADS_DISABLED === "1";
+const FREE_REWARDED_FALLBACK = import.meta.env.VITE_REWARDED_ADS_DISABLED === "1" && !(
+  typeof window !== "undefined" && (
+    hasAndroidAppReferrer() ||
+    new URLSearchParams(window.location.search).get("source") === "googleplay-twa" ||
+    new URLSearchParams(window.location.search).get("source") === "twa" ||
+    (/Android/i.test(navigator.userAgent || "") &&
+      (window.matchMedia?.("(display-mode: standalone)").matches === true ||
+       window.matchMedia?.("(display-mode: fullscreen)").matches === true))
+  )
+);
 const ADSTERRA_BANNER_KEY = ADS_DISABLED ? undefined : ((import.meta.env.VITE_ADSTERRA_BANNER_KEY as string | undefined) ?? "1212cb86d493b763d38d4523eec88cac");
 const ADSTERRA_BANNER_W = 320;
 const ADSTERRA_BANNER_H = 50;
