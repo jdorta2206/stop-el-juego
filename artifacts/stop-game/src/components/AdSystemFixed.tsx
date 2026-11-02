@@ -92,7 +92,7 @@ export function BannerAd({ className = "", isPremium = false }: { className?: st
       if (!cancelled && channel === "stripe") setAdsAllowed(true);
     } catch {}
     return () => { cancelled = true; };
-  }, []);
+  }, [isPremium]);
   useEffect(() => { if (ADSENSE_READY && BANNER_SLOT && insRef.current) pushAd(); }, []);
   if (isPremium || !visible || !adsAllowed) return null;
   if (ADSTERRA_BANNER_KEY) return <div className={`relative ${className}`}><AdsterraSlot adKey={ADSTERRA_BANNER_KEY} width={ADSTERRA_BANNER_W} height={ADSTERRA_BANNER_H} /><button onClick={() => setVisible(false)} aria-label="Cerrar anuncio" className="absolute top-0 right-0 p-1 text-black/30 hover:text-black/60 z-20"><X className="w-3.5 h-3.5" /></button></div>;
@@ -201,6 +201,8 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
       }, 5000);
     }
   };
+
+  if (isPremium) return null;
 
   return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"><div className="w-full max-w-sm rounded-3xl overflow-hidden bg-white shadow-2xl"><div className="p-6 text-center"><h3 className="text-xl font-black">{phase === "done" ? "¡Recompensa!" : phase === "error" ? "Anuncio no disponible" : "Mira el anuncio"}</h3>{phase === "pre" && <><div className="my-5 flex justify-center">{icons[rewardType]}</div><p className="text-gray-600 text-sm mb-5">{FREE_REWARDED_FALLBACK ? "Recompensa gratuita mientras AdMob no está disponible." : labels[rewardType]}</p><button onClick={startWatching} className="w-full py-3 rounded-xl font-bold bg-[#f9a825] text-[#0d1757]">{FREE_REWARDED_FALLBACK ? "Obtener recompensa gratis" : "Ver anuncio"}</button><button onClick={onSkip} className="w-full py-2 mt-2 text-gray-500">Ahora no</button></>}{phase === "loading" && <div className="py-10"><div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-4 border-gray-200 border-t-[#f9a825]"/><p className="text-sm text-gray-600">Cargando anuncio…</p></div>}{phase === "error" && <><div className="py-8 text-4xl">📺</div><p className="text-sm text-gray-600">No se ha podido mostrar un anuncio recompensado.</p>{errorDetail && <p className="mt-2 rounded-lg bg-gray-100 px-3 py-2 text-left text-[11px] leading-4 text-gray-600 break-words">Diagnóstico: {errorDetail}</p>}<button onClick={onSkip} className="w-full py-2 mt-4 text-gray-500">Continuar</button></>}{phase === "done" && <div className="py-8"><div className="text-5xl mb-3">🎉</div><p className="text-gray-700">{labels[rewardType]}</p></div>}</div></div></div>;
 }
