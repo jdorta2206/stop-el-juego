@@ -79,13 +79,13 @@ function AdsterraSlot({ adKey, width, height }: { adKey: string; width: number; 
   return <div className="relative overflow-hidden rounded-xl" style={{ width, height: height + 14, margin: "0 auto" }}><div ref={containerRef} style={{ width, height, marginTop: 12 }} /></div>;
 }
 
-export function BannerAd({ className = "" }: { className?: string }) {
+export function BannerAd({ className = "", isPremium = false }: { className?: string; isPremium?: boolean }) {
   const insRef = useRef<HTMLModElement>(null);
   const [visible, setVisible] = useState(true);
   const [adsAllowed, setAdsAllowed] = useState(false);
   const t = getT();
   useEffect(() => {
-    if (ADS_DISABLED || inStandaloneOrTwaSync()) return;
+    if (ADS_DISABLED || isPremium || inStandaloneOrTwaSync()) return;
     let cancelled = false;
     try {
       const channel = detectPaymentChannel();
@@ -94,13 +94,13 @@ export function BannerAd({ className = "" }: { className?: string }) {
     return () => { cancelled = true; };
   }, []);
   useEffect(() => { if (ADSENSE_READY && BANNER_SLOT && insRef.current) pushAd(); }, []);
-  if (!visible || !adsAllowed) return null;
+  if (isPremium || !visible || !adsAllowed) return null;
   if (ADSTERRA_BANNER_KEY) return <div className={`relative ${className}`}><AdsterraSlot adKey={ADSTERRA_BANNER_KEY} width={ADSTERRA_BANNER_W} height={ADSTERRA_BANNER_H} /><button onClick={() => setVisible(false)} aria-label="Cerrar anuncio" className="absolute top-0 right-0 p-1 text-black/30 hover:text-black/60 z-20"><X className="w-3.5 h-3.5" /></button></div>;
   if (ADSENSE_READY && BANNER_SLOT) return <div className={`relative overflow-hidden rounded-xl ${className}`} style={{ minHeight: 60 }}><div className="absolute top-1 left-2 text-[9px] text-black/30 font-mono z-10">{t.ads.label}</div><ins ref={insRef} className="adsbygoogle" style={{ display: "block", minHeight: 50 }} data-ad-client={ADSENSE_CLIENT} data-ad-slot={BANNER_SLOT} data-ad-format="auto" data-full-width-responsive="true" /></div>;
   return null;
 }
 
-export function RewardedAd({ onComplete, onSkip, playerId, rewardType = "points", rewardAmount = 20 }: { onComplete: (reward: number) => void; onSkip: () => void; playerId?: string; rewardType?: "points" | "hint" | "extraTime"; rewardAmount?: number }) {
+export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, rewardType = "points", rewardAmount = 20 }: { onComplete: (reward: number) => void; onSkip: () => void; playerId?: string; isPremium?: boolean; rewardType?: "points" | "hint" | "extraTime"; rewardAmount?: number }) {
   const [phase, setPhase] = useState<"pre" | "loading" | "error" | "done">("pre");
   const [errorDetail, setErrorDetail] = useState<string>("");
   const t = getT();
