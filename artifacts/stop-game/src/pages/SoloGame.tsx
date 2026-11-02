@@ -123,7 +123,9 @@ function getTodayStr(): string {
 
 export default function SoloGame() {
   const { player, showAuth } = usePlayer();
-  const { isPremium, loading: premiumLoading } = usePremium(player?.id);
+  const { isPremium, loading: premiumLoading, error: premiumError } = usePremium(player?.id);
+  // Fail closed: never request ads when Premium entitlement cannot be verified.
+  const adsBlocked = isPremium || premiumLoading || !!premiumError;
   const { streak: soloStreak, recordPlay } = useStreak(player?.id);
   const { t, lang } = useT();
   const { addXp, levelUpInfo, clearLevelUp } = useProgression(player?.id);
@@ -1386,7 +1388,7 @@ export default function SoloGame() {
 
       // Launch the interstitial after the game has already transitioned.
       // Fire-and-forget: an ad can never make "Volver a jugar" unresponsive.
-      void maybeShowInterstitial(isPremium || premiumLoading);
+      void maybeShowInterstitial(adsBlocked);
     } else {
       setRound(r => r + 1);
       startGame(false);
@@ -1559,7 +1561,7 @@ export default function SoloGame() {
 
       <div className="flex-1 flex flex-col max-w-2xl mx-auto w-full">
 
-        {rewardedAdType && !isPremium && !premiumLoading && (
+        {rewardedAdType && !adsBlocked && (
           <RewardedAd
             rewardType={rewardedAdType === "double" ? "points" : rewardedAdType}
             rewardAmount={
@@ -1573,7 +1575,7 @@ export default function SoloGame() {
               setRewardedAdType(null);
             }}
             playerId={player?.id}
-            isPremium={isPremium || premiumLoading}
+            isPremium={adsBlocked}
           />
         )}
 
@@ -1892,7 +1894,7 @@ export default function SoloGame() {
               ) : (
                 <>
                   {/* Banner solo en navegador web (se auto-oculta dentro del TWA). */}
-                  <BannerAd isPremium={isPremium || premiumLoading} />
+                  <BannerAd isPremium={adsBlocked} />
                 </>
               )}
             </motion.div>
