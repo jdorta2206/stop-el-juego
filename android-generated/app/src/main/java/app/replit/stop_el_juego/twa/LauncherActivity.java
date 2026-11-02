@@ -41,7 +41,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     private static final String TAG = "STOP_AD_BRIDGE";
     private static final Uri SOURCE_ORIGIN = Uri.parse("https://www.stopjuegodepalabras.com");
     private static final Uri TARGET_ORIGIN = Uri.parse("https://www.stopjuegodepalabras.com");
-    private static final boolean USE_TEST_REWARDED_ADS = true;
+    private static final boolean USE_TEST_REWARDED_ADS = false;
     private static final String REWARDED_TEST_ID = "ca-app-pub-3940256099942544/5224354917";
     private static final String REWARDED_REAL_ID = "ca-app-pub-4807272408824742/3559554716";
 
