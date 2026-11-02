@@ -80,7 +80,7 @@
 
         <activity
             android:name=".RewardedAdActivity"
-            android:exported="true"
+            android:exported="false"
             android:excludeFromRecents="true"
             android:theme="@android:style/Theme.Material.Light.NoActionBar">
             <intent-filter>
@@ -94,7 +94,7 @@
 
         <activity
             android:name=".InterstitialAdActivity"
-            android:exported="true"
+            android:exported="false"
             android:excludeFromRecents="true"
             android:theme="@android:style/Theme.Material.Light.NoActionBar">
             <intent-filter>
