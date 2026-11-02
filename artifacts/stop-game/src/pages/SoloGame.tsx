@@ -1559,7 +1559,7 @@ export default function SoloGame() {
 
       <div className="flex-1 flex flex-col max-w-2xl mx-auto w-full">
 
-        {rewardedAdType && (
+        {rewardedAdType && !isPremium && !premiumLoading && (
           <RewardedAd
             rewardType={rewardedAdType === "double" ? "points" : rewardedAdType}
             rewardAmount={
@@ -1573,6 +1573,7 @@ export default function SoloGame() {
               setRewardedAdType(null);
             }}
             playerId={player?.id}
+            isPremium={isPremium || premiumLoading}
           />
         )}
 
@@ -1891,7 +1892,7 @@ export default function SoloGame() {
               ) : (
                 <>
                   {/* Banner solo en navegador web (se auto-oculta dentro del TWA). */}
-                  <BannerAd />
+                  <BannerAd isPremium={isPremium || premiumLoading} />
                 </>
               )}
             </motion.div>
