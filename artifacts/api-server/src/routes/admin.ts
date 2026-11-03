@@ -503,7 +503,7 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
     const platformMethods = (await db.execute(sql`
       SELECT
         CASE WHEN s.platform = 'android' THEN 'android' WHEN s.platform = 'ios' THEN 'ios' ELSE 'web' END AS platform,
-        CASE WHEN s.login_method = 'google' OR s.player_id LIKE 'google_%' THEN 'google'
+        CASE WHEN s.player_id LIKE 'google_%' THEN 'google'
              WHEN s.player_id LIKE 'fb_%' THEN 'facebook'
              WHEN s.player_id LIKE 'apple_%' THEN 'apple'
              WHEN s.player_id LIKE 'ig_%' THEN 'instagram'
