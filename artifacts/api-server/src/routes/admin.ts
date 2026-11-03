@@ -455,11 +455,11 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
       SELECT s.player_id, COALESCE(ps.player_name, CASE WHEN s.player_id IS NULL THEN 'Invitado' ELSE s.player_id END) AS player_name,
              s.platform, s.app_version, s.language, s.last_seen,
              CASE
-               WHEN s.login_method IN ('google','gmail') OR s.player_id LIKE 'google_%' THEN 'Google / Gmail'
-               WHEN s.login_method = 'facebook' OR s.player_id LIKE 'fb_%' THEN 'Facebook'
-               WHEN s.login_method = 'apple' OR s.player_id LIKE 'apple_%' THEN 'Apple'
-               WHEN s.login_method = 'instagram' OR s.player_id LIKE 'ig_%' THEN 'Instagram'
-               WHEN s.login_method = 'tiktok' OR s.player_id LIKE 'tt_%' THEN 'TikTok'
+               WHEN s.player_id LIKE 'google_%' THEN 'Google / Gmail'
+               WHEN s.player_id LIKE 'fb_%' THEN 'Facebook'
+               WHEN s.player_id LIKE 'apple_%' THEN 'Apple'
+               WHEN s.player_id LIKE 'ig_%' THEN 'Instagram'
+               WHEN s.player_id LIKE 'tt_%' THEN 'TikTok'
                WHEN s.player_id IS NULL THEN 'Invitado'
                ELSE 'Cuenta'
              END AS login_method
@@ -476,11 +476,11 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
       observed AS (
         SELECT s.session_id, s.player_id, s.last_seen,
           CASE
-            WHEN s.login_method IN ('google','gmail') OR s.player_id LIKE 'google_%' THEN 'google'
-            WHEN s.login_method = 'facebook' OR s.player_id LIKE 'fb_%' THEN 'facebook'
-            WHEN s.login_method = 'apple' OR s.player_id LIKE 'apple_%' THEN 'apple'
-            WHEN s.login_method = 'instagram' OR s.player_id LIKE 'ig_%' THEN 'instagram'
-            WHEN s.login_method = 'tiktok' OR s.player_id LIKE 'tt_%' THEN 'tiktok'
+            WHEN s.player_id LIKE 'google_%' THEN 'google'
+            WHEN s.player_id LIKE 'fb_%' THEN 'facebook'
+            WHEN s.player_id LIKE 'apple_%' THEN 'apple'
+            WHEN s.player_id LIKE 'ig_%' THEN 'instagram'
+            WHEN s.player_id LIKE 'tt_%' THEN 'tiktok'
             WHEN s.player_id IS NOT NULL THEN 'account'
             ELSE 'guest'
           END AS method
@@ -503,11 +503,11 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
     const platformMethods = (await db.execute(sql`
       SELECT
         CASE WHEN s.platform = 'android' THEN 'android' WHEN s.platform = 'ios' THEN 'ios' ELSE 'web' END AS platform,
-        CASE WHEN s.login_method = 'google' OR s.player_id LIKE 'google_%' THEN 'google'
-             WHEN s.login_method = 'facebook' OR s.player_id LIKE 'fb_%' THEN 'facebook'
-             WHEN s.login_method = 'apple' OR s.player_id LIKE 'apple_%' THEN 'apple'
-             WHEN s.login_method = 'instagram' OR s.player_id LIKE 'ig_%' THEN 'instagram'
-             WHEN s.login_method = 'tiktok' OR s.player_id LIKE 'tt_%' THEN 'tiktok'
+        CASE WHEN s.player_id LIKE 'google_%' THEN 'google'
+             WHEN s.player_id LIKE 'fb_%' THEN 'facebook'
+             WHEN s.player_id LIKE 'apple_%' THEN 'apple'
+             WHEN s.player_id LIKE 'ig_%' THEN 'instagram'
+             WHEN s.player_id LIKE 'tt_%' THEN 'tiktok'
              WHEN s.player_id IS NOT NULL THEN 'account' ELSE 'guest' END AS method,
         COUNT(DISTINCT COALESCE(s.player_id, s.session_id)) FILTER (WHERE s.last_seen >= NOW() - INTERVAL '90 seconds')::int AS active,
         COUNT(DISTINCT COALESCE(s.player_id, s.session_id))::int AS unique_users,
