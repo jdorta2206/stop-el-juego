@@ -139,7 +139,8 @@ export default function Room() {
     return t && m ? { code: t, matchId: m } : null;
   })();
   const { player } = usePlayer();
-  const { isPremium: meIsPremium } = usePremium(player?.id);
+  const { isPremium: meIsPremium, loading: premiumLoading, error: premiumError } = usePremium(player?.id);
+  const adsBlocked = meIsPremium || premiumLoading || !!premiumError;
   const { followedIds, follow, unfollow } = useFollows(player?.id);
   // The host's own custom packs (premium feature). Non-premium players see
   // an empty list and the custom-pack section in the lobby is hidden for them.
@@ -1096,7 +1097,7 @@ export default function Room() {
       if (interstitialCountedRoomRef.current !== roomCode) {
         interstitialCountedRoomRef.current = roomCode || "";
         recordInterstitialGameCompleted();
-        void maybeShowInterstitial(meIsPremium);
+        void maybeShowInterstitial(adsBlocked);
       }
 
       // Count this finished multiplayer game toward review-prompt
