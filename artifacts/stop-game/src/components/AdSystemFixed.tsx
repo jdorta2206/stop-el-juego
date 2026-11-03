@@ -64,8 +64,9 @@ function AdsterraSlot({ adKey, width, height }: { adKey: string; width: number; 
     }, 400);
     return () => { window.clearInterval(timer); try { el.innerHTML = ""; el.dataset.adInjected = ""; } catch {} };
   }, [adKey, width, height]);
-  if (!filled) return null;
-  return <div className="relative overflow-hidden rounded-xl" style={{ width, height: height + 14, margin: "0 auto" }}><div ref={containerRef} style={{ width, height, marginTop: 12 }} /></div>;
+  // Keep the host element mounted so the ad script can inject its iframe.
+  // Collapse the slot until an iframe is detected to avoid reserving empty space.
+  return <div className="relative overflow-hidden rounded-xl" style={{ width, height: filled ? height + 14 : 0, margin: "0 auto" }}><div ref={containerRef} style={{ width, height, marginTop: 12, position: filled ? "relative" : "absolute", opacity: filled ? 1 : 0, pointerEvents: filled ? "auto" : "none" }} /></div>;
 }
 
 export function BannerAd({ className = "", isPremium = false }: { className?: string; isPremium?: boolean }) {
@@ -82,7 +83,11 @@ export function BannerAd({ className = "", isPremium = false }: { className?: st
     } catch {}
     return () => { cancelled = true; };
   }, [isPremium]);
-  useEffect(() => { if (ADSENSE_READY && BANNER_SLOT && insRef.current) pushAd(); }, []);
+  useEffect(() => {
+    // The <ins> only exists after adsAllowed becomes true. Initialize it then,
+    // never while Premium or while ads are otherwise blocked.
+    if (!ADS_DISABLED && adsAllowed && !isPremium && ADSENSE_READY && BANNER_SLOT && insRef.current) pushAd();
+  }, [adsAllowed, isPremium]);
   if (isPremium || !visible || !adsAllowed) return null;
   if (ADSTERRA_BANNER_KEY) return <div className={`relative ${className}`}><AdsterraSlot adKey={ADSTERRA_BANNER_KEY} width={ADSTERRA_BANNER_W} height={ADSTERRA_BANNER_H} /><button onClick={() => setVisible(false)} aria-label="Cerrar anuncio" className="absolute top-0 right-0 p-1 text-black/30 hover:text-black/60 z-20"><X className="w-3.5 h-3.5" /></button></div>;
   if (ADSENSE_READY && BANNER_SLOT) return <div className={`relative overflow-hidden rounded-xl ${className}`} style={{ minHeight: 60 }}><div className="absolute top-1 left-2 text-[9px] text-black/30 font-mono z-10">{t.ads.label}</div><ins ref={insRef} className="adsbygoogle" style={{ display: "block", minHeight: 50 }} data-ad-client={ADSENSE_CLIENT} data-ad-slot={BANNER_SLOT} data-ad-format="auto" data-full-width-responsive="true" /></div>;
