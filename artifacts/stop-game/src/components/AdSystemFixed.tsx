@@ -1,32 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { Gift, Star, X, Zap } from "lucide-react";
+import { Gift, Star, Zap } from "lucide-react";
 import { getT } from "@/i18n/index";
-import { detectPaymentChannel, hasAndroidAppReferrer } from "@/lib/playBilling";
+import { hasAndroidAppReferrer } from "@/lib/playBilling";
 import { initTwaAdBridge, isTwaAdBridgeAvailable, requestRewardedAd, setRewardedAdPlayerId } from "@/lib/twaAdBridge";
 import { pauseGameTimer, resumeGameTimer } from "@/lib/timerPauseGuard";
 import { trackAnalyticsEvent } from "@/lib/analyticsClient";
-
-const ADS_DISABLED = import.meta.env.VITE_ADS_DISABLED === "1";
-const ADSTERRA_BANNER_KEY = ADS_DISABLED ? undefined : ((import.meta.env.VITE_ADSTERRA_BANNER_KEY as string | undefined) ?? "1212cb86d493b763d38d4523eec88cac");
-const ADSTERRA_BANNER_W = 320;
-const ADSTERRA_BANNER_H = 50;
-const ADSENSE_CLIENT = import.meta.env.VITE_ADSENSE_CLIENT_ID as string | undefined;
-const BANNER_SLOT = import.meta.env.VITE_ADSENSE_BANNER_SLOT as string | undefined;
-const VIDEO_SLOT = import.meta.env.VITE_ADSENSE_VIDEO_SLOT as string | undefined;
-const ADSENSE_READY = !!ADSENSE_CLIENT;
-
-function inStandaloneOrTwaSync(): boolean {
-  if (typeof window === "undefined") return true;
-  try {
-    if (hasAndroidAppReferrer()) return true;
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("source") === "twa" || params.get("utm_source") === "twa") return true;
-    const ua = navigator.userAgent || "";
-    const standalone = window.matchMedia?.("(display-mode: standalone)").matches ?? false;
-    const fullscreen = window.matchMedia?.("(display-mode: fullscreen)").matches ?? false;
-    return /Android/i.test(ua) && (standalone || fullscreen);
-  } catch { return true; }
-}
 
 const GAME_TIMER_PAUSE_EVENT = "stop:rewarded-ad-pause";
 const GAME_TIMER_RESUME_EVENT = "stop:rewarded-ad-resume";
@@ -69,28 +47,10 @@ function AdsterraSlot({ adKey, width, height }: { adKey: string; width: number; 
   return <div className="relative overflow-hidden rounded-xl" style={{ width, height: filled ? height + 14 : 0, margin: "0 auto" }}><div ref={containerRef} style={{ width, height, marginTop: 12, position: filled ? "relative" : "absolute", opacity: filled ? 1 : 0, pointerEvents: filled ? "auto" : "none" }} /></div>;
 }
 
-export function BannerAd({ className = "", isPremium = false }: { className?: string; isPremium?: boolean }) {
-  const insRef = useRef<HTMLModElement>(null);
-  const [visible, setVisible] = useState(true);
-  const [adsAllowed, setAdsAllowed] = useState(false);
-  const t = getT();
-  useEffect(() => {
-    if (ADS_DISABLED || isPremium || inStandaloneOrTwaSync()) return;
-    let cancelled = false;
-    try {
-      const channel = detectPaymentChannel();
-      if (!cancelled && channel === "stripe") setAdsAllowed(true);
-    } catch {}
-    return () => { cancelled = true; };
-  }, [isPremium]);
-  useEffect(() => {
-    // The <ins> only exists after adsAllowed becomes true. Initialize it then,
-    // never while Premium or while ads are otherwise blocked.
-    if (!ADS_DISABLED && adsAllowed && !isPremium && ADSENSE_READY && BANNER_SLOT && insRef.current) pushAd();
-  }, [adsAllowed, isPremium]);
-  if (isPremium || !visible || !adsAllowed) return null;
-  if (ADSTERRA_BANNER_KEY) return <div className={`relative ${className}`}><AdsterraSlot adKey={ADSTERRA_BANNER_KEY} width={ADSTERRA_BANNER_W} height={ADSTERRA_BANNER_H} /><button onClick={() => setVisible(false)} aria-label="Cerrar anuncio" className="absolute top-0 right-0 p-1 text-black/30 hover:text-black/60 z-20"><X className="w-3.5 h-3.5" /></button></div>;
-  if (ADSENSE_READY && BANNER_SLOT) return <div className={`relative overflow-hidden rounded-xl ${className}`} style={{ minHeight: 60 }}><div className="absolute top-1 left-2 text-[9px] text-black/30 font-mono z-10">{t.ads.label}</div><ins ref={insRef} className="adsbygoogle" style={{ display: "block", minHeight: 50 }} data-ad-client={ADSENSE_CLIENT} data-ad-slot={BANNER_SLOT} data-ad-format="auto" data-full-width-responsive="true" /></div>;
+// STOP uses the existing native Google AdMob integration inside the Android TWA.
+// Do not load Adsterra or AdSense scripts from the website; native rewarded and
+// interstitial placements are handled by the Android AdMob SDK.
+export function BannerAd(_props: { className?: string; isPremium?: boolean }) {
   return null;
 }
 
