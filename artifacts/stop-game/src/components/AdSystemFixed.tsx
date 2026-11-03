@@ -9,44 +9,6 @@ import { trackAnalyticsEvent } from "@/lib/analyticsClient";
 const GAME_TIMER_PAUSE_EVENT = "stop:rewarded-ad-pause";
 const GAME_TIMER_RESUME_EVENT = "stop:rewarded-ad-resume";
 
-function pushAd() {
-  try {
-    const win = window as any;
-    win.adsbygoogle = win.adsbygoogle || [];
-    win.adsbygoogle.push({});
-  } catch {}
-}
-
-function AdsterraSlot({ adKey, width, height }: { adKey: string; width: number; height: number }) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [filled, setFilled] = useState(false);
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el || el.dataset.adInjected === "1") return;
-    el.dataset.adInjected = "1";
-    const cfg = document.createElement("script");
-    cfg.type = "text/javascript";
-    cfg.text = `atOptions = { 'key' : '${adKey}', 'format' : 'iframe', 'height' : ${height}, 'width' : ${width}, 'params' : {} };`;
-    el.appendChild(cfg);
-    const loader = document.createElement("script");
-    loader.type = "text/javascript";
-    loader.src = `https://www.highperformanceformat.com/${adKey}/invoke.js`;
-    loader.async = true;
-    loader.onerror = () => setFilled(false);
-    el.appendChild(loader);
-    const started = Date.now();
-    const timer = window.setInterval(() => {
-      if (!el.isConnected) return window.clearInterval(timer);
-      if (el.querySelector("iframe")) { setFilled(true); window.clearInterval(timer); }
-      else if (Date.now() - started > 4000) window.clearInterval(timer);
-    }, 400);
-    return () => { window.clearInterval(timer); try { el.innerHTML = ""; el.dataset.adInjected = ""; } catch {} };
-  }, [adKey, width, height]);
-  // Keep the host element mounted so the ad script can inject its iframe.
-  // Collapse the slot until an iframe is detected to avoid reserving empty space.
-  return <div className="relative overflow-hidden rounded-xl" style={{ width, height: filled ? height + 14 : 0, margin: "0 auto" }}><div ref={containerRef} style={{ width, height, marginTop: 12, position: filled ? "relative" : "absolute", opacity: filled ? 1 : 0, pointerEvents: filled ? "auto" : "none" }} /></div>;
-}
-
 // STOP uses the existing native Google AdMob integration inside the Android TWA.
 // Do not load Adsterra or AdSense scripts from the website; native rewarded and
 // interstitial placements are handled by the Android AdMob SDK.
