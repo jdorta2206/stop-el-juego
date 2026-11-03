@@ -20,7 +20,10 @@ export function usePremium(playerId: string | null | undefined): PremiumStatus {
   const [isPremium, setIsPremium] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [resolvedKey, setResolvedKey] = useState<string | null>(null);
   const [refreshTick, setRefreshTick] = useState(0);
+  const requestKey = `${playerId ?? ""}:${refreshTick}`;
+  const shouldCheck = !!playerId && isPremiumEligibleAccount(playerId) && resolvedKey !== requestKey;
 
   useEffect(() => {
     const handler = () => setRefreshTick((t) => t + 1);
@@ -33,6 +36,7 @@ export function usePremium(playerId: string | null | undefined): PremiumStatus {
       setIsPremium(false);
       setLoading(false);
       setError(null);
+      setResolvedKey(requestKey);
       return;
     }
 
@@ -63,14 +67,17 @@ export function usePremium(playerId: string | null | undefined): PremiumStatus {
           setError(err?.message || "No se pudo comprobar Premium");
         }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+          setResolvedKey(requestKey);
+        }
       }
     })();
 
     return () => { cancelled = true; };
   }, [playerId, refreshTick]);
 
-  return { isPremium, loading, error };
+  return { isPremium, loading: loading || shouldCheck, error };
 }
 
 export async function fetchPremiumProducts() {
