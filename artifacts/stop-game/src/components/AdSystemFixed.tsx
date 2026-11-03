@@ -125,6 +125,8 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
   useEffect(() => { initTwaAdBridge(); }, []);
 
   const startWatching = async () => {
+    // Fail closed before fallback, analytics, timer changes, or native AdMob requests.
+    if (isPremium || !mountedRef.current) return;
     setRewardedAdPlayerId(playerId);
     if (FREE_REWARDED_FALLBACK) {
       const placement = rewardType === "extraTime" ? "extra_time" : rewardType === "hint" ? "hint" : "double_points";
