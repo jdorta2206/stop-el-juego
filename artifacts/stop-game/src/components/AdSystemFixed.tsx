@@ -114,72 +114,60 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
   useEffect(() => { initTwaAdBridge(); }, []);
 
   const startWatching = async () => {
-    // Fail closed before fallback, analytics, timer changes, or native AdMob requests.
+    // Premium and unmounted overlays must never request or grant an ad reward.
     if (isPremium || !mountedRef.current) return;
     setRewardedAdPlayerId(playerId);
-    const placement = rewardType === "extraTime" ? "extra_time" : rewardType === "hint" ? "hint" : "double_points";
-      void trackAnalyticsEvent("rewarded_ad_requested", { metadata: { placement, source: "free_fallback" } });
-      if (!mountedRef.current) return;
-      pauseGameTimer();
-      window.dispatchEvent(new Event(GAME_TIMER_PAUSE_EVENT));
-      setPhase("done");
-      void trackAnalyticsEvent("rewarded_ad_completed", { metadata: { placement, source: "free_fallback" } });
-      void trackAnalyticsEvent("powerup_used", { metadata: { powerup: placement, source: "free_fallback" } });
-      timeoutRef.current = window.setTimeout(() => {
-        timeoutRef.current = null;
-        if (mountedRef.current) onCompleteRef.current(rewardAmount);
-      }, 300);
-      return;
-    }
     const placement = rewardType === "extraTime" ? "extra_time" : rewardType === "hint" ? "hint" : "double_points";
     void trackAnalyticsEvent("rewarded_ad_requested", { metadata: { placement } });
     pauseGameTimer();
     window.dispatchEvent(new Event(GAME_TIMER_PAUSE_EVENT));
     setPhase("loading");
     setErrorDetail("");
+
     try {
       const bridgeReady = isTwaAdBridgeAvailable();
-    const knownTwa =
-      hasAndroidAppReferrer() ||
-      new URLSearchParams(window.location.search).get("source") === "googleplay-twa" ||
-      new URLSearchParams(window.location.search).get("source") === "twa";
+      const knownTwa =
+        hasAndroidAppReferrer() ||
+        new URLSearchParams(window.location.search).get("source") === "googleplay-twa" ||
+        new URLSearchParams(window.location.search).get("source") === "twa";
 
-    if (bridgeReady || knownTwa) {
-      const result = await requestRewardedAd(placement);
-      if (result.rewarded === true && result.source === "admob") {
-        if (!mountedRef.current) return;
-        setPhase("done");
-        void trackAnalyticsEvent("rewarded_ad_completed", { metadata: { placement, source: result.source } });
-        void trackAnalyticsEvent("powerup_used", { metadata: { powerup: placement } });
-        timeoutRef.current = window.setTimeout(() => {
-          timeoutRef.current = null;
-          if (mountedRef.current) onCompleteRef.current(rewardAmount);
-        }, 500);
-      } else {
-        const detail = [
-          result.errorCode != null ? `código ${result.errorCode}` : "",
-          result.errorDomain || "",
-          result.errorMessage || "",
-        ].filter(Boolean).join(" · ");
-        setErrorDetail(detail);
-        void trackAnalyticsEvent("rewarded_ad_failed", { metadata: { placement, error: detail.slice(0, 300) } });
-        if (!mountedRef.current) return;
-        setPhase("error");
-        timeoutRef.current = window.setTimeout(() => {
-          timeoutRef.current = null;
-          if (mountedRef.current) onSkipRef.current();
-        }, detail ? 5000 : 900);
+      if (bridgeReady || knownTwa) {
+        const result = await requestRewardedAd(placement);
+        // The server only reports source=admob after validating Google's signed SSV callback.
+        if (result.rewarded === true && result.source === "admob") {
+          if (!mountedRef.current) return;
+          setPhase("done");
+          void trackAnalyticsEvent("rewarded_ad_completed", { metadata: { placement, source: "admob" } });
+          void trackAnalyticsEvent("powerup_used", { metadata: { powerup: placement, source: "admob" } });
+          timeoutRef.current = window.setTimeout(() => {
+            timeoutRef.current = null;
+            if (mountedRef.current) onCompleteRef.current(rewardAmount);
+          }, 500);
+        } else {
+          const detail = [
+            result.errorCode != null ? `código ${result.errorCode}` : "",
+            result.errorDomain || "",
+            result.errorMessage || "",
+          ].filter(Boolean).join(" · ");
+          setErrorDetail(detail);
+          void trackAnalyticsEvent("rewarded_ad_failed", { metadata: { placement, error: detail.slice(0, 300) } });
+          if (!mountedRef.current) return;
+          setPhase("error");
+          timeoutRef.current = window.setTimeout(() => {
+            timeoutRef.current = null;
+            if (mountedRef.current) onSkipRef.current();
+          }, detail ? 5000 : 900);
+        }
+        return;
       }
-      return;
-    }
 
-    setErrorDetail("El puente nativo de anuncios no está disponible.");
-    if (!mountedRef.current) return;
-    setPhase("error");
-    timeoutRef.current = window.setTimeout(() => {
-      timeoutRef.current = null;
-      if (mountedRef.current) onSkipRef.current();
-    }, 5000);
+      setErrorDetail("El puente nativo de anuncios no está disponible.");
+      if (!mountedRef.current) return;
+      setPhase("error");
+      timeoutRef.current = window.setTimeout(() => {
+        timeoutRef.current = null;
+        if (mountedRef.current) onSkipRef.current();
+      }, 5000);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Error desconocido";
       setErrorDetail(message.slice(0, 300));
