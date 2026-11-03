@@ -36,7 +36,8 @@ const HALLOWEEN_PREVIEW = import.meta.env.VITE_HALLOWEEN_PREVIEW === "true";
 
 export default function Home() {
   const { player } = usePlayer();
-  const { isPremium } = usePremium(player?.id);
+  const { isPremium, loading: premiumLoading, error: premiumError } = usePremium(player?.id);
+  const adsBlocked = isPremium || premiumLoading || !!premiumError;
   const { friends } = useFollows(player?.id);
   const friendsOnline = useFriendsOnline(player?.id, friends);
   const { t, lang } = useT();
@@ -1196,7 +1197,7 @@ export default function Home() {
         )}
 
         {/* Banner solo en navegador web (BannerAd se auto-oculta dentro del TWA). */}
-        {!isPremium && <BannerAd className="my-4" />}
+        {!adsBlocked && <BannerAd className="my-4" isPremium={adsBlocked} />}
 
         {/* Share row */}
         <motion.div
