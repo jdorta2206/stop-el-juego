@@ -13,7 +13,7 @@
         android:label="@string/appName"
         android:supportsRtl="true"
         android:manageSpaceActivity="com.google.androidbrowserhelper.trusted.ManageDataLauncherActivity"
-        android:theme="@android:style/Theme.Material.Light.NoActionBar">
+        android:theme="@style/Theme.STOP">
 
         <meta-data
             android:name="com.google.android.gms.games.APP_ID"
