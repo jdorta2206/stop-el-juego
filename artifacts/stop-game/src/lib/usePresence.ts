@@ -32,6 +32,9 @@ export interface IncomingChallenge {
 
 // Send a heartbeat to mark this player as online
 async function ping(player: PlayerProfile, roomCode?: string | null, language?: string) {
+  // Presence is backed by player_scores; guest/local profiles have no canonical
+  // row there and would generate a predictable 404 every heartbeat.
+  if (!/^(google_|fb_|instagram_|ig_|apple_|tiktok_|tt_)/.test(player.id)) return;
   try {
     await fetch(`${API_BASE}/api/presence/ping`, {
       method: "POST",
