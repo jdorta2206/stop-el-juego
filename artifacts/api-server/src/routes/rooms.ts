@@ -1024,7 +1024,15 @@ function applyRoundAdvanceSideEffects(room: any, sweptPlayers: any[], newStatus:
 // round deadlocks forever if the last pending player's submission never
 // reaches the server (their SSE stays "online" so the in-handler sweep never
 // fires for them, and there's no other player left to trigger it).
+// Prevent overlapping 3-second sweeps when PostgreSQL is slow. A single
+// sweep owns the recovery work until its queries and writes have settled.
+let sweepStuckRoomsInFlight = false;
+let lastFinishedSettlementRecoveryAt = 0;
+const auxiliaryRecoveryStartedForRoom = new Set<number>();
+
 async function sweepStuckRooms() {
+  if (sweepStuckRoomsInFlight) return;
+  sweepStuckRoomsInFlight = true;
   try {
     // Scan BOTH "stopped" (someone pressed STOP) and "playing" (the round timer
     // ran out with no STOP) — either can deadlock if a submission is lost.
@@ -1076,9 +1084,13 @@ async function sweepStuckRooms() {
     // non-guest player. Without this guard every 3s sweep would re-run the
     // settlement function for every finished room, including already-settled
     // games, causing avoidable DB/CPU load and repeated timezone lookups.
-    const finishedRooms = await db.select().from(roomsTable)
-      .where(eq(roomsTable.status, "finished"));
-    for (const room of finishedRooms) {
+    // Finished-room recovery is maintenance work, not round progression.
+    // Run it at most once every 30 seconds instead of scanning every 3 seconds.
+    if (Date.now() - lastFinishedSettlementRecoveryAt >= 30_000) {
+      lastFinishedSettlementRecoveryAt = Date.now();
+      const finishedRooms = await db.select().from(roomsTable)
+        .where(eq(roomsTable.status, "finished"));
+      for (const room of finishedRooms) {
       const players = parsePlayers(room.playersJson);
       const eligible = players.filter((p: any) => p && !p.isBot && p.playerId && p.loginMethod !== "guest");
       if (eligible.length === 0) continue;
@@ -1090,9 +1102,13 @@ async function sweepStuckRooms() {
         // Core settlement already succeeded; recover only auxiliary effects
         // that may have been lost if the process crashed immediately after
         // the claim transaction committed. Season/Halloween are idempotent.
-        void recoverMultiplayerAuxiliaryEffects(room, players).catch((err) => {
-          console.error("[sweepStuckRooms] auxiliary settlement recovery failed:", (err as Error).message);
-        });
+        if (!auxiliaryRecoveryStartedForRoom.has(room.id)) {
+          auxiliaryRecoveryStartedForRoom.add(room.id);
+          void recoverMultiplayerAuxiliaryEffects(room, players).catch((err) => {
+            auxiliaryRecoveryStartedForRoom.delete(room.id);
+            console.error("[sweepStuckRooms] auxiliary settlement recovery failed:", (err as Error).message);
+          });
+        }
         continue;
       }
 
@@ -1106,6 +1122,7 @@ async function sweepStuckRooms() {
       ).catch((err) => {
         console.error("[sweepStuckRooms] final settlement retry failed:", (err as Error).message);
       });
+      }
     }
 
     // 🃏 Also rescue rooms stuck in "bluffvoting": resolution only happens when
@@ -1159,6 +1176,8 @@ async function sweepStuckRooms() {
     }
   } catch (err) {
     console.error("[sweepStuckRooms] failed:", (err as Error).message);
+  } finally {
+    sweepStuckRoomsInFlight = false;
   }
 }
 
