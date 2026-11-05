@@ -23,14 +23,14 @@ SELECT to_char((created_at AT TIME ZONE 'UTC') AT TIME ZONE 'Europe/Madrid','DD/
 platform, app_version, metadata_json
 FROM public.analytics_events
 WHERE trusted=TRUE AND event_name='client_error'
-AND created_at>=NOW()-INTERVAL '15 minutes'
+AND created_at>=NOW()-INTERVAL '2 hours'
 ORDER BY created_at DESC
 LIMIT 5
 `)).rows as Array<{occurred_at?:string;platform?:string;app_version?:string;metadata_json?:string}>;
-// Show only sanitized error messages in the private health panel; never expose stacks, player IDs, or session IDs.
-const safeErrorText=(value:string)=>value.replace(/https?:\/\/[^\s"'<>]+/gi,(url)=>url.split(/[?#]/,1)[0]).replace(/\bBearer\s+\S+/gi,"Bearer [oculto]").replace(/(token|password|authorization|cookie)\s*[:=]\s*[^\s,;]+/gi,"$1=[oculto]").replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi,"[email oculto]").replace(/\s+/g," ").slice(0,180);
-const clientErrorSummaries=clientErrorDetailRows.map((row)=>{let message="Error de cliente (sin mensaje)";try{const parsed=JSON.parse(String(row.metadata_json??"{}")) as {message?:unknown};if(typeof parsed.message==="string"&&parsed.message.trim())message=safeErrorText(parsed.message.trim())}catch{}return `${String(row.occurred_at??"hora desconocida")} · ${String(row.platform??"plataforma desconocida")} · ${String(row.app_version??"versión desconocida")} · ${message}`});
-checks.push({name:"Detalle de errores cliente",status:clientErrorSummaries.length===0?"ok":"warn",value:clientErrorSummaries.length===0?"SIN ERRORES":`${clientErrorSummaries.length} detalle(s)`,detail:clientErrorSummaries.length===0?"No hay errores de cliente en los últimos 15 minutos.":clientErrorSummaries.join(" | ")});
+// Show sanitized traces only in the private health panel; never expose player IDs or session IDs.
+const safeErrorText=(value:string,maxLength=180)=>value.replace(/https?:\/\/[^\s"'<>]+/gi,(url)=>url.split(/[?#]/,1)[0]).replace(/\bBearer\s+\S+/gi,"Bearer [oculto]").replace(/(token|password|authorization|cookie)\s*[:=]\s*[^\s,;]+/gi,"$1=[oculto]").replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi,"[email oculto]").replace(/\s+/g," ").slice(0,maxLength);
+const clientErrorSummaries=clientErrorDetailRows.map((row)=>{let message="Error de cliente (sin mensaje)";let componentStack="";let stack="";try{const parsed=JSON.parse(String(row.metadata_json??"{}")) as {message?:unknown;componentStack?:unknown;stack?:unknown};if(typeof parsed.message==="string"&&parsed.message.trim())message=safeErrorText(parsed.message.trim());if(typeof parsed.componentStack==="string"&&parsed.componentStack.trim())componentStack=safeErrorText(parsed.componentStack.trim(),700);if(typeof parsed.stack==="string"&&parsed.stack.trim())stack=safeErrorText(parsed.stack.trim(),700)}catch{}const trace=[componentStack?`Componentes React: ${componentStack}`:null,stack?`Traza JS: ${stack}`:null].filter(Boolean).join(" · ");return `${String(row.occurred_at??"hora desconocida")} · ${String(row.platform??"plataforma desconocida")} · ${String(row.app_version??"versión desconocida")} · ${message}${trace?` · ${trace}`:" · Sin traza adicional"}`});
+checks.push({name:"Detalle de errores cliente (2 h)",status:clientErrorSummaries.length===0?"ok":"warn",value:clientErrorSummaries.length===0?"SIN ERRORES":`${clientErrorSummaries.length} detalle(s)`,detail:clientErrorSummaries.length===0?"No hay errores de cliente en las últimas 2 horas.":clientErrorSummaries.join(" | ")});
 const chunkRows=(await db.execute(sql`
 SELECT COUNT(*) FILTER(WHERE created_at>=NOW()-INTERVAL '15 minutes')::int AS recent,
 COUNT(*)::int AS window
