@@ -2765,7 +2765,16 @@ export default function SoloGame() {
                 })()}
               </AnimatePresence>
 
-              <div className="space-y-3 mb-6 flex-1 overflow-y-auto">
+              <div className="mb-6 flex-1 min-h-0 flex flex-col">
+                <div className="sticky top-0 z-10 mb-3 rounded-xl border border-white/10 bg-slate-950/95 px-3 py-2 text-center shadow-lg">
+                  <p className="text-xs font-black uppercase tracking-wider text-yellow-300">
+                    {lang === "en" ? "ROUND ANSWERS" : lang === "pt" ? "RESPOSTAS DA RODADA" : lang === "fr" ? "RÉPONSES DE LA MANCHE" : "RESPUESTAS DE LA RONDA"}
+                  </p>
+                  <p className="mt-1 text-xs font-medium text-white/65">
+                    {lang === "en" ? "Scroll down to see every category and both answers." : lang === "pt" ? "Desliza para ver todas as categorias e respostas." : lang === "fr" ? "Faites défiler pour voir toutes les catégories et réponses." : "Desliza hacia abajo para ver todas las categorías y las dos respuestas."}
+                  </p>
+                </div>
+                <div className="space-y-3 min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1 pb-2" tabIndex={0} aria-label={lang === "en" ? "Round answers by category" : lang === "pt" ? "Respostas da rodada por categoria" : lang === "fr" ? "Réponses de la manche par catégorie" : "Respuestas de la ronda por categoría"}>
                 {categories.map((category, idx) => {
                   const res = results?.results?.[category];
                   const playerRes = res?.player;
@@ -2823,6 +2832,7 @@ export default function SoloGame() {
                     </motion.div>
                   );
                 })}
+                </div>
               </div>
 
               {!isPremium && (
