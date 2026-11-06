@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { getAiWord, isWordValid } from "./game";
+import { normalizeWord } from "../lib/wordRules";
 
 describe("game word language validation", () => {
   it.each(["en", "pt", "fr"])("returns a candidate accepted by the same %s scoring validator", (language) => {
     const word = getAiWord("A", "animal", language);
     expect(word).not.toBe("");
-    expect(word.normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLowerCase().startsWith("a")).toBe(true);
+    expect(normalizeWord(word).startsWith("a")).toBe(true);
     expect(isWordValid(word, "A", "animal", language)).toBe(true);
   });
 
