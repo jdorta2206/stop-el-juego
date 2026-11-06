@@ -234,7 +234,13 @@ export default function Ranking() {
   // Always fetch the current player's own stats (works even if outside top 100)
   const { data: myStats } = useGetPlayerStats(
     player?.id ?? "",
-    { query: { enabled: isLoggedInPlayer, refetchOnMount: "always", staleTime: 0 } as any }
+    { query: {
+      enabled: isLoggedInPlayer,
+      queryFn: ({ signal }) => fetchRankingJson("/api/ranking/scores/" + encodeURIComponent(player?.id ?? ""), signal, true),
+      refetchOnMount: "always",
+      staleTime: 0,
+      retry: false,
+    } as any }
   );
   // Weekly ranking
   const { data: weeklyData, isLoading: weeklyLoading, isError: weeklyError, refetch: refetchWeekly } = useQuery({
@@ -275,6 +281,7 @@ export default function Ranking() {
     enabled: isLoggedInPlayer,
     refetchOnMount: "always",
     staleTime: 0,
+    retry: false,
   });
 
   const [filter, setFilter] = useState<"global" | "weekly" | "monthly" | "friends">("weekly");
