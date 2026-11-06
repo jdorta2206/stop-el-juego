@@ -112,15 +112,25 @@ const NOT_BOT = sql`player_id NOT LIKE 'bot_%'`;
 
 const PANEL_QUERY_CONCURRENCY = 5;
 let activePanelQueries = 0;
+let panelQueryFailures = 0;
 const panelQueryWaiters: Array<() => void> = [];
 async function withPanelQuerySlot<T>(operation: () => Promise<T>): Promise<T> {
   if (activePanelQueries >= PANEL_QUERY_CONCURRENCY) await new Promise<void>((resolve) => panelQueryWaiters.push(resolve));
   activePanelQueries += 1; try { return await operation(); } finally { activePanelQueries -= 1; panelQueryWaiters.shift()?.(); }
 }
 function executePanelQuery(query: SQL) {
-  return withPanelQuerySlot(() => db.transaction(async (tx) => {
-    await tx.execute(sql`SET LOCAL statement_timeout = '1800ms'`); return tx.execute(query);
-  }));
+  return withPanelQuerySlot(async () => {
+    try {
+      return await db.transaction(async (tx) => {
+        await tx.execute(sql`SET LOCAL statement_timeout = '1800ms'`);
+        return tx.execute(query);
+      });
+    } catch (error) {
+      panelQueryFailures += 1;
+      console.warn("[admin panel] one query timed out or failed:", error instanceof Error ? error.message : error);
+      return { rows: [] } as any;
+    }
+  });
 }
 let cachedAdminPanelHtml: string | null = null;
 let cachedAdminPanelAt = 0;
@@ -152,6 +162,7 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
   }
   if (adminPanelBuildInFlight) return;
   adminPanelBuildInFlight = true;
+  panelQueryFailures = 0;
   if (!hasCachedHtml) res.set("Retry-After", "5").status(202).type("html").send(ADMIN_PANEL_LOADING_HTML);
 
   try {
@@ -179,7 +190,7 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
           (SELECT COUNT(*) FROM game_history
              WHERE ${NOT_BOT} AND created_at >= ${MADRID_TODAY_UTC}) AS games
       `)
-    ).rows[0] as Record<string, unknown>; })();
+    ).rows[0] ?? ({} as Record<string, unknown>); })();
     const guestTodayPromise = (async () => { return (
       await executePanelQuery(sql`
         SELECT COALESCE(games,0) AS games, COALESCE(conversions,0) AS conversions
@@ -742,6 +753,7 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
 </head><body>
   <h1>📊 STOP Control</h1>
   <div class="sub">Panel privado · datos en tiempo real · ${esc(now)}</div>
+  ${panelQueryFailures > 0 ? "<div>Algunos indicadores no se han podido actualizar (" + panelQueryFailures + " consultas). El panel volverá a intentarlo al actualizar.</div>" : ""}
 
   <h2>Hoy</h2>
   <div class="cards">
@@ -906,7 +918,7 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
 </body></html>`;
 
     cachedAdminPanelHtml = html;
-    cachedAdminPanelAt = Date.now();
+    cachedAdminPanelAt = panelQueryFailures > 0 ? Date.now() - 60_000 : Date.now();
     if (!res.headersSent) res.status(200).type("html").send(html);
   } catch (err: any) {
     console.error("[admin panel] error:", err?.message ?? err);
