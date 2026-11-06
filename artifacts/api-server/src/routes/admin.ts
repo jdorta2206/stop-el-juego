@@ -1,7 +1,7 @@
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
 import { timingSafeEqual } from "crypto";
 import { db, indexesReady } from "@workspace/db";
-import { sql } from "drizzle-orm";
+import { sql, type SQL } from "drizzle-orm";
 import { authLimiter } from "../middlewares/rateLimit";
 import { sendLocalizedBroadcast, type PushPayload } from "../lib/pushHelper";
 
@@ -107,15 +107,38 @@ function esc(v: unknown): string {
 // "today" boundary in Europe/Madrid, returned as an instant comparable to the
 // UTC-naive timestamp columns (which store UTC wall time).
 const MADRID_TODAY = sql`(date_trunc('day', now() AT TIME ZONE 'Europe/Madrid') AT TIME ZONE 'Europe/Madrid')`;
+const MADRID_TODAY_UTC = sql`(${MADRID_TODAY} AT TIME ZONE 'UTC')`;
 const NOT_BOT = sql`player_id NOT LIKE 'bot_%'`;
 
+const PANEL_QUERY_CONCURRENCY = 5;
+let activePanelQueries = 0;
+let panelQueryFailures = 0;
+const panelQueryWaiters: Array<() => void> = [];
+async function withPanelQuerySlot<T>(operation: () => Promise<T>): Promise<T> {
+  if (activePanelQueries >= PANEL_QUERY_CONCURRENCY) await new Promise<void>((resolve) => panelQueryWaiters.push(resolve));
+  activePanelQueries += 1; try { return await operation(); } finally { activePanelQueries -= 1; panelQueryWaiters.shift()?.(); }
+}
+function executePanelQuery(query: SQL) {
+  return withPanelQuerySlot(async () => {
+    try {
+      return await db.transaction(async (tx) => {
+        await tx.execute(sql`SET LOCAL statement_timeout = '1800ms'`);
+        return tx.execute(query);
+      });
+    } catch (error) {
+      panelQueryFailures += 1;
+      console.warn("[admin panel] one query timed out or failed:", error instanceof Error ? error.message : error);
+      return { rows: [] } as any;
+    }
+  });
+}
 let cachedAdminPanelHtml: string | null = null;
 let cachedAdminPanelAt = 0;
 let adminPanelBuildInFlight = false;
 
 const ADMIN_PANEL_LOADING_HTML = `<!doctype html>
 <html lang="es"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
-<meta http-equiv="refresh" content="20"/><meta name="robots" content="noindex,nofollow"/>
+<meta http-equiv="refresh" content="5"/><meta name="robots" content="noindex,nofollow"/>
 <title>STOP Control · Cargando</title>
 <style>body{margin:0;background:#0f1216;color:#e8edf2;font:16px system-ui;padding:28px;display:grid;min-height:80vh;place-content:center;text-align:center}
 .card{max-width:460px;padding:24px;border:1px solid #80651f;border-radius:16px;background:#1a2029}
@@ -126,96 +149,100 @@ h1{font-size:1.25rem;color:#f4cf65}p{color:#aab5c2;line-height:1.5}a{color:#6ee7
 
 router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => {
   const now = Date.now();
-  if (cachedAdminPanelHtml && now - cachedAdminPanelAt < 20_000) {
-    res.set("X-STOP-Admin-Cache", "HIT").status(200).type("html").send(cachedAdminPanelHtml);
-    return;
-  }
-  if (adminPanelBuildInFlight) {
-    res.set("Retry-After", "20").status(202).type("html").send(ADMIN_PANEL_LOADING_HTML);
-    return;
-  }
+  const hasCachedHtml = cachedAdminPanelHtml !== null;
+  const cacheFresh = hasCachedHtml && now - cachedAdminPanelAt < 60_000;
 
+  // Stale-while-revalidate: serve the last complete panel before refreshing it.
+  if (hasCachedHtml) {
+    res.set("X-STOP-Admin-Cache", cacheFresh ? "HIT" : "STALE").status(200).type("html").send(cachedAdminPanelHtml);
+    if (cacheFresh || adminPanelBuildInFlight) return;
+  } else if (adminPanelBuildInFlight) {
+    res.set("Retry-After", "5").status(202).type("html").send(ADMIN_PANEL_LOADING_HTML);
+    return;
+  }
+  if (adminPanelBuildInFlight) return;
   adminPanelBuildInFlight = true;
-  const loadingTimer = setTimeout(() => {
-    if (!res.headersSent) res.status(202).type("html").send(ADMIN_PANEL_LOADING_HTML);
-  }, 8_000);
+  panelQueryFailures = 0;
+  if (!hasCachedHtml) res.set("Retry-After", "5").status(202).type("html").send(ADMIN_PANEL_LOADING_HTML);
 
   try {
     // ── KPIs de hoy (zona horaria de España) ──────────────────────────────
-    const todayRows = (
-      await db.execute(sql`
-        SELECT
-          (SELECT COUNT(*) FROM player_scores
-             WHERE ${NOT_BOT} AND (updated_at AT TIME ZONE 'UTC') >= ${MADRID_TODAY}) AS active,
-          (SELECT COUNT(*) FROM player_scores
-             WHERE ${NOT_BOT} AND (created_at AT TIME ZONE 'UTC') >= ${MADRID_TODAY}) AS new_users,
-          (SELECT COUNT(*) FROM game_history
-             WHERE ${NOT_BOT} AND (created_at AT TIME ZONE 'UTC') >= ${MADRID_TODAY}) AS games
-      `)
-    ).rows[0] as Record<string, unknown>;
+
 
     // Invitados de hoy. Usamos el día de Europe/Madrid para que TODAS las
     // tarjetas de "Hoy" cambien de día a la vez (medianoche española).
-    const guestToday = (
-      await db.execute(sql`
+
+
+    // ── Totales históricos ────────────────────────────────────────────────
+
+
+    // ── Series de los últimos 14 días ─────────────────────────────────────
+    const dayExpr = sql`to_char((created_at AT TIME ZONE 'UTC') AT TIME ZONE 'Europe/Madrid', 'YYYY-MM-DD')`;
+
+    // Launch all independent queries together; the semaphore caps concurrent DB work.
+    const todayRowsPromise = (async () => { return (
+      await executePanelQuery(sql`
+        SELECT
+          (SELECT COUNT(*) FROM player_scores
+             WHERE ${NOT_BOT} AND updated_at >= ${MADRID_TODAY_UTC}) AS active,
+          (SELECT COUNT(*) FROM player_scores
+             WHERE ${NOT_BOT} AND created_at >= ${MADRID_TODAY_UTC}) AS new_users,
+          (SELECT COUNT(*) FROM game_history
+             WHERE ${NOT_BOT} AND created_at >= ${MADRID_TODAY_UTC}) AS games
+      `)
+    ).rows[0] ?? ({} as Record<string, unknown>); })();
+    const guestTodayPromise = (async () => { return (
+      await executePanelQuery(sql`
         SELECT COALESCE(games,0) AS games, COALESCE(conversions,0) AS conversions
         FROM guest_stats
         WHERE day = to_char(now() AT TIME ZONE 'Europe/Madrid', 'YYYY-MM-DD')
       `)
-    ).rows[0] as Record<string, unknown> | undefined;
-
-    // ── Totales históricos ────────────────────────────────────────────────
-    const totals = (
-      await db.execute(sql`
+    ).rows[0] as Record<string, unknown> | undefined; })();
+    const totalsPromise = (async () => { return (
+      await executePanelQuery(sql`
         SELECT
           (SELECT COUNT(*) FROM player_scores WHERE ${NOT_BOT}) AS users,
           (SELECT COUNT(*) FROM player_scores ps WHERE ${NOT_BOT} AND EXISTS (\n             SELECT 1 FROM play_subscriptions sub\n             WHERE sub.player_id = ps.player_id\n               AND sub.product_id = 'premium_monthly'\n               AND sub.state IN ('ACTIVE', 'IN_GRACE_PERIOD')\n               AND sub.expiry_time_ms > (EXTRACT(EPOCH FROM NOW()) * 1000)\n           )) AS premium,
           (SELECT COUNT(*) FROM game_history WHERE ${NOT_BOT}) AS games
       `)
-    ).rows[0] as Record<string, unknown>;
-
-    // ── Series de los últimos 14 días ─────────────────────────────────────
-    const dayExpr = sql`to_char((created_at AT TIME ZONE 'UTC') AT TIME ZONE 'Europe/Madrid', 'YYYY-MM-DD')`;
-    const gamesByDay = (
-      await db.execute(sql`
+    ).rows[0] as Record<string, unknown>; })();
+    const gamesByDayPromise = (async () => { return (
+      await executePanelQuery(sql`
         SELECT ${dayExpr} AS d, COUNT(*) AS games, COUNT(DISTINCT player_id) AS players
         FROM game_history
         WHERE ${NOT_BOT} AND created_at >= now() - interval '14 days'
         GROUP BY d ORDER BY d DESC
       `)
-    ).rows as Record<string, unknown>[];
-    const regsByDay = (
-      await db.execute(sql`
+    ).rows as Record<string, unknown>[]; })();
+    const regsByDayPromise = (async () => { return (
+      await executePanelQuery(sql`
         SELECT ${dayExpr} AS d, COUNT(*) AS regs
         FROM player_scores
         WHERE ${NOT_BOT} AND created_at >= now() - interval '14 days'
         GROUP BY d ORDER BY d DESC
       `)
-    ).rows as Record<string, unknown>[];
-    const guestsByDay = (
-      await db.execute(sql`
+    ).rows as Record<string, unknown>[]; })();
+    const guestsByDayPromise = (async () => { return (
+      await executePanelQuery(sql`
         SELECT day AS d, games, conversions FROM guest_stats
         WHERE day >= to_char(now() AT TIME ZONE 'Europe/Madrid' - interval '14 days', 'YYYY-MM-DD')
         ORDER BY day DESC
       `)
-    ).rows as Record<string, unknown>[];
-
-    const analyticsStartsByDay = (await db.execute(sql`
+    ).rows as Record<string, unknown>[]; })();
+    const analyticsStartsByDayPromise = (async () => { return (await executePanelQuery(sql`
       SELECT to_char((created_at AT TIME ZONE 'UTC') AT TIME ZONE 'Europe/Madrid', 'YYYY-MM-DD') AS d,
              COUNT(*)::int AS starts,
              COUNT(*) FILTER (WHERE app_version IS NOT NULL AND app_version <> '')::int AS starts_with_version
       FROM analytics_events
       WHERE trusted = TRUE AND event_name = 'game_start' AND created_at >= NOW() - INTERVAL '14 days'
       GROUP BY d ORDER BY d DESC
-    `)).rows as Record<string, unknown>[];
-
-    const analyticsVersionCoverage = (await db.execute(sql`
+    `)).rows as Record<string, unknown>[]; })();
+    const analyticsVersionCoveragePromise = (async () => { return (await executePanelQuery(sql`
       SELECT COUNT(*)::int AS sessions,
              COUNT(*) FILTER (WHERE app_version IS NOT NULL AND app_version <> '')::int AS sessions_with_version
       FROM analytics_sessions WHERE started_at >= NOW() - INTERVAL '24 hours'
-    `)).rows[0] as Record<string, unknown> | undefined;
-
-    const analyticsStartCoverage = (await db.execute(sql`
+    `)).rows[0] as Record<string, unknown> | undefined; })();
+    const analyticsStartCoveragePromise = (async () => { return (await executePanelQuery(sql`
       SELECT COUNT(*)::int AS starts,
              COUNT(*) FILTER (WHERE app_version IS NOT NULL AND app_version <> '')::int AS starts_with_version,
              COUNT(*) FILTER (WHERE platform IN ('web','android','ios'))::int AS starts_with_platform
@@ -223,15 +250,12 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
       WHERE trusted = TRUE
         AND event_name = 'game_start'
         AND created_at >= NOW() - INTERVAL '24 hours'
-        AND metadata_json LIKE '%"source":"client_game_start"%'
-    `)).rows[0] as Record<string, unknown> | undefined;
-
-    // ── Retención y embudo real (analytics_sessions / trusted events) ────────
-    // DAU/WAU/MAU usa player_id para cuentas y session_id para invitados.
-    const retentionKpis = (
-      await db.execute(sql`
+        AND metadata_json::jsonb->>'source' = 'client_game_start'
+    `)).rows[0] as Record<string, unknown> | undefined; })();
+    const retentionKpisPromise = (async () => { return (
+      await executePanelQuery(sql`
         SELECT
-          COUNT(DISTINCT CASE WHEN s.last_seen >= (date_trunc('day', NOW() AT TIME ZONE 'Europe/Madrid') AT TIME ZONE 'Europe/Madrid') THEN COALESCE(s.player_id, s.session_id) END)::int AS dau,
+          COUNT(DISTINCT CASE WHEN s.last_seen >= ${MADRID_TODAY_UTC} THEN COALESCE(s.player_id, s.session_id) END)::int AS dau,
           COUNT(DISTINCT CASE WHEN s.last_seen >= NOW() - INTERVAL '7 days' THEN COALESCE(s.player_id, s.session_id) END)::int AS wau,
           COUNT(DISTINCT CASE WHEN s.last_seen >= NOW() - INTERVAL '30 days' THEN COALESCE(s.player_id, s.session_id) END)::int AS mau,
           COUNT(DISTINCT CASE WHEN s.last_seen >= NOW() - INTERVAL '7 days' AND s.player_id IS NOT NULL THEN s.player_id END)::int AS account_active_7d,
@@ -239,10 +263,9 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
         FROM analytics_sessions s
         WHERE s.last_seen >= NOW() - INTERVAL '30 days'
       `)
-    ).rows[0] as Record<string, unknown> | undefined;
-
-    const funnel = (
-      await db.execute(sql`
+    ).rows[0] as Record<string, unknown> | undefined; })();
+    const funnelPromise = (async () => { return (
+      await executePanelQuery(sql`
         SELECT
           COUNT(DISTINCT CASE WHEN event_name = 'session_start' THEN session_id END)::int AS sessions,
           COUNT(DISTINCT CASE WHEN event_name = 'game_lobby_view' THEN session_id END)::int AS lobby_sessions,
@@ -278,10 +301,9 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
         WHERE trusted = TRUE
           AND created_at >= NOW() - INTERVAL '7 days'
       `)
-    ).rows[0] as Record<string, unknown> | undefined;
-
-    const activityByDay = (
-      await db.execute(sql`
+    ).rows[0] as Record<string, unknown> | undefined; })();
+    const activityByDayPromise = (async () => { return (
+      await executePanelQuery(sql`
         SELECT to_char((created_at AT TIME ZONE 'UTC') AT TIME ZONE 'Europe/Madrid', 'YYYY-MM-DD') AS d,
                COUNT(DISTINCT session_id) FILTER (WHERE event_name = 'session_start')::int AS active,
                COUNT(DISTINCT COALESCE(player_id, session_id)) FILTER (WHERE event_name = 'game_start')::int AS starters,
@@ -291,10 +313,9 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
           AND event_name IN ('session_start','game_start','game_complete')
         GROUP BY d ORDER BY d DESC
       `)
-    ).rows as Record<string, unknown>[];
-
-    const churnBuckets = (
-      await db.execute(sql`
+    ).rows as Record<string, unknown>[]; })();
+    const churnBucketsPromise = (async () => { return (
+      await executePanelQuery(sql`
         SELECT
           COUNT(*) FILTER (WHERE last_seen >= NOW() - INTERVAL '1 day')::int AS active_1d,
           COUNT(*) FILTER (WHERE last_seen < NOW() - INTERVAL '1 day' AND last_seen >= NOW() - INTERVAL '3 days')::int AS away_1_3d,
@@ -308,10 +329,9 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
           GROUP BY player_id
         ) x
       `)
-    ).rows[0] as Record<string, unknown> | undefined;
-
-    const platformVersions = (
-      await db.execute(sql`
+    ).rows[0] as Record<string, unknown> | undefined; })();
+    const platformVersionsPromise = (async () => { return (
+      await executePanelQuery(sql`
         SELECT platform, COALESCE(app_version, '—') AS app_version,
                COUNT(DISTINCT COALESCE(player_id, session_id)) FILTER (WHERE last_seen >= NOW() - INTERVAL '7 days')::int AS active_7d
         FROM analytics_sessions
@@ -320,7 +340,233 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
         ORDER BY active_7d DESC, platform, app_version
         LIMIT 30
       `)
-    ).rows as Record<string, unknown>[];
+    ).rows as Record<string, unknown>[]; })();
+    const currentErrorsPromise = (async () => { return (
+      await executePanelQuery(sql`
+        SELECT event_name, platform, app_version, created_at, metadata_json
+        FROM analytics_events
+        WHERE trusted = TRUE
+          AND event_name IN ('client_error','api_error')
+          AND created_at >= NOW() - INTERVAL '15 minutes'
+        ORDER BY created_at DESC
+        LIMIT 100
+      `)
+    ).rows as Record<string, unknown>[]; })();
+    const historicalErrorSummaryPromise = (async () => { return (
+      await executePanelQuery(sql`
+        SELECT event_name, COUNT(*)::int AS total
+        FROM analytics_events
+        WHERE trusted = TRUE
+          AND event_name IN ('client_error','api_error')
+          AND created_at >= NOW() - INTERVAL '7 days'
+          AND created_at < NOW() - INTERVAL '15 minutes'
+        GROUP BY event_name ORDER BY total DESC
+      `)
+    ).rows as Record<string, unknown>[]; })();
+    const historicalErrorCountPromise = (async () => { return num((await executePanelQuery(sql`
+      SELECT COUNT(*)::int AS total
+      FROM analytics_events
+      WHERE trusted = TRUE
+        AND event_name IN ('client_error','api_error')
+        AND created_at >= NOW() - INTERVAL '7 days'
+        AND created_at < NOW() - INTERVAL '15 minutes'
+    `)).rows[0]?.total); })();
+    const modeUsagePromise = (async () => { return (
+      await executePanelQuery(sql`
+        SELECT COALESCE(mode, 'sin modo') AS mode, COUNT(*)::int AS total
+        FROM analytics_events
+        WHERE trusted = TRUE AND event_name = 'game_start' AND created_at >= NOW() - INTERVAL '7 days'
+        GROUP BY mode ORDER BY total DESC LIMIT 10
+      `)
+    ).rows as Record<string, unknown>[]; })();
+    const powerupUsagePromise = (async () => { return (
+      await executePanelQuery(sql`
+        SELECT COALESCE(metadata_json::jsonb->>'powerup', 'sin identificar') AS powerup, COUNT(*)::int AS total
+        FROM analytics_events
+        WHERE trusted = TRUE AND event_name = 'powerup_used' AND created_at >= NOW() - INTERVAL '7 days'
+        GROUP BY powerup ORDER BY total DESC LIMIT 10
+      `)
+    ).rows as Record<string, unknown>[]; })();
+    const adUniquePromise = (async () => { return (await executePanelQuery(sql`
+      SELECT
+        COUNT(DISTINCT CASE WHEN event_name = 'ad_impression' THEN COALESCE(player_id, session_id) END)::int AS impressions,
+        COUNT(DISTINCT CASE WHEN event_name = 'rewarded_ad_requested' THEN COALESCE(player_id, session_id) END)::int AS requested,
+        COUNT(DISTINCT CASE WHEN event_name = 'rewarded_ad_completed' THEN COALESCE(player_id, session_id) END)::int AS completed,
+        COUNT(DISTINCT CASE WHEN event_name = 'rewarded_ad_failed' THEN COALESCE(player_id, session_id) END)::int AS failed
+      FROM analytics_events
+      WHERE trusted = TRUE
+        AND created_at >= NOW() - INTERVAL '7 days'
+        AND event_name IN ('ad_impression','rewarded_ad_requested','rewarded_ad_completed','rewarded_ad_failed')
+    `)).rows[0] as Record<string, unknown> | undefined; })();
+    const topPromise = (async () => { return (
+      await executePanelQuery(sql`
+        SELECT player_name, total_score, games_played, is_premium
+        FROM player_scores
+        WHERE ${NOT_BOT}
+        ORDER BY total_score DESC
+        LIMIT 10
+      `)
+    ).rows as Record<string, unknown>[]; })();
+    const activeSessionsPromise = (async () => { return (await executePanelQuery(sql`
+      SELECT s.player_id, COALESCE(ps.player_name, CASE WHEN s.player_id IS NULL THEN 'Invitado' ELSE s.player_id END) AS player_name,
+             s.platform, s.app_version, s.language, s.last_seen,
+             CASE
+               WHEN s.player_id LIKE 'google_%' THEN 'Google / Gmail'
+               WHEN s.player_id LIKE 'fb_%' THEN 'Facebook'
+               WHEN s.player_id LIKE 'apple_%' THEN 'Apple'
+               WHEN s.player_id LIKE 'ig_%' THEN 'Instagram'
+               WHEN s.player_id LIKE 'tt_%' THEN 'TikTok'
+               WHEN s.player_id IS NULL THEN 'Invitado'
+               ELSE 'Cuenta'
+             END AS login_method
+      FROM analytics_sessions s
+      LEFT JOIN player_scores ps ON ps.player_id = s.player_id
+      WHERE s.last_seen >= NOW() - INTERVAL '90 seconds'
+      ORDER BY s.last_seen DESC LIMIT 200
+    `)).rows as Record<string, unknown>[]; })();
+    const loginMethodsPromise = (async () => { return (await executePanelQuery(sql`
+      WITH methods(method) AS (
+        VALUES ('google'), ('facebook'), ('apple'), ('instagram'), ('tiktok'), ('account'), ('guest')
+      ),
+      observed AS (
+        SELECT s.session_id, s.player_id, s.last_seen,
+          CASE
+            WHEN s.player_id LIKE 'google_%' THEN 'google'
+            WHEN s.player_id LIKE 'fb_%' THEN 'facebook'
+            WHEN s.player_id LIKE 'apple_%' THEN 'apple'
+            WHEN s.player_id LIKE 'ig_%' THEN 'instagram'
+            WHEN s.player_id LIKE 'tt_%' THEN 'tiktok'
+            WHEN s.player_id IS NOT NULL THEN 'account'
+            ELSE 'guest'
+          END AS method
+        FROM analytics_sessions s
+        WHERE s.started_at >= NOW() - INTERVAL '24 hours'
+      )
+      SELECT m.method,
+             COUNT(DISTINCT CASE WHEN o.last_seen >= NOW() - INTERVAL '90 seconds'
+               THEN COALESCE(o.player_id, o.session_id) END)::int AS active,
+             COUNT(DISTINCT COALESCE(o.player_id, o.session_id))::int AS unique_users,
+             COUNT(o.session_id)::int AS sessions
+      FROM methods m
+      LEFT JOIN observed o ON o.method = m.method
+      GROUP BY m.method
+      ORDER BY CASE m.method WHEN 'facebook' THEN 1 WHEN 'google' THEN 2 WHEN 'apple' THEN 3 WHEN 'instagram' THEN 4 WHEN 'tiktok' THEN 5 WHEN 'account' THEN 6 ELSE 7 END
+    `)).rows as Record<string, unknown>[]; })();
+    const platformMethodsPromise = (async () => { return (await executePanelQuery(sql`
+      SELECT
+        CASE WHEN s.platform = 'android' THEN 'android' WHEN s.platform = 'ios' THEN 'ios' ELSE 'web' END AS platform,
+        CASE WHEN s.player_id LIKE 'google_%' THEN 'google'
+             WHEN s.player_id LIKE 'fb_%' THEN 'facebook'
+             WHEN s.player_id LIKE 'apple_%' THEN 'apple'
+             WHEN s.player_id LIKE 'ig_%' THEN 'instagram'
+             WHEN s.player_id LIKE 'tt_%' THEN 'tiktok'
+             WHEN s.player_id IS NOT NULL THEN 'account' ELSE 'guest' END AS method,
+        COUNT(DISTINCT COALESCE(s.player_id, s.session_id)) FILTER (WHERE s.last_seen >= NOW() - INTERVAL '90 seconds')::int AS active,
+        COUNT(DISTINCT COALESCE(s.player_id, s.session_id))::int AS unique_users,
+        COUNT(*)::int AS sessions
+      FROM analytics_sessions s
+      WHERE s.started_at >= NOW() - INTERVAL '24 hours'
+      GROUP BY platform, method
+      ORDER BY unique_users DESC, platform, method
+    `)).rows as Record<string, unknown>[]; })();
+    const platformTotalsPromise = (async () => { return (await executePanelQuery(sql`
+      SELECT
+        CASE WHEN s.platform = 'android' THEN 'android' WHEN s.platform = 'ios' THEN 'ios' ELSE 'web' END AS platform,
+        COUNT(DISTINCT COALESCE(s.player_id, s.session_id)) FILTER (WHERE s.last_seen >= NOW() - INTERVAL '90 seconds')::int AS active,
+        COUNT(DISTINCT COALESCE(s.player_id, s.session_id))::int AS unique_users,
+        COUNT(*)::int AS sessions
+      FROM analytics_sessions s
+      WHERE s.started_at >= NOW() - INTERVAL '24 hours'
+      GROUP BY platform
+      ORDER BY unique_users DESC, platform
+    `)).rows as Record<string, unknown>[]; })();
+    const adViewersPromise = (async () => { return (await executePanelQuery(sql`
+      SELECT COALESCE(ps.player_name, CASE WHEN e.player_id IS NULL THEN 'Invitado' ELSE e.player_id END) AS player_name,
+             e.platform, e.event_name, MAX(e.created_at) AS last_seen, COUNT(*)::int AS events
+      FROM analytics_events e LEFT JOIN player_scores ps ON ps.player_id = e.player_id
+      WHERE e.trusted = TRUE
+        AND e.created_at >= NOW() - INTERVAL '7 days'
+        AND e.event_name IN ('rewarded_ad_requested','rewarded_ad_completed','rewarded_ad_failed','ad_impression')
+      GROUP BY e.player_id, ps.player_name, e.platform, e.event_name ORDER BY last_seen DESC LIMIT 300
+    `)).rows as Record<string, unknown>[]; })();
+
+    const [
+      todayRows,
+      guestToday,
+      totals,
+      gamesByDay,
+      regsByDay,
+      guestsByDay,
+      analyticsStartsByDay,
+      analyticsVersionCoverage,
+      analyticsStartCoverage,
+      retentionKpis,
+      funnel,
+      activityByDay,
+      churnBuckets,
+      platformVersions,
+      currentErrors,
+      historicalErrorSummary,
+      historicalErrorCount,
+      modeUsage,
+      powerupUsage,
+      adUnique,
+      top,
+      activeSessions,
+      loginMethods,
+      platformMethods,
+      platformTotals,
+      adViewers
+    ] = await Promise.all([
+      todayRowsPromise,
+      guestTodayPromise,
+      totalsPromise,
+      gamesByDayPromise,
+      regsByDayPromise,
+      guestsByDayPromise,
+      analyticsStartsByDayPromise,
+      analyticsVersionCoveragePromise,
+      analyticsStartCoveragePromise,
+      retentionKpisPromise,
+      funnelPromise,
+      activityByDayPromise,
+      churnBucketsPromise,
+      platformVersionsPromise,
+      currentErrorsPromise,
+      historicalErrorSummaryPromise,
+      historicalErrorCountPromise,
+      modeUsagePromise,
+      powerupUsagePromise,
+      adUniquePromise,
+      topPromise,
+      activeSessionsPromise,
+      loginMethodsPromise,
+      platformMethodsPromise,
+      platformTotalsPromise,
+      adViewersPromise
+    ]);
+
+
+
+
+
+
+
+
+
+
+
+    // ── Retención y embudo real (analytics_sessions / trusted events) ────────
+    // DAU/WAU/MAU usa player_id para cuentas y session_id para invitados.
+
+
+
+
+
+
+
+
+
 
     const activityRows = activityByDay.map((row) =>
       `<tr><td>${esc(row.d)}</td><td>${num(row.active)}</td><td>${num(row.starters)}</td><td>${num(row.completers)}</td><td>${num(row.starters) > 0 ? Math.round((num(row.completers) / num(row.starters)) * 100) : 0}%</td></tr>`
@@ -330,38 +576,11 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
     // Estado de incidencias: solo se considera ACTIVO un error que haya ocurrido
     // en los últimos 15 minutos. Los errores anteriores siguen conservados como
     // HISTÓRICO, pero nunca contaminan el semáforo actual del panel.
-    const currentErrors = (
-      await db.execute(sql`
-        SELECT event_name, platform, app_version, created_at, metadata_json
-        FROM analytics_events
-        WHERE trusted = TRUE
-          AND event_name IN ('client_error','api_error')
-          AND created_at >= NOW() - INTERVAL '15 minutes'
-        ORDER BY created_at DESC
-        LIMIT 100
-      `)
-    ).rows as Record<string, unknown>[];
 
-    const historicalErrorSummary = (
-      await db.execute(sql`
-        SELECT event_name, COUNT(*)::int AS total
-        FROM analytics_events
-        WHERE trusted = TRUE
-          AND event_name IN ('client_error','api_error')
-          AND created_at >= NOW() - INTERVAL '7 days'
-          AND created_at < NOW() - INTERVAL '15 minutes'
-        GROUP BY event_name ORDER BY total DESC
-      `)
-    ).rows as Record<string, unknown>[];
 
-    const historicalErrorCount = num((await db.execute(sql`
-      SELECT COUNT(*)::int AS total
-      FROM analytics_events
-      WHERE trusted = TRUE
-        AND event_name IN ('client_error','api_error')
-        AND created_at >= NOW() - INTERVAL '7 days'
-        AND created_at < NOW() - INTERVAL '15 minutes'
-    `)).rows[0]?.total);
+
+
+
 
     const historicalErrorChart = historicalErrorSummary.map((row) => ({
       label: String(row.event_name) === 'client_error' ? 'Fallos del juego' : 'Fallos API',
@@ -382,23 +601,9 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
       ? '<div class="card" style="border-color:#2c6b45"><div class="label">Estado actual</div><div class="val">🟢 OK</div><div class="sub">Sin errores registrados en los últimos 15 minutos.</div></div>'
       : `<div class="card" style="border-color:#7f1d1d"><div class="label">Estado actual</div><div class="val">🔴 ${currentErrors.length} activo(s)</div><div class="sub">Hay errores recientes que requieren comprobación.</div></div>`;
 
-    const modeUsage = (
-      await db.execute(sql`
-        SELECT COALESCE(mode, 'sin modo') AS mode, COUNT(*)::int AS total
-        FROM analytics_events
-        WHERE trusted = TRUE AND event_name = 'game_start' AND created_at >= NOW() - INTERVAL '7 days'
-        GROUP BY mode ORDER BY total DESC LIMIT 10
-      `)
-    ).rows as Record<string, unknown>[];
 
-    const powerupUsage = (
-      await db.execute(sql`
-        SELECT COALESCE(metadata_json::jsonb->>'powerup', 'sin identificar') AS powerup, COUNT(*)::int AS total
-        FROM analytics_events
-        WHERE trusted = TRUE AND event_name = 'powerup_used' AND created_at >= NOW() - INTERVAL '7 days'
-        GROUP BY powerup ORDER BY total DESC LIMIT 10
-      `)
-    ).rows as Record<string, unknown>[];
+
+
 
     const chartActivity = [...activityByDay].reverse().map((row) => ({ label: String(row.d).slice(5), value: num(row.active) }));
     const chartCompletions = [...activityByDay].reverse().map((row) => ({ label: String(row.d).slice(5), value: num(row.starters) > 0 ? Math.round((num(row.completers) / num(row.starters)) * 100) : 0 }));
@@ -410,17 +615,7 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
       { label: "Jugadores que iniciaron", value: num(funnel?.game_players) },
       { label: "Jugadores con resultado", value: num(funnel?.completed_players) },
     ];
-    const adUnique = (await db.execute(sql`
-      SELECT
-        COUNT(DISTINCT CASE WHEN event_name = 'ad_impression' THEN COALESCE(player_id, session_id) END)::int AS impressions,
-        COUNT(DISTINCT CASE WHEN event_name = 'rewarded_ad_requested' THEN COALESCE(player_id, session_id) END)::int AS requested,
-        COUNT(DISTINCT CASE WHEN event_name = 'rewarded_ad_completed' THEN COALESCE(player_id, session_id) END)::int AS completed,
-        COUNT(DISTINCT CASE WHEN event_name = 'rewarded_ad_failed' THEN COALESCE(player_id, session_id) END)::int AS failed
-      FROM analytics_events
-      WHERE trusted = TRUE
-        AND created_at >= NOW() - INTERVAL '7 days'
-        AND event_name IN ('ad_impression','rewarded_ad_requested','rewarded_ad_completed','rewarded_ad_failed')
-    `)).rows[0] as Record<string, unknown> | undefined;
+
 
     const adChart = [
       { label: "Usuarios con solicitud", value: num(adUnique?.requested) },
@@ -435,15 +630,7 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
     }).join('');
 
     // Top 10 jugadores
-    const top = (
-      await db.execute(sql`
-        SELECT player_name, total_score, games_played, is_premium
-        FROM player_scores
-        WHERE ${NOT_BOT}
-        ORDER BY total_score DESC
-        LIMIT 10
-      `)
-    ).rows as Record<string, unknown>[];
+
 
     // Merge daily series by date key.
     const byDay = new Map<string, { regs: number; games: number; players: number; guestGames: number; conversions: number; starts: number; startsWithVersion: number }>();
@@ -481,84 +668,15 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
       .join("");
 
     // Conexiones, login y publicidad directamente en /test.
-    const activeSessions = (await db.execute(sql`
-      SELECT s.player_id, COALESCE(ps.player_name, CASE WHEN s.player_id IS NULL THEN 'Invitado' ELSE s.player_id END) AS player_name,
-             s.platform, s.app_version, s.language, s.last_seen,
-             CASE
-               WHEN s.player_id LIKE 'google_%' THEN 'Google / Gmail'
-               WHEN s.player_id LIKE 'fb_%' THEN 'Facebook'
-               WHEN s.player_id LIKE 'apple_%' THEN 'Apple'
-               WHEN s.player_id LIKE 'ig_%' THEN 'Instagram'
-               WHEN s.player_id LIKE 'tt_%' THEN 'TikTok'
-               WHEN s.player_id IS NULL THEN 'Invitado'
-               ELSE 'Cuenta'
-             END AS login_method
-      FROM analytics_sessions s
-      LEFT JOIN player_scores ps ON ps.player_id = s.player_id
-      WHERE s.last_seen >= NOW() - INTERVAL '90 seconds'
-      ORDER BY s.last_seen DESC LIMIT 200
-    `)).rows as Record<string, unknown>[];
 
-    const loginMethods = (await db.execute(sql`
-      WITH methods(method) AS (
-        VALUES ('google'), ('facebook'), ('apple'), ('instagram'), ('tiktok'), ('account'), ('guest')
-      ),
-      observed AS (
-        SELECT s.session_id, s.player_id, s.last_seen,
-          CASE
-            WHEN s.player_id LIKE 'google_%' THEN 'google'
-            WHEN s.player_id LIKE 'fb_%' THEN 'facebook'
-            WHEN s.player_id LIKE 'apple_%' THEN 'apple'
-            WHEN s.player_id LIKE 'ig_%' THEN 'instagram'
-            WHEN s.player_id LIKE 'tt_%' THEN 'tiktok'
-            WHEN s.player_id IS NOT NULL THEN 'account'
-            ELSE 'guest'
-          END AS method
-        FROM analytics_sessions s
-        WHERE s.started_at >= NOW() - INTERVAL '24 hours'
-      )
-      SELECT m.method,
-             COUNT(DISTINCT CASE WHEN o.last_seen >= NOW() - INTERVAL '90 seconds'
-               THEN COALESCE(o.player_id, o.session_id) END)::int AS active,
-             COUNT(DISTINCT COALESCE(o.player_id, o.session_id))::int AS unique_users,
-             COUNT(o.session_id)::int AS sessions
-      FROM methods m
-      LEFT JOIN observed o ON o.method = m.method
-      GROUP BY m.method
-      ORDER BY CASE m.method WHEN 'facebook' THEN 1 WHEN 'google' THEN 2 WHEN 'apple' THEN 3 WHEN 'instagram' THEN 4 WHEN 'tiktok' THEN 5 WHEN 'account' THEN 6 ELSE 7 END
-    `)).rows as Record<string, unknown>[];
+
+
 
     // Desglose de plataforma y cruce plataforma + método de acceso.
     // Las cuentas se cuentan por player_id; los invitados por session_id.
-    const platformMethods = (await db.execute(sql`
-      SELECT
-        CASE WHEN s.platform = 'android' THEN 'android' WHEN s.platform = 'ios' THEN 'ios' ELSE 'web' END AS platform,
-        CASE WHEN s.player_id LIKE 'google_%' THEN 'google'
-             WHEN s.player_id LIKE 'fb_%' THEN 'facebook'
-             WHEN s.player_id LIKE 'apple_%' THEN 'apple'
-             WHEN s.player_id LIKE 'ig_%' THEN 'instagram'
-             WHEN s.player_id LIKE 'tt_%' THEN 'tiktok'
-             WHEN s.player_id IS NOT NULL THEN 'account' ELSE 'guest' END AS method,
-        COUNT(DISTINCT COALESCE(s.player_id, s.session_id)) FILTER (WHERE s.last_seen >= NOW() - INTERVAL '90 seconds')::int AS active,
-        COUNT(DISTINCT COALESCE(s.player_id, s.session_id))::int AS unique_users,
-        COUNT(*)::int AS sessions
-      FROM analytics_sessions s
-      WHERE s.started_at >= NOW() - INTERVAL '24 hours'
-      GROUP BY platform, method
-      ORDER BY unique_users DESC, platform, method
-    `)).rows as Record<string, unknown>[];
 
-    const platformTotals = (await db.execute(sql`
-      SELECT
-        CASE WHEN s.platform = 'android' THEN 'android' WHEN s.platform = 'ios' THEN 'ios' ELSE 'web' END AS platform,
-        COUNT(DISTINCT COALESCE(s.player_id, s.session_id)) FILTER (WHERE s.last_seen >= NOW() - INTERVAL '90 seconds')::int AS active,
-        COUNT(DISTINCT COALESCE(s.player_id, s.session_id))::int AS unique_users,
-        COUNT(*)::int AS sessions
-      FROM analytics_sessions s
-      WHERE s.started_at >= NOW() - INTERVAL '24 hours'
-      GROUP BY platform
-      ORDER BY unique_users DESC, platform
-    `)).rows as Record<string, unknown>[];
+
+
 
     const platformLabels: Record<string, string> = { android: '🤖 Android', ios: '🍎 iOS', web: '🌐 Web' };
     const methodLabels: Record<string, string> = { google: '🔵 Google / Gmail', facebook: '🔵 Facebook', apple: '🍎 Apple', instagram: '📸 Instagram', tiktok: '🎵 TikTok', account: '👤 Cuenta', guest: '👤 Invitado' };
@@ -569,15 +687,7 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
       `<tr><td>${platformLabels[String(row.platform)] ?? esc(row.platform)}</td><td>${methodLabels[String(row.method)] ?? esc(row.method)}</td><td>${num(row.active)}</td><td>${num(row.unique_users)}</td><td>${num(row.sessions)}</td></tr>`,
     ).join('');
 
-    const adViewers = (await db.execute(sql`
-      SELECT COALESCE(ps.player_name, CASE WHEN e.player_id IS NULL THEN 'Invitado' ELSE e.player_id END) AS player_name,
-             e.platform, e.event_name, MAX(e.created_at) AS last_seen, COUNT(*)::int AS events
-      FROM analytics_events e LEFT JOIN player_scores ps ON ps.player_id = e.player_id
-      WHERE e.trusted = TRUE
-        AND e.created_at >= NOW() - INTERVAL '7 days'
-        AND e.event_name IN ('rewarded_ad_requested','rewarded_ad_completed','rewarded_ad_failed','ad_impression')
-      GROUP BY e.player_id, ps.player_name, e.platform, e.event_name ORDER BY last_seen DESC LIMIT 300
-    `)).rows as Record<string, unknown>[];
+
 
     const activeSessionRows = activeSessions.map((row) => {
       const platform = String(row.platform) === "android" ? "🤖 Android" : String(row.platform) === "ios" ? "🍎 iOS" : "🌐 Web";
@@ -643,6 +753,7 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
 </head><body>
   <h1>📊 STOP Control</h1>
   <div class="sub">Panel privado · datos en tiempo real · ${esc(now)}</div>
+  ${panelQueryFailures > 0 ? "<div>Algunos indicadores no se han podido actualizar (" + panelQueryFailures + " consultas). El panel volverá a intentarlo al actualizar.</div>" : ""}
 
   <h2>Hoy</h2>
   <div class="cards">
@@ -807,15 +918,12 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
 </body></html>`;
 
     cachedAdminPanelHtml = html;
-    cachedAdminPanelAt = Date.now();
-    clearTimeout(loadingTimer);
+    cachedAdminPanelAt = panelQueryFailures > 0 ? Date.now() - 60_000 : Date.now();
     if (!res.headersSent) res.status(200).type("html").send(html);
   } catch (err: any) {
-    clearTimeout(loadingTimer);
     console.error("[admin panel] error:", err?.message ?? err);
     if (!res.headersSent) res.status(500).type("html").send("<h1>Error</h1><p>No se pudieron cargar las estadísticas.</p><p><a href='/test'>Volver a intentar</a></p>");
   } finally {
-    clearTimeout(loadingTimer);
     adminPanelBuildInFlight = false;
   }
 });
