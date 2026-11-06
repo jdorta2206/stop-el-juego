@@ -73,12 +73,24 @@ export function useInventory(playerId?: string | null) {
     refreshAbortRef.current = controller;
     setLoading(true);
     setError(null);
+    let timedOut = false;
+    const timeout = window.setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, 8_000);
     try {
-      const res = await fetch(`${API}/api/inventory`, {
-        credentials: "include",
-        headers: { ...authHeaders(), ...(import.meta.env.VITE_HALLOWEEN_PREVIEW === "true" ? { "x-halloween-player-id": playerId } : {}), ...PREVIEW_HEADERS },
-        signal: controller.signal,
-      });
+      let res: Response | null = null;
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        res = await fetch(API + "/api/inventory", {
+          credentials: "include",
+          headers: { ...authHeaders(), ...(import.meta.env.VITE_HALLOWEEN_PREVIEW === "true" ? { "x-halloween-player-id": playerId } : {}), ...PREVIEW_HEADERS },
+          signal: controller.signal,
+        });
+        if (res.status !== 503 || attempt === 2) break;
+        await new Promise((resolve) => window.setTimeout(resolve, 350 * (attempt + 1)));
+        if (controller.signal.aborted) return;
+      }
+      if (!res) throw new Error("Inventory request did not return a response");
       if (!res.ok) {
         if (!controller.signal.aborted) {
           const body = await res.json().catch(() => ({}));
@@ -86,7 +98,9 @@ export function useInventory(playerId?: string | null) {
             ? "Inicia sesión para acceder a tu inventario y realizar compras."
             : res.status === 404
               ? "No se ha encontrado el inventario de este jugador."
-              : body.error || `No se pudo cargar la tienda (HTTP ${res.status}).`;
+              : res.status === 503
+                ? "La tienda sigue ocupada. Pulsa Reintentar dentro de unos segundos."
+                : body.error || "No se pudo cargar la tienda (HTTP " + res.status + ").";
           setError(message);
           setData(null);
         }
@@ -98,12 +112,15 @@ export function useInventory(playerId?: string | null) {
         setError(null);
       }
     } catch {
-      if (!controller.signal.aborted) {
+      if (timedOut) {
+        setError("La tienda tardó más de 8 segundos en responder. Pulsa Reintentar.");
+        setData(null);
+      } else if (!controller.signal.aborted) {
         setError("No se pudo conectar con la tienda. Comprueba tu conexión e inténtalo de nuevo.");
         setData(null);
       }
-    }
-    finally {
+    } finally {
+      window.clearTimeout(timeout);
       if (refreshAbortRef.current === controller) {
         refreshAbortRef.current = null;
         setLoading(false);
