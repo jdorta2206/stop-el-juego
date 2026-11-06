@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildAdmobPendingResponse } from "./rewards";
+import { buildAdmobPendingResponse } from "../lib/admobRewardPoll";
 
 describe("AdMob rewarded SSV polling response", () => {
   it("returns a non-ready response when the request does not exist", () => {
