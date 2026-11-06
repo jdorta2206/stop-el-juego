@@ -500,6 +500,8 @@ export default function SoloGame() {
   // the game and hand them back on submit so the server can clamp a fabricated
   // total. Reset per new game (where totalScore resets to 0), not per round.
   const scoreTokensRef = useRef<string[]>([]);
+  // Independent proof for the global leaderboard when the daily proof is consumed.
+  const rankingScoreTokensRef = useRef<string[]>([]);
   // Stable idempotency key for the logical game score. It survives all round
   // transitions and is replaced only when a genuinely new game starts.
   const gameSubmissionIdRef = useRef<string | null>(null);
@@ -581,6 +583,10 @@ export default function SoloGame() {
 
   const startGame = (newGame = true) => {
     if (!gameSubmissionIdRef.current) gameSubmissionIdRef.current = createSubmissionId();
+    if (newGame) {
+      scoreTokensRef.current = [];
+      rankingScoreTokensRef.current = [];
+    }
     if (halloweenScareTimerRef.current) clearTimeout(halloweenScareTimerRef.current);
     if (halloweenAnswerScareTimerRef.current) clearTimeout(halloweenAnswerScareTimerRef.current);
     halloweenScareRoundRef.current = null;
@@ -862,6 +868,7 @@ export default function SoloGame() {
     // 🔒 Capture this round's anti-cheat voucher (online play only — the
     // offline fallback payload has none). Accumulated for the final submit.
     if (apiData?.scoreToken) scoreTokensRef.current.push(apiData.scoreToken);
+    if (isDailyMode && apiData?.rankingScoreToken) rankingScoreTokensRef.current.push(apiData.rankingScoreToken);
 
     // Persist whichever payload we ended up with so the RESULTS effect
     // and the UI read the *current* round's data, not the prior mutation.
@@ -1197,7 +1204,8 @@ export default function SoloGame() {
     if (!player || player.loginMethod === "guest") return;
     if (finalScore <= 0) return;
     const isBonus = opts?.bonus === true;
-    if (!isBonus && scoreTokensRef.current.length === 0) {
+    const leaderboardScoreTokens = isDailyMode ? rankingScoreTokensRef.current : scoreTokensRef.current;
+    if (!isBonus && leaderboardScoreTokens.length === 0) {
       const offMsg =
         lang === "en" ? "Offline — this score stays on this device and won't enter the ranking." :
         lang === "pt" ? "Offline — esta pontuação fica neste dispositivo e não entra no ranking." :
@@ -1215,10 +1223,10 @@ export default function SoloGame() {
         avatarColor: player.avatarColor,
         score: finalScore,
         letter: currentLetter || "?",
-        mode: isDailyMode ? "daily" : "solo",
+        mode: "solo",
         won,
         bonus: isBonus,
-        scoreTokens: scoreTokensRef.current,
+        scoreTokens: leaderboardScoreTokens,
       }
     }, {
       onSuccess: (response: any) => {
@@ -1261,7 +1269,7 @@ export default function SoloGame() {
           // Only server-voucher-backed rounds can be synchronized to the
           // authoritative ranking. A fully offline game is still playable, but
           // its locally calculated score has no server proof and stays local.
-          const hasServerProof = scoreTokensRef.current.length > 0;
+          const hasServerProof = leaderboardScoreTokens.length > 0;
           if (hasServerProof) {
             await enqueueScoreOutbox({
               submissionId: `${gameSubmissionIdRef.current ?? createSubmissionId()}${isBonus ? ":bonus" : ""}`,
@@ -1273,7 +1281,7 @@ export default function SoloGame() {
               mode: isDailyMode ? "daily" : "solo",
               won,
               bonus: isBonus,
-              scoreTokens: scoreTokensRef.current,
+              scoreTokens: leaderboardScoreTokens,
             });
             const offMsg =
               lang === "en" ? "Offline — verified rounds will sync when you're back." :
@@ -1375,6 +1383,7 @@ export default function SoloGame() {
       setRound(1);
       setTotalScore(0);
       scoreTokensRef.current = [];
+      rankingScoreTokensRef.current = [];
       gameSubmissionIdRef.current = null;
       setAiTotalScore(0);
       setBestRoundScore(0);

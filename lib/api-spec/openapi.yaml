@@ -341,6 +341,10 @@ components:
             (alongside any other rounds' tokens) when submitting the final
             game score, so the server can verify the score wasn't fabricated.
             Absent when the round was validated offline.
+        rankingScoreToken:
+          type: string
+          description: Independent single-use Solo voucher for the global leaderboard submission of a daily challenge.
+
       required:
         - results
         - playerTotalScore

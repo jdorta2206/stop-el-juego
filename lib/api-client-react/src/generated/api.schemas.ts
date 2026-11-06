@@ -64,6 +64,8 @@ game score, so the server can verify the score wasn't fabricated.
 Absent when the round was validated offline.
  */
   scoreToken?: string;
+  /** Independent single-use Solo voucher for the global leaderboard submission of a daily challenge. */
+  rankingScoreToken?: string;
 }
 
 export interface PlayerScore {

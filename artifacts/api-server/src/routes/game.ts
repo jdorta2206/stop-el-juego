@@ -1622,12 +1622,18 @@ router.post("/validate", async (req, res) => {
   // server-computed base score for this round. The client returns it when
   // submitting the final game score so the leaderboard can't be fabricated.
   const scoreToken = issueScoreToken(playerTotalScore, validatedCollectionWords, requestedGameMode, aiTotalScore);
+  // Daily challenge scores also enter the global leaderboard. Keep independent
+  // single-use proofs so saving either ranking cannot consume the other's proof.
+  const rankingScoreToken = requestedGameMode === "daily"
+    ? issueScoreToken(playerTotalScore, validatedCollectionWords, "solo", aiTotalScore)
+    : null;
 
   const response = ValidateRoundResponse.parse({
     results,
     playerTotalScore,
     aiTotalScore,
     ...(scoreToken ? { scoreToken } : {}),
+    ...(rankingScoreToken ? { rankingScoreToken } : {}),
   });
 
   res.json(response);
