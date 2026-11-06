@@ -167,7 +167,7 @@ router.get("/admob-result/:requestId", async (req, res) => {
     const row = rows.rows?.[0];
 
     if (!row || row.consumed_at) {
-      res.json({ ready: false });
+      res.json({ ready: false, clientState: row.client_state });
       return;
     }
 
