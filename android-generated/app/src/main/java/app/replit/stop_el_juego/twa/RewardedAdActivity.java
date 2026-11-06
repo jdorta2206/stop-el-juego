@@ -160,7 +160,7 @@ public class RewardedAdActivity extends Activity {
                 // Do not release the web game while the fullscreen ad is still visible.
                 // The web timer/reward must be reconciled only after AdMob closes the ad.
                 sendClientResult(rewardEarned ? "earned" : "dismissed");
-                Application.preloadRewardedAd();
+                RewardedAdPreloader.preloadRewardedAd();
                 finish();
             }
 
@@ -168,7 +168,7 @@ public class RewardedAdActivity extends Activity {
             public void onAdFailedToShowFullScreenContent(@NonNull AdError error) {
                 Log.e(TAG, "Rewarded show failed: " + error.getCode() + " " + error.getMessage());
                 sendClientResult("dismissed");
-                Application.preloadRewardedAd();
+                RewardedAdPreloader.preloadRewardedAd();
                 finish();
             }
         });
@@ -183,7 +183,7 @@ public class RewardedAdActivity extends Activity {
         } catch (RuntimeException error) {
             Log.e(TAG, "Rewarded show exception", error);
             sendClientResult("dismissed");
-            Application.preloadRewardedAd();
+            RewardedAdPreloader.preloadRewardedAd();
             finish();
         }
     }
