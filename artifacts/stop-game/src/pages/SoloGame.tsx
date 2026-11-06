@@ -124,8 +124,9 @@ function getTodayStr(): string {
 export default function SoloGame() {
   const { player, showAuth } = usePlayer();
   const { isPremium, loading: premiumLoading, error: premiumError } = usePremium(player?.id);
-  // Fail closed: never request ads when Premium entitlement cannot be verified.
-  const adsBlocked = isPremium || premiumLoading || !!premiumError;
+  // Block ads only when Premium is positively confirmed. A failed entitlement lookup
+  // must not silently disable monetization for non-Premium players.
+  const adsBlocked = isPremium;
   const { streak: soloStreak, recordPlay } = useStreak(player?.id);
   const { t, lang } = useT();
   const { addXp, levelUpInfo, clearLevelUp } = useProgression(player?.id);
@@ -1420,7 +1421,7 @@ export default function SoloGame() {
       .replace(/[\u0300-\u036f]/g, "")
       .replace(/~/g, "ñ");
     const expectedLetter = normalize(normalizedLetter);
-    const langDict = bundle.dictionary[getCurrentLang()] || bundle.dictionary.es || {};
+    const langDict = bundle.dictionary[getCurrentLang()] || {};
     const canonicalCategory = bundle.categoryAliases?.[normalize(category)] ?? category;
     const requestedCategory = normalize(canonicalCategory);
     const neverValid = new Set((bundle.neverValidWords || []).map(normalize));
@@ -1443,10 +1444,6 @@ export default function SoloGame() {
 
     const valid = pick(langDict);
     if (valid.length > 0) return valid[Math.floor(Math.random() * valid.length)];
-    if (bundle.dictionary.es && langDict !== bundle.dictionary.es) {
-      const esWords = pick(bundle.dictionary.es);
-      if (esWords.length > 0) return esWords[Math.floor(Math.random() * esWords.length)];
-    }
     return "";
   };
 
