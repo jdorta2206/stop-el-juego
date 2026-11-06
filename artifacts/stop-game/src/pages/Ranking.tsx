@@ -224,7 +224,7 @@ function useWeekCountdown(nextReset?: string) {
 
 export default function Ranking() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, isLoading, isError: globalError, refetch: refetchGlobal } = useGetLeaderboard({ limit: 100 }, {
+  const { data, isLoading, isFetching: globalFetching, isError: globalError, refetch: refetchGlobal } = useGetLeaderboard({ limit: 100 }, {
     query: { queryFn: ({ signal }) => fetchRankingJson("/api/ranking/scores?limit=100", signal), refetchOnMount: "always", staleTime: 0, retry: false } as any
   });
   const { player } = usePlayer();
@@ -243,7 +243,7 @@ export default function Ranking() {
     } as any }
   );
   // Weekly ranking
-  const { data: weeklyData, isLoading: weeklyLoading, isError: weeklyError, refetch: refetchWeekly } = useQuery({
+  const { data: weeklyData, isLoading: weeklyLoading, isFetching: weeklyFetching, isError: weeklyError, refetch: refetchWeekly } = useQuery({
     queryKey: ["/api/ranking/weekly"],
     queryFn: ({ signal }) => fetchRankingJson("/api/ranking/weekly", signal),
     refetchOnMount: true,
@@ -264,7 +264,7 @@ export default function Ranking() {
   });
 
   // Monthly ranking
-  const { data: monthlyData, isLoading: monthlyLoading, isError: monthlyError, refetch: refetchMonthly } = useQuery({
+  const { data: monthlyData, isLoading: monthlyLoading, isFetching: monthlyFetching, isError: monthlyError, refetch: refetchMonthly } = useQuery({
     queryKey: ["/api/ranking/monthly"],
     queryFn: ({ signal }) => fetchRankingJson("/api/ranking/monthly", signal),
     refetchOnMount: true,
@@ -285,6 +285,16 @@ export default function Ranking() {
   });
 
   const [filter, setFilter] = useState<"global" | "weekly" | "monthly" | "friends">("weekly");
+  const activeRankingLoading = filter === "weekly" ? weeklyFetching : filter === "monthly" ? monthlyFetching : filter === "global" ? globalFetching : false;
+  const [showSlowRetry, setShowSlowRetry] = useState(false);
+  useEffect(() => {
+    if (!activeRankingLoading) {
+      setShowSlowRetry(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setShowSlowRetry(true), 3_000);
+    return () => window.clearTimeout(timer);
+  }, [activeRankingLoading, filter]);
   const activeRankingError = filter === "weekly" ? weeklyError : filter === "monthly" ? monthlyError : filter === "global" ? globalError : false;
   const retryActiveRanking = () => {
     if (filter === "weekly") void refetchWeekly();
@@ -539,9 +549,9 @@ const PODIUM_ORDER = [1, 0, 2];
           </motion.div>
         )}
 
-        {activeRankingError ? (
+        {(activeRankingError || showSlowRetry) ? (
           <div className="p-8 text-center bg-black/20 rounded-2xl border border-white/10">
-            <p className="text-white/70 font-bold mb-3">No se ha podido cargar el ranking. Comprueba la conexión e inténtalo de nuevo.</p>
+            <p className="text-white/70 font-bold mb-3">{activeRankingError ? "No se ha podido cargar el ranking. Comprueba la conexión e inténtalo de nuevo." : "El ranking está tardando más de 3 segundos."}</p>
             <button type="button" onClick={retryActiveRanking} className="px-5 py-3 rounded-xl font-black text-sm bg-secondary text-black">Reintentar</button>
           </div>
         ) : (filter === "weekly" ? weeklyLoading : filter === "monthly" ? monthlyLoading : isLoading) ? (
