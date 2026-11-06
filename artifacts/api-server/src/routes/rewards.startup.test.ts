@@ -15,13 +15,20 @@ describe("AdMob SSV startup availability", () => {
     expect(routerSource).not.toMatch(/router\.use\([\s\S]*?indexesReady\(\)/);
   });
 
-  it("keeps the AdMob verification probe ahead of rewards readiness middleware", () => {
-    const routeStart = rewardsSource.indexOf('router.get("/admob-ssv"');
-    const routeGate = rewardsSource.indexOf("router.use((_req, res, next) => {", routeStart);
-    expect(routeStart).toBeGreaterThanOrEqual(0);
-    expect(routeGate).toBeGreaterThan(routeStart);
-    const ssvRoute = rewardsSource.slice(routeStart, routeGate);
+  it("keeps AdMob result and SSV routes available while indexes are being built", () => {
+    const resultStart = rewardsSource.indexOf('router.post("/admob-result"');
+    const ssvStart = rewardsSource.indexOf('router.get("/admob-ssv"');
+    const routeGate = rewardsSource.indexOf("router.use((_req, res, next) => {", ssvStart);
+    expect(resultStart).toBeGreaterThanOrEqual(0);
+    expect(ssvStart).toBeGreaterThan(resultStart);
+    expect(routeGate).toBeGreaterThan(ssvStart);
+
+    const resultRoutes = rewardsSource.slice(resultStart, ssvStart);
+    const ssvRoute = rewardsSource.slice(ssvStart, routeGate);
+    expect(resultRoutes).not.toContain("indexesReady()");
+    expect(resultRoutes).toContain("await ensureAdmobRewardTable()");
     expect(ssvRoute).not.toContain("indexesReady()");
+    expect(ssvRoute).toContain("await ensureAdmobRewardTable()");
     expect(ssvRoute).toMatch(/if \(!hasCustomData\)\s*\{\s*res\.status\(200\)\.send\("ok"\)/);
   });
 });
