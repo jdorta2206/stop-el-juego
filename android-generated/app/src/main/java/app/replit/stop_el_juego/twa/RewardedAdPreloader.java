@@ -1,11 +1,6 @@
-/*
- * Copyright 2020 Google Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- */
 package app.replit.stop_el_juego.twa;
 
+import android.content.Context;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
@@ -19,38 +14,42 @@ import com.google.android.gms.ads.MobileAds;
 import com.google.android.gms.ads.rewarded.RewardedAd;
 import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback;
 
-public class Application extends android.app.Application {
+/** App-scoped preloader for the rewarded AdMob Activity. */
+public final class RewardedAdPreloader {
     private static final String TAG = "STOP_REWARDED";
     private static final String REAL_REWARDED_ID = "ca-app-pub-4807272408824742/3559554716";
     private static final long RETRY_DELAY_MS = 2000L;
-    // Google documents that manually preloaded rewarded ads expire after one hour.
-    // Refresh slightly before the hard expiry so a cached object is never shown stale.
+    // AdMob rewarded objects expire after one hour; refresh before the hard expiry.
     private static final long PRELOADED_AD_TTL_MS = 55 * 60 * 1000L;
 
+    private static final Handler HANDLER = new Handler(Looper.getMainLooper());
+    private static volatile Context appContext;
     private static volatile RewardedAd preloadedRewardedAd;
     private static volatile boolean loadingRewardedAd;
+    private static volatile boolean initializationStarted;
     private static volatile long preloadedRewardedAdAt;
-    private static Application instance;
-    private final Handler handler = new Handler(Looper.getMainLooper());
 
-    @Override
-    public void onCreate() {
-        super.onCreate();
-        instance = this;
-        if (AdsPolicy.isEnabled()) MobileAds.initialize(this, status -> preloadRewardedAd());
+    private RewardedAdPreloader() {}
+
+    public static synchronized void initialize(@NonNull Context context) {
+        appContext = context.getApplicationContext();
+        if (!AdsPolicy.isEnabled() || initializationStarted) return;
+        initializationStarted = true;
+        MobileAds.initialize(appContext, status -> preloadRewardedAd());
     }
 
     public static synchronized void preloadRewardedAd() {
-        if (!AdsPolicy.isEnabled() || loadingRewardedAd || preloadedRewardedAd != null || instance == null) return;
+        Context context = appContext;
+        if (!AdsPolicy.isEnabled() || loadingRewardedAd || preloadedRewardedAd != null || context == null) return;
         loadingRewardedAd = true;
-        RewardedAd.load(instance, REAL_REWARDED_ID, new AdRequest.Builder().build(), new RewardedAdLoadCallback() {
+        RewardedAd.load(context, REAL_REWARDED_ID, new AdRequest.Builder().build(), new RewardedAdLoadCallback() {
             @Override
             public void onAdLoaded(@NonNull RewardedAd ad) {
                 preloadedRewardedAd = ad;
                 preloadedRewardedAdAt = System.currentTimeMillis();
                 loadingRewardedAd = false;
-                Log.d(TAG, "Rewarded ad preloaded");
-                instance.handler.postDelayed(Application::expirePreloadedRewardedAd, PRELOADED_AD_TTL_MS);
+                Log.d(TAG, "Rewarded ad preloaded by StopApplication");
+                HANDLER.postDelayed(RewardedAdPreloader::expirePreloadedRewardedAd, PRELOADED_AD_TTL_MS);
             }
 
             @Override
@@ -59,15 +58,13 @@ public class Application extends android.app.Application {
                 Log.e(TAG, "Rewarded preload failed: code=" + error.getCode()
                         + " domain=" + error.getDomain()
                         + " message=" + error.getMessage());
-                if (instance != null) {
-                    instance.handler.postDelayed(Application::preloadRewardedAd, RETRY_DELAY_MS);
-                }
+                HANDLER.postDelayed(RewardedAdPreloader::preloadRewardedAd, RETRY_DELAY_MS);
             }
         });
     }
 
     private static synchronized void expirePreloadedRewardedAd() {
-        if (preloadedRewardedAd == null || instance == null) return;
+        if (preloadedRewardedAd == null) return;
         if (System.currentTimeMillis() - preloadedRewardedAdAt < PRELOADED_AD_TTL_MS) return;
         preloadedRewardedAd = null;
         preloadedRewardedAdAt = 0L;

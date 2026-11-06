@@ -1,6 +1,5 @@
 package app.replit.stop_el_juego.twa;
 
-import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
@@ -19,13 +18,7 @@ import com.google.android.play.core.appupdate.AppUpdateInfo;
 import com.google.android.play.core.appupdate.AppUpdateManager;
 import com.google.android.play.core.appupdate.AppUpdateManagerFactory;
 import com.google.android.play.core.install.model.UpdateAvailability;
-import com.google.android.gms.ads.AdError;
-import com.google.android.gms.ads.AdRequest;
-import com.google.android.gms.ads.FullScreenContentCallback;
-import com.google.android.gms.ads.LoadAdError;
 import com.google.android.gms.ads.MobileAds;
-import com.google.android.gms.ads.rewarded.RewardedAd;
-import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback;
 import com.google.android.gms.games.PlayGames;
 import com.google.android.gms.games.PlayGamesSdk;
 import com.google.androidbrowserhelper.trusted.QualityEnforcer;
@@ -41,9 +34,6 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     private static final String TAG = "STOP_AD_BRIDGE";
     private static final Uri SOURCE_ORIGIN = Uri.parse("https://www.stopjuegodepalabras.com");
     private static final Uri TARGET_ORIGIN = Uri.parse("https://www.stopjuegodepalabras.com");
-    private static final boolean USE_TEST_REWARDED_ADS = false;
-    private static final String REWARDED_TEST_ID = "ca-app-pub-3940256099942544/5224354917";
-    private static final String REWARDED_REAL_ID = "ca-app-pub-4807272408824742/3559554716";
 
     private boolean relationshipValidated;
     private boolean originValidationRequestPending;
@@ -51,12 +41,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     private int originValidationGeneration;
     private boolean messageChannelReady;
     private boolean mobileAdsReady;
-    private RewardedAd rewardedAd;
-    private boolean rewardedAdLoading;
-    private boolean rewardGrantedForCurrentAd;
     private String activeInterstitialRequestId;
-    private String activeRequestId;
-    private String activePlacement;
     private boolean channelRequestInFlight;
     private int channelRequestAttempts;
     private static final String PLAY_STORE_PACKAGE = "app.replit.stop_el_juego.twa";
@@ -92,7 +77,6 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             MobileAds.initialize(this, status -> {
                 mobileAdsReady = true;
                 Log.d(TAG, "MobileAds initialized; starting rewarded + interstitial preload");
-                preloadRewardedAd();
                 InterstitialAdStore.initialize(this);
             });
         }
@@ -359,15 +343,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                 showInterstitialWhenReady();
                 return;
             }
-            if (!"STOP_AD_REQUEST_REWARDED".equals(type)) return;
-            String requestId = message.optString("requestId", "");
-            String placement = message.optString("placement", "extra_time");
-            if (requestId.isEmpty() || !messageChannelReady || activeRequestId != null) return;
-            if (!isAllowedPlacement(placement)) return;
-            activeRequestId = requestId;
-            activePlacement = placement;
-            rewardGrantedForCurrentAd = false;
-            showRewardedAdWhenReady();
+            // Rewarded ads use the dedicated stopad://rewarded Activity and SSV flow.
         } catch (JSONException ignored) { Log.w(TAG, "Ignoring malformed web message"); }
     }
 
@@ -592,90 +568,6 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
         } catch (JSONException ignored) { return; }
         sendMessage(result);
         if (requestId.equals(activeInterstitialRequestId)) activeInterstitialRequestId = null;
-    }
-    private boolean isAllowedPlacement(String placement) {
-        return "extra_time".equals(placement) || "hint".equals(placement) || "double_points".equals(placement)
-                || "skip_round".equals(placement) || "extra_pack".equals(placement);
-    }
-    private String rewardedUnitId() { return USE_TEST_REWARDED_ADS ? REWARDED_TEST_ID : REWARDED_REAL_ID; }
-    private void preloadRewardedAd() {
-        if (!mobileAdsReady || rewardedAd != null || rewardedAdLoading) return;
-        rewardedAdLoading = true;
-        Log.d(TAG, "Rewarded load requested; unit=" + rewardedUnitId());
-        RewardedAd.load(this, rewardedUnitId(), new AdRequest.Builder().build(), new RewardedAdLoadCallback() {
-            @Override public void onAdLoaded(@NonNull RewardedAd ad) {
-                rewardedAdLoading = false;
-                rewardedAd = ad;
-                Log.d(TAG, "Rewarded loaded successfully");
-                if (activeRequestId != null) showRewardedAd();
-            }
-            @Override public void onAdFailedToLoad(@NonNull LoadAdError error) {
-                rewardedAdLoading = false;
-                rewardedAd = null;
-                Log.e(TAG, "Rewarded load failed: code=" + error.getCode() + " domain=" + error.getDomain()
-                        + " message=" + error.getMessage() + " response=" + error.getResponseInfo());
-                if (activeRequestId != null) sendResult(false, "error", error.getCode(), error.getDomain(), error.getMessage());
-            }
-        });
-    }
-    private void showRewardedAdWhenReady() {
-        if (rewardedAd != null) { showRewardedAd(); return; }
-        if (!mobileAdsReady) { Log.w(TAG, "Rewarded requested before Mobile Ads initialization finished"); return; }
-        preloadRewardedAd();
-    }
-    private void showRewardedAd() {
-        if (activeRequestId == null || rewardedAd == null) return;
-        RewardedAd ad = rewardedAd;
-        rewardedAd = null;
-        ad.setFullScreenContentCallback(new FullScreenContentCallback() {
-            @Override public void onAdDismissedFullScreenContent() {
-                Log.d(TAG, "Rewarded dismissed; earned=" + rewardGrantedForCurrentAd);
-                if (!rewardGrantedForCurrentAd) sendResult(false, "skipped");
-                preloadRewardedAd();
-            }
-            @Override public void onAdFailedToShowFullScreenContent(@NonNull AdError error) {
-                Log.e(TAG, "Rewarded show failed: code=" + error.getCode() + " domain=" + error.getDomain() + " message=" + error.getMessage());
-                sendResult(false, "error", error.getCode(), error.getDomain(), error.getMessage());
-                preloadRewardedAd();
-            }
-            @Override public void onAdShowedFullScreenContent() { Log.d(TAG, "Rewarded showed fullscreen content"); }
-        });
-        try {
-            Activity hostActivity = this;
-            Log.d(TAG, "Showing rewarded ad requestId=" + activeRequestId + " placement=" + activePlacement);
-            ad.show(hostActivity, rewardItem -> {
-                rewardGrantedForCurrentAd = true;
-                Log.d(TAG, "Reward earned type=" + rewardItem.getType() + " amount=" + rewardItem.getAmount());
-                sendResult(true, "admob");
-            });
-        } catch (RuntimeException error) {
-            Log.e(TAG, "Rewarded show threw", error);
-            sendResult(false, "error", -1, "java", error.getClass().getSimpleName() + ": " + error.getMessage());
-            preloadRewardedAd();
-        }
-    }
-    private void sendResult(boolean rewarded, String source) {
-        sendResult(rewarded, source, 0, "", "");
-    }
-    private void sendResult(boolean rewarded, String source, int errorCode, String errorDomain, String errorMessage) {
-        if (activeRequestId == null) return;
-        JSONObject result = new JSONObject();
-        try {
-            result.put("type", "STOP_AD_REWARDED_RESULT");
-            result.put("requestId", activeRequestId);
-            result.put("placement", activePlacement);
-            result.put("rewarded", rewarded);
-            result.put("source", source);
-            if (!rewarded && "error".equals(source)) {
-                result.put("errorCode", errorCode);
-                result.put("errorDomain", errorDomain == null ? "" : errorDomain);
-                result.put("errorMessage", errorMessage == null ? "" : errorMessage);
-            }
-        } catch (JSONException ignored) { return; }
-        sendMessage(result);
-        activeRequestId = null;
-        activePlacement = null;
-        rewardGrantedForCurrentAd = false;
     }
     private JSONObject newMessage(String type) {
         JSONObject message = new JSONObject();
