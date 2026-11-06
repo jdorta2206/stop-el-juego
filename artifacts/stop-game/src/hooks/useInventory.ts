@@ -88,7 +88,13 @@ export function useInventory(playerId?: string | null) {
         });
         if (res.status !== 503 || attempt === 2) break;
         await new Promise((resolve) => window.setTimeout(resolve, 350 * (attempt + 1)));
-        if (controller.signal.aborted) return;
+        if (controller.signal.aborted) {
+          if (timedOut) {
+            setError("La tienda tardó más de 8 segundos en responder. Pulsa Reintentar.");
+            setData(null);
+          }
+          return;
+        }
       }
       if (!res) throw new Error("Inventory request did not return a response");
       if (!res.ok) {
