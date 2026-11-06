@@ -51,7 +51,7 @@ function writeStoredPlayer(profile: PlayerProfile | null) {
   try { window.dispatchEvent(new CustomEvent(PLAYER_EVENT)); } catch {}
 }
 
-async function tryRestoreFrom(apiBase: string, shouldCommit: () => boolean = () => true, expectedPlayerId: string | null = null): Promise<PlayerProfile | null> {
+async function tryRestoreFrom(apiBase: string, shouldCommit: () => boolean = () => true, expectedPlayerId: string | null = null, signal?: AbortSignal): Promise<PlayerProfile | null> {
   try {
     const headers: Record<string, string> = {};
     let token: string | null = null;
@@ -66,7 +66,7 @@ async function tryRestoreFrom(apiBase: string, shouldCommit: () => boolean = () 
       } catch { return false; }
     };
 
-    const res = await fetch(`${apiBase}/api/auth/me`, { credentials: "include", headers, cache: "no-store" });
+    const res = await fetch(`${apiBase}/api/auth/me`, { credentials: "include", headers, cache: "no-store", signal });
 
     // A 401 can be caused by a transient cookie/proxy/navigation race during
     // OAuth return. Never destroy the only client-side session credential here;
@@ -84,13 +84,23 @@ async function tryRestoreFrom(apiBase: string, shouldCommit: () => boolean = () 
 }
 
 async function tryRestoreSession(shouldCommit: () => boolean = () => true, expectedPlayerId: string | null = null): Promise<PlayerProfile | null> {
-  const localBase = getApiUrl();
-  const restored = await tryRestoreFrom(localBase, shouldCommit, expectedPlayerId);
-  if (restored) return restored;
+  // Session restoration is optional startup work. Do not keep the whole game
+  // (including its navigation) hidden while an auth/database request is stalled.
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 3_000);
   try {
-    if (new URL(localBase, window.location.origin).origin !== CANONICAL_API_ORIGIN) return await tryRestoreFrom(CANONICAL_API_ORIGIN, shouldCommit, expectedPlayerId);
-  } catch {}
-  return null;
+    const localBase = getApiUrl();
+    const restored = await tryRestoreFrom(localBase, shouldCommit, expectedPlayerId, controller.signal);
+    if (restored) return restored;
+    try {
+      if (new URL(localBase, window.location.origin).origin !== CANONICAL_API_ORIGIN) {
+        return await tryRestoreFrom(CANONICAL_API_ORIGIN, shouldCommit, expectedPlayerId, controller.signal);
+      }
+    } catch {}
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 export function usePlayer() {
