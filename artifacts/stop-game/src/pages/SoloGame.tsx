@@ -1407,7 +1407,7 @@ export default function SoloGame() {
     const normalize = (value: string) => value.toLowerCase().trim()
       .replace(/ñ/g, "~")
       .normalize("NFD")
-      .replace(/[\\u0300-\\u036f]/g, "")
+      .replace(/[\u0300-\u036f]/g, "")
       .replace(/~/g, "ñ");
     const expectedLetter = normalize(normalizedLetter);
     const langDict = bundle.dictionary[getCurrentLang()] || bundle.dictionary.es || {};
@@ -2196,8 +2196,8 @@ export default function SoloGame() {
                       }
                       const hintLetter = currentLetter.trim().toUpperCase();
                       const word = await getHintWord(hintLetter, empty);
-                      const normalizedWord = word.trim().toLowerCase().normalize("NFD").replace(/[\\u0300-\\u036f]/g, "");
-                      const normalizedLetter = hintLetter.toLowerCase().normalize("NFD").replace(/[\\u0300-\\u036f]/g, "");
+                      const normalizedWord = word.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+                      const normalizedLetter = hintLetter.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
                       if (!word || !normalizedWord.startsWith(normalizedLetter)) {
                         toast({ title: lang === "en" ? "No valid hint available right now" : lang === "pt" ? "No hay una pista válida disponible ahora" : "No hay una pista válida disponible ahora" });
                         return;
