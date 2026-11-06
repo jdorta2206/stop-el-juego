@@ -254,6 +254,7 @@ export default function Ranking() {
     enabled: isLoggedInPlayer,
     refetchOnMount: "always",
     staleTime: 0,
+    retry: false,
   });
 
   // Monthly ranking
