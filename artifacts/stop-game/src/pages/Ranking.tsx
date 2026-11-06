@@ -549,9 +549,15 @@ const PODIUM_ORDER = [1, 0, 2];
           </motion.div>
         )}
 
-        {(activeRankingError || showSlowRetry) ? (
+        {showSlowRetry && !activeRankingError && (
+          <div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/20 p-3">
+            <span className="text-sm text-white/70">El ranking está tardando más de 3 segundos.</span>
+            <button type="button" onClick={retryActiveRanking} className="px-4 py-2 rounded-xl font-black text-sm bg-secondary text-black">Reintentar</button>
+          </div>
+        )}
+        {activeRankingError ? (
           <div className="p-8 text-center bg-black/20 rounded-2xl border border-white/10">
-            <p className="text-white/70 font-bold mb-3">{activeRankingError ? "No se ha podido cargar el ranking. Comprueba la conexión e inténtalo de nuevo." : "El ranking está tardando más de 3 segundos."}</p>
+            <p className="text-white/70 font-bold mb-3">No se ha podido cargar el ranking. Comprueba la conexión e inténtalo de nuevo.</p>
             <button type="button" onClick={retryActiveRanking} className="px-5 py-3 rounded-xl font-black text-sm bg-secondary text-black">Reintentar</button>
           </div>
         ) : (filter === "weekly" ? weeklyLoading : filter === "monthly" ? monthlyLoading : isLoading) ? (
