@@ -15,6 +15,40 @@ import { useLocation } from "wouter";
 
 type ChallengeState = "idle" | "sending" | "waiting";
 
+async function fetchRankingJson(path: string, signal?: AbortSignal, allowUnauthorized = false): Promise<any> {
+  const controller = new AbortController();
+  const forwardAbort = () => controller.abort();
+  if (signal?.aborted) controller.abort();
+  else signal?.addEventListener("abort", forwardAbort, { once: true });
+  const timeout = window.setTimeout(() => controller.abort(), 8_000);
+  try {
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const response = await fetch(getApiUrl() + path, {
+        credentials: "include",
+        headers: authHeaders(),
+        signal: controller.signal,
+      });
+      if (response.status === 503 && attempt < 2) {
+        await new Promise((resolve) => window.setTimeout(resolve, 350 * (attempt + 1)));
+        if (controller.signal.aborted) throw new Error("La clasificación tardó más de 8 segundos.");
+        continue;
+      }
+      if (response.status === 401 && allowUnauthorized) return null;
+      if (!response.ok) throw new Error("No se pudo cargar el ranking (HTTP " + response.status + ").");
+      return await response.json();
+    }
+    throw new Error("El servidor sigue ocupado. Pulsa Reintentar.");
+  } catch (error) {
+    if (controller.signal.aborted && !signal?.aborted) {
+      throw new Error("La clasificación tardó más de 8 segundos. Pulsa Reintentar.");
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeout);
+    signal?.removeEventListener("abort", forwardAbort);
+  }
+}
+
 function OnlineDot({ isOnline }: { isOnline: boolean }) {
   if (!isOnline) return null;
   return (
@@ -190,8 +224,8 @@ function useWeekCountdown(nextReset?: string) {
 
 export default function Ranking() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, isLoading } = useGetLeaderboard({ limit: 100 }, {
-    query: { refetchOnMount: "always", staleTime: 0 } as any
+  const { data, isLoading, isFetching: globalFetching, isError: globalError, refetch: refetchGlobal } = useGetLeaderboard({ limit: 100 }, {
+    query: { queryFn: ({ signal }) => fetchRankingJson("/api/ranking/scores?limit=100", signal), refetchOnMount: "always", staleTime: 0, retry: false } as any
   });
   const { player } = usePlayer();
   const { t, lang } = useT();
@@ -200,59 +234,73 @@ export default function Ranking() {
   // Always fetch the current player's own stats (works even if outside top 100)
   const { data: myStats } = useGetPlayerStats(
     player?.id ?? "",
-    { query: { enabled: isLoggedInPlayer, refetchOnMount: "always", staleTime: 0 } as any }
+    { query: {
+      enabled: isLoggedInPlayer,
+      queryFn: ({ signal }) => fetchRankingJson("/api/ranking/scores/" + encodeURIComponent(player?.id ?? ""), signal, true),
+      refetchOnMount: "always",
+      staleTime: 0,
+      retry: false,
+    } as any }
   );
   // Weekly ranking
-  const { data: weeklyData, isLoading: weeklyLoading } = useQuery({
+  const { data: weeklyData, isLoading: weeklyLoading, isFetching: weeklyFetching, isError: weeklyError, refetch: refetchWeekly } = useQuery({
     queryKey: ["/api/ranking/weekly"],
-    queryFn: ({ signal }) => fetch(`${getApiUrl()}/api/ranking/weekly`, { signal }).then(r => r.json()),
+    queryFn: ({ signal }) => fetchRankingJson("/api/ranking/weekly", signal),
     refetchOnMount: true,
     staleTime: 0,
+    retry: false,
   });
   const weeklyPlayers: any[] = weeklyData?.players ?? [];
   const weekCountdown = useWeekCountdown(weeklyData?.nextReset);
   const { data: weeklyMe } = useQuery({
     queryKey: ["/api/ranking/weekly/me", player?.id],
     queryFn: async ({ signal }) => {
-      const response = await fetch(getApiUrl() + "/api/ranking/weekly/me", {
-        credentials: "include",
-        headers: authHeaders(),
-        signal,
-      });
-      if (!response.ok) return null;
-      return response.json();
+      return fetchRankingJson("/api/ranking/weekly/me", signal, true);
     },
     enabled: isLoggedInPlayer,
     refetchOnMount: "always",
     staleTime: 0,
+    retry: false,
   });
 
   // Monthly ranking
-  const { data: monthlyData, isLoading: monthlyLoading } = useQuery({
+  const { data: monthlyData, isLoading: monthlyLoading, isFetching: monthlyFetching, isError: monthlyError, refetch: refetchMonthly } = useQuery({
     queryKey: ["/api/ranking/monthly"],
-    queryFn: ({ signal }) => fetch(`${getApiUrl()}/api/ranking/monthly`, { signal }).then(r => r.json()),
+    queryFn: ({ signal }) => fetchRankingJson("/api/ranking/monthly", signal),
     refetchOnMount: true,
     staleTime: 0,
+    retry: false,
   });
   const monthlyPlayers: any[] = monthlyData?.players ?? [];
   const monthCountdown = useWeekCountdown(monthlyData?.nextReset);
   const { data: monthlyMe } = useQuery({
     queryKey: ["/api/ranking/monthly/me", player?.id],
     queryFn: async ({ signal }) => {
-      const response = await fetch(getApiUrl() + "/api/ranking/monthly/me", {
-        credentials: "include",
-        headers: authHeaders(),
-        signal,
-      });
-      if (!response.ok) return null;
-      return response.json();
+      return fetchRankingJson("/api/ranking/monthly/me", signal, true);
     },
     enabled: isLoggedInPlayer,
     refetchOnMount: "always",
     staleTime: 0,
+    retry: false,
   });
 
   const [filter, setFilter] = useState<"global" | "weekly" | "monthly" | "friends">("weekly");
+  const activeRankingLoading = filter === "weekly" ? weeklyFetching : filter === "monthly" ? monthlyFetching : filter === "global" ? globalFetching : false;
+  const [showSlowRetry, setShowSlowRetry] = useState(false);
+  useEffect(() => {
+    if (!activeRankingLoading) {
+      setShowSlowRetry(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setShowSlowRetry(true), 3_000);
+    return () => window.clearTimeout(timer);
+  }, [activeRankingLoading, filter]);
+  const activeRankingError = filter === "weekly" ? weeklyError : filter === "monthly" ? monthlyError : filter === "global" ? globalError : false;
+  const retryActiveRanking = () => {
+    if (filter === "weekly") void refetchWeekly();
+    else if (filter === "monthly") void refetchMonthly();
+    else if (filter === "global") void refetchGlobal();
+  };
 
   // Presence: online players + incoming challenge notifications
   const { onlinePlayers, incomingChallenge, dismissChallenge } = usePresence(
@@ -501,7 +549,18 @@ const PODIUM_ORDER = [1, 0, 2];
           </motion.div>
         )}
 
-        {(filter === "weekly" ? weeklyLoading : filter === "monthly" ? monthlyLoading : isLoading) ? (
+        {showSlowRetry && !activeRankingError && (
+          <div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/20 p-3">
+            <span className="text-sm text-white/70">El ranking está tardando más de 3 segundos.</span>
+            <button type="button" onClick={retryActiveRanking} className="px-4 py-2 rounded-xl font-black text-sm bg-secondary text-black">Reintentar</button>
+          </div>
+        )}
+        {activeRankingError ? (
+          <div className="p-8 text-center bg-black/20 rounded-2xl border border-white/10">
+            <p className="text-white/70 font-bold mb-3">No se ha podido cargar el ranking. Comprueba la conexión e inténtalo de nuevo.</p>
+            <button type="button" onClick={retryActiveRanking} className="px-5 py-3 rounded-xl font-black text-sm bg-secondary text-black">Reintentar</button>
+          </div>
+        ) : (filter === "weekly" ? weeklyLoading : filter === "monthly" ? monthlyLoading : isLoading) ? (
           <div className="space-y-3">
             {[1,2,3,4,5].map(i => (
               <div key={i} className="h-16 bg-white/10 rounded-xl animate-pulse" />
