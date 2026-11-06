@@ -6,7 +6,7 @@ describe("AdMob rewarded SSV polling response", () => {
     expect(buildAdmobPendingResponse(undefined)).toEqual({ ready: false });
   });
 
-  it("preserves the client state for a consumed request without claiming a reward", () => {
+  it("preserves the client state for a pending request without claiming a reward", () => {
     expect(buildAdmobPendingResponse({ client_state: "earned" })).toEqual({
       ready: false,
       clientState: "earned",
