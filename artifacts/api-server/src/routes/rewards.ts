@@ -263,11 +263,6 @@ router.post("/admob-result/:requestId/consume", async (req, res) => {
 });
 router.get("/admob-ssv", async (req, res) => {
   try {
-    if (!indexesReady()) {
-      res.status(503).send("warming_up");
-      return;
-    }
-
     // AdMob's dashboard "Verify URL" probe may intentionally omit custom_data.
     // This probe only validates reachability/configuration and MUST NEVER grant
     // a reward, so it is safe to acknowledge it before normal SSV processing.
