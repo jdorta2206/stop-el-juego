@@ -11,7 +11,7 @@ import { ShoppingBag, Crown } from "lucide-react";
 
 export default function Tienda() {
   const { player } = usePlayer();
-  const { inventory, loading, error, refresh } = useInventory(player?.id || null);
+  const { inventory, loading, error, refresh, buy, equip } = useInventory(player?.id || null);
   const { isPremium } = usePremium(player?.id);
   const [, setLocation] = useLocation();
   const [showPremiumModal, setShowPremiumModal] = useState(false);
@@ -55,7 +55,7 @@ export default function Tienda() {
 
         {/* La tienda se muestra una sola vez. Antes se renderizaba dos veces y duplicaba su altura en móvil. */}
         <div className="w-full">
-          <CosmeticShop />
+          <CosmeticShop inventory={inventory} refresh={refresh} buy={buy} equip={equip} />
         </div>
 
         <div className="mt-4 sm:mt-6 text-center">
