@@ -10,13 +10,17 @@ const adminRouteSource = readFileSync(
 );
 
 // Inspect the actual production funnel SQL, not a separately copied predicate.
-const funnelQueryMatch = adminRouteSource.match(
-  /const funnelPromise = [\\s\\S]*?executePanelQuery\\(sql\x60([\\s\\S]*?)\x60\\)/,
-);
-if (!funnelQueryMatch) {
+// Inspect the actual production funnel SQL, not a separately copied predicate.
+const funnelPromiseStart = adminRouteSource.indexOf("const funnelPromise =");
+const funnelSqlStart = adminRouteSource.indexOf("executePanelQuery(sql`", funnelPromiseStart);
+const funnelSqlEnd = adminRouteSource.indexOf("`)", funnelSqlStart);
+if (funnelPromiseStart < 0 || funnelSqlStart < 0 || funnelSqlEnd < 0) {
   throw new Error("Could not locate the production analytics funnel SQL in admin.ts");
 }
-const funnelQuery = funnelQueryMatch[1];
+const funnelQuery = adminRouteSource.slice(
+  funnelSqlStart + "executePanelQuery(sql`".length,
+  funnelSqlEnd,
+);
 
 describe("STOP Control analytics funnel event ordering", () => {
   it("keeps the funnel restricted to trusted events in the seven-day window", () => {
