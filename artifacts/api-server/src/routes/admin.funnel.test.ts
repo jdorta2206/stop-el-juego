@@ -57,14 +57,14 @@ describe("STOP Control panel query performance", () => {
     expect(adminRouteSource).toContain("const PANEL_QUERY_CONCURRENCY = 5");
     expect(adminRouteSource).toContain("SET LOCAL statement_timeout = '1800ms'");
     expect(adminRouteSource).toContain("await Promise.all");
-    expect(adminRouteSource.match(/const \\w+Promise = \\(async \\(\\) =>/g)?.length).toBe(26);
+    expect(adminRouteSource.match(/const \w+Promise = \(async \(\) =>/g)?.length).toBe(26);
   });
 
   it("uses a 60-second stale-while-revalidate cache and avoids costly metadata LIKE scans", () => {
     expect(adminRouteSource).toContain("cachedAdminPanelAt < 60_000");
     expect(adminRouteSource).toContain('X-STOP-Admin-Cache');
     expect(adminRouteSource).not.toContain("metadata_json LIKE");
-    expect(adminRouteSource).not.toMatch(/\\(updated_at AT TIME ZONE 'UTC'\\) >=/);
-    expect(adminRouteSource).not.toMatch(/\\(created_at AT TIME ZONE 'UTC'\\) >=/);
+    expect(adminRouteSource).not.toMatch(/\(updated_at AT TIME ZONE 'UTC'\) >=/);
+    expect(adminRouteSource).not.toMatch(/\(created_at AT TIME ZONE 'UTC'\) >=/);
   });
 });
