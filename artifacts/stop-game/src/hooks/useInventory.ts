@@ -63,22 +63,46 @@ export interface InventorySnapshot {
 export function useInventory(playerId?: string | null) {
   const [data, setData] = useState<InventorySnapshot | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const refreshAbortRef = useRef<AbortController | null>(null);
 
   const refresh = useCallback(async () => {
-    if (!playerId) { setData(null); return; }
+    if (!playerId) { setData(null); setError(null); setLoading(false); return; }
     refreshAbortRef.current?.abort();
     const controller = new AbortController();
     refreshAbortRef.current = controller;
     setLoading(true);
+    setError(null);
     try {
       const res = await fetch(`${API}/api/inventory`, {
         credentials: "include",
         headers: { ...authHeaders(), ...(import.meta.env.VITE_HALLOWEEN_PREVIEW === "true" ? { "x-halloween-player-id": playerId } : {}), ...PREVIEW_HEADERS },
         signal: controller.signal,
       });
-      if (res.ok && !controller.signal.aborted) setData(await res.json());
-    } catch { /* ignore */ }
+      if (!res.ok) {
+        if (!controller.signal.aborted) {
+          const body = await res.json().catch(() => ({}));
+          const message = res.status === 401
+            ? "Inicia sesión para acceder a tu inventario y realizar compras."
+            : res.status === 404
+              ? "No se ha encontrado el inventario de este jugador."
+              : body.error || `No se pudo cargar la tienda (HTTP ${res.status}).`;
+          setError(message);
+          setData(null);
+        }
+        return;
+      }
+      const snapshot = await res.json();
+      if (!controller.signal.aborted) {
+        setData(snapshot);
+        setError(null);
+      }
+    } catch {
+      if (!controller.signal.aborted) {
+        setError("No se pudo conectar con la tienda. Comprueba tu conexión e inténtalo de nuevo.");
+        setData(null);
+      }
+    }
     finally {
       if (refreshAbortRef.current === controller) {
         refreshAbortRef.current = null;
@@ -124,5 +148,5 @@ export function useInventory(playerId?: string | null) {
     return res.json();
   }, [playerId, refresh]);
 
-  return { inventory: data, loading, refresh, equip, buy };
+  return { inventory: data, loading, error, refresh, equip, buy };
 }
