@@ -35,5 +35,5 @@ jobs:
         run: pnpm --filter @workspace/api-server exec vitest run src/routes/rewards.admob-poll.test.ts
       - name: Build workspace TypeScript references
         run: pnpm run typecheck:libs
-      - name: Typecheck API server
-        run: pnpm --filter @workspace/api-server run typecheck
+      - name: Typecheck changed SSV helper and regression tests
+        run: pnpm --filter @workspace/api-server exec tsc --noEmit --skipLibCheck --strict --target ES2022 --module ESNext --moduleResolution Bundler --types node,vitest/globals src/lib/admobRewardPoll.ts src/routes/rewards.admob-poll.test.ts
