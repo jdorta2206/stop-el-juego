@@ -33,5 +33,7 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Run rewarded SSV regression tests
         run: pnpm --filter @workspace/api-server exec vitest run src/routes/rewards.admob-poll.test.ts
+      - name: Build workspace TypeScript references
+        run: pnpm run typecheck:libs
       - name: Typecheck API server
         run: pnpm --filter @workspace/api-server run typecheck
