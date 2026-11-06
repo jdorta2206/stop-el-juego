@@ -11,7 +11,7 @@ const adminRouteSource = readFileSync(
 
 // Inspect the actual production funnel SQL, not a separately copied predicate.
 const funnelQueryMatch = adminRouteSource.match(
-  /const funnel = \(\s*await db\.execute\(sql\`([\s\S]*?)\`\)\s*\)\.rows/,
+  /const funnelPromise = [\\s\\S]*?executePanelQuery\\(sql\x60([\\s\\S]*?)\x60\\)/,
 );
 if (!funnelQueryMatch) {
   throw new Error("Could not locate the production analytics funnel SQL in admin.ts");
