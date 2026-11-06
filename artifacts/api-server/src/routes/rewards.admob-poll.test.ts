@@ -38,13 +38,16 @@ describe("AdMob rewarded SSV polling response", () => {
   });
 
   it("reopens a consumed, unearned request when a late signed SSV callback confirms it", () => {
-    const conflictUpdate = rewardsRouteSource.match(
-      /ON CONFLICT \\(request_id\\) DO UPDATE SET([\\s\\S]*?)\\n    \`/,
-    )?.[1];
-
-    expect(conflictUpdate).toBeDefined();
-    expect(conflictUpdate).toMatch(
-      /consumed_at = CASE[\\s\\S]*?WHEN admob_reward_requests\\.rewarded = false THEN NULL[\\s\\S]*?ELSE admob_reward_requests\\.consumed_at/,
+    const conflictStart = rewardsRouteSource.indexOf(
+      "ON CONFLICT (request_id) DO UPDATE SET",
     );
+    const conflictEnd = rewardsRouteSource.indexOf("\n    `);", conflictStart);
+    const conflictUpdate = rewardsRouteSource.slice(conflictStart, conflictEnd);
+
+    expect(conflictStart).toBeGreaterThanOrEqual(0);
+    expect(conflictEnd).toBeGreaterThan(conflictStart);
+    expect(conflictUpdate).toContain("consumed_at = CASE");
+    expect(conflictUpdate).toContain("WHEN admob_reward_requests.rewarded = false THEN NULL");
+    expect(conflictUpdate).toContain("ELSE admob_reward_requests.consumed_at");
   });
 });
