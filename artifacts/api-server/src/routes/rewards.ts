@@ -22,6 +22,24 @@ interface SqlResult<T> {
   rows?: T[];
 }
 
+type AdmobPollRow = {
+  client_state?: string | null;
+};
+
+/**
+ * A missing or pending SSV record is never proof of a reward.
+ * Preserve the client signal so the TWA can offer a later SSV recheck.
+ */
+export function buildAdmobPendingResponse(row?: AdmobPollRow | null): {
+  ready: false;
+  clientState?: string;
+} {
+  return {
+    ready: false,
+    ...(typeof row?.client_state === "string" ? { clientState: row.client_state } : {}),
+  };
+}
+
 const router: IRouter = Router();
 
 const ADMOB_REQUEST_ID_RE = /^[A-Za-z0-9_-]{20,128}$/;
@@ -167,7 +185,7 @@ router.get("/admob-result/:requestId", async (req, res) => {
     const row = rows.rows?.[0];
 
     if (!row || row.consumed_at) {
-      res.json({ ready: false, clientState: row?.client_state });
+      res.json(buildAdmobPendingResponse(row));
       return;
     }
 
@@ -221,7 +239,7 @@ router.get("/admob-result/:requestId", async (req, res) => {
       }
     }
 
-    res.json({ ready: false, clientState: row.client_state });
+    res.json(buildAdmobPendingResponse(row));
   } catch (error) {
     console.error(
       "[rewards/admob-result/get] error:",
