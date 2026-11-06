@@ -370,6 +370,10 @@ router.get("/admob-ssv", async (req, res) => {
       ON CONFLICT (request_id) DO UPDATE SET
         rewarded = true,
         client_state = 'earned',
+        consumed_at = CASE
+          WHEN admob_reward_requests.rewarded = false THEN NULL
+          ELSE admob_reward_requests.consumed_at
+        END,
         transaction_id = COALESCE(admob_reward_requests.transaction_id, EXCLUDED.transaction_id),
         placement = COALESCE(admob_reward_requests.placement, EXCLUDED.placement)
     `);
