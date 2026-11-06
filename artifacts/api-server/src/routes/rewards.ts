@@ -221,7 +221,7 @@ router.get("/admob-result/:requestId", async (req, res) => {
       }
     }
 
-    res.json({ ready: false });
+    res.json({ ready: false, clientState: row.client_state });
   } catch (error) {
     console.error(
       "[rewards/admob-result/get] error:",
