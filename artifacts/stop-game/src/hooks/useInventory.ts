@@ -64,6 +64,7 @@ export function useInventory(playerId?: string | null) {
   const [data, setData] = useState<InventorySnapshot | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [slow, setSlow] = useState(false);
   const refreshAbortRef = useRef<AbortController | null>(null);
 
   const refresh = useCallback(async () => {
@@ -73,6 +74,8 @@ export function useInventory(playerId?: string | null) {
     refreshAbortRef.current = controller;
     setLoading(true);
     setError(null);
+    setSlow(false);
+    const slowTimer = window.setTimeout(() => setSlow(true), 3_000);
     let timedOut = false;
     const timeout = window.setTimeout(() => {
       timedOut = true;
@@ -127,6 +130,8 @@ export function useInventory(playerId?: string | null) {
       }
     } finally {
       window.clearTimeout(timeout);
+      window.clearTimeout(slowTimer);
+      setSlow(false);
       if (refreshAbortRef.current === controller) {
         refreshAbortRef.current = null;
         setLoading(false);
