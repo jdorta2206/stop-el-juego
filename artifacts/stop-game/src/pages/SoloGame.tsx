@@ -123,7 +123,7 @@ function getTodayStr(): string {
 
 export default function SoloGame() {
   const { player, showAuth } = usePlayer();
-  const { isPremium, loading: premiumLoading, error: premiumError } = usePremium(player?.id);
+  const { isPremium } = usePremium(player?.id);
   // Block ads only when Premium is positively confirmed. A failed entitlement lookup
   // must not silently disable monetization for non-Premium players.
   const adsBlocked = isPremium;
