@@ -1024,7 +1024,13 @@ function applyRoundAdvanceSideEffects(room: any, sweptPlayers: any[], newStatus:
 // round deadlocks forever if the last pending player's submission never
 // reaches the server (their SSE stays "online" so the in-handler sweep never
 // fires for them, and there's no other player left to trigger it).
+let sweepStuckRoomsInProgress = false;
+
 async function sweepStuckRooms() {
+  // The timer fires every 3 seconds, but a slow database pass can take longer.
+  // Never let two full sweeps overlap and multiply database pressure.
+  if (sweepStuckRoomsInProgress) return;
+  sweepStuckRoomsInProgress = true;
   try {
     // Scan BOTH "stopped" (someone pressed STOP) and "playing" (the round timer
     // ran out with no STOP) — either can deadlock if a submission is lost.
@@ -1078,13 +1084,29 @@ async function sweepStuckRooms() {
     // games, causing avoidable DB/CPU load and repeated timezone lookups.
     const finishedRooms = await db.select().from(roomsTable)
       .where(eq(roomsTable.status, "finished"));
+    // Fetch settlement claims in one round-trip instead of one query per room.
+    // This keeps recovery work bounded to a single indexed lookup per sweep.
+    const finishedRoomIds = finishedRooms.map((room) => room.id);
+    const settlementClaimRows = finishedRoomIds.length > 0
+      ? await db.execute(sql`
+          SELECT room_id, player_id
+          FROM multiplayer_settlement_claims
+          WHERE room_id IN (${sql.join(finishedRoomIds.map((id) => sql`${id}`), sql`, `)})
+        `)
+      : { rows: [] };
+    const claimedByRoom = new Map<number, Set<string>>();
+    for (const row of (settlementClaimRows.rows ?? []) as any[]) {
+      const roomId = Number(row.room_id);
+      const claims = claimedByRoom.get(roomId) ?? new Set<string>();
+      claims.add(String(row.player_id));
+      claimedByRoom.set(roomId, claims);
+    }
     for (const room of finishedRooms) {
       const players = parsePlayers(room.playersJson);
       const eligible = players.filter((p: any) => p && !p.isBot && p.playerId && p.loginMethod !== "guest");
       if (eligible.length === 0) continue;
 
-      const claimRows = await db.execute(sql`SELECT player_id FROM multiplayer_settlement_claims WHERE room_id = ${room.id}`);
-      const claimedIds = new Set((claimRows.rows ?? []).map((row: any) => String(row.player_id)));
+      const claimedIds = claimedByRoom.get(room.id) ?? new Set<string>();
       const pending = eligible.filter((p: any) => !claimedIds.has(String(p.playerId)));
       if (pending.length === 0) {
         // Core settlement already succeeded; recover only auxiliary effects
@@ -1159,6 +1181,8 @@ async function sweepStuckRooms() {
     }
   } catch (err) {
     console.error("[sweepStuckRooms] failed:", (err as Error).message);
+  } finally {
+    sweepStuckRoomsInProgress = false;
   }
 }
 
