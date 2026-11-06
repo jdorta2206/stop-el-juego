@@ -31,9 +31,13 @@ interface CosmeticShopProps {
   showInventory?: boolean;
 }
 
-export function CosmeticShop(_props: CosmeticShopProps) {
+export function CosmeticShop(props: CosmeticShopProps) {
   const { player } = usePlayer();
-  const { inventory, refresh: refreshInventory, buy, equip } = useInventory(player?.id || null);
+  const ownInventory = useInventory(player?.id || null);
+  const inventory = props.inventory ?? ownInventory.inventory;
+  const refreshInventory = props.refresh ?? ownInventory.refresh;
+  const buy = props.buy ?? ownInventory.buy;
+  const equip = props.equip ?? ownInventory.equip;
   const [selectedCategory, setSelectedCategory] = useState<Category>("all");
   const [purchasing, setPurchasing] = useState<string | null>(null);
   const [equipping, setEquipping] = useState<string | null>(null);
