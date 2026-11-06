@@ -81,7 +81,7 @@ public class RewardedAdActivity extends Activity {
         handler.postDelayed(globalWatchdog, GLOBAL_WATCHDOG_MS);
 
         MobileAds.initialize(this, status -> {
-            RewardedAd preloaded = Application.takePreloadedRewardedAd();
+            RewardedAd preloaded = RewardedAdPreloader.takePreloadedRewardedAd();
             if (preloaded != null) {
                 Log.d(TAG, "Using preloaded rewarded ad requestId=" + requestId);
                 showRewarded(preloaded);
@@ -144,7 +144,7 @@ public class RewardedAdActivity extends Activity {
         } catch (Exception error) {
             Log.e(TAG, "Unable to configure SSV custom data", error);
             sendClientResult("dismissed");
-            Application.preloadRewardedAd();
+            RewardedAdPreloader.preloadRewardedAd();
             finish();
             return;
         }
