@@ -10,7 +10,6 @@ const adminRouteSource = readFileSync(
 );
 
 // Inspect the actual production funnel SQL, not a separately copied predicate.
-// Inspect the actual production funnel SQL, not a separately copied predicate.
 const funnelPromiseStart = adminRouteSource.indexOf("const funnelPromise =");
 const funnelSqlStart = adminRouteSource.indexOf("executePanelQuery(sql`", funnelPromiseStart);
 const funnelSqlEnd = adminRouteSource.indexOf("`)", funnelSqlStart);
@@ -50,5 +49,22 @@ describe("STOP Control analytics funnel event ordering", () => {
     expect(completionTransition).toMatch(/gc\.session_id = analytics_events\.session_id/);
     expect(completionTransition).toMatch(/gc\.created_at >= analytics_events\.created_at/);
     expect(completionTransition).toMatch(/gc\.created_at >= NOW\(\) - INTERVAL '7 days'/);
+  });
+});
+
+describe("STOP Control panel query performance", () => {
+  it("runs the 26 independent queries in parallel with bounded concurrency and timeouts", () => {
+    expect(adminRouteSource).toContain("const PANEL_QUERY_CONCURRENCY = 5");
+    expect(adminRouteSource).toContain("SET LOCAL statement_timeout = '1800ms'");
+    expect(adminRouteSource).toContain("await Promise.all");
+    expect(adminRouteSource.match(/const \\w+Promise = \\(async \\(\\) =>/g)?.length).toBe(26);
+  });
+
+  it("uses a 60-second stale-while-revalidate cache and avoids costly metadata LIKE scans", () => {
+    expect(adminRouteSource).toContain("cachedAdminPanelAt < 60_000");
+    expect(adminRouteSource).toContain('X-STOP-Admin-Cache');
+    expect(adminRouteSource).not.toContain("metadata_json LIKE");
+    expect(adminRouteSource).not.toMatch(/\\(updated_at AT TIME ZONE 'UTC'\\) >=/);
+    expect(adminRouteSource).not.toMatch(/\\(created_at AT TIME ZONE 'UTC'\\) >=/);
   });
 });
