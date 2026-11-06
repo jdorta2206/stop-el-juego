@@ -45,6 +45,34 @@ function isAllowedOrigin(value: string): boolean {
   return ADMOB_ORIGINS.has(value);
 }
 
+let admobRewardTableReady: Promise<void> | null = null;
+
+// The signed AdMob callback must remain writable while the broader index
+// bootstrap is running. Create only its minimal storage table on first use;
+// ensureIndexes() adds the remaining supporting indexes concurrently later.
+async function ensureAdmobRewardTable(): Promise<void> {
+  if (!admobRewardTableReady) {
+    const createTable = db.execute(sql`
+      CREATE TABLE IF NOT EXISTS admob_reward_requests (
+        request_id text PRIMARY KEY,
+        rewarded boolean NOT NULL DEFAULT FALSE,
+        player_id text NOT NULL,
+        placement text,
+        origin text,
+        client_state text NOT NULL DEFAULT 'pending',
+        transaction_id text,
+        created_at timestamp NOT NULL DEFAULT NOW(),
+        consumed_at timestamp
+      )
+    `).then(() => undefined);
+    admobRewardTableReady = createTable.catch((error) => {
+      admobRewardTableReady = null;
+      throw error;
+    });
+  }
+  await admobRewardTableReady;
+}
+
 async function cleanupAdmobRewardRequests(): Promise<void> {
   await db.execute(sql.raw(
     "DELETE FROM admob_reward_requests WHERE rewarded = false AND consumed_at IS NULL AND created_at < NOW() - INTERVAL '5 minutes'",
@@ -52,12 +80,6 @@ async function cleanupAdmobRewardRequests(): Promise<void> {
 }
 
 router.post("/admob-result", async (req, res) => {
-  if (!indexesReady()) {
-    res.setHeader("Retry-After", "2");
-    res.status(503).json({ error: "Server warming up", ready: false });
-    return;
-  }
-
   const requestId = readString(req.body?.requestId);
   const playerId = readString(req.body?.playerId);
   const origin = readString(req.body?.origin);
@@ -76,6 +98,7 @@ router.post("/admob-result", async (req, res) => {
   }
 
   try {
+    await ensureAdmobRewardTable();
     await cleanupAdmobRewardRequests();
 
     const existingRows = await db.execute(sql`
@@ -136,12 +159,6 @@ router.post("/admob-result", async (req, res) => {
 });
 
 router.get("/admob-result/:requestId", async (req, res) => {
-  if (!indexesReady()) {
-    res.setHeader("Retry-After", "2");
-    res.status(503).json({ error: "Server warming up", ready: false });
-    return;
-  }
-
   const requestId = req.params.requestId;
   if (!ADMOB_REQUEST_ID_RE.test(requestId)) {
     res.status(400).json({ error: "Invalid requestId" });
@@ -149,6 +166,7 @@ router.get("/admob-result/:requestId", async (req, res) => {
   }
 
   try {
+    await ensureAdmobRewardTable();
     await cleanupAdmobRewardRequests();
 
     const rows = await db.execute(sql`
@@ -232,12 +250,6 @@ router.get("/admob-result/:requestId", async (req, res) => {
 });
 
 router.post("/admob-result/:requestId/consume", async (req, res) => {
-  if (!indexesReady()) {
-    res.setHeader("Retry-After", "2");
-    res.status(503).json({ error: "Server warming up", ready: false });
-    return;
-  }
-
   const requestId = req.params.requestId;
   if (!ADMOB_REQUEST_ID_RE.test(requestId)) {
     res.status(400).json({ error: "Invalid requestId" });
@@ -245,6 +257,7 @@ router.post("/admob-result/:requestId/consume", async (req, res) => {
   }
 
   try {
+    await ensureAdmobRewardTable();
     await db.execute(sql`
       UPDATE admob_reward_requests
       SET consumed_at = NOW()
@@ -263,11 +276,6 @@ router.post("/admob-result/:requestId/consume", async (req, res) => {
 });
 router.get("/admob-ssv", async (req, res) => {
   try {
-    if (!indexesReady()) {
-      res.status(503).send("warming_up");
-      return;
-    }
-
     // AdMob's dashboard "Verify URL" probe may intentionally omit custom_data.
     // This probe only validates reachability/configuration and MUST NEVER grant
     // a reward, so it is safe to acknowledge it before normal SSV processing.
@@ -342,6 +350,7 @@ router.get("/admob-ssv", async (req, res) => {
       return;
     }
 
+    await ensureAdmobRewardTable();
     const existingRows = await db.execute(sql`
       SELECT request_id, player_id, rewarded
       FROM admob_reward_requests

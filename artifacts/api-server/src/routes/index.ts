@@ -21,22 +21,12 @@ import customPacksRouter from "./customPacks";
 import guestStatsRouter from "./guestStats";
 import halloweenRouter from "./halloween";
 import compensationRouter from "./compensation";
-import { indexesReady } from "@workspace/db";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
 
-// The HTTP listener starts before schema bootstrap so Railway can detect the
-// port. Keep every DB-backed API route unavailable until the schema is ready;
-// /healthz above remains the readiness probe and intentionally returns 503.
-router.use((_req, res, next) => {
-  if (!indexesReady()) {
-    res.setHeader("Retry-After", "2");
-    return res.status(503).json({ error: "Server warming up", ready: false });
-  }
-  next();
-});
+// Route-specific readiness checks live beside the endpoints that need them.
 router.use("/game", gameRouter);
 router.use("/ranking", rankingRouter);
 router.use("/ranking", progressRouter);
