@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
 import { usePlayer } from "@/hooks/use-player";
-import { useInventory, type ShopItem as InventoryShopItem, type TitleView } from "@/hooks/useInventory";
+import { type ShopItem as InventoryShopItem, type TitleView } from "@/hooks/useInventory";
 import { Button } from "@/components/ui";
 import { toast } from "sonner";
 import { Check, Sparkles, Coins, ShoppingBag, Tag } from "lucide-react";
@@ -24,20 +24,16 @@ const HALLOWEEN_MARKER = "_halloween_";
 
 interface CosmeticShopProps {
   playerId?: string;
-  inventory?: any;
-  refresh?: () => void;
-  buy?: (itemId: string) => void;
-  equip?: (kind: string, value: string | null) => void;
+  inventory: any;
+  refresh: () => Promise<void>;
+  buy: (itemId: string) => Promise<any>;
+  equip: (kind: string, value: string | null) => Promise<any>;
   showInventory?: boolean;
 }
 
 export function CosmeticShop(props: CosmeticShopProps) {
   const { player } = usePlayer();
-  const ownInventory = useInventory(player?.id || null);
-  const inventory = props.inventory ?? ownInventory.inventory;
-  const refreshInventory = props.refresh ?? ownInventory.refresh;
-  const buy = props.buy ?? ownInventory.buy;
-  const equip = props.equip ?? ownInventory.equip;
+  const { inventory, refresh: refreshInventory, buy, equip } = props;
   const [selectedCategory, setSelectedCategory] = useState<Category>("all");
   const [purchasing, setPurchasing] = useState<string | null>(null);
   const [equipping, setEquipping] = useState<string | null>(null);
