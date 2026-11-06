@@ -131,8 +131,8 @@ export function useInventory(playerId?: string | null) {
     } finally {
       window.clearTimeout(timeout);
       window.clearTimeout(slowTimer);
-      setSlow(false);
       if (refreshAbortRef.current === controller) {
+        setSlow(false);
         refreshAbortRef.current = null;
         setLoading(false);
       }
