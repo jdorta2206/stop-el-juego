@@ -17,10 +17,12 @@ import {
 } from "../lib/collectionSets";
 import { evaluatePrestige, prestigeReward, prestigeTier } from "../lib/prestigeRewards";
 import { verifyAdMobSsv } from "../lib/admobSsv";
+import { buildAdmobPendingResponse } from "../lib/admobRewardPoll";
 
 interface SqlResult<T> {
   rows?: T[];
 }
+
 
 const router: IRouter = Router();
 
@@ -167,7 +169,7 @@ router.get("/admob-result/:requestId", async (req, res) => {
     const row = rows.rows?.[0];
 
     if (!row || row.consumed_at) {
-      res.json({ ready: false });
+      res.json(buildAdmobPendingResponse(row));
       return;
     }
 
@@ -221,7 +223,7 @@ router.get("/admob-result/:requestId", async (req, res) => {
       }
     }
 
-    res.json({ ready: false });
+    res.json(buildAdmobPendingResponse(row));
   } catch (error) {
     console.error(
       "[rewards/admob-result/get] error:",
@@ -368,6 +370,10 @@ router.get("/admob-ssv", async (req, res) => {
       ON CONFLICT (request_id) DO UPDATE SET
         rewarded = true,
         client_state = 'earned',
+        consumed_at = CASE
+          WHEN admob_reward_requests.rewarded = false THEN NULL
+          ELSE admob_reward_requests.consumed_at
+        END,
         transaction_id = COALESCE(admob_reward_requests.transaction_id, EXCLUDED.transaction_id),
         placement = COALESCE(admob_reward_requests.placement, EXCLUDED.placement)
     `);
