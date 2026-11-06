@@ -109,7 +109,37 @@ function esc(v: unknown): string {
 const MADRID_TODAY = sql`(date_trunc('day', now() AT TIME ZONE 'Europe/Madrid') AT TIME ZONE 'Europe/Madrid')`;
 const NOT_BOT = sql`player_id NOT LIKE 'bot_%'`;
 
+let cachedAdminPanelHtml: string | null = null;
+let cachedAdminPanelAt = 0;
+let adminPanelBuildInFlight = false;
+
+const ADMIN_PANEL_LOADING_HTML = `<!doctype html>
+<html lang="es"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<meta http-equiv="refresh" content="20"/><meta name="robots" content="noindex,nofollow"/>
+<title>STOP Control · Cargando</title>
+<style>body{margin:0;background:#0f1216;color:#e8edf2;font:16px system-ui;padding:28px;display:grid;min-height:80vh;place-content:center;text-align:center}
+.card{max-width:460px;padding:24px;border:1px solid #80651f;border-radius:16px;background:#1a2029}
+h1{font-size:1.25rem;color:#f4cf65}p{color:#aab5c2;line-height:1.5}a{color:#6ee7a0}</style></head>
+<body><main class="card"><h1>⏳ STOP Control está preparando los datos</h1>
+<p>El servidor está atendiendo una consulta de estadísticas. No se ha quedado en blanco ni se ha iniciado otra consulta en paralelo.</p>
+<p>Esta página se actualizará automáticamente cuando termine. También puedes <a href="/test">reintentar</a>.</p></main></body></html>`;
+
 router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => {
+  const now = Date.now();
+  if (cachedAdminPanelHtml && now - cachedAdminPanelAt < 20_000) {
+    res.set("X-STOP-Admin-Cache", "HIT").status(200).type("html").send(cachedAdminPanelHtml);
+    return;
+  }
+  if (adminPanelBuildInFlight) {
+    res.set("Retry-After", "20").status(202).type("html").send(ADMIN_PANEL_LOADING_HTML);
+    return;
+  }
+
+  adminPanelBuildInFlight = true;
+  const loadingTimer = setTimeout(() => {
+    if (!res.headersSent) res.status(202).type("html").send(ADMIN_PANEL_LOADING_HTML);
+  }, 8_000);
+
   try {
     // ── KPIs de hoy (zona horaria de España) ──────────────────────────────
     const todayRows = (
@@ -776,10 +806,17 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
   <div class="foot">Acceso privado. No compartas esta dirección ni tus credenciales.</div>
 </body></html>`;
 
-    res.status(200).type("html").send(html);
+    cachedAdminPanelHtml = html;
+    cachedAdminPanelAt = Date.now();
+    clearTimeout(loadingTimer);
+    if (!res.headersSent) res.status(200).type("html").send(html);
   } catch (err: any) {
+    clearTimeout(loadingTimer);
     console.error("[admin panel] error:", err?.message ?? err);
-    res.status(500).type("html").send("<h1>Error</h1><p>No se pudieron cargar las estadísticas.</p>");
+    if (!res.headersSent) res.status(500).type("html").send("<h1>Error</h1><p>No se pudieron cargar las estadísticas.</p><p><a href='/test'>Volver a intentar</a></p>");
+  } finally {
+    clearTimeout(loadingTimer);
+    adminPanelBuildInFlight = false;
   }
 });
 
