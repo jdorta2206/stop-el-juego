@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, resolve } from "node:path";
 import { buildAdmobPendingResponse } from "../lib/admobRewardPoll";
+
+const currentDir = dirname(fileURLToPath(import.meta.url));
+const rewardsRouteSource = readFileSync(
+  resolve(currentDir, "rewards.ts"),
+  "utf8",
+);
 
 describe("AdMob rewarded SSV polling response", () => {
   it("returns a non-ready response when the request does not exist", () => {
@@ -26,5 +35,16 @@ describe("AdMob rewarded SSV polling response", () => {
       ready: false,
       clientState: "dismissed",
     });
+  });
+
+  it("reopens a consumed, unearned request when a late signed SSV callback confirms it", () => {
+    const conflictUpdate = rewardsRouteSource.match(
+      /ON CONFLICT \\(request_id\\) DO UPDATE SET([\\s\\S]*?)\\n    \`/,
+    )?.[1];
+
+    expect(conflictUpdate).toBeDefined();
+    expect(conflictUpdate).toMatch(
+      /consumed_at = CASE[\\s\\S]*?WHEN admob_reward_requests\\.rewarded = false THEN NULL[\\s\\S]*?ELSE admob_reward_requests\\.consumed_at/,
+    );
   });
 });
