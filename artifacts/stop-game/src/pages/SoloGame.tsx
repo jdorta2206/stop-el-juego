@@ -1400,8 +1400,9 @@ export default function SoloGame() {
   const getHintWord = async (letter: string, category: string): Promise<string> => {
     const normalizedLetter = letter.trim().toUpperCase();
     if (!normalizedLetter) return "";
-    let bundle = getCachedOfflineBundle();
-    if (!bundle) bundle = await ensureOfflineBundle();
+    // Refresh the authoritative server dictionary before offering a paid hint.
+    // ensureOfflineBundle falls back to the cached copy only when the network is unavailable.
+    const bundle = await ensureOfflineBundle();
     if (!bundle) return "";
 
     const normalize = (value: string) => value.toLowerCase().trim()
@@ -1411,7 +1412,9 @@ export default function SoloGame() {
       .replace(/~/g, "ñ");
     const expectedLetter = normalize(normalizedLetter);
     const langDict = bundle.dictionary[getCurrentLang()] || bundle.dictionary.es || {};
-    const requestedCategory = normalize(category);
+    const canonicalCategory = bundle.categoryAliases?.[normalize(category)] ?? category;
+    const requestedCategory = normalize(canonicalCategory);
+    const neverValid = new Set((bundle.neverValidWords || []).map(normalize));
     const findWords = (dict: Record<string, string[]>, categoryName: string): string[] => {
       const exact = Object.entries(dict).find(([key]) => normalize(key) === categoryName);
       if (exact) return exact[1];
@@ -1425,6 +1428,7 @@ export default function SoloGame() {
       .filter(Boolean)
       .map(word => word.trim())
       .filter(word => word.length >= 2)
+      .filter(word => !neverValid.has(normalize(word)))
       // Strict compatibility: the hint MUST start with the round letter.
       .filter(word => normalize(word).startsWith(expectedLetter));
 
