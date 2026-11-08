@@ -22,45 +22,6 @@ let messagePort: MessagePort | null = null;
 let pendingMessages: NativeMessage[] = [];
 let lastStatus: PgsStatus | null = null;
 
-// TEMPORAL: diagnóstico Play Games (retirar tras resolver)
-type PlayGamesDiagnostics = {
-  messageEvents: number;
-  messageEventsAllowedOrigin: number;
-  lastMessageOrigin: string | null;
-  portsReceived: number;
-  portMessages: number;
-  lastPortMessageType: string | null;
-  adBridgeReady: boolean;
-  lastNativeStatus: PgsStatus | null;
-  locationOrigin: string;
-  hasTwaMarker: boolean;
-};
-
-const diagnostics: PlayGamesDiagnostics = {
-  messageEvents: 0,
-  messageEventsAllowedOrigin: 0,
-  lastMessageOrigin: null,
-  portsReceived: 0,
-  portMessages: 0,
-  lastPortMessageType: null,
-  adBridgeReady: false,
-  lastNativeStatus: null,
-  locationOrigin: "",
-  hasTwaMarker: false,
-};
-
-export function getPlayGamesDiagnostics(): PlayGamesDiagnostics {
-  try {
-    return { ...diagnostics, lastNativeStatus: diagnostics.lastNativeStatus ? { ...diagnostics.lastNativeStatus } : null };
-  } catch {
-    return {
-      messageEvents: 0, messageEventsAllowedOrigin: 0, lastMessageOrigin: null,
-      portsReceived: 0, portMessages: 0, lastPortMessageType: null,
-      adBridgeReady: false, lastNativeStatus: null, locationOrigin: "", hasTwaMarker: false,
-    };
-  }
-}
-
 export function isAndroidTwa(): boolean {
   if (typeof window === "undefined") return false;
   try {
@@ -85,7 +46,6 @@ function receiveNativeMessage(raw: unknown): void {
   let payload: any;
   try { payload = JSON.parse(raw); } catch { return; }
   if (payload?.type === "STOP_AD_BRIDGE_READY") {
-    diagnostics.adBridgeReady = true;
     const wasReady = channelReady;
     channelReady = messagePort !== null;
     if (channelReady) {
@@ -105,7 +65,6 @@ function receiveNativeMessage(raw: unknown): void {
     ok: payload.ok === true,
     status: typeof payload.status === "string" ? payload.status : "unknown",
   };
-  try { diagnostics.lastNativeStatus = { ...lastStatus }; } catch { /* diagnóstico temporal no bloqueante */ }
   window.dispatchEvent(new CustomEvent("stop:play-games-status", { detail: lastStatus }));
 }
 
@@ -146,47 +105,18 @@ export function initTwaPlayGamesBridge(): void {
   if (typeof window === "undefined" || initialized) return;
   initialized = true;
   if (!isAndroidTwa()) return;
-  // TEMPORAL: diagnóstico Play Games (retirar tras resolver)
-  try {
-    diagnostics.locationOrigin = window.location.origin;
-    const params = new URLSearchParams(window.location.search);
-    diagnostics.hasTwaMarker = params.get("source") === "googleplay-twa" ||
-      params.get("source") === "twa" ||
-      document.referrer.startsWith("android-app://app.replit.stop_el_juego.twa");
-  } catch { /* diagnóstico temporal no bloqueante */ }
-
   window.addEventListener("message", (event: MessageEvent) => {
-    try {
-      diagnostics.messageEvents += 1;
-      diagnostics.lastMessageOrigin = typeof event.origin === "string" ? event.origin : null;
-      if (event.ports?.[0]) diagnostics.portsReceived += 1;
-      if (ALLOWED_MESSAGE_EVENT_ORIGINS.has(event.origin)) diagnostics.messageEventsAllowedOrigin += 1;
-    } catch { /* diagnóstico temporal no bloqueante */ }
     if (!ALLOWED_MESSAGE_EVENT_ORIGINS.has(event.origin)) return;
     const transferredPort = event.ports?.[0];
     if (transferredPort) {
       messagePort = transferredPort;
       messagePort.onmessage = (portEvent: MessageEvent) => {
-        try {
-          diagnostics.portMessages += 1;
-          const raw = portEvent.data;
-          if (typeof raw === "string") {
-            const parsed = JSON.parse(raw);
-            diagnostics.lastPortMessageType = typeof parsed?.type === "string" ? parsed.type : null;
-          } else {
-            diagnostics.lastPortMessageType = typeof raw?.type === "string" ? raw.type : null;
-          }
-        } catch { diagnostics.lastPortMessageType = null; }
         receiveNativeMessage(portEvent.data);
       };
       messagePort.start?.();
     }
     receiveNativeMessage(event.data);
   });
-  // Surface an explicit startup state immediately, rather than leaving the
-  // home screen looking disconnected while native Play Games authentication runs.
-  lastStatus = { ok: false, status: "conectando" };
-  window.dispatchEvent(new CustomEvent("stop:play-games-status", { detail: lastStatus }));
   // LauncherActivity owns the single launch-time sign-in attempt. Do not enqueue
   // another sign-in here: it can race the native attempt and return sign_in_in_progress.
   // The status snapshot requested when the message channel opens reconciles the UI.
