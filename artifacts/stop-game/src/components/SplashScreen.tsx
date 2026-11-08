@@ -68,7 +68,7 @@ export function SplashScreen({ onDone, lang = "es" }: Props) {
             justifyContent: "center",
             overflow: "hidden",
             background:
-              "radial-gradient(ellipse at 50% 45%, #5a1208 0%, #1a063a 55%, #060318 100%)",
+              "linear-gradient(145deg, #ef233c 0%, #c1121f 55%, #8f0015 100%)",
           }}
         >
           {/* Ambient glow orbs */}
@@ -81,7 +81,7 @@ export function SplashScreen({ onDone, lang = "es" }: Props) {
               height: "60vmax",
               borderRadius: "50%",
               background:
-                "radial-gradient(circle, rgba(181,48,26,0.55) 0%, transparent 70%)",
+                "radial-gradient(circle, rgba(255,80,80,0.42) 0%, transparent 70%)",
               pointerEvents: "none",
             }}
           />
@@ -94,7 +94,7 @@ export function SplashScreen({ onDone, lang = "es" }: Props) {
               height: "40vmax",
               borderRadius: "50%",
               background:
-                "radial-gradient(circle, rgba(99,20,200,0.35) 0%, transparent 70%)",
+                "radial-gradient(circle, rgba(255,70,70,0.22) 0%, transparent 70%)",
               pointerEvents: "none",
               top: "60%",
               left: "60%",
@@ -153,7 +153,7 @@ export function SplashScreen({ onDone, lang = "es" }: Props) {
               borderRadius: "50%",
               border: "2px solid rgba(181,48,26,0.25)",
               boxShadow:
-                "0 0 40px rgba(181,48,26,0.3), inset 0 0 40px rgba(181,48,26,0.1)",
+                "0 0 40px rgba(255,150,150,0.24), inset 0 0 40px rgba(255,150,150,0.10)",
               pointerEvents: "none",
             }}
           />
@@ -182,7 +182,7 @@ export function SplashScreen({ onDone, lang = "es" }: Props) {
                 inset: "-20%",
                 borderRadius: "50%",
                 background:
-                  "radial-gradient(circle, rgba(181,48,26,0.7) 0%, transparent 70%)",
+                  "radial-gradient(circle, rgba(255,110,110,0.55) 0%, transparent 70%)",
                 filter: "blur(18px)",
                 zIndex: 0,
               }}
@@ -196,7 +196,7 @@ export function SplashScreen({ onDone, lang = "es" }: Props) {
                 objectFit: "contain",
                 position: "relative",
                 zIndex: 1,
-                filter: "drop-shadow(0 0 24px rgba(181,48,26,0.9)) drop-shadow(0 4px 20px rgba(0,0,0,0.8))",
+                filter: "drop-shadow(0 0 24px rgba(255,190,190,0.75)) drop-shadow(0 4px 20px rgba(0,0,0,0.8))",
                 borderRadius: "50%",
               }}
             />
@@ -215,7 +215,7 @@ export function SplashScreen({ onDone, lang = "es" }: Props) {
               fontFamily: "'Fredoka One', sans-serif",
               letterSpacing: "0.06em",
               textAlign: "center",
-              textShadow: "0 0 20px rgba(181,48,26,0.6)",
+              textShadow: "0 0 20px rgba(255,190,190,0.5)",
               zIndex: 2,
               position: "relative",
               maxWidth: "80vw",
@@ -251,8 +251,8 @@ export function SplashScreen({ onDone, lang = "es" }: Props) {
                   width: 8,
                   height: 8,
                   borderRadius: "50%",
-                  background: "#b5301a",
-                  boxShadow: "0 0 8px rgba(181,48,26,0.8)",
+                  background: "#fff1f2",
+                  boxShadow: "0 0 8px rgba(255,190,190,0.65)",
                 }}
               />
             ))}
