@@ -248,7 +248,7 @@ router.get("/admob-result/:requestId", async (req, res) => {
       }
     }
 
-    res.json({ ready: false });
+    res.json(buildAdmobPendingResponse(row));
   } catch (error) {
     console.error(
       "[rewards/admob-result/get] error:",
