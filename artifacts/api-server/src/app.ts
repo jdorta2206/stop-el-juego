@@ -108,7 +108,7 @@ app.use("/api", (req, res, next) => {
     path === "/check-version" ||
     path === "/rewards/admob-ssv" ||
     path === "/rewards/admob-result" ||
-    /^\\/rewards\\/admob-result\\/[^/]+(?:\\/consume)?$/.test(path);
+    /^\/rewards\/admob-result\/[^/]+(?:\/consume)?$/.test(path);
 
   if (isBootstrapSafe) return next();
   res.setHeader("Retry-After", "2");
