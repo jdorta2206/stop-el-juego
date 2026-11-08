@@ -23,6 +23,9 @@ public final class StopApplication extends Application {
             playGamesInitialized = false;
             Log.w("STOP_PLAY_GAMES", "Play Games SDK initialization failed; STOP continues normally", error);
         }
+        // This is the Application class declared in AndroidManifest.xml.
+        // Start the real AdMob rewarded preloader from the actual app lifecycle.
+        RewardedAdPreloader.initialize(this);
     }
 
     public static boolean isPlayGamesInitialized() {
