@@ -7,6 +7,7 @@ import { SplashScreen } from "@/components/SplashScreen";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { usePlayer } from "@/hooks/use-player";
 import { claimStripePack } from "@/lib/worldCupPack";
+import { notifyPlayGamesStartupReady } from "@/lib/twaPlayGamesBridge";
 import { flushScoreOutbox } from "@/lib/offlineGame";
 import { getApiUrl, authHeaders } from "@/lib/utils";
 import Home from "@/pages/Home";
@@ -218,7 +219,17 @@ function App() {
         <ErrorBoundary>
           <PackClaimHandler />
           <ScoreOutboxHandler />
-          <SplashScreen onDone={() => setSplashDone(true)} lang={lang} />
+          <SplashScreen
+            onDone={() => {
+              setSplashDone(true);
+              // Let React remove the splash and paint the first game frame before
+              // Android opens the Google Play Games welcome/authentication UI.
+              requestAnimationFrame(() => requestAnimationFrame(() => {
+                notifyPlayGamesStartupReady();
+              }));
+            }}
+            lang={lang}
+          />
           {splashDone && (
             <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
               <Suspense fallback={

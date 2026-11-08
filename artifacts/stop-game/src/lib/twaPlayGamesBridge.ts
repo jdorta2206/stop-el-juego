@@ -130,6 +130,11 @@ export function initTwaPlayGamesBridge(): void {
   window.addEventListener("focus", refreshStatus);
 }
 
+/** Notify Android only after the animated app splash has fully finished. */
+export function notifyPlayGamesStartupReady(): boolean {
+  return post("STOP_PGS_STARTUP_READY");
+}
+
 export function requestPlayGamesSignIn(): boolean {
   return post("STOP_PGS_SIGN_IN");
 }
