@@ -158,7 +158,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             if (isFinishing() || playGamesStartupSignInAttempted) return;
             playGamesStartupSignInAttempted = true;
             Log.i("STOP_PLAY_GAMES", "Starting one-time startup sign-in after onResume");
-            checkPlayGamesStartupAuthentication();
+            startPlayGamesSignInIfNeeded();
         }, 800L);
     }
 
@@ -372,53 +372,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     }
 
 
-    private void checkPlayGamesStartupAuthentication() {
-        if (!playGamesInitialized) {
-            sendPlayGamesStatus(false, "sdk_unavailable");
-            return;
-        }
-        if (playGamesSignInInFlight || isFinishing()) return;
-        playGamesSignInInFlight = true;
-        final int checkGeneration = ++playGamesSignInGeneration;
-        // PGS v2 performs platform authentication automatically during SDK startup.
-        // Observe that state only: never launch a second sign-in UI over the first game frame.
-        getWindow().getDecorView().postDelayed(() -> {
-            if (playGamesSignInInFlight
-                    && checkGeneration == playGamesSignInGeneration
-                    && !isFinishing()) {
-                playGamesSignInGeneration++;
-                playGamesSignInInFlight = false;
-                Log.e("STOP_PLAY_GAMES", "Startup authentication status check timed out; guest play remains available");
-                sendPlayGamesStatus(false, "sign_in_timeout");
-            }
-        }, 15000L);
-        try {
-            PlayGames.getGamesSignInClient(this).isAuthenticated()
-                    .addOnCompleteListener(task -> {
-                        if (checkGeneration != playGamesSignInGeneration || isFinishing()) {
-                            Log.w("STOP_PLAY_GAMES", "Ignoring late startup authentication result");
-                            return;
-                        }
-                        playGamesSignInGeneration++;
-                        boolean authenticated = task.isSuccessful()
-                                && task.getResult() != null
-                                && task.getResult().isAuthenticated();
-                        playGamesSignInInFlight = false;
-                        if (!task.isSuccessful()) {
-                            Log.w("STOP_PLAY_GAMES", "Startup authentication status check failed", task.getException());
-                        }
-                        sendPlayGamesStatus(authenticated,
-                                authenticated ? "authenticated" : "not_authenticated");
-                    });
-        } catch (RuntimeException error) {
-            if (checkGeneration == playGamesSignInGeneration) playGamesSignInGeneration++;
-            playGamesSignInInFlight = false;
-            Log.w("STOP_PLAY_GAMES", "Startup authentication status check unavailable", error);
-            sendPlayGamesStatus(false, "sign_in_failed");
-        }
-    }
-
-    private void requestManualPlayGamesSignIn() {
+    private void startPlayGamesSignInIfNeeded() {
         if (!playGamesInitialized) {
             sendPlayGamesStatus(false, "sdk_unavailable");
             return;
@@ -435,7 +389,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             if (playGamesSignInInFlight && signInGeneration == playGamesSignInGeneration && !isFinishing()) {
                 playGamesSignInGeneration++;
                 playGamesSignInInFlight = false;
-                Log.e("STOP_PLAY_GAMES", "Manual isAuthenticated check timed out");
+                Log.e("STOP_PLAY_GAMES", "Startup/manual authentication check timed out");
                 sendPlayGamesStatus(false, "sign_in_timeout");
             }
         }, 15000L);
@@ -445,7 +399,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                         if (signInGeneration != playGamesSignInGeneration || isFinishing()) return;
                         playGamesSignInGeneration++;
                         if (!task.isSuccessful()) {
-                            Log.e("STOP_PLAY_GAMES", "Manual isAuthenticated task failed", task.getException());
+                            Log.w("STOP_PLAY_GAMES", "Authentication status check failed; attempting PGS sign-in", task.getException());
                         }
                         boolean authenticated = task.isSuccessful()
                                 && task.getResult() != null
@@ -488,7 +442,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             return;
         }
         if ("STOP_PGS_SIGN_IN".equals(type)) {
-            requestManualPlayGamesSignIn();
+            startPlayGamesSignInIfNeeded();
             return;
         }
         if ("STOP_PGS_STATUS".equals(type)) {
