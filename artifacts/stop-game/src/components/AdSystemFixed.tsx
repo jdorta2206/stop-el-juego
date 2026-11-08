@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Gift, Star, Zap } from "lucide-react";
 import { getT } from "@/i18n/index";
 import { hasAndroidAppReferrer } from "@/lib/playBilling";
-import { initTwaAdBridge, isTwaAdBridgeAvailable, requestRewardedAd, setRewardedAdPlayerId } from "@/lib/twaAdBridge";
+import { initTwaAdBridge, isTwaAdBridgeAvailable, requestRewardedAd, retryRewardedResult, setRewardedAdPlayerId } from "@/lib/twaAdBridge";
 import { pauseGameTimer, resumeGameTimer } from "@/lib/timerPauseGuard";
 import { trackAnalyticsEvent } from "@/lib/analyticsClient";
 
@@ -17,8 +17,9 @@ export function BannerAd(_props: { className?: string; isPremium?: boolean }) {
 }
 
 export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, rewardType = "points", rewardAmount = 20 }: { onComplete: (reward: number) => void; onSkip: () => void; playerId?: string; isPremium?: boolean; rewardType?: "points" | "hint" | "extraTime"; rewardAmount?: number }) {
-  const [phase, setPhase] = useState<"pre" | "loading" | "error" | "done">("pre");
+  const [phase, setPhase] = useState<"pre" | "loading" | "error" | "pending" | "done">("pre");
   const [errorDetail, setErrorDetail] = useState<string>("");
+  const [retryRequestId, setRetryRequestId] = useState<string | null>(null);
   const t = getT();
   const timeoutRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
   const mountedRef = useRef(true);
@@ -70,6 +71,11 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
             timeoutRef.current = null;
             if (mountedRef.current) onCompleteRef.current(rewardAmount);
           }, 500);
+        } else if (result.pendingSsv && result.requestId) {
+          setRetryRequestId(result.requestId);
+          setErrorDetail(result.errorMessage || "El anuncio se ha visto, pero falta la confirmación de Google.");
+          if (!mountedRef.current) return;
+          setPhase("pending");
         } else {
           const detail = [
             result.errorCode != null ? `código ${result.errorCode}` : "",
@@ -107,7 +113,30 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
     }
   };
 
+  const retryConfirmation = async () => {
+    if (!retryRequestId || !mountedRef.current) return;
+    setPhase("loading");
+    setErrorDetail("");
+    const result = await retryRewardedResult(retryRequestId);
+    if (!mountedRef.current) return;
+    if (result.rewarded === true && result.source === "admob") {
+      setPhase("done");
+      void trackAnalyticsEvent("rewarded_ad_completed", { metadata: { placement: rewardType, source: "admob", retry: true } });
+      timeoutRef.current = window.setTimeout(() => {
+        timeoutRef.current = null;
+        if (mountedRef.current) onCompleteRef.current(rewardAmount);
+      }, 500);
+    } else if (result.pendingSsv) {
+      setErrorDetail(result.errorMessage || "La confirmación de Google sigue pendiente.");
+      setPhase("pending");
+    } else {
+      setErrorDetail(result.errorMessage || "No se pudo confirmar la recompensa.");
+      setPhase("error");
+    }
+  };
+
   if (isPremium) return null;
 
-  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"><div className="w-full max-w-sm rounded-3xl overflow-hidden bg-white shadow-2xl"><div className="p-6 text-center"><h3 className="text-xl font-black">{phase === "done" ? "¡Recompensa!" : phase === "error" ? "Anuncio no disponible" : "Mira el anuncio"}</h3>{phase === "pre" && <><div className="my-5 flex justify-center">{icons[rewardType]}</div><p className="text-gray-600 text-sm mb-5">{labels[rewardType]}</p><button onClick={startWatching} className="w-full py-3 rounded-xl font-bold bg-[#f9a825] text-[#0d1757]">Ver anuncio</button><button onClick={onSkip} className="w-full py-2 mt-2 text-gray-500">Ahora no</button></>}{phase === "loading" && <div className="py-10"><div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-4 border-gray-200 border-t-[#f9a825]"/><p className="text-sm text-gray-600">Cargando anuncio…</p></div>}{phase === "error" && <><div className="py-8 text-4xl">📺</div><p className="text-sm text-gray-600">No se ha podido mostrar un anuncio recompensado.</p>{errorDetail && <p className="mt-2 rounded-lg bg-gray-100 px-3 py-2 text-left text-[11px] leading-4 text-gray-600 break-words">Diagnóstico: {errorDetail}</p>}<button onClick={onSkip} className="w-full py-2 mt-4 text-gray-500">Continuar</button></>}{phase === "done" && <div className="py-8"><div className="text-5xl mb-3">🎉</div><p className="text-gray-700">{labels[rewardType]}</p></div>}</div></div></div>;
+  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"><div className="w-full max-w-sm rounded-3xl overflow-hidden bg-white shadow-2xl"><div className="p-6 text-center"><h3 className="text-xl font-black">{phase === "done" ? "¡Recompensa!" : phase === "error" ? "Anuncio no disponible" : phase === "pending" ? "Confirmación pendiente" : "Mira el anuncio"}</h3>{phase === "pre" && <><div className="my-5 flex justify-center">{icons[rewardType]}</div><p className="text-gray-600 text-sm mb-5">{labels[rewardType]}</p><button onClick={startWatching} className="w-full py-3 rounded-xl font-bold bg-[#f9a825] text-[#0d1757]">Ver anuncio</button><button onClick={onSkip} className="w-full py-2 mt-2 text-gray-500">Ahora no</button></>}{phase === "loading" && <div className="py-10"><div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-4 border-gray-200 border-t-[#f9a825]"/><p className="text-sm text-gray-600">Cargando anuncio…</p></div>}{phase === "error" && <><div className="py-8 text-4xl">📺</div><p className="text-sm text-gray-600">No se ha podido mostrar o confirmar el anuncio recompensado.</p>{errorDetail && <p className="mt-2 rounded-lg bg-gray-100 px-3 py-2 text-left text-[11px] leading-4 text-gray-600 break-words">{errorDetail}</p>}<button onClick={onSkip} className="w-full py-2 mt-4 text-gray-500">Continuar</button></>}
+      {phase === "pending" && <><div className="py-8 text-4xl">⏳</div><p className="text-sm text-gray-700">El anuncio se ha visto, pero Google todavía no ha confirmado la recompensa. No se concederá hasta recibir la verificación segura.</p>{errorDetail && <p className="mt-2 rounded-lg bg-gray-100 px-3 py-2 text-left text-[11px] leading-4 text-gray-600 break-words">{errorDetail}</p>}<button onClick={retryConfirmation} className="w-full py-3 mt-4 rounded-xl font-bold bg-[#f9a825] text-[#0d1757]">Reintentar comprobación</button><button onClick={onSkip} className="w-full py-2 mt-2 text-gray-500">Continuar sin recompensa</button></>}{phase === "done" && <div className="py-8"><div className="text-5xl mb-3">🎉</div><p className="text-gray-700">{labels[rewardType]}</p></div>}</div></div></div>;
 }

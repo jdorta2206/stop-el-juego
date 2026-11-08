@@ -17,6 +17,7 @@ import {
 } from "../lib/collectionSets";
 import { evaluatePrestige, prestigeReward, prestigeTier } from "../lib/prestigeRewards";
 import { verifyAdMobSsv } from "../lib/admobSsv";
+import { buildAdmobPendingResponse } from "../lib/admobRewardPoll";
 
 interface SqlResult<T> {
   rows?: T[];
@@ -193,7 +194,7 @@ router.get("/admob-result/:requestId", async (req, res) => {
     const row = rows.rows?.[0];
 
     if (!row || row.consumed_at) {
-      res.json({ ready: false });
+      res.json(buildAdmobPendingResponse(row));
       return;
     }
 
@@ -247,7 +248,7 @@ router.get("/admob-result/:requestId", async (req, res) => {
       }
     }
 
-    res.json({ ready: false });
+    res.json(buildAdmobPendingResponse(row));
   } catch (error) {
     console.error(
       "[rewards/admob-result/get] error:",
