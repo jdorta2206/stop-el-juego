@@ -7,14 +7,6 @@ import { sendLocalizedBroadcast, type PushPayload } from "../lib/pushHelper";
 
 const router: IRouter = Router();
 
-router.use((_req, res, next) => {
-  if (!indexesReady()) {
-    res.setHeader("Retry-After", "2");
-    return res.status(503).json({ error: "Server warming up", ready: false });
-  }
-  next();
-});
-
 // Timing-safe string compare that tolerates length differences.
 function safeEqual(a: string, b: string): boolean {
   const bufA = Buffer.from(a, "utf8");
@@ -146,6 +138,11 @@ h1{font-size:1.25rem;color:#f4cf65}p{color:#aab5c2;line-height:1.5}a{color:#6ee7
 <p>Esta página se actualizará automáticamente cuando termine. También puedes <a href="/test">reintentar</a>.</p></main></body></html>`;
 
 router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => {
+  if (!indexesReady()) {
+    res.setHeader("Retry-After", "2");
+    res.status(503).type("html").send("<h1>STOP Control está preparando los datos</h1><p>Reintenta en unos segundos.</p>");
+    return;
+  }
   const now = Date.now();
   const hasCachedHtml = cachedAdminPanelHtml !== null;
   const cacheFresh = hasCachedHtml && now - cachedAdminPanelAt < 60_000;
