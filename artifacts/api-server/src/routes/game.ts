@@ -1422,7 +1422,7 @@ export async function isWordValidAsync(
   return result.isValid;
 }
 
-function isWordValid(word: string, letter: string, category: string, language = "es"): boolean {
+export function isWordValid(word: string, letter: string, category: string, language = "es"): boolean {
   if (!isSafeInput(word)) return false;
 
   const normalizedWord = normalizeWord(word);
@@ -1442,16 +1442,12 @@ function isWordValid(word: string, letter: string, category: string, language = 
   // (Min-2 is kept globally only for closed categories like Animal where "ñu" is valid.)
   if (OPEN_CATEGORIES.has(normCategory)) return normalizedWord.length >= 3;
 
-  // Strict mode: every other category requires the word to be in the dictionary.
-  // Try the player's language first, then fall back to Spanish (the canonical dict).
-  const primaryDict = DICTIONARY[language] || DICTIONARY["es"];
-  let categoryWords = findCategoryWords(primaryDict, validationCategory);
-  if (categoryWords.length === 0 && language !== "es") {
-    categoryWords = findCategoryWords(DICTIONARY["es"], validationCategory);
-  }
-
-  // No dictionary at all → accept any word ≥ 3 chars (defensive fallback)
-  if (categoryWords.length === 0) return normalizedWord.length >= 3;
+  // Closed categories must use the selected language dictionary only.
+  // Never validate a Spanish fallback as an answer in another language.
+  const primaryDict = DICTIONARY[language];
+  if (!primaryDict) return false;
+  const categoryWords = findCategoryWords(primaryDict, validationCategory);
+  if (categoryWords.length === 0) return false;
 
   // Strict: word must match (or be a variation of) a dictionary entry.
   return categoryWords.some(w => {
@@ -1461,13 +1457,11 @@ function isWordValid(word: string, letter: string, category: string, language = 
   });
 }
 
-function getAiWord(letter: string, category: string, language = "es"): string {
-  const langDict = DICTIONARY[language] || DICTIONARY["es"];
+export function getAiWord(letter: string, category: string, language = "es"): string {
+  const langDict = DICTIONARY[language];
+  if (!langDict) return "";
   const validationCategory = canonicalCategoryForValidation(category);
-  let categoryWords = findCategoryWords(langDict, validationCategory);
-  if (categoryWords.length === 0 && language !== "es") {
-    categoryWords = findCategoryWords(DICTIONARY["es"], validationCategory);
-  }
+  const categoryWords = findCategoryWords(langDict, validationCategory);
   const normalizedLetter = normalizeWord(letter);
 
   const matches = categoryWords.filter(w => normalizeWord(w).startsWith(normalizedLetter));
