@@ -121,7 +121,7 @@ function executePanelQuery(query: SQL) {
   return withPanelQuerySlot(async () => {
     try {
       return await db.transaction(async (tx) => {
-        await tx.execute(sql`SET LOCAL statement_timeout = '1800ms'`);
+        await tx.execute(sql`SET LOCAL statement_timeout = '5000ms'`);
         return tx.execute(query);
       });
     } catch (error) {
