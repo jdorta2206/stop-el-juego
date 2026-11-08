@@ -174,9 +174,11 @@ async function main() {
     console.log(`Server listening on port ${port}`);
   });
 
-  // Ensure the DB schema is ready before starting tasks that query tables
-  // created by the bootstrap (notably play_subscriptions). Keep the port open
-  // so Railway can observe the instance; /healthz remains 503 until ready.
+  // Complete schema/index maintenance before starting cron tasks that query
+  // bootstrap tables (notably play_subscriptions). The HTTP listener is already
+  // live: app.ts keeps /healthz as the readiness probe but does not put a
+  // blanket 503 gate in front of /api. Only individual routes that need a
+  // bootstrap table keep their own readiness check.
   try {
     await ensureIndexes();
     await loadRevokedPlayerIds();

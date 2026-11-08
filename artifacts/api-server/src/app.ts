@@ -42,13 +42,8 @@ app.get("/healthz", (_req, res) => {
   return res.status(200).json({ status: "ok" });
 });
 
-// Keep all API routes behind the same bootstrap gate. Health checks remain
-// available so Railway can distinguish startup (503) from readiness (200).
-app.use("/api", (req, res, next) => {
-  if (req.path === "/healthz" || indexesReady()) return next();
-  res.setHeader("Retry-After", "2");
-  return res.status(503).json({ error: "Service is still initializing" });
-});
+// API routes remain available while non-blocking index maintenance runs.
+// Endpoints that require newly-created schema objects keep their own readiness checks.
 
 app.post(
   "/api/stripe/webhook",
@@ -99,10 +94,39 @@ app.use(cors({
 app.use(cookieParser());
 app.use(express.json({ limit: "256kb" }));
 app.use(express.urlencoded({ extended: true, limit: "64kb" }));
+
+// Keep the API unavailable until schema/index bootstrap completes. Only the
+// health/version endpoints and AdMob's self-initializing reward handshake may
+// pass during this window; every other route could touch a table or index that
+// ensureIndexes() has not finished preparing yet.
+app.use("/api", (req, res, next) => {
+  if (indexesReady()) return next();
+
+  const path = req.path;
+  const isBootstrapSafe =
+    path === "/healthz" ||
+    path === "/check-version" ||
+    path === "/rewards/admob-ssv" ||
+    path === "/rewards/admob-result" ||
+    /^\/rewards\/admob-result\/[^/]+(?:\/consume)?$/.test(path);
+
+  if (isBootstrapSafe) return next();
+  res.setHeader("Retry-After", "2");
+  return res.status(503).json({ error: "Service is starting", status: "starting" });
+});
+
 app.use("/api", generalLimiter);
 app.use("/api", router);
 app.use("/test/analytics", adminAnalytics);
 app.use("/test/health", adminHealth);
+
+// The private panel reads production tables too; keep it behind the same
+// bootstrap boundary while leaving its dedicated health/analytics diagnostics available.
+app.use("/test", (req, res, next) => {
+  if (indexesReady()) return next();
+  res.setHeader("Retry-After", "2");
+  return res.status(503).type("text").send("STOP diagnostics are starting; retry shortly.");
+});
 
 // Private analytics panel. Mounted directly so it cannot monkey-patch Express responses.
 app.use("/test", adminPanel);
