@@ -87,7 +87,6 @@ export async function ensureIndexes(): Promise<void> {
     `CREATE INDEX CONCURRENTLY IF NOT EXISTS score_bonus_claims_player_id_idx ON score_bonus_claims (player_id)`,
     `CREATE INDEX CONCURRENTLY IF NOT EXISTS score_bonus_claims_expires_at_idx ON score_bonus_claims (expires_at)`,
     `CREATE TABLE IF NOT EXISTS admob_reward_requests (request_id text PRIMARY KEY, rewarded boolean NOT NULL DEFAULT FALSE, player_id text NOT NULL, placement text, origin text, client_state text NOT NULL DEFAULT 'pending', transaction_id text, created_at timestamp NOT NULL DEFAULT NOW(), consumed_at timestamp)`,
-    `CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS admob_reward_requests_transaction_uidx ON admob_reward_requests (transaction_id) WHERE transaction_id IS NOT NULL`,
     `CREATE INDEX CONCURRENTLY IF NOT EXISTS admob_reward_requests_created_at_idx ON admob_reward_requests (created_at)`,
     `CREATE INDEX CONCURRENTLY IF NOT EXISTS score_voucher_uses_expires_at_idx ON score_voucher_uses (expires_at)`,
     `CREATE TABLE IF NOT EXISTS impossible_results (id serial PRIMARY KEY, player_id text NOT NULL, player_name text NOT NULL, challenge_date text NOT NULL, language text NOT NULL DEFAULT 'es', letter text NOT NULL, category text NOT NULL, attempted_word text NOT NULL DEFAULT '', won boolean NOT NULL DEFAULT false, time_ms integer NOT NULL DEFAULT 60000, created_at timestamp NOT NULL DEFAULT NOW())`,
