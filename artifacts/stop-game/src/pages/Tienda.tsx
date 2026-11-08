@@ -11,7 +11,7 @@ import { ShoppingBag, Crown } from "lucide-react";
 
 export default function Tienda() {
   const { player } = usePlayer();
-  const { inventory, loading, error, refresh, buy, equip } = useInventory(player?.id || null);
+  const { inventory, loading, error, slow, refresh, buy, equip } = useInventory(player?.id || null);
   const { isPremium } = usePremium(player?.id);
   const [, setLocation] = useLocation();
   const [showPremiumModal, setShowPremiumModal] = useState(false);
@@ -21,7 +21,10 @@ export default function Tienda() {
       <Layout>
         <div className="flex-1 flex flex-col items-center justify-center gap-3 px-5 text-center">
           {loading || (!error && !player) ? (
-            <div className="animate-pulse text-white/60">Cargando tienda...</div>
+            <div className="flex flex-col items-center gap-3 text-white/60">
+              <span className="animate-pulse">Cargando tienda...</span>
+              {slow && <Button onClick={() => void refresh()} className="bg-gradient-to-r from-yellow-500 to-orange-500 text-black font-bold">Reintentar</Button>}
+            </div>
           ) : (
             <>
               <p className="text-white/80">{error || "No se ha podido cargar tu perfil."}</p>
