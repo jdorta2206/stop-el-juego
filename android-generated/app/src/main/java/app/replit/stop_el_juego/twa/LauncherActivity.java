@@ -384,7 +384,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
         if (isFinishing()) return;
         playGamesSignInInFlight = true;
         final int signInGeneration = ++playGamesSignInGeneration;
-        // Bound the authentication check, but do not time out the user-driven sign-in UI.
+        // Bound the authentication status check so a stalled SDK cannot block startup.
         getWindow().getDecorView().postDelayed(() -> {
             if (playGamesSignInInFlight && signInGeneration == playGamesSignInGeneration && !isFinishing()) {
                 playGamesSignInGeneration++;
@@ -399,7 +399,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                         if (signInGeneration != playGamesSignInGeneration || isFinishing()) return;
                         playGamesSignInGeneration++;
                         if (!task.isSuccessful()) {
-                            Log.w("STOP_PLAY_GAMES", "Authentication status check failed; attempting PGS sign-in", task.getException());
+                            Log.w("STOP_PLAY_GAMES", "Authentication status check failed; continuing without blocking startup", task.getException());
                         }
                         boolean authenticated = task.isSuccessful()
                                 && task.getResult() != null
