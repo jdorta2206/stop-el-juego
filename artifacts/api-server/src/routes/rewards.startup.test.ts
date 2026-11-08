@@ -21,6 +21,7 @@ describe("AdMob SSV startup availability", () => {
   });
 
   it("keeps AdMob result and SSV routes available while indexes are being built", () => {
+    expect(rewardsSource).toContain("CREATE UNIQUE INDEX IF NOT EXISTS admob_reward_requests_transaction_uidx");
     const resultStart = rewardsSource.indexOf('router.post("/admob-result"');
     const ssvStart = rewardsSource.indexOf('router.get("/admob-ssv"');
     const routeGate = rewardsSource.indexOf("router.use((_req, res, next) => {", ssvStart);
