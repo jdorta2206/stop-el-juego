@@ -55,7 +55,7 @@ describe("STOP Control analytics funnel event ordering", () => {
 describe("STOP Control panel query performance", () => {
   it("runs the 26 independent queries in parallel with bounded concurrency and timeouts", () => {
     expect(adminRouteSource).toContain("const PANEL_QUERY_CONCURRENCY = 5");
-    expect(adminRouteSource).toContain("SET LOCAL statement_timeout = '1800ms'");
+    expect(adminRouteSource).toContain("SET LOCAL statement_timeout = '5000ms'");
     expect(adminRouteSource).toContain("await Promise.all");
     expect(adminRouteSource.match(/const \w+Promise = \(async \(\) =>/g)?.length).toBe(26);
   });
