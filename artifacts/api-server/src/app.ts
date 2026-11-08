@@ -120,6 +120,14 @@ app.use("/api", router);
 app.use("/test/analytics", adminAnalytics);
 app.use("/test/health", adminHealth);
 
+// The private panel reads production tables too; keep it behind the same
+// bootstrap boundary while leaving its dedicated health/analytics diagnostics available.
+app.use("/test", (req, res, next) => {
+  if (indexesReady()) return next();
+  res.setHeader("Retry-After", "2");
+  return res.status(503).type("text").send("STOP diagnostics are starting; retry shortly.");
+});
+
 // Private analytics panel. Mounted directly so it cannot monkey-patch Express responses.
 app.use("/test", adminPanel);
 
