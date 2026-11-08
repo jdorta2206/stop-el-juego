@@ -70,6 +70,19 @@ jobs:
           grep -q 'versionCode 74' app/build.gradle
           grep -q 'versionName "1.3.8.8"' app/build.gradle
           grep -q 'appVersion=1.3.8.8' app/build.gradle
+          # Keep the actual Android launchUrl resource in sync with the Bubblewrap manifest.
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          p = Path('app/build.gradle')
+          s = p.read_text()
+          pattern = r'def launchUrl = "https://www\\.stopjuegodepalabras\\.com/\\?source=googleplay-twa&appVersion=[^"]+"'
+          updated, count = re.subn(pattern, 'def launchUrl = "https://www.stopjuegodepalabras.com/?source=googleplay-twa&appVersion=1.3.8.8"', s)
+          if count != 1:
+              raise SystemExit(f'Expected exactly one Android launchUrl resource, found {count}')
+          p.write_text(updated)
+          PY
+          grep -q 'def launchUrl = "https://www.stopjuegodepalabras.com/?source=googleplay-twa&appVersion=1.3.8.8"' app/build.gradle
           python3 - <<'PY'
           from pathlib import Path
           p = Path('app/src/main/AndroidManifest.xml')
