@@ -389,7 +389,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             if (playGamesSignInInFlight && signInGeneration == playGamesSignInGeneration && !isFinishing()) {
                 playGamesSignInGeneration++;
                 playGamesSignInInFlight = false;
-                Log.e("STOP_PLAY_GAMES", "Manual isAuthenticated check timed out");
+                Log.e("STOP_PLAY_GAMES", "Startup/manual authentication check timed out");
                 sendPlayGamesStatus(false, "sign_in_timeout");
             }
         }, 15000L);
@@ -399,7 +399,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                         if (signInGeneration != playGamesSignInGeneration || isFinishing()) return;
                         playGamesSignInGeneration++;
                         if (!task.isSuccessful()) {
-                            Log.e("STOP_PLAY_GAMES", "Manual isAuthenticated task failed", task.getException());
+                            Log.w("STOP_PLAY_GAMES", "Authentication status check failed; attempting PGS sign-in", task.getException());
                         }
                         boolean authenticated = task.isSuccessful()
                                 && task.getResult() != null
