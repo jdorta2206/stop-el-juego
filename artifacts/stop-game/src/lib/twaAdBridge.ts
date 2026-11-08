@@ -1,12 +1,19 @@
 const RESULT_BASE = "/api/rewards/admob-result";
-// SSV callbacks can arrive after the ad has already been dismissed.
-// Keep the web-side request alive long enough to reconcile a delayed callback.
-// The native Activity can keep the ad visible well beyond the initial load.
-// Do not resume/close the game while a real rewarded ad is still in progress.
+// An earned client callback is only a signal. Wait briefly for signed AdMob SSV,
+// then expose a manual reconciliation action without granting an unverified reward.
 const RESULT_TIMEOUT_MS = 300_000;
+const SSV_CONFIRMATION_WINDOW_MS = 15_000;
 
 type RewardedPlacement = "extra_time" | "hint" | "double_points" | "skip_round" | "extra_pack";
-type RewardResult = { rewarded: boolean; source: "admob" | "client" | "skipped" | "error"; errorCode?: number; errorDomain?: string; errorMessage?: string };
+export type RewardResult = {
+  rewarded: boolean;
+  source: "admob" | "client" | "skipped" | "error";
+  errorCode?: number;
+  errorDomain?: string;
+  errorMessage?: string;
+  pendingSsv?: boolean;
+  requestId?: string;
+};
 
 let initialized = false;
 let pendingPlayerId = "guest";
@@ -54,10 +61,21 @@ async function readResult(requestId: string): Promise<RewardResult | null> {
     });
     if (!response.ok) return null;
     const data = await response.json();
-    if (data?.ready !== true) return null;
-    return data.rewarded === true
-      ? { rewarded: true, source: data.source === "client" ? "client" : "admob" }
-      : { rewarded: false, source: "skipped" };
+    if (data?.ready === true) {
+      return data.rewarded === true
+        ? { rewarded: true, source: "admob" }
+        : { rewarded: false, source: "skipped" };
+    }
+    if (data?.clientState === "earned") {
+      return {
+        rewarded: false,
+        source: "error",
+        pendingSsv: true,
+        requestId,
+        errorMessage: "El anuncio se ha visto, pero Google aún no ha confirmado la recompensa. Reintenta la comprobación; no se concederá hasta verificarla.",
+      };
+    }
+    return null;
   } catch {
     return null;
   }
@@ -77,35 +95,14 @@ async function acknowledgeRewardResult(requestId: string): Promise<void> {
   }
 }
 
-export async function requestRewardedAd(placement: RewardedPlacement): Promise<RewardResult> {
-  installResumeListener();
-  if (typeof window === "undefined") return { rewarded: false, source: "error", errorMessage: "Window unavailable" };
-
-  const requestId = makeRequestId();
-  const playerId = pendingPlayerId || "guest";
-  const origin = window.location.origin;
-  const deepLink = `stopad://rewarded?requestId=${encodeURIComponent(requestId)}&placement=${encodeURIComponent(placement)}&playerId=${encodeURIComponent(playerId)}&origin=${encodeURIComponent(origin)}`;
-
+function pollRewardResult(requestId: string): Promise<RewardResult> {
   return new Promise<RewardResult>((resolve) => {
     let finished = false;
     let checkInFlight = false;
+    let earnedObservedAt: number | null = null;
     const startedAt = Date.now();
     let timer: number | null = null;
     let deadlineTimer: number | null = null;
-
-    const checkNow = async () => {
-      if (finished || checkInFlight) return;
-      checkInFlight = true;
-      try {
-        const result = await readResult(requestId);
-        if (result) finish(result);
-        else if (Date.now() - startedAt >= RESULT_TIMEOUT_MS) {
-          finish({ rewarded: false, source: "error", errorMessage: "Native rewarded ad request timed out" });
-        }
-      } finally {
-        checkInFlight = false;
-      }
-    };
 
     const finish = (result: RewardResult) => {
       if (finished) return;
@@ -118,20 +115,73 @@ export async function requestRewardedAd(placement: RewardedPlacement): Promise<R
       resolve(result);
     };
 
+    const checkNow = async () => {
+      if (finished || checkInFlight) return;
+      checkInFlight = true;
+      try {
+        const result = await readResult(requestId);
+        if (result?.rewarded || result?.source === "skipped") {
+          finish(result);
+          return;
+        }
+        if (result?.pendingSsv) {
+          earnedObservedAt ??= Date.now();
+          if (Date.now() - earnedObservedAt >= SSV_CONFIRMATION_WINDOW_MS) {
+            finish(result);
+            return;
+          }
+        }
+        if (Date.now() - startedAt >= RESULT_TIMEOUT_MS) {
+          finish({
+            rewarded: false,
+            source: "error",
+            requestId,
+            errorMessage: "No se pudo confirmar la recompensa. Puedes reintentar la comprobación.",
+          });
+        }
+      } finally {
+        checkInFlight = false;
+      }
+    };
+
     timer = window.setInterval(checkNow, 1500);
     deadlineTimer = window.setTimeout(() => {
-      finish({ rewarded: false, source: "error", errorMessage: "Native rewarded ad request timed out" });
+      finish({
+        rewarded: false,
+        source: "error",
+        requestId,
+        errorMessage: "No se pudo confirmar la recompensa. Puedes reintentar la comprobación.",
+      });
     }, RESULT_TIMEOUT_MS);
     document.addEventListener("visibilitychange", checkNow);
     window.addEventListener("focus", checkNow);
-
-    try {
-      // This navigation is executed directly from the user's "Ver anuncio" click.
-      // Android routes the custom scheme to RewardedAdActivity, which is a real
-      // foreground Activity and therefore a valid host for RewardedAd.show().
-      window.location.href = deepLink;
-    } catch {
-      finish({ rewarded: false, source: "error", errorMessage: "Unable to launch native rewarded activity" });
-    }
+    void checkNow();
   });
+}
+
+export function retryRewardedResult(requestId: string): Promise<RewardResult> {
+  if (!requestId) {
+    return Promise.resolve({ rewarded: false, source: "error", errorMessage: "No hay una recompensa pendiente para comprobar." });
+  }
+  return pollRewardResult(requestId);
+}
+
+export async function requestRewardedAd(placement: RewardedPlacement): Promise<RewardResult> {
+  installResumeListener();
+  if (typeof window === "undefined") return { rewarded: false, source: "error", errorMessage: "Window unavailable" };
+
+  const requestId = makeRequestId();
+  const playerId = pendingPlayerId || "guest";
+  const origin = window.location.origin;
+  const deepLink = `stopad://rewarded?requestId=${encodeURIComponent(requestId)}&placement=${encodeURIComponent(placement)}&playerId=${encodeURIComponent(playerId)}&origin=${encodeURIComponent(origin)}`;
+  const resultPromise = pollRewardResult(requestId);
+
+  try {
+    // This navigation is executed directly from the user's "Ver anuncio" click.
+    // Android routes the custom scheme to RewardedAdActivity, a real foreground Activity.
+    window.location.href = deepLink;
+  } catch {
+    return { rewarded: false, source: "error", requestId, errorMessage: "Unable to launch native rewarded activity" };
+  }
+  return resultPromise;
 }
