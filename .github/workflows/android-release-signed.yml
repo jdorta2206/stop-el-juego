@@ -139,4 +139,4 @@ jobs:
         if: always()
         run: rm -f android-release.keystore
 
-
+# Build trigger for signed Android release 1.3.8.8 (versionCode 74).
