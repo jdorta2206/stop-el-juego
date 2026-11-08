@@ -10,9 +10,14 @@ const routerSource = readSource("./index.ts");
 const rewardsSource = readSource("./rewards.ts");
 
 describe("AdMob SSV startup availability", () => {
-  it("does not put a blanket indexesReady 503 gate in front of /api", () => {
-    expect(appSource).not.toMatch(/app\.use\(["']\/api["'][\s\S]*?indexesReady\(\)/);
-    expect(routerSource).not.toMatch(/router\.use\([\s\S]*?indexesReady\(\)/);
+  it("gates API routes during bootstrap except health, version and AdMob handshake", () => {
+    expect(appSource).toContain('app.use("/api", (req, res, next) => {');
+    expect(appSource).toContain("if (indexesReady()) return next()");
+    expect(appSource).toContain('path === "/rewards/admob-ssv"');
+    expect(appSource).toContain('path === "/rewards/admob-result"');
+    expect(appSource).toContain("/^\\\\/rewards\\\\/admob-result");
+    expect(appSource).toContain('status(503).json({ error: "Service is starting"');
+    expect(routerSource).not.toMatch(/router\\.use\\([\\s\\S]*?indexesReady\\(\\)/);
   });
 
   it("keeps AdMob result and SSV routes available while indexes are being built", () => {
