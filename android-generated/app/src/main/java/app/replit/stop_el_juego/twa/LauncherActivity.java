@@ -158,7 +158,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             if (isFinishing() || playGamesStartupSignInAttempted) return;
             playGamesStartupSignInAttempted = true;
             Log.i("STOP_PLAY_GAMES", "Starting one-time startup sign-in after onResume");
-            checkPlayGamesStartupAuthentication();
+            startPlayGamesSignInIfNeeded();
         }, 800L);
     }
 
@@ -372,7 +372,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     }
 
 
-    private void checkPlayGamesStartupAuthentication() {
+    private void startPlayGamesSignInIfNeeded() {
         if (!playGamesInitialized) {
             sendPlayGamesStatus(false, "sdk_unavailable");
             return;
@@ -418,7 +418,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
         }
     }
 
-    private void requestManualPlayGamesSignIn() {
+    private void startPlayGamesSignInIfNeeded() {
         if (!playGamesInitialized) {
             sendPlayGamesStatus(false, "sdk_unavailable");
             return;
@@ -488,7 +488,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             return;
         }
         if ("STOP_PGS_SIGN_IN".equals(type)) {
-            requestManualPlayGamesSignIn();
+            startPlayGamesSignInIfNeeded();
             return;
         }
         if ("STOP_PGS_STATUS".equals(type)) {
