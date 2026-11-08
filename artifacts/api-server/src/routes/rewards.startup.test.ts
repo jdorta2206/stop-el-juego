@@ -15,7 +15,7 @@ describe("AdMob SSV startup availability", () => {
     expect(appSource).toContain("if (indexesReady()) return next()");
     expect(appSource).toContain('path === "/rewards/admob-ssv"');
     expect(appSource).toContain('path === "/rewards/admob-result"');
-    expect(appSource).toContain("/^\\\\/rewards\\\\/admob-result");
+    expect(appSource).toContain("/^\\/rewards\\/admob-result");
     expect(appSource).toContain('status(503).json({ error: "Service is starting"');
     expect(routerSource).not.toMatch(/router\\.use\\([\\s\\S]*?indexesReady\\(\\)/);
   });
