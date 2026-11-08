@@ -64,7 +64,6 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     private boolean playUpdatePromptShown;
     private boolean playGamesInitialized;
     private boolean playGamesSignInInFlight;
-    private boolean playGamesStartupSignInScheduled;
     private boolean playGamesStartupSignInAttempted;
     private int playGamesSignInGeneration;
     // Keep the most recent PGS result until the TWA MessagePort is ready.
@@ -148,20 +147,6 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
         checkForPlayUpdate();
     }
 
-    private void schedulePlayGamesStartupSignIn() {
-        if (!playGamesInitialized || playGamesStartupSignInScheduled || playGamesStartupSignInAttempted
-                || isFinishing()) return;
-        playGamesStartupSignInScheduled = true;
-        // Wait until NAVIGATION_FINISHED and let the first game frame render before Google auth UI.
-        getWindow().getDecorView().postDelayed(() -> {
-            playGamesStartupSignInScheduled = false;
-            if (isFinishing() || playGamesStartupSignInAttempted) return;
-            playGamesStartupSignInAttempted = true;
-            Log.i("STOP_PLAY_GAMES", "Starting one-time startup sign-in after onResume");
-            startPlayGamesSignInIfNeeded();
-        }, 800L);
-    }
-
     @Override
     protected CustomTabsCallback getCustomTabsCallback() {
         return new QualityEnforcer() {
@@ -192,9 +177,8 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                 // relationshipValidated and the native bridge remains disabled.
                 requestUseAsOriginValidation();
                 if (relationshipValidated) requestMessageChannelWithRetry(250L);
-                // Start the native Play Games welcome only after the TWA page has
-                // completed its first navigation, so Google UI cannot interrupt startup. 
-                schedulePlayGamesStartupSignIn();
+                // Startup authentication is triggered by the web app only after its
+                // animated splash has finished and the first game screen is rendered.
             }
             @Override
             public void onMessageChannelReady(@Nullable Bundle extras) {
@@ -439,6 +423,14 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     private void handlePlayGamesMessage(String type, JSONObject message) {
         if (!playGamesInitialized) {
             sendPlayGamesStatus(false, "sdk_unavailable");
+            return;
+        }
+        if ("STOP_PGS_STARTUP_READY".equals(type)) {
+            if (!playGamesStartupSignInAttempted) {
+                playGamesStartupSignInAttempted = true;
+                Log.i("STOP_PLAY_GAMES", "Starting automatic sign-in after app splash completed");
+                startPlayGamesSignInIfNeeded();
+            }
             return;
         }
         if ("STOP_PGS_SIGN_IN".equals(type)) {
