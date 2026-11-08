@@ -31,4 +31,8 @@ describe("AdMob SSV startup availability", () => {
     expect(ssvRoute).toContain("await ensureAdmobRewardTable()");
     expect(ssvRoute).toMatch(/if \(!hasCustomData\)\s*\{\s*res\.status\(200\)\.send\("ok"\)/);
   });
+
+  it("reopens an unverified request when a late signed SSV callback confirms the reward", () => {
+    expect(rewardsSource).toMatch(/consumed_at = CASE\\s+WHEN admob_reward_requests\\.rewarded = false THEN NULL\\s+ELSE admob_reward_requests\\.consumed_at\\s+END/);
+  });
 });
