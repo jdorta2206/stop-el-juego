@@ -94,6 +94,27 @@ app.use(cors({
 app.use(cookieParser());
 app.use(express.json({ limit: "256kb" }));
 app.use(express.urlencoded({ extended: true, limit: "64kb" }));
+
+// Keep the API unavailable until schema/index bootstrap completes. Only the
+// health/version endpoints and AdMob's self-initializing reward handshake may
+// pass during this window; every other route could touch a table or index that
+// ensureIndexes() has not finished preparing yet.
+app.use("/api", (req, res, next) => {
+  if (indexesReady()) return next();
+
+  const path = req.path;
+  const isBootstrapSafe =
+    path === "/healthz" ||
+    path === "/check-version" ||
+    path === "/rewards/admob-ssv" ||
+    path === "/rewards/admob-result" ||
+    /^\\/rewards\\/admob-result\\/[^/]+(?:\\/consume)?$/.test(path);
+
+  if (isBootstrapSafe) return next();
+  res.setHeader("Retry-After", "2");
+  return res.status(503).json({ error: "Service is starting", status: "starting" });
+});
+
 app.use("/api", generalLimiter);
 app.use("/api", router);
 app.use("/test/analytics", adminAnalytics);
