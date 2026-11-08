@@ -28,8 +28,7 @@ import { HalloweenBanner } from "@/components/HalloweenBanner";
 import { HALLOWEEN_START, isHalloweenActive, isHalloweenModeEnabled, setHalloweenModeEnabled } from "@/lib/halloweenEvent";
 import { useHalloweenProgress } from "@/hooks/useHalloweenProgress";
 import { HalloweenHomeAtmosphere } from "@/components/HalloweenHomeAtmosphere";
-import { PlayGamesConnectBanner } from "@/components/PlayGamesConnectBanner";
-import { getLastPlayGamesStatus, getPlayGamesDiagnostics, isAndroidTwa, requestPlayGamesSignIn, showPlayGamesAchievements } from "@/lib/twaPlayGamesBridge";
+import { getLastPlayGamesStatus, isAndroidTwa, requestPlayGamesSignIn, showPlayGamesAchievements } from "@/lib/twaPlayGamesBridge";
 
 const LOGO_URL = `${import.meta.env.BASE_URL}images/stop-logo.png`;
 const HALLOWEEN_PREVIEW = import.meta.env.VITE_HALLOWEEN_PREVIEW === "true";
@@ -51,39 +50,6 @@ export default function Home() {
   const [showDowntimeCompensation, setShowDowntimeCompensation] = useState(false);
   const [playGamesStatus, setPlayGamesStatus] = useState<{ ok: boolean; status: string } | null>(() => getLastPlayGamesStatus());
   const playGamesTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // TEMPORAL: diagnóstico Play Games (retirar tras resolver)
-  const [showPlayGamesDiagnostics, setShowPlayGamesDiagnostics] = useState(false);
-  const [playGamesDiagnosticsText, setPlayGamesDiagnosticsText] = useState("");
-  const playGamesTapCountRef = useRef(0);
-  const playGamesLastTapAtRef = useRef(0);
-
-  const handlePlayGamesDiagnosticTap = () => {
-    try {
-      const now = Date.now();
-      playGamesTapCountRef.current = now - playGamesLastTapAtRef.current > 2000
-        ? 1
-        : playGamesTapCountRef.current + 1;
-      playGamesLastTapAtRef.current = now;
-      if (playGamesTapCountRef.current >= 5) {
-        setShowPlayGamesDiagnostics(value => !value);
-        playGamesTapCountRef.current = 0;
-        playGamesLastTapAtRef.current = 0;
-      }
-    } catch { /* diagnóstico temporal no bloqueante */ }
-  };
-
-  useEffect(() => {
-    if (!showPlayGamesDiagnostics) return;
-    const refreshDiagnostics = () => {
-      try {
-        setPlayGamesDiagnosticsText(JSON.stringify(getPlayGamesDiagnostics(), null, 2));
-      } catch { setPlayGamesDiagnosticsText("Diagnóstico no disponible"); }
-    };
-    refreshDiagnostics();
-    const timer = window.setInterval(refreshDiagnostics, 1000);
-    return () => window.clearInterval(timer);
-  }, [showPlayGamesDiagnostics]);
-
   useEffect(() => {
     const onPlayGamesStatus = (event: Event) => {
       const detail = (event as CustomEvent<{ ok: boolean; status: string }>).detail;
@@ -272,7 +238,6 @@ export default function Home() {
 
   return (
     <Layout>
-      <PlayGamesConnectBanner />
       <HalloweenHomeAtmosphere active={isHalloweenActive()} enabled={halloweenModeEnabled} />
       {!isHalloweenActive() && (halloweenCountdown.days > 0 || halloweenCountdown.hours > 0 || halloweenCountdown.minutes > 0 || halloweenCountdown.seconds > 0) && (
         <div className="mx-auto mb-4 w-full max-w-2xl px-4" role="status" aria-live="polite">
@@ -859,38 +824,10 @@ export default function Home() {
             </motion.div>
           </Link>
 
-          {/* Play Games stays quiet during normal play; only expose the relevant action on Android. */}
+          {/* Play Games authentication runs silently at native startup. Keep only a manual action here. */}
           {isAndroidTwa() && (
-            <div className="w-full space-y-2 rounded-xl border border-white/10 bg-black/15 p-3">
-              {/* TEMPORAL: diagnóstico Play Games (retirar tras resolver) */}
-              <p
-                className={`text-center text-sm font-semibold ${playGamesStatus?.ok ? "text-emerald-300" : "text-white/80"}`}
-                role="status"
-                onClick={handlePlayGamesDiagnosticTap}
-              >
-                {playGamesStatus?.ok
-                  ? "Google Play Games conectado"
-                  : playGamesStatus?.status === "conectando"
-                    ? "Conectando con Google Play Games…"
-                    : playGamesStatus
-                      ? ({
-                          puente_no_disponible: "No se ha podido abrir el canal de conexión. Vuelve a intentarlo.",
-                          sin_respuesta: "Google Play Games no responde. Puedes volver a intentarlo.",
-                          sdk_unavailable: "Google Play Games no se ha podido iniciar en este dispositivo.",
-                          sign_in_in_progress: "La conexión sigue en curso. Espera unos segundos.",
-                          sign_in_failed: "No se pudo conectar con Google Play Games.",
-                          sign_in_timeout: "Google Play Games ha tardado demasiado en responder.",
-                          not_authenticated: "Google Play Games todavía no está conectado.",
-                          unavailable: "Google Play Games no está disponible ahora mismo.",
-                        }[playGamesStatus.status] ?? "Google Play Games no está conectado.")
-                      : "Comprobando conexión con Google Play Games…"}
-              </p>
-              {showPlayGamesDiagnostics && (
-                <pre className="max-h-56 overflow-auto rounded-md border border-white/10 bg-black/40 p-2 text-left font-mono text-[10px] leading-relaxed text-emerald-200 whitespace-pre-wrap break-words">
-                  {playGamesDiagnosticsText}
-                </pre>
-              )}
-              {playGamesStatus?.ok ? (
+            <div className="w-full rounded-xl border border-white/10 bg-black/15 p-3">
+              {playGamesStatus?.ok === true && playGamesStatus.status === "authenticated" ? (
                 <button
                   type="button"
                   onClick={() => showPlayGamesAchievements()}
@@ -898,7 +835,7 @@ export default function Home() {
                 >
                   Ver mis logros
                 </button>
-              ) : playGamesStatus?.status !== "conectando" ? (
+              ) : (
                 <button
                   type="button"
                   onClick={() => {
@@ -906,11 +843,11 @@ export default function Home() {
                     const sent = requestPlayGamesSignIn();
                     if (!sent) setPlayGamesStatus({ ok: false, status: "puente_no_disponible" });
                   }}
-                  className="mx-auto block rounded-lg border border-white/15 bg-white/10 px-4 py-2 text-sm font-bold text-white/90 active:scale-[0.99] transition-transform"
+                  className="w-full rounded-lg border border-white/15 bg-white/10 px-4 py-2 text-sm font-bold text-white/90 active:scale-[0.99] transition-transform"
                 >
-                  Reintentar conexión
+                  Conectar a Google Play Juegos
                 </button>
-              ) : null}
+              )}
             </div>
           )}
 
