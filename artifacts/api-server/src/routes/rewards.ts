@@ -64,7 +64,15 @@ async function ensureAdmobRewardTable(): Promise<void> {
         created_at timestamp NOT NULL DEFAULT NOW(),
         consumed_at timestamp
       )
-    `).then(() => undefined);
+    `).then(async () => {
+      // SSV callbacks may arrive before global index bootstrap completes.
+      // Enforce transaction idempotency before accepting callbacks in that window.
+      await db.execute(sql`
+        CREATE UNIQUE INDEX IF NOT EXISTS admob_reward_requests_transaction_uidx
+        ON admob_reward_requests (transaction_id)
+        WHERE transaction_id IS NOT NULL
+      `);
+    });
     admobRewardTableReady = createTable.catch((error) => {
       admobRewardTableReady = null;
       throw error;
