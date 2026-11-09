@@ -1,6 +1,10 @@
 name: Android TWA splash PR check
 
 on:
+  pull_request:
+    branches:
+      - fix/android-twa-transparent-launcher-theme
+    types: [opened, synchronize, reopened]
   push:
     branches:
       - fix/android-twa-splash-self-uri-permission
@@ -36,4 +40,3 @@ jobs:
         working-directory: android-generated
         run: ./gradlew --no-daemon :app:assembleDebug
 
-# PR validation is configured on the base branch so this draft PR is checked.
