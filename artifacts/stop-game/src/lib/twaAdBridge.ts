@@ -103,14 +103,17 @@ function pollRewardResult(requestId: string): Promise<RewardResult> {
     const startedAt = Date.now();
     let timer: number | null = null;
     let deadlineTimer: number | null = null;
+    let returnTimer: number | null = null;
+    let pageWasHidden = document.visibilityState === "hidden";
 
     const finish = (result: RewardResult) => {
       if (finished) return;
       finished = true;
       if (timer !== null) window.clearInterval(timer);
       if (deadlineTimer !== null) window.clearTimeout(deadlineTimer);
-      document.removeEventListener("visibilitychange", checkNow);
-      window.removeEventListener("focus", checkNow);
+      if (returnTimer !== null) window.clearTimeout(returnTimer);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", handleWindowFocus);
       if (result.rewarded) void acknowledgeRewardResult(requestId);
       resolve(result);
     };
@@ -144,6 +147,36 @@ function pollRewardResult(requestId: string): Promise<RewardResult> {
       }
     };
 
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        pageWasHidden = true;
+        return;
+      }
+      if (!pageWasHidden) return;
+      pageWasHidden = false;
+      void checkNow();
+      // Returning from RewardedAdActivity means the fullscreen ad has closed.
+      // If its native result POST was lost, release the game instead of leaving
+      // the reward overlay stuck in "Cargando anuncio…" for the five-minute limit.
+      if (returnTimer !== null) window.clearTimeout(returnTimer);
+      returnTimer = window.setTimeout(() => {
+        finish({
+          rewarded: false,
+          source: "error",
+          requestId,
+          errorMessage: "El anuncio se cerró, pero no llegó la confirmación. Puedes continuar sin recompensa.",
+        });
+      }, 30_000);
+    };
+
+    const handleWindowFocus = () => {
+      if (pageWasHidden && document.visibilityState !== "hidden") {
+        handleVisibilityChange();
+      } else {
+        void checkNow();
+      }
+    };
+
     timer = window.setInterval(checkNow, 1500);
     deadlineTimer = window.setTimeout(() => {
       finish({
@@ -153,8 +186,8 @@ function pollRewardResult(requestId: string): Promise<RewardResult> {
         errorMessage: "No se pudo confirmar la recompensa. Puedes reintentar la comprobación.",
       });
     }, RESULT_TIMEOUT_MS);
-    document.addEventListener("visibilitychange", checkNow);
-    window.addEventListener("focus", checkNow);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", handleWindowFocus);
     void checkNow();
   });
 }
