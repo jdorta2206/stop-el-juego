@@ -9,6 +9,7 @@ on:
     branches:
       - fix/android-twa-splash-self-uri-permission
       - fix/android-twa-transparent-launcher-theme
+      - fix/android-twa-splash-fallback-background
 
 permissions:
   contents: read
@@ -38,3 +39,4 @@ jobs:
       - name: Assemble complete debug APK
         working-directory: android-generated
         run: ./gradlew --no-daemon :app:assembleDebug
+
