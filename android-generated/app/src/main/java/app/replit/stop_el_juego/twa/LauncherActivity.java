@@ -78,6 +78,8 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        // Install the splash strategy and start the TWA before initializing optional SDKs.
+        // This keeps PGS, ads and update checks from leaving the launcher window visible.
         appUpdateManager = AppUpdateManagerFactory.create(this);
         // StopApplication initializes PGS before any activity. Retain an activity-level
         // fallback only if application initialization failed, without blocking gameplay.
