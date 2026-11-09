@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   compile:
-    name: Compile Android debug Java
+    name: Compile and package Android debug build
     runs-on: ubuntu-latest
     steps:
       - name: Check out PR branch
@@ -30,3 +30,6 @@ jobs:
       - name: Compile debug Java sources
         working-directory: android-generated
         run: ./gradlew --no-daemon :app:compileDebugJavaWithJavac
+      - name: Assemble complete debug APK
+        working-directory: android-generated
+        run: ./gradlew --no-daemon :app:assembleDebug
