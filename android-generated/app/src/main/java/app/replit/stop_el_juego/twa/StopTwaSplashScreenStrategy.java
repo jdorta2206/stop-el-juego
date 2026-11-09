@@ -134,12 +134,15 @@ final class StopTwaSplashScreenStrategy extends PwaWrapperSplashScreenStrategy {
         protected void onPostExecute(Boolean success) {
             if (isCancelled() || activity.isFinishing()) return;
             if (!Boolean.TRUE.equals(success)) {
-                Log.w(TAG, "Browser did not accept transferred splash image");
-                onReadyCallback.run();
-                return;
+                Log.w(TAG, "Browser did not accept transferred splash image; using background-only splash parameters");
+                // Even when Chrome rejects the image file, pass the configured splash
+                // background color so supported providers can avoid a default white frame.
+                // Keep the same launch-animation handling as the successful transfer path.
+                builder.setSplashScreenParams(makeSplashParams());
+            } else {
+                builder.setSplashScreenParams(makeSplashParams());
             }
 
-            builder.setSplashScreenParams(makeSplashParams());
             Runnable launch = () -> {
                 if (activity.isFinishing()) return;
                 onReadyCallback.run();
