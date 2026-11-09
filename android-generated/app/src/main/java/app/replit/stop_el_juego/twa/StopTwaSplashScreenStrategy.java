@@ -8,6 +8,7 @@ import android.graphics.Matrix;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.os.Build;
 import android.util.Log;
 import android.widget.ImageView;
 
@@ -41,6 +42,7 @@ final class StopTwaSplashScreenStrategy extends PwaWrapperSplashScreenStrategy {
     private String providerPackage;
     @Nullable private TransferTask transferTask;
     @Nullable private Runnable pendingLaunch;
+    private boolean enterAnimationComplete = Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP;
 
     StopTwaSplashScreenStrategy(Activity activity, LauncherActivityMetadata metadata,
             ImageView.ScaleType scaleType, @Nullable Matrix transformationMatrix) {
@@ -143,7 +145,7 @@ final class StopTwaSplashScreenStrategy extends PwaWrapperSplashScreenStrategy {
                 onReadyCallback.run();
                 activity.overridePendingTransition(0, 0);
             };
-            if (metadata.startChromeBeforeAnimationComplete) {
+            if (metadata.startChromeBeforeAnimationComplete || enterAnimationComplete) {
                 launch.run();
             } else {
                 pendingLaunch = launch;
@@ -172,6 +174,7 @@ final class StopTwaSplashScreenStrategy extends PwaWrapperSplashScreenStrategy {
 
     @Override
     public void onActivityEnterAnimationComplete() {
+        enterAnimationComplete = true;
         super.onActivityEnterAnimationComplete();
         Runnable launch = pendingLaunch;
         pendingLaunch = null;
