@@ -29,7 +29,7 @@
 
         <meta-data
             android:name="web_manifest_url"
-            android:resource="@string/webManifestUrl" />
+            android:value="@string/webManifestUrl" />
 
         <meta-data
             android:name="twa_generator"
