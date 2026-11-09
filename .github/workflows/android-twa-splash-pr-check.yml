@@ -35,3 +35,5 @@ jobs:
       - name: Assemble complete debug APK
         working-directory: android-generated
         run: ./gradlew --no-daemon :app:assembleDebug
+
+# PR validation is configured on the base branch so this draft PR is checked.
