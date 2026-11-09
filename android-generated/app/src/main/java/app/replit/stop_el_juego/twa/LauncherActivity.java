@@ -78,8 +78,28 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        // Install the splash strategy and start the TWA before initializing optional SDKs.
-        // This keeps PGS, ads and update checks from leaving the launcher window visible.
+        // Keep ABH's standard launch path. Only replace its splash strategy when the
+        // manifest actually configures a splash image; on reflection failure, retain ABH's
+        // original strategy and continue launching normally.
+        if (!isFinishing()) {
+            com.google.androidbrowserhelper.trusted.LauncherActivityMetadata metadata =
+                    com.google.androidbrowserhelper.trusted.LauncherActivityMetadata.parse(this);
+            if (metadata != null && metadata.splashImageDrawableId != 0) {
+                try {
+                    StopTwaSplashScreenStrategy strategy =
+                            new StopTwaSplashScreenStrategy(this, metadata,
+                                    getSplashImageScaleType(), getSplashImageTransformationMatrix());
+                    Field splashField = com.google.androidbrowserhelper.trusted.LauncherActivity.class
+                            .getDeclaredField("mSplashScreenStrategy");
+                    splashField.setAccessible(true);
+                    splashField.set(this, strategy);
+                } catch (ReflectiveOperationException | RuntimeException error) {
+                    Log.w(TAG, "Custom splash strategy unavailable; using Android Browser Helper default",
+                            error);
+                }
+            }
+            launchTwa();
+        }
         appUpdateManager = AppUpdateManagerFactory.create(this);
         // StopApplication initializes PGS before any activity. Retain an activity-level
         // fallback only if application initialization failed, without blocking gameplay.
@@ -109,28 +129,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
         }
 
-        // Keep ABH's standard launch path. Only replace its splash strategy when the
-        // manifest actually configures a splash image; on reflection failure, retain ABH's
-        // original strategy and continue launching normally.
-        if (!isFinishing()) {
-            com.google.androidbrowserhelper.trusted.LauncherActivityMetadata metadata =
-                    com.google.androidbrowserhelper.trusted.LauncherActivityMetadata.parse(this);
-            if (metadata != null && metadata.splashImageDrawableId != 0) {
-                try {
-                    StopTwaSplashScreenStrategy strategy =
-                            new StopTwaSplashScreenStrategy(this, metadata,
-                                    getSplashImageScaleType(), getSplashImageTransformationMatrix());
-                    Field splashField = com.google.androidbrowserhelper.trusted.LauncherActivity.class
-                            .getDeclaredField("mSplashScreenStrategy");
-                    splashField.setAccessible(true);
-                    splashField.set(this, strategy);
-                } catch (ReflectiveOperationException | RuntimeException error) {
-                    Log.w(TAG, "Custom splash strategy unavailable; using Android Browser Helper default",
-                            error);
-                }
-            }
-            launchTwa();
-        }
+
     }
 
     private void checkForPlayUpdate() {
