@@ -112,7 +112,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
         // original strategy and continue launching normally.
         if (!isFinishing()) {
             com.google.androidbrowserhelper.trusted.LauncherActivityMetadata metadata =
-                    getMetadata();
+                    com.google.androidbrowserhelper.trusted.LauncherActivityMetadata.parse(this);
             if (metadata != null && metadata.splashImageDrawableId != 0) {
                 try {
                     StopTwaSplashScreenStrategy strategy =
