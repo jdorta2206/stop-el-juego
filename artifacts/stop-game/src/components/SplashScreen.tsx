@@ -31,11 +31,21 @@ export function SplashScreen({ onDone, lang = "es" }: Props) {
   );
 
   useEffect(() => {
-    const el = document.getElementById("html-splash");
-    if (el) {
-      el.classList.add("fade-out");
-      setTimeout(() => el.remove(), 400);
-    }
+    // Wait until React has committed and the browser has had a paint opportunity
+    // before fading the HTML fallback. This prevents a brief bare-background flash.
+    let secondFrame = 0;
+    const firstFrame = window.requestAnimationFrame(() => {
+      secondFrame = window.requestAnimationFrame(() => {
+        const el = document.getElementById("html-splash");
+        if (!el) return;
+        el.classList.add("fade-out");
+        window.setTimeout(() => el.remove(), 400);
+      });
+    });
+    return () => {
+      window.cancelAnimationFrame(firstFrame);
+      if (secondFrame) window.cancelAnimationFrame(secondFrame);
+    };
   }, []);
 
   // Keep latest onDone in a ref so re-renders from parent (new arrow fn each time)
