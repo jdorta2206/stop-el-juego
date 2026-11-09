@@ -95,7 +95,7 @@ async function acknowledgeRewardResult(requestId: string): Promise<void> {
   }
 }
 
-function pollRewardResult(requestId: string): Promise<RewardResult> {
+function pollRewardResult(requestId: string, releaseAfterNativeReturn = false): Promise<RewardResult> {
   return new Promise<RewardResult>((resolve) => {
     let finished = false;
     let checkInFlight = false;
@@ -159,14 +159,17 @@ function pollRewardResult(requestId: string): Promise<RewardResult> {
       // If its native result POST was lost, release the game instead of leaving
       // the reward overlay stuck in "Cargando anuncio…" for the five-minute limit.
       if (returnTimer !== null) window.clearTimeout(returnTimer);
-      returnTimer = window.setTimeout(() => {
-        finish({
-          rewarded: false,
-          source: "error",
-          requestId,
-          errorMessage: "El anuncio se cerró, pero no llegó la confirmación. Puedes continuar sin recompensa.",
-        });
-      }, 30_000);
+      if (releaseAfterNativeReturn) {
+        returnTimer = window.setTimeout(() => {
+          finish({
+            rewarded: false,
+            source: "error",
+            pendingSsv: true,
+            requestId,
+            errorMessage: "El anuncio se cerró, pero aún no llegó la confirmación segura. Puedes reintentar la comprobación o continuar sin recompensa.",
+          });
+        }, 30_000);
+      }
     };
 
     const handleWindowFocus = () => {
@@ -207,7 +210,7 @@ export async function requestRewardedAd(placement: RewardedPlacement): Promise<R
   const playerId = pendingPlayerId || "guest";
   const origin = window.location.origin;
   const deepLink = `stopad://rewarded?requestId=${encodeURIComponent(requestId)}&placement=${encodeURIComponent(placement)}&playerId=${encodeURIComponent(playerId)}&origin=${encodeURIComponent(origin)}`;
-  const resultPromise = pollRewardResult(requestId);
+  const resultPromise = pollRewardResult(requestId, true);
 
   try {
     // This navigation is executed directly from the user's "Ver anuncio" click.
