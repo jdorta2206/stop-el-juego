@@ -1,6 +1,10 @@
 name: Android TWA splash PR check
 
 on:
+  pull_request:
+    branches:
+      - fix/android-twa-transparent-launcher-theme
+    types: [opened, synchronize, reopened]
   push:
     branches:
       - fix/android-twa-splash-self-uri-permission
