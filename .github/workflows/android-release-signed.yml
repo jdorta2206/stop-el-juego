@@ -5,8 +5,9 @@ on:
   push:
     branches:
       - release/admob-enabled-code73
-      - build/android-1.3.9.1-code77
+      - build/android-1.3.9.2-code77
       - fix/android-twa-splash-self-uri-permission
+      - fix/android-twa-transparent-launcher-theme
 
 permissions:
   contents: read
@@ -46,13 +47,13 @@ jobs:
           printf '%s' "$KEYSTORE_BASE64" | base64 --decode > android-release.keystore
           test -s android-release.keystore
           keytool -list -keystore android-release.keystore -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" >/dev/null
-      - name: Set v77 version code and verify notification permission
+      - name: Set v78 version code and verify notification permission
         working-directory: android-generated
         shell: bash
         run: |
           set -euo pipefail
-          sed -i -E 's/versionCode [0-9]+/versionCode 77/' app/build.gradle
-          sed -i -E 's/versionName "[^"]+"/versionName "1.3.9.1"/' app/build.gradle
+          sed -i -E 's/versionCode [0-9]+/versionCode 78/' app/build.gradle
+          sed -i -E 's/versionName "[^"]+"/versionName "1.3.9.2"/' app/build.gradle
           python3 - <<'PY'
           from pathlib import Path
           p = Path('app/build.gradle')
@@ -64,13 +65,13 @@ jobs:
           lines = s.splitlines()
           for i, current in enumerate(lines):
               if marker in current:
-                  lines[i] = "    launchUrl: '/?source=googleplay-twa&appVersion=1.3.9.1',"
+                  lines[i] = "    launchUrl: '/?source=googleplay-twa&appVersion=1.3.9.2',"
                   break
           p.write_text("\n".join(lines) + "\n")
           PY
-          grep -q 'versionCode 77' app/build.gradle
-          grep -q 'versionName "1.3.9.1"' app/build.gradle
-          grep -q 'appVersion=1.3.9.1' app/build.gradle
+          grep -q 'versionCode 78' app/build.gradle
+          grep -q 'versionName "1.3.9.2"' app/build.gradle
+          grep -q 'appVersion=1.3.9.2' app/build.gradle
           # Keep the actual Android launchUrl resource in sync with the Bubblewrap manifest.
           python3 - <<'PY'
           from pathlib import Path
@@ -78,12 +79,12 @@ jobs:
           p = Path('app/build.gradle')
           s = p.read_text()
           pattern = r'def launchUrl = "https://www\.stopjuegodepalabras\.com/\?source=googleplay-twa&appVersion=[^"]+"'
-          updated, count = re.subn(pattern, 'def launchUrl = "https://www.stopjuegodepalabras.com/?source=googleplay-twa&appVersion=1.3.9.1"', s)
+          updated, count = re.subn(pattern, 'def launchUrl = "https://www.stopjuegodepalabras.com/?source=googleplay-twa&appVersion=1.3.9.2"', s)
           if count != 1:
               raise SystemExit(f'Expected exactly one Android launchUrl resource, found {count}')
           p.write_text(updated)
           PY
-          grep -q 'def launchUrl = "https://www.stopjuegodepalabras.com/?source=googleplay-twa&appVersion=1.3.9.1"' app/build.gradle
+          grep -q 'def launchUrl = "https://www.stopjuegodepalabras.com/?source=googleplay-twa&appVersion=1.3.9.2"' app/build.gradle
           python3 - <<'PY'
           from pathlib import Path
           p = Path('app/src/main/AndroidManifest.xml')
@@ -114,9 +115,9 @@ jobs:
           AAB='app/build/outputs/bundle/release/app-release.aab'
           test -s "$APK"
           test -s "$AAB"
-          grep -q 'versionCode 77' app/build.gradle
-          grep -q 'versionName "1.3.9.1"' app/build.gradle
-          grep -q 'appVersion=1.3.9.1' app/build.gradle
+          grep -q 'versionCode 78' app/build.gradle
+          grep -q 'versionName "1.3.9.2"' app/build.gradle
+          grep -q 'appVersion=1.3.9.2' app/build.gradle
           grep -q 'checkForPlayUpdate' app/src/main/java/app/replit/stop_el_juego/twa/LauncherActivity.java
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs "$APK"
           "$ANDROID_HOME/build-tools/35.0.0/aapt2" dump permissions "$APK" | tee /tmp/apk-permissions.txt
@@ -143,7 +144,7 @@ jobs:
       - name: Upload signed Release artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: stop-android-release-signed-v77-google-play-games
+          name: stop-android-release-signed-v78-google-play-games
           path: |
             android-generated/app/build/outputs/apk/release/app-release.apk
             android-generated/app/build/outputs/bundle/release/app-release.aab
