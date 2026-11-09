@@ -5,6 +5,7 @@ on:
     branches:
       - fix/android-twa-splash-self-uri-permission
       - fix/android-twa-transparent-launcher-theme
+      - fix/android-twa-splash-fallback-background
 
 permissions:
   contents: read
