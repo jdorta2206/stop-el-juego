@@ -38,6 +38,12 @@ import java.lang.reflect.Field;
 
 /** STOP TWA native bridge for Google Mobile Ads rewarded video. */
 public class LauncherActivity extends com.google.androidbrowserhelper.trusted.LauncherActivity {
+
+    // Defer the base launch just long enough to install the guarded splash strategy.
+    @Override
+    protected boolean shouldLaunchImmediately() {
+        return false;
+    }
     private static final String TAG = "STOP_AD_BRIDGE";
     private static final Uri SOURCE_ORIGIN = Uri.parse("https://www.stopjuegodepalabras.com");
     private static final Uri TARGET_ORIGIN = Uri.parse("https://www.stopjuegodepalabras.com");
@@ -72,6 +78,28 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        // Keep ABH's standard launch path. Only replace its splash strategy when the
+        // manifest actually configures a splash image; on reflection failure, retain ABH's
+        // original strategy and continue launching normally.
+        if (!isFinishing()) {
+            com.google.androidbrowserhelper.trusted.LauncherActivityMetadata metadata =
+                    com.google.androidbrowserhelper.trusted.LauncherActivityMetadata.parse(this);
+            if (metadata != null && metadata.splashImageDrawableId != 0) {
+                try {
+                    StopTwaSplashScreenStrategy strategy =
+                            new StopTwaSplashScreenStrategy(this, metadata,
+                                    getSplashImageScaleType(), getSplashImageTransformationMatrix());
+                    Field splashField = com.google.androidbrowserhelper.trusted.LauncherActivity.class
+                            .getDeclaredField("mSplashScreenStrategy");
+                    splashField.setAccessible(true);
+                    splashField.set(this, strategy);
+                } catch (ReflectiveOperationException | RuntimeException error) {
+                    Log.w(TAG, "Custom splash strategy unavailable; using Android Browser Helper default",
+                            error);
+                }
+            }
+            launchTwa();
+        }
         appUpdateManager = AppUpdateManagerFactory.create(this);
         // StopApplication initializes PGS before any activity. Retain an activity-level
         // fallback only if application initialization failed, without blocking gameplay.
@@ -100,6 +128,8 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
         } else {
             setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
         }
+
+
     }
 
     private void checkForPlayUpdate() {
