@@ -118,6 +118,9 @@ export function Layout({ children }: { children: ReactNode }) {
           src={LOGO_URL}
           alt="STOP"
           className="w-24 h-24 rounded-full"
+          width={96}
+          height={96}
+          decoding="async"
           animate={{ rotate: 360 }}
           transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
         />
@@ -158,6 +161,9 @@ export function Layout({ children }: { children: ReactNode }) {
             src={LOGO_URL}
             alt="STOP"
             className="w-12 h-12 rounded-full cursor-pointer"
+            width={48}
+            height={48}
+            decoding="async"
             whileHover={{ scale: 1.08, rotate: -5 }}
             whileTap={{ scale: 0.95 }}
             style={{ boxShadow: "0 4px 16px rgba(0,0,0,0.3)" }}
