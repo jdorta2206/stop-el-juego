@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - chore/android-aab-v81
+      - fix/android-keep-admob-paused
 
 permissions:
   contents: read
@@ -72,6 +73,8 @@ jobs:
           grep -q 'Posting client result' app/src/main/java/app/replit/stop_el_juego/twa/RewardedAdActivity.java
           grep -q 'android:name=".StopApplication"' app/src/main/AndroidManifest.xml
           grep -q 'AdsPolicy.isEnabled' app/src/main/java/app/replit/stop_el_juego/twa/RewardedAdActivity.java
+          grep -Fq 'private static final boolean ENABLED = false;' app/src/main/java/app/replit/stop_el_juego/twa/AdsPolicy.java
+          echo 'AdMob disabled policy assertion: OK'
           echo 'Rewarded diagnostic Android source checks: OK'
       - name: Build signed Google Play AAB
         working-directory: android-generated
