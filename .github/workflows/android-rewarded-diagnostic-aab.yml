@@ -5,7 +5,6 @@ on:
   push:
     branches:
       - chore/android-aab-v81
-      - fix/android-keep-admob-paused
 
 permissions:
   contents: read
