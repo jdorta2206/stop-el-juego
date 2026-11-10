@@ -71,12 +71,9 @@ const SPEED_ROUND_TIME = 20;
 const CHAOS_ROUND_TIME = 45;
 const MAX_ROUNDS = 3;
 const EASY_LETTERS = ["A", "C", "E", "I", "L", "M", "P", "R", "S", "T"];
-const REWARDED_ADS_DISABLED = (() => {
-  if (import.meta.env.VITE_REWARDED_ADS_DISABLED !== "1") return false;
-  // Browser advertising stays disabled. Reuse the canonical Google Play TWA
-  // detector so appVersion, STOPApp UA and Play Billing signals are recognised.
-  return !isLikelyPlayTwa();
-})();
+// A global rewarded-ad kill switch: when AdMob is paused, hide rewarded
+// entry points in browsers AND Google Play TWA until native ads are re-enabled.
+const REWARDED_ADS_DISABLED = import.meta.env.VITE_REWARDED_ADS_DISABLED === "1";
 
 function getCrazyCategory(t: any): string | null {
   if (!t.crazyCategories || t.crazyCategories.length === 0) return null;
@@ -1561,7 +1558,7 @@ export default function SoloGame() {
 
       <div className="flex-1 flex flex-col max-w-2xl mx-auto w-full">
 
-        {rewardedAdType && !adsBlocked && (
+        {rewardedAdType && !adsBlocked && !REWARDED_ADS_DISABLED && (
           <RewardedAd
             rewardType={rewardedAdType === "double" ? "points" : rewardedAdType}
             rewardAmount={
