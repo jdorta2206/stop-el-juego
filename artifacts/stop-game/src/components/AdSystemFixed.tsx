@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Gift, Star, Zap } from "lucide-react";
 import { getT } from "@/i18n/index";
-import { hasAndroidAppReferrer } from "@/lib/playBilling";
+import { isLikelyPlayTwa } from "@/lib/playBilling";
 import { initTwaAdBridge, isTwaAdBridgeAvailable, requestRewardedAd, retryRewardedResult, setRewardedAdPlayerId } from "@/lib/twaAdBridge";
 import { pauseGameTimer, resumeGameTimer } from "@/lib/timerPauseGuard";
 import { trackAnalyticsEvent } from "@/lib/analyticsClient";
@@ -54,10 +54,7 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
 
     try {
       const bridgeReady = isTwaAdBridgeAvailable();
-      const knownTwa =
-        hasAndroidAppReferrer() ||
-        new URLSearchParams(window.location.search).get("source") === "googleplay-twa" ||
-        new URLSearchParams(window.location.search).get("source") === "twa";
+      const knownTwa = isLikelyPlayTwa();
 
       if (bridgeReady || knownTwa) {
         const result = await requestRewardedAd(placement);

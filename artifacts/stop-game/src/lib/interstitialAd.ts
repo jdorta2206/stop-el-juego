@@ -20,8 +20,10 @@ export function recordInterstitialGameCompleted(): void {
 
 export function interstitialEligible(): boolean {
   const games = readNumber(GAMES_KEY);
-  if (games < EVERY_N_GAMES || games % EVERY_N_GAMES !== 0) return false;
-  return readNumber(CONSUMED_KEY) !== games;
+  const consumedGames = readNumber(CONSUMED_KEY);
+  // Keep a due ad pending if the player leaves the results screen and returns
+  // after starting another game; don't lose the 3-game slot on a non-multiple.
+  return games - consumedGames >= EVERY_N_GAMES;
 }
 
 export function consumeInterstitialSlot(): void {
