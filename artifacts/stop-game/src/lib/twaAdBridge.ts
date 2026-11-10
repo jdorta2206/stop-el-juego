@@ -155,14 +155,21 @@ function pollRewardResult(requestId: string): Promise<RewardResult> {
     };
 
     timer = window.setInterval(checkNow, 1500);
-    deadlineTimer = window.setTimeout(() => {
+    const finishAtDeadline = () => {
+      // Let an already-running result request settle before closing reconciliation.
+      // Otherwise a verified SSV response arriving at the deadline could be discarded.
+      if (checkInFlight) {
+        deadlineTimer = window.setTimeout(finishAtDeadline, 1500);
+        return;
+      }
       finish({
         rewarded: false,
         source: "error",
         requestId,
         errorMessage: "No se pudo confirmar la recompensa. Puedes reintentar la comprobación.",
       });
-    }, RESULT_TIMEOUT_MS);
+    };
+    deadlineTimer = window.setTimeout(finishAtDeadline, RESULT_TIMEOUT_MS);
     document.addEventListener("visibilitychange", handleVisibilityChange);
     window.addEventListener("focus", handleWindowFocus);
     void checkNow();
