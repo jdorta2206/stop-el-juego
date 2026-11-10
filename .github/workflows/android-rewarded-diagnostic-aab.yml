@@ -2,6 +2,9 @@ name: Android rewarded diagnostic AAB
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - fix/android-rewarded-return-recovery
 
 permissions:
   contents: read
