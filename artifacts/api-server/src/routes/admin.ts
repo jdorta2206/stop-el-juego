@@ -109,14 +109,18 @@ async function withPanelQuerySlot<T>(operation: () => Promise<T>): Promise<T> {
   if (activePanelQueries >= PANEL_QUERY_CONCURRENCY) await new Promise<void>((resolve) => panelQueryWaiters.push(resolve));
   activePanelQueries += 1; try { return await operation(); } finally { activePanelQueries -= 1; panelQueryWaiters.shift()?.(); }
 }
-function executePanelQuery(query: SQL) {
+async function executePanelQuery(query: SQL): Promise<{ rows: Record<string, unknown>[] }> {
   return withPanelQuerySlot(async () => {
     try {
       return await db.transaction(async (tx) => {
         await tx.execute(sql`SET LOCAL statement_timeout = '5000ms'`);
-        return tx.execute(query);
+        const result = await tx.execute(query);
+        return { rows: result.rows as Record<string, unknown>[] };
       });
     } catch (error) {
+      // Never turn a failed metric into a plausible zero: that would misreport
+      // player activity. Reject this refresh so the route keeps the last
+      // complete cached dashboard (or returns an explicit error on first load).
       console.warn("[admin panel] query failed; preserving last complete panel:", error instanceof Error ? error.message : error);
       throw error;
     }
@@ -157,7 +161,8 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
   }
   if (adminPanelBuildInFlight) return;
   adminPanelBuildInFlight = true;
-  if (!hasCachedHtml) res.set("Retry-After", "5").status(202).type("html").send(ADMIN_PANEL_LOADING_HTML);
+  // La primera petición espera al HTML completo. Solo las peticiones concurrentes
+  // reciben 202; así evitamos enviar una respuesta que luego no se puede sustituir.
 
   try {
     // ── KPIs de hoy (zona horaria de España) ──────────────────────────────
@@ -997,3 +1002,4 @@ router.post("/notify-mundial", authLimiter, basicAuth, async (req: Request, res:
 });
 
 export default router;
+
