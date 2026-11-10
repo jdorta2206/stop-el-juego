@@ -1,6 +1,6 @@
 const RESULT_BASE = "/api/rewards/admob-result";
-// An earned client callback is only a signal. Wait briefly for signed AdMob SSV,
-// then expose a manual reconciliation action without granting an unverified reward.
+// An earned client callback is only a signal. Keep polling for signed AdMob SSV
+// throughout the reconciliation window; never grant an unverified reward.
 const RESULT_TIMEOUT_MS = 300_000;
 
 type RewardedPlacement = "extra_time" | "hint" | "double_points" | "skip_round" | "extra_pack";
@@ -94,7 +94,7 @@ async function acknowledgeRewardResult(requestId: string): Promise<void> {
   }
 }
 
-function pollRewardResult(requestId: string, releaseAfterNativeReturn = false): Promise<RewardResult> {
+function pollRewardResult(requestId: string): Promise<RewardResult> {
   return new Promise<RewardResult>((resolve) => {
     let finished = false;
     let checkInFlight = false;
@@ -184,7 +184,7 @@ export async function requestRewardedAd(placement: RewardedPlacement): Promise<R
   const playerId = pendingPlayerId || "guest";
   const origin = window.location.origin;
   const deepLink = `stopad://rewarded?requestId=${encodeURIComponent(requestId)}&placement=${encodeURIComponent(placement)}&playerId=${encodeURIComponent(playerId)}&origin=${encodeURIComponent(origin)}`;
-  const resultPromise = pollRewardResult(requestId, true);
+  const resultPromise = pollRewardResult(requestId);
 
   try {
     // This navigation is executed directly from the user's "Ver anuncio" click.
