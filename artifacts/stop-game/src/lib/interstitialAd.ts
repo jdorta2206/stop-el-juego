@@ -35,7 +35,8 @@ export function consumeInterstitialSlot(): void {
 export async function maybeShowInterstitial(isPremium: boolean): Promise<boolean> {
   // Respect the same global AdMob pause as rewarded ads. Do not launch the
   // Android deep link or consume an interstitial slot while native ads are off.
-  if (import.meta.env.VITE_REWARDED_ADS_DISABLED === "1") return false;
+  // Default to paused; only an explicit VITE_REWARDED_ADS_DISABLED=0 re-enables AdMob.
+  if (import.meta.env.VITE_REWARDED_ADS_DISABLED !== "0") return false;
   if (isPremium || !interstitialEligible() || !isTwaInterstitialAvailable()) return false;
   // Consume before launching so repeated taps/re-renders cannot trigger two ads.
   consumeInterstitialSlot();
