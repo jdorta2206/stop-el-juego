@@ -73,7 +73,8 @@ const MAX_ROUNDS = 3;
 const EASY_LETTERS = ["A", "C", "E", "I", "L", "M", "P", "R", "S", "T"];
 // A global rewarded-ad kill switch: when AdMob is paused, hide rewarded
 // entry points in browsers AND Google Play TWA until native ads are re-enabled.
-const REWARDED_ADS_DISABLED = import.meta.env.VITE_REWARDED_ADS_DISABLED === "1";
+// Ads stay paused unless production explicitly opts back in with VITE_REWARDED_ADS_DISABLED=0.
+const REWARDED_ADS_DISABLED = import.meta.env.VITE_REWARDED_ADS_DISABLED !== "0";
 
 function getCrazyCategory(t: any): string | null {
   if (!t.crazyCategories || t.crazyCategories.length === 0) return null;
