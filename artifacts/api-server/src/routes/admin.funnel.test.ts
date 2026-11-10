@@ -30,11 +30,11 @@ describe("STOP Control analytics funnel event ordering", () => {
   it("uses one bounded seven-day event set and aggregates transitions per session", () => {
     expect(funnelQuery).toMatch(/WITH recent_events AS MATERIALIZED/);
     expect(funnelQuery).toMatch(/WHERE trusted = TRUE/);
-    expect(funnelQuery).toMatch(/created_at >= NOW\\(\\) - INTERVAL '7 days'/);
+    expect(funnelQuery).toMatch(/created_at >= NOW\(\) - INTERVAL '7 days'/);
     expect(funnelQuery).toMatch(/GROUP BY session_id/);
-    expect(funnelQuery).toMatch(/MAX\\(created_at\\) FILTER \\(WHERE event_name = 'game_lobby_view'\\)/);
-    expect(funnelQuery).toMatch(/MAX\\(created_at\\) FILTER \\(WHERE event_name = 'game_start'\\)/);
-    expect(funnelQuery).toMatch(/MAX\\(created_at\\) FILTER \\(WHERE event_name = 'game_complete'\\)/);
+    expect(funnelQuery).toMatch(/MAX\(created_at\) FILTER \(WHERE event_name = 'game_lobby_view'\)/);
+    expect(funnelQuery).toMatch(/MAX\(created_at\) FILTER \(WHERE event_name = 'game_start'\)/);
+    expect(funnelQuery).toMatch(/MAX\(created_at\) FILTER \(WHERE event_name = 'game_complete'\)/);
     expect(funnelQuery).not.toMatch(/NOT EXISTS/);
   });
 });
