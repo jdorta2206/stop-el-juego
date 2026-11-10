@@ -265,40 +265,48 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
     ).rows[0] as Record<string, unknown> | undefined; })();
     const funnelPromise = (async () => { return (
       await executePanelQuery(sql`
+        WITH recent_events AS MATERIALIZED (
+          SELECT event_name, session_id, player_id, created_at
+          FROM analytics_events
+          WHERE trusted = TRUE
+            AND created_at >= NOW() - INTERVAL '7 days'
+        ),
+        session_flow AS (
+          SELECT
+            session_id,
+            BOOL_OR(event_name = 'session_start') AS has_session_start,
+            BOOL_OR(event_name = 'game_lobby_view') AS has_lobby_view,
+            MAX(created_at) FILTER (WHERE event_name = 'game_lobby_view') AS last_lobby_view,
+            MAX(created_at) FILTER (WHERE event_name = 'game_start') AS last_game_start,
+            MAX(created_at) FILTER (WHERE event_name = 'game_complete') AS last_game_complete
+          FROM recent_events
+          GROUP BY session_id
+        ),
+        player_counts AS (
+          SELECT
+            COUNT(DISTINCT COALESCE(player_id, session_id)) FILTER (WHERE event_name = 'game_start')::int AS games_started,
+            COUNT(DISTINCT COALESCE(player_id, session_id)) FILTER (WHERE event_name = 'game_complete')::int AS games_completed,
+            COUNT(DISTINCT COALESCE(player_id, session_id)) FILTER (WHERE event_name = 'game_start')::int AS game_players,
+            COUNT(DISTINCT COALESCE(player_id, session_id)) FILTER (WHERE event_name = 'game_complete')::int AS completed_players,
+            COUNT(DISTINCT COALESCE(player_id, session_id)) FILTER (WHERE event_name = 'rewarded_ad_requested')::int AS ad_players,
+            COUNT(DISTINCT COALESCE(player_id, session_id)) FILTER (WHERE event_name = 'rewarded_ad_failed')::int AS ad_failed_players
+          FROM recent_events
+        )
         SELECT
-          COUNT(DISTINCT CASE WHEN event_name = 'session_start' THEN session_id END)::int AS sessions,
-          COUNT(DISTINCT CASE WHEN event_name = 'game_lobby_view' THEN session_id END)::int AS lobby_sessions,
-          COUNT(DISTINCT CASE
-            WHEN event_name = 'game_lobby_view'
-              AND NOT EXISTS (
-                SELECT 1 FROM analytics_events gs
-                WHERE gs.trusted = TRUE
-                  AND gs.event_name = 'game_start'
-                  AND gs.session_id = analytics_events.session_id
-                  AND gs.created_at >= analytics_events.created_at
-                  AND gs.created_at >= NOW() - INTERVAL '7 days'
-              )
-            THEN session_id END)::int AS lobby_without_start,
-          COUNT(DISTINCT CASE WHEN event_name = 'game_start' THEN COALESCE(player_id, session_id) END)::int AS games_started,
-          COUNT(DISTINCT CASE
-            WHEN event_name = 'game_start'
-              AND NOT EXISTS (
-                SELECT 1 FROM analytics_events gc
-                WHERE gc.trusted = TRUE
-                  AND gc.event_name = 'game_complete'
-                  AND gc.session_id = analytics_events.session_id
-                  AND gc.created_at >= analytics_events.created_at
-                  AND gc.created_at >= NOW() - INTERVAL '7 days'
-              )
-            THEN session_id END)::int AS started_without_complete,
-          COUNT(DISTINCT CASE WHEN event_name = 'game_complete' THEN COALESCE(player_id, session_id) END)::int AS games_completed,
-          COUNT(DISTINCT CASE WHEN event_name = 'game_start' THEN COALESCE(player_id, session_id) END)::int AS game_players,
-          COUNT(DISTINCT CASE WHEN event_name = 'game_complete' THEN COALESCE(player_id, session_id) END)::int AS completed_players,
-          COUNT(DISTINCT CASE WHEN event_name = 'rewarded_ad_requested' THEN COALESCE(player_id, session_id) END)::int AS ad_players,
-          COUNT(DISTINCT CASE WHEN event_name = 'rewarded_ad_failed' THEN COALESCE(player_id, session_id) END)::int AS ad_failed_players
-        FROM analytics_events
-        WHERE trusted = TRUE
-          AND created_at >= NOW() - INTERVAL '7 days'
+          (SELECT COUNT(DISTINCT session_id)::int FROM session_flow WHERE has_session_start) AS sessions,
+          (SELECT COUNT(DISTINCT session_id)::int FROM session_flow WHERE has_lobby_view) AS lobby_sessions,
+          (SELECT COUNT(DISTINCT session_id)::int FROM session_flow
+            WHERE has_lobby_view AND (last_game_start IS NULL OR last_game_start < last_lobby_view)) AS lobby_without_start,
+          player_counts.games_started,
+          (SELECT COUNT(DISTINCT session_id)::int FROM session_flow
+            WHERE last_game_start IS NOT NULL
+              AND (last_game_complete IS NULL OR last_game_complete < last_game_start)) AS started_without_complete,
+          player_counts.games_completed,
+          player_counts.game_players,
+          player_counts.completed_players,
+          player_counts.ad_players,
+          player_counts.ad_failed_players
+        FROM player_counts
       `)
     ).rows[0] as Record<string, unknown> | undefined; })();
     const activityByDayPromise = (async () => { return (
