@@ -2,7 +2,6 @@ const RESULT_BASE = "/api/rewards/admob-result";
 // An earned client callback is only a signal. Wait briefly for signed AdMob SSV,
 // then expose a manual reconciliation action without granting an unverified reward.
 const RESULT_TIMEOUT_MS = 300_000;
-const SSV_CONFIRMATION_WINDOW_MS = 15_000;
 
 type RewardedPlacement = "extra_time" | "hint" | "double_points" | "skip_round" | "extra_pack";
 export type RewardResult = {
@@ -99,11 +98,9 @@ function pollRewardResult(requestId: string, releaseAfterNativeReturn = false): 
   return new Promise<RewardResult>((resolve) => {
     let finished = false;
     let checkInFlight = false;
-    let earnedObservedAt: number | null = null;
     const startedAt = Date.now();
     let timer: number | null = null;
     let deadlineTimer: number | null = null;
-    let returnTimer: number | null = null;
     let pageWasHidden = document.visibilityState === "hidden";
 
     const finish = (result: RewardResult) => {
@@ -111,7 +108,6 @@ function pollRewardResult(requestId: string, releaseAfterNativeReturn = false): 
       finished = true;
       if (timer !== null) window.clearInterval(timer);
       if (deadlineTimer !== null) window.clearTimeout(deadlineTimer);
-      if (returnTimer !== null) window.clearTimeout(returnTimer);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("focus", handleWindowFocus);
       if (result.rewarded) void acknowledgeRewardResult(requestId);
@@ -126,13 +122,6 @@ function pollRewardResult(requestId: string, releaseAfterNativeReturn = false): 
         if (result?.rewarded || result?.source === "skipped") {
           finish(result);
           return;
-        }
-        if (result?.pendingSsv) {
-          earnedObservedAt ??= Date.now();
-          if (Date.now() - earnedObservedAt >= SSV_CONFIRMATION_WINDOW_MS) {
-            finish(result);
-            return;
-          }
         }
         if (Date.now() - startedAt >= RESULT_TIMEOUT_MS) {
           finish({
@@ -155,21 +144,6 @@ function pollRewardResult(requestId: string, releaseAfterNativeReturn = false): 
       if (!pageWasHidden) return;
       pageWasHidden = false;
       void checkNow();
-      // Returning from RewardedAdActivity means the fullscreen ad has closed.
-      // If its native result POST was lost, release the game instead of leaving
-      // the reward overlay stuck in "Cargando anuncio…" for the five-minute limit.
-      if (returnTimer !== null) window.clearTimeout(returnTimer);
-      if (releaseAfterNativeReturn) {
-        returnTimer = window.setTimeout(() => {
-          finish({
-            rewarded: false,
-            source: "error",
-            pendingSsv: true,
-            requestId,
-            errorMessage: "El anuncio se cerró, pero aún no llegó la confirmación segura. Puedes reintentar la comprobación o continuar sin recompensa.",
-          });
-        }, 30_000);
-      }
     };
 
     const handleWindowFocus = () => {
