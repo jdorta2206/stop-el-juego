@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - fix/android-rewarded-return-recovery
+      - chore/android-aab-v81
 
 permissions:
   contents: read
@@ -44,29 +44,29 @@ jobs:
           printf '%s' "$KEYSTORE_BASE64" | base64 --decode > android-release.keystore
           test -s android-release.keystore
           keytool -list -keystore android-release.keystore -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" >/dev/null
-      - name: Set diagnostic version 1.3.9.4 (code 80)
+      - name: Set diagnostic version 1.3.9.5 (code 81)
         working-directory: android-generated
         shell: bash
         run: |
           set -euo pipefail
-          sed -i -E 's/versionCode [0-9]+/versionCode 80/' app/build.gradle
-          sed -i -E 's/versionName "[^"]+"/versionName "1.3.9.4"/' app/build.gradle
+          sed -i -E 's/versionCode [0-9]+/versionCode 81/' app/build.gradle
+          sed -i -E 's/versionName "[^"]+"/versionName "1.3.9.5"/' app/build.gradle
           python3 - <<'PY'
           from pathlib import Path
           import re
           p = Path('app/build.gradle')
           s = p.read_text()
-          s, count = re.subn(r"launchUrl: '/\?source=googleplay-twa&appVersion=[^']*'", "launchUrl: '/?source=googleplay-twa&appVersion=1.3.9.4'", s, count=1)
+          s, count = re.subn(r"launchUrl: '/\?source=googleplay-twa&appVersion=[^']*'", "launchUrl: '/?source=googleplay-twa&appVersion=1.3.9.5'", s, count=1)
           if count != 1:
               raise SystemExit('Bubblewrap launchUrl not found exactly once')
-          s, count = re.subn(r'def launchUrl = "https://www\.stopjuegodepalabras\.com/\?source=googleplay-twa&appVersion=[^"]+"', 'def launchUrl = "https://www.stopjuegodepalabras.com/?source=googleplay-twa&appVersion=1.3.9.4"', s, count=1)
+          s, count = re.subn(r'def launchUrl = "https://www\.stopjuegodepalabras\.com/\?source=googleplay-twa&appVersion=[^"]+"', 'def launchUrl = "https://www.stopjuegodepalabras.com/?source=googleplay-twa&appVersion=1.3.9.5"', s, count=1)
           if count != 1:
               raise SystemExit('Android launchUrl resource not found exactly once')
           p.write_text(s)
           PY
-          grep -q 'versionCode 80' app/build.gradle
-          grep -q 'versionName "1.3.9.4"' app/build.gradle
-          grep -q 'appVersion=1.3.9.4' app/build.gradle
+          grep -q 'versionCode 81' app/build.gradle
+          grep -q 'versionName "1.3.9.5"' app/build.gradle
+          grep -q 'appVersion=1.3.9.5' app/build.gradle
           grep -q 'SSV custom data configured' app/src/main/java/app/replit/stop_el_juego/twa/RewardedAdActivity.java
           grep -q 'onUserEarnedReward' app/src/main/java/app/replit/stop_el_juego/twa/RewardedAdActivity.java
           grep -q 'Posting client result' app/src/main/java/app/replit/stop_el_juego/twa/RewardedAdActivity.java
@@ -88,14 +88,14 @@ jobs:
           AAB='app/build/outputs/bundle/release/app-release.aab'
           test -s "$AAB"
           jarsigner -verify "$AAB"
-          grep -q 'versionCode 80' app/build.gradle
-          grep -q 'versionName "1.3.9.4"' app/build.gradle
+          grep -q 'versionCode 81' app/build.gradle
+          grep -q 'versionName "1.3.9.5"' app/build.gradle
           sha256sum "$AAB"
           ls -lh "$AAB"
       - name: Upload diagnostic AAB artifact
         uses: actions/upload-artifact@v4
         with:
-          name: stop-rewarded-diagnostic-aab-v80-1.3.9.4
+          name: stop-rewarded-diagnostic-aab-v81-1.3.9.5
           path: android-generated/app/build/outputs/bundle/release/app-release.aab
           if-no-files-found: error
           retention-days: 7
