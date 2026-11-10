@@ -14,6 +14,15 @@ function urlB64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
   return Uint8Array.from([...rawData].map((c) => c.charCodeAt(0))) as Uint8Array<ArrayBuffer>;
 }
 
+function hasCurrentVapidKey(subscription: PushSubscription): boolean {
+  const actual = subscription.options.applicationServerKey;
+  if (!actual || !VAPID_PUBLIC) return false;
+  const expected = urlB64ToUint8Array(VAPID_PUBLIC);
+  const actualBytes = new Uint8Array(actual);
+  return actualBytes.length === expected.length &&
+    actualBytes.every((byte, index) => byte === expected[index]);
+}
+
 export type NotifPermission = "default" | "granted" | "denied" | "unsupported";
 
 export function usePushNotifications(playerId: string | undefined, language: string) {
@@ -44,14 +53,14 @@ export function usePushNotifications(playerId: string | undefined, language: str
         const sub = await reg.pushManager.getSubscription();
         if (cancelled) return;
 
-        // Prioritize the browser's actual persisted Push API subscription.
-        if (sub) {
+        // A persisted subscription is usable only with the VAPID public key
+        // currently configured by this client. Do not report stale subscriptions
+        // as enabled; the user can renew them from the notification settings.
+        if (sub && hasCurrentVapidKey(sub)) {
           setIsSubscribed(true);
           try { localStorage.removeItem(DISABLED_KEY); } catch {}
         } else {
-          let disabled = false;
-          try { disabled = localStorage.getItem(DISABLED_KEY) === "1"; } catch {}
-          setIsSubscribed(!disabled);
+          setIsSubscribed(false);
           return;
         }
 
@@ -100,10 +109,25 @@ export function usePushNotifications(playerId: string | undefined, language: str
 
       const existing = await reg.pushManager.getSubscription();
       if (currentPlayerIdRef.current !== playerId) return false;
-      const sub = existing || await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlB64ToUint8Array(VAPID_PUBLIC),
-      });
+
+      // PushManager.subscribe() does not replace an existing subscription when
+      // its applicationServerKey changes. Renew it explicitly after the user
+      // grants permission, then persist the new endpoint on the server.
+      const staleEndpoint = existing && !hasCurrentVapidKey(existing)
+        ? existing.endpoint
+        : null;
+      if (staleEndpoint && existing) {
+        await existing.unsubscribe();
+      }
+      const sub = staleEndpoint
+        ? await reg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlB64ToUint8Array(VAPID_PUBLIC),
+          })
+        : existing || await reg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlB64ToUint8Array(VAPID_PUBLIC),
+          });
 
       const tzOffsetMinutes = -new Date().getTimezoneOffset();
       const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
@@ -123,6 +147,19 @@ export function usePushNotifications(playerId: string | undefined, language: str
 
       if (!res.ok) throw new Error(`subscription HTTP ${res.status}`);
       if (currentPlayerIdRef.current !== playerId) return false;
+
+      // Remove the obsolete server row only after the replacement was saved.
+      if (staleEndpoint && staleEndpoint !== sub.endpoint) {
+        try {
+          await fetch(`${API_BASE}/api/notifications/unsubscribe`, {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ endpoint: staleEndpoint, playerId: playerId || "anonymous" }),
+          });
+        } catch (e) {
+          console.warn("[push] stale subscription cleanup failed", e);
+        }
+      }
       setIsSubscribed(true);
       return true;
     } catch (e) {
