@@ -118,10 +118,11 @@ async function executePanelQuery(query: SQL): Promise<{ rows: Record<string, unk
         return { rows: result.rows as Record<string, unknown>[] };
       });
     } catch (error) {
-      // A slow/invalid metric must not take down the whole private dashboard.
-      // Keep the failure visible in Railway logs and render this metric as empty.
-      console.warn("[admin panel] query failed; rendering this metric as empty:", error instanceof Error ? error.message : error);
-      return { rows: [] };
+      // Never turn a failed metric into a plausible zero: that would misreport
+      // player activity. Reject this refresh so the route keeps the last
+      // complete cached dashboard (or returns an explicit error on first load).
+      console.warn("[admin panel] query failed; preserving last complete panel:", error instanceof Error ? error.message : error);
+      throw error;
     }
   });
 }
