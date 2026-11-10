@@ -111,6 +111,20 @@ export function Layout({ children }: { children: ReactNode }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canInstall, isSupported, isSubscribed, permission]);
 
+  if (!isLoaded) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <motion.img
+          src={LOGO_URL}
+          alt="STOP"
+          className="w-24 h-24 rounded-full"
+          animate={{ rotate: 360 }}
+          transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
+        />
+      </div>
+    );
+  }
+
   const openProfile = () => {
     setShowProfileMenu(false);
     setEditName(player?.name || "");
@@ -126,24 +140,9 @@ export function Layout({ children }: { children: ReactNode }) {
   };
 
   return (
-    <>
-      {!isLoaded && (
-        <div className="fixed inset-0 z-[100000] flex items-center justify-center bg-[#1a063a]" role="status" aria-label="Cargando STOP">
-          <motion.img
-            src={LOGO_URL}
-            alt="STOP"
-            className="w-24 h-24 rounded-full"
-            width={96}
-            height={96}
-            decoding="async"
-            animate={{ rotate: 360 }}
-            transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
-          />
-        </div>
-      )}
-      <div className="min-h-screen flex flex-col relative overflow-hidden" style={{ visibility: isLoaded ? "visible" : "hidden" }}>
+    <div className="min-h-screen flex flex-col relative overflow-hidden">
       <AnimatePresence>
-        {isLoaded && needsAuth && (
+        {needsAuth && (
           <AuthModal
             onSave={savePlayer}
             initial={player}
@@ -159,9 +158,6 @@ export function Layout({ children }: { children: ReactNode }) {
             src={LOGO_URL}
             alt="STOP"
             className="w-12 h-12 rounded-full cursor-pointer"
-            width={48}
-            height={48}
-            decoding="async"
             whileHover={{ scale: 1.08, rotate: -5 }}
             whileTap={{ scale: 0.95 }}
             style={{ boxShadow: "0 4px 16px rgba(0,0,0,0.3)" }}
@@ -641,7 +637,6 @@ export function Layout({ children }: { children: ReactNode }) {
           </Modal>
         )}
       </AnimatePresence>
-      </div>
-    </>
+    </div>
   );
 }
