@@ -304,7 +304,10 @@ router.get("/admob-ssv", async (req, res) => {
     const verification = await verifyAdMobSsv(req.originalUrl);
 
     if (!verification.valid) {
-      console.warn("[admob-reward] ssv_signature_invalid");
+      // Log the verifier's reason without logging signed query data or secrets.
+      console.warn("[admob-reward] ssv_verification_failed", {
+        reason: verification.error,
+      });
       res.status(400).send("invalid_ssv");
       return;
     }
@@ -314,7 +317,9 @@ router.get("/admob-ssv", async (req, res) => {
     const customDataRaw = params.custom_data ?? "";
     const transactionId = params.transaction_id ?? "";
 
-    if (adUnit !== "ca-app-pub-4807272408824742/3559554716") {
+    // AdMob's SSV `ad_unit` parameter contains the numeric ad-unit ID only,
+    // not the full publisher/ad-unit string used by the Android SDK.
+    if (adUnit !== "3559554716") {
       console.warn("[admob-reward] ssv_ad_unit_rejected", { adUnit });
       res.status(400).send("invalid_ad_unit");
       return;
