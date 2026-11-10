@@ -197,6 +197,15 @@ public class RewardedAdActivity extends Activity {
     protected void onDestroy() {
         handler.removeCallbacks(globalWatchdog);
         if (loadTimeout != null) handler.removeCallbacks(loadTimeout);
+
+        // If Android destroys this activity after the fullscreen ad closes but
+        // before AdMob's dismissal callback reaches us, release the web poll.
+        // An earned client signal is still NOT a reward: the server requires
+        // the signed AdMob SSV callback before granting anything.
+        if (!resultSent && requestId != null && !requestId.isEmpty()) {
+            Log.w(TAG, "Activity destroyed before rewarded result callback; sending fallback");
+            sendClientResult(rewardEarned ? "earned" : "dismissed");
+        }
         super.onDestroy();
     }
 
