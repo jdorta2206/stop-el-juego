@@ -30,12 +30,9 @@ export function isAndroidTwa(): boolean {
         document.referrer.startsWith("android-app://app.replit.stop_el_juego.twa")) {
       return true;
     }
-    // Older Play Store builds do not yet include the launchUrl marker. Some
-    // Android TWA/Chrome versions also report display-mode "browser" and omit
-    // the app referrer, so requiring standalone mode hides the status card in
-    // the actual installed app. Restrict this fallback to Android; the native
-    // message channel remains the authority for whether Play Games is available.
-    return /Android/i.test(navigator.userAgent);
+    // Do not infer an installed TWA from the Android user agent alone:
+    // ordinary Chrome and other Android browsers must not show Play Games UI.
+    return false;
   } catch {
     return false;
   }
