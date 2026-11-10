@@ -109,16 +109,19 @@ async function withPanelQuerySlot<T>(operation: () => Promise<T>): Promise<T> {
   if (activePanelQueries >= PANEL_QUERY_CONCURRENCY) await new Promise<void>((resolve) => panelQueryWaiters.push(resolve));
   activePanelQueries += 1; try { return await operation(); } finally { activePanelQueries -= 1; panelQueryWaiters.shift()?.(); }
 }
-function executePanelQuery(query: SQL) {
+async function executePanelQuery(query: SQL): Promise<{ rows: Record<string, unknown>[] }> {
   return withPanelQuerySlot(async () => {
     try {
       return await db.transaction(async (tx) => {
         await tx.execute(sql`SET LOCAL statement_timeout = '5000ms'`);
-        return tx.execute(query);
+        const result = await tx.execute(query);
+        return { rows: result.rows as Record<string, unknown>[] };
       });
     } catch (error) {
-      console.warn("[admin panel] query failed; preserving last complete panel:", error instanceof Error ? error.message : error);
-      throw error;
+      // A slow/invalid metric must not take down the whole private dashboard.
+      // Keep the failure visible in Railway logs and render this metric as empty.
+      console.warn("[admin panel] query failed; rendering this metric as empty:", error instanceof Error ? error.message : error);
+      return { rows: [] };
     }
   });
 }
@@ -157,7 +160,8 @@ router.get("/", authLimiter, basicAuth, async (_req: Request, res: Response) => 
   }
   if (adminPanelBuildInFlight) return;
   adminPanelBuildInFlight = true;
-  if (!hasCachedHtml) res.set("Retry-After", "5").status(202).type("html").send(ADMIN_PANEL_LOADING_HTML);
+  // La primera petición espera al HTML completo. Solo las peticiones concurrentes
+  // reciben 202; así evitamos enviar una respuesta que luego no se puede sustituir.
 
   try {
     // ── KPIs de hoy (zona horaria de España) ──────────────────────────────
@@ -997,3 +1001,4 @@ router.post("/notify-mundial", authLimiter, basicAuth, async (req: Request, res:
 });
 
 export default router;
+
