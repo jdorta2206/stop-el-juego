@@ -95,6 +95,7 @@ router.post("/admob-result", async (req, res) => {
   const placement = readString(req.body?.placement);
   const rawClientState = readString(req.body?.clientState);
   const clientState = rawClientState === "earned" || rawClientState === "dismissed" ? rawClientState : "pending";
+  console.info("[admob-reward] client_callback_received", { requestId: requestId.slice(0, 8), placement, clientState, origin });
 
   if (!ADMOB_REQUEST_ID_RE.test(requestId) || !playerId || playerId.length > 256) {
     res.status(400).json({ error: "Invalid rewarded request" });
@@ -284,6 +285,12 @@ router.post("/admob-result/:requestId/consume", async (req, res) => {
   }
 });
 router.get("/admob-ssv", async (req, res) => {
+  console.info("[admob-reward] ssv_callback_received", {
+    hasCustomData: typeof req.query.custom_data === "string" && req.query.custom_data.length > 0,
+    hasSignature: typeof req.query.signature === "string" && req.query.signature.length > 0,
+    hasKeyId: typeof req.query.key_id === "string" && req.query.key_id.length > 0,
+    adUnit: typeof req.query.ad_unit === "string" ? req.query.ad_unit : null,
+  });
   try {
     // AdMob's dashboard "Verify URL" probe may intentionally omit custom_data.
     // This probe only validates reachability/configuration and MUST NEVER grant
@@ -297,6 +304,7 @@ router.get("/admob-ssv", async (req, res) => {
     const verification = await verifyAdMobSsv(req.originalUrl);
 
     if (!verification.valid) {
+      console.warn("[admob-reward] ssv_signature_invalid");
       res.status(400).send("invalid_ssv");
       return;
     }
@@ -307,6 +315,7 @@ router.get("/admob-ssv", async (req, res) => {
     const transactionId = params.transaction_id ?? "";
 
     if (adUnit !== "ca-app-pub-4807272408824742/3559554716") {
+      console.warn("[admob-reward] ssv_ad_unit_rejected", { adUnit });
       res.status(400).send("invalid_ad_unit");
       return;
     }
@@ -394,6 +403,7 @@ router.get("/admob-ssv", async (req, res) => {
         placement = COALESCE(admob_reward_requests.placement, EXCLUDED.placement)
     `);
 
+    console.info("[admob-reward] ssv_reward_stored", { requestId: requestId.slice(0, 8), placement });
     res.status(200).send("ok");
   } catch (error) {
     console.error(

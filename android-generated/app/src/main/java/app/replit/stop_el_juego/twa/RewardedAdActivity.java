@@ -57,6 +57,7 @@ public class RewardedAdActivity extends Activity {
         if (!AdsPolicy.isEnabled()) { finish(); return; }
 
         Uri data = getIntent().getData();
+        Log.i(TAG, "Rewarded activity created; deepLinkPresent=" + (data != null));
         requestId = data == null ? null : data.getQueryParameter("requestId");
         playerId = data == null ? null : data.getQueryParameter("playerId");
         origin = data == null ? null : data.getQueryParameter("origin");
@@ -141,6 +142,8 @@ public class RewardedAdActivity extends Activity {
                             .setCustomData(customData.toString())
                             .build();
             ad.setServerSideVerificationOptions(options);
+            Log.i(TAG, "SSV custom data configured requestId=" + requestId
+                    + " placement=" + (placement == null ? "unknown" : placement));
         } catch (Exception error) {
             Log.e(TAG, "Unable to configure SSV custom data", error);
             sendClientResult("dismissed");
@@ -152,13 +155,14 @@ public class RewardedAdActivity extends Activity {
         ad.setFullScreenContentCallback(new FullScreenContentCallback() {
             @Override
             public void onAdShowedFullScreenContent() {
-                Log.d(TAG, "Rewarded ad shown requestId=" + requestId);
+                Log.i(TAG, "AdMob onAdShowed requestId=" + requestId);
             }
 
             @Override
             public void onAdDismissedFullScreenContent() {
                 // Do not release the web game while the fullscreen ad is still visible.
                 // The web timer/reward must be reconciled only after AdMob closes the ad.
+                Log.i(TAG, "AdMob onAdDismissed rewardEarned=" + rewardEarned + " requestId=" + requestId);
                 sendClientResult(rewardEarned ? "earned" : "dismissed");
                 RewardedAdPreloader.preloadRewardedAd();
                 finish();
@@ -176,7 +180,8 @@ public class RewardedAdActivity extends Activity {
         try {
             ad.show(this, rewardItem -> {
                 rewardEarned = true;
-                Log.d(TAG, "Reward earned amount=" + rewardItem.getAmount());
+                Log.i(TAG, "AdMob onUserEarnedReward amount=" + rewardItem.getAmount()
+                        + " type=" + rewardItem.getType() + " requestId=" + requestId);
                 // Wait for onAdDismissedFullScreenContent before notifying the web app.
                 // This keeps the timer paused and applies the reward only after the ad closes.
             });
@@ -198,6 +203,7 @@ public class RewardedAdActivity extends Activity {
     private void sendClientResult(String clientState) {
         if (resultSent) return;
         resultSent = true;
+        Log.i(TAG, "Queueing client result state=" + clientState + " requestId=" + requestId);
 
         final String id = requestId;
         final String currentPlayerId = playerId == null ? "guest" : playerId;
@@ -207,6 +213,7 @@ public class RewardedAdActivity extends Activity {
             HttpURLConnection connection = null;
             try {
                 URL url = new URL(currentOrigin + "/api/rewards/admob-result");
+                Log.i(TAG, "Posting client result to " + url.getHost() + "/api/rewards/admob-result");
                 connection = (HttpURLConnection) url.openConnection();
                 connection.setRequestMethod("POST");
                 connection.setConnectTimeout(5000);

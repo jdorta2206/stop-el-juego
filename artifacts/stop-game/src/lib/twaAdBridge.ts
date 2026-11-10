@@ -1,8 +1,7 @@
 const RESULT_BASE = "/api/rewards/admob-result";
-// An earned client callback is only a signal. Wait briefly for signed AdMob SSV,
-// then expose a manual reconciliation action without granting an unverified reward.
+// An earned client callback is only a signal. Keep polling for signed AdMob SSV
+// throughout the reconciliation window; never grant an unverified reward.
 const RESULT_TIMEOUT_MS = 300_000;
-const SSV_CONFIRMATION_WINDOW_MS = 15_000;
 
 type RewardedPlacement = "extra_time" | "hint" | "double_points" | "skip_round" | "extra_pack";
 export type RewardResult = {
@@ -99,18 +98,18 @@ function pollRewardResult(requestId: string): Promise<RewardResult> {
   return new Promise<RewardResult>((resolve) => {
     let finished = false;
     let checkInFlight = false;
-    let earnedObservedAt: number | null = null;
     const startedAt = Date.now();
     let timer: number | null = null;
     let deadlineTimer: number | null = null;
+    let pageWasHidden = document.visibilityState === "hidden";
 
     const finish = (result: RewardResult) => {
       if (finished) return;
       finished = true;
       if (timer !== null) window.clearInterval(timer);
       if (deadlineTimer !== null) window.clearTimeout(deadlineTimer);
-      document.removeEventListener("visibilitychange", checkNow);
-      window.removeEventListener("focus", checkNow);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", handleWindowFocus);
       if (result.rewarded) void acknowledgeRewardResult(requestId);
       resolve(result);
     };
@@ -123,13 +122,6 @@ function pollRewardResult(requestId: string): Promise<RewardResult> {
         if (result?.rewarded || result?.source === "skipped") {
           finish(result);
           return;
-        }
-        if (result?.pendingSsv) {
-          earnedObservedAt ??= Date.now();
-          if (Date.now() - earnedObservedAt >= SSV_CONFIRMATION_WINDOW_MS) {
-            finish(result);
-            return;
-          }
         }
         if (Date.now() - startedAt >= RESULT_TIMEOUT_MS) {
           finish({
@@ -144,17 +136,42 @@ function pollRewardResult(requestId: string): Promise<RewardResult> {
       }
     };
 
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        pageWasHidden = true;
+        return;
+      }
+      if (!pageWasHidden) return;
+      pageWasHidden = false;
+      void checkNow();
+    };
+
+    const handleWindowFocus = () => {
+      if (pageWasHidden && document.visibilityState !== "hidden") {
+        handleVisibilityChange();
+      } else {
+        void checkNow();
+      }
+    };
+
     timer = window.setInterval(checkNow, 1500);
-    deadlineTimer = window.setTimeout(() => {
+    const finishAtDeadline = () => {
+      // Let an already-running result request settle before closing reconciliation.
+      // Otherwise a verified SSV response arriving at the deadline could be discarded.
+      if (checkInFlight) {
+        deadlineTimer = window.setTimeout(finishAtDeadline, 1500);
+        return;
+      }
       finish({
         rewarded: false,
         source: "error",
         requestId,
         errorMessage: "No se pudo confirmar la recompensa. Puedes reintentar la comprobación.",
       });
-    }, RESULT_TIMEOUT_MS);
-    document.addEventListener("visibilitychange", checkNow);
-    window.addEventListener("focus", checkNow);
+    };
+    deadlineTimer = window.setTimeout(finishAtDeadline, RESULT_TIMEOUT_MS);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", handleWindowFocus);
     void checkNow();
   });
 }
