@@ -3,11 +3,10 @@ package app.replit.stop_el_juego.twa;
 /**
  * Single native advertising safety switch.
  *
- * AdMob account is active again. Ads remain gated behind this switch so
- * they can be restored in a reviewed Google Play release.
+ * AdMob remains disabled until it is explicitly reactivated and reviewed.
  */
 public final class AdsPolicy {
-    private static final boolean ENABLED = true;
+    private static final boolean ENABLED = false;
 
     private AdsPolicy() {}
 
