@@ -183,11 +183,14 @@ export function retryRewardedResult(requestId: string): Promise<RewardResult> {
   return pollRewardResult(requestId);
 }
 
-export async function requestRewardedAd(placement: RewardedPlacement): Promise<RewardResult> {
+export async function requestRewardedAd(placement: RewardedPlacement, onRequestCreated?: (requestId: string) => void): Promise<RewardResult> {
   installResumeListener();
   if (typeof window === "undefined") return { rewarded: false, source: "error", errorMessage: "Window unavailable" };
 
   const requestId = makeRequestId();
+  // Persist the identity before handing control to the native fullscreen ad.
+  // The web page may be recreated while Android is showing the ad.
+  onRequestCreated?.(requestId);
   const playerId = pendingPlayerId || "guest";
   const origin = window.location.origin;
   const deepLink = `stopad://rewarded?requestId=${encodeURIComponent(requestId)}&placement=${encodeURIComponent(placement)}&playerId=${encodeURIComponent(playerId)}&origin=${encodeURIComponent(origin)}`;
