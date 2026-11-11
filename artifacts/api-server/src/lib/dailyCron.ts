@@ -188,20 +188,21 @@ async function sendSeasonClaimNotifications() {
     //    belong to a player with at least one push subscription. The LIKE
     //    is a cheap prefilter; we re-validate by parsing the JSON below.
     const rows = (await db.execute(sql`
-      SELECT sp.player_id,
+      SELECT DISTINCT ON (sp.player_id)
+             sp.player_id,
              sp.missions_json,
-             COALESCE(MIN(sub.language), 'es') AS language,
-             MIN(CASE
+             COALESCE(sub.language, 'es') AS language,
+             CASE
                WHEN NULLIF(sub.time_zone, '') IS NOT NULL
                  AND EXISTS (SELECT 1 FROM pg_timezone_names valid_tz WHERE valid_tz.name = sub.time_zone)
                THEN TO_CHAR(NOW() AT TIME ZONE sub.time_zone, 'YYYY-MM-DD')
                ELSE TO_CHAR((NOW() AT TIME ZONE 'UTC') + (sub.tz_offset_minutes * INTERVAL '1 minute'), 'YYYY-MM-DD')
-             END) AS local_day
+             END AS local_day
       FROM season_progress sp
       INNER JOIN push_subscriptions sub ON sub.player_id = sp.player_id
       WHERE sp.season_id = ${activeSeason.id}
         AND sp.missions_json LIKE '%"completed":true%'
-      GROUP BY sp.player_id, sp.missions_json
+      ORDER BY sp.player_id, sub.created_at DESC, sub.id DESC
       LIMIT 10000
     `)) as unknown as SqlResult<SeasonClaimCandidateRow>;
 
