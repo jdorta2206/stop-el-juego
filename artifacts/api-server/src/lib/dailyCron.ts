@@ -544,6 +544,7 @@ async function sendDailyDealsNotifications() {
 }
 
 let dailyCronTimer: ReturnType<typeof setInterval> | null = null;
+let dailyCronTickRunning = false;
 
 export function startDailyCron() {
   if (dailyCronTimer) return;
@@ -552,6 +553,11 @@ export function startDailyCron() {
   // :14... and permanently missed every local :00–:04 notification window.
   // Per-player DB claims keep the denser polling idempotent across instances.
   const runTick = async () => {
+    // Do not let a slow delivery batch overlap the next minute's tick in
+    // this process. Database claims still provide cross-instance idempotency.
+    if (dailyCronTickRunning) return;
+    dailyCronTickRunning = true;
+    try {
     const now = new Date();
     const utcHour = now.getUTCHours();
     const utcMinute = now.getUTCMinutes();
@@ -607,6 +613,9 @@ export function startDailyCron() {
       // Per-player claims inside the job provide cluster-wide idempotency and
       // allow failed recipients to retry without blocking the whole batch.
       await sendSeasonClaimNotifications();
+    }
+    } finally {
+      dailyCronTickRunning = false;
     }
   };
 
