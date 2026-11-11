@@ -189,7 +189,7 @@ export async function sendPushToPlayer(playerId: string, payload: PushPayload): 
       );
       sent++;
     } catch (e: any) {
-      if (e.statusCode === 410 || e.statusCode === 404 || e.statusCode === 403) {
+      if (e.statusCode === 410 || e.statusCode === 404) {
         await cleanStaleEndpoint(row);
       } else {
         console.error(`[push] send failed status=${e?.statusCode ?? "unknown"} player=${playerId}`);
@@ -234,7 +234,7 @@ export async function sendPushToAllSubscribers(
       sent++;
     } catch (e: any) {
       failed++;
-      if (e.statusCode === 410 || e.statusCode === 404 || e.statusCode === 403) toDelete.push(row);
+      if (e.statusCode === 410 || e.statusCode === 404) toDelete.push(row);
       else console.error(`[push] broadcast failed status=${e?.statusCode ?? "unknown"}`);
     }
   }));
@@ -276,7 +276,7 @@ export async function sendLocalizedBroadcast(
       sent++;
     } catch (e: any) {
       failed++;
-      if (e.statusCode === 410 || e.statusCode === 404 || e.statusCode === 403) toDelete.push(row);
+      if (e.statusCode === 410 || e.statusCode === 404) toDelete.push(row);
       else console.error(`[push] localized broadcast failed status=${e?.statusCode ?? "unknown"}`);
     }
   }));
@@ -342,7 +342,7 @@ export async function notifyFollowersPlayerOnline(
             );
             sent++;
           } catch (e: any) {
-            if (e?.statusCode === 410 || e?.statusCode === 404 || e?.statusCode === 403) {
+            if (e?.statusCode === 410 || e?.statusCode === 404) {
               await cleanStaleEndpoint(row);
             } else {
               console.error(`[push] friend-online failed status=${e?.statusCode ?? "unknown"} follower=${follower.followerId}`);
