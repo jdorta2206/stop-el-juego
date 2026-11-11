@@ -62,8 +62,8 @@ async function readResult(requestId: string): Promise<RewardResult | null> {
     const data = await response.json();
     if (data?.ready === true) {
       return data.rewarded === true
-        ? { rewarded: true, source: "admob" }
-        : { rewarded: false, source: "skipped" };
+        ? { rewarded: true, source: "admob", requestId }
+        : { rewarded: false, source: "skipped", requestId };
     }
     if (data?.clientState === "earned") {
       return {
@@ -80,7 +80,7 @@ async function readResult(requestId: string): Promise<RewardResult | null> {
   }
 }
 
-async function acknowledgeRewardResult(requestId: string): Promise<void> {
+export async function acknowledgeRewardResult(requestId: string): Promise<void> {
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
       const response = await fetch(`${RESULT_BASE}/${encodeURIComponent(requestId)}/consume`, {
@@ -110,7 +110,7 @@ function pollRewardResult(requestId: string): Promise<RewardResult> {
       if (deadlineTimer !== null) window.clearTimeout(deadlineTimer);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("focus", handleWindowFocus);
-      if (result.rewarded) void acknowledgeRewardResult(requestId);
+      // The caller must first apply the reward locally, then acknowledge it.
       resolve(result);
     };
 
@@ -127,8 +127,9 @@ function pollRewardResult(requestId: string): Promise<RewardResult> {
           finish({
             rewarded: false,
             source: "error",
+            pendingSsv: true,
             requestId,
-            errorMessage: "No se pudo confirmar la recompensa. Puedes reintentar la comprobación.",
+            errorMessage: "No se pudo confirmar el resultado del anuncio. Conservamos la solicitud para comprobar si Google envía la verificación; no se concederá nada sin esa confirmación.",
           });
         }
       } finally {
@@ -165,8 +166,9 @@ function pollRewardResult(requestId: string): Promise<RewardResult> {
       finish({
         rewarded: false,
         source: "error",
+        pendingSsv: true,
         requestId,
-        errorMessage: "No se pudo confirmar la recompensa. Puedes reintentar la comprobación.",
+        errorMessage: "No se pudo confirmar el resultado del anuncio. Conservamos la solicitud para comprobar si Google envía la verificación; no se concederá nada sin esa confirmación.",
       });
     };
     deadlineTimer = window.setTimeout(finishAtDeadline, RESULT_TIMEOUT_MS);
@@ -183,11 +185,14 @@ export function retryRewardedResult(requestId: string): Promise<RewardResult> {
   return pollRewardResult(requestId);
 }
 
-export async function requestRewardedAd(placement: RewardedPlacement): Promise<RewardResult> {
+export async function requestRewardedAd(placement: RewardedPlacement, onRequestCreated?: (requestId: string) => void): Promise<RewardResult> {
   installResumeListener();
   if (typeof window === "undefined") return { rewarded: false, source: "error", errorMessage: "Window unavailable" };
 
   const requestId = makeRequestId();
+  // Persist the identity before handing control to the native fullscreen ad.
+  // The web page may be recreated while Android is showing the ad.
+  onRequestCreated?.(requestId);
   const playerId = pendingPlayerId || "guest";
   const origin = window.location.origin;
   const deepLink = `stopad://rewarded?requestId=${encodeURIComponent(requestId)}&placement=${encodeURIComponent(placement)}&playerId=${encodeURIComponent(playerId)}&origin=${encodeURIComponent(origin)}`;

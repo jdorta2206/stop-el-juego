@@ -23,7 +23,6 @@ import com.google.android.gms.ads.AdError;
 import com.google.android.gms.ads.AdRequest;
 import com.google.android.gms.ads.FullScreenContentCallback;
 import com.google.android.gms.ads.LoadAdError;
-import com.google.android.gms.ads.MobileAds;
 import com.google.android.gms.ads.rewarded.RewardedAd;
 import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback;
 import com.google.android.gms.games.PlayGames;
@@ -88,12 +87,25 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
         // Authentication is scheduled from onResume after the activity enters the foreground.
         checkForPlayUpdate();
         if (AdsPolicy.isEnabled()) {
-            MobileAds.initialize(this, status -> {
-                mobileAdsReady = true;
-                Log.d(TAG, "MobileAds initialized; starting rewarded + interstitial preload");
-                preloadRewardedAd();
-                InterstitialAdStore.initialize(this);
-            });
+            // Keep Mobile Ads out of Application.onCreate and the first TWA
+            // frame. Reward requests remain queued until this delayed init completes.
+            getWindow().getDecorView().postDelayed(() -> {
+                if (isFinishing() || isDestroyed() || !AdsPolicy.isEnabled()) return;
+                RewardedAdPreloader.initialize(this, () -> {
+                    if (isFinishing() || isDestroyed()) return;
+                    mobileAdsReady = true;
+                    Log.d(TAG, "MobileAds ready; starting interstitial preload");
+                    // Resume a rewarded request that arrived during the 1.2s
+                    // deferred SDK initialization instead of leaving it queued forever.
+                    if (activeRequestId != null) {
+                        showRewardedAdWhenReady();
+                    } else {
+                        preloadRewardedAd();
+                    }
+                    InterstitialAdStore.initialize(this);
+                    if (activeInterstitialRequestId != null) showInterstitialWhenReady();
+                });
+            }, 1200L);
         }
         if (Build.VERSION.SDK_INT > Build.VERSION_CODES.O) {
             setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT);
@@ -333,10 +345,17 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                 String requestId = message.optString("requestId", "");
                 String origin = message.optString("origin", "");
                 Log.d(TAG, "INTERSTITIAL REQUEST requestId=" + requestId + " origin=" + origin);
-                if (requestId.isEmpty() || !messageChannelReady || activeInterstitialRequestId != null) return;
+                if (requestId.isEmpty() || !messageChannelReady) return;
                 if (!isAllowedOrigin(origin)) {
                     Log.w(TAG, "INTERSTITIAL rejected origin=" + origin);
                     sendInterstitialResult(requestId, false, "invalid_origin");
+                    return;
+                }
+                // Only one fullscreen ad may run at a time. Always complete a
+                // rejected request so the web caller does not wait for its timeout.
+                if (activeInterstitialRequestId != null || activeRequestId != null) {
+                    Log.w(TAG, "INTERSTITIAL rejected: another ad request is active");
+                    sendInterstitialResult(requestId, false, "busy");
                     return;
                 }
                 activeInterstitialRequestId = requestId;
@@ -346,8 +365,16 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             if (!"STOP_AD_REQUEST_REWARDED".equals(type)) return;
             String requestId = message.optString("requestId", "");
             String placement = message.optString("placement", "extra_time");
-            if (requestId.isEmpty() || !messageChannelReady || activeRequestId != null) return;
-            if (!isAllowedPlacement(placement)) return;
+            if (requestId.isEmpty() || !messageChannelReady) return;
+            if (activeRequestId != null || activeInterstitialRequestId != null) {
+                Log.w(TAG, "REWARDED rejected: another ad request is active");
+                sendRejectedRewardedResult(requestId, placement, "busy");
+                return;
+            }
+            if (!isAllowedPlacement(placement)) {
+                sendRejectedRewardedResult(requestId, placement, "invalid_placement");
+                return;
+            }
             activeRequestId = requestId;
             activePlacement = placement;
             rewardGrantedForCurrentAd = false;
@@ -505,8 +532,8 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
 
     private void showInterstitialWhenReady() {
         if (!mobileAdsReady) {
-            Log.w(TAG, "INTERSTITIAL requested before Mobile Ads initialization finished");
-            activeInterstitialRequestId = null;
+            // Preserve the request; the Mobile Ads initialization callback resumes it.
+            Log.d(TAG, "INTERSTITIAL waiting for Mobile Ads initialization");
             return;
         }
         String requestId = activeInterstitialRequestId;
@@ -515,11 +542,23 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                 + "&origin=" + Uri.encode("https://www.stopjuegodepalabras.com"));
         try {
             Log.d(TAG, "Launching native interstitial activity requestId=" + requestId);
-            startActivity(new Intent(Intent.ACTION_VIEW, uri));
+            startActivityForResult(new Intent(Intent.ACTION_VIEW, uri), 7403);
         } catch (RuntimeException error) {
             Log.e(TAG, "INTERSTITIAL launch failed", error);
-            activeInterstitialRequestId = null;
+            // Complete the web request so a failed launch cannot block later ads.
+            sendInterstitialResult(requestId, false, "launch_failed");
         }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode != 7403) return;
+        String requestId = activeInterstitialRequestId;
+        if (requestId == null) return;
+        boolean shown = resultCode == Activity.RESULT_OK;
+        Log.d(TAG, "INTERSTITIAL activity finished requestId=" + requestId + " shown=" + shown);
+        sendInterstitialResult(requestId, shown, shown ? "admob" : "unavailable");
     }
 
     private boolean isAllowedOrigin(String origin) {
@@ -600,6 +639,22 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             preloadRewardedAd();
         }
     }
+    private void sendRejectedRewardedResult(String requestId, String placement, String reason) {
+        if (requestId == null || requestId.isEmpty()) return;
+        JSONObject result = new JSONObject();
+        try {
+            result.put("type", "STOP_AD_REWARDED_RESULT");
+            result.put("requestId", requestId);
+            result.put("placement", placement == null ? "" : placement);
+            result.put("rewarded", false);
+            result.put("source", "error");
+            result.put("errorCode", 0);
+            result.put("errorDomain", "STOP_AD_BRIDGE");
+            result.put("errorMessage", reason);
+        } catch (JSONException ignored) { return; }
+        sendMessage(result);
+    }
+
     private void sendResult(boolean rewarded, String source) {
         sendResult(rewarded, source, 0, "", "");
     }
