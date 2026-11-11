@@ -23,7 +23,6 @@ import com.google.android.gms.ads.AdError;
 import com.google.android.gms.ads.AdRequest;
 import com.google.android.gms.ads.FullScreenContentCallback;
 import com.google.android.gms.ads.LoadAdError;
-import com.google.android.gms.ads.MobileAds;
 import com.google.android.gms.ads.rewarded.RewardedAd;
 import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback;
 import com.google.android.gms.games.PlayGames;
@@ -88,12 +87,12 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
         // Authentication is scheduled from onResume after the activity enters the foreground.
         checkForPlayUpdate();
         if (AdsPolicy.isEnabled()) {
-            MobileAds.initialize(this, status -> {
+            // Reuse the process-wide initialization started by StopApplication.
+            RewardedAdPreloader.initialize(this, () -> {
                 mobileAdsReady = true;
-                Log.d(TAG, "MobileAds initialized; starting rewarded + interstitial preload");
+                Log.d(TAG, "MobileAds ready; starting interstitial preload");
                 preloadRewardedAd();
                 InterstitialAdStore.initialize(this);
-                // Resume an interstitial request that arrived while the SDK was starting.
                 if (activeInterstitialRequestId != null) showInterstitialWhenReady();
             });
         }
