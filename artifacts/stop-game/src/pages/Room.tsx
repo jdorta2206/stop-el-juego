@@ -608,6 +608,9 @@ export default function Room() {
       const res = await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/add-bot`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
+
+        credentials: "include",
+
         body: JSON.stringify({ hostId: player.id, roomId: room?.id }),
       });
       if (!res.ok) {
@@ -631,6 +634,9 @@ export default function Room() {
       const r = await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/rematch`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
+
+        credentials: "include",
+
         body: JSON.stringify({ playerId: player.id, playerName: player.name ?? "?", avatarColor: (player as any).avatarColor }),
       });
       const j = await r.json();
@@ -735,6 +741,9 @@ export default function Room() {
       const response = await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/halloween-scare`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders(), ...(isHalloweenPreview() ? { "x-halloween-preview": "1" } : {}) },
+
+        credentials: "include",
+
         body: JSON.stringify({ playerId: player.id, playerName: player.name }),
       });
       const data = await response.json().catch(() => ({}));
@@ -830,6 +839,9 @@ export default function Room() {
       const res = await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/category-pack`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
+
+        credentials: "include",
+
         body: JSON.stringify({ hostId: player.id, roomId: room?.id, pack, ...(extras ?? {}) }),
       });
       if (!res.ok) {
@@ -1022,6 +1034,9 @@ export default function Room() {
       await fetch(`${apiBase}/api/rooms/${roomCode.toUpperCase()}/bluff-vote`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
+
+        credentials: "include",
+
         body: JSON.stringify({ voterId: player.id, accusedPlayerId, category, vote }),
       });
     } catch { /* silent */ }
@@ -1165,6 +1180,9 @@ export default function Room() {
           fetch(`${getApiUrl()}/api/tournaments/${tournamentCtx.code}/match-result`, {
             method: "POST",
             headers: { "Content-Type": "application/json", ...authHeaders() },
+
+            credentials: "include",
+
             body: JSON.stringify({ matchId: tournamentCtx.matchId, winnerId: winner.playerId, winnerName: winner.playerName }),
             credentials: "include",
           }).catch(() => {});
@@ -1284,6 +1302,9 @@ export default function Room() {
       await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/stop`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
+
+        credentials: "include",
+
         body: JSON.stringify({ playerId: player.id, playerName: player.name }),
       });
       // 🛡️ Race fix: only kick off the freeze locally if polling hasn't already
@@ -1893,6 +1914,7 @@ export default function Room() {
                         try {
                           const r = await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/use-card`, {
                             method: "POST", headers: { "Content-Type": "application/json", ...authHeaders() },
+                            credentials: "include",
                             body: JSON.stringify({ playerId: player.id }),
                           });
                           const data = await r.json();
@@ -2863,6 +2885,9 @@ function StreamerModeCard({ room, playerId }: { room: any; playerId: string }) {
       await fetch(`${apiBase}/api/rooms/${encodeURIComponent(code)}/visibility`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", ...authHeaders() },
+
+        credentials: "include",
+
         body: JSON.stringify({ hostId: playerId, roomId: room?.id, isPublic: !isPublic }),
       });
     } finally {
