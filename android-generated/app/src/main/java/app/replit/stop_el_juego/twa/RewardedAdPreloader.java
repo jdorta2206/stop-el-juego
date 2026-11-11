@@ -9,7 +9,6 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import com.google.android.gms.ads.AdRequest;
-import com.google.android.gms.ads.initialization.InitializationStatus;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -37,7 +36,7 @@ public final class RewardedAdPreloader {
     private RewardedAdPreloader() {}
 
     public interface InitializationListener {
-        void onInitialized(@NonNull InitializationStatus status);
+        void onInitialized();
     }
 
     public static void initialize(@NonNull Context context) {
@@ -52,7 +51,7 @@ public final class RewardedAdPreloader {
             if (!AdsPolicy.isEnabled()) return;
             if (listener != null) {
                 if (initializationComplete) {
-                    HANDLER.post(() -> listener.onInitialized(null));
+                    HANDLER.post(() -> listener.onInitialized());
                     return;
                 }
                 initializationListeners.add(listener);
@@ -71,7 +70,7 @@ public final class RewardedAdPreloader {
             preloadRewardedAd();
             for (InitializationListener callback : listeners) {
                 try {
-                    callback.onInitialized(status);
+                    callback.onInitialized();
                 } catch (RuntimeException error) {
                     Log.e(TAG, "AdMob initialization listener failed", error);
                 }
