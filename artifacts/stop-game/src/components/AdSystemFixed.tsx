@@ -111,7 +111,6 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
         });
         // The server only reports source=admob after validating Google's signed SSV callback.
         if (result.rewarded === true && result.source === "admob") {
-          clearStoredPendingReward();
           if (!mountedRef.current) return;
           setPhase("done");
           void trackAnalyticsEvent("rewarded_ad_completed", { metadata: { placement, source: "admob" } });
@@ -119,8 +118,15 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
           timeoutRef.current = window.setTimeout(() => {
             timeoutRef.current = null;
             if (mountedRef.current) {
-              onCompleteRef.current(rewardAmount);
-              void acknowledgeRewardResult(result.requestId!);
+              try {
+                onCompleteRef.current(rewardAmount);
+                clearStoredPendingReward();
+                void acknowledgeRewardResult(result.requestId!);
+              } catch {
+                setRetryRequestId(result.requestId!);
+                setErrorDetail("Google confirmó el anuncio, pero STOP no pudo aplicar la recompensa. Puedes reintentarla.");
+                setPhase("pending");
+              }
             }
           }, 500);
         } else if (result.pendingSsv && result.requestId) {
@@ -183,15 +189,20 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
     const result = await retryRewardedResult(retryRequestId);
     if (!mountedRef.current) return;
     if (result.rewarded === true && result.source === "admob") {
-      clearStoredPendingReward();
-      setRetryRequestId(null);
       setPhase("done");
       void trackAnalyticsEvent("rewarded_ad_completed", { metadata: { placement: rewardType, source: "admob", retry: true } });
       timeoutRef.current = window.setTimeout(() => {
         timeoutRef.current = null;
         if (mountedRef.current) {
-          onCompleteRef.current(rewardAmount);
-          void acknowledgeRewardResult(retryRequestId);
+          try {
+            onCompleteRef.current(rewardAmount);
+            clearStoredPendingReward();
+            setRetryRequestId(null);
+            void acknowledgeRewardResult(retryRequestId);
+          } catch {
+            setErrorDetail("Google confirmó el anuncio, pero STOP no pudo aplicar la recompensa. Puedes reintentarla.");
+            setPhase("pending");
+          }
         }
       }, 500);
     } else if (result.pendingSsv) {
