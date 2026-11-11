@@ -250,7 +250,7 @@ public class RewardedAdActivity extends Activity {
                             + " attempt=" + attempt + " state=" + clientState);
                     if (status >= 200 && status < 300) return;
                     // Retry transient server/rate-limit failures, not invalid requests.
-                    if (status < 500 && status != 429) return;
+                    if (status < 500 && status != 408 && status != 429) return;
                 } catch (Exception error) {
                     Log.w(TAG, "Client rewarded result attempt=" + attempt + " failed", error);
                 } finally {
