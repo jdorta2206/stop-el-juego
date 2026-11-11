@@ -1,5 +1,5 @@
 /**
- * Keep AdMob placements disabled until account reactivation is explicitly
- * confirmed. The native and web integrations remain in the codebase.
+ * AdMob has been reactivated. Keep the web game and native TWA placements
+ * controlled by this shared policy switch.
  */
-export const ADMOB_ADS_ENABLED = false;
+export const ADMOB_ADS_ENABLED = true;
