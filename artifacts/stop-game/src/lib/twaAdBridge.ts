@@ -62,7 +62,7 @@ async function readResult(requestId: string): Promise<RewardResult | null> {
     const data = await response.json();
     if (data?.ready === true) {
       return data.rewarded === true
-        ? { rewarded: true, source: "admob" }
+        ? { rewarded: true, source: "admob", requestId }
         : { rewarded: false, source: "skipped" };
     }
     if (data?.clientState === "earned") {
@@ -80,7 +80,7 @@ async function readResult(requestId: string): Promise<RewardResult | null> {
   }
 }
 
-async function acknowledgeRewardResult(requestId: string): Promise<void> {
+export async function acknowledgeRewardResult(requestId: string): Promise<void> {
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
       const response = await fetch(`${RESULT_BASE}/${encodeURIComponent(requestId)}/consume`, {
@@ -110,7 +110,6 @@ function pollRewardResult(requestId: string): Promise<RewardResult> {
       if (deadlineTimer !== null) window.clearTimeout(deadlineTimer);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("focus", handleWindowFocus);
-      if (result.rewarded) void acknowledgeRewardResult(requestId);
       resolve(result);
     };
 
