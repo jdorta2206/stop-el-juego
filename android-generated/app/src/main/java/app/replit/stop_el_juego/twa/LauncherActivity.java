@@ -93,6 +93,8 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                 Log.d(TAG, "MobileAds initialized; starting rewarded + interstitial preload");
                 preloadRewardedAd();
                 InterstitialAdStore.initialize(this);
+                // Resume an interstitial request that arrived while the SDK was starting.
+                if (activeInterstitialRequestId != null) showInterstitialWhenReady();
             });
         }
         if (Build.VERSION.SDK_INT > Build.VERSION_CODES.O) {
@@ -505,8 +507,8 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
 
     private void showInterstitialWhenReady() {
         if (!mobileAdsReady) {
-            Log.w(TAG, "INTERSTITIAL requested before Mobile Ads initialization finished");
-            activeInterstitialRequestId = null;
+            // Preserve the request; the Mobile Ads initialization callback resumes it.
+            Log.d(TAG, "INTERSTITIAL waiting for Mobile Ads initialization");
             return;
         }
         String requestId = activeInterstitialRequestId;
@@ -515,11 +517,23 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                 + "&origin=" + Uri.encode("https://www.stopjuegodepalabras.com"));
         try {
             Log.d(TAG, "Launching native interstitial activity requestId=" + requestId);
-            startActivity(new Intent(Intent.ACTION_VIEW, uri));
+            startActivityForResult(new Intent(Intent.ACTION_VIEW, uri), 7403);
         } catch (RuntimeException error) {
             Log.e(TAG, "INTERSTITIAL launch failed", error);
-            activeInterstitialRequestId = null;
+            // Complete the web request so a failed launch cannot block later ads.
+            sendInterstitialResult(requestId, false, "launch_failed");
         }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode != 7403) return;
+        String requestId = activeInterstitialRequestId;
+        if (requestId == null) return;
+        boolean shown = resultCode == Activity.RESULT_OK;
+        Log.d(TAG, "INTERSTITIAL activity finished requestId=" + requestId + " shown=" + shown);
+        sendInterstitialResult(requestId, shown, shown ? "admob" : "unavailable");
     }
 
     private boolean isAllowedOrigin(String origin) {
