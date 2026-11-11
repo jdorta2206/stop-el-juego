@@ -98,9 +98,20 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
       const knownTwa = isLikelyPlayTwa();
 
       if (bridgeReady || knownTwa) {
-        const result = await requestRewardedAd(placement);
+        const result = await requestRewardedAd(placement, (requestId) => {
+          try {
+            window.localStorage.setItem(PENDING_REWARD_STORAGE_KEY, JSON.stringify({
+              requestId,
+              playerId: playerId || "guest",
+              rewardType,
+              rewardAmount,
+              createdAt: Date.now(),
+            } satisfies StoredPendingReward));
+          } catch {}
+        });
         // The server only reports source=admob after validating Google's signed SSV callback.
         if (result.rewarded === true && result.source === "admob") {
+          clearStoredPendingReward();
           if (!mountedRef.current) return;
           setPhase("done");
           void trackAnalyticsEvent("rewarded_ad_completed", { metadata: { placement, source: "admob" } });
@@ -124,6 +135,7 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
           if (!mountedRef.current) return;
           setPhase("pending");
         } else {
+          clearStoredPendingReward();
           const detail = [
             result.errorCode != null ? `código ${result.errorCode}` : "",
             result.errorDomain || "",
@@ -149,6 +161,7 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
         if (mountedRef.current) onSkipRef.current();
       }, 5000);
     } catch (error) {
+      clearStoredPendingReward();
       const message = error instanceof Error ? error.message : "Error desconocido";
       setErrorDetail(message.slice(0, 300));
       if (!mountedRef.current) return;
