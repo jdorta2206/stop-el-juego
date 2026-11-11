@@ -198,8 +198,8 @@ export default function NotificationsPage() {
           <button
             onClick={async () => {
               if (isSubscribed) {
-                await unsubscribe();
-                flashToast(t.deactivated);
+                const ok = await unsubscribe();
+                if (ok) flashToast(t.deactivated);
               } else {
                 const ok = await subscribe();
                 if (ok) flashToast(t.activated);
