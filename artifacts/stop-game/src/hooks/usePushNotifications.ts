@@ -49,9 +49,9 @@ export function usePushNotifications(playerId: string | undefined, language: str
           setIsSubscribed(true);
           try { localStorage.removeItem(DISABLED_KEY); } catch {}
         } else {
-          let disabled = false;
-          try { disabled = localStorage.getItem(DISABLED_KEY) === "1"; } catch {}
-          setIsSubscribed(!disabled);
+          // No persisted Push API subscription means this device cannot receive pushes.
+          // Never present the notification setting as active without a real endpoint.
+          setIsSubscribed(false);
           return;
         }
 
