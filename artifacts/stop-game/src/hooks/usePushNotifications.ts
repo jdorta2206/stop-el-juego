@@ -63,43 +63,72 @@ export function usePushNotifications(playerId: string | undefined, language: str
         const reg = await navigator.serviceWorker.ready;
         if (cancelled) return;
 
-        const sub = await reg.pushManager.getSubscription();
+        let sub = await reg.pushManager.getSubscription();
         if (cancelled) return;
 
-        // Prioritize the browser's actual persisted Push API subscription.
-        if (sub) {
-          setIsSubscribed(true);
-          try { localStorage.removeItem(DISABLED_KEY); } catch {}
-        } else {
+        if (!sub) {
           let disabled = false;
           try { disabled = localStorage.getItem(DISABLED_KEY) === "1"; } catch {}
           setIsSubscribed(!disabled);
           return;
         }
 
-        if (perm === "granted" && !cancelled && currentPlayerIdRef.current === playerId) {
-          const tzOffsetMinutes = -new Date().getTimezoneOffset();
-          const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
-          try {
-            if (currentPlayerIdRef.current !== playerId) return;
-            const res = await fetch(`${API_BASE}/api/notifications/subscribe`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json", ...authHeaders() },
-              credentials: "include",
-              signal: controller.signal,
-              body: JSON.stringify({
-                playerId: playerId || "anonymous",
-                subscription: sub.toJSON(),
-                language,
-                tzOffsetMinutes,
-                timeZone,
-                origin: window.location.origin,
-              }),
-            });
-            if (!res.ok) console.warn("[push] subscription backfill failed", res.status);
-          } catch (e) {
-            console.warn("[push] subscription backfill error", e);
+        // A browser subscription is not necessarily usable by this server:
+        // Push endpoints are bound to the VAPID key used when they were created.
+        if (perm !== "granted" || currentPlayerIdRef.current !== playerId) {
+          setIsSubscribed(false);
+          return;
+        }
+
+        const vapidPublicKey = await getServerVapidPublicKey();
+        if (cancelled || currentPlayerIdRef.current !== playerId) return;
+        if (!vapidPublicKey) {
+          console.warn("[push] server VAPID key unavailable; subscription is not confirmed");
+          setIsSubscribed(false);
+          return;
+        }
+
+        if (!subscriptionMatchesVapidKey(sub, vapidPublicKey)) {
+          // Permission is already granted. Replace only after obtaining the
+          // current server key, then register the new endpoint below.
+          await sub.unsubscribe();
+          if (cancelled || currentPlayerIdRef.current !== playerId) return;
+          sub = await reg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlB64ToUint8Array(vapidPublicKey),
+          });
+        }
+
+        const tzOffsetMinutes = -new Date().getTimezoneOffset();
+        const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
+        try {
+          if (currentPlayerIdRef.current !== playerId) return;
+          const res = await fetch(`${API_BASE}/api/notifications/subscribe`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", ...authHeaders() },
+            credentials: "include",
+            signal: controller.signal,
+            body: JSON.stringify({
+              playerId: playerId || "anonymous",
+              subscription: sub.toJSON(),
+              language,
+              tzOffsetMinutes,
+              timeZone,
+              origin: window.location.origin,
+            }),
+          });
+          if (!res.ok) {
+            console.warn("[push] subscription backfill failed", res.status);
+            if (!cancelled) setIsSubscribed(false);
+            return;
           }
+          if (!cancelled && currentPlayerIdRef.current === playerId) {
+            try { localStorage.removeItem(DISABLED_KEY); } catch {}
+            setIsSubscribed(true);
+          }
+        } catch (e) {
+          console.warn("[push] subscription backfill error", e);
+          if (!cancelled) setIsSubscribed(false);
         }
       } catch (e) {
         console.warn("[push] initialise error", e);
