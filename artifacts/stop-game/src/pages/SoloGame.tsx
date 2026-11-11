@@ -1,5 +1,4 @@
 import { trackAnalyticsEvent, trackTrustedGameStart } from "@/lib/analyticsClient";
-import { isLikelyPlayTwa } from "@/lib/playBilling";
 import { useState, useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
