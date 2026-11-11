@@ -67,9 +67,8 @@ export function usePushNotifications(playerId: string | undefined, language: str
         if (cancelled) return;
 
         if (!sub) {
-          let disabled = false;
-          try { disabled = localStorage.getItem(DISABLED_KEY) === "1"; } catch {}
-          setIsSubscribed(!disabled);
+          // Without a browser PushSubscription there is nothing the server can deliver to.
+          setIsSubscribed(false);
           return;
         }
 
