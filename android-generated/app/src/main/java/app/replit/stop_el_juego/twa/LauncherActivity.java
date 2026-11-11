@@ -87,14 +87,19 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
         // Authentication is scheduled from onResume after the activity enters the foreground.
         checkForPlayUpdate();
         if (AdsPolicy.isEnabled()) {
-            // Reuse the process-wide initialization started by StopApplication.
-            RewardedAdPreloader.initialize(this, () -> {
-                mobileAdsReady = true;
-                Log.d(TAG, "MobileAds ready; starting interstitial preload");
-                preloadRewardedAd();
-                InterstitialAdStore.initialize(this);
-                if (activeInterstitialRequestId != null) showInterstitialWhenReady();
-            });
+            // Keep Mobile Ads out of Application.onCreate and the first TWA
+            // frame. Reward requests remain queued until this delayed init completes.
+            getWindow().getDecorView().postDelayed(() -> {
+                if (isFinishing() || isDestroyed() || !AdsPolicy.isEnabled()) return;
+                RewardedAdPreloader.initialize(this, () -> {
+                    if (isFinishing() || isDestroyed()) return;
+                    mobileAdsReady = true;
+                    Log.d(TAG, "MobileAds ready; starting interstitial preload");
+                    preloadRewardedAd();
+                    InterstitialAdStore.initialize(this);
+                    if (activeInterstitialRequestId != null) showInterstitialWhenReady();
+                });
+            }, 1200L);
         }
         if (Build.VERSION.SDK_INT > Build.VERSION_CODES.O) {
             setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT);
