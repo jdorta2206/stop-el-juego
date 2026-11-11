@@ -37,17 +37,23 @@ describe("AdMob rewarded SSV polling response", () => {
     });
   });
 
-  it("reopens a consumed, unearned request when a late signed SSV callback confirms it", () => {
-    const conflictStart = rewardsRouteSource.indexOf(
-      "ON CONFLICT (request_id) DO UPDATE SET",
-    );
-    const conflictEnd = rewardsRouteSource.indexOf("\n    `);", conflictStart);
-    const conflictUpdate = rewardsRouteSource.slice(conflictStart, conflictEnd);
+  it("ignores a replayed Google transaction tied to a different request ID", () => {
+    expect(rewardsRouteSource).toContain("ON CONFLICT DO NOTHING");
+    expect(rewardsRouteSource).toContain("duplicate_transaction_ignored");
+    expect(rewardsRouteSource).toContain("WHERE transaction_id = ${transactionId}");
+    expect(rewardsRouteSource).toContain("request_id <> ${requestId}");
+  });
 
-    expect(conflictStart).toBeGreaterThanOrEqual(0);
-    expect(conflictEnd).toBeGreaterThan(conflictStart);
-    expect(conflictUpdate).toContain("consumed_at = CASE");
-    expect(conflictUpdate).toContain("WHEN admob_reward_requests.rewarded = false THEN NULL");
-    expect(conflictUpdate).toContain("ELSE admob_reward_requests.consumed_at");
+  it("reopens a consumed, unearned request when its late signed SSV callback arrives", () => {
+    const updateStart = rewardsRouteSource.indexOf("UPDATE admob_reward_requests", rewardsRouteSource.indexOf("duplicate_transaction_ignored"));
+    const updateEnd = rewardsRouteSource.indexOf("\n      `);", updateStart);
+    const update = rewardsRouteSource.slice(updateStart, updateEnd);
+
+    expect(updateStart).toBeGreaterThanOrEqual(0);
+    expect(updateEnd).toBeGreaterThan(updateStart);
+    expect(update).toContain("consumed_at = CASE");
+    expect(update).toContain("WHEN rewarded = false THEN NULL");
+    expect(update).toContain("ELSE consumed_at");
+    expect(update).toContain("AND NOT EXISTS");
   });
 });
