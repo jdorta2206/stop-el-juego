@@ -110,7 +110,7 @@ export function usePushNotifications(playerId: string | undefined, language: str
         const tzOffsetMinutes = -new Date().getTimezoneOffset();
         const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
         try {
-          if (currentPlayerIdRef.current !== playerId) return false;
+          if (currentPlayerIdRef.current !== playerId) return;
           const res = await fetch(`${API_BASE}/api/notifications/subscribe`, {
             method: "POST",
             headers: { "Content-Type": "application/json", ...authHeaders() },
@@ -158,8 +158,6 @@ export function usePushNotifications(playerId: string | undefined, language: str
       setPermission(perm as NotifPermission);
       if (perm !== "granted") return false;
 
-      try { localStorage.removeItem(DISABLED_KEY); } catch {}
-
       let existing = await reg.pushManager.getSubscription();
       if (currentPlayerIdRef.current !== playerId) return false;
       // A persisted subscription created with a previous VAPID key cannot receive
@@ -192,6 +190,7 @@ export function usePushNotifications(playerId: string | undefined, language: str
 
       if (!res.ok) throw new Error(`subscription HTTP ${res.status}`);
       if (currentPlayerIdRef.current !== playerId) return false;
+      try { localStorage.removeItem(DISABLED_KEY); } catch {}
       setIsSubscribed(true);
       return true;
     } catch (e) {
