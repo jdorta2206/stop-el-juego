@@ -613,10 +613,11 @@ router.post("/scores", scoreLimiter, requirePlayerIdentity, async (req: AuthedRe
   const baseXpGain = calcXpGain(score, effectiveWon, effectiveMode);
   const baseCoinGain = calcCoinGain(score, effectiveWon, effectiveMode, isBonus);
   const playerTimezone = await lookupPlayerTimezone(playerId);
-  // Happy Hour is a reward multiplier, so never let the request choose the
-  // timezone used to grant it. Use the timezone persisted for the account's
-  // enabled push subscription; fall back to its persisted UTC offset.
-  const effectiveTimeZone = playerTimezone.timeZone;
+  // Prefer the timezone already registered for this player. If the player
+  // has never enabled push notifications, use the validated IANA timezone
+  // sent with the authenticated gameplay request instead of silently using UTC.
+  const requestTimeZone = normalizePlayerTimeZone(req.headers["x-stop-timezone"]);
+  const effectiveTimeZone = playerTimezone.timeZone ?? (requestTimeZone !== "UTC" ? requestTimeZone : null);
   const happyHourActive = effectiveTimeZone
     ? isHappyHourActiveForTimeZone(effectiveTimeZone)
     : isHappyHourActiveForTzOffset(playerTimezone.tzOffset);
