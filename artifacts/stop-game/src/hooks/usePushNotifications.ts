@@ -2,9 +2,6 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { getApiUrl, authHeaders } from "@/lib/utils";
 
 const API_BASE = getApiUrl();
-const VAPID_PUBLIC =
-  import.meta.env.VITE_VAPID_PUBLIC_KEY ||
-  "BOwVNL3sEONgyFulirkX5dzwQo662jY2_C846OSMrTSfiz4GFwEsl3_1NY3x_GqJIco8P7Ls85u56IRC3Y8Bj2c";
 const DISABLED_KEY = "stop_push_notifications_disabled";
 
 async function getServerVapidPublicKey(): Promise<string | null> {
@@ -29,6 +26,14 @@ function urlB64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
   const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
   const rawData = atob(base64);
   return Uint8Array.from([...rawData].map((c) => c.charCodeAt(0))) as Uint8Array<ArrayBuffer>;
+}
+
+function subscriptionMatchesVapidKey(subscription: PushSubscription, publicKey: string): boolean {
+  const currentKey = subscription.options.applicationServerKey;
+  if (!currentKey) return false;
+  const current = new Uint8Array(currentKey);
+  const expected = urlB64ToUint8Array(publicKey);
+  return current.length === expected.length && current.every((value, index) => value === expected[index]);
 }
 
 export type NotifPermission = "default" | "granted" | "denied" | "unsupported";
@@ -118,8 +123,14 @@ export function usePushNotifications(playerId: string | undefined, language: str
 
       try { localStorage.removeItem(DISABLED_KEY); } catch {}
 
-      const existing = await reg.pushManager.getSubscription();
+      let existing = await reg.pushManager.getSubscription();
       if (currentPlayerIdRef.current !== playerId) return false;
+      // A persisted subscription created with a previous VAPID key cannot receive
+      // pushes signed by the server current key. Recreate it before registering.
+      if (existing && !subscriptionMatchesVapidKey(existing, vapidPublicKey)) {
+        await existing.unsubscribe();
+        existing = null;
+      }
       const sub = existing || await reg.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlB64ToUint8Array(vapidPublicKey),
