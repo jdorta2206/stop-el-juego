@@ -94,12 +94,12 @@ async function acknowledgeRewardResult(requestId: string): Promise<void> {
   }
 }
 
-function pollRewardResult(requestId: string): Promise<RewardResult> {
+function pollRewardResult(requestId: string, pendingSsvAlreadyObserved = false): Promise<RewardResult> {
   return new Promise<RewardResult>((resolve) => {
     let finished = false;
     let checkInFlight = false;
     const startedAt = Date.now();
-    let pendingSsvObserved = false;
+    let pendingSsvObserved = pendingSsvAlreadyObserved;
     const timeoutResult = (): RewardResult => ({
       rewarded: false,
       source: "error",
@@ -179,7 +179,8 @@ export function retryRewardedResult(requestId: string): Promise<RewardResult> {
   if (!requestId) {
     return Promise.resolve({ rewarded: false, source: "error", errorMessage: "No hay una recompensa pendiente para comprobar." });
   }
-  return pollRewardResult(requestId);
+  // This retry is only offered after the UI has already received a pending SSV result.
+  return pollRewardResult(requestId, true);
 }
 
 export async function requestRewardedAd(placement: RewardedPlacement): Promise<RewardResult> {
