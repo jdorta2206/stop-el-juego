@@ -8,7 +8,6 @@ import androidx.annotation.Nullable;
 
 import com.google.android.gms.ads.AdRequest;
 import com.google.android.gms.ads.LoadAdError;
-import com.google.android.gms.ads.MobileAds;
 import com.google.android.gms.ads.interstitial.InterstitialAd;
 import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback;
 
@@ -31,11 +30,13 @@ public final class InterstitialAdStore {
         appContext = context.getApplicationContext();
         if (initializing) return;
         initializing = true;
-        MobileAds.initialize(appContext, status -> {
+        // LauncherActivity already owns the single process-wide Mobile Ads
+        // initialization. Reuse it instead of initializing the SDK again.
+        RewardedAdPreloader.initialize(appContext, () -> {
             synchronized (InterstitialAdStore.class) {
                 initializing = false;
             }
-            Log.d(TAG, "Mobile Ads initialized; preloading interstitial");
+            Log.d(TAG, "Shared Mobile Ads initialization ready; preloading interstitial");
             preload();
         });
     }
