@@ -80,7 +80,7 @@ async function readResult(requestId: string): Promise<RewardResult | null> {
   }
 }
 
-async function acknowledgeRewardResult(requestId: string): Promise<void> {
+export async function acknowledgeRewardResult(requestId: string): Promise<void> {
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
       const response = await fetch(`${RESULT_BASE}/${encodeURIComponent(requestId)}/consume`, {
@@ -110,7 +110,7 @@ function pollRewardResult(requestId: string): Promise<RewardResult> {
       if (deadlineTimer !== null) window.clearTimeout(deadlineTimer);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("focus", handleWindowFocus);
-      if (result.rewarded) void acknowledgeRewardResult(requestId);
+      // The caller must first apply the reward locally, then acknowledge it.
       resolve(result);
     };
 
