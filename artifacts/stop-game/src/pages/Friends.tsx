@@ -314,6 +314,7 @@ function OnlinePlayerCard({
       controller.abort(); clearInterval(poll); challengePollRef.current = null;
       pendingId.current = null; challengeTimeoutRef.current = null;
     }, 60000);
+    return true;
   };
 
   const isMe = player.playerId === currentPlayer.id;
