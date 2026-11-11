@@ -170,7 +170,18 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
         if (mountedRef.current) onSkipRef.current();
       }, 5000);
     } catch (error) {
-      clearStoredPendingReward();
+      const stored = readStoredPendingReward();
+      if (stored
+        && stored.playerId === (playerId || "guest")
+        && stored.rewardType === rewardType
+        && stored.rewardAmount === rewardAmount) {
+        // The native request may already have started before the bridge/poll
+        // failed. Keep its requestId so the signed SSV result can be retried.
+        setRetryRequestId(stored.requestId);
+        setErrorDetail("La solicitud del anuncio quedó pendiente. Comprueba la confirmación de Google antes de volver a intentarlo.");
+        if (mountedRef.current) setPhase("pending");
+        return;
+      }
       const message = error instanceof Error ? error.message : "Error desconocido";
       setErrorDetail(message.slice(0, 300));
       if (!mountedRef.current) return;
