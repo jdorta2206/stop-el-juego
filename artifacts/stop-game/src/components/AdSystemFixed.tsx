@@ -5,6 +5,7 @@ import { isLikelyPlayTwa } from "@/lib/playBilling";
 import { acknowledgeRewardResult, initTwaAdBridge, isTwaAdBridgeAvailable, requestRewardedAd, retryRewardedResult, setRewardedAdPlayerId } from "@/lib/twaAdBridge";
 import { pauseGameTimer, resumeGameTimer } from "@/lib/timerPauseGuard";
 import { trackAnalyticsEvent } from "@/lib/analyticsClient";
+import { ADMOB_ADS_ENABLED } from "@/lib/admobPolicy";
 
 const GAME_TIMER_PAUSE_EVENT = "stop:rewarded-ad-pause";
 const GAME_TIMER_RESUME_EVENT = "stop:rewarded-ad-resume";
@@ -101,7 +102,10 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
 
   const startWatching = async () => {
     // Premium and unmounted overlays must never request or grant an ad reward.
-    if (isPremium || !mountedRef.current) return;
+    if (!ADMOB_ADS_ENABLED || isPremium || !mountedRef.current) {
+      if (mountedRef.current) onSkipRef.current();
+      return;
+    }
     setRewardedAdPlayerId(playerId);
     const placement = rewardType === "extraTime" ? "extra_time" : rewardType === "hint" ? "hint" : "double_points";
     void trackAnalyticsEvent("rewarded_ad_requested", { metadata: { placement } });
