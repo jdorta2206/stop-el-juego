@@ -41,9 +41,10 @@ export async function lookupPlayerTimezone(playerId: string): Promise<{ timeZone
     const rows = await db
       .select({ timeZone: pushSubscriptionsTable.timeZone, tz: pushSubscriptionsTable.tzOffsetMinutes })
       .from(pushSubscriptionsTable)
-      .where(sql`${pushSubscriptionsTable.playerId} = ${playerId}
-              AND ${pushSubscriptionsTable.enabled} = TRUE`)
-      .orderBy(sql`CASE WHEN ${pushSubscriptionsTable.timeZone} IS NOT NULL THEN 0 ELSE 1 END`)
+      // Keep using the player's last known timezone even after push is disabled.
+      // Notification consent must not change the local time used for game rewards.
+      .where(eq(pushSubscriptionsTable.playerId, playerId))
+      .orderBy(sql`CASE WHEN ${pushSubscriptionsTable.timeZone} IS NOT NULL THEN 0 ELSE 1 END`, desc(pushSubscriptionsTable.id))
       .limit(1);
     return { timeZone: rows[0]?.timeZone ?? null, tzOffset: rows[0]?.tz ?? null };
   } catch {
