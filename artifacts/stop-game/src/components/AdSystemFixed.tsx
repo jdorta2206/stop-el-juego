@@ -115,7 +115,7 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
           setPhase("done");
           void trackAnalyticsEvent("rewarded_ad_completed", { metadata: { placement, source: "admob" } });
           void trackAnalyticsEvent("powerup_used", { metadata: { powerup: placement, source: "admob" } });
-          timeoutRef.current = window.setTimeout(() => {
+          timeoutRef.current = window.setTimeout(async () => {
             timeoutRef.current = null;
             if (mountedRef.current) {
               try {
