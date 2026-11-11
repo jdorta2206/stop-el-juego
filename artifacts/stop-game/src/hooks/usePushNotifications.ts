@@ -253,7 +253,7 @@ export function usePushNotifications(playerId: string | undefined, language: str
       try { localStorage.setItem(DISABLED_KEY, "1"); } catch {}
 
       if (sub) {
-        if (currentPlayerIdRef.current !== playerId) return;
+        if (currentPlayerIdRef.current !== playerId) return false;
         try {
           const response = await fetch(`${API_BASE}/api/notifications/unsubscribe`, {
             method: "DELETE",
