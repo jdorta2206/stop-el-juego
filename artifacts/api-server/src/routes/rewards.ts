@@ -379,39 +379,78 @@ router.get("/admob-ssv", async (req, res) => {
     }
 
     await ensureAdmobRewardTable();
-    const existingRows = await db.execute(sql`
-      SELECT request_id, player_id, rewarded
-      FROM admob_reward_requests
-      WHERE request_id = ${requestId}
-      LIMIT 1
-    `) as unknown as SqlResult<{
-      request_id: string;
-      player_id: string;
-      rewarded: boolean;
-    }>;
 
-    const existing = existingRows.rows?.[0];
-
-    if (existing && existing.player_id !== playerId) {
-      res.status(409).send("identity_mismatch");
-      return;
-    }
-
-    await db.execute(sql`
+    // A Google SSV transaction is globally unique, not merely unique per
+    // request_id. Ignore a replay that arrives with a different request ID;
+    // it must never turn a second pending request into another reward.
+    const inserted = await db.execute(sql`
       INSERT INTO admob_reward_requests
         (request_id, rewarded, player_id, placement, client_state, transaction_id, created_at)
       VALUES
         (${requestId}, true, ${playerId}, ${placement}, 'earned', ${transactionId}, NOW())
-      ON CONFLICT (request_id) DO UPDATE SET
-        rewarded = true,
-        client_state = 'earned',
-        consumed_at = CASE
-          WHEN admob_reward_requests.rewarded = false THEN NULL
-          ELSE admob_reward_requests.consumed_at
-        END,
-        transaction_id = COALESCE(admob_reward_requests.transaction_id, EXCLUDED.transaction_id),
-        placement = COALESCE(admob_reward_requests.placement, EXCLUDED.placement)
-    `);
+      ON CONFLICT DO NOTHING
+      RETURNING request_id
+    `) as unknown as SqlResult<{ request_id: string }>;
+
+    if (!inserted.rows?.length) {
+      const existingRows = await db.execute(sql`
+        SELECT request_id, player_id, transaction_id
+        FROM admob_reward_requests
+        WHERE request_id = ${requestId}
+        LIMIT 1
+      `) as unknown as SqlResult<{
+        request_id: string;
+        player_id: string;
+        transaction_id: string | null;
+      }>;
+
+      const existing = existingRows.rows?.[0];
+      if (!existing) {
+        // The transaction_id uniqueness constraint was hit by a different
+        // request. Acknowledge Google's delivery, but do not grant anything.
+        console.warn("[admob-reward] duplicate_transaction_ignored", {
+          requestId: requestId.slice(0, 8),
+        });
+        res.status(200).send("ok");
+        return;
+      }
+
+      if (existing.player_id !== playerId) {
+        res.status(409).send("identity_mismatch");
+        return;
+      }
+
+      if (existing.transaction_id && existing.transaction_id !== transactionId) {
+        console.warn("[admob-reward] request_transaction_mismatch_ignored", {
+          requestId: requestId.slice(0, 8),
+        });
+        res.status(200).send("ok");
+        return;
+      }
+
+      // The client may have created this pending row before Google's signed
+      // callback arrived. Attach the transaction only if it is not already
+      // owned by another request; the unique index remains the final guard.
+      await db.execute(sql`
+        UPDATE admob_reward_requests
+        SET rewarded = true,
+            client_state = 'earned',
+            consumed_at = CASE
+              WHEN rewarded = false THEN NULL
+              ELSE consumed_at
+            END,
+            transaction_id = COALESCE(transaction_id, ${transactionId}),
+            placement = COALESCE(placement, ${placement})
+        WHERE request_id = ${requestId}
+          AND player_id = ${playerId}
+          AND (transaction_id IS NULL OR transaction_id = ${transactionId})
+          AND NOT EXISTS (
+            SELECT 1 FROM admob_reward_requests
+            WHERE transaction_id = ${transactionId}
+              AND request_id <> ${requestId}
+          )
+      `);
+    }
 
     console.info("[admob-reward] ssv_reward_stored", { requestId: requestId.slice(0, 8), placement });
     res.status(200).send("ok");
