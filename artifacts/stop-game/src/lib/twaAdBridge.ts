@@ -127,8 +127,9 @@ function pollRewardResult(requestId: string): Promise<RewardResult> {
           finish({
             rewarded: false,
             source: "error",
+            pendingSsv: true,
             requestId,
-            errorMessage: "No se pudo confirmar la recompensa. Puedes reintentar la comprobación.",
+            errorMessage: "No se pudo confirmar el resultado del anuncio. Conservamos la solicitud para comprobar si Google envía la verificación; no se concederá nada sin esa confirmación.",
           });
         }
       } finally {
@@ -165,8 +166,9 @@ function pollRewardResult(requestId: string): Promise<RewardResult> {
       finish({
         rewarded: false,
         source: "error",
+        pendingSsv: true,
         requestId,
-        errorMessage: "No se pudo confirmar la recompensa. Puedes reintentar la comprobación.",
+        errorMessage: "No se pudo confirmar el resultado del anuncio. Conservamos la solicitud para comprobar si Google envía la verificación; no se concederá nada sin esa confirmación.",
       });
     };
     deadlineTimer = window.setTimeout(finishAtDeadline, RESULT_TIMEOUT_MS);
