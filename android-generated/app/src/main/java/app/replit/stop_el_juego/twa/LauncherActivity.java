@@ -345,10 +345,17 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                 String requestId = message.optString("requestId", "");
                 String origin = message.optString("origin", "");
                 Log.d(TAG, "INTERSTITIAL REQUEST requestId=" + requestId + " origin=" + origin);
-                if (requestId.isEmpty() || !messageChannelReady || activeInterstitialRequestId != null) return;
+                if (requestId.isEmpty() || !messageChannelReady) return;
                 if (!isAllowedOrigin(origin)) {
                     Log.w(TAG, "INTERSTITIAL rejected origin=" + origin);
                     sendInterstitialResult(requestId, false, "invalid_origin");
+                    return;
+                }
+                // Only one fullscreen ad may run at a time. Always complete a
+                // rejected request so the web caller does not wait for its timeout.
+                if (activeInterstitialRequestId != null || activeRequestId != null) {
+                    Log.w(TAG, "INTERSTITIAL rejected: another ad request is active");
+                    sendInterstitialResult(requestId, false, "busy");
                     return;
                 }
                 activeInterstitialRequestId = requestId;
@@ -358,8 +365,16 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             if (!"STOP_AD_REQUEST_REWARDED".equals(type)) return;
             String requestId = message.optString("requestId", "");
             String placement = message.optString("placement", "extra_time");
-            if (requestId.isEmpty() || !messageChannelReady || activeRequestId != null) return;
-            if (!isAllowedPlacement(placement)) return;
+            if (requestId.isEmpty() || !messageChannelReady) return;
+            if (activeRequestId != null || activeInterstitialRequestId != null) {
+                Log.w(TAG, "REWARDED rejected: another ad request is active");
+                sendRejectedRewardedResult(requestId, placement, "busy");
+                return;
+            }
+            if (!isAllowedPlacement(placement)) {
+                sendRejectedRewardedResult(requestId, placement, "invalid_placement");
+                return;
+            }
             activeRequestId = requestId;
             activePlacement = placement;
             rewardGrantedForCurrentAd = false;
@@ -624,6 +639,22 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             preloadRewardedAd();
         }
     }
+    private void sendRejectedRewardedResult(String requestId, String placement, String reason) {
+        if (requestId == null || requestId.isEmpty()) return;
+        JSONObject result = new JSONObject();
+        try {
+            result.put("type", "STOP_AD_REWARDED_RESULT");
+            result.put("requestId", requestId);
+            result.put("placement", placement == null ? "" : placement);
+            result.put("rewarded", false);
+            result.put("source", "error");
+            result.put("errorCode", 0);
+            result.put("errorDomain", "STOP_AD_BRIDGE");
+            result.put("errorMessage", reason);
+        } catch (JSONException ignored) { return; }
+        sendMessage(result);
+    }
+
     private void sendResult(boolean rewarded, String source) {
         sendResult(rewarded, source, 0, "", "");
     }
