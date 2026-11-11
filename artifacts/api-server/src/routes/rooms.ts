@@ -627,11 +627,19 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
     const won = winner?.playerId === p.playerId;
     const xpBase = calcXpGain(score, won, "multiplayer");
     const storedTimezone = await lookupPlayerTimezone(p.playerId);
-    const playerTimezone = { timeZone: p.timeZone ? normalizePlayerTimeZone(p.timeZone) : (storedTimezone.timeZone ?? "UTC"), tzOffset: storedTimezone.tzOffset };
-    const tzOffset = playerTimezone.tzOffset;
-    const happyHour = tzOffset !== null && isHappyHourActiveForTzOffset(tzOffset);
+    const playerTimeZone = p.timeZone
+      ? normalizePlayerTimeZone(p.timeZone)
+      : (storedTimezone.timeZone ?? "UTC");
+    // Use the room participant's validated IANA timezone to respect DST.
+    // Fall back to the saved offset only when no usable IANA timezone exists.
+    const happyHour = p.timeZone
+      ? isHappyHourActiveForTimeZone(playerTimeZone)
+      : storedTimezone.timeZone
+        ? isHappyHourActiveForTimeZone(storedTimezone.timeZone)
+        : storedTimezone.tzOffset !== null && isHappyHourActiveForTzOffset(storedTimezone.tzOffset);
     const xpGain = happyHour ? xpBase * HAPPY_HOUR_MULTIPLIER : xpBase;
-    const coinGain = calcCoinGain(score, won, "multiplayer", false);
+    const coinBase = calcCoinGain(score, won, "multiplayer", false);
+    const coinGain = happyHour ? coinBase * HAPPY_HOUR_MULTIPLIER : coinBase;
 
     // Claim + all core leaderboard/history mutations are one DB transaction.
     // If two requests race, exactly one INSERT ... ON CONFLICT wins. If the
