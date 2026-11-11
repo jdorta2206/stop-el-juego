@@ -1,4 +1,5 @@
 import { trackAnalyticsEvent, trackTrustedGameStart } from "@/lib/analyticsClient";
+import { ADMOB_ADS_ENABLED } from "@/lib/admobPolicy";
 import { useState, useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
@@ -70,9 +71,7 @@ const SPEED_ROUND_TIME = 20;
 const CHAOS_ROUND_TIME = 45;
 const MAX_ROUNDS = 3;
 const EASY_LETTERS = ["A", "C", "E", "I", "L", "M", "P", "R", "S", "T"];
-// Safety lock: keep rewarded AdMob requests disabled on web and TWA until
-// the AdMob account is explicitly reactivated. The integration remains intact.
-const REWARDED_ADS_DISABLED = true;
+const REWARDED_ADS_DISABLED = !ADMOB_ADS_ENABLED;
 
 function getCrazyCategory(t: any): string | null {
   if (!t.crazyCategories || t.crazyCategories.length === 0) return null;
