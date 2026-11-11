@@ -84,7 +84,7 @@ async function ensureAdmobRewardTable(): Promise<void> {
 
 async function cleanupAdmobRewardRequests(): Promise<void> {
   await db.execute(sql.raw(
-    "DELETE FROM admob_reward_requests WHERE rewarded = false AND consumed_at IS NULL AND created_at < NOW() - INTERVAL '5 minutes'",
+    "DELETE FROM admob_reward_requests WHERE rewarded = false AND consumed_at IS NULL AND created_at < NOW() - INTERVAL '24 hours'",
   ));
 }
 
@@ -199,11 +199,16 @@ router.get("/admob-result/:requestId", async (req, res) => {
       return;
     }
 
-    if (row.rewarded) {
-      // Do not consume on GET: the HTTP response itself can be lost after the
-      // database mutation succeeds. Consumption is acknowledged explicitly by
-      // the web client after it has received the reward result.
+    if (row.rewarded && !row.consumed_at) {
+      // Keep GET read-only so a lost HTTP response can be retried. Once the
+      // client acknowledges receipt through /consume, never expose this same
+      // AdMob transaction as a fresh reward again.
       res.json({ ready: true, rewarded: true, source: "admob" });
+      return;
+    }
+
+    if (row.rewarded && row.consumed_at) {
+      res.json({ ready: true, rewarded: false, alreadyConsumed: true });
       return;
     }
 
@@ -233,7 +238,7 @@ router.get("/admob-result/:requestId", async (req, res) => {
     // Keep pending requests alive long enough for delayed AdMob SSV callbacks.
     // Google documents that SSV callbacks may be delayed, so consuming at the
     // same 120s client polling deadline could discard a legitimate reward.
-    if (ageMs >= 300_000) {
+    if (ageMs >= 24 * 60 * 60 * 1_000) {
       const updated = await db.execute(sql`
         UPDATE admob_reward_requests
         SET consumed_at = NOW()
