@@ -95,7 +95,13 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
                     if (isFinishing() || isDestroyed()) return;
                     mobileAdsReady = true;
                     Log.d(TAG, "MobileAds ready; starting interstitial preload");
-                    preloadRewardedAd();
+                    // Resume a rewarded request that arrived during the 1.2s
+                    // deferred SDK initialization instead of leaving it queued forever.
+                    if (activeRequestId != null) {
+                        showRewardedAdWhenReady();
+                    } else {
+                        preloadRewardedAd();
+                    }
                     InterstitialAdStore.initialize(this);
                     if (activeInterstitialRequestId != null) showInterstitialWhenReady();
                 });
