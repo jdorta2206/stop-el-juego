@@ -7,7 +7,7 @@ import { calculateStreak, appendStreakDay, calcXpGain, calcCoinGain, calcLevel, 
 import { getAnalyticsSessionId, recordTrustedAnalyticsEvent } from "./analytics";
 import { recordAuthoritativeSeasonEvents } from "./season";
 import { recordHalloweenEvent, recordHalloweenScareEvents, getHalloweenEventYear, recordHalloweenScareEventsInTransaction, recordHalloweenScareEventsWithCooldown, isHalloweenPreviewAuthorized } from "./halloween";
-import { isHappyHourActiveForTzOffset, HAPPY_HOUR_MULTIPLIER } from "../lib/happyHour";
+import { isHappyHourActiveForTimeZone, isHappyHourActiveForTzOffset, HAPPY_HOUR_MULTIPLIER } from "../lib/happyHour";
 import { isWordValidAsync, HALLOWEEN_CATEGORY_ALIASES } from "./game";
 import { writeLimiter, roomJoinLimiter, halloweenScareLimiter } from "../middlewares/rateLimit";
 import { verifyClaimedIdentity, readPlayerId, isLoggedInId, isAuthConfigured } from "../lib/playerAuth";
@@ -629,7 +629,12 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
     const storedTimezone = await lookupPlayerTimezone(p.playerId);
     const playerTimezone = { timeZone: p.timeZone ? normalizePlayerTimeZone(p.timeZone) : (storedTimezone.timeZone ?? "UTC"), tzOffset: storedTimezone.tzOffset };
     const tzOffset = playerTimezone.tzOffset;
-    const happyHour = tzOffset !== null && isHappyHourActiveForTzOffset(tzOffset);
+    // Prefer the persisted IANA timezone so daylight-saving changes cannot
+    // leave multiplayer rewards one hour out of sync with the player's clock.
+    const effectiveTimeZone = playerTimezone.timeZone;
+    const happyHour = effectiveTimeZone
+      ? isHappyHourActiveForTimeZone(effectiveTimeZone)
+      : tzOffset !== null && isHappyHourActiveForTzOffset(tzOffset);
     const xpGain = happyHour ? xpBase * HAPPY_HOUR_MULTIPLIER : xpBase;
     const coinGain = calcCoinGain(score, won, "multiplayer", false) * (happyHour ? HAPPY_HOUR_MULTIPLIER : 1);
 
