@@ -585,7 +585,8 @@ export default function Room() {
     const seq = ++typingSeq.current;
     fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/typing`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      credentials: "include",
       body: JSON.stringify({
         playerId: player.id,
         playerName: player.name ?? "?",
