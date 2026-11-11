@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Gift, Star, Zap } from "lucide-react";
 import { getT } from "@/i18n/index";
 import { isLikelyPlayTwa } from "@/lib/playBilling";
-import { initTwaAdBridge, isTwaAdBridgeAvailable, requestRewardedAd, retryRewardedResult, setRewardedAdPlayerId } from "@/lib/twaAdBridge";
+import { initTwaAdBridge, isTwaAdBridgeAvailable, requestRewardedAd, retryRewardedResult, setRewardedAdPlayerId, acknowledgeRewardResult } from "@/lib/twaAdBridge";
 import { pauseGameTimer, resumeGameTimer } from "@/lib/timerPauseGuard";
 import { trackAnalyticsEvent } from "@/lib/analyticsClient";
 
@@ -66,7 +66,10 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
           void trackAnalyticsEvent("powerup_used", { metadata: { powerup: placement, source: "admob" } });
           timeoutRef.current = window.setTimeout(() => {
             timeoutRef.current = null;
-            if (mountedRef.current) onCompleteRef.current(rewardAmount);
+            if (mountedRef.current) {
+              onCompleteRef.current(rewardAmount);
+              if (result.requestId) void acknowledgeRewardResult(result.requestId);
+            }
           }, 500);
         } else if (result.pendingSsv && result.requestId) {
           setRetryRequestId(result.requestId);
@@ -121,7 +124,10 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
       void trackAnalyticsEvent("rewarded_ad_completed", { metadata: { placement: rewardType, source: "admob", retry: true } });
       timeoutRef.current = window.setTimeout(() => {
         timeoutRef.current = null;
-        if (mountedRef.current) onCompleteRef.current(rewardAmount);
+        if (mountedRef.current) {
+            onCompleteRef.current(rewardAmount);
+            if (result.requestId) void acknowledgeRewardResult(result.requestId);
+          }
       }, 500);
     } else if (result.pendingSsv) {
       setErrorDetail(result.errorMessage || "La confirmación de Google sigue pendiente.");
