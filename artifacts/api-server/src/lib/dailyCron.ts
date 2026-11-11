@@ -540,9 +540,11 @@ let dailyCronTimer: ReturnType<typeof setInterval> | null = null;
 
 export function startDailyCron() {
   if (dailyCronTimer) return;
-  // Check every 5 minutes if it's time to send notifications.
-  // Both fires use a per-key DB lock so only ONE instance sends across the cluster.
-  dailyCronTimer = setInterval(async () => {
+  // Poll every minute: the old 5-minute interval inherited the process
+  // startup minute. If the service started at :04, it checked at :04, :09,
+  // :14... and permanently missed every local :00–:04 notification window.
+  // Per-player DB claims keep the denser polling idempotent across instances.
+  const runTick = async () => {
     const now = new Date();
     const utcHour = now.getUTCHours();
     const utcMinute = now.getUTCMinutes();
@@ -599,7 +601,12 @@ export function startDailyCron() {
       // allow failed recipients to retry without blocking the whole batch.
       await sendSeasonClaimNotifications();
     }
-  }, 5 * 60 * 1000);
+  };
+
+  // Run once immediately so a fresh deployment does not miss a window that
+  // began before the first interval callback.
+  void runTick();
+  dailyCronTimer = setInterval(() => { void runTick(); }, 60 * 1000);
 
   console.log("[dailyCron] Crons started — per-user daily, happy hour, daily deals ~10:00 local, streak rescue 19:00 UTC, season rollover 08:00 UTC, season claim 21:00 UTC");
 }
