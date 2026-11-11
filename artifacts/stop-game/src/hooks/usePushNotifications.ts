@@ -268,7 +268,7 @@ export function usePushNotifications(playerId: string | undefined, language: str
 
   useEffect(() => () => preferencesAbortRef.current?.abort(), [playerId]);
 
-  const isSupported = "Notification" in window && "serviceWorker" in navigator && !!VAPID_PUBLIC;
+  const isSupported = "Notification" in window && "serviceWorker" in navigator;
 
   return { permission, isSubscribed, loading, subscribe, unsubscribe, isSupported, getPreferences, updatePreferences };
 }
