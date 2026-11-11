@@ -520,7 +520,8 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             startActivityForResult(new Intent(Intent.ACTION_VIEW, uri), 7403);
         } catch (RuntimeException error) {
             Log.e(TAG, "INTERSTITIAL launch failed", error);
-            activeInterstitialRequestId = null;
+            // Complete the web request so a failed launch cannot block later ads.
+            sendInterstitialResult(requestId, false, "launch_failed");
         }
     }
 
