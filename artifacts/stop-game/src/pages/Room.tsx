@@ -2402,7 +2402,8 @@ export default function Room() {
                                           try {
                                             await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/funvote`, {
                                               method: "POST",
-                                              headers: { "Content-Type": "application/json" },
+                                              headers: { "Content-Type": "application/json", ...authHeaders() },
+                                              credentials: "include",
                                               body: JSON.stringify({
                                                 playerId: player.id,
                                                 votedPlayerId: p.playerId,
