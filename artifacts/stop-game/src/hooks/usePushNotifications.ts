@@ -72,6 +72,15 @@ export function usePushNotifications(playerId: string | undefined, language: str
           return;
         }
 
+        // Respect an explicit opt-out even if the browser failed to remove its
+        // local subscription during the previous unsubscribe attempt.
+        let locallyDisabled = false;
+        try { locallyDisabled = localStorage.getItem(DISABLED_KEY) === "1"; } catch {}
+        if (locallyDisabled) {
+          setIsSubscribed(false);
+          return;
+        }
+
         // A browser subscription is not necessarily usable by this server:
         // Push endpoints are bound to the VAPID key used when they were created.
         if (perm !== "granted" || currentPlayerIdRef.current !== playerId) {
