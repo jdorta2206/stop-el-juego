@@ -789,7 +789,10 @@ async function recoverMultiplayerAuxiliaryEffects(room: any, players: any[]): Pr
   const eligible = players.filter((p: any) => p && !p.isBot && p.playerId && p.loginMethod !== "guest");
   if (eligible.length === 0) return;
   const halloweenPreview = parseBluffMeta(room.stopperJson)?.halloweenPreview === true;
-  const sorted = [...eligible].sort((a, b) => {
+  // Match the original settlement winner calculation: guests count as
+  // competitors even though they are excluded from persistent rewards.
+  const scoringPlayers = players.filter((p: any) => p && !p.isBot);
+  const sorted = [...scoringPlayers].sort((a, b) => {
     const ds = (b.score || 0) - (a.score || 0);
     if (ds !== 0) return ds;
     const sa = a.wasStopper ? 1 : 0, sb = b.wasStopper ? 1 : 0;
