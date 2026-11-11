@@ -1,13 +1,10 @@
 package app.replit.stop_el_juego.twa;
 
 /**
- * Single native advertising safety switch.
- *
- * Keep AdMob disabled until the account is explicitly reactivated and
- * the serving status is verified. The integration remains in place.
+ * Single native advertising policy switch. AdMob serving has been reactivated.
  */
 public final class AdsPolicy {
-    private static final boolean ENABLED = false;
+    private static final boolean ENABLED = true;
 
     private AdsPolicy() {}
 
