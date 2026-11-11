@@ -105,24 +105,29 @@ export function ChallengeNotification({ challenge, onDismiss }: ChallengeNotific
     // the new roomCode; join that room and retry the acceptance once.
     let response = await respondToChallenge(challenge.challengeId, true);
     if (!response.ok && response.roomCode) {
-      const retryJoin = await fetch(
-        getApiUrl() + "/api/rooms/" + response.roomCode.toUpperCase() + "/join",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json", ...authHeaders() },
-          credentials: "include",
-          signal: controller.signal,
-          body: JSON.stringify({
-            playerId: playerData.id,
-            playerName: playerData.name,
-            avatarColor: playerData.avatarColor,
-            loginMethod: playerData.loginMethod ?? null,
-            challengeId: challenge.challengeId,
-          }),
-        },
-      );
-      if (retryJoin.ok) {
-        response = await respondToChallenge(challenge.challengeId, true);
+      try {
+        const retryJoin = await fetch(
+          getApiUrl() + "/api/rooms/" + response.roomCode.toUpperCase() + "/join",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json", ...authHeaders() },
+            credentials: "include",
+            signal: controller.signal,
+            body: JSON.stringify({
+              playerId: playerData.id,
+              playerName: playerData.name,
+              avatarColor: playerData.avatarColor,
+              loginMethod: playerData.loginMethod ?? null,
+              challengeId: challenge.challengeId,
+            }),
+          },
+        );
+        if (retryJoin.ok) {
+          response = await respondToChallenge(challenge.challengeId, true);
+        }
+      } catch {
+        // A failed retry must release the notification instead of leaving
+        // the accept button permanently stuck in its loading state.
       }
     }
     if (!response.ok || !response.roomCode) {
