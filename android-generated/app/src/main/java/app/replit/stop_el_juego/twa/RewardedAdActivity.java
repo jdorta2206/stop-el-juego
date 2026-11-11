@@ -219,36 +219,55 @@ public class RewardedAdActivity extends Activity {
         final String currentOrigin = origin;
         final String currentPlacement = placement == null ? "" : placement;
         new Thread(() -> {
-            HttpURLConnection connection = null;
-            try {
-                URL url = new URL(currentOrigin + "/api/rewards/admob-result");
-                Log.i(TAG, "Posting client result to " + url.getHost() + "/api/rewards/admob-result");
-                connection = (HttpURLConnection) url.openConnection();
-                connection.setRequestMethod("POST");
-                connection.setConnectTimeout(5000);
-                connection.setReadTimeout(5000);
-                connection.setDoOutput(true);
-                connection.setRequestProperty("Content-Type", "application/json");
+            final int maxAttempts = 3;
+            for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+                HttpURLConnection connection = null;
+                try {
+                    URL url = new URL(currentOrigin + "/api/rewards/admob-result");
+                    Log.i(TAG, "Posting client result attempt=" + attempt + " to "
+                            + url.getHost() + "/api/rewards/admob-result");
+                    connection = (HttpURLConnection) url.openConnection();
+                    connection.setRequestMethod("POST");
+                    connection.setConnectTimeout(5000);
+                    connection.setReadTimeout(5000);
+                    connection.setDoOutput(true);
+                    connection.setRequestProperty("Content-Type", "application/json");
 
-                JSONObject body = new JSONObject();
-                body.put("requestId", id);
-                body.put("rewarded", false);
-                body.put("clientState", clientState);
-                body.put("playerId", currentPlayerId);
-                body.put("origin", currentOrigin);
-                body.put("placement", currentPlacement);
+                    JSONObject body = new JSONObject();
+                    body.put("requestId", id);
+                    body.put("rewarded", false);
+                    body.put("clientState", clientState);
+                    body.put("playerId", currentPlayerId);
+                    body.put("origin", currentOrigin);
+                    body.put("placement", currentPlacement);
 
-                byte[] bytes = body.toString().getBytes(StandardCharsets.UTF_8);
-                try (OutputStream output = connection.getOutputStream()) {
-                    output.write(bytes);
+                    byte[] bytes = body.toString().getBytes(StandardCharsets.UTF_8);
+                    try (OutputStream output = connection.getOutputStream()) {
+                        output.write(bytes);
+                    }
+                    int status = connection.getResponseCode();
+                    Log.i(TAG, "Client rewarded result http=" + status
+                            + " attempt=" + attempt + " state=" + clientState);
+                    if (status >= 200 && status < 300) return;
+                    // Retry transient server/rate-limit failures, not invalid requests.
+                    if (status < 500 && status != 429) return;
+                } catch (Exception error) {
+                    Log.w(TAG, "Client rewarded result attempt=" + attempt + " failed", error);
+                } finally {
+                    if (connection != null) connection.disconnect();
                 }
-                Log.d(TAG, "Client rewarded result sent http=" + connection.getResponseCode()
-                        + " state=" + clientState);
-            } catch (Exception error) {
-                Log.e(TAG, "Unable to send rewarded result", error);
-            } finally {
-                if (connection != null) connection.disconnect();
+
+                if (attempt < maxAttempts) {
+                    try {
+                        Thread.sleep(500L * attempt);
+                    } catch (InterruptedException interrupted) {
+                        Thread.currentThread().interrupt();
+                        return;
+                    }
+                }
             }
+            Log.e(TAG, "Client rewarded result delivery failed after " + maxAttempts
+                    + " attempts; signed AdMob SSV remains the only reward authority");
         }).start();
     }
 
