@@ -1,6 +1,7 @@
 name: Android AdMob release AAB v82
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - build/android-admob-1.3.9.6-code82
