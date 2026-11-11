@@ -99,6 +99,14 @@ function pollRewardResult(requestId: string): Promise<RewardResult> {
     let finished = false;
     let checkInFlight = false;
     const startedAt = Date.now();
+    let pendingSsvObserved = false;
+    const timeoutResult = (): RewardResult => ({
+      rewarded: false,
+      source: "error",
+      requestId,
+      pendingSsv: pendingSsvObserved,
+      errorMessage: "No se pudo confirmar la recompensa. Puedes reintentar la comprobación.",
+    });
     let timer: number | null = null;
     let deadlineTimer: number | null = null;
     let pageWasHidden = document.visibilityState === "hidden";
@@ -119,17 +127,13 @@ function pollRewardResult(requestId: string): Promise<RewardResult> {
       checkInFlight = true;
       try {
         const result = await readResult(requestId);
+        if (result?.pendingSsv) pendingSsvObserved = true;
         if (result?.rewarded || result?.source === "skipped") {
           finish(result);
           return;
         }
         if (Date.now() - startedAt >= RESULT_TIMEOUT_MS) {
-          finish({
-            rewarded: false,
-            source: "error",
-            requestId,
-            errorMessage: "No se pudo confirmar la recompensa. Puedes reintentar la comprobación.",
-          });
+          finish(timeoutResult());
         }
       } finally {
         checkInFlight = false;
@@ -162,12 +166,7 @@ function pollRewardResult(requestId: string): Promise<RewardResult> {
         deadlineTimer = window.setTimeout(finishAtDeadline, 1500);
         return;
       }
-      finish({
-        rewarded: false,
-        source: "error",
-        requestId,
-        errorMessage: "No se pudo confirmar la recompensa. Puedes reintentar la comprobación.",
-      });
+      finish(timeoutResult());
     };
     deadlineTimer = window.setTimeout(finishAtDeadline, RESULT_TIMEOUT_MS);
     document.addEventListener("visibilitychange", handleVisibilityChange);
