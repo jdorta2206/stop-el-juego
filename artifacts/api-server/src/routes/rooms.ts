@@ -631,7 +631,7 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
     const tzOffset = playerTimezone.tzOffset;
     const happyHour = tzOffset !== null && isHappyHourActiveForTzOffset(tzOffset);
     const xpGain = happyHour ? xpBase * HAPPY_HOUR_MULTIPLIER : xpBase;
-    const coinGain = calcCoinGain(score, won, "multiplayer", false);
+    const coinGain = calcCoinGain(score, won, "multiplayer", false) * (happyHour ? HAPPY_HOUR_MULTIPLIER : 1);
 
     // Claim + all core leaderboard/history mutations are one DB transaction.
     // If two requests race, exactly one INSERT ... ON CONFLICT wins. If the
