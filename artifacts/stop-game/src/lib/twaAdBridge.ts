@@ -62,8 +62,8 @@ async function readResult(requestId: string): Promise<RewardResult | null> {
     const data = await response.json();
     if (data?.ready === true) {
       return data.rewarded === true
-        ? { rewarded: true, source: "admob" }
-        : { rewarded: false, source: "skipped" };
+        ? { rewarded: true, source: "admob", requestId }
+        : { rewarded: false, source: "skipped", requestId };
     }
     if (data?.clientState === "earned") {
       return {
