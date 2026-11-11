@@ -9,6 +9,10 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import com.google.android.gms.ads.AdRequest;
+import com.google.android.gms.ads.initialization.InitializationStatus;
+
+import java.util.ArrayList;
+import java.util.List;
 import com.google.android.gms.ads.LoadAdError;
 import com.google.android.gms.ads.MobileAds;
 import com.google.android.gms.ads.rewarded.RewardedAd;
@@ -26,15 +30,57 @@ public final class RewardedAdPreloader {
     private static RewardedAd preloadedAd;
     private static boolean loading;
     private static boolean initialized;
+    private static boolean initializationComplete;
+    private static final List<InitializationListener> initializationListeners = new ArrayList<>();
     private static long loadedAt;
 
     private RewardedAdPreloader() {}
 
-    public static synchronized void initialize(@NonNull Context context) {
-        appContext = context.getApplicationContext();
-        if (!AdsPolicy.isEnabled() || initialized) return;
-        initialized = true;
-        MobileAds.initialize(appContext, status -> preloadRewardedAd());
+    public interface InitializationListener {
+        void onInitialized(@NonNull InitializationStatus status);
+    }
+
+    public static void initialize(@NonNull Context context) {
+        initialize(context, null);
+    }
+
+    public static void initialize(@NonNull Context context, @Nullable InitializationListener listener) {
+        final Context applicationContext = context.getApplicationContext();
+        final boolean startInitialization;
+        synchronized (RewardedAdPreloader.class) {
+            appContext = applicationContext;
+            if (!AdsPolicy.isEnabled()) return;
+            if (listener != null) {
+                if (initializationComplete) {
+                    HANDLER.post(() -> listener.onInitialized(null));
+                    return;
+                }
+                initializationListeners.add(listener);
+            }
+            startInitialization = !initialized;
+            if (startInitialization) initialized = true;
+        }
+        if (!startInitialization) return;
+        MobileAds.initialize(applicationContext, status -> {
+            List<InitializationListener> listeners;
+            synchronized (RewardedAdPreloader.class) {
+                initializationComplete = true;
+                listeners = new ArrayList<>(initializationListeners);
+                initializationListeners.clear();
+            }
+            preloadRewardedAd();
+            for (InitializationListener callback : listeners) {
+                try {
+                    callback.onInitialized(status);
+                } catch (RuntimeException error) {
+                    Log.e(TAG, "AdMob initialization listener failed", error);
+                }
+            }
+        });
+    }
+
+    public static synchronized boolean isInitialized() {
+        return initializationComplete;
     }
 
     public static synchronized void preloadRewardedAd() {
