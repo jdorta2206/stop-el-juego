@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isStalePushEndpointStatus } from "./pushHelper";
+import { isStalePushEndpointStatus } from "./pushStatus";
 
 describe("push subscription stale endpoint detection", () => {
   it.each([404, 410])("treats HTTP %i as an expired endpoint", (status) => {
