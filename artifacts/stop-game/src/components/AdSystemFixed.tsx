@@ -119,7 +119,7 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
             timeoutRef.current = null;
             if (mountedRef.current) {
               try {
-                onCompleteRef.current(rewardAmount);
+                await onCompleteRef.current(rewardAmount);
                 clearStoredPendingReward();
                 void acknowledgeRewardResult(result.requestId!);
               } catch {
@@ -206,7 +206,7 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
         timeoutRef.current = null;
         if (mountedRef.current) {
           try {
-            onCompleteRef.current(rewardAmount);
+            await onCompleteRef.current(rewardAmount);
             clearStoredPendingReward();
             setRetryRequestId(null);
             void acknowledgeRewardResult(retryRequestId);
