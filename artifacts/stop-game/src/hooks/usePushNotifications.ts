@@ -7,6 +7,23 @@ const VAPID_PUBLIC =
   "BOwVNL3sEONgyFulirkX5dzwQo662jY2_C846OSMrTSfiz4GFwEsl3_1NY3x_GqJIco8P7Ls85u56IRC3Y8Bj2c";
 const DISABLED_KEY = "stop_push_notifications_disabled";
 
+async function getServerVapidPublicKey(): Promise<string | null> {
+  try {
+    const response = await fetch(`${API_BASE}/api/notifications/vapid-public-key`, {
+      method: "GET",
+      credentials: "omit",
+      cache: "no-store",
+    });
+    if (!response.ok) return null;
+    const data = await response.json();
+    return typeof data?.key === "string" && data.key.trim() ? data.key.trim() : null;
+  } catch {
+    // If the server key cannot be retrieved, do not subscribe with a possibly
+    // stale build-time key: Web Push endpoints are bound to the VAPID key pair.
+    return null;
+  }
+}
+
 function urlB64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
@@ -89,9 +106,11 @@ export function usePushNotifications(playerId: string | undefined, language: str
   }, [playerId, language]);
 
   const subscribe = useCallback(async () => {
-    if (!VAPID_PUBLIC || !("serviceWorker" in navigator)) return false;
+    if (!("serviceWorker" in navigator)) return false;
     setLoading(true);
     try {
+      const vapidPublicKey = await getServerVapidPublicKey();
+      if (!vapidPublicKey) throw new Error("Server VAPID public key is unavailable");
       const reg = await navigator.serviceWorker.ready;
       const perm = await Notification.requestPermission();
       setPermission(perm as NotifPermission);
@@ -103,7 +122,7 @@ export function usePushNotifications(playerId: string | undefined, language: str
       if (currentPlayerIdRef.current !== playerId) return false;
       const sub = existing || await reg.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: urlB64ToUint8Array(VAPID_PUBLIC),
+        applicationServerKey: urlB64ToUint8Array(vapidPublicKey),
       });
 
       const tzOffsetMinutes = -new Date().getTimezoneOffset();
