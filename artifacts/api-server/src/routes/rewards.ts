@@ -199,11 +199,16 @@ router.get("/admob-result/:requestId", async (req, res) => {
       return;
     }
 
-    if (row.rewarded) {
-      // Do not consume on GET: the HTTP response itself can be lost after the
-      // database mutation succeeds. Consumption is acknowledged explicitly by
-      // the web client after it has received the reward result.
+    if (row.rewarded && !row.consumed_at) {
+      // Keep GET read-only so a lost HTTP response can be retried. Once the
+      // client acknowledges receipt through /consume, never expose this same
+      // AdMob transaction as a fresh reward again.
       res.json({ ready: true, rewarded: true, source: "admob" });
+      return;
+    }
+
+    if (row.rewarded && row.consumed_at) {
+      res.json({ ready: true, rewarded: false, alreadyConsumed: true });
       return;
     }
 
