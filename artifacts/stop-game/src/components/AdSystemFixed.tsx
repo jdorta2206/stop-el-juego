@@ -220,6 +220,12 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
       setErrorDetail(result.errorMessage || "La confirmación de Google sigue pendiente.");
       setPhase("pending");
     } else {
+      // A definitive non-reward result (for example, the user skipped the ad)
+      // must not be restored as a pending confirmation on the next mount.
+      if (!result.pendingSsv) {
+        clearStoredPendingReward();
+        setRetryRequestId(null);
+      }
       setErrorDetail(result.errorMessage || "No se pudo confirmar la recompensa.");
       setPhase("error");
     }
