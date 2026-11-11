@@ -15,11 +15,7 @@ function enabledAndUnmuted() {
   );
 }
 
-// A 403 can mean credentials/policy mismatch and is not proof that a
-// browser subscription is expired. Only 404/410 are safe stale-endpoint signals.
-export function isStalePushEndpointStatus(statusCode: unknown): boolean {
-  return statusCode === 404 || statusCode === 410;
-}
+import { isStalePushEndpointStatus } from "./pushStatus";
 
 const VAPID_PUBLIC  = process.env.VAPID_PUBLIC_KEY  || "";
 const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY || "";
