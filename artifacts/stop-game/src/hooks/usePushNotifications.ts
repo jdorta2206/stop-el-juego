@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { getApiUrl } from "@/lib/utils";
+import { getApiUrl, authHeaders } from "@/lib/utils";
 
 const API_BASE = getApiUrl();
 const VAPID_PUBLIC =
@@ -62,7 +62,8 @@ export function usePushNotifications(playerId: string | undefined, language: str
             if (currentPlayerIdRef.current !== playerId) return;
             const res = await fetch(`${API_BASE}/api/notifications/subscribe`, {
               method: "POST",
-              headers: { "Content-Type": "application/json" },
+              headers: { "Content-Type": "application/json", ...authHeaders() },
+              credentials: "include",
               signal: controller.signal,
               body: JSON.stringify({
                 playerId: playerId || "anonymous",
@@ -109,7 +110,8 @@ export function usePushNotifications(playerId: string | undefined, language: str
       const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
       const res = await fetch(`${API_BASE}/api/notifications/subscribe`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        credentials: "include",
         body: JSON.stringify({
           playerId: playerId || "anonymous",
           subscription: sub.toJSON(),
@@ -146,7 +148,7 @@ export function usePushNotifications(playerId: string | undefined, language: str
       if (!sub) return null;
       const res = await fetch(
         `${API_BASE}/api/notifications/preferences?endpoint=${encodeURIComponent(sub.endpoint)}&playerId=${encodeURIComponent(playerId || "anonymous")}`,
-        { signal: controller.signal },
+        { signal: controller.signal, credentials: "include", headers: authHeaders() },
       );
       if (!res.ok || controller.signal.aborted || currentPlayerIdRef.current !== playerId) return null;
       return await res.json();
@@ -167,7 +169,8 @@ export function usePushNotifications(playerId: string | undefined, language: str
       if (currentPlayerIdRef.current !== playerId) return false;
       const res = await fetch(`${API_BASE}/api/notifications/preferences`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        credentials: "include",
         body: JSON.stringify({ endpoint: sub.endpoint, playerId: playerId || "anonymous", ...patch }),
       });
       return res.ok;
@@ -187,7 +190,8 @@ export function usePushNotifications(playerId: string | undefined, language: str
         try {
           await fetch(`${API_BASE}/api/notifications/unsubscribe`, {
             method: "DELETE",
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json", ...authHeaders() },
+            credentials: "include",
             body: JSON.stringify({ endpoint: sub.endpoint, playerId: playerId || "anonymous" }),
           });
         } catch (e) {
