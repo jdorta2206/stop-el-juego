@@ -107,6 +107,7 @@ public class InterstitialAdActivity extends Activity {
         ad.setFullScreenContentCallback(new FullScreenContentCallback() {
             @Override public void onAdShowedFullScreenContent() {
                 Log.d(TAG, "Interstitial shown");
+                setResult(Activity.RESULT_OK);
             }
 
             @Override public void onAdDismissedFullScreenContent() {
