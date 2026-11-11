@@ -1,5 +1,6 @@
 import { trackAnalyticsEvent, trackTrustedGameStart } from "@/lib/analyticsClient";
 import { ADMOB_ADS_ENABLED } from "@/lib/admobPolicy";
+import { isLikelyPlayTwa } from "@/lib/playBilling";
 import { useState, useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
@@ -71,7 +72,9 @@ const SPEED_ROUND_TIME = 20;
 const CHAOS_ROUND_TIME = 45;
 const MAX_ROUNDS = 3;
 const EASY_LETTERS = ["A", "C", "E", "I", "L", "M", "P", "R", "S", "T"];
-const REWARDED_ADS_DISABLED = !ADMOB_ADS_ENABLED;
+const REWARDED_ADS_DISABLED = !ADMOB_ADS_ENABLED || (
+  import.meta.env.VITE_REWARDED_ADS_DISABLED === "1" && !isLikelyPlayTwa()
+);
 
 function getCrazyCategory(t: any): string | null {
   if (!t.crazyCategories || t.crazyCategories.length === 0) return null;
