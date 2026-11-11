@@ -244,8 +244,8 @@ export function usePushNotifications(playerId: string | undefined, language: str
     } catch { return false; }
   }, [playerId]);
 
-  const unsubscribe = useCallback(async () => {
-    if (!("serviceWorker" in navigator)) return;
+  const unsubscribe = useCallback(async (): Promise<boolean> => {
+    if (!("serviceWorker" in navigator)) return false;
     setLoading(true);
     try {
       const reg = await navigator.serviceWorker.ready;
@@ -255,20 +255,26 @@ export function usePushNotifications(playerId: string | undefined, language: str
       if (sub) {
         if (currentPlayerIdRef.current !== playerId) return;
         try {
-          await fetch(`${API_BASE}/api/notifications/unsubscribe`, {
+          const response = await fetch(`${API_BASE}/api/notifications/unsubscribe`, {
             method: "DELETE",
             headers: { "Content-Type": "application/json", ...authHeaders() },
             credentials: "include",
             body: JSON.stringify({ endpoint: sub.endpoint, playerId: playerId || "anonymous" }),
           });
+          if (!response.ok) {
+            console.warn("[push] unsubscribe server cleanup failed", response.status);
+          }
         } catch (e) {
           console.warn("[push] unsubscribe server request failed", e);
         }
-        await sub.unsubscribe();
+        const removedLocally = await sub.unsubscribe();
+        if (!removedLocally) return false;
       }
       setIsSubscribed(false);
+      return true;
     } catch (e) {
       console.error("Push unsubscribe error:", e);
+      return false;
     } finally {
       setLoading(false);
     }
