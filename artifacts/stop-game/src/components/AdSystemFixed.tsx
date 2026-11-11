@@ -57,6 +57,23 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
   const onSkipRef = useRef(onSkip);
   onCompleteRef.current = onComplete;
   onSkipRef.current = onSkip;
+  // A rapid double tap / overlapping SSV retry must never apply the same
+  // confirmed request twice during this mounted game session.
+  const completedRewardRequestsRef = useRef(new Set<string>());
+  const applyConfirmedRewardOnce = async (requestId: string, amount: number) => {
+    if (completedRewardRequestsRef.current.has(requestId)) return false;
+    completedRewardRequestsRef.current.add(requestId);
+    try {
+      await onCompleteRef.current(amount);
+      clearStoredPendingReward();
+      setRetryRequestId(null);
+      void acknowledgeRewardResult(requestId);
+      return true;
+    } catch (error) {
+      completedRewardRequestsRef.current.delete(requestId);
+      throw error;
+    }
+  };
   useEffect(() => () => {
     mountedRef.current = false;
     if (timeoutRef.current !== null) window.clearTimeout(timeoutRef.current);
@@ -119,9 +136,7 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
             timeoutRef.current = null;
             if (mountedRef.current) {
               try {
-                await onCompleteRef.current(rewardAmount);
-                clearStoredPendingReward();
-                void acknowledgeRewardResult(result.requestId!);
+                await applyConfirmedRewardOnce(result.requestId!, rewardAmount);
               } catch {
                 setRetryRequestId(result.requestId!);
                 setErrorDetail("Google confirmó el anuncio, pero STOP no pudo aplicar la recompensa. Puedes reintentarla.");
@@ -206,10 +221,7 @@ export function RewardedAd({ onComplete, onSkip, playerId, isPremium = false, re
         timeoutRef.current = null;
         if (mountedRef.current) {
           try {
-            await onCompleteRef.current(rewardAmount);
-            clearStoredPendingReward();
-            setRetryRequestId(null);
-            void acknowledgeRewardResult(retryRequestId);
+            await applyConfirmedRewardOnce(retryRequestId, rewardAmount);
           } catch {
             setErrorDetail("Google confirmó el anuncio, pero STOP no pudo aplicar la recompensa. Puedes reintentarla.");
             setPhase("pending");
