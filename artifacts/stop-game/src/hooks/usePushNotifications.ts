@@ -140,7 +140,7 @@ export function usePushNotifications(playerId: string | undefined, language: str
   }, [playerId, language]);
 
   const subscribe = useCallback(async () => {
-    if (!("serviceWorker" in navigator)) return false;
+    if (!("Notification" in window) || !("serviceWorker" in navigator)) return false;
     setLoading(true);
     try {
       const vapidPublicKey = await getServerVapidPublicKey();
