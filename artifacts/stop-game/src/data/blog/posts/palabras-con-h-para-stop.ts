@@ -66,8 +66,6 @@ Pocos colores empiezan por H. Discutibles:
 - **Hamburgo** (Alemania)
 - **Helsinki** (Finlandia)
 - **Houston** (Estados Unidos)
-- **Helsinki** (Finlandia)
-- **Hamburgo** (Alemania)
 - **Hong Kong** (región administrativa especial de China; comprobad si vuestra categoría admite territorios)
 - **Heredia** (Costa Rica)
 
@@ -78,7 +76,7 @@ Pocos colores empiezan por H. Discutibles:
 - **Huevo** (también huevos)
 - **Higo / Higos**
 - **Habas**
-- **Hot dog / Hotdog** (acepta)
+- **Hot dog / hotdog** (préstamo del inglés; acordad si lo admitís)
 
 ## Objetos / cosas con H
 
@@ -92,7 +90,7 @@ Pocos colores empiezan por H. Discutibles:
 
 ## Deportes con H
 
-- **Hockey** (RAE válida, también "jockey" es otra cosa)
+- **Hockey** (deporte de equipo)
 - **Halterofilia** (levantamiento de pesas)
 - **Hípica / Hipismo** (deporte ecuestre)
 
