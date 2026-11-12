@@ -85,7 +85,7 @@ Si no se te ocurre nada, **deja la casilla en blanco** y enfócate en otras cate
 
 Aquí hay más opciones de las que parece:
 
-- **Kebab** (la versión turca, casi universalmente conocida)
+- **Kebab** (plato de origen turco y de otras cocinas de la región)
 - **Kiwi** (la fruta)
 - **Kéfir** (bebida fermentada)
 - **Kétchup** (la salsa)
@@ -181,7 +181,7 @@ Memoriza esta tabla y la próxima vez que salga la K en una partida, **arrasará
 
 ¿Te ha sido útil? Sigue practicando con más letras:
 
-- [Las 100 mejores palabras con W](/blog/palabras-con-w-para-stop)
+- [Palabras con W para STOP](/blog/palabras-con-w-para-stop)
 - [Palabras con X para STOP](/blog/palabras-con-x-para-stop)
 - [Palabras con Y para STOP](/blog/palabras-con-y-para-stop)
 - [Cómo pensar palabras rápido bajo presión](/blog/pensar-palabras-rapido-bajo-presion)
