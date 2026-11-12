@@ -75,6 +75,14 @@ jobs:
           grep -q 'ADMOB_ADS_ENABLED = true' ../artifacts/stop-game/src/lib/admobPolicy.ts
           grep -q 'com.google.android.gms.permission.AD_ID' app/src/main/AndroidManifest.xml
           grep -q 'android.permission.POST_NOTIFICATIONS' app/src/main/AndroidManifest.xml
+          grep -q 'ca-app-pub-4807272408824742~9880632781' app/src/main/AndroidManifest.xml
+          grep -q 'ca-app-pub-4807272408824742/3559554716' app/src/main/java/app/replit/stop_el_juego/twa/RewardedAdActivity.java
+          grep -q 'ca-app-pub-4807272408824742/7242069847' app/src/main/java/app/replit/stop_el_juego/twa/InterstitialAdStore.java
+          grep -q 'USE_TEST_REWARDED_ADS = false' app/src/main/java/app/replit/stop_el_juego/twa/LauncherActivity.java
+          grep -q 'play-services-games-v2:22.1.0' app/build.gradle
+          grep -q 'com.google.android.gms.ads.APPLICATION_ID' app/src/main/AndroidManifest.xml
+          grep -q 'app.replit.stop_el_juego.twa' app/src/main/AndroidManifest.xml
+          echo 'Production AdMob IDs, Android package, Play Games SDK and permissions: OK'
           echo 'Android AdMob release source checks: OK'
       - name: Build signed Google Play AAB
         working-directory: android-generated
