@@ -26,7 +26,7 @@ function setMeta(html, name, content, attribute = "name") {
   return tag.test(html) ? html.replace(tag, replacement) : html.replace(/<\/head>/i, `  ${replacement}\n</head>`);
 }
 
-function makeDocument(shell, { route, title, description, body }) {
+function makeDocument(shell, { route, canonicalRoute = route, title, description, body }) {
   const rootPattern = /<div\s+id=["']root["']\s*>[\s\S]*?<\/div>/i;
   if (!rootPattern.test(shell)) throw new Error("No se encontró #root en la plantilla de Vite.");
   let html = shell.replace(rootPattern, `<div id="root">${body}</div>`);
@@ -34,8 +34,8 @@ function makeDocument(shell, { route, title, description, body }) {
   html = setMeta(html, "description", description);
   html = setMeta(html, "og:title", title, "property");
   html = setMeta(html, "og:description", description, "property");
-  html = setMeta(html, "og:url", `${SITE}${route || "/"}`, "property");
-  const canonical = `<link rel="canonical" href="${SITE}${route || "/"}">`;
+  html = setMeta(html, "og:url", `${SITE}${canonicalRoute || "/"}`, "property");
+  const canonical = `<link rel="canonical" href="${SITE}${canonicalRoute || "/"}">`;
   if (/<link\s+rel=["']canonical["']/i.test(html)) {
     html = html.replace(/<link\s+rel=["']canonical["'][^>]*>/i, canonical);
   } else {
@@ -149,8 +149,54 @@ const staticPages/ = [
     title: "Contacto y soporte de STOP El Juego",
     description: "Contacta con el equipo de STOP El Juego para comunicar incidencias, enviar sugerencias o solicitar ayuda.",
     body: pageBody("Contacto y soporte", "Si tienes problemas al acceder, iniciar una partida o utilizar una función, puedes ponerte en contacto con el equipo de STOP El Juego.", [
-      ["Soporte por correo", "Escribe a soporte@stopjuegodepalabras.com e indica qué estabas intentando hacer, el dispositivo y el navegador que utilizas. No incluyas contraseñas ni datos de pago."],
+      ["Soporte por correo", "Escribe a dorynex@stopjuegodepalabras.com e indica qué estabas intentando hacer y el dispositivo y navegador que utilizas. No incluyas contraseñas ni datos de pago."],
       ["Sugerencias", "También puedes enviar ideas para mejorar las categorías, las reglas, la accesibilidad o la experiencia multijugador."]
+    ]),
+  },
+  {
+    route: "/privacidad",
+    title: "Política de privacidad de STOP El Juego",
+    description: "Consulta qué datos trata STOP El Juego, con qué finalidades y qué opciones tienes para ejercer tus derechos y solicitar la eliminación de tu cuenta.",
+    body: pageBody("Política de privacidad", "Última actualización: 1 de octubre de 2026. En STOP valoramos tu privacidad. Esta política explica qué información tratamos, para qué la usamos y con qué servicios puede compartirse.", [
+      ["Información que tratamos", "Podemos tratar tu nombre de usuario, correo electrónico cuando lo facilita el proveedor de inicio de sesión, foto de perfil, datos de partidas, puntuaciones, progreso, preferencias y datos necesarios para mantener tu sesión y tu cuenta. También registramos eventos de uso y datos técnicos para medir el funcionamiento y la actividad del juego."],
+      ["Para qué utilizamos los datos", "Utilizamos la información para gestionar cuentas, sesiones, perfiles, partidas, rankings y progreso; procesar pagos mediante los proveedores correspondientes; enviar notificaciones si las activas; y mejorar la seguridad, el funcionamiento y la experiencia del juego."],
+      ["Analítica, publicidad y cookies", "La versión web puede utilizar Google Analytics, Google Tag Manager y Google AdSense. La aplicación Android/TWA puede utilizar servicios de medición y publicidad asociados a Google Play y AdMob. Estos servicios pueden utilizar cookies, identificadores u otras tecnologías según su configuración y sus propias políticas."],
+      ["Proveedores externos", "STOP puede utilizar servicios de Google para autenticación, analítica, publicidad, notificaciones y distribución, y Stripe para pagos. Cada proveedor procesa los datos conforme a sus propias condiciones y políticas. STOP no vende datos personales."],
+      ["Tus derechos y eliminación de cuenta", "Puedes solicitar acceso, rectificación o eliminación de tus datos escribiendo a dorynex@stopjuegodepalabras.com. También puedes utilizar la página de eliminación de cuenta para enviar una solicitud específica."]
+    ]),
+  },
+  {
+    route: "/privacy",
+    canonicalRoute: "/privacidad",
+    title: "Política de privacidad de STOP El Juego",
+    description: "Consulta qué datos trata STOP El Juego, con qué finalidades y qué opciones tienes para ejercer tus derechos y solicitar la eliminación de tu cuenta.",
+    body: pageBody("Política de privacidad", "Última actualización: 1 de octubre de 2026. En STOP valoramos tu privacidad. Esta política explica qué información tratamos, para qué la usamos y con qué servicios puede compartirse.", [
+      ["Información que tratamos", "Podemos tratar tu nombre de usuario, correo electrónico cuando lo facilita el proveedor de inicio de sesión, foto de perfil, datos de partidas, puntuaciones, progreso, preferencias y datos necesarios para mantener tu sesión y tu cuenta."],
+      ["Tus derechos", "Puedes solicitar acceso, rectificación o eliminación de tus datos escribiendo a dorynex@stopjuegodepalabras.com o utilizando la página de eliminación de cuenta."]
+    ]),
+  },
+  {
+    route: "/terminos",
+    title: "Términos y condiciones de STOP El Juego",
+    description: "Lee las condiciones de uso de STOP El Juego, las reglas sobre cuentas, compras, conducta y propiedad intelectual.",
+    body: pageBody("Términos y condiciones", "Última actualización: 17 de junio de 2026. Al utilizar STOP aceptas estas condiciones. Si no estás de acuerdo con ellas, no utilices el servicio.", [
+      ["Uso del servicio", "STOP es un juego de palabras gratuito para mayores de 13 años. Puedes jugar sin registro, aunque algunas funciones como el ranking o la tienda pueden requerir una cuenta."],
+      ["Cuentas", "Eres responsable de la actividad realizada desde tu cuenta y de mantener protegidas tus credenciales. No compartas tu contraseña con terceros."],
+      ["Compras", "Los packs opcionales y sus condiciones se muestran antes de completar la compra. Consulta la información del producto y las condiciones del proveedor de pago antes de confirmar."],
+      ["Conducta", "No está permitido hacer trampas, acosar a otros jugadores ni utilizar lenguaje ofensivo. El incumplimiento puede dar lugar a medidas sobre la cuenta."],
+      ["Propiedad intelectual", "Los elementos propios de STOP pertenecen a sus titulares. Las marcas de terceros mencionadas en el servicio pertenecen a sus respectivos propietarios."],
+      ["Cambios y contacto", "Las condiciones pueden actualizarse. Para consultas, visita la página de contacto o escribe a dorynex@stopjuegodepalabras.com."]
+    ]),
+  },
+  {
+    route: "/terms",
+    canonicalRoute: "/terminos",
+    title: "Términos y condiciones de STOP El Juego",
+    description: "Lee las condiciones de uso de STOP El Juego, las reglas sobre cuentas, compras, conducta y propiedad intelectual.",
+    body: pageBody("Términos y condiciones", "Última actualización: 17 de junio de 2026. Al utilizar STOP aceptas estas condiciones. Si no estás de acuerdo con ellas, no utilices el servicio.", [
+      ["Uso del servicio", "STOP es un juego de palabras gratuito para mayores de 13 años. Puedes jugar sin registro, aunque algunas funciones como el ranking o la tienda pueden requerir una cuenta."],
+      ["Conducta", "No está permitido hacer trampas, acosar a otros jugadores ni utilizar lenguaje ofensivo. El incumplimiento puede dar lugar a medidas sobre la cuenta."],
+      ["Contacto", "Para consultas, visita la página de contacto o escribe a dorynex@stopjuegodepalabras.com."]
     ]),
   },
   {
