@@ -213,7 +213,12 @@ if (process.env["SERVE_CLIENT"] === "1") {
 
     res.sendFile(routeIndex, {
       headers: { "Cache-Control": "no-cache, no-store, must-revalidate" },
-    }, next);
+    }, (error) => {
+      // sendFile has already completed the response on success. Only forward
+      // an actual file error; calling next() on success triggers the SPA
+      // fallback and attempts to send a second response.
+      if (error && !res.headersSent) next(error);
+    });
   });
 
   // SPA fallback: only application routes should receive index.html.
@@ -227,7 +232,9 @@ if (process.env["SERVE_CLIENT"] === "1") {
     }
     res.sendFile(path.join(clientDist, "index.html"), {
       headers: { "Cache-Control": "no-cache, no-store, must-revalidate" },
-    }, next);
+    }, (error) => {
+      if (error && !res.headersSent) next(error);
+    });
   });
 }
 
