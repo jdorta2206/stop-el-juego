@@ -139,13 +139,11 @@ Mejor en blanco.
 | Marca | Yamaha |
 | Famoso | Yoko Ono |
 
-9 palabras. **+90 puntos asegurados** si las pones bien y nadie más las tiene.
+Esta selección ofrece ejemplos para practicar. No asegura puntos: la puntuación depende del sistema de la partida, de la validez de cada respuesta y de las coincidencias con otros jugadores.
 
 ## Por qué la Y es una oportunidad
 
-A diferencia de la X, donde casi nadie saca nada, la Y es una **letra intermedia**: el jugador medio saca 20-30 puntos, el bien preparado saca 70-90. La diferencia es enorme.
-
-Memorizar este artículo te da una **ventaja real** sobre tus rivales. Y solo te llevará 5 minutos.
+La Y ofrece más posibilidades que algunas letras poco frecuentes, pero no existe una puntuación media universal. Practica las palabras, revisa su significado y adapta tus respuestas a las categorías y reglas de cada partida.
 
 ---
 
