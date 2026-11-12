@@ -127,8 +127,8 @@ Pocos colores empiezan por H. Discutibles:
 
 1. **Cuidado con las palabras "que suenan a H pero no".** Ernesto, Andrés, Alicia… no valen.
 2. **La H es rica en marcas y famosos.** Aprovéchalas.
-3. **Hipopótamo siempre.** Es la palabra que **nadie discute** y casi todo el mundo escribe.
-4. **No olvides los plurales.** "Habas", "Higos", "Huevos" — funcionan igual.
+3. **Hipopótamo** es un ejemplo claro de animal con H. Aun así, comprobad que la categoría y el criterio de aceptación estén claros.
+4. **Revisa el criterio sobre plurales.** Algunas partidas los admiten y otras prefieren respuestas en singular.
 
 ## Tu "kit mínimo STOP letra H"
 
