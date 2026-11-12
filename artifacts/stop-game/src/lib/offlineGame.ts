@@ -141,8 +141,8 @@ function isWordValid(
   const normCategory = normalizeWord(canonicalCategory);
   if (bundle.openCategories.includes(normCategory)) return normalizedWord.length >= 3;
 
-  const primaryDict = bundle.dictionary[language] || bundle.dictionary["es"];
-  let categoryWords = findCategoryWords(primaryDict || {}, canonicalCategory);
+  const primaryDict = bundle.dictionary[language];
+  let categoryWords = primaryDict ? findCategoryWords(primaryDict, canonicalCategory) : [];
   // Match the server: closed categories require a dictionary for the selected
   // language. Never accept an arbitrary word when that category is missing.
   if (categoryWords.length === 0) return false;
@@ -161,9 +161,9 @@ export function getAiWordOffline(
 ): string {
   const bundle = getCachedOfflineBundle();
   if (!bundle) return "";
-  const langDict = bundle.dictionary[language] || bundle.dictionary["es"] || {};
+  const langDict = bundle.dictionary[language] || {};
   const canonicalCategory = bundle.categoryAliases?.[normalizeWord(category)] ?? category;
-  let categoryWords = findCategoryWords(langDict, canonicalCategory);
+  const categoryWords = findCategoryWords(langDict, canonicalCategory);
   const normalizedLetter = normalizeWord(letter);
   const matches = categoryWords.filter(w => normalizeWord(w).startsWith(normalizedLetter));
   if (matches.length === 0) return "";
