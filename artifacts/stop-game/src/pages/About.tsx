@@ -7,7 +7,7 @@ export default function About() {
         <h1 className="text-4xl font-black text-white mb-6">Acerca de STOP</h1>
         <div className="space-y-6 text-white/80 leading-relaxed">
           <p>
-            <strong>STOP</strong> nació en 2025 como un proyecto personal de un grupo de amigos apasionados por los juegos de palabras. Inspirados en el clásico <em>Tutti Frutti</em> y <em>Scattergories</em>, queríamos crear una versión moderna, multijugador y accesible desde cualquier dispositivo.
+            <strong>STOP El Juego</strong> es un proyecto independiente inspirado en los juegos clásicos de categorías y palabras, conocidos en distintos lugares como STOP, Basta o Tutti Frutti. Su objetivo es ofrecer una forma accesible de jugar desde el navegador y compartir partidas desde móvil u ordenador.
           </p>
           <p>
             El objetivo era sencillo: <strong>conectar a personas a través de la diversión y el desafío mental</strong>. Queríamos que cualquier persona, sin importar su edad o conocimientos informáticos, pudiera disfrutar de una partida rápida con amigos o competir globalmente en retos diarios.
