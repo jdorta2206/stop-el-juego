@@ -21,25 +21,25 @@ const escapeHtml = (value = "") => String(value)
   .replace(/'/g, "&#39;");
 
 function setMeta(html, name, content, attribute = "name") {
-  const tag = new RegExp(`<meta\\s+${attribute}=["']${name}["'][^>]*>`, "i");
+  const tag = new RegExp(`<meta\s+${attribute}=["']${name}["'][^>]*>`, "i");
   const replacement = `<meta ${attribute}="${name}" content="${escapeHtml(content)}">`;
-  return tag.test(html) ? html.replace(tag, replacement) : html.replace(/<\\/head>/i, `  ${replacement}\\n</head>`);
+  return tag.test(html) ? html.replace(tag, replacement) : html.replace(/<\/head>/i, `  ${replacement}\n</head>`);
 }
 
 function makeDocument(shell, { route, title, description, body }) {
-  const rootPattern = /<div\\s+id=["']root["']\\s*>[\\s\\S]*?<\\/div>/i;
+  const rootPattern = /<div\s+id=["']root["']\s*>[\s\S]*?<\/div>/i;
   if (!rootPattern.test(shell)) throw new Error("No se encontró #root en la plantilla de Vite.");
   let html = shell.replace(rootPattern, `<div id="root">${body}</div>`);
-  html = html.replace(/<title>[^<]*<\\/title>/i, `<title>${escapeHtml(title)}</title>`);
+  html = html.replace(/<title>[^<]*<\/title>/i, `<title>${escapeHtml(title)}</title>`);
   html = setMeta(html, "description", description);
   html = setMeta(html, "og:title", title, "property");
   html = setMeta(html, "og:description", description, "property");
   html = setMeta(html, "og:url", `${SITE}${route || "/"}`, "property");
   const canonical = `<link rel="canonical" href="${SITE}${route || "/"}">`;
-  if (/<link\\s+rel=["']canonical["']/i.test(html)) {
-    html = html.replace(/<link\\s+rel=["']canonical["'][^>]*>/i, canonical);
+  if (/<link\s+rel=["']canonical["']/i.test(html)) {
+    html = html.replace(/<link\s+rel=["']canonical["'][^>]*>/i, canonical);
   } else {
-    html = html.replace(/<\\/head>/i, `  ${canonical}\\n</head>`);
+    html = html.replace(/<\/head>/i, `  ${canonical}\n</head>`);
   }
   return html;
 }
@@ -53,7 +53,7 @@ if (!fs.existsSync(indexPath)) {
 }
 
 const shell = fs.readFileSync(indexPath, "utf8");
-if (!/<div\\s+id=["']root["']\\s*>/i.test(shell)) {
+if (!/<div\s+id=["']root["']\s*>/i.test(shell)) {
   throw new Error('dist/index.html no contiene el contenedor React <div id="root"></div> esperado.');
 }
 
@@ -192,9 +192,9 @@ for (const page of pages) {
 }
 
 const homeHtml = fs.readFileSync(indexPath, "utf8");
-const rootMatch = homeHtml.match(/<div\\s+id=["']root["']>([\\s\\S]*?)<\\/div>/i);
+const rootMatch = homeHtml.match(/<div\s+id=["']root["']>([\s\S]*?)<\/div>/i);
 const homeRoot = rootMatch?.[1] ?? "";
-const wordCount = homeRoot.replace(/<[^>]+>/g, " ").replace(/&[^;]+;/g, " ").trim().split(/\\s+/).filter(Boolean).length;
+const wordCount = homeRoot.replace(/<[^>]+>/g, " ").replace(/&[^;]+;/g, " ").trim().split(/\s+/).filter(Boolean).length;
 if (wordCount < 150) throw new Error(`La portada prerenderizada tiene solo ${wordCount} palabras.`);
 
 for (const route of ["/como-jugar", "/como-funciona", "/acerca", "/faq", "/contacto", "/estrategias", "/blog"]) {
