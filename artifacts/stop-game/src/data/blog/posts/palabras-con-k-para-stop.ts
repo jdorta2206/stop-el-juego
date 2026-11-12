@@ -2,7 +2,7 @@ import type { BlogPost } from "../types";
 
 const post: BlogPost = {
   slug: "palabras-con-k-para-stop",
-  title: "Las 100 mejores palabras con K para STOP (categoría por categoría)",
+  title: "Palabras con K para STOP: ejemplos por categorías",
   description: "Ejemplos de palabras con K organizados por categorías para practicar y revisar antes de una partida de STOP.",
   keywords: ["palabras con K", "palabras con K para STOP", "nombres con K", "animales con K", "países con K", "comidas con K", "objetos con K", "marcas con K"],
   publishedAt: "2026-05-21",
