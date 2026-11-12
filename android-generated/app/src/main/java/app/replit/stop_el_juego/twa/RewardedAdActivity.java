@@ -14,7 +14,6 @@ import com.google.android.gms.ads.AdError;
 import com.google.android.gms.ads.AdRequest;
 import com.google.android.gms.ads.FullScreenContentCallback;
 import com.google.android.gms.ads.LoadAdError;
-import com.google.android.gms.ads.MobileAds;
 import com.google.android.gms.ads.rewarded.RewardedAd;
 import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback;
 import com.google.android.gms.ads.rewarded.ServerSideVerificationOptions;
@@ -81,7 +80,10 @@ public class RewardedAdActivity extends Activity {
 
         handler.postDelayed(globalWatchdog, GLOBAL_WATCHDOG_MS);
 
-        MobileAds.initialize(this, status -> {
+        // The Application owns Mobile Ads initialization; wait for that same
+        // initialization instead of starting a second SDK initialization here.
+        RewardedAdPreloader.initialize(this, () -> {
+            if (isFinishing()) return;
             RewardedAd preloaded = RewardedAdPreloader.takePreloadedRewardedAd();
             if (preloaded != null) {
                 Log.d(TAG, "Using preloaded rewarded ad requestId=" + requestId);

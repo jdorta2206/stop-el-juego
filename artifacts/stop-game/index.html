@@ -51,7 +51,22 @@
     j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
     'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
     })(window,document,'script','dataLayer','GTM-KP7P4GBK');</script>
-    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4807272408824742" crossorigin="anonymous"></script>
+    <script>
+      // AdSense is for the browser website; Android TWA uses native AdMob only.
+      (function () {
+        var params = new URLSearchParams(window.location.search);
+        var isAndroidTwa =
+          params.get("source") === "googleplay-twa" ||
+          params.get("source") === "twa" ||
+          document.referrer.indexOf("android-app://app.replit.stop_el_juego.twa") === 0;
+        if (isAndroidTwa) return;
+        var ads = document.createElement("script");
+        ads.async = true;
+        ads.src = "https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4807272408824742";
+        ads.crossOrigin = "anonymous";
+        document.head.appendChild(ads);
+      })();
+    </script>
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="STOP - El Juego" />
     <meta property="og:url" content="https://www.stopjuegodepalabras.com/" />
@@ -70,6 +85,7 @@
     <meta name="keywords" content="STOP, juego de palabras, categorías, online, multijugador, ranking" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
     <noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"></noscript>
     <style>

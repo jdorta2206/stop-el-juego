@@ -32,9 +32,22 @@
     'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
     })(window,document,'script','dataLayer','GTM-KP7P4GBK');</script>
 
-    <!-- Google AdSense — verificación de propiedad + carga de anuncios -->
-    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4807272408824742"
-            crossorigin="anonymous"></script>
+    <script>
+      // AdSense is for the browser website; Android TWA uses native AdMob only.
+      (function () {
+        var params = new URLSearchParams(window.location.search);
+        var isAndroidTwa =
+          params.get("source") === "googleplay-twa" ||
+          params.get("source") === "twa" ||
+          document.referrer.indexOf("android-app://app.replit.stop_el_juego.twa") === 0;
+        if (isAndroidTwa) return;
+        var ads = document.createElement("script");
+        ads.async = true;
+        ads.src = "https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4807272408824742";
+        ads.crossOrigin = "anonymous";
+        document.head.appendChild(ads);
+      })();
+    </script>
 
     <!-- Open Graph — WhatsApp, Instagram, Facebook, Telegram -->
     <meta property="og:type"        content="website" />

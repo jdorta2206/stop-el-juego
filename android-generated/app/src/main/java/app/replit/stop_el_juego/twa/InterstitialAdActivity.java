@@ -16,7 +16,6 @@ import com.google.android.gms.ads.FullScreenContentCallback;
 import com.google.android.gms.ads.interstitial.InterstitialAd;
 import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback;
 import com.google.android.gms.ads.LoadAdError;
-import com.google.android.gms.ads.MobileAds;
 
 public class InterstitialAdActivity extends Activity {
     private static final String TAG = "STOP_INTERSTITIAL";
@@ -46,7 +45,9 @@ public class InterstitialAdActivity extends Activity {
         if (!isAllowedOrigin(origin)) { finish(); return; }
 
         handler.postDelayed(initializationTimeout, INITIALIZATION_TIMEOUT_MS);
-        MobileAds.initialize(this, status -> {
+        // Reuse the process-wide SDK initialization. Do not initialize
+        // Mobile Ads a second time when an interstitial Activity is opened.
+        RewardedAdPreloader.initialize(this, () -> {
             handler.removeCallbacks(initializationTimeout);
             if (!finished && !isFinishing()) showPreloadedOrLoad();
         });
@@ -107,6 +108,7 @@ public class InterstitialAdActivity extends Activity {
         ad.setFullScreenContentCallback(new FullScreenContentCallback() {
             @Override public void onAdShowedFullScreenContent() {
                 Log.d(TAG, "Interstitial shown");
+                setResult(Activity.RESULT_OK);
             }
 
             @Override public void onAdDismissedFullScreenContent() {
