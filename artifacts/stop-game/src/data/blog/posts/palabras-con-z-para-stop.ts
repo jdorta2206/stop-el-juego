@@ -2,8 +2,8 @@ import type { BlogPost } from "../types";
 
 const post: BlogPost = {
   slug: "palabras-con-z-para-stop",
-  title: "Palabras con Z para STOP: 90 palabras para arrasar la ronda",
-  description: "La Z parece difícil pero tiene más palabras de las que crees. Te damos 90+ palabras con Z válidas para STOP: zorro, zanahoria, Zimbabue, Zara, Zinedine Zidane y más.",
+  title: "Palabras con Z para STOP: ejemplos por categorías",
+  description: "Practica palabras con Z organizadas por categorías y comprueba cuáles encajan con las reglas de tu partida de STOP.",
   keywords: ["palabras con Z", "palabras con Z para STOP", "nombres con Z", "animales con Z", "países con Z", "comidas con Z", "marcas con Z"],
   publishedAt: "2026-05-17",
   author: "Equipo STOP",
@@ -133,7 +133,7 @@ Muy pocos colores empiezan por Z. Si no es zafiro, mejor en blanco.
 | Marca | Zara |
 | Famoso | Zinedine Zidane |
 
-10 categorías cubiertas. **+100 puntos potenciales** en la ronda.
+La lista reúne ejemplos de varias categorías; no implica una puntuación fija ni garantiza que todas las respuestas sean aceptadas en cualquier partida.
 
 ## La Z, una letra subestimada
 
