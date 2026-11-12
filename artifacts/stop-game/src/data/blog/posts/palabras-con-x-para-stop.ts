@@ -126,11 +126,11 @@ Aquí sorprendentemente hay opciones:
 | Marca | Xiaomi |
 | Famoso | Xavi Hernández |
 
-Estos ejemplos pueden servirte como punto de partida para practicar, pero no garantizan una puntuación: comprueba que cada respuesta encaja con la categoría y las normas de tu partida.
+Estos seis ejemplos pueden servirte como punto de partida para practicar, pero no garantizan una puntuación: comprueba que cada respuesta encaja con la categoría y las normas de tu partida.
 
 ## Por qué la X es ventaja, no problema
 
-Aunque parezca contraintuitivo, las letras "imposibles" como X, K, W, Y, Z son donde **se ganan las partidas de STOP**. Razón:
+Aunque parezca contraintuitivo, las letras menos frecuentes como X, K, W, Y y Z pueden exigir más preparación y dejar categorías sin respuesta. Razón:
 
 - Las letras frecuentes suelen ofrecer más opciones conocidas, aunque eso no asegura que todos obtengan la misma puntuación.
 - Las letras menos habituales pueden exigir más preparación y dejar categorías sin respuesta; el resultado depende de las palabras admitidas y del sistema de puntuación.
