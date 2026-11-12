@@ -158,20 +158,19 @@ Hay marcas conocidas que empiezan por K. Son nombres comerciales, así que utili
 
 ## Resumen: tu "kit STOP letra K"
 
-Si solo te quedas con 10 palabras, que sean estas:
+Si quieres preparar algunos ejemplos por categoría, puedes empezar por estos:
 
-| Categoría | Palabra |
+| Categoría | Ejemplo |
 |---|---|
 | Nombre (si se admiten nombres propios) | Karen |
 | Animal | Koala |
-
 | País | Kenia |
 | Ciudad | Kioto |
 | Comida | Kebab |
 | Objeto | Kayak |
 | Deporte | Karate |
 | Marca (si se admiten marcas) | Kellogg's |
-| Famoso | Kim Kardashian |
+| Persona famosa (si se admiten nombres propios) | Kim Kardashian |
 
 La tabla reúne ejemplos para practicar. Los nombres propios y las marcas solo encajan si las reglas de vuestra partida los admiten.
 

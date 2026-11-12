@@ -2,167 +2,132 @@ import type { BlogPost } from "../types";
 
 const post: BlogPost = {
   slug: "regionalismos-stop-paises-hispanos",
-  title: "STOP en español: regionalismos por país que SÍ valen (y los que no)",
-  description: "¿Vale 'auto' en categoría de cosa si juegas con españoles? ¿Y 'palta' por aguacate? Guía completa de regionalismos hispanos válidos en STOP y cómo gestionarlos.",
+  title: "STOP en español: regionalismos por país y cómo aceptarlos",
+  description: "Guía para gestionar regionalismos del español en partidas de STOP: diferencias de vocabulario, diccionarios y criterios compartidos para evitar impugnaciones.",
   keywords: ["regionalismos STOP", "palabras Latinoamérica STOP", "español de México Argentina STOP", "qué palabras valen STOP", "vocabulario hispano juego"],
   publishedAt: "2026-05-07",
   author: "Equipo STOP",
   category: "Historia y curiosidades",
   readMinutes: 6,
   content: `
-El español es una lengua **rica en regionalismos**. Lo que en España es "coche", en México es "auto" o "carro". Lo que en Argentina es "frutilla", en España es "fresa". Y en STOP, **estas diferencias pueden salvarte una ronda… o costarte una discusión**.
+El español tiene muchas palabras distintas para nombrar un mismo objeto o alimento. En España se dice a menudo «coche» y en distintos países de América se usan «auto» o «carro»; «fresa» y «frutilla» también varían según la región.
 
-Esta guía recoge los regionalismos hispanos más comunes que aparecen en STOP, y cómo manejarlos según con quién juegues.
+En STOP, estas diferencias pueden enriquecer la partida, pero conviene acordar cómo se van a aceptar antes de empezar. Esta guía ofrece ejemplos de equivalencias y una forma práctica de resolver dudas sin asumir que todas las palabras se aceptan automáticamente.
 
-## Regla general: vale lo que está en el DRAE
+## Una regla útil: acordad el criterio antes de jugar
 
-El **Diccionario de la Real Academia Española** acepta la mayoría de regionalismos hispanoamericanos como válidos. Si la palabra está en el [DRAE](https://dle.rae.es) con una marca de "Méx.", "Arg.", "Esp." o similar, **vale**.
+El [Diccionario de la lengua española](https://dle.rae.es) es una fuente de consulta útil para comprobar el significado y las marcas geográficas de muchas palabras. Sin embargo, encontrar una entrada no significa que esa respuesta encaje automáticamente en cualquier categoría o que todas las partidas tengan que aceptarla.
 
-Esto cubre **el 95% de los casos**. Cuando hay duda, consulta el DRAE en el móvil.
+Antes de jugar, acordad:
 
-## Frutas y verduras: el campo de batalla
+- Si se aceptan regionalismos de todos los países hispanohablantes.
+- Qué diccionarios u otras fuentes se usarán para resolver dudas.
+- Si se permiten nombres propios, marcas, extranjerismos y variantes coloquiales.
+- Cómo se resolverán las impugnaciones y si se tendrá en cuenta el contexto de la palabra.
 
-Esta es la categoría con **más diferencias regionales**:
+## Frutas y verduras: nombres que cambian según la región
 
-| España | México | Argentina | Otros |
-|---|---|---|---|
-| Plátano | Plátano / Cambur | Banana | Banano (Col.) |
-| Fresa | Fresa | Frutilla | Fresón |
-| Aguacate | Aguacate | Palta | Palta (Chi., Per.) |
-| Melocotón | Durazno | Durazno | Durazno |
-| Patata | Papa | Papa | Papa |
-| Pomelo | Toronja | Pomelo | Toronja |
-| Albaricoque | Chabacano | Damasco | Damasco |
+| España | Otros usos regionales | Comentario |
+|---|---|---|
+| Fresa | Frutilla | El uso cambia según el país. |
+| Aguacate | Palta | Ambos nombres se usan en distintas zonas. |
+| Melocotón | Durazno | Son nombres regionales de la misma fruta. |
+| Patata | Papa | La preferencia depende de la región. |
+| Pomelo | Toronja | El uso y la extensión varían por país. |
+| Albaricoque | Damasco, chabacano | Hay varias denominaciones regionales. |
 
-> 💡 **Todas son válidas** según RAE. Si juegas con mexicanos, "durazno" vale aunque tú lo llames "melocotón".
+La tabla muestra equivalencias de vocabulario, no una resolución automática de cada respuesta. Comprueba el significado concreto y las reglas de vuestra partida.
 
 ## Animales
 
-| España | Méx./LATAM | Notas |
+| Nombre habitual en España | Otros usos o variantes | Qué conviene comprobar |
 |---|---|---|
-| Perro / Can | Perro | Universal |
-| Loro / Cotorra | Cotorra / Perico | Perico vale RAE |
-| Caballo / Yegua | Caballo / Pingo (Arg.) | Pingo regional |
-| Mariposa | Mariposa / Papalote (Méx., pero papalote es cometa) | Cuidado con falsos amigos |
+| Loro | Cotorra, perico | Que la palabra identifique un animal y no otra acepción. |
+| Caballo | Pingo en algunos usos regionales | El significado y el registro de la palabra. |
+| Mariposa | Mariposa | En este caso el nombre es ampliamente compartido. |
 
-## Cosas / objetos cotidianos
+No confundas una palabra que suena regional con una palabra que pertenece a otra categoría. Por ejemplo, «papalote» se usa en México para una cometa, por lo que no debe presentarse como sinónimo general de mariposa.
 
-Aquí hay **muchas trampas**:
+## Objetos cotidianos
 
-| España | LATAM | RAE |
+| España | Otros usos regionales | Comentario |
 |---|---|---|
-| Coche | Auto, carro | Las 3 válidas |
-| Móvil | Celular | Ambas válidas |
-| Ordenador | Computadora | Ambas válidas |
-| Bolígrafo | Birome (Arg.), pluma (Méx.) | Birome y pluma válidas |
-| Jersey | Suéter, chompa (Per.) | Todas válidas |
-| Falda | Pollera (Arg.) | Pollera válida |
-| Piscina | Pileta (Arg.), alberca (Méx.) | Las 3 válidas |
-| Patata frita | Papa frita | Ambas válidas |
-| Chaqueta | Saco (Arg.), chamarra (Méx.) | Todas válidas |
-| Aparcamiento | Estacionamiento, parqueo | Todas válidas |
+| Coche | Auto, carro | Denominaciones habituales en distintos países. |
+| Móvil | Celular | Diferencia regional de uso. |
+| Ordenador | Computadora | Diferencia regional de uso. |
+| Bolígrafo | Birome, pluma | El significado puede variar según el país y el contexto. |
+| Jersey | Suéter, chompa | Conviene comprobar la acepción regional. |
+| Falda | Pollera | Uso regional. |
+| Piscina | Pileta, alberca | El uso depende de la zona. |
+| Chaqueta | Chamarra, saco | Algunas voces tienen otros significados según el país. |
 
-## Profesiones
+## Profesiones y ocupaciones
 
-Pocas diferencias serias, pero ojo con:
+También hay diferencias habituales:
 
-- **Camarero** (Esp.) vs **mesero / mozo** (LATAM) — todas válidas.
-- **Conductor** vs **chófer / chofer** — todas válidas.
+- «Camarero», «mesero» y «mozo» pueden designar trabajos similares en distintos países.
+- «Conductor» y «chófer» se usan para referirse a quien conduce profesionalmente.
 
-## Comidas
+Comprueba siempre que la palabra corresponda a la categoría concreta que aparece en la partida.
 
-Muchísimas diferencias:
+## Comidas y bebidas
 
-| España | LATAM | Notas |
+| España | Otros usos regionales | Comentario |
 |---|---|---|
-| Tortilla (de patata) | Tortilla (de maíz) | ¡Falso amigo! |
-| Patatas bravas | (no existe) | Concepto regional |
-| Croqueta | Croqueta | Universal |
-| Bocadillo / Bocata | Sándwich, torta (Méx.) | Las 3 válidas |
-| Empanada | Empanada | Universal pero diferentes versiones |
-| Tapa | Botana (Méx.), picada (Arg.) | Diferentes |
+| Zumo | Jugo | Denominaciones regionales de bebidas de fruta. |
+| Bocadillo | Sándwich, torta | El significado de «torta» cambia mucho según el país. |
+| Refresco | Gaseosa, soda | El uso varía por región. |
+| Caña | Chela | Son voces coloquiales y su significado depende del contexto. |
 
-## Bebidas
+Una equivalencia aproximada no garantiza que dos palabras sean intercambiables en todos los contextos. Si hay desacuerdo, consultad una fuente y aplicad el criterio pactado.
 
-- **Refresco** (Esp.) vs **gaseosa** (LATAM) vs **soda** (Méx.): todas válidas.
-- **Zumo** (Esp.) vs **jugo** (LATAM): ambas válidas.
-- **Caña** (cerveza, Esp.) vs **chela** (Méx., Per.): chela = informal.
+## Regionalismos, nombres propios y marcas no son lo mismo
 
-## Apodos cariñosos
+Que una palabra sea regional no la convierte en nombre propio ni en marca. Son cuestiones distintas y pueden tener criterios de aceptación diferentes.
 
-Categoría "famosa" o "apodo": cuidado regional:
+- **Regionalismo:** una palabra cuyo uso se asocia especialmente con una zona.
+- **Nombre propio:** identifica a una persona, lugar o entidad concreta.
+- **Marca:** identifica un producto o servicio comercial.
+- **Extranjerismo:** procede de otra lengua; su aceptación depende del uso y de las reglas acordadas.
 
-- **Tío / tía** (Esp.) = amigo/amiga genérico.
-- **Güey / wey** (Méx.) = igual.
-- **Boludo / pibe** (Arg.) = igual.
-- **Mae** (Costa Rica) = igual.
-- **Compa / mano** (Méx., Centroam.) = igual.
+No deis por válida una respuesta solo porque sea conocida en vuestro país o aparezca en una lista online.
 
-Estas valen como "apodo" pero **NO como nombre propio**.
+## Cómo jugar con participantes de varios países
 
-## Topónimos y gentilicios
+Una partida mixta puede funcionar muy bien si todos conocen el criterio de antemano:
 
-- **Madrileño / chilango (Méx.) / porteño (Arg.) / habanero (Cuba)** → todos válidos como gentilicio.
-- **Galicia / Gallega / gallego (Arg., despectivo para español)** → vale en RAE pero ojo con el contexto.
+### 1. Aceptar regionalismos de todo el español
 
-## Cómo gestionar las diferencias en una partida mixta
+Es una opción inclusiva si el grupo quiere reconocer vocabulario de distintos países. Aun así, cada respuesta debe cumplir la inicial, la categoría y los criterios acordados.
 
-Si juegas con gente de **varios países hispanos**, hay 3 opciones:
+### 2. Limitarse a una variedad concreta
 
-### 1. **Reglas amplias** (recomendado)
+Puede ser útil en una actividad escolar o lingüística centrada en una región. Explicad el criterio antes de empezar para evitar sorpresas.
 
-Cualquier palabra del DRAE vale, sin importar de qué región. Es la opción más justa y divertida.
+### 3. Resolver las dudas con una fuente común
 
-### 2. **Reglas estrictas por país**
+Elegid un diccionario o recurso de consulta y utilizadlo para todos por igual. Si una palabra tiene varias acepciones, comprobad la que corresponde al contexto.
 
-Solo valen palabras del español de un país concreto. Útil si estáis aprendiendo el español de esa región, pero **resta diversión**.
+## Palabras que conviene revisar con cuidado
 
-### 3. **Reglas "voto rápido"**
+- **Cool:** extranjerismo de uso coloquial; acordad si se permiten palabras de otras lenguas.
+- **Selfi / selfie:** comprobad qué forma y criterio ortográfico vais a aceptar.
+- **Whatsappear:** los nombres de aplicaciones y los derivados informales pueden generar dudas; no los deis por válidos sin acuerdo.
+- **Comelón:** puede tener uso regional; comprobad la acepción y la categoría.
+- **Bizarro:** no presupongas que tiene el mismo significado que el inglés «bizarre».
 
-Para palabras dudosas, votación express de 10 segundos. Si la mayoría la acepta, vale.
-
-## Palabras "trampa" que parecen regionalismos pero no lo son
-
-Algunas palabras suenan a regionalismo pero **no están en ningún diccionario**. Cuidado con:
-
-- ❌ **"Patatífero"** — inventada
-- ❌ **"Carrópata"** — inventada
-- ❌ **"Aguacatero"** — sí existe en algunos diccionarios mexicanos, pero discutible
-
-Si la palabra te suena rara, **mejor no la pongas**. Pierdes menos que en una impugnación que te quede mal.
-
-## El bonus: jugar en castellano antiguo
-
-Una variante divertida para **filólogos y curiosos**: jugar con palabras del **castellano medieval o del siglo XVII**:
-
-- **Vusté** (vuestra merced)
-- **Yantar** (comer)
-- **Pesquisas** (investigaciones)
-
-Suelen tener letra inicial poco común y son **muy originales** = casi siempre puntos únicos.
-
-## Casos famosos de discusión
-
-Algunas palabras que **siempre generan debate** en partidas mixtas:
-
-1. **"Cool"** → no es español. Pero está RAE como anglicismo. Depende del grupo.
-2. **"Selfie"** → idem.
-3. **"Whatsappear"** → no está en RAE. No vale.
-4. **"Comelón"** → vale en México, raro en España.
-5. **"Bizarro"** → en español significa "valiente", no "raro" (es falso anglicismo).
-
-> 💡 **Conclusión:** si tienes dudas, **consulta el DRAE en el móvil**. 10 segundos te evitan 10 minutos de discusión.
+La mejor manera de evitar discusiones no es memorizar una lista supuestamente definitiva, sino utilizar un criterio común y aplicarlo a todos los jugadores.
 
 ---
 
-Sigue explorando el mundo hispano del STOP:
+Sigue explorando el mundo del STOP:
 
 - [STOP vs Scattergories vs Tutti Frutti](/blog/stop-vs-scattergories-vs-tutti-frutti)
 - [Historia del STOP](/blog/historia-del-stop-juego-palabras)
 - [Las palabras más raras pero válidas](/blog/palabras-raras-pero-validas-stop)
 - [50 categorías originales para STOP](/blog/categorias-originales-stop)
 
-¿Listo para jugar contra hispanohablantes de todo el mundo? [STOP online](/) tiene partidas multijugador internacionales gratis.
+¿Juegas con personas de distintos países? [Prueba STOP online](/) y acordad los criterios de la partida antes de empezar.
 `,
 };
 
