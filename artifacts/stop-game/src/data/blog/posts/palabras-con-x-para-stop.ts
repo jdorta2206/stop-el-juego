@@ -142,7 +142,7 @@ Dedicar un rato a practicar letras menos frecuentes puede ampliar tu repertorio,
 
 Sigue mejorando para las letras imposibles:
 
-- [Las 100 mejores palabras con K](/blog/palabras-con-k-para-stop)
+- [Palabras con K para STOP](/blog/palabras-con-k-para-stop)
 - [Palabras con W para STOP](/blog/palabras-con-w-para-stop)
 - [Palabras con Y para STOP](/blog/palabras-con-y-para-stop)
 - [Palabras con Z para STOP](/blog/palabras-con-z-para-stop)
