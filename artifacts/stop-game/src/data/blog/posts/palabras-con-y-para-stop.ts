@@ -45,7 +45,7 @@ Aquí hay opciones reales:
 - **Yacaré** (caimán sudamericano)
 - **Yegua** (hembra del caballo)
 - **Yorkshire** (raza de perro)
-- **Yaguar / Jaguar** (depende de cómo se escriba)
+- **Yaguar** (variante de "jaguar"; comprobad si la aceptáis en vuestro diccionario de referencia)
 
 ## Colores con Y
 
@@ -67,7 +67,7 @@ Mejor en blanco.
 - **York** (Inglaterra)
 - **Yibuti** (capital del país homónimo)
 - **Yangon** (Birmania)
-- **Yerevan** (también escrito Ereván; capital de Armenia, si aceptáis esta grafía)
+- **Yangon** (antigua capital de Myanmar)
 
 > 🟩 **Top pick:** "Yakarta" o "Yokohama".
 
