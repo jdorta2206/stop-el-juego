@@ -42,13 +42,17 @@ function Avatar({ picture, name, avatarColor, frame, title, glyph, size = 44 }: 
 
 type ChallengeState = "idle" | "sending" | "waiting";
 
-function ChallengeBtn({ onChallenge }: { onChallenge: () => Promise<void> }) {
+function ChallengeBtn({ onChallenge }: { onChallenge: () => Promise<boolean> }) {
   const [state, setState] = useState<ChallengeState>("idle");
   const handle = async () => {
     if (state !== "idle") return;
     setState("sending");
-    await onChallenge();
-    setState("waiting");
+    try {
+      const sent = await onChallenge();
+      setState(sent ? "waiting" : "idle");
+    } catch {
+      setState("idle");
+    }
   };
   if (state === "idle") return (
     <button onClick={handle}
@@ -114,10 +118,10 @@ function FriendCard({
     }
   };
 
-  const handleChallenge = async () => {
-    if (!friend.onlineData) return;
+  const handleChallenge = async (): Promise<boolean> => {
+    if (!friend.onlineData) return false;
     const result = await sendChallenge(currentPlayer, friend.onlineData.playerId);
-    if (!result) return;
+    if (!result) return false;
     pendingId.current = result.challengeId;
     challengeAbortRef.current?.abort();
     if (challengePollRef.current) clearInterval(challengePollRef.current);
@@ -149,6 +153,7 @@ function FriendCard({
       controller.abort(); clearInterval(poll); challengePollRef.current = null;
       pendingId.current = null; challengeTimeoutRef.current = null;
     }, 60000);
+    return true;
   };
 
   return (
@@ -280,9 +285,9 @@ function OnlinePlayerCard({
     }
   };
 
-  const handleChallenge = async () => {
+  const handleChallenge = async (): Promise<boolean> => {
     const result = await sendChallenge(currentPlayer, player.playerId);
-    if (!result) return;
+    if (!result) return false;
     pendingId.current = result.challengeId;
     challengeAbortRef.current?.abort();
     if (challengePollRef.current) clearInterval(challengePollRef.current);
@@ -314,6 +319,7 @@ function OnlinePlayerCard({
       controller.abort(); clearInterval(poll); challengePollRef.current = null;
       pendingId.current = null; challengeTimeoutRef.current = null;
     }, 60000);
+    return true;
   };
 
   const isMe = player.playerId === currentPlayer.id;
