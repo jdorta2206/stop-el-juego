@@ -57,3 +57,21 @@ describe("AdMob rewarded SSV polling response", () => {
     expect(update).toContain("AND NOT EXISTS");
   });
 });
+
+describe("AdMob rewarded result consumption", () => {
+  const consumeStart = rewardsRouteSource.indexOf('router.post("/admob-result/:requestId/consume"');
+  const consumeEnd = rewardsRouteSource.indexOf('router.get("/admob-ssv"', consumeStart);
+  const consumeHandler = rewardsRouteSource.slice(consumeStart, consumeEnd);
+
+  it("only returns success after consuming a verified reward or confirming prior consumption", () => {
+    expect(consumeHandler).toContain("AND rewarded = true");
+    expect(consumeHandler).toContain("AND consumed_at IS NULL");
+    expect(consumeHandler).toContain("RETURNING request_id");
+    expect(consumeHandler).toContain("existing.rewarded && existing.consumed_at");
+  });
+
+  it("does not acknowledge missing or unverified requests as consumed", () => {
+    expect(consumeHandler).toContain('res.status(404).json({ error: "Reward request not found" })');
+    expect(consumeHandler).toContain('res.status(409).json({ error: "Reward result is not confirmed or consumed" })');
+  });
+});
