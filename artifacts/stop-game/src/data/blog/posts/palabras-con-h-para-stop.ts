@@ -3,7 +3,7 @@ import type { BlogPost } from "../types";
 const post: BlogPost = {
   slug: "palabras-con-h-para-stop",
   title: "Palabras con H para STOP: la trampa que todos olvidan",
-  description: "La H parece fácil pero es traidora: como es muda, la confundes con palabras que empiezan por vocal. Te damos 100+ palabras con H válidas por categoría.",
+  description: "Practica ejemplos con H por categorías y distingue las palabras que empiezan por esta letra de las que comienzan por vocal.",
   keywords: ["palabras con H", "palabras con H para STOP", "nombres con H", "animales con H", "países con H", "comidas con H", "marcas con H"],
   publishedAt: "2026-05-16",
   author: "Equipo STOP",
@@ -21,17 +21,17 @@ La H en español **no se pronuncia**, pero **sí se escribe**. En STOP solo cuen
 ❌ **Errores típicos:**
 
 - "Helado" sí (con H) — "elado" no existe.
-- "Hora" sí — "ora" no es palabra.
+- "Hora" empieza por H. "Ora" también existe, pero tiene otro significado y no es equivalente a "hora".
 - "Helado" sí — "Ernesto" **NO** (empieza por E).
 
-> 💡 **Truco:** antes de escribir, **visualiza la palabra**. Si no la ves con H, no vale.
+> 💡 **Truco:** antes de escribir, comprueba la primera letra y la ortografía. Una palabra que suena igual puede escribirse de otra manera y tener otro significado.
 
 ## Nombres de persona con H
 
 - **Helena, Heidi, Hortensia, Hilda, Herminia** (femeninos)
 - **Héctor, Hernán, Hugo, Horacio, Hilario, Hernando, Hipólito** (masculinos)
 
-> 🟩 **Top pick:** "Hugo" o "Héctor" — universalmente conocidos.
+> **Ejemplos:** "Hugo" y "Héctor" son nombres propios; utilizadlos si vuestra partida admite nombres de persona.
 
 ## Apellidos con H
 
@@ -40,12 +40,12 @@ La H en español **no se pronuncia**, pero **sí se escribe**. En STOP solo cuen
 
 ## Animales con H
 
-- **Hipopótamo** (la apuesta segura)
-- **Hiena** (felino africano)
+- **Hipopótamo** (mamífero)
+- **Hiena** (mamífero carnívoro, no felino)
 - **Halcón** (ave rapaz)
 - **Hormiga**
 - **Hámster**
-- **Huron**
+- **Hurón**
 - **Hipocampo / Caballito de mar**
 
 ## Colores con H
@@ -58,16 +58,15 @@ Pocos colores empiezan por H. Discutibles:
 
 - **Honduras**
 - **Hungría**
-- **Holanda / Países Bajos** (la RAE acepta Holanda)
+- **Honduras, Hungría, Haití** (ejemplos de países cuyo nombre empieza por H)
 - **Haití**
 
 ## Ciudades con H
 
 - **Hamburgo** (Alemania)
 - **Helsinki** (Finlandia)
-- **Hong Kong**
-- **Houston** (EE.UU.)
-- **La Habana** (Cuba) — si vale "La" como artículo
+- **Houston** (Estados Unidos)
+- **Hong Kong** (región administrativa especial de China; comprobad si vuestra categoría admite territorios)
 - **Heredia** (Costa Rica)
 
 ## Comidas y bebidas con H
@@ -77,7 +76,7 @@ Pocos colores empiezan por H. Discutibles:
 - **Huevo** (también huevos)
 - **Higo / Higos**
 - **Habas**
-- **Hot dog / Hotdog** (acepta)
+- **Hot dog / hotdog** (préstamo del inglés; acordad si lo admitís)
 
 ## Objetos / cosas con H
 
@@ -86,12 +85,12 @@ Pocos colores empiezan por H. Discutibles:
 - **Huerto**
 - **Hierro**
 - **Horno**
-- **Hospital** (¿institución u objeto?)
+- **Herramienta** (categoría general; concreta el objeto si las normas lo requieren)
 - **Habitación**
 
 ## Deportes con H
 
-- **Hockey** (RAE válida, también "jockey" es otra cosa)
+- **Hockey** (deporte de equipo)
 - **Halterofilia** (levantamiento de pesas)
 - **Hípica / Hipismo** (deporte ecuestre)
 
@@ -127,9 +126,9 @@ Pocos colores empiezan por H. Discutibles:
 ## Trucos para la H
 
 1. **Cuidado con las palabras "que suenan a H pero no".** Ernesto, Andrés, Alicia… no valen.
-2. **La H es rica en marcas y famosos.** Aprovéchalas.
-3. **Hipopótamo siempre.** Es la palabra que **nadie discute** y casi todo el mundo escribe.
-4. **No olvides los plurales.** "Habas", "Higos", "Huevos" — funcionan igual.
+2. Hay ejemplos de marcas y personas famosas con H; usadlos solo si vuestra partida admite esas categorías.
+3. **Hipopótamo** es un ejemplo claro de animal con H. Aun así, comprobad que la categoría y el criterio de aceptación estén claros.
+4. **Revisa el criterio sobre plurales.** Algunas partidas los admiten y otras prefieren respuestas en singular.
 
 ## Tu "kit mínimo STOP letra H"
 
@@ -143,10 +142,10 @@ Pocos colores empiezan por H. Discutibles:
 | Objeto | Hilo |
 | Deporte | Hockey |
 | Profesión | Herrero |
-| Marca | Honda |
+| Marca (si se admiten marcas) | Honda |
 | Famoso | Harrison Ford |
 
-Esta lista es de las más fáciles de memorizar porque la H es **una letra "rica"** en español, no como X o W.
+Esta lista reúne ejemplos para practicar. La aceptación de nombres, marcas y categorías depende de las reglas acordadas para cada partida.
 
 ---
 

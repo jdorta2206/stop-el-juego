@@ -3,7 +3,7 @@ import type { BlogPost } from "../types";
 const post: BlogPost = {
   slug: "palabras-con-y-para-stop",
   title: "Palabras con Y para STOP: lista completa por categoría",
-  description: "Cuando sale la Y, muchos se bloquean. Te damos las palabras con Y más útiles para STOP: yate, yogur, Yemen, Yucatán, Yamaha, Yuri… y muchas más.",
+  description: "Ejemplos de palabras con Y organizados por categorías para practicar y comprobar según las reglas de tu partida de STOP.",
   keywords: ["palabras con Y", "palabras con Y para STOP", "nombres con Y", "animales con Y", "países con Y", "comidas con Y", "marcas con Y"],
   publishedAt: "2026-05-18",
   author: "Equipo STOP",
@@ -12,7 +12,7 @@ const post: BlogPost = {
   content: `
 La letra **Y** en español es más amigable que la X o la W, pero aun así muchos jugadores se bloquean cuando sale. Razón: la mayoría de palabras con Y son **muy específicas** (Yemen, yate, yoyó…) y no las tenemos en la punta de la lengua.
 
-Esta guía te da una lista completa de palabras con Y por categoría para que **arrases en esa ronda**.
+Esta guía reúne ejemplos con Y por categoría para ayudarte a practicar y revisar su escritura.
 
 ## La Y en español: usos comunes
 
@@ -22,7 +22,7 @@ En español la Y puede ser:
 2. **Vocal o consonante** al inicio de palabra: yate, yogur, ya, yegua…
 3. **Final de palabra**: rey, hoy, soy… (no cuentan, deben empezar por Y).
 
-Vamos con las palabras válidas.
+Veamos ejemplos que empiezan por Y; comprobad su significado y las reglas de aceptación de vuestra partida.
 
 ## Nombres de persona con Y
 
@@ -30,7 +30,7 @@ Vamos con las palabras válidas.
 - **Yago / Iago, Yannick, Yusuf, Yuri** (masculinos)
 - **Yon, Yeray** (vasco/canario)
 
-> 🟩 **Top pick:** "Yolanda" — universalmente conocido.
+> **Ejemplo:** "Yolanda" es un nombre propio; utilizadlo si vuestra partida admite nombres de persona.
 
 ## Apellidos con Y
 
@@ -43,9 +43,9 @@ Aquí hay opciones reales:
 
 - **Yak** (bóvido del Tíbet)
 - **Yacaré** (caimán sudamericano)
-- **Yegua** (la hembra del caballo, RAE válida)
+- **Yegua** (hembra del caballo)
 - **Yorkshire** (raza de perro)
-- **Yaguar / Jaguar** (depende de cómo se escriba)
+- **Yaguar** (variante de "jaguar"; comprobad si la aceptáis en vuestro diccionario de referencia)
 
 ## Colores con Y
 
@@ -58,7 +58,7 @@ Mejor en blanco.
 ## Países con Y
 
 - **Yemen** (la apuesta segura)
-- **Yibuti** (Djibouti, país de África) — RAE acepta ambas escrituras
+- **Yibuti** (nombre adaptado al español del país africano)
 
 ## Ciudades con Y
 
@@ -66,18 +66,17 @@ Mejor en blanco.
 - **Yokohama** (Japón)
 - **York** (Inglaterra)
 - **Yibuti** (capital del país homónimo)
-- **Yangon** (Birmania)
-- **Yucatán** (península y región de México) — algunos la aceptan como ciudad
+- **Yangon** (ciudad de Myanmar)
 
 > 🟩 **Top pick:** "Yakarta" o "Yokohama".
 
 ## Comidas y bebidas con Y
 
-- **Yogur** (RAE válida)
+- **Yogur** (alimento lácteo fermentado)
 - **Yema** (yema de huevo, o dulce típico de Ávila)
 - **Yuca** (raíz comestible muy popular en Latinoamérica)
 - **Yakisoba** (fideos japoneses)
-- **Yatzy / Yuzu** (cítrico japonés)
+- **Yuzu** (cítrico de origen asiático)
 
 ## Objetos / cosas con Y
 
@@ -89,9 +88,9 @@ Mejor en blanco.
 
 ## Deportes con Y
 
-- **Yoga** (acepta como deporte / actividad física)
+- **Yoga** (actividad física; acordad si encaja en vuestra categoría de deportes)
 - **Yudo / Judo** (depende de la escritura)
-- **Yatching / Vela** (deporte náutico)
+- **Yate** es una embarcación, no un deporte; no lo uses como respuesta para esta categoría.
 
 ## Profesiones con Y
 
@@ -121,7 +120,7 @@ Mejor en blanco.
 
 ## Trucos para la Y
 
-1. **Memoriza el "kit mínimo" de abajo.** Con eso superas al 90% de jugadores.
+1. Repasa algunos ejemplos del resumen y comprueba su escritura antes de jugar.
 2. **No confundas Y con J en nombres** (Yésica/Jessica, Yago/Iago). Asegúrate de que se escribe con Y.
 3. **Aprovecha la comida y los objetos** — son las categorías más ricas en Y.
 
@@ -136,22 +135,20 @@ Mejor en blanco.
 | Comida | Yogur |
 | Objeto | Yate |
 | Deporte | Yoga |
-| Marca | Yamaha |
+| Marca (si se admiten marcas) | Yamaha |
 | Famoso | Yoko Ono |
 
-9 palabras. **+90 puntos asegurados** si las pones bien y nadie más las tiene.
+Esta selección ofrece ejemplos para practicar. No asegura puntos: la puntuación depende del sistema de la partida, de la validez de cada respuesta y de las coincidencias con otros jugadores.
 
 ## Por qué la Y es una oportunidad
 
-A diferencia de la X, donde casi nadie saca nada, la Y es una **letra intermedia**: el jugador medio saca 20-30 puntos, el bien preparado saca 70-90. La diferencia es enorme.
-
-Memorizar este artículo te da una **ventaja real** sobre tus rivales. Y solo te llevará 5 minutos.
+La Y ofrece más posibilidades que algunas letras poco frecuentes, pero no existe una puntuación media universal. Practica las palabras, revisa su significado y adapta tus respuestas a las categorías y reglas de cada partida.
 
 ---
 
 Sigue practicando con otras letras difíciles:
 
-- [Las 100 mejores palabras con K](/blog/palabras-con-k-para-stop)
+- [Palabras con K para STOP](/blog/palabras-con-k-para-stop)
 - [Palabras con W para STOP](/blog/palabras-con-w-para-stop)
 - [Palabras con X para STOP](/blog/palabras-con-x-para-stop)
 - [Palabras con Z para STOP](/blog/palabras-con-z-para-stop)

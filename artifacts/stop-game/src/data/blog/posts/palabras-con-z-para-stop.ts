@@ -2,15 +2,15 @@ import type { BlogPost } from "../types";
 
 const post: BlogPost = {
   slug: "palabras-con-z-para-stop",
-  title: "Palabras con Z para STOP: 90 palabras para arrasar la ronda",
-  description: "La Z parece difícil pero tiene más palabras de las que crees. Te damos 90+ palabras con Z válidas para STOP: zorro, zanahoria, Zimbabue, Zara, Zinedine Zidane y más.",
+  title: "Palabras con Z para STOP: ejemplos por categorías",
+  description: "Practica palabras con Z organizadas por categorías y comprueba cuáles encajan con las reglas de tu partida de STOP.",
   keywords: ["palabras con Z", "palabras con Z para STOP", "nombres con Z", "animales con Z", "países con Z", "comidas con Z", "marcas con Z"],
   publishedAt: "2026-05-17",
   author: "Equipo STOP",
   category: "Listas de palabras",
   readMinutes: 6,
   content: `
-La letra **Z** tiene más vida en español de lo que parece. No es tan rara como la X o la W, pero **muchos jugadores se bloquean** porque no la practican. Si tienes preparada una lista mínima, sacas ventaja fácil.
+La letra **Z** ofrece ejemplos en varias categorías. Preparar una lista de práctica puede ayudarte a recordar palabras, aunque no garantiza una ventaja ni una puntuación concreta.
 
 Esta guía recoge las palabras con Z más útiles por categoría para STOP.
 
@@ -49,10 +49,10 @@ Muy pocos colores empiezan por Z. Si no es zafiro, mejor en blanco.
 
 ## Países con Z
 
-- **Zimbabue / Zimbabwe** (RAE acepta ambas)
+- **Zimbabue** (forma adaptada al español; comprueba las variantes admitidas por el diccionario que utilicéis)
 - **Zambia**
 
-> 🟩 **Top pick:** "Zimbabue" — y nadie lo va a poner igual.
+> **Ejemplo:** "Zimbabue" es un nombre de país; acordad si aceptáis nombres de países y qué grafías admitís.
 
 ## Ciudades con Z
 
@@ -93,6 +93,8 @@ Muy pocos colores empiezan por Z. Si no es zafiro, mejor en blanco.
 
 ## Marcas con Z
 
+Estos son nombres comerciales; incluidlos solo si las reglas de vuestra partida permiten marcas:
+
 - **Zara** (ropa española)
 - **Zalando** (ropa online)
 - **Zenith** (relojes)
@@ -101,7 +103,7 @@ Muy pocos colores empiezan por Z. Si no es zafiro, mejor en blanco.
 - **Zippo** (encendedores)
 - **Zelda** (videojuego — discutible si es marca)
 
-> 🟩 **Top pick:** "Zara" o "Zoom".
+> **Ejemplos:** "Zara" o "Zoom", si vuestra partida admite marcas.
 
 ## Famosos con Z
 
@@ -130,20 +132,20 @@ Muy pocos colores empiezan por Z. Si no es zafiro, mejor en blanco.
 | Comida | Zanahoria |
 | Objeto | Zapato |
 | Deporte | Zumba |
-| Marca | Zara |
+| Marca (si se admiten marcas) | Zara |
 | Famoso | Zinedine Zidane |
 
-10 categorías cubiertas. **+100 puntos potenciales** en la ronda.
+La lista reúne ejemplos de varias categorías; no implica una puntuación fija ni garantiza que todas las respuestas sean aceptadas en cualquier partida.
 
 ## La Z, una letra subestimada
 
-A diferencia de la X o la W, la Z **tiene muchas palabras buenas** en español. Lo que pasa es que la gente no las practica. Si te aprendes este artículo, tendrás una ventaja muy grande cuando salga.
+La Z ofrece más opciones de uso frecuente que algunas letras poco habituales. Repasar ejemplos puede ayudarte a responder con más soltura, pero la aceptación depende de la categoría y de las normas acordadas.
 
 ---
 
 Sigue mejorando con otras letras:
 
-- [Las 100 mejores palabras con K](/blog/palabras-con-k-para-stop)
+- [Palabras con K para STOP](/blog/palabras-con-k-para-stop)
 - [Palabras con W para STOP](/blog/palabras-con-w-para-stop)
 - [Palabras con X para STOP](/blog/palabras-con-x-para-stop)
 - [Palabras con Y para STOP](/blog/palabras-con-y-para-stop)

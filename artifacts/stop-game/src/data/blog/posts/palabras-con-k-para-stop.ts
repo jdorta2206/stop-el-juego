@@ -2,8 +2,8 @@ import type { BlogPost } from "../types";
 
 const post: BlogPost = {
   slug: "palabras-con-k-para-stop",
-  title: "Las 100 mejores palabras con K para STOP (categoría por categoría)",
-  description: "Lista completa de palabras con K para ganar en STOP: nombres, animales, países, ciudades, comidas, objetos y marcas. Memorízalas y serás imbatible cuando salga la K.",
+  title: "Palabras con K para STOP: ejemplos por categorías",
+  description: "Ejemplos de palabras con K organizados por categorías para practicar y revisar antes de una partida de STOP.",
   keywords: ["palabras con K", "palabras con K para STOP", "nombres con K", "animales con K", "países con K", "comidas con K", "objetos con K", "marcas con K"],
   publishedAt: "2026-05-21",
   author: "Equipo STOP",
@@ -12,7 +12,7 @@ const post: BlogPost = {
   content: `
 La letra **K** es una de las **pesadillas clásicas** del STOP. En español hay muy pocas palabras nativas con K (la mayoría son préstamos de otros idiomas), por lo que cuando sale, **muchos jugadores se quedan en blanco**.
 
-Y ahí está la oportunidad: si te aprendes solo **una palabra por categoría**, te llevas **+10 puntos en cada una** (porque nadie más la pondrá). Esta lista está optimizada para eso.
+Preparar ejemplos por categoría puede ayudarte a recordar respuestas, pero ninguna lista garantiza puntos: el resultado depende de las reglas, de la validación y de lo que escriban los demás.
 
 ## Por qué la K es tan difícil en español
 
@@ -23,17 +23,17 @@ El español casi no tiene palabras propias con K. Las que existen son:
 - **Nombres propios** extranjeros (Karen, Kevin, Kenia…).
 - **Topónimos** lejanos (Kenia, Kuwait, Kioto…).
 
-La Real Academia Española acepta como válidas la mayoría de estas palabras, así que **no temas usarlas**. Si alguien te impugna, dile que las consulte en el [DRAE](https://dle.rae.es).
+Que una palabra aparezca en el DLE no determina por sí solo si será aceptada en una partida. Acordad si admitís préstamos, nombres propios, marcas y topónimos, y consultad el diccionario como referencia lingüística, no como sustituto de las reglas del grupo.
 
 ## Nombres de persona con K
 
-Estos siempre se aceptan en STOP porque son nombres reales en uso:
+Estos son ejemplos de nombres propios que empiezan por K. Antes de usarlos, acordad si vuestra partida admite nombres de persona:
 
 - **Karen, Karina, Katia, Katrina, Krista, Kira** (femeninos)
 - **Kevin, Kenneth, Karl, Kurt, Kai, Khalid** (masculinos)
 - **Kim, Kobe, Kasper, Konstantin** (unisex o internacionales)
 
-> 💡 Si juegas en familia, **"Karen"** o **"Kevin"** son las apuestas más seguras: las conoce todo el mundo.
+> 💡 "Karen" y "Kevin" son ejemplos de nombres propios con K. Utilízalos solo si habéis acordado admitir nombres de persona.
 
 ## Apellidos con K
 
@@ -50,15 +50,13 @@ Esta es la categoría donde más te puedes lucir:
 - **Kakapo** (loro nocturno de Nueva Zelanda)
 - **Kudú** (antílope africano)
 - **Krill** (los crustáceos que comen las ballenas)
-- **Kanguro** o **Canguro** (se acepta con K en algunos diccionarios)
+- **Kinkajú** (mamífero arborícola de América Central y del Sur)
 
 ## Colores con K
 
-Pocos colores empiezan por K. Las opciones reales:
+No hay una respuesta habitual y clara en español para esta categoría con K. "Caqui" suele escribirse con C; no la cambies por K sin comprobar el diccionario y las reglas que utilicéis.
 
-- **Kaki** o **Caqui** (el verde militar) — válido en ambos formatos.
-
-Si no se te ocurre nada, **deja la casilla en blanco** y enfócate en otras categorías. No vale la pena perder tiempo aquí.
+Si no encuentras una opción que encaje, deja la casilla en blanco y continúa con otra categoría.
 
 ## Países con K
 
@@ -69,7 +67,7 @@ Si no se te ocurre nada, **deja la casilla en blanco** y enfócate en otras cate
 - **Kiribati** (pequeño archipiélago del Pacífico)
 - **Kosovo** (reconocido por la mayoría de países)
 
-> 🟩 **Top pick:** "Kenia" es la más conocida y nadie la impugna.
+> **Ejemplo:** "Kenia" es un topónimo conocido; su aceptación depende de las reglas que hayáis acordado.
 
 ## Ciudades con K
 
@@ -85,7 +83,7 @@ Si no se te ocurre nada, **deja la casilla en blanco** y enfócate en otras cate
 
 Aquí hay más opciones de las que parece:
 
-- **Kebab** (la versión turca, casi universalmente conocida)
+- **Kebab** (plato de origen turco y de otras cocinas de la región)
 - **Kiwi** (la fruta)
 - **Kéfir** (bebida fermentada)
 - **Kétchup** (la salsa)
@@ -100,20 +98,20 @@ Aquí hay más opciones de las que parece:
 - **Kimono** (la prenda japonesa)
 - **Kart** (vehículo de competición)
 - **Kit** (conjunto de herramientas)
-- **Klaxon** (la bocina, aceptado por la RAE)
+- **Klaxon** (término usado para una bocina; comprueba la grafía y el criterio del diccionario que utilicéis)
 
 ## Deportes con K
 
-- **Karate** (la apuesta segura)
+- **Karate** (arte marcial de origen japonés)
 - **Kayak / Piragüismo en kayak**
 - **Kárting** (carreras de karts)
-- **Kickboxing** (acepta como palabra extranjera)
+- **Kickboxing** (préstamo del inglés; acordad si lo admitís)
 - **Kendo** (esgrima japonesa)
 - **Kung-fu**
 
 ## Profesiones con K
 
-Esta es muy difícil. Si la K cae en "profesión", probablemente nadie meta una palabra válida.
+Hay pocos términos frecuentes de profesiones con K. Las siguientes opciones son poco habituales y conviene comprobarlas antes de la partida:
 
 Opciones débiles pero defendibles:
 
@@ -125,7 +123,7 @@ Opciones débiles pero defendibles:
 
 ## Marcas con K
 
-Las marcas con K son **casi infinitas** y todas conocidas. Esta es probablemente tu categoría más fácil:
+Hay marcas conocidas que empiezan por K. Son nombres comerciales, así que utilizadlos solo si las reglas de vuestra partida admiten marcas:
 
 - **Kellogg's** (cereales)
 - **Kit-Kat** (chocolate)
@@ -138,11 +136,11 @@ Las marcas con K son **casi infinitas** y todas conocidas. Esta es probablemente
 - **Krafft** (alimentación)
 - **Krups** (electrodomésticos)
 
-> 🟩 **Top pick:** **"Kia"** o **"Kellogg's"** — siempre válidas, siempre conocidas.
+> **Ejemplos:** "Kia" y "Kellogg's" son marcas; incluidlas solo si las normas de la partida permiten respuestas comerciales.
 
 ## Famosos con K
 
-- **Kim Kardashian** (la opción universal)
+- **Kim Kardashian** (figura pública; admítela solo si las normas permiten nombres de personas famosas)
 - **Kanye West** (rapero)
 - **Kobe Bryant** (NBA)
 - **Karol G** (cantante colombiana)
@@ -153,10 +151,10 @@ Las marcas con K son **casi infinitas** y todas conocidas. Esta es probablemente
 
 ## Trucos para no quedarse en blanco con la K
 
-1. **Memoriza un "kit mínimo"** de 1 palabra por categoría. Con 10 palabras te aseguras la ronda.
-2. **Si dudas, escribe.** Es mejor poner una palabra dudosa y que te la impugnen que dejarlo en blanco. Si nadie la impugna, +10 puntos.
-3. **Prioriza categorías "ricas en K"**: marcas, ciudades, animales, comidas. Allí siempre hay opciones.
-4. **No malgastes tiempo en colores o profesiones** con K. Casi no hay opciones; mejor avanzar.
+1. Prepara algunos ejemplos por categoría y comprueba su escritura antes de la partida.
+2. Si una palabra te genera dudas, no la fuerces: valora si encaja realmente con la categoría y las reglas acordadas.
+3. Distingue nombres propios, marcas, préstamos y topónimos; cada grupo puede recibir un tratamiento distinto.
+4. Si no encuentras una respuesta, pasa a otra categoría y vuelve después si queda tiempo.
 
 ## Resumen: tu "kit STOP letra K"
 
@@ -164,24 +162,24 @@ Si solo te quedas con 10 palabras, que sean estas:
 
 | Categoría | Palabra |
 |---|---|
-| Nombre | Karen |
+| Nombre (si se admiten nombres propios) | Karen |
 | Animal | Koala |
-| Color | Kaki |
+
 | País | Kenia |
 | Ciudad | Kioto |
 | Comida | Kebab |
 | Objeto | Kayak |
 | Deporte | Karate |
-| Marca | Kellogg's |
+| Marca (si se admiten marcas) | Kellogg's |
 | Famoso | Kim Kardashian |
 
-Memoriza esta tabla y la próxima vez que salga la K en una partida, **arrasarás**.
+La tabla reúne ejemplos para practicar. Los nombres propios y las marcas solo encajan si las reglas de vuestra partida los admiten.
 
 ---
 
 ¿Te ha sido útil? Sigue practicando con más letras:
 
-- [Las 100 mejores palabras con W](/blog/palabras-con-w-para-stop)
+- [Palabras con W para STOP](/blog/palabras-con-w-para-stop)
 - [Palabras con X para STOP](/blog/palabras-con-x-para-stop)
 - [Palabras con Y para STOP](/blog/palabras-con-y-para-stop)
 - [Cómo pensar palabras rápido bajo presión](/blog/pensar-palabras-rapido-bajo-presion)
