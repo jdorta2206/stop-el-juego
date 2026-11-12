@@ -10,7 +10,7 @@ const post: BlogPost = {
   category: "Listas de palabras",
   readMinutes: 6,
   content: `
-La letra **Z** tiene más vida en español de lo que parece. No es tan rara como la X o la W, pero **muchos jugadores se bloquean** porque no la practican. Si tienes preparada una lista mínima, sacas ventaja fácil.
+La letra **Z** ofrece ejemplos en varias categorías. Preparar una lista de práctica puede ayudarte a recordar palabras, aunque no garantiza una ventaja ni una puntuación concreta.
 
 Esta guía recoge las palabras con Z más útiles por categoría para STOP.
 
@@ -49,10 +49,10 @@ Muy pocos colores empiezan por Z. Si no es zafiro, mejor en blanco.
 
 ## Países con Z
 
-- **Zimbabue / Zimbabwe** (RAE acepta ambas)
+- **Zimbabue** (forma adaptada al español; comprueba las variantes admitidas por el diccionario que utilicéis)
 - **Zambia**
 
-> 🟩 **Top pick:** "Zimbabue" — y nadie lo va a poner igual.
+> **Ejemplo:** "Zimbabue" es un nombre de país; acordad si aceptáis nombres de países y qué grafías admitís.
 
 ## Ciudades con Z
 
@@ -137,7 +137,7 @@ La lista reúne ejemplos de varias categorías; no implica una puntuación fija 
 
 ## La Z, una letra subestimada
 
-A diferencia de la X o la W, la Z **tiene muchas palabras buenas** en español. Lo que pasa es que la gente no las practica. Si te aprendes este artículo, tendrás una ventaja muy grande cuando salga.
+La Z ofrece más opciones de uso frecuente que algunas letras poco habituales. Repasar ejemplos puede ayudarte a responder con más soltura, pero la aceptación depende de la categoría y de las normas acordadas.
 
 ---
 
