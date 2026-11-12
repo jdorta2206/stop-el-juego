@@ -162,18 +162,18 @@ Si solo te quedas con 10 palabras, que sean estas:
 
 | Categoría | Palabra |
 |---|---|
-| Nombre | Karen |
+| Nombre (si se admiten nombres propios) | Karen |
 | Animal | Koala |
-| Color | Kaki |
+
 | País | Kenia |
 | Ciudad | Kioto |
 | Comida | Kebab |
 | Objeto | Kayak |
 | Deporte | Karate |
-| Marca | Kellogg's |
+| Marca (si se admiten marcas) | Kellogg's |
 | Famoso | Kim Kardashian |
 
-Memoriza esta tabla y la próxima vez que salga la K en una partida, **arrasarás**.
+La tabla reúne ejemplos para practicar. Los nombres propios y las marcas solo encajan si las reglas de vuestra partida los admiten.
 
 ---
 
