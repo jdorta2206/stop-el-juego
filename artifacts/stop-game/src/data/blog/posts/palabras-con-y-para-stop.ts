@@ -43,7 +43,7 @@ Aquí hay opciones reales:
 
 - **Yak** (bóvido del Tíbet)
 - **Yacaré** (caimán sudamericano)
-- **Yegua** (la hembra del caballo, RAE válida)
+- **Yegua** (hembra del caballo)
 - **Yorkshire** (raza de perro)
 - **Yaguar / Jaguar** (depende de cómo se escriba)
 
@@ -58,7 +58,7 @@ Mejor en blanco.
 ## Países con Y
 
 - **Yemen** (la apuesta segura)
-- **Yibuti** (Djibouti, país de África) — RAE acepta ambas escrituras
+- **Yibuti** (nombre adaptado al español del país africano)
 
 ## Ciudades con Y
 
@@ -67,17 +67,17 @@ Mejor en blanco.
 - **York** (Inglaterra)
 - **Yibuti** (capital del país homónimo)
 - **Yangon** (Birmania)
-- **Yucatán** (península y región de México) — algunos la aceptan como ciudad
+- **Yerevan** (también escrito Ereván; capital de Armenia, si aceptáis esta grafía)
 
 > 🟩 **Top pick:** "Yakarta" o "Yokohama".
 
 ## Comidas y bebidas con Y
 
-- **Yogur** (RAE válida)
+- **Yogur** (alimento lácteo fermentado)
 - **Yema** (yema de huevo, o dulce típico de Ávila)
 - **Yuca** (raíz comestible muy popular en Latinoamérica)
 - **Yakisoba** (fideos japoneses)
-- **Yatzy / Yuzu** (cítrico japonés)
+- **Yuzu** (cítrico de origen asiático)
 
 ## Objetos / cosas con Y
 
