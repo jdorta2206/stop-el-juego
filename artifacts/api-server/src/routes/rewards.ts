@@ -273,14 +273,40 @@ router.post("/admob-result/:requestId/consume", async (req, res) => {
 
   try {
     await ensureAdmobRewardTable();
-    await db.execute(sql`
+    const consumed = await db.execute(sql`
       UPDATE admob_reward_requests
       SET consumed_at = NOW()
       WHERE request_id = ${requestId}
         AND rewarded = true
         AND consumed_at IS NULL
-    `);
-    res.status(204).end();
+      RETURNING request_id
+    `) as unknown as SqlResult<{ request_id: string }>;
+
+    if (consumed.rows?.[0]) {
+      res.status(204).end();
+      return;
+    }
+
+    // A repeated acknowledgement is successful only when this exact request
+    // was already verified by AdMob and consumed. Never report success for a
+    // missing request or one that has not received its signed SSV callback.
+    const existingRows = await db.execute(sql`
+      SELECT rewarded, consumed_at
+      FROM admob_reward_requests
+      WHERE request_id = ${requestId}
+      LIMIT 1
+    `) as unknown as SqlResult<{ rewarded: boolean; consumed_at: Date | null }>;
+    const existing = existingRows.rows?.[0];
+
+    if (!existing) {
+      res.status(404).json({ error: "Reward request not found" });
+      return;
+    }
+    if (existing.rewarded && existing.consumed_at) {
+      res.status(204).end();
+      return;
+    }
+    res.status(409).json({ error: "Reward result is not confirmed or consumed" });
   } catch (error) {
     console.error(
       "[rewards/admob-result/consume] error:",
