@@ -17,7 +17,7 @@ interface DailyChallenge {
 }
 
 interface DailyRanking {
-  playerId: string;
+  isMe: boolean;
   rank: number;
   playerName: string;
   avatarColor: string;
@@ -92,7 +92,13 @@ export default function DailyChallenge() {
       .then(setChallenge)
       .catch(() => {});
 
-    fetch(`${API_BASE}/api/daily/rankings?language=${lang}`, { headers: { "X-Stop-Timezone": getPlayerTimeZone() }, signal: controller.signal })
+    const rankingParams = new URLSearchParams({ language: lang });
+    if (player?.id) rankingParams.set("playerId", player.id);
+    fetch(`${API_BASE}/api/daily/rankings?${rankingParams.toString()}`, {
+      headers: { ...authHeaders(), "X-Stop-Timezone": getPlayerTimeZone() },
+      credentials: "include",
+      signal: controller.signal,
+    })
       .then(r => r.json())
       .then(d => setRankings(d.rankings || []))
       .catch(() => {});
@@ -164,7 +170,7 @@ export default function DailyChallenge() {
   // when the player is actually present in the visible top-10; otherwise do
   // not invent a rank from the array index.
   const myRank = player
-    ? (rankings.find(r => r.playerId === player.id)?.rank ?? 0)
+    ? (rankings.find(r => r.isMe)?.rank ?? 0)
     : 0;
 
   return (
@@ -288,7 +294,7 @@ export default function DailyChallenge() {
           )}
 
           {playedToday && rankings.map((r, i) => {
-            const isMe = player && r.playerId === player.id;
+            const isMe = !!player && r.isMe;
             return (
               <motion.div
                 key={i}
