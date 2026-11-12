@@ -58,7 +58,6 @@ async function syncFromServer(playerId: string, signal?: AbortSignal): Promise<C
   if (playerId.startsWith("guest_")) return {};
   try {
     const r = await fetch(`${getApiUrl()}/api/ranking/progress/${playerId}`, {
-      credentials: "include",
       headers: authHeaders(),
       signal,
     });
@@ -75,7 +74,6 @@ async function saveToServer(playerId: string, collected: CollectionMap) {
   try {
     await fetch(`${getApiUrl()}/api/ranking/progress/${playerId}`, {
       method: "POST",
-      credentials: "include",
       headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify({ collectedWords: collected }),
     });
