@@ -21,17 +21,17 @@ La H en español **no se pronuncia**, pero **sí se escribe**. En STOP solo cuen
 ❌ **Errores típicos:**
 
 - "Helado" sí (con H) — "elado" no existe.
-- "Hora" sí — "ora" no es palabra.
+- "Hora" empieza por H. "Ora" también existe, pero tiene otro significado y no es equivalente a "hora".
 - "Helado" sí — "Ernesto" **NO** (empieza por E).
 
-> 💡 **Truco:** antes de escribir, **visualiza la palabra**. Si no la ves con H, no vale.
+> 💡 **Truco:** antes de escribir, comprueba la primera letra y la ortografía. Una palabra que suena igual puede escribirse de otra manera y tener otro significado.
 
 ## Nombres de persona con H
 
 - **Helena, Heidi, Hortensia, Hilda, Herminia** (femeninos)
 - **Héctor, Hernán, Hugo, Horacio, Hilario, Hernando, Hipólito** (masculinos)
 
-> 🟩 **Top pick:** "Hugo" o "Héctor" — universalmente conocidos.
+> **Ejemplos:** "Hugo" y "Héctor" son nombres propios; utilizadlos si vuestra partida admite nombres de persona.
 
 ## Apellidos con H
 
@@ -40,12 +40,12 @@ La H en español **no se pronuncia**, pero **sí se escribe**. En STOP solo cuen
 
 ## Animales con H
 
-- **Hipopótamo** (la apuesta segura)
-- **Hiena** (felino africano)
+- **Hipopótamo** (mamífero)
+- **Hiena** (mamífero carnívoro, no felino)
 - **Halcón** (ave rapaz)
 - **Hormiga**
 - **Hámster**
-- **Huron**
+- **Hurón**
 - **Hipocampo / Caballito de mar**
 
 ## Colores con H
@@ -58,16 +58,17 @@ Pocos colores empiezan por H. Discutibles:
 
 - **Honduras**
 - **Hungría**
-- **Holanda / Países Bajos** (la RAE acepta Holanda)
+- **Honduras, Hungría, Haití** (ejemplos de países cuyo nombre empieza por H)
 - **Haití**
 
 ## Ciudades con H
 
 - **Hamburgo** (Alemania)
 - **Helsinki** (Finlandia)
-- **Hong Kong**
-- **Houston** (EE.UU.)
-- **La Habana** (Cuba) — si vale "La" como artículo
+- **Houston** (Estados Unidos)
+- **Helsinki** (Finlandia)
+- **Hamburgo** (Alemania)
+- **Hong Kong** (región administrativa especial de China; comprobad si vuestra categoría admite territorios)
 - **Heredia** (Costa Rica)
 
 ## Comidas y bebidas con H
@@ -86,7 +87,7 @@ Pocos colores empiezan por H. Discutibles:
 - **Huerto**
 - **Hierro**
 - **Horno**
-- **Hospital** (¿institución u objeto?)
+- **Herramienta** (categoría general; concreta el objeto si las normas lo requieren)
 - **Habitación**
 
 ## Deportes con H
