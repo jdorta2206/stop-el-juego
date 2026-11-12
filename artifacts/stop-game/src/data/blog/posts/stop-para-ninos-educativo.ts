@@ -2,197 +2,96 @@ import type { BlogPost } from "../types";
 
 const post: BlogPost = {
   slug: "stop-para-ninos-educativo",
-  title: "STOP para niños: variantes educativas y adaptaciones por edad",
-  description: "Cómo adaptar el STOP para niños de 5 a 12 años: categorías por edad, reglas simplificadas, beneficios educativos y trucos para profesores y padres.",
-  keywords: ["STOP para niños", "Scattergories niños", "juego de palabras infantil", "STOP educativo", "actividades clase Lengua", "vocabulario niños"],
-  publishedAt: "2026-05-09",
+  title: "STOP para niños: ideas y adaptaciones para jugar en familia o clase",
+  description: "Ideas para adaptar el juego STOP a distintas edades, elegir categorías sencillas y convertir cada ronda en una actividad compartida.",
+  keywords: ["STOP para niños", "juego de palabras infantil", "STOP en familia", "actividad de vocabulario"],
+  publishedAt: "2026-11-12",
   author: "Equipo STOP",
   category: "Para todos los públicos",
-  readMinutes: 7,
+  readMinutes: 5,
   content: `
-El STOP es uno de los **mejores juegos educativos** que existen. En 60 segundos los niños trabajan **vocabulario, ortografía, geografía, agilidad mental y socialización**. Y lo más importante: **no se aburren**.
+El STOP puede ser una actividad entretenida para compartir palabras, practicar la escritura y conversar sobre sus significados. Para que resulte agradable a los niños, adapta las categorías, el ritmo y la forma de puntuar a quienes participan. No hace falta convertir cada ronda en una competición.
 
-Pero el STOP estándar puede ser demasiado difícil o aburrido para edades pequeñas. Aquí está la guía para adaptarlo según la edad y aprovecharlo al máximo.
+Esta guía propone variantes para jugar en casa o en el aula. Son ideas orientativas, no recomendaciones educativas o clínicas ni una promesa de resultados de aprendizaje.
 
-## Por qué el STOP es genial para niños
+## Adaptar el juego a la edad
 
-Los **beneficios cognitivos** documentados del STOP en niños incluyen:
+### 5-6 años: jugar hablando
 
-- 📚 **Ampliación de vocabulario** (cada ronda activan palabras que no usan a diario).
-- ✍️ **Mejora ortográfica** (escribir bajo presión consolida la escritura correcta).
-- ⚡ **Velocidad mental** (presión del cronómetro entrena pensamiento rápido).
-- 🌍 **Conocimiento general** (geografía, animales, cultura).
-- 🤝 **Habilidades sociales** (turnos, normas, gestión de la frustración).
-- 🎯 **Atención sostenida** (necesitan concentración total 60 segundos).
+- Elegid dos o tres categorías muy conocidas, como animales, colores y comidas.
+- Decid la letra en voz alta y buscad respuestas por turnos.
+- No hace falta usar cronómetro ni llevar puntuación.
+- Ayudad a explicar por qué una respuesta encaja.
 
-Estudios sobre **juegos de vocabulario en aula** demuestran que niños que juegan al STOP 1-2 veces por semana mejoran su **fluidez verbal** un 15-20% en pocos meses.
+### 7-9 años: rondas sencillas
 
-## Adaptación por edad
+- Probad con nombre, animal, color, comida y objeto.
+- Dad tiempo suficiente para pensar y escribir.
+- Acordad si se permiten respuestas repetidas.
+- Revisad juntos la escritura al terminar la ronda.
 
-### 👶 5-6 años: STOP "mini"
+### 10-12 años: más variedad
 
-A esta edad, los niños aún no escriben con fluidez. Adaptaciones:
+- Añadid categorías como ciudad, deporte, profesión o personaje.
+- Introducid letras menos frecuentes poco a poco.
+- Dejad que los participantes propongan nuevas categorías.
+- Si usáis puntos, explicad el criterio antes de empezar.
 
-- **STOP oral**: el profesor dice la letra, los niños responden en voz alta por turnos.
-- **Sin cronómetro** o con tiempos muy generosos (3-4 minutos).
-- **Solo 2-3 categorías**: animal, color, fruta.
-- **Sin sistema de puntos**: simplemente ronda tras ronda, celebrando cada palabra válida.
+Estas edades son orientativas: el nivel de lectura, escritura e interés varía de una persona a otra.
 
-### 🧒 7-9 años: STOP simplificado
+## Categorías fáciles para empezar
 
-A esta edad ya escriben:
+- Animal
+- Color
+- Fruta
+- Comida
+- Juguete
+- Objeto de casa
+- Nombre
+- Lugar
 
-- **4-5 categorías simples**: nombre, animal, color, comida, juguete.
-- **Cronómetro generoso**: 2-3 minutos por ronda.
-- **Tiempo extra si lo necesitan**: la idea no es presión sino aprender.
-- **Excluir letras imposibles**: Ñ, K, W, X, Y, Z fuera del sorteo.
-- **Puntos sencillos**: 1 punto por palabra válida, sin distinción de "única" o "repetida".
+Cuando el grupo tenga práctica, podéis añadir categorías temáticas: naturaleza, música, deportes, libros o personajes.
 
-### 🧑 10-12 años: STOP estándar adaptado
+## Variantes para aprender jugando
 
-Ya pueden con casi todo:
+### STOP de palabras
 
-- **6-8 categorías** mezclando fáciles y medias: nombre, apellido, animal, ciudad, comida, deporte, marca, famoso.
-- **Cronómetro 90 segundos**.
-- **Puntuación estándar**: 10/5/0.
-- **Todas las letras** excepto Ñ.
-- **Pueden empezar a competir** entre sí en torneos pequeños de clase.
+Elegid sustantivos, adjetivos o verbos. Después de cada ronda, comentad el significado y construid una frase con alguna respuesta.
 
-### 🧑‍🎓 13+ años: STOP adulto
+### STOP de geografía
 
-A partir de los 13 años pueden jugar al STOP como cualquier adulto, incluyendo categorías difíciles (escritor, río, capital) y letras imposibles.
+Usad países, ciudades, ríos o montañas. Tened un atlas o mapa a mano para comprobar los lugares que no conozcáis.
 
-## Categorías ideales por edad
+### STOP de animales
 
-### Para niños pequeños (5-8 años)
-1. **Animal**
-2. **Color**
-3. **Fruta o verdura**
-4. **Juguete**
-5. **Comida**
-6. **Personaje de dibujos**
-7. **Cosa de la casa**
+Proponed animales domésticos, aves, mamíferos o animales marinos. Al terminar, cada participante puede compartir un dato que conozca.
 
-### Para niños de 9-12 años
-1. **Nombre de persona**
-2. **Apellido**
-3. **Animal**
-4. **Ciudad o país**
-5. **Comida**
-6. **Deporte**
-7. **Marca**
-8. **Película o serie**
-9. **Famoso**
-10. **Asignatura del cole**
+### STOP creativo
 
-## Variantes educativas concretas
+Usad categorías abiertas como «algo que hace reír», «un personaje inventado» o «un lugar imaginario». En esta variante importa más explicar la idea que competir por puntos.
 
-### 📖 STOP de Lengua
+## Cómo hacer que la partida sea agradable
 
-Solo categorías lingüísticas:
+1. Explicad las reglas antes de empezar.
+2. Ajustad el tiempo a la experiencia del grupo o jugad sin cronómetro.
+3. Valorad las respuestas y el esfuerzo, no solo quién termina primero.
+4. Evitad ridiculizar errores: corregidlos con calma al final.
+5. Permitid cambiar una categoría si resulta demasiado difícil.
+6. Alternad quién elige la letra o las categorías.
 
-- Sustantivo
-- Adjetivo
-- Verbo (infinitivo)
-- Sinónimo de "feliz"
-- Antónimo de "grande"
+## Jugar en familia o en clase
 
-Ideal para clase de Lengua.
+En familia, podéis jugar por parejas o de forma cooperativa, intentando completar entre todos una tabla. En clase, el docente puede escoger categorías relacionadas con el tema que se esté trabajando y revisar las respuestas después de la partida.
 
-### 🌍 STOP de Geografía
+El juego no sustituye una actividad de enseñanza planificada ni garantiza mejoras medibles en vocabulario, ortografía o atención. Puede servir como recurso lúdico para practicar y conversar.
 
-Solo categorías geográficas:
+## Si utilizas una versión digital
 
-- País
-- Capital
-- Río
-- Montaña
-- Ciudad europea
-- Ciudad americana
+Antes de que los niños jueguen en una web o aplicación, un adulto debería revisar sus funciones, anuncios, compras, chat, privacidad y opciones de interacción con otras personas. No des por hecho que una sala privada o un modo sin anuncios están disponibles: comprueba las opciones reales del producto y sus condiciones.
 
-Ideal para Ciencias Sociales.
+También puedes consultar [categorías originales para STOP](/blog/categorias-originales-stop), [cómo organizar un torneo](/blog/como-organizar-torneo-stop) y [reglas del STOP](/blog/como-jugar-stop-reglas-completas).
 
-### 🦁 STOP de Animales
-
-Solo categorías sobre fauna:
-
-- Mamífero
-- Ave
-- Pez
-- Insecto
-- Animal de granja
-- Animal de la selva
-
-Para curso de Naturales.
-
-### 🎨 STOP creativo
-
-Categorías abiertas y artísticas:
-
-- Cosa que te hace reír
-- Sonido extraño
-- Personaje inventado
-- Sabor raro
-- Lugar imaginario
-
-Genial para clases de creatividad o talleres extraescolares.
-
-## Cómo gestionar la competitividad infantil
-
-Los niños se **frustran** cuando pierden. Para evitarlo:
-
-1. **No anuncies "ganador" en cada ronda.** Anuncia "buenas palabras" o "palabra más original".
-2. **Premia el esfuerzo, no solo el resultado.** "Mira qué bien escribió Lucía 'elefante' a la primera".
-3. **Rota equipos en cada ronda** si juegas por parejas, para que no se cree "el equipo malo".
-4. **Permite "comodín"** para los más pequeños: poder saltarse una letra difícil sin penalización.
-5. **Celebra los STOPs gritados aunque pierdan la ronda**: anima a la valentía.
-
-## STOP en familia: ideas concretas
-
-- **STOP del domingo:** ritual semanal antes de comer. 15 minutos, 3 rondas. Familias enteras lo hacen.
-- **STOP del viaje:** en el coche, oral, durante un trayecto largo. Mantiene a los niños entretenidos sin pantalla.
-- **STOP de aprendizaje del idioma:** si la familia es bilingüe, jugar en el idioma que se quiere reforzar.
-- **STOP con abuelos:** maravilloso para fomentar relación intergeneracional. Los abuelos saben palabras "raras" que sorprenden a los niños.
-
-## Stop digital para niños
-
-Si quieres jugar en pantalla, asegúrate de elegir una versión adaptada:
-
-- ✅ **Sin anuncios** (importante para menores).
-- ✅ **Sin chat con desconocidos** (solo modo familia o sala privada).
-- ✅ **Categorías adaptadas a edad**.
-- ✅ **Diccionario validador** (evita discusiones).
-
-[STOP online](/) cumple los 4 puntos: sin ads invasivos en modo Premium, salas privadas con código (solo amigos/familia), categorías configurables, validación automática.
-
-## Errores típicos al jugar con niños
-
-- ❌ **Forzar la Ñ.** Frustración garantizada. Excluye.
-- ❌ **Cronómetro muy rápido.** 60 segundos pueden ser una eternidad para un niño de 7. Empieza con 2-3 minutos.
-- ❌ **Categorías de adultos** ("escritor", "río de Asia"). Adapta a su mundo.
-- ❌ **Corregir cada error.** Si escribe "elefante" con dos L, anótalo en una libreta y coméntalo después. Durante el juego, valida.
-
-## Para profesores: integrar STOP en el aula
-
-El STOP funciona como **calentamiento de clase** (5-10 minutos al inicio) o como **actividad de cierre** (recompensa al terminar la lección).
-
-Ventajas para el profesor:
-
-- No requiere fotocopias (excepto la tabla inicial).
-- Funciona con cualquier número de alumnos.
-- Cubre varios objetivos curriculares (vocabulario, ortografía, cultura general).
-- Es **autogestionable**: una vez explicadas las normas, los alumnos pueden jugar entre sí sin supervisión.
-
----
-
-Sigue leyendo sobre STOP educativo y familiar:
-
-- [50 categorías originales para STOP](/blog/categorias-originales-stop)
-- [Beneficios cognitivos de jugar al STOP](/blog/beneficios-cognitivos-jugar-stop)
-- [STOP en pareja: 15 ideas](/blog/stop-en-pareja-dinamicas)
-- [Cómo organizar un torneo de STOP](/blog/como-organizar-torneo-stop)
-
-¿Eres profesor o madre/padre? Prueba [STOP online](/) en clase o en casa. Es gratis, funciona en cualquier móvil y sin descargas.
+[Juega a STOP online](/) y adapta la partida a vuestro grupo.
 `,
 };
 
