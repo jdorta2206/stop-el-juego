@@ -33,7 +33,7 @@ Estos son ejemplos de nombres propios que empiezan por K. Antes de usarlos, acor
 - **Kevin, Kenneth, Karl, Kurt, Kai, Khalid** (masculinos)
 - **Kim, Kobe, Kasper, Konstantin** (unisex o internacionales)
 
-> 💡 Si juegas en familia, **"Karen"** o **"Kevin"** son las apuestas más seguras: las conoce todo el mundo.
+> 💡 "Karen" y "Kevin" son ejemplos de nombres propios con K. Utilízalos solo si habéis acordado admitir nombres de persona.
 
 ## Apellidos con K
 
@@ -50,15 +50,13 @@ Esta es la categoría donde más te puedes lucir:
 - **Kakapo** (loro nocturno de Nueva Zelanda)
 - **Kudú** (antílope africano)
 - **Krill** (los crustáceos que comen las ballenas)
-- **Kanguro** o **Canguro** (se acepta con K en algunos diccionarios)
+- **Kinkajú** (mamífero arborícola de América Central y del Sur)
 
 ## Colores con K
 
-Pocos colores empiezan por K. Las opciones reales:
+No hay una respuesta habitual y clara en español para esta categoría con K. "Caqui" suele escribirse con C; no la cambies por K sin comprobar el diccionario y las reglas que utilicéis.
 
-- **Kaki** o **Caqui** (el verde militar) — válido en ambos formatos.
-
-Si no se te ocurre nada, **deja la casilla en blanco** y enfócate en otras categorías. No vale la pena perder tiempo aquí.
+Si no encuentras una opción que encaje, deja la casilla en blanco y continúa con otra categoría.
 
 ## Países con K
 
@@ -104,16 +102,16 @@ Aquí hay más opciones de las que parece:
 
 ## Deportes con K
 
-- **Karate** (la apuesta segura)
+- **Karate** (arte marcial de origen japonés)
 - **Kayak / Piragüismo en kayak**
 - **Kárting** (carreras de karts)
-- **Kickboxing** (acepta como palabra extranjera)
+- **Kickboxing** (préstamo del inglés; acordad si lo admitís)
 - **Kendo** (esgrima japonesa)
 - **Kung-fu**
 
 ## Profesiones con K
 
-Esta es muy difícil. Si la K cae en "profesión", probablemente nadie meta una palabra válida.
+Hay pocos términos frecuentes de profesiones con K. Las siguientes opciones son poco habituales y conviene comprobarlas antes de la partida:
 
 Opciones débiles pero defendibles:
 
@@ -125,7 +123,7 @@ Opciones débiles pero defendibles:
 
 ## Marcas con K
 
-Las marcas con K son **casi infinitas** y todas conocidas. Esta es probablemente tu categoría más fácil:
+Hay marcas conocidas que empiezan por K. Son nombres comerciales, así que utilizadlos solo si las reglas de vuestra partida admiten marcas:
 
 - **Kellogg's** (cereales)
 - **Kit-Kat** (chocolate)
@@ -142,7 +140,7 @@ Las marcas con K son **casi infinitas** y todas conocidas. Esta es probablemente
 
 ## Famosos con K
 
-- **Kim Kardashian** (la opción universal)
+- **Kim Kardashian** (figura pública; admítela solo si las normas permiten nombres de personas famosas)
 - **Kanye West** (rapero)
 - **Kobe Bryant** (NBA)
 - **Karol G** (cantante colombiana)
