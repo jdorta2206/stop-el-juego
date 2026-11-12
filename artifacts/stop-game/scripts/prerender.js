@@ -97,7 +97,7 @@ const homepage = {
     `,
 };
 
-const staticPages/ = [
+const staticPages = [
   {
     route: "/como-jugar",
     title: "Cómo jugar a STOP: reglas, rondas y puntuación",
