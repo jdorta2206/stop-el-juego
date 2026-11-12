@@ -174,7 +174,6 @@ function ScoreOutboxHandler() {
 }
 
 function App() {
-  const [splashDone, setSplashDone] = useState(false);
 
   // Production prerender puts SEO HTML inside #root. Reveal it only after
   // React has committed the real application, preventing a raw-HTML flash.
@@ -221,7 +220,6 @@ function App() {
           <ScoreOutboxHandler />
           <SplashScreen
             onDone={() => {
-              setSplashDone(true);
               // Let React remove the splash and paint the first game frame before
               // Android opens the Google Play Games welcome/authentication UI.
               requestAnimationFrame(() => requestAnimationFrame(() => {
@@ -230,8 +228,7 @@ function App() {
             }}
             lang={lang}
           />
-          {splashDone && (
-            <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
               <Suspense fallback={
                 <div
                   className="fixed inset-0 flex items-center justify-center pointer-events-none"
@@ -246,8 +243,7 @@ function App() {
               }>
                 <Router />
               </Suspense>
-            </WouterRouter>
-          )}
+          </WouterRouter>
           <Toaster />
         </ErrorBoundary>
       </MotionConfig>
