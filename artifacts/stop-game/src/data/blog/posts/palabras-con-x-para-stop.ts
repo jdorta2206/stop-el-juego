@@ -2,8 +2,8 @@ import type { BlogPost } from "../types";
 
 const post: BlogPost = {
   slug: "palabras-con-x-para-stop",
-  title: "Palabras con X para STOP: lista completa para ganar la ronda",
-  description: "Cuando sale la X en STOP, la mayoría se queda en blanco. Te damos 70+ palabras con X válidas por categoría: nombres, animales, comidas, objetos, marcas y más.",
+  title: "Palabras con X para STOP: ejemplos por categorías",
+  description: "Practica ejemplos con X por categorías y comprueba cuáles encajan con las normas de tu partida de STOP.",
   keywords: ["palabras con X", "palabras con X para STOP", "nombres con X", "animales con X", "comidas con X", "objetos con X", "marcas con X"],
   publishedAt: "2026-05-19",
   author: "Equipo STOP",
@@ -77,7 +77,7 @@ Casi inexistentes en español, pero:
 ## Objetos / cosas con X
 
 - **Xilófono** (instrumento musical)
-- **Xerocopia** (fotocopia, RAE válida)
+- **Xerocopia** (término relacionado con la reproducción de documentos; comprueba su aceptación con el diccionario acordado)
 - **Xenón** (gas noble, también marca de faros)
 
 ## Deportes con X
@@ -112,9 +112,9 @@ Aquí sorprendentemente hay opciones:
 ## Trucos para sobrevivir a la X
 
 1. **Acepta perder casillas.** La X tiene tan pocas palabras que es **normal dejar 3-4 en blanco**. No te frustres.
-2. **Sé rápido.** Como los demás también van a perder casillas, **gritar STOP cuanto antes** maximiza tu ventaja.
-3. **Concéntrate en 4-5 categorías "fáciles"** (nombre, ciudad, marca, famoso). Si llenas esas, ya ganas la ronda.
-4. **Memoriza Xilófono, Xerox, Xiaomi, Xavier, Xátiva.** Con esas 5 cubres lo esencial.
+2. **Administra el tiempo.** Empieza por las categorías en las que conozcas una respuesta que encaje y vuelve a las difíciles si te queda tiempo.
+3. **Comprueba las normas.** Nombres propios, marcas y personajes ficticios pueden tener criterios distintos según la partida.
+4. **Practica la escritura.** Repasar ejemplos como xilófono o topónimos con X ayuda a recordarlos, pero no sustituye la comprobación de cada respuesta.
 
 ## Tu "kit mínimo STOP letra X"
 
@@ -136,7 +136,7 @@ Aunque parezca contraintuitivo, las letras "imposibles" como X, K, W, Y, Z son d
 - Las letras frecuentes suelen ofrecer más opciones conocidas, aunque eso no asegura que todos obtengan la misma puntuación.
 - Las letras menos habituales pueden exigir más preparación y dejar categorías sin respuesta; el resultado depende de las palabras admitidas y del sistema de puntuación.
 
-Por eso vale más invertir 20 minutos en memorizar listas de letras difíciles que en aprender palabras "fáciles" que ya conoces.
+Dedicar un rato a practicar letras menos frecuentes puede ampliar tu repertorio, aunque no existe un tiempo de estudio que garantice ganar.
 
 ---
 
