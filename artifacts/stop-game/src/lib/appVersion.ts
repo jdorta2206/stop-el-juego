@@ -11,16 +11,14 @@
 const STORAGE_KEY = "stop_app_version";
 
 // ── Configurable threshold ──────────────────────────────────────────────
-// Bump this to the latest published versionName whenever you ship an Android
-// build you want everyone on. Anyone whose installed version is >= this value
-// will NOT see the "update available" prompt.
-export const MIN_RECOMMENDED_APP_VERSION = "1.3.6.7";
+// Latest Android version now published and recommended to players.
+// Builds reporting a lower version will see the in-game update prompt.
+export const MIN_RECOMMENDED_APP_VERSION = "1.3.9.6";
 
-// Current published TWA build. The TWA start URL identifies the Play app,
-// but older published builds did not include an appVersion query parameter.
-// Keep this fallback only for that TWA marker; normal web clients remain unversioned
-// unless they explicitly report a version.
-export const CURRENT_TWA_VERSION = "1.3.6.7";
+// Last production TWA version that did not report appVersion explicitly.
+// Keep this legacy fallback at 1.3.6.9 so existing installs are not
+// incorrectly identified as 1.3.9.6 and hidden from the update prompt.
+export const CURRENT_TWA_VERSION = "1.3.6.9";
 
 // Unique build identifier used only for operational web telemetry.
 export const CURRENT_WEB_VERSION = import.meta.env.VITE_WEB_BUILD_VERSION || "web-dev";
@@ -41,9 +39,9 @@ function readFromUrl(): string | null {
     const explicit = clean(params.get("appVersion"));
     if (explicit) return explicit;
 
-    // The published TWA currently launches with source=googleplay-twa.
-    // Until all Play builds carry appVersion explicitly, this gives analytics
-    // a truthful version for the current published TWA instead of reporting null.
+    // Older published TWA builds may only carry the TWA source marker.
+    // Attribute those legacy installs to the last production version known
+    // not to report appVersion; normal web clients remain unversioned.
     if (params.get("source") === "googleplay-twa" || params.get("source") === "twa") {
       return CURRENT_TWA_VERSION;
     }
@@ -106,10 +104,9 @@ export function compareVersions(a: string, b: string): number {
   return 0;
 }
 
-// Whether to nudge the user to update. We only have a version for builds that
-// report it: an OLD build (one that predates this feature) reports nothing, so
-// an unknown version is treated as "behind" and still gets nudged. A build
-// that reports a version >= the threshold is up to date and is left alone.
+// Whether to nudge the user to update. A build that reports a version below
+// the threshold (or no version at all) is treated as behind. Builds reporting
+// 1.3.9.6 or newer are left alone.
 export function isAppUpdateRecommended(): boolean {
   const installed = getInstalledAppVersion();
   if (!installed) return true;
