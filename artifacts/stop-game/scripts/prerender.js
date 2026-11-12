@@ -144,6 +144,7 @@ const staticPages = [
 ];
 
 const vite = await createServer({
+  root: packageRoot,
   configFile: path.join(packageRoot, "vite.config.ts"),
   server: { middlewareMode: true },
   appType: "custom",
