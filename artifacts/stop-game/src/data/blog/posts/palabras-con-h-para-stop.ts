@@ -126,7 +126,7 @@ Pocos colores empiezan por H. Discutibles:
 ## Trucos para la H
 
 1. **Cuidado con las palabras "que suenan a H pero no".** Ernesto, Andrés, Alicia… no valen.
-2. **La H es rica en marcas y famosos.** Aprovéchalas.
+2. Hay ejemplos de marcas y personas famosas con H; usadlos solo si vuestra partida admite esas categorías.
 3. **Hipopótamo** es un ejemplo claro de animal con H. Aun así, comprobad que la categoría y el criterio de aceptación estén claros.
 4. **Revisa el criterio sobre plurales.** Algunas partidas los admiten y otras prefieren respuestas en singular.
 
@@ -142,10 +142,10 @@ Pocos colores empiezan por H. Discutibles:
 | Objeto | Hilo |
 | Deporte | Hockey |
 | Profesión | Herrero |
-| Marca | Honda |
+| Marca (si se admiten marcas) | Honda |
 | Famoso | Harrison Ford |
 
-Esta lista es de las más fáciles de memorizar porque la H es **una letra "rica"** en español, no como X o W.
+Esta lista reúne ejemplos para practicar. La aceptación de nombres, marcas y categorías depende de las reglas acordadas para cada partida.
 
 ---
 
