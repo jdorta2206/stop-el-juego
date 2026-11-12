@@ -73,7 +73,8 @@ jobs:
           done
           for article in dist/blog/*/index.html; do
             slug=$(basename "$(dirname "$article")")
-            curl --fail --silent --show-error "http://127.0.0.1:4173/blog/$slug/" | grep -q '<h1>'
+            curl --fail --silent --show-error "http://127.0.0.1:4173/blog/$slug/" -o /tmp/seo-article.html
+            grep -q '<h1>' /tmp/seo-article.html
           done
       - name: Upload exact dist index
         uses: actions/upload-artifact@v4
