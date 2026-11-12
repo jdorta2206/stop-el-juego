@@ -2,169 +2,130 @@ import type { BlogPost } from "../types";
 
 const post: BlogPost = {
   slug: "categorias-originales-stop",
-  title: "50 categorías originales para tu próxima partida de STOP",
-  description: "¿Aburrido de las mismas categorías de siempre? Te damos 50 categorías originales y divertidas para STOP: cine, viajes, gastronomía, infancia, internet y mucho más.",
+  title: "50 ideas de categorías originales para jugar a STOP",
+  description: "Descubre 50 propuestas de categorías para variar tus partidas de STOP, desde cine y música hasta viajes, gastronomía y videojuegos.",
   keywords: ["categorías STOP", "ideas categorías Scattergories", "categorías originales", "categorías divertidas STOP", "qué categorías usar en STOP"],
   publishedAt: "2026-05-11",
   author: "Equipo STOP",
   category: "Ideas y categorías",
   readMinutes: 6,
   content: `
-Una de las **razones principales** por las que el STOP se vuelve repetitivo es siempre usar las mismas categorías: nombre, animal, color, país, cosa, comida. **A la tercera partida ya estás escribiendo "perro" y "rojo" sin pensar**.
+Las categorías habituales —como nombre, animal, color, país o comida— son un buen punto de partida. Si quieres variar una partida de STOP, puedes sustituir algunas por temas más concretos.
 
-La solución: cambia las categorías. Aquí tienes **50 ideas originales** organizadas por tema, listas para que copies y pegues en tu próxima partida.
+Estas son **50 ideas** que puedes adaptar a la edad, los intereses y los conocimientos del grupo. No son reglas oficiales: son propuestas para partidas personalizadas.
 
-## 🎬 Categorías de cine y TV
+## 🎬 Cine y televisión
 
-1. **Película**
-2. **Director de cine**
-3. **Personaje de Disney**
-4. **Saga de películas** (ej. Star Wars, El Señor de los Anillos)
-5. **Serie de TV**
-6. **Personaje de serie**
-7. **Actor o actriz**
-8. **Estudio de cine** (Pixar, Warner, Sony…)
+1. Película
+2. Director o directora de cine
+3. Personaje de animación
+4. Saga cinematográfica
+5. Serie de televisión
+6. Personaje de una serie
+7. Actor o actriz
+8. Estudio de animación
 
-> 💡 **Trampa común:** "Personaje de ficción" es muy abierto. Sé específico ("personaje de Disney") para evitar discusiones.
+## 🏅 Deporte
 
-## 🏟️ Categorías de deporte
+9. Deportista
+10. Club deportivo
+11. Estadio o pabellón
+12. Modalidad deportiva
+13. Equipo de baloncesto
+14. Deporte olímpico
 
-9. **Deportista famoso**
-10. **Club de fútbol**
-11. **Estadio o pabellón**
-12. **Tipo de deporte**
-13. **Marca deportiva**
-14. **Equipo de baloncesto NBA**
+## 🍽️ Gastronomía
 
-## 🍕 Categorías gastronómicas
+15. Plato
+16. Postre
+17. Fruta
+18. Verdura u hortaliza
+19. Especia o condimento
+20. Tipo de queso
+21. Bebida sin alcohol
 
-15. **Plato típico**
-16. **Postre o dulce**
-17. **Especia o condimento**
-18. **Bebida alcohólica**
-19. **Bebida sin alcohol**
-20. **Tipo de queso**
+## 🌍 Viajes y geografía
 
-## ✈️ Categorías de viajes y geografía
+22. Capital
+23. Río
+24. Montaña
+25. Isla
+26. País
+27. Monumento
+28. Parque nacional
 
-21. **Capital del mundo**
-22. **Río famoso**
-23. **Cordillera o montaña**
-24. **Aeropuerto**
-25. **Monumento famoso** (Torre Eiffel, Coliseo…)
-26. **Isla**
-27. **Mar u océano**
+## 🎵 Música
 
-## 🎵 Categorías musicales
+29. Cantante o grupo
+30. Instrumento musical
+31. Género musical
+32. Álbum
+33. Festival de música
 
-28. **Cantante o grupo musical**
-29. **Instrumento musical**
-30. **Género musical** (rock, jazz, reguetón…)
-31. **Canción famosa**
-32. **Festival de música**
+## 🛍️ Marcas y objetos
 
-## 🛒 Categorías de marcas y comercio
+34. Marca de automóvil
+35. Marca de ropa
+36. Marca de tecnología
+37. Electrodoméstico
+38. Herramienta
+39. Objeto que llevarías de viaje
 
-33. **Marca de coche**
-34. **Marca de ropa**
-35. **Marca de tecnología**
-36. **Cadena de supermercados**
-37. **Marca de bebida**
+## 📚 Personas y cultura
 
-## 👤 Categorías de personas
+40. Personaje histórico
+41. Escritor o escritora
+42. Científico o científica
+43. Pintor o pintora
+44. Libro
+45. Profesión
 
-38. **Personaje histórico**
-39. **Político actual**
-40. **Personaje de la realeza** (rey, reina, príncipe…)
-41. **Escritor famoso**
-42. **Inventor o científico**
+## 🎮 Videojuegos e internet
 
-## 🎮 Categorías "modernas" y de internet
+46. Videojuego
+47. Personaje de videojuego
+48. Aplicación
+49. Red social
+50. Juego de mesa
 
-43. **Videojuego**
-44. **Personaje de videojuego**
-45. **Red social o app**
-46. **YouTuber o streamer**
-47. **Meme famoso**
-48. **Influencer**
+## Cómo elegir categorías para el grupo
 
-## 🧒 Categorías para infancia y nostalgia
+- **Combina temas familiares y nuevos.** Así la partida puede ser accesible sin que todas las respuestas resulten evidentes.
+- **Define bien cada categoría.** Por ejemplo, acordad si «personaje» incluye personajes históricos, ficticios o ambos.
+- **Ten en cuenta a quienes juegan.** Para niños, elige temas que conozcan; para un grupo con aficiones compartidas, puedes añadir categorías más específicas.
+- **Acordad los criterios antes de empezar.** Decidid cómo tratar nombres propios, títulos, marcas, idiomas y respuestas discutibles.
+- **Cambia algunas categorías entre partidas.** No hace falta modificar todas: sustituir dos o tres puede aportar variedad.
 
-49. **Juguete clásico**
-50. **Dibujo animado de los 90/00**
+## Categorías para distintas edades y ocasiones
 
----
+### Para jugar con niños
+Puedes probar con animal, fruta, juguete, personaje de animación, deporte, comida o color. Escoge temas que el grupo pueda reconocer.
 
-## Cómo elegir buenas categorías
+### Para adolescentes
+Videojuegos, música, películas, aplicaciones, deportes y libros pueden servir como punto de partida.
 
-Después de probar cientos de combinaciones en partidas reales, hemos aprendido **5 reglas** para elegir bien:
+### Para una reunión familiar
+Combina categorías generales —país, comida, profesión y animal— con otras relacionadas con aficiones compartidas.
 
-### 1. Mezcla "fáciles" y "difíciles"
+### Para una partida temática
+Elige un único tema, como cine, viajes, música o naturaleza, y prepara varias categorías relacionadas. Explica cualquier criterio especial antes de jugar.
 
-Si todas son difíciles (saxofonista de jazz, río de África), la ronda se vuelve frustrante. Si todas son fáciles (nombre, color), aburrida. **3 fáciles + 3 medias + 2 difíciles** es la combinación ideal.
+## Un detalle importante: acordad qué respuestas se aceptan
 
-### 2. Sé específico
+Una categoría personalizada puede admitir respuestas de distintos tipos. Antes de empezar, aclarad si se permiten nombres propios, marcas, personajes ficticios, títulos traducidos o términos de otros idiomas. Si surge una duda, aplicad el criterio que el grupo haya acordado; una palabra no queda validada automáticamente por aparecer en una lista de internet.
 
-"Personaje famoso" da discusiones (¿vale Bart Simpson? ¿Y Napoleón?). Mejor "**personaje de dibujos animados**" o "**personaje histórico**" por separado.
+## Configurar categorías en STOP online
 
-### 3. Evita categorías que dependan de mucha cultura
-
-"Ópera famosa" o "filósofo del siglo XVIII" pueden ser **divertidas con un público culto**, pero matan la partida con público general. Lee a tu grupo.
-
-### 4. Incluye al menos UNA categoría "humorística"
-
-Cosas como **"cosa que da asco"** o **"excusa para faltar al trabajo"** generan risas. No siempre, pero alivian la tensión.
-
-### 5. Rota cada 5-10 rondas
-
-No uses las mismas 8 categorías toda la partida. **Cambia 2-3 cada 5 rondas** para mantener variedad.
-
-## Categorías por edad
-
-### Para niños (6-12 años)
-- Animal, fruta, color, juguete, dibujo animado, comida, deporte.
-
-### Para adolescentes (13-17)
-- Cantante, app, videojuego, marca de ropa, película, youtuber, deportista.
-
-### Para adultos
-- Cualquier mezcla. Añade categorías de cultura general (escritor, monumento, río).
-
-### Para sobremesa familiar mixta
-- Quédate en lo seguro: animal, ciudad, comida, famoso, marca, película.
-
-## Categorías "trampa" que conviene evitar
-
-Algunas categorías parecen buena idea pero **arruinan la partida**:
-
-- ❌ **"Cosa"** → demasiado vago, todo vale, no hay diversión.
-- ❌ **"Verbo"** → discusiones constantes sobre conjugaciones.
-- ❌ **"Palabra que rime con X"** → confunde el objetivo del juego.
-- ❌ **"Adjetivo"** → cualquier "rojo" o "alto" sirve, sin originalidad.
-
-## Categorías temáticas para fiestas
-
-Si organizas una sobremesa, **partida temática** o evento, usa categorías que encajen:
-
-- **Despedida de soltero/a:** apodo de soltero, marca de alcohol, prenda que se quita, regalo subido de tono…
-- **Cumpleaños infantil:** dibujo animado, juguete, dulce, animal de zoo, color favorito…
-- **Cena de empresa:** marca, profesión, ciudad de negocios, app de trabajo, cliente famoso…
-- **Reunión friki:** personaje de Marvel, raza de Star Trek, juego de mesa, anime, videojuego retro…
-
----
-
-## Configurar tus propias categorías en STOP online
-
-En [STOP online](/) puedes elegir entre las categorías clásicas o crear partidas personalizadas con cualquier combinación. **Las salas privadas con amigos** permiten configurar las categorías que quieras antes de empezar.
+En [STOP online](/) puedes jugar con categorías clásicas o preparar partidas personalizadas cuando el modo de juego lo permita. En las salas privadas, revisa las opciones disponibles antes de empezar para adaptar la partida al grupo.
 
 Sigue leyendo:
 
 - [Cómo organizar un torneo de STOP en clase u oficina](/blog/como-organizar-torneo-stop)
 - [STOP para niños: variantes educativas](/blog/stop-para-ninos-educativo)
-- [STOP en pareja: 15 ideas para divertirte](/blog/stop-en-pareja-dinamicas)
-- [Estrategias avanzadas para ganar](/blog/estrategias-avanzadas-stop)
+- [STOP en pareja: ideas para divertirte](/blog/stop-en-pareja-dinamicas)
+- [Estrategias avanzadas para jugar a STOP](/blog/estrategias-avanzadas-stop)
 
-¿Has inventado una categoría buena? Pruébala en [STOP online](/) y cuéntanos cuál te funcionó mejor.
+¿Has encontrado una categoría que funciona bien con tu grupo? Pruébala en [STOP online](/) y compártela con tus compañeros de partida.
 `,
 };
 
