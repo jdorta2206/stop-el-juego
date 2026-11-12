@@ -143,7 +143,7 @@ La Z ofrece más opciones de uso frecuente que algunas letras poco habituales. R
 
 Sigue mejorando con otras letras:
 
-- [Las 100 mejores palabras con K](/blog/palabras-con-k-para-stop)
+- [Palabras con K para STOP](/blog/palabras-con-k-para-stop)
 - [Palabras con W para STOP](/blog/palabras-con-w-para-stop)
 - [Palabras con X para STOP](/blog/palabras-con-x-para-stop)
 - [Palabras con Y para STOP](/blog/palabras-con-y-para-stop)
