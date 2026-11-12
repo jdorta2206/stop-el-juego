@@ -10,7 +10,6 @@ const storageKey = (playerId?: string) =>
 async function syncBestsFromServer(playerId: string, signal?: AbortSignal): Promise<BestScores | null> {
   try {
     const r = await fetch(`${getApiUrl()}/api/ranking/progress/${playerId}`, {
-      credentials: "include",
       headers: authHeaders(),
       signal,
     });
@@ -24,7 +23,6 @@ async function saveBestsToServer(playerId: string, personalBests: BestScores) {
   try {
     await fetch(`${getApiUrl()}/api/ranking/progress/${playerId}`, {
       method: "POST",
-      credentials: "include",
       headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify({ personalBests }),
     });
