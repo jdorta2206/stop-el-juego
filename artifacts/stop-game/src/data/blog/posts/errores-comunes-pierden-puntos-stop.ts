@@ -3,138 +3,97 @@ import type { BlogPost } from "../types";
 const post: BlogPost = {
   slug: "errores-comunes-pierden-puntos-stop",
   title: "10 errores comunes que te hacen perder puntos en STOP",
-  description: "Si tu media de puntos en STOP no sube, probablemente cometes 1 o más de estos 10 errores típicos. Análisis honesto y cómo corregir cada uno.",
+  description: "Diez errores frecuentes al jugar STOP y consejos prácticos para responder con más claridad, administrar el tiempo y respetar las reglas de cada partida.",
   keywords: ["errores STOP", "perder puntos Scattergories", "fallos juego STOP", "por qué pierdo al STOP", "mejorar puntuación STOP"],
   publishedAt: "2026-05-05",
   author: "Equipo STOP",
   category: "Estrategias",
   readMinutes: 7,
   content: `
-Si llevas tiempo jugando al STOP y tu **media de puntos no sube**, no es porque tengas mal vocabulario. Probablemente cometes **uno o más de estos 10 errores clásicos** que la mayoría de jugadores ocasionales no detecta.
+Una buena ronda de STOP no depende solo de conocer muchas palabras. También importa entender las reglas de esa partida, organizar el tiempo y comprobar que cada respuesta encaja en la categoría.
 
-Aquí los analizamos uno a uno con **cómo corregirlos**.
+Estos son diez errores habituales y algunas formas sencillas de evitarlos. La puntuación y el ritmo pueden cambiar según el modo de juego y las reglas acordadas, así que no tomes como universales los valores que aparecen en listas de internet.
 
-## 1. Empezar siempre por la categoría más fácil
+## 1. No leer las reglas del modo elegido
 
-**El error:** rellenas "nombre" y "color" en 5 segundos, te dejan satisfecho, y luego te das cuenta de que llevas 30 segundos perdidos en "país" cuando se acaba el tiempo. Las casillas en blanco son siempre las más difíciles.
+**El error:** empezar a responder sin comprobar cuántas rondas hay, cuánto dura cada una o cómo termina.
 
-**La corrección:** **ataca primero las difíciles**. Si te bloqueas, abandonas (5 segundos máximo) y vuelves al final con las fáciles.
+**La corrección:** antes de jugar, revisa las instrucciones de la modalidad. En STOP, el modo normal puede incluir hasta tres rondas de 60 segundos; el modo rápido y el reto diario tienen una estructura distinta.
 
-**Impacto:** puede subirte 15-20 puntos por ronda.
+## 2. Quedarte demasiado tiempo bloqueado en una categoría
 
-## 2. No conocer las palabras "raras pero válidas"
+**El error:** insistir con una respuesta mientras quedan otras categorías por completar.
 
-**El error:** cuando sale la K, pones "Karen" como nombre y "Kayak" como objeto. Punto a tu favor, pero **el resto también puso lo mismo**. Te llevas +5 cuando podrías llevarte +10.
+**La corrección:** si no encuentras una palabra, pasa a otra y vuelve después si queda tiempo. Una respuesta sencilla y correcta es mejor que una invención apresurada.
 
-**La corrección:** memoriza palabras únicas por letra. En vez de "Karen" pon "**Kira**". En vez de "Kayak" pon "**Kimono**". Más raras = más probable que sean únicas = +10 en vez de +5.
+## 3. Confundir una palabra conocida con una respuesta válida
 
-> 📖 Estudia las listas: [palabras con K](/blog/palabras-con-k-para-stop), [palabras con W](/blog/palabras-con-w-para-stop), [palabras con X](/blog/palabras-con-x-para-stop).
+**El error:** escribir una palabra real que no corresponde a la categoría o no empieza por la letra indicada.
 
-**Impacto:** +5 puntos por categoría que conviertas en única. Si haces esto en 4 categorías, son **+20 puntos por ronda**.
+**La corrección:** comprueba las dos condiciones: inicial y categoría. Por ejemplo, que una palabra sea un nombre de lugar no la convierte automáticamente en un país.
 
-## 3. Quedarte trabado 30 segundos en una categoría
+## 4. Dar por válida cualquier marca o nombre propio
 
-**El error:** "Tiene que haber un país con Q… capital con Q… seguro… ¿Catar? No, Catar es con C. ¿Quito? Quito no es país. ¿Quiraz? No existe."
+**El error:** pensar que una marca, un personaje o un nombre de persona se acepta en todas las partidas.
 
-Mientras piensas, **el rival ya rellenó 4 categorías más**.
+**La corrección:** consulta las reglas del grupo o de la modalidad. Si no se han permitido expresamente nombres propios, marcas o personajes, no des por hecho que cuentan.
 
-**La corrección:** **regla de los 5 segundos**. Si no se te ocurre nada en 5 segundos, **abandonas y avanzas**. Vuelve al final.
+## 5. Tratar el diccionario como única regla de la partida
 
-**Impacto:** evitas dejar 3-4 casillas en blanco por mala gestión del tiempo.
+**El error:** asumir que cualquier entrada de un diccionario sirve para cualquier categoría.
 
-## 4. No gritar STOP a tiempo
+**La corrección:** el diccionario ayuda a comprobar significado y uso, pero también hay que respetar la categoría, la inicial y los criterios acordados. Una entrada no resuelve por sí sola todas las posibles impugnaciones.
 
-**El error:** terminas las 10 categorías a los 40 segundos, pero **sigues escribiendo "para mejorar"** las que ya tienes. Mientras tanto, otro jugador grita STOP y te corta.
+## 6. Repetir siempre la primera palabra que recuerdas
 
-**La corrección:** **en cuanto tengas las 10 categorías llenas (aunque algunas sean dudosas), GRITA**. El bonus de STOP es **enorme** (+20 puntos en algunas variantes, o **20-30 puntos** que cortas al resto).
+**El error:** recurrir a la misma respuesta en cada partida sin pensar si existe otra opción más precisa.
 
-**Impacto:** este error **es el que más subestima la gente**. Aplicar la regla del STOP rápido te puede subir tu media **un 25-30%** instantáneamente.
+**La corrección:** amplía el vocabulario poco a poco y aprende alternativas, pero comprueba su significado antes de memorizarlas. No elijas una palabra solo porque parezca rara.
 
-## 5. Discutir palabras impugnadas
+## 7. No revisar las respuestas dudosas
 
-**El error:** alguien impugna tu palabra. Te enfadas. Discutes 5 minutos. **Pierdes la ronda y el ambiente**. Y al final, igual te quitan los puntos.
+**El error:** dejar pasar una respuesta que no recuerdas bien o discutirla sin comprobarla.
 
-**La corrección:** **acepta o consulta el DRAE en 30 segundos**. Si está en el DRAE, vale, no hay discusión. Si no está, fuera. Sin dramas.
+**La corrección:** cuando termine la ronda, revisa las dudas con una fuente fiable y aplica el mismo criterio a todos los jugadores. Si la partida tiene un sistema de validación, sigue el resultado y las reglas de esa modalidad.
 
-**Impacto:** mejora el ambiente de la partida y tu **velocidad mental** entre rondas.
+## 8. No adaptar el ritmo al tiempo disponible
 
-## 6. Usar siempre las mismas palabras
+**El error:** jugar una ronda rápida como si tuvieras todo el tiempo del modo normal.
 
-**El error:** la K saca "Karen". La W saca "Walter". La Z saca "Zorro". Mismas palabras en cada partida → **todos repiten** → siempre +5, nunca +10.
+**La corrección:** identifica cuánto dura la ronda y distribuye el tiempo. En las modalidades más cortas, prioriza respuestas claras y no te detengas demasiado en una sola casilla.
 
-**La corrección:** **rota tus palabras**. Memoriza **2-3 opciones por letra** y alterna. Si en la partida anterior pusiste "Karen", esta ronda pon "Katia" o "Kira".
+## 9. Confundir originalidad con validez
 
-**Impacto:** sale ganando en originalidad y diversión.
+**El error:** creer que una respuesta poco frecuente tiene que ser correcta o que una respuesta compartida deja de ser válida.
 
-## 7. No estudiar entre partidas
+**La corrección:** primero importa que la respuesta cumpla las reglas. La coincidencia con otros jugadores y su efecto en la puntuación dependen del sistema de esa partida.
 
-**El error:** juegas 100 partidas pero **no aprendes vocabulario nuevo**. Tu rendimiento se estabiliza. Te frustras.
+## 10. No aprender de las dudas de partidas anteriores
 
-**La corrección:** **5 minutos al día de lectura** (DRAE, revistas, novelas) o memorización de listas. La diferencia entre el jugador "ocasional eterno" y el "que mejora" es esto.
+**El error:** repetir una respuesta que ya generó confusión sin comprobarla.
 
-**Impacto:** mejora medible en 2-3 semanas.
-
-## 8. Subestimar las letras "imposibles"
-
-**El error:** "Bah, la X salió, todos vamos a sacar 0 puntos, da igual." Te rindes mentalmente.
-
-**La corrección:** las letras imposibles son **donde se ganan las partidas**. Si tú sacas 30 puntos en X y el resto saca 5, **te llevas la ronda con diferencia abrumadora**. Memoriza nuestras listas para [K, W, X, Y, Z](/blog/palabras-con-k-para-stop).
-
-**Impacto:** +50 puntos por partida si dominas las raras.
-
-## 9. Distraerte mirando lo que escriben los demás
-
-**El error:** miras la hoja del rival "para ver qué pone". Pierdes 5-10 segundos por ronda. Encima, **no te ayuda** (no puedes copiar = sería trampa).
-
-**La corrección:** **concéntrate en tu hoja**. Solo levanta la cabeza para vigilar quién va a gritar STOP primero.
-
-**Impacto:** +5-10 segundos efectivos por ronda = 1-2 categorías más rellenas.
-
-## 10. No leer las respuestas con confianza
-
-**El error:** lees tus respuestas dudando ("Eh… ‘Karen’… aunque no estoy seguro"). Al rival le **invitas a impugnar**.
-
-**La corrección:** **lee con confianza absoluta**, aunque dudes internamente. Tono firme, tono claro. El **80% de impugnaciones nace de la inseguridad** del que lee.
-
-**Impacto:** evitas perder palabras que en realidad valían.
+**La corrección:** anota las palabras que te costó defender, busca su significado y decide si encajan en las categorías que sueles jugar. Así mejoras tu vocabulario sin memorizar listas dudosas.
 
 ---
 
-## Tabla resumen: errores y soluciones
+## Resumen: cómo preparar una buena ronda
 
-| # | Error | Pérdida media por ronda |
-|---|---|---|
-| 1 | Empezar por fácil | -15 pts |
-| 2 | No saber palabras raras | -20 pts |
-| 3 | Bloquearte en una categoría | -10 a -30 pts |
-| 4 | No gritar STOP a tiempo | -20 a -40 pts |
-| 5 | Discutir impugnaciones | -5 pts (ambiente) |
-| 6 | Mismas palabras | -10 pts |
-| 7 | No estudiar entre partidas | progresivo |
-| 8 | Rendirte en letras raras | -30 a -50 pts |
-| 9 | Mirar al rival | -10 pts (tiempo) |
-| 10 | Leer dudando | -10 pts (impugnaciones) |
+- Lee las instrucciones del modo antes de empezar.
+- Comprueba la inicial y la categoría de cada respuesta.
+- No presupongas que nombres propios, marcas o regionalismos están permitidos.
+- Usa diccionarios como apoyo, no como sustituto de las reglas.
+- Administra el tiempo y revisa las dudas al terminar.
 
-Si corriges **solo los 3 más caros** (4, 8, 2), tu media puede subir **+70-90 puntos por partida**.
+No hay una técnica que garantice ganar todas las partidas. Sí puedes jugar con más seguridad si conoces las reglas, eliges respuestas defendibles y aprendes de cada ronda.
 
-## El error meta: no medir tu progreso
+Sigue practicando:
 
-Aparte de los 10 anteriores, hay un **error meta** que casi todos cometen: **no llevan registro de partidas**. Por eso no saben dónde mejorar.
-
-Lo que sí funciona: **anota tu puntuación final** y la letra que más te ha costado tras cada partida. En 10 partidas verás un patrón.
-
-En [STOP online](/) las estadísticas se guardan automáticamente: ves tus puntos por partida, tu mejor letra, tu peor letra, etc. Útil para saber **dónde te toca estudiar**.
-
----
-
-Sigue mejorando:
-
-- [Estrategias avanzadas para ganar al STOP](/blog/estrategias-avanzadas-stop)
+- [Estrategias para jugar mejor a STOP](/blog/estrategias-avanzadas-stop)
 - [Cómo pensar palabras rápido bajo presión](/blog/pensar-palabras-rapido-bajo-presion)
 - [Las palabras más raras pero válidas](/blog/palabras-raras-pero-validas-stop)
 - [Cómo jugar al STOP: reglas completas](/blog/como-jugar-stop-reglas-completas)
 
-¿Cuántos de estos 10 errores reconoces en tu juego? Corrige los 3 más caros y **prueba ahora mismo** en [STOP online](/). Verás la diferencia.
+¿Qué tipo de respuesta te cuesta más comprobar? Practica en [STOP online](/) y consulta las reglas de la modalidad antes de empezar.
 `,
 };
 
