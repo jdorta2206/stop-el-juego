@@ -7,13 +7,17 @@ type BestScores = Partial<Record<GameMode, number>>;
 const storageKey = (playerId?: string) =>
   `stop_best_score_v2:${playerId || "guest"}`;
 
-async function syncBestsFromServer(playerId: string, signal?: AbortSignal): Promise<BestScores> {
+async function syncBestsFromServer(playerId: string, signal?: AbortSignal): Promise<BestScores | null> {
   try {
-    const r = await fetch(`${getApiUrl()}/api/ranking/progress/${playerId}`, { signal });
-    if (!r.ok) return {};
+    const r = await fetch(`${getApiUrl()}/api/ranking/progress/${playerId}`, {
+      credentials: "include",
+      headers: authHeaders(),
+      signal,
+    });
+    if (!r.ok) return null;
     const data = await r.json();
     return (data.personalBests && typeof data.personalBests === "object") ? data.personalBests : {};
-  } catch { return {}; }
+  } catch { return null; }
 }
 
 async function saveBestsToServer(playerId: string, personalBests: BestScores) {
@@ -52,7 +56,8 @@ export function usePersonalBest(mode: GameMode, playerId?: string) {
     const controller = new AbortController();
     syncAbortRef.current = controller;
     syncBestsFromServer(playerId, controller.signal).then(serverBests => {
-      setBests(prev => {
+      if (!serverBests || controller.signal.aborted) return;
+      setBests(() => {
         const authoritative: BestScores = {};
         for (const [m, score] of Object.entries(serverBests)) {
           if (typeof score === "number" && Number.isFinite(score) && score >= 0) {
