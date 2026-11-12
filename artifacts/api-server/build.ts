@@ -64,6 +64,7 @@ async function buildAll() {
       "process.env.NODE_ENV": '"production"',
     },
     minify: true,
+    sourcemap: "external",
     external: externals,
     logLevel: "info",
   });
