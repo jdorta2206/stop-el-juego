@@ -12,7 +12,7 @@ const post: BlogPost = {
   content: `
 La letra **K** es una de las **pesadillas clásicas** del STOP. En español hay muy pocas palabras nativas con K (la mayoría son préstamos de otros idiomas), por lo que cuando sale, **muchos jugadores se quedan en blanco**.
 
-Y ahí está la oportunidad: si te aprendes solo **una palabra por categoría**, te llevas **+10 puntos en cada una** (porque nadie más la pondrá). Esta lista está optimizada para eso.
+Preparar ejemplos por categoría puede ayudarte a recordar respuestas, pero ninguna lista garantiza puntos: el resultado depende de las reglas, de la validación y de lo que escriban los demás.
 
 ## Por qué la K es tan difícil en español
 
@@ -23,7 +23,7 @@ El español casi no tiene palabras propias con K. Las que existen son:
 - **Nombres propios** extranjeros (Karen, Kevin, Kenia…).
 - **Topónimos** lejanos (Kenia, Kuwait, Kioto…).
 
-La Real Academia Española acepta como válidas la mayoría de estas palabras, así que **no temas usarlas**. Si alguien te impugna, dile que las consulte en el [DRAE](https://dle.rae.es).
+Que una palabra aparezca en el DLE no determina por sí solo si será aceptada en una partida. Acordad si admitís préstamos, nombres propios, marcas y topónimos, y consultad el diccionario como referencia lingüística, no como sustituto de las reglas del grupo.
 
 ## Nombres de persona con K
 
@@ -153,10 +153,10 @@ Las marcas con K son **casi infinitas** y todas conocidas. Esta es probablemente
 
 ## Trucos para no quedarse en blanco con la K
 
-1. **Memoriza un "kit mínimo"** de 1 palabra por categoría. Con 10 palabras te aseguras la ronda.
-2. **Si dudas, escribe.** Es mejor poner una palabra dudosa y que te la impugnen que dejarlo en blanco. Si nadie la impugna, +10 puntos.
-3. **Prioriza categorías "ricas en K"**: marcas, ciudades, animales, comidas. Allí siempre hay opciones.
-4. **No malgastes tiempo en colores o profesiones** con K. Casi no hay opciones; mejor avanzar.
+1. Prepara algunos ejemplos por categoría y comprueba su escritura antes de la partida.
+2. Si una palabra te genera dudas, no la fuerces: valora si encaja realmente con la categoría y las reglas acordadas.
+3. Distingue nombres propios, marcas, préstamos y topónimos; cada grupo puede recibir un tratamiento distinto.
+4. Si no encuentras una respuesta, pasa a otra categoría y vuelve después si queda tiempo.
 
 ## Resumen: tu "kit STOP letra K"
 
