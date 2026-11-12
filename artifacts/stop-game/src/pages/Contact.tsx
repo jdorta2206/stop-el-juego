@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui";
-import { Mail, Phone, MapPin, Twitter, Instagram, Facebook, CheckCircle, AlertCircle } from "lucide-react";
+import { Mail, CheckCircle, AlertCircle } from "lucide-react";
 
 export default function Contact() {
   const [name, setName] = useState("");
@@ -128,31 +128,9 @@ export default function Contact() {
                 <Mail className="w-5 h-5 text-secondary" />
                 <span className="text-white font-bold">dorynex@stopjuegodepalabras.com</span>
               </div>
-              <div className="flex items-center gap-3 mb-4">
-                <Phone className="w-5 h-5 text-secondary" />
-                <span className="text-white">+34 666 66 66 66</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <MapPin className="w-5 h-5 text-secondary" />
-                <span className="text-white">Leganés, Madrid, España</span>
-              </div>
+
             </div>
-            <div className="bg-white/5 rounded-2xl p-6 border border-white/10">
-              <p className="text-white/70 text-sm">
-                También puedes contactarnos a través de nuestras redes sociales:
-              </p>
-              <div className="flex gap-4 mt-3">
-                <a href="#" className="text-white/70 hover:text-white transition-colors">
-                  <Twitter className="w-5 h-5" />
-                </a>
-                <a href="#" className="text-white/70 hover:text-white transition-colors">
-                  <Instagram className="w-5 h-5" />
-                </a>
-                <a href="#" className="text-white/70 hover:text-white transition-colors">
-                  <Facebook className="w-5 h-5" />
-                </a>
-              </div>
-            </div>
+
           </div>
         </div>
       </div>

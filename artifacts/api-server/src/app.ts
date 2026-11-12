@@ -193,6 +193,29 @@ if (process.env["SERVE_CLIENT"] === "1") {
     },
   }));
 
+  // Serve route-specific prerendered HTML before falling back to the SPA shell.
+  // express.static uses index:false above, so without this step every deep URL
+  // would receive the homepage even when its own dist/<route>/index.html exists.
+  app.get(/^\/(?!api(?:\/|$)).*/, (req, res, next) => {
+    const pathname = req.path;
+    if (/\.(?:js|mjs|css|map|json|png|jpe?g|gif|svg|webp|ico|woff2?|ttf|wasm|webmanifest)$/i.test(pathname)) {
+      return next();
+    }
+
+    const distRoot = path.resolve(clientDist);
+    const routeDirectory = path.resolve(clientDist, `.${pathname}`);
+    if (routeDirectory !== distRoot && !routeDirectory.startsWith(distRoot + path.sep)) {
+      return next();
+    }
+
+    const routeIndex = path.join(routeDirectory, "index.html");
+    if (!existsSync(routeIndex)) return next();
+
+    res.sendFile(routeIndex, {
+      headers: { "Cache-Control": "no-cache, no-store, must-revalidate" },
+    }, next);
+  });
+
   // SPA fallback: only application routes should receive index.html.
   // Never return HTML for a missing JS/CSS/image module, otherwise browsers
   // reject it with a strict MIME-type error and the whole app fails to boot.

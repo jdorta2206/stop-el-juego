@@ -7,14 +7,14 @@ export default function About() {
         <h1 className="text-4xl font-black text-white mb-6">Acerca de STOP</h1>
         <div className="space-y-6 text-white/80 leading-relaxed">
           <p>
-            <strong>STOP</strong> nació en 2025 como un proyecto personal de un grupo de amigos apasionados por los juegos de palabras. Inspirados en el clásico <em>Tutti Frutti</em> y <em>Scattergories</em>, queríamos crear una versión moderna, multijugador y accesible desde cualquier dispositivo.
+            <strong>STOP El Juego</strong> es un proyecto independiente inspirado en los juegos clásicos de categorías y palabras, conocidos en distintos lugares como STOP, Basta o Tutti Frutti. Su objetivo es ofrecer una forma accesible de jugar desde el navegador y compartir partidas desde móvil u ordenador.
           </p>
           <p>
             El objetivo era sencillo: <strong>conectar a personas a través de la diversión y el desafío mental</strong>. Queríamos que cualquier persona, sin importar su edad o conocimientos informáticos, pudiera disfrutar de una partida rápida con amigos o competir globalmente en retos diarios.
           </p>
           <h2 className="text-2xl font-bold text-white mt-6">¿Quién está detrás de STOP?</h2>
           <p>
-            El equipo está formado por desarrolladores, diseñadores y jugadores apasionados. Todos colaboramos de forma remota, y cada uno aporta su visión para mejorar la experiencia. Aunque somos un equipo pequeño, creemos en la calidad y en escuchar a nuestra comunidad.
+            El proyecto se mantiene y mejora de forma continua a partir de las necesidades de la comunidad y de los problemas detectados durante el uso. Las prioridades son la estabilidad de las partidas, la claridad de las reglas y una experiencia accesible.
           </p>
           <p>
             El proyecto se financia principalmente mediante <strong>packs opcionales</strong> (Premium y Mundial) que ofrecen cosméticos exclusivos y apoyan el desarrollo continuo. También estamos explorando la publicidad responsable para mantener el juego gratuito para todos.
@@ -38,7 +38,7 @@ export default function About() {
           </p>
           <h2 className="text-2xl font-bold text-white mt-6">Contacto</h2>
           <p>
-            ¿Tienes ideas, sugerencias o quieres reportar un problema? Escríbenos a <a href="mailto:soporte@stopjuegodepalabras.com" className="text-secondary hover:underline">soporte@stopjuegodepalabras.com</a> o usa nuestro <a href="/contacto" className="text-secondary hover:underline">formulario de contacto</a>.
+            ¿Tienes ideas, sugerencias o quieres reportar un problema? Escríbenos a <a href="mailto:dorynex@stopjuegodepalabras.com" className="text-secondary hover:underline">dorynex@stopjuegodepalabras.com</a> o usa nuestro <a href="/contacto" className="text-secondary hover:underline">formulario de contacto</a>.
           </p>
           <p className="text-sm text-white/40 mt-8">
             STOP es un proyecto independiente. No estamos afiliados a Scattergories o Hasbro. Todos los derechos de las marcas mencionadas pertenecen a sus respectivos propietarios.

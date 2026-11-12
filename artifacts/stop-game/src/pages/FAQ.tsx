@@ -40,7 +40,7 @@ export default function FAQ() {
     },
     {
       q: "¿Cómo puedo contactar con soporte?",
-      a: "Puedes contactarnos a través de nuestra página de contacto o enviando un correo a dorynex@stopjuegodepalabras.com.",
+      a: "Puedes utilizar el formulario de contacto o escribir a dorynex@stopjuegodepalabras.com.",
     },
     {
       q: "¿Puedo jugar sin conexión?",

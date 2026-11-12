@@ -1,4 +1,4 @@
-name: Verify SEO homepage prerender
+name: Verify SEO multi-page prerender
 
 on:
   push:
@@ -30,6 +30,8 @@ jobs:
       - name: Build frontend and prerender
         working-directory: artifacts/stop-game
         run: pnpm run build
+      - name: Build API server
+        run: pnpm --filter @workspace/api-server build
       - name: Verify real Vite output
         working-directory: artifacts/stop-game
         shell: bash
@@ -37,9 +39,14 @@ jobs:
           test -f dist/index.html
           grep -q '<div id="root">' dist/index.html
           grep -q 'STOP: juego de palabras online' dist/index.html
-          grep -q 'href="/como-jugar"' dist/index.html
-          grep -q 'href="/blog"' dist/index.html
-          grep -q 'href="/estrategias"' dist/index.html
+          for route in como-jugar como-funciona acerca faq contacto estrategias privacidad privacy terminos terms blog; do
+            test -f "dist/$route/index.html"
+            grep -q 'data-prerendered="true"' "dist/$route/index.html"
+            grep -q '<h1>' "dist/$route/index.html"
+          done
+          BLOG_ARTICLES=$(find dist/blog -mindepth 2 -maxdepth 2 -name index.html | wc -l)
+          test "$BLOG_ARTICLES" -gt 0
+          echo "BLOG_ARTICLES=$BLOG_ARTICLES"
           WORDS=$(python - <<'PY'
           import re
           from pathlib import Path
@@ -61,10 +68,16 @@ jobs:
           SERVER_PID=$!
           trap 'kill $SERVER_PID' EXIT
           sleep 2
-          curl --fail --silent --show-error http://127.0.0.1:4173/
+          for route in / /como-jugar/ /como-funciona/ /acerca/ /faq/ /contacto/ /estrategias/ /privacidad/ /privacy/ /terminos/ /terms/ /blog/; do
+            curl --fail --silent --show-error "http://127.0.0.1:4173$route" >/dev/null
+          done
+          for article in dist/blog/*/index.html; do
+            slug=$(basename "$(dirname "$article")")
+            curl --fail --silent --show-error "http://127.0.0.1:4173/blog/$slug/" | grep -q '<h1>'
+          done
       - name: Upload exact dist index
         uses: actions/upload-artifact@v4
         with:
-          name: seo-homepage-dist-index
-          path: artifacts/stop-game/dist/index.html
+          name: seo-multipage-prerender-dist
+          path: artifacts/stop-game/dist
           retention-days: 7
