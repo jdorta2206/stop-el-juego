@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, lazy, Suspense } from "react";
 import { MotionConfig } from "framer-motion";
 import { Toaster } from "@/components/ui/toaster";
 import { SplashScreen } from "@/components/SplashScreen";
+import { PlayUpdateBanner } from "@/components/PlayUpdateBanner";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { usePlayer } from "@/hooks/use-player";
 import { claimStripePack } from "@/lib/worldCupPack";
@@ -244,6 +245,7 @@ function App() {
                 <Router />
               </Suspense>
           </WouterRouter>
+          <PlayUpdateBanner />
           <Toaster />
         </ErrorBoundary>
       </MotionConfig>
