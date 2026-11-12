@@ -53,7 +53,7 @@ function readFromUrl(): string | null {
 
 function readFromUserAgent(): string | null {
   try {
-    const m = (navigator.userAgent || "").match(/STOPApp\\/([0-9][0-9.]*)/i);
+    const m = (navigator.userAgent || "").match(/STOPApp\/([0-9][0-9.]*)/i);
     return clean(m && m[1] ? m[1] : null);
   } catch {
     return null;
