@@ -22,7 +22,7 @@ En español la Y puede ser:
 2. **Vocal o consonante** al inicio de palabra: yate, yogur, ya, yegua…
 3. **Final de palabra**: rey, hoy, soy… (no cuentan, deben empezar por Y).
 
-Vamos con las palabras válidas.
+Veamos ejemplos que empiezan por Y; comprobad su significado y las reglas de aceptación de vuestra partida.
 
 ## Nombres de persona con Y
 
@@ -135,7 +135,7 @@ Mejor en blanco.
 | Comida | Yogur |
 | Objeto | Yate |
 | Deporte | Yoga |
-| Marca | Yamaha |
+| Marca (si se admiten marcas) | Yamaha |
 | Famoso | Yoko Ono |
 
 Esta selección ofrece ejemplos para practicar. No asegura puntos: la puntuación depende del sistema de la partida, de la validez de cada respuesta y de las coincidencias con otros jugadores.
