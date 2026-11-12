@@ -30,7 +30,7 @@ Vamos con las palabras válidas.
 - **Yago / Iago, Yannick, Yusuf, Yuri** (masculinos)
 - **Yon, Yeray** (vasco/canario)
 
-> 🟩 **Top pick:** "Yolanda" — universalmente conocido.
+> **Ejemplo:** "Yolanda" es un nombre propio; utilizadlo si vuestra partida admite nombres de persona.
 
 ## Apellidos con Y
 
@@ -66,8 +66,7 @@ Mejor en blanco.
 - **Yokohama** (Japón)
 - **York** (Inglaterra)
 - **Yibuti** (capital del país homónimo)
-- **Yangon** (Birmania)
-- **Yangon** (antigua capital de Myanmar)
+- **Yangon** (ciudad de Myanmar)
 
 > 🟩 **Top pick:** "Yakarta" o "Yokohama".
 
@@ -149,7 +148,7 @@ La Y ofrece más posibilidades que algunas letras poco frecuentes, pero no exist
 
 Sigue practicando con otras letras difíciles:
 
-- [Las 100 mejores palabras con K](/blog/palabras-con-k-para-stop)
+- [Palabras con K para STOP](/blog/palabras-con-k-para-stop)
 - [Palabras con W para STOP](/blog/palabras-con-w-para-stop)
 - [Palabras con X para STOP](/blog/palabras-con-x-para-stop)
 - [Palabras con Z para STOP](/blog/palabras-con-z-para-stop)
