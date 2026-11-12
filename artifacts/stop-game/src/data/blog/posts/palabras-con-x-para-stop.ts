@@ -29,7 +29,7 @@ En las partidas de STOP, la respuesta debe comenzar por la letra de la ronda. Po
 - **Xenia, Ximena, Xochitl** (femeninos)
 - **Xavi** (apodo de Xavier, usado en Cataluña)
 
-> 🟩 **Top pick:** "Xavier" o "Ximena" — son las más reconocidas internacionalmente.
+> **Ejemplos:** "Xavier" y "Ximena" son nombres propios; su aceptación depende de las normas de la partida.
 
 ## Apellidos con X
 
@@ -39,7 +39,7 @@ En las partidas de STOP, la respuesta debe comenzar por la letra de la ronda. Po
 
 ## Animales con X
 
-Esta es la categoría imposible con X. Las únicas opciones reales:
+Hay pocos ejemplos conocidos para esta categoría. Estos términos pueden servir para investigar, pero comprobad su significado y si encajan en las reglas:
 
 - **Xenope** (rana africana)
 - **Xolo / Xoloitzcuintle** (perro mexicano sin pelo)
@@ -111,7 +111,7 @@ Aquí sorprendentemente hay opciones:
 
 ## Trucos para sobrevivir a la X
 
-1. **Acepta perder casillas.** La X tiene tan pocas palabras que es **normal dejar 3-4 en blanco**. No te frustres.
+1. **No fuerces respuestas.** Si no encuentras una palabra que encaje, es preferible dejar la casilla vacía según las reglas de vuestra partida.
 2. **Administra el tiempo.** Empieza por las categorías en las que conozcas una respuesta que encaje y vuelve a las difíciles si te queda tiempo.
 3. **Comprueba las normas.** Nombres propios, marcas y personajes ficticios pueden tener criterios distintos según la partida.
 4. **Practica la escritura.** Repasar ejemplos como xilófono o topónimos con X ayuda a recordarlos, pero no sustituye la comprobación de cada respuesta.
