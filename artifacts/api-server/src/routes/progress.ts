@@ -117,6 +117,16 @@ router.post("/progress/:playerId", async (req, res) => {
     ? Object.keys(incomingBests).filter(mode => mode.length <= MAX_KEY_LENGTH).slice(0, MAX_PERSONAL_BESTS)
     : [];
 
+  const playerRows = await db
+    .select({ playerId: playerScoresTable.playerId })
+    .from(playerScoresTable)
+    .where(eq(playerScoresTable.playerId, playerId))
+    .limit(1);
+  if (!playerRows.length) {
+    res.status(404).json({ error: "Player not found" });
+    return;
+  }
+
   // Collection entries are append-only discoveries. Validate every field and
   // derive the key on the server; never trust arbitrary client object keys.
   const rawCollection = body.collectedWords;
@@ -135,7 +145,7 @@ router.post("/progress/:playerId", async (req, res) => {
       const category = entry.cat.trim().slice(0, MAX_KEY_LENGTH);
       const rarity = entry.r;
       if (!name || !category || !["common", "rare", "epic", "legendary"].includes(rarity)) continue;
-      const key = name.toLowerCase().normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").trim();
+      const key = name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
       if (!key || key.length > MAX_KEY_LENGTH || normalizedCollection[key]) continue;
       normalizedCollection[key] = {
         name,
