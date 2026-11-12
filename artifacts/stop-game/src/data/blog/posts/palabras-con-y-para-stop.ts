@@ -3,7 +3,7 @@ import type { BlogPost } from "../types";
 const post: BlogPost = {
   slug: "palabras-con-y-para-stop",
   title: "Palabras con Y para STOP: lista completa por categoría",
-  description: "Cuando sale la Y, muchos se bloquean. Te damos las palabras con Y más útiles para STOP: yate, yogur, Yemen, Yucatán, Yamaha, Yuri… y muchas más.",
+  description: "Ejemplos de palabras con Y organizados por categorías para practicar y comprobar según las reglas de tu partida de STOP.",
   keywords: ["palabras con Y", "palabras con Y para STOP", "nombres con Y", "animales con Y", "países con Y", "comidas con Y", "marcas con Y"],
   publishedAt: "2026-05-18",
   author: "Equipo STOP",
@@ -12,7 +12,7 @@ const post: BlogPost = {
   content: `
 La letra **Y** en español es más amigable que la X o la W, pero aun así muchos jugadores se bloquean cuando sale. Razón: la mayoría de palabras con Y son **muy específicas** (Yemen, yate, yoyó…) y no las tenemos en la punta de la lengua.
 
-Esta guía te da una lista completa de palabras con Y por categoría para que **arrases en esa ronda**.
+Esta guía reúne ejemplos con Y por categoría para ayudarte a practicar y revisar su escritura.
 
 ## La Y en español: usos comunes
 
@@ -120,7 +120,7 @@ Mejor en blanco.
 
 ## Trucos para la Y
 
-1. **Memoriza el "kit mínimo" de abajo.** Con eso superas al 90% de jugadores.
+1. Repasa algunos ejemplos del resumen y comprueba su escritura antes de jugar.
 2. **No confundas Y con J en nombres** (Yésica/Jessica, Yago/Iago). Asegúrate de que se escribe con Y.
 3. **Aprovecha la comida y los objetos** — son las categorías más ricas en Y.
 
