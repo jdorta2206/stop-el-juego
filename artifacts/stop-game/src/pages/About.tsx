@@ -14,7 +14,7 @@ export default function About() {
           </p>
           <h2 className="text-2xl font-bold text-white mt-6">¿Quién está detrás de STOP?</h2>
           <p>
-            El equipo está formado por desarrolladores, diseñadores y jugadores apasionados. Todos colaboramos de forma remota, y cada uno aporta su visión para mejorar la experiencia. Aunque somos un equipo pequeño, creemos en la calidad y en escuchar a nuestra comunidad.
+            El proyecto se mantiene y mejora de forma continua a partir de las necesidades de la comunidad y de los problemas detectados durante el uso. Las prioridades son la estabilidad de las partidas, la claridad de las reglas y una experiencia accesible.
           </p>
           <p>
             El proyecto se financia principalmente mediante <strong>packs opcionales</strong> (Premium y Mundial) que ofrecen cosméticos exclusivos y apoyan el desarrollo continuo. También estamos explorando la publicidad responsable para mantener el juego gratuito para todos.
