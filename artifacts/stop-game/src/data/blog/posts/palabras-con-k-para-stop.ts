@@ -3,7 +3,7 @@ import type { BlogPost } from "../types";
 const post: BlogPost = {
   slug: "palabras-con-k-para-stop",
   title: "Las 100 mejores palabras con K para STOP (categoría por categoría)",
-  description: "Lista completa de palabras con K para ganar en STOP: nombres, animales, países, ciudades, comidas, objetos y marcas. Memorízalas y serás imbatible cuando salga la K.",
+  description: "Ejemplos de palabras con K organizados por categorías para practicar y revisar antes de una partida de STOP.",
   keywords: ["palabras con K", "palabras con K para STOP", "nombres con K", "animales con K", "países con K", "comidas con K", "objetos con K", "marcas con K"],
   publishedAt: "2026-05-21",
   author: "Equipo STOP",
@@ -27,7 +27,7 @@ Que una palabra aparezca en el DLE no determina por sí solo si será aceptada e
 
 ## Nombres de persona con K
 
-Estos siempre se aceptan en STOP porque son nombres reales en uso:
+Estos son ejemplos de nombres propios que empiezan por K. Antes de usarlos, acordad si vuestra partida admite nombres de persona:
 
 - **Karen, Karina, Katia, Katrina, Krista, Kira** (femeninos)
 - **Kevin, Kenneth, Karl, Kurt, Kai, Khalid** (masculinos)
@@ -69,7 +69,7 @@ Si no se te ocurre nada, **deja la casilla en blanco** y enfócate en otras cate
 - **Kiribati** (pequeño archipiélago del Pacífico)
 - **Kosovo** (reconocido por la mayoría de países)
 
-> 🟩 **Top pick:** "Kenia" es la más conocida y nadie la impugna.
+> **Ejemplo:** "Kenia" es un topónimo conocido; su aceptación depende de las reglas que hayáis acordado.
 
 ## Ciudades con K
 
@@ -100,7 +100,7 @@ Aquí hay más opciones de las que parece:
 - **Kimono** (la prenda japonesa)
 - **Kart** (vehículo de competición)
 - **Kit** (conjunto de herramientas)
-- **Klaxon** (la bocina, aceptado por la RAE)
+- **Klaxon** (término usado para una bocina; comprueba la grafía y el criterio del diccionario que utilicéis)
 
 ## Deportes con K
 
@@ -138,7 +138,7 @@ Las marcas con K son **casi infinitas** y todas conocidas. Esta es probablemente
 - **Krafft** (alimentación)
 - **Krups** (electrodomésticos)
 
-> 🟩 **Top pick:** **"Kia"** o **"Kellogg's"** — siempre válidas, siempre conocidas.
+> **Ejemplos:** "Kia" y "Kellogg's" son marcas; incluidlas solo si las normas de la partida permiten respuestas comerciales.
 
 ## Famosos con K
 
