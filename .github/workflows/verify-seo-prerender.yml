@@ -30,6 +30,8 @@ jobs:
       - name: Build frontend and prerender
         working-directory: artifacts/stop-game
         run: pnpm run build
+      - name: Build API server
+        run: pnpm --filter @workspace/api-server build
       - name: Verify real Vite output
         working-directory: artifacts/stop-game
         shell: bash
