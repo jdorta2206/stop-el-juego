@@ -38,7 +38,7 @@ export default function About() {
           </p>
           <h2 className="text-2xl font-bold text-white mt-6">Contacto</h2>
           <p>
-            ¿Tienes ideas, sugerencias o quieres reportar un problema? Escríbenos a <a href="mailto:soporte@stopjuegodepalabras.com" className="text-secondary hover:underline">soporte@stopjuegodepalabras.com</a> o usa nuestro <a href="/contacto" className="text-secondary hover:underline">formulario de contacto</a>.
+            ¿Tienes ideas, sugerencias o quieres reportar un problema? Escríbenos a <a href="mailto:dorynex@stopjuegodepalabras.com" className="text-secondary hover:underline">dorynex@stopjuegodepalabras.com</a> o usa nuestro <a href="/contacto" className="text-secondary hover:underline">formulario de contacto</a>.
           </p>
           <p className="text-sm text-white/40 mt-8">
             STOP es un proyecto independiente. No estamos afiliados a Scattergories o Hasbro. Todos los derechos de las marcas mencionadas pertenecen a sus respectivos propietarios.
