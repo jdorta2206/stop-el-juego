@@ -127,7 +127,7 @@ Aquí sorprendentemente hay opciones:
 | Marca | Xiaomi |
 | Famoso | Xavi Hernández |
 
-Estas cinco referencias pueden servirte como punto de partida para practicar, pero no garantizan una puntuación: comprueba que cada respuesta encaja con la categoría y las normas de tu partida.
+Estos ejemplos pueden servirte como punto de partida para practicar, pero no garantizan una puntuación: comprueba que cada respuesta encaja con la categoría y las normas de tu partida.
 
 ## Por qué la X es ventaja, no problema
 
