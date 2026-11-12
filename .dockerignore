@@ -1,0 +1,35 @@
+# Keep the Docker build context limited to source and required build inputs.
+.git
+**/.git
+
+# Dependencies are installed inside the builder stage.
+node_modules
+**/node_modules
+
+# Generated output and local caches.
+dist
+**/dist
+coverage
+**/coverage
+.cache
+**/.cache
+.local
+**/.local
+tmp
+**/tmp
+
+# Local logs and editor / OS files.
+*.log
+.DS_Store
+Thumbs.db
+.vscode
+.idea
+
+# Never send local secrets or signing material to the build context.
+.env
+.env.*
+!.env.example
+*.keystore
+*.jks
+*.p12
+*.pem
