@@ -108,85 +108,107 @@ router.post("/progress/:playerId", async (req, res) => {
     return;
   }
 
-  const rows = await db
-    .select({ personalBestsJson: playerScoresTable.personalBestsJson })
-    .from(playerScoresTable)
-    .where(eq(playerScoresTable.playerId, playerId))
-    .limit(1);
-
-  if (!rows.length) {
-    res.status(404).json({ error: "Player not found" });
-    return;
-  }
-
   const body = (req.body ?? {}) as JsonRecord;
   const personalBests = body.personalBests;
+  const incomingBests = personalBests && typeof personalBests === "object" && !Array.isArray(personalBests)
+    ? personalBests as JsonRecord
+    : null;
+  const modes = incomingBests
+    ? Object.keys(incomingBests).filter(mode => mode.length <= MAX_KEY_LENGTH).slice(0, MAX_PERSONAL_BESTS)
+    : [];
 
-  // Ignore client-supplied achievements/stats entirely. In particular, never
-  // persist arbitrary achievement ids, counters or booleans supplied by the
-  // caller, even when the caller is authenticated.
-  if (!personalBests || typeof personalBests !== "object" || Array.isArray(personalBests)) {
+  // Collection entries are append-only discoveries. Validate every field and
+  // derive the key on the server; never trust arbitrary client object keys.
+  const rawCollection = body.collectedWords;
+  const incomingCollection = rawCollection && typeof rawCollection === "object" && !Array.isArray(rawCollection)
+    ? rawCollection as JsonRecord
+    : null;
+  const normalizedCollection: JsonRecord = {};
+  if (incomingCollection) {
+    for (const value of Object.values(incomingCollection).slice(0, 5000)) {
+      if (!value || typeof value !== "object" || Array.isArray(value)) continue;
+      const entry = value as JsonRecord;
+      if (typeof entry.name !== "string" || typeof entry.cat !== "string" ||
+          typeof entry.r !== "string" || typeof entry.d !== "number" ||
+          !Number.isFinite(entry.d)) continue;
+      const name = entry.name.trim().slice(0, MAX_KEY_LENGTH);
+      const category = entry.cat.trim().slice(0, MAX_KEY_LENGTH);
+      const rarity = entry.r;
+      if (!name || !category || !["common", "rare", "epic", "legendary"].includes(rarity)) continue;
+      const key = name.toLowerCase().normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").trim();
+      if (!key || key.length > MAX_KEY_LENGTH || normalizedCollection[key]) continue;
+      normalizedCollection[key] = {
+        name,
+        cat: category,
+        r: rarity,
+        d: Math.max(0, Math.min(Math.floor(entry.d), Date.now())),
+      };
+    }
+  }
+
+  // Ignore client-supplied achievements/stats entirely. Only personal bests
+  // backed by game_history and validated append-only collection discoveries
+  // may be synchronized.
+  if (modes.length === 0 && !incomingCollection) {
     res.json({ ok: true });
     return;
   }
 
-  const incoming = personalBests as JsonRecord;
-  const modes = Object.keys(incoming)
-    .filter(mode => mode.length <= MAX_KEY_LENGTH)
-    .slice(0, MAX_PERSONAL_BESTS);
-
-  if (modes.length === 0) {
-    res.json({ ok: true });
-    return;
+  const authoritativeMax = new Map<string, number>();
+  if (modes.length > 0) {
+    const historyRows = await db
+      .select({
+        mode: gameHistoryTable.mode,
+        maxScore: sql<number>`MAX(${gameHistoryTable.score})`,
+      })
+      .from(gameHistoryTable)
+      .where(eq(gameHistoryTable.playerId, playerId))
+      .groupBy(gameHistoryTable.mode);
+    for (const row of historyRows) authoritativeMax.set(String(row.mode), Number(row.maxScore ?? 0));
   }
 
-  const historyRows = await db
-    .select({
-      mode: gameHistoryTable.mode,
-      maxScore: sql<number>`MAX(${gameHistoryTable.score})`,
-    })
-    .from(gameHistoryTable)
-    .where(eq(gameHistoryTable.playerId, playerId))
-    .groupBy(gameHistoryTable.mode);
-
-  const authoritativeMax = new Map(
-    historyRows.map(row => [String(row.mode), Number(row.maxScore ?? 0)])
-  );
-
-  // Serialize the read/merge/write itself. Without the row lock, two devices
-  // can both read the same JSON, merge different modes, and the second UPDATE
-  // silently discard the first device's legitimate progress.
+  // Lock the row while merging both JSON documents so concurrent devices
+  // cannot overwrite one another's legitimate discoveries or personal bests.
   await db.transaction(async (tx) => {
     const locked = await tx.execute(sql`
-      SELECT personal_bests_json
+      SELECT personal_bests_json, collected_words_json
       FROM player_scores
       WHERE player_id = ${playerId}
       FOR UPDATE
     `);
-    const lockedRow = (locked.rows as Array<{ personal_bests_json: string | null }>)[0];
+    const lockedRow = (locked.rows as Array<{
+      personal_bests_json: string | null;
+      collected_words_json: string | null;
+    }>)[0];
     if (!lockedRow) throw new Error("Player not found");
 
-    const current = parseJson<JsonRecord>(lockedRow.personal_bests_json, {});
-    const merged: JsonRecord = { ...current };
-
+    const currentBests = parseJson<JsonRecord>(lockedRow.personal_bests_json, {});
+    const mergedBests: JsonRecord = { ...currentBests };
     for (const mode of modes) {
-      const score = incoming[mode];
+      const score = incomingBests?.[mode];
       if (typeof score !== "number" || !Number.isFinite(score)) continue;
-
       const safeScore = Math.max(0, Math.min(Math.floor(score), 100_000));
       const serverMax = authoritativeMax.get(mode);
-
-      // A local device may report a legitimate score the server already knows,
-      // but it can never manufacture a higher personal best.
       if (serverMax === undefined || safeScore > serverMax) continue;
-
-      merged[mode] = Math.max(Number(current[mode] ?? 0), safeScore);
+      mergedBests[mode] = Math.max(Number(currentBests[mode] ?? 0), safeScore);
     }
 
-    if (JSON.stringify(merged) !== JSON.stringify(current)) {
-      await tx
-        .update(playerScoresTable)
-        .set({ personalBestsJson: JSON.stringify(merged) })
+    const currentCollection = parseJson<JsonRecord>(lockedRow.collected_words_json, {});
+    const mergedCollection: JsonRecord = { ...currentCollection };
+    for (const [key, value] of Object.entries(normalizedCollection)) {
+      if (!mergedCollection[key]) mergedCollection[key] = value;
+    }
+
+    const update: { personalBestsJson?: string; collectedWordsJson?: string } = {};
+    if (JSON.stringify(mergedBests) !== JSON.stringify(currentBests)) {
+      update.personalBestsJson = JSON.stringify(mergedBests);
+    }
+    if (JSON.stringify(mergedCollection) !== JSON.stringify(currentCollection)) {
+      update.collectedWordsJson = JSON.stringify(mergedCollection);
+    }
+    if (Object.keys(update).length > 0) {
+      await tx.update(playerScoresTable)
+        .set(update)
         .where(eq(playerScoresTable.playerId, playerId));
     }
   });
