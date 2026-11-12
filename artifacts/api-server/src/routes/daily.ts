@@ -222,6 +222,8 @@ router.post("/submit", async (req, res) => {
 router.get("/rankings", async (req, res) => {
   const requestedLanguage = typeof req.query.language === "string" ? req.query.language.trim().toLowerCase() : "es";
   const language = ["es", "en", "pt", "fr"].includes(requestedLanguage) ? requestedLanguage : "es";
+  const claimedPlayerId = typeof req.query.playerId === "string" ? req.query.playerId.trim() : "";
+  const canIdentifyPlayer = !!claimedPlayerId && await verifyClaimedIdentity(req, claimedPlayerId);
   const today = getTodayForPlayer(req);
 
   const results = await db
@@ -246,7 +248,14 @@ router.get("/rankings", async (req, res) => {
     .orderBy(desc(dailyResultsTable.score))
     .limit(10);
 
-  res.json({ date: today, rankings: results });
+  // Keep player IDs server-side: the public leaderboard exposes only whether
+  // the verified caller owns each row, never another player's identifier.
+  const rankings = results.map(({ playerId, ...entry }) => ({
+    ...entry,
+    isMe: canIdentifyPlayer && playerId === claimedPlayerId,
+  }));
+
+  res.json({ date: today, rankings });
 });
 
 export default router;
