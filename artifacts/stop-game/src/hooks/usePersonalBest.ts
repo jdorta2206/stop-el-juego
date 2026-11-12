@@ -8,7 +8,7 @@ const storageKey = (playerId?: string) =>
   `stop_best_score_v2:${playerId || "guest"}`;
 
 async function syncBestsFromServer(playerId: string, signal?: AbortSignal): Promise<BestScores | null> {
-  if (playerId.startsWith("guest_")) return null;
+  if (playerId === "guest" || playerId.startsWith("guest_")) return null;
   try {
     const r = await fetch(`${getApiUrl()}/api/ranking/progress/${playerId}`, {
       headers: authHeaders(),
@@ -21,7 +21,7 @@ async function syncBestsFromServer(playerId: string, signal?: AbortSignal): Prom
 }
 
 async function saveBestsToServer(playerId: string, personalBests: BestScores) {
-  if (playerId.startsWith("guest_")) return;
+  if (playerId === "guest" || playerId.startsWith("guest_")) return;
   try {
     await fetch(`${getApiUrl()}/api/ranking/progress/${playerId}`, {
       method: "POST",
