@@ -93,6 +93,8 @@ Muy pocos colores empiezan por Z. Si no es zafiro, mejor en blanco.
 
 ## Marcas con Z
 
+Estos son nombres comerciales; incluidlos solo si las reglas de vuestra partida permiten marcas:
+
 - **Zara** (ropa española)
 - **Zalando** (ropa online)
 - **Zenith** (relojes)
@@ -101,7 +103,7 @@ Muy pocos colores empiezan por Z. Si no es zafiro, mejor en blanco.
 - **Zippo** (encendedores)
 - **Zelda** (videojuego — discutible si es marca)
 
-> 🟩 **Top pick:** "Zara" o "Zoom".
+> **Ejemplos:** "Zara" o "Zoom", si vuestra partida admite marcas.
 
 ## Famosos con Z
 
@@ -130,7 +132,7 @@ Muy pocos colores empiezan por Z. Si no es zafiro, mejor en blanco.
 | Comida | Zanahoria |
 | Objeto | Zapato |
 | Deporte | Zumba |
-| Marca | Zara |
+| Marca (si se admiten marcas) | Zara |
 | Famoso | Zinedine Zidane |
 
 La lista reúne ejemplos de varias categorías; no implica una puntuación fija ni garantiza que todas las respuestas sean aceptadas en cualquier partida.
