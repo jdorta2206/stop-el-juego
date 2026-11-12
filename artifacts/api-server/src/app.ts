@@ -196,9 +196,9 @@ if (process.env["SERVE_CLIENT"] === "1") {
   // Serve route-specific prerendered HTML before falling back to the SPA shell.
   // express.static uses index:false above, so without this step every deep URL
   // would receive the homepage even when its own dist/<route>/index.html exists.
-  app.get(/^\\/(?!api(?:\\/|$)).*/, (req, res, next) => {
+  app.get(/^\/(?!api(?:\/|$)).*/, (req, res, next) => {
     const pathname = req.path;
-    if (/\\.(?:js|mjs|css|map|json|png|jpe?g|gif|svg|webp|ico|woff2?|ttf|wasm|webmanifest)$/i.test(pathname)) {
+    if (/\.(?:js|mjs|css|map|json|png|jpe?g|gif|svg|webp|ico|woff2?|ttf|wasm|webmanifest)$/i.test(pathname)) {
       return next();
     }
 
