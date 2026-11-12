@@ -188,7 +188,11 @@ function StatCard({ label, value }: { label: string; value: string | number }) {
 }
 
 function timeAgo(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime();
+  const date = new Date(dateStr);
+  const timestamp = date.getTime();
+  if (!Number.isFinite(timestamp)) return "fecha desconocida";
+
+  const diff = Date.now() - timestamp;
   const m = Math.floor(diff / 60000);
   const h = Math.floor(diff / 3600000);
   const d = Math.floor(diff / 86400000);
@@ -196,7 +200,7 @@ function timeAgo(dateStr: string): string {
   if (m < 60) return `hace ${m}m`;
   if (h < 24) return `hace ${h}h`;
   if (d < 7)  return `hace ${d}d`;
-  return new Date(dateStr).toLocaleDateString("es-ES", { day: "numeric", month: "short" });
+  return date.toLocaleDateString("es-ES", { day: "numeric", month: "short" });
 }
 
 export default function PlayerProfile() {
