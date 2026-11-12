@@ -128,7 +128,7 @@ const staticPages = [
     body: pageBody("Acerca de STOP El Juego", "STOP El Juego es un proyecto independiente inspirado en los juegos clásicos de categorías y palabras, conocidos en distintos lugares como STOP, Basta o Tutti Frutti. Su objetivo es ofrecer una forma accesible de jugar desde el navegador y compartir partidas.", [
       ["Qué ofrece el proyecto", "La plataforma reúne partidas individuales, opciones multijugador y recursos para aprender las reglas y ampliar vocabulario. El juego está pensado para poder abrirse desde dispositivos móviles y ordenadores."],
       ["Desarrollo y mejoras", "El proyecto evoluciona mediante correcciones, mejoras de accesibilidad y nuevas funciones. La experiencia de juego y la estabilidad de las partidas son prioridades del desarrollo."],
-      ["Contacto", "Para consultas o incidencias puedes escribir a soporte@stopjuegodepalabras.com o utilizar el formulario de contacto disponible en la web."]
+      ["Contacto", "Para consultas o incidencias puedes escribir a dorynex@stopjuegodepalabras.com o consultar la página de contacto para conocer el correo de soporte."]
     ]),
   },
   {
@@ -141,7 +141,7 @@ const staticPages = [
       ["¿Puedo practicar sin otros jugadores?", "Sí. El modo individual permite jugar sin esperar a que se conecten otras personas."],
       ["¿Cómo se puntúa?", "La puntuación depende de la validez de la respuesta y de si otros jugadores han escrito la misma palabra. Consulta las reglas de la partida antes de empezar."],
       ["¿Necesito conexión a Internet?", "Sí. Las funciones online y la sincronización de partidas requieren conexión."],
-      ["¿Cómo contacto con soporte?", "Puedes escribir a soporte@stopjuegodepalabras.com o visitar la página de contacto."]
+      ["¿Cómo contacto con soporte?", "Puedes escribir a dorynex@stopjuegodepalabras.com o visitar la página de contacto."]
     ]),
   },
   {
