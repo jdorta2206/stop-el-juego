@@ -56,10 +56,10 @@ jobs:
           import re
           p = Path('app/build.gradle')
           s = p.read_text()
-          s, count = re.subn(r"launchUrl: '/\\?source=googleplay-twa&appVersion=[^']*'", "launchUrl: '/?source=googleplay-twa&appVersion=1.3.9.6'", s, count=1)
+          s, count = re.subn(r"launchUrl: '/\?source=googleplay-twa&appVersion=[^']*'", "launchUrl: '/?source=googleplay-twa&appVersion=1.3.9.6'", s, count=1)
           if count != 1:
               raise SystemExit('Bubblewrap launchUrl not found exactly once')
-          s, count = re.subn(r'def launchUrl = "https://www\\.stopjuegodepalabras\\.com/\\?source=googleplay-twa&appVersion=[^"]+"', 'def launchUrl = "https://www.stopjuegodepalabras.com/?source=googleplay-twa&appVersion=1.3.9.6"', s, count=1)
+          s, count = re.subn(r'def launchUrl = "https://www\.stopjuegodepalabras\.com/\?source=googleplay-twa&appVersion=[^"]+"', 'def launchUrl = "https://www.stopjuegodepalabras.com/?source=googleplay-twa&appVersion=1.3.9.6"', s, count=1)
           if count != 1:
               raise SystemExit('Android launchUrl resource not found exactly once')
           p.write_text(s)
