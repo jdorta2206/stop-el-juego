@@ -2,138 +2,94 @@ import type { BlogPost } from "../types";
 
 const post: BlogPost = {
   slug: "stop-vs-scattergories-vs-tutti-frutti",
-  title: "STOP vs Scattergories vs Tutti Frutti: diferencias, reglas y origen",
-  description: "STOP, Scattergories, Tutti Frutti, Basta… ¿son el mismo juego? Análisis completo de las diferencias entre todas las variantes del juego de palabras más popular del mundo hispano.",
-  keywords: ["STOP vs Scattergories", "Tutti Frutti juego", "Basta juego de palabras", "Auto-Stop juego", "Adedonha", "diferencias STOP Scattergories"],
+  title: "STOP vs Scattergories vs Tutti Frutti: semejanzas y diferencias",
+  description: "Comparamos la dinámica de STOP, Scattergories, Tutti Frutti y Basta sin asumir que sus reglas, puntuaciones o nombres sean iguales en todas las regiones.",
+  keywords: ["STOP vs Scattergories", "Tutti Frutti juego", "Basta juego de palabras", "diferencias STOP Scattergories", "juego de categorías"],
   publishedAt: "2026-05-13",
   author: "Equipo STOP",
   category: "Historia y curiosidades",
-  readMinutes: 7,
+  readMinutes: 6,
   content: `
-Si alguna vez has buscado en internet "**Scattergories**" o "**Tutti Frutti**" pensando que era el mismo juego que STOP, no te equivocas. Pero **tampoco aciertas del todo**. Son juegos primos hermanos con **reglas, origen y matices distintos**.
+**STOP**, **Tutti Frutti**, **Basta** y **Scattergories** suelen aparecer en conversaciones sobre juegos de palabras por categorías. Comparten una idea reconocible: encontrar respuestas que empiecen por una letra determinada. Sin embargo, sus nombres y reglas pueden variar según la edición, el país y las normas que acuerde cada grupo.
 
-Esta guía explica las diferencias entre las **6 grandes variantes** del juego de palabras por letra y categoría.
+Esta guía resume las semejanzas sin convertir costumbres locales en reglas universales.
 
-## Tabla comparativa rápida
+## Comparación rápida
 
-| Variante | País de origen | Categorías | Letras | Tiempo | Puntuación |
-|---|---|---|---|---|---|
-| **STOP** | España / América Latina | 8-12 acordadas | Sorteadas en voz alta | 60-90 s | 5/10/0 |
-| **Scattergories** | EE.UU. (Hasbro) | 12 fijas | Dado de 20 caras | 60-180 s | 1 por palabra + bonus |
-| **Tutti Frutti** | Argentina, Uruguay | 6-10 acordadas | Sorteadas | 30-60 s | 10/5/0 |
-| **Basta** | México, Chile | 8-12 acordadas | Sorteadas | 60-90 s | 100/50/0 |
-| **Auto-Stop** | Colombia | 8-10 acordadas | Sorteadas | 60 s | 10/5/0 |
-| **Adedonha / Stop** | Brasil | 8-10 acordadas | Sorteadas | 60-90 s | 10/5/0 |
+| Nombre | Qué conviene tener en cuenta |
+|---|---|
+| **STOP** | En muchas partidas se elige una letra y se completan categorías antes de que termine la ronda. Las reglas concretas se acuerdan entre participantes o las establece la versión digital. |
+| **Tutti Frutti** | Es uno de los nombres utilizados para juegos de letras y categorías en algunas regiones. Las categorías y la puntuación pueden cambiar de un grupo a otro. |
+| **Basta** | También se utiliza como nombre de esta familia de juegos. No existe una única tabla de puntos válida para todas las partidas. |
+| **Scattergories** | Es una edición comercial de mesa con sus propios materiales y reglas. Comparte la mecánica general, pero no tiene por qué coincidir con una partida casera. |
 
-## STOP (España y resto de Latinoamérica)
+## STOP
 
-Es la versión más extendida y la que la mayoría conoce. Reglas:
+En una partida tradicional, las personas acuerdan una lista de categorías, seleccionan una letra y escriben una respuesta para cada categoría. La ronda puede terminar al agotarse un tiempo pactado o cuando alguien completa su lista y anuncia el final.
 
-- Cualquier número de jugadores.
-- Categorías acordadas al principio (entre 5 y 12).
-- Letra sorteada cantando el abecedario hasta que alguien grita STOP.
-- Cronómetro entre 60 y 90 segundos.
-- Puntuación: 10 si única, 5 si compartida, 0 si en blanco o inválida.
+Antes de empezar, conviene aclarar:
 
-> 📖 Si quieres leer las **reglas completas paso a paso**, las tienes [aquí](/blog/como-jugar-stop-reglas-completas).
+- Qué categorías se van a utilizar.
+- Cómo se elige la letra.
+- Cuánto dura la ronda.
+- Si se permiten nombres propios, regionalismos o palabras de otros idiomas.
+- Cómo se valoran las respuestas repetidas, incompletas o discutibles.
 
-## Scattergories (Hasbro, EE.UU.)
+No hay una única puntuación que pueda atribuirse a todas las versiones llamadas STOP.
 
-Es el **juego comercial** del que vienen todas las demás variantes. Creado en 1988 por **Hasbro** (la misma empresa de Monopoly y Risk).
+## Tutti Frutti
 
-Diferencias clave con STOP:
+**Tutti Frutti** es otro nombre conocido para este tipo de juego en determinadas comunidades. La selección de categorías, la forma de detener la ronda y el sistema de puntos dependen de las reglas locales.
 
-1. **Las categorías son fijas** y vienen en tarjetas (cada tarjeta tiene 12 categorías).
-2. **Las letras se sortean con un dado de 20 caras** (no incluye las difíciles K, Q, V, X, Y, Z para igualar la dificultad).
-3. **Puntuación distinta:** **1 punto por palabra válida**, con bonus si tiene más palabras (ej: "Big Black Bear" en categoría "animal con B" → 3 puntos).
-4. **Tiempo más generoso:** 2-3 minutos por ronda.
+Si juegas con personas que conocen versiones diferentes, acordad primero qué significa una respuesta válida y cómo se resolverán los empates o las palabras repetidas.
 
-> 💡 **Curiosidad:** Scattergories es **patentado y comercial**. STOP, Tutti Frutti, Basta… son **versiones populares libres** que llevan décadas jugándose en cada país con cuaderno y lápiz.
+## Basta
 
-## Tutti Frutti (Argentina, Uruguay)
+**Basta** es también un nombre utilizado para juegos de palabras por categorías. En algunas partidas se anuncia esa palabra para detener la ronda, pero no debe suponerse que todas las personas que usan ese nombre siguen la misma puntuación o el mismo conjunto de categorías.
 
-Variante muy popular en el **Río de la Plata**. Diferencias con STOP:
+La mejor referencia para una partida concreta es el reglamento que el grupo haya acordado o las instrucciones de la edición que esté utilizando.
 
-- **Categorías más cortas** (6-8 normalmente).
-- **Ronda más rápida** (30-60 segundos).
-- **Categorías clásicas:** "Tutti frutti" o "fruta" siempre está presente (de ahí el nombre).
-- En algunas regiones se grita **"Tutti Frutti"** en lugar de "STOP" cuando se termina.
+## Scattergories
 
-El origen del nombre viene de los **helados Tutti Frutti**, que mezclan muchos sabores… igual que el juego mezcla categorías.
+**Scattergories** lleva esta dinámica a un juego comercial de mesa, con componentes y reglas definidos por su edición. Su presentación puede incluir listas de categorías, un sistema para elegir letras y un temporizador.
 
-## Basta (México, Chile)
+Por eso, aunque se parece al STOP de papel y lápiz, es mejor comparar sus instrucciones concretas en lugar de atribuir a todos los juegos los mismos tiempos, categorías o puntos.
 
-En México y Chile (también partes de Perú y Bolivia), el juego se llama **Basta**:
+## Qué tienen en común
 
-- Reglas casi idénticas a STOP.
-- **Puntuación distinta:** 100 puntos por palabra única, 50 si compartida, 0 si en blanco.
-- A veces se grita **"¡BASTA!"** en lugar de "¡STOP!".
-- En México, también se conoce como **"Mercado"** o **"Mercadito"**.
+En términos generales, estas variantes pueden compartir varios elementos:
 
-## Auto-Stop (Colombia)
+1. Una lista de categorías.
+2. Una letra que condiciona las respuestas.
+3. Un tiempo o una condición para terminar la ronda.
+4. Una revisión de las respuestas.
+5. Algún criterio para valorar coincidencias y respuestas válidas.
 
-Variante colombiana. Detalles:
+La forma exacta de aplicar cada elemento depende de la versión.
 
-- Reglas básicas iguales a STOP.
-- Categorías típicas: nombre, apellido, fruta, animal, ciudad, departamento (las regiones de Colombia).
-- A veces incluyen una categoría **"Cosa"** que es comodín para objetos varios.
+## Cómo elegir una variante para tu grupo
 
-## Adedonha (Brasil)
+- **Para una partida improvisada:** basta con papel, lápiz, una letra y categorías acordadas.
+- **Para jugar con reglas cerradas:** utiliza las instrucciones de la edición comercial que tengas.
+- **Para un grupo de varias regiones:** aclarad de antemano los regionalismos y las palabras que se aceptarán.
+- **Para jugar desde el móvil o el ordenador:** comprueba las modalidades y reglas que ofrece el juego online que elijas.
 
-La versión brasileña, popular en todas las regiones. Detalles:
+## Una regla importante: acordar antes de discutir
 
-- En Brasil también se llama **"Stop"**.
-- Categorías en portugués (fruta, animal, país, cidade…).
-- A veces se incluye **"CEP"** (código postal brasileño) como categoría peculiar.
-- Misma puntuación que STOP español.
+Muchas discusiones aparecen porque cada persona recuerda una versión distinta. Antes de empezar, dejad claro si se aceptan gentilicios, nombres propios, marcas, regionalismos y respuestas en otros idiomas. Aplicad el mismo criterio a todas las personas.
 
-> 📺 **Curiosidad:** Adedonha apareció en el programa de TV brasileño "Domingão do Faustão" durante años, popularizándolo aún más.
-
-## ¿Qué tienen en común todos?
-
-Pese a sus diferencias, **todos comparten 5 elementos**:
-
-1. **Categorías predefinidas** que rellenar.
-2. **Una letra obligatoria** que sortear.
-3. **Tiempo limitado** o "primer jugador en terminar grita STOP/BASTA/etc.".
-4. **Sistema de puntos** basado en originalidad.
-5. **Juego informal**, sin tablero ni piezas físicas (excepto Scattergories).
-
-## ¿De dónde viene el juego original?
-
-El juego es **anterior a Scattergories**. Hay registros de juegos similares jugados en **escuelas europeas** desde principios del siglo XX. La idea de "lista de categorías + letra al azar" se atribuye originalmente a juegos de salón ingleses del siglo XIX.
-
-Lo que hizo Hasbro en 1988 fue **comercializar** la idea con un nombre registrado (Scattergories), tarjetas impresas, un dado especial y temporizador físico. Pero el juego ya existía en miles de cocinas, aulas y autobuses escolares de todo el mundo.
-
-## ¿Cuál es la mejor variante?
-
-Depende de qué busques:
-
-- **Para casa rápida, casual**: STOP, Tutti Frutti o Basta. Solo necesitas papel y boli.
-- **Para regalo o sobremesa larga**: Scattergories (el juego de mesa físico).
-- **Para móvil**: [STOP online](/) — la versión digital que **mezcla las mejores reglas** de todas las variantes.
-- **Para clase de Lengua**: STOP educativo (versión adaptada).
-
-## Cómo jugar todas las variantes en una sola partida
-
-Un truco que usamos en sobremesas familiares con gente de varios países: jugar **"STOP federal"**:
-
-- Categorías mezcladas (algunas españolas, otras mexicanas, otras argentinas).
-- Puntuación STOP (10/5/0) por simplicidad.
-- Cualquier idioma cuenta (español, portugués, catalán).
-
-Sale **divertidísimo** y nadie se queja porque "no juegan a su versión".
+En [STOP online](/) puedes consultar las reglas y modalidades disponibles dentro del propio juego.
 
 ---
 
-Sigue explorando el mundo del STOP:
+Sigue explorando:
 
 - [Cómo jugar al STOP: reglas completas](/blog/como-jugar-stop-reglas-completas)
-- [Historia del STOP: origen del juego](/blog/historia-del-stop-juego-palabras)
-- [Estrategias avanzadas para ganar](/blog/estrategias-avanzadas-stop)
+- [Historia del STOP y sus variantes](/blog/historia-del-stop-juego-palabras)
+- [Estrategias avanzadas para jugar al STOP](/blog/estrategias-avanzadas-stop)
 - [STOP en español: regionalismos por país](/blog/regionalismos-stop-paises-hispanos)
 
-¿Y tú con qué variante jugaste de pequeño? [Pruébala digital en STOP online](/) y dinos en redes cuál te gusta más.
+¿Con qué nombre conocías este juego? [Prueba STOP online](/).
 `,
 };
 
