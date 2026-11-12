@@ -25,6 +25,7 @@ export default function NotificationsPage() {
 
   const [prefs, setPrefs] = useState<Prefs>(null);
   const [savingHour, setSavingHour] = useState(false);
+  const [savingMute, setSavingMute] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -198,8 +199,8 @@ export default function NotificationsPage() {
           <button
             onClick={async () => {
               if (isSubscribed) {
-                await unsubscribe();
-                flashToast(t.deactivated);
+                const ok = await unsubscribe();
+                if (ok) flashToast(t.deactivated);
               } else {
                 const ok = await subscribe();
                 if (ok) flashToast(t.activated);
@@ -265,15 +266,22 @@ export default function NotificationsPage() {
           </div>
           <button
             onClick={async () => {
-              const days = isMuted ? 0 : 7;
-              const ok = await updatePreferences({ muteDays: days });
-              if (ok) {
-                const next = await getPreferences();
-                setPrefs(next);
-                flashToast(isMuted ? t.unmuted : t.muted);
+              if (savingMute) return;
+              setSavingMute(true);
+              try {
+                const days = isMuted ? 0 : 7;
+                const ok = await updatePreferences({ muteDays: days });
+                if (ok) {
+                  const next = await getPreferences();
+                  if (next) setPrefs(next);
+                  flashToast(isMuted ? t.unmuted : t.muted);
+                }
+              } finally {
+                setSavingMute(false);
               }
             }}
-            className="w-full py-3 rounded-2xl font-black text-sm bg-white/8 text-white hover:bg-white/15"
+            disabled={savingMute}
+            className="w-full py-3 rounded-2xl font-black text-sm bg-white/8 text-white hover:bg-white/15 disabled:opacity-50"
           >
             {isMuted ? t.unmuteBtn : t.muteBtn}
           </button>

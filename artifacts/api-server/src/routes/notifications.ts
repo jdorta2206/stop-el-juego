@@ -368,7 +368,7 @@ router.post("/send-invite", inviteLimiter, async (req, res) => {
       );
       sent++;
     } catch (e: any) {
-      if (e?.statusCode === 403 || e?.statusCode === 404 || e?.statusCode === 410) {
+      if (e?.statusCode === 404 || e?.statusCode === 410) {
         toDelete.push(row);
       } else {
         console.error(`[push] invite failed status=${e?.statusCode ?? "unknown"} target=${targetPlayerId}`);

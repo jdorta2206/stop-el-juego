@@ -15,6 +15,8 @@ function enabledAndUnmuted() {
   );
 }
 
+import { isStalePushEndpointStatus } from "./pushStatus";
+
 const VAPID_PUBLIC  = process.env.VAPID_PUBLIC_KEY  || "";
 const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY || "";
 const VAPID_EMAIL   = process.env.VAPID_EMAIL       || "mailto:dorynex@stopjuegodepalabras.com";
@@ -189,7 +191,7 @@ export async function sendPushToPlayer(playerId: string, payload: PushPayload): 
       );
       sent++;
     } catch (e: any) {
-      if (e.statusCode === 410 || e.statusCode === 404 || e.statusCode === 403) {
+      if (isStalePushEndpointStatus(e.statusCode)) {
         await cleanStaleEndpoint(row);
       } else {
         console.error(`[push] send failed status=${e?.statusCode ?? "unknown"} player=${playerId}`);
@@ -234,7 +236,7 @@ export async function sendPushToAllSubscribers(
       sent++;
     } catch (e: any) {
       failed++;
-      if (e.statusCode === 410 || e.statusCode === 404 || e.statusCode === 403) toDelete.push(row);
+      if (isStalePushEndpointStatus(e.statusCode)) toDelete.push(row);
       else console.error(`[push] broadcast failed status=${e?.statusCode ?? "unknown"}`);
     }
   }));
@@ -276,7 +278,7 @@ export async function sendLocalizedBroadcast(
       sent++;
     } catch (e: any) {
       failed++;
-      if (e.statusCode === 410 || e.statusCode === 404 || e.statusCode === 403) toDelete.push(row);
+      if (isStalePushEndpointStatus(e.statusCode)) toDelete.push(row);
       else console.error(`[push] localized broadcast failed status=${e?.statusCode ?? "unknown"}`);
     }
   }));
@@ -342,7 +344,7 @@ export async function notifyFollowersPlayerOnline(
             );
             sent++;
           } catch (e: any) {
-            if (e?.statusCode === 410 || e?.statusCode === 404 || e?.statusCode === 403) {
+            if (isStalePushEndpointStatus(e?.statusCode)) {
               await cleanStaleEndpoint(row);
             } else {
               console.error(`[push] friend-online failed status=${e?.statusCode ?? "unknown"} follower=${follower.followerId}`);
