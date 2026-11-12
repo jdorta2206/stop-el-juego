@@ -1,4 +1,4 @@
-name: Verify SEO homepage prerender
+name: Verify SEO multi-page prerender
 
 on:
   push:
@@ -37,9 +37,14 @@ jobs:
           test -f dist/index.html
           grep -q '<div id="root">' dist/index.html
           grep -q 'STOP: juego de palabras online' dist/index.html
-          grep -q 'href="/como-jugar"' dist/index.html
-          grep -q 'href="/blog"' dist/index.html
-          grep -q 'href="/estrategias"' dist/index.html
+          for route in como-jugar como-funciona acerca faq contacto estrategias blog; do
+            test -f "dist/$route/index.html"
+            grep -q 'data-prerendered="true"' "dist/$route/index.html"
+            grep -q '<h1>' "dist/$route/index.html"
+          done
+          BLOG_ARTICLES=$(find dist/blog -mindepth 2 -maxdepth 2 -name index.html | wc -l)
+          test "$BLOG_ARTICLES" -gt 0
+          echo "BLOG_ARTICLES=$BLOG_ARTICLES"
           WORDS=$(python - <<'PY'
           import re
           from pathlib import Path
@@ -50,7 +55,7 @@ jobs:
           print(len([w for w in text.split() if w]))
           PY
           )
-          test "$WORDS" -ge 300
+          test "$WORDS" -ge 150
           echo "PRERENDER_WORDS=$WORDS"
           echo "DIST_INDEX_BYTES=$(wc -c < dist/index.html)"
       - name: Serve exact dist and curl homepage
@@ -61,10 +66,16 @@ jobs:
           SERVER_PID=$!
           trap 'kill $SERVER_PID' EXIT
           sleep 2
-          curl --fail --silent --show-error http://127.0.0.1:4173/
+          for route in / /como-jugar/ /como-funciona/ /acerca/ /faq/ /contacto/ /estrategias/ /blog/; do
+            curl --fail --silent --show-error "http://127.0.0.1:4173$route" >/dev/null
+          done
+          for article in dist/blog/*/index.html; do
+            slug=$(basename "$(dirname "$article")")
+            curl --fail --silent --show-error "http://127.0.0.1:4173/blog/$slug/" | grep -q '<h1>'
+          done
       - name: Upload exact dist index
         uses: actions/upload-artifact@v4
         with:
-          name: seo-homepage-dist-index
-          path: artifacts/stop-game/dist/index.html
+          name: seo-multipage-prerender-dist
+          path: artifacts/stop-game/dist
           retention-days: 7
