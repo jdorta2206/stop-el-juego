@@ -10,9 +10,9 @@ const post: BlogPost = {
   category: "Listas de palabras",
   readMinutes: 6,
   content: `
-La letra **X** en español es rara, exótica y temida en el STOP. Cuando aparece, **el 80% de los jugadores deja todas las casillas en blanco**. Si tú tienes preparadas aunque sea 5 palabras, te llevas la ronda fácil.
+La letra **X** es poco frecuente al comienzo de muchas palabras en español y puede resultar difícil en STOP. Preparar algunos ejemplos ayuda a practicar, pero no garantiza completar la ronda ni ganarla.
 
-Aquí está la lista de palabras con X más útiles, validables y memorizables para STOP.
+Aquí tienes ejemplos con X agrupados por categorías. Revisa cada respuesta según el significado, la categoría y las normas que utilicéis.
 
 ## La X en español: dos posiciones
 
@@ -21,7 +21,7 @@ En español la X puede aparecer en dos lugares:
 1. **Al principio de palabra** (poco común): xilófono, xerox, xenofobia…
 2. **En medio o al final** (más común): taxi, examen, exilio, máximo…
 
-En STOP **solo cuentan las palabras que EMPIEZAN por X**. Por eso es tan difícil. Memoriza las pocas que hay y serás imbatible.
+En las partidas de STOP, la respuesta debe comenzar por la letra de la ronda. Por eso, para una ronda con X no sirven palabras que solo contienen esa letra en medio o al final.
 
 ## Nombres de persona con X
 
