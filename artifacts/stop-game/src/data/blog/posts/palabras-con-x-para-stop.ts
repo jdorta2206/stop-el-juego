@@ -41,9 +41,8 @@ En las partidas de STOP, la respuesta debe comenzar por la letra de la ronda. Po
 
 Hay pocos ejemplos conocidos para esta categoría. Estos términos pueden servir para investigar, pero comprobad su significado y si encajan en las reglas:
 
-- **Xenope** (rana africana)
-- **Xolo / Xoloitzcuintle** (perro mexicano sin pelo)
-- **Xenarthra** (orden de mamíferos: armadillos, perezosos…) — discutible
+- **Xoloitzcuintle** (raza de perro mexicano sin pelo)
+- **Xenarthra** (grupo taxonómico que incluye armadillos y perezosos; al ser un taxón, su aceptación como respuesta depende de las reglas)
 
 Si no te las sabes, **deja en blanco**. No hay vergüenza.
 
