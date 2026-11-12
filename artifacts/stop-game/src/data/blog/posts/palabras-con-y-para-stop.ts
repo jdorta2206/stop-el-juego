@@ -88,9 +88,9 @@ Mejor en blanco.
 
 ## Deportes con Y
 
-- **Yoga** (acepta como deporte / actividad física)
+- **Yoga** (actividad física; acordad si encaja en vuestra categoría de deportes)
 - **Yudo / Judo** (depende de la escritura)
-- **Yatching / Vela** (deporte náutico)
+- **Yate** es una embarcación, no un deporte; no lo uses como respuesta para esta categoría.
 
 ## Profesiones con Y
 
