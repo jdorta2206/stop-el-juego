@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db, dailyResultsTable, playerScoresTable } from "@workspace/db";
 import { eq, and, desc, sql } from "drizzle-orm";
-import { verifyClaimedIdentity } from "../lib/playerAuth";
+import { isLoggedInId, verifyClaimedIdentity } from "../lib/playerAuth";
 import { sumVerifiedBasePersistent, consumeScoreVoucherJtis, ceilingFromBase } from "../lib/scoreToken";
 import { recordAuthoritativeSeasonEvents } from "./season";
 
@@ -223,7 +223,10 @@ router.get("/rankings", async (req, res) => {
   const requestedLanguage = typeof req.query.language === "string" ? req.query.language.trim().toLowerCase() : "es";
   const language = ["es", "en", "pt", "fr"].includes(requestedLanguage) ? requestedLanguage : "es";
   const claimedPlayerId = typeof req.query.playerId === "string" ? req.query.playerId.trim() : "";
-  const canIdentifyPlayer = !!claimedPlayerId && await verifyClaimedIdentity(req, claimedPlayerId);
+  // Guest UUIDs are intentionally unauthenticated in this game. Only mark
+  // OAuth accounts as "mine" after the signed identity token has been checked.
+  const canIdentifyPlayer = isLoggedInId(claimedPlayerId)
+    && await verifyClaimedIdentity(req, claimedPlayerId);
   const today = getTodayForPlayer(req);
 
   const results = await db
