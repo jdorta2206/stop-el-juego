@@ -3,7 +3,7 @@ import type { BlogPost } from "../types";
 const post: BlogPost = {
   slug: "palabras-con-h-para-stop",
   title: "Palabras con H para STOP: la trampa que todos olvidan",
-  description: "La H parece fácil pero es traidora: como es muda, la confundes con palabras que empiezan por vocal. Te damos 100+ palabras con H válidas por categoría.",
+  description: "Practica ejemplos con H por categorías y distingue las palabras que empiezan por esta letra de las que comienzan por vocal.",
   keywords: ["palabras con H", "palabras con H para STOP", "nombres con H", "animales con H", "países con H", "comidas con H", "marcas con H"],
   publishedAt: "2026-05-16",
   author: "Equipo STOP",
