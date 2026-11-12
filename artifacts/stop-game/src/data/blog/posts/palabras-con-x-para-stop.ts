@@ -127,14 +127,14 @@ Aquí sorprendentemente hay opciones:
 | Marca | Xiaomi |
 | Famoso | Xavi Hernández |
 
-5 palabras. Memorizalas. Te darán **+50 puntos garantizados** en una ronda donde el resto saca 0-10.
+Estas cinco referencias pueden servirte como punto de partida para practicar, pero no garantizan una puntuación: comprueba que cada respuesta encaja con la categoría y las normas de tu partida.
 
 ## Por qué la X es ventaja, no problema
 
 Aunque parezca contraintuitivo, las letras "imposibles" como X, K, W, Y, Z son donde **se ganan las partidas de STOP**. Razón:
 
-- En letras fáciles (A, M, P), todos sacan 50-80 puntos. Diferencias mínimas.
-- En letras difíciles (X, W), un jugador puede sacar 30 puntos y otros 0. **Diferencia decisiva**.
+- Las letras frecuentes suelen ofrecer más opciones conocidas, aunque eso no asegura que todos obtengan la misma puntuación.
+- Las letras menos habituales pueden exigir más preparación y dejar categorías sin respuesta; el resultado depende de las palabras admitidas y del sistema de puntuación.
 
 Por eso vale más invertir 20 minutos en memorizar listas de letras difíciles que en aprender palabras "fáciles" que ya conoces.
 
