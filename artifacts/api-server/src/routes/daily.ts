@@ -222,11 +222,17 @@ router.post("/submit", async (req, res) => {
 router.get("/rankings", async (req, res) => {
   const requestedLanguage = typeof req.query.language === "string" ? req.query.language.trim().toLowerCase() : "es";
   const language = ["es", "en", "pt", "fr"].includes(requestedLanguage) ? requestedLanguage : "es";
+  const claimedPlayerId = typeof req.query.playerId === "string" ? req.query.playerId.trim() : "";
+  // Guests have no signed account token; verifyClaimedIdentity permits their UUID
+  // for this read-only self-marker, while still requiring a valid token for OAuth IDs.
+  const canIdentifyPlayer = Boolean(claimedPlayerId)
+    && await verifyClaimedIdentity(req, claimedPlayerId);
   const today = getTodayForPlayer(req);
 
   const results = await db
     .select({
       id: dailyResultsTable.id,
+      playerId: dailyResultsTable.playerId,
       playerName: dailyResultsTable.playerName,
       avatarColor: dailyResultsTable.avatarColor,
       challengeDate: dailyResultsTable.challengeDate,
@@ -245,7 +251,12 @@ router.get("/rankings", async (req, res) => {
     .orderBy(desc(dailyResultsTable.score))
     .limit(10);
 
-  res.json({ date: today, rankings: results });
+  // Never expose player IDs in the public leaderboard; return only a self marker.
+  const rankings = results.map(({ playerId, ...entry }) => ({
+    ...entry,
+    isMe: canIdentifyPlayer && playerId === claimedPlayerId,
+  }));
+  res.json({ date: today, rankings });
 });
 
 export default router;
