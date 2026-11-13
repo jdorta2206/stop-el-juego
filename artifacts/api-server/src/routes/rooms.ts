@@ -790,11 +790,11 @@ async function submitAllScoresToLeaderboard(players: any[], letter: string, room
   }));
 }
 
-async function recoverMultiplayerAuxiliaryEffects(room: any, players: any[]): Promise<void> {
+async function recoverMultiplayerAuxiliaryEffects(room: any, players: any[]): Promise<boolean> {
   // Recovery may run during a cold start; wait for the eager table creation before querying it.
   await multiplayerAuxClaimsReady;
   const eligible = players.filter((p: any) => p && !p.isBot && p.playerId && p.loginMethod !== "guest");
-  if (eligible.length === 0) return;
+  if (eligible.length === 0) return true;
   const halloweenPreview = parseBluffMeta(room.stopperJson)?.halloweenPreview === true;
   // Match normal settlement: guests compete for the win but remain ineligible for persistent rewards.
   const scoringPlayers = players.filter((p: any) => p && !p.isBot);
@@ -887,6 +887,18 @@ async function recoverMultiplayerAuxiliaryEffects(room: any, players: any[]): Pr
       if (!halloweenApplicable || halloweenResult !== null) await markMultiplayerAuxClaim(room.id, p.playerId, "halloween");
     }
   }
+
+  // A transient season-event failure can return false without throwing. Verify
+  // durable claims so the caller can retry incomplete auxiliary recovery.
+  const claimRows = await db.execute(sql`
+    SELECT player_id, effect
+    FROM multiplayer_settlement_aux_claims
+    WHERE room_id = ${room.id} AND effect IN ('season', 'halloween')
+  `);
+  const completed = new Set((claimRows.rows ?? []).map((row: any) => `${row.player_id}:${row.effect}`));
+  return eligible.every((p: any) =>
+    completed.has(`${p.playerId}:season`) && completed.has(`${p.playerId}:halloween`)
+  );
 }
 
 // Run the stuck-player sweep and, if everyone is ready, compute the next
@@ -1129,7 +1141,9 @@ async function sweepStuckRooms() {
         // the claim transaction committed. Season/Halloween are idempotent.
         if (!auxiliaryRecoveryStartedForRoom.has(room.id)) {
           auxiliaryRecoveryStartedForRoom.add(room.id);
-          void recoverMultiplayerAuxiliaryEffects(room, players).catch((err) => {
+          void recoverMultiplayerAuxiliaryEffects(room, players).then((complete) => {
+            if (!complete) auxiliaryRecoveryStartedForRoom.delete(room.id);
+          }).catch((err) => {
             auxiliaryRecoveryStartedForRoom.delete(room.id);
             console.error("[sweepStuckRooms] auxiliary settlement recovery failed:", (err as Error).message);
           });
