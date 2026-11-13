@@ -2,6 +2,7 @@ package app.replit.stop_el_juego.twa;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.ComponentName;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
 import android.net.Uri;
@@ -12,6 +13,8 @@ import android.util.Log;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.browser.customtabs.CustomTabsCallback;
+import androidx.browser.customtabs.CustomTabsClient;
+import androidx.browser.customtabs.CustomTabsServiceConnection;
 import androidx.browser.customtabs.CustomTabsService;
 import androidx.browser.customtabs.CustomTabsSession;
 
@@ -29,6 +32,7 @@ import com.google.android.gms.games.PlayGames;
 import com.google.android.gms.games.PlayGamesSdk;
 import com.google.androidbrowserhelper.trusted.QualityEnforcer;
 import com.google.androidbrowserhelper.trusted.TwaLauncher;
+import com.google.androidbrowserhelper.trusted.TwaProviderPicker;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -64,13 +68,184 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     private boolean playGamesInitialized;
     private boolean playGamesSignInInFlight;
     private boolean playGamesStartupSignInAttempted;
+    // Android Browser Helper finishes LauncherActivity as soon as Chrome opens
+    // the TWA. Keep this Activity alive until the TWA returns so its
+    // CustomTabsSession remains bound for the Play Games postMessage bridge.
+    private boolean retainLauncherForTwa;
+    private boolean initialTwaFinishSuppressed;
+    private boolean livenessProbePending;
+    private boolean livenessProbeReceived;
+    private int livenessProbeGeneration;
+    @Nullable private String activeLivenessProbeId;
+    private boolean twaLaunchStarted;
+    private boolean warmupServiceBound;
+    @Nullable private CustomTabsServiceConnection warmupConnection;
     private int playGamesSignInGeneration;
     // Keep the most recent PGS result until the TWA MessagePort is ready.
     @Nullable private JSONObject pendingPlayGamesStatus;
 
     @Override
+    protected boolean shouldLaunchImmediately() {
+        // Warm up the selected Custom Tabs provider before TwaLauncher creates
+        // its session. PostMessage origin validation requires warmup even on
+        // Chrome versions that can launch a TWA without it.
+        return false;
+    }
+
+    private void warmupCustomTabsThenLaunchTwa() {
+        if (isFinishing() || isDestroyed()) return;
+        final TwaProviderPicker.Action provider;
+        try {
+            provider = TwaProviderPicker.pickProvider(getPackageManager());
+        } catch (RuntimeException error) {
+            Log.w("STOP_PLAY_GAMES", "Unable to select Custom Tabs provider for warmup; launching normally", error);
+            launchTwaOnce();
+            return;
+        }
+
+        final String providerPackage = provider.provider;
+        if (providerPackage == null || provider.launchMode == TwaProviderPicker.LaunchMode.BROWSER) {
+            Log.w("STOP_PLAY_GAMES", "No Custom Tabs service available for warmup; launching fallback");
+            launchTwaOnce();
+            return;
+        }
+
+        warmupConnection = new CustomTabsServiceConnection() {
+            @Override
+            public void onCustomTabsServiceConnected(ComponentName name, CustomTabsClient client) {
+                if (isFinishing() || isDestroyed()) {
+                    unbindWarmupService();
+                    return;
+                }
+                try {
+                    boolean warmed = client.warmup(0L);
+                    Log.i("STOP_PLAY_GAMES", "Custom Tabs warmup before TWA launch=" + warmed
+                            + " provider=" + providerPackage);
+                } catch (RuntimeException error) {
+                    Log.w("STOP_PLAY_GAMES", "Custom Tabs warmup failed; continuing to launch TWA", error);
+                }
+                unbindWarmupService();
+                launchTwaOnce();
+            }
+
+            @Override
+            public void onServiceDisconnected(ComponentName name) {
+                Log.w("STOP_PLAY_GAMES", "Custom Tabs warmup service disconnected; continuing to launch TWA");
+                unbindWarmupService();
+                launchTwaOnce();
+            }
+        };
+
+        try {
+            warmupServiceBound = CustomTabsClient.bindCustomTabsService(
+                    this, providerPackage, warmupConnection);
+        } catch (RuntimeException error) {
+            Log.w("STOP_PLAY_GAMES", "Could not bind Custom Tabs warmup service", error);
+            warmupServiceBound = false;
+        }
+
+        if (!warmupServiceBound) {
+            warmupConnection = null;
+            launchTwaOnce();
+            return;
+        }
+
+        // Never leave a player on the launcher screen if a provider does not
+        // answer its warmup bind promptly.
+        getWindow().getDecorView().postDelayed(() -> {
+            if (!twaLaunchStarted && !isFinishing() && !isDestroyed()) {
+                Log.w("STOP_PLAY_GAMES", "Custom Tabs warmup timed out; launching without waiting");
+                unbindWarmupService();
+                launchTwaOnce();
+            }
+        }, 1500L);
+    }
+
+    private void unbindWarmupService() {
+        if (warmupServiceBound && warmupConnection != null) {
+            try {
+                unbindService(warmupConnection);
+            } catch (IllegalArgumentException error) {
+                Log.d("STOP_PLAY_GAMES", "Custom Tabs warmup service was already unbound");
+            }
+        }
+        warmupServiceBound = false;
+        warmupConnection = null;
+    }
+
+    private void launchTwaOnce() {
+        if (twaLaunchStarted || isFinishing() || isDestroyed()) return;
+        twaLaunchStarted = true;
+        unbindWarmupService();
+        launchTwa();
+    }
+
+    @Override
+    protected void launchTwa() {
+        retainLauncherForTwa = true;
+        try {
+            super.launchTwa();
+        } catch (RuntimeException error) {
+            retainLauncherForTwa = false;
+            throw error;
+        }
+    }
+
+    @Override
+    public void finish() {
+        if (!retainLauncherForTwa) {
+            super.finish();
+            return;
+        }
+
+        // ABH calls finish() once immediately after opening Chrome. Suppress that
+        // first call but keep the retention flag set: onRestart() can also happen
+        // when a native Play Games screen returns while the TWA page is still open.
+        if (!initialTwaFinishSuppressed) {
+            initialTwaFinishSuppressed = true;
+            Log.i("STOP_PLAY_GAMES", "Keeping TWA launcher alive to preserve CustomTabsSession");
+            return;
+        }
+
+        if (livenessProbePending) return;
+        livenessProbePending = true;
+        livenessProbeReceived = false;
+        final int probeGeneration = ++livenessProbeGeneration;
+        final String probeId = String.valueOf(probeGeneration);
+        activeLivenessProbeId = probeId;
+
+        JSONObject probe = newMessage("STOP_TWA_LIVENESS_PROBE");
+        try {
+            probe.put("probeId", probeId);
+        } catch (JSONException error) {
+            // The probe id is a string and should never fail to serialize. If it
+            // does, let the bounded timeout close the launcher safely.
+            Log.w("STOP_PLAY_GAMES", "Unable to serialize TWA liveness probe id", error);
+        }
+        sendMessage(probe);
+
+        // If the page answers, Chrome still owns the live TWA: put this launcher
+        // task behind Chrome again. If no answer arrives, the TWA has closed and
+        // it is now safe for ABH to destroy the CustomTabsSession.
+        getWindow().getDecorView().postDelayed(() -> {
+            if (probeGeneration != livenessProbeGeneration || isDestroyed()) return;
+            livenessProbePending = false;
+            activeLivenessProbeId = null;
+            if (livenessProbeReceived) {
+                Log.i("STOP_PLAY_GAMES", "TWA page is still active; returning launcher behind Chrome");
+                moveTaskToBack(true);
+                return;
+            }
+            retainLauncherForTwa = false;
+            Log.i("STOP_PLAY_GAMES", "TWA page did not answer liveness probe; closing launcher session");
+            super.finish();
+        }, 1800L);
+    }
+
+    @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        if (isFinishing()) return;
         appUpdateManager = AppUpdateManagerFactory.create(this);
         // StopApplication initializes PGS before any activity. Retain an activity-level
         // fallback only if application initialization failed, without blocking gameplay.
@@ -112,6 +287,13 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
         } else {
             setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
         }
+        warmupCustomTabsThenLaunchTwa();
+    }
+
+    @Override
+    protected void onDestroy() {
+        unbindWarmupService();
+        super.onDestroy();
     }
 
     private void checkForPlayUpdate() {
@@ -157,6 +339,9 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     protected void onResume() {
         super.onResume();
         checkForPlayUpdate();
+        // Some Custom Tabs providers do not consistently emit NAVIGATION_FINISHED.
+        // Retry origin validation after resume as a second, duplicate-guarded entry point.
+        getWindow().getDecorView().postDelayed(this::requestUseAsOriginValidation, 1500L);
     }
 
     @Override
@@ -210,11 +395,15 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     }
 
     private void requestUseAsOriginValidation() {
-        if (relationshipValidated || originValidationRequestPending || isFinishing()
+        if (relationshipValidated || originValidationRequestPending || isFinishing() || isDestroyed()
                 || originValidationAttempts >= 10) return;
         originValidationAttempts++;
         final int requestGeneration = ++originValidationGeneration;
         CustomTabsSession session = getTwaSession();
+        if (session == null && (originValidationAttempts == 1 || originValidationAttempts == 10)) {
+            Log.w("STOP_PLAY_GAMES", "TWA CustomTabsSession unavailable for origin validation attempt="
+                    + originValidationAttempts);
+        }
         if (session != null) {
             try {
                 boolean requested = session.validateRelationship(
@@ -309,7 +498,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             if (!(launcher instanceof TwaLauncher)) return null;
             Object session = findFieldValue(launcher, "mSession");
             return session instanceof CustomTabsSession ? (CustomTabsSession) session : null;
-        } catch (ReflectiveOperationException | ClassCastException error) {
+        } catch (ReflectiveOperationException | RuntimeException error) {
             Log.w(TAG, "Unable to obtain TWA CustomTabsSession", error);
             return null;
         }
@@ -330,6 +519,18 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
         try {
             JSONObject message = new JSONObject(raw);
             String type = message.optString("type", "");
+            if ("STOP_TWA_LIVENESS_ALIVE".equals(type)) {
+                String origin = message.optString("origin", "");
+                String probeId = message.optString("probeId", "");
+                if (messageChannelReady && relationshipValidated && isAllowedOrigin(origin)
+                        && livenessProbePending && probeId.equals(activeLivenessProbeId)) {
+                    livenessProbeReceived = true;
+                    Log.i("STOP_PLAY_GAMES", "TWA liveness probe answered by active page");
+                } else {
+                    Log.w("STOP_PLAY_GAMES", "Rejected invalid TWA liveness response");
+                }
+                return;
+            }
             if (type.startsWith("STOP_PGS_")) {
                 String origin = message.optString("origin", "");
                 if (!messageChannelReady || !relationshipValidated || !isAllowedOrigin(origin)) {
