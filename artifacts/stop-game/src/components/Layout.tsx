@@ -95,7 +95,7 @@ export function Layout({ children }: { children: ReactNode }) {
     if (dismissed) { promptChecked.current = true; return; }
 
     // If already subscribed or browser permission is final → mark done and never show.
-    if (isSubscribed || permission === "granted" || permission === "denied") {
+    if (isSubscribed || permission === "denied") {
       promptChecked.current = true;
       localStorage.setItem("stop_notif_prompt_v1", "1");
       return;
@@ -174,13 +174,12 @@ export function Layout({ children }: { children: ReactNode }) {
               whileTap={{ scale: 0.9 }}
               onClick={async () => {
                 if (isSubscribed) {
-                  await unsubscribe();
-                  showNotifToast("🔕 Notificaciones desactivadas");
+                  const ok = await unsubscribe();
+                  showNotifToast(ok ? "🔕 Notificaciones desactivadas" : "⚠️ No se pudieron desactivar. Inténtalo de nuevo.");
                 } else {
                   const ok = await subscribe();
-                  if (ok) showNotifToast("🔔 ¡Notificaciones activadas!");
+                  showNotifToast(ok ? "🔔 ¡Notificaciones activadas!" : "⚠️ No se pudieron activar. Revisa el permiso y vuelve a intentarlo.");
                 }
-
               }}
               disabled={notifLoading}
               title={isSubscribed ? "Desactivar notificaciones" : "Activar notificaciones"}
@@ -518,7 +517,9 @@ export function Layout({ children }: { children: ReactNode }) {
                       <p className="text-white/50 text-[10px]">
                         {isSubscribed
                           ? (lang === "en" ? "Active ✓" : lang === "pt" ? "Ativo ✓" : lang === "fr" ? "Activé ✓" : "Activadas ✓")
-                          : (lang === "en" ? "The browser will ask for permission" : lang === "pt" ? "O navegador pedirá permissão" : lang === "fr" ? "Le navigateur demandera la permission" : "El navegador te pedirá permiso")}
+                          : permission === "granted"
+                            ? (lang === "en" ? "Permission granted · repairing device registration" : lang === "pt" ? "Permissão concedida · a reparar o registo do dispositivo" : lang === "fr" ? "Autorisation accordée · réparation de l'inscription" : "Permiso concedido · reparando el registro del dispositivo")
+                            : (lang === "en" ? "The browser will ask for permission" : lang === "pt" ? "O navegador pedirá permissão" : lang === "fr" ? "Le navigateur demandera la permission" : "El navegador te pedirá permiso")}
                       </p>
                     </div>
                     {!isSubscribed && (
@@ -529,6 +530,8 @@ export function Layout({ children }: { children: ReactNode }) {
                             showNotifToast("🔔 ¡Notificaciones activadas!");
                             setShowNotifPrompt(false);
                             localStorage.setItem("stop_notif_prompt_v1", "1");
+                          } else {
+                            showNotifToast("⚠️ No se pudieron activar. Revisa el permiso y vuelve a intentarlo.");
                           }
                         }}
                         disabled={notifLoading}
