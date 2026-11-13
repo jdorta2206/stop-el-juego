@@ -111,10 +111,10 @@ function getTodayStr(): string {
 
 export default function SoloGame() {
   const { player, showAuth } = usePlayer();
-  const { isPremium, loading: premiumLoading } = usePremium(player?.id);
-  // Keep ads hidden while entitlement is being checked; if the lookup fails,
-  // loading ends and non-Premium players can still receive ads.
-  const adsBlocked = isPremium || premiumLoading;
+  const { isPremium, loading: premiumLoading, error: premiumError } = usePremium(player?.id);
+  // Fail closed consistently across Solo, Home and Rooms: if Premium cannot be
+  // verified, do not show rewarded or interstitial ads until the status is known.
+  const adsBlocked = isPremium || premiumLoading || !!premiumError;
   const { streak: soloStreak, recordPlay } = useStreak(player?.id);
   const { t, lang } = useT();
   const { addXp, levelUpInfo, clearLevelUp } = useProgression(player?.id);
