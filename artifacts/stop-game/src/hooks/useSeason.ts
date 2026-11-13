@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { getApiUrl } from "@/lib/utils";
 
 const API = getApiUrl();
@@ -180,30 +180,74 @@ export function useSeason(playerId?: string | null) {
  * automatically when an auth session is present.
  */
 export function useSeasonLeaderboard(seasonId?: number | null, enabled: boolean = true) {
-  const [data, setData] = useState<Leaderboard | null>(null);
+  const [dataSnapshot, setDataSnapshot] = useState<{ seasonId: number | null; value: Leaderboard } | null>(null);
+  const [errorSnapshot, setErrorSnapshot] = useState<{ seasonId: number | null; message: string } | null>(null);
   const [loading, setLoading] = useState(false);
+  const requestIdRef = useRef(0);
+  const activeControllerRef = useRef<AbortController | null>(null);
+  const currentSeasonId = seasonId ?? null;
 
   const refresh = useCallback(async () => {
     if (!enabled) return;
+    const requestId = ++requestIdRef.current;
+    activeControllerRef.current?.abort();
+    const controller = new AbortController();
+    activeControllerRef.current = controller;
+    let timedOut = false;
+    const timeoutId = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, 15000);
+
     setLoading(true);
+    setErrorSnapshot(null);
     try {
       const url = new URL(`${API}/api/season/leaderboard`);
       if (seasonId) url.searchParams.set("seasonId", String(seasonId));
       const r = await fetch(url.toString(), {
         credentials: "include",
         headers: authHeaders(),
+        signal: controller.signal,
       });
-      if (r.ok) setData(await r.json());
-    } catch {
-      /* ignore */
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const value = await r.json() as Leaderboard;
+      if (requestId === requestIdRef.current && !controller.signal.aborted) {
+        setDataSnapshot({ seasonId: currentSeasonId, value });
+        setErrorSnapshot(null);
+      }
+    } catch (error) {
+      if (requestId === requestIdRef.current && !controller.signal.aborted || (requestId === requestIdRef.current && timedOut)) {
+        setErrorSnapshot({
+          seasonId: currentSeasonId,
+          message: timedOut
+            ? "El ranking de temporada está tardando demasiado. Inténtalo de nuevo."
+            : error instanceof Error && error.message.startsWith("HTTP ")
+              ? `No se pudo cargar el ranking de temporada (${error.message}).`
+              : "No se pudo conectar con el ranking de temporada.",
+        });
+      }
     } finally {
-      setLoading(false);
+      clearTimeout(timeoutId);
+      if (requestId === requestIdRef.current) {
+        setLoading(false);
+        activeControllerRef.current = null;
+      }
     }
-  }, [seasonId, enabled]);
+  }, [seasonId, enabled, currentSeasonId]);
 
-  useEffect(() => { refresh(); }, [refresh]);
+  useEffect(() => {
+    void refresh();
+    return () => {
+      requestIdRef.current += 1;
+      activeControllerRef.current?.abort();
+      activeControllerRef.current = null;
+      setLoading(false);
+    };
+  }, [refresh]);
 
-  return { data, loading, refresh };
+  const data = dataSnapshot?.seasonId === currentSeasonId ? dataSnapshot.value : null;
+  const error = errorSnapshot?.seasonId === currentSeasonId ? errorSnapshot.message : null;
+  return { data, loading: loading || (enabled && !data && !error), error, refresh };
 }
 
 /**

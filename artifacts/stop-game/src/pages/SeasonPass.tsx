@@ -249,10 +249,18 @@ function LeaderboardRow({ entry, isMe }: { entry: LeaderboardEntry; isMe: boolea
 }
 
 function LeaderboardPanel({ seasonId, viewerId }: { seasonId?: number; viewerId?: string | null }) {
-  const { data, loading } = useSeasonLeaderboard(seasonId, true);
+  const { data, loading, error, refresh } = useSeasonLeaderboard(seasonId, true);
 
   if (loading && !data) {
     return <p className="text-white/50 text-sm text-center py-6">Cargando ranking…</p>;
+  }
+  if (!data && error) {
+    return (
+      <div className="text-center py-6 space-y-3">
+        <p className="text-white/70 text-sm">{error}</p>
+        <button onClick={() => void refresh()} className="px-4 py-2 rounded-lg bg-amber-400 text-slate-950 font-bold text-sm">Reintentar</button>
+      </div>
+    );
   }
   if (!data || data.top.length === 0) {
     return <p className="text-white/50 text-sm text-center py-6">Aún no hay jugadores en el ranking.</p>;
