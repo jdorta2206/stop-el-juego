@@ -486,6 +486,37 @@ async function sendHappyHourNotifications() {
  * pattern as Happy Hour. The body advertises today's real best discount,
  * recomputed from the deterministic daily-shop seed.
  */
+const ANALYTICS_RETENTION_LOCK = "analytics_events_retention";
+const ANALYTICS_RETENTION_BATCH_SIZE = 5000;
+
+// Run one bounded cleanup batch every five-minute cron tick. The padded
+// epoch bucket makes the cron_locks claim monotonic and cluster-safe.
+async function pruneExpiredAnalyticsEvents(): Promise<void> {
+  const bucket = String(Math.floor(Date.now() / 300_000)).padStart(16, "0");
+  if (!await claimDailyLock(bucket, ANALYTICS_RETENTION_LOCK)) return;
+  try {
+    const result = await db.execute(sql`
+      WITH expired AS (
+        SELECT ctid
+        FROM analytics_events
+        WHERE created_at < NOW() - INTERVAL '30 days'
+        ORDER BY created_at ASC
+        LIMIT ${ANALYTICS_RETENTION_BATCH_SIZE}
+      )
+      DELETE FROM analytics_events target
+      USING expired
+      WHERE target.ctid = expired.ctid
+    `);
+    const deleted = Number((result as any).rowCount ?? 0);
+    if (deleted > 0) {
+      console.log(`[analyticsRetentionCron] deleted=${deleted} older than 30 days`);
+    }
+  } catch (error) {
+    await releaseDailyLock(bucket, ANALYTICS_RETENTION_LOCK);
+    console.error("[analyticsRetentionCron] cleanup failed:", error);
+  }
+}
+
 async function sendDailyDealsNotifications() {
   try {
     const now = Date.now();
@@ -583,6 +614,9 @@ export function startDailyCron() {
     // local. Tells them fresh shop discounts are live (they reset 00:00 UTC).
     // Per-player claims prevent duplicate sends across cron instances.
     await sendDailyDealsNotifications();
+
+    // Gradually prune expired analytics rows without a large table-wide DELETE.
+    await pruneExpiredAnalyticsEvents();
 
     // 19:00–19:05 UTC → streak rescue. 19:00 UTC was chosen because it
     // falls inside daytime/evening waking hours for every supported locale
