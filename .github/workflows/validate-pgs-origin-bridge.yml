@@ -62,7 +62,7 @@ jobs:
           assert 'super.finish();' in native
           assert 'Keeping TWA launcher alive to preserve CustomTabsSession' in native
           # Keep the session through native Play Games UI returns; only close after the page fails its liveness probe.
-          finish_method = native.split("public void finish() {", 1)[1].split("\\n    @Override\\n    protected void onCreate", 1)[0]
+          finish_method = native.split("public void finish() {", 1)[1].split("\n    @Override\n    protected void onCreate", 1)[0]
           first_finish_guard = finish_method.split("if (!initialTwaFinishSuppressed) {", 1)[1].split("if (livenessProbePending)", 1)[0]
           assert "return;" in first_finish_guard and "super.finish();" not in first_finish_guard
           assert "STOP_TWA_LIVENESS_PROBE" in finish_method and "moveTaskToBack(true);" in finish_method
