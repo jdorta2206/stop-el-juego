@@ -185,6 +185,9 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     protected void onResume() {
         super.onResume();
         checkForPlayUpdate();
+        // Some Custom Tabs providers do not consistently emit NAVIGATION_FINISHED.
+        // Retry origin validation after resume as a second, duplicate-guarded entry point.
+        getWindow().getDecorView().postDelayed(this::requestUseAsOriginValidation, 1500L);
     }
 
     @Override
@@ -243,6 +246,10 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
         originValidationAttempts++;
         final int requestGeneration = ++originValidationGeneration;
         CustomTabsSession session = getTwaSession();
+        if (session == null && (originValidationAttempts == 1 || originValidationAttempts == 10)) {
+            Log.w("STOP_PLAY_GAMES", "TWA CustomTabsSession unavailable for origin validation attempt="
+                    + originValidationAttempts);
+        }
         if (session != null) {
             try {
                 boolean requested = session.validateRelationship(
