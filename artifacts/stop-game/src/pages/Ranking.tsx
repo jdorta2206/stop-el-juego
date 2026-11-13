@@ -320,6 +320,7 @@ export default function Ranking() {
   const [followedIds, setFollowedIds] = useState<Set<string>>(new Set());
   const [followedFriends, setFollowedFriends] = useState<any[]>([]);
   const [friendsLoadError, setFriendsLoadError] = useState(false);
+  const [friendsRetry, setFriendsRetry] = useState(0);
   const [previewPlayer, setPreviewPlayer] = useState<any | null>(null);
 
   useEffect(() => {
@@ -354,7 +355,7 @@ export default function Ranking() {
         setFriendsLoadError(true);
       });
     return () => controller.abort();
-  }, [player?.id, isFollowing]);
+  }, [player?.id, isFollowing, friendsRetry]);
 
   // Follow an offline ranking player (no OnlinePlayer data available)
   const followOffline = useCallback(async (p: { playerId: string; playerName: string; avatarColor: string }) => {
@@ -566,6 +567,12 @@ const PODIUM_ORDER = [1, 0, 2];
           </motion.div>
         )}
 
+        {filter === "friends" && friendsLoadError && players.length > 0 && (
+          <div role="status" className="mb-3 rounded-xl border border-white/10 bg-black/20 p-3 text-center text-sm text-white/60">
+            No se ha podido actualizar la lista de amigos. Se mantienen los datos anteriores.
+            <button type="button" onClick={() => setFriendsRetry((retry) => retry + 1)} className="ml-2 font-black text-secondary underline">Reintentar</button>
+          </div>
+        )}
         {showSlowRetry && !activeRankingError && (
           <div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/20 p-3">
             <span className="text-sm text-white/70">El ranking está tardando más de 3 segundos.</span>
@@ -586,7 +593,7 @@ const PODIUM_ORDER = [1, 0, 2];
         ) : players.length === 0 && filter === "friends" && friendsLoadError ? (
           <div className="p-8 text-center text-white/60 font-bold bg-black/20 rounded-2xl border border-white/10">
             <p>No se ha podido actualizar la lista de amigos. Comprueba la conexión e inténtalo de nuevo.</p>
-            <button type="button" onClick={() => setFriendsLoadError(false)} className="mt-3 px-5 py-2 rounded-xl font-black text-sm bg-secondary text-black">Volver a cargar</button>
+            <button type="button" onClick={() => setFriendsRetry((retry) => retry + 1)} className="mt-3 px-5 py-2 rounded-xl font-black text-sm bg-secondary text-black">Volver a cargar</button>
           </div>
         ) : players.length === 0 && filter === "friends" ? (
           <div className="p-16 text-center text-white/50 font-bold bg-black/20 rounded-2xl border border-white/10">
