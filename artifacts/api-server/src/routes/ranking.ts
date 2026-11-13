@@ -41,9 +41,9 @@ export async function lookupPlayerTimezone(playerId: string): Promise<{ timeZone
     const rows = await db
       .select({ timeZone: pushSubscriptionsTable.timeZone, tz: pushSubscriptionsTable.tzOffsetMinutes })
       .from(pushSubscriptionsTable)
-      .where(sql`${pushSubscriptionsTable.playerId} = ${playerId}
-              AND ${pushSubscriptionsTable.enabled} = TRUE`)
-      .orderBy(sql`CASE WHEN ${pushSubscriptionsTable.timeZone} IS NOT NULL THEN 0 ELSE 1 END`)
+      .where(eq(pushSubscriptionsTable.playerId, playerId))
+      // Push opt-out must not erase the timezone used for game rewards.
+      .orderBy(sql`CASE WHEN ${pushSubscriptionsTable.timeZone} IS NOT NULL THEN 0 ELSE 1 END`, desc(pushSubscriptionsTable.id))
       .limit(1);
     return { timeZone: rows[0]?.timeZone ?? null, tzOffset: rows[0]?.tz ?? null };
   } catch {
@@ -621,10 +621,10 @@ router.post("/scores", scoreLimiter, requirePlayerIdentity, async (req: AuthedRe
   const baseXpGain = calcXpGain(score, effectiveWon, effectiveMode);
   const baseCoinGain = calcCoinGain(score, effectiveWon, effectiveMode, isBonus);
   const playerTimezone = await lookupPlayerTimezone(playerId);
-  // Happy Hour is a reward multiplier, so never let the request choose the
-  // timezone used to grant it. Use the timezone persisted for the account's
-  // enabled push subscription; fall back to its persisted UTC offset.
-  const effectiveTimeZone = playerTimezone.timeZone;
+  // Prefer the last persisted timezone. If the player never enabled push or
+  // opted out, use the validated timezone sent with this authenticated score.
+  const requestTimeZone = normalizePlayerTimeZone(req.headers["x-stop-timezone"]);
+  const effectiveTimeZone = playerTimezone.timeZone ?? (requestTimeZone !== "UTC" ? requestTimeZone : null);
   const happyHourActive = effectiveTimeZone
     ? isHappyHourActiveForTimeZone(effectiveTimeZone)
     : isHappyHourActiveForTzOffset(playerTimezone.tzOffset);
