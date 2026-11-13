@@ -4,13 +4,25 @@ import { getApiUrl, authHeaders } from "@/lib/utils";
 const API_BASE = getApiUrl();
 const DISABLED_KEY = "stop_push_notifications_disabled";
 
+function withTimeout<T>(promise: Promise<T>, milliseconds: number, message: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error(message)), milliseconds);
+    }),
+  ]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
+}
+
 async function getServerVapidPublicKey(): Promise<string | null> {
   try {
-    const response = await fetch(`${API_BASE}/api/notifications/vapid-public-key`, {
+    const response = await withTimeout(fetch(`${API_BASE}/api/notifications/vapid-public-key`, {
       method: "GET",
       credentials: "omit",
       cache: "no-store",
-    });
+    }), 10000, "VAPID request timed out");
     if (!response.ok) return null;
     const data = await response.json();
     return typeof data?.key === "string" && data.key.trim() ? data.key.trim() : null;
@@ -88,7 +100,7 @@ export function usePushNotifications(playerId: string | undefined, language: str
           return;
         }
 
-        const vapidPublicKey = await getServerVapidPublicKey();
+        const vapidPublicKey = await withTimeout(getServerVapidPublicKey(), 12000, "VAPID key request timed out");
         if (cancelled || currentPlayerIdRef.current !== playerId) return;
         if (!vapidPublicKey) {
           console.warn("[push] server VAPID key unavailable; subscription is not confirmed");
@@ -111,7 +123,7 @@ export function usePushNotifications(playerId: string | undefined, language: str
         const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
         try {
           if (currentPlayerIdRef.current !== playerId) return;
-          const res = await fetch(`${API_BASE}/api/notifications/subscribe`, {
+          const res = await withTimeout(fetch(`${API_BASE}/api/notifications/subscribe`, {
             method: "POST",
             headers: { "Content-Type": "application/json", ...authHeaders() },
             credentials: "include",
@@ -156,7 +168,7 @@ export function usePushNotifications(playerId: string | undefined, language: str
       // otherwise consume that activation and cause Chrome/Android to ignore
       // or reject the permission prompt.
       const permissionRequest = Notification.requestPermission();
-      const perm = await permissionRequest;
+      const perm = await withTimeout(permissionRequest, 12000, "Notification permission request timed out");
       setPermission(perm as NotifPermission);
       if (perm !== "granted") return false;
 
@@ -164,9 +176,9 @@ export function usePushNotifications(playerId: string | undefined, language: str
       // decision has been made.
       const vapidPublicKey = await getServerVapidPublicKey();
       if (!vapidPublicKey) throw new Error("Server VAPID public key is unavailable");
-      const reg = await navigator.serviceWorker.ready;
+      const reg = await withTimeout(navigator.serviceWorker.ready, 12000, "Service worker is not ready");
 
-      let existing = await reg.pushManager.getSubscription();
+      let existing = await withTimeout(reg.pushManager.getSubscription(), 10000, "Could not read push subscription");
       if (currentPlayerIdRef.current !== playerId) return false;
       // A persisted subscription created with a previous VAPID key cannot receive
       // pushes signed by the server current key. Recreate it before registering.
@@ -174,10 +186,10 @@ export function usePushNotifications(playerId: string | undefined, language: str
         await existing.unsubscribe();
         existing = null;
       }
-      const sub = existing || await reg.pushManager.subscribe({
+      const sub = existing || await withTimeout(reg.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlB64ToUint8Array(vapidPublicKey),
-      });
+      }), 12000, "Push subscription timed out");
 
       const tzOffsetMinutes = -new Date().getTimezoneOffset();
       const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
@@ -193,7 +205,7 @@ export function usePushNotifications(playerId: string | undefined, language: str
           tzOffsetMinutes,
           timeZone,
           origin: typeof window !== "undefined" ? window.location.origin : undefined,
-        }),
+        }), 12000, "Subscription registration timed out");
       });
 
       if (!res.ok) throw new Error(`subscription HTTP ${res.status}`);
