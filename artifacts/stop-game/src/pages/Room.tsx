@@ -406,7 +406,7 @@ export default function Room() {
     (async () => {
       try {
         const url = `${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/draft?playerId=${encodeURIComponent(player.id)}`;
-        const r = await fetch(url);
+        const r = await fetch(url, { headers: authHeaders(), credentials: "include" });
         if (!r.ok) return;
         const data = await r.json() as { responses?: Record<string, string>; round?: number; letter?: string };
         if (cancelled) return;
@@ -585,7 +585,8 @@ export default function Room() {
     const seq = ++typingSeq.current;
     fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/typing`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      credentials: "include",
       body: JSON.stringify({
         playerId: player.id,
         playerName: player.name ?? "?",
@@ -608,8 +609,9 @@ export default function Room() {
       const res = await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/add-bot`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
+        credentials: "include",
         body: JSON.stringify({ hostId: player.id, roomId: room?.id }),
-      });
+        });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         toast({ title: data.error ?? "No se pudo añadir bot", variant: "destructive" });
@@ -631,8 +633,9 @@ export default function Room() {
       const r = await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/rematch`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
+        credentials: "include",
         body: JSON.stringify({ playerId: player.id, playerName: player.name ?? "?", avatarColor: (player as any).avatarColor }),
-      });
+        });
       const j = await r.json();
       if (j.rematchCode) { setRematchCode(j.rematchCode); setLocation(`/room/${j.rematchCode}`); }
     } catch {} finally { setRematchLoading(false); }
@@ -735,8 +738,9 @@ export default function Room() {
       const response = await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/halloween-scare`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders(), ...(isHalloweenPreview() ? { "x-halloween-preview": "1" } : {}) },
+        credentials: "include",
         body: JSON.stringify({ playerId: player.id, playerName: player.name }),
-      });
+        });
       const data = await response.json().catch(() => ({}));
       if (response.ok) {
         void reportHalloweenEvent(player.id, "scare_provoked", `room:${roomCode.toUpperCase()}:${Date.now()}`);
@@ -788,7 +792,8 @@ export default function Room() {
     try {
       await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/react`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        credentials: "include",
         body: JSON.stringify({ emoji, playerId: player.id, playerName: player.name }),
       });
     } catch {}
@@ -814,7 +819,8 @@ export default function Room() {
     try {
       await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/phrase`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        credentials: "include",
         body: JSON.stringify({ playerId: player.id, playerName: player.name, phraseIndex }),
       });
     } catch {}
@@ -830,8 +836,9 @@ export default function Room() {
       const res = await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/category-pack`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
+        credentials: "include",
         body: JSON.stringify({ hostId: player.id, roomId: room?.id, pack, ...(extras ?? {}) }),
-      });
+        });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         toast({ title: data?.error ?? "No se pudo cambiar categorías", variant: "destructive" });
@@ -1022,8 +1029,9 @@ export default function Room() {
       await fetch(`${apiBase}/api/rooms/${roomCode.toUpperCase()}/bluff-vote`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
+        credentials: "include",
         body: JSON.stringify({ voterId: player.id, accusedPlayerId, category, vote }),
-      });
+        });
     } catch { /* silent */ }
   }, [player, roomCode, apiBase]);
 
@@ -1284,8 +1292,9 @@ export default function Room() {
       await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/stop`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
+        credentials: "include",
         body: JSON.stringify({ playerId: player.id, playerName: player.name }),
-      });
+        });
       // 🛡️ Race fix: only kick off the freeze locally if polling hasn't already
       // done it. Otherwise stopAllTimers() here would clear the freeze interval
       // that the polling effect just installed and the countdown would stall at "3".
@@ -1893,8 +1902,9 @@ export default function Room() {
                         try {
                           const r = await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/use-card`, {
                             method: "POST", headers: { "Content-Type": "application/json", ...authHeaders() },
+                            credentials: "include",
                             body: JSON.stringify({ playerId: player.id }),
-                          });
+        });
                           const data = await r.json();
                           if (data.ok) {
                             if (cardId === "lightning") setTimeLeft(t => Math.min(t + 15, ROUND_TIME + 15));
@@ -2013,7 +2023,8 @@ export default function Room() {
                     try {
                       const r = await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/spy`, {
                         method: "POST",
-                        headers: { "Content-Type": "application/json" },
+                        headers: { "Content-Type": "application/json", ...authHeaders() },
+                        credentials: "include",
                         body: JSON.stringify({ playerId: player.id }),
                       });
                       if (!r.ok) {
@@ -2402,7 +2413,8 @@ export default function Room() {
                                           try {
                                             await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/funvote`, {
                                               method: "POST",
-                                              headers: { "Content-Type": "application/json" },
+                                              headers: { "Content-Type": "application/json", ...authHeaders() },
+                                              credentials: "include",
                                               body: JSON.stringify({
                                                 playerId: player.id,
                                                 votedPlayerId: p.playerId,
@@ -2863,8 +2875,9 @@ function StreamerModeCard({ room, playerId }: { room: any; playerId: string }) {
       await fetch(`${apiBase}/api/rooms/${encodeURIComponent(code)}/visibility`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", ...authHeaders() },
+        credentials: "include",
         body: JSON.stringify({ hostId: playerId, roomId: room?.id, isPublic: !isPublic }),
-      });
+        });
     } finally {
       setBusy(false);
     }
