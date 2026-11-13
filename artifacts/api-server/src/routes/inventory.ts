@@ -44,15 +44,24 @@ interface OwnedInventory {
 const router: IRouter = Router();
 
 async function requireInventoryIdentity(req: AuthedRequest, res: any, next: any): Promise<void> {
+  const continueWithIdentity = () => {
+    const expectedPlayerId = String(req.headers["x-stop-player-id"] ?? "").trim();
+    if (expectedPlayerId && req.playerId !== expectedPlayerId) {
+      res.status(409).json({ error: "Player identity changed. Refresh the shop and try again." });
+      return;
+    }
+    next();
+  };
+
   if (req.headers["x-halloween-preview"] === "1") {
     const claimedId = String(req.headers["x-halloween-player-id"] ?? "").trim();
     if (claimedId && await verifyClaimedIdentity(req, claimedId)) {
       req.playerId = claimedId;
-      next();
+      continueWithIdentity();
       return;
     }
   }
-  requirePlayerIdentity(req, res, next);
+  requirePlayerIdentity(req, res, continueWithIdentity);
 }
 
 router.use((_req, res, next) => {
@@ -100,6 +109,7 @@ router.get("/", requireInventoryIdentity, async (req: AuthedRequest, res) => {
     const inv = parseInventory(row.inventory_json);
     const titleStats = computeTitleStats(row);
     res.json({
+      playerId,
       coins: row.coins,
       equipped: { avatar: row.equipped_avatar, frame: row.equipped_frame, title: row.equipped_title, background: inv.equippedBackground },
       owned: {
