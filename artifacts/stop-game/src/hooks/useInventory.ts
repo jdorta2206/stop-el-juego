@@ -62,6 +62,7 @@ export interface InventorySnapshot {
 
 export function useInventory(playerId?: string | null) {
   const [data, setData] = useState<InventorySnapshot | null>(null);
+  const [dataPlayerId, setDataPlayerId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [slow, setSlow] = useState(false);
@@ -118,6 +119,7 @@ export function useInventory(playerId?: string | null) {
       const snapshot = await res.json();
       if (!controller.signal.aborted) {
         setData(snapshot);
+        setDataPlayerId(playerId);
         setError(null);
       }
     } catch {
@@ -176,5 +178,8 @@ export function useInventory(playerId?: string | null) {
     return res.json();
   }, [playerId, refresh]);
 
-  return { inventory: data, loading, error, slow, refresh, equip, buy };
+  // Never expose a previous account's inventory while the new account loads.
+  const inventory = dataPlayerId === playerId ? data : null;
+
+  return { inventory, loading, error, slow, refresh, equip, buy };
 }
