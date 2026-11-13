@@ -250,8 +250,12 @@ export function useAchievements(playerId?: string) {
   useEffect(() => {
     const syncNativeAchievements = (status: ReturnType<typeof getLastPlayGamesStatus>) => {
       if (!status?.ok || status.status !== "authenticated") return;
+      // Read by the current player key instead of the render snapshot: when
+      // accounts switch, React may render once before the player-scoped state
+      // effect replaces the previous account's in-memory Set.
+      const unlockedForPlayer = loadUnlocked(playerId);
       for (const achievement of ACHIEVEMENTS) {
-        if (unlocked.has(achievement.id)) {
+        if (unlockedForPlayer.has(achievement.id)) {
           unlockPlayGamesAchievementForMilestone(achievement.id);
         }
       }
