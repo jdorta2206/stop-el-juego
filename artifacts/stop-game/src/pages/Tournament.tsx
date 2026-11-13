@@ -45,7 +45,11 @@ async function apiFetch(path: string, opts?: RequestInit) {
     headers: { "Content-Type": "application/json", ...authHeaders() },
     ...opts,
   });
-  return r.json();
+  const data = await r.json();
+  if (!r.ok) {
+    throw new Error(data?.error || `Tournament request failed (HTTP ${r.status})`);
+  }
+  return data;
 }
 
 export default function Tournament() {
