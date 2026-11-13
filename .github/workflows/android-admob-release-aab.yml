@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - build/android-admob-1.3.9.6-code82
+      - build/android-admob-1.3.9.6-code82-current
 
 permissions:
   contents: read
@@ -75,6 +75,7 @@ jobs:
           grep -q 'ADMOB_ADS_ENABLED = true' ../artifacts/stop-game/src/lib/admobPolicy.ts
           grep -q 'com.google.android.gms.permission.AD_ID' app/src/main/AndroidManifest.xml
           grep -q 'android.permission.POST_NOTIFICATIONS' app/src/main/AndroidManifest.xml
+          grep -q 'com.google.androidbrowserhelper.trusted.NotificationPermissionRequestActivity' app/src/main/AndroidManifest.xml
           echo 'Android AdMob release source checks: OK'
       - name: Build signed Google Play AAB
         working-directory: android-generated
@@ -91,6 +92,7 @@ jobs:
           AAB='app/build/outputs/bundle/release/app-release.aab'
           test -s "$AAB"
           jarsigner -verify "$AAB"
+          unzip -p "$AAB" base/manifest/AndroidManifest.xml | strings | grep -q 'com.google.androidbrowserhelper.trusted.NotificationPermissionRequestActivity'
           grep -q 'versionCode 82' app/build.gradle
           grep -q 'versionName "1.3.9.6"' app/build.gradle
           sha256sum "$AAB"
