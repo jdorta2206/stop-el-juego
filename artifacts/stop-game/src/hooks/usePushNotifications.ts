@@ -159,8 +159,51 @@ export function usePushNotifications(playerId: string | undefined, language: str
     return () => { cancelled = true; controller.abort(); };
   }, [playerId, language]);
 
+  const registerSubscription = useCallback(async (): Promise<boolean> => {
+    const vapidPublicKey = await getServerVapidPublicKey();
+    if (!vapidPublicKey) throw new Error("Server VAPID public key is unavailable");
+    const reg = await withTimeout(navigator.serviceWorker.ready, 12000, "Service worker is not ready");
+
+    let existing = await withTimeout(reg.pushManager.getSubscription(), 10000, "Could not read push subscription");
+    if (currentPlayerIdRef.current !== playerId) return false;
+    // A persisted subscription created with a previous VAPID key cannot receive
+    // pushes signed by the server current key. Recreate it before registering.
+    if (existing && !subscriptionMatchesVapidKey(existing, vapidPublicKey)) {
+      await existing.unsubscribe();
+      existing = null;
+    }
+    const sub = existing || await withTimeout(reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlB64ToUint8Array(vapidPublicKey),
+    }), 12000, "Push subscription timed out");
+
+    const tzOffsetMinutes = -new Date().getTimezoneOffset();
+    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
+    const res = await withTimeout(fetch(`${API_BASE}/api/notifications/subscribe`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      credentials: "include",
+      body: JSON.stringify({
+        playerId: playerId || "anonymous",
+        subscription: sub.toJSON(),
+        language,
+        hourLocal: 20,
+        tzOffsetMinutes,
+        timeZone,
+        origin: typeof window !== "undefined" ? window.location.origin : undefined,
+      }),
+    }), 12000, "Subscription registration timed out");
+
+    if (!res.ok) throw new Error(`subscription HTTP ${res.status}`);
+    if (currentPlayerIdRef.current !== playerId) return false;
+    try { localStorage.removeItem(DISABLED_KEY); } catch {}
+    setIsSubscribed(true);
+    return true;
+  }, [playerId, language]);
+
   const subscribe = useCallback(async () => {
     if (!("Notification" in window) || !("serviceWorker" in navigator)) return false;
+    let permissionRequest: Promise<NotificationPermission> | null = null;
     setLoading(true);
     try {
       // Request permission immediately while the click's transient user
@@ -169,7 +212,7 @@ export function usePushNotifications(playerId: string | undefined, language: str
       // or reject the permission prompt.
       // Some Android WebView/TWA permission prompts may leave this Promise pending.
       // Bound the wait so the activation control never remains disabled forever.
-      const permissionRequest = Notification.requestPermission();
+      permissionRequest = Notification.requestPermission();
       const perm = await withTimeout(
         permissionRequest,
         15000,
@@ -180,52 +223,34 @@ export function usePushNotifications(playerId: string | undefined, language: str
 
       // Only perform network/service-worker work after the browser permission
       // decision has been made.
-      const vapidPublicKey = await getServerVapidPublicKey();
-      if (!vapidPublicKey) throw new Error("Server VAPID public key is unavailable");
-      const reg = await withTimeout(navigator.serviceWorker.ready, 12000, "Service worker is not ready");
-
-      let existing = await withTimeout(reg.pushManager.getSubscription(), 10000, "Could not read push subscription");
-      if (currentPlayerIdRef.current !== playerId) return false;
-      // A persisted subscription created with a previous VAPID key cannot receive
-      // pushes signed by the server current key. Recreate it before registering.
-      if (existing && !subscriptionMatchesVapidKey(existing, vapidPublicKey)) {
-        await existing.unsubscribe();
-        existing = null;
-      }
-      const sub = existing || await withTimeout(reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlB64ToUint8Array(vapidPublicKey),
-      }), 12000, "Push subscription timed out");
-
-      const tzOffsetMinutes = -new Date().getTimezoneOffset();
-      const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
-      const res = await withTimeout(fetch(`${API_BASE}/api/notifications/subscribe`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...authHeaders() },
-        credentials: "include",
-        body: JSON.stringify({
-          playerId: playerId || "anonymous",
-          subscription: sub.toJSON(),
-          language,
-          hourLocal: 20,
-          tzOffsetMinutes,
-          timeZone,
-          origin: typeof window !== "undefined" ? window.location.origin : undefined,
-        }),
-      }), 12000, "Subscription registration timed out");
-
-      if (!res.ok) throw new Error(`subscription HTTP ${res.status}`);
-      if (currentPlayerIdRef.current !== playerId) return false;
-      try { localStorage.removeItem(DISABLED_KEY); } catch {}
-      setIsSubscribed(true);
-      return true;
+      return await registerSubscription();
     } catch (e) {
       console.error("Push subscribe error:", e);
+      // A timed-out permission prompt is not cancelled by Promise.race. If the
+      // user accepts it later, finish registration instead of leaving Android
+      // permission granted while STOP remains unsubscribed.
+      if (permissionRequest && e instanceof Error && e.message === "Notification permission request timed out") {
+        void permissionRequest.then(async (latePermission) => {
+          if (currentPlayerIdRef.current !== playerId) return;
+          setPermission(latePermission as NotifPermission);
+          if (latePermission !== "granted") return;
+          setLoading(true);
+          try {
+            await registerSubscription();
+          } catch (lateError) {
+            console.error("Late push subscription registration failed:", lateError);
+          } finally {
+            setLoading(false);
+          }
+        }).catch((lateError) => {
+          console.error("Late notification permission result failed:", lateError);
+        });
+      }
       return false;
     } finally {
       setLoading(false);
     }
-  }, [playerId, language]);
+  }, [playerId, language, registerSubscription]);
 
   const getPreferences = useCallback(async (): Promise<{
     enabled: boolean; hourLocal: number; mutedUntil: number; tzOffsetMinutes: number;
