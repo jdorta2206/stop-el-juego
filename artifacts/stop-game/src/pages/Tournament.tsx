@@ -45,7 +45,11 @@ async function apiFetch(path: string, opts?: RequestInit) {
     headers: { "Content-Type": "application/json", ...authHeaders() },
     ...opts,
   });
-  return r.json();
+  const data = await r.json();
+  if (!r.ok) {
+    throw new Error(data?.error || data?.message || `Tournament request failed (HTTP ${r.status})`);
+  }
+  return data;
 }
 
 export default function Tournament() {
@@ -148,7 +152,7 @@ export default function Tournament() {
       }
       setTournament(data);
       setView("lobby");
-    } catch { setError("Error al crear torneo"); }
+    } catch (error) { setError(error instanceof Error ? error.message : "Error al crear torneo"); }
     finally { tournamentActionInFlightRef.current = false; setLoading(false); }
   };
 
@@ -164,7 +168,7 @@ export default function Tournament() {
       if (data.error) { setError(data.error); return; }
       setTournament(data);
       setView(data.status === "active" ? "bracket" : "lobby");
-    } catch { setError("Código de torneo inválido"); }
+    } catch (error) { setError(error instanceof Error ? error.message : "Código de torneo inválido"); }
     finally { tournamentActionInFlightRef.current = false; setLoading(false); }
   }, [player]);
 
@@ -226,13 +230,14 @@ export default function Tournament() {
       if (data.error) { setError(data.error); return; }
       setTournament(data);
       setView("bracket");
-    } catch { setError("Error al iniciar torneo"); }
+    } catch (error) { setError(error instanceof Error ? error.message : "Error al iniciar torneo"); }
     finally { tournamentActionInFlightRef.current = false; setLoading(false); }
   };
 
   const startMatch = async (match: Match) => {
     if (!tournament || !player || tournamentActionInFlightRef.current) return;
     tournamentActionInFlightRef.current = true;
+    setError("");
     try {
       const response = await apiFetch(`/${tournament.code}/start-match`, {
         method: "POST",
@@ -241,7 +246,9 @@ export default function Tournament() {
       const roomCode: string | undefined = response?.roomCode;
       if (!roomCode) return;
       navigate(`/room/${roomCode}?torneo=${tournament.code}&match=${match.id}`);
-    } catch {} finally {
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "No se pudo iniciar la partida");
+    } finally {
       tournamentActionInFlightRef.current = false;
     }
   };
