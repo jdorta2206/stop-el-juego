@@ -156,7 +156,14 @@ export async function consumeAuthHandoff(): Promise<void> {
             picture: user.picture ?? null,
             fbAccessToken: null,
           };
-          if (profile.name) localStorage.setItem(PLAYER_STORAGE_KEY, JSON.stringify(profile));
+          if (profile.name) {
+            localStorage.setItem(PLAYER_STORAGE_KEY, JSON.stringify(profile));
+            // The handoff can finish after main.tsx's startup timeout has
+            // already mounted React. Notify usePlayer so it reloads the
+            // newly persisted identity and the push hook re-registers the
+            // browser subscription against the correct account.
+            window.dispatchEvent(new CustomEvent("stop:player-changed"));
+          }
         }
       } catch {}
     }
