@@ -4,6 +4,7 @@ import type { OnlinePlayer } from "@/lib/usePresence";
 
 const API_BASE = getApiUrl();
 const EMPTY_ONLINE: OnlinePlayer[] = [];
+const EMPTY_FOLLOWED_IDS = new Set<string>();
 
 export interface FollowedFriendBase {
   id: number;
@@ -41,6 +42,7 @@ export function useFollows(
 ) {
   const [rawFriends, setRawFriends] = useState<FollowedFriendBase[]>([]);
   const [followedIds, setFollowedIds] = useState<Set<string>>(new Set());
+  const [friendsOwnerId, setFriendsOwnerId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const requestRef = useRef<AbortController | null>(null);
 
@@ -49,6 +51,7 @@ export function useFollows(
     if (!meId) {
       setRawFriends([]);
       setFollowedIds(new Set());
+      setFriendsOwnerId(null);
       return;
     }
     const controller = new AbortController();
@@ -62,6 +65,7 @@ export function useFollows(
       const list: FollowedFriendBase[] = data.friends;
       setRawFriends(list);
       setFollowedIds(new Set(list.map((f) => f.followedId)));
+      setFriendsOwnerId(meId);
     } catch {
       if (controller.signal.aborted) return;
     } finally {
@@ -72,18 +76,23 @@ export function useFollows(
 
   useEffect(() => { refresh(); }, [refresh]);
 
+  // Never expose a previous account's friends while a new account is loading.
+  const ownsCurrentFriends = !!meId && friendsOwnerId === meId;
+  const currentRawFriends = ownsCurrentFriends ? rawFriends : [];
+  const currentFollowedIds = ownsCurrentFriends ? followedIds : EMPTY_FOLLOWED_IDS;
+
   // Enrich friends with live presence data so legacy callers keep working.
   const friends: FollowedFriend[] = useMemo(() => {
     const onlineMap = new Map(onlinePlayers.map((p) => [p.playerId, p]));
-    return rawFriends.map((f) => {
+    return currentRawFriends.map((f) => {
       const od = onlineMap.get(f.followedId);
       return { ...f, isOnline: !!od, onlineData: od };
     });
-  }, [rawFriends, onlinePlayers]);
+  }, [currentRawFriends, onlinePlayers]);
 
   const isFollowing = useCallback(
-    (targetId: string) => followedIds.has(targetId),
-    [followedIds],
+    (targetId: string) => currentFollowedIds.has(targetId),
+    [currentFollowedIds],
   );
 
   const follow = useCallback(async (target: {
@@ -136,7 +145,7 @@ export function useFollows(
     } catch { return false; }
   }, [meId, refresh]);
 
-  return { friends, followedIds, loading, follow, unfollow, refresh, isFollowing };
+  return { friends, followedIds: currentFollowedIds, loading, follow, unfollow, refresh, isFollowing };
 }
 
 // Cross-reference my friends with /presence/online to know who's playing right now.
