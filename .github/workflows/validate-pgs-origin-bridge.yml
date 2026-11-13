@@ -58,7 +58,7 @@ jobs:
           assert 'isFinishing() || isDestroyed()' in native
           assert 'protected void launchTwa()' in native
           assert 'retainLauncherForTwa = true;' in native
-          assert 'if (retainLauncherForTwa)' in native
+          assert 'if (!retainLauncherForTwa)' in native
           assert 'super.finish();' in native
           assert 'Keeping TWA launcher alive to preserve CustomTabsSession' in native
           # Keep the session through native Play Games UI returns; only close after the page fails its liveness probe.
