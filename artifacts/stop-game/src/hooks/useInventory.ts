@@ -49,6 +49,7 @@ export interface WeeklyDeal {
 }
 
 export interface InventorySnapshot {
+  playerId: string;
   coins: number;
   equipped: { avatar: string | null; frame: string | null; title: string | null; background: string | null };
   owned: { avatars: CosmeticMeta[]; frames: CosmeticMeta[]; backgrounds: CosmeticMeta[] };
@@ -62,20 +63,38 @@ export interface InventorySnapshot {
 
 export function useInventory(playerId?: string | null) {
   const [data, setData] = useState<InventorySnapshot | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [slow, setSlow] = useState(false);
+  const [dataPlayerId, setDataPlayerId] = useState<string | null>(null);
+  const [statusPlayerId, setStatusPlayerId] = useState<string | null>(null);
+  const [loadingState, setLoadingState] = useState(false);
+  const [errorState, setErrorState] = useState<string | null>(null);
+  const [slowState, setSlowState] = useState(false);
   const refreshAbortRef = useRef<AbortController | null>(null);
+  const activePlayerIdRef = useRef(playerId);
+  activePlayerIdRef.current = playerId;
 
   const refresh = useCallback(async () => {
-    if (!playerId) { setData(null); setError(null); setLoading(false); return; }
+    if (activePlayerIdRef.current !== playerId) return;
+    if (!playerId) {
+      refreshAbortRef.current?.abort();
+      refreshAbortRef.current = null;
+      setData(null);
+      setDataPlayerId(null);
+      setStatusPlayerId(null);
+      setErrorState(null);
+      setLoadingState(false);
+      setSlowState(false);
+      return;
+    }
     refreshAbortRef.current?.abort();
     const controller = new AbortController();
     refreshAbortRef.current = controller;
-    setLoading(true);
-    setError(null);
-    setSlow(false);
-    const slowTimer = window.setTimeout(() => setSlow(true), 3_000);
+    setStatusPlayerId(playerId);
+    setLoadingState(true);
+    setErrorState(null);
+    setSlowState(false);
+    const slowTimer = window.setTimeout(() => {
+      if (activePlayerIdRef.current === playerId && refreshAbortRef.current === controller) setSlowState(true);
+    }, 3_000);
     let timedOut = false;
     const timeout = window.setTimeout(() => {
       timedOut = true;
@@ -86,15 +105,16 @@ export function useInventory(playerId?: string | null) {
       for (let attempt = 0; attempt < 3; attempt += 1) {
         res = await fetch(API + "/api/inventory", {
           credentials: "include",
-          headers: { ...authHeaders(), ...(import.meta.env.VITE_HALLOWEEN_PREVIEW === "true" ? { "x-halloween-player-id": playerId } : {}), ...PREVIEW_HEADERS },
+          headers: { ...authHeaders(), "X-Stop-Player-Id": playerId, ...(import.meta.env.VITE_HALLOWEEN_PREVIEW === "true" ? { "x-halloween-player-id": playerId } : {}), ...PREVIEW_HEADERS },
           signal: controller.signal,
         });
         if (res.status !== 503 || attempt === 2) break;
         await new Promise((resolve) => window.setTimeout(resolve, 350 * (attempt + 1)));
         if (controller.signal.aborted) {
           if (timedOut) {
-            setError("La tienda tardó más de 8 segundos en responder. Pulsa Reintentar.");
+            setErrorState("La tienda tardó más de 8 segundos en responder. Pulsa Reintentar.");
             setData(null);
+            setDataPlayerId(null);
           }
           return;
         }
@@ -110,31 +130,40 @@ export function useInventory(playerId?: string | null) {
               : res.status === 503
                 ? "La tienda sigue ocupada. Pulsa Reintentar dentro de unos segundos."
                 : body.error || "No se pudo cargar la tienda (HTTP " + res.status + ").";
-          setError(message);
+          setErrorState(message);
           setData(null);
+          setDataPlayerId(null);
         }
         return;
       }
-      const snapshot = await res.json();
-      if (!controller.signal.aborted) {
+      const snapshot = await res.json() as InventorySnapshot;
+      if (snapshot?.playerId !== playerId) {
+        throw new Error("Inventory response identity mismatch");
+      }
+      if (!controller.signal.aborted && activePlayerIdRef.current === playerId) {
         setData(snapshot);
-        setError(null);
+        setDataPlayerId(snapshot.playerId);
+        setErrorState(null);
       }
     } catch {
       if (timedOut) {
-        setError("La tienda tardó más de 8 segundos en responder. Pulsa Reintentar.");
+        setErrorState("La tienda tardó más de 8 segundos en responder. Pulsa Reintentar.");
         setData(null);
+        setDataPlayerId(null);
       } else if (!controller.signal.aborted) {
-        setError("No se pudo conectar con la tienda. Comprueba tu conexión e inténtalo de nuevo.");
+        setErrorState(error instanceof Error && error.message === "Inventory response identity mismatch"
+          ? "La cuenta activa ha cambiado. Actualiza la tienda para cargar el inventario correcto."
+          : "No se pudo conectar con la tienda. Comprueba tu conexión e inténtalo de nuevo.");
         setData(null);
+        setDataPlayerId(null);
       }
     } finally {
       window.clearTimeout(timeout);
       window.clearTimeout(slowTimer);
       if (refreshAbortRef.current === controller) {
-        setSlow(false);
+        setSlowState(false);
         refreshAbortRef.current = null;
-        setLoading(false);
+        setLoadingState(false);
       }
     }
   }, [playerId]);
@@ -145,11 +174,11 @@ export function useInventory(playerId?: string | null) {
   }, [refresh]);
 
   const equip = useCallback(async (kind: EquipKind, value: string | null) => {
-    if (!playerId) return null;
+    if (!playerId || activePlayerIdRef.current !== playerId) return null;
     const res = await fetch(`${API}/api/inventory/equip`, {
       method: "POST",
       credentials: "include",
-      headers: { "Content-Type": "application/json", ...authHeaders() },
+      headers: { "Content-Type": "application/json", ...authHeaders(), "X-Stop-Player-Id": playerId },
       body: JSON.stringify({ kind, value }),
     });
     if (!res.ok) {
@@ -161,11 +190,11 @@ export function useInventory(playerId?: string | null) {
   }, [playerId, refresh]);
 
   const buy = useCallback(async (itemId: string) => {
-    if (!playerId) return null;
+    if (!playerId || activePlayerIdRef.current !== playerId) return null;
     const res = await fetch(`${API}/api/inventory/buy`, {
       method: "POST",
       credentials: "include",
-      headers: { "Content-Type": "application/json", ...authHeaders() },
+      headers: { "Content-Type": "application/json", ...authHeaders(), "X-Stop-Player-Id": playerId },
       body: JSON.stringify({ itemId }),
     });
     if (!res.ok) {
@@ -176,5 +205,10 @@ export function useInventory(playerId?: string | null) {
     return res.json();
   }, [playerId, refresh]);
 
-  return { inventory: data, loading, error, slow, refresh, equip, buy };
+  const inventory = dataPlayerId === playerId ? data : null;
+  const loading = !!playerId && (statusPlayerId !== playerId || loadingState);
+  const error = statusPlayerId === playerId ? errorState : null;
+  const slow = statusPlayerId === playerId && slowState;
+
+  return { inventory, loading, error, slow, refresh, equip, buy };
 }
