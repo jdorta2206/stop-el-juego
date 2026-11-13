@@ -9,6 +9,7 @@ import { useDisplayStreak } from "@/hooks/useDisplayStreak";
 import { useReviewPrompt } from "@/hooks/useReviewPrompt";
 import { ReviewPromptCard } from "@/components/ReviewPromptCard";
 import { getApiUrl, authHeaders } from "@/lib/utils";
+import { trackClientError } from "@/lib/analyticsClient";
 
 interface DailyChallenge {
   letter: string;
@@ -90,19 +91,37 @@ export default function DailyChallenge() {
 
   useEffect(() => {
     const controller = new AbortController();
-    fetch(`${API_BASE}/api/daily?language=${lang}`, { headers: { "X-Stop-Timezone": getPlayerTimeZone() }, signal: controller.signal })
+    const challengeController = new AbortController();
+    let challengeTimedOut = false;
+    setChallenge(null);
+    setChallengeError(false);
+    const challengeTimeout = setTimeout(() => {
+      challengeTimedOut = true;
+      challengeController.abort();
+    }, 12000);
+    fetch(`${API_BASE}/api/daily?language=${lang}`, { headers: { "X-Stop-Timezone": getPlayerTimeZone() }, signal: challengeController.signal })
       .then(async (r) => {
         if (!r.ok) throw new Error(`Daily challenge request failed: ${r.status}`);
         const data = await r.json();
-        if (!data || typeof data.letter !== "string" || !Array.isArray(data.categories)) {
+        if (!data || typeof data.letter !== "string" || !data.letter.trim() ||
+            typeof data.date !== "string" || !data.date.trim() ||
+            !Array.isArray(data.categories) || data.categories.length === 0 ||
+            !data.categories.every((category: unknown) => typeof category === "string" && category.trim().length > 0)) {
           throw new Error("Invalid daily challenge response");
         }
-        setChallenge(data);
+        if (challengeController.signal.aborted) return;
+        clearTimeout(challengeTimeout);
+        setChallenge(data as DailyChallenge);
         setChallengeError(false);
       })
-      .catch(() => {
-        if (!controller.signal.aborted) setChallengeError(true);
-      });
+      .catch((error: unknown) => {
+        if (challengeTimedOut || !challengeController.signal.aborted) {
+          trackClientError(error instanceof Error ? error : new Error("Daily challenge load failed"));
+          setChallenge(null);
+          setChallengeError(true);
+        }
+      })
+      .finally(() => clearTimeout(challengeTimeout));
 
     const rankingParams = new URLSearchParams({ language: lang });
     if (player?.id) rankingParams.set("playerId", player.id);
@@ -172,6 +191,8 @@ export default function DailyChallenge() {
     }, 60000);
     return () => {
       controller.abort();
+      challengeController.abort();
+      clearTimeout(challengeTimeout);
       clearInterval(timer);
       if (reviewTimerRef.current) clearTimeout(reviewTimerRef.current);
     };
