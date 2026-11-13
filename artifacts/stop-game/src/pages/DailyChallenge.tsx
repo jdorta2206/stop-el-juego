@@ -78,6 +78,8 @@ export default function DailyChallenge() {
   const { streak } = useDisplayStreak();
   const [, setLocation] = useLocation();
   const [challenge, setChallenge] = useState<DailyChallenge | null>(null);
+  const [challengeError, setChallengeError] = useState(false);
+  const [challengeRetry, setChallengeRetry] = useState(0);
   const [rankings, setRankings] = useState<DailyRanking[]>([]);
   const [rankingsError, setRankingsError] = useState(false);
   const [playedToday, setPlayedToday] = useState(false);
@@ -89,9 +91,18 @@ export default function DailyChallenge() {
   useEffect(() => {
     const controller = new AbortController();
     fetch(`${API_BASE}/api/daily?language=${lang}`, { headers: { "X-Stop-Timezone": getPlayerTimeZone() }, signal: controller.signal })
-      .then(r => r.json())
-      .then(setChallenge)
-      .catch(() => {});
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`Daily challenge request failed: ${r.status}`);
+        const data = await r.json();
+        if (!data || typeof data.letter !== "string" || !Array.isArray(data.categories)) {
+          throw new Error("Invalid daily challenge response");
+        }
+        setChallenge(data);
+        setChallengeError(false);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setChallengeError(true);
+      });
 
     const rankingParams = new URLSearchParams({ language: lang });
     if (player?.id) rankingParams.set("playerId", player.id);
@@ -164,7 +175,7 @@ export default function DailyChallenge() {
       clearInterval(timer);
       if (reviewTimerRef.current) clearTimeout(reviewTimerRef.current);
     };
-  }, [lang, player?.id, player?.loginMethod]);
+  }, [lang, player?.id, player?.loginMethod, challengeRetry]);
 
   function handlePlay() {
     if (!challenge) return;
@@ -214,6 +225,18 @@ export default function DailyChallenge() {
         </div>
 
         {/* Challenge card */}
+        {!challenge && challengeError && (
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-5 text-center space-y-3">
+            <p className="text-white/70 text-sm">{t.daily.challengeLoadError}</p>
+            <button
+              type="button"
+              onClick={() => setChallengeRetry((value) => value + 1)}
+              className="rounded-xl bg-white/10 px-5 py-2 font-bold text-white"
+            >
+              {t.daily.retry}
+            </button>
+          </div>
+        )}
         {challenge && (
           <motion.div
             initial={{ opacity: 0, y: 16 }}
