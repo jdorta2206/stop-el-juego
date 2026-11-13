@@ -1118,9 +1118,9 @@ export default function SoloGame() {
           submitToLeaderboard(finalPlayerScore, finalAi);
           if (isDailyMode) submitDailyResult(finalPlayerScore);
         }
-        // Count the completed game when the final round actually finishes,
-        // not when the player later presses "Jugar de nuevo". This preserves
-        // the every-3-games cadence even if the player leaves the RESULTS screen.
+        // Count completion as soon as the final results are produced. Do not
+        // depend on the player pressing "Jugar de nuevo" or leaving RESULTS.
+        void trackAnalyticsEvent("game_complete", { metadata: { mode: gameMode, rounds: maxRounds } });
         if (!isDailyMode) recordInterstitialGameCompleted();
         // The private /test panel tracks guest games separately from registered
         // game_history. Only anonymous players must increment that aggregate.
@@ -1339,7 +1339,6 @@ export default function SoloGame() {
 
   const nextRound = async () => {
     if (round >= maxRounds) {
-      void trackAnalyticsEvent("game_complete", { metadata: { mode: gameMode, rounds: maxRounds } });
       recordPlay();
       // Calculate XP with multipliers
       const validCount = results
