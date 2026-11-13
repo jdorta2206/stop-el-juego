@@ -3335,6 +3335,27 @@ router.post("/:roomCode/stop", async (req, res) => {
     return stopped;
   });
 
+  // A simultaneous STOP can win the roomVersion compare-and-swap first.
+  // In that case this request has no updated row; never pass null to
+  // broadcastAndFormat()/formatRoom(), which dereferences stopperJson.
+  if (!updated) {
+    const [latestRoom] = await db.select().from(roomsTable)
+      .where(eq(roomsTable.roomCode, roomCode.toUpperCase()))
+      .limit(1);
+    if (!latestRoom) {
+      res.status(404).json({ error: "Room not found" });
+      return;
+    }
+    if (latestRoom.status !== "playing") {
+      // The competing request already stopped or advanced this exact room.
+      // Return its authoritative state without replaying STOP side effects.
+      res.json(formatRoom(latestRoom));
+      return;
+    }
+    res.status(409).json({ error: "Room changed while stopping; please retry" });
+    return;
+  }
+
   try {
     // Halloween is deliberately persisted only after the authoritative STOP
     // transaction has committed. A Halloween DB failure must never roll back STOP.
