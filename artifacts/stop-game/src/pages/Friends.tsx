@@ -597,22 +597,21 @@ export default function Friends() {
             <motion.div key="friends" initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }}
               className="space-y-2"
             >
+              {error && !isGuest && (
+                <div className="rounded-xl p-3 flex items-center justify-between gap-3"
+                  style={{ background: "rgba(248,113,113,0.08)", border: "1px solid rgba(248,113,113,0.2)" }}
+                >
+                  <p className="text-white/60 text-xs">No se pudo actualizar la lista. Se mantienen los amigos cargados.</p>
+                  <button onClick={() => void refresh()} disabled={loading}
+                    className="text-xs font-bold disabled:opacity-50" style={{ color: "#f9a825" }}
+                  >
+                    {loading ? "…" : "Reintentar"}
+                  </button>
+                </div>
+              )}
               {isGuest ? (
                 <div className="text-center py-8 text-white/30 text-sm">
                   Inicia sesión para ver tus amigos guardados
-                </div>
-              ) : error ? (
-                <div className="rounded-2xl py-8 text-center space-y-3"
-                  style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(248,113,113,0.2)" }}
-                >
-                  <p className="text-white/70 text-sm font-bold">No se pudieron cargar tus amigos</p>
-                  <p className="text-white/40 text-xs">Tu lista guardada no se ha borrado. Comprueba la conexión e inténtalo de nuevo.</p>
-                  <button onClick={() => void refresh()} disabled={loading}
-                    className="px-4 py-2 rounded-xl text-xs font-bold disabled:opacity-50"
-                    style={{ background: "rgba(249,168,37,0.15)", border: "1px solid rgba(249,168,37,0.3)", color: "#f9a825" }}
-                  >
-                    {loading ? "Cargando…" : "Reintentar"}
-                  </button>
                 </div>
               ) : filteredFriends.length === 0 ? (
                 <div className="rounded-2xl py-10 text-center space-y-2"
