@@ -75,6 +75,7 @@ jobs:
           grep -q 'ADMOB_ADS_ENABLED = true' ../artifacts/stop-game/src/lib/admobPolicy.ts
           grep -q 'com.google.android.gms.permission.AD_ID' app/src/main/AndroidManifest.xml
           grep -q 'android.permission.POST_NOTIFICATIONS' app/src/main/AndroidManifest.xml
+          grep -q 'com.google.androidbrowserhelper.trusted.NotificationPermissionRequestActivity' app/src/main/AndroidManifest.xml
           grep -q 'ca-app-pub-4807272408824742~9880632781' app/src/main/AndroidManifest.xml
           grep -q 'ca-app-pub-4807272408824742/3559554716' app/src/main/java/app/replit/stop_el_juego/twa/RewardedAdActivity.java
           grep -q 'ca-app-pub-4807272408824742/7242069847' app/src/main/java/app/replit/stop_el_juego/twa/InterstitialAdStore.java
@@ -101,6 +102,16 @@ jobs:
           jarsigner -verify "$AAB"
           grep -q 'versionCode 82' app/build.gradle
           grep -q 'versionName "1.3.9.6"' app/build.gradle
+          python3 - <<'PY'
+          import zipfile
+          from pathlib import Path
+          aab = Path('app/build/outputs/bundle/release/app-release.aab')
+          with zipfile.ZipFile(aab) as z:
+              data = z.read('base/manifest/AndroidManifest.xml')
+          if b'com.google.androidbrowserhelper.trusted.NotificationPermissionRequestActivity' not in data:
+              raise SystemExit('ERROR: AAB does not declare NotificationPermissionRequestActivity')
+          print('OK: AAB declares TWA notification permission activity')
+          PY
           sha256sum "$AAB"
           ls -lh "$AAB"
       - name: Upload signed AAB
