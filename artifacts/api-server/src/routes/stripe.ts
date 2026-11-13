@@ -375,7 +375,8 @@ router.post("/claim-pack", async (req, res) => {
         (s) =>
           s.mode === "payment" &&
           s.payment_status === "paid" &&
-          s.metadata?.["sku"] === WORLD_CUP_PACK_SKU
+          s.metadata?.["sku"] === WORLD_CUP_PACK_SKU &&
+          s.metadata?.["playerId"] === playerId
       );
     }
 
