@@ -56,8 +56,10 @@ export function useFollows(
     setLoading(true);
     try {
       const r = await fetch(`${API_BASE}/api/friends/list/${encodeURIComponent(meId)}`, { signal: controller.signal, credentials: "include", headers: authHeaders() });
+      if (!r.ok) throw new Error(`Friends request failed: ${r.status}`);
       const data = await r.json();
-      const list: FollowedFriendBase[] = data.friends ?? [];
+      if (!Array.isArray(data?.friends)) throw new Error("Invalid friends response");
+      const list: FollowedFriendBase[] = data.friends;
       setRawFriends(list);
       setFollowedIds(new Set(list.map((f) => f.followedId)));
     } catch {
