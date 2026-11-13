@@ -794,7 +794,7 @@ async function recoverMultiplayerAuxiliaryEffects(room: any, players: any[]): Pr
   // Recovery may run during a cold start; wait for the eager table creation before querying it.
   await multiplayerAuxClaimsReady;
   const eligible = players.filter((p: any) => p && !p.isBot && p.playerId && p.loginMethod !== "guest");
-  if (eligible.length === 0) return;
+  if (eligible.length === 0) return true;
   const halloweenPreview = parseBluffMeta(room.stopperJson)?.halloweenPreview === true;
   // Match normal settlement: guests compete for the win but remain ineligible for persistent rewards.
   const scoringPlayers = players.filter((p: any) => p && !p.isBot);
