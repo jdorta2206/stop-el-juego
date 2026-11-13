@@ -352,7 +352,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     }
 
     private void requestUseAsOriginValidation() {
-        if (relationshipValidated || originValidationRequestPending || isFinishing()
+        if (relationshipValidated || originValidationRequestPending || isFinishing() || isDestroyed()
                 || originValidationAttempts >= 10) return;
         originValidationAttempts++;
         final int requestGeneration = ++originValidationGeneration;
