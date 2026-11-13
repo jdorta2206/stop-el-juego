@@ -44,6 +44,7 @@ export function useFollows(
   const [followedIds, setFollowedIds] = useState<Set<string>>(new Set());
   const [friendsOwnerId, setFriendsOwnerId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(false);
   const requestRef = useRef<AbortController | null>(null);
 
   const refresh = useCallback(async () => {
@@ -52,11 +53,13 @@ export function useFollows(
       setRawFriends([]);
       setFollowedIds(new Set());
       setFriendsOwnerId(null);
+      setError(false);
       return;
     }
     const controller = new AbortController();
     requestRef.current = controller;
     setLoading(true);
+    setError(false);
     try {
       const r = await fetch(`${API_BASE}/api/friends/list/${encodeURIComponent(meId)}`, { signal: controller.signal, credentials: "include", headers: authHeaders() });
       if (!r.ok) throw new Error(`Friends request failed: ${r.status}`);
@@ -68,6 +71,7 @@ export function useFollows(
       setFriendsOwnerId(meId);
     } catch {
       if (controller.signal.aborted) return;
+      setError(true);
     } finally {
       if (!controller.signal.aborted) setLoading(false);
       if (requestRef.current === controller) requestRef.current = null;
@@ -140,12 +144,13 @@ export function useFollows(
         n.delete(targetId);
         return n;
       });
+      setRawFriends((prev) => prev.filter((friend) => friend.followedId !== targetId));
       refresh();
       return true;
     } catch { return false; }
   }, [meId, refresh]);
 
-  return { friends, followedIds: currentFollowedIds, loading, follow, unfollow, refresh, isFollowing };
+  return { friends, followedIds: currentFollowedIds, loading, error, follow, unfollow, refresh, isFollowing };
 }
 
 // Cross-reference my friends with /presence/online to know who's playing right now.
