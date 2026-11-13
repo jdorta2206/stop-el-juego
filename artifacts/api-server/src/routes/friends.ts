@@ -86,21 +86,9 @@ router.get("/list/:followerId", async (req, res) => {
     return res.json({ friends: result });
   } catch (error) {
     console.error("Error en /friends/list:", error);
-    // En caso de error, devolver al menos la lista básica con los datos guardados en follows
-    const fallback = follows.map(f => ({
-      followerId: f.followerId,
-      followedId: f.followedId,
-      followedName: f.followedName,
-      followedPicture: f.followedPicture,
-      followedAvatarColor: f.followedAvatarColor,
-      followedProvider: f.followedProvider,
-      equippedAvatar: null,
-      equippedFrame: null,
-      equippedBackground: null,
-      equippedTitle: null,
-      isPremium: false,
-    }));
-    return res.json({ friends: fallback });
+    // Do not turn a database failure into a successful empty friends list.
+    // The client can preserve its last known list and offer a retry on HTTP 500.
+    return res.status(500).json({ error: "Could not load friends list" });
   }
 });
 
