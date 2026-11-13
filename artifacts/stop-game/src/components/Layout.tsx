@@ -2,7 +2,7 @@ import { ReactNode, useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
 import { usePlayer } from "@/hooks/use-player";
 import { usePremium } from "@/lib/usePremium";
-import { Crown, LogOut, Bell, BellOff, Home, Trophy, Users, Calendar, ShoppingBag } from "lucide-react";
+import { Crown, LogOut, Bell, BellOff, Loader2, Home, Trophy, Users, Calendar, ShoppingBag } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button, Input, Modal } from "./ui";
 import { AuthModal } from "./AuthModal";
@@ -177,20 +177,31 @@ export function Layout({ children }: { children: ReactNode }) {
             <motion.button
               whileTap={{ scale: 0.9 }}
               onClick={async () => {
-                if (isSubscribed) {
-                  const ok = await unsubscribe();
-                  showNotifToast(ok ? "🔕 Notificaciones desactivadas" : "⚠️ No se pudieron desactivar. Inténtalo de nuevo.");
-                } else {
-                  const ok = await subscribe();
-                  showNotifToast(ok ? "🔔 ¡Notificaciones activadas!" : "⚠️ No se pudieron activar. Revisa el permiso y vuelve a intentarlo.");
+                if (notifLoading) return;
+                showNotifToast(isSubscribed ? "Desactivando notificaciones…" : "Solicitando permiso para notificaciones…", 20000);
+                try {
+                  if (isSubscribed) {
+                    const ok = await unsubscribe();
+                    showNotifToast(ok ? "🔕 Notificaciones desactivadas" : "⚠️ No se pudieron desactivar. Inténtalo de nuevo.");
+                  } else {
+                    const ok = await subscribe();
+                    showNotifToast(ok ? "🔔 ¡Notificaciones activadas!" : "⚠️ No se pudieron activar. Revisa el permiso del navegador y vuelve a intentarlo.");
+                  }
+                } catch (error) {
+                  console.error("[push] notification button failed", error);
+                  showNotifToast("⚠️ No se pudo completar la acción. Vuelve a intentarlo.");
                 }
               }}
               disabled={notifLoading}
-              title={isSubscribed ? "Desactivar notificaciones" : "Activar notificaciones"}
-              className="w-8 h-8 rounded-full flex items-center justify-center transition-colors hover:bg-white/10 relative"
-              style={{ color: isSubscribed ? "#f9a825" : "rgba(255,255,255,0.45)" }}
+              aria-label={notifLoading ? "Procesando notificaciones" : isSubscribed ? "Desactivar notificaciones" : "Activar notificaciones"}
+              aria-busy={notifLoading}
+              title={notifLoading ? "Procesando…" : isSubscribed ? "Desactivar notificaciones" : "Activar notificaciones"}
+              className="w-9 h-9 rounded-full flex items-center justify-center transition-colors hover:bg-white/10 relative disabled:opacity-80"
+              style={{ color: isSubscribed ? "#f9a825" : "rgba(255,255,255,0.75)" }}
             >
-              {isSubscribed ? <Bell className="w-4 h-4" /> : <BellOff className="w-4 h-4" />}
+              {notifLoading
+                ? <Loader2 className="w-4 h-4 animate-spin" />
+                : isSubscribed ? <Bell className="w-4 h-4" /> : <BellOff className="w-4 h-4" />}
               {/* Pulsing dot when not subscribed */}
               {!isSubscribed && (
                 <motion.span
