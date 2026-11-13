@@ -606,7 +606,15 @@ router.post("/scores", scoreLimiter, requirePlayerIdentity, async (req: AuthedRe
         .where(
           sql`${playerScoresTable.totalScore} > ${oldTotal}
           AND ${playerScoresTable.totalScore} <= ${newTotal}
-          AND ${playerScoresTable.playerId} != ${playerId}`
+          AND ${playerScoresTable.playerId} != ${playerId}
+          AND EXISTS (
+            SELECT 1
+            FROM push_subscriptions ps
+            WHERE ps.player_id = ${playerScoresTable.playerId}
+              AND ps.enabled = TRUE
+              AND COALESCE(ps.muted_until, 0) <= ${Date.now()}
+              AND (ps.origin IS NULL OR ps.origin NOT LIKE '%replit.app%')
+          )`
         )
     : [];
 
