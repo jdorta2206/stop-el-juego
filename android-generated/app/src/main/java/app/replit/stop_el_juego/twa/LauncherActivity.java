@@ -2,6 +2,7 @@ package app.replit.stop_el_juego.twa;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.ComponentName;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
 import android.net.Uri;
@@ -12,6 +13,8 @@ import android.util.Log;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.browser.customtabs.CustomTabsCallback;
+import androidx.browser.customtabs.CustomTabsClient;
+import androidx.browser.customtabs.CustomTabsServiceConnection;
 import androidx.browser.customtabs.CustomTabsService;
 import androidx.browser.customtabs.CustomTabsSession;
 
@@ -29,6 +32,7 @@ import com.google.android.gms.games.PlayGames;
 import com.google.android.gms.games.PlayGamesSdk;
 import com.google.androidbrowserhelper.trusted.QualityEnforcer;
 import com.google.androidbrowserhelper.trusted.TwaLauncher;
+import com.google.androidbrowserhelper.trusted.TwaProviderPicker;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -68,9 +72,103 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     // the TWA. Keep this Activity alive until the TWA returns so its
     // CustomTabsSession remains bound for the Play Games postMessage bridge.
     private boolean retainLauncherForTwa;
+    private boolean twaLaunchStarted;
+    private boolean warmupServiceBound;
+    @Nullable private CustomTabsServiceConnection warmupConnection;
     private int playGamesSignInGeneration;
     // Keep the most recent PGS result until the TWA MessagePort is ready.
     @Nullable private JSONObject pendingPlayGamesStatus;
+
+    @Override
+    protected boolean shouldLaunchImmediately() {
+        // Warm up the selected Custom Tabs provider before TwaLauncher creates
+        // its session. PostMessage origin validation requires warmup even on
+        // Chrome versions that can launch a TWA without it.
+        return false;
+    }
+
+    private void warmupCustomTabsThenLaunchTwa() {
+        final TwaProviderPicker.Action provider;
+        try {
+            provider = TwaProviderPicker.pickProvider(getPackageManager());
+        } catch (RuntimeException error) {
+            Log.w("STOP_PLAY_GAMES", "Unable to select Custom Tabs provider for warmup; launching normally", error);
+            launchTwaOnce();
+            return;
+        }
+
+        final String providerPackage = provider.provider;
+        if (providerPackage == null || provider.launchMode == TwaProviderPicker.LaunchMode.BROWSER) {
+            Log.w("STOP_PLAY_GAMES", "No Custom Tabs service available for warmup; launching fallback");
+            launchTwaOnce();
+            return;
+        }
+
+        warmupConnection = new CustomTabsServiceConnection() {
+            @Override
+            public void onCustomTabsServiceConnected(ComponentName name, CustomTabsClient client) {
+                try {
+                    boolean warmed = client.warmup(0L);
+                    Log.i("STOP_PLAY_GAMES", "Custom Tabs warmup before TWA launch=" + warmed
+                            + " provider=" + providerPackage);
+                } catch (RuntimeException error) {
+                    Log.w("STOP_PLAY_GAMES", "Custom Tabs warmup failed; continuing to launch TWA", error);
+                }
+                unbindWarmupService();
+                launchTwaOnce();
+            }
+
+            @Override
+            public void onServiceDisconnected(ComponentName name) {
+                Log.w("STOP_PLAY_GAMES", "Custom Tabs warmup service disconnected; continuing to launch TWA");
+                unbindWarmupService();
+                launchTwaOnce();
+            }
+        };
+
+        try {
+            warmupServiceBound = CustomTabsClient.bindCustomTabsService(
+                    this, providerPackage, warmupConnection);
+        } catch (RuntimeException error) {
+            Log.w("STOP_PLAY_GAMES", "Could not bind Custom Tabs warmup service", error);
+            warmupServiceBound = false;
+        }
+
+        if (!warmupServiceBound) {
+            warmupConnection = null;
+            launchTwaOnce();
+            return;
+        }
+
+        // Never leave a player on the launcher screen if a provider does not
+        // answer its warmup bind promptly.
+        getWindow().getDecorView().postDelayed(() -> {
+            if (!twaLaunchStarted && !isFinishing()) {
+                Log.w("STOP_PLAY_GAMES", "Custom Tabs warmup timed out; launching without waiting");
+                unbindWarmupService();
+                launchTwaOnce();
+            }
+        }, 1500L);
+    }
+
+    private void unbindWarmupService() {
+        if (warmupServiceBound && warmupConnection != null) {
+            try {
+                unbindService(warmupConnection);
+            } catch (IllegalArgumentException error) {
+                Log.d("STOP_PLAY_GAMES", "Custom Tabs warmup service was already unbound");
+            }
+        }
+        warmupServiceBound = false;
+        warmupConnection = null;
+    }
+
+    private void launchTwaOnce() {
+        if (twaLaunchStarted || isFinishing()) return;
+        twaLaunchStarted = true;
+        unbindWarmupService();
+        launchTwa();
+    }
 
     @Override
     protected void launchTwa() {
@@ -99,6 +197,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        if (isFinishing()) return;
         appUpdateManager = AppUpdateManagerFactory.create(this);
         // StopApplication initializes PGS before any activity. Retain an activity-level
         // fallback only if application initialization failed, without blocking gameplay.
@@ -140,6 +239,13 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
         } else {
             setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
         }
+        warmupCustomTabsThenLaunchTwa();
+    }
+
+    @Override
+    protected void onDestroy() {
+        unbindWarmupService();
+        super.onDestroy();
     }
 
     private void checkForPlayUpdate() {
