@@ -182,6 +182,7 @@ export function useSeason(playerId?: string | null) {
 export function useSeasonLeaderboard(seasonId?: number | null, enabled: boolean = true) {
   const [data, setData] = useState<Leaderboard | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     if (!enabled) return;
@@ -193,9 +194,14 @@ export function useSeasonLeaderboard(seasonId?: number | null, enabled: boolean 
         credentials: "include",
         headers: authHeaders(),
       });
-      if (r.ok) setData(await r.json());
+      if (r.ok) {
+        setData(await r.json());
+        setError(null);
+      } else {
+        setError(`No se pudo cargar el ranking de temporada (HTTP ${r.status}).`);
+      }
     } catch {
-      /* ignore */
+      setError("No se pudo conectar con el ranking de temporada.");
     } finally {
       setLoading(false);
     }
@@ -203,7 +209,7 @@ export function useSeasonLeaderboard(seasonId?: number | null, enabled: boolean 
 
   useEffect(() => { refresh(); }, [refresh]);
 
-  return { data, loading, refresh };
+  return { data, loading, error, refresh };
 }
 
 /**
