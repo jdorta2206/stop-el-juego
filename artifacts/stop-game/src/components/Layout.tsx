@@ -81,27 +81,31 @@ export function Layout({ children }: { children: ReactNode }) {
     notifToastTimerRef.current = null;
   }, []);
 
-  // Proactive prompt — show once per install, 3 s after first open.
-  // Rules:
-  //   • If the user dismissed OR activated → never show again (localStorage flag).
-  //   • If permission is already granted/denied → mark as seen and never show.
-  //   • Only evaluates the condition once per session (promptChecked ref).
+  // Proactive prompt — show once per install, but allow repair when browser
+  // permission is granted and the server-side subscription is missing.
   const promptChecked = useRef(false);
   useEffect(() => {
+    const dismissed = localStorage.getItem("stop_notif_prompt_v1");
+
+    // A previous dismissal must not permanently block recovery of a broken
+    // subscription. Permission=granted without a registered subscription is
+    // precisely the state in which the user needs the repair action.
+    if (dismissed && permission === "granted" && !isSubscribed) {
+      localStorage.removeItem("stop_notif_prompt_v1");
+      promptChecked.current = false;
+    } else if (dismissed) {
+      if (permission === "denied" || isSubscribed) promptChecked.current = true;
+      return;
+    }
+
     if (promptChecked.current) return;
 
-    // Always respect the dismissed flag — unconditionally, even in standalone/TWA mode.
-    const dismissed = localStorage.getItem("stop_notif_prompt_v1");
-    if (dismissed) { promptChecked.current = true; return; }
-
-    // If already subscribed or browser permission is final → mark done and never show.
     if (isSubscribed || permission === "denied") {
       promptChecked.current = true;
       localStorage.setItem("stop_notif_prompt_v1", "1");
       return;
     }
 
-    // Still waiting for async subscription state — only proceed when we know enough.
     const shouldShow = canInstall || (isSupported && permission !== "unsupported");
     if (!shouldShow) return;
 
