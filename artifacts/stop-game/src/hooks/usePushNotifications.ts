@@ -167,8 +167,14 @@ export function usePushNotifications(playerId: string | undefined, language: str
       // activation is still available. Network and service-worker awaits can
       // otherwise consume that activation and cause Chrome/Android to ignore
       // or reject the permission prompt.
+      // Some Android WebView/TWA permission prompts may leave this Promise pending.
+      // Bound the wait so the activation control never remains disabled forever.
       const permissionRequest = Notification.requestPermission();
-      const perm = await permissionRequest;
+      const perm = await withTimeout(
+        permissionRequest,
+        15000,
+        "Notification permission request timed out",
+      );
       setPermission(perm as NotifPermission);
       if (perm !== "granted") return false;
 
