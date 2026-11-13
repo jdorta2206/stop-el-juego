@@ -12,6 +12,8 @@ import { getCurrentLang, getApiUrl, authHeaders } from "@/lib/utils";
 import { loadActiveRoom, clearActiveRoom } from "@/lib/activeRoom";
 import { AnimatePresence, motion } from "framer-motion";
 
+type PublicRoomsError = { kind: "http"; status: number } | { kind: "network" };
+
 interface PublicRoom {
   roomCode: string;
   hostId: string;
@@ -39,7 +41,7 @@ export default function Multiplayer() {
   const [maxPlayers, setMaxPlayers] = useState(8);
   const [publicRooms, setPublicRooms] = useState<PublicRoom[]>([]);
   const [loadingPublic, setLoadingPublic] = useState(false);
-  const [publicRoomsError, setPublicRoomsError] = useState<string | null>(null);
+  const [publicRoomsError, setPublicRoomsError] = useState<PublicRoomsError | null>(null);
   const [resumeCode, setResumeCode] = useState<string | null>(null);
 
   // PWA share_target delivers the shared link as ?url=<encoded-url>.
@@ -140,7 +142,8 @@ export default function Multiplayer() {
   };
 
   const loadPublicRooms = async () => {
-    publicRoomsAbortRef.current?.abort();
+    // Do not abort a valid in-flight request just because the polling interval fired.
+    if (publicRoomsAbortRef.current) return;
     const controller = new AbortController();
     publicRoomsAbortRef.current = controller;
     setLoadingPublic(true);
@@ -148,7 +151,7 @@ export default function Multiplayer() {
       const res = await fetch(`${getApiUrl()}/api/rooms/public`, { signal: controller.signal });
       if (!res.ok) {
         if (!controller.signal.aborted) {
-          setPublicRoomsError(`${t.multiplayer.publicRoomsLoadError} (HTTP ${res.status})`);
+          setPublicRoomsError({ kind: "http", status: res.status });
         }
         return;
       }
@@ -159,7 +162,7 @@ export default function Multiplayer() {
       }
     } catch {
       if (!controller.signal.aborted) {
-        setPublicRoomsError(t.multiplayer.publicRoomsLoadErrorDetails);
+        setPublicRoomsError({ kind: "network" });
       }
     }
     finally {
@@ -174,7 +177,7 @@ export default function Multiplayer() {
   useEffect(() => {
     loadPublicRooms();
     const interval = setInterval(loadPublicRooms, 6000);
-    return () => { clearInterval(interval); publicRoomsAbortRef.current?.abort(); };
+    return () => { clearInterval(interval); publicRoomsAbortRef.current?.abort(); publicRoomsAbortRef.current = null; };
   }, []);
 
   const handleCreate = async () => {
@@ -476,7 +479,7 @@ export default function Multiplayer() {
           </div>
 
           {publicRoomsError && publicRooms.length > 0 && (
-            <p className="text-amber-300 text-xs text-center" role="status">{publicRoomsError} {t.multiplayer.publicRoomsStale}</p>
+            <p className="text-amber-300 text-xs text-center" role="alert">{publicRoomsError.kind === "http" ? `${t.multiplayer.publicRoomsLoadError} (HTTP ${publicRoomsError.status})` : t.multiplayer.publicRoomsLoadErrorDetails} {t.multiplayer.publicRoomsStale}</p>
           )}
           {loadingPublic && publicRooms.length === 0 ? (
             <div className="space-y-2">
@@ -484,7 +487,7 @@ export default function Multiplayer() {
             </div>
           ) : publicRoomsError && publicRooms.length === 0 ? (
             <div className="p-6 text-center text-white/70 bg-black/20 rounded-2xl border border-white/10 space-y-3">
-              <p className="text-sm" role="alert">{publicRoomsError}</p>
+              <p className="text-sm" role="alert">{publicRoomsError.kind === "http" ? `${t.multiplayer.publicRoomsLoadError} (HTTP ${publicRoomsError.status})` : t.multiplayer.publicRoomsLoadErrorDetails}</p>
               <button onClick={loadPublicRooms} className="px-4 py-2 rounded-lg bg-secondary text-black font-bold text-sm">{t.multiplayer.retryPublicRooms}</button>
             </div>
           ) : publicRooms.length === 0 ? (
