@@ -9,7 +9,7 @@
     "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck",
     "test": "pnpm -r --if-present run test",
     "build:railway": "pnpm --filter @workspace/stop-game build && pnpm --filter @workspace/api-server build && rm -rf artifacts/api-server/dist/public && mkdir -p artifacts/api-server/dist/public && cp -R artifacts/stop-game/dist/. artifacts/api-server/dist/public/",
-    "start:railway": "SERVE_CLIENT=1 node artifacts/api-server/dist/index.cjs"
+    "start:railway": "SERVE_CLIENT=1 node --enable-source-maps artifacts/api-server/dist/index.cjs"
   },
   "packageManager": "pnpm@10.26.1",
   "engines": {
