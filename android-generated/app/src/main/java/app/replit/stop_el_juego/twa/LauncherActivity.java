@@ -88,6 +88,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     }
 
     private void warmupCustomTabsThenLaunchTwa() {
+        if (isFinishing() || isDestroyed()) return;
         final TwaProviderPicker.Action provider;
         try {
             provider = TwaProviderPicker.pickProvider(getPackageManager());
@@ -107,6 +108,10 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
         warmupConnection = new CustomTabsServiceConnection() {
             @Override
             public void onCustomTabsServiceConnected(ComponentName name, CustomTabsClient client) {
+                if (isFinishing() || isDestroyed()) {
+                    unbindWarmupService();
+                    return;
+                }
                 try {
                     boolean warmed = client.warmup(0L);
                     Log.i("STOP_PLAY_GAMES", "Custom Tabs warmup before TWA launch=" + warmed
@@ -143,7 +148,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
         // Never leave a player on the launcher screen if a provider does not
         // answer its warmup bind promptly.
         getWindow().getDecorView().postDelayed(() -> {
-            if (!twaLaunchStarted && !isFinishing()) {
+            if (!twaLaunchStarted && !isFinishing() && !isDestroyed()) {
                 Log.w("STOP_PLAY_GAMES", "Custom Tabs warmup timed out; launching without waiting");
                 unbindWarmupService();
                 launchTwaOnce();
@@ -164,7 +169,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     }
 
     private void launchTwaOnce() {
-        if (twaLaunchStarted || isFinishing()) return;
+        if (twaLaunchStarted || isFinishing() || isDestroyed()) return;
         twaLaunchStarted = true;
         unbindWarmupService();
         launchTwa();
