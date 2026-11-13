@@ -45,6 +45,16 @@ jobs:
           assert 'if (!messageChannelReady || !relationshipValidated || !isAllowedOrigin(origin))' in native
           assert 'String origin = message.optString("origin", "");' in native
           assert 'STOP_PGS_UNLOCK_ACHIEVEMENT' in web and 'STOP_PGS_UNLOCK_ACHIEVEMENT' in native
+          # Keep ABH's LauncherActivity/TwaLauncher alive while the TWA is open.
+          assert 'protected void launchTwa()' in native
+          assert 'retainLauncherForTwa = true;' in native
+          assert 'if (retainLauncherForTwa)' in native
+          assert 'super.finish();' in native
+          assert 'Keeping TWA launcher alive to preserve CustomTabsSession' in native
+          # PGS v2 startup stays silent; interactive sign-in is player-initiated.
+          assert 'startPlayGamesSignInIfNeeded(false);' in native
+          assert 'startPlayGamesSignInIfNeeded(true);' in native
+          assert 'startPlayGamesSignInIfNeeded();' not in native
           assert 'return "https://stopjuegodepalabras.com".equals(origin)' in native
           assert '|| "https://www.stopjuegodepalabras.com".equals(origin);' in native
           print("PGS web origin payload and native TWA relationship/origin guards verified.")
