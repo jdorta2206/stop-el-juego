@@ -326,6 +326,8 @@ const es = {
     seeRanking: "Ver ranking del día",
     noResults: "Sé el primero en jugar hoy",
     loadError: "No se pudo cargar el ranking. Inténtalo de nuevo.",
+    challengeLoadError: "No se pudo cargar el reto de hoy.",
+    retry: "Reintentar",
     newChallenge: "Nuevo reto cada día a medianoche",
   },
 

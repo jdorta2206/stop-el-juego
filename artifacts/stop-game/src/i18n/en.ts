@@ -310,6 +310,8 @@ const en = {
     seeRanking: "See today's ranking",
     noResults: "Be the first to play today",
     loadError: "Could not load the ranking. Please try again.",
+    challengeLoadError: "Could not load today’s challenge.",
+    retry: "Retry",
     newChallenge: "New challenge every day at midnight",
   },
 
