@@ -90,6 +90,7 @@ export default function Live() {
   return (
     <PageShell>
       <div className="w-full max-w-2xl mx-auto px-4 py-4 flex flex-col gap-4">
+        {networkError && <p className="text-amber-300 text-xs text-center" role="alert">Conexión interrumpida. Se muestran los últimos datos disponibles.</p>}
         {/* Header live */}
         <div className="flex items-center justify-between">
           <Link href="/"><Button variant="ghost" size="sm"><ArrowLeft className="w-4 h-4 mr-1" />Inicio</Button></Link>
