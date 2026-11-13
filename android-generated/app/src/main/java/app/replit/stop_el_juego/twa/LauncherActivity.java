@@ -455,7 +455,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
             if (!(launcher instanceof TwaLauncher)) return null;
             Object session = findFieldValue(launcher, "mSession");
             return session instanceof CustomTabsSession ? (CustomTabsSession) session : null;
-        } catch (ReflectiveOperationException | ClassCastException error) {
+        } catch (ReflectiveOperationException | RuntimeException error) {
             Log.w(TAG, "Unable to obtain TWA CustomTabsSession", error);
             return null;
         }
