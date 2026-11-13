@@ -267,26 +267,26 @@ export function usePushNotifications(playerId: string | undefined, language: str
     if (!("serviceWorker" in navigator)) return false;
     setLoading(true);
     try {
-      const reg = await navigator.serviceWorker.ready;
-      const sub = await reg.pushManager.getSubscription();
+      const reg = await withTimeout(navigator.serviceWorker.ready, 12000, "Service worker is not ready");
+      const sub = await withTimeout(reg.pushManager.getSubscription(), 10000, "Could not read push subscription");
       try { localStorage.setItem(DISABLED_KEY, "1"); } catch {}
 
       if (sub) {
         if (currentPlayerIdRef.current !== playerId) return false;
         try {
-          const response = await fetch(`${API_BASE}/api/notifications/unsubscribe`, {
+          const response = await withTimeout(fetch(`${API_BASE}/api/notifications/unsubscribe`, {
             method: "DELETE",
             headers: { "Content-Type": "application/json", ...authHeaders() },
             credentials: "include",
             body: JSON.stringify({ endpoint: sub.endpoint, playerId: playerId || "anonymous" }),
-          });
+          }), 12000, "Unsubscribe request timed out");
           if (!response.ok) {
             console.warn("[push] unsubscribe server cleanup failed", response.status);
           }
         } catch (e) {
           console.warn("[push] unsubscribe server request failed", e);
         }
-        const removedLocally = await sub.unsubscribe();
+        const removedLocally = await withTimeout(sub.unsubscribe(), 12000, "Could not remove push subscription");
         if (!removedLocally) return false;
       }
       setIsSubscribed(false);
