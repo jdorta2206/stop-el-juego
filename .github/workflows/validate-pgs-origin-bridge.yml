@@ -68,7 +68,7 @@ jobs:
           assert "STOP_TWA_LIVENESS_PROBE" in finish_method and "moveTaskToBack(true);" in finish_method
           assert '"STOP_TWA_LIVENESS_ALIVE".equals(type)' in native
           assert 'STOP_TWA_LIVENESS_PROBE' in web and 'STOP_TWA_LIVENESS_ALIVE' in web
-          assert 'android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout"' in manifest
+          assert 'android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout|locale|layoutDirection|uiMode|density|fontScale|colorMode"' in manifest
           assert 'postDelayed(this::requestUseAsOriginValidation, 1500L)' in native
           assert 'TWA CustomTabsSession unavailable for origin validation attempt=' in native
           # PGS v2 startup stays silent; interactive sign-in is player-initiated.
