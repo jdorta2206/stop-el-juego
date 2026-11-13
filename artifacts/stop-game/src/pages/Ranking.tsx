@@ -12,6 +12,7 @@ import { usePresence, sendChallenge, pollChallengeStatus, type OnlinePlayer } fr
 import { useFollows } from "@/lib/useFollows";
 import { ChallengeNotification } from "@/components/ChallengeNotification";
 import { useLocation } from "wouter";
+import { trackClientError } from "@/lib/analyticsClient";
 
 type ChallengeState = "idle" | "sending" | "waiting";
 
@@ -319,9 +320,18 @@ export default function Ranking() {
   // Friends list for the friends tab (separate fetch to avoid duplicate)
   const [followedIds, setFollowedIds] = useState<Set<string>>(new Set());
   const [followedFriends, setFollowedFriends] = useState<any[]>([]);
+  const [friendsLoadError, setFriendsLoadError] = useState(false);
+  const [friendsRetry, setFriendsRetry] = useState(0);
   const [previewPlayer, setPreviewPlayer] = useState<any | null>(null);
+  const friendsOwnerRef = useRef(player?.id);
 
   useEffect(() => {
+    if (friendsOwnerRef.current !== player?.id) {
+      friendsOwnerRef.current = player?.id;
+      setFollowedFriends([]);
+      setFollowedIds(new Set());
+    }
+    setFriendsLoadError(false);
     if (!player?.id) return;
     const controller = new AbortController();
     fetch(`${getApiUrl()}/api/friends/list/${encodeURIComponent(player.id)}`, {
@@ -329,17 +339,29 @@ export default function Ranking() {
       credentials: "include",
       signal: controller.signal,
     })
-      .then(r => r.ok ? r.json() : { friends: [] })
-      .then(({ friends }: { friends: any[] }) => {
+      .then((r) => {
+        if (!r.ok) throw new Error(`Friends request failed: ${r.status}`);
+        return r.json();
+      })
+      .then((data: { friends?: any[] }) => {
         if (controller.signal.aborted) return;
+        if (!Array.isArray(data?.friends) || !data.friends.every((friend) =>
+          friend && typeof friend.followedId === "string" && friend.followedId.length > 0
+        )) {
+          throw new Error("Invalid friends response");
+        }
+        const friends = data.friends;
         setFollowedFriends(friends);
-        setFollowedIds(new Set(friends.map((f: any) => f.followedId)));
+        setFollowedIds(new Set(friends.map((friend) => friend.followedId)));
+        setFriendsLoadError(false);
       })
       .catch((error: unknown) => {
-        if (error instanceof DOMException && error.name === "AbortError") return;
+        if (controller.signal.aborted || (error instanceof DOMException && error.name === "AbortError")) return;
+        trackClientError(error);
+        setFriendsLoadError(true);
       });
     return () => controller.abort();
-  }, [player?.id, isFollowing]);
+  }, [player?.id, isFollowing, friendsRetry]);
 
   // Follow an offline ranking player (no OnlinePlayer data available)
   const followOffline = useCallback(async (p: { playerId: string; playerName: string; avatarColor: string }) => {
@@ -358,8 +380,10 @@ export default function Ranking() {
   }, [player?.id, follow]);
 
   const unfollowPlayer = useCallback(async (targetId: string) => {
-    await unfollow(targetId);
+    const succeeded = await unfollow(targetId);
+    if (!succeeded) return;
     setFollowedIds(prev => { const s = new Set(prev); s.delete(targetId); return s; });
+    setFollowedFriends((prev) => prev.filter((friend) => friend.followedId !== targetId));
   }, [unfollow]);
 
   const allPlayers = data?.players || [];
@@ -549,6 +573,12 @@ const PODIUM_ORDER = [1, 0, 2];
           </motion.div>
         )}
 
+        {filter === "friends" && friendsLoadError && players.length > 0 && (
+          <div role="status" className="mb-3 rounded-xl border border-white/10 bg-black/20 p-3 text-center text-sm text-white/60">
+            No se ha podido actualizar la lista de amigos. Se mantienen los datos anteriores.
+            <button type="button" onClick={() => setFriendsRetry((retry) => retry + 1)} className="ml-2 font-black text-secondary underline">Reintentar</button>
+          </div>
+        )}
         {showSlowRetry && !activeRankingError && (
           <div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/20 p-3">
             <span className="text-sm text-white/70">El ranking está tardando más de 3 segundos.</span>
@@ -565,6 +595,11 @@ const PODIUM_ORDER = [1, 0, 2];
             {[1,2,3,4,5].map(i => (
               <div key={i} className="h-16 bg-white/10 rounded-xl animate-pulse" />
             ))}
+          </div>
+        ) : players.length === 0 && filter === "friends" && friendsLoadError ? (
+          <div className="p-8 text-center text-white/60 font-bold bg-black/20 rounded-2xl border border-white/10">
+            <p>No se ha podido actualizar la lista de amigos. Comprueba la conexión e inténtalo de nuevo.</p>
+            <button type="button" onClick={() => setFriendsRetry((retry) => retry + 1)} className="mt-3 px-5 py-2 rounded-xl font-black text-sm bg-secondary text-black">Volver a cargar</button>
           </div>
         ) : players.length === 0 && filter === "friends" ? (
           <div className="p-16 text-center text-white/50 font-bold bg-black/20 rounded-2xl border border-white/10">
