@@ -148,7 +148,7 @@ export default function Multiplayer() {
       const res = await fetch(`${getApiUrl()}/api/rooms/public`, { signal: controller.signal });
       if (!res.ok) {
         if (!controller.signal.aborted) {
-          setPublicRoomsError(`No se pudieron cargar las salas públicas (HTTP ${res.status}).`);
+          setPublicRoomsError(`${t.multiplayer.publicRoomsLoadError} (HTTP ${res.status})`);
         }
         return;
       }
@@ -159,7 +159,7 @@ export default function Multiplayer() {
       }
     } catch {
       if (!controller.signal.aborted) {
-        setPublicRoomsError("No se pudieron cargar las salas públicas. Comprueba la conexión e inténtalo de nuevo.");
+        setPublicRoomsError(t.multiplayer.publicRoomsLoadErrorDetails);
       }
     }
     finally {
@@ -476,7 +476,7 @@ export default function Multiplayer() {
           </div>
 
           {publicRoomsError && publicRooms.length > 0 && (
-            <p className="text-amber-300 text-xs text-center" role="status">{publicRoomsError} Se muestran los últimos datos disponibles.</p>
+            <p className="text-amber-300 text-xs text-center" role="status">{publicRoomsError} {t.multiplayer.publicRoomsStale}</p>
           )}
           {loadingPublic && publicRooms.length === 0 ? (
             <div className="space-y-2">
@@ -484,8 +484,8 @@ export default function Multiplayer() {
             </div>
           ) : publicRoomsError && publicRooms.length === 0 ? (
             <div className="p-6 text-center text-white/70 bg-black/20 rounded-2xl border border-white/10 space-y-3">
-              <p className="text-sm">{publicRoomsError}</p>
-              <button onClick={loadPublicRooms} className="px-4 py-2 rounded-lg bg-secondary text-black font-bold text-sm">Reintentar</button>
+              <p className="text-sm" role="alert">{publicRoomsError}</p>
+              <button onClick={loadPublicRooms} className="px-4 py-2 rounded-lg bg-secondary text-black font-bold text-sm">{t.multiplayer.retryPublicRooms}</button>
             </div>
           ) : publicRooms.length === 0 ? (
             <div className="p-8 text-center text-white/40 font-bold bg-black/20 rounded-2xl border border-white/10">
