@@ -322,10 +322,14 @@ export default function Ranking() {
   const [friendsLoadError, setFriendsLoadError] = useState(false);
   const [friendsRetry, setFriendsRetry] = useState(0);
   const [previewPlayer, setPreviewPlayer] = useState<any | null>(null);
+  const friendsOwnerRef = useRef(player?.id);
 
   useEffect(() => {
-    setFollowedFriends([]);
-    setFollowedIds(new Set());
+    if (friendsOwnerRef.current !== player?.id) {
+      friendsOwnerRef.current = player?.id;
+      setFollowedFriends([]);
+      setFollowedIds(new Set());
+    }
     setFriendsLoadError(false);
     if (!player?.id) return;
     const controller = new AbortController();
