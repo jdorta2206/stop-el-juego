@@ -309,6 +309,7 @@ const fr = {
     playFirst: "Joue pour voir le classement",
     seeRanking: "Voir le classement du jour",
     noResults: "Sois le premier à jouer aujourd'hui",
+    loadError: "Impossible de charger le classement. Réessaie."
     newChallenge: "Nouveau défi chaque jour à minuit",
   },
 
