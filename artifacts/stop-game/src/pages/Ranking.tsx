@@ -375,7 +375,8 @@ export default function Ranking() {
       roomCode: null,
       lastSeen: Date.now(),
     };
-    await follow(asOnlinePlayer);
+    const succeeded = await follow(asOnlinePlayer);
+    if (!succeeded) return;
     setFollowedIds(prev => new Set([...prev, p.playerId]));
   }, [player?.id, follow]);
 
