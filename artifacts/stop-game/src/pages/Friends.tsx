@@ -613,6 +613,19 @@ export default function Friends() {
                 <div className="text-center py-8 text-white/30 text-sm">
                   Inicia sesión para ver tus amigos guardados
                 </div>
+              ) : error && filteredFriends.length === 0 ? (
+                <div className="rounded-2xl py-8 text-center space-y-3"
+                  style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(248,113,113,0.2)" }}
+                >
+                  <p className="text-white/70 text-sm font-bold">No se pudieron cargar tus amigos</p>
+                  <p className="text-white/40 text-xs">No podemos confirmar si tienes amigos guardados. Inténtalo de nuevo.</p>
+                  <button onClick={() => void refresh()} disabled={loading}
+                    className="px-4 py-2 rounded-xl text-xs font-bold disabled:opacity-50"
+                    style={{ background: "rgba(249,168,37,0.15)", border: "1px solid rgba(249,168,37,0.3)", color: "#f9a825" }}
+                  >
+                    {loading ? "Cargando…" : "Reintentar"}
+                  </button>
+                </div>
               ) : filteredFriends.length === 0 ? (
                 <div className="rounded-2xl py-10 text-center space-y-2"
                   style={{ background: "rgba(255,255,255,0.03)", border: "1px dashed rgba(255,255,255,0.1)" }}
