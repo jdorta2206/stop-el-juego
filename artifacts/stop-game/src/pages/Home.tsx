@@ -29,6 +29,7 @@ import { HALLOWEEN_START, isHalloweenActive, isHalloweenModeEnabled, setHallowee
 import { useHalloweenProgress } from "@/hooks/useHalloweenProgress";
 import { HalloweenHomeAtmosphere } from "@/components/HalloweenHomeAtmosphere";
 import { getLastPlayGamesStatus, isAndroidTwa, requestPlayGamesSignIn, showPlayGamesAchievements } from "@/lib/twaPlayGamesBridge";
+import { trackClientError } from "@/lib/analyticsClient";
 
 const LOGO_URL = `${import.meta.env.BASE_URL}images/stop-logo.png`;
 const HALLOWEEN_PREVIEW = import.meta.env.VITE_HALLOWEEN_PREVIEW === "true";
@@ -111,6 +112,7 @@ export default function Home() {
   }, [player?.id, player?.loginMethod]);
 
   useEffect(() => {
+    setDailyDone(null);
     const controller = new AbortController();
     const timeZone = (() => {
       try { return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"; } catch { return "UTC"; }
@@ -137,7 +139,11 @@ export default function Home() {
     })
       .then(r => r.ok ? r.json() : Promise.reject(new Error("daily-status")))
       .then(d => { if (!controller.signal.aborted) setDailyDone(!!d.played); })
-      .catch(() => { /* Keep status unknown when the API cannot confirm completion. */ });
+      .catch((error) => {
+        if (controller.signal.aborted) return;
+        setDailyDone(null);
+        trackClientError(error);
+      });
     return () => controller.abort();
   }, [player?.id, player?.loginMethod, lang]);
 
