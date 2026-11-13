@@ -136,7 +136,7 @@ export function usePushNotifications(playerId: string | undefined, language: str
               timeZone,
               origin: window.location.origin,
             }),
-          });
+          }), 12000, "Subscription backfill timed out");
           if (!res.ok) {
             console.warn("[push] subscription backfill failed", res.status);
             if (!cancelled) setIsSubscribed(false);
