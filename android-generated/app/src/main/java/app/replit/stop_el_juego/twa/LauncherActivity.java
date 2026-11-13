@@ -217,12 +217,10 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
         JSONObject probe = newMessage("STOP_TWA_LIVENESS_PROBE");
         try {
             probe.put("probeId", probeId);
-        } catch (JSONException ignored) {
-            livenessProbePending = false;
-            activeLivenessProbeId = null;
-            retainLauncherForTwa = false;
-            super.finish();
-            return;
+        } catch (JSONException error) {
+            // The probe id is a string and should never fail to serialize. If it
+            // does, let the bounded timeout close the launcher safely.
+            Log.w("STOP_PLAY_GAMES", "Unable to serialize TWA liveness probe id", error);
         }
         sendMessage(probe);
 
