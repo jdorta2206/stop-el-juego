@@ -111,7 +111,7 @@ export function useInventory(playerId?: string | null) {
         if (res.status !== 503 || attempt === 2) break;
         await new Promise((resolve) => window.setTimeout(resolve, 350 * (attempt + 1)));
         if (controller.signal.aborted) {
-          if (timedOut) {
+          if (timedOut && activePlayerIdRef.current === playerId && refreshAbortRef.current === controller) {
             setErrorState("La tienda tardó más de 8 segundos en responder. Pulsa Reintentar.");
             setData(null);
             setDataPlayerId(null);
@@ -121,7 +121,7 @@ export function useInventory(playerId?: string | null) {
       }
       if (!res) throw new Error("Inventory request did not return a response");
       if (!res.ok) {
-        if (!controller.signal.aborted) {
+        if (!controller.signal.aborted && activePlayerIdRef.current === playerId) {
           const body = await res.json().catch(() => ({}));
           const message = res.status === 401
             ? "Inicia sesión para acceder a tu inventario y realizar compras."
