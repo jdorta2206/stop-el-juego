@@ -498,7 +498,7 @@ export default function Friends() {
   const [search, setSearch] = useState("");
 
   const { onlinePlayers, incomingChallenge, dismissChallenge } = usePresence(player ?? null);
-  const { friends, isFollowing, follow, unfollow } = useFollows(
+  const { friends, isFollowing, follow, unfollow, refresh, error, loading } = useFollows(
     player && player.loginMethod !== "guest" ? player.id : null,
     onlinePlayers
   );
@@ -597,6 +597,18 @@ export default function Friends() {
             <motion.div key="friends" initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }}
               className="space-y-2"
             >
+              {error && !isGuest && (
+                <div className="rounded-xl p-3 flex items-center justify-between gap-3"
+                  style={{ background: "rgba(248,113,113,0.08)", border: "1px solid rgba(248,113,113,0.2)" }}
+                >
+                  <p className="text-white/60 text-xs">No se pudo actualizar la lista. Se mantienen los amigos cargados.</p>
+                  <button onClick={() => void refresh()} disabled={loading}
+                    className="text-xs font-bold disabled:opacity-50" style={{ color: "#f9a825" }}
+                  >
+                    {loading ? "…" : "Reintentar"}
+                  </button>
+                </div>
+              )}
               {isGuest ? (
                 <div className="text-center py-8 text-white/30 text-sm">
                   Inicia sesión para ver tus amigos guardados
