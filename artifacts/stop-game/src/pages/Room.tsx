@@ -609,7 +609,8 @@ export default function Room() {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ hostId: player.id, roomId: room?.id }),
-      });
+      credentials: "include",
+        });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         toast({ title: data.error ?? "No se pudo añadir bot", variant: "destructive" });
@@ -632,7 +633,8 @@ export default function Room() {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ playerId: player.id, playerName: player.name ?? "?", avatarColor: (player as any).avatarColor }),
-      });
+      credentials: "include",
+        });
       const j = await r.json();
       if (j.rematchCode) { setRematchCode(j.rematchCode); setLocation(`/room/${j.rematchCode}`); }
     } catch {} finally { setRematchLoading(false); }
@@ -736,7 +738,8 @@ export default function Room() {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders(), ...(isHalloweenPreview() ? { "x-halloween-preview": "1" } : {}) },
         body: JSON.stringify({ playerId: player.id, playerName: player.name }),
-      });
+      credentials: "include",
+        });
       const data = await response.json().catch(() => ({}));
       if (response.ok) {
         void reportHalloweenEvent(player.id, "scare_provoked", `room:${roomCode.toUpperCase()}:${Date.now()}`);
@@ -831,7 +834,8 @@ export default function Room() {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ hostId: player.id, roomId: room?.id, pack, ...(extras ?? {}) }),
-      });
+      credentials: "include",
+        });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         toast({ title: data?.error ?? "No se pudo cambiar categorías", variant: "destructive" });
@@ -1023,7 +1027,8 @@ export default function Room() {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ voterId: player.id, accusedPlayerId, category, vote }),
-      });
+      credentials: "include",
+        });
     } catch { /* silent */ }
   }, [player, roomCode, apiBase]);
 
@@ -1285,7 +1290,8 @@ export default function Room() {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ playerId: player.id, playerName: player.name }),
-      });
+      credentials: "include",
+        });
       // 🛡️ Race fix: only kick off the freeze locally if polling hasn't already
       // done it. Otherwise stopAllTimers() here would clear the freeze interval
       // that the polling effect just installed and the countdown would stall at "3".
@@ -1894,7 +1900,8 @@ export default function Room() {
                           const r = await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/use-card`, {
                             method: "POST", headers: { "Content-Type": "application/json", ...authHeaders() },
                             body: JSON.stringify({ playerId: player.id }),
-                          });
+                          credentials: "include",
+        });
                           const data = await r.json();
                           if (data.ok) {
                             if (cardId === "lightning") setTimeLeft(t => Math.min(t + 15, ROUND_TIME + 15));
@@ -2864,7 +2871,8 @@ function StreamerModeCard({ room, playerId }: { room: any; playerId: string }) {
         method: "PATCH",
         headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ hostId: playerId, roomId: room?.id, isPublic: !isPublic }),
-      });
+      credentials: "include",
+        });
     } finally {
       setBusy(false);
     }
