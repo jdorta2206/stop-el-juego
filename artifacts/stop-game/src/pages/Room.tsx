@@ -1289,7 +1289,7 @@ export default function Room() {
     scheduleUiTimeout(() => setStopFlash(false), 220);
     setIsStopping(true);
     try {
-      await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/stop`, {
+      const response = await fetch(`${getApiUrl()}/api/rooms/${roomCode.toUpperCase()}/stop`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
         credentials: "include",
@@ -1298,7 +1298,7 @@ export default function Room() {
       // 🛡️ Race fix: only kick off the freeze locally if polling hasn't already
       // done it. Otherwise stopAllTimers() here would clear the freeze interval
       // that the polling effect just installed and the countdown would stall at "3".
-      if (!isFreezingRef.current) {
+      if (response.ok && !isFreezingRef.current) {
         stopAllTimers();
         setPhase("freeze");
         startFreezeCountdown();
