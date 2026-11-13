@@ -448,7 +448,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
         } catch (RuntimeException error) {
             if (signInGeneration == playGamesSignInGeneration) playGamesSignInGeneration++;
             playGamesSignInInFlight = false;
-            Log.e("STOP_PLAY_GAMES", "Manual authentication check failed", error);
+            Log.e("STOP_PLAY_GAMES", "Authentication status check failed", error);
             sendPlayGamesStatus(false, "sign_in_failed");
         }
     }
@@ -461,7 +461,7 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
         if ("STOP_PGS_STARTUP_READY".equals(type)) {
             if (!playGamesStartupSignInAttempted) {
                 playGamesStartupSignInAttempted = true;
-                Log.i("STOP_PLAY_GAMES", "Starting automatic sign-in after app splash completed");
+                Log.i("STOP_PLAY_GAMES", "Checking automatic authentication after app splash completed");
                 startPlayGamesSignInIfNeeded(false);
             }
             return;
