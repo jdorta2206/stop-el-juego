@@ -141,12 +141,11 @@ function isWordValid(
   const normCategory = normalizeWord(canonicalCategory);
   if (bundle.openCategories.includes(normCategory)) return normalizedWord.length >= 3;
 
-  const primaryDict = bundle.dictionary[language] || bundle.dictionary["es"];
-  let categoryWords = findCategoryWords(primaryDict || {}, canonicalCategory);
-  if (categoryWords.length === 0 && language !== "es" && bundle.dictionary["es"]) {
-    categoryWords = findCategoryWords(bundle.dictionary["es"], canonicalCategory);
-  }
-  if (categoryWords.length === 0) return normalizedWord.length >= 3;
+  const primaryDict = bundle.dictionary[language];
+  const categoryWords = primaryDict ? findCategoryWords(primaryDict, canonicalCategory) : [];
+  // Match the server: closed categories require a dictionary for the selected
+  // language. Never accept an arbitrary word when that category is missing.
+  if (categoryWords.length === 0) return false;
 
   return categoryWords.some(w => {
     const nw = normalizeWord(w);
@@ -162,12 +161,9 @@ export function getAiWordOffline(
 ): string {
   const bundle = getCachedOfflineBundle();
   if (!bundle) return "";
-  const langDict = bundle.dictionary[language] || bundle.dictionary["es"] || {};
+  const langDict = bundle.dictionary[language] || {};
   const canonicalCategory = bundle.categoryAliases?.[normalizeWord(category)] ?? category;
-  let categoryWords = findCategoryWords(langDict, canonicalCategory);
-  if (categoryWords.length === 0 && language !== "es" && bundle.dictionary["es"]) {
-    categoryWords = findCategoryWords(bundle.dictionary["es"], category);
-  }
+  const categoryWords = findCategoryWords(langDict, canonicalCategory);
   const normalizedLetter = normalizeWord(letter);
   const matches = categoryWords.filter(w => normalizeWord(w).startsWith(normalizedLetter));
   if (matches.length === 0) return "";
