@@ -146,6 +146,7 @@ export function useInventory(playerId?: string | null) {
         setErrorState(null);
       }
     } catch (error) {
+      if (activePlayerIdRef.current !== playerId || refreshAbortRef.current !== controller) return;
       if (timedOut) {
         setErrorState("La tienda tardó más de 8 segundos en responder. Pulsa Reintentar.");
         setData(null);
