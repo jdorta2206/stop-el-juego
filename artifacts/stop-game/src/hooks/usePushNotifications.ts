@@ -168,7 +168,7 @@ export function usePushNotifications(playerId: string | undefined, language: str
       // otherwise consume that activation and cause Chrome/Android to ignore
       // or reject the permission prompt.
       const permissionRequest = Notification.requestPermission();
-      const perm = await withTimeout(permissionRequest, 12000, "Notification permission request timed out");
+      const perm = await permissionRequest;
       setPermission(perm as NotifPermission);
       if (perm !== "granted") return false;
 
