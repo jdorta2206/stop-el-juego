@@ -29,6 +29,7 @@ import { HALLOWEEN_START, isHalloweenActive, isHalloweenModeEnabled, setHallowee
 import { useHalloweenProgress } from "@/hooks/useHalloweenProgress";
 import { HalloweenHomeAtmosphere } from "@/components/HalloweenHomeAtmosphere";
 import { getLastPlayGamesStatus, isAndroidTwa, requestPlayGamesSignIn, showPlayGamesAchievements } from "@/lib/twaPlayGamesBridge";
+import { trackClientError } from "@/lib/analyticsClient";
 
 const LOGO_URL = `${import.meta.env.BASE_URL}images/stop-logo.png`;
 const HALLOWEEN_PREVIEW = import.meta.env.VITE_HALLOWEEN_PREVIEW === "true";
@@ -46,7 +47,7 @@ export default function Home() {
   const [showStreakCalendar, setShowStreakCalendar] = useState(false);
   // Whether today's daily challenge was already played (same localStorage key
   // the DailyChallenge page uses), so the banner reflects the player's state.
-  const [dailyDone, setDailyDone] = useState(false);
+  const [dailyDone, setDailyDone] = useState<boolean | null>(null);
   const [showDowntimeCompensation, setShowDowntimeCompensation] = useState(false);
   const [playGamesStatus, setPlayGamesStatus] = useState<{ ok: boolean; status: string } | null>(() => getLastPlayGamesStatus());
   const playGamesTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -111,6 +112,7 @@ export default function Home() {
   }, [player?.id, player?.loginMethod]);
 
   useEffect(() => {
+    setDailyDone(null);
     const controller = new AbortController();
     const timeZone = (() => {
       try { return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"; } catch { return "UTC"; }
@@ -137,7 +139,11 @@ export default function Home() {
     })
       .then(r => r.ok ? r.json() : Promise.reject(new Error("daily-status")))
       .then(d => { if (!controller.signal.aborted) setDailyDone(!!d.played); })
-      .catch(() => { if (!controller.signal.aborted) setDailyDone(false); });
+      .catch((error) => {
+        if (controller.signal.aborted) return;
+        setDailyDone(null);
+        trackClientError(error);
+      });
     return () => controller.abort();
   }, [player?.id, player?.loginMethod, lang]);
 
@@ -579,7 +585,7 @@ export default function Home() {
                   <p className="text-[10px] font-black uppercase tracking-widest text-[#f9a825]">
                     {t.daily.title}
                   </p>
-                  {!dailyDone && (
+                  {dailyDone === false && (
                     <span className="relative flex h-2 w-2" aria-hidden>
                       <span className="absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75 animate-ping" />
                       <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-400" />
@@ -596,12 +602,14 @@ export default function Home() {
               <div
                 className="flex-shrink-0 px-3 py-2 rounded-xl font-black text-xs text-center whitespace-nowrap"
                 style={
-                  dailyDone
+                  dailyDone === true
                     ? { background: "rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.7)" }
-                    : { background: "#f9a825", color: "#0d1757" }
+                    : dailyDone === false
+                      ? { background: "#f9a825", color: "#0d1757" }
+                      : { background: "rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.7)" }
                 }
               >
-                {dailyDone ? `${t.daily.played} ✓` : `${t.daily.play} →`}
+                {dailyDone === true ? `${t.daily.played} ✓` : dailyDone === false ? `${t.daily.play} →` : t.daily.title}
               </div>
             </div>
           </motion.div>
