@@ -193,7 +193,7 @@ export function usePushNotifications(playerId: string | undefined, language: str
 
       const tzOffsetMinutes = -new Date().getTimezoneOffset();
       const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
-      const res = await fetch(`${API_BASE}/api/notifications/subscribe`, {
+      const res = await withTimeout(fetch(`${API_BASE}/api/notifications/subscribe`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
         credentials: "include",
@@ -205,8 +205,8 @@ export function usePushNotifications(playerId: string | undefined, language: str
           tzOffsetMinutes,
           timeZone,
           origin: typeof window !== "undefined" ? window.location.origin : undefined,
-        }), 12000, "Subscription registration timed out");
-      });
+        }),
+      }), 12000, "Subscription registration timed out");
 
       if (!res.ok) throw new Error(`subscription HTTP ${res.status}`);
       if (currentPlayerIdRef.current !== playerId) return false;
