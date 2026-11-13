@@ -39,6 +39,7 @@ export default function Multiplayer() {
   const [maxPlayers, setMaxPlayers] = useState(8);
   const [publicRooms, setPublicRooms] = useState<PublicRoom[]>([]);
   const [loadingPublic, setLoadingPublic] = useState(false);
+  const [publicRoomsError, setPublicRoomsError] = useState<string | null>(null);
   const [resumeCode, setResumeCode] = useState<string | null>(null);
 
   // PWA share_target delivers the shared link as ?url=<encoded-url>.
@@ -145,11 +146,22 @@ export default function Multiplayer() {
     setLoadingPublic(true);
     try {
       const res = await fetch(`${getApiUrl()}/api/rooms/public`, { signal: controller.signal });
-      if (res.ok) {
-        const data = await res.json();
-        setPublicRooms(data.rooms || []);
+      if (!res.ok) {
+        if (!controller.signal.aborted) {
+          setPublicRoomsError(`No se pudieron cargar las salas públicas (HTTP ${res.status}).`);
+        }
+        return;
       }
-    } catch {}
+      const data = await res.json();
+      if (!controller.signal.aborted) {
+        setPublicRooms(data.rooms || []);
+        setPublicRoomsError(null);
+      }
+    } catch {
+      if (!controller.signal.aborted) {
+        setPublicRoomsError("No se pudieron cargar las salas públicas. Comprueba la conexión e inténtalo de nuevo.");
+      }
+    }
     finally {
       if (publicRoomsAbortRef.current === controller) {
         publicRoomsAbortRef.current = null;
@@ -463,9 +475,17 @@ export default function Multiplayer() {
             </button>
           </div>
 
-          {loadingPublic ? (
+          {publicRoomsError && publicRooms.length > 0 && (
+            <p className="text-amber-300 text-xs text-center" role="status">{publicRoomsError} Se muestran los últimos datos disponibles.</p>
+          )}
+          {loadingPublic && publicRooms.length === 0 ? (
             <div className="space-y-2">
               {[1,2].map(i => <div key={i} className="h-16 bg-white/10 rounded-xl animate-pulse" />)}
+            </div>
+          ) : publicRoomsError && publicRooms.length === 0 ? (
+            <div className="p-6 text-center text-white/70 bg-black/20 rounded-2xl border border-white/10 space-y-3">
+              <p className="text-sm">{publicRoomsError}</p>
+              <button onClick={loadPublicRooms} className="px-4 py-2 rounded-lg bg-secondary text-black font-bold text-sm">Reintentar</button>
             </div>
           ) : publicRooms.length === 0 ? (
             <div className="p-8 text-center text-white/40 font-bold bg-black/20 rounded-2xl border border-white/10">
