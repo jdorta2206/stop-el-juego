@@ -12,6 +12,7 @@ import { usePresence, sendChallenge, pollChallengeStatus, type OnlinePlayer } fr
 import { useFollows } from "@/lib/useFollows";
 import { ChallengeNotification } from "@/components/ChallengeNotification";
 import { useLocation } from "wouter";
+import { trackClientError } from "@/lib/analyticsClient";
 
 type ChallengeState = "idle" | "sending" | "waiting";
 
@@ -356,6 +357,7 @@ export default function Ranking() {
       })
       .catch((error: unknown) => {
         if (controller.signal.aborted || (error instanceof DOMException && error.name === "AbortError")) return;
+        trackClientError(error);
         setFriendsLoadError(true);
       });
     return () => controller.abort();
