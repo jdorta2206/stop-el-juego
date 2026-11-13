@@ -151,12 +151,20 @@ export function usePushNotifications(playerId: string | undefined, language: str
     if (!("Notification" in window) || !("serviceWorker" in navigator)) return false;
     setLoading(true);
     try {
+      // Request permission immediately while the click's transient user
+      // activation is still available. Network and service-worker awaits can
+      // otherwise consume that activation and cause Chrome/Android to ignore
+      // or reject the permission prompt.
+      const permissionRequest = Notification.requestPermission();
+      const perm = await permissionRequest;
+      setPermission(perm as NotifPermission);
+      if (perm !== "granted") return false;
+
+      // Only perform network/service-worker work after the browser permission
+      // decision has been made.
       const vapidPublicKey = await getServerVapidPublicKey();
       if (!vapidPublicKey) throw new Error("Server VAPID public key is unavailable");
       const reg = await navigator.serviceWorker.ready;
-      const perm = await Notification.requestPermission();
-      setPermission(perm as NotifPermission);
-      if (perm !== "granted") return false;
 
       let existing = await reg.pushManager.getSubscription();
       if (currentPlayerIdRef.current !== playerId) return false;
