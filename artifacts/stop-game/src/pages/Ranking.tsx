@@ -375,7 +375,13 @@ export default function Ranking() {
       roomCode: null,
       lastSeen: Date.now(),
     };
-    await follow(asOnlinePlayer);
+    const succeeded = await follow(asOnlinePlayer);
+    if (!succeeded) {
+      // The server may have saved the follow even if the response was lost.
+      // Re-read the authoritative friends list to reconcile the UI.
+      setFriendsRetry((retry) => retry + 1);
+      return;
+    }
     setFollowedIds(prev => new Set([...prev, p.playerId]));
   }, [player?.id, follow]);
 
