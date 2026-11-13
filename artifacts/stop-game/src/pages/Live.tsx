@@ -27,13 +27,13 @@ export default function Live() {
     let stop = false;
     let activeController: AbortController | null = null;
     const fetchOnce = async () => {
-      activeController?.abort();
+      if (activeController) return;
       const controller = new AbortController();
       activeController = controller;
       try {
         const r = await fetch(`${API}/api/rooms/${encodeURIComponent(code)}/spectate`, { signal: controller.signal });
-        if (r.status === 404) { setError("Sala no encontrada"); return; }
-        if (r.status === 403) { setError("Esta sala no es pública"); return; }
+        if (r.status === 404) { if (!stop) setError("Sala no encontrada"); return; }
+        if (r.status === 403) { if (!stop) setError("Esta sala no es pública"); return; }
         if (!r.ok) { if (!stop) setNetworkError(true); return; }
         const data = await r.json();
         if (!stop) { setRoom(data); setError(null); setNetworkError(false); }
@@ -90,6 +90,7 @@ export default function Live() {
   return (
     <PageShell>
       <div className="w-full max-w-2xl mx-auto px-4 py-4 flex flex-col gap-4">
+        {networkError && <p className="text-amber-300 text-xs text-center" role="alert">Conexión interrumpida. Se muestran los últimos datos disponibles.</p>}
         {/* Header live */}
         <div className="flex items-center justify-between">
           <Link href="/"><Button variant="ghost" size="sm"><ArrowLeft className="w-4 h-4 mr-1" />Inicio</Button></Link>
