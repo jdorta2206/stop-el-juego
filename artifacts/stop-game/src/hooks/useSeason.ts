@@ -241,6 +241,7 @@ export function useSeasonLeaderboard(seasonId?: number | null, enabled: boolean 
       requestIdRef.current += 1;
       activeControllerRef.current?.abort();
       activeControllerRef.current = null;
+      setLoading(false);
     };
   }, [refresh]);
 
