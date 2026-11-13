@@ -64,9 +64,37 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     private boolean playGamesInitialized;
     private boolean playGamesSignInInFlight;
     private boolean playGamesStartupSignInAttempted;
+    // Android Browser Helper finishes LauncherActivity as soon as Chrome opens
+    // the TWA. Keep this Activity alive until the TWA returns so its
+    // CustomTabsSession remains bound for the Play Games postMessage bridge.
+    private boolean retainLauncherForTwa;
     private int playGamesSignInGeneration;
     // Keep the most recent PGS result until the TWA MessagePort is ready.
     @Nullable private JSONObject pendingPlayGamesStatus;
+
+    @Override
+    protected void launchTwa() {
+        retainLauncherForTwa = true;
+        try {
+            super.launchTwa();
+        } catch (RuntimeException error) {
+            retainLauncherForTwa = false;
+            throw error;
+        }
+    }
+
+    @Override
+    public void finish() {
+        if (retainLauncherForTwa) {
+            // Suppress only the first finish() issued by ABH's TWA launch
+            // completion callback. ABH's onRestart() will call finish() again
+            // after the player closes the TWA; that call must reach super.
+            retainLauncherForTwa = false;
+            Log.i("STOP_PLAY_GAMES", "Keeping TWA launcher alive to preserve CustomTabsSession");
+            return;
+        }
+        super.finish();
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
