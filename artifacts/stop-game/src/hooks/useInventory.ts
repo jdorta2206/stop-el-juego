@@ -145,7 +145,7 @@ export function useInventory(playerId?: string | null) {
         setDataPlayerId(snapshot.playerId);
         setErrorState(null);
       }
-    } catch {
+    } catch (error) {
       if (timedOut) {
         setErrorState("La tienda tardó más de 8 segundos en responder. Pulsa Reintentar.");
         setData(null);
