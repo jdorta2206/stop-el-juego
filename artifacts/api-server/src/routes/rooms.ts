@@ -3374,7 +3374,10 @@ router.post("/:roomCode/stop", async (req, res) => {
   // broadcastAndFormat()/formatRoom(), which dereferences stopperJson.
   if (!updated) {
     const [latestRoom] = await db.select().from(roomsTable)
-      .where(eq(roomsTable.roomCode, roomCode.toUpperCase()))
+      .where(and(
+        eq(roomsTable.roomCode, roomCode.toUpperCase()),
+        eq(roomsTable.id, room.id),
+      ))
       .limit(1);
     if (!latestRoom) {
       res.status(404).json({ error: "Room not found" });
