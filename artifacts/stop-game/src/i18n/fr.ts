@@ -195,6 +195,11 @@ const fr = {
   },
 
   multiplayer: {
+    publicRoomsLoadError: "Impossible de charger les salles publiques.",
+    publicRoomsLoadErrorDetails: "Vérifie ta connexion et réessaie.",
+    publicRoomsStale: "Affichage des dernières données disponibles.",
+    retryPublicRooms: "Réessayer",
+
     createRoom: "Créer une salle",
     joinRoom: "Rejoindre une salle",
     roomCode: "Code de la salle",

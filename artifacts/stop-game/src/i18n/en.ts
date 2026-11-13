@@ -195,6 +195,11 @@ const en = {
   },
 
   multiplayer: {
+    publicRoomsLoadError: "Public rooms could not be loaded.",
+    publicRoomsLoadErrorDetails: "Check your connection and try again.",
+    publicRoomsStale: "Showing the latest available data.",
+    retryPublicRooms: "Retry",
+
     createRoom: "Create room",
     joinRoom: "Join room",
     roomCode: "Room code",
