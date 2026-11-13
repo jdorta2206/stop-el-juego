@@ -79,6 +79,7 @@ export default function DailyChallenge() {
   const [, setLocation] = useLocation();
   const [challenge, setChallenge] = useState<DailyChallenge | null>(null);
   const [rankings, setRankings] = useState<DailyRanking[]>([]);
+  const [rankingsError, setRankingsError] = useState(false);
   const [playedToday, setPlayedToday] = useState(false);
   const [myScore, setMyScore] = useState<number | null>(null);
   const [timeLeft, setTimeLeft] = useState(getTimeUntilMidnight());
@@ -99,9 +100,18 @@ export default function DailyChallenge() {
       credentials: "include",
       signal: controller.signal,
     })
-      .then(r => r.json())
-      .then(d => setRankings(d.rankings || []))
-      .catch(() => {});
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`Daily rankings request failed: ${r.status}`);
+        return r.json();
+      })
+      .then((d) => {
+        if (!Array.isArray(d?.rankings)) throw new Error("Invalid daily rankings response");
+        setRankings(d.rankings);
+        setRankingsError(false);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setRankingsError(true);
+      });
 
     // Logged-in players use the server as the source of truth. Local storage
     // is only a guest fallback because guests have no server daily result.
@@ -289,7 +299,11 @@ export default function DailyChallenge() {
             <p className="text-white/40 text-sm text-center py-2">{t.daily.playFirst}</p>
           )}
 
-          {playedToday && rankings.length === 0 && (
+          {playedToday && rankingsError && (
+            <p className="text-white/40 text-sm text-center py-2">{t.daily.loadError}</p>
+          )}
+
+          {playedToday && !rankingsError && rankings.length === 0 && (
             <p className="text-white/40 text-sm text-center py-2">{t.daily.noResults}</p>
           )}
 
