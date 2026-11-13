@@ -73,6 +73,7 @@ export default function NotificationsPage() {
       muted: "Silenciado 7 días",
       unmuted: "Reanudado",
       activated: "Notificaciones activadas",
+      failed: "No se pudieron activar. Revisa el permiso del navegador y vuelve a intentarlo.",
       deactivated: "Notificaciones desactivadas",
     },
     en: {
@@ -98,6 +99,7 @@ export default function NotificationsPage() {
       muted: "Muted for 7 days",
       unmuted: "Resumed",
       activated: "Notifications enabled",
+      failed: "Could not enable notifications. Check browser permission and try again.",
       deactivated: "Notifications disabled",
     },
     pt: {
@@ -123,6 +125,7 @@ export default function NotificationsPage() {
       muted: "Silenciado 7 dias",
       unmuted: "Retomado",
       activated: "Notificações ativadas",
+      failed: "Não foi possível ativar. Verifica a permissão do navegador e tenta novamente.",
       deactivated: "Notificações desativadas",
     },
     fr: {
@@ -148,6 +151,7 @@ export default function NotificationsPage() {
       muted: "Coupé 7 jours",
       unmuted: "Repris",
       activated: "Notifications activées",
+      failed: "Impossible d’activer les notifications. Vérifie l’autorisation du navigateur et réessaie.",
       deactivated: "Notifications désactivées",
     },
   } as const;
@@ -203,7 +207,7 @@ export default function NotificationsPage() {
                 if (ok) flashToast(t.deactivated);
               } else {
                 const ok = await subscribe();
-                if (ok) flashToast(t.activated);
+                flashToast(ok ? t.activated : t.failed);
               }
             }}
             disabled={loading}
