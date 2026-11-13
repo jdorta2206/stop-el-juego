@@ -329,9 +329,14 @@ export default function Ranking() {
       credentials: "include",
       signal: controller.signal,
     })
-      .then(r => r.ok ? r.json() : { friends: [] })
-      .then(({ friends }: { friends: any[] }) => {
+      .then((r) => {
+        if (!r.ok) throw new Error(`Friends request failed: ${r.status}`);
+        return r.json();
+      })
+      .then((data: { friends?: any[] }) => {
         if (controller.signal.aborted) return;
+        if (!Array.isArray(data?.friends)) throw new Error("Invalid friends response");
+        const friends = data.friends;
         setFollowedFriends(friends);
         setFollowedIds(new Set(friends.map((f: any) => f.followedId)));
       })
