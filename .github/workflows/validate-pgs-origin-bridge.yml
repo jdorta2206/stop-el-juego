@@ -54,6 +54,7 @@ jobs:
           assert 'CustomTabsClient.bindCustomTabsService' in native
           assert 'client.warmup(0L)' in native
           assert 'warmupCustomTabsThenLaunchTwa();' in native
+          assert 'isFinishing() || isDestroyed()' in native
           assert 'protected void launchTwa()' in native
           assert 'retainLauncherForTwa = true;' in native
           assert 'if (retainLauncherForTwa)' in native
