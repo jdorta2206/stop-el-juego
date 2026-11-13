@@ -66,7 +66,31 @@ function addDays(dateStr: string, days: number): string {
  * (season_id, player_id) index so re-runs are a no-op. Called whenever a
  * brand-new active season is opened (lazy create OR cron rollover).
  */
-export async function finalizePreviousSeason(currentSeasonId: number, today: string): Promise<void> {
+// Deduplicate rollover recovery requests within this process. A failed attempt is
+// retried after a short cooldown instead of being launched by every season read.
+const seasonFinalizationInFlight = new Map<string, Promise<void>>();
+const seasonFinalizationLastAttempt = new Map<string, number>();
+const SEASON_FINALIZATION_RETRY_COOLDOWN_MS = 30_000;
+
+export function finalizePreviousSeason(currentSeasonId: number, today: string): Promise<void> {
+  const key = `${currentSeasonId}:${today}`;
+  const active = seasonFinalizationInFlight.get(key);
+  if (active) return active;
+
+  const lastAttempt = seasonFinalizationLastAttempt.get(key) ?? 0;
+  if (Date.now() - lastAttempt < SEASON_FINALIZATION_RETRY_COOLDOWN_MS) {
+    return Promise.resolve();
+  }
+
+  seasonFinalizationLastAttempt.set(key, Date.now());
+  const task = finalizePreviousSeasonOnce(currentSeasonId, today).finally(() => {
+    if (seasonFinalizationInFlight.get(key) === task) seasonFinalizationInFlight.delete(key);
+  });
+  seasonFinalizationInFlight.set(key, task);
+  return task;
+}
+
+async function finalizePreviousSeasonOnce(currentSeasonId: number, today: string): Promise<void> {
   try {
     // Finalize every ended season, not just the immediately preceding one.
     // This matters after downtime: several season periods may have elapsed
@@ -79,77 +103,100 @@ export async function finalizePreviousSeason(currentSeasonId: number, today: str
 
     for (const season of endedRows.rows ?? []) {
       const prevId = Number(season.id);
-      // Finalization and authoritative season events share one transaction-level
-      // advisory lock. This closes the midnight race where an event that started
-      // before rollover could otherwise update the old season after its standings
-      // snapshot had already been taken.
       const client = await pool.connect();
       let processed = 0;
       let standingsCount = 0;
       try {
         await client.query("BEGIN");
-        await client.query("SELECT pg_advisory_xact_lock($1::bigint)", [prevId]);
 
-        const standings = await client.query<{
-          player_id: string;
-          xp: number;
-          rank: number | string;
-          total: number | string;
-        }>(
-          `SELECT player_id, xp,
-                  ROW_NUMBER() OVER (ORDER BY xp DESC, id ASC) AS rank,
-                  COUNT(*) OVER () AS total
-           FROM season_progress
-           WHERE season_id = $1
-           ORDER BY xp DESC, id ASC`,
+        // Never queue multiple rollover workers behind the same season lock.
+        // A concurrent worker owns finalization; this invocation can safely skip.
+        const lock = await client.query<{ acquired: boolean }>(
+          "SELECT pg_try_advisory_xact_lock($1::bigint) AS acquired",
           [prevId],
         );
-        standingsCount = standings.rows.length;
+        if (!lock.rows[0]?.acquired) {
+          await client.query("COMMIT");
+          continue;
+        }
 
-        for (const r of standings.rows) {
-          const rank = Number(r.rank);
-          const total = Number(r.total);
-          const cosmetic = rank <= 3 ? championFrameId(prevId, rank as 1 | 2 | 3) : null;
+        // Snapshot every player's final position in one set-based statement.
+        // The previous row-by-row INSERT held the transaction/lock while
+        // issuing one round trip per player and repeatedly timed out at rollover.
+        const inserted = await client.query<{ player_id: string }>(
+          `INSERT INTO season_finals
+             (season_id, player_id, final_rank, final_xp, total_players, awarded_cosmetic)
+           SELECT $1, ranked.player_id, ranked.final_rank, ranked.xp, ranked.total, NULL
+           FROM (
+             SELECT player_id, xp,
+                    ROW_NUMBER() OVER (ORDER BY xp DESC, id ASC) AS final_rank,
+                    COUNT(*) OVER () AS total
+             FROM season_progress
+             WHERE season_id = $1
+           ) AS ranked
+           ON CONFLICT (season_id, player_id) DO NOTHING
+           RETURNING player_id`,
+          [prevId],
+        );
+        processed = inserted.rowCount ?? inserted.rows.length;
+        const countResult = await client.query<{ total: string }>(
+          "SELECT COUNT(*)::text AS total FROM season_progress WHERE season_id = $1",
+          [prevId],
+        );
+        standingsCount = Number(countResult.rows[0]?.total ?? 0);
+
+        // Only the top three need inventory updates; all other standings were
+        // persisted in the bulk snapshot above. Re-running is safe and repairs
+        // a prior partial attempt because existing finals are not overwritten.
+        const champions = await client.query<{ player_id: string }>(
+          `SELECT player_id
+           FROM season_progress
+           WHERE season_id = $1
+           ORDER BY xp DESC, id ASC
+           LIMIT 3`,
+          [prevId],
+        );
+
+        for (let index = 0; index < champions.rows.length; index++) {
+          const playerId = champions.rows[index].player_id;
+          const rank = index + 1;
+          const cosmetic = championFrameId(prevId, rank as 1 | 2 | 3);
 
           await client.query(
-            `INSERT INTO season_finals
-               (season_id, player_id, final_rank, final_xp, total_players, awarded_cosmetic)
-             VALUES ($1, $2, $3, $4, $5, $6)
-             ON CONFLICT (season_id, player_id) DO NOTHING`,
-            [prevId, r.player_id, rank, r.xp, total, cosmetic],
+            `UPDATE season_finals
+             SET awarded_cosmetic = $1
+             WHERE season_id = $2 AND player_id = $3`,
+            [cosmetic, prevId, playerId],
           );
 
-          if (cosmetic) {
-            const invRes = await client.query<{ inventory_json: string }>(
-              `SELECT inventory_json FROM player_scores
-               WHERE player_id = $1 FOR UPDATE`,
-              [r.player_id],
-            );
-            if (invRes.rows.length > 0) {
-              const raw = invRes.rows[0].inventory_json;
-              const inv: Record<string, unknown> = { avatars: [], frames: [] };
-              try {
-                const parsed = JSON.parse(raw || "{}");
-                if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-                  Object.assign(inv, parsed);
-                }
-                if (!Array.isArray(inv.avatars)) inv.avatars = [];
-                if (!Array.isArray(inv.frames)) inv.frames = [];
-              } catch { /* keep defaults */ }
-
-              const frames = inv.frames as string[];
-              if (!frames.includes(cosmetic)) {
-                frames.push(cosmetic);
-                await client.query(
-                  `UPDATE player_scores
-                   SET inventory_json = $1, updated_at = NOW()
-                   WHERE player_id = $2`,
-                  [JSON.stringify(inv), r.player_id],
-                );
+          const invRes = await client.query<{ inventory_json: string }>(
+            `SELECT inventory_json FROM player_scores
+             WHERE player_id = $1 FOR UPDATE`,
+            [playerId],
+          );
+          if (invRes.rows.length > 0) {
+            const raw = invRes.rows[0].inventory_json;
+            const inv: Record<string, unknown> = { avatars: [], frames: [] };
+            try {
+              const parsed = JSON.parse(raw || "{}");
+              if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+                Object.assign(inv, parsed);
               }
+              if (!Array.isArray(inv.avatars)) inv.avatars = [];
+              if (!Array.isArray(inv.frames)) inv.frames = [];
+            } catch { /* keep defaults */ }
+
+            const frames = inv.frames as string[];
+            if (!frames.includes(cosmetic)) {
+              frames.push(cosmetic);
+              await client.query(
+                `UPDATE player_scores
+                 SET inventory_json = $1, updated_at = NOW()
+                 WHERE player_id = $2`,
+                [JSON.stringify(inv), playerId],
+              );
             }
           }
-          processed++;
         }
 
         await client.query("COMMIT");
@@ -171,7 +218,6 @@ export async function finalizePreviousSeason(currentSeasonId: number, today: str
     console.error("[finalizePreviousSeason] error:", e instanceof Error ? e.message : String(e));
   }
 }
-
 async function getOrCreateActiveSeason() {
   const today = todayUTC();
 
