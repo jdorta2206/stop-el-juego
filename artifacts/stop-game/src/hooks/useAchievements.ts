@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { getApiUrl, authHeaders } from "@/lib/utils";
-import { unlockPlayGamesAchievementForMilestone } from "@/lib/twaPlayGamesBridge";
+import { getLastPlayGamesStatus, unlockPlayGamesAchievementForMilestone } from "@/lib/twaPlayGamesBridge";
 
 const STATS_KEY = "stop_achievement_stats_v1";
 const UNLOCKED_KEY = "stop_achievements_unlocked_v1";
@@ -242,6 +242,30 @@ export function useAchievements(playerId?: string) {
     syncedRef.current = false;
     syncAbortRef.current?.abort();
   }, [playerId]);
+
+  // A player may have earned local/server achievements before Play Games
+  // authentication or the native MessagePort was ready. Reconcile the full
+  // unlocked set when the bridge becomes authenticated, not only on the next
+  // newly-earned milestone.
+  useEffect(() => {
+    const syncNativeAchievements = (status: ReturnType<typeof getLastPlayGamesStatus>) => {
+      if (!status?.ok || status.status !== "authenticated") return;
+      for (const achievement of ACHIEVEMENTS) {
+        if (unlocked.has(achievement.id)) {
+          unlockPlayGamesAchievementForMilestone(achievement.id);
+        }
+      }
+    };
+
+    const onPlayGamesStatus = (event: Event) => {
+      const detail = (event as CustomEvent<{ ok: boolean; status: string }>).detail;
+      syncNativeAchievements(detail ?? getLastPlayGamesStatus());
+    };
+
+    syncNativeAchievements(getLastPlayGamesStatus());
+    window.addEventListener("stop:play-games-status", onPlayGamesStatus);
+    return () => window.removeEventListener("stop:play-games-status", onPlayGamesStatus);
+  }, [playerId, unlocked]);
 
   // ── Sync from server on mount — server wins, then merge with local ────────
   useEffect(() => {
