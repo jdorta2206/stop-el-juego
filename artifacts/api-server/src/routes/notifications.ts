@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { createHash } from "node:crypto";
 import webpush from "web-push";
 import { db } from "@workspace/db";
 import { pushSubscriptionsTable, roomsTable } from "@workspace/db";
@@ -8,6 +9,10 @@ import { inviteLimiter } from "../middlewares/rateLimit";
 import { verifyClaimedIdentity } from "../lib/playerAuth";
 
 const router: IRouter = Router();
+
+function pushDiagnosticId(value: string): string {
+  return createHash("sha256").update(value).digest("hex").slice(0, 12);
+}
 
 const VAPID_PUBLIC  = process.env.VAPID_PUBLIC_KEY  || "";
 const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY || "";
@@ -162,6 +167,8 @@ router.post("/subscribe", async (req, res) => {
 
   try {
     await runInsert(true);
+    // Correlate registration and delivery without logging endpoint credentials or raw identity.
+    console.info(`[push] subscription-saved player=${pushDiagnosticId(String(playerId))} endpoint=${pushDiagnosticId(String(endpoint))} origin=${(() => { try { return origin ? new URL(origin).host : "unknown"; } catch { return "invalid"; } })()}`);
     res.json({ ok: true });
   } catch (e: any) {
     // Si la columna origin aún no existe (race con ensureIndexes en cold
@@ -170,6 +177,7 @@ router.post("/subscribe", async (req, res) => {
     if (/column .*origin.* does not exist/i.test(e?.message ?? "")) {
       try {
         await runInsert(false);
+        console.info(`[push] subscription-saved player=${pushDiagnosticId(String(playerId))} endpoint=${pushDiagnosticId(String(endpoint))} origin=legacy-no-column`);
         res.json({ ok: true, note: "origin column not yet migrated" });
         return;
       } catch (e2: any) {

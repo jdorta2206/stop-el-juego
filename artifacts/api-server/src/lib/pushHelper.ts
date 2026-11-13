@@ -1,4 +1,5 @@
 import webpush from "web-push";
+import { createHash } from "node:crypto";
 import { db } from "@workspace/db";
 import { pushSubscriptionsTable, followsTable } from "@workspace/db";
 import { and, eq, not, like, or, isNull, sql } from "drizzle-orm";
@@ -131,6 +132,10 @@ async function cleanStaleEndpoint(row: Pick<PushRow, "endpoint" | "p256dh" | "au
 }
 
 type PushRow = typeof pushSubscriptionsTable.$inferSelect;
+
+function pushDiagnosticId(value: string): string {
+  return createHash("sha256").update(value).digest("hex").slice(0, 12);
+}
 function dedupeByPlayer(rows: PushRow[]): PushRow[] {
   const anon: PushRow[] = [];
   const byPlayer = new Map<string, PushRow>();
@@ -171,6 +176,9 @@ export async function sendPushToPlayer(playerId: string, payload: PushPayload): 
     throw error;
   }
 
+  // Log counts and irreversible hashes only; never expose endpoints, keys, or raw player IDs.
+  console.info(`[push] delivery-start player=${pushDiagnosticId(playerId)} subscriptions=${rows.length} kind=${notificationKind(payload)}`);
+
   // A direct player notification must reach every active device/session owned by
   // the player. dedupeByPlayer() is only for broadcasts, where one notification
   // per player is intentional; push_subscriptions.endpoint is already unique.
@@ -190,14 +198,16 @@ export async function sendPushToPlayer(playerId: string, payload: PushPayload): 
         })
       );
       sent++;
+      console.info(`[push] delivery-accepted player=${pushDiagnosticId(playerId)} endpoint=${pushDiagnosticId(row.endpoint)} status=accepted`);
     } catch (e: any) {
+      console.error(`[push] delivery-failed player=${pushDiagnosticId(playerId)} endpoint=${pushDiagnosticId(row.endpoint)} status=${e?.statusCode ?? "unknown"}`);
       if (isStalePushEndpointStatus(e.statusCode)) {
         await cleanStaleEndpoint(row);
-      } else {
-        console.error(`[push] send failed status=${e?.statusCode ?? "unknown"} player=${playerId}`);
       }
     }
   }));
+
+  console.info(`[push] delivery-summary player=${pushDiagnosticId(playerId)} accepted=${sent} attempted=${picked.length}`);
 
   // A failed delivery must not consume the cooldown: otherwise a transient
   // webpush/provider failure can suppress the player's next valid notification.
