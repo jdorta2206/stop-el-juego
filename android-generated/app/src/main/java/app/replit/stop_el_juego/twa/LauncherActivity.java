@@ -72,6 +72,11 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
     // the TWA. Keep this Activity alive until the TWA returns so its
     // CustomTabsSession remains bound for the Play Games postMessage bridge.
     private boolean retainLauncherForTwa;
+    private boolean initialTwaFinishSuppressed;
+    private boolean livenessProbePending;
+    private boolean livenessProbeReceived;
+    private int livenessProbeGeneration;
+    @Nullable private String activeLivenessProbeId;
     private boolean twaLaunchStarted;
     private boolean warmupServiceBound;
     @Nullable private CustomTabsServiceConnection warmupConnection;
@@ -188,15 +193,55 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
 
     @Override
     public void finish() {
-        if (retainLauncherForTwa) {
-            // Suppress only the first finish() issued by ABH's TWA launch
-            // completion callback. ABH's onRestart() will call finish() again
-            // after the player closes the TWA; that call must reach super.
-            retainLauncherForTwa = false;
+        if (!retainLauncherForTwa) {
+            super.finish();
+            return;
+        }
+
+        // ABH calls finish() once immediately after opening Chrome. Suppress that
+        // first call but keep the retention flag set: onRestart() can also happen
+        // when a native Play Games screen returns while the TWA page is still open.
+        if (!initialTwaFinishSuppressed) {
+            initialTwaFinishSuppressed = true;
             Log.i("STOP_PLAY_GAMES", "Keeping TWA launcher alive to preserve CustomTabsSession");
             return;
         }
-        super.finish();
+
+        if (livenessProbePending) return;
+        livenessProbePending = true;
+        livenessProbeReceived = false;
+        final int probeGeneration = ++livenessProbeGeneration;
+        final String probeId = String.valueOf(probeGeneration);
+        activeLivenessProbeId = probeId;
+
+        JSONObject probe = newMessage("STOP_TWA_LIVENESS_PROBE");
+        try {
+            probe.put("probeId", probeId);
+        } catch (JSONException ignored) {
+            livenessProbePending = false;
+            activeLivenessProbeId = null;
+            retainLauncherForTwa = false;
+            super.finish();
+            return;
+        }
+        sendMessage(probe);
+
+        // If the page answers, Chrome still owns the live TWA: put this launcher
+        // task behind Chrome again. If no answer arrives, the TWA has closed and
+        // it is now safe for ABH to destroy the CustomTabsSession.
+        getWindow().getDecorView().postDelayed(() -> {
+            if (probeGeneration != livenessProbeGeneration || isDestroyed()) return;
+            livenessProbePending = false;
+            activeLivenessProbeId = null;
+            if (livenessProbeReceived) {
+                Log.i("STOP_PLAY_GAMES", "TWA page is still active; returning launcher behind Chrome");
+                moveTaskToBack(true);
+                return;
+            }
+            retainLauncherForTwa = false;
+            Log.i("STOP_PLAY_GAMES", "TWA page did not answer liveness probe; closing launcher session");
+            super.finish();
+        }, 1800L);
     }
 
     @Override
@@ -476,6 +521,18 @@ public class LauncherActivity extends com.google.androidbrowserhelper.trusted.La
         try {
             JSONObject message = new JSONObject(raw);
             String type = message.optString("type", "");
+            if ("STOP_TWA_LIVENESS_ALIVE".equals(type)) {
+                String origin = message.optString("origin", "");
+                String probeId = message.optString("probeId", "");
+                if (messageChannelReady && relationshipValidated && isAllowedOrigin(origin)
+                        && livenessProbePending && probeId.equals(activeLivenessProbeId)) {
+                    livenessProbeReceived = true;
+                    Log.i("STOP_PLAY_GAMES", "TWA liveness probe answered by active page");
+                } else {
+                    Log.w("STOP_PLAY_GAMES", "Rejected invalid TWA liveness response");
+                }
+                return;
+            }
             if (type.startsWith("STOP_PGS_")) {
                 String origin = message.optString("origin", "");
                 if (!messageChannelReady || !relationshipValidated || !isAllowedOrigin(origin)) {
