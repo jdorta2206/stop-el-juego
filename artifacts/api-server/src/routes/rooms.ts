@@ -7,7 +7,7 @@ import { calculateStreak, appendStreakDay, calcXpGain, calcCoinGain, calcLevel, 
 import { recordTrustedAnalyticsEvent } from "./analytics";
 import { recordAuthoritativeSeasonEvents } from "./season";
 import { recordHalloweenEvent, recordHalloweenScareEvents, getHalloweenEventYear, recordHalloweenScareEventsInTransaction, recordHalloweenScareEventsWithCooldown, isHalloweenPreviewAuthorized } from "./halloween";
-import { isHappyHourActiveForTzOffset, HAPPY_HOUR_MULTIPLIER } from "../lib/happyHour";
+import { isHappyHourActiveForTimeZone, isHappyHourActiveForTzOffset, HAPPY_HOUR_MULTIPLIER } from "../lib/happyHour";
 import { isWordValidAsync, HALLOWEEN_CATEGORY_ALIASES } from "./game";
 import { writeLimiter, roomJoinLimiter, halloweenScareLimiter } from "../middlewares/rateLimit";
 import { verifyClaimedIdentity, readPlayerId, isLoggedInId, isAuthConfigured } from "../lib/playerAuth";
