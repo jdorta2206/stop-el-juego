@@ -60,6 +60,7 @@ export default function NotificationsPage() {
       enableTitle: "Activar notificaciones",
       enableBody: "Recibirás un recordatorio diario del reto, avisos de racha y de misiones para reclamar.",
       enableBtn: "Activar",
+      checking: "Comprobando suscripción…",
       disableBtn: "Desactivar",
       activeTitle: "Notificaciones activadas",
       hourTitle: "Hora del recordatorio",
@@ -86,6 +87,7 @@ export default function NotificationsPage() {
       enableTitle: "Enable notifications",
       enableBody: "Get a daily challenge reminder, streak alerts, and missions ready to claim.",
       enableBtn: "Enable",
+      checking: "Checking subscription…",
       disableBtn: "Disable",
       activeTitle: "Notifications on",
       hourTitle: "Reminder time",
@@ -112,6 +114,7 @@ export default function NotificationsPage() {
       enableTitle: "Ativar notificações",
       enableBody: "Recebe um lembrete diário do desafio, alertas de sequência e missões a reclamar.",
       enableBtn: "Ativar",
+      checking: "A verificar a subscrição…",
       disableBtn: "Desativar",
       activeTitle: "Notificações ativadas",
       hourTitle: "Hora do lembrete",
@@ -138,6 +141,7 @@ export default function NotificationsPage() {
       enableTitle: "Activer les notifications",
       enableBody: "Reçois un rappel quotidien du défi, alertes de série, et missions à réclamer.",
       enableBtn: "Activer",
+      checking: "Vérification de l’abonnement…",
       disableBtn: "Désactiver",
       activeTitle: "Notifications activées",
       hourTitle: "Heure du rappel",
@@ -217,7 +221,7 @@ export default function NotificationsPage() {
               color: isSubscribed ? "white" : "#0d1757",
             }}
           >
-            {isSubscribed ? t.disableBtn : t.enableBtn}
+            {loading ? t.checking : isSubscribed ? t.disableBtn : t.enableBtn}
           </button>
         </Card>
       )}
